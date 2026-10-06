@@ -28,7 +28,7 @@ case "$cmd" in
     mkdir -p "$WT_ROOT"
     git -C "$REPO" worktree add -b "$branch" "$wt" main
     (cd "$wt" && COREPACK_ENABLE_DOWNLOAD_PROMPT=0 pnpm install --frozen-lockfile --silent)
-    n=$(ls "$run_dir"/round-*.md 2>/dev/null | wc -l)
+    n=$(find "$run_dir" -maxdepth 1 -name 'round-*.md' | wc -l)
     codex exec --disable apps -m "$MODEL" -c "model_reasoning_effort=$EFFORT" -s workspace-write -C "$wt" \
       -o "$run_dir/round-$n.md" - < "$brief" 2>&1 | tee "$run_dir/round-$n.log"
     grep -m1 -oE 'session id: [0-9a-f-]+' "$run_dir/round-$n.log" | awk '{print $3}' > "$run_dir/session"
@@ -38,7 +38,7 @@ case "$cmd" in
     feedback="${3:-}"; [[ -f "$feedback" ]] || die "fix needs a feedback file"
     wt="$(worktree_for "$id")"; [[ -n "$wt" ]] || die "no worktree for $id"
     session="$(cat "$run_dir/session" 2>/dev/null)"; [[ -n "$session" ]] || die "no session for $id"
-    n=$(ls "$run_dir"/round-*.md 2>/dev/null | wc -l)
+    n=$(find "$run_dir" -maxdepth 1 -name 'round-*.md' | wc -l)
     (cd "$wt" && codex exec resume "$session" --disable apps -m "$MODEL" -c "model_reasoning_effort=$EFFORT" \
       -c 'sandbox_mode="workspace-write"' -o "$run_dir/round-$n.md" - < "$feedback" 2>&1 | tee "$run_dir/round-$n.log")
     echo "codex-task: report $run_dir/round-$n.md"
