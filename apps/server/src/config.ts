@@ -21,6 +21,7 @@ const ConfigSchema = z.object({
     .transform((value) => new URL(value).origin)
     .default('http://127.0.0.1:5173'),
   mode: z.enum(['fake', 'live']).default('fake'),
+  fakeSpeed: z.coerce.number().positive().default(1),
 })
 
 export type Config = z.infer<typeof ConfigSchema>
@@ -32,6 +33,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     port: env.SCORE_PORT,
     webOrigin: env.SCORE_WEB_ORIGIN,
     mode: env.SCORE_MODE,
+    fakeSpeed: env.SCORE_FAKE_SPEED,
   })
 }
 

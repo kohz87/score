@@ -11,6 +11,7 @@ import { registerStreamRoute, type StreamRouteOptions } from './http/stream.ts'
 import type { ScoreDb } from './db/index.ts'
 import type { Ingest } from './hub/ingest.ts'
 import { getSystemStatus as defaultSystemStatus } from './system-status.ts'
+import { createHermesPort, type HermesPort } from './hermes/index.ts'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -26,6 +27,7 @@ interface BuildAppOptions {
   db?: ScoreDb
   ingest?: Ingest
   getEpoch?: () => string
+  port?: HermesPort
   getSystemStatus?: () => SystemStatus
   streamOptions?: Pick<StreamRouteOptions, 'heartbeatMs' | 'fanoutOptions'>
 }
@@ -38,7 +40,8 @@ export function buildApp({
   db,
   ingest,
   getEpoch,
-  getSystemStatus = () => defaultSystemStatus(config),
+  port = createHermesPort(config),
+  getSystemStatus = () => defaultSystemStatus(config, port),
   streamOptions,
 }: BuildAppOptions): FastifyInstance {
   const logging = logger ?? process.env.NODE_ENV !== 'test'

@@ -18,6 +18,23 @@ export default tseslint.config(
     rules: reactHooks.configs.recommended.rules,
   },
   {
+    files: ['apps/server/src/**/*.ts'],
+    ignores: ['apps/server/src/hermes/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '(^|/)hermes(?:$|/(?!index\\.ts$))',
+              message: 'Use the Hermes adapter entry (hermes/index.ts).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // The front end may only talk to the server through the API contract.
     files: ['apps/web/**/*.{ts,tsx}'],
     rules: {

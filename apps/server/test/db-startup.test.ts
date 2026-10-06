@@ -21,6 +21,11 @@ const mocks = vi.hoisted(() => {
     acquireHomeLock: vi.fn(() => ({ release: mocksRelease })),
     release: mocksRelease,
     ingest: { close: vi.fn(async (): Promise<void> => undefined) },
+    port: {
+      start: vi.fn(async (): Promise<void> => undefined),
+      stop: vi.fn(async (): Promise<void> => undefined),
+    },
+    createHermesPort: vi.fn(),
     createIngest: vi.fn(),
     getEpoch: vi.fn(() => 'epoch'),
     pruneEvents: vi.fn(),
@@ -35,6 +40,7 @@ vi.mock('../src/db/index.ts', () => ({
   getEpoch: mocks.getEpoch,
 }))
 vi.mock('../src/hub/ingest.ts', () => ({ createIngest: mocks.createIngest }))
+vi.mock('../src/hermes/index.ts', () => ({ createHermesPort: mocks.createHermesPort }))
 vi.mock('../src/hub/retention.ts', () => ({ pruneEvents: mocks.pruneEvents }))
 vi.mock('../src/hub/retire.ts', () => ({ retireIngestKeys: mocks.retireIngestKeys }))
 vi.mock('../src/app.ts', () => ({ buildApp: mocks.buildApp }))
@@ -53,6 +59,7 @@ beforeEach(() => {
   vi.resetModules()
   vi.clearAllMocks()
   mocks.createIngest.mockReturnValue(mocks.ingest)
+  mocks.createHermesPort.mockReturnValue(mocks.port)
   vi.spyOn(globalThis, 'setInterval')
   previousExitCode = process.exitCode
   process.exitCode = undefined
@@ -92,12 +99,14 @@ test('startup opens and migrates the configured database before building and lis
   expect(mocks.createIngest).toHaveBeenCalledExactlyOnceWith(mocks.db)
   expect(mocks.buildApp).toHaveBeenCalledWith({
     config: expect.objectContaining({ home: '/tmp/score-test-startup' }),
+    port: mocks.port,
     sessionStore: expect.any(Object),
     db: mocks.db,
     ingest: mocks.ingest,
     getEpoch: expect.any(Function),
   })
   expect(mocks.app.listen).toHaveBeenCalledExactlyOnceWith({ host: '127.0.0.1', port: 8740 })
+  expect(mocks.port.start).toHaveBeenCalledExactlyOnceWith(mocks.ingest)
   expect(process.stdout.write).toHaveBeenCalledExactlyOnceWith(
     'Pair this browser: http://127.0.0.1:5173/pair#pairing-token\n',
   )
@@ -109,6 +118,7 @@ test('startup opens and migrates the configured database before building and lis
     mocks.storeConstructor,
     mocks.buildApp,
     mocks.app.listen,
+    mocks.port.start,
     vi.mocked(process.stdout.write),
   ].map((mock) => mock.mock.invocationCallOrder[0])
   expect(order).toEqual([...order].sort((left, right) => (left ?? 0) - (right ?? 0)))
@@ -128,7 +138,11 @@ test.each(['SIGINT', 'SIGTERM'])(
     signals.get(signal)?.()
     signals.get('SIGINT')?.()
     signals.get('SIGTERM')?.()
-    expect(mocks.app.close).toHaveBeenCalledTimes(1)
+    expect(mocks.port.stop).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(mocks.app.close).toHaveBeenCalledTimes(1))
+    expect(mocks.port.stop.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.app.close.mock.invocationCallOrder[0]!,
+    )
     expect(mocks.db.close).not.toHaveBeenCalled()
     expect(mocks.ingest.close).not.toHaveBeenCalled()
     if (!finishClose) throw new Error('Shutdown was not started')
@@ -173,6 +187,33 @@ test('listen failures close the app then the database and do not print pairing c
     mocks.db.close.mock.invocationCallOrder[0] ?? 0,
   )
   expect(process.stdout.write).not.toHaveBeenCalled()
+  expect(process.exitCode).toBe(1)
+})
+
+test('adapter startup failure closes all resources and preserves the original error', async () => {
+  mocks.port.start.mockRejectedValueOnce(new Error('adapter startup failed'))
+  mocks.port.stop.mockRejectedValueOnce(new Error('adapter cleanup failed'))
+  await import('../src/index.ts')
+  expect(process.stderr.write).toHaveBeenCalledExactlyOnceWith(
+    'Score server could not start: adapter startup failed\n',
+  )
+  expect(mocks.port.stop).toHaveBeenCalledOnce()
+  expect(mocks.app.close).toHaveBeenCalledOnce()
+  expect(mocks.ingest.close).toHaveBeenCalledOnce()
+  expect(mocks.db.close).toHaveBeenCalledOnce()
+  expect(mocks.release).toHaveBeenCalledOnce()
+  expect(process.stdout.write).not.toHaveBeenCalled()
+  expect(process.exitCode).toBe(1)
+})
+
+test('adapter shutdown failure still closes the app, ingest and database', async () => {
+  mocks.port.stop.mockRejectedValueOnce(new Error('adapter shutdown failed'))
+  await import('../src/index.ts')
+  signals.get('SIGTERM')?.()
+  await vi.waitFor(() => expect(mocks.release).toHaveBeenCalledOnce())
+  expect(mocks.app.close).toHaveBeenCalledOnce()
+  expect(mocks.ingest.close).toHaveBeenCalledOnce()
+  expect(mocks.db.close).toHaveBeenCalledOnce()
   expect(process.exitCode).toBe(1)
 })
 
@@ -250,7 +291,10 @@ test('hourly retirement errors are logged and the next interval retries', async 
   })
   await import('../src/index.ts')
   await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
-  expect(mocks.app.log.error).toHaveBeenCalledExactlyOnceWith('Ingest key retirement failed')
+  expect(mocks.app.log.error).toHaveBeenCalledExactlyOnceWith(
+    { err: expect.any(Error) },
+    'Ingest key retirement failed',
+  )
   await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
   expect(mocks.retireIngestKeys).toHaveBeenCalledTimes(2)
   expect(mocks.pruneEvents).toHaveBeenCalledTimes(2)
@@ -264,6 +308,9 @@ test('an event prune error is logged and still allows key retirement', async () 
   })
   await import('../src/index.ts')
   await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
-  expect(mocks.app.log.error).toHaveBeenCalledExactlyOnceWith('Event retention prune failed')
+  expect(mocks.app.log.error).toHaveBeenCalledExactlyOnceWith(
+    { err: expect.any(Error) },
+    'Event retention prune failed',
+  )
   expect(mocks.retireIngestKeys).toHaveBeenCalledExactlyOnceWith(mocks.db)
 })

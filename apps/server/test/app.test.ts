@@ -180,7 +180,7 @@ test.each(['fake', 'live'] as const)(
     expect(response.statusCode).toBe(200)
     const status = SystemStatusSchema.parse(response.json())
     expect(status.mode).toBe(mode)
-    expect(status.hermes.reachable).toBe(false)
+    expect(status.hermes.reachable).toBe(mode === 'fake')
     expect(status.agentIsolation).toBe('same_user')
   },
 )
