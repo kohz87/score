@@ -22,6 +22,7 @@ Toolchain, reference study, spike, architecture, contract, plan, AGENTS.md / CLA
 Open items: Codex plugin enablement, the architecture adversarial review, and live tests L1–L5 (all need you).
 
 ## Phase 1: Foundation
+**Plan approved by the owner on 2026-10-06.**
 Revised after the architecture review (ARCHITECTURE v0.2). Section refs like D1 point to ARCHITECTURE.md.
 
 **1.1 Contract package** · Lead

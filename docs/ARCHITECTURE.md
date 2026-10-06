@@ -1,7 +1,7 @@
 # Score architecture
 
 Status: **v0.2. Revised after the adversarial review** (`docs/reviews/2026-10-06-architecture-adversarial.md`;
-responses in the "Review log" at the end). One open owner decision: the approval threat model (D7.1).
+responses in the "Review log" at the end). Owner decisions recorded inline (D4.2, D4.3, D7.1).
 Inputs: `docs/SPIKE.md` (what Hermes v0.21 exposes, incl. live tests) and `docs/REFERENCE-NOTES.md`.
 
 ## 1. Shape
@@ -292,7 +292,7 @@ Reports read `runs`, `tool_calls`, `approvals` and `tasks_proj` history, kept â‰
   **paired browser session**. On first run the server prints a one-time pairing URL **to its own terminal**. The
   browser exchanges it for an HttpOnly, SameSite=Strict session cookie. The server stores only a hash, never in a
   file the bridge uses.
-  - **Threat-model limit (owner decision pending):** agents run as the same OS user, so a determined agent with
+  - **Threat-model limit (owner decision 2026-10-06: accepted, option a):** agents run as the same OS user, so a determined agent with
     shell access could still read browser cookie stores or `~/.score`. Pairing stops casual or accidental
     self-approval and CSRF, not a hostile same-user process.
   - Real isolation means running agents in Hermes's sandboxed terminal backend (docker/ssh) or as a different
