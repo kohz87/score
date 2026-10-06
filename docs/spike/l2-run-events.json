@@ -1,0 +1,664 @@
+[
+ {
+  "t": "2.11",
+  "id": "0",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290587.5364866,
+  "delta": "I",
+  "seq": 0
+ },
+ {
+  "t": "2.11",
+  "id": "1",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290587.5373151,
+  "delta": "'ll",
+  "seq": 1
+ },
+ {
+  "t": "2.12",
+  "id": "2",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290587.539045,
+  "delta": " run",
+  "seq": 2
+ },
+ {
+  "t": "2.12",
+  "id": "3",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290587.5404103,
+  "delta": " these",
+  "seq": 3
+ },
+ {
+  "t": "2.12",
+  "id": "4",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290587.5415165,
+  "delta": " three",
+  "seq": 4
+ },
+ {
+  "t": "2.12",
+  "id": "5",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290587.5422275,
+  "delta": " terminal",
+  "seq": 5
+ },
+ {
+  "t": "2.15",
+  "id": "6",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290587.5752795,
+  "delta": " commands",
+  "seq": 6
+ },
+ {
+  "t": "2.15",
+  "id": "7",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290587.5764332,
+  "delta": " in",
+  "seq": 7
+ },
+ {
+  "t": "2.15",
+  "id": "8",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290587.5779414,
+  "delta": " sequence",
+  "seq": 8
+ },
+ {
+  "t": "2.24",
+  "id": "9",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290587.6678638,
+  "delta": ".",
+  "seq": 9
+ },
+ {
+  "t": "5.68",
+  "id": "10",
+  "event": "reasoning.available",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290591.1006367,
+  "text": "I'll run these three terminal commands in sequence.",
+  "seq": 10
+ },
+ {
+  "t": "5.71",
+  "id": "11",
+  "event": "message.interim",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290591.1295564,
+  "text": "I'll run these three terminal commands in sequence.",
+  "already_streamed": true,
+  "seq": 11
+ },
+ {
+  "t": "5.86",
+  "id": "12",
+  "event": "tool.started",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290591.2791758,
+  "tool": "terminal",
+  "preview": "mkdir -p /tmp/score-spike-x",
+  "seq": 12
+ },
+ {
+  "t": "6.55",
+  "id": "13",
+  "event": "tool.completed",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290591.972681,
+  "tool": "terminal",
+  "duration": 0.702,
+  "error": false,
+  "preview": "{\"output\": \"\", \"exit_code\": 0, \"error\": null}",
+  "seq": 13
+ },
+ {
+  "t": "17.30",
+  "id": "14",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290602.7225208,
+  "delta": "\n\nmkdir",
+  "seq": 14
+ },
+ {
+  "t": "17.30",
+  "id": "15",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290602.7235022,
+  "delta": " succeeded",
+  "seq": 15
+ },
+ {
+  "t": "17.30",
+  "id": "16",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290602.7247992,
+  "delta": ";",
+  "seq": 16
+ },
+ {
+  "t": "17.30",
+  "id": "17",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290602.7257383,
+  "delta": " running",
+  "seq": 17
+ },
+ {
+  "t": "17.30",
+  "id": "18",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290602.7269983,
+  "delta": " ls",
+  "seq": 18
+ },
+ {
+  "t": "17.31",
+  "id": "19",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290602.7279637,
+  "delta": " next",
+  "seq": 19
+ },
+ {
+  "t": "17.31",
+  "id": "20",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290602.728908,
+  "delta": ".",
+  "seq": 20
+ },
+ {
+  "t": "17.82",
+  "id": "21",
+  "event": "reasoning.available",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290603.2444375,
+  "text": "mkdir succeeded; running ls next.",
+  "seq": 21
+ },
+ {
+  "t": "17.83",
+  "id": "22",
+  "event": "message.interim",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290603.2503994,
+  "text": "mkdir succeeded; running ls next.",
+  "already_streamed": true,
+  "seq": 22
+ },
+ {
+  "t": "17.83",
+  "id": "23",
+  "event": "tool.started",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290603.2546353,
+  "tool": "terminal",
+  "preview": "ls -la /tmp/score-spike-x",
+  "seq": 23
+ },
+ {
+  "t": "18.06",
+  "id": "24",
+  "event": "tool.completed",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290603.4795754,
+  "tool": "terminal",
+  "duration": 0.224,
+  "error": false,
+  "preview": "{\"output\": \"total 0\\ndrwxrwxr-x  2 raven raven  40 Oct  6 12:43 .\\ndrwxrwxrwt 18 root  root  440 Oct  6 12:43 ..\", \"exit_code\": 0, \"error\": null}",
+  "seq": 24
+ },
+ {
+  "t": "32.22",
+  "id": "25",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290617.6471019,
+  "delta": "\n\nls",
+  "seq": 25
+ },
+ {
+  "t": "32.42",
+  "id": "26",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290617.8463106,
+  "delta": " shows",
+  "seq": 26
+ },
+ {
+  "t": "32.64",
+  "id": "27",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290618.0634317,
+  "delta": " an",
+  "seq": 27
+ },
+ {
+  "t": "32.68",
+  "id": "28",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290618.1012068,
+  "delta": " empty",
+  "seq": 28
+ },
+ {
+  "t": "32.75",
+  "id": "29",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290618.1733208,
+  "delta": " directory",
+  "seq": 29
+ },
+ {
+  "t": "32.75",
+  "id": "30",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290618.1742787,
+  "delta": ";",
+  "seq": 30
+ },
+ {
+  "t": "32.75",
+  "id": "31",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290618.1753013,
+  "delta": " removing",
+  "seq": 31
+ },
+ {
+  "t": "32.80",
+  "id": "32",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290618.2246418,
+  "delta": " it",
+  "seq": 32
+ },
+ {
+  "t": "32.80",
+  "id": "33",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290618.225937,
+  "delta": " now",
+  "seq": 33
+ },
+ {
+  "t": "32.80",
+  "id": "34",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290618.2266865,
+  "delta": ".",
+  "seq": 34
+ },
+ {
+  "t": "33.55",
+  "id": "35",
+  "event": "reasoning.available",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290618.9736829,
+  "text": "ls shows an empty directory; removing it now.",
+  "seq": 35
+ },
+ {
+  "t": "33.56",
+  "id": "36",
+  "event": "message.interim",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290618.981293,
+  "text": "ls shows an empty directory; removing it now.",
+  "already_streamed": true,
+  "seq": 36
+ },
+ {
+  "t": "33.56",
+  "id": "37",
+  "event": "tool.started",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290618.9851987,
+  "tool": "terminal",
+  "preview": "rm -rf /tmp/score-spike-x",
+  "seq": 37
+ },
+ {
+  "t": "33.94",
+  "id": "38",
+  "command": "rm -rf /tmp/score-spike-x",
+  "pattern_key": "delete in root path",
+  "pattern_keys": [
+   "delete in root path"
+  ],
+  "description": "delete in root path",
+  "allow_permanent": true,
+  "allow_session": true,
+  "request_id": "32918bb2b7294c60ac2cead5753c88bb",
+  "event": "approval.request",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290619.361505,
+  "choices": [
+   "once",
+   "session",
+   "always",
+   "deny"
+  ],
+  "seq": 38
+ },
+ {
+  "t": "33.95",
+  "id": "39",
+  "event": "approval.responded",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290619.3675098,
+  "choice": "deny",
+  "request_id": "32918bb2b7294c60ac2cead5753c88bb",
+  "resolved": 1,
+  "seq": 39
+ },
+ {
+  "t": "33.96",
+  "id": "40",
+  "event": "tool.completed",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290619.3800724,
+  "tool": "terminal",
+  "duration": 0.389,
+  "error": true,
+  "preview": "{\"output\": \"\", \"exit_code\": -1, \"error\": \"BLOCKED: Command denied by user. The user has NOT consented to this action. Do NOT retry this command, do NOT rephrase it, and do NOT attempt the same outcome via a different command. Stop the current workflow and wait for the user to respond before taking any further destructive or irreversible action.\", \"status\": \"blocked\", \"user_summary\": \"You denied this command \u2014 it did not run.\"}",
+  "seq": 40
+ },
+ {
+  "t": "42.45",
+  "id": "41",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290627.8731656,
+  "delta": "\n\nStep",
+  "seq": 41
+ },
+ {
+  "t": "42.45",
+  "id": "42",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290627.874116,
+  "delta": " ",
+  "seq": 42
+ },
+ {
+  "t": "42.60",
+  "id": "43",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.025356,
+  "delta": "3",
+  "seq": 43
+ },
+ {
+  "t": "42.60",
+  "id": "44",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.0267253,
+  "delta": " was",
+  "seq": 44
+ },
+ {
+  "t": "42.60",
+  "id": "45",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.0275295,
+  "delta": " denied",
+  "seq": 45
+ },
+ {
+  "t": "42.62",
+  "id": "46",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.0421453,
+  "delta": " by",
+  "seq": 46
+ },
+ {
+  "t": "42.62",
+  "id": "47",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.0435307,
+  "delta": " the",
+  "seq": 47
+ },
+ {
+  "t": "42.62",
+  "id": "48",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.044895,
+  "delta": " user",
+  "seq": 48
+ },
+ {
+  "t": "42.90",
+  "id": "49",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.3254602,
+  "delta": ";",
+  "seq": 49
+ },
+ {
+  "t": "43.03",
+  "id": "50",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.4530787,
+  "delta": " stopping",
+  "seq": 50
+ },
+ {
+  "t": "43.33",
+  "id": "51",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.7563171,
+  "delta": " here",
+  "seq": 51
+ },
+ {
+  "t": "43.44",
+  "id": "52",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.861905,
+  "delta": ",",
+  "seq": 52
+ },
+ {
+  "t": "43.46",
+  "id": "53",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.8870964,
+  "delta": " the",
+  "seq": 53
+ },
+ {
+  "t": "43.51",
+  "id": "54",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.931846,
+  "delta": " directory",
+  "seq": 54
+ },
+ {
+  "t": "43.51",
+  "id": "55",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.9336343,
+  "delta": " still",
+  "seq": 55
+ },
+ {
+  "t": "43.51",
+  "id": "56",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.9347622,
+  "delta": " exists",
+  "seq": 56
+ },
+ {
+  "t": "43.51",
+  "id": "57",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.9354281,
+  "delta": " at",
+  "seq": 57
+ },
+ {
+  "t": "43.54",
+  "id": "58",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.9666176,
+  "delta": " /",
+  "seq": 58
+ },
+ {
+  "t": "43.55",
+  "id": "59",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.9682004,
+  "delta": "tmp",
+  "seq": 59
+ },
+ {
+  "t": "43.55",
+  "id": "60",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290628.9696095,
+  "delta": "/s",
+  "seq": 60
+ },
+ {
+  "t": "43.58",
+  "id": "61",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290629.0070314,
+  "delta": "core",
+  "seq": 61
+ },
+ {
+  "t": "43.59",
+  "id": "62",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290629.0085795,
+  "delta": "-sp",
+  "seq": 62
+ },
+ {
+  "t": "43.59",
+  "id": "63",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290629.0094283,
+  "delta": "ike",
+  "seq": 63
+ },
+ {
+  "t": "44.06",
+  "id": "64",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290629.4849935,
+  "delta": "-x",
+  "seq": 64
+ },
+ {
+  "t": "44.06",
+  "id": "65",
+  "event": "message.delta",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290629.486148,
+  "delta": ".",
+  "seq": 65
+ },
+ {
+  "t": "44.38",
+  "id": "66",
+  "event": "reasoning.available",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290629.8024836,
+  "text": "Step 3 was denied by the user; stopping here, the directory still exists at /tmp/score-spike-x.",
+  "seq": 66
+ },
+ {
+  "t": "44.41",
+  "id": "67",
+  "event": "run.completed",
+  "run_id": "run_6492f1ad96fb4fa58b20f847386839da",
+  "timestamp": 1791290629.8321466,
+  "output": "Step 3 was denied by the user; stopping here, the directory still exists at /tmp/score-spike-x.",
+  "usage": {
+   "input_tokens": 51481,
+   "output_tokens": 143,
+   "total_tokens": 51624,
+   "cache_read_tokens": 4256,
+   "cache_write_tokens": 0
+  },
+  "runtime": {
+   "provider": "nous",
+   "model": "poolside/laguna-s-2.1:free",
+   "route_source": "raw_request",
+   "requested": {
+    "provider": "",
+    "model": "poolside/laguna-s-2.1:free"
+   }
+  },
+  "completed": true,
+  "partial": false,
+  "interrupted": false,
+  "seq": 67
+ }
+]

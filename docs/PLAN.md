@@ -86,14 +86,14 @@ Open items: Codex plugin enablement, the architecture adversarial review, and li
 - Done when: tests with recorded fixtures from L2 pass; unknown events are counted, not crashed on.
 - Test: `pnpm --filter @score/server test -- live/gateway`
 
-**1.12 Live tests L1–L5 (with your OK)** · Lead + you
+**1.12 Live tests L1–L5** · ✅ done 2026-10-06 (see SPIKE.md); remaining work: turn `docs/spike/*.json` into server test fixtures
 - Goal: run the SPIKE live tests and capture fixtures.
 - Files: `docs/SPIKE.md` (results), `apps/server/test/fixtures/**`
 - Done when: each test has a recorded outcome; ARCHITECTURE risks updated.
 - Test: n/a (manual, commands recorded)
 
 **1.13 Bridge plugin v0** · Lead · *adversarial review before merge*
-- Goal: Python Hermes plugin: hooks → batched `POST /bridge/v1/events`; long-poll decisions → `resolve_gateway_approval`; fail-open (never blocks the agent).
+- Goal: Python Hermes plugin: hooks → batched `POST /bridge/v1/events`; long-poll decisions → `resolve_gateway_approval`; Kanban one-shot grants via in-memory `approve_permanent` scoped to `HERMES_KANBAN_TASK` (ARCHITECTURE D4.3); fail-open (never blocks the agent). Seed from `docs/spike/score-spike-plugin/`.
 - Files: `hermes-plugin/score_bridge/{plugin.yaml,__init__.py,client.py}`, `hermes-plugin/tests/*`, `hermes-plugin/pyproject.toml`
 - Done when: pytest covers batching, Score-down behavior (drops, no exceptions), decision apply; manual install doc in SETUP.md.
 - Test: `cd hermes-plugin && uv run pytest`

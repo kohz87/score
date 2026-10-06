@@ -71,6 +71,10 @@ docs/
 - **Version gate**: at startup the adapter reads `hermes --version` and `GET /v1/capabilities`, records
   them, and exposes `GET /api/system`. Unknown majors run in degraded, read-only mode with a banner.
   `translate.ts` is keyed by capability, so a Hermes upgrade touches one file plus its tests.
+- **Per-profile wiring (verified live, SPIKE L3)**: every profile has its own `state.db`
+  (`~/.hermes/profiles/<name>/state.db`; `default` uses `~/.hermes/state.db`) and its own `API_SERVER_KEY`.
+  Score stores keys in `~/.score/hermes-keys/<profile>` (0600) and sets them with `hermes -p <profile> config set
+  API_SERVER_KEY …` when an agent is added. `kanban.db` is shared. New profiles are served automatically.
 - **Reads** use SQLite opened read-only via Node's built-in `node:sqlite`
   (`file:…?mode=ro`, WAL-safe, no native addon). The reader tails `task_events` / `messages` by composite
   cursor `(created_at, id)`, never by timestamp alone.
@@ -103,22 +107,33 @@ loop guard (the same pair cannot ping-pong more than 2 times without a human mes
      choice, request_id)` **in-process**. This is *additive*: Telegram still shows the prompt, and the first answer wins.
      Score marks the item resolved on `post_approval_response`.
      **Decided (owner, 2026-10-06): additive, alongside Telegram.** The exclusive plugin transport
-     (`security.approval.transport`) is not used.
+     (`security.approval.transport`) is not used. *Verified live (SPIKE L4).* Resolution signal is the
+     `post_approval_response` hook (in-process resolution emits no `approval.responded` on the run SSE).
+     Correlation is by `session_key` + command, because the gateway-surface hook has `request_id: None`.
+     Parallel tool calls in one session can make this ambiguous; in that case Score resolves the oldest
+     pending item for that session and shows a warning.
+     Smart-mode guardian decisions (`surface: smart`, `decided_by: aux_llm`) are recorded as resolved
+     approvals with `resolvedBy: 'guardian'`, so Reports and the timeline show what was auto-approved.
   3. **Blocked Kanban workers** (origin `kanban`). Kanban workers and cron cannot ask a human: under
-     `approvals.single_query_mode: deny` they deny instantly (SPIKE (b)). **Decided (owner, 2026-10-06): a
-     blocked worker becomes an approval in Score.** The bridge plugin watches the worker's `post_tool_call` for an
-     approval-gate block (it carries `pattern_key` and `description`). It records the redacted command against the
-     Kanban task, and the task is blocked (`hermes kanban block --kind capability`, unless the agent already
-     blocked it). Score shows a normal approval card with origin `kanban`:
-     - **Approve once**: unblock the task with a comment carrying a one-shot grant. The bridge plugin in the next
-       worker process pre-approves exactly that `pattern_key` for that task's session (`approve_session`), and
-       the grant is consumed when used.
-     - **Always**: add the pattern to Hermes's permanent allowlist (`approve_permanent`), then unblock.
-     - **Deny**: comment the denial and leave the task blocked for the human (or reassign).
-     Hermes's own defaults stay unchanged: `single_query_mode` stays `deny`, so nothing is auto-approved.
-     Live test L4/L5 must confirm that the block result reaches `post_tool_call` and that `approve_session`
-     from a plugin is honored in a `-q` worker. Fallback if not: Approve = unblock + comment that tells the agent
-     the human approved, and the agent retries (weaker; flagged in the UI).
+     `approvals.single_query_mode: deny` they deny instantly, without firing `pre_approval_request` (SPIKE L5).
+     **Decided (owner, 2026-10-06): a blocked worker becomes an approval in Score.** *Mechanism verified live.*
+     - Detect: the bridge plugin's `post_tool_call` in a worker (`HERMES_KANBAN_TASK` set) sees
+       `status: blocked` + "BLOCKED: Command flagged as dangerous …". It recomputes `pattern_key` with Hermes's
+       `detect_dangerous_command(command)` and posts an approval (origin `kanban`, `taskId`, redacted command).
+       The agent normally blocks the task itself (`kanban_block`, kind `capability`).
+     - **Approve once**: Score records a one-shot grant `{taskId, pattern_key}`, comments on the task and
+       unblocks it (`hermes kanban comment` / `unblock`). In the next worker for that task, the bridge plugin
+       calls `tools.approval.approve_permanent(pattern_key)` **in memory only**, scoped to the process whose
+       `HERMES_KANBAN_TASK` matches. It lives and dies with that worker; nothing is written to
+       `command_allowlist`. (`approve_session` does **not** work here: unattended mode checks only the
+       permanent set.) The grant is marked consumed when the matching `post_tool_call` succeeds.
+     - **Always**: also persist the pattern in that profile's `command_allowlist` (via `hermes -p <profile>`
+       config tooling, shown as a diff first).
+     - **Deny**: comment the denial; the task stays blocked for the human (or gets reassigned).
+     - Watch for Hermes's re-block loop guard: a second block for the same reason sends the task to `triage`,
+       and the specifier may re-dispatch it. Score must apply the grant **before** unblocking, and show
+       `block_loop_detected` events.
+     Hermes's own defaults stay unchanged (`single_query_mode: deny`); nothing is auto-approved.
 - The "Needs you" column = approvals from sources 1–3, plus tasks blocked with `block_kind` `needs_input`
   (questions, not approvals).
 - All approval decisions are idempotent (`requestId` + `Idempotency-Key`). A double click, two tabs, or Telegram
@@ -176,7 +191,8 @@ diamond), `designer` (coral, square). Persona names live only in the user's loca
 
 | Risk | Mitigation |
 |---|---|
-| Hook payloads differ from source reading | Live test L4 before Phase 1 bridge work; contract tests on captured fixtures |
+| Hook payloads differ from source reading | Verified in L4/L5; fixtures in `docs/spike/`; contract tests on captured payloads |
+| Bridge relies on non-public Hermes functions (`resolve_gateway_approval`, `approve_permanent`, `detect_dangerous_command`) | All calls live in one plugin module with a version check; the upgrade drill re-runs the L4/L5 scenarios |
 | In-process `resolve_gateway_approval` is not a public API | Isolated in the plugin; fall back to exclusive transport (public contract) |
 | Gateway must serve every profile | Setup checks `served_profiles`; Settings shows unserved agents |
 | `node:sqlite` stability on Node 24 | Read-only use only; `better-sqlite3` (MIT) is a drop-in fallback |

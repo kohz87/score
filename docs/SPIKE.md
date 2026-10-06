@@ -1,8 +1,9 @@
 # Spike: what the live Hermes install actually exposes
 
 Date: 2026-10-06. Machine: Ubuntu 26.04.1 LTS, x86_64.
-Everything here was run **read-only**. No Hermes config, database or plugin was changed.
-SQLite files were opened with `file:…?mode=ro` URIs. Secrets in `config.yaml` were redacted before display.
+Sections 0 and (a)–(d) were run **read-only**: SQLite opened with `file:…?mode=ro`, secrets redacted.
+The **live tests** at the end (L1–L5) were run after the owner approved them, and they changed Hermes config; the
+full list of changes is in "What the live tests changed".
 
 Source code was read at the exact commit the live install runs (`e97923c3`, checked out in
 `../reference/hermes-agent`, one commit behind upstream `main`).
@@ -11,9 +12,9 @@ Source code was read at the exact commit the live install runs (`e97923c3`, chec
 >
 > | Question | Answer | Confidence |
 > |---|---|---|
-> | (a) Tool calls visible mid-run? | **Yes**, three ways: run SSE (`/v1/runs/{id}/events`), incremental `state.db` flushes after every tool result, and in-process plugin hooks. | Source-verified; not yet observed live (needs one test run, see "Open live tests") |
-> | (b) See and answer a pending approval? | **Yes for runs Score starts** (`approval.request` event → `POST /v1/runs/{id}/approval`). **For other runs** (Telegram, cron, other UIs) only through a Hermes plugin: observe via `pre_approval_request`, answer via an approval *transport* or in-process `resolve_gateway_approval`. **Kanban workers never ask anyone by default**: they auto-deny. | Source-verified |
-> | (c) Start a turn for a specific profile from our backend? | **Yes**: `POST /p/{profile}/v1/runs` on the gateway's API server (profile must be served by the gateway), or a Kanban task assigned to that profile, or `hermes -p <profile> chat -q` (no approvals possible). | Source-verified; the API server is **not enabled** on this install |
+> | (a) Tool calls visible mid-run? | **Yes**, three ways: run SSE (`/v1/runs/{id}/events`), incremental `state.db` flushes after every tool result, and in-process plugin hooks. | **Verified live** (L2, L4) |
+> | (b) See and answer a pending approval? | **Yes for runs Score starts** (`approval.request` event → `POST /v1/runs/{id}/approval`). **For other runs** (Telegram, cron, other UIs) only through a Hermes plugin: observe via `pre_approval_request`, answer via an approval *transport* or in-process `resolve_gateway_approval`. **Kanban workers never ask anyone by default**: they auto-deny. | **Verified live** (L2, L4A, L5), including in-process resolution and a scoped Kanban grant |
+> | (c) Start a turn for a specific profile from our backend? | **Yes**: `POST /p/{profile}/v1/runs` on the gateway's API server (profile must be served by the gateway), or a Kanban task assigned to that profile, or `hermes -p <profile> chat -q` (no approvals possible). | **Verified live** (L1, L3); needs a per-profile API key |
 > | (d) Kanban DB schema? | 7 tables, all **empty**. Full DDL in `docs/spike/kanban-schema.sql`. | Verified live |
 >
 > **Your install differs from the brief.** It has only the `default` profile (no akeno / fern / makima / marin),
@@ -205,12 +206,115 @@ Other DBs (read-only dumps in `docs/spike/`):
 
 ---
 
-## Open live tests (each needs your OK because it writes or spends tokens)
 
-| # | Test | What it writes | Why |
-|---|---|---|---|
-| L1 | Enable the API server: `hermes config set platforms.api_server.enabled true` (+ key), then `hermes gateway restart` | `~/.hermes/config.yaml`, restarts gateway | Prerequisite for (a) channel 1, (b) row 1, (c) option 1 |
-| L2 | One cheap run: `POST /v1/runs` "run `ls` then `rm -rf /tmp/score-spike-x`" and watch `/events` | 1 session in `state.db`, model tokens | Observe `tool.*` and `approval.request` live, answer via `/approval` |
-| L3 | Create two test profiles (`hermes profile create score-test-a/-b`) and have the gateway serve them | `~/.hermes/profiles/…` | Confirm `/p/{profile}/v1/runs` routing |
-| L4 | Install a 30-line throwaway hook plugin that appends hook payloads to a file | `~/.hermes/plugins/score-spike/` | Confirm hooks fire in gateway **and** Kanban worker processes, and that `pre_approval_request.request_id` matches the transport request |
-| L5 | Create one Kanban task assigned to a test profile | 1 task row + worker run | See `task_events` kinds and payloads in practice |
+## Live tests (run 2026-10-06 with owner approval)
+
+Scripts and evidence: `docs/spike/run.mjs` (run driver: starts a run, records SSE, samples `state.db`, optionally
+answers approvals), `docs/spike/score-spike-plugin/` (throwaway hook logger with two opt-in probes),
+`docs/spike/l2-run-events.json`, `l4a-run-events.json`, `l5-worker-hooks.json`, `l5-task-events.json`.
+Model for all runs: `poolside/laguna-s-2.1:free` (free tier, **$0 spent**).
+
+### L1: enable the API server ✅
+```console
+$ umask 077; python3 -I -c 'import secrets;print(secrets.token_urlsafe(32))' > ~/.score/hermes-keys/default
+$ hermes config set API_SERVER_KEY "$(cat ~/.score/hermes-keys/default)"
+✓ Set API_SERVER_KEY in /home/raven/.hermes/.env
+$ hermes gateway restart
+✓ User service restarted (PID 12014)
+$ curl -s http://127.0.0.1:8642/v1/health
+{"status": "ok", "platform": "hermes-agent", "version": "0.21.5"}            # no auth needed
+$ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8642/v1/capabilities
+401
+$ curl -s -H "Authorization: Bearer $KEY" http://127.0.0.1:8642/v1/capabilities   # excerpt
+"run_submission": true, "run_events_sse": true, "run_stop": true, "run_steer": true,
+"run_approval_response": true, "tool_progress_events": true, "approval_events": true,
+"session_chat_streaming": true, "skills_api": true,
+"admin_config_rw": false, "jobs_admin": false, "memory_write_api": false,
+"session_continuity_header": "X-Hermes-Session-Id", "session_key_header": "X-Hermes-Session-Key"
+```
+Setting `API_SERVER_KEY` alone enables the API server. Config, jobs and memory writes are **not** available over
+HTTP, so Score uses the `hermes` CLI for those.
+
+### L2: one run on the default profile, deny via the Runs API ✅
+- **Problem found:** your default model `stealth/space-bunny-alpha` returns `HTTP 404 … not found`, and paid models
+  fail with "account balance is too low" (Nous Portal). Every run on `default` currently fails. Per-request
+  `"model"` overrides work (the run records the requested model).
+- Event order (68 events): `reasoning.available` → `message.interim` → `tool.started {tool, preview: <command>}` →
+  `tool.completed {duration, error, preview: <json result ≤500 chars>}` → … → `approval.request` →
+  `approval.responded` → `tool.completed {error: true, "BLOCKED: Command denied by user…"}` → `run.completed
+  {output, usage}`. `id:` = `seq`, monotonic per run, starting at 0.
+- `approval.request` payload: `command` (redacted), `pattern_key`, `pattern_keys`, `description`,
+  `allow_permanent`, `allow_session`, `request_id`. `POST /v1/runs/{id}/approval {"choice":"deny","request_id":…}`
+  → 200 `{"resolved": 1}` within ~10 ms; the agent stopped as instructed.
+- `state.db`: the session row and user message appear at run start. The assistant's `tool_calls` row lands when
+  the tool **starts**, and the `tool` result row right after it **completes**. `sessions.last_activity_description`
+  stayed `null`. So DB polling trails SSE by about 1 s.
+- Cost signal: **51k input tokens** for three one-line commands (large system prompt).
+
+### L3: per-profile runs ✅
+```console
+$ hermes profile create scoretesta --clone --no-alias --description "Score spike test profile (safe to delete)"
+$ hermes profile create scoretestb --clone --no-alias --description "…"
+# gateway_state.json → served_profiles: ['default', 'scoretesta', 'scoretestb']   (auto-served, no restart)
+$ hermes -p scoretesta config set model.default 'poolside/laguna-s-2.1:free'      # test profiles only
+$ curl … /p/nosuchprofile/v1/capabilities → 404 {"error": "Unknown or unconfigured profile"}
+$ curl … -H "Bearer <owner key>" /p/scoretesta/v1/runs → 401 gateway_auth_failed
+$ hermes -p scoretesta config set API_SERVER_KEY <per-profile key>                 # no restart needed
+$ curl … /p/scoretesta/v1/runs → run.completed "hello from scoretesta"
+```
+- **Each named profile needs its own `API_SERVER_KEY`** (the owner key is refused). `--clone` does not copy it.
+  Score keeps one key per profile in `~/.score/hermes-keys/<profile>` (0600).
+- Run IDs are scoped per profile: an unprefixed `/v1/runs/{id}` lookup of a profile's run returns 404.
+- **Each profile has its own `state.db`** at `~/.hermes/profiles/<name>/state.db`. `kanban.db` is shared
+  (`~/.hermes/kanban.db`, `assignee` = profile).
+
+### L4: hooks + approvals alongside other surfaces ✅ (after one adjustment)
+Plugin installed into **scoretesta only** (`~/.hermes/profiles/scoretesta/plugins/score-spike/`, then
+`hermes -p scoretesta plugins enable score-spike`). The running gateway hot-reloaded it, with no restart.
+- Hooks fire in the gateway process for API runs: `on_session_start`, `pre_tool_call` / `post_tool_call`
+  (`tool_name`, `args`, `result`, `tool_call_id`, `duration_ms`, `status`), `on_interim_message`,
+  `on_human_input_request` / `resolved`, `pre_approval_request` / `post_approval_response`, `on_session_end`.
+  For API runs, `session_id` = `session_key` = the `run_…` id.
+- First attempt: the **smart approval guardian auto-approved** `rm -rf /tmp/…` (`surface: smart`,
+  `choice: smart_approve`, `decided_by: aux_llm`). In L2 the same pattern went to a human, so smart mode is
+  nondeterministic. The hooks still fire, so Score can show "auto-approved by guardian".
+- With `approvals.mode: manual` on scoretesta: `pre_approval_request {session_key, pattern_key, surface:
+  gateway, request_id: None}` → the plugin called `tools.approval.resolve_gateway_approval(session_key, "deny")`
+  in-process 1.5 s later → `resolved: 1` → `post_approval_response {choice: deny}` → the agent got "BLOCKED:
+  Command denied by user". **Approvals shown alongside other surfaces work.**
+- Gotchas: (1) in-process resolution emits **no** `approval.responded` on the run SSE, so Score must use
+  `post_approval_response` (or the blocked `tool.completed`) as the resolution signal. (2) On the gateway
+  surface the hook's `request_id` is `None`, and the SSE `request_id` differs from the `on_human_input_request`
+  `request_id`, so correlation is by `session_key` (plus command text). This is fine for sequential tools and
+  ambiguous for parallel tool calls in one session.
+
+### L5: Kanban worker approvals ✅ (the session grant failed; an in-memory allow works)
+- Task `t_e8276867` → dispatcher spawned worker pid 14388 (`HERMES_KANBAN_TASK` set, `HERMES_SINGLE_QUERY_SESSION=1`).
+  `task_events`: `created → claimed → tip_scratch_workspace → spawned → heartbeat → blocked`.
+- The `rm -rf` was denied **instantly**, with **no** `pre_approval_request` hook. It is visible only as
+  `post_tool_call.result = {"exit_code": -1, "error": "BLOCKED: Command flagged as dangerous (delete in root
+  path) but single-query mode (-q) runs without a user present…", "status": "blocked"}`. There is no structured
+  `pattern_key`; the bridge can recompute it with Hermes's own `detect_dangerous_command(command)`.
+- **Session grant failed:** `approve_session(get_current_session_key(), pattern)` from `pre_tool_call` had no
+  effect, because unattended mode checks only the **permanent** allowlist (`_unattended_deny` →
+  `_is_permanently_approved`). A re-block for the same reason sent the task to **triage**, and Hermes's specifier
+  re-dispatched it from there (`block_loop_detected`, `specified`, `promoted`). Archived to stop the loop.
+- **In-memory allow works:** for a fresh task `t_478c2ed0`, the plugin called `tools.approval.approve_permanent(
+  "delete in root path")` **only in the worker whose `HERMES_KANBAN_TASK` matched**. That set is in-memory
+  (persisting is a separate `save_permanent_allowlist` step), so the grant lived and died with that worker process.
+  The `rm -rf` ran, the task completed, and a concurrent worker for another task was still blocked. No
+  `command_allowlist` was written anywhere (checked default and scoretesta configs).
+
+### What the live tests changed (all approved)
+| Change | Where | Keep? |
+|---|---|---|
+| `API_SERVER_KEY` set → API server enabled on 127.0.0.1:8642 | `~/.hermes/.env` | Keep: Score needs it |
+| Profiles `scoretesta`, `scoretestb` (cloned from default, free model, own API keys) | `~/.hermes/profiles/` | Keep for development; delete with `hermes profile delete <name>` |
+| `approvals.mode: manual` | scoretesta config only | Keep (deterministic tests) |
+| Plugin `score-spike` (now **disabled**) | scoretesta plugins | Delete when the real bridge plugin lands |
+| Kanban tasks `t_e8276867` (archived), `t_478c2ed0` (done) | `~/.hermes/kanban.db` | Harmless |
+| Sessions from test runs | default/test-profile `state.db` | Harmless |
+| Score keys `~/.score/hermes-keys/*` (0600, one per profile) | `~/.score/` | Keep |
+
+**Still broken on your side (not caused by the tests):** the default profile's model `stealth/space-bunny-alpha`
+doesn't exist anymore, and the Nous Portal balance can't pay for paid models.

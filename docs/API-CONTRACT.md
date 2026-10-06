@@ -43,7 +43,7 @@ type Approval = {
   command: string /* redacted by Hermes */; cwd: string | null
   description: string /* why it was flagged / which rule */
   choices: ApprovalChoice[]; createdAt: string; expiresAt: string | null
-  resolvedAt: string | null; resolvedBy: 'you' | 'telegram' | 'timeout' | 'rule' | string | null
+  resolvedAt: string | null; resolvedBy: 'you' | 'telegram' | 'timeout' | 'rule' | 'guardian' /* smart-mode aux LLM */ | string | null
   choice: ApprovalChoice | null
   blocking: string /* "Nothing else is blocked; reviewer keeps going" */ | null
   refs: Ref[]

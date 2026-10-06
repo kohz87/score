@@ -1,0 +1,399 @@
+[
+ {
+  "t": "7.51",
+  "id": "0",
+  "event": "tool.started",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290877.6727135,
+  "tool": "terminal",
+  "preview": "mkdir -p /tmp/score-spike-y",
+  "seq": 0
+ },
+ {
+  "t": "7.83",
+  "id": "1",
+  "event": "tool.completed",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290877.985991,
+  "tool": "terminal",
+  "duration": 0.311,
+  "error": false,
+  "preview": "{\"output\": \"\", \"exit_code\": 0, \"error\": null}",
+  "seq": 1
+ },
+ {
+  "t": "10.25",
+  "id": "2",
+  "event": "tool.started",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290880.4068673,
+  "tool": "terminal",
+  "preview": "rm -rf /tmp/score-spike-y",
+  "seq": 2
+ },
+ {
+  "t": "10.55",
+  "id": "3",
+  "command": "rm -rf /tmp/score-spike-y",
+  "pattern_key": "delete in root path",
+  "pattern_keys": [
+   "delete in root path"
+  ],
+  "description": "delete in root path",
+  "allow_permanent": true,
+  "allow_session": true,
+  "request_id": "4803537e50d848d5a1b4bfd6a82f8165",
+  "event": "approval.request",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290880.7137184,
+  "choices": [
+   "once",
+   "session",
+   "always",
+   "deny"
+  ],
+  "seq": 3
+ },
+ {
+  "t": "12.07",
+  "id": "4",
+  "event": "tool.completed",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290882.2261147,
+  "tool": "terminal",
+  "duration": 1.815,
+  "error": true,
+  "preview": "{\"output\": \"\", \"exit_code\": -1, \"error\": \"BLOCKED: Command denied by user. The user has NOT consented to this action. Do NOT retry this command, do NOT rephrase it, and do NOT attempt the same outcome via a different command. Stop the current workflow and wait for the user to respond before taking any further destructive or irreversible action.\", \"status\": \"blocked\", \"user_summary\": \"You denied this command \u2014 it did not run.\"}",
+  "seq": 4
+ },
+ {
+  "t": "14.49",
+  "id": "5",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.6504369,
+  "delta": "\n\nCreated",
+  "seq": 5
+ },
+ {
+  "t": "14.49",
+  "id": "6",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.6520689,
+  "delta": " `/",
+  "seq": 6
+ },
+ {
+  "t": "14.49",
+  "id": "7",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.6544807,
+  "delta": "tmp",
+  "seq": 7
+ },
+ {
+  "t": "14.53",
+  "id": "8",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.693918,
+  "delta": "/s",
+  "seq": 8
+ },
+ {
+  "t": "14.54",
+  "id": "9",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.69525,
+  "delta": "core",
+  "seq": 9
+ },
+ {
+  "t": "14.54",
+  "id": "10",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.6966395,
+  "delta": "-sp",
+  "seq": 10
+ },
+ {
+  "t": "14.59",
+  "id": "11",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.750883,
+  "delta": "ike",
+  "seq": 11
+ },
+ {
+  "t": "14.60",
+  "id": "12",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.7539105,
+  "delta": "-y",
+  "seq": 12
+ },
+ {
+  "t": "14.60",
+  "id": "13",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.7552204,
+  "delta": "`",
+  "seq": 13
+ },
+ {
+  "t": "14.61",
+  "id": "14",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.77074,
+  "delta": " successfully",
+  "seq": 14
+ },
+ {
+  "t": "14.61",
+  "id": "15",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.773128,
+  "delta": ".",
+  "seq": 15
+ },
+ {
+  "t": "14.61",
+  "id": "16",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.7738085,
+  "delta": " The",
+  "seq": 16
+ },
+ {
+  "t": "14.66",
+  "id": "17",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.820316,
+  "delta": " `",
+  "seq": 17
+ },
+ {
+  "t": "14.66",
+  "id": "18",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.8219757,
+  "delta": "rm",
+  "seq": 18
+ },
+ {
+  "t": "14.66",
+  "id": "19",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.8236156,
+  "delta": " -",
+  "seq": 19
+ },
+ {
+  "t": "14.69",
+  "id": "20",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.8525991,
+  "delta": "rf",
+  "seq": 20
+ },
+ {
+  "t": "14.70",
+  "id": "21",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.855436,
+  "delta": "`",
+  "seq": 21
+ },
+ {
+  "t": "14.70",
+  "id": "22",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.857137,
+  "delta": " command",
+  "seq": 22
+ },
+ {
+  "t": "14.74",
+  "id": "23",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.902294,
+  "delta": " was",
+  "seq": 23
+ },
+ {
+  "t": "14.74",
+  "id": "24",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.9041421,
+  "delta": " blocked",
+  "seq": 24
+ },
+ {
+  "t": "14.74",
+  "id": "25",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.9058373,
+  "delta": " by",
+  "seq": 25
+ },
+ {
+  "t": "14.79",
+  "id": "26",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.9498224,
+  "delta": " your",
+  "seq": 26
+ },
+ {
+  "t": "14.79",
+  "id": "27",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.9516447,
+  "delta": " shell",
+  "seq": 27
+ },
+ {
+  "t": "14.79",
+  "id": "28",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.9532611,
+  "delta": " consent",
+  "seq": 28
+ },
+ {
+  "t": "14.82",
+  "id": "29",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.9850795,
+  "delta": " settings",
+  "seq": 29
+ },
+ {
+  "t": "14.83",
+  "id": "30",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.9867406,
+  "delta": " (",
+  "seq": 30
+ },
+ {
+  "t": "14.83",
+  "id": "31",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290884.9880252,
+  "delta": "no",
+  "seq": 31
+ },
+ {
+  "t": "14.86",
+  "id": "32",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290885.0229461,
+  "delta": " removal",
+  "seq": 32
+ },
+ {
+  "t": "14.86",
+  "id": "33",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290885.0247138,
+  "delta": " rights",
+  "seq": 33
+ },
+ {
+  "t": "14.87",
+  "id": "34",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290885.026433,
+  "delta": ");",
+  "seq": 34
+ },
+ {
+  "t": "14.90",
+  "id": "35",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290885.0599422,
+  "delta": " not",
+  "seq": 35
+ },
+ {
+  "t": "14.90",
+  "id": "36",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290885.061574,
+  "delta": " retrying",
+  "seq": 36
+ },
+ {
+  "t": "14.90",
+  "id": "37",
+  "event": "message.delta",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290885.0631537,
+  "delta": ".",
+  "seq": 37
+ },
+ {
+  "t": "14.95",
+  "id": "38",
+  "event": "reasoning.available",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290885.1079493,
+  "text": "Created `/tmp/score-spike-y` successfully. The `rm -rf` command was blocked by your shell consent settings (no removal rights); not retrying.",
+  "seq": 38
+ },
+ {
+  "t": "14.97",
+  "id": "39",
+  "event": "run.completed",
+  "run_id": "run_c6d52652e1c748b497d138932c8fc5e5",
+  "timestamp": 1791290885.1295292,
+  "output": "Created `/tmp/score-spike-y` successfully. The `rm -rf` command was blocked by your shell consent settings (no removal rights); not retrying.",
+  "usage": {
+   "input_tokens": 38465,
+   "output_tokens": 202,
+   "total_tokens": 38667,
+   "cache_read_tokens": 14912,
+   "cache_write_tokens": 0
+  },
+  "runtime": {
+   "provider": "nous",
+   "model": "poolside/laguna-s-2.1:free",
+   "route_source": "global"
+  },
+  "completed": true,
+  "partial": false,
+  "interrupted": false,
+  "seq": 39
+ }
+]

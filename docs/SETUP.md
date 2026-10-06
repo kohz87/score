@@ -86,18 +86,29 @@ Then:
 pnpm e2e                # starts `pnpm dev` automatically if it is not already running
 ```
 
-## 6. Live mode against Hermes (Phase 1+, not needed yet)
+## 6. Live mode against Hermes
 
-Score talks to the Hermes gateway's API server. On the Hermes machine **(system: changes Hermes config)**:
+Score talks to the Hermes gateway's API server. **(system: these write Hermes config.)**
 
 ```bash
-hermes config set platforms.api_server.enabled true
+# One key per Hermes profile; Score keeps its copies in ~/.score/hermes-keys/ (0600).
+umask 077; mkdir -p ~/.score/hermes-keys
+python3 -I -c 'import secrets;print(secrets.token_urlsafe(32))' > ~/.score/hermes-keys/default
+hermes config set API_SERVER_KEY "$(cat ~/.score/hermes-keys/default)"     # enables the API server
 hermes gateway restart
-curl -s http://127.0.0.1:8642/v1/health
+curl -s http://127.0.0.1:8642/v1/health                                    # {"status": "ok", ...}
+
+# For every other profile Score should drive (no restart needed):
+P=<profile>
+python3 -I -c 'import secrets;print(secrets.token_urlsafe(32))' > ~/.score/hermes-keys/$P
+hermes -p $P config set API_SERVER_KEY "$(cat ~/.score/hermes-keys/$P)"
 ```
 
-Details, plus the Score bridge plugin install (Python, managed with `uv`), will be added when Phase 1 tasks
-1.12–1.13 land.
+Check that each profile's `model.default` is a model your provider actually serves
+(`curl -s -H "Authorization: Bearer $(cat ~/.score/hermes-keys/default)" http://127.0.0.1:8642/api/model/options`).
+
+The Score bridge plugin (Python, managed with `uv`) gets its install steps here when Phase 1 task 1.13 lands.
 
 ## Changelog of this file
 - 2026-10-06: initial (Phase 0).
+- 2026-10-06: live-mode steps verified (per-profile API keys).
