@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
     pairing: { createToken: vi.fn(() => 'pairing-token') },
     listen: vi.fn(async () => undefined),
     close: vi.fn(async (): Promise<void> => undefined),
+    log: { error: vi.fn() },
   }
   return {
     db,
@@ -19,6 +20,10 @@ const mocks = vi.hoisted(() => {
     storeConstructor: vi.fn(),
     acquireHomeLock: vi.fn(() => ({ release: mocksRelease })),
     release: mocksRelease,
+    ingest: { close: vi.fn(async (): Promise<void> => undefined) },
+    createIngest: vi.fn(),
+    getEpoch: vi.fn(() => 'epoch'),
+    pruneEvents: vi.fn(),
   }
 })
 
@@ -26,7 +31,10 @@ vi.mock('../src/db/index.ts', () => ({
   openDatabase: mocks.openDatabase,
   migrate: mocks.migrate,
   acquireHomeLock: mocks.acquireHomeLock,
+  getEpoch: mocks.getEpoch,
 }))
+vi.mock('../src/hub/ingest.ts', () => ({ createIngest: mocks.createIngest }))
+vi.mock('../src/hub/retention.ts', () => ({ pruneEvents: mocks.pruneEvents }))
 vi.mock('../src/app.ts', () => ({ buildApp: mocks.buildApp }))
 vi.mock('../src/auth/sqlite-session-store.ts', () => ({
   SqliteSessionStore: class {
@@ -42,6 +50,8 @@ let previousExitCode: typeof process.exitCode
 beforeEach(() => {
   vi.resetModules()
   vi.clearAllMocks()
+  mocks.createIngest.mockReturnValue(mocks.ingest)
+  vi.spyOn(globalThis, 'setInterval')
   previousExitCode = process.exitCode
   process.exitCode = undefined
   vi.stubEnv('SCORE_HOME', '/tmp/score-test-startup')
@@ -59,6 +69,10 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  for (const result of vi.mocked(setInterval).mock.results) {
+    if (result.type === 'return') clearInterval(result.value)
+  }
+  vi.useRealTimers()
   process.exitCode = previousExitCode
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
@@ -73,9 +87,13 @@ test('startup opens and migrates the configured database before building and lis
     fileURLToPath(new URL('../migrations/', import.meta.url)),
   )
   expect(mocks.storeConstructor).toHaveBeenCalledExactlyOnceWith(mocks.db)
+  expect(mocks.createIngest).toHaveBeenCalledExactlyOnceWith(mocks.db)
   expect(mocks.buildApp).toHaveBeenCalledWith({
     config: expect.objectContaining({ home: '/tmp/score-test-startup' }),
     sessionStore: expect.any(Object),
+    db: mocks.db,
+    ingest: mocks.ingest,
+    getEpoch: expect.any(Function),
   })
   expect(mocks.app.listen).toHaveBeenCalledExactlyOnceWith({ host: '127.0.0.1', port: 8740 })
   expect(process.stdout.write).toHaveBeenCalledExactlyOnceWith(
@@ -85,6 +103,7 @@ test('startup opens and migrates the configured database before building and lis
     mocks.acquireHomeLock,
     mocks.openDatabase,
     mocks.migrate,
+    mocks.createIngest,
     mocks.storeConstructor,
     mocks.buildApp,
     mocks.app.listen,
@@ -109,10 +128,15 @@ test.each(['SIGINT', 'SIGTERM'])(
     signals.get('SIGTERM')?.()
     expect(mocks.app.close).toHaveBeenCalledTimes(1)
     expect(mocks.db.close).not.toHaveBeenCalled()
+    expect(mocks.ingest.close).not.toHaveBeenCalled()
     if (!finishClose) throw new Error('Shutdown was not started')
     finishClose()
     await vi.waitFor(() => expect(mocks.db.close).toHaveBeenCalledTimes(1))
     expect(mocks.release).toHaveBeenCalledOnce()
+    expect(mocks.ingest.close).toHaveBeenCalledOnce()
+    expect(mocks.ingest.close.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.db.close.mock.invocationCallOrder[0]!,
+    )
     expect(mocks.db.close.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.release.mock.invocationCallOrder[0]!,
     )
@@ -194,4 +218,19 @@ test('a database shutdown failure still releases home ownership', async () => {
   signals.get('SIGTERM')?.()
   await vi.waitFor(() => expect(mocks.release).toHaveBeenCalledOnce())
   expect(process.exitCode).toBe(1)
+})
+
+test('hourly retention is unrefd and cleared before shutdown', async () => {
+  vi.useFakeTimers()
+  const interval = vi.spyOn(globalThis, 'setInterval')
+  await import('../src/index.ts')
+  expect(interval).toHaveBeenCalledExactlyOnceWith(expect.any(Function), 60 * 60 * 1000)
+  const timer = interval.mock.results[0]!.value as NodeJS.Timeout
+  expect(timer.hasRef()).toBe(false)
+  await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+  expect(mocks.pruneEvents).toHaveBeenCalledExactlyOnceWith(mocks.db)
+  signals.get('SIGTERM')?.()
+  await vi.waitFor(() => expect(mocks.db.close).toHaveBeenCalledOnce())
+  await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+  expect(mocks.pruneEvents).toHaveBeenCalledOnce()
 })

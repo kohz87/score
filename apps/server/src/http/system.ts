@@ -1,22 +1,9 @@
 import type { FastifyInstance } from 'fastify'
-import { SystemStatusSchema } from '@score/contract'
-import type { Config } from '../config.ts'
+import { SystemStatusSchema, type SystemStatus } from '@score/contract'
 
-export function registerSystemRoutes(app: FastifyInstance, config: Config): void {
-  app.get('/api/system', async () =>
-    SystemStatusSchema.parse({
-      mode: config.mode,
-      hermes: {
-        version: null,
-        reachable: false,
-        apiServer: false,
-        capabilities: [],
-        servedProfiles: [],
-      },
-      bridge: { producers: 0, lastSeenAt: null, isolation: 'unknown' },
-      compatibility: { fingerprint: 'unavailable', tested: false, disabled: [] },
-      agentIsolation: 'same_user',
-      degraded: ['Hermes adapter is not connected'],
-    }),
-  )
+export function registerSystemRoutes(
+  app: FastifyInstance,
+  getSystemStatus: () => SystemStatus,
+): void {
+  app.get('/api/system', async () => SystemStatusSchema.parse(getSystemStatus()))
 }
