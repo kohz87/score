@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
+  const mocksRelease = vi.fn()
   const db = { close: vi.fn() }
   const app = {
     pairing: { createToken: vi.fn(() => 'pairing-token') },
@@ -16,12 +17,15 @@ const mocks = vi.hoisted(() => {
     migrate: vi.fn(),
     buildApp: vi.fn(() => app),
     storeConstructor: vi.fn(),
+    acquireHomeLock: vi.fn(() => ({ release: mocksRelease })),
+    release: mocksRelease,
   }
 })
 
 vi.mock('../src/db/index.ts', () => ({
   openDatabase: mocks.openDatabase,
   migrate: mocks.migrate,
+  acquireHomeLock: mocks.acquireHomeLock,
 }))
 vi.mock('../src/app.ts', () => ({ buildApp: mocks.buildApp }))
 vi.mock('../src/auth/sqlite-session-store.ts', () => ({
@@ -63,6 +67,7 @@ afterEach(() => {
 test('startup opens and migrates the configured database before building and listening', async () => {
   await import('../src/index.ts')
   expect(mocks.openDatabase).toHaveBeenCalledExactlyOnceWith('/tmp/score-test-startup/score.db')
+  expect(mocks.acquireHomeLock).toHaveBeenCalledExactlyOnceWith('/tmp/score-test-startup')
   expect(mocks.migrate).toHaveBeenCalledExactlyOnceWith(
     mocks.db,
     fileURLToPath(new URL('../migrations/', import.meta.url)),
@@ -77,6 +82,7 @@ test('startup opens and migrates the configured database before building and lis
     'Pair this browser: http://127.0.0.1:5173/pair#pairing-token\n',
   )
   const order = [
+    mocks.acquireHomeLock,
     mocks.openDatabase,
     mocks.migrate,
     mocks.storeConstructor,
@@ -106,6 +112,10 @@ test.each(['SIGINT', 'SIGTERM'])(
     if (!finishClose) throw new Error('Shutdown was not started')
     finishClose()
     await vi.waitFor(() => expect(mocks.db.close).toHaveBeenCalledTimes(1))
+    expect(mocks.release).toHaveBeenCalledOnce()
+    expect(mocks.db.close.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.release.mock.invocationCallOrder[0]!,
+    )
   },
 )
 
@@ -118,6 +128,7 @@ test('migration failures are formatted and close the database without building o
     'Score server could not start: Applied migration changed\n',
   )
   expect(mocks.db.close).toHaveBeenCalledTimes(1)
+  expect(mocks.release).toHaveBeenCalledOnce()
   expect(mocks.buildApp).not.toHaveBeenCalled()
   expect(process.stdout.write).not.toHaveBeenCalled()
   expect(process.exitCode).toBe(1)
@@ -131,6 +142,7 @@ test('listen failures close the app then the database and do not print pairing c
   )
   expect(mocks.app.close).toHaveBeenCalledTimes(1)
   expect(mocks.db.close).toHaveBeenCalledTimes(1)
+  expect(mocks.release).toHaveBeenCalledOnce()
   expect(mocks.app.close.mock.invocationCallOrder[0]).toBeLessThan(
     mocks.db.close.mock.invocationCallOrder[0] ?? 0,
   )
@@ -146,6 +158,7 @@ test('configuration failures are formatted before opening a database', async () 
   )
   expect(mocks.openDatabase).not.toHaveBeenCalled()
   expect(mocks.db.close).not.toHaveBeenCalled()
+  expect(mocks.release).not.toHaveBeenCalled()
   expect(process.exitCode).toBe(1)
 })
 
@@ -158,5 +171,27 @@ test('database open failures still use the startup formatter', async () => {
     'Score server could not start: Cannot open /tmp/score-test-startup/score.db\n',
   )
   expect(mocks.db.close).not.toHaveBeenCalled()
+  expect(mocks.release).toHaveBeenCalledOnce()
+  expect(process.exitCode).toBe(1)
+})
+
+test('a home-lock failure prevents opening the database or listening', async () => {
+  mocks.acquireHomeLock.mockImplementationOnce(() => {
+    throw new Error('Another Score server is using this home')
+  })
+  await import('../src/index.ts')
+  expect(mocks.openDatabase).not.toHaveBeenCalled()
+  expect(mocks.app.listen).not.toHaveBeenCalled()
+  expect(mocks.release).not.toHaveBeenCalled()
+  expect(process.exitCode).toBe(1)
+})
+
+test('a database shutdown failure still releases home ownership', async () => {
+  mocks.db.close.mockImplementationOnce(() => {
+    throw new Error('close failed')
+  })
+  await import('../src/index.ts')
+  signals.get('SIGTERM')?.()
+  await vi.waitFor(() => expect(mocks.release).toHaveBeenCalledOnce())
   expect(process.exitCode).toBe(1)
 })
