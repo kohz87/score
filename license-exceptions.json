@@ -1,0 +1,59 @@
+{
+  "policy": "Each entry needs explicit approval from the project owner. Record who approved it, when, and why. Exact name@version only.",
+  "approved": [
+    {
+      "name": "lightningcss",
+      "version": "1.33.0",
+      "license": "MPL-2.0",
+      "scope": "dev (vite)",
+      "approvedBy": "owner",
+      "date": "2026-10-06",
+      "reason": "Hard dependency of Vite 8; build-time only, not shipped."
+    },
+    {
+      "name": "lightningcss-linux-x64-gnu",
+      "version": "1.33.0",
+      "license": "MPL-2.0",
+      "scope": "dev (vite)",
+      "approvedBy": "owner",
+      "date": "2026-10-06",
+      "reason": "Platform binary of lightningcss; build-time only."
+    },
+    {
+      "name": "caniuse-lite",
+      "version": "1.0.30001814",
+      "license": "CC-BY-4.0",
+      "scope": "dev (eslint-plugin-react-hooks → babel → browserslist)",
+      "approvedBy": "owner",
+      "date": "2026-10-06",
+      "reason": "Lint-time data only, not shipped."
+    },
+    {
+      "name": "lru-cache",
+      "version": "11.5.3",
+      "license": "BlueOak-1.0.0",
+      "scope": "dev (jsdom, eslint)",
+      "approvedBy": "owner",
+      "date": "2026-10-06",
+      "reason": "Permissive license; test/lint tooling only."
+    },
+    {
+      "name": "minimatch",
+      "version": "10.2.6",
+      "license": "BlueOak-1.0.0",
+      "scope": "dev (eslint)",
+      "approvedBy": "owner",
+      "date": "2026-10-06",
+      "reason": "Permissive license; lint tooling only."
+    },
+    {
+      "name": "mdn-data",
+      "version": "2.27.1",
+      "license": "CC0-1.0",
+      "scope": "dev (jsdom → css-tree)",
+      "approvedBy": "owner",
+      "date": "2026-10-06",
+      "reason": "Public-domain data; test tooling only."
+    }
+  ]
+}

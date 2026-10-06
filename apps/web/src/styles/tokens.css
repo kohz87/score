@@ -1,0 +1,46 @@
+/* Design tokens: source of truth is docs/design/. Agent palette is an example, not persona-bound. */
+:root {
+  --ground: #eceef2;
+  --card: #ffffff;
+  --ink: #12131a;
+  --ink-muted: #5b5e6b;
+  --radius-card: 28px;
+
+  --agent-violet: #6b4eff;
+  --agent-jade: #19c39a;
+  --agent-saffron: #ffb61e;
+  --agent-coral: #ff6b8a;
+
+  --font-heading: 'Bricolage Grotesque', system-ui, sans-serif;
+  --font-body: 'Hanken Grotesk', system-ui, sans-serif;
+  --font-code: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading);
+}
+
+code,
+pre {
+  font-family: var(--font-code);
+}
+
+.scaffold {
+  margin: 48px;
+  padding: 32px;
+  background: var(--card);
+  border-radius: var(--radius-card);
+}

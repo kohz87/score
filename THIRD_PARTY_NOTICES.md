@@ -1,0 +1,44 @@
+# Third-party notices
+
+Score's own source code does not yet include code copied or adapted from third-party sources.
+When code is copied or closely adapted, add an entry below with the source path(s) in the upstream repository
+and the full copyright notice, and keep the upstream license text.
+
+npm dependencies are not listed here. Their licenses are checked by `pnpm license:check` and their notices
+ship inside `node_modules`. A generated notices file for distribution builds is planned for Phase 5.
+
+## Approved reference sources (MIT)
+
+| Source | Copyright | Used in |
+|---|---|---|
+| github.com/JPeetz/Hermes-Studio | Copyright (c) 2026 JPeetz; portions copyright (c) 2026 Eric (outsourc-e), original hermes-workspace | not yet |
+| github.com/outsourc-e/hermes-workspace | Copyright (c) 2026 Eric (outsourc-e) | not yet |
+| github.com/NousResearch/hermes-agent | Copyright (c) 2025 Nous Research | not yet |
+| github.com/NousResearch/hermes-example-plugins | Copyright (c) 2026 Nous Research | not yet |
+
+## MIT License text (applies to each source above)
+
+```
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## Fonts (SIL Open Font License 1.1, bundled via @fontsource)
+- Bricolage Grotesque: Copyright 2022 The Bricolage Grotesque Project Authors
+- Hanken Grotesk: Copyright 2021 The Hanken Grotesk Project Authors
+- JetBrains Mono: Copyright 2020 The JetBrains Mono Project Authors
