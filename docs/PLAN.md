@@ -22,36 +22,43 @@ Toolchain, reference study, spike, architecture, contract, plan, AGENTS.md / CLA
 Open items: Codex plugin enablement, the architecture adversarial review, and live tests L1–L5 (all need you).
 
 ## Phase 1: Foundation
+Revised after the architecture review (ARCHITECTURE v0.2). Section refs like D1 point to ARCHITECTURE.md.
 
-**1.1 Contract package: shared types** · Lead
-- Goal: zod schemas + inferred TS types for API-CONTRACT §1 (shared types) and §2 (stream envelope + event union).
-- Files: `packages/contract/src/{types,stream,index}.ts`, `packages/contract/test/*.test.ts`
-- Done when: every type in §1–§2 has a schema; round-trip tests pass for one fixture per type; `apps/*` import from `@score/contract`.
+**1.1 Contract package** · Lead
+- Goal: zod schemas + inferred types for API-CONTRACT §1 (shared types), §2 (stream envelope, control frames, event union) and §11 (bridge protocol).
+- Files: `packages/contract/src/{types,stream,bridge,index}.ts`, `packages/contract/test/*.test.ts`
+- Done when: every type in §1, §2 and §11 has a schema; round-trip tests pass for one fixture per type; control frames are a separate union from durable events.
 - Test: `pnpm --filter @score/contract test`
 
-**1.2 Server skeleton** · Lead
-- Goal: Fastify app factory, config (`SCORE_HOME`, port, mode), `GET /api/system` (fake data), error shape, CSRF header guard.
-- Files: `apps/server/src/{app,config,errors}.ts`, `apps/server/src/http/system.ts`, tests
-- Done when: `inject()` tests cover 200, 400 error shape, 403 on a mutating request without `X-Score-Client`.
+**1.2 Server skeleton + session pairing** · Lead
+- Goal: Fastify app factory, config (`SCORE_HOME`, port, mode), error shape, CSRF guard, `GET /api/system` (fake), pairing (`/api/session*`, one-time token printed to the server terminal, hashed at rest), and an **H** route guard (D7.1).
+- Files: `apps/server/src/{app,config,errors}.ts`, `apps/server/src/http/{system,session}.ts`, `apps/server/src/auth/*`, tests
+- Done when: `inject()` tests cover the error shape, a 403 without `X-Score-Client`, a 401 `not_paired` on an H route, a successful pairing, token reuse rejected, and the cookie flags.
 - Test: `pnpm --filter @score/server test`
 
 **1.3 score.db + migrations** · Lead
-- Goal: `node:sqlite` wrapper, forward-only SQL migrations, `events` table.
-- Files: `apps/server/src/db/{index,migrate}.ts`, `apps/server/migrations/0001_events.sql`
-- Done when: fresh DB migrates; re-run is a no-op; tests use a temp dir.
+- Goal: `node:sqlite` wrapper (WAL, busy timeout), forward-only migrations, infrastructure tables (`events` with `epoch`, `ingest_keys`, `ingest_checkpoints`, `gaps`, `command_intents`).
+- Files: `apps/server/src/db/*`, `apps/server/migrations/0001_infra.sql`
+- Done when: fresh DB migrates; re-run is a no-op; the epoch is created once; tests use temp dirs.
 - Test: `pnpm --filter @score/server test -- db`
 
-**1.4 Event hub + `/api/stream`** · Lead · *adversarial review before merge*
-- Goal: persist → seq → fan-out; SSE endpoint with `since`, `Last-Event-ID`, heartbeat, `stream.reset` on prune/overflow, per-client queue cap.
-- Files: `apps/server/src/hub/{hub,sse}.ts`, `apps/server/src/http/stream.ts`, tests
-- Done when: tests prove no gap/no duplicate across reconnect; slow client gets reset without blocking others; retention prune works.
-- Test: `pnpm --filter @score/server test -- hub`
+**1.4a Ingest path** · Lead · *adversarial review before merge*
+- Goal: single-writer ingest queue; each observation applies dedupe + projection updates + event append + checkpoint in **one transaction**; terminal-state guards (D1, D2.3).
+- Files: `apps/server/src/hub/{ingest,projections}.ts`, tests
+- Done when: tests prove duplicates are dropped by ingest key; out-of-order delayed observations can't regress terminal states; a crash mid-transaction leaves neither the event nor the projection; snapshot reads return projection + `asOfSeq` from one read transaction.
+- Test: `pnpm --filter @score/server test -- hub/ingest`
+
+**1.4b `/api/stream` with subscription fence** · Lead
+- Goal: SSE endpoint: register-buffer → head H → replay `(since,H]` → release; control frames without IDs; epoch/retention/future-cursor resets; byte budget + write timeout; retention prune (D1).
+- Files: `apps/server/src/hub/{sse,fanout}.ts`, `apps/server/src/http/stream.ts`, tests
+- Done when: a concurrency test with producers writing during replay shows no gap and no duplicate; slow-client disconnect doesn't block others; each reset reason is covered.
+- Test: `pnpm --filter @score/server test -- hub/sse`
 
 **1.5 HermesPort + fake adapter** · Lead
-- Goal: the adapter interface (API-CONTRACT-shaped domain calls + event emitter) and a scripted fake with the four neutral agents (lead, builder, reviewer, designer) running a small scenario on a clock.
-- Files: `apps/server/src/hermes/{port,index}.ts`, `apps/server/src/hermes/fake/*`
-- Done when: `SCORE_MODE=fake pnpm dev` streams scenario events; lint rule blocks importing `hermes/*` internals elsewhere.
-- Test: `pnpm --filter @score/server test -- fake`
+- Goal: adapter interface (domain calls + observations into the ingest path) and a scripted fake with the four neutral agents, including approvals of all three origins and a gap interval.
+- Files: `apps/server/src/hermes/{port,index}.ts`, `apps/server/src/hermes/fake/*`, boundary lint rule + boundary test
+- Done when: `SCORE_MODE=fake pnpm dev` streams the scenario; the boundary test fails if non-adapter code mentions Hermes paths, URLs or event names.
+- Test: `pnpm --filter @score/server test -- fake boundary`
 
 **1.6 Web shell** · Lead
 - Goal: tokens (CSS vars), @fontsource fonts, top nav (6 destinations + "Now" dot), route stubs, ⌘K stub, avatar.
@@ -60,55 +67,75 @@ Open items: Codex plugin enablement, the architecture adversarial review, and li
 - Token source: `docs/design/html/*.html` inline styles. Most-used values: ink #12131A, muted #5E626C / #6E727C, hairline #DFE2E8, ground #ECEEF2, subtle #F4F5F8; agent tints #ECE8FF / #DDF6EE / #FFF1D1 / #FFE3E9 with text #4A2FD9 / #00694F / #8A5A00; radii 999px (pills), 28px (cards), 20/16/14/8px.
 - Test: `pnpm --filter @score/web test && pnpm e2e -- shell`
 
-**1.7 `useStream` + Query cache patching** · Lead
-- Goal: one EventSource per tab, resume, `stream.reset` → invalidate; typed event dispatch to Query cache updaters.
-- Files: `apps/web/src/data/{stream,queryClient}.ts`, tests with a mock EventSource
-- Done when: reconnect resumes from the last seq; reset triggers refetch; unknown event types are ignored and logged.
+**1.7 `useStream` with per-query resync** · Lead
+- Goal: one EventSource per tab; per-query `asOfSeq`; buffer during refetch; apply `seq > asOfSeq`; drop superseded fetches; handle `stream.hello` epoch and `stream.reset` (D1, contract §2).
+- Files: `apps/web/src/data/{stream,resync,queryClient}.ts`, tests with a mock EventSource and controllable fetches
+- Done when: tests cover a delta arriving during refetch (not lost, not double-applied), a stale fetch resolving last (ignored), an epoch change → full resync, and unknown event types ignored and logged.
 - Test: `pnpm --filter @score/web test -- stream`
 
 **1.8 AgentGlyph component** · Codex
-- Goal: render an agent as color + shape (8 shapes), sizes S/M/L, with an accessible name and high-contrast outline mode.
+- Goal: render an agent as color + shape (8 shapes), sizes S/M/L, accessible name, high-contrast outline mode.
 - Files: `apps/web/src/components/AgentGlyph.tsx` + test
-- Done when: snapshot per shape; `aria-label` includes the agent name; never color-only (shape visible in grayscale test).
+- Done when: a snapshot per shape; `aria-label` includes the agent name; the shape is distinguishable in a grayscale test.
 - Test: `pnpm --filter @score/web test -- AgentGlyph`
 
-**1.9 Live adapter: SQLite readers** · Lead
-- Goal: read-only readers for kanban.db (tasks, runs, events, links) and state.db (sessions, messages, usage); tail by `(created_at, id)`.
-- Files: `apps/server/src/hermes/live/{sqlite,kanban,sessions}.ts`, fixtures built from `docs/spike/*-schema.sql`
-- Done when: tests against fixture DBs cover tailing with same-millisecond rows; opening uses `mode=ro`.
+**1.9a SQLite readers + checkpoints** · Lead
+- Goal: read-only readers for `kanban.db` and per-profile `state.db`; tail `task_events.id` and `messages.id` per DB incarnation; never timestamps (D2.4).
+- Files: `apps/server/src/hermes/live/{sqlite,kanban,sessions}.ts`, fixture DBs built from `docs/spike/*-schema.sql`
+- Done when: tests cover carried rows with older timestamps, same-millisecond rows, DB replacement (incarnation change → re-baseline), and `mode=ro` opening.
 - Test: `pnpm --filter @score/server test -- live/sqlite`
 
+**1.9b Session reconciliation** · Codex
+- Goal: reconcile recently active sessions by `message_uid`/`tool_call_uid` (edits, `active`/`compacted` flips, rewind, compaction) into ingest observations.
+- Files: `apps/server/src/hermes/live/reconcile.ts` + fixtures
+- Done when: fixtures for rewind, compaction and edit produce the expected observations with no duplicates on re-run.
+- Test: `pnpm --filter @score/server test -- reconcile`
+
 **1.10 Upstream SSE client** · Codex
-- Goal: robust SSE parser/client (multi-line `data:`, comments, `id:`, retry, resume with `Last-Event-ID`, abort).
+- Goal: robust SSE parser/client (multi-line `data:`, comments, `id:`, retry, `Last-Event-ID` resume, abort, `replay.truncated` surfaced).
 - Files: `apps/server/src/hermes/live/sse-client.ts` + tests
-- Done when: spec-conformance tests (WHATWG event-stream parsing cases) pass; resume test against a local test server.
+- Done when: WHATWG event-stream parsing cases pass; resume test against a local server; truncation produces a typed signal.
 - Test: `pnpm --filter @score/server test -- sse-client`
 
-**1.11 Live adapter: gateway runs** · Lead
-- Goal: start/stop/steer runs on `/p/{profile}/v1/runs`, consume events, translate to domain events (`translate.ts`), capability probe.
-- Files: `apps/server/src/hermes/live/{gateway,translate,capabilities}.ts`
-- Done when: tests with recorded fixtures from L2 pass; unknown events are counted, not crashed on.
+**1.11a Gateway runs** · Lead
+- Goal: start/stop/steer via `/p/{profile}/v1/runs` with `Idempotency-Key` = `score_turn_id` through `command_intents`; status polling; truncation/restart → gap interval + reconciliation; credential generations (D2.5, D2.4).
+- Files: `apps/server/src/hermes/live/{gateway,translate,intents}.ts`, `apps/server/src/hermes/live/credentials.ts`
+- Done when: recorded-fixture tests (L2/L3/L4) pass; a crash after admission reconciles via idempotency without a double run; an unknown event is counted, not fatal.
 - Test: `pnpm --filter @score/server test -- live/gateway`
 
-**1.12 Live tests L1–L5** · ✅ done 2026-10-06 (see SPIKE.md); remaining work: turn `docs/spike/*.json` into server test fixtures
-- Goal: run the SPIKE live tests and capture fixtures.
-- Files: `docs/SPIKE.md` (results), `apps/server/test/fixtures/**`
-- Done when: each test has a recorded outcome; ARCHITECTURE risks updated.
-- Test: n/a (manual, commands recorded)
+**1.11b Compatibility fingerprint gate** · Codex
+- Goal: compute the fingerprint (D2.2), compare against `tested-fingerprints.json`, expose `SystemStatus.compatibility`, disable features with `feature_disabled`.
+- Files: `apps/server/src/hermes/live/fingerprint.ts`, `apps/server/src/hermes/tested-fingerprints.json`
+- Done when: tests cover tested, unknown and partial (bridge private API missing) fingerprints.
+- Test: `pnpm --filter @score/server test -- fingerprint`
 
-**1.13 Bridge plugin v0** · Lead · *adversarial review before merge*
-- Goal: Python Hermes plugin: hooks → batched `POST /bridge/v1/events`; long-poll decisions → `resolve_gateway_approval`; Kanban one-shot grants via in-memory `approve_permanent` scoped to `HERMES_KANBAN_TASK` (ARCHITECTURE D4.3); fail-open (never blocks the agent). Seed from `docs/spike/score-spike-plugin/`.
-- Files: `hermes-plugin/score_bridge/{plugin.yaml,__init__.py,client.py}`, `hermes-plugin/tests/*`, `hermes-plugin/pyproject.toml`
-- Done when: pytest covers batching, Score-down behavior (drops, no exceptions), decision apply; manual install doc in SETUP.md.
+**1.12 Live tests L1–L5** · ✅ done 2026-10-06 (SPIKE.md). Remaining: convert `docs/spike/*.json` into server fixtures (part of 1.9a/1.11a).
+
+**1.13a Bridge plugin: handshake, events, redaction, spool** · Lead · *adversarial review before merge*
+- Goal: Python plugin with `hermes_private.py` (all private calls), `hello` handshake (isolation mode, private API availability), hooks → batched events with `(incarnation, counter)`, mandatory `redact_sensitive_text(force=True)` before truncation, bounded on-disk spool, fail-open (D2.1, D2.4, D6).
+- Files: `hermes-plugin/score_bridge/{plugin.yaml,__init__.py,client.py,spool.py,redact.py,hermes_private.py}`, `hermes-plugin/tests/*`, `hermes-plugin/pyproject.toml`
+- Done when: pytest covers batching, Score down (spool, then drain, drop counter), secret fixtures redacted in every hook payload, host-isolation mode reported; manual install steps are in SETUP.md.
 - Test: `cd hermes-plugin && uv run pytest`
 
-**1.14 Bridge ingest + approvals ledger** · Lead
-- Goal: `/bridge/v1/*`, `approvals` table, `/api/approvals*`, events; three origins resolved idempotently.
-- Files: `apps/server/src/http/{bridge,approvals}.ts`, `apps/server/src/domain/approvals.ts`, migration `0002_approvals.sql`
-- Done when: tests cover double-decision (409), Telegram-answered-first, expiry; fake adapter produces approvals.
+**1.13b Bridge: gateway approvals with exact targets** · Lead · *adversarial review before merge*
+- Goal: capture exact `request_id` via `list_gateway_approvals` inside `pre_approval_request`; register settle callback; leased decisions; resolve by exact id only; coalesced followers attached (D4.2).
+- Files: `hermes-plugin/score_bridge/approvals.py`, `apps/server/src/hermes/bridge.ts`, tests
+- Done when: tests show no FIFO path exists; a missing id → non-actionable; delivery only to the reporting producer; a live check on scoretesta (manual mode) resolves the exact request.
+- Test: `cd hermes-plugin && uv run pytest && pnpm --filter @score/server test -- bridge`
+
+**1.13c Bridge: Kanban one-shot grants (feature-flagged)** · Lead · *adversarial review before merge*
+- Goal: nested-result decoding, verified denial class, digest-bound staged → redeemed → consumed grants, in-flight guard, add/remove around the single call, triage handling, expiry; live test **L6** on scoretesta (D4.3).
+- Files: `hermes-plugin/score_bridge/grants.py`, `apps/server/src/domain/grants.ts`, migration, tests, `docs/SPIKE.md` (L6 results)
+- Done when: unit tests cover a wrong digest, a wrong attempt, expiry, a concurrent call revoking the grant, and a missing post hook → `unknown`; L6 shows exactly one execution and no `command_allowlist` write.
+- Test: `cd hermes-plugin && uv run pytest && pnpm --filter @score/server test -- grants`
+
+**1.14 Approvals ledger + delivery outbox** · Lead
+- Goal: operations with phases; `approval_deliveries` outbox (`intent → delivering → applied | not_pending | failed | unknown`); attribution only on confirmed delivery; `/api/approvals*` (H); origin dedupe (D4).
+- Files: `apps/server/src/domain/approvals.ts`, `apps/server/src/http/approvals.ts`, migration
+- Done when: tests cover a double decision (409), an answer from another surface first (`not_pending` → "answered elsewhere", never deny), a Score crash between intent and apply, guardian escalation linking, and a non-actionable card rejecting decisions.
 - Test: `pnpm --filter @score/server test -- approvals`
 
-**Phase 1 gate** · Gemini whole-repo review + `/codex:review --base main`
+**Phase 1 gate** · Codex code review at `max` against `main` + Gemini whole-repo review (you)
 
 ## Phase 2: Chat, Tasks, Team, Settings
 
@@ -165,10 +192,10 @@ Packaging (`pnpm build && pnpm start`), a11y audit, perf (1k events/min), Hermes
 ---
 
 ## First five tasks
-1. **1.1** Contract package (shared types + stream envelope)
-2. **1.2** Server skeleton
+1. **1.1** Contract package
+2. **1.2** Server skeleton + session pairing
 3. **1.3** score.db + migrations
-4. **1.4** Event hub + `/api/stream` (with adversarial review)
-5. **1.5** HermesPort + fake adapter
+4. **1.4a** Ingest path (adversarial review before merge)
+5. **1.4b** `/api/stream` with subscription fence
 
-These need nothing from your live Hermes install, so they can start while the live tests (1.12) wait for your OK.
+None of them need the live Hermes install.

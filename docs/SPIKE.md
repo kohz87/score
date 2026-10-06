@@ -89,11 +89,12 @@ $ python3 -I docs/spike/schema.py ~/.hermes/shared-state.db > docs/spike/shared-
 
 1. **Gateway API server: run event stream (runs we start).**
    `GET /v1/runs/{run_id}/events` is SSE with `id: <seq>` on every frame and `Last-Event-ID` / `?last_seq=` resume
-   (`gateway/platforms/api_server_runs.py:1064-1150`). Events, in wire order, include `run.queued`, `run.started`,
-   `message.delta`, `message.interim`, `tool.started {tool, preview}`,
+   (`gateway/platforms/api_server_runs.py:1064-1150`). Events include `message.delta`, `message.interim`, `tool.started {tool, preview}`,
    `tool.completed {tool, duration, error, preview≤500 chars, redacted}`, `reasoning.available`, `subagent.start`,
    `subagent.complete` (with tokens and cost), `approval.request`, `approval.responded`, `run.steered`, and terminal
-   `run.completed | run.failed | run.cancelled | run.interrupted`. Backlog: 1000 events per run, in memory.
+   `run.completed | run.failed | run.cancelled | run.interrupted`. *Correction (review, 2026-10-06):* the Runs API sets
+   `queued`/`running` **status** but does not emit `run.queued`/`run.started` **events** (confirmed by the L2
+   fixture); lifecycle must come from dispatch + `GET /v1/runs/{id}`. Backlog: 1000 events per run, in memory.
    A `replay.truncated` frame tells the client when it asked for events older than that.
    **Limit:** a run is visible only to the caller that created it (`_request_owns_run`). Runs started by Telegram,
    cron, Kanban workers or other UIs are **not** visible here.
@@ -232,8 +233,10 @@ $ curl -s -H "Authorization: Bearer $KEY" http://127.0.0.1:8642/v1/capabilities 
 "admin_config_rw": false, "jobs_admin": false, "memory_write_api": false,
 "session_continuity_header": "X-Hermes-Session-Id", "session_key_header": "X-Hermes-Session-Key"
 ```
-Setting `API_SERVER_KEY` alone enables the API server. Config, jobs and memory writes are **not** available over
-HTTP, so Score uses the `hermes` CLI for those.
+Setting `API_SERVER_KEY` alone enables the API server. Config and memory writes are **not** available over HTTP,
+so Score uses the `hermes` CLI for those. *Correction (review):* `jobs_admin: false` notwithstanding, the
+authenticated `/api/jobs*` routes **are** registered (`api_server.py:1780-1787`); capabilities are not a complete
+endpoint inventory, so Score probes endpoints directly.
 
 ### L2: one run on the default profile, deny via the Runs API ✅
 - **Problem found:** your default model `stealth/space-bunny-alpha` returns `HTTP 404 … not found`, and paid models

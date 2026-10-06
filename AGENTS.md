@@ -13,9 +13,15 @@ Read `docs/ARCHITECTURE.md` before structural work and `docs/PLAN.md` for the ta
 the endpoints and events in that contract. If you need something new, update the contract doc first, then
 `packages/contract`, then both sides, in the same change.
 
-All Hermes access lives in `apps/server/src/hermes/`. Nothing else may import Hermes paths, URLs, CLI verbs or
-event names. Never read `~/.hermes/.env`, `auth.json` or any credential file. Never write Hermes SQLite
-databases: open them read-only and write through the `hermes` CLI or the gateway API.
+Hermes access lives behind two boundaries (ARCHITECTURE D2.1):
+- **Node:** `apps/server/src/hermes/`. Nothing else may import Hermes paths, URLs, CLI verbs or event names.
+- **Python:** `hermes-plugin/score_bridge/`. Every call into private Hermes functions lives in
+  `score_bridge/hermes_private.py` and nowhere else.
+
+Never read `~/.hermes/.env`, `auth.json` or any credential file. Never write Hermes SQLite databases: open them
+read-only and write through the `hermes` CLI or the gateway API. The only file-write exception is `SOUL.md` and
+`AGENTS.md` inside a profile directory, via the adapter's atomic, etag-checked writer (D2.6). Redact before
+storing anything that came from a hook (D6).
 
 ## Stack
 - Node 24 (≥ 22.22.2), pnpm 12 workspaces, TypeScript 6 (strict), ESM everywhere.

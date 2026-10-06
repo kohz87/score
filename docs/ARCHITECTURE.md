@@ -1,189 +1,329 @@
 # Score architecture
 
-Status: **DRAFT v0.1, pending `/codex:adversarial-review`** (see "Review log" at the end).
-Inputs: `docs/SPIKE.md` (what Hermes v0.21 exposes) and `docs/REFERENCE-NOTES.md` (what Hermes Studio did).
+Status: **v0.2. Revised after the adversarial review** (`docs/reviews/2026-10-06-architecture-adversarial.md`;
+responses in the "Review log" at the end). One open owner decision: the approval threat model (D7.1).
+Inputs: `docs/SPIKE.md` (what Hermes v0.21 exposes, incl. live tests) and `docs/REFERENCE-NOTES.md`.
 
 ## 1. Shape
 
 Your default preference holds, with **one push-back**: we need a small amount of Python, but as a **Hermes
 plugin** that runs inside Hermes's own processes, not as a separate sidecar service. Reason: the only way to see
-*every* agent's tool calls and approvals live (including Telegram, cron and Kanban-worker runs) is Hermes's
-in-process plugin hooks (SPIKE (a)3, (b)). Node cannot reach those. A sidecar would not help either, because it
-would be a different process.
+*every* agent's tool calls and approvals live (including Telegram, cron and Kanban-worker runs), and to act on
+gateway approvals precisely, is Hermes's in-process plugin hooks and approval queue (SPIKE L4/L5). Node cannot
+reach those, and neither could a sidecar, since it would be a different process.
 
 ```
  Browser (apps/web, React SPA)
-   │  REST  /api/*        (commands + snapshots, JSON, zod-validated)
-   │  SSE   /api/stream   (ONE stream for every screen, resumable by Last-Event-ID)
+   │  REST  /api/*        (commands + snapshots; human decisions need the paired session, D7)
+   │  SSE   /api/stream   (ONE stream for every screen; resumable; per-query watermarks, D1)
    ▼
- Score server (apps/server, Node 24 + Fastify)               ~/.score/score.db  (Score-owned state)
+ Score server (apps/server, Node 24 + Fastify)                     ~/.score/score.db (Score-owned state, D5)
    ├─ http/        routes = API-CONTRACT.md, nothing else
-   ├─ hub/         event hub: persist → seq → fan-out; snapshot+delta
-   ├─ domain/      rooms, mentions, approvals ledger, agents view, reports
-   └─ hermes/      ◄── THE ADAPTER: the only code that knows Hermes exists
-        ├─ gateway.ts    HTTP to API server: /p/{profile}/v1/runs, /events, /approval, /steer, /stop, /api/jobs
-        ├─ kanban.ts     read kanban.db (read-only SQLite) · write via `hermes kanban …` CLI
-        ├─ sessions.ts   read state.db (read-only SQLite): sessions, messages, usage, cost
-        ├─ profiles.ts   read profile dirs (config.yaml, SOUL.md, AGENTS.md, skills, memory) · write via `hermes` CLI
-        ├─ bridge.ts     ingest endpoint for the Score bridge plugin + approval decision queue
-        ├─ translate.ts  every upstream event name/shape → Score domain events (one table, versioned)
-        └─ fake/         scripted fake Hermes (same port), for dev, tests and e2e without tokens
-   ▲                ▲                                 ▲
-   │ HTTP+SSE       │ read-only SQLite + CLI          │ HTTP POST (events) / long-poll (decisions)
- Hermes gateway   ~/.hermes/{kanban,state}.db       Score bridge plugin (Python, hermes-plugin/score_bridge)
- (API server on)  ~/.hermes/profiles/*              loaded in gateway, Kanban workers, cron, CLI
+   ├─ hub/         single ordered ingest path: dedupe → projections → event log, one transaction (D1)
+   ├─ domain/      rooms, routing, approvals ledger + delivery outbox, grants, briefs, reports
+   └─ hermes/      ◄── ADAPTER BOUNDARY #1 (TypeScript): the only Node code that knows Hermes exists
+        ├─ gateway.ts    /p/{profile}/v1/runs (+events, approval, steer, stop), /api/jobs, capabilities
+        ├─ kanban.ts     read kanban.db (read-only) · write via `hermes kanban …` with idempotency keys
+        ├─ sessions.ts   read per-profile state.db (read-only) · ID checkpoints + reconciliation (D2.4)
+        ├─ profiles.ts   read profile dirs · SOUL.md/AGENTS.md atomic writes (D2.6) · other writes via CLI
+        ├─ bridge.ts     producer registry, event ingest, decision delivery leases, grant redemption (D4)
+        ├─ translate.ts  upstream shapes → Score domain events, keyed by compatibility fingerprint (D2.2)
+        └─ fake/         scripted fake Hermes for dev, tests and e2e (no tokens)
+   ▲                ▲                                   ▲
+   │ HTTP+SSE       │ read-only SQLite + CLI            │ HTTP (events, decisions, grants), spool on failure
+ Hermes gateway   ~/.hermes/{kanban.db, state.db}       Score bridge plugin  ◄── ADAPTER BOUNDARY #2 (Python)
+ (API server on)  ~/.hermes/profiles/<p>/state.db       hermes-plugin/score_bridge; the only code that calls
+                                                         private Hermes functions (score_bridge/hermes_private.py)
 ```
 
 Repo layout:
 
 ```
 apps/web/            React 19 + Vite + TypeScript SPA
-apps/server/         Fastify server + Hermes adapter
-packages/contract/   zod schemas + TS types for every endpoint and event (generated from/checked against API-CONTRACT.md)
-hermes-plugin/       score_bridge Python plugin + pytest (Phase 1b; needs uv, see SETUP.md)
-e2e/                 Playwright tests (run against the fake adapter)
-scripts/             license check, helpers
+apps/server/         Fastify server + TypeScript Hermes adapter
+packages/contract/   zod schemas + TS types for every endpoint and event (checked against API-CONTRACT.md)
+hermes-plugin/       score_bridge Python plugin + pytest (managed with uv)
+e2e/                 Playwright tests (fake adapter)
+scripts/             license check, codex-task.sh
 docs/
 ```
 
 ## 2. Key decisions
 
-### D1. One live stream: SSE, not WebSocket
-- Traffic is one-way (server → browser). Every command is a REST POST, which gets normal status codes,
-  idempotency and validation.
-- SSE gives automatic reconnect and `Last-Event-ID` for free, passes through the Vite dev proxy, and is easy
-  to debug with `curl -N`.
-- Envelope: `{ seq: number, ts: string, type: string, data: object }`. `seq` is a global, gap-free integer
-  assigned when the event is persisted to `score.db` (`events` table), **before** fan-out (Studio's pattern).
-- **Snapshot + delta**: every snapshot endpoint returns `asOfSeq`. The client opens the stream with
-  `?since=<asOfSeq>`, so no event between snapshot and subscribe is lost or double-applied. On reconnect the
-  browser resends `Last-Event-ID`. If that seq has been pruned, the server sends `stream.reset` and the client
-  refetches snapshots.
-- Retention: events are kept 7 days (configurable); Watch frames are kept separately (D6).
-- Backpressure: per-client queue limit; a slow client is disconnected with `stream.reset` instead of blocking the hub.
+### D1. One live stream: SSE with a fenced, transactional event log
+**Transport.** One-way server → browser over SSE; every command is a REST request. One stream per tab.
+
+**Single ordered ingest path.** Every producer (run SSE readers, bridge ingest, SQLite tailers, Score's own
+domain actions) submits *observations* to one in-process ingest queue, drained by **one writer**. Each
+observation is applied in **one SQLite transaction** that:
+1. checks the ingest key (unique `(source, source_identity)`, see D2.3) and drops duplicates;
+2. updates the **projections** the screens read (D5);
+3. appends zero or more domain events to `events` (`seq INTEGER PRIMARY KEY AUTOINCREMENT`);
+4. advances that source's ingestion checkpoint.
+
+`seq` is **strictly increasing**. Gaps are allowed and clients must not assume gap-free. A durable event and the
+projection change it describes commit together.
+
+**Snapshots.** Snapshot endpoints read the projection rows **and** `max(seq)` in **one read transaction**
+(WAL snapshot isolation), so `asOfSeq` exactly describes the snapshot. Direct Hermes reads never feed live
+snapshots; they feed reconciliation (D2.4), which goes through the same ingest path.
+
+**Subscription fence.** On connect: register the subscriber with a buffer → capture head `H` → replay
+`(since, H]` from the log → release buffered events with `seq > H` → live. Nothing is lost between replay and
+live, and nothing is sent twice.
+
+**Frames.** Durable events carry `id: <seq>`. Control frames (`stream.hello`, `stream.reset`, heartbeats) carry
+**no `id`**. `stream.hello` includes the log **epoch** (a random ID stored in `score.db`, regenerated on restore
+or reset). On connect the server answers `stream.reset` instead of replaying when:
+- the cursor's epoch differs from the current one,
+- the cursor is older than the retention floor, or
+- the cursor is ahead of the head.
+
+**Client resync (per query, not per tab).** Each cached query records its own `asOfSeq`. While a query refetches,
+the client buffers stream events. When the fresh snapshot arrives it replaces the cache, then applies buffered
+events with `seq > asOfSeq` for that query. Stale in-flight fetches are cancelled or ignored by request
+generation. On `stream.reset` every active query enters this resync.
+
+**Backpressure.** Per-client byte budget plus a socket write timeout. Exceeding either closes the connection; it
+does not block the hub. The client reconnects with `Last-Event-ID`. A reset frame is best effort.
+
+**Retention.** The event log keeps 7 days. Reports and history read durable tables (D5), never the log.
 
 ### D2. The Hermes adapter boundary
-- `apps/server/src/hermes/` is the **only** place that imports Hermes paths, URLs, CLI verbs or event names.
-  Everything else talks to the `HermesPort` interface and receives Score domain events. Lint rule:
-  `no-restricted-imports` blocks `hermes/*` internals outside `hermes/index.ts`.
-- `HermesPort` has two implementations: `live` and `fake`. The fake one replays scripted scenarios
-  (neutral example agents) so the whole UI and the e2e suite run with no Hermes and no model spend.
-- **Version gate**: at startup the adapter reads `hermes --version` and `GET /v1/capabilities`, records
-  them, and exposes `GET /api/system`. Unknown majors run in degraded, read-only mode with a banner.
-  `translate.ts` is keyed by capability, so a Hermes upgrade touches one file plus its tests.
-- **Per-profile wiring (verified live, SPIKE L3)**: every profile has its own `state.db`
-  (`~/.hermes/profiles/<name>/state.db`; `default` uses `~/.hermes/state.db`) and its own `API_SERVER_KEY`.
-  Score stores keys in `~/.score/hermes-keys/<profile>` (0600) and sets them with `hermes -p <profile> config set
-  API_SERVER_KEY …` when an agent is added. `kanban.db` is shared. New profiles are served automatically.
-- **Reads** use SQLite opened read-only via Node's built-in `node:sqlite`
-  (`file:…?mode=ro`, WAL-safe, no native addon). The reader tails `task_events` / `messages` by composite
-  cursor `(created_at, id)`, never by timestamp alone.
-- **Writes** never touch Hermes's SQLite. They go through `hermes` CLI subcommands (kanban, profile, config) or
-  the gateway HTTP API. CLI calls use `execFile` with argument arrays (no shell), a timeout, and parsed output.
+**D2.1 Two explicit boundaries.** (1) `apps/server/src/hermes/` for Node. Lint (`no-restricted-imports`) blocks
+imports of its internals, and a test asserts that no other server module mentions Hermes paths, URLs, CLI verbs
+or upstream event names. (2) The Python bridge `hermes-plugin/score_bridge/`. Every call into private Hermes
+functions (`list_gateway_approvals`, `register_gateway_settle`, `resolve_gateway_approval`,
+`approve_permanent`, the permanent-set discard, `detect_dangerous_command`, `redact_sensitive_text`) lives in
+**`hermes_private.py`** and nowhere else. `HermesPort` has `live` and `fake` implementations.
+
+**D2.2 Compatibility gate (fingerprints, not semver).** All of Hermes 0.x shares major 0, so semver can't gate
+anything. A **compatibility fingerprint** is: Hermes `code_version` + `code_sha` (from `gateway_state.json`),
+`/v1/capabilities` features, a hash of the `kanban.db` / `state.db` schemas, the bridge handshake (plugin version,
+`plugins.isolation` mode, which private functions resolved), and the CLI version. Score keeps a list of
+**tested fingerprints** (recorded with fixtures). If the fingerprint is unknown, Score runs in a degraded mode:
+- reads still work;
+- Score-started runs are still controlled through the public Runs API;
+- bridge-dependent actions (gateway approval answers, Kanban grants) are **disabled** and shown as such;
+- a banner explains it.
+
+Under `plugins.isolation: host` the bridge runs outside the gateway process, so in-process approval actions are
+impossible. The handshake reports it and those features stay off. `translate.ts` is keyed by fingerprint.
+Capabilities are not a complete inventory (e.g. `/api/jobs` exists despite `jobs_admin: false`), so endpoints are
+also probed directly.
+
+**D2.3 Canonical producers and stable identities.**
+
+| Domain fact | Canonical source | Others (enrich/reconcile only) | Stable identity |
+|---|---|---|---|
+| Tool call lifecycle | Bridge `pre/post_tool_call` (`tool_call_id`) | `state.db` rows (`tool_call_id`), run SSE `tool.*` (no `tool_call_id`) | `(profile, session_id, tool_call_id)` |
+| Score-started run status | Runs API (`GET /v1/runs/{id}` + SSE terminal events) | bridge session hooks | Hermes `run_id` |
+| Run text/reasoning stream | run SSE `message.*` / `reasoning.available` | bridge `on_interim_message` | `(run_id, seq)` |
+| Approval (Score run) | run SSE `approval.request` (has `request_id`) | bridge approval hooks | `(profile, session_key, request_id)` |
+| Approval (gateway) | bridge (exact `request_id`, D4) | — | `(profile, session_key, request_id)` |
+| Kanban task state | `kanban.db` `tasks` + `task_events` (append-only) | bridge `on_kanban_*` | `task_events.id`, `task_runs.id` |
+| Session messages | `state.db` `messages` | bridge | `(profile, db_incarnation, messages.id)` + `message_uid` |
+
+Bridge events carry `(producer_incarnation, counter)`; the unique ingest key makes re-delivery harmless.
+**Terminal-state guards:** a delayed observation can't move a finished run, approval or tool call back to an
+earlier state. Upstream cursors are persisted per source: SSE `seq` per run, `task_events.id`, `messages.id` per
+DB incarnation, bridge counters per producer.
+
+**D2.4 Recovery per source.**
+- **Run SSE**: resume with `Last-Event-ID`. On `replay.truncated` or a gateway restart, poll `GET /v1/runs/{id}`,
+  reconcile tools and messages from `state.db`, and record a visible **gap interval** on the run.
+  `run.queued`/`run.started` are **not** emitted by the Runs API, so lifecycle starts from Score's own dispatch
+  record plus status polling.
+- **Bridge**: a bounded on-disk **spool** per producer (`~/.score/spool/`, size-capped, oldest dropped, with a
+  drop counter) when Score is unreachable. It drains on reconnect, and dropped ranges become gap intervals.
+- **kanban.db**: tail `task_events` by `id` (append-only). Re-read `tasks` rows touched by new events.
+- **state.db** (per profile): ingest new rows by `messages.id` > checkpoint, scoped to a DB incarnation
+  (file identity + `state_meta`). Hermes inserts carried/cloned rows with **older timestamps** and orders by ID,
+  so timestamps are never a cursor. Edits, `active`/`compacted` flips, rewinds and compaction create or change rows
+  without new IDs, so a periodic **session reconciliation** compares logical identities (`message_uid`,
+  `tool_call_uid`) for sessions active in the last N hours. Fixtures cover rewind, compaction, carried timestamps
+  and restore.
+
+**D2.5 Per-profile wiring and credentials.** Every profile has its own `state.db` and its own `API_SERVER_KEY`
+(SPIKE L3). Score stores keys in `~/.score/hermes-keys/<profile>` (0600) with a **credential generation**. Run
+mappings record the generation they were admitted under, because Hermes scopes run ownership by profile + key.
+- **Adoption** of an existing profile is explicit (owner action).
+- **Rotation** = stop new admissions for that profile → drain its runs and approvals → rekey → bump the generation.
+- A **missing key** marks the profile "credentials unavailable" and is never silently regenerated. Runs admitted
+  under a lost key are uncontrollable, and the UI says so.
+
+**D2.6 Writes.** Hermes SQLite is never written.
+- **CLI or gateway API** (`execFile`, argument arrays, timeouts, parsed output) for Kanban, config, profiles,
+  skills and cron. Every Hermes-side create goes through a **command intent** (outbox, D5) with a stable
+  idempotency key (`Idempotency-Key` on `/v1/runs`, `--idempotency-key` on `kanban create`). After a crash, Score
+  reconciles acceptance before retrying or attaching results.
+- **Exception: `SOUL.md` and `AGENTS.md`** in a profile directory. No CLI command edits them (`hermes profile`
+  has none). The adapter writes exactly these two files: path-checked inside `<profile home>`, etag = sha256 of the
+  current content, write temp + fsync + rename. Never `.env`, `auth.json`, `config.yaml` or anything else.
 
 ### D3. Starting agent work
-| Intent | Mechanism | Live events | Approvals |
+| Intent | Mechanism | Canonical live events | Approvals |
 |---|---|---|---|
-| Chat message to agent(s) in a room | `POST /p/{profile}/v1/runs` with `session_id = score:{room}:{agent}` and room transcript as `conversation_history` | run SSE | `approval.request` → `/approval` |
-| `/assign`, New task, hand-offs that should be durable | `hermes kanban create/assign` | bridge plugin + `task_events` tail | none by default (see D4) |
-| `/routine` | `hermes cron` / `/api/jobs` | bridge plugin | none (cron_mode) |
-| Pause / stop | `/v1/runs/{id}/stop`; Kanban `block`; "Pause everyone" = stop Score-started runs + pause dispatch | — | — |
+| Chat message to agent(s) in a room | `POST /p/{profile}/v1/runs` (D3.1) | run SSE + bridge | Runs API (D4.1) |
+| `/assign`, New task, durable hand-offs | `hermes kanban create --idempotency-key …` | bridge + `task_events` | blocked-worker grants (D4.3) |
+| `/routine` | `/api/jobs` or `hermes cron` | bridge | none (cron denies) |
+| Pause / stop | `/v1/runs/{id}/stop`; "Pause everyone" = stop Score-started runs + hold Score dispatch; Kanban `block` | — | — |
 
-@mention routing (designed from scratch: the Graphite plugin isn't installed on this machine, so there is no code
-to reuse): an unaddressed
-message goes to the room's lead agent. `@agent` starts a run for that agent. When an agent's reply @mentions
-another agent, that is a hand-off: Score starts the next run, up to a per-room hop limit (default 6) and with a
-loop guard (the same pair cannot ping-pong more than 2 times without a human message).
+**D3.1 Room turns.** Identities are kept separate and persisted per turn:
+- `score_turn_id`, Score's own; also the `Idempotency-Key`;
+- Hermes `run_id`, which is also the approval session key;
+- the conversation session ID, stable per (room, agent): `score-<room>-<agent>`;
+- the **live tip** Hermes resolves it to after compression, recorded from run status.
 
-### D4. Approvals reach the UI through one ledger
-- Score keeps an `approvals` table: `{id, origin, agent, runId?, sessionKey?, taskId?, requestId?, command (redacted),
-  description, choices, status, createdAt, resolvedAt, resolvedBy, choice}`. Every screen reads it (Now card, Chat
-  inline card, Flow inspector, Watch bar, Tasks "Needs you", Reports).
-- Sources:
-  1. **Runs Score started**: the adapter consumes `approval.request` from the run SSE. Resolve with
-     `POST /p/{profile}/v1/runs/{id}/approval`.
-  2. **Gateway sessions** (Telegram etc.): the bridge plugin's `pre_approval_request` hook posts the request to
-     Score. Resolve: the plugin long-polls Score for decisions and calls `resolve_gateway_approval(session_key,
-     choice, request_id)` **in-process**. This is *additive*: Telegram still shows the prompt, and the first answer wins.
-     Score marks the item resolved on `post_approval_response`.
-     **Decided (owner, 2026-10-06): additive, alongside Telegram.** The exclusive plugin transport
-     (`security.approval.transport`) is not used. *Verified live (SPIKE L4).* Resolution signal is the
-     `post_approval_response` hook (in-process resolution emits no `approval.responded` on the run SSE).
-     Correlation is by `session_key` + command, because the gateway-surface hook has `request_id: None`.
-     Parallel tool calls in one session can make this ambiguous; in that case Score resolves the oldest
-     pending item for that session and shows a warning.
-     Smart-mode guardian decisions (`surface: smart`, `decided_by: aux_llm`) are recorded as resolved
-     approvals with `resolvedBy: 'guardian'`, so Reports and the timeline show what was auto-approved.
-  3. **Blocked Kanban workers** (origin `kanban`). Kanban workers and cron cannot ask a human: under
-     `approvals.single_query_mode: deny` they deny instantly, without firing `pre_approval_request` (SPIKE L5).
-     **Decided (owner, 2026-10-06): a blocked worker becomes an approval in Score.** *Mechanism verified live.*
-     - Detect: the bridge plugin's `post_tool_call` in a worker (`HERMES_KANBAN_TASK` set) sees
-       `status: blocked` + "BLOCKED: Command flagged as dangerous …". It recomputes `pattern_key` with Hermes's
-       `detect_dangerous_command(command)` and posts an approval (origin `kanban`, `taskId`, redacted command).
-       The agent normally blocks the task itself (`kanban_block`, kind `capability`).
-     - **Approve once**: Score records a one-shot grant `{taskId, pattern_key}`, comments on the task and
-       unblocks it (`hermes kanban comment` / `unblock`). In the next worker for that task, the bridge plugin
-       calls `tools.approval.approve_permanent(pattern_key)` **in memory only**, scoped to the process whose
-       `HERMES_KANBAN_TASK` matches. It lives and dies with that worker; nothing is written to
-       `command_allowlist`. (`approve_session` does **not** work here: unattended mode checks only the
-       permanent set.) The grant is marked consumed when the matching `post_tool_call` succeeds.
-     - **Always**: also persist the pattern in that profile's `command_allowlist` (via `hermes -p <profile>`
-       config tooling, shown as a diff first).
-     - **Deny**: comment the denial; the task stays blocked for the human (or gets reassigned).
-     - Watch for Hermes's re-block loop guard: a second block for the same reason sends the task to `triage`,
-       and the specifier may re-dispatch it. Score must apply the grant **before** unblocking, and show
-       `block_loop_detected` events.
-     Hermes's own defaults stay unchanged (`single_query_mode: deny`); nothing is auto-approved.
-- The "Needs you" column = approvals from sources 1–3, plus tasks blocked with `block_kind` `needs_input`
-  (questions, not approvals).
-- All approval decisions are idempotent (`requestId` + `Idempotency-Key`). A double click, two tabs, or Telegram
-  answering first all end in one terminal state. The UI shows who answered and where.
+Turns are **serialized per (room, agent)**, so the same agent never runs two turns in one room at once. The input
+is built **at admission**, not at enqueue: `session_id` plus, as `input`, the room messages since that agent's
+last turn (speaker-labelled). No `conversation_history` is sent, so Hermes keeps the agent's own tool history from
+its session and won't swap in a different history after waiting on its turn lease.
 
-### D5. Score-owned state (`~/.score/score.db`, node:sqlite, SQL migrations)
-`events` (the stream log), `rooms`, `room_members`, `messages` (Score chat), `mentions`, `approvals`,
-`agent_style` (color + shape per profile), `runs` (Score-started runs ↔ room/message/task),
-`watch_frames` (D6), `settings`. Hermes remains the source of truth for tasks, sessions, profiles, skills and memory;
-Score caches nothing it can re-read cheaply.
+**D3.2 @mention routing** (designed from scratch; no Graphite on this machine):
+- An unaddressed message goes to the room's lead agent; `@agent` starts a turn for that agent.
+- An agent reply that @mentions another agent is a hand-off, subject to a hop limit (6 per human message) and a
+  ping-pong guard (a pair at most 2 times without a human message).
+
+### D4. Approvals: one ledger, exact targets, confirmed delivery
+**Ledger model.** An *operation* (one flagged action) has phases: `guardian_evaluating` → `human_pending` →
+`decided`. It ends in `executed` or `blocked`.
+- Only `human_pending` items with an **actionable exact target** appear in "Needs you".
+- Guardian evaluations are recorded (`surface: smart`). An escalation links the later human prompt to the same
+  operation. Guardian approve/deny is attributed to the guardian.
+- **Decision delivery** is separate from the approval's status: `intent → delivering → applied | not_pending |
+  failed | unknown`, stored in an **outbox** before any external call.
+  - `not_pending` is **never** interpreted as a denial. Score reconciles via hooks/tool results and shows "answered
+    elsewhere".
+  - "You (Score)" is shown only when delivery is confirmed `applied`. Answers from other surfaces show as
+    "answered elsewhere", because Hermes's hooks carry no actor.
+
+**D4.1 Score-started runs.**
+- **Canonical:** `approval.request` from that run's SSE, which carries `request_id`.
+- **Resolve:** `POST /p/{profile}/v1/runs/{run_id}/approval {choice, request_id}`, using the credential generation
+  the run was admitted under.
+- **Dedupe:** bridge hooks for the same `session_key = run_id` enrich the same operation.
+
+**D4.2 Gateway sessions (Telegram etc.). Additive, alongside Telegram (owner decision).**
+- **Exact target.** In `pre_approval_request` the bridge reads the **exact `request_id`** with
+  `list_gateway_approvals(session_key)`. The entry is enqueued before the hook fires, in the same thread
+  (`approval_gateway_wait.py:166-203`), so the newest entry with matching command and pattern keys is this request.
+  The bridge also registers `register_gateway_settle(session_key, request_id, cb)` as the resolution signal for
+  that exact request (fires on answer, timeout, withdrawal).
+- **Resolve:** decisions are delivered **only to the producer that reported the request** (lease plus
+  exact-target ack), which calls `resolve_gateway_approval(session_key, choice, request_id=<exact>)`. **No FIFO
+  resolution ever:** if no exact `request_id` was captured, the card is view-only ("answer in Telegram").
+- **Coalesced followers** (`coalesced=True`) attach to their leader and are never separate actionable cards.
+
+**D4.3 Blocked Kanban workers (owner decision: a blocked worker becomes an approval).**
+- **Scope.** Only the verified denial class is redeemable: the terminal dangerous-pattern denial in unattended
+  mode. The bridge's `post_tool_call` **decodes the nested `result` JSON** (top-level `status` is `error`; the
+  inner `status` is `blocked`), validates it, recomputes `pattern_key` with `detect_dangerous_command`, and
+  computes a **command digest** (sha256 of the raw command, inside the plugin; only the digest leaves the process).
+  Other blocks (e.g. `execute_code`, which denies before any allowlist lookup) become diagnostics on a "Needs you"
+  task, without an approve button.
+- **Approve once = this exact command, once, in the next attempt.**
+  1. Score **stages** a grant `{profile, board, task_id, eligible after task_run id, command_digest, pattern_key,
+     expires_at (2 h)}`.
+  2. It revalidates the task (assignee, latest `task_events.id`, status `blocked`), then comments and unblocks.
+  3. In the next worker, at the `pre_tool_call` of a terminal call whose digest matches, the bridge **redeems**
+     the grant atomically (Score moves it `staged → redeemed`, bound to that producer and `tool_call_id`).
+     It then adds the pattern to the in-memory permanent set, **only if no other tool call is in flight** in that
+     process; any other `pre_tool_call` while the grant is active revokes it first.
+  4. At that call's `post_tool_call` the bridge **removes** the pattern and the grant becomes `consumed`.
+     If the post hook never arrives, the grant becomes `unknown` and needs a human.
+  5. Nothing is ever written to `command_allowlist`.
+- **Always** persists the pattern for that profile through config tooling, after a diff preview.
+- **Deny** comments and leaves the task `blocked` (not dispatched).
+- **Triage.** If a task lands in `triage` (Hermes's loop guard, keyed on block **kind**) or is re-promoted by
+  the specifier, Score shows it as "triage" with no grant action, and existing grants for it expire.
+- **Residual risk:** the window between adding and removing the pattern is one tool call in one process, guarded
+  against concurrent calls. A live test (L6) must confirm the add → execute → remove ordering before this ships.
+
+**"Needs you"** = actionable approvals (D4.1–D4.3) + tasks blocked as `needs_input` (questions).
+
+### D5. Score-owned state (`~/.score/score.db`, node:sqlite, forward-only SQL migrations)
+**Infrastructure:**
+- `events`: the stream log, with `epoch`.
+- `ingest_keys`: unique source identities.
+- `ingest_checkpoints`: per source, DB incarnation, run and producer.
+- `producers`: bridge identity, incarnation, profile, isolation mode, last seen.
+- `gaps`: unrecoverable intervals.
+- `command_intents`: outbox for Hermes-side creates and actions.
+
+**Projections** (what live screens read; updated in the same transaction as events):
+- `agents_proj`
+- `tasks_proj` (Kanban mirror plus Score columns)
+- `runs`: **all origins**; `score_turn_id`, `run_id`, profile, credential generation, conversation session,
+  live tip, room/task links, status, tokens, cost.
+- `tool_calls`
+- `lanes` / `handoffs` (Score timeline)
+
+**Owned state:**
+- `rooms`, `room_members`, `messages`, `mentions`
+- `briefs`, `brief_tasks`, `room_tasks`: the associations Hermes can't hold.
+- `approvals` (operations) and `approval_deliveries` (outbox)
+- `kanban_grants`
+- `agent_style`
+- `watch_frames`, `media`
+- `settings`, `credentials` (profile → key file + generation; never the key itself)
+
+Reports read `runs`, `tool_calls`, `approvals` and `tasks_proj` history, kept ≥ 90 days.
 
 ### D6. Watch = event replay, not remote desktop
-- Frames come from the bridge plugin's `pre/post_tool_call` (terminal command + output tail, file path + unified
-  diff computed from patch/write args, browser tool screenshots or artifact refs) and from `reasoning.available` /
-  interim messages.
-- Stored per agent-session in `watch_frames` (size-capped: 64 KB per terminal chunk, images as files under
-  `~/.score/media/` with a per-day quota). The scrub timeline is just `seq` order.
-- "Take control" in the mock is **out of scope for v1** (no remote desktop). v1 offers "Pause <agent>" and
-  "Open in terminal" (copies the `hermes -p … --resume` command).
+- Frames come from the bridge's `pre/post_tool_call` (terminal command + output tail, file path + unified diff from
+  patch/write args, browser screenshots or artifact refs) and from interim/reasoning text. They are stored per
+  session in `watch_frames` (64 KB per terminal chunk; images in `~/.score/media/` with a quota). Scrub = `seq` order.
+- **Mandatory redaction (two layers).** Hermes hooks pass **raw** args and results (`model_tools.py:680`), and
+  gateway approval text is redacted only if the user hasn't disabled redaction. So:
+  1. the bridge runs `redact_sensitive_text(…, force=True)` on every command, argument and result **before
+     truncation and before serialization**;
+  2. the server runs its own secret-pattern pass before durable storage.
 
-### D7. Security posture (single-user, local-first)
-- The server binds `127.0.0.1` by default. Mutating requests require the `X-Score-Client` header + same-origin check (CSRF).
-- Bridge ingest uses a shared secret at `~/.score/bridge.token` (0600), created on first run and read by the plugin.
-- Score **never** reads `~/.hermes/.env`, `auth.json` or key files. Provider status comes from `hermes` CLI
-  status output with secrets redacted by Hermes. Key edits shell out to `hermes auth`/`config` commands.
-- Approval payloads are already redacted by Hermes (`_redact_approval_command`); Score stores them as received.
+  Correlation uses digests computed in the plugin on raw text, never stored raw text. Fixtures include
+  secret-bearing commands and outputs for every producer.
+- "Take control" is **out of scope for v1**. v1 offers "Pause <agent>" and "Open in terminal" (copies the
+  `hermes -p … --resume` command).
+
+### D7. Security posture (single user, local first)
+- **Network.** The server binds `127.0.0.1`.
+- **Browser.** Mutations require `X-Score-Client` + same-origin (CSRF).
+- **D7.1 Human decisions** (approval decisions, grants, rule changes, credential actions) additionally require a
+  **paired browser session**. On first run the server prints a one-time pairing URL **to its own terminal**. The
+  browser exchanges it for an HttpOnly, SameSite=Strict session cookie. The server stores only a hash, never in a
+  file the bridge uses.
+  - **Threat-model limit (owner decision pending):** agents run as the same OS user, so a determined agent with
+    shell access could still read browser cookie stores or `~/.score`. Pairing stops casual or accidental
+    self-approval and CSRF, not a hostile same-user process.
+  - Real isolation means running agents in Hermes's sandboxed terminal backend (docker/ssh) or as a different
+    OS user. Score shows the current isolation level on the Settings page.
+- **Bridge identity.** The bootstrap secret `~/.score/bridge.token` only allows `POST /bridge/v1/hello`. Each
+  producer then gets a short-lived **producer token** scoped to its profile, process incarnation and
+  `HERMES_KANBAN_TASK`. It can post only its own events, receive only decisions targeted at its own approvals,
+  and redeem only grants for its own task. Bridge tokens can't call `/api/*`.
+- **Secrets.** Score never reads `~/.hermes/.env`, `auth.json` or key files. Payloads are redacted per D6.
 
 ### D8. Front end
-- React 19 + Vite + TypeScript, React Router, TanStack Query for snapshots, one `useStream()` hook that patches
-  the Query cache from SSE events. No global state library.
-- Design tokens as CSS custom properties (`--ground #ECEEF2`, `--ink #12131A`, `--radius-card 28px`, agent palette).
-  Fonts via `@fontsource/{bricolage-grotesque,hanken-grotesk,jetbrains-mono}`, bundled; no Google requests.
-  Agents always render as color **+** shape (circle-dot, triangle, diamond, square, …).
-- Flow graph: custom SVG with layered auto-layout (seeded from Studio's Kahn layering) and pan/zoom/fit. No graph
-  library unless the layout outgrows ~200 lines (React Flow is MIT if needed).
-- Charts (Reports): hand-rolled SVG components; no chart library in v1.
+- React 19 + Vite + TypeScript, React Router, TanStack Query. One `useStream()` hook implements D1's per-query
+  resync and patches the Query cache. No global state library.
+- Design tokens as CSS custom properties, from `docs/design/html/`. Fonts via `@fontsource`, bundled.
+  Agents are always shown with color **and** shape.
+- Flow: custom SVG, layered auto-layout (seeded from Studio's Kahn layering), pan/zoom/fit. Charts: hand-rolled SVG.
 
 ### D9. Shipping defaults
 Neutral example agents only: `lead` (violet, circle-dot), `builder` (jade, triangle), `reviewer` (saffron,
 diamond), `designer` (coral, square). Persona names live only in the user's local Hermes profiles and in
-`~/.score`. The design PNGs (which show personas) stay in `docs/design/` as reference and are never used as fixtures.
+`~/.score`. The design PNGs stay reference-only.
 
 ## 3. Alternatives considered
 
 | Option | Why not (for v1) |
 |---|---|
 | WebSocket for everything | Needs our own resume/ack protocol; SSE + REST covers it |
-| Python sidecar service | Can't see in-process hooks either; the plugin is the right place for Python |
+| Python sidecar service | Can't reach in-process hooks or the approval queue |
+| Exclusive approval transport (`security.approval.transport`) | Replaces Telegram prompts. The owner chose additive; switching needs a new owner decision |
 | Writing kanban.db directly | Bypasses claims, dispatcher and notify; schema is internal |
-| Hermes dashboard API (`hermes dashboard`) as backend | Separate process with its own auth, built for one UI; useful later for SOUL and model edits via `/api/profiles/*` |
+| Hermes dashboard API as backend | Separate process with its own auth; may replace D2.6's file writes later |
 | Studio's browser-run DAG | Superseded by Kanban dependencies + dispatcher |
 | Mirroring rooms into Hermes `hosted_rooms` | Multi-host feature with grants; revisit after v1 |
 
@@ -191,13 +331,39 @@ diamond), `designer` (coral, square). Persona names live only in the user's loca
 
 | Risk | Mitigation |
 |---|---|
-| Hook payloads differ from source reading | Verified in L4/L5; fixtures in `docs/spike/`; contract tests on captured payloads |
-| Bridge relies on non-public Hermes functions (`resolve_gateway_approval`, `approve_permanent`, `detect_dangerous_command`) | All calls live in one plugin module with a version check; the upgrade drill re-runs the L4/L5 scenarios |
-| In-process `resolve_gateway_approval` is not a public API | Isolated in the plugin; fall back to exclusive transport (public contract) |
-| Gateway must serve every profile | Setup checks `served_profiles`; Settings shows unserved agents |
-| `node:sqlite` stability on Node 24 | Read-only use only; `better-sqlite3` (MIT) is a drop-in fallback |
-| Hermes upgrades change event names | `translate.ts` + recorded-fixture tests; version gate |
+| Private Hermes functions change | Confined to `hermes_private.py`; fingerprint gate disables dependent features; upgrade drill re-runs L4–L6 fixtures |
+| Kanban one-shot grant ordering assumption | Live test L6 before shipping D4.3; feature-flagged until then |
+| Same-user agent abuses Score's API | Pairing (D7.1) + documented limit; recommend sandboxed terminal backend |
+| Missed events while Score is down | Spool, cursors, reconciliation, visible gap intervals (D2.4) |
+| `node:sqlite` stability on Node 24 | Wrapped in `db/`; `better-sqlite3` (MIT) is a drop-in fallback |
 
 ## Review log
-- _pending_: `/codex:adversarial-review` with focus "event stream design, approval routing, Hermes adapter
-  boundary, Score DB schema". Findings and responses go here before this doc is marked final.
+
+### 2026-10-06: Codex adversarial review (gpt-6.1-sol, max)
+Full text: `docs/reviews/2026-10-06-architecture-adversarial.md`. I verified each claim against Hermes `e97923c3`
+before acting. #1, #9, #10 and #17 were confirmed directly in source; the rest are design gaps.
+
+| # | Finding | Response |
+|---|---|---|
+| 1 | FIFO resolution can approve a different request | **Accepted.** Exact `request_id` via `list_gateway_approvals` + settle callback; no FIFO ever (D4.2) |
+| 2 | `approve_permanent` grants for the whole worker | **Accepted.** Digest-bound, one tool call, in-flight guard, add/remove around the call; L6 test (D4.3) |
+| 3 | No human-only authority | **Accepted in part.** Paired session + scoped bridge tokens; full isolation from same-user agents isn't achievable in-app; threat model is an owner decision (D7.1) |
+| 4 | Hook payloads aren't redacted | **Accepted.** Two-layer mandatory redaction, digests for correlation (D6) |
+| 5 | `asOfSeq` not a consistent snapshot | **Accepted.** Score projections + one read transaction (D1, D5) |
+| 6 | Replay/subscription race | **Accepted.** Single writer + subscription fence (D1) |
+| 7 | Duplicates/inversions across channels | **Accepted.** Canonical producers, stable identities, ingest keys, terminal guards (D2.3) |
+| 8 | Reset/resync loses changes | **Accepted.** Per-query watermarks, buffered resync, epoch, control frames without IDs (D1) |
+| 9 | Wrong tail cursor; messages mutable | **Accepted** (confirmed: Hermes orders by ID, carried rows keep old timestamps). ID checkpoints + reconciliation (D2.4) |
+| 10 | Unrecoverable events; no `run.started` | **Accepted** (confirmed). Per-source recovery, spool, gap intervals; SPIKE corrected (D2.4) |
+| 11 | Decision routing and grant delivery undefined | **Accepted.** Producer registry, leases, exact-target acks, grant redemption endpoint (D4, contract §11) |
+| 12 | Ledger vs effect idempotency | **Accepted.** Delivery outbox and states; `not_pending` ≠ deny (D4) |
+| 13 | Stale grants, triage | **Accepted.** Staging, revalidation, attempt binding, expiry, triage handling (D4.3) |
+| 14 | Wrong status layer in detector | **Accepted.** Decode nested result; restrict to verified denial class (D4.3) |
+| 15 | Room session identities and concurrency | **Accepted.** Separate IDs, per-pair serialization, input built at admission (D3.1) |
+| 16 | D5 omits non-reconstructible state | **Accepted.** Briefs, associations, all-origin runs, outbox, checkpoints (D5) |
+| 17 | Version gate too weak; host isolation | **Accepted** (confirmed). Fingerprint gate, bridge handshake, second boundary (D2.1, D2.2) |
+| 18 | No profile-file write mechanism | **Accepted.** Scoped atomic writes for SOUL.md/AGENTS.md only (D2.6) |
+| 19 | Key rotation orphans runs | **Accepted.** Credential generations, adoption, drain-then-rotate (D2.5) |
+| 20 | Guardian phases and attribution | **Accepted.** Operation phases; attribution only on confirmed delivery (D4) |
+
+Rejected findings: none.
