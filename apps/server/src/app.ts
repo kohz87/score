@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify'
-import { CONTRACT_VERSION } from '@score/contract'
+import { CONTRACT_VERSION, type SystemStatus } from '@score/contract'
 import type { Config } from './config.ts'
 import { registerErrorHandlers } from './errors.ts'
 import { registerCsrfGuard } from './auth/csrf.ts'
@@ -7,6 +7,10 @@ import { PairingService } from './auth/pairing.ts'
 import type { SessionStore } from './auth/session-store.ts'
 import { registerSessionRoutes } from './http/session.ts'
 import { registerSystemRoutes } from './http/system.ts'
+import { registerStreamRoute, type StreamRouteOptions } from './http/stream.ts'
+import type { ScoreDb } from './db/index.ts'
+import type { Ingest } from './hub/ingest.ts'
+import { getSystemStatus as defaultSystemStatus } from './system-status.ts'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -19,6 +23,11 @@ interface BuildAppOptions {
   logger?: FastifyServerOptions['logger']
   clock?: () => number
   sessionStore?: SessionStore
+  db?: ScoreDb
+  ingest?: Ingest
+  getEpoch?: () => string
+  getSystemStatus?: () => SystemStatus
+  streamOptions?: Pick<StreamRouteOptions, 'heartbeatMs' | 'fanoutOptions'>
 }
 
 export function buildApp({
@@ -26,6 +35,11 @@ export function buildApp({
   logger,
   clock,
   sessionStore,
+  db,
+  ingest,
+  getEpoch,
+  getSystemStatus = () => defaultSystemStatus(config),
+  streamOptions,
 }: BuildAppOptions): FastifyInstance {
   const logging = logger ?? process.env.NODE_ENV !== 'test'
   const app = Fastify({
@@ -61,6 +75,9 @@ export function buildApp({
   registerCsrfGuard(app, config)
   app.get('/api/health', async () => ({ ok: true, contract: CONTRACT_VERSION }))
   registerSessionRoutes(app, app.pairing)
-  registerSystemRoutes(app, config)
+  registerSystemRoutes(app, getSystemStatus)
+  if (db && ingest && getEpoch) {
+    registerStreamRoute(app, { db, ingest, getEpoch, getSystemStatus, ...streamOptions })
+  }
   return app
 }
