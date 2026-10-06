@@ -1,8 +1,66 @@
-import Fastify, { type FastifyInstance } from 'fastify'
+import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify'
 import { CONTRACT_VERSION } from '@score/contract'
+import type { Config } from './config.ts'
+import { registerErrorHandlers } from './errors.ts'
+import { registerCsrfGuard } from './auth/csrf.ts'
+import { PairingService } from './auth/pairing.ts'
+import type { SessionStore } from './auth/session-store.ts'
+import { registerSessionRoutes } from './http/session.ts'
+import { registerSystemRoutes } from './http/system.ts'
 
-export function buildApp(): FastifyInstance {
-  const app = Fastify({ logger: process.env.NODE_ENV !== 'test' })
+declare module 'fastify' {
+  interface FastifyInstance {
+    pairing: PairingService
+  }
+}
+
+interface BuildAppOptions {
+  config: Config
+  logger?: FastifyServerOptions['logger']
+  clock?: () => number
+  sessionStore?: SessionStore
+}
+
+export function buildApp({
+  config,
+  logger,
+  clock,
+  sessionStore,
+}: BuildAppOptions): FastifyInstance {
+  const logging = logger ?? process.env.NODE_ENV !== 'test'
+  const app = Fastify({
+    logger:
+      logging === false
+        ? false
+        : {
+            ...(typeof logging === 'object' ? logging : {}),
+            redact: [
+              'req.headers.cookie',
+              'req.headers.authorization',
+              'res.headers["set-cookie"]',
+            ],
+            serializers: {
+              // Log route templates rather than client URLs, which may contain secrets.
+              req: (request) => ({
+                method: request.method,
+                url: request.routeOptions.url,
+                headers: {
+                  cookie: request.headers.cookie,
+                  authorization: request.headers.authorization,
+                },
+              }),
+              res: (reply) => ({
+                statusCode: reply.statusCode,
+                headers: reply.getHeaders?.(),
+              }),
+            },
+          },
+  })
+  app.decorate('pairing', new PairingService(sessionStore, clock))
+  registerErrorHandlers(app)
+  registerCsrfGuard(app, config)
   app.get('/api/health', async () => ({ ok: true, contract: CONTRACT_VERSION }))
+  registerSessionRoutes(app, app.pairing)
+  registerSystemRoutes(app, config)
   return app
 }
