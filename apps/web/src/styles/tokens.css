@@ -1,46 +1,69 @@
-/* Design tokens: source of truth is docs/design/. Agent palette is an example, not persona-bound. */
+/* Design tokens: docs/design/html/. The agent palette is neutral and reusable. */
 :root {
   --ground: #eceef2;
   --card: #ffffff;
   --ink: #12131a;
-  --ink-muted: #5b5e6b;
-  --radius-card: 28px;
-
+  --ink-muted: #5e626c;
+  --muted: #6e727c;
+  --hairline: #dfe2e8;
+  --subtle: #f4f5f8;
   --agent-violet: #6b4eff;
   --agent-jade: #19c39a;
   --agent-saffron: #ffb61e;
   --agent-coral: #ff6b8a;
-
-  --font-heading: 'Bricolage Grotesque', system-ui, sans-serif;
-  --font-body: 'Hanken Grotesk', system-ui, sans-serif;
+  --agent-violet-tint: #ece8ff;
+  --agent-jade-tint: #ddf6ee;
+  --agent-saffron-tint: #fff1d1;
+  --agent-coral-tint: #ffe3e9;
+  --agent-violet-text: #4a2fd9;
+  --agent-jade-text: #00694f;
+  --agent-saffron-text: #8a5a00;
+  --agent-coral-text: #b01e43;
+  --radius-pill: 999px;
+  --radius-card: 28px;
+  --radius-20: 20px;
+  --radius-16: 16px;
+  --radius-14: 14px;
+  --radius-8: 8px;
+  --radius-key: 6px;
+  --font-heading: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif;
+  --font-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
   --font-code: 'JetBrains Mono', ui-monospace, monospace;
 }
 
 * {
   box-sizing: border-box;
 }
-
 body {
   margin: 0;
   background: var(--ground);
   color: var(--ink);
   font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
 }
-
+button,
+input {
+  font: inherit;
+}
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
 h1,
 h2,
 h3 {
   font-family: var(--font-heading);
 }
-
-code,
-pre {
-  font-family: var(--font-code);
+h1 {
+  margin: 0;
+  font-weight: 600;
+  font-size: 58px;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
 }
-
-.scaffold {
-  margin: 48px;
-  padding: 32px;
-  background: var(--card);
-  border-radius: var(--radius-card);
+code,
+pre,
+kbd {
+  font-family: var(--font-code);
 }
