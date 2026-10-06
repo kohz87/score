@@ -124,6 +124,18 @@ also probed directly.
 | Kanban task state | `kanban.db` `tasks` + `task_events` (append-only) | bridge `on_kanban_*` | `task_events.id`, `task_runs.id` |
 | Session messages | `state.db` `messages` | bridge | `(profile, db_incarnation, messages.id)` + `message_uid` |
 
+**Observation identity ≠ entity identity** (from the 1.4a review). The ingest key `(source, identity)` names one
+immutable *observation*, not the entity it's about. Each source namespaces its keys by kind, so different tables can
+never collide:
+- Immutable redeliveries use the upstream event's own ID: `task_event:<id>`, `sse:<run_id>:<seq>`,
+  `bridge:<incarnation>:<counter>`.
+- Observations of **mutable** state add a revision: `task_run:<id>@<status>:<ended_at>`,
+  `message:<uid>@<active>:<compacted>`, `run_status:<run_id>@<status>`. A changed entity therefore produces a new
+  observation, not a dropped duplicate.
+
+Projections key on the entity ID. Their `versionColumn` guard (`guardedUpsert`) rejects stale writes. A producer
+that sees a conflicting payload for an immutable key logs it as a source fault; it doesn't overwrite.
+
 Bridge events carry `(producer_incarnation, counter)`; the unique ingest key makes re-delivery harmless.
 **Terminal-state guards:** a delayed observation can't move a finished run, approval or tool call back to an
 earlier state. Upstream cursors are persisted per source: SSE `seq` per run, `task_events.id`, `messages.id` per

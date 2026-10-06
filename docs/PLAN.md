@@ -55,6 +55,12 @@ Revised after the architecture review (ARCHITECTURE v0.2). Section refs like D1 
 - Done when: a concurrency test with producers writing during replay shows no gap and no duplicate; slow-client disconnect doesn't block others; each reset reason is covered.
 - Test: `pnpm --filter @score/server test -- hub/sse`
 
+**1.4c Ingest-key retirement** · Codex (added after the 1.4a review)
+- Goal: keep `ingest_keys` from growing forever without re-enabling duplicates. Per source, retire keys strictly below a durable acknowledged floor: the checkpoint position for monotonic sources; for bridge producers, the incarnation's acked counter after the producer is gone for longer than the spool lifetime. Keep a per-source floor row so anything at or below the floor is still rejected as a duplicate.
+- Files: `apps/server/src/hub/retire.ts`, migration if a floor table is needed, tests
+- Done when: after retirement, redelivery at or below the floor is still rejected; keys above the floor are untouched; retirement runs in bounded batches.
+- Test: `pnpm --filter @score/server test -- retire`
+
 **1.5 HermesPort + fake adapter** · Lead
 - Goal: adapter interface (domain calls + observations into the ingest path) and a scripted fake with the four neutral agents, including approvals of all three origins and a gap interval.
 - Files: `apps/server/src/hermes/{port,index}.ts`, `apps/server/src/hermes/fake/*`, boundary lint rule + boundary test
