@@ -121,7 +121,15 @@ test('one transaction commits projection, validated envelopes, first seq and che
     { ...draft('two'), seq: 2, ts: now },
   ])
   expect(rows('ingest_keys')).toEqual([
-    { source: 'score', identity: 'one', first_seq: 1, created_at: now },
+    {
+      source: 'score',
+      identity: 'one',
+      first_seq: 1,
+      created_at: now,
+      scope: 'runs',
+      incarnation: 'incarnation-1',
+      position: 1,
+    },
   ])
   expect(rows('ingest_checkpoints')).toEqual([
     {
@@ -210,7 +218,15 @@ test('zero-event observations commit projection and checkpoint with a NULL first
     seqs: [],
   })
   expect(rows('ingest_keys')).toEqual([
-    { source: 'score', identity: 'one', first_seq: null, created_at: now },
+    {
+      source: 'score',
+      identity: 'one',
+      first_seq: null,
+      created_at: now,
+      scope: 'runs',
+      incarnation: 'incarnation-1',
+      position: 1,
+    },
   ])
   expect(rows('ingest_checkpoints')).toHaveLength(1)
   expect(persistedEvents()).toEqual([])

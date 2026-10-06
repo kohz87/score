@@ -7,6 +7,7 @@ import { loadConfig } from './config.ts'
 import { acquireHomeLock, getEpoch, migrate, openDatabase, type ScoreDb } from './db/index.ts'
 import { createIngest, type Ingest } from './hub/ingest.ts'
 import { pruneEvents } from './hub/retention.ts'
+import { retireIngestKeys } from './hub/retire.ts'
 import { formatStartupError } from './startup-error.ts'
 
 let db: ScoreDb | undefined
@@ -56,8 +57,13 @@ try {
     () => {
       try {
         pruneEvents(database)
-      } catch {
-        app?.log.error('Event retention prune failed')
+      } catch (error) {
+        app?.log.error({ err: error }, 'Event retention prune failed')
+      }
+      try {
+        retireIngestKeys(database)
+      } catch (error) {
+        app?.log.error({ err: error }, 'Ingest key retirement failed')
       }
     },
     60 * 60 * 1000,
