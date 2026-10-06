@@ -31,7 +31,8 @@ case "$cmd" in
     n=$(find "$run_dir" -maxdepth 1 -name 'round-*.md' | wc -l)
     codex exec --disable apps -m "$MODEL" -c "model_reasoning_effort=$EFFORT" -s workspace-write -C "$wt" \
       -o "$run_dir/round-$n.md" - < "$brief" 2>&1 | tee "$run_dir/round-$n.log"
-    grep -m1 -oE 'session id: [0-9a-f-]+' "$run_dir/round-$n.log" | awk '{print $3}' > "$run_dir/session"
+    sed 's/\x1b\[[0-9;]*m//g' "$run_dir/round-$n.log" | grep -m1 -oE 'session id: [0-9a-f-]+' | awk '{print $3}' > "$run_dir/session"
+    [[ -s "$run_dir/session" ]] || die "could not read the Codex session id from $run_dir/round-$n.log"
     echo "codex-task: session $(cat "$run_dir/session"); worktree $wt; report $run_dir/round-$n.md"
     ;;
   fix)
