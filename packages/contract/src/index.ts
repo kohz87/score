@@ -1,2 +1,5 @@
-// Executable form of docs/API-CONTRACT.md. Schemas land in Phase 1 task 1.1.
-export const CONTRACT_VERSION = 0
+export * from './types.ts'
+export * from './stream.ts'
+export * from './bridge.ts'
+
+export const CONTRACT_VERSION = 1

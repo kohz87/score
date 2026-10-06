@@ -333,10 +333,10 @@ Served under `/bridge/v1` on the same port. Bridge tokens can't call `/api/*`, a
 - The `pre_approval_request` event payload includes the exact `requestId` read via `list_gateway_approvals`
   (or `null` → the operation is not actionable) and a `commandDigest`. Settle callbacks arrive as
   `approval.settled` events with `{ requestId, reason }`.
-- `GET /bridge/v1/decisions?wait=25` (long-poll) → `{ items: { deliveryId; leaseUntil; sessionKey; requestId;
+- `GET /bridge/v1/decisions?wait=25` (long-poll; `wait` = integer seconds 0–30, default 25) → `{ items: { deliveryId; leaseUntil; sessionKey; requestId;
   choice: ApprovalChoice; reason: string | null }[] }`. Only decisions for approvals **this producer reported**
   are returned.
-- `POST /bridge/v1/decisions/:deliveryId/ack` `{ outcome: 'applied' | 'not_pending' | 'failed'; resolved: number; error?: string }`
+- `POST /bridge/v1/decisions/:deliveryId/ack` `{ outcome: 'applied' | 'not_pending' | 'failed'; resolved: number; error?: string }` → `204`
 
 **Kanban grants** (D4.3)
 - `POST /bridge/v1/grants/redeem` `{ taskId; taskRunId: number; commandDigest; toolCallId }` →
