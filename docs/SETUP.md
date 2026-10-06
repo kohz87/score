@@ -86,7 +86,17 @@ Then:
 pnpm e2e                # starts `pnpm dev` automatically if it is not already running
 ```
 
-## 6. Live mode against Hermes
+## 6. Codex CLI (the implementer; see CLAUDE.md)
+
+Codex CLI (signed in with ChatGPT) runs implementation tasks in a sandbox. On Ubuntu 24.04+ the sandbox needs the
+**system** bubblewrap, because AppArmor only lets `/usr/bin/bwrap` create user namespaces **(system)**:
+
+```bash
+sudo apt install -y bubblewrap
+codex exec --disable apps -m gpt-6.1-sol -s read-only "run: ls" # should list files, not fail with RTM_NEWADDR
+```
+
+## 7. Live mode against Hermes
 
 Score talks to the Hermes gateway's API server. **(system: these write Hermes config.)**
 

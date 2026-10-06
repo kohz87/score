@@ -1,11 +1,15 @@
 # Score plan
 
-Every task is ≤ half a day. Owners: **Lead** (Claude: lead/integrator), **Codex** (isolated tasks via the
-codex plugin; brief must include the goal, the "done when" criteria, the relevant API-CONTRACT section and "follow
-AGENTS.md"), **Gemini** (whole-repo review, run manually by you).
+Every task is ≤ half a day. **Operating model (owner decision, 2026-10-06):** Codex CLI (`gpt-6.1-sol`, high)
+implements every task; Claude writes the brief, reviews every diff, integrates and commits (see CLAUDE.md
+"Task loop"). The owner label on each task now means:
+- **Lead**: integration-heavy or design-sensitive. Claude writes a detailed brief and reviews line by line;
+  Claude may take it over if Codex fails twice.
+- **Codex**: isolated and well-specified. Standard brief and review.
+- **Gemini**: whole-repo review, run manually by you at phase gates.
 
-Rules for every task: after it lands, `/codex:review --background`. Before merging a phase, run
-`/codex:review --base main` and the phase-gate Gemini review. Rejected review findings are noted in the task log
+Rules for every task: Claude reviews the diff and runs `pnpm check` before merging. Before merging a phase, run
+a fresh Codex code review at `max` against `main` and the phase-gate Gemini review. Rejected review findings are noted in the task log
 (`docs/TASKLOG.md`) with the reason.
 
 Test commands: `pnpm test` (Vitest, all packages), `pnpm typecheck`, `pnpm lint`, `pnpm e2e` (Playwright vs.

@@ -2,28 +2,59 @@
 
 # Claude-specific notes
 
-You are the lead engineer and the only integrator. Codex is a second engineer, Gemini is run manually by the
-owner for whole-repo reviews.
+## Roles (decided by the owner, 2026-10-06)
+- **Claude (you) = lead engineer, product owner's proxy, and the only integrator.** You own the architecture,
+  `docs/API-CONTRACT.md`, `docs/PLAN.md`, task briefs, code review, merges and the overall product quality.
+  You don't write feature code yourself, except integration glue, small fixes found in review, and tasks
+  Codex failed twice.
+- **Codex CLI = implementer.** Every implementation task in `docs/PLAN.md` goes to Codex through the CLI
+  (not the Claude Code plugin). Codex never commits; you review the diff and commit.
+- **Gemini** = whole-repo reviews, run manually by the owner at phase gates.
 
-## Codex workflow (openai/codex-plugin-cc)
-- Start of a session: `/codex:setup` to confirm Codex is installed and signed in. If not signed in, ask the
-  owner to run `!codex login`. **Never enable the review gate**: it can loop and drain usage limits.
-- After each completed task: `/codex:review --background`. Check with `/codex:status` and `/codex:result`.
-- Before merging a phase: `/codex:review --base main`.
-- Before locking in anything hard to reverse (event stream, approval routing, adapter boundary, DB schema,
-  briefs model): `/codex:adversarial-review <focus text>`. Record findings and responses in the doc's review log.
-- Fix real findings. Log each rejected finding with the reason in `docs/TASKLOG.md`.
-- Delegation: hand isolated, well-specified tasks to Codex through the `codex:codex-rescue` subagent (or
-  `/codex:rescue --background`). Tasks marked **Codex** in `docs/PLAN.md` are candidates. Every brief must contain:
-  1. the task's goal and "done when" criteria copied from `docs/PLAN.md`,
-  2. the relevant section of `docs/API-CONTRACT.md`,
-  3. "Follow AGENTS.md (licensing rules included)."
-  Review everything Codex returns before it lands. Prefer reviews over delegation, and never delegate trivial
-  work. Codex usage shares the owner's ChatGPT plan with their Hermes agent.
-- If a `/codex:` command isn't available in this session, give the owner the exact command and wait for the result.
+## Codex CLI settings
+| Use | Command core | Effort |
+|---|---|---|
+| Implementation task | `codex exec --disable apps -m gpt-6.1-sol -c model_reasoning_effort=high -s workspace-write` | high |
+| Fix round on the same task | `codex exec resume <session-id> -` (same model/effort flags) | high |
+| Adversarial design review | `codex exec --disable apps -m gpt-6.1-sol -c model_reasoning_effort=max -s read-only` | max |
+| Phase-gate code review | `codex exec review` / `codex exec -s read-only` against `main` | max |
+
+Always pass `--disable apps` (keeps the owner's ChatGPT connectors out of Score work). The sandbox needs the
+system `bubblewrap` package on Ubuntu (AppArmor userns restriction; see docs/SETUP.md).
+
+Usage counts against the owner's ChatGPT plan, which their Hermes agent also uses. Keep `max` for design
+reviews and phase gates. Never enable any auto-review/review-gate loop.
+
+## Task loop (one PLAN task at a time unless tasks are independent)
+1. **Brief**: write `docs/briefs/<plan-id>.md` with: the task goal and "done when" criteria copied from
+   `docs/PLAN.md`, the relevant `docs/API-CONTRACT.md` section(s), files in scope, constraints ("Follow AGENTS.md,
+   including the licensing rules"; no new dependencies, list any you need instead; don't edit
+   docs/API-CONTRACT.md or docs/ARCHITECTURE.md; don't commit; run `pnpm check` before finishing), and the
+   expected final report (what changed, test results, open questions).
+2. **Start**: `scripts/codex-task.sh start <plan-id> <slug>` creates the branch `task/<plan-id>-<slug>` and a
+   worktree in `../score-worktrees/`, installs deps, runs Codex with the brief, and saves the session id and
+   final message under `~/.score/codex/runs/<plan-id>/`.
+3. **Review** (yours, every line): `git -C <worktree> diff main`, run `pnpm check` (and `pnpm e2e` when UI
+   changed) in the worktree, and check against the brief, AGENTS.md, the contract, design PNG/HTML and licensing.
+4. **Fix rounds**: `scripts/codex-task.sh fix <plan-id> <feedback-file>`. If round 2 still fails, take it over
+   or re-scope the task.
+5. **Land**: commit in the worktree with a message naming the plan id, merge to `main`, remove the worktree.
+   Record the result, review notes and every rejected finding (with the reason) in `docs/TASKLOG.md`.
+6. **Dependencies** Codex asks for: you check the license, add them yourself (`pnpm add <pkg>@<exact>`), and
+   commit the lockfile with the task.
+
+## Phase gates
+Before merging a phase: Codex code review at `max` against `main` (fresh session, so it isn't reviewing with
+its own implementation context), then ask the owner to run the Gemini whole-repo review. Fix real findings and
+log rejected ones.
+
+## Design challenges
+Before locking in anything hard to reverse (event stream, approval routing, adapter boundary, DB schema,
+briefs model), run an adversarial review at `max` (read-only sandbox; prompt saved in `~/.score/codex/`; output
+committed to `docs/reviews/`). Record findings and responses in the doc's review log.
 
 ## Working with the owner
 - Plan first; no feature code without an approved plan task.
-- System-level or global installs, and anything that writes to `~/.hermes`: give the exact command plus the
-  reason, and wait for an OK.
-- Spike or live tests against Hermes: read-only unless the owner approved the specific write.
+- System-level or global installs, and anything that writes to `~/.hermes` beyond the approved test profiles:
+  give the exact command plus the reason, and wait for an OK.
+- Live Hermes tests use the test profiles (`scoretesta`, `scoretestb`) and free models unless the owner says otherwise.
