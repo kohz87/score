@@ -4,14 +4,24 @@ import type { FastifyInstance } from 'fastify'
 import { buildApp } from './app.ts'
 import { SqliteSessionStore } from './auth/sqlite-session-store.ts'
 import { loadConfig } from './config.ts'
-import { migrate, openDatabase, type ScoreDb } from './db/index.ts'
+import { acquireHomeLock, migrate, openDatabase, type ScoreDb } from './db/index.ts'
 import { formatStartupError } from './startup-error.ts'
 
 let db: ScoreDb | undefined
 let app: FastifyInstance | undefined
+let homeLock: ReturnType<typeof acquireHomeLock> | undefined
+
+function closeDatabase(): void {
+  try {
+    db?.close()
+  } finally {
+    homeLock?.release()
+  }
+}
 
 try {
   const config = loadConfig(process.env)
+  homeLock = acquireHomeLock(config.home)
   db = openDatabase(join(config.home, 'score.db'))
   migrate(db, fileURLToPath(new URL('../migrations/', import.meta.url)))
   app = buildApp({ config, sessionStore: new SqliteSessionStore(db) })
@@ -24,7 +34,7 @@ try {
     try {
       await app?.close()
     } finally {
-      db?.close()
+      closeDatabase()
     }
   }
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
@@ -41,7 +51,7 @@ try {
   try {
     await app?.close()
   } finally {
-    db?.close()
+    closeDatabase()
     process.exitCode = 1
   }
 }
