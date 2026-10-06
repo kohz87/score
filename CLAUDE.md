@@ -15,7 +15,8 @@
 | Use | Command core | Effort |
 |---|---|---|
 | Implementation task | `codex exec --disable apps -m gpt-6.1-sol -c model_reasoning_effort=high -s workspace-write` | high |
-| Fix round on the same task | `codex exec resume <session-id> -` (same model/effort flags) | high |
+| Fix round (default) | fresh `codex exec` in the task worktree with brief + feedback (`codex-task.sh fix`) | high |
+| Fix round that needs the original reasoning | `codex-task.sh resume` (re-bills the whole session; rarely worth it) | high |
 | Adversarial design review | `codex exec --disable apps -m gpt-6.1-sol -c model_reasoning_effort=max -s read-only` | max |
 | Phase-gate code review | `codex exec review` / `codex exec -s read-only` against `main` | max |
 
@@ -36,8 +37,9 @@ reviews and phase gates. Never enable any auto-review/review-gate loop.
    final message under `~/.score/codex/runs/<plan-id>/`.
 3. **Review** (yours, every line): `git -C <worktree> diff main`, run `pnpm check` (and `pnpm e2e` when UI
    changed) in the worktree, and check against the brief, AGENTS.md, the contract, design PNG/HTML and licensing.
-4. **Fix rounds**: `scripts/codex-task.sh fix <plan-id> <feedback-file>`. If round 2 still fails, take it over
-   or re-scope the task.
+4. **Fix rounds**: small, well-understood fixes (a few lines, clear cause) you make yourself and test; that's
+   cheaper than any Codex round. Real rework goes to `scripts/codex-task.sh fix <plan-id> <feedback-file>` (fresh
+   session). If round 2 still fails, take it over or re-scope the task.
 5. **Land**: commit in the worktree with a message naming the plan id, merge to `main`, remove the worktree.
    Record the result, review notes and every rejected finding (with the reason) in `docs/TASKLOG.md`.
 6. **Dependencies** Codex asks for: you check the license, add them yourself (`pnpm add <pkg>@<exact>`), and
