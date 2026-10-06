@@ -101,8 +101,11 @@ type Handoff = { id: string; from: { agentId: AgentId; blockId: string }; to: { 
 
 ## 2. Stream
 
-### `GET /api/stream?since=<seq>`, `text/event-stream`
-- Resume with the `Last-Event-ID` header (wins over `since`).
+### `GET /api/stream?since=<seq>&epoch=<epoch>`, `text/event-stream`
+- Resume with the `Last-Event-ID` header (wins over `since`). `epoch` is the value from the last `stream.hello`
+  the client saw. The browser's EventSource reconnects with the same URL, so it carries the epoch automatically.
+  A cursor without an epoch is treated as foreign (→ `stream.reset` with reason `epoch`). A fresh connection
+  sends neither and gets live events from the head.
 - **Durable events**: `id: <seq>`, `event: <type>`, `data: <envelope json>`. `seq` is strictly increasing; gaps
   are allowed. Nothing between replay and live is lost or duplicated (server-side subscription fence).
 - **Control frames** (`stream.hello`, `stream.reset`) have **no `id:`**. Comment heartbeat every 15 s (`: hb`).
