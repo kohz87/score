@@ -11,6 +11,7 @@ test('loads defaults without reading process.env', () => {
     port: 8740,
     webOrigin: 'http://127.0.0.1:5173',
     mode: 'fake',
+    fakeSpeed: 1,
   })
 })
 
@@ -21,6 +22,7 @@ test('loads explicit config and normalizes the web origin', () => {
     SCORE_PORT: '9000',
     SCORE_WEB_ORIGIN: 'https://localhost:5173/',
     SCORE_MODE: 'live',
+    SCORE_FAKE_SPEED: '2.5',
   }
   expect(loadConfig(env)).toEqual({
     home: '/tmp/score-test',
@@ -28,6 +30,7 @@ test('loads explicit config and normalizes the web origin', () => {
     port: 9000,
     webOrigin: 'https://localhost:5173',
     mode: 'live',
+    fakeSpeed: 2.5,
   })
   expect(env.SCORE_WEB_ORIGIN).toBe('https://localhost:5173/')
 })
@@ -38,6 +41,11 @@ test.each([
   { SCORE_PORT: '8740.5' },
   { SCORE_PORT: 'invalid' },
   { SCORE_MODE: 'unknown' },
+  { SCORE_FAKE_SPEED: '0' },
+  { SCORE_FAKE_SPEED: '-1' },
+  { SCORE_FAKE_SPEED: 'NaN' },
+  { SCORE_FAKE_SPEED: 'Infinity' },
+  { SCORE_FAKE_SPEED: '' },
   { SCORE_HOME: '' },
   { SCORE_HOST: 'localhost/path' },
   { SCORE_WEB_ORIGIN: 'file:///tmp/score' },
