@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => {
     createIngest: vi.fn(),
     getEpoch: vi.fn(() => 'epoch'),
     pruneEvents: vi.fn(),
+    retireIngestKeys: vi.fn(),
   }
 })
 
@@ -35,6 +36,7 @@ vi.mock('../src/db/index.ts', () => ({
 }))
 vi.mock('../src/hub/ingest.ts', () => ({ createIngest: mocks.createIngest }))
 vi.mock('../src/hub/retention.ts', () => ({ pruneEvents: mocks.pruneEvents }))
+vi.mock('../src/hub/retire.ts', () => ({ retireIngestKeys: mocks.retireIngestKeys }))
 vi.mock('../src/app.ts', () => ({ buildApp: mocks.buildApp }))
 vi.mock('../src/auth/sqlite-session-store.ts', () => ({
   SqliteSessionStore: class {
@@ -229,8 +231,39 @@ test('hourly retention is unrefd and cleared before shutdown', async () => {
   expect(timer.hasRef()).toBe(false)
   await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
   expect(mocks.pruneEvents).toHaveBeenCalledExactlyOnceWith(mocks.db)
+  expect(mocks.retireIngestKeys).toHaveBeenCalledExactlyOnceWith(mocks.db)
+  expect(mocks.pruneEvents.mock.invocationCallOrder[0]).toBeLessThan(
+    mocks.retireIngestKeys.mock.invocationCallOrder[0]!,
+  )
   signals.get('SIGTERM')?.()
   await vi.waitFor(() => expect(mocks.db.close).toHaveBeenCalledOnce())
   await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
   expect(mocks.pruneEvents).toHaveBeenCalledOnce()
+  expect(mocks.retireIngestKeys).toHaveBeenCalledOnce()
+})
+
+test('hourly retirement errors are logged and the next interval retries', async () => {
+  vi.useFakeTimers()
+  vi.spyOn(globalThis, 'setInterval')
+  mocks.retireIngestKeys.mockImplementationOnce(() => {
+    throw new Error('retirement failed')
+  })
+  await import('../src/index.ts')
+  await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+  expect(mocks.app.log.error).toHaveBeenCalledExactlyOnceWith('Ingest key retirement failed')
+  await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+  expect(mocks.retireIngestKeys).toHaveBeenCalledTimes(2)
+  expect(mocks.pruneEvents).toHaveBeenCalledTimes(2)
+})
+
+test('an event prune error is logged and still allows key retirement', async () => {
+  vi.useFakeTimers()
+  vi.spyOn(globalThis, 'setInterval')
+  mocks.pruneEvents.mockImplementationOnce(() => {
+    throw new Error('prune failed')
+  })
+  await import('../src/index.ts')
+  await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+  expect(mocks.app.log.error).toHaveBeenCalledExactlyOnceWith('Event retention prune failed')
+  expect(mocks.retireIngestKeys).toHaveBeenCalledExactlyOnceWith(mocks.db)
 })

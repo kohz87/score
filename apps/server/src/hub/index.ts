@@ -15,3 +15,4 @@ export {
   type Lifecycle,
 } from './projections.ts'
 export { headSeq, snapshot } from './snapshot.ts'
+export { retireIngestKeys } from './retire.ts'

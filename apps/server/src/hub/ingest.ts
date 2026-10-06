@@ -38,9 +38,11 @@ export interface Ingest {
   flushListeners(): Promise<void>
   close(): Promise<void>
   releaseHold(source: string, scope: string): void
+  heldPositions(source: string, scope: string): number[]
 }
 
 const owners = new WeakMap<ScoreDb, Ingest>()
+const FloorRowSchema = z.object({ floor: z.int().nonnegative() })
 const EventSeqSchema = z.int().positive()
 const CheckpointRowSchema = z.object({
   cursor: z.string().regex(/^\d+$/).transform(Number).pipe(z.int().nonnegative()),
@@ -54,6 +56,10 @@ const ObservationMetadataSchema = z.object({
 
 function holdKey(source: string, scope: string): string {
   return JSON.stringify([source, scope])
+}
+
+export function heldIngestPositions(db: ScoreDb, source: string, scope: string): number[] {
+  return owners.get(db)?.heldPositions(source, scope) ?? []
 }
 
 function deepFreeze<T>(value: T): DeepReadonly<T> {
@@ -159,12 +165,32 @@ export function createIngest(
     try {
       const now = new Date(clock()).toISOString()
       const committed = db.tx((sqlite): { result: IngestResult; events: StreamEvent[] } => {
+        const checkpoint = obs.checkpoint
+        if (checkpoint) {
+          const row = sqlite
+            .prepare(
+              'SELECT floor FROM ingest_floors WHERE source = ? AND scope = ? AND incarnation = ?',
+            )
+            .get(obs.source, checkpoint.scope, checkpoint.incarnation ?? '')
+          if (row !== undefined && FloorRowSchema.parse(row).floor >= checkpoint.position) {
+            advanceCheckpoint(sqlite, obs, now)
+            return { result: { status: 'duplicate' }, events: [] }
+          }
+        }
         const inserted = sqlite
           .prepare(
-            `INSERT INTO ingest_keys (source, identity, first_seq, created_at) VALUES (?, ?, NULL, ?)
+            `INSERT INTO ingest_keys (source, identity, first_seq, created_at, scope, incarnation, position)
+             VALUES (?, ?, NULL, ?, ?, ?, ?)
              ON CONFLICT (source, identity) DO NOTHING`,
           )
-          .run(obs.source, obs.identity, now)
+          .run(
+            obs.source,
+            obs.identity,
+            now,
+            checkpoint?.scope ?? null,
+            checkpoint?.incarnation ?? null,
+            checkpoint?.position ?? null,
+          )
         if (inserted.changes === 0) {
           advanceCheckpoint(sqlite, obs, now)
           return { result: { status: 'duplicate' }, events: [] }
@@ -295,6 +321,9 @@ export function createIngest(
     },
     releaseHold(source, scope) {
       holds.delete(holdKey(source, scope))
+    },
+    heldPositions(source, scope) {
+      return [...(holds.get(holdKey(source, scope)) ?? [])]
     },
   }
   owners.set(db, hub)

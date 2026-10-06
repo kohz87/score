@@ -37,7 +37,8 @@ function open(): ScoreDb {
 
 function copyMigrations(): string {
   const copy = join(dir, 'migrations')
-  cpSync(migrationDir, copy, { recursive: true })
+  mkdirSync(copy)
+  cpSync(join(migrationDir, '0001_infra.sql'), join(copy, '0001_infra.sql'))
   return copy
 }
 
@@ -51,11 +52,18 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
   const db = open()
   migrate(db, migrationDir)
   const sql = readFileSync(join(migrationDir, '0001_infra.sql'), 'utf8')
+  const floorsSql = readFileSync(join(migrationDir, '0002_ingest_floors.sql'), 'utf8')
   expect(db.sqlite.prepare('SELECT * FROM schema_migrations').all()).toEqual([
     {
       version: 1,
       name: '0001_infra.sql',
       checksum: createHash('sha256').update(sql).digest('hex'),
+      applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
+    },
+    {
+      version: 2,
+      name: '0002_ingest_floors.sql',
+      checksum: createHash('sha256').update(floorsSql).digest('hex'),
       applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
     },
   ])
@@ -69,6 +77,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'events',
     'gaps',
     'ingest_checkpoints',
+    'ingest_floors',
     'ingest_keys',
     'meta',
     'schema_migrations',
@@ -77,10 +86,10 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
   expect(
     db.sqlite
       .prepare(
-        "SELECT name FROM sqlite_schema WHERE type = 'index' AND name IN ('events_ts', 'gaps_run') ORDER BY name",
+        "SELECT name FROM sqlite_schema WHERE type = 'index' AND name IN ('events_ts', 'gaps_run', 'ingest_keys_position') ORDER BY name",
       )
       .all(),
-  ).toEqual([{ name: 'events_ts' }, { name: 'gaps_run' }])
+  ).toEqual([{ name: 'events_ts' }, { name: 'gaps_run' }, { name: 'ingest_keys_position' }])
   expect(db.sqlite.prepare("SELECT value FROM meta WHERE key = 'created_at'").get()).toEqual({
     value: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
   })
@@ -149,9 +158,9 @@ test('database from a newer Score is rejected', () => {
   migrate(db, migrationDir)
   db.sqlite
     .prepare('INSERT INTO schema_migrations VALUES (?, ?, ?, ?)')
-    .run(2, '0002_newer.sql', 'a'.repeat(64), new Date().toISOString())
+    .run(3, '0003_newer.sql', 'a'.repeat(64), new Date().toISOString())
   expect(() => migrate(db, migrationDir)).toThrow(
-    'Database is from a newer Score: unknown applied migration 2',
+    'Database is from a newer Score: unknown applied migration 3',
   )
 })
 
