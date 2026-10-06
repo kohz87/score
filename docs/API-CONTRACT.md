@@ -103,7 +103,8 @@ type Handoff = { id: string; from: { agentId: AgentId; blockId: string }; to: { 
 
 ### `GET /api/stream?since=<seq>&epoch=<epoch>`, `text/event-stream`
 - Resume with the `Last-Event-ID` header (wins over `since`). `epoch` is the value from the last `stream.hello`
-  the client saw. The browser's EventSource reconnects with the same URL, so it carries the epoch automatically.
+  the client saw. The first connection has no epoch yet, so the client **manages reconnects itself**:
+  close the EventSource on error and open a new one with `?since=<lastSeq>&epoch=<epoch>` (backoff 0.5–10 s).
   A cursor without an epoch is treated as foreign (→ `stream.reset` with reason `epoch`). A fresh connection
   sends neither and gets live events from the head.
 - **Durable events**: `id: <seq>`, `event: <type>`, `data: <envelope json>`. `seq` is strictly increasing; gaps
