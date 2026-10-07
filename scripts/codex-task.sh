@@ -16,6 +16,14 @@ RUNS="${SCORE_HOME:-$HOME/.score}/codex/runs"
 die() { echo "codex-task: $*" >&2; exit 1; }
 worktree_for() { ls -d "$WT_ROOT/$1-"* 2>/dev/null | head -1; }
 
+# The owner's rule: if Codex runs out of quota, pause all work and wait for them (see CLAUDE.md).
+check_quota() {
+  if sed 's/\x1b\[[0-9;]*m//g' "$1" | grep -qiE "usage limit|rate limit|quota|too many requests|limit reached|insufficient_quota|429"; then
+    echo "codex-task: CODEX QUOTA EXHAUSTED (see $1). Pause all work, write docs/PAUSED.md, wait for the owner." >&2
+    exit 75
+  fi
+}
+
 cmd="${1:-}"; id="${2:-}"
 [[ -n "$cmd" && -n "$id" ]] || die "usage: $0 start|fix|resume|path|clean <plan-id> [...]"
 run_dir="$RUNS/$id"; mkdir -p "$run_dir"
@@ -34,6 +42,7 @@ case "$cmd" in
     n=$(find "$run_dir" -maxdepth 1 -name 'round-*.md' | wc -l)
     codex exec --disable apps -m "$MODEL" -c "model_reasoning_effort=$EFFORT" -s workspace-write -C "$wt" \
       -o "$run_dir/round-$n.md" - < "$brief" 2>&1 | tee "$run_dir/round-$n.log"
+    check_quota "$run_dir/round-$n.log"
     sed 's/\x1b\[[0-9;]*m//g' "$run_dir/round-$n.log" | grep -m1 -oE 'session id: [0-9a-f-]+' | awk '{print $3}' > "$run_dir/session"
     [[ -s "$run_dir/session" ]] || die "could not read the Codex session id from $run_dir/round-$n.log"
     echo "codex-task: session $(cat "$run_dir/session"); worktree $wt; report $run_dir/round-$n.md"
@@ -49,6 +58,7 @@ case "$cmd" in
       cat "$brief"; printf '\n\n# FEEDBACK FOR THIS ROUND\n\n'; cat "$feedback"; } \
       | codex exec --disable apps -m "$MODEL" -c "model_reasoning_effort=$EFFORT" -s workspace-write -C "$wt" \
           -o "$run_dir/round-$n.md" - 2>&1 | tee "$run_dir/round-$n.log"
+    check_quota "$run_dir/round-$n.log"
     echo "codex-task: report $run_dir/round-$n.md"
     ;;
   resume)

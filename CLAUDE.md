@@ -45,6 +45,12 @@ reviews and phase gates. Never enable any auto-review/review-gate loop.
 6. **Dependencies** Codex asks for: you check the license, add them yourself (`pnpm add <pkg>@<exact>`), and
    commit the lockfile with the task.
 
+## If Codex runs out of quota (owner's rule, 2026-10-07)
+`codex-task.sh` exits 75 with `CODEX QUOTA EXHAUSTED`. Then **pause everything**, including your own reviews,
+merges and coding. Write `docs/PAUSED.md` (in-flight tasks, worktrees and branches, Codex session IDs, what's merged
+and what's reviewed but unmerged), commit it on `main`, tell the owner, and wait for their explicit go. On resume,
+vet each interrupted worktree's integrity first (diff, `pnpm check`, half-written files) before continuing.
+
 ## Phase gates
 Before merging a phase: Codex code review at `max` against `main` (fresh session, so it isn't reviewing with
 its own implementation context), then ask the owner to run the Gemini whole-repo review. Fix real findings and
