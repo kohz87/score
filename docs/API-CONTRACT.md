@@ -248,9 +248,12 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 - **S** `GET /api/tasks/:taskId` → `TaskDetail`
 - `POST /api/tasks` `{ title; body?; assignee?: AgentId; reviewer?: AgentId; roomId?; dependsOn?: string[]; steps?: string[] }` → `TaskDetail`
 - `PATCH /api/tasks/:taskId` `{ title?; body?; assignee?; reviewer?; steps?: TaskStep[] }` → `TaskDetail`
-- `POST /api/tasks/:taskId/actions`
+- **H** `POST /api/tasks/:taskId/actions`
   `{ action: 'start' | 'block' | 'unblock' | 'request_review' | 'request_changes' | 'complete' | 'archive' | 'comment'; text?: string }`
-  → `TaskDetail` (409 when the Hermes state machine rejects the transition)
+  → `200 { taskId; action; hermesStatus: string }` after the Hermes CLI accepted it; the task's new state arrives on the
+  stream (`task.upserted`). `409 conflict` when the Hermes state machine rejects the transition (e.g. `unblock` on a
+  task that isn't blocked). `501 not_implemented` for actions not built yet (only `comment` and `unblock` exist after
+  1.13c; the rest arrive with Phase 2 Tasks).
 
 ## 8. Team
 
@@ -358,11 +361,10 @@ Served under `/bridge/v1` on the same port. Bridge tokens can't call `/api/*`, a
   the queue entry is provably this hook's own; otherwise send `null` (view-only). Never use `register_gateway_settle`:
   it holds one callback per request and would displace the gateway's own (2026-10-07 design review, finding 9).
 
-**Kanban grants** (D4.3)
-- `POST /bridge/v1/grants/redeem` `{ taskId; taskRunId: number; commandDigest; toolCallId }` →
-  `200 { grantId; patternKey }` or `404 no_grant` / `409 not_eligible` (wrong attempt, expired, already redeemed).
-  Allowed only when the producer token's `kanbanTaskId` equals `taskId`.
-- `POST /bridge/v1/grants/:grantId/consume` `{ toolCallId; outcome: 'executed' | 'blocked' | 'revoked' }` → `204`
+**Kanban denials** (D4.3, revised 2026-10-07): there are **no** grant endpoints. A Kanban worker's `post_tool_call`
+event may carry `kanbanDenial: { patternKey: string; commandDigest: string; taskId: string; runId: number | null }`
+when the plugin verified the unattended dangerous-command denial; the server shows it as a view-only approval card.
+`enabled.kanbanGrants` in `hello` is reserved and always `false` until Hermes offers a one-shot grant API.
 
 Hook → domain mapping lives in `apps/server/src/hermes/translate.ts`; payload fixtures in
 `apps/server/test/fixtures/bridge/` (seeded from `docs/spike/`).

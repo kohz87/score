@@ -237,30 +237,25 @@ its session and won't swap in a different history after waiting on its turn leas
   resolution ever:** if no exact `request_id` was captured, the card is view-only ("answer in Telegram").
 - **Coalesced followers** (`coalesced=True`) attach to their leader and are never separate actionable cards.
 
-**D4.3 Blocked Kanban workers (owner decision: a blocked worker becomes an approval).**
-- **Scope.** Only the verified denial class is redeemable: the terminal dangerous-pattern denial in unattended
-  mode. The bridge's `post_tool_call` **decodes the nested `result` JSON** (top-level `status` is `error`; the
-  inner `status` is `blocked`), validates it, recomputes `pattern_key` with `detect_dangerous_command`, and
-  computes a **command digest** (sha256 of the raw command, inside the plugin; only the digest leaves the process).
-  Other blocks (e.g. `execute_code`, which denies before any allowlist lookup) become diagnostics on a "Needs you"
-  task, without an approve button.
-- **Approve once = this exact command, once, in the next attempt.**
-  1. Score **stages** a grant `{profile, board, task_id, eligible after task_run id, command_digest, pattern_key,
-     expires_at (2 h)}`.
-  2. It revalidates the task (assignee, latest `task_events.id`, status `blocked`), then comments and unblocks.
-  3. In the next worker, at the `pre_tool_call` of a terminal call whose digest matches, the bridge **redeems**
-     the grant atomically (Score moves it `staged → redeemed`, bound to that producer and `tool_call_id`).
-     It then adds the pattern to the in-memory permanent set, **only if no other tool call is in flight** in that
-     process; any other `pre_tool_call` while the grant is active revokes it first.
-  4. At that call's `post_tool_call` the bridge **removes** the pattern and the grant becomes `consumed`.
-     If the post hook never arrives, the grant becomes `unknown` and needs a human.
-  5. Nothing is ever written to `command_allowlist`.
-- **Always** persists the pattern for that profile through config tooling, after a diff preview.
-- **Deny** comments and leaves the task `blocked` (not dispatched).
-- **Triage.** If a task lands in `triage` (Hermes's loop guard, keyed on block **kind**) or is re-promoted by
-  the specifier, Score shows it as "triage" with no grant action, and existing grants for it expire.
-- **Residual risk:** the window between adding and removing the pattern is one tool call in one process, guarded
-  against concurrent calls. A live test (L6) must confirm the add → execute → remove ordering before this ships.
+**D4.3 Blocked Kanban workers (owner decisions: a blocked worker becomes an approval, 2026-10-06; view-only until
+Hermes offers a one-shot grant, 2026-10-07).**
+- **Detection.** In unattended (`-q`) mode Hermes denies a dangerous terminal command instantly, with no approval hooks.
+  The bridge's `post_tool_call` decodes the tool result JSON (envelope `status: error`; the decoded `result` has
+  `status: blocked` and an `error` starting `BLOCKED: Command flagged as dangerous`; the terminal denial drops
+  `pattern_key`), recomputes the pattern with Hermes's `detect_dangerous_command` on the raw command, and reports a
+  verified `kanbanDenial` with the command digest. Other blocks (Tirith, `execute_code`) stay diagnostics.
+- **What Score shows.** A view-only "Needs you" card linked to the task, with the exact blocked command and why. The
+  human acts through Hermes's own state machine: **Deny** = `hermes kanban comment` (the task stays blocked);
+  **Unblock with a note** = `hermes kanban unblock --reason` (the next attempt runs unattended again and will block
+  again unless the pattern is allowed); **Always allow this pattern** comes with Settings (Phase 2), as an explicit
+  `command_allowlist` change after a diff preview.
+- **Why no "approve once" (1.13c design review, docs/reviews/2026-10-07-1.13c-design-adversarial.md).** A plugin can only
+  grant by adding to Hermes's in-memory permanent allowlist, and that cannot be made one-shot: Hermes's
+  `_persist_choice` snapshots the **whole** set into `command_allowlist` whenever anyone chooses "always"; the terminal
+  tool retries `env.execute()` up to 3 times beneath the guard; other plugins can rewrite a call's arguments after
+  Score's hook; abandoned hook threads and forks defeat cleanup; `tool_call_id` doesn't identify ownership. A safe
+  version needs Hermes to consume a scoped, expiring, one-shot capability inside its own guard (draft proposal:
+  `docs/proposals/hermes-one-shot-unattended-grant.md`). Score adds "Approve once" only on top of such an API.
 
 **D4.4 Correlation (1.14b design reviews, 2026-10-07).** Ledger rows are keyed only by exact identifiers:
 `request_id` (run SSE; a hook's `requestId` when the producer guarantees it), a transport's own request id, and a

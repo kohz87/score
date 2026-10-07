@@ -135,11 +135,13 @@ Revised after the architecture review (ARCHITECTURE v0.2). Section refs like D1 
 - Done when: tests show no FIFO path exists; a missing id → non-actionable; delivery only to the reporting producer; a live check on scoretesta (manual mode) resolves the exact request.
 - Test: `cd hermes-plugin && uv run pytest && pnpm --filter @score/server test -- bridge`
 
-**1.13c Bridge: Kanban one-shot grants (feature-flagged)** · Lead · *adversarial review before merge*
-- Goal: nested-result decoding, verified denial class, digest-bound staged → redeemed → consumed grants, in-flight guard, add/remove around the single call, triage handling, expiry; live test **L6** on scoretesta (D4.3).
-- Files: `hermes-plugin/score_bridge/grants.py`, `apps/server/src/domain/grants.ts`, migration, tests, `docs/SPIKE.md` (L6 results)
-- Done when: unit tests cover a wrong digest, a wrong attempt, expiry, a concurrent call revoking the grant, and a missing post hook → `unknown`; L6 shows exactly one execution and no `command_allowlist` write.
-- Test: `cd hermes-plugin && uv run pytest && pnpm --filter @score/server test -- grants`
+**1.13c Bridge: Kanban denials, view-only (rescoped 2026-10-07, owner decision)** · Lead
+- Goal: verified unattended-denial detection in the plugin; view-only "Needs you" cards linked to the task; a `hermes`
+  CLI runner; `POST /api/tasks/:taskId/actions` for `comment` (Deny) and `unblock` (with a note) (D4.3). No grants.
+- Done when: positive/negative denial detection tests; a card per (task, run, digest), closed when the task leaves
+  `blocked`; the two actions run the CLI with exact argument arrays and map rejections to 409; a live check on
+  scoretesta (a blocked worker appears in Score; Deny comments; Unblock re-dispatches).
+- Test: `cd hermes-plugin && uv run pytest && pnpm --filter @score/server test`
 
 **Order change (2026-10-07):** 1.13b and 1.13c need the server side of the bridge, so the next step is 1.14a, then
 1.14b, then 1.13b, then 1.13c.

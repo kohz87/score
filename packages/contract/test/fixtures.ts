@@ -269,17 +269,3 @@ export const bridgeAck = {
   resolved: 0,
   error: 'Request no longer pending',
 } satisfies Contract.BridgeDecisionAckRequest
-export const redeem = {
-  taskId: 'task-1',
-  taskRunId: 1,
-  commandDigest: '0123456789abcdef'.repeat(4),
-  toolCallId: 'tool-call-1',
-} satisfies Contract.BridgeGrantRedeemRequest
-export const grant = {
-  grantId: 'grant-1',
-  patternKey: 'terminal-command',
-} satisfies Contract.BridgeGrantRedeemResponse
-export const consume = {
-  toolCallId: 'tool-call-1',
-  outcome: 'executed',
-} satisfies Contract.BridgeGrantConsumeRequest

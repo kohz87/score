@@ -7,8 +7,6 @@ import {
   BridgeEventSchema,
   BridgeEventsRequestSchema,
   BridgeEventsResponseSchema,
-  BridgeGrantConsumeRequestSchema,
-  BridgeGrantRedeemRequestSchema,
   BridgeHelloRequestSchema,
   BridgeHelloResponseSchema,
 } from '../src/index.ts'
@@ -107,11 +105,6 @@ const positiveIntegerCases = [
     (pid: number) => ({ ...f.bridgeHelloRequest, pid }),
   ],
   ['BridgeEvent.counter', BridgeEventSchema, (counter: number) => ({ ...f.bridgeEvent, counter })],
-  [
-    'BridgeGrantRedeemRequest.taskRunId',
-    BridgeGrantRedeemRequestSchema,
-    (taskRunId: number) => ({ ...f.redeem, taskRunId }),
-  ],
 ] as const
 
 describe.each(positiveIntegerCases)('%s', (_name, schema, fixture) => {
@@ -151,15 +144,6 @@ test('rejects an empty producer token', () => {
   ).toBe(false)
 })
 
-test.each(['', 'a'.repeat(63), 'a'.repeat(65), 'A'.repeat(64), 'g'.repeat(64)])(
-  'rejects invalid SHA-256 digest %s',
-  (commandDigest) => {
-    expect(BridgeGrantRedeemRequestSchema.safeParse({ ...f.redeem, commandDigest }).success).toBe(
-      false,
-    )
-  },
-)
-
 test.each(['once', 'session', 'always', 'deny'])('accepts the %s decision choice', (choice) => {
   const decision = { ...f.bridgeDecision, choice, reason: 'Human decision' }
   expect(BridgeDecisionSchema.parse(decision)).toEqual(decision)
@@ -185,11 +169,6 @@ test('rejects an ack without a lease id', () => {
   expect(BridgeDecisionAckRequestSchema.safeParse({ outcome: 'failed', resolved: 0 }).success).toBe(
     false,
   )
-})
-
-test.each(['executed', 'blocked', 'revoked'])('accepts the %s grant outcome', (outcome) => {
-  const request = { ...f.consume, outcome }
-  expect(BridgeGrantConsumeRequestSchema.parse(request)).toEqual(request)
 })
 
 test('rejects deliveries without an exact request or session', () => {

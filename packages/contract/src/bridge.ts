@@ -20,7 +20,7 @@ export const BridgeHelloResponseSchema = z.object({
   expiresAt: z.iso.datetime(),
   enabled: z.object({
     gatewayApprovals: z.boolean(),
-    kanbanGrants: z.boolean(),
+    kanbanGrants: z.boolean(), // reserved; always false until Hermes offers a one-shot grant API (D4.3)
     watch: z.boolean(),
   }),
 })
@@ -72,23 +72,3 @@ export const BridgeDecisionAckRequestSchema = z
   // Exact-target resolution resolves exactly one request.
   .refine((ack) => ack.outcome !== 'applied' || ack.resolved === 1)
 export type BridgeDecisionAckRequest = z.infer<typeof BridgeDecisionAckRequestSchema>
-
-export const BridgeGrantRedeemRequestSchema = z.object({
-  taskId: z.string().min(1),
-  taskRunId: z.int().positive(),
-  commandDigest: z.string().regex(/^[0-9a-f]{64}$/),
-  toolCallId: z.string().min(1),
-})
-export type BridgeGrantRedeemRequest = z.infer<typeof BridgeGrantRedeemRequestSchema>
-
-export const BridgeGrantRedeemResponseSchema = z.object({
-  grantId: z.string().min(1),
-  patternKey: z.string(),
-})
-export type BridgeGrantRedeemResponse = z.infer<typeof BridgeGrantRedeemResponseSchema>
-
-export const BridgeGrantConsumeRequestSchema = z.object({
-  toolCallId: z.string().min(1),
-  outcome: z.enum(['executed', 'blocked', 'revoked']),
-})
-export type BridgeGrantConsumeRequest = z.infer<typeof BridgeGrantConsumeRequestSchema>

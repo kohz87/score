@@ -61,9 +61,6 @@ const cases = [
   ['BridgeDecisionSchema', f.bridgeDecision, { ...f.bridgeDecision, requestId: null }],
   ['BridgeDecisionsResponseSchema', { items: [f.bridgeDecision] }, { items: [{}] }],
   ['BridgeDecisionAckRequestSchema', f.bridgeAck, { ...f.bridgeAck, outcome: 'denied' }],
-  ['BridgeGrantRedeemRequestSchema', f.redeem, { ...f.redeem, taskRunId: '1' }],
-  ['BridgeGrantRedeemResponseSchema', f.grant, { ...f.grant, grantId: '' }],
-  ['BridgeGrantConsumeRequestSchema', f.consume, { ...f.consume, toolCallId: '' }],
 ] as const satisfies ReadonlyArray<readonly [keyof typeof contract, unknown, unknown]>
 
 test('every exported schema has valid and invalid fixtures', () => {
