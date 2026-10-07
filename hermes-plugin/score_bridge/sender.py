@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from urllib.error import HTTPError
 
 from . import hermes_private
+from .gates import capture
 from .client import ScoreClient
 from .redact import bound_payload, digest, scrub, snapshot
 from .spool import Spool, gap_event
@@ -127,6 +128,7 @@ class Sender:
         if type(command) is not str and type(payload.get("args")) is dict:
             command = payload["args"].get("command")
         command_digest = digest(command) if type(command) is str and not command.startswith("[omitted:") else None
+        payload = capture(hook, payload, command_digest)
         self.queue.put_nowait({"hook": hook, "at": at, "raw": payload, "digest": command_digest,
                                "profile": hermes_private.current_profile(), "context": contextvars.copy_context()})
 

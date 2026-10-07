@@ -8,6 +8,8 @@ import {
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import type { ApprovalOutbox } from '../../domain/approval-outbox.ts'
+import { registerBridgeDecisionRoutes } from './decisions.ts'
 import type { ScoreDb } from '../../db/index.ts'
 import { HttpError } from '../../errors.ts'
 import type { Ingest } from '../../hub/ingest.ts'
@@ -23,6 +25,7 @@ export interface BridgeDeps {
   getCompatibility: () => SystemStatus['compatibility']
   clock?: () => number
   metrics?: BridgeMetrics
+  outbox?: ApprovalOutbox
 }
 
 const BearerSchema = z.string().regex(/^Bearer [A-Za-z0-9_-]{43}$/i)
@@ -82,6 +85,13 @@ export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): vo
       const now = clock()
       const at = new Date(now).toISOString()
       const expires = now + 60 * 60 * 1000
+      const gatewayApprovals =
+        hello.isolation === 'in_process' &&
+        ['list_gateway_approvals', 'resolve_gateway_approval'].every(
+          (name) =>
+            (hello.privateApis[`tools.approval.${name}`] ?? hello.privateApis[name]) === true,
+        ) &&
+        !getCompatibility().disabled.includes('gateway-approvals')
       db.tx((sqlite) => {
         const row = sqlite
           .prepare('SELECT * FROM producers WHERE incarnation = ?')
@@ -102,12 +112,12 @@ export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): vo
         sqlite
           .prepare(
             `INSERT INTO producers (id, profile, incarnation, pid, kanban_task_id, isolation, plugin_version,
-        hermes_version, hermes_code_sha, private_apis, token_hash, token_expires_at, created_at, last_seen_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        hermes_version, hermes_code_sha, private_apis, token_hash, token_expires_at, created_at, last_seen_at, gateway_approvals)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (incarnation) DO UPDATE SET isolation = excluded.isolation, plugin_version = excluded.plugin_version,
         hermes_version = excluded.hermes_version, hermes_code_sha = excluded.hermes_code_sha,
         private_apis = excluded.private_apis, token_hash = excluded.token_hash,
-        token_expires_at = excluded.token_expires_at, last_seen_at = excluded.last_seen_at`,
+        token_expires_at = excluded.token_expires_at, last_seen_at = excluded.last_seen_at, gateway_approvals = excluded.gateway_approvals`,
           )
           .run(
             previous?.id ?? randomUUID(),
@@ -124,6 +134,7 @@ export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): vo
             expires,
             at,
             at,
+            gatewayApprovals ? 1 : 0,
           )
       })
       return BridgeHelloResponseSchema.parse({
@@ -132,17 +143,26 @@ export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): vo
         enabled: {
           watch: true,
           kanbanGrants: false,
-          gatewayApprovals:
-            hello.isolation === 'in_process' &&
-            ['list_gateway_approvals', 'register_gateway_settle', 'resolve_gateway_approval'].every(
-              (name) =>
-                (hello.privateApis[`tools.approval.${name}`] ?? hello.privateApis[name]) === true,
-            ) &&
-            !getCompatibility().disabled.includes('gateway-approvals'),
+          gatewayApprovals,
         },
       })
     },
   )
+
+  if (deps.outbox)
+    registerBridgeDecisionRoutes(app, {
+      outbox: deps.outbox,
+      clock,
+      authenticate(value) {
+        const row = db.sqlite
+          .prepare('SELECT * FROM producers WHERE token_hash = ?')
+          .get(bearerHash(value).toString('hex'))
+        if (!row) throw unauthorized()
+        const producer = ProducerSchema.parse(row)
+        if (producer.token_expires_at <= clock()) throw unauthorized()
+        return producer
+      },
+    })
 
   app.post(
     '/bridge/v1/events',
@@ -163,7 +183,9 @@ export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): vo
       if (producer.token_expires_at <= clock()) throw unauthorized()
       const { events } = BatchSchema.parse(request.body)
       // Validate the whole batch before accepting any part of it.
-      const observations = events.map((event) => translateBridgeEvent(producer, event, metrics))
+      const observations = events.map((event) =>
+        translateBridgeEvent(producer, event, metrics, getCompatibility().disabled),
+      )
       let ackedThrough: number
       try {
         for (const observation of observations) await ingest.submit(observation)

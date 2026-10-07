@@ -23,3 +23,5 @@ export function createHermesPort(
         ...(config.hermesUrl ? { baseUrl: config.hermesUrl } : {}),
       })
 }
+
+export { ApprovalDeliveryError } from './port.ts'

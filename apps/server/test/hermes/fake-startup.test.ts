@@ -68,3 +68,71 @@ test('fake startup streams the scenario and exposes the same adapter status in s
     rmSync(home, { recursive: true, force: true })
   }
 })
+
+test('fake approvals share the real human API, outbox, and confirmed delivery attribution', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'score-fake-approvals-'))
+  const server = await startServer(
+    loadConfig({
+      SCORE_HOME: home,
+      SCORE_MODE: 'fake',
+      SCORE_FAKE_SPEED: '100',
+      SCORE_FAKE_LOOP: 'false',
+    }),
+    {
+      logger: false,
+      listen: async (app) => {
+        await app.ready()
+      },
+    },
+  )
+  try {
+    const paired = await server.app.inject({
+      method: 'POST',
+      url: '/api/session/pair',
+      headers: { 'x-score-client': 'web' },
+      payload: { token: server.pairingToken },
+    })
+    const cookie = paired.headers['set-cookie']!.toString().split(';')[0]!
+    let approvalId: string | undefined
+    await vi.waitFor(
+      async () => {
+        const result = (await server.app.inject('/api/approvals')).json()
+        approvalId = result.items.find((item: { actionable: boolean }) => item.actionable)?.id
+        expect(approvalId).toBeDefined()
+      },
+      { timeout: 3000, interval: 10 },
+    )
+    const response = await server.app.inject({
+      method: 'POST',
+      url: `/api/approvals/${approvalId}/decision`,
+      headers: { cookie, 'x-score-client': 'web' },
+      payload: { choice: 'once' },
+    })
+    expect(response.statusCode).toBe(202)
+    expect(response.json().decision).toBeNull()
+    await vi.waitFor(async () => {
+      const item = (await server.app.inject('/api/approvals?status=all'))
+        .json()
+        .items.find((item: { id: string }) => item.id === approvalId)
+      expect(item).toMatchObject({
+        status: 'approved',
+        delivery: 'applied',
+        decision: { by: 'you', choice: 'once' },
+        actionable: false,
+      })
+    })
+    expect(
+      (
+        await server.app.inject({
+          method: 'POST',
+          url: `/api/approvals/${approvalId}/decision`,
+          headers: { cookie, 'x-score-client': 'web' },
+          payload: { choice: 'deny' },
+        })
+      ).statusCode,
+    ).toBe(409)
+  } finally {
+    await server.close()
+    rmSync(home, { recursive: true, force: true })
+  }
+})

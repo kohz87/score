@@ -20,7 +20,15 @@ const mocks = vi.hoisted(() => {
     storeConstructor: vi.fn(),
     acquireHomeLock: vi.fn(() => ({ release: mocksRelease })),
     release: mocksRelease,
-    ingest: { close: vi.fn(async (): Promise<void> => undefined) },
+    ingest: {
+      close: vi.fn(async (): Promise<void> => undefined),
+      submit: vi.fn(async () => undefined),
+    },
+    outbox: {
+      start: vi.fn(async () => undefined),
+      stop: vi.fn(async () => undefined),
+      sweep: vi.fn(async () => undefined),
+    },
     port: {
       start: vi.fn(async (): Promise<void> => undefined),
       stop: vi.fn(async (): Promise<void> => undefined),
@@ -38,6 +46,13 @@ const mocks = vi.hoisted(() => {
   }
 })
 
+vi.mock('../src/domain/approval-outbox.ts', () => ({
+  ApprovalOutbox: class {
+    constructor() {
+      return mocks.outbox
+    }
+  },
+}))
 vi.mock('../src/db/index.ts', () => ({
   openDatabase: mocks.openDatabase,
   migrate: mocks.migrate,
@@ -109,6 +124,7 @@ test('startup opens and migrates the configured database before building and lis
   expect(mocks.buildApp).toHaveBeenCalledWith({
     config: expect.objectContaining({ home: '/tmp/score-test-startup' }),
     port: mocks.port,
+    outbox: mocks.outbox,
     sessionStore: expect.any(Object),
     db: mocks.db,
     ingest: mocks.ingest,
@@ -183,7 +199,7 @@ test.each(['SIGINT', 'SIGTERM'])(
     signals.get(signal)?.()
     signals.get('SIGINT')?.()
     signals.get('SIGTERM')?.()
-    expect(mocks.port.stop).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(mocks.port.stop).toHaveBeenCalledTimes(1))
     await vi.waitFor(() => expect(mocks.app.close).toHaveBeenCalledTimes(1))
     expect(mocks.port.stop.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.app.close.mock.invocationCallOrder[0]!,
@@ -312,8 +328,9 @@ test('hourly retention is unrefd and cleared before shutdown', async () => {
   vi.useFakeTimers()
   const interval = vi.spyOn(globalThis, 'setInterval')
   await import('../src/index.ts')
-  expect(interval).toHaveBeenCalledExactlyOnceWith(expect.any(Function), 60 * 60 * 1000)
-  const timer = interval.mock.results[0]!.value as NodeJS.Timeout
+  expect(interval).toHaveBeenCalledWith(expect.any(Function), 60 * 60 * 1000)
+  expect(interval).toHaveBeenCalledWith(expect.any(Function), 10_000)
+  const timer = interval.mock.results[1]!.value as NodeJS.Timeout
   expect(timer.hasRef()).toBe(false)
   await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
   expect(mocks.pruneEvents).toHaveBeenCalledExactlyOnceWith(mocks.db)

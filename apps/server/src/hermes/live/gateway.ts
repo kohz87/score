@@ -81,6 +81,7 @@ const CapabilitiesSchema = z
 const HealthSchema = z.object({ status: z.string(), platform: z.string(), version: z.string() })
 const errorCodes = z.enum([
   'approval_not_pending',
+  'approval_not_active',
   'gateway_auth_failed',
   'run_not_found',
   'invalid_request',
@@ -91,9 +92,30 @@ export class HermesHttpError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
+    readonly maybeApplied = true,
   ) {
     super(`Gateway request failed (${status}, ${code})`)
     this.name = 'HermesHttpError'
+  }
+}
+
+export function redactRunPayload(value: unknown, secrets: string[] = []): Record<string, unknown> {
+  const content = { ...z.record(z.string(), z.unknown()).parse(value) }
+  const identifiers: Record<string, string> = {}
+  for (const name of ['run_id', 'request_id']) {
+    if (!Object.hasOwn(content, name)) continue
+    const id = z
+      .string()
+      .regex(/^[\x21-\x7e]{1,256}$/)
+      .parse(content[name])
+    if (secrets.some((secret) => secret && id.includes(secret)))
+      throw new HermesHttpError(200, 'invalid_response')
+    identifiers[name] = id
+    delete content[name]
+  }
+  return {
+    ...z.record(z.string(), z.unknown()).parse(redactValue(content, secrets)),
+    ...identifiers,
   }
 }
 
@@ -200,7 +222,20 @@ export class GatewayClient {
       return schema.parse(redactValue(JSON.parse(text), key ? [key] : []))
     } catch (error) {
       if (error instanceof HermesHttpError) throw error
-      throw new HermesHttpError(status, status ? 'invalid_response' : 'transport_error')
+      const cause = z
+        .object({ cause: z.object({ code: z.string().optional() }).optional() })
+        .safeParse(error)
+      const code = cause.success ? cause.data.cause?.code : undefined
+      const notSent = [
+        'ECONNREFUSED',
+        'ENOTFOUND',
+        'EAI_AGAIN',
+        'ERR_TLS_CERT_ALTNAME_INVALID',
+        'CERT_HAS_EXPIRED',
+        'DEPTH_ZERO_SELF_SIGNED_CERT',
+        'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+      ].includes(code ?? '')
+      throw new HermesHttpError(status, status ? 'invalid_response' : 'transport_error', !notSent)
     }
   }
 
@@ -264,18 +299,18 @@ export class GatewayClient {
   }
   async submitApproval(
     profile: string,
-    request: { runId: string; choice: z.infer<typeof ApprovalChoiceSchema>; requestId?: string },
+    request: { runId: string; choice: z.infer<typeof ApprovalChoiceSchema>; requestId: string },
     generation?: number,
   ): Promise<'applied' | 'not_pending'> {
     const parsed = z
       .object({
         runId: z.string().min(1),
         choice: ApprovalChoiceSchema,
-        requestId: z.string().min(1).optional(),
+        requestId: z.string().min(1),
       })
       .parse(request)
     try {
-      await this.json(
+      const result = await this.json(
         profile,
         `/v1/runs/${encodeURIComponent(parsed.runId)}/approval`,
         z.object({ resolved: z.int().nonnegative() }),
@@ -283,12 +318,13 @@ export class GatewayClient {
         undefined,
         generation,
       )
+      if (result.resolved !== 1) throw new HermesHttpError(200, 'invalid_response')
       return 'applied'
     } catch (error) {
       if (
         error instanceof HermesHttpError &&
         error.status === 409 &&
-        error.code === 'approval_not_pending'
+        ['approval_not_pending', 'approval_not_active'].includes(error.code)
       )
         return 'not_pending'
       throw error
@@ -337,7 +373,7 @@ export class GatewayClient {
           } catch {
             throw new HermesHttpError(200, 'invalid_response')
           }
-          yield { ...frame, data: JSON.stringify(redactValue(value, [key])) }
+          yield { ...frame, data: JSON.stringify(redactRunPayload(value, [key])) }
         }
       },
     }

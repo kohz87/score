@@ -55,6 +55,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
   const floorsSql = readFileSync(join(migrationDir, '0002_ingest_floors.sql'), 'utf8')
   const runsSql = readFileSync(join(migrationDir, '0003_runs.sql'), 'utf8')
   const bridgeSql = readFileSync(join(migrationDir, '0004_bridge.sql'), 'utf8')
+  const approvalsSql = readFileSync(join(migrationDir, '0005_approvals.sql'), 'utf8')
   expect(db.sqlite.prepare('SELECT * FROM schema_migrations').all()).toEqual([
     {
       version: 1,
@@ -80,6 +81,12 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
       checksum: createHash('sha256').update(bridgeSql).digest('hex'),
       applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
     },
+    {
+      version: 5,
+      name: '0005_approvals.sql',
+      checksum: createHash('sha256').update(approvalsSql).digest('hex'),
+      applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
+    },
   ])
   const tables = db.sqlite
     .prepare(
@@ -87,7 +94,10 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     )
     .all()
   expect(tables.map((row) => row.name)).toEqual([
+    'approval_deliveries',
+    'approval_delivery_leases',
     'approval_signals',
+    'approvals',
     'command_intents',
     'credentials',
     'events',
@@ -178,9 +188,9 @@ test('database from a newer Score is rejected', () => {
   migrate(db, migrationDir)
   db.sqlite
     .prepare('INSERT INTO schema_migrations VALUES (?, ?, ?, ?)')
-    .run(5, '0005_newer.sql', 'a'.repeat(64), new Date().toISOString())
+    .run(6, '0006_newer.sql', 'a'.repeat(64), new Date().toISOString())
   expect(() => migrate(db, migrationDir)).toThrow(
-    'Database is from a newer Score: unknown applied migration 5',
+    'Database is from a newer Score: unknown applied migration 6',
   )
 })
 

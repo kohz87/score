@@ -4,7 +4,13 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { HttpError } from '../../errors.ts'
-import type { HermesPort, HermesPortDeps, ObservationSink } from '../port.ts'
+import {
+  ApprovalDeliveryError,
+  DecisionDeliveryRequestSchema,
+  type HermesPort,
+  type HermesPortDeps,
+  type ObservationSink,
+} from '../port.ts'
 import { CredentialsUnavailable, readKey } from './credentials.ts'
 import {
   assertFeature,
@@ -15,7 +21,7 @@ import {
   type FingerprintInputs,
   type TestedFingerprint,
 } from './fingerprint.ts'
-import { GatewayClient } from './gateway.ts'
+import { GatewayClient, HermesHttpError } from './gateway.ts'
 import { RunIntents } from './intents.ts'
 import { ProfileNameSchema, resolveHermesHome } from './paths.ts'
 import { followRun, type FollowOptions } from './runs.ts'
@@ -262,7 +268,12 @@ export class LivePort implements HermesPort {
       gateway,
       sink,
       signal,
-      context: { profile: row.profile, runId, credentialGeneration: row.credential_generation },
+      context: {
+        profile: row.profile,
+        runId,
+        credentialGeneration: row.credential_generation,
+        getDisabled: () => this.current.compatibility.disabled,
+      },
       metrics: this.metrics,
       ...this.options.following,
     })
@@ -303,7 +314,34 @@ export class LivePort implements HermesPort {
     if (row.profile !== req.agentId) throw new HttpError(404, 'not_found', 'Unknown run')
     await gateway.stopRun(req.agentId, req.runId, row.credential_generation ?? undefined)
   }
-  async deliverDecision(): Promise<never> {
-    throw new HttpError(503, 'hermes_unavailable', 'Approval delivery is not implemented yet')
+  async deliverDecision(
+    req: Parameters<HermesPort['deliverDecision']>[0],
+  ): Promise<'applied' | 'not_pending' | 'failed'> {
+    try {
+      const { db, gateway } = this.requireStarted()
+      const target = DecisionDeliveryRequestSchema.extend({ runId: z.string().min(1) }).parse(req)
+      const row = readRun(db.sqlite, target.runId)
+      if (
+        row.profile !== target.profile ||
+        row.origin !== 'score' ||
+        row.credential_generation === null
+      )
+        throw new ApprovalDeliveryError('invalid_target', false, false)
+      return await gateway.submitApproval(target.profile, target, row.credential_generation)
+    } catch (error) {
+      if (error instanceof ApprovalDeliveryError) throw error
+      if (error instanceof CredentialsUnavailable)
+        throw new ApprovalDeliveryError('credentials_unavailable', false, false)
+      if (error instanceof HermesHttpError) {
+        const retryable =
+          error.status === 0 || error.status >= 500 || [408, 429].includes(error.status)
+        throw new ApprovalDeliveryError(
+          error.code,
+          retryable || error.status === 200 ? error.maybeApplied : false,
+          retryable,
+        )
+      }
+      throw new ApprovalDeliveryError('invalid_target', false, false)
+    }
   }
 }
