@@ -1,0 +1,345 @@
+import { ApprovalChoiceSchema, RunSummarySchema } from '@score/contract'
+import { z } from 'zod'
+import type { ScoreDb } from '../../db/index.ts'
+import { redact, redactValue } from '../../redact.ts'
+import { CredentialsUnavailable, ensureGeneration, readKey } from './credentials.ts'
+import { ProfileNameSchema } from './paths.ts'
+import { connectSse, type SseConnection } from './sse-client.ts'
+
+export const RunStatusSchema = RunSummarySchema.shape.status
+const UpstreamStatusSchema = z
+  .union([RunStatusSchema, z.literal('started'), z.literal('stopping')])
+  .transform((status) =>
+    status === 'started' || status === 'stopping' ? ('running' as const) : status,
+  )
+export const UsageSchema = z.object({
+  input_tokens: z.int().nonnegative(),
+  output_tokens: z.int().nonnegative(),
+  cost_usd: z.number().finite().nonnegative().nullish(),
+})
+const TimestampSchema = z
+  .union([z.number().finite().nonnegative(), z.iso.datetime()])
+  .transform((value) => (typeof value === 'number' ? new Date(value * 1000).toISOString() : value))
+export const GatewayRunSchema = z.object({
+  run_id: z.string().min(1),
+  status: UpstreamStatusSchema,
+  created_at: TimestampSchema,
+  updated_at: TimestampSchema,
+  session_id: z
+    .string()
+    .nullish()
+    .transform((value) => value ?? null),
+  model: z
+    .string()
+    .nullish()
+    .transform((value) => value ?? null),
+  output: z
+    .string()
+    .nullish()
+    .transform((value) => value ?? null),
+  error: z
+    .string()
+    .nullish()
+    .transform((value) => value ?? null),
+  last_event: z
+    .string()
+    .nullish()
+    .transform((value) => value ?? null),
+  usage: UsageSchema.nullish(),
+})
+export type GatewayRun = z.infer<typeof GatewayRunSchema>
+export const StartRunSchema = z.object({
+  profile: ProfileNameSchema,
+  input: z.string().min(1),
+  sessionId: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+})
+export type StartRun = z.infer<typeof StartRunSchema>
+const AdmissionSchema = z.object({
+  run_id: z.string().min(1),
+  status: UpstreamStatusSchema,
+  replayed: z.boolean(),
+})
+const ActionSchema = z
+  .object({
+    run_id: z.string().optional(),
+    status: UpstreamStatusSchema.optional(),
+    stopped: z.boolean().optional(),
+    steered: z.boolean().optional(),
+    accepted: z.boolean().optional(),
+    ok: z.boolean().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0)
+const CapabilitiesSchema = z
+  .object({
+    features: z.record(
+      z.string(),
+      z.union([z.boolean(), z.string(), z.record(z.string(), z.unknown())]),
+    ),
+  })
+  .transform(({ features }) => features)
+const HealthSchema = z.object({ status: z.string(), platform: z.string(), version: z.string() })
+const errorCodes = z.enum([
+  'approval_not_pending',
+  'gateway_auth_failed',
+  'run_not_found',
+  'invalid_request',
+  'idempotency_conflict',
+])
+
+export class HermesHttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+  ) {
+    super(`Gateway request failed (${status}, ${code})`)
+    this.name = 'HermesHttpError'
+  }
+}
+
+export interface GatewayOptions {
+  scoreHome: string
+  db: ScoreDb
+  baseUrl?: string
+  fetch?: typeof globalThis.fetch
+}
+
+export class GatewayClient {
+  private readonly baseUrl: string
+  private readonly fetch: typeof globalThis.fetch
+  constructor(private readonly options: GatewayOptions) {
+    const url = new URL(options.baseUrl ?? 'http://127.0.0.1:8642')
+    if (
+      !['http:', 'https:'].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      url.pathname !== '/' ||
+      url.search ||
+      url.hash
+    )
+      throw new Error('Invalid gateway origin')
+    this.baseUrl = url.origin
+    this.fetch = options.fetch ?? globalThis.fetch
+  }
+
+  private url(profile: string, path: string): string {
+    const name = ProfileNameSchema.parse(profile)
+    return `${this.baseUrl}${name === 'default' ? '' : `/p/${name}`}${path}`
+  }
+
+  private credential(profile: string, generation?: number) {
+    const credential = readKey(this.options.scoreHome, profile)
+    const current = ensureGeneration(this.options.db, profile, credential.keySha256)
+    if (generation !== undefined && generation !== current)
+      throw new CredentialsUnavailable(profile)
+    return { ...credential, generation: current }
+  }
+
+  generation(profile: string): number {
+    return this.credential(profile).generation
+  }
+
+  withoutCredential(profile: string, text: string): string {
+    return text.replaceAll(this.credential(profile).key, '[redacted]')
+  }
+
+  sanitize(profile: string, text: string): string {
+    return redact(text.replaceAll(this.credential(profile).key, '[redacted]'))
+  }
+
+  private async json<T>(
+    profile: string,
+    path: string,
+    schema: z.ZodType<T>,
+    body?: unknown,
+    idempotencyKey?: string,
+    generation?: number,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    const key = path === '/v1/health' ? undefined : this.credential(profile, generation).key
+    const headers = new Headers()
+    if (key) headers.set('Authorization', `Bearer ${key}`)
+    if (body !== undefined) headers.set('Content-Type', 'application/json')
+    if (idempotencyKey !== undefined)
+      headers.set(
+        'Idempotency-Key',
+        z
+          .string()
+          .min(1)
+          .regex(/^[\x21-\x7e]+$/)
+          .parse(idempotencyKey),
+      )
+    let status = 0
+    try {
+      const response = await this.fetch(this.url(profile, path), {
+        headers,
+        method: body === undefined ? 'GET' : 'POST',
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(10_000)])
+          : AbortSignal.timeout(10_000),
+      })
+      status = response.status
+      const text = await response.text()
+      if (!response.ok) {
+        let code = 'http_error'
+        try {
+          const value = z
+            .object({ error: z.unknown().optional(), code: z.unknown().optional() })
+            .parse(JSON.parse(text))
+          const nested = z.object({ code: z.unknown().optional() }).safeParse(value.error)
+          const parsed = errorCodes.safeParse(
+            value.code ?? (nested.success ? nested.data.code : value.error),
+          )
+          if (parsed.success) code = parsed.data
+        } catch {
+          /* Error bodies never leave the client. */
+        }
+        throw new HermesHttpError(status, code)
+      }
+      return schema.parse(redactValue(JSON.parse(text), key ? [key] : []))
+    } catch (error) {
+      if (error instanceof HermesHttpError) throw error
+      throw new HermesHttpError(status, status ? 'invalid_response' : 'transport_error')
+    }
+  }
+
+  async startRun(request: StartRun, idempotencyKey: string, generation?: number) {
+    const { profile, input, sessionId, model } = StartRunSchema.parse(request)
+    const result = await this.json(
+      profile,
+      '/v1/runs',
+      AdmissionSchema,
+      {
+        input,
+        ...(sessionId === undefined ? {} : { session_id: sessionId }),
+        ...(model === undefined ? {} : { model }),
+      },
+      idempotencyKey,
+      generation,
+    )
+    return { runId: result.run_id, replayed: result.replayed }
+  }
+
+  getRun(
+    profile: string,
+    runId: string,
+    generation?: number,
+    signal?: AbortSignal,
+  ): Promise<GatewayRun> {
+    return this.json(
+      profile,
+      `/v1/runs/${encodeURIComponent(z.string().min(1).parse(runId))}`,
+      GatewayRunSchema,
+      undefined,
+      undefined,
+      generation,
+      signal,
+    )
+  }
+  async stopRun(profile: string, runId: string, generation?: number): Promise<void> {
+    await this.json(
+      profile,
+      `/v1/runs/${encodeURIComponent(z.string().min(1).parse(runId))}/stop`,
+      ActionSchema,
+      {},
+      undefined,
+      generation,
+    )
+  }
+  async steerRun(
+    profile: string,
+    runId: string,
+    input: string,
+    generation?: number,
+  ): Promise<void> {
+    await this.json(
+      profile,
+      `/v1/runs/${encodeURIComponent(z.string().min(1).parse(runId))}/steer`,
+      ActionSchema,
+      { input: z.string().min(1).parse(input) },
+      undefined,
+      generation,
+    )
+  }
+  async submitApproval(
+    profile: string,
+    request: { runId: string; choice: z.infer<typeof ApprovalChoiceSchema>; requestId?: string },
+    generation?: number,
+  ): Promise<'applied' | 'not_pending'> {
+    const parsed = z
+      .object({
+        runId: z.string().min(1),
+        choice: ApprovalChoiceSchema,
+        requestId: z.string().min(1).optional(),
+      })
+      .parse(request)
+    try {
+      await this.json(
+        profile,
+        `/v1/runs/${encodeURIComponent(parsed.runId)}/approval`,
+        z.object({ resolved: z.int().nonnegative() }),
+        { choice: parsed.choice, ...(parsed.requestId ? { request_id: parsed.requestId } : {}) },
+        undefined,
+        generation,
+      )
+      return 'applied'
+    } catch (error) {
+      if (
+        error instanceof HermesHttpError &&
+        error.status === 409 &&
+        error.code === 'approval_not_pending'
+      )
+        return 'not_pending'
+      throw error
+    }
+  }
+  capabilities(profile: string) {
+    return this.json(profile, '/v1/capabilities', CapabilitiesSchema)
+  }
+  health() {
+    return this.json('default', '/v1/health', HealthSchema)
+  }
+
+  runEvents(
+    profile: string,
+    runId: string,
+    lastEventId?: string,
+    generation?: number,
+    signal?: AbortSignal,
+  ): SseConnection {
+    const { key } = this.credential(profile, generation)
+    const connection = connectSse({
+      url: this.url(
+        profile,
+        `/v1/runs/${encodeURIComponent(z.string().min(1).parse(runId))}/events`,
+      ),
+      headers: { Authorization: `Bearer ${key}` },
+      ...(lastEventId === undefined ? {} : { lastEventId }),
+      ...(signal ? { signal } : {}),
+      fetch: this.fetch,
+    })
+    return {
+      closed: connection.closed,
+      get retry() {
+        return connection.retry
+      },
+      abort: () => connection.abort(),
+      async *[Symbol.asyncIterator]() {
+        for await (const frame of connection) {
+          if (frame.type === 'comment') {
+            yield frame
+            continue
+          }
+          let value: unknown
+          try {
+            value = JSON.parse(frame.data)
+          } catch {
+            throw new HermesHttpError(200, 'invalid_response')
+          }
+          yield { ...frame, data: JSON.stringify(redactValue(value, [key])) }
+        }
+      },
+    }
+  }
+}

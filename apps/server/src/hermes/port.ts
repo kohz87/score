@@ -1,4 +1,5 @@
 import type { AgentSummary, ApprovalChoice, SystemStatus } from '@score/contract'
+import type { ScoreDb } from '../db/index.ts'
 import type { IngestResult, Observation } from '../hub/ingest.ts'
 
 export interface ObservationSink {
@@ -14,7 +15,13 @@ export interface HermesPort {
     'hermes' | 'bridge' | 'compatibility' | 'agentIsolation' | 'degraded'
   >
   listAgents(): Promise<AgentSummary[]>
-  startRun(req: { agentId: string; input: string; turnId: string }): Promise<{ runId: string }>
+  startRun(req: {
+    agentId: string
+    input: string
+    turnId: string
+    sessionId?: string
+    model?: string
+  }): Promise<{ runId: string }>
   stopRun(req: { agentId: string; runId: string }): Promise<void>
   deliverDecision(req: {
     approvalId: string
@@ -29,6 +36,8 @@ export interface Scheduler {
 }
 
 export interface HermesPortDeps {
+  /** The server's shared Score DB (single writer, D1). The live port never opens its own. */
+  db?: ScoreDb
   scheduler?: Scheduler
   onError?: (error: unknown) => void
 }

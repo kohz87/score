@@ -7,6 +7,15 @@ const ConfigSchema = z.object({
   home: z.string().min(1).default(join(homedir(), '.score')),
   // Default (the user's Hermes home) is resolved inside the Hermes adapter.
   hermesHome: z.string().min(1).optional(),
+  hermesUrl: z
+    .url({ protocol: /^https?$/ })
+    .pipe(
+      z.string().refine((value) => {
+        const url = new URL(value)
+        return !url.username && !url.password && url.pathname === '/' && !url.search && !url.hash
+      }, 'Expected an HTTP(S) origin'),
+    )
+    .optional(),
   host: z
     .string()
     .refine((host) => isIP(host) !== 0 || /^[a-z\d]+(?:[a-z\d.-]*[a-z\d])?$/i.test(host))
@@ -36,6 +45,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   return ConfigSchema.parse({
     home: env.SCORE_HOME,
     hermesHome: env.SCORE_HERMES_HOME,
+    hermesUrl: env.SCORE_HERMES_URL,
     host: env.SCORE_HOST,
     port: env.SCORE_PORT,
     webOrigin: env.SCORE_WEB_ORIGIN,

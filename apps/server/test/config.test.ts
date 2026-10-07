@@ -69,3 +69,18 @@ test('constructs IPv6 and default server origins', () => {
   expect(serverOrigin(loadConfig({}))).toBe('http://127.0.0.1:8740')
   expect(serverOrigin(loadConfig({ SCORE_HOST: '::1' }))).toBe('http://[::1]:8740')
 })
+
+test('gateway URL is optional and must be a credential-free HTTP origin', () => {
+  expect(loadConfig({ SCORE_HERMES_URL: 'http://localhost:8643' }).hermesUrl).toBe(
+    'http://localhost:8643',
+  )
+  for (const value of [
+    '',
+    'file:///tmp/fixture',
+    'http://user:pass@localhost',
+    'http://localhost/path',
+    'http://localhost?key=example',
+  ]) {
+    expect(() => loadConfig({ SCORE_HERMES_URL: value })).toThrow(ZodError)
+  }
+})

@@ -386,7 +386,6 @@ export async function resumableSse(options: ResumableSseOptions): Promise<Resuma
         }
         retry = connection.retry ?? retry
         if (next.done) break
-        failures = 0
         const frame = next.value
         if (frame.type === 'comment') {
           if (frame.text === 'stream closed') return result('server_closed')
@@ -397,6 +396,7 @@ export async function resumableSse(options: ResumableSseOptions): Promise<Resuma
         if (truncated) await options.onTruncated(truncated)
         else if (!alreadyDelivered(frame.id, lastEventId)) {
           await options.onEvent(frame)
+          failures = 0
           lastEventId = frame.id || undefined
         }
       }
