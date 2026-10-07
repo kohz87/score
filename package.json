@@ -20,7 +20,8 @@
     "e2e": "playwright test",
     "e2e:install": "playwright install chromium",
     "license:check": "node scripts/license-check.mjs",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm license:check"
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm test:plugin && pnpm license:check",
+    "test:plugin": "cd hermes-plugin && uv run --offline pytest -q"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

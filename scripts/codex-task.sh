@@ -29,6 +29,8 @@ case "$cmd" in
     mkdir -p "$WT_ROOT"
     git -C "$REPO" worktree add -b "$branch" "$wt" main
     (cd "$wt" && COREPACK_ENABLE_DOWNLOAD_PROMPT=0 pnpm install --frozen-lockfile --silent)
+    # Codex's sandbox has no network, so prepare the plugin's Python env here.
+    [[ -f "$wt/hermes-plugin/pyproject.toml" ]] && (cd "$wt/hermes-plugin" && uv sync --frozen --quiet)
     n=$(find "$run_dir" -maxdepth 1 -name 'round-*.md' | wc -l)
     codex exec --disable apps -m "$MODEL" -c "model_reasoning_effort=$EFFORT" -s workspace-write -C "$wt" \
       -o "$run_dir/round-$n.md" - < "$brief" 2>&1 | tee "$run_dir/round-$n.log"
