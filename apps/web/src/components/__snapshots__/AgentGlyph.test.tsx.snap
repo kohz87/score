@@ -1,0 +1,182 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`circle-dot matches the shape snapshot 1`] = `
+<span
+  aria-label="lead"
+  class="agent-glyph agent-glyph--md agent-glyph--tile"
+  role="img"
+  style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
+>
+  <svg
+    aria-hidden="true"
+    fill="none"
+    focusable="false"
+    viewBox="0 0 20 20"
+  >
+    <circle
+      class="agent-glyph__ring"
+      cx="10"
+      cy="10"
+      r="6.5"
+      stroke-width="2.4"
+    />
+    <circle
+      class="agent-glyph__solid"
+      cx="10"
+      cy="10"
+      r="2.4"
+    />
+  </svg>
+</span>
+`;
+
+exports[`cross matches the shape snapshot 1`] = `
+<span
+  aria-label="lead"
+  class="agent-glyph agent-glyph--md agent-glyph--tile"
+  role="img"
+  style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
+>
+  <svg
+    aria-hidden="true"
+    fill="none"
+    focusable="false"
+    viewBox="0 0 20 20"
+  >
+    <path
+      class="agent-glyph__solid"
+      d="M8 8 V4.5 A2 2 0 0 1 12 4.5 V8 H15.5 A2 2 0 0 1 15.5 12 H12 V15.5 A2 2 0 0 1 8 15.5 V12 H4.5 A2 2 0 0 1 4.5 8 Z"
+    />
+  </svg>
+</span>
+`;
+
+exports[`diamond matches the shape snapshot 1`] = `
+<span
+  aria-label="lead"
+  class="agent-glyph agent-glyph--md agent-glyph--tile"
+  role="img"
+  style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
+>
+  <svg
+    aria-hidden="true"
+    fill="none"
+    focusable="false"
+    viewBox="0 0 20 20"
+  >
+    <path
+      class="agent-glyph__solid"
+      d="M10 2.5 L17.5 10 L10 17.5 L2.5 10 Z"
+    />
+  </svg>
+</span>
+`;
+
+exports[`hexagon matches the shape snapshot 1`] = `
+<span
+  aria-label="lead"
+  class="agent-glyph agent-glyph--md agent-glyph--tile"
+  role="img"
+  style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
+>
+  <svg
+    aria-hidden="true"
+    fill="none"
+    focusable="false"
+    viewBox="0 0 20 20"
+  >
+    <path
+      class="agent-glyph__solid"
+      d="M10 2.5 L17.5 6.25 V13.75 L10 17.5 L2.5 13.75 V6.25 Z"
+    />
+  </svg>
+</span>
+`;
+
+exports[`pill matches the shape snapshot 1`] = `
+<span
+  aria-label="lead"
+  class="agent-glyph agent-glyph--md agent-glyph--tile"
+  role="img"
+  style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
+>
+  <svg
+    aria-hidden="true"
+    fill="none"
+    focusable="false"
+    viewBox="0 0 20 20"
+  >
+    <path
+      class="agent-glyph__solid"
+      d="M6.5 6 H13.5 A4 4 0 0 1 13.5 14 H6.5 A4 4 0 0 1 6.5 6 Z"
+    />
+  </svg>
+</span>
+`;
+
+exports[`square matches the shape snapshot 1`] = `
+<span
+  aria-label="lead"
+  class="agent-glyph agent-glyph--md agent-glyph--tile"
+  role="img"
+  style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
+>
+  <svg
+    aria-hidden="true"
+    fill="none"
+    focusable="false"
+    viewBox="0 0 20 20"
+  >
+    <rect
+      class="agent-glyph__solid"
+      height="12"
+      rx="4"
+      width="12"
+      x="4"
+      y="4"
+    />
+  </svg>
+</span>
+`;
+
+exports[`star matches the shape snapshot 1`] = `
+<span
+  aria-label="lead"
+  class="agent-glyph agent-glyph--md agent-glyph--tile"
+  role="img"
+  style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
+>
+  <svg
+    aria-hidden="true"
+    fill="none"
+    focusable="false"
+    viewBox="0 0 20 20"
+  >
+    <path
+      class="agent-glyph__solid"
+      d="M10 3 L11.88 7.91 L17.13 8.18 L13.04 11.49 L14.41 16.57 L10 13.7 L5.59 16.57 L6.96 11.49 L2.87 8.18 L8.12 7.91 Z"
+    />
+  </svg>
+</span>
+`;
+
+exports[`triangle matches the shape snapshot 1`] = `
+<span
+  aria-label="lead"
+  class="agent-glyph agent-glyph--md agent-glyph--tile"
+  role="img"
+  style="--glyph-color: #6B4EFF; --glyph-tint: #ECE8FF;"
+>
+  <svg
+    aria-hidden="true"
+    fill="none"
+    focusable="false"
+    viewBox="0 0 20 20"
+  >
+    <path
+      class="agent-glyph__solid"
+      d="M10 3 L17.5 16 H2.5 Z"
+    />
+  </svg>
+</span>
+`;

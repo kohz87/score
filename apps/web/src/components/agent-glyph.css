@@ -1,0 +1,84 @@
+.agent-glyph {
+  /* Whole-byte downward rounding keeps even a white agent above 3:1. */
+  --glyph-outline: rgb(
+    from color-mix(in srgb, var(--glyph-color) 55%, #12131a 45%) round(down, r, 1) round(down, g, 1)
+      round(down, b, 1)
+  );
+  display: inline-flex;
+  flex: none;
+  vertical-align: middle;
+}
+
+.agent-glyph--xs {
+  --glyph-tile-size: 20px;
+  --glyph-radius: 7px;
+  --glyph-svg-size: 12px;
+}
+
+.agent-glyph--sm {
+  --glyph-tile-size: 34px;
+  --glyph-radius: 11px;
+  --glyph-svg-size: 18px;
+}
+
+.agent-glyph--md {
+  --glyph-tile-size: 40px;
+  --glyph-radius: 13px;
+  --glyph-svg-size: 20px;
+}
+
+.agent-glyph--lg {
+  --glyph-tile-size: 44px;
+  --glyph-radius: 14px;
+  --glyph-svg-size: 24px;
+}
+
+.agent-glyph--tile {
+  box-sizing: border-box;
+  width: var(--glyph-tile-size);
+  height: var(--glyph-tile-size);
+  align-items: center;
+  justify-content: center;
+  border: var(--glyph-border, 0 solid transparent);
+  border-radius: var(--glyph-radius);
+  background: var(--glyph-tint);
+}
+
+svg.agent-glyph,
+.agent-glyph > svg {
+  width: var(--glyph-svg-size);
+  height: var(--glyph-svg-size);
+}
+
+svg.agent-glyph {
+  display: inline-block;
+}
+
+.agent-glyph > svg {
+  display: block;
+}
+
+.agent-glyph__solid {
+  fill: var(--glyph-color);
+  stroke: var(--glyph-shape-stroke, none);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.agent-glyph__ring {
+  stroke: var(--glyph-ring-stroke, var(--glyph-color));
+}
+
+.agent-glyph--high {
+  --glyph-shape-stroke: var(--glyph-outline);
+  --glyph-ring-stroke: var(--glyph-outline);
+  --glyph-border: 1.5px solid #12131a;
+}
+
+@media (prefers-contrast: more) {
+  .agent-glyph {
+    --glyph-shape-stroke: var(--glyph-outline);
+    --glyph-ring-stroke: var(--glyph-outline);
+    --glyph-border: 1.5px solid #12131a;
+  }
+}
