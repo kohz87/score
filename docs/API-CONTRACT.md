@@ -321,7 +321,8 @@ Served under `/bridge/v1` on the same port. Bridge tokens can't call `/api/*`, a
 - `POST /bridge/v1/hello`, auth `Bearer <~/.score/bridge.token>` (bootstrap secret, allowed for this call only):
   ```ts
   req: { profile: string; pid: number; incarnation: string /* random per process */; kanbanTaskId: string | null
-         isolation: 'in_process' | 'host'; pluginVersion: string; hermes: { version: string; codeSha: string }
+         isolation: 'in_process' | 'host' | 'unknown' /* unknown → observe only; actions disabled */
+         pluginVersion: string; hermes: { version: string; codeSha: string }
          privateApis: Record<string, boolean> /* which hermes_private functions resolved */ }
   res: { producerToken: string; expiresAt: string; enabled: { gatewayApprovals: boolean; kanbanGrants: boolean; watch: boolean } }
   ```

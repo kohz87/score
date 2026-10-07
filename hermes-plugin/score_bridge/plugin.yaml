@@ -1,0 +1,19 @@
+name: score-bridge
+version: 0.1.0
+description: 'Streams redacted Hermes hook events to Score with bounded offline recovery.'
+author: score
+hooks:
+  - pre_tool_call
+  - post_tool_call
+  - pre_approval_request
+  - post_approval_response
+  - on_session_start
+  - on_session_end
+  - on_interim_message
+  - subagent_start
+  - subagent_stop
+  - on_human_input_request
+  - on_human_input_resolved
+  - on_kanban_worker_spawned
+  - on_kanban_worker_exited
+  - on_kanban_task_updated
