@@ -28,7 +28,7 @@ test('review secret-key approval probe is scrubbed before reaching SQLite or the
     ).statusCode,
   ).toBe(200)
   const row = server.db.sqlite.prepare('SELECT payload FROM approval_signals').get()!
-  expect(JSON.parse(String(row.payload))).toEqual({
+  expect(JSON.parse(String(row.payload))).toMatchObject({
     apiKey: '[redacted]',
     authorization: '[redacted]',
     '[redacted]': 'key-leak',
@@ -99,7 +99,7 @@ test('exact producer identity survives secret-shaped names and private API keys 
     session_key: identifiers.sessionKey,
     request_id: 'sk-requestaaaaaaaa',
   })
-  expect(JSON.parse(String(approval.payload))).toEqual({
+  expect(JSON.parse(String(approval.payload))).toMatchObject({
     requestId: 'sk-requestaaaaaaaa',
     sessionId: identifiers.sessionId,
   })
@@ -163,10 +163,22 @@ test('supported hooks bound depth and nodes, including decoded result JSON, and 
       ])
     ).json(),
   ).toEqual({ ackedThrough: 5 })
-  expect(server.db.sqlite.prepare('SELECT payload FROM approval_signals').all()).toEqual([
-    { payload: '{"omitted":"payload too complex"}' },
-    { payload: '{"omitted":"payload too complex"}' },
+  expect(
+    server.db.sqlite
+      .prepare(`SELECT payload FROM approval_signals WHERE hook != 'post_tool_call'`)
+      .all()
+      .map((row) => JSON.parse(String(row.payload))),
+  ).toMatchObject([
+    { omitted: 'payload too complex', kind: 'pre' },
+    { omitted: 'payload too complex', kind: 'post' },
   ])
+  // The ungated tool completion is kept as evidence for a gate that may arrive later.
+  expect(
+    server.db.sqlite
+      .prepare(`SELECT payload FROM approval_signals WHERE hook = 'post_tool_call'`)
+      .all()
+      .map((row) => JSON.parse(String(row.payload))),
+  ).toEqual([{ completion: 'ok', toolCallId: 'tool-1' }])
   expect(server.db.sqlite.prepare('SELECT count(*) AS n FROM events').get()).toEqual({ n: 5 })
   expect(server.metrics.unknownHooks).toBe(0)
 })
@@ -257,7 +269,7 @@ test('producer retention keeps unacknowledged keys and open gaps and expires eli
   ])
 })
 
-test('approval retention expires old rows and caps signals at 50000, oldest first', async () => {
+test('approval retention keeps young unmatched signals above the cap, then caps older signals', async () => {
   const at = new Date(initialTime).toISOString()
   const older = new Date(initialTime - 30 * 24 * 60 * 60 * 1000 - 1).toISOString()
   const insert = server.db.sqlite.prepare(
@@ -267,7 +279,13 @@ test('approval retention expires old rows and caps signals at 50000, oldest firs
     insert.run(older)
     for (let i = 0; i < 50002; i++) insert.run(at)
   })
-  expect(pruneBridge(server.db, { now: initialTime })).toEqual({ producers: 0, approvalSignals: 3 })
+  expect(pruneBridge(server.db, { now: initialTime })).toEqual({ producers: 0, approvalSignals: 1 })
+  expect(server.db.sqlite.prepare('SELECT count(*) AS n FROM approval_signals').get()).toEqual({
+    n: 50002,
+  })
+  expect(
+    pruneBridge(server.db, { now: initialTime + 24 * 60 * 60 * 1000 + 1 }).approvalSignals,
+  ).toBe(2)
   expect(
     server.db.sqlite
       .prepare('SELECT count(*) AS n, min(id) AS first, max(id) AS last FROM approval_signals')

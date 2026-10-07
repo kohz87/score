@@ -1,4 +1,4 @@
-import { StreamEventSchema, type StreamEvent } from '@score/contract'
+import { StreamEventSchema, type StreamEvent, type ApprovalChoice } from '@score/contract'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -60,6 +60,16 @@ function events(): StreamEvent[] {
     .map((row) => StreamEventSchema.parse({ ...row, data: JSON.parse(String(row.data)) }))
 }
 
+function deliverDecision(req: { approvalId: string; choice: ApprovalChoice }) {
+  return port.deliverDecision({
+    ...req,
+    origin: 'score-run',
+    profile: 'builder',
+    runId: `fake-approval-run:${req.approvalId}`,
+    requestId: req.approvalId,
+  })
+}
+
 async function play(): Promise<void> {
   await port.start(sink)
   await scheduler.advance(scenarioDuration)
@@ -94,7 +104,7 @@ test('the whole fake scenario passes real ingest validation and covers every dur
   expect(events()).toEqual(stored)
 })
 
-test('the same scheduler produces identical types and data and a restart replays on the same DB', async () => {
+test('restart replays scenario observations while keeping durable approval decisions', async () => {
   await play()
   const first = events()
   const firstIdentities = observations.map((observation) => observation.identity)
@@ -107,9 +117,22 @@ test('the same scheduler produces identical types and data and a restart replays
   port = createHermesPort(loadConfig({ SCORE_FAKE_LOOP: 'false' }), { scheduler, onError })
   await play()
   const second = events().slice(first.length)
-  expect(second.map(({ type, data }) => ({ type, data }))).toEqual(
-    first.map(({ type, data }) => ({ type, data })),
+  expect(
+    second
+      .filter((event) => !event.type.startsWith('approval.'))
+      .map(({ type, data }) => ({ type, data })),
+  ).toEqual(
+    first
+      .filter((event) => !event.type.startsWith('approval.'))
+      .map(({ type, data }) => ({ type, data })),
   )
+  expect(
+    second.filter((event) => event.type.startsWith('approval.')).map((event) => event.type),
+  ).toEqual(['approval.updated', 'approval.updated', 'approval.updated', 'approval.updated'])
+  expect(second.find((event) => event.type === 'approval.updated')?.data).toMatchObject({
+    status: 'approved',
+    decision: { by: 'elsewhere' },
+  })
   expect(second[0]!.seq).toBe(first.length + 1)
   expect(new Set(observations.map((observation) => observation.identity)).size).toBe(
     first.length * 2,
@@ -124,7 +147,7 @@ test.each(['score-run', 'gateway', 'kanban'] as const)(
     await port.start(sink)
     await scheduler.advance(2600 * 18)
     const req = { approvalId: `approval-${origin}-0`, choice: 'once' as const }
-    expect(await Promise.all([port.deliverDecision(req), port.deliverDecision(req)])).toEqual([
+    expect(await Promise.all([deliverDecision(req), deliverDecision(req)])).toEqual([
       'applied',
       'not_pending',
     ])
@@ -134,8 +157,8 @@ test.each(['score-run', 'gateway', 'kanban'] as const)(
       id: req.approvalId,
       phase: 'decided',
       status: 'approved',
-      decision: { choice: 'once', by: 'you', at: new Date(scheduler.now()).toISOString() },
-      delivery: 'applied',
+      decision: { choice: 'once', by: 'elsewhere', at: new Date(scheduler.now()).toISOString() },
+      delivery: 'none',
     })
     await scheduler.advance(scenarioDuration)
     expect(
@@ -146,23 +169,23 @@ test.each(['score-run', 'gateway', 'kanban'] as const)(
   },
 )
 
-test('unknown and already decided approvals are not pending; denial is attributed to you', async () => {
+test('unknown and decided approvals are not pending; direct port evidence carries no Score attribution', async () => {
   await play()
   const count = events().length
-  expect(await port.deliverDecision({ approvalId: 'unknown', choice: 'deny' })).toBe('not_pending')
-  expect(await port.deliverDecision({ approvalId: 'approval-score-run-0', choice: 'deny' })).toBe(
+  expect(await deliverDecision({ approvalId: 'unknown', choice: 'deny' })).toBe('not_pending')
+  expect(await deliverDecision({ approvalId: 'approval-score-run-0', choice: 'deny' })).toBe(
     'not_pending',
   )
   expect(events()).toHaveLength(count)
-  expect(await port.deliverDecision({ approvalId: 'approval-gateway-0', choice: 'deny' })).toBe(
+  expect(await deliverDecision({ approvalId: 'approval-gateway-0', choice: 'deny' })).toBe(
     'applied',
   )
   expect(events().at(-1)?.data).toMatchObject({
     status: 'denied',
-    decision: { choice: 'deny', by: 'you' },
-    delivery: 'applied',
+    decision: { choice: 'deny', by: 'elsewhere' },
+    delivery: 'none',
   })
-  expect(await port.deliverDecision({ approvalId: 'approval-kanban-0', choice: 'session' })).toBe(
+  expect(await deliverDecision({ approvalId: 'approval-kanban-0', choice: 'session' })).toBe(
     'failed',
   )
 })
@@ -171,8 +194,8 @@ test('a failed decision submission leaves the approval pending for retry', async
   await play()
   const submit = vi.spyOn(sink, 'submit').mockRejectedValueOnce(new Error('ingest failure'))
   const req = { approvalId: 'approval-gateway-0', choice: 'once' as const }
-  expect(await port.deliverDecision(req)).toBe('failed')
-  expect(await port.deliverDecision(req)).toBe('applied')
+  expect(await deliverDecision(req)).toBe('failed')
+  expect(await deliverDecision(req)).toBe('applied')
   expect(submit).toHaveBeenCalledTimes(2)
 })
 

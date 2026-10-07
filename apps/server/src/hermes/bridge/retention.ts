@@ -13,6 +13,7 @@ export function pruneBridge(
         .prepare(
           `
       DELETE FROM producers WHERE last_seen_at < ?
+        AND NOT EXISTS (SELECT 1 FROM approval_deliveries d WHERE d.producer_id = producers.id AND d.state IN ('intent','delivering'))
         AND NOT EXISTS (SELECT 1 FROM ingest_keys k WHERE k.source = 'bridge:' || producers.incarnation
           AND (k.position IS NULL OR k.position > producers.acked_through))
         AND NOT EXISTS (SELECT 1 FROM ingest_checkpoints c
@@ -29,11 +30,11 @@ export function pruneBridge(
         .prepare(
           `
       DELETE FROM approval_signals WHERE id IN (
-        SELECT id FROM approval_signals ORDER BY at DESC, id DESC LIMIT -1 OFFSET 50000
+        SELECT id FROM approval_signals WHERE matched_approval_id IS NOT NULL OR at < ? ORDER BY at DESC, id DESC LIMIT -1 OFFSET 50000
       )
     `,
         )
-        .run().changes,
+        .run(new Date(now - 24 * 60 * 60 * 1000).toISOString()).changes,
     )
     return { producers, approvalSignals: expired + excess }
   })

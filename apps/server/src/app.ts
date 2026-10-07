@@ -1,6 +1,8 @@
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify'
 import { CONTRACT_VERSION, type SystemStatus } from '@score/contract'
 import type { Config } from './config.ts'
+import { ApprovalOutbox } from './domain/approval-outbox.ts'
+import { registerApprovalRoutes } from './http/approvals.ts'
 import { registerErrorHandlers } from './errors.ts'
 import { registerCsrfGuard } from './auth/csrf.ts'
 import { PairingService } from './auth/pairing.ts'
@@ -36,6 +38,7 @@ interface BuildAppOptions {
   getSystemStatus?: () => SystemStatus
   streamOptions?: Pick<StreamRouteOptions, 'heartbeatMs' | 'fanoutOptions'>
   bridge?: BridgeDeps
+  outbox?: ApprovalOutbox
 }
 
 export function buildApp({
@@ -50,6 +53,7 @@ export function buildApp({
   getSystemStatus = () => defaultSystemStatus(config, port, db, clock),
   streamOptions,
   bridge,
+  outbox,
 }: BuildAppOptions): FastifyInstance {
   const logging = logger ?? process.env.NODE_ENV !== 'test'
   const app = Fastify({
@@ -83,7 +87,38 @@ export function buildApp({
   app.decorate('pairing', new PairingService(sessionStore, clock))
   registerErrorHandlers(app)
   registerCsrfGuard(app, config)
-  if (bridge) registerBridgeRoutes(app, bridge)
+  const approvalsOutbox =
+    outbox ??
+    (db && ingest
+      ? new ApprovalOutbox({
+          db,
+          ingest,
+          port,
+          getDisabled: () =>
+            bridge?.getCompatibility().disabled ?? port.status().compatibility.disabled,
+          ...(clock ? { clock } : {}),
+        })
+      : undefined)
+  if (bridge)
+    registerBridgeRoutes(app, {
+      ...bridge,
+      ...(approvalsOutbox ? { outbox: approvalsOutbox } : {}),
+    })
+  if (db && ingest && approvalsOutbox) {
+    registerApprovalRoutes(app, {
+      db,
+      ingest,
+      outbox: approvalsOutbox,
+      disabled: () => bridge?.getCompatibility().disabled ?? port.status().compatibility.disabled,
+      ...(clock ? { clock } : {}),
+    })
+    app.addHook('preClose', async () => {
+      approvalsOutbox.notifier.close()
+    })
+    app.addHook('onClose', async () => {
+      await approvalsOutbox.stop()
+    })
+  }
   app.get('/api/health', async () => ({ ok: true, contract: CONTRACT_VERSION }))
   registerSessionRoutes(app, app.pairing)
   registerSystemRoutes(app, getSystemStatus)

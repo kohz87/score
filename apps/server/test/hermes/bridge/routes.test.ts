@@ -72,7 +72,7 @@ test.each(flagCases)(
     expect(BridgeHelloResponseSchema.parse(response.json()).enabled).toEqual({
       watch: true,
       kanbanGrants: false,
-      gatewayApprovals: isolation === 'in_process' && mask === 7 && !disabled,
+      gatewayApprovals: isolation === 'in_process' && (mask & 5) === 5 && !disabled,
     })
   },
 )

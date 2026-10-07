@@ -155,7 +155,14 @@ test('redacts before truncating tools, approvals, terminal output and error', as
   const long = 'x'.repeat(490) + ` ${secret}`
   const values = [
     { event: 'tool.started', tool: 'terminal', preview: `TOKEN=${secret}` },
-    { event: 'approval.request', command: `Bearer ${secret}`, description: 'why', token: secret },
+    {
+      event: 'approval.request',
+      request_id: 'redaction-request',
+      choices: ['once', 'deny'],
+      command: `Bearer ${secret}`,
+      description: 'why',
+      token: secret,
+    },
     { event: 'tool.completed', tool: 'terminal', preview: long, duration: 2, error: true },
     { event: 'run.failed', output: '🐈'.repeat(2047) + ` ${secret}`, error: `password=${secret}` },
   ]
@@ -188,4 +195,38 @@ test('rejects malformed known events and wrong run before projection or cursor w
     ),
   ).toThrow('different run')
   expect(env.db.sqlite.prepare('SELECT * FROM ingest_checkpoints').all()).toEqual([])
+})
+
+test('exact request ids survive redaction; feature gating and supplied expiry appear in the stream', async () => {
+  const context = await admitted()
+  const event = fixture('l4a').find((entry) => entry.event === 'approval.request')!
+  const expires = Date.now() + 60_000
+  await env.ingest.submit(
+    translateRunEvent(
+      { ...context, getDisabled: () => ['score-runs'] },
+      {
+        ...event,
+        run_id: context.runId,
+        request_id: 'sk-request-exact-aaaaaaaa',
+        timestamp: Date.now() / 1000,
+        command: 'echo password=must-redact',
+        expires_at: expires / 1000,
+      },
+      { unknownEvents: 0 },
+    ),
+  )
+  const approval = JSON.parse(
+    String(
+      env.db.sqlite.prepare(`SELECT data FROM events WHERE type = 'approval.requested'`).get()!
+        .data,
+    ),
+  )
+  expect(approval).toMatchObject({
+    actionable: false,
+    expiresAt: new Date(expires).toISOString(),
+    command: 'echo password=[redacted]',
+  })
+  expect(env.db.sqlite.prepare('SELECT request_id FROM approvals').get()?.request_id).toBe(
+    'sk-request-exact-aaaaaaaa',
+  )
 })

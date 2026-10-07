@@ -1,8 +1,16 @@
-import type { AgentSummary, Approval, ApprovalChoice, RunSummary } from '@score/contract'
+import { requestRunApproval, respondRunApproval } from '../../domain/approvals.ts'
+import { approvalDraft, patchApproval, readApprovalRow } from '../../domain/approval-store.ts'
+import type { AgentSummary, Approval, RunSummary } from '@score/contract'
 import { randomUUID } from 'node:crypto'
 import { HttpError } from '../../errors.ts'
 import type { Observation } from '../../hub/ingest.ts'
-import type { HermesPort, HermesPortDeps, ObservationSink, Scheduler } from '../port.ts'
+import {
+  DecisionDeliveryRequestSchema,
+  type HermesPort,
+  type HermesPortDeps,
+  type ObservationSink,
+  type Scheduler,
+} from '../port.ts'
 import {
   createScenario,
   exampleAgents,
@@ -17,7 +25,6 @@ const realScheduler: Scheduler = {
   clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 }
 
-// Projection writes can be added here when the corresponding tables arrive.
 export function stepToObservation(
   step: ScenarioStep,
   identity: string,
@@ -27,12 +34,76 @@ export function stepToObservation(
   return {
     source: 'fake',
     identity,
-    apply: () => (suppressed ? [] : ([structuredClone(draft)] as ReturnType<Observation['apply']>)),
+    apply({ sqlite, now }) {
+      if (suppressed) return []
+      if (step.kind === 'run.updated') {
+        const run = step.data
+        sqlite
+          .prepare(
+            `INSERT INTO runs (id, profile, origin, status, started_at, ended_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT (id) DO UPDATE SET status = excluded.status, ended_at = excluded.ended_at, updated_at = excluded.updated_at`,
+          )
+          .run(run.id, run.agentId, run.origin, run.status, run.startedAt, run.endedAt, now)
+      }
+      if (step.kind === 'approval.requested') {
+        const approval = step.data
+        const runId = `fake-approval-run:${approval.id}`
+        sqlite
+          .prepare(
+            `INSERT INTO runs (id, profile, origin, status, started_at, updated_at) VALUES (?, ?, 'score', 'waiting_for_approval', ?, ?) ON CONFLICT DO NOTHING`,
+          )
+          .run(runId, approval.agentId, approval.createdAt, now)
+        const drafts = requestRunApproval(
+          sqlite,
+          {
+            id: approval.id,
+            profile: approval.agentId,
+            runId,
+            requestId: approval.id,
+            command: approval.command,
+            description: `${approval.title}\n${approval.description}`,
+            choices: approval.choices,
+          },
+          approval.createdAt,
+        )
+        patchApproval(
+          sqlite,
+          approval.id,
+          { origin: approval.origin, blocking: approval.blocking },
+          now,
+        )
+        return drafts.length
+          ? approvalDraft(
+              sqlite,
+              approval.id,
+              { now: Date.parse(now) },
+              drafts.some((event) => event.type === 'approval.requested'),
+            )
+          : []
+      }
+      if (step.kind === 'approval.updated') {
+        const row = readApprovalRow(sqlite, step.data.id)
+        if (!row) return []
+        if (step.data.decision)
+          return respondRunApproval(
+            sqlite,
+            row.profile,
+            row.session_key,
+            row.request_id!,
+            step.data.decision.choice,
+            step.data.decision.at,
+          )
+        patchApproval(sqlite, row.id, { blocking: step.data.blocking }, now)
+        return approvalDraft(sqlite, row.id, { now: Date.parse(now) })
+      }
+      return [structuredClone(draft)] as ReturnType<Observation['apply']>
+    },
   }
 }
 
 export class FakePort implements HermesPort {
   readonly mode = 'fake'
+  private readonly db: HermesPortDeps['db']
   private readonly scheduler: Scheduler
   private readonly onError: (error: unknown) => void
   private readonly timers = new Set<unknown>()
@@ -54,6 +125,7 @@ export class FakePort implements HermesPort {
   ) {
     if (!Number.isFinite(speed) || speed <= 0)
       throw new Error('Fake speed must be positive and finite')
+    this.db = deps.db
     this.scheduler = deps.scheduler ?? realScheduler
     this.onError = deps.onError ?? ((error) => console.error('Fake observation failed', error))
     this.resetState()
@@ -228,12 +300,36 @@ export class FakePort implements HermesPort {
     })
   }
 
-  deliverDecision(req: {
-    approvalId: string
-    choice: ApprovalChoice
-  }): Promise<'applied' | 'not_pending' | 'failed'> {
+  deliverDecision(
+    req: Parameters<HermesPort['deliverDecision']>[0],
+  ): Promise<'applied' | 'not_pending' | 'failed'> {
     return this.enqueue(async () => {
-      const approval = this.approvals.get(req.approvalId)
+      let approval = this.approvals.get(req.approvalId)
+      if (!approval && this.db) {
+        const row = readApprovalRow(this.db.sqlite, req.approvalId)
+        if (row)
+          approval = {
+            id: row.id,
+            status: row.status,
+            phase: row.phase,
+            origin: row.origin,
+            agentId: row.profile,
+            choices: row.choices,
+            decision: null,
+            actionable: true,
+            linkedTo: null,
+            title: row.description,
+            command: row.command,
+            cwd: null,
+            description: row.description,
+            createdAt: row.created_at,
+            expiresAt: row.expires_at,
+            delivery: 'none',
+            blocking: null,
+            refs: [],
+          }
+      }
+      DecisionDeliveryRequestSchema.parse(req)
       if (!approval || approval.status !== 'pending' || approval.decision) return 'not_pending'
       if (!approval.choices.includes(req.choice)) return 'failed'
       try {
@@ -244,7 +340,7 @@ export class FakePort implements HermesPort {
             ...approval,
             phase: 'decided',
             status: req.choice === 'deny' ? 'denied' : 'approved',
-            decision: { choice: req.choice, by: 'you', at: this.now() },
+            decision: { choice: req.choice, by: 'elsewhere', at: this.now() },
             delivery: 'applied',
           },
         })

@@ -1,6 +1,9 @@
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance, FastifyServerOptions } from 'fastify'
+import { ApprovalOutbox } from './domain/approval-outbox.ts'
+import { expireApprovals } from './domain/approvals.ts'
+import { randomUUID } from 'node:crypto'
 import { buildApp } from './app.ts'
 import { SqliteSessionStore } from './auth/sqlite-session-store.ts'
 import type { Config } from './config.ts'
@@ -25,14 +28,21 @@ export async function startServer(config: Config, { logger, listen }: StartServe
   let app: FastifyInstance | undefined
   let homeLock: ReturnType<typeof acquireHomeLock> | undefined
   let ingest: Ingest | undefined
+  let outbox: ApprovalOutbox | undefined
+  let deliverySweep: NodeJS.Timeout | undefined
   let retention: NodeJS.Timeout | undefined
   let port: HermesPort | undefined
   let closing: Promise<void> | undefined
 
   async function closeResources(): Promise<void> {
     clearInterval(retention)
+    clearInterval(deliverySweep)
     try {
-      await port?.stop()
+      try {
+        await outbox?.stop()
+      } finally {
+        await port?.stop()
+      }
     } finally {
       try {
         await app?.close()
@@ -70,9 +80,17 @@ export async function startServer(config: Config, { logger, listen }: StartServe
       onError: (error) => app?.log.error({ err: error }, 'Hermes observation failed'),
     })
     const adapter = port
+    outbox = new ApprovalOutbox({
+      db: database,
+      ingest,
+      port,
+      onError: (error) => app?.log.error({ err: error }, 'Approval delivery failed'),
+    })
+    const dispatcher = outbox
     app = buildApp({
       config,
       port,
+      outbox,
       ...(logger === undefined ? {} : { logger }),
       db: database,
       ingest,
@@ -93,6 +111,13 @@ export async function startServer(config: Config, { logger, listen }: StartServe
     if (listen) await listen(app)
     else await app.listen({ host: config.host, port: config.port })
     await port.start(ingest)
+    await outbox.start()
+    deliverySweep = setInterval(() => {
+      void dispatcher
+        .sweep()
+        .catch((error: unknown) => app?.log.error({ err: error }, 'Delivery sweep failed'))
+    }, 10_000)
+    deliverySweep.unref()
     retention = setInterval(
       () => {
         try {
@@ -107,6 +132,13 @@ export async function startServer(config: Config, { logger, listen }: StartServe
         }
         try {
           pruneBridge(database)
+          void ingest
+            ?.submit({
+              source: 'approval-expiry',
+              identity: randomUUID(),
+              apply: ({ sqlite, now }) => expireApprovals(sqlite, now),
+            })
+            .catch((error: unknown) => app?.log.error({ err: error }, 'Approval expiry failed'))
         } catch (error) {
           app?.log.error({ err: error }, 'Bridge retention prune failed')
         }

@@ -187,3 +187,70 @@ test('real HTTP transport enforces bearer and idempotency and streams a fixture'
     await new Promise<void>((resolve) => server.close(() => resolve()))
   }
 })
+
+test.each([0, 1, 2])('approval resolved=%i requires exactly one target', async (resolved) => {
+  const fetch = vi
+    .fn<typeof globalThis.fetch>()
+    .mockResolvedValue(new Response(JSON.stringify({ resolved }), { status: 200 }))
+  const client = new GatewayClient({ scoreHome: env.home, db: env.db, fetch })
+  const request = { runId: 'run-exact', requestId: 'request-exact', choice: 'once' as const }
+  if (resolved === 1) expect(await client.submitApproval('builder', request, 1)).toBe('applied')
+  else
+    await expect(client.submitApproval('builder', request, 1)).rejects.toMatchObject({
+      status: 200,
+      code: 'invalid_response',
+      maybeApplied: true,
+    })
+  expect(fetch.mock.calls[0]?.[0]).toBe(
+    'http://127.0.0.1:8642/p/builder/v1/runs/run-exact/approval',
+  )
+  expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({
+    choice: 'once',
+    request_id: 'request-exact',
+  })
+})
+test.each(['approval_not_pending', 'approval_not_active'])(
+  'approval %s is not_pending',
+  async (code) => {
+    const client = new GatewayClient({
+      scoreHome: env.home,
+      db: env.db,
+      fetch: async () => new Response(JSON.stringify({ error: { code } }), { status: 409 }),
+    })
+    expect(
+      await client.submitApproval('builder', {
+        runId: 'run',
+        requestId: 'request',
+        choice: 'deny',
+      }),
+    ).toBe('not_pending')
+  },
+)
+test.each([
+  ['ECONNREFUSED', false],
+  ['ENOTFOUND', false],
+  ['EAI_AGAIN', false],
+  ['ERR_TLS_CERT_ALTNAME_INVALID', false],
+  ['CERT_HAS_EXPIRED', false],
+  ['ECONNRESET', true],
+  ['ETIMEDOUT', true],
+] as const)('transport %s preserves delivery uncertainty %s', async (code, maybeApplied) => {
+  const client = new GatewayClient({
+    scoreHome: env.home,
+    db: env.db,
+    fetch: async () => {
+      throw new TypeError('private transport details', { cause: { code } })
+    },
+  })
+  await expect(
+    client.submitApproval('builder', { runId: 'run', requestId: 'request', choice: 'once' }),
+  ).rejects.toMatchObject({ code: 'transport_error', maybeApplied })
+})
+test('approval rejects a stale run credential generation without sending', async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>()
+  const client = new GatewayClient({ scoreHome: env.home, db: env.db, fetch })
+  await expect(
+    client.submitApproval('builder', { runId: 'run', requestId: 'request', choice: 'once' }, 2),
+  ).rejects.toMatchObject({ profile: 'builder' })
+  expect(fetch).not.toHaveBeenCalled()
+})

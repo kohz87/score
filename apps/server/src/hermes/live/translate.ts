@@ -1,10 +1,21 @@
-import { RunSummarySchema, type RunSummary } from '@score/contract'
+import { ApprovalChoiceSchema, RunSummarySchema, type RunSummary } from '@score/contract'
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { z } from 'zod'
+import {
+  requestRunApproval,
+  respondRunApproval,
+  closeRunApprovals,
+} from '../../domain/approvals.ts'
 import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
 import { guardedUpsert, type Lifecycle } from '../../hub/projections.ts'
 import { redactBounded, redactValue } from '../../redact.ts'
-import { GatewayRunSchema, RunStatusSchema, UsageSchema, type GatewayRun } from './gateway.ts'
+import {
+  GatewayRunSchema,
+  RunStatusSchema,
+  UsageSchema,
+  redactRunPayload,
+  type GatewayRun,
+} from './gateway.ts'
 import { ProfileNameSchema } from './paths.ts'
 
 export const terminalStatuses = ['completed', 'failed', 'cancelled', 'interrupted'] as const
@@ -72,6 +83,7 @@ export interface RunContext {
   profile: string
   runId: string
   credentialGeneration: number
+  getDisabled?: () => readonly string[]
 }
 const EnvelopeSchema = z.object({
   event: z.string().min(1),
@@ -90,8 +102,32 @@ const TerminalSchema = z.object({
   usage: UsageSchema.nullish(),
 })
 const ApprovalSchema = z
-  .object({ command: z.string(), description: z.string(), request_id: z.string().optional() })
+  .object({
+    command: z.string(),
+    description: z.string(),
+    request_id: z.string().min(1),
+    choices: z.array(ApprovalChoiceSchema),
+    pattern_keys: z.array(z.string()).optional(),
+    pattern_key: z.string().optional(),
+    expires_at: z
+      .union([
+        z.iso.datetime(),
+        z
+          .number()
+          .finite()
+          .nonnegative()
+          .max(253402300799)
+          .transform((value) => new Date(value * 1000).toISOString()),
+      ])
+      .optional(),
+  })
   .passthrough()
+// Other API clients may answer without a request_id (resolve-first or resolve-all); that is evidence we can't bind.
+const ResponseSchema = z.object({
+  request_id: z.string().min(1).optional(),
+  choice: ApprovalChoiceSchema,
+  resolved: z.int().nonnegative().optional(),
+})
 export interface RunMetrics {
   unknownEvents: number
 }
@@ -128,7 +164,7 @@ export function translateRunEvent(
   metrics: RunMetrics,
 ): Observation {
   ProfileNameSchema.parse(context.profile)
-  const safe = redactValue(value)
+  const safe = redactRunPayload(value)
   const envelope = EnvelopeSchema.parse(safe)
   if (envelope.run_id !== context.runId) throw new Error('Run event belongs to a different run')
   const { event, seq } = envelope
@@ -136,6 +172,7 @@ export function translateRunEvent(
   const started = event === 'tool.started' ? ToolStartedSchema.parse(safe) : undefined
   const completed = event === 'tool.completed' ? ToolCompletedSchema.parse(safe) : undefined
   const approval = event === 'approval.request' ? ApprovalSchema.parse(safe) : undefined
+  const responded = event === 'approval.responded' ? ResponseSchema.safeParse(safe).data : undefined
   const terminal =
     event.startsWith('run.') && runLifecycle.isTerminal(event.slice(4) as RunSummary['status'])
       ? TerminalSchema.parse(safe)
@@ -160,15 +197,48 @@ export function translateRunEvent(
       )
         throw new Error('Run credential mapping mismatch')
       if (!known) metrics.unknownEvents++
-      // A terminal run is immutable, including its tools; stale observations still advance ingest.
-      if (runLifecycle.isTerminal(row.status) || seq <= (row.last_seq ?? -1)) return []
+      const drafts: DomainEventDraft[] = []
+      if (approval) {
+        drafts.push(
+          ...requestRunApproval(
+            sqlite,
+            {
+              profile: row.profile,
+              runId: row.id,
+              requestId: approval.request_id,
+              command: approval.command,
+              description: approval.description,
+              choices: approval.choices,
+              patternKeys:
+                approval.pattern_keys ?? (approval.pattern_key ? [approval.pattern_key] : []),
+              ...(approval.expires_at ? { expiresAt: approval.expires_at } : {}),
+            },
+            at,
+            { disabled: context.getDisabled?.() ?? [] },
+          ),
+        )
+        if (runLifecycle.isTerminal(row.status))
+          drafts.push(...closeRunApprovals(sqlite, row.id, at))
+      }
+      if (responded?.request_id && (responded.resolved === undefined || responded.resolved === 1))
+        drafts.push(
+          ...respondRunApproval(
+            sqlite,
+            row.profile,
+            row.id,
+            responded.request_id,
+            responded.choice,
+            at,
+          ),
+        )
+      // Approval evidence may refine a closed row even when run lifecycle observations are stale.
+      if (runLifecycle.isTerminal(row.status) || seq <= (row.last_seq ?? -1)) return drafts
       if (ignored || !known) {
         sqlite
           .prepare('UPDATE runs SET last_seq = ?, updated_at = ? WHERE id = ?')
           .run(seq, at, row.id)
         return []
       }
-      const drafts: DomainEventDraft[] = []
       const values: Record<string, SQLInputValue> = { last_seq: seq }
       if (!ignored && known) values.status = 'running'
       if (started) {
@@ -219,6 +289,7 @@ export function translateRunEvent(
         })
       if (approval) values.status = 'waiting_for_approval'
       if (terminal) {
+        drafts.push(...closeRunApprovals(sqlite, row.id, at))
         values.status = event.slice(4)
         values.ended_at = at
         values.output = terminal.output == null ? null : redactBounded(terminal.output, 8192)
@@ -265,7 +336,10 @@ export function runStatusObservation(context: RunContext, run: GatewayRun): Obse
             }
           : {}),
       })
-      return changed ? [runDraft(sqlite, row.id)] : []
+      return [
+        ...(changed ? [runDraft(sqlite, row.id)] : []),
+        ...(terminal ? closeRunApprovals(sqlite, row.id, now) : []),
+      ]
     },
   }
 }

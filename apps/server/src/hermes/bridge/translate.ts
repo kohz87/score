@@ -1,5 +1,10 @@
 import { BridgeEventSchema, BridgeIdentifierSchema, type BridgeEvent } from '@score/contract'
 import { z } from 'zod'
+import {
+  applyApprovalSignal,
+  completeApprovalTool,
+  GateSignalSchema,
+} from '../../domain/approvals.ts'
 import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
 import { defineLifecycle, guardedUpsert } from '../../hub/projections.ts'
 import { redact, redactBounded, redactValue } from '../../redact.ts'
@@ -20,9 +25,22 @@ const ToolPayloadSchema = z.object({
     .regex(/^[a-f0-9]{64}$/)
     .nullish(),
 })
+const ExpirySchema = z.union([
+  z.iso.datetime(),
+  z
+    .number()
+    .finite()
+    .nonnegative()
+    .max(253402300799)
+    .transform((value) => new Date(value * 1000).toISOString()),
+])
 const ApprovalPayloadSchema = z.object({
   requestId: BridgeIdentifierSchema.nullable().optional(),
   request_id: BridgeIdentifierSchema.nullable().optional(),
+  gateId: BridgeIdentifierSchema.nullish(),
+  linkedGateId: BridgeIdentifierSchema.nullish(),
+  supersedesGateId: BridgeIdentifierSchema.nullish(),
+  transportRequestId: BridgeIdentifierSchema.nullish(),
 })
 const GapPayloadSchema = z
   .object({
@@ -83,6 +101,12 @@ const payloadIdentifierNames = [
   'sessionId',
   'toolCallId',
   'requestId',
+  'gateId',
+  'linkedGateId',
+  'supersedesGateId',
+  'transportRequestId',
+  'turn_id',
+  'turnId',
   'kanban_task_id',
   'session_key',
   'session_id',
@@ -119,6 +143,7 @@ export function translateBridgeEvent(
   producer: Producer,
   value: BridgeEvent,
   metrics: BridgeMetrics,
+  disabled: readonly string[] = [],
 ): Observation {
   const parsed = BridgeEventSchema.parse(value)
   const source = `bridge:${producer.incarnation}`
@@ -167,6 +192,23 @@ export function translateBridgeEvent(
   const nested = z.object({ status: z.string().optional() }).safeParse(result)
   const approval = approvalHooks.has(event.hook)
     ? ApprovalPayloadSchema.parse(event.payload)
+    : undefined
+  const signal = approval
+    ? GateSignalSchema.parse({
+        ...event.payload,
+        kind:
+          event.hook === 'pre_approval_request'
+            ? 'pre'
+            : event.hook === 'post_approval_response'
+              ? 'post'
+              : 'closed',
+        toolCallId: event.toolCallId,
+        sessionId: event.sessionId,
+        turnId: event.payload.turn_id ?? event.payload.turnId,
+        expiresAt: ExpirySchema.nullish().parse(
+          event.payload.expiresAt ?? event.payload.expires_at,
+        ),
+      })
     : undefined
   const gap =
     event.hook === 'bridge.gap' && !omitted
@@ -263,6 +305,20 @@ export function translateBridgeEvent(
           })
         }
         return [
+          ...(post && event.toolCallId
+            ? completeApprovalTool(
+                sqlite,
+                producer,
+                {
+                  toolCallId: event.toolCallId,
+                  counter: event.counter,
+                  sessionKey: event.sessionKey,
+                },
+                status === 'running' ? 'ok' : status,
+                event.at,
+                { disabled },
+              )
+            : []),
           log(
             'tool',
             `${tool.tool_name ?? 'Tool'} ${pre ? 'started' : status}: ${preview(pre ? tool.args : result) ?? ''}`,
@@ -270,21 +326,30 @@ export function translateBridgeEvent(
         ]
       }
       if (approval) {
-        sqlite
+        const inserted = sqlite
           .prepare(
-            `INSERT INTO approval_signals (producer_id, profile, hook, session_key, request_id, payload, at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO approval_signals
+          (producer_id, profile, hook, session_key, request_id, payload, at, producer_incarnation, counter, gate_id, linked_gate_id, transport_request_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             producer.id,
             producer.profile,
             event.hook,
             event.sessionKey,
-            approval.requestId ?? approval.request_id ?? null,
-            JSON.stringify(event.payload),
+            approval.requestId ?? null,
+            JSON.stringify({ ...event.payload, ...signal }),
             event.at,
+            producer.incarnation,
+            event.counter,
+            approval.gateId ?? null,
+            approval.linkedGateId ?? null,
+            approval.transportRequestId ?? null,
           )
-        return [log('approval', event.hook)]
+        return [
+          ...applyApprovalSignal(sqlite, Number(inserted.lastInsertRowid), now, { disabled }),
+          log('approval', event.hook),
+        ]
       }
       if (text) {
         return [

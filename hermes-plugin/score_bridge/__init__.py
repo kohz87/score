@@ -41,6 +41,8 @@ def _make_hook(hook):
 def _reset_after_fork():
     global _sender, _pid, _exit_callback
     from .client import ScoreClient
+    from .gates import reset
+    reset()
     from .sender import Sender
     from .spool import close_inherited_descriptors
     close_inherited_descriptors()
@@ -63,6 +65,8 @@ def register(ctx):
     global _sender, _pid, _exit_callback
     try:
         from .client import ScoreClient
+        from .gates import reset
+        reset()
         from .sender import Sender
         if _sender is not None:
             _sender.shutdown()
