@@ -56,14 +56,14 @@ test('re-hello rotates the token, preserves acknowledgement, and refuses identit
 })
 
 const flagCases = (['in_process', 'host', 'unknown'] as const).flatMap((isolation) =>
-  Array.from({ length: 8 }, (_, mask) =>
+  Array.from({ length: 4 }, (_, mask) =>
     [false, true].map((disabled) => ({ isolation, mask, disabled })),
   ).flat(),
 )
 test.each(flagCases)(
   'enabled flags: $isolation private API mask $mask disabled=$disabled',
   async ({ isolation, mask, disabled }) => {
-    const names = ['list_gateway_approvals', 'register_gateway_settle', 'resolve_gateway_approval']
+    const names = ['list_gateway_approvals', 'resolve_gateway_approval']
     const privateApis = Object.fromEntries(
       names.map((name, bit) => [`tools.approval.${name}`, Boolean(mask & (1 << bit))]),
     )
@@ -72,7 +72,7 @@ test.each(flagCases)(
     expect(BridgeHelloResponseSchema.parse(response.json()).enabled).toEqual({
       watch: true,
       kanbanGrants: false,
-      gatewayApprovals: isolation === 'in_process' && (mask & 5) === 5 && !disabled,
+      gatewayApprovals: isolation === 'in_process' && (mask & 3) === 3 && !disabled,
     })
   },
 )

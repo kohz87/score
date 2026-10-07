@@ -9,7 +9,7 @@ private = ModuleType("score_bridge.hermes_private")
 private.available = lambda: {
     name: True for name in (
         "agent.redact.redact_sensitive_text", "tools.approval.list_gateway_approvals",
-        "tools.approval.register_gateway_settle", "tools.approval.resolve_gateway_approval",
+        "tools.approval.resolve_gateway_approval",
         "tools.approval.approve_permanent", "tools.approval_detection.detect_dangerous_command",
         "hermes_cli.plugin_isolation.isolation_mode",
     )
@@ -25,3 +25,7 @@ private.redact = redact
 sys.modules[private.__name__] = private
 
 private.current_profile = lambda: __import__("os").environ.get("HERMES_PROFILE") or "default"
+
+private.snapshot_gateway_approvals = lambda session_key, limit=64, timeout=0.005: []
+private.approval_lock_free = lambda timeout: True
+private.resolve_exact = lambda session_key, choice, request_id: 0

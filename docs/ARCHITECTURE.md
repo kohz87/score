@@ -222,6 +222,12 @@ its session and won't swap in a different history after waiting on its turn leas
   can enqueue an identical command between this thread's enqueue and its hook; 1.14b design review, finding 2). The
   bridge reports a `requestId` only when it can prove the entry is this hook's own (e.g. exactly one entry with that
   command and pattern keys); otherwise `null` and the card is view-only.
+  **Known limit (1.13b review, finding 1):** Hermes gives a hook no handle to its own queue entry. If a prompt is
+  answered on another surface in the milliseconds between its enqueue and its hook (only a FIFO `/approve` or
+  `/approve all` can do that, since nobody has seen it yet), while a byte-identical command in the same session is
+  queued by a terminal batch, the hook can claim the identical entry. Its own post hook closes that card within
+  milliseconds, and any binding is to an identical command. Claims are never evicted and end at the gate's post hook.
+  Exact ownership needs Hermes to pass `request_id` to `pre_approval_request` (upstream change; worth proposing).
   ~~The bridge also registers `register_gateway_settle(…)`~~ **Removed (1.14b design review, finding 9):** the settle
   slot holds one callback per request and the gateway registers its own afterwards, so Score must not use it. Resolution
   is observed through `post_approval_response`. The plugin reports a `request_id` only when the queue entry is provably

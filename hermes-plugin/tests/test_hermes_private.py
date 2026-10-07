@@ -119,3 +119,53 @@ def test_boundary_propagates_cancellation(private, monkeypatch, cancel):
         redact_sensitive_text=lambda *args, **kwargs: (_ for _ in ()).throw(cancel())))
     with pytest.raises(cancel):
         private.redact("text")
+
+
+@pytest.mark.parametrize("request_id", [None, "", 0, False, [], {}, "exact-1"])
+def test_resolution_never_uses_fifo(private, monkeypatch, request_id):
+    calls = []
+    def resolve(session, choice, **kwargs):
+        assert set(kwargs) == {"request_id"}
+        assert type(kwargs["request_id"]) is str and kwargs["request_id"]
+        calls.append((session, choice, kwargs))
+        return 1
+    monkeypatch.setattr(private.importlib, "import_module", lambda name: SimpleNamespace(
+        resolve_gateway_approval=resolve))
+    assert private.resolve_exact("s", "once", request_id) == (1 if request_id == "exact-1" else 0)
+    assert len(calls) == (1 if request_id == "exact-1" else 0)
+
+
+def test_no_settle_slot_reference_in_plugin():
+    package = Path(__file__).parents[1] / "score_bridge"
+    forbidden = "register_gateway_" + "settle"
+    assert all(forbidden not in path.read_text() for path in package.glob("*.py"))
+
+
+def _approval_module(lock, queues):
+    return SimpleNamespace(_lock=lock, _gateway_queues=queues)
+
+
+def test_snapshot_is_bounded_and_never_waits_on_a_held_lock(private, monkeypatch):
+    import threading
+    import time
+    lock = threading.Lock()
+    entry = SimpleNamespace(data={"request_id": "r1", "command": "rm x", "pattern_keys": ["rm"]})
+    queues = {"s": [entry], "big": [entry] * 65}
+    monkeypatch.setattr(private.importlib, "import_module", lambda name: _approval_module(lock, queues))
+    assert private.snapshot_gateway_approvals("s") == [entry.data]
+    assert private.snapshot_gateway_approvals("missing") == []
+    assert private.snapshot_gateway_approvals("big") is None
+    lock.acquire()
+    try:
+        started = time.perf_counter()
+        assert private.snapshot_gateway_approvals("s") is None
+        assert private.approval_lock_free(0.01) is False
+        assert time.perf_counter() - started < 0.2
+    finally:
+        lock.release()
+    assert private.approval_lock_free(0.01) is True
+
+
+def test_snapshot_without_hermes_internals_is_none(private):
+    assert private.snapshot_gateway_approvals("s") is None
+    assert private.approval_lock_free(0.01) is False

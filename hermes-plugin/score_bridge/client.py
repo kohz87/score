@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import uuid
 from datetime import datetime
@@ -11,6 +12,7 @@ from urllib.error import HTTPError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from . import hermes_private
+from .decision_transport import DecisionTransport
 
 PLUGIN_VERSION = "0.1.0"
 
@@ -46,6 +48,7 @@ class ScoreClient:
         self.base_url = (base_url or os.environ.get("SCORE_URL", "http://127.0.0.1:8740")).rstrip("/")
         self.token_path = Path(token_path) if token_path else Path.home() / ".score" / "bridge.token"
         self.transport = transport or urllib_transport
+        self.decision_transport = DecisionTransport() if transport is None or transport is urllib_transport else transport
         self.clock = clock
         self.incarnation = uuid.uuid4().hex
         self.producer_token: str | None = None
@@ -54,6 +57,10 @@ class ScoreClient:
         self.timeout = 3.0
         self._identity: dict | None = None
         self.profile = profile
+        self._hello_lock = threading.RLock()
+        self._poller = None
+        self._closed = False
+        self._allow_decisions = True
 
     def identity(self) -> dict:
         if self._identity is None:
@@ -70,9 +77,14 @@ class ScoreClient:
         recovered = ScoreClient(self.base_url, self.token_path, self.transport, clock=self.clock)
         recovered.incarnation = identity["incarnation"]
         recovered._identity = dict(identity)
+        recovered._allow_decisions = False
         return recovered
 
     def hello(self) -> dict:
+        with self._hello_lock:
+            return self._hello()
+
+    def _hello(self) -> dict:
         # An undetectable isolation mode still reports events; the server keeps actions disabled.
         identity = self.identity()
         try:
@@ -97,20 +109,66 @@ class ScoreClient:
                 or any(type(enabled.get(key)) is not bool for key in ("gatewayApprovals", "kanbanGrants", "watch"))):
             raise ProtocolError("invalid hello")
         self.producer_token, self.expires_at, self.enabled = token, expiry_time, dict(enabled)
+        if self._allow_decisions and not self._closed and enabled["gatewayApprovals"] and self._poller is None:
+            from .decisions import DecisionPoller
+            self._poller = DecisionPoller(self)
+            self._poller.start()
         return response
 
-    def send(self, events: list[dict]) -> int:
-        if self.producer_token is None or self.expires_at <= self.clock() + 60:
-            self.hello()
+    def decision_request(self, path, body, timeout):
+        # Shutdown must not wait behind the sender's renewal: take the lock with a bound and re-check closure after.
+        if not self._hello_lock.acquire(timeout=1.0):
+            return None
         try:
-            response = self.transport(self.base_url + "/bridge/v1/events", self.producer_token,
+            if self._closed:
+                return None
+            if self.producer_token is None or self.expires_at <= self.clock() + 60:
+                self._hello()
+            if self._closed or not self.enabled.get("gatewayApprovals", False):
+                return None
+            token = self.producer_token
+        finally:
+            self._hello_lock.release()
+        try:
+            return self.decision_transport(self.base_url + path, token, body, timeout)
+        except HTTPError as exc:
+            if exc.code != 401:
+                raise
+            if not self._hello_lock.acquire(timeout=1.0):
+                return None
+            try:
+                if self._closed:
+                    return None
+                if self.producer_token == token:
+                    self._hello()
+                if self._closed or not self.enabled.get("gatewayApprovals", False):
+                    return None
+                token = self.producer_token
+            finally:
+                self._hello_lock.release()
+            return self.decision_transport(self.base_url + path, token, body, timeout)
+
+    def stop_decisions(self):
+        self._closed = True
+        if self._poller is not None:
+            self._poller.stop()
+
+    def send(self, events: list[dict]) -> int:
+        with self._hello_lock:
+            if self.producer_token is None or self.expires_at <= self.clock() + 60:
+                self._hello()
+            token = self.producer_token
+        try:
+            response = self.transport(self.base_url + "/bridge/v1/events", token,
                                       {"events": events}, self.timeout)
         except HTTPError as exc:
             if exc.code != 401:
                 raise
-            self.producer_token = None
-            self.hello()
-            response = self.transport(self.base_url + "/bridge/v1/events", self.producer_token,
+            with self._hello_lock:
+                if self.producer_token == token:
+                    self._hello()
+                token = self.producer_token
+            response = self.transport(self.base_url + "/bridge/v1/events", token,
                                       {"events": events}, self.timeout)
         ack = response.get("ackedThrough") if isinstance(response, dict) else None
         if type(ack) is not int or ack < 0:

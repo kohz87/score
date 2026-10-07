@@ -116,6 +116,7 @@ class Sender:
         merge_ranges(self._gaps.setdefault(profile, []), first, last, at)
 
     def enqueue(self, hook, args, kwargs):
+        profile = hermes_private.current_profile()
         at = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
         if args:
             # Apply one shared node budget to args and kwargs together.
@@ -128,9 +129,9 @@ class Sender:
         if type(command) is not str and type(payload.get("args")) is dict:
             command = payload["args"].get("command")
         command_digest = digest(command) if type(command) is str and not command.startswith("[omitted:") else None
-        payload = capture(hook, payload, command_digest)
+        payload = capture(hook, payload, command_digest, raw=kwargs, profile=profile)
         self.queue.put_nowait({"hook": hook, "at": at, "raw": payload, "digest": command_digest,
-                               "profile": hermes_private.current_profile(), "context": contextvars.copy_context()})
+                               "profile": profile, "context": contextvars.copy_context()})
 
     def _take(self, deadline=None):
         if not self.queue.mutex.acquire(timeout=max(0, deadline - time.monotonic()) if deadline else 0.002):
@@ -353,6 +354,9 @@ class Sender:
         self._closed = True
         self._stop.set()
         self._wake.set()
+        clients = [client for client, _ in list(self._producers.values())]
+        for client in clients:
+            client.stop_decisions()
         # No network or new threads at exit. Persistence has its own bounded locks.
         try:
             while time.monotonic() < deadline and self._persist(deadline):
@@ -369,3 +373,6 @@ class Sender:
             self.dropped += len(self.queue.queue)
         if self._thread is not None and self._thread is not threading.current_thread():
             self._thread.join(max(0, deadline - time.monotonic()))
+        for client in clients:
+            if client._poller is not None:
+                client._poller.join(deadline)

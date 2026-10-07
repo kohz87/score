@@ -26,7 +26,6 @@ export const hello: BridgeHelloRequest = {
   hermes: { version: '0.21.0', codeSha: 'fixture' },
   privateApis: {
     'tools.approval.list_gateway_approvals': true,
-    'tools.approval.register_gateway_settle': true,
     'tools.approval.resolve_gateway_approval': true,
   },
 }

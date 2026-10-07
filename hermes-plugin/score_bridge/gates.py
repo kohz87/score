@@ -4,15 +4,18 @@ from __future__ import annotations
 import threading
 import uuid
 
+from . import approvals
+
 _state = threading.local()
 
 
 def reset():
     global _state
     _state = threading.local()
+    approvals.reset()
 
 
-def capture(hook, payload, command_digest):
+def capture(hook, payload, command_digest, *, raw=None, profile=None):
     if hook in ("pre_tool_call", "on_session_end"):
         _state.open = []
         _state.closed_guardian = None
@@ -28,7 +31,9 @@ def capture(hook, payload, command_digest):
     # command differently, so the command digest can't be part of this check.
     context = (payload.get("tool_call_id"), payload.get("turn_id"), payload.get("session_id"))
     result = dict(payload)
+    result.pop("requestId", None)
     transport_id = result.pop("request_id", None) if surface.startswith("transport:") else None
+    result.pop("request_id", None)
     if surface.startswith("transport:"):
         result["transportRequestId"] = transport_id
     if hook == "pre_approval_request":
@@ -49,6 +54,8 @@ def capture(hook, payload, command_digest):
         stack.append(gate)
         del stack[:-16]
         result.update(gateId=gate["id"], linkedGateId=linked)
+        result["requestId"] = approvals.capture_exact(payload if raw is None else raw, profile, gate["id"])
+        gate["request_id"] = result["requestId"]
         if supersedes:
             result["supersedesGateId"] = supersedes
     else:
@@ -58,6 +65,10 @@ def capture(hook, payload, command_digest):
                 gate = stack.pop(index)
                 break
         result["gateId"] = gate["id"] if gate else None
+        result["requestId"] = gate["request_id"] if gate else None
+        if gate and gate.get("request_id") and family == "human":
+            # The gate's wait has ended; its entry is gone, so the claim can't be resolved again.
+            approvals.release(gate["request_id"])
         if gate and surface.startswith("transport:"):
             result["transportRequestId"] = gate["transport_id"]
         _state.closed_guardian = gate if gate and family == "smart" and result.get("choice") == "smart_deny" else None
