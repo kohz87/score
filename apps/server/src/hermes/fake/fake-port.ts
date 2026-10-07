@@ -43,12 +43,14 @@ export class FakePort implements HermesPort {
   private sink: ObservationSink | undefined
   private sessionId = ''
   private nextIdentity = 0
+  private loop = 0
   private tail: Promise<void> = Promise.resolve()
   private stopping: Promise<void> | undefined
 
   constructor(
     private readonly speed = 1,
     deps: HermesPortDeps = {},
+    private readonly looping = true,
   ) {
     if (!Number.isFinite(speed) || speed <= 0)
       throw new Error('Fake speed must be positive and finite')
@@ -70,18 +72,31 @@ export class FakePort implements HermesPort {
     this.resetState()
     this.sessionId = randomUUID()
     this.sink = sink
+    this.loop = 0
+    this.scheduleScenario()
+  }
+
+  private scheduleScenario(): void {
     const startedAt = this.scheduler.now()
     const sessionId = this.sessionId
-    const steps = createScenario(startedAt)
+    const steps = createScenario(startedAt, this.loop)
     this.nextIdentity = steps.length
     const scheduleStep = (index: number): void => {
+      if (!this.sink || this.sessionId !== sessionId) return
       const step = steps[index]
-      if (!step || !this.sink || this.sessionId !== sessionId) return
+      if (!step) {
+        if (this.looping)
+          this.schedule(10000, async () => {
+            this.loop++
+            this.scheduleScenario()
+          })
+        return
+      }
       // Only one script timer is armed, so overdue timers cannot reorder the session.
       const remaining = Math.max(0, startedAt + step.at / this.speed - this.scheduler.now())
       this.schedule(remaining, async () => {
         try {
-          await this.emit(step, index)
+          await this.emit(step, `${this.loop}:${index}`)
         } finally {
           scheduleStep(index + 1)
         }
@@ -137,7 +152,10 @@ export class FakePort implements HermesPort {
     return this.sink
   }
 
-  private async emit(step: ScenarioStep, index = this.nextIdentity++): Promise<void> {
+  private async emit(
+    step: ScenarioStep,
+    index = `${this.loop}:command:${this.nextIdentity++}`,
+  ): Promise<void> {
     // Delayed script steps cannot undo commands delivered while the scenario was playing.
     const suppressed = Boolean(
       (step.kind === 'approval.updated' && this.approvals.get(step.data.id)?.decision) ||

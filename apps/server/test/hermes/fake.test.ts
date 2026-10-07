@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { createHermesPort, type HermesPort, type ObservationSink } from '../../src/hermes/index.ts'
-import { createScenario } from '../../src/hermes/fake/scenario.ts'
+import { createScenario, scenarioDuration } from '../../src/hermes/fake/scenario.ts'
 import {
   createIngest,
   type Ingest,
@@ -43,7 +43,7 @@ beforeEach(() => {
     },
   }
   onError = vi.fn<(error: unknown) => void>()
-  port = createHermesPort(loadConfig({}), { scheduler, onError })
+  port = createHermesPort(loadConfig({ SCORE_FAKE_LOOP: 'false' }), { scheduler, onError })
 })
 
 afterEach(async () => {
@@ -62,7 +62,7 @@ function events(): StreamEvent[] {
 
 async function play(): Promise<void> {
   await port.start(sink)
-  await scheduler.advance(10000)
+  await scheduler.advance(scenarioDuration)
   await ingest.drain()
 }
 
@@ -79,14 +79,14 @@ test('the whole fake scenario passes real ingest validation and covers every dur
     stored.filter((event) => event.type === 'watch.frame').map((event) => event.data.surface),
   ).toEqual(['terminal', 'editor', 'browser'])
   expect(stored.find((event) => event.type === 'gap.recorded')?.data).toMatchObject({
-    from: '2026-01-01T12:00:04.000Z',
-    to: '2026-01-01T12:00:05.000Z',
+    from: '2026-01-01T12:01:12.000Z',
+    to: '2026-01-01T12:01:30.000Z',
   })
   expect(results.every((result) => result.status === 'applied')).toBe(true)
   expect(observations.every((observation) => observation.source === 'fake')).toBe(true)
   const session = observations[0]!.identity.split(':')[0]
   expect(observations.map((observation) => observation.identity)).toEqual(
-    stored.map((_, index) => `${session}:${index}`),
+    stored.map((_, index) => `${session}:0:${index}`),
   )
   expect(onError).not.toHaveBeenCalled()
   expect(scheduler.pending).toBe(0)
@@ -104,7 +104,7 @@ test('the same scheduler produces identical types and data and a restart replays
   db = openDatabase(join(directory, 'score.db'))
   scheduler = new FakeScheduler()
   ingest = createIngest(db, { clock: () => scheduler.now() })
-  port = createHermesPort(loadConfig({}), { scheduler, onError })
+  port = createHermesPort(loadConfig({ SCORE_FAKE_LOOP: 'false' }), { scheduler, onError })
   await play()
   const second = events().slice(first.length)
   expect(second.map(({ type, data }) => ({ type, data }))).toEqual(
@@ -122,8 +122,8 @@ test.each(['score-run', 'gateway', 'kanban'] as const)(
   'delivers a pending %s decision exactly once, even concurrently',
   async (origin) => {
     await port.start(sink)
-    await scheduler.advance(2600)
-    const req = { approvalId: `approval-${origin}`, choice: 'once' as const }
+    await scheduler.advance(2600 * 18)
+    const req = { approvalId: `approval-${origin}-0`, choice: 'once' as const }
     expect(await Promise.all([port.deliverDecision(req), port.deliverDecision(req)])).toEqual([
       'applied',
       'not_pending',
@@ -137,7 +137,7 @@ test.each(['score-run', 'gateway', 'kanban'] as const)(
       decision: { choice: 'once', by: 'you', at: new Date(scheduler.now()).toISOString() },
       delivery: 'applied',
     })
-    await scheduler.advance(10000)
+    await scheduler.advance(scenarioDuration)
     expect(
       events().filter(
         (event) => event.type === 'approval.updated' && event.data.id === req.approvalId,
@@ -150,11 +150,11 @@ test('unknown and already decided approvals are not pending; denial is attribute
   await play()
   const count = events().length
   expect(await port.deliverDecision({ approvalId: 'unknown', choice: 'deny' })).toBe('not_pending')
-  expect(await port.deliverDecision({ approvalId: 'approval-score-run', choice: 'deny' })).toBe(
+  expect(await port.deliverDecision({ approvalId: 'approval-score-run-0', choice: 'deny' })).toBe(
     'not_pending',
   )
   expect(events()).toHaveLength(count)
-  expect(await port.deliverDecision({ approvalId: 'approval-gateway', choice: 'deny' })).toBe(
+  expect(await port.deliverDecision({ approvalId: 'approval-gateway-0', choice: 'deny' })).toBe(
     'applied',
   )
   expect(events().at(-1)?.data).toMatchObject({
@@ -162,7 +162,7 @@ test('unknown and already decided approvals are not pending; denial is attribute
     decision: { choice: 'deny', by: 'you' },
     delivery: 'applied',
   })
-  expect(await port.deliverDecision({ approvalId: 'approval-kanban', choice: 'session' })).toBe(
+  expect(await port.deliverDecision({ approvalId: 'approval-kanban-0', choice: 'session' })).toBe(
     'failed',
   )
 })
@@ -170,7 +170,7 @@ test('unknown and already decided approvals are not pending; denial is attribute
 test('a failed decision submission leaves the approval pending for retry', async () => {
   await play()
   const submit = vi.spyOn(sink, 'submit').mockRejectedValueOnce(new Error('ingest failure'))
-  const req = { approvalId: 'approval-gateway', choice: 'once' as const }
+  const req = { approvalId: 'approval-gateway-0', choice: 'once' as const }
   expect(await port.deliverDecision(req)).toBe('failed')
   expect(await port.deliverDecision(req)).toBe('applied')
   expect(submit).toHaveBeenCalledTimes(2)
@@ -257,12 +257,12 @@ test('stop is idempotent, drains in-flight submissions and cancels remaining tim
 
 test('stopping a scripted run prevents later script steps from undoing the cancellation', async () => {
   await port.start(sink)
-  await scheduler.advance(600)
-  await port.stopRun({ agentId: 'builder', runId: 'scenario-build' })
-  await scheduler.advance(10000)
+  await scheduler.advance(600 * 18)
+  await port.stopRun({ agentId: 'builder', runId: 'scenario-build-0' })
+  await scheduler.advance(scenarioDuration)
   const updates = events().filter(
     (event): event is Extract<StreamEvent, { type: 'run.updated' }> =>
-      event.type === 'run.updated' && event.data.id === 'scenario-build',
+      event.type === 'run.updated' && event.data.id === 'scenario-build-0',
   )
   expect(updates.map((event) => event.data.status)).toEqual(['queued', 'cancelled'])
   expect(observations).toHaveLength(createScenario(schedulerStart).length + 1)
@@ -303,19 +303,22 @@ test('fake status and agent styles match the defaults; returned objects cannot m
   expect((await port.listAgents())[0]!.style.color).toBe('#6B4EFF')
   await port.start(sink)
   await port.start(sink)
-  await scheduler.advance(900)
+  await scheduler.advance(900 * 18)
   expect(observations).toHaveLength(9)
   expect((await port.listAgents())[1]!.status).toBe('working')
 })
 
 test('speed scales timer delays while scenario data stays deterministic', async () => {
-  port = createHermesPort(loadConfig({ SCORE_FAKE_SPEED: '100' }), { scheduler, onError })
+  port = createHermesPort(loadConfig({ SCORE_FAKE_SPEED: '100', SCORE_FAKE_LOOP: 'false' }), {
+    scheduler,
+    onError,
+  })
   await port.start(sink)
-  await scheduler.advance(99)
-  expect(events().at(-1)?.type).toBe('memory.saved')
+  await scheduler.advance(scenarioDuration / 100 - 1)
+  expect(events().at(-1)?.type).toBe('agent.updated')
   await scheduler.advance(1)
   expect(events()).toHaveLength(createScenario(schedulerStart).length)
-  expect(events().at(-1)?.data).toMatchObject({ updatedAt: '2026-01-01T12:00:10.000Z' })
+  expect(events().at(-1)?.data).toMatchObject({ updatedAt: '2026-01-01T12:03:00.000Z' })
 })
 
 test('overdue timers cannot reorder scripted events or skip the running transition', async () => {
@@ -325,7 +328,7 @@ test('overdue timers cannot reorder scripted events or skip the running transiti
     input: 'Summarize the feed',
     turnId: 'late-turn',
   })
-  await scheduler.advance(10000, true)
+  await scheduler.advance(scenarioDuration, true)
   const stored = events()
   expect(
     stored
@@ -344,4 +347,58 @@ test('stopped runs reject commands and unknown agents cannot start work', async 
   await expect(port.startRun(req)).rejects.toMatchObject({ status: 503 })
   await port.start(sink)
   await expect(port.startRun(req)).rejects.toMatchObject({ status: 404 })
+})
+
+test('looping pauses ten seconds then emits fresh identities and entities on the same ingest log', async () => {
+  port = createHermesPort(loadConfig({}), { scheduler, onError })
+  await play()
+  const first = events()
+  expect(first).toHaveLength(createScenario(schedulerStart).length)
+  expect(scheduler.pending).toBe(1)
+  await scheduler.advance(9999)
+  expect(events()).toEqual(first)
+  await scheduler.advance(1 + scenarioDuration)
+  const second = events().slice(first.length)
+  expect(second).toHaveLength(first.length)
+  expect(new Set(observations.map(({ identity }) => identity)).size).toBe(first.length * 2)
+  const session = observations[0]!.identity.split(':')[0]
+  expect(observations[first.length]!.identity).toBe(`${session}:1:0`)
+  const entityIds = (loopEvents: StreamEvent[]) =>
+    new Set(
+      loopEvents.flatMap((event) =>
+        ['run.updated', 'task.upserted', 'approval.requested', 'message.created'].includes(
+          event.type,
+        ) && 'id' in event.data
+          ? [event.data.id]
+          : [],
+      ),
+    )
+  const firstIds = entityIds(first)
+  const secondIds = entityIds(second)
+  expect([...secondIds].every((id) => !firstIds.has(id))).toBe(true)
+  expect(second.map(({ type }) => type)).toEqual(first.map(({ type }) => type))
+  expect(second.find((event) => event.type === 'message.delta')?.data.messageId).toBe(
+    'message-plan-1',
+  )
+  expect(second.find((event) => event.type === 'run.updated')?.data.refs).toEqual([
+    { kind: 'task', taskId: 'task-pagination-1' },
+  ])
+  expect(results.every((result) => result.status === 'applied')).toBe(true)
+  expect(onError).not.toHaveBeenCalled()
+  await scheduler.advance(10000 + scenarioDuration)
+  expect(observations[first.length * 2]!.identity).toBe(`${session}:2:0`)
+  await port.stop()
+  expect(scheduler.pending).toBe(0)
+})
+
+test('SCORE_FAKE_LOOP=false idles after a three-minute scenario with distinct realistic approval commands', async () => {
+  await play()
+  const stored = events()
+  expect(scheduler.pending).toBe(0)
+  await scheduler.advance(scenarioDuration * 3)
+  expect(events()).toEqual(stored)
+  const approvals = stored.filter((event) => event.type === 'approval.requested')
+  expect(new Set(approvals.map((event) => event.data.command)).size).toBe(3)
+  expect(new Set(approvals.map((event) => event.data.title)).size).toBe(3)
+  expect(createScenario(schedulerStart).at(-1)?.at).toBe(scenarioDuration)
 })

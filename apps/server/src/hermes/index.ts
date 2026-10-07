@@ -6,8 +6,10 @@ import type { HermesPort, HermesPortDeps } from './port.ts'
 export type { HermesPort, HermesPortDeps, ObservationSink, Scheduler } from './port.ts'
 
 export function createHermesPort(
-  config: Pick<Config, 'mode' | 'fakeSpeed'>,
+  config: Pick<Config, 'mode' | 'fakeSpeed' | 'fakeLoop'>,
   deps: HermesPortDeps = {},
 ): HermesPort {
-  return config.mode === 'fake' ? new FakePort(config.fakeSpeed, deps) : new LivePort()
+  return config.mode === 'fake'
+    ? new FakePort(config.fakeSpeed, deps, config.fakeLoop)
+    : new LivePort()
 }

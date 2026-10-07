@@ -10,15 +10,23 @@ import '@fontsource/jetbrains-mono/500.css'
 import './styles/tokens.css'
 import './shell/shell.css'
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createBrowserRouter } from 'react-router'
 import { App, appRoutes } from './App.tsx'
+import { createQueryClient, StreamContext } from './data/query-client.ts'
+import { createStreamClient } from './data/stream.ts'
+import { createStreamQueryRegistry } from './data/resync.ts'
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
-})
+const queryClient = createQueryClient()
+const stream = createStreamClient()
+const streamContext = { client: stream, queries: createStreamQueryRegistry(queryClient, stream) }
+if (import.meta.hot)
+  import.meta.hot.dispose(() => {
+    streamContext.queries.dispose()
+    stream.close()
+  })
 const router = createBrowserRouter(appRoutes)
 
 const root = document.getElementById('root')
@@ -26,7 +34,9 @@ if (!root) throw new Error('#root missing')
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App router={router} />
+      <StreamContext value={streamContext}>
+        <App router={router} />
+      </StreamContext>
     </QueryClientProvider>
   </StrictMode>,
 )
