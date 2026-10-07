@@ -4,6 +4,7 @@ import { LivePort } from './live/live-port.ts'
 import type { HermesPort, HermesPortDeps } from './port.ts'
 
 export type { HermesPort, HermesPortDeps, ObservationSink, Scheduler } from './port.ts'
+export { assertFeature } from './live/fingerprint.ts'
 
 export function createHermesPort(
   config: Pick<Config, 'mode' | 'fakeSpeed' | 'fakeLoop' | 'home' | 'hermesHome' | 'hermesUrl'>,

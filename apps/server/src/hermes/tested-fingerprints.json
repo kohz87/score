@@ -1,0 +1,39 @@
+[
+  {
+    "id": "92ab43f0bad01d0a",
+    "parts": {
+      "codeVersion": "0.21.5",
+      "codeSha": "e97923c38acba2066aff9c45e35fe1584a2155b2",
+      "capabilities": [
+        "approval_events",
+        "chat_completions",
+        "chat_completions_streaming",
+        "model_options",
+        "reasoning_streaming",
+        "responses_api",
+        "responses_streaming",
+        "run_approval_response",
+        "run_events_sse",
+        "run_status",
+        "run_steer",
+        "run_stop",
+        "run_submission",
+        "session_chat",
+        "session_chat_streaming",
+        "session_fork",
+        "session_model_lock",
+        "session_resources",
+        "skills_api",
+        "tool_progress_events"
+      ],
+      "schemas": {
+        "kanban": "8a2ee15544fa0dbb2f890f490b04a23839fee5b1f3331f15a5c472004bfcca92",
+        "state": "e3cd78f0629c60e1532ee5a5da3ccc5fea7b5ddbfabfa83962d0bef7012ce90d"
+      },
+      "bridge": null,
+      "cli": "Hermes Agent v0.21.5+7904.ge97923c (2026.9.24) \u00b7 upstream e97923c3"
+    },
+    "testedAt": "2026-10-07T00:00:00.000Z",
+    "notes": "Owner's install (Hermes v0.21.5, upstream e97923c3). Verified by spike L1\u2013L5 and the 1.11a live run on scoretesta."
+  }
+]

@@ -6,6 +6,15 @@ import type { ScoreDb } from '../../db/index.ts'
 import { HttpError } from '../../errors.ts'
 import type { HermesPort, HermesPortDeps, ObservationSink } from '../port.ts'
 import { CredentialsUnavailable, readKey } from './credentials.ts'
+import {
+  assertFeature,
+  computeFingerprint,
+  evaluateCompatibility,
+  testedFingerprints,
+  type Fingerprint,
+  type FingerprintInputs,
+  type TestedFingerprint,
+} from './fingerprint.ts'
 import { GatewayClient } from './gateway.ts'
 import { RunIntents } from './intents.ts'
 import { ProfileNameSchema, resolveHermesHome } from './paths.ts'
@@ -25,6 +34,8 @@ export interface LivePortOptions extends HermesPortDeps {
   baseUrl?: string
   db?: ScoreDb
   fetch?: typeof globalThis.fetch
+  readCliVersion?: FingerprintInputs['readCliVersion']
+  testedFingerprints?: readonly TestedFingerprint[]
   following?: Pick<FollowOptions, 'backoff' | 'pollIntervalMs' | 'pollLimitMs' | 'now' | 'wait'>
 }
 export class LivePort implements HermesPort {
@@ -37,6 +48,8 @@ export class LivePort implements HermesPort {
   private controller: AbortController | undefined
   private timer: NodeJS.Timeout | undefined
   private refresh: Promise<void> | undefined
+  private fingerprint: Fingerprint | undefined
+  private fingerprintAt = -Infinity
   private readonly followers = new Map<string, Promise<void>>()
   private current: ReturnType<HermesPort['status']> = {
     hermes: {
@@ -50,7 +63,7 @@ export class LivePort implements HermesPort {
     compatibility: {
       fingerprint: 'unavailable',
       tested: false,
-      disabled: ['gateway-approvals', 'kanban-grants'],
+      disabled: ['gateway-approvals', 'kanban-grants', 'score-runs'],
     },
     agentIsolation: 'same_user',
     degraded: ['Gateway status unavailable'],
@@ -103,6 +116,7 @@ export class LivePort implements HermesPort {
     this.intents = undefined
     this.gateway = undefined
     this.db = undefined
+    this.fingerprint = undefined
   }
   status(): ReturnType<HermesPort['status']> {
     return structuredClone(this.current)
@@ -140,9 +154,12 @@ export class LivePort implements HermesPort {
       degraded.push('Gateway unreachable')
     }
     const capabilities = new Set<string>()
-    for (const profile of served) {
+    let defaultCapabilities: string[] | null = null
+    for (const profile of new Set(['default', ...served])) {
       try {
         const features = await this.gateway!.capabilities(profile)
+        if (profile === 'default')
+          defaultCapabilities = Object.keys(features).filter((name) => features[name] === true)
         for (const [feature, enabled] of Object.entries(features))
           if (enabled === true) capabilities.add(feature)
       } catch (error) {
@@ -153,6 +170,28 @@ export class LivePort implements HermesPort {
         )
       }
     }
+    if (
+      !this.fingerprint ||
+      Date.now() - this.fingerprintAt >= 10 * 60_000 ||
+      (reachable && !this.current.hermes.reachable)
+    ) {
+      this.fingerprint = await computeFingerprint({
+        ...(this.options.hermesHome ? { hermesHome: this.options.hermesHome } : {}),
+        capabilities: defaultCapabilities,
+        ...(this.options.readCliVersion ? { readCliVersion: this.options.readCliVersion } : {}),
+      })
+      this.fingerprintAt = Date.now()
+    }
+    const compatibility = evaluateCompatibility(
+      this.fingerprint,
+      this.options.testedFingerprints ?? testedFingerprints,
+    )
+    if (!compatibility.tested) {
+      const { codeVersion, codeSha } = this.fingerprint.parts
+      degraded.push(
+        `Untested Hermes build: ${codeVersion ?? 'unknown'} (${codeSha?.slice(0, 8) ?? 'unknown'})`,
+      )
+    }
     this.current = {
       ...this.current,
       hermes: {
@@ -162,7 +201,7 @@ export class LivePort implements HermesPort {
         capabilities: [...capabilities].sort(),
         servedProfiles: served,
       },
-      compatibility: { ...this.current.compatibility, fingerprint: version ?? 'unavailable' },
+      compatibility,
       degraded,
     }
   }
@@ -243,6 +282,7 @@ export class LivePort implements HermesPort {
     model?: string
   }): Promise<{ runId: string }> {
     const { intents } = this.requireStarted()
+    assertFeature(this.current, 'score-runs')
     if (!this.current.hermes.servedProfiles.includes(req.agentId))
       throw new HttpError(503, 'hermes_unavailable', 'Profile is not served')
     const result = await intents.startRunIntent(

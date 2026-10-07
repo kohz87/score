@@ -69,6 +69,7 @@ export class FakeGateway {
       return json({
         features: {
           run_submission: true,
+          run_status: true,
           run_events_sse: true,
           run_stop: true,
           run_steer: true,
