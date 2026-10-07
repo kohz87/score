@@ -3,6 +3,7 @@
 #   scripts/codex-task.sh start <plan-id> <slug>        # brief: docs/briefs/<plan-id>.md
 #   scripts/codex-task.sh fix   <plan-id> <feedback.md> # fresh Codex session in the task worktree (default)
 #   scripts/codex-task.sh resume <plan-id> <feedback.md> # resume the original session (costs its full context)
+#   scripts/codex-task.sh review <plan-id> <prompt.md> <out.md> [effort]  # read-only review in the task worktree
 #   scripts/codex-task.sh path  <plan-id>               # print the worktree path
 #   scripts/codex-task.sh clean <plan-id>               # remove the worktree (after merge)
 set -euo pipefail
@@ -18,14 +19,14 @@ worktree_for() { ls -d "$WT_ROOT/$1-"* 2>/dev/null | head -1; }
 
 # The owner's rule: if Codex runs out of quota, pause all work and wait for them (see CLAUDE.md).
 check_quota() {
-  if sed 's/\x1b\[[0-9;]*m//g' "$1" | grep -qiE "usage limit|usage_limit|hit your limit|rate_limit_exceeded|insufficient_quota|quota exceeded|limit has been reached"; then
+  if sed 's/\x1b\[[0-9;]*m//g' "$1" | grep -qiE "usage limit|usage_limit|hit your limit|rate_limit_exceeded|insufficient_quota|quota exceeded|limit has been reached|out of credits|add credits"; then
     echo "codex-task: CODEX QUOTA EXHAUSTED (see $1). Pause all work, write docs/PAUSED.md, wait for the owner." >&2
     exit 75
   fi
 }
 
 cmd="${1:-}"; id="${2:-}"
-[[ -n "$cmd" && -n "$id" ]] || die "usage: $0 start|fix|resume|path|clean <plan-id> [...]"
+[[ -n "$cmd" && -n "$id" ]] || die "usage: $0 start|fix|resume|review|path|clean <plan-id> [...]"
 run_dir="$RUNS/$id"; mkdir -p "$run_dir"
 
 case "$cmd" in
@@ -77,6 +78,20 @@ case "$cmd" in
     (cd "$wt" && codex exec resume "$session" --disable apps -m "$MODEL" -c "model_reasoning_effort=$EFFORT" \
       -c 'sandbox_mode="workspace-write"' -o "$run_dir/round-$n.md" - < "$feedback" 2>&1 | tee "$run_dir/round-$n.log")
     echo "codex-task: report $run_dir/round-$n.md"
+    ;;
+  review)
+    prompt="${3:-}"; out="${4:-}"; effort="${5:-max}"
+    [[ -f "$prompt" && -n "$out" ]] || die "review needs a prompt file and an output path"
+    wt="$(worktree_for "$id")"; [[ -n "$wt" ]] || die "no worktree for $id"
+    log="$run_dir/review-$(date +%s).log"
+    set +e
+    codex exec --disable apps -m "$MODEL" -c "model_reasoning_effort=$effort" -s read-only \
+      --add-dir "$(dirname "$REPO")/reference" -C "$wt" -o "$out" - < "$prompt" > "$log" 2>&1
+    status=$?
+    set -e
+    check_quota "$log"
+    [[ $status -eq 0 ]] || die "review exited with status $status (see $log)"
+    echo "codex-task: review written to $out (log $log)"
     ;;
   path) worktree_for "$id" ;;
   clean)
