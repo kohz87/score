@@ -1,7 +1,7 @@
 [project]
 name = "score-bridge"
-version = "0.0.0"
-description = "Hermes plugin that streams agent activity to Score and applies Score's approval decisions."
+version = "0.1.0"
+description = "Hermes plugin that streams redacted agent activity to Score with bounded offline recovery."
 requires-python = ">=3.12"
 dependencies = []
 

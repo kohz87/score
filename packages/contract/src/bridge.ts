@@ -6,7 +6,7 @@ export const BridgeHelloRequestSchema = z.object({
   pid: z.int().positive(),
   incarnation: z.string().min(1),
   kanbanTaskId: z.string().min(1).nullable(),
-  isolation: z.enum(['in_process', 'host']),
+  isolation: z.enum(['in_process', 'host', 'unknown']),
   pluginVersion: z.string(),
   hermes: z.object({ version: z.string(), codeSha: z.string() }),
   privateApis: z.record(z.string(), z.boolean()),

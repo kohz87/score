@@ -1,3 +1,6 @@
 pnpm-lock.yaml
 docs/
 *.md
+# Recorded evidence (Hermes captures) keeps its original bytes.
+hermes-plugin/tests/fixtures/
+apps/server/test/fixtures/hermes/*.json
