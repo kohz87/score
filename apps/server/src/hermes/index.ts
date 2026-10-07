@@ -5,6 +5,10 @@ import type { HermesPort, HermesPortDeps } from './port.ts'
 
 export type { HermesPort, HermesPortDeps, ObservationSink, Scheduler } from './port.ts'
 export { assertFeature } from './live/fingerprint.ts'
+export { loadBridgeBootstrap } from './bridge/bootstrap.ts'
+export { registerBridgeRoutes, type BridgeDeps } from './bridge/routes.ts'
+export { getBridgeStatus } from './bridge/registry.ts'
+export { pruneBridge } from './bridge/retention.ts'
 
 export function createHermesPort(
   config: Pick<Config, 'mode' | 'fakeSpeed' | 'fakeLoop' | 'home' | 'hermesHome' | 'hermesUrl'>,

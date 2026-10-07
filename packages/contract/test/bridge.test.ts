@@ -19,6 +19,51 @@ test('accepts a host-isolated producer without a Kanban task', () => {
   expect(BridgeHelloRequestSchema.parse(request)).toEqual(request)
 })
 
+test.each([
+  { profile: '' },
+  { profile: '-builder' },
+  { profile: 'has space' },
+  { profile: 'é' },
+  { profile: 'a'.repeat(65) },
+  { incarnation: 'short' },
+  { incarnation: '-1234567' },
+  { incarnation: 'a'.repeat(129) },
+  { incarnation: 'has space' },
+  { kanbanTaskId: 'task with space' },
+  { privateApis: { 'invalid-key': true } },
+  { privateApis: { ['a'.repeat(129)]: true } },
+])('rejects invalid producer identifiers %j', (change) => {
+  expect(BridgeHelloRequestSchema.safeParse({ ...f.bridgeHelloRequest, ...change }).success).toBe(
+    false,
+  )
+})
+
+test('accepts identifier boundaries without redaction', () => {
+  const request = {
+    ...f.bridgeHelloRequest,
+    profile: 'a'.repeat(64),
+    incarnation: 'a'.repeat(128),
+    kanbanTaskId: 'sk-aaaaaaaaaa',
+    privateApis: { ['a'.repeat(128)]: true },
+  }
+  expect(BridgeHelloRequestSchema.parse(request)).toEqual(request)
+  expect(
+    BridgeHelloRequestSchema.safeParse({ ...request, profile: 'a', incarnation: '12345678' })
+      .success,
+  ).toBe(true)
+})
+
+test.each(['sessionKey', 'sessionId', 'toolCallId'] as const)(
+  'validates %s as bounded printable ASCII',
+  (name) => {
+    for (const value of ['', ' ', '\n', 'é', 'x'.repeat(257)]) {
+      expect(BridgeEventSchema.safeParse({ ...f.bridgeEvent, [name]: value }).success).toBe(false)
+    }
+    const event = { ...f.bridgeEvent, [name]: 'sk-aaaaaaaaaa' }
+    expect(BridgeEventSchema.parse(event)).toEqual(event)
+  },
+)
+
 test('accepts absent session and tool identities on a bridge event', () => {
   const event = { ...f.bridgeEvent, sessionKey: null, sessionId: null, toolCallId: null }
   expect(BridgeEventSchema.parse(event)).toEqual(event)

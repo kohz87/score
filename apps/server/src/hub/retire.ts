@@ -28,11 +28,13 @@ export function retireIngestKeys(
         `SELECT c.source, c.scope, c.cursor, c.incarnation, f.floor
          FROM ingest_checkpoints c LEFT JOIN ingest_floors f
            ON f.source = c.source AND f.scope = c.scope
-           AND f.incarnation = COALESCE(c.incarnation, '')`,
+           AND f.incarnation = COALESCE(c.incarnation, '')
+         WHERE c.scope NOT LIKE 'gap:%'`,
       )
       .all(),
   )
   let retired = 0
+  // Gap scopes are temporary coverage ranges, not key streams; a floor would outlive their consumption.
   let floors = 0
   for (const checkpoint of checkpoints) {
     let target = checkpoint.cursor - options.keepPositions

@@ -234,3 +234,50 @@ def test_lost_ack_then_eviction_uses_fresh_gap_counter(tmp_path):
     enqueue(sender, 1, command="echo after recovery")
     sender.process_once()
     assert max(received) > previous
+
+
+def test_large_backlog_splits_by_actual_http_body_bytes(setup):
+    sender, transport = setup
+    enqueue(sender, 40, result={f"part{i}": "x" * 10_000 for i in range(6)})
+    sender.process_once()
+    assert [event["counter"] for event in transport.acked] == list(range(1, 41))
+    assert len(transport.event_calls) > 1
+    for events in transport.event_calls:
+        assert len(events) <= 200
+        assert len(json.dumps({"events": events}, allow_nan=False).encode("utf-8")) <= 1.5 * 1024 * 1024
+    assert not sender.spool.path.exists()
+
+
+def test_byte_split_stops_at_first_failure_and_retries_remaining_events(setup):
+    sender, transport = setup
+    attempts = []
+    failing = [True]
+    def fail_second(url, bearer, body, timeout):
+        if url.endswith("/events"):
+            attempts.append(body["events"])
+            if len(attempts) == 2 and failing[0]:
+                raise ConnectionRefusedError()
+        return transport(url, bearer, body, timeout)
+    sender.client.transport = fail_second
+    enqueue(sender, 80, result={f"part{i}": "x" * 10_000 for i in range(6)})
+    sender.process_once()
+    assert len(attempts) == 2
+    assert transport.acked
+    last = transport.acked[-1]["counter"]
+    assert sender.spool.peek()[0]["counter"] == last + 1
+    failing[0] = False
+    sender.process_once()
+    assert [event["counter"] for event in transport.acked] == list(range(1, 81))
+    assert attempts[2][0]["counter"] == last + 1
+    assert not sender.spool.path.exists()
+
+
+def test_byte_budget_counts_encoder_unicode_escaping(setup):
+    sender, transport = setup
+    # UTF-8 spool bytes fit while the HTTP encoder's ensure_ascii expansion requires splitting.
+    enqueue(sender, 40, result={f"part{i}": "é" * 5_000 for i in range(4)})
+    sender.process_once()
+    assert [event["counter"] for event in transport.acked] == list(range(1, 41))
+    assert len(transport.event_calls) > 1
+    assert all(len(json.dumps({"events": events}, allow_nan=False).encode("utf-8")) <= 1.5 * 1024 * 1024
+               for events in transport.event_calls)

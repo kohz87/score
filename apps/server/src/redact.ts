@@ -41,8 +41,14 @@ export function redactValue(value: unknown, secrets: readonly string[] = []): un
   if (value !== null && typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value).map(([name, child]) => [
-        name,
-        /^(?:(?:[a-z0-9]+_)*(?:password|token|api_key|secret))$/i.test(name)
+        redact(name),
+        /password|passwd|secret|token|apikey|accesskey|privatekey|clientsecret|authorization|cookie|credential|sessionid/.test(
+          name.toLowerCase().replace(/[_\- ]/g, ''),
+        ) &&
+        // Numbers, booleans and null can't carry a secret (keeps fields such as input_tokens).
+        child !== null &&
+        typeof child !== 'number' &&
+        typeof child !== 'boolean'
           ? '[redacted]'
           : redactValue(child, secrets),
       ]),

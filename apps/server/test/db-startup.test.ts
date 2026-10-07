@@ -24,12 +24,17 @@ const mocks = vi.hoisted(() => {
     port: {
       start: vi.fn(async (): Promise<void> => undefined),
       stop: vi.fn(async (): Promise<void> => undefined),
+      status: vi.fn(() => ({
+        compatibility: { fingerprint: 'fixture', tested: true, disabled: [] },
+      })),
     },
     createHermesPort: vi.fn(),
     createIngest: vi.fn(),
     getEpoch: vi.fn(() => 'epoch'),
     pruneEvents: vi.fn(),
+    pruneBridge: vi.fn(),
     retireIngestKeys: vi.fn(),
+    loadBridgeBootstrap: vi.fn(() => Buffer.alloc(32)),
   }
 })
 
@@ -40,7 +45,11 @@ vi.mock('../src/db/index.ts', () => ({
   getEpoch: mocks.getEpoch,
 }))
 vi.mock('../src/hub/ingest.ts', () => ({ createIngest: mocks.createIngest }))
-vi.mock('../src/hermes/index.ts', () => ({ createHermesPort: mocks.createHermesPort }))
+vi.mock('../src/hermes/index.ts', () => ({
+  createHermesPort: mocks.createHermesPort,
+  loadBridgeBootstrap: mocks.loadBridgeBootstrap,
+  pruneBridge: mocks.pruneBridge,
+}))
 vi.mock('../src/hub/retention.ts', () => ({ pruneEvents: mocks.pruneEvents }))
 vi.mock('../src/hub/retire.ts', () => ({ retireIngestKeys: mocks.retireIngestKeys }))
 vi.mock('../src/app.ts', () => ({ buildApp: mocks.buildApp }))
@@ -122,6 +131,42 @@ test('startup opens and migrates the configured database before building and lis
     vi.mocked(process.stdout.write),
   ].map((mock) => mock.mock.invocationCallOrder[0])
   expect(order).toEqual([...order].sort((left, right) => (left ?? 0) - (right ?? 0)))
+})
+
+test('live startup initializes bridge bootstrap and passes shared DB, ingest and dynamic compatibility', async () => {
+  vi.stubEnv('SCORE_MODE', 'live')
+  await import('../src/index.ts')
+  expect(mocks.loadBridgeBootstrap).toHaveBeenCalledExactlyOnceWith('/tmp/score-test-startup')
+  const options = mocks.buildApp.mock.calls[0] as unknown as [
+    {
+      bridge: {
+        db: unknown
+        ingest: unknown
+        bootstrapHash: Buffer
+        getCompatibility(): unknown
+      }
+    },
+  ]
+  expect(options[0].bridge).toMatchObject({
+    db: mocks.db,
+    ingest: mocks.ingest,
+    bootstrapHash: Buffer.alloc(32),
+  })
+  expect(options[0].bridge.getCompatibility()).toEqual(mocks.port.status().compatibility)
+})
+
+test('live bootstrap failure closes resources before listening or printing pairing credentials', async () => {
+  vi.stubEnv('SCORE_MODE', 'live')
+  mocks.loadBridgeBootstrap.mockImplementationOnce(() => {
+    throw new Error('Bridge bootstrap token must be an owner-only regular file')
+  })
+  await import('../src/index.ts')
+  expect(mocks.buildApp).not.toHaveBeenCalled()
+  expect(mocks.app.listen).not.toHaveBeenCalled()
+  expect(mocks.ingest.close).toHaveBeenCalledOnce()
+  expect(mocks.db.close).toHaveBeenCalledOnce()
+  expect(mocks.release).toHaveBeenCalledOnce()
+  expect(process.stdout.write).not.toHaveBeenCalled()
 })
 
 test.each(['SIGINT', 'SIGTERM'])(
@@ -298,6 +343,7 @@ test('hourly retirement errors are logged and the next interval retries', async 
   await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
   expect(mocks.retireIngestKeys).toHaveBeenCalledTimes(2)
   expect(mocks.pruneEvents).toHaveBeenCalledTimes(2)
+  expect(mocks.pruneBridge).toHaveBeenCalledTimes(2)
 })
 
 test('an event prune error is logged and still allows key retirement', async () => {
@@ -313,4 +359,22 @@ test('an event prune error is logged and still allows key retirement', async () 
     'Event retention prune failed',
   )
   expect(mocks.retireIngestKeys).toHaveBeenCalledExactlyOnceWith(mocks.db)
+  expect(mocks.pruneBridge).toHaveBeenCalledExactlyOnceWith(mocks.db)
+})
+
+test('bridge prune errors are logged and retried at the next retention interval', async () => {
+  vi.useFakeTimers()
+  vi.spyOn(globalThis, 'setInterval')
+  mocks.pruneBridge.mockImplementationOnce(() => {
+    throw new Error('bridge prune failed')
+  })
+  await import('../src/index.ts')
+  await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+  expect(mocks.app.log.error).toHaveBeenCalledExactlyOnceWith(
+    { err: expect.any(Error) },
+    'Bridge retention prune failed',
+  )
+  await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+  expect(mocks.pruneBridge).toHaveBeenCalledTimes(2)
+  expect(mocks.retireIngestKeys).toHaveBeenCalledTimes(2)
 })

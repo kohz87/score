@@ -11,7 +11,12 @@ import { registerStreamRoute, type StreamRouteOptions } from './http/stream.ts'
 import type { ScoreDb } from './db/index.ts'
 import type { Ingest } from './hub/ingest.ts'
 import { getSystemStatus as defaultSystemStatus } from './system-status.ts'
-import { createHermesPort, type HermesPort } from './hermes/index.ts'
+import {
+  createHermesPort,
+  registerBridgeRoutes,
+  type BridgeDeps,
+  type HermesPort,
+} from './hermes/index.ts'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -30,6 +35,7 @@ interface BuildAppOptions {
   port?: HermesPort
   getSystemStatus?: () => SystemStatus
   streamOptions?: Pick<StreamRouteOptions, 'heartbeatMs' | 'fanoutOptions'>
+  bridge?: BridgeDeps
 }
 
 export function buildApp({
@@ -41,8 +47,9 @@ export function buildApp({
   ingest,
   getEpoch,
   port = createHermesPort(config),
-  getSystemStatus = () => defaultSystemStatus(config, port),
+  getSystemStatus = () => defaultSystemStatus(config, port, db, clock),
   streamOptions,
+  bridge,
 }: BuildAppOptions): FastifyInstance {
   const logging = logger ?? process.env.NODE_ENV !== 'test'
   const app = Fastify({
@@ -76,6 +83,7 @@ export function buildApp({
   app.decorate('pairing', new PairingService(sessionStore, clock))
   registerErrorHandlers(app)
   registerCsrfGuard(app, config)
+  if (bridge) registerBridgeRoutes(app, bridge)
   app.get('/api/health', async () => ({ ok: true, contract: CONTRACT_VERSION }))
   registerSessionRoutes(app, app.pairing)
   registerSystemRoutes(app, getSystemStatus)
