@@ -96,7 +96,7 @@ test('the whole fake scenario passes real ingest validation and covers every dur
   expect(observations.every((observation) => observation.source === 'fake')).toBe(true)
   const session = observations[0]!.identity.split(':')[0]
   expect(observations.map((observation) => observation.identity)).toEqual(
-    stored.map((_, index) => `${session}:0:${index}`),
+    createScenario(schedulerStart).map((_, index) => `${session}:0:${index}`),
   )
   expect(onError).not.toHaveBeenCalled()
   expect(scheduler.pending).toBe(0)
@@ -135,13 +135,13 @@ test('restart replays scenario observations while keeping durable approval decis
   })
   expect(second[0]!.seq).toBe(first.length + 1)
   expect(new Set(observations.map((observation) => observation.identity)).size).toBe(
-    first.length * 2,
+    createScenario(schedulerStart).length * 2,
   )
-  expect(observations[first.length]!.identity).not.toBe(firstIdentities[0])
+  expect(observations[createScenario(schedulerStart).length]!.identity).not.toBe(firstIdentities[0])
   expect(results.every((result) => result.status === 'applied')).toBe(true)
 })
 
-test.each(['score-run', 'gateway', 'kanban'] as const)(
+test.each(['score-run', 'gateway'] as const)(
   'delivers a pending %s decision exactly once, even concurrently',
   async (origin) => {
     await port.start(sink)
@@ -186,7 +186,7 @@ test('unknown and decided approvals are not pending; direct port evidence carrie
     delivery: 'none',
   })
   expect(await deliverDecision({ approvalId: 'approval-kanban-0', choice: 'session' })).toBe(
-    'failed',
+    'not_pending',
   )
 })
 
@@ -385,7 +385,7 @@ test('looping pauses ten seconds then emits fresh identities and entities on the
   expect(second).toHaveLength(first.length)
   expect(new Set(observations.map(({ identity }) => identity)).size).toBe(first.length * 2)
   const session = observations[0]!.identity.split(':')[0]
-  expect(observations[first.length]!.identity).toBe(`${session}:1:0`)
+  expect(observations[createScenario(schedulerStart).length]!.identity).toBe(`${session}:1:0`)
   const entityIds = (loopEvents: StreamEvent[]) =>
     new Set(
       loopEvents.flatMap((event) =>
@@ -424,4 +424,41 @@ test('SCORE_FAKE_LOOP=false idles after a three-minute scenario with distinct re
   expect(new Set(approvals.map((event) => event.data.command)).size).toBe(3)
   expect(new Set(approvals.map((event) => event.data.title)).size).toBe(3)
   expect(createScenario(schedulerStart).at(-1)?.at).toBe(scenarioDuration)
+})
+
+test('Kanban denial is view-only and task actions preserve the Hermes state machine', async () => {
+  await port.start(sink)
+  await scheduler.advance(2600 * 18)
+  const card = events().find(
+    (event) => event.type === 'approval.requested' && event.data.origin === 'kanban',
+  )
+  expect(card?.data).toMatchObject({
+    actionable: false,
+    choices: [],
+    refs: [{ kind: 'task', taskId: 'task-pagination-0' }],
+  })
+  expect(await deliverDecision({ approvalId: 'approval-kanban-0', choice: 'once' })).toBe(
+    'not_pending',
+  )
+  await expect(port.taskAction({ taskId: 'missing', action: 'unblock' })).rejects.toMatchObject({
+    status: 404,
+  })
+  await expect(
+    port.taskAction({ taskId: 'task-pagination-0', action: 'comment', text: 'Denied' }),
+  ).resolves.toEqual({ hermesStatus: 'blocked' })
+  await expect(
+    port.taskAction({ taskId: 'task-pagination-0', action: 'unblock', text: 'Try again' }),
+  ).resolves.toEqual({ hermesStatus: 'ready' })
+  expect(events().at(-1)?.data).toMatchObject({
+    origin: 'kanban',
+    phase: 'withdrawn',
+    status: 'withdrawn',
+  })
+  await expect(
+    port.taskAction({ taskId: 'task-pagination-0', action: 'unblock' }),
+  ).rejects.toMatchObject({ status: 409, details: { hermesStatus: 'ready' } })
+  await scheduler.advance(3700 * 18)
+  await expect(
+    port.taskAction({ taskId: 'task-pagination-0', action: 'comment', text: 'note' }),
+  ).resolves.toEqual({ hermesStatus: 'ready' })
 })

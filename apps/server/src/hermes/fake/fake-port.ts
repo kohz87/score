@@ -1,11 +1,13 @@
+import { recordKanbanDenial, closeKanbanDenials } from '../../domain/kanban-denials.ts'
 import { requestRunApproval, respondRunApproval } from '../../domain/approvals.ts'
 import { approvalDraft, patchApproval, readApprovalRow } from '../../domain/approval-store.ts'
-import type { AgentSummary, Approval, RunSummary } from '@score/contract'
-import { randomUUID } from 'node:crypto'
+import type { AgentSummary, Approval, RunSummary, TaskSummary } from '@score/contract'
+import { createHash, randomUUID } from 'node:crypto'
 import { HttpError } from '../../errors.ts'
 import type { Observation } from '../../hub/ingest.ts'
 import {
   DecisionDeliveryRequestSchema,
+  TaskActionRequestSchema,
   type HermesPort,
   type HermesPortDeps,
   type ObservationSink,
@@ -47,6 +49,23 @@ export function stepToObservation(
       }
       if (step.kind === 'approval.requested') {
         const approval = step.data
+        if (approval.origin === 'kanban') {
+          const ref = approval.refs.find((ref) => ref.kind === 'task')
+          if (!ref || ref.kind !== 'task') return []
+          return recordKanbanDenial(
+            sqlite,
+            {
+              taskId: ref.taskId,
+              runId: 1,
+              patternKey: 'delete',
+              commandDigest: createHash('sha256').update(approval.command).digest('hex'),
+            },
+            { profile: approval.agentId, id: 'fake', incarnation: 'fake' },
+            approval.command,
+            approval.createdAt,
+            approval.id,
+          )
+        }
         const runId = `fake-approval-run:${approval.id}`
         sqlite
           .prepare(
@@ -84,6 +103,10 @@ export function stepToObservation(
       if (step.kind === 'approval.updated') {
         const row = readApprovalRow(sqlite, step.data.id)
         if (!row) return []
+        if (row.origin === 'kanban' && step.data.status === 'withdrawn') {
+          patchApproval(sqlite, row.id, { closed_reason: 'task_moved', closed_at: now }, now)
+          return approvalDraft(sqlite, row.id)
+        }
         if (step.data.decision)
           return respondRunApproval(
             sqlite,
@@ -108,6 +131,8 @@ export class FakePort implements HermesPort {
   private readonly onError: (error: unknown) => void
   private readonly timers = new Set<unknown>()
   private readonly approvals = new Map<string, Approval>()
+  private readonly tasks = new Map<string, TaskSummary>()
+  private readonly taskOverrides = new Map<string, string>()
   private readonly runs = new Map<string, RunSummary>()
   private readonly turns = new Map<string, string>()
   private agents = new Map<string, AgentSummary>()
@@ -134,6 +159,8 @@ export class FakePort implements HermesPort {
   private resetState(): void {
     this.agents = new Map(exampleAgents().map((agent) => [agent.id, agent]))
     this.approvals.clear()
+    this.tasks.clear()
+    this.taskOverrides.clear()
     this.runs.clear()
     this.turns.clear()
   }
@@ -230,6 +257,9 @@ export class FakePort implements HermesPort {
   ): Promise<void> {
     // Delayed script steps cannot undo commands delivered while the scenario was playing.
     const suppressed = Boolean(
+      (step.kind === 'task.upserted' &&
+        this.taskOverrides.has(step.data.id) &&
+        step.data.hermesStatus !== this.taskOverrides.get(step.data.id)) ||
       (step.kind === 'approval.updated' && this.approvals.get(step.data.id)?.decision) ||
       (step.kind === 'run.updated' &&
         ['completed', 'failed', 'cancelled', 'interrupted'].includes(
@@ -241,6 +271,12 @@ export class FakePort implements HermesPort {
     )
     if (suppressed) return
     switch (step.kind) {
+      case 'task.upserted':
+        this.tasks.set(step.data.id, {
+          ...structuredClone(step.data),
+          hermesStatus: this.taskOverrides.get(step.data.id) ?? step.data.hermesStatus,
+        })
+        break
       case 'agent.updated':
         this.agents.set(step.data.id, structuredClone(step.data))
         break
@@ -300,6 +336,40 @@ export class FakePort implements HermesPort {
     })
   }
 
+  taskAction(request: Parameters<HermesPort['taskAction']>[0]): Promise<{ hermesStatus: string }> {
+    return this.enqueue(async () => {
+      this.requireSink()
+      const req = TaskActionRequestSchema.parse(request)
+      const task = this.tasks.get(req.taskId)
+      if (!task) throw new HttpError(404, 'not_found', 'Unknown task')
+      if (req.action === 'unblock') {
+        if (task.hermesStatus !== 'blocked')
+          throw new HttpError(409, 'conflict', 'Task is not blocked', {
+            hermesStatus: task.hermesStatus,
+          })
+        await this.emit({
+          at: 0,
+          kind: 'task.upserted',
+          data: {
+            ...task,
+            hermesStatus: 'ready',
+            column: 'planned',
+            badge: null,
+            updatedAt: this.now(),
+          },
+        })
+        this.taskOverrides.set(task.id, 'ready')
+      }
+      if (req.action === 'unblock')
+        await this.requireSink().submit({
+          source: 'fake',
+          identity: `${this.sessionId}:${this.loop}:command:${this.nextIdentity++}`,
+          apply: ({ sqlite, now }) => closeKanbanDenials(sqlite, [task.id], now),
+        })
+      return { hermesStatus: this.tasks.get(task.id)!.hermesStatus }
+    })
+  }
+
   deliverDecision(
     req: Parameters<HermesPort['deliverDecision']>[0],
   ): Promise<'applied' | 'not_pending' | 'failed'> {
@@ -307,6 +377,7 @@ export class FakePort implements HermesPort {
       let approval = this.approvals.get(req.approvalId)
       if (!approval && this.db) {
         const row = readApprovalRow(this.db.sqlite, req.approvalId)
+        if (row?.origin === 'kanban') return 'not_pending'
         if (row)
           approval = {
             id: row.id,
@@ -330,7 +401,8 @@ export class FakePort implements HermesPort {
           }
       }
       DecisionDeliveryRequestSchema.parse(req)
-      if (!approval || approval.status !== 'pending' || approval.decision) return 'not_pending'
+      if (!approval || !approval.actionable || approval.status !== 'pending' || approval.decision)
+        return 'not_pending'
       if (!approval.choices.includes(req.choice)) return 'failed'
       try {
         await this.emit({

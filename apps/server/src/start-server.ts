@@ -11,6 +11,7 @@ import {
   createHermesPort,
   loadBridgeBootstrap,
   pruneBridge,
+  sweepKanbanDenials,
   type HermesPort,
 } from './hermes/index.ts'
 import { acquireHomeLock, getEpoch, migrate, openDatabase, type ScoreDb } from './db/index.ts'
@@ -29,6 +30,7 @@ export async function startServer(config: Config, { logger, listen }: StartServe
   let homeLock: ReturnType<typeof acquireHomeLock> | undefined
   let ingest: Ingest | undefined
   let outbox: ApprovalOutbox | undefined
+  let denialSweep: Promise<void> | undefined
   let deliverySweep: NodeJS.Timeout | undefined
   let retention: NodeJS.Timeout | undefined
   let port: HermesPort | undefined
@@ -41,6 +43,7 @@ export async function startServer(config: Config, { logger, listen }: StartServe
       try {
         await outbox?.stop()
       } finally {
+        await denialSweep
         await port?.stop()
       }
     } finally {
@@ -112,7 +115,15 @@ export async function startServer(config: Config, { logger, listen }: StartServe
     else await app.listen({ host: config.host, port: config.port })
     await port.start(ingest)
     await outbox.start()
+    const observations = ingest
     deliverySweep = setInterval(() => {
+      if (config.mode === 'live' && !denialSweep) {
+        denialSweep = sweepKanbanDenials(database, observations, config)
+          .catch(() => app?.log.error('Kanban denial sweep failed'))
+          .finally(() => {
+            denialSweep = undefined
+          })
+      }
       void dispatcher
         .sweep()
         .catch((error: unknown) => app?.log.error({ err: error }, 'Delivery sweep failed'))

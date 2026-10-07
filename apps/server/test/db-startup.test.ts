@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => {
     getEpoch: vi.fn(() => 'epoch'),
     pruneEvents: vi.fn(),
     pruneBridge: vi.fn(),
+    sweepKanbanDenials: vi.fn(async () => undefined),
     retireIngestKeys: vi.fn(),
     loadBridgeBootstrap: vi.fn(() => Buffer.alloc(32)),
   }
@@ -64,6 +65,7 @@ vi.mock('../src/hermes/index.ts', () => ({
   createHermesPort: mocks.createHermesPort,
   loadBridgeBootstrap: mocks.loadBridgeBootstrap,
   pruneBridge: mocks.pruneBridge,
+  sweepKanbanDenials: mocks.sweepKanbanDenials,
 }))
 vi.mock('../src/hub/retention.ts', () => ({ pruneEvents: mocks.pruneEvents }))
 vi.mock('../src/hub/retire.ts', () => ({ retireIngestKeys: mocks.retireIngestKeys }))
@@ -394,4 +396,30 @@ test('bridge prune errors are logged and retried at the next retention interval'
   await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
   expect(mocks.pruneBridge).toHaveBeenCalledTimes(2)
   expect(mocks.retireIngestKeys).toHaveBeenCalledTimes(2)
+})
+
+test('denial sweeps use the existing timer in live mode only and stop at shutdown', async () => {
+  vi.useFakeTimers()
+  vi.spyOn(globalThis, 'setInterval')
+  vi.stubEnv('SCORE_MODE', 'live')
+  await import('../src/index.ts')
+  await vi.advanceTimersByTimeAsync(10000)
+  expect(mocks.sweepKanbanDenials).toHaveBeenCalledExactlyOnceWith(
+    mocks.db,
+    mocks.ingest,
+    expect.objectContaining({ mode: 'live' }),
+  )
+  signals.get('SIGTERM')?.()
+  await vi.waitFor(() => expect(mocks.db.close).toHaveBeenCalledOnce())
+  await vi.advanceTimersByTimeAsync(10000)
+  expect(mocks.sweepKanbanDenials).toHaveBeenCalledOnce()
+})
+
+test('fake mode never opens Hermes for denial sweeps', async () => {
+  vi.useFakeTimers()
+  vi.spyOn(globalThis, 'setInterval')
+  vi.stubEnv('SCORE_MODE', 'fake')
+  await import('../src/index.ts')
+  await vi.advanceTimersByTimeAsync(10000)
+  expect(mocks.sweepKanbanDenials).not.toHaveBeenCalled()
 })

@@ -166,13 +166,12 @@ test('unknown code disables private actions, preserves reads and public run cont
   const live = createPort([tested])
   await live.start(env.ingest)
   expect(live.status()).toMatchObject({
-    compatibility: { tested: false, disabled: ['gateway-approvals', 'kanban-grants'] },
+    compatibility: { tested: false, disabled: ['gateway-approvals'] },
     degraded: ['Untested Hermes build: 0.21.5 (12345678)'],
   })
   expect((await live.listAgents()).map(({ id }) => id)).toEqual(['default', 'builder'])
   expect(() => assertFeature(live.status(), 'score-runs')).not.toThrow()
   expect(() => assertFeature(live.status(), 'gateway-approvals')).toThrow(HttpError)
-  expect(() => assertFeature(live.status(), 'kanban-grants')).toThrow(HttpError)
 })
 
 test('partial capabilities disable score-runs and reject admission before any upstream run or intent is created', async () => {
@@ -227,7 +226,6 @@ test.each(['codeVersion', 'schemas'] as const)(
     )
     expect(evaluateCompatibility(fingerprint, [entry(tested)]).disabled).toEqual([
       'gateway-approvals',
-      'kanban-grants',
     ])
   },
 )
@@ -255,7 +253,7 @@ test('an empty or unseeded registry disables private features while preserving s
     expect(evaluateCompatibility(fingerprint, entries)).toEqual({
       fingerprint: fingerprint.id,
       tested: false,
-      disabled: ['gateway-approvals', 'kanban-grants'],
+      disabled: ['gateway-approvals'],
     })
 })
 
@@ -283,7 +281,6 @@ test('missing files, an unreachable gateway and unavailable CLI yield null parts
   expect(() => readFileSync(join(missing, 'kanban.db'))).toThrow()
   expect(evaluateCompatibility(fingerprint, []).disabled).toEqual([
     'gateway-approvals',
-    'kanban-grants',
     'score-runs',
   ])
 })
@@ -364,7 +361,7 @@ test('gateway reconnection refreshes the fingerprint before ten minutes', async 
   expect(readCli).toHaveBeenCalledTimes(2)
   expect(live.status()).toMatchObject({
     hermes: { reachable: true },
-    compatibility: { tested: false, disabled: ['gateway-approvals', 'kanban-grants'] },
+    compatibility: { tested: false, disabled: ['gateway-approvals'] },
     degraded: ['Untested Hermes build: 0.21.5 (reconnec)'],
   })
 })

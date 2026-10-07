@@ -8,10 +8,12 @@ import {
 import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
 import { defineLifecycle, guardedUpsert } from '../../hub/projections.ts'
 import { redact, redactBounded, redactValue } from '../../redact.ts'
+import { KanbanDenialSchema, recordKanbanDenial } from '../../domain/kanban-denials.ts'
 import type { Producer } from './registry.ts'
 
 export interface BridgeMetrics {
   unknownHooks: number
+  mismatchedKanbanTasks?: number
 }
 
 const ToolPayloadSchema = z.object({
@@ -185,6 +187,10 @@ export function translateBridgeEvent(
     ...parsed,
     payload: omitted ? { omitted: 'payload too complex' } : redactPayload(payload),
   }
+  const denial =
+    parsed.hook === 'post_tool_call' && !omitted
+      ? KanbanDenialSchema.safeParse(parsed.payload.kanbanDenial)
+      : undefined
   const pre = event.hook === 'pre_tool_call'
   const post = event.hook === 'post_tool_call'
   const tool = pre || post ? ToolPayloadSchema.parse(event.payload) : undefined
@@ -264,6 +270,18 @@ export function translateBridgeEvent(
         ]
       }
       if (tool) {
+        const denialDrafts: DomainEventDraft[] = []
+        if (denial?.success) {
+          if (producer.kanban_task_id !== denial.data.taskId)
+            metrics.mismatchedKanbanTasks = (metrics.mismatchedKanbanTasks ?? 0) + 1
+          else {
+            const args = z.object({ command: z.string() }).safeParse(tool.args)
+            if (args.success)
+              denialDrafts.push(
+                ...recordKanbanDenial(sqlite, denial.data, producer, args.data.command, event.at),
+              )
+          }
+        }
         const status = pre
           ? 'running'
           : nested.success && nested.data.status === 'blocked'
@@ -305,6 +323,7 @@ export function translateBridgeEvent(
           })
         }
         return [
+          ...denialDrafts,
           ...(post && event.toolCallId
             ? completeApprovalTool(
                 sqlite,
