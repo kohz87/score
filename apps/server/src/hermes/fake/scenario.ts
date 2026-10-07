@@ -61,14 +61,17 @@ export function exampleRun(agentId: string, id: string, at: string): RunSummary 
   }
 }
 
-export function createScenario(startedAt: number): ScenarioStep[] {
-  const time = (at: number) => new Date(startedAt + at).toISOString()
+export const scenarioDuration = 180000
+
+export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
+  const id = (base: string) => `${base}-${loop}`
+  const time = (at: number) => new Date(startedAt + at * 18).toISOString()
   const agents = exampleAgents()
-  const taskId = 'task-pagination'
+  const taskId = id('task-pagination')
   const roomId = 'room-activity-feed'
-  const briefId = 'brief-pagination'
+  const briefId = id('brief-pagination')
   const run = {
-    ...exampleRun('builder', 'scenario-build', time(600)),
+    ...exampleRun('builder', id('scenario-build'), time(600)),
     refs: [{ kind: 'task' as const, taskId }],
   }
   const task = {
@@ -87,7 +90,7 @@ export function createScenario(startedAt: number): ScenarioStep[] {
     updatedAt: time(700),
   }
   const block = {
-    id: 'block-build',
+    id: id('block-build'),
     label: 'Build feed pagination',
     state: 'working' as const,
     start: time(800),
@@ -96,23 +99,35 @@ export function createScenario(startedAt: number): ScenarioStep[] {
     runId: run.id,
   }
   const approval = (origin: Approval['origin'], agentId: string, at: number): Approval => ({
-    id: `approval-${origin}`,
+    id: id(`approval-${origin}`),
     origin,
     phase: 'human_pending',
     status: 'pending',
     actionable: true,
     agentId,
-    title: 'May I install the project dependencies?',
-    command: 'pnpm install --frozen-lockfile',
+    ...{
+      'score-run': {
+        title: 'May I install the pagination dependency?',
+        command: 'pnpm add @tanstack/react-virtual@3.13.12',
+      },
+      gateway: {
+        title: 'May I push the pagination branch?',
+        command: 'git push origin task/feed-pagination',
+      },
+      kanban: {
+        title: 'May I delete the previous build directory?',
+        command: 'rm -rf demo-project/dist',
+      },
+    }[origin],
     cwd: 'demo-project',
-    description: 'Installing dependencies needs your approval.',
+    description: 'This command changes the workspace or remote repository and needs your approval.',
     choices:
       origin === 'kanban' ? ['once', 'always', 'deny'] : ['once', 'session', 'always', 'deny'],
     createdAt: time(at),
     expiresAt: null,
     decision: null,
     delivery: 'none',
-    blocking: 'Only this install is waiting; the rest of the team can continue.',
+    blocking: 'Only this command is waiting; the rest of the team can continue.',
     refs: [{ kind: 'task', taskId }],
   })
   const scoreApproval = approval('score-run', 'builder', 2000)
@@ -121,7 +136,7 @@ export function createScenario(startedAt: number): ScenarioStep[] {
     to: time(5000),
     reason: 'Demo connection interrupted; this interval could not be recovered.',
   }
-  return [
+  const steps: ScenarioStep[] = [
     { at: 0, kind: 'system.status', data: { mode: 'fake', ...fakeStatus() } },
     ...agents.map((agent, index): ScenarioStep => ({
       at: 100 + index * 100,
@@ -146,7 +161,7 @@ export function createScenario(startedAt: number): ScenarioStep[] {
       at: 1200,
       kind: 'message.created',
       data: {
-        id: 'message-plan',
+        id: id('message-plan'),
         roomId,
         author: { kind: 'agent', agentId: 'lead' },
         to: ['builder', 'reviewer', 'designer'],
@@ -160,12 +175,12 @@ export function createScenario(startedAt: number): ScenarioStep[] {
       at: 1400,
       kind: 'message.delta',
       data: {
-        messageId: 'message-plan',
+        messageId: id('message-plan'),
         roomId,
         append: ' while keeping the newest activity visible.',
       },
     },
-    { at: 1600, kind: 'message.completed', data: { messageId: 'message-plan', roomId } },
+    { at: 1600, kind: 'message.completed', data: { messageId: id('message-plan'), roomId } },
     { at: 1700, kind: 'typing', data: { roomId, agentId: 'lead', text: null } },
     { at: 2000, kind: 'approval.requested', data: scoreApproval },
     { at: 2300, kind: 'approval.requested', data: approval('gateway', 'designer', 2300) },
@@ -185,7 +200,7 @@ export function createScenario(startedAt: number): ScenarioStep[] {
       at: 3200,
       kind: 'log.line',
       data: {
-        id: 'log-check',
+        id: id('log-check'),
         at: time(3200),
         agentId: 'builder',
         kind: 'tool',
@@ -263,7 +278,7 @@ export function createScenario(startedAt: number): ScenarioStep[] {
         agentId: 'reviewer',
         block: {
           ...block,
-          id: 'block-review',
+          id: id('block-review'),
           label: 'Review pagination',
           start: time(6600),
           runId: null,
@@ -276,9 +291,9 @@ export function createScenario(startedAt: number): ScenarioStep[] {
       data: {
         briefId,
         handoff: {
-          id: 'handoff-review',
+          id: id('handoff-review'),
           from: { agentId: 'builder', blockId: block.id },
-          to: { agentId: 'reviewer', blockId: 'block-review' },
+          to: { agentId: 'reviewer', blockId: id('block-review') },
           kind: 'review',
           at: time(6700),
         },
@@ -324,9 +339,165 @@ export function createScenario(startedAt: number): ScenarioStep[] {
         column: 'done',
         hermesStatus: 'done',
         progress: 1,
-        elapsedSec: 10,
+        elapsedSec: 180,
         updatedAt: time(10000),
       },
     },
   ]
+  steps.push(
+    {
+      at: 1450,
+      kind: 'message.delta',
+      data: {
+        messageId: id('message-plan'),
+        roomId,
+        append: ' Load older items in batches of 25.',
+      },
+    },
+    {
+      at: 1500,
+      kind: 'message.delta',
+      data: {
+        messageId: id('message-plan'),
+        roomId,
+        append: ' Keep keyboard focus on the load button.',
+      },
+    },
+    {
+      at: 1800,
+      kind: 'typing',
+      data: { roomId, agentId: 'builder', text: 'is checking the dependency versions' },
+    },
+    { at: 3100, kind: 'typing', data: { roomId, agentId: 'builder', text: null } },
+    {
+      at: 3500,
+      kind: 'log.line',
+      data: {
+        id: id('log-page'),
+        at: time(3500),
+        agentId: 'builder',
+        kind: 'tool',
+        text: 'Added the next-page cursor and loading state.',
+      },
+    },
+    {
+      at: 3600,
+      kind: 'lane.upserted',
+      data: {
+        briefId,
+        agentId: 'builder',
+        block: { ...block, label: 'Check cursor and keyboard behavior' },
+      },
+    },
+    {
+      at: 3700,
+      kind: 'task.upserted',
+      data: { ...task, progress: 0.55, elapsedSec: 66, updatedAt: time(3700) },
+    },
+    {
+      at: 4200,
+      kind: 'agent.updated',
+      data: {
+        ...agents[1]!,
+        status: 'working',
+        activity: 'Checking cursor recovery after reconnect',
+      },
+    },
+    {
+      at: 4500,
+      kind: 'log.line',
+      data: {
+        id: id('log-reconnect'),
+        at: time(4500),
+        agentId: 'builder',
+        kind: 'system',
+        text: 'Reconnecting to the feed; preserving the current page.',
+      },
+    },
+    {
+      at: 5800,
+      kind: 'task.upserted',
+      data: { ...task, progress: 0.85, elapsedSec: 104, updatedAt: time(5800) },
+    },
+    {
+      at: 7200,
+      kind: 'agent.updated',
+      data: {
+        ...agents[2]!,
+        status: 'working',
+        activity: 'Reviewing pagination and focus handling',
+      },
+    },
+    {
+      at: 7250,
+      kind: 'typing',
+      data: { roomId, agentId: 'reviewer', text: 'is writing the review' },
+    },
+    {
+      at: 7300,
+      kind: 'message.created',
+      data: {
+        id: id('message-review'),
+        roomId,
+        author: { kind: 'agent', agentId: 'reviewer' },
+        to: ['builder'],
+        parts: [{ kind: 'text', text: 'The cursor and loading states look good.' }],
+        createdAt: time(7300),
+        streaming: true,
+        refs: [{ kind: 'task', taskId }],
+      },
+    },
+    {
+      at: 7400,
+      kind: 'message.delta',
+      data: {
+        messageId: id('message-review'),
+        roomId,
+        append: ' Keyboard focus stays in place after loading.',
+      },
+    },
+    {
+      at: 7500,
+      kind: 'message.delta',
+      data: {
+        messageId: id('message-review'),
+        roomId,
+        append: ' Ready to merge after the final checks.',
+      },
+    },
+    { at: 7600, kind: 'message.completed', data: { messageId: id('message-review'), roomId } },
+    { at: 7700, kind: 'typing', data: { roomId, agentId: 'reviewer', text: null } },
+    {
+      at: 7800,
+      kind: 'log.line',
+      data: {
+        id: id('log-review'),
+        at: time(7800),
+        agentId: 'reviewer',
+        kind: 'tool',
+        text: 'Final checks passed: pagination, reconnect and keyboard focus.',
+      },
+    },
+    {
+      at: 9500,
+      kind: 'lane.upserted',
+      data: {
+        briefId,
+        agentId: 'reviewer',
+        block: {
+          ...block,
+          id: id('block-review'),
+          label: 'Review pagination',
+          start: time(6600),
+          end: time(9500),
+          state: 'done',
+          runId: null,
+        },
+      },
+    },
+    { at: 9800, kind: 'agent.updated', data: agents[2]! },
+  )
+  return steps
+    .sort((left, right) => left.at - right.at)
+    .map((step) => ({ ...step, at: step.at * 18 }))
 }

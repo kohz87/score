@@ -22,6 +22,10 @@ const ConfigSchema = z.object({
     .default('http://127.0.0.1:5173'),
   mode: z.enum(['fake', 'live']).default('fake'),
   fakeSpeed: z.coerce.number().positive().default(1),
+  fakeLoop: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .default(true),
 })
 
 export type Config = z.infer<typeof ConfigSchema>
@@ -34,6 +38,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     webOrigin: env.SCORE_WEB_ORIGIN,
     mode: env.SCORE_MODE,
     fakeSpeed: env.SCORE_FAKE_SPEED,
+    fakeLoop: env.SCORE_FAKE_LOOP,
   })
 }
 

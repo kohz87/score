@@ -12,7 +12,12 @@ test('fake startup streams the scenario and exposes the same adapter status in s
   const home = mkdtempSync(join(tmpdir(), 'score-fake-startup-'))
   const abort = new AbortController()
   const replayAbort = new AbortController()
-  const config = loadConfig({ SCORE_HOME: home, SCORE_MODE: 'fake', SCORE_FAKE_SPEED: '100' })
+  const config = loadConfig({
+    SCORE_HOME: home,
+    SCORE_MODE: 'fake',
+    SCORE_FAKE_SPEED: '100',
+    SCORE_FAKE_LOOP: 'false',
+  })
   const server = await startServer(config, {
     logger: false,
     listen: async (app) => {
