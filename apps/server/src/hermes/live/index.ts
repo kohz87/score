@@ -48,3 +48,12 @@ export {
   type ResumableSseOptions,
   type ResumableSseResult,
 } from './sse-client.ts'
+export {
+  recentSessions,
+  reconcileSession,
+  reconcileRecent,
+  revisionIdentity,
+  type MessageRevision,
+  type RosterRevision,
+  type SessionReconciliation,
+} from './reconcile.ts'
