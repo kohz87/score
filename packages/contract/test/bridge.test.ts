@@ -165,9 +165,26 @@ test.each(['once', 'session', 'always', 'deny'])('accepts the %s decision choice
   expect(BridgeDecisionSchema.parse(decision)).toEqual(decision)
 })
 
-test.each(['applied', 'not_pending', 'failed'])('accepts the %s delivery ack', (outcome) => {
-  const request = { outcome, resolved: 0 }
+test.each([
+  ['applied', 1],
+  ['not_pending', 0],
+  ['failed', 0],
+])('accepts the %s delivery ack', (outcome, resolved) => {
+  const request = { leaseId: 'lease-1', outcome, resolved }
   expect(BridgeDecisionAckRequestSchema.parse(request)).toEqual(request)
+})
+
+test.each([0, 2])('rejects an applied ack that resolved %s requests', (resolved) => {
+  expect(
+    BridgeDecisionAckRequestSchema.safeParse({ leaseId: 'lease-1', outcome: 'applied', resolved })
+      .success,
+  ).toBe(false)
+})
+
+test('rejects an ack without a lease id', () => {
+  expect(BridgeDecisionAckRequestSchema.safeParse({ outcome: 'failed', resolved: 0 }).success).toBe(
+    false,
+  )
 })
 
 test.each(['executed', 'blocked', 'revoked'])('accepts the %s grant outcome', (outcome) => {

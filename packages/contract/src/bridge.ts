@@ -50,6 +50,7 @@ export type BridgeDecisionsRequest = z.infer<typeof BridgeDecisionsRequestSchema
 
 export const BridgeDecisionSchema = z.object({
   deliveryId: z.string().min(1),
+  leaseId: z.string().min(1),
   leaseUntil: z.iso.datetime(),
   sessionKey: z.string().min(1),
   requestId: z.string().min(1),
@@ -61,11 +62,15 @@ export type BridgeDecision = z.infer<typeof BridgeDecisionSchema>
 export const BridgeDecisionsResponseSchema = z.object({ items: z.array(BridgeDecisionSchema) })
 export type BridgeDecisionsResponse = z.infer<typeof BridgeDecisionsResponseSchema>
 
-export const BridgeDecisionAckRequestSchema = z.object({
-  outcome: z.enum(['applied', 'not_pending', 'failed']),
-  resolved: z.int().nonnegative(),
-  error: z.string().optional(),
-})
+export const BridgeDecisionAckRequestSchema = z
+  .object({
+    leaseId: z.string().min(1),
+    outcome: z.enum(['applied', 'not_pending', 'failed']),
+    resolved: z.int().nonnegative(),
+    error: z.string().max(200).optional(),
+  })
+  // Exact-target resolution resolves exactly one request.
+  .refine((ack) => ack.outcome !== 'applied' || ack.resolved === 1)
 export type BridgeDecisionAckRequest = z.infer<typeof BridgeDecisionAckRequestSchema>
 
 export const BridgeGrantRedeemRequestSchema = z.object({

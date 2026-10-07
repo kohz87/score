@@ -59,6 +59,7 @@ export const ApprovalSchema = z.object({
   origin: z.enum(['score-run', 'gateway', 'kanban']),
   phase: z.enum([
     'guardian_evaluating',
+    'escalated',
     'human_pending',
     'decided',
     'executed',
@@ -68,6 +69,7 @@ export const ApprovalSchema = z.object({
   ]),
   status: z.enum(['pending', 'approved', 'denied', 'expired', 'withdrawn', 'unknown']),
   actionable: z.boolean(),
+  linkedTo: z.string().min(1).nullable(),
   agentId: AgentIdSchema,
   title: z.string(),
   command: z.string(),

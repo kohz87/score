@@ -28,6 +28,7 @@ export const approval = {
   phase: 'decided',
   status: 'approved',
   actionable: true,
+  linkedTo: null,
   agentId: 'builder',
   title: 'Can I run this command?',
   command: 'pnpm test',
@@ -255,6 +256,7 @@ export const bridgeEvent = {
 } satisfies Contract.BridgeEvent
 export const bridgeDecision = {
   deliveryId: 'delivery-1',
+  leaseId: 'lease-1',
   leaseUntil: later,
   sessionKey: 'session-key-1',
   requestId: 'request-1',
@@ -262,6 +264,7 @@ export const bridgeDecision = {
   reason: null,
 } satisfies Contract.BridgeDecision
 export const bridgeAck = {
+  leaseId: 'lease-1',
   outcome: 'failed',
   resolved: 0,
   error: 'Request no longer pending',

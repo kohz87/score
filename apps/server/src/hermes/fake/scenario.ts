@@ -104,6 +104,7 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
     phase: 'human_pending',
     status: 'pending',
     actionable: true,
+    linkedTo: null,
     agentId,
     ...{
       'score-run': {

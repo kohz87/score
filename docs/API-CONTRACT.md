@@ -43,7 +43,8 @@ type ApprovalChoice = 'once' | 'session' | 'always' | 'deny'
 type Approval = {
   id: string /* Score operation id */
   origin: 'score-run' | 'gateway' | 'kanban'
-  phase: 'guardian_evaluating' | 'human_pending' | 'decided' | 'executed' | 'blocked' | 'withdrawn' | 'expired'
+  phase: 'guardian_evaluating' | 'escalated' | 'human_pending' | 'decided' | 'executed' | 'blocked' | 'withdrawn' | 'expired'
+  linkedTo: string | null      /* guardian stage → the human approval it escalated into (UI shows that one) */
   status: 'pending' | 'approved' | 'denied' | 'expired' | 'withdrawn' | 'unknown'
   actionable: boolean          /* false = no exact target captured; answer on the originating surface */
   agentId: AgentId; title: string /* "Can I install a package?" */
@@ -342,10 +343,15 @@ Served under `/bridge/v1` on the same port. Bridge tokens can't call `/api/*`, a
 - The `pre_approval_request` event payload includes the exact `requestId` read via `list_gateway_approvals`
   (or `null` → the operation is not actionable) and a `commandDigest`. Settle callbacks arrive as
   `approval.settled` events with `{ requestId, reason }`.
-- `GET /bridge/v1/decisions?wait=25` (long-poll; `wait` = integer seconds 0–30, default 25) → `{ items: { deliveryId; leaseUntil; sessionKey; requestId;
-  choice: ApprovalChoice; reason: string | null }[] }`. Only decisions for approvals **this producer reported**
-  are returned.
-- `POST /bridge/v1/decisions/:deliveryId/ack` `{ outcome: 'applied' | 'not_pending' | 'failed'; resolved: number; error?: string }` → `204`
+- `GET /bridge/v1/decisions?wait=25` (long-poll; `wait` = integer seconds 0–30, default 25) → `{ items: { deliveryId; leaseId; leaseUntil;
+  sessionKey; requestId; choice: ApprovalChoice; reason: string | null }[] }`. Only decisions for approvals **this producer
+  reported** are returned. Polls and acks count as producer liveness.
+- `POST /bridge/v1/decisions/:deliveryId/ack` `{ leaseId; outcome: 'applied' | 'not_pending' | 'failed'; resolved: number; error?: string }`
+  → `204`. `applied` requires `resolved === 1` (exact target). `leaseId` fences stale acks; a late `applied` still
+  refines an `unknown` delivery.
+- `requestId` in a `pre_approval_request` event is a **guarantee of exactness** by the producer: report it only when
+  the queue entry is provably this hook's own; otherwise send `null` (view-only). Never use `register_gateway_settle`:
+  it holds one callback per request and would displace the gateway's own (2026-10-07 design review, finding 9).
 
 **Kanban grants** (D4.3)
 - `POST /bridge/v1/grants/redeem` `{ taskId; taskRunId: number; commandDigest; toolCallId }` →
