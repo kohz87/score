@@ -32,6 +32,7 @@ function create() {
     hermesHome,
     db: env.db,
     fetch: env.fake.fetch,
+    readCliVersion: async () => null,
     following: { backoff: { maxAttempts: 2, sleep: async () => {} }, pollIntervalMs: 0 },
   }))
 }
@@ -64,7 +65,10 @@ test('health and capabilities are cached, served agents require keys and use neu
       servedProfiles: ['default', 'builder', 'reviewer'],
       capabilities: expect.arrayContaining(['run_submission']),
     },
-    degraded: ['reviewer: credentials unavailable'],
+    degraded: expect.arrayContaining([
+      'reviewer: credentials unavailable',
+      'Untested Hermes build: unknown (unknown)',
+    ]),
   })
   const before = env.fake.calls.length
   for (let i = 0; i < 10; i++) live.status()
@@ -139,11 +143,16 @@ test('an unreachable gateway starts in degraded mode and stops cleanly', async (
     fetch: async () => {
       throw new Error('fixture offline')
     },
+    readCliVersion: async () => null,
   })
   await port.start(env.ingest)
   expect(port.status()).toMatchObject({
     hermes: { reachable: false, servedProfiles: [] },
-    degraded: ['Served profiles unavailable', 'Gateway unreachable'],
+    degraded: expect.arrayContaining([
+      'Served profiles unavailable',
+      'Gateway unreachable',
+      'Untested Hermes build: unknown (unknown)',
+    ]),
   })
 })
 
@@ -156,7 +165,13 @@ test('the live port uses the shared Score DB and refuses to start without it', a
   )
   const orphan = new LivePort({ scoreHome: env.home, hermesHome, fetch: env.fake.fetch })
   await expect(orphan.start(env.ingest)).rejects.toThrow('shared Score DB')
-  port = new LivePort({ scoreHome: env.home, hermesHome, fetch: env.fake.fetch, db: env.db })
+  port = new LivePort({
+    scoreHome: env.home,
+    hermesHome,
+    fetch: env.fake.fetch,
+    db: env.db,
+    readCliVersion: async () => null,
+  })
   await port.start(env.ingest)
   const result = await port.startRun({ agentId: 'builder', input: 'hello', turnId: 'shared-turn' })
   await expect.poll(() => readRun(env.db.sqlite, result.runId).status).toBe('completed')
