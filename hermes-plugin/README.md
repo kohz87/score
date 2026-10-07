@@ -1,8 +1,8 @@
 # Score bridge
 
 `score_bridge` is a Hermes plugin with no runtime dependencies. It observes hooks and sends
-redacted activity to Score. It does not apply approval decisions or Kanban grants; those are
-separate tasks (1.13b/c).
+redacted activity to Score and applies gateway approval decisions by exact request id.
+Kanban grants remain a separate task (1.13c).
 
 ## Install in a profile
 
@@ -75,6 +75,29 @@ local secret-pattern fallback. Host processes report `host` even though Hermes's
 helper reports `in_process` inside the host. Unknown isolation still reports events; the
 server disables actions in that mode. Cancellation signals propagate; diagnostics are a
 bounded ring of error locations, never raw exception text.
+
+## Gateway approvals
+
+On a human gateway approval hook, the plugin compares the raw command and pattern keys
+with the session's pending queue. It reports `requestId` only for exactly one matching
+entry whose id has not already been claimed in this process. Smart evaluations, transport
+requests, coalesced followers, missing/ambiguous ids and lookup failures stay view-only.
+Capture compares at most 64 entries; oversized or foreign command/pattern inputs are also
+view-only to preserve the hook budget. Claims retain at most 4,096 ids, evicting the oldest.
+
+Each current profile producer starts one daemon decision poller only after Score's hello
+enables `gatewayApprovals`. Score requires in-process isolation, both queue APIs and a
+compatible fingerprint. The poller long-polls with that producer's token, renews it on 401,
+and accepts only ids claimed here for the same profile and session. It never answers an
+approval without a non-empty exact id and never uses FIFO resolution or a settle callback.
+The gateway's own surfaces keep working alongside Score.
+
+Leased decisions receive `applied` only for exactly one resolved entry, `not_pending` for
+zero, or `failed` with a short error code. Acknowledgement retries retain the lease id
+and outcome without resolving again. Poll failures back off for 1, 5, then 30 seconds.
+Shutdown cancels the long-poll socket within the sender's two-second budget. Forked children
+clear claims and pollers and start new producers lazily; orphan spool recovery never starts
+a decision poller. Approval errors remain fail-open and never expose exception text.
 
 ## Offline validation
 

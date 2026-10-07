@@ -47,6 +47,11 @@ def _reset_after_fork():
     from .spool import close_inherited_descriptors
     close_inherited_descriptors()
     old = _sender
+    if old is not None:
+        for client, _ in old._producers.values():
+            reset_transport = getattr(client.decision_transport, "after_fork", None)
+            if callable(reset_transport):
+                reset_transport()
     if old is None or old._closed:
         _sender = None
         return

@@ -10,7 +10,6 @@ from .redact import local_redact
 _APIS = (
     "agent.redact.redact_sensitive_text",
     "tools.approval.list_gateway_approvals",
-    "tools.approval.register_gateway_settle",
     "tools.approval.resolve_gateway_approval",
     "tools.approval.approve_permanent",
     "tools.approval_detection.detect_dangerous_command",
@@ -30,6 +29,54 @@ def _lookup(path: str):
 
 def available() -> dict[str, bool]:
     return {path: _lookup(path) is not None for path in _APIS}
+
+
+@lru_cache(maxsize=None)
+def _lookup_attr(path: str):
+    module, _, name = path.rpartition(".")
+    try:
+        return getattr(importlib.import_module(module), name)
+    except Exception:
+        return None
+
+
+def snapshot_gateway_approvals(session_key: str, limit: int = 64, timeout: float = 0.005) -> list[dict] | None:
+    """A bounded copy of one session's pending gateway approvals, or None when unavailable or contended.
+
+    Mirrors ``tools.approval.list_gateway_approvals`` (Hermes e97923c3) but never waits on Hermes's approval lock
+    for more than ``timeout`` and refuses to copy more than ``limit`` entries: this runs on a Hermes hook thread.
+    """
+    lock = _lookup_attr("tools.approval._lock")
+    queues = _lookup_attr("tools.approval._gateway_queues")
+    if lock is None or not isinstance(queues, dict) or not hasattr(lock, "acquire"):
+        return None
+    if not lock.acquire(timeout=timeout):
+        return None
+    try:
+        queue = queues.get(session_key) or []
+        if len(queue) > limit:
+            return None
+        return [dict(entry.data) for entry in queue]
+    finally:
+        lock.release()
+
+
+def approval_lock_free(timeout: float) -> bool:
+    """True when Hermes's approval lock can be taken within ``timeout`` (it is then released at once)."""
+    lock = _lookup_attr("tools.approval._lock")
+    if lock is None or not hasattr(lock, "acquire") or not lock.acquire(timeout=max(0.0, timeout)):
+        return False
+    lock.release()
+    return True
+
+
+def resolve_exact(session_key: str, choice: str, request_id: str) -> int:
+    if type(request_id) is not str or not request_id:
+        return 0
+    fn = _lookup("tools.approval.resolve_gateway_approval")
+    if fn is None:
+        raise RuntimeError("approval API unavailable")
+    return fn(session_key, choice, request_id=request_id)
 
 
 def redact(text: str) -> str:
