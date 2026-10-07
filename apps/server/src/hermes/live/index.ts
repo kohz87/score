@@ -32,3 +32,19 @@ export {
   type Session,
 } from './sessions.ts'
 export { createTailer, type TailCheckpoint, type TailResult } from './tailer.ts'
+export {
+  createSseParser,
+  connectSse,
+  resumableSse,
+  SseHttpError,
+  type SseEvent,
+  type SseFrame,
+  type SseParser,
+  type SseClosed,
+  type SseConnection,
+  type ConnectSseOptions,
+  type SseTruncated,
+  type SseBackoff,
+  type ResumableSseOptions,
+  type ResumableSseResult,
+} from './sse-client.ts'
