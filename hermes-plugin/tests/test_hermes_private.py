@@ -169,3 +169,29 @@ def test_snapshot_is_bounded_and_never_waits_on_a_held_lock(private, monkeypatch
 def test_snapshot_without_hermes_internals_is_none(private):
     assert private.snapshot_gateway_approvals("s") is None
     assert private.approval_lock_free(0.01) is False
+
+
+@pytest.mark.parametrize("result, expected", [
+    ((True, "delete", "description"), "delete"), ((False, "delete", "description"), None),
+    ((True, None, "description"), None), ((True, "", "description"), None),
+    ((True, "x" * 257, "description"), None), (None, None),
+])
+def test_danger_detection_boundary(private, monkeypatch, result, expected):
+    calls = []
+    def detector(command):
+        calls.append(command)
+        return result
+    monkeypatch.setattr(private.importlib, "import_module", lambda name: SimpleNamespace(detect_dangerous_command=detector))
+    assert private.detect_dangerous("rm -rf /tmp/example") == expected
+    assert calls == ["rm -rf /tmp/example"]
+    assert private.detect_dangerous("x" * 16385) is None
+    assert len(calls) == 1
+
+
+def test_danger_detection_missing_or_throwing(private, monkeypatch):
+    assert private.detect_dangerous("rm x") is None
+    private._lookup.cache_clear()
+    def broken(command):
+        raise ValueError()
+    monkeypatch.setattr(private.importlib, "import_module", lambda name: SimpleNamespace(detect_dangerous_command=broken))
+    assert private.detect_dangerous("rm x") is None

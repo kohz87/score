@@ -90,7 +90,7 @@ function scoreRun(sqlite: DatabaseSync, profile: string, session: string): boole
   const run = z.object({ origin: z.string(), profile: z.string() }).parse(value)
   return run.origin === 'score' && run.profile === profile
 }
-function insertApproval(
+export function insertApproval(
   sqlite: DatabaseSync,
   values: Partial<ApprovalRow> &
     Pick<ApprovalRow, 'profile' | 'session_key' | 'command' | 'description' | 'created_at'>,

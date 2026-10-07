@@ -13,6 +13,7 @@ from urllib.error import HTTPError
 
 from . import hermes_private
 from .gates import capture
+from .kanban import capture_denial
 from .client import ScoreClient
 from .redact import bound_payload, digest, scrub, snapshot
 from .spool import Spool, gap_event
@@ -130,6 +131,11 @@ class Sender:
             command = payload["args"].get("command")
         command_digest = digest(command) if type(command) is str and not command.startswith("[omitted:") else None
         payload = capture(hook, payload, command_digest, raw=kwargs, profile=profile)
+        payload.pop("kanbanDenial", None)
+        if hook == "post_tool_call":
+            denial = capture_denial(kwargs)
+            if denial is not None:
+                payload["kanbanDenial"] = denial
         self.queue.put_nowait({"hook": hook, "at": at, "raw": payload, "digest": command_digest,
                                "profile": profile, "context": contextvars.copy_context()})
 

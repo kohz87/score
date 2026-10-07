@@ -11,7 +11,6 @@ _APIS = (
     "agent.redact.redact_sensitive_text",
     "tools.approval.list_gateway_approvals",
     "tools.approval.resolve_gateway_approval",
-    "tools.approval.approve_permanent",
     "tools.approval_detection.detect_dangerous_command",
     "hermes_cli.plugin_isolation.isolation_mode",
 )
@@ -122,3 +121,18 @@ def current_profile() -> str:
     except Exception:
         pass
     return os.environ.get("HERMES_PROFILE") or "default"
+
+
+def detect_dangerous(command: str) -> str | None:
+    """Recompute the canonical pattern without changing approval policy."""
+    if type(command) is not str or len(command) > 16_384:
+        return None
+    fn = _lookup("tools.approval_detection.detect_dangerous_command")
+    try:
+        result = fn(command) if fn else None
+        if (type(result) is tuple and len(result) == 3 and result[0] is True
+                and type(result[1]) is str and 0 < len(result[1]) <= 256):
+            return result[1]
+    except Exception:
+        pass
+    return None

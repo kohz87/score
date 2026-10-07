@@ -21,6 +21,18 @@ export const DecisionDeliveryRequestSchema = z.object({
   choice: ApprovalChoiceSchema,
 })
 
+export const TaskActionRequestSchema = z
+  .object({
+    taskId: z.string().min(1).max(256),
+    action: z.enum(['comment', 'unblock']),
+    text: z
+      .string()
+      .max(2000)
+      .refine((value) => !value.includes('\0'))
+      .optional(),
+  })
+  .refine((req) => req.action !== 'comment' || Boolean(req.text?.trim()))
+
 export interface HermesPort {
   readonly mode: 'live' | 'fake'
   start(sink: ObservationSink): Promise<void>
@@ -38,6 +50,7 @@ export interface HermesPort {
     model?: string
   }): Promise<{ runId: string }>
   stopRun(req: { agentId: string; runId: string }): Promise<void>
+  taskAction(req: z.infer<typeof TaskActionRequestSchema>): Promise<{ hermesStatus: string }>
   deliverDecision(
     req: z.infer<typeof DecisionDeliveryRequestSchema>,
   ): Promise<'applied' | 'not_pending' | 'failed'>

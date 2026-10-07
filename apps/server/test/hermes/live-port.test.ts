@@ -1,11 +1,12 @@
 import { SystemStatusSchema } from '@score/contract'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { loadConfig } from '../../src/config.ts'
 import { createHermesPort } from '../../src/hermes/index.ts'
-import { LivePort } from '../../src/hermes/live/live-port.ts'
+import { LivePort, type LivePortOptions } from '../../src/hermes/live/live-port.ts'
 import { readRun, translateRunEvent } from '../../src/hermes/live/translate.ts'
+import { buildFixture, insertTask } from '../fixtures/hermes/sqlite-fixture.ts'
 import { setup } from './live/gateway/helpers.ts'
 
 let env: ReturnType<typeof setup>
@@ -20,7 +21,7 @@ afterEach(async () => {
   env.db.close()
   rmSync(env.home, { recursive: true, force: true })
 })
-function create() {
+function create(runner?: LivePortOptions['runner']) {
   const hermesHome = join(env.home, 'upstream-fixture')
   mkdirSync(hermesHome)
   writeFileSync(
@@ -30,6 +31,7 @@ function create() {
   return (port = new LivePort({
     scoreHome: env.home,
     hermesHome,
+    ...(runner ? { runner } : {}),
     db: env.db,
     fetch: env.fake.fetch,
     readCliVersion: async () => null,
@@ -240,3 +242,37 @@ test.each([
       retryable: expected === 'retry',
     })
 })
+
+test.each(['builder', 'reviewer'])(
+  'live task actions redact only a known exact %s gateway key',
+  async (assignee) => {
+    const runner = vi.fn<NonNullable<LivePortOptions['runner']>>(async () => ({ exitCode: 0 }))
+    const live = create(runner)
+    const fixture = buildFixture(join(env.home, 'upstream-fixture', 'kanban.db'), 'kanban')
+    try {
+      insertTask(fixture, 't_test')
+      fixture.prepare("UPDATE tasks SET status = 'blocked', assignee = ?").run(assignee)
+      await live.start(env.ingest)
+      const key = env.fake.keys.get('builder')!
+      const text =
+        assignee === 'builder' ? `Deny ${key}; password=example` : 'Deny; password=example'
+      expect(await live.taskAction({ taskId: 't_test', action: 'comment', text })).toEqual({
+        hermesStatus: 'blocked',
+      })
+      expect(runner).toHaveBeenCalledWith(
+        [
+          'kanban',
+          'comment',
+          '--author',
+          'score',
+          '--',
+          't_test',
+          assignee === 'builder' ? 'Deny [redacted]; password=example' : text,
+        ],
+        { timeoutMs: 10000, hermesHome: join(env.home, 'upstream-fixture') },
+      )
+    } finally {
+      fixture.close()
+    }
+  },
+)

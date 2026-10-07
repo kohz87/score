@@ -25,6 +25,8 @@ import { GatewayClient, HermesHttpError } from './gateway.ts'
 import { RunIntents } from './intents.ts'
 import { ProfileNameSchema, resolveHermesHome } from './paths.ts'
 import { followRun, type FollowOptions } from './runs.ts'
+import { taskAction, taskReader } from './task-actions.ts'
+import type { HermesRunner } from './cli.ts'
 import { readRun, RunRowSchema, runLifecycle, type RunMetrics } from './translate.ts'
 
 const palette = [
@@ -39,6 +41,7 @@ export interface LivePortOptions extends HermesPortDeps {
   hermesHome?: string
   baseUrl?: string
   db?: ScoreDb
+  runner?: HermesRunner
   fetch?: typeof globalThis.fetch
   readCliVersion?: FingerprintInputs['readCliVersion']
   testedFingerprints?: readonly TestedFingerprint[]
@@ -69,7 +72,7 @@ export class LivePort implements HermesPort {
     compatibility: {
       fingerprint: 'unavailable',
       tested: false,
-      disabled: ['gateway-approvals', 'kanban-grants', 'score-runs'],
+      disabled: ['gateway-approvals', 'score-runs'],
     },
     agentIsolation: 'same_user',
     degraded: ['Gateway status unavailable'],
@@ -313,6 +316,24 @@ export class LivePort implements HermesPort {
     const row = readRun(db.sqlite, req.runId)
     if (row.profile !== req.agentId) throw new HttpError(404, 'not_found', 'Unknown run')
     await gateway.stopRun(req.agentId, req.runId, row.credential_generation ?? undefined)
+  }
+  async taskAction(
+    req: Parameters<HermesPort['taskAction']>[0],
+  ): Promise<{ hermesStatus: string }> {
+    const { gateway } = this.requireStarted()
+    return taskAction(req, {
+      readTask: taskReader(this.options.hermesHome),
+      withoutCredential: (profile, text) => {
+        try {
+          return gateway.withoutCredential(profile, text)
+        } catch (error) {
+          if (error instanceof CredentialsUnavailable) return text
+          throw error
+        }
+      },
+      ...(this.options.runner ? { runner: this.options.runner } : {}),
+      ...(this.options.hermesHome ? { hermesHome: this.options.hermesHome } : {}),
+    })
   }
   async deliverDecision(
     req: Parameters<HermesPort['deliverDecision']>[0],

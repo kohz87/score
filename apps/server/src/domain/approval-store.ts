@@ -8,7 +8,7 @@ export const ApprovalRowSchema = z.object({
   id: z.string(),
   origin: ApprovalSchema.shape.origin,
   stage: z.enum(['guardian', 'human']),
-  target_kind: z.enum(['run_request', 'gateway_request', 'transport', 'kanban_grant', 'none']),
+  target_kind: z.enum(['run_request', 'gateway_request', 'transport', 'none']),
   visible: z.int().min(0).max(1),
   profile: z.string(),
   session_key: z.string(),
@@ -206,7 +206,11 @@ export function approvalView(
         : null,
     delivery: readDelivery(sqlite, row.id)?.state ?? 'none',
     blocking: row.blocking,
-    refs: row.run_id ? [{ kind: 'run', runId: row.run_id }] : [],
+    refs: row.kanban_task_id
+      ? [{ kind: 'task', taskId: row.kanban_task_id }]
+      : row.run_id
+        ? [{ kind: 'run', runId: row.run_id }]
+        : [],
   })
 }
 

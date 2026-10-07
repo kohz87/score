@@ -155,7 +155,7 @@ export function evaluateCompatibility(
     parts.codeSha !== closest.parts.codeSha ||
     !equal(parts.schemas, closest.parts.schemas)
   )
-    disabled.push('gateway-approvals', 'kanban-grants')
+    disabled.push('gateway-approvals')
   if (requiredCapabilities.some((feature) => !parts.capabilities?.includes(feature)))
     disabled.push('score-runs')
   return { fingerprint: fingerprint.id, tested: false, disabled }

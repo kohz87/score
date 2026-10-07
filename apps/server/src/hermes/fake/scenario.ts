@@ -103,7 +103,7 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
     origin,
     phase: 'human_pending',
     status: 'pending',
-    actionable: true,
+    actionable: origin !== 'kanban',
     linkedTo: null,
     agentId,
     ...{
@@ -116,14 +116,13 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
         command: 'git push origin task/feed-pagination',
       },
       kanban: {
-        title: 'May I delete the previous build directory?',
+        title: 'Blocked in unattended mode',
         command: 'rm -rf demo-project/dist',
       },
     }[origin],
     cwd: 'demo-project',
     description: 'This command changes the workspace or remote repository and needs your approval.',
-    choices:
-      origin === 'kanban' ? ['once', 'always', 'deny'] : ['once', 'session', 'always', 'deny'],
+    choices: origin === 'kanban' ? [] : ['once', 'session', 'always', 'deny'],
     createdAt: time(at),
     expiresAt: null,
     decision: null,
@@ -185,6 +184,17 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
     { at: 1700, kind: 'typing', data: { roomId, agentId: 'lead', text: null } },
     { at: 2000, kind: 'approval.requested', data: scoreApproval },
     { at: 2300, kind: 'approval.requested', data: approval('gateway', 'designer', 2300) },
+    {
+      at: 2500,
+      kind: 'task.upserted',
+      data: {
+        ...task,
+        column: 'needs_you',
+        hermesStatus: 'blocked',
+        badge: { kind: 'blocked', label: 'Blocked in unattended mode' },
+        updatedAt: time(2500),
+      },
+    },
     { at: 2600, kind: 'approval.requested', data: approval('kanban', 'reviewer', 2600) },
     {
       at: 3000,
@@ -394,6 +404,11 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
       at: 3700,
       kind: 'task.upserted',
       data: { ...task, progress: 0.55, elapsedSec: 66, updatedAt: time(3700) },
+    },
+    {
+      at: 3701,
+      kind: 'approval.updated',
+      data: { ...approval('kanban', 'reviewer', 2600), phase: 'withdrawn', status: 'withdrawn' },
     },
     {
       at: 4200,
