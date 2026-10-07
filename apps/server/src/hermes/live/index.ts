@@ -57,3 +57,8 @@ export {
   type RosterRevision,
   type SessionReconciliation,
 } from './reconcile.ts'
+export { GatewayClient, HermesHttpError, GatewayRunSchema, type GatewayRun } from './gateway.ts'
+export { readKey, ensureGeneration, CredentialsUnavailable } from './credentials.ts'
+export { RunIntents, startRunIntent, recoverIntents } from './intents.ts'
+export { followRun } from './runs.ts'
+export { translateRunEvent, runStatusObservation, runSummary, readRun } from './translate.ts'

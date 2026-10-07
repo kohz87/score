@@ -61,7 +61,8 @@ export async function startServer(config: Config, { logger, listen }: StartServe
     const database = db
     ingest = createIngest(database)
     port = createHermesPort(config, {
-      onError: (error) => app?.log.error({ err: error }, 'Fake observation failed'),
+      db: database,
+      onError: (error) => app?.log.error({ err: error }, 'Hermes observation failed'),
     })
     app = buildApp({
       config,
