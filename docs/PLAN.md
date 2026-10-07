@@ -141,7 +141,20 @@ Revised after the architecture review (ARCHITECTURE v0.2). Section refs like D1 
 - Done when: unit tests cover a wrong digest, a wrong attempt, expiry, a concurrent call revoking the grant, and a missing post hook → `unknown`; L6 shows exactly one execution and no `command_allowlist` write.
 - Test: `cd hermes-plugin && uv run pytest && pnpm --filter @score/server test -- grants`
 
-**1.14 Approvals ledger + delivery outbox** · Lead
+**Order change (2026-10-07):** 1.13b and 1.13c need the server side of the bridge, so the next step is 1.14a, then
+1.14b, then 1.13b, then 1.13c.
+
+**1.14a Bridge server: handshake, producer tokens, event ingest** · Lead
+- Goal: `~/.score/bridge.token` bootstrap; `/bridge/v1/hello` (producer registry, hashed short-lived producer tokens,
+  enabled features); `/bridge/v1/events` → ingest observations with D2.3 identities, gap handling, `ackedThrough`;
+  bridge tool calls into a session-keyed projection plus `log.line`; approval-hook signals kept for 1.14b;
+  `SystemStatus.bridge`.
+- Files: `apps/server/src/hermes/bridge/*`, migration `0004_bridge.sql`, `src/http` wiring, tests
+- Done when: contract §11 request/response tests; auth scoping (a bootstrap token can't post events; a producer token
+  can't call /api); dedupe on redelivery; gap → `gap.recorded`; the Python plugin talks to a real server (lead check).
+- Test: `pnpm --filter @score/server test -- bridge`
+
+**1.14b Approvals ledger + delivery outbox** · Lead (was 1.14)
 - Goal: operations with phases; `approval_deliveries` outbox (`intent → delivering → applied | not_pending | failed | unknown`); attribution only on confirmed delivery; `/api/approvals*` (H); origin dedupe (D4).
 - Files: `apps/server/src/domain/approvals.ts`, `apps/server/src/http/approvals.ts`, migration
 - Done when: tests cover a double decision (409), an answer from another surface first (`not_pending` → "answered elsewhere", never deny), a Score crash between intent and apply, guardian escalation linking, and a non-actionable card rejecting decisions.
