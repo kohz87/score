@@ -38,6 +38,7 @@ export interface Ingest {
   flushListeners(): Promise<void>
   close(): Promise<void>
   releaseHold(source: string, scope: string): void
+  clearHolds(source: string, scope: string, throughPosition: number): void
   heldPositions(source: string, scope: string): number[]
 }
 
@@ -321,6 +322,14 @@ export function createIngest(
     },
     releaseHold(source, scope) {
       holds.delete(holdKey(source, scope))
+    },
+    clearHolds(source, scope, throughPosition) {
+      const key = holdKey(source, scope)
+      const failed = holds.get(key)
+      for (const position of failed ?? []) {
+        if (position <= throughPosition) failed?.delete(position)
+      }
+      if (failed?.size === 0) holds.delete(key)
     },
     heldPositions(source, scope) {
       return [...(holds.get(holdKey(source, scope)) ?? [])]

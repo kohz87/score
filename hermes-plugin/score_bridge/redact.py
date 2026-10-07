@@ -92,6 +92,17 @@ def snapshot(value: object) -> object:
     return walk(value)
 
 
+def _decoded(value: object) -> object:
+    # Hermes returns tool results as JSON text. Redacting the text form lets an assignment rule run past
+    # the value into the JSON syntax; decoding first keeps each secret inside its own leaf.
+    if type(value) is not str or len(value) > LEAF_CAP or value.lstrip()[:1] not in ("{", "["):
+        return value
+    try:
+        return snapshot(json.loads(value))
+    except (ValueError, RecursionError):
+        return value
+
+
 def scrub(value: object, redact_fn: Callable[[str], str]) -> object:
     def text(raw, limit):
         try:
@@ -108,8 +119,9 @@ def scrub(value: object, redact_fn: Callable[[str], str]) -> object:
         if type(item) is str:
             return text(item, limit)
         if type(item) is dict:
-            return {text(key, 4096): _REDACTED if credential_key(key) else
-                    walk(child, 16384 if key == "result" else limit)
+            # Numbers and booleans can't carry a secret (keeps fields such as max_tokens).
+            return {text(key, 4096): _REDACTED if credential_key(key) and type(child) in (str, dict, list) else
+                    walk(_decoded(child), 16384) if key == "result" else walk(child, limit)
                     for key, child in item.items() if not key.startswith("_")}
         if type(item) is list:
             return [walk(child, limit) for child in item]

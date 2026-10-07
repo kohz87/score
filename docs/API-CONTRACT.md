@@ -333,6 +333,10 @@ Served under `/bridge/v1` on the same port. Bridge tokens can't call `/api/*`, a
 - `POST /bridge/v1/events` `{ events: { counter: number; hook: string; at: string; sessionKey: string | null;
   sessionId: string | null; toolCallId: string | null; payload: object }[] }` → `{ ackedThrough: number }`.
   `(incarnation, counter)` is the ingest key; redelivery after a spool drain is harmless.
+  Limits: ≤ 200 events and ≤ 2 MiB of request body; each event's `payload` is ≤ 64 KiB serialized. Producers split
+  a backlog into byte-bounded requests in counter order. `profile` is `^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$` and
+  `incarnation` `^[A-Za-z0-9][A-Za-z0-9_.-]{7,127}$`; identifiers are validated, never redacted. Unknown hooks are
+  acknowledged and ignored.
 
 **Gateway approvals** (D4.2)
 - The `pre_approval_request` event payload includes the exact `requestId` read via `list_gateway_approvals`

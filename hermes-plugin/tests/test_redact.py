@@ -110,3 +110,23 @@ def test_nested_terminal_command_digest(tmp_path):
     event = sender._build(sender._take()[0])
     assert event["payload"]["command_digest"] == digest("token=raw")
     assert "raw" not in event["payload"]["args"]["command"]
+
+
+def test_json_text_result_is_decoded_before_redaction():
+    raw = json.dumps({"output": "bridge API_TOKEN=sk-or-abcdefghijklmnopqrstuvwx9876\n", "exit_code": 0})
+    safe = scrub({"result": raw}, local_redact)
+    assert safe["result"] == {"output": "bridge API_TOKEN=[redacted]\n", "exit_code": 0}
+    assert scrub({"result": "{not json API_TOKEN=abc"}, local_redact)["result"] == "{not json API_TOKEN=[redacted]"
+
+
+def test_credential_named_numbers_survive_and_strings_do_not():
+    safe = scrub({"args": {"max_tokens": 512, "token_reused": False, "apiKey": "opaque", "tokens": ["x"]}}, local_redact)
+    assert safe["args"] == {"max_tokens": 512, "token_reused": False, "apiKey": "[redacted]", "tokens": "[redacted]"}
+
+
+def test_request_split_encodes_like_the_http_body():
+    # The incremental size must equal json.dumps of the real envelope (default separators).
+    events = [{"counter": n, "payload": {"x": "é" * n}} for n in range(1, 6)]
+    expected = len(json.dumps({"events": events}).encode("utf-8"))
+    size = len(b'{"events": []}') + sum(len(json.dumps(e).encode("utf-8")) for e in events) + 2 * (len(events) - 1)
+    assert size == expected

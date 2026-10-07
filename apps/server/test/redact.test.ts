@@ -67,3 +67,44 @@ test('generic key labels require a secret-shaped long value', () => {
   )
   expect(redact('key=0123456789abcdef0123456789abcdef')).toBe('key=[redacted]')
 })
+
+test('structured redaction scrubs keys and masks entire credential subtrees', () => {
+  const names = [
+    'password',
+    'pass-wd',
+    'SECRET',
+    'auth_token',
+    'apiKey',
+    'access key',
+    'privateKey',
+    'client-secret',
+    'authorization',
+    'Cookie',
+    'credentials',
+    'session_id',
+    'AWS_SECRET_ACCESS_KEY',
+    'AWS_ACCESS_KEY_ID',
+    'x-api-key',
+  ]
+  const input = Object.fromEntries(names.map((name) => [name, { nested: ['unshaped-secret'] }]))
+  expect(redactValue(input)).toEqual(Object.fromEntries(names.map((name) => [name, '[redacted]'])))
+  expect(redactValue({ nested: { 'sk-abcdefgh123456': 'key-leak' } })).toEqual({
+    nested: { '[redacted]': 'key-leak' },
+  })
+})
+
+test('credential-named fields keep numbers, booleans and null but mask anything that can hold a secret', () => {
+  expect(
+    redactValue({
+      usage: { input_tokens: 12, output_tokens: 8, max_tokens: null, token_reused: false },
+      apiKey: 'opaque',
+      tokens: ['opaque'],
+      secret: { nested: 1 },
+    }),
+  ).toEqual({
+    usage: { input_tokens: 12, output_tokens: 8, max_tokens: null, token_reused: false },
+    apiKey: '[redacted]',
+    tokens: '[redacted]',
+    secret: '[redacted]',
+  })
+})

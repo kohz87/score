@@ -4,7 +4,12 @@ import type { FastifyInstance, FastifyServerOptions } from 'fastify'
 import { buildApp } from './app.ts'
 import { SqliteSessionStore } from './auth/sqlite-session-store.ts'
 import type { Config } from './config.ts'
-import { createHermesPort, type HermesPort } from './hermes/index.ts'
+import {
+  createHermesPort,
+  loadBridgeBootstrap,
+  pruneBridge,
+  type HermesPort,
+} from './hermes/index.ts'
 import { acquireHomeLock, getEpoch, migrate, openDatabase, type ScoreDb } from './db/index.ts'
 import { createIngest, type Ingest } from './hub/ingest.ts'
 import { pruneEvents } from './hub/retention.ts'
@@ -64,6 +69,7 @@ export async function startServer(config: Config, { logger, listen }: StartServe
       db: database,
       onError: (error) => app?.log.error({ err: error }, 'Hermes observation failed'),
     })
+    const adapter = port
     app = buildApp({
       config,
       port,
@@ -72,6 +78,16 @@ export async function startServer(config: Config, { logger, listen }: StartServe
       ingest,
       getEpoch: () => getEpoch(database),
       sessionStore: new SqliteSessionStore(database),
+      ...(config.mode === 'live'
+        ? {
+            bridge: {
+              db: database,
+              ingest,
+              bootstrapHash: loadBridgeBootstrap(config.home),
+              getCompatibility: () => adapter.status().compatibility,
+            },
+          }
+        : {}),
     })
     const token = app.pairing.createToken()
     if (listen) await listen(app)
@@ -88,6 +104,11 @@ export async function startServer(config: Config, { logger, listen }: StartServe
           retireIngestKeys(database)
         } catch (error) {
           app?.log.error({ err: error }, 'Ingest key retirement failed')
+        }
+        try {
+          pruneBridge(database)
+        } catch (error) {
+          app?.log.error({ err: error }, 'Bridge retention prune failed')
         }
       },
       60 * 60 * 1000,

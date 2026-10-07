@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextvars
+import json
 import queue
 import re
 import threading
@@ -251,6 +252,17 @@ class Sender:
             events = spool.peek()
             if not events:
                 return True
+            # Use the HTTP encoder, including the envelope and its default escaping/separators.
+            # Encode each event once: the body is '{"events": [' + items joined by ", " + ']}'.
+            prefix, size = [], len(b'{"events": []}')
+            for event in events[:200]:
+                size += len(json.dumps(event, allow_nan=False).encode("utf-8")) + (2 if prefix else 0)
+                if size > 1.5 * 1024 * 1024:
+                    break
+                prefix.append(event)
+            if not prefix:
+                raise ValueError("event exceeds request budget")
+            events = prefix
             ack = client.send(events)
             if ack < events[0]["counter"]:
                 return False

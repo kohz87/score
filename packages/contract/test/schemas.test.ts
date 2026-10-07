@@ -54,6 +54,7 @@ const cases = [
     { ...f.bridgeHelloResponse, expiresAt: 'later' },
   ],
   ['BridgeEventSchema', f.bridgeEvent, { ...f.bridgeEvent, payload: [] }],
+  ['BridgeIdentifierSchema', 'session-1', 'has space'],
   ['BridgeEventsRequestSchema', { events: [f.bridgeEvent] }, { events: [{ counter: 1 }] }],
   ['BridgeEventsResponseSchema', { ackedThrough: 1 }, { ackedThrough: '1' }],
   ['BridgeDecisionsRequestSchema', { wait: 25 }, { wait: '31' }],

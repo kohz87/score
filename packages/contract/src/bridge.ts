@@ -1,15 +1,17 @@
 import { z } from 'zod'
-import { AgentIdSchema, ApprovalChoiceSchema } from './types.ts'
+import { ApprovalChoiceSchema } from './types.ts'
+
+export const BridgeIdentifierSchema = z.string().regex(/^[\x21-\x7e]{1,256}$/)
 
 export const BridgeHelloRequestSchema = z.object({
-  profile: AgentIdSchema,
+  profile: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/),
   pid: z.int().positive(),
-  incarnation: z.string().min(1),
-  kanbanTaskId: z.string().min(1).nullable(),
+  incarnation: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{7,127}$/),
+  kanbanTaskId: BridgeIdentifierSchema.nullable(),
   isolation: z.enum(['in_process', 'host', 'unknown']),
   pluginVersion: z.string(),
   hermes: z.object({ version: z.string(), codeSha: z.string() }),
-  privateApis: z.record(z.string(), z.boolean()),
+  privateApis: z.record(z.string().regex(/^[A-Za-z0-9_.]{1,128}$/), z.boolean()),
 })
 export type BridgeHelloRequest = z.infer<typeof BridgeHelloRequestSchema>
 
@@ -28,9 +30,9 @@ export const BridgeEventSchema = z.object({
   counter: z.int().positive(),
   hook: z.string(),
   at: z.iso.datetime(),
-  sessionKey: z.string().min(1).nullable(),
-  sessionId: z.string().min(1).nullable(),
-  toolCallId: z.string().min(1).nullable(),
+  sessionKey: BridgeIdentifierSchema.nullable(),
+  sessionId: BridgeIdentifierSchema.nullable(),
+  toolCallId: BridgeIdentifierSchema.nullable(),
   payload: z.record(z.string(), z.unknown()),
 })
 export type BridgeEvent = z.infer<typeof BridgeEventSchema>
