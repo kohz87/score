@@ -340,9 +340,14 @@ Served under `/bridge/v1` on the same port. Bridge tokens can't call `/api/*`, a
   acknowledged and ignored.
 
 **Gateway approvals** (D4.2)
-- The `pre_approval_request` event payload includes the exact `requestId` read via `list_gateway_approvals`
-  (or `null` → the operation is not actionable) and a `commandDigest`. Settle callbacks arrive as
-  `approval.settled` events with `{ requestId, reason }`.
+- Every `pre_approval_request` / `post_approval_response` event payload carries a producer-minted **`gateId`** (uuid,
+  unique per gate occurrence; the post hook carries its pre hook's id, matched in the same thread) and, on a human
+  prompt that follows an unanswered or denied guardian (`smart`) gate in the same thread, **`linkedGateId`**. A fresh
+  prompt that replaces a coalesced follower (leader answered `once`; Hermes fires no post hook for it) carries
+  **`supersedesGateId`**. The
+  hook's own `tool_call_id`/`turn_id`/`session_id` are informational only (not unique). Transport surfaces send their
+  id as `transportRequestId`. Gateway human prompts may add `requestId` (see the exactness rule below) and a
+  `commandDigest`.
 - `GET /bridge/v1/decisions?wait=25` (long-poll; `wait` = integer seconds 0–30, default 25) → `{ items: { deliveryId; leaseId; leaseUntil;
   sessionKey; requestId; choice: ApprovalChoice; reason: string | null }[] }`. Only decisions for approvals **this producer
   reported** are returned. Polls and acks count as producer liveness.

@@ -130,7 +130,7 @@ Revised after the architecture review (ARCHITECTURE v0.2). Section refs like D1 
 - Test: `cd hermes-plugin && uv run pytest`
 
 **1.13b Bridge: gateway approvals with exact targets** · Lead · *adversarial review before merge*
-- Goal: capture exact `request_id` via `list_gateway_approvals` inside `pre_approval_request`; register settle callback; leased decisions; resolve by exact id only; coalesced followers attached (D4.2).
+- Goal: report `requestId` only when provably exact (D4.2); poll leased decisions and resolve by exact id only; never `register_gateway_settle` (D4.4); live check. Gate ids and the ledger come from 1.14b.
 - Files: `hermes-plugin/score_bridge/approvals.py`, `apps/server/src/hermes/bridge.ts`, tests
 - Done when: tests show no FIFO path exists; a missing id → non-actionable; delivery only to the reporting producer; a live check on scoretesta (manual mode) resolves the exact request.
 - Test: `cd hermes-plugin && uv run pytest && pnpm --filter @score/server test -- bridge`
@@ -155,7 +155,7 @@ Revised after the architecture review (ARCHITECTURE v0.2). Section refs like D1 
 - Test: `pnpm --filter @score/server test -- bridge`
 
 **1.14b Approvals ledger + delivery outbox** · Lead (was 1.14)
-- Goal: operations with phases; `approval_deliveries` outbox (`intent → delivering → applied | not_pending | failed | unknown`); attribution only on confirmed delivery; `/api/approvals*` (H); origin dedupe (D4).
+- Goal (design: docs/briefs/1.14b.md after two design reviews): gate-id correlation in the plugin; operations with phases; `approval_deliveries` outbox (`intent → delivering → applied | not_pending | failed | unknown`); attribution only on confirmed delivery; `/api/approvals*` (H); origin dedupe (D4).
 - Files: `apps/server/src/domain/approvals.ts`, `apps/server/src/http/approvals.ts`, migration
 - Done when: tests cover a double decision (409), an answer from another surface first (`not_pending` → "answered elsewhere", never deny), a Score crash between intent and apply, guardian escalation linking, and a non-actionable card rejecting decisions.
 - Test: `pnpm --filter @score/server test -- approvals`

@@ -217,9 +217,11 @@ its session and won't swap in a different history after waiting on its turn leas
 - **Dedupe:** bridge hooks for the same `session_key = run_id` enrich the same operation.
 
 **D4.2 Gateway sessions (Telegram etc.). Additive, alongside Telegram (owner decision).**
-- **Exact target.** In `pre_approval_request` the bridge reads the **exact `request_id`** with
-  `list_gateway_approvals(session_key)`. The entry is enqueued before the hook fires, in the same thread
-  (`approval_gateway_wait.py:166-203`), so the newest entry with matching command and pattern keys is this request.
+- **Exact target.** In `pre_approval_request` the bridge may read the `request_id` with
+  `list_gateway_approvals(session_key)`, but the newest matching entry is **not** proof of ownership (another thread
+  can enqueue an identical command between this thread's enqueue and its hook; 1.14b design review, finding 2). The
+  bridge reports a `requestId` only when it can prove the entry is this hook's own (e.g. exactly one entry with that
+  command and pattern keys); otherwise `null` and the card is view-only.
   ~~The bridge also registers `register_gateway_settle(…)`~~ **Removed (1.14b design review, finding 9):** the settle
   slot holds one callback per request and the gateway registers its own afterwards, so Score must not use it. Resolution
   is observed through `post_approval_response`. The plugin reports a `request_id` only when the queue entry is provably
@@ -254,14 +256,18 @@ its session and won't swap in a different history after waiting on its turn leas
 - **Residual risk:** the window between adding and removing the pattern is one tool call in one process, guarded
   against concurrent calls. A live test (L6) must confirm the add → execute → remove ordering before this ships.
 
-**D4.4 Correlation (1.14b design review, 2026-10-07).** Ledger rows are keyed only by exact identifiers: `request_id`
-(run SSE; hooks when the producer guarantees it) and the hook's `tool_call_id` (every approval hook carries the
-active `tool_call_id`, `turn_id` and `session_id`). There is no matching by pattern, command text or time window, and
-no "only open one" fallback. A guardian stage and the human stage it escalates into are **separate rows linked by
-`linkedTo`** (`escalated`), never merged. Signals that match nothing are kept and replayed when a row gains their key,
-so arrival order between the run SSE and the bridge doesn't matter. Coalesced followers are view-only rows of their own.
-Transport surfaces (`transport:<name>`) are view-only. Decision evidence (a known choice) refines a row closed by a
-weaker signal.
+**D4.4 Correlation (1.14b design reviews, 2026-10-07).** Ledger rows are keyed only by exact identifiers:
+`request_id` (run SSE; a hook's `requestId` when the producer guarantees it), a transport's own request id, and a
+**producer-minted gate id**. A gate's pre and post hooks always fire sequentially in the same thread, so the plugin
+mints `gateId` at the pre hook and attaches it to that thread's post hook, and reports `linkedGateId` when a human
+prompt follows a guardian gate in the same thread. Hermes's `tool_call_id` is not unique (fallback ids repeat for
+identical calls, provider ids repeat across completions, subagents share processes), so it is informational only.
+There is no matching by pattern, command text or time window, and no "only open one" fallback. A guardian stage and
+the human stage it escalates into are **separate rows linked by `linkedTo`** (`escalated`), never merged. Signals that
+match nothing are kept and replayed when a row gains their key, so arrival order doesn't matter. Hook stages of
+Score-started runs without an exact `requestId` are kept as hidden stage records (the run SSE row is the card).
+Coalesced followers are view-only. Decision and completion evidence are stored separately and the phase is recomputed
+from them, so a known choice refines a closure regardless of arrival order.
 
 **"Needs you"** = actionable approvals (D4.1–D4.3) + tasks blocked as `needs_input` (questions).
 
