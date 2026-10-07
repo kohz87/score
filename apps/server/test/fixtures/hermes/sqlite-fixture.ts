@@ -84,3 +84,46 @@ export function insertMessage(
       .run(timestamp, toolCalls, `message-${timestamp}`).lastInsertRowid,
   )
 }
+
+export function insertSessionMessage(
+  db: DatabaseSync,
+  options: {
+    sessionId?: string
+    messageUid: string
+    role?: string
+    content?: string | null
+    timestamp?: number
+    active?: 0 | 1
+    compacted?: 0 | 1
+    toolCalls?: string | null
+    toolCallId?: string | null
+    toolName?: string | null
+    toolCallUid?: string | null
+    toolCallUids?: string | null
+    reasoning?: string | null
+  },
+): number {
+  return Number(
+    db
+      .prepare(
+        `INSERT INTO messages (session_id, message_uid, role, content, timestamp, active,
+          compacted, tool_calls, tool_call_id, tool_name, tool_call_uid, tool_call_uids, reasoning)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        options.sessionId ?? 'session-1',
+        options.messageUid,
+        options.role ?? 'assistant',
+        options.content === undefined ? 'Example reply' : options.content,
+        options.timestamp ?? 2000,
+        options.active ?? 1,
+        options.compacted ?? 0,
+        options.toolCalls ?? null,
+        options.toolCallId ?? null,
+        options.toolName ?? null,
+        options.toolCallUid ?? null,
+        options.toolCallUids ?? null,
+        options.reasoning ?? null,
+      ).lastInsertRowid,
+  )
+}
