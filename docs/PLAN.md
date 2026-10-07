@@ -110,8 +110,9 @@ Revised after the architecture review (ARCHITECTURE v0.2). Section refs like D1 
 - Done when: recorded-fixture tests (L2/L3/L4) pass; a crash after admission reconciles via idempotency without a double run; an unknown event is counted, not fatal.
 - Test: `pnpm --filter @score/server test -- live/gateway`
 
-- Note from 1.9b: reconciliation revisions can repeat (rewind then undo: A→B→A), so they must not be used directly as
-  ingest identities. 1.11a compares each revision with the projection's stored revision, emits an observation only on
+- Note from 1.9b (applies to the task that wires session reconciliation into ingest, Phase 2): reconciliation
+  revisions can repeat (rewind then undo: A→B→A), so they must not be used directly as ingest identities. That task
+  compares each revision with the projection's stored revision, emits an observation only on
   change, and builds the identity with a per-message version counter (`message:<…>:<logicalId>@v<n>:<revision>`).
 
 **1.11b Compatibility fingerprint gate** · Codex
