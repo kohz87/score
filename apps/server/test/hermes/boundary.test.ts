@@ -13,7 +13,6 @@ const forbiddenFragments = [
   '.hermes',
   'kanban.db',
   'state.db',
-  'HERMES_',
   'hermes kanban',
   'API_SERVER_KEY',
 ]
@@ -28,9 +27,13 @@ const upstreamEvents = [
 // Escaped literals keep the scanner's own source free of the names it prohibits.
 const personaPattern = /\u0061keno|\u0066ern|\u006dakima|\u006darin/i
 
+// Hermes's own environment variables (HERMES_KANBAN_TASK, ...) but not Score's SCORE_HERMES_* settings.
+const hermesEnvPattern = /(?<!SCORE_)HERMES_[A-Z]/
+
 function boundaryViolations(source: string): string[] {
   return [
     ...forbiddenFragments.filter((fragment) => source.includes(fragment)),
+    ...(hermesEnvPattern.test(source) ? ['HERMES_*'] : []),
     ...upstreamEvents.filter((event) =>
       ["'", '"', '`'].some((quote) => source.includes(`${quote}${event}${quote}`)),
     ),
@@ -62,6 +65,11 @@ test.each(upstreamEvents)('boundary scanner catches the whole quoted token %s', 
     expect(boundaryViolations(`const type = ${quote}${event}${quote}`)).toContain(event)
     expect(boundaryViolations(`const type = ${quote}${event}ed${quote}`)).toEqual([])
   }
+})
+
+test('Hermes environment variables are flagged, Score settings are not', () => {
+  expect(boundaryViolations('process.env.HERMES_KANBAN_TASK')).toEqual(['HERMES_*'])
+  expect(boundaryViolations('hermesHome: env.SCORE_HERMES_HOME')).toEqual([])
 })
 
 test('Score approval.requested does not trip the upstream token check', () => {
