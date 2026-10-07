@@ -19,6 +19,7 @@ test('loads defaults without reading process.env', () => {
 test('loads explicit config and normalizes the web origin', () => {
   const env = {
     SCORE_HOME: '/tmp/score-test',
+    SCORE_HERMES_HOME: '/tmp/hermes-test',
     SCORE_HOST: 'localhost',
     SCORE_PORT: '9000',
     SCORE_WEB_ORIGIN: 'https://localhost:5173/',
@@ -28,6 +29,7 @@ test('loads explicit config and normalizes the web origin', () => {
   }
   expect(loadConfig(env)).toEqual({
     home: '/tmp/score-test',
+    hermesHome: '/tmp/hermes-test',
     host: 'localhost',
     port: 9000,
     webOrigin: 'https://localhost:5173',
@@ -52,6 +54,7 @@ test.each([
   { SCORE_FAKE_SPEED: 'Infinity' },
   { SCORE_FAKE_SPEED: '' },
   { SCORE_HOME: '' },
+  { SCORE_HERMES_HOME: '' },
   { SCORE_HOST: 'localhost/path' },
   { SCORE_WEB_ORIGIN: 'file:///tmp/score' },
   { SCORE_WEB_ORIGIN: 'http://localhost:5173/pair' },
