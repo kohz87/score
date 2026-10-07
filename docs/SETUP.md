@@ -40,6 +40,17 @@ export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 pnpm -v    # 12.9.1
 ```
 
+### 1c. uv (Python tooling for the Hermes bridge plugin, user-local)
+
+```bash
+V=0.12.23; T=uv-x86_64-unknown-linux-gnu.tar.gz
+cd ~/.cache && curl -fsSLO https://github.com/astral-sh/uv/releases/download/$V/$T
+curl -fsSL https://github.com/astral-sh/uv/releases/download/$V/$T.sha256 | sha256sum -c -
+tar -xzf $T && install -m 755 uv-x86_64-unknown-linux-gnu/{uv,uvx} ~/.local/bin/
+rm -rf $T uv-x86_64-unknown-linux-gnu
+uv --version    # uv 0.12.23
+```
+
 ## 2. Install
 
 ```bash
@@ -122,3 +133,4 @@ The Score bridge plugin (Python, managed with `uv`) gets its install steps here 
 ## Changelog of this file
 - 2026-10-06: initial (Phase 0).
 - 2026-10-06: live-mode steps verified (per-profile API keys).
+- 2026-10-07: uv 0.12.23 (user-local, checksum-verified) for hermes-plugin/.
