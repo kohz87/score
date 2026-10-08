@@ -1,6 +1,8 @@
 import type { AgentSummary, Message, MessagePart } from '@score/contract'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { agentTextColor } from './agent-text-color.ts'
+import { ApprovalCard } from './ApprovalCard.tsx'
+import { PlanCard } from './PlanCard.tsx'
 
 function Part({ part, agents }: { part: MessagePart; agents: AgentSummary[] }) {
   switch (part.kind) {
@@ -23,47 +25,9 @@ function Part({ part, agents }: { part: MessagePart; agents: AgentSummary[] }) {
         </div>
       )
     case 'approval':
-      return (
-        <div className="chat-approval">
-          <span>Approval requested</span>
-          <button type="button" disabled>
-            Approve
-          </button>
-          <button type="button" disabled>
-            Deny
-          </button>
-        </div>
-      )
+      return <ApprovalCard approvalId={part.approvalId} />
     case 'plan':
-      return (
-        <section className="chat-plan" aria-label="Plan">
-          <strong>Plan</strong>
-          {part.lanes.map((lane) => {
-            const agent = agents.find((item) => item.id === lane.agentId)
-            return (
-              <div className="chat-plan-lane" key={lane.agentId}>
-                <span
-                  className="chat-agent-label"
-                  style={agent && { color: agentTextColor(agent.style.color) }}
-                >
-                  {agent && <AgentGlyph agent={agent} size="xs" decorative />}
-                  {agent?.name ?? lane.agentId}
-                </span>
-                <div className="chat-plan-blocks">
-                  {lane.blocks.map((block) => (
-                    <span
-                      className={`chat-plan-block chat-plan-block--${block.state}`}
-                      key={block.id}
-                    >
-                      {block.label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-        </section>
-      )
+      return <PlanCard part={part} agents={agents} />
   }
 }
 

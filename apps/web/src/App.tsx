@@ -6,6 +6,7 @@ import { TeamLayout, TeamPage } from './routes/team/TeamPage.tsx'
 import { TasksPage } from './routes/tasks/TasksPage.tsx'
 import { AppShell } from './shell/AppShell.tsx'
 import { destinations } from './shell/destinations.ts'
+import { SettingsPage } from './routes/settings/SettingsPage.tsx'
 import { ChatPage } from './routes/chat/ChatPage.tsx'
 
 function StubPage({ title }: { title: string }) {
@@ -28,6 +29,7 @@ export const appRoutes: RouteObject[] = [
               { path: ':taskId', element: <></> },
             ],
           }
+        if (path === '/settings') return { path, Component: SettingsPage }
         if (path === '/team')
           return {
             path,

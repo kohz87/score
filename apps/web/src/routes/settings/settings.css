@@ -1,0 +1,243 @@
+/* Layout and spacing from docs/design/html/settings.html. */
+.settings-layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  align-items: flex-start;
+}
+.settings-nav {
+  flex: 1 1 220px;
+  max-width: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 6px;
+}
+.settings-nav h1 {
+  margin: 0 0 14px 12px;
+  font-weight: 700;
+  font-size: 40px;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.settings-nav a {
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-14);
+  color: var(--chat-secondary);
+  text-decoration: none;
+}
+.settings-nav a:first-of-type {
+  background: var(--card);
+  border-color: var(--hairline);
+  color: var(--ink);
+  font-weight: 600;
+}
+.settings-nav p {
+  margin: 18px 12px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.settings-content {
+  flex: 999 1 640px;
+  min-width: 0;
+  max-width: 980px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.settings-card {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: 26px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.settings-card h2 {
+  margin: 0;
+  font-weight: 600;
+  font-size: 28px;
+  letter-spacing: -0.025em;
+}
+.settings-card h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.settings-card p {
+  margin: 0;
+}
+.settings-muted,
+.settings-detail {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.settings-muted-strong {
+  color: var(--ink-muted);
+}
+.settings-rows,
+.settings-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--ground);
+}
+.settings-row:last-child {
+  border-bottom: 0;
+}
+.settings-row-name {
+  flex: 1 1 200px;
+  font-weight: 600;
+  font-size: 16px;
+}
+.settings-row-name[data-missing='true'],
+.settings-chip-name[data-missing='true'] {
+  color: var(--ink-muted);
+}
+.settings-glyphs {
+  display: flex;
+  gap: 6px;
+}
+.settings-status {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--agent-jade-text);
+}
+.settings-status[data-status='needs_signin'] {
+  color: var(--agent-saffron-text);
+}
+.settings-status[data-status='missing'] {
+  color: var(--ink-muted);
+}
+.settings-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.settings-start {
+  align-self: flex-start;
+}
+.settings-pill,
+.settings-primary {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+.settings-primary {
+  background: var(--ink);
+  color: #fff;
+}
+.settings-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.settings-column {
+  flex: 1 1 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.settings-chips {
+  gap: 10px;
+}
+.settings-chip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-16);
+  background: var(--subtle);
+}
+.settings-chip[data-status='needs_signin'],
+.settings-chip[data-status='error'] {
+  background: var(--agent-saffron-tint);
+}
+.settings-chip-name {
+  flex: 1;
+}
+.settings-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--agent-jade);
+}
+.settings-dot[data-status='needs_signin'],
+.settings-dot[data-status='error'] {
+  background: #e0a000;
+}
+.settings-dot[data-status='disconnected'] {
+  background: transparent;
+  border: 1.5px solid #9a9ea7;
+}
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-16);
+  background: var(--subtle);
+}
+.settings-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.settings-form input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  background: var(--card);
+}
+.settings-command {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--radius-16);
+  background: var(--ink);
+  color: #fff;
+}
+.settings-command code {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.settings-command .settings-pill {
+  border-color: #fff;
+  color: #fff;
+}
+.settings-command .settings-link {
+  color: #fff;
+}
+.settings-command-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}

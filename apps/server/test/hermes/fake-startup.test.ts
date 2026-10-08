@@ -41,7 +41,7 @@ test('fake startup streams the scenario and exposes the same adapter status in s
       `/api/stream?since=0&epoch=${hello.data.epoch}`,
       replayAbort.signal,
     )
-    const total = createScenario(0).length + 2
+    const total = createScenario(0).length + 3
     await vi.waitFor(() => expect(replay.seqs).toHaveLength(total), { timeout: 5000 })
     expect(replay.seqs).toEqual(Array.from({ length: total }, (_, index) => index + 1))
     expect(

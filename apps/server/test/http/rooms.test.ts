@@ -441,11 +441,15 @@ test('fake scenario persists full conversation, deltas, completion and unread vi
   const room = list.rooms.find((room) => room.id === 'room-activity-feed')!
   expect(room).toMatchObject({
     name: '#activity-feed',
-    unread: 2,
-    activeAgents: ['lead', 'reviewer'],
+    unread: 3,
+    activeAgents: ['builder', 'lead', 'reviewer'],
   })
   const page = PageSchema.parse((await get(`/api/rooms/${room.id}/messages`)).json())
-  expect(page.items.map((message) => message.id)).toEqual(['message-review-0', 'message-plan-0'])
+  expect(page.items.map((message) => message.id)).toEqual([
+    'message-review-0',
+    'approval:approval-score-run-0',
+    'message-plan-0',
+  ])
   expect(page.items.every((message) => !message.streaming)).toBe(true)
   expect(page.items[0]!.parts).toEqual([
     {
@@ -453,7 +457,8 @@ test('fake scenario persists full conversation, deltas, completion and unread vi
       text: 'The cursor and loading states look good. Keyboard focus stays in place after loading. Ready to merge after the final checks.',
     },
   ])
-  expect(page.items[1]!.parts[0]).toMatchObject({
+  expect(page.items[1]!.parts).toEqual([{ kind: 'approval', approvalId: 'approval-score-run-0' }])
+  expect(page.items[2]!.parts[0]).toMatchObject({
     kind: 'text',
     text: expect.stringContaining('Keep keyboard focus on the load button.'),
   })
@@ -760,4 +765,119 @@ test('GET /api/commands lists the slash commands for the composer menu', async (
     'skill',
     'model',
   ])
+})
+
+test('filesInPlay lists distinct file-tool paths of this room runs, newest first', async () => {
+  const room = await create('files')
+  const other = await create('other')
+  await agentMessage(room.id, 'p1')
+  await agentMessage(other.id, 'p2')
+  const at = (n: number) => new Date(Date.parse('2026-10-01T00:00:00Z') + n * 1000).toISOString()
+  await ingest.submit({
+    source: 'test',
+    identity: 'panel-fixtures',
+    apply({ sqlite, now }) {
+      const run = (id: string, profile: string, session: string) =>
+        sqlite
+          .prepare(
+            `INSERT INTO runs (id, profile, origin, session_id, status, started_at, updated_at) VALUES (?, ?, 'score', ?, 'completed', ?, ?)`,
+          )
+          .run(id, profile, session, now, now)
+      run('run-a', 'builder', 'sess-a')
+      run('run-b', 'builder', 'sess-b')
+      const link = (message: string, roomId: string, runId: string, n: number) =>
+        sqlite
+          .prepare(
+            `INSERT INTO message_runs (message_id, run_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, state, created_at)
+             VALUES (?, ?, ?, 'builder', ?, 0, ?, ?, 'x', '[]', 'completed', ?)`,
+          )
+          .run(`reply:${message}`, runId, roomId, message, `turn-${message}`, message, at(n))
+      link('p1', room.id, 'run-a', 0)
+      link('p2', other.id, 'run-b', 0)
+      const tool = (runId: string, seq: number, name: string, preview: string | null, n: number) =>
+        sqlite
+          .prepare(
+            `INSERT INTO tool_calls (run_id, seq, tool, preview, status, started_at) VALUES (?, ?, ?, ?, 'ok', ?)`,
+          )
+          .run(runId, seq, name, preview, at(n))
+      tool('run-a', 1, 'edit_file', JSON.stringify({ path: 'src/a.ts' }), 1)
+      tool('run-a', 2, 'terminal', 'ls src/b.ts', 2)
+      tool('run-a', 3, 'read_file', 'src/b.ts', 3)
+      tool('run-a', 4, 'edit_file', JSON.stringify({ path: './src/a.ts' }), 4)
+      tool('run-a', 5, 'edit_file', null, 5)
+      tool('run-b', 1, 'edit_file', JSON.stringify({ path: 'src/other-room.ts' }), 6)
+      sqlite
+        .prepare(
+          `INSERT INTO session_tool_calls (profile, session_id, tool_call_id, tool, args_preview, status, started_at)
+           VALUES ('builder', 'sess-a', 'tc1', 'write_file', ?, 'ok', ?)`,
+        )
+        .run(JSON.stringify({ path: 'docs/notes.md' }), at(2.5))
+      return []
+    },
+  })
+  const detail = DetailSchema.parse((await get(`/api/rooms/${room.id}`)).json())
+  expect(detail.filesInPlay).toEqual(['src/a.ts', 'src/b.ts', 'docs/notes.md'])
+})
+
+test('filesInPlay is capped at 12', async () => {
+  const room = await create('cap')
+  await agentMessage(room.id, 'c1')
+  await ingest.submit({
+    source: 'test',
+    identity: 'cap-fixtures',
+    apply({ sqlite, now }) {
+      sqlite
+        .prepare(
+          `INSERT INTO runs (id, profile, origin, status, started_at, updated_at) VALUES ('run-c', 'builder', 'score', 'completed', ?, ?)`,
+        )
+        .run(now, now)
+      sqlite
+        .prepare(
+          `INSERT INTO message_runs (message_id, run_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, created_at)
+           VALUES ('reply:c1', 'run-c', ?, 'builder', 'c1', 0, 'turn-c1', 'c1', 'x', '[]', ?)`,
+        )
+        .run(room.id, now)
+      for (let i = 0; i < 15; i++)
+        sqlite
+          .prepare(
+            `INSERT INTO tool_calls (run_id, seq, tool, preview, status, started_at) VALUES ('run-c', ?, 'edit_file', ?, 'ok', ?)`,
+          )
+          .run(i, JSON.stringify({ path: `f${i}.ts` }), now)
+      return []
+    },
+  })
+  const detail = DetailSchema.parse((await get(`/api/rooms/${room.id}`)).json())
+  expect(detail.filesInPlay).toHaveLength(12)
+})
+
+test('learned lists memory.saved events whose source is this room, newest first, max 5', async () => {
+  const room = await create('learn')
+  const other = await create('elsewhere')
+  const save = (identity: string, text: string, roomId: string | null) =>
+    ingest.submit({
+      source: 'test',
+      identity,
+      apply: () => [
+        {
+          type: 'memory.saved' as const,
+          data: {
+            agentIds: ['lead', 'builder'],
+            text,
+            source: roomId === null ? null : { kind: 'room' as const, roomId },
+          },
+        },
+      ],
+    })
+  for (let i = 1; i <= 6; i++) await save(`m${i}`, `fact ${i}`, room.id)
+  await save('mo', 'other room fact', other.id)
+  await save('mn', 'no source', null)
+  const detail = DetailSchema.parse((await get(`/api/rooms/${room.id}`)).json())
+  expect(detail.learned.map((item) => item.text)).toEqual([
+    'fact 6',
+    'fact 5',
+    'fact 4',
+    'fact 3',
+    'fact 2',
+  ])
+  expect(detail.learned[0]).toMatchObject({ savedTo: ['lead', 'builder'] })
 })

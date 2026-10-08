@@ -3,7 +3,13 @@ import { FakePort } from './fake/fake-port.ts'
 import { LivePort } from './live/live-port.ts'
 import type { HermesPort, HermesPortDeps } from './port.ts'
 
-export type { HermesPort, HermesPortDeps, ObservationSink, Scheduler } from './port.ts'
+export type {
+  HermesPort,
+  HermesPortDeps,
+  ObservationSink,
+  ProviderBase,
+  Scheduler,
+} from './port.ts'
 export {
   AgentFileConflictError,
   AgentFileNameSchema,

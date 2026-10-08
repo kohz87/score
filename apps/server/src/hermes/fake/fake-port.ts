@@ -24,6 +24,10 @@ import { approvalDraft, patchApproval, readApprovalRow } from '../../domain/appr
 import type {
   AgentSummary,
   Approval,
+  ConnectResult,
+  ConnectionsResponse,
+  LocalProviderRequest,
+  ToolServerRequest,
   RoutineSummary,
   RunSummary,
   TaskDetail,
@@ -64,6 +68,7 @@ import {
   matchesTask,
   type HermesPort,
   type HermesPortDeps,
+  type ProviderBase,
   type ObservationSink,
   type Scheduler,
 } from '../port.ts'
@@ -585,6 +590,64 @@ export class FakePort implements HermesPort {
     // Real Hermes runs on its next tick; the fake records the run immediately.
     this.routine(id).lastRunAt = this.now()
   }
+  private readonly fakeProviders: ProviderBase[] = [
+    { id: 'demo', label: 'Demo', status: 'connected', detail: 'Built-in demo models' },
+    { id: 'openrouter', label: 'OpenRouter', status: 'missing', detail: 'Not connected' },
+    { id: 'anthropic', label: 'Anthropic', status: 'needs_signin', detail: 'Session expired' },
+    {
+      id: 'openai-codex',
+      label: 'ChatGPT (Codex)',
+      status: 'connected',
+      detail: 'Your ChatGPT plan',
+    },
+  ]
+  async listProviders(): Promise<ProviderBase[]> {
+    return structuredClone(this.fakeProviders)
+  }
+  async connectProvider(id: string): Promise<ConnectResult> {
+    if (!this.fakeProviders.some((provider) => provider.id === id))
+      throw new HttpError(404, 'not_found', 'Unknown provider')
+    return { next: 'run_in_terminal', command: `hermes auth add ${id}` }
+  }
+  async addLocalProvider(req: LocalProviderRequest): Promise<ProviderBase> {
+    const id = req.label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+    if (!id) throw new HttpError(400, 'bad_request', 'Invalid request')
+    if (this.fakeProviders.some((provider) => provider.id === id))
+      throw new HttpError(409, 'conflict', 'A provider with that name already exists')
+    const provider: ProviderBase = {
+      id,
+      label: req.label,
+      status: 'connected',
+      detail: new URL(req.baseUrl).host,
+    }
+    this.fakeProviders.push(provider)
+    return structuredClone(provider)
+  }
+  async listConnections(): Promise<ConnectionsResponse> {
+    return {
+      toolServers: [
+        { id: 'files', label: 'files', status: 'ok', usedBy: 'everyone' },
+        { id: 'web-search', label: 'web-search', status: 'needs_signin', usedBy: 'everyone' },
+        { id: 'issue-tracker', label: 'issue-tracker', status: 'error', usedBy: 'everyone' },
+      ],
+      messaging: [
+        { platform: 'telegram', label: 'Telegram', status: 'connected', detail: null },
+        { platform: 'discord', label: 'Discord', status: 'disconnected', detail: null },
+        { platform: 'slack', label: 'Slack', status: 'disconnected', detail: 'auth_failed' },
+      ],
+    }
+  }
+  async addToolServer(req: ToolServerRequest): Promise<ConnectResult> {
+    return { next: 'run_in_terminal', command: `hermes mcp add ${req.name}` }
+  }
+  async connectMessaging(platform: string): Promise<ConnectResult> {
+    if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(platform))
+      throw new HttpError(404, 'not_found', 'Unknown platform')
+    return { next: 'run_in_terminal', command: 'hermes gateway setup' }
+  }
   async readAgentFile(agentId: string, file: AgentFileName): Promise<AgentFile> {
     if (!this.agents.has(agentId)) throw new HttpError(404, 'not_found', 'Agent not found')
     const content = this.files.get(`${agentId}/${file}`) ?? ''
@@ -826,23 +889,53 @@ export class FakePort implements HermesPort {
                 })
                 stream(index + 1)
               } else {
-                await this.requireSink().submit({
-                  source: 'fake',
-                  identity: `${this.sessionId}:tools:${runId}`,
-                  apply({ sqlite, now }) {
-                    for (const [seq, tool] of response.tools.entries())
-                      sqlite
-                        .prepare(
-                          `INSERT INTO tool_calls
-                    (run_id, seq, tool, status, started_at, ended_at) VALUES (?, ?, ?, 'ok', ?, ?) ON CONFLICT DO NOTHING`,
-                        )
-                        .run(runId, seq, tool, now, now)
-                    return []
-                  },
-                })
-                const current = this.runs.get(runId)!
-                this.runs.set(runId, { ...current, toolsUsed: [...new Set(response.tools)] })
-                await this.transitionRun(runId, 'completed')
+                const complete = async (): Promise<void> => {
+                  await this.requireSink().submit({
+                    source: 'fake',
+                    identity: `${this.sessionId}:tools:${runId}`,
+                    apply({ sqlite, now }) {
+                      for (const [seq, tool] of response.tools.entries())
+                        sqlite
+                          .prepare(
+                            `INSERT INTO tool_calls
+                      (run_id, seq, tool, preview, status, started_at, ended_at) VALUES (?, ?, ?, ?, 'ok', ?, ?) ON CONFLICT DO NOTHING`,
+                          )
+                          .run(
+                            runId,
+                            seq,
+                            tool,
+                            // File tools carry a path so the Chat "Files in play" panel has demo data.
+                            tool === 'edit_file'
+                              ? JSON.stringify({
+                                  path: `src/${seq % 2 ? 'feed-card.css' : 'activity-feed.ts'}`,
+                                })
+                              : null,
+                            now,
+                            now,
+                          )
+                      return []
+                    },
+                  })
+                  const current = this.runs.get(runId)!
+                  this.runs.set(runId, { ...current, toolsUsed: [...new Set(response.tools)] })
+                  await this.transitionRun(runId, 'completed')
+                }
+                // Demo hook: a message that says "ask for approval" makes the run raise one and wait.
+                if (!/ask for approval/i.test(req.input.split('\n\nRoom context:')[0] ?? ''))
+                  await complete()
+                else {
+                  await this.requestRunApproval(runId, req.agentId)
+                  const deadline = this.scheduler.now() + 600_000
+                  const wait = (): void =>
+                    this.schedule(250, async () => {
+                      if (this.runs.get(runId)?.status !== 'waiting_for_approval') return
+                      if (!this.approvalAnswered(runId) && this.scheduler.now() < deadline)
+                        return wait()
+                      await this.transitionRun(runId, 'running')
+                      await complete()
+                    })
+                  wait()
+                }
               }
             },
           )
@@ -853,16 +946,48 @@ export class FakePort implements HermesPort {
     })
   }
 
+  private async requestRunApproval(runId: string, agentId: string): Promise<void> {
+    await this.requireSink().submit({
+      source: 'fake',
+      identity: `${this.sessionId}:approval:${runId}`,
+      apply: ({ sqlite, now }) =>
+        requestRunApproval(
+          sqlite,
+          {
+            id: `fake-approval:${runId}`,
+            profile: agentId,
+            runId,
+            requestId: `${runId}:approval`,
+            command: 'pnpm add ws@8.18.0',
+            description: 'Install the websocket library\nThe run needs it to keep going.',
+            choices: ['once', 'session', 'always', 'deny'],
+          },
+          now,
+        ),
+    })
+    await this.transitionRun(runId, 'waiting_for_approval')
+  }
+
+  private approvalAnswered(runId: string): boolean {
+    if (!this.db) return true
+    const row = readApprovalRow(this.db.sqlite, `fake-approval:${runId}`)
+    return !row || row.phase !== 'human_pending'
+  }
+
   private async transitionRun(
     runId: string,
-    status: 'running' | 'completed' | 'cancelled',
+    status: 'running' | 'completed' | 'cancelled' | 'waiting_for_approval',
   ): Promise<void> {
     const run = this.runs.get(runId)
     if (!run || !['queued', 'running', 'waiting_for_approval'].includes(run.status)) return
     await this.emit({
       at: 0,
       kind: 'run.updated',
-      data: { ...run, status, endedAt: status === 'running' ? null : this.now() },
+      data: {
+        ...run,
+        status,
+        endedAt: status === 'running' || status === 'waiting_for_approval' ? null : this.now(),
+      },
     })
   }
 

@@ -6,6 +6,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import {
   MessageSchema,
   type AgentSummary,
+  type Approval,
+  type LaneBlock,
   type Message,
   type Room,
   type StreamEvent,
@@ -62,8 +64,30 @@ class Source extends EventTarget {
 }
 const disposers: (() => void)[] = []
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>
+const pendingApproval: Approval = {
+  id: 'approval',
+  origin: 'score-run',
+  phase: 'human_pending',
+  status: 'pending',
+  actionable: true,
+  linkedTo: null,
+  agentId: 'lead',
+  title: 'Approval requested',
+  command: 'pnpm add ws',
+  cwd: null,
+  description: '',
+  choices: ['once', 'deny'],
+  createdAt: '2026-10-08T10:00:00.000Z',
+  expiresAt: null,
+  decision: null,
+  delivery: 'none',
+  blocking: null,
+  refs: [],
+}
 let items: Message[]
 let rooms: Room[]
+let filesInPlay: string[]
+let learned: { text: string; savedTo: string[]; at: string }[]
 function response(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), { status })
 }
@@ -95,8 +119,12 @@ function emit(type: StreamEvent['type'], data: unknown, seq: number) {
 beforeEach(() => {
   items = [message]
   rooms = [room]
+  filesInPlay = []
+  learned = []
   fetchMock = vi.fn(async (input) => {
     const url = String(input)
+    if (url.startsWith('/api/approvals?'))
+      return response({ asOfSeq: 1, items: [pendingApproval], nextCursor: null })
     if (url === '/api/agents') return response({ asOfSeq: 1, items: [agent] })
     if (url === '/api/rooms') return response({ asOfSeq: 1, rooms, directs: [direct] })
     if (url.includes('/messages'))
@@ -111,8 +139,8 @@ beforeEach(() => {
     return response({
       asOfSeq: 1,
       room: url.includes('direct-lead') ? direct : room,
-      filesInPlay: [],
-      learned: [],
+      filesInPlay,
+      learned,
     })
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -296,7 +324,7 @@ test('cursor pagination prepends history, deduplicates overlaps and updates hist
   expect(screen.getByText('Earlier message updated')).toBeDefined()
   expect(screen.queryByRole('button', { name: 'Load older messages' })).toBeNull()
 })
-test('renders every message part and keeps approval and plan placeholders passive', async () => {
+test('renders every message part and shows approval and plan cards', async () => {
   items = [
     MessageSchema.parse({
       ...message,
@@ -337,15 +365,58 @@ test('renders every message part and keeps approval and plan placeholders passiv
     '+182',
     '−12',
     'Changes requested',
-    'Approval requested',
     'Review work',
   ])
     expect(screen.getByText(text)).toBeDefined()
-  expect(screen.getByRole('button', { name: 'Approve' }).hasAttribute('disabled')).toBe(true)
-  expect(screen.getByRole('button', { name: 'Deny' }).hasAttribute('disabled')).toBe(true)
+  expect(await screen.findByRole('button', { name: 'Approve' })).toBeDefined()
+  expect(screen.getByRole('button', { name: 'Deny' })).toBeDefined()
   expect(screen.getByText('Ready for review').parentElement?.getAttribute('aria-live')).toBe(
     'polite',
   )
+})
+test('lane.upserted updates the plan block of its brief live', () => {
+  const block: LaneBlock = {
+    id: 'b1',
+    label: 'Old',
+    state: 'planned',
+    start: message.createdAt,
+    end: null,
+    taskId: null,
+    runId: null,
+  }
+  const data = {
+    items: [
+      {
+        ...message,
+        parts: [
+          {
+            kind: 'plan' as const,
+            briefId: 'brief',
+            lanes: [{ agentId: 'lead', blocks: [block] }],
+          },
+        ],
+      },
+    ],
+    nextCursor: null,
+    typing: {},
+  }
+  const lane = (briefId: string | null, agentId: string, next: typeof block) =>
+    ({
+      type: 'lane.upserted',
+      seq: 2,
+      ts: message.createdAt,
+      data: { briefId, agentId, block: next },
+    }) as StreamEvent
+  const plan = (event: StreamEvent) => {
+    const part = reduceMessages(data, event, 'general', true).items[0]!.parts[0]
+    return part?.kind === 'plan' ? part.lanes : []
+  }
+  expect(
+    plan(lane('brief', 'lead', { ...block, label: 'New', state: 'working' }))[0]!.blocks,
+  ).toEqual([{ ...block, label: 'New', state: 'working' }])
+  expect(plan(lane('brief', 'lead', { ...block, id: 'b2' }))[0]!.blocks).toHaveLength(2)
+  expect(plan(lane('brief', 'builder', block))).toHaveLength(2)
+  expect(plan(lane('other', 'lead', { ...block, label: 'No' }))[0]!.blocks[0]!.label).toBe('Old')
 })
 test('reducers ignore other rooms, append missing text parts and exclude new messages from history', () => {
   const data = { items: [{ ...message, parts: [] }], nextCursor: null, typing: {} }
@@ -427,4 +498,79 @@ test('resync follows a changed pagination boundary without skipping messages', a
   await act(async () => queries.register(messagesQuery('general')).refetch())
   await screen.findByText('Fresh boundary')
   expect(screen.queryByText('Old boundary')).toBeNull()
+})
+
+const panel = () => screen.findByRole('complementary', { name: 'About this room' })
+test('side panels show empty states for every card', async () => {
+  setup()
+  const aside = within(await panel())
+  expect(await aside.findByText('No files touched yet.')).toBeDefined()
+  expect(aside.getByText('Nothing saved from this room yet.')).toBeDefined()
+  expect(aside.getByText('Not mirrored to any channel.')).toBeDefined()
+  expect(aside.getByRole('link', { name: 'Manage channels' }).getAttribute('href')).toBe(
+    '/settings',
+  )
+})
+test('side panels list files, learned facts with memory links, and channels', async () => {
+  filesInPlay = ['api/events.py', 'web/feed.ts']
+  learned = [
+    { text: 'Page with a cursor.', savedTo: ['lead', 'ghost'], at: '2026-10-08T10:00:00.000Z' },
+  ]
+  rooms = [{ ...room, channels: [{ platform: 'telegram', label: 'Telegram topic' }] }]
+  fetchMock.mockImplementation(async (input) => {
+    const url = String(input)
+    if (url === '/api/agents') return response({ asOfSeq: 1, items: [agent] })
+    if (url === '/api/rooms') return response({ asOfSeq: 1, rooms, directs: [direct] })
+    if (url.includes('/messages')) return response({ asOfSeq: 1, items, nextCursor: null })
+    return response({ asOfSeq: 1, room: rooms[0], filesInPlay, learned })
+  })
+  setup()
+  const aside = within(await panel())
+  expect(await aside.findByText('api/events.py')).toBeDefined()
+  expect(aside.getByText('web/feed.ts')).toBeDefined()
+  expect(aside.getByText('Page with a cursor.')).toBeDefined()
+  expect(aside.getByText('Saved to Lead’s and ghost’s memory')).toBeDefined()
+  expect(aside.getByRole('link', { name: /Open memory/ }).getAttribute('href')).toBe('/team/lead')
+  expect(await aside.findByText('Telegram topic')).toBeDefined()
+})
+test('side panels refetch when this room completes a message or saves a memory', async () => {
+  setup()
+  const aside = within(await panel())
+  await aside.findByText('No files touched yet.')
+  filesInPlay = ['src/new.ts']
+  emit('message.completed', { messageId: 'other', roomId: 'elsewhere' }, 2)
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  expect(aside.queryByText('src/new.ts')).toBeNull()
+  emit('message.completed', { messageId: 'message-one', roomId: 'general' }, 3)
+  expect(await aside.findByText('src/new.ts')).toBeDefined()
+  learned = [{ text: 'Fresh fact', savedTo: ['lead'], at: '2026-10-08T10:00:00.000Z' }]
+  emit(
+    'memory.saved',
+    { agentIds: ['lead'], text: 'Fresh fact', source: { kind: 'room', roomId: 'general' } },
+    4,
+  )
+  expect(await aside.findByText('Fresh fact')).toBeDefined()
+})
+test('the details toggle expands and collapses the side panels', async () => {
+  setup()
+  await panel()
+  const toggle = screen.getByRole('button', { name: 'Show room details' })
+  expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(toggle)
+  expect(
+    screen.getByRole('button', { name: 'Hide room details' }).getAttribute('aria-expanded'),
+  ).toBe('true')
+})
+test('side panels show an error with retry when the room details fail', async () => {
+  fetchMock.mockImplementation(async (input) => {
+    const url = String(input)
+    if (url === '/api/agents') return response({ asOfSeq: 1, items: [agent] })
+    if (url === '/api/rooms') return response({ asOfSeq: 1, rooms, directs: [direct] })
+    if (url.includes('/messages')) return response({ asOfSeq: 1, items, nextCursor: null })
+    return response({ error: { code: 'internal', message: 'x' } }, 500)
+  })
+  setup()
+  const aside = within(await panel())
+  expect(await aside.findByText('Could not load room details.')).toBeDefined()
+  expect(aside.getByRole('button', { name: 'Try again' })).toBeDefined()
 })

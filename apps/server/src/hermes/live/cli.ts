@@ -10,6 +10,9 @@ export interface CliOptions {
   captureTaskCreate?: boolean
   // Allowlisted read-only commands (see captureReadShape): config values, tool list, hub search.
   captureRead?: boolean
+  // Settings status reads (`auth list`, `config get --json mcp_servers|providers`): Hermes prints no secrets for
+  // these, and callers parse only the fields they need.
+  captureSettings?: boolean
   execute?: (
     file: string,
     args: string[],
@@ -51,6 +54,7 @@ export function captureReadShape(argv: string[]): boolean {
     argv[6]!.length <= 200
   )
 }
+const SETTINGS_READS = ['auth list', 'config get --json mcp_servers', 'config get --json providers']
 
 export const runHermes: HermesRunner = async (args, options) => {
   const argv = z.array(z.string().refine((value) => !value.includes('\0'))).parse(args)
@@ -69,9 +73,20 @@ export const runHermes: HermesRunner = async (args, options) => {
     throw new Error('CLI stdout capture is restricted to task creation')
   if (options.captureRead && !captureReadShape(argv))
     throw new Error('CLI stdout capture is restricted to allowlisted reads')
-  const capture = options.captureModel || options.captureTaskCreate || options.captureRead
-  // The create echo includes the task body; the model value is tiny.
-  const captureLimit = options.captureTaskCreate || options.captureRead ? 512 * 1024 : 16 * 1024
+  if (options.captureSettings && !SETTINGS_READS.includes(argv.join(' ')))
+    throw new Error('CLI stdout capture is restricted to settings status reads')
+  const capture =
+    options.captureModel ||
+    options.captureTaskCreate ||
+    options.captureRead ||
+    options.captureSettings
+  // The create echo includes the task body and reads can list many tools; the model value is tiny.
+  const captureLimit =
+    options.captureTaskCreate || options.captureRead
+      ? 512 * 1024
+      : options.captureSettings
+        ? 256 * 1024
+        : 16 * 1024
   const timeout = z.int().positive().parse(options.timeoutMs)
   const env: NodeJS.ProcessEnv = { HERMES_HOME: resolveHermesHome(options.hermesHome) }
   for (const name of ['PATH', 'HOME', 'LANG', 'LC_ALL', 'TMPDIR']) {

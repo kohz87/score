@@ -1,15 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-
-// Sending needs a paired browser: use the pairing link the dev server printed (playwright.config.ts).
-async function pair(page: import('@playwright/test').Page) {
-  const log = readFileSync(join(process.env.SCORE_E2E_HOME!, 'dev.log'), 'utf8')
-  const token = /\/pair#([\w-]+)/.exec(log)?.[1]
-  expect(token).toBeTruthy()
-  await page.goto(`/pair#${token}`)
-  await expect(page.getByText('This browser is paired')).toBeVisible()
-}
+import { pair } from './pair.ts'
 
 test('the composer sends a message that gets a streamed reply, and an /assign that creates a task', async ({
   page,
