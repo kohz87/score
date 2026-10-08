@@ -66,3 +66,51 @@ test.each(['', '?range=year', '?range=7d&x=1'])('a bad query %s is a 400', async
   expect(response.statusCode).toBe(400)
   expect(response.json().error.code).toBe('bad_request')
 })
+
+test('GET /api/reports/export.csv returns the By agent table as a download', async () => {
+  const response = await app.inject('/api/reports/export.csv?range=7d')
+  expect(response.statusCode).toBe(200)
+  expect(response.headers['content-type']).toBe('text/csv; charset=utf-8')
+  expect(response.headers['content-disposition']).toMatch(
+    /^attachment; filename="score-report-7d-\d{4}-\d{2}-\d{2}\.csv"$/,
+  )
+  const report = ReportsSchema.parse((await app.inject('/api/reports?range=7d')).json())
+  const lines = response.body.trimEnd().split('\r\n')
+  expect(lines[0]).toBe('Agent,Finished,Runs,Median time (min),First-time pass (%),Spend (USD)')
+  expect(lines).toHaveLength(report.byAgent.length + 1)
+  expect((await app.inject('/api/reports/export.csv?range=bad')).statusCode).toBe(400)
+})
+
+test('the seeded demo history fills every part of the report', async () => {
+  const seeded = new FakePort(1, { db: env.db }, false, undefined, true)
+  await seeded.start(env.ingest)
+  const demo = buildApp({
+    config: loadConfig({ SCORE_MODE: 'fake' }),
+    logger: false,
+    port: seeded,
+    db: env.db,
+    ingest: env.ingest,
+    clock: () => now,
+  })
+  try {
+    for (const range of ['7d', '30d'] as const) {
+      const report = ReportsSchema.parse((await demo.inject(`/api/reports?range=${range}`)).json())
+      expect(report.totals.tasksFinished).toBeGreaterThan(range === '7d' ? 10 : 50)
+      expect(report.totals.firstPassRate).toBeGreaterThan(0.5)
+      expect(report.totals.firstPassRate).toBeLessThan(0.95)
+      expect(report.approvals.asked).toBeGreaterThan(3)
+      expect(report.approvals.denied).toBeGreaterThanOrEqual(0)
+      for (const id of ['lead', 'builder', 'designer']) {
+        const split = report.timeSplit.find((row) => row.agentId === id)!
+        expect(split.workingPct).toBeGreaterThan(0)
+        expect(split.waitingOnAgentPct).toBeGreaterThan(0)
+      }
+      expect(report.byAgent.find((row) => row.agentId === 'reviewer')?.firstPassRate).toBeNull()
+    }
+    const again = (await demo.inject('/api/reports?range=7d')).json()
+    expect((await demo.inject('/api/reports?range=7d')).json()).toEqual(again)
+  } finally {
+    await demo.close()
+    await seeded.stop()
+  }
+})

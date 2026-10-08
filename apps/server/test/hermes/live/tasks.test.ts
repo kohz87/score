@@ -288,3 +288,80 @@ test('toggling steps preserves original body bytes even when the read model reda
     { timeoutMs: 10000, hermesHome: fixture.home },
   )
 })
+
+test('brief review and sent-back edges come from event kinds, survive late links, and deduplicate on restart', async () => {
+  const { createBrief, linkTask } = await import('../../../src/domain/briefs.ts')
+  const { readBriefFlow, readFlowNode, activeRunOfNode } =
+    await import('../../../src/domain/brief-flow.ts')
+  const { insertRoom, storeMessage } = await import('../../../src/domain/rooms.ts')
+  upstream.db.exec(`UPDATE tasks SET assignee = 'builder', status = 'running' WHERE id = 't_test';
+    INSERT INTO task_events (task_id, kind, payload, created_at) VALUES
+    ('t_test', 'review_requested', '{"reviewer":"reviewer","reason":"Custom feedback"}', 2100),
+    ('t_test', 'changes_requested', '{"author":"reviewer","reason":"Use a composite cursor"}', 2200);`)
+  await tasks.poll()
+  await ingest.submit({
+    source: 'test',
+    identity: 'brief',
+    apply({ sqlite, now }) {
+      insertRoom(
+        sqlite,
+        {
+          id: 'room-flow',
+          name: 'Flow',
+          kind: 'room',
+          leadAgentId: 'lead',
+          members: ['lead', 'builder', 'reviewer'],
+        },
+        now,
+      )
+      storeMessage(
+        sqlite,
+        {
+          id: 'brief-flow',
+          roomId: 'room-flow',
+          author: { kind: 'you' },
+          to: ['lead'],
+          parts: [{ kind: 'text', text: 'Review the cursor' }],
+          createdAt: now,
+          streaming: false,
+          refs: [],
+        },
+        now,
+      )
+      const drafts = createBrief(
+        sqlite,
+        {
+          id: 'brief-flow',
+          roomId: 'room-flow',
+          text: 'Review the cursor',
+          startedAt: new Date(2000 * 1000).toISOString(),
+        },
+        now,
+      )
+      linkTask(sqlite, 'brief-flow', 't_test', 'plan', now)
+      return drafts
+    },
+  })
+  await tasks.poll()
+  const flow = readBriefFlow(score.sqlite, 'brief-flow', 2300 * 1000)
+  expect(flow.nodes.map((node) => node.id)).toEqual([
+    'brief:brief-flow',
+    'task:t_test',
+    'review:t_test',
+  ])
+  expect(flow.nodes[2]).toMatchObject({ agentId: 'reviewer', state: 'done' })
+  expect(flow.edges).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ from: 'task:t_test', to: 'review:t_test', kind: 'review' }),
+      expect.objectContaining({ from: 'review:t_test', to: 'task:t_test', kind: 'sent_back' }),
+    ]),
+  )
+  expect(readFlowNode(score.sqlite, 'review:t_test', 2300 * 1000).node.agentId).toBe('reviewer')
+  expect(() => activeRunOfNode(score.sqlite, 'review:t_test')).toThrow('Nothing is running')
+  const before = score.sqlite.prepare('SELECT COUNT(*) AS n FROM events').get()
+  await tasks.close()
+  tasks = new LiveTasks(score, ingest, fixture.home)
+  await tasks.poll()
+  expect(score.sqlite.prepare('SELECT COUNT(*) AS n FROM events').get()).toEqual(before)
+  expect(score.sqlite.prepare('SELECT COUNT(*) AS n FROM brief_edges').get()).toEqual({ n: 2 })
+})

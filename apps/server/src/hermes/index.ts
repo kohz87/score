@@ -32,7 +32,7 @@ export function createHermesPort(
   deps: HermesPortDeps = {},
 ): HermesPort {
   return config.mode === 'fake'
-    ? new FakePort(config.fakeSpeed, deps, config.fakeLoop)
+    ? new FakePort(config.fakeSpeed, deps, config.fakeLoop, undefined, true)
     : new LivePort({
         ...deps,
         scoreHome: config.home,

@@ -161,6 +161,7 @@ const cases = [
       nodes: [flowNode],
       edges: [flowEdge],
       stats: { runningSec: 1, steps: 1, handoffs: 0, spendUsd: null, eta: null },
+      notice: null,
     },
     { asOfSeq: 1, brief: f.brief, nodes: [flowNode], edges: [flowEdge] },
   ],
