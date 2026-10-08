@@ -76,11 +76,19 @@ export function AdvancedSection() {
   }
   function runApply() {
     if (!previewed) return
+    const submitted = pending
     apply.mutate(
       { changes, expectedDiffHash: previewed.hash },
       {
         onSuccess: (result) => {
-          setPending({})
+          // Keep anything staged or re-staged while the request was in flight.
+          setPending((all) =>
+            Object.fromEntries(
+              Object.entries(all).filter(
+                ([key, value]) => !(key in submitted) || submitted[key] !== value,
+              ),
+            ),
+          )
           setPreviewed(null)
           setDone({ restart: result.restartRequired })
         },

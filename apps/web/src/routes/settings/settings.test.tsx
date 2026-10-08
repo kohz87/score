@@ -64,9 +64,12 @@ let registry: ReturnType<typeof createStreamQueryRegistry>
 let stream: ReturnType<typeof createStreamClient>
 let calls: { path: string; init?: RequestInit }[]
 let respond: (path: string, init?: RequestInit) => Response
+// When set, the config apply response waits for it, so a test can edit while a save is in flight.
+let applyGate: Promise<void> | null = null
 
 beforeEach(() => {
   calls = []
+  applyGate = null
   respond = (path) => {
     if (path === '/api/agents') return json({ asOfSeq: 0, items: [builder] })
     if (path === '/api/settings/providers') return json({ items: providers })
@@ -77,6 +80,8 @@ beforeEach(() => {
     'fetch',
     vi.fn((path: string, init?: RequestInit) => {
       calls.push({ path, ...(init ? { init } : {}) })
+      if (applyGate && path === '/api/settings/config/apply')
+        return applyGate.then(() => respond(path, init))
       return Promise.resolve(respond(path, init))
     }),
   )
@@ -248,6 +253,27 @@ test('advanced: editing after a preview clears the diff', async () => {
   await within(advanced).findByText(/\+agent.max_turns: 30/)
   fireEvent.click(within(advanced).getByRole('button', { name: 'Discard agent.max_turns' }))
   expect(within(advanced).queryByText(/\+agent.max_turns: 30/)).toBeNull()
+})
+
+test('advanced: a change staged while an apply is in flight stays pending after it succeeds', async () => {
+  let release!: () => void
+  applyGate = new Promise<void>((resolve) => (release = resolve))
+  advancedRespond(() => json({ ok: true, restartRequired: false }))
+  mount()
+  const advanced = await stageTurns()
+  fireEvent.click(within(advanced).getByRole('button', { name: 'Preview' }))
+  await within(advanced).findByText(/\+agent.max_turns: 30/)
+  fireEvent.click(within(advanced).getByRole('button', { name: 'Apply' }))
+  fireEvent.click(within(advanced).getByRole('button', { name: 'Edit display.language' }))
+  fireEvent.change(within(advanced).getByLabelText('New value for display.language'), {
+    target: { value: 'fr' },
+  })
+  fireEvent.click(within(advanced).getByRole('button', { name: 'Stage change' }))
+  release()
+  await within(advanced).findByText(/Saved\./)
+  const tray = within(advanced).getByRole('group', { name: 'Pending changes' })
+  expect(within(tray).getByText(/display.language = fr/)).toBeDefined()
+  expect(within(tray).queryByText(/agent.max_turns/)).toBeNull()
 })
 
 const pluginRows: PluginItem[] = [
