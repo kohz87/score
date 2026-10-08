@@ -251,6 +251,8 @@ export interface HermesPort extends ProfileManagementPort {
     turnId: string
     sessionId?: string
     model?: string
+    /** Media ids of the person's image attachments, in message order. */
+    images?: string[]
   }): Promise<{ runId: string }>
   stopRun(req: { agentId: string; runId: string }): Promise<void>
   taskAction(req: z.infer<typeof TaskActionRequestSchema>): Promise<{ hermesStatus: string }>
@@ -270,7 +272,11 @@ export interface HermesPortDeps {
   db?: ScoreDb
   scheduler?: Scheduler
   onError?: (error: unknown) => void
+  /** Reads an uploaded image by media id (wired from the media store; `hermes/` never imports it). */
+  imageReader?: ImageReader
 }
+
+export type ImageReader = (mediaId: string) => { contentType: string; bytes: Uint8Array } | null
 
 export class ApprovalDeliveryError extends Error {
   constructor(

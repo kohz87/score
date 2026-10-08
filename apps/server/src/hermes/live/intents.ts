@@ -8,6 +8,8 @@ import { attachRunMessage } from '../../domain/message-runs.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import { runDraft } from './translate.ts'
 import { HttpError } from '../../errors.ts'
+import type { ImageReader } from '../port.ts'
+import { buildRunInput } from './attachments.ts'
 
 const PayloadSchema = StartRunSchema.extend({ credentialGeneration: z.int().positive() })
 const IntentRowSchema = z.object({
@@ -23,6 +25,7 @@ interface IntentDeps {
   db: ScoreDb
   gateway: GatewayClient
   sink: ObservationSink
+  imageReader?: ImageReader
 }
 
 export class RunIntents {
@@ -89,6 +92,9 @@ async function dispatch(
         payload,
         row.idempotency_key,
         payload.credentialGeneration,
+        payload.images?.length
+          ? buildRunInput(payload.input, payload.images, deps.imageReader)
+          : undefined,
       )
       runId = result.runId
       db.tx((sqlite) => {
@@ -180,7 +186,8 @@ export async function startRunIntent(
       payload.profile !== parsed.profile ||
       payload.input !== parsed.input ||
       payload.model !== parsed.model ||
-      payload.sessionId !== parsed.sessionId
+      payload.sessionId !== parsed.sessionId ||
+      JSON.stringify(payload.images ?? []) !== JSON.stringify(parsed.images ?? [])
     )
       throw new Error('Idempotency key belongs to a different request')
     return dispatch(deps, row)

@@ -43,7 +43,7 @@ Below the timeline are three cards:
 
 The message box at the bottom sends a message to the room: **To** picks who gets it (default: the room's lead),
 **Add someone** adds more agents, **Plan first** asks for a plan before work starts, and the paperclip attaches
-files.
+files. Attached images are sent to the agents you address (up to about 6 MB per message).
 
 **Pause everyone** stops every running agent at once; the button becomes **Resume everyone**.
 

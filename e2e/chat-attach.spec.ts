@@ -47,4 +47,6 @@ test('the composer attaches an image, rejects a non-image, and the sent message 
   await expect
     .poll(() => image.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth))
     .toBe(1)
+  // The attachment reaches the addressed agent (the fake adapter reports how many images it received).
+  await expect(history.getByText('I can see 1 image.')).toBeVisible({ timeout: 20_000 })
 })

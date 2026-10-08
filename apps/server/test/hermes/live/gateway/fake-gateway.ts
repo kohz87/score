@@ -25,7 +25,7 @@ export function fixture(name: 'l2' | 'l4a'): FixtureEvent[] {
 const json = (body: unknown, status = 200) => Response.json(body, { status })
 interface FakeRun {
   profile: string
-  input: string
+  input: string | unknown[]
   id: string
   terminal: boolean
 }
@@ -83,11 +83,14 @@ export class FakeGateway {
     if (path === '/v1/runs' && method === 'POST') {
       const key = headers.get('Idempotency-Key')
       if (!key) return json({ error: { code: 'invalid_request' } }, 400)
-      const request = z.object({ input: z.string() }).parse(body)
+      const request = z.object({ input: z.union([z.string(), z.array(z.unknown())]) }).parse(body)
       const scope = this.identity(profile, key)
       const existing = this.admissions.get(scope)
       if (existing) {
-        if (this.runs.get(this.identity(profile, existing))?.input !== request.input)
+        if (
+          JSON.stringify(this.runs.get(this.identity(profile, existing))?.input) !==
+          JSON.stringify(request.input)
+        )
           return json({ error: { code: 'idempotency_conflict' } }, 409)
         return json({ run_id: existing, status: 'running', replayed: true }, 202)
       }
