@@ -737,6 +737,31 @@ test('the Memory tab searches, pages, adds once per submission and deletes after
   )
 })
 
+test('a read-only memory page hides the add and delete controls and says why', async () => {
+  renderTeam('/team/builder')
+  tabsApi((call) => {
+    if (call.method === 'GET' && call.path.includes('/memory'))
+      return json({
+        items: [
+          {
+            id: 'm-1',
+            text: 'Prefers short updates',
+            source: 'USER.md',
+            at: '2026-10-01T00:00:00.000Z',
+          },
+        ],
+        nextCursor: null,
+        writable: false,
+      })
+    return undefined
+  })
+  fireEvent.click(await screen.findByRole('tab', { name: 'Memory' }))
+  expect(await screen.findByText('Prefers short updates')).toBeDefined()
+  expect(screen.getByText(/Memory is read-only here/)).toBeDefined()
+  expect(screen.queryByRole('button', { name: 'Add memory' })).toBeNull()
+  expect(screen.queryByRole('button', { name: /Delete memory/ })).toBeNull()
+})
+
 test('memory writes Hermes cannot do show its reason', async () => {
   renderTeam('/team/builder')
   tabsApi((call) => {

@@ -47,6 +47,8 @@ export class FakeGateway {
   empty = false
   crashAfterAdmission = false
   terminalAfterPoll = 2
+  /** Shown as the pending approval while a polled run is not yet terminal. */
+  statusApproval: Record<string, unknown> | undefined
   events: FixtureEvent[] = fixture('l2')
   private identity(profile: string, id: string) {
     return `${profile}:${id}`
@@ -114,10 +116,22 @@ export class FakeGateway {
     if (action === 'events') {
       this.streams++
       if (this.sse404) return json({ error: 'no stream' }, 404)
-      if (this.truncate)
-        return new Response('data: {"event":"replay.truncated","oldest_retained_seq":10}\n\n', {
-          headers: { 'content-type': 'text/event-stream' },
-        })
+      if (this.truncate) {
+        // Hermes follows the notice with the events it still retains (api_server_runs `_write_event` loop).
+        const retained = this.events.filter((event) => event.seq >= 10)
+        run.terminal = true
+        return new Response(
+          'data: {"event":"replay.truncated","oldest_retained_seq":10}\n\n' +
+            retained
+              .map(
+                (event) =>
+                  `id: ${event.seq}\ndata: ${JSON.stringify({ ...event, run_id: run.id })}\n\n`,
+              )
+              .join('') +
+            ': stream closed\n\n',
+          { headers: { 'content-type': 'text/event-stream' } },
+        )
+      }
       const cursor = headers.get('Last-Event-ID')
       const filtered = this.events.filter((event) => cursor === null || event.seq >= Number(cursor))
       const dropping = this.dropAt !== undefined && this.streams === 1
@@ -154,7 +168,10 @@ export class FakeGateway {
     const last = this.events.at(-1)!
     return json({
       run_id: run.id,
-      status: terminal ? 'completed' : 'running',
+      status: terminal ? 'completed' : this.statusApproval ? 'waiting_for_approval' : 'running',
+      ...(!terminal && this.statusApproval
+        ? { approval: { ...this.statusApproval, run_id: run.id } }
+        : {}),
       created_at: this.events[0]!.timestamp,
       updated_at: last.timestamp,
       session_id: run.id,

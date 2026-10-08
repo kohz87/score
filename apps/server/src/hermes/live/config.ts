@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { runHermes, type HermesRunner } from './cli.ts'
+import { ProfileLocks } from './profile-locks.ts'
 import { resolveHermesHome } from './paths.ts'
 import { ConfigService, type ConfigBackend, type ConfigIndexEntry } from '../config-service.ts'
 import index from './config-index.json' with { type: 'json' }
@@ -26,6 +27,7 @@ export class LiveConfigBackend implements ConfigBackend {
   constructor(
     hermesHome: string | undefined,
     private readonly runner: HermesRunner = runHermes,
+    private readonly locks: ProfileLocks = new ProfileLocks(),
   ) {
     this.home = resolveHermesHome(hermesHome)
   }
@@ -43,14 +45,18 @@ export class LiveConfigBackend implements ConfigBackend {
     }
   }
   async write(key: string, value: string): Promise<boolean> {
-    const result = await this.runner(['config', 'set', key, value], {
-      timeoutMs: TIMEOUT_MS,
-      hermesHome: this.home,
-    })
+    // Unscoped commands act on the default profile (cli.ts pinScope).
+    const result = await this.locks.run('default', () =>
+      this.runner(['config', 'set', key, value], { timeoutMs: TIMEOUT_MS, hermesHome: this.home }),
+    )
     return result.exitCode === 0
   }
 }
 
-export function createLiveConfigService(hermesHome: string | undefined, runner?: HermesRunner) {
-  return new ConfigService(new LiveConfigBackend(hermesHome, runner), CONFIG_INDEX)
+export function createLiveConfigService(
+  hermesHome: string | undefined,
+  runner?: HermesRunner,
+  locks?: ProfileLocks,
+) {
+  return new ConfigService(new LiveConfigBackend(hermesHome, runner, locks), CONFIG_INDEX)
 }

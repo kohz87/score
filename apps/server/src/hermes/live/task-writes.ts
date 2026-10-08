@@ -39,12 +39,18 @@ export async function createTask(
   z.string()
     .regex(/^[\x21-\x7e]{1,256}$/)
     .parse(key)
-  if (req.reviewer !== undefined || req.roomId !== undefined)
+  // Hermes names a reviewer only when review is requested (`kanban request-review --reviewer`), not at creation.
+  if (req.reviewer !== undefined)
     throw new HttpError(
       501,
       'not_implemented',
-      'Creating tasks with reviewer or roomId is not supported by the CLI',
+      'Creating tasks with a reviewer is not supported by Hermes',
     )
+  if (
+    req.roomId !== undefined &&
+    !deps.db.sqlite.prepare('SELECT 1 FROM rooms WHERE id = ?').get(req.roomId)
+  )
+    throw new HttpError(400, 'bad_request', 'Unknown room')
   if (req.assignee) ProfileNameSchema.parse(req.assignee)
   for (const parent of req.dependsOn ?? []) TaskIdSchema.parse(parent)
   const body =
@@ -70,7 +76,9 @@ export async function createTask(
   z.string().max(32000).parse(body)
   const intentId = `task-create:${key}`
   const payload = JSON.stringify({
-    requestHash: createHash('sha256').update(JSON.stringify(args)).digest('hex'),
+    requestHash: createHash('sha256')
+      .update(JSON.stringify(req.roomId === undefined ? args : [args, req.roomId]))
+      .digest('hex'),
   })
   const now = new Date().toISOString()
   // Persist intent before the external create; its key also deduplicates at the upstream boundary.
@@ -88,16 +96,22 @@ export async function createTask(
         'Idempotency key belongs to a different task',
       )
     if (row.state === 'accepted' && row.result) return deps.getTask(TaskIdSchema.parse(row.result))
-    throw new HttpError(409, 'idempotency_pending', 'Task creation already has a command intent')
-  }
-  deps.db.tx((sqlite) =>
-    sqlite
-      .prepare(
-        `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at)
+    // Not accepted: the earlier attempt timed out, failed or died mid-way, and Hermes may or may not have created
+    // the task. Asking again with the same --idempotency-key returns that task if it exists (kanban_db
+    // create_task) and creates it otherwise, so the retry can never duplicate it.
+    deps.db.sqlite
+      .prepare("UPDATE command_intents SET state = 'pending', updated_at = ? WHERE id = ?")
+      .run(now, intentId)
+  } else {
+    deps.db.tx((sqlite) =>
+      sqlite
+        .prepare(
+          `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at)
     VALUES (?, 'task-create', ?, ?, 'pending', ?, ?)`,
-      )
-      .run(intentId, intentId, payload, now, now),
-  )
+        )
+        .run(intentId, intentId, payload, now, now),
+    )
+  }
   try {
     const result = await execute(args, deps)
     let id: string
@@ -106,13 +120,20 @@ export async function createTask(
     } catch {
       throw new HttpError(502, 'hermes_unavailable', 'Task creation returned invalid output')
     }
-    deps.db.tx((sqlite) =>
+    deps.db.tx((sqlite) => {
+      const at = new Date().toISOString()
       sqlite
         .prepare(
           "UPDATE command_intents SET state = 'accepted', result = ?, attempts = 1, updated_at = ? WHERE id = ?",
         )
-        .run(id, new Date().toISOString(), intentId),
-    )
+        .run(id, at, intentId)
+      if (req.roomId !== undefined)
+        sqlite
+          .prepare(
+            'INSERT OR REPLACE INTO task_rooms (task_id, room_id, created_at) VALUES (?, ?, ?)',
+          )
+          .run(id, req.roomId, at)
+    })
     return await deps.getTask(id)
   } catch (error) {
     deps.db.tx((sqlite) =>

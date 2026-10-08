@@ -24,7 +24,7 @@ test.each([0, 2, -1])(
       expect(execute).toHaveBeenCalledOnce()
       const [file, argv, options] = execute.mock.calls[0]!
       expect(file).toBe('hermes')
-      expect(argv).toEqual(args)
+      expect(argv).toEqual(['-p', 'default', 'kanban', '--board', 'default', ...args.slice(1)])
       expect(options).toMatchObject({
         timeout: 1234,
         maxBuffer: 16384,
@@ -146,7 +146,7 @@ test.each([
 test.each([
   ['-p', 'builder', 'config', 'get', '--json', 'skills.disabled'],
   ['-p', 'builder', 'config', 'get', '--json', 'delegation.max_concurrent_children'],
-  ['-p', 'builder', 'tools', 'list'],
+  ['-p', 'builder', 'tools', 'list', '--platform', 'api_server'],
   ['skills', 'search', '--json', '--limit', '20', '--', 'changelog'],
   ['config', 'get', '--json', 'display'],
   ['config', 'get', '--json', 'agent'],
@@ -163,6 +163,7 @@ test.each([
   ['-p', 'builder', 'config', 'get', '--json', 'api_key'],
   ['-p', 'builder', 'config', 'get', '--raw', 'skills.disabled'],
   ['-p', 'builder', 'tools', 'list', '--platform', 'x'],
+  ['-p', 'builder', 'tools', 'list'],
   ['-p', '../x', 'tools', 'list'],
   ['skills', 'search', '--json', '--limit', '20', 'unquoted'],
   ['skills', 'search', '--json', '--limit', 'x', '--', 'q'],
@@ -186,7 +187,7 @@ test.each([
   expect(execute).not.toHaveBeenCalled()
 })
 test('captureRead drops oversized output and failed commands stay private', async () => {
-  const args = ['-p', 'builder', 'tools', 'list']
+  const args = ['-p', 'builder', 'tools', 'list', '--platform', 'api_server']
   const execute = vi.fn<NonNullable<CliOptions['execute']>>((_file, _args, _options, callback) =>
     callback(null, 'x'.repeat(512 * 1024 + 1)),
   )
@@ -199,4 +200,48 @@ test('captureRead drops oversized output and failed commands stay private', asyn
   await expect(runHermes(args, { timeoutMs: 100, captureRead: true, execute })).resolves.toEqual({
     exitCode: 3,
   })
+})
+
+test.each([
+  [
+    ['config', 'get', '--json', 'display'],
+    ['-p', 'default', 'config', 'get', '--json', 'display'],
+  ],
+  [
+    ['auth', 'list'],
+    ['-p', 'default', 'auth', 'list'],
+  ],
+  [
+    ['-p', 'builder', 'config', 'set', 'a', 'b'],
+    ['-p', 'builder', 'config', 'set', 'a', 'b'],
+  ],
+  [
+    ['kanban', 'comment', '--', 't_1', 'x'],
+    ['-p', 'default', 'kanban', '--board', 'default', 'comment', '--', 't_1', 'x'],
+  ],
+  [
+    ['-p', 'builder', 'kanban', 'archive', '--', 't_1'],
+    ['-p', 'builder', 'kanban', '--board', 'default', 'archive', '--', 't_1'],
+  ],
+  [
+    ['profile', 'list'],
+    ['profile', 'list'],
+  ],
+])('unscoped commands are pinned to the default profile and board: %j', async (argv, sent) => {
+  const execute = vi.fn<NonNullable<CliOptions['execute']>>((_file, _args, _options, callback) =>
+    callback(null, ''),
+  )
+  await runHermes(argv, { timeoutMs: 100, hermesHome: '/tmp/hermes-root', execute })
+  expect(execute.mock.calls[0]![1]).toEqual(sent)
+})
+test('a Hermes home that is itself a profile directory is not re-pinned to default', async () => {
+  const execute = vi.fn<NonNullable<CliOptions['execute']>>((_file, _args, _options, callback) =>
+    callback(null, ''),
+  )
+  await runHermes(['auth', 'list'], {
+    timeoutMs: 100,
+    hermesHome: '/tmp/hermes/profiles/builder',
+    execute,
+  })
+  expect(execute.mock.calls[0]![1]).toEqual(['auth', 'list'])
 })

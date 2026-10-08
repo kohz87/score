@@ -38,7 +38,7 @@ export class LiveTasks {
         sqlite.exec('BEGIN')
         try {
           const batch = tailTaskEvents(sqlite, { afterId, limit })
-          const tasks = readTaskDetails(sqlite)
+          const tasks = this.withRooms(readTaskDetails(sqlite))
           const reviews = reviewTransitionsFrom(batch.rows)
           // A task linked to a brief after its review events went past the tailer still needs its edges: read the
           // history of newly linked tasks once (by id), never the whole board.
@@ -60,6 +60,16 @@ export class LiveTasks {
         }
       },
     })
+  }
+  /** Room links are Score's own (task_rooms); Hermes tasks carry none. */
+  private withRooms(tasks: TaskDetail[]): TaskDetail[] {
+    const rooms = new Map(
+      z
+        .array(z.object({ task_id: z.string(), room_id: z.string() }))
+        .parse(this.db.sqlite.prepare('SELECT task_id, room_id FROM task_rooms').all())
+        .map((row) => [row.task_id, row.room_id]),
+    )
+    return tasks.map((task) => ({ ...task, roomId: rooms.get(task.id) ?? null }))
   }
   private latest: TaskDetail[] = []
   private reviews: ReviewTransition[] = []

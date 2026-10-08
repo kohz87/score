@@ -33,7 +33,14 @@ export function requestIdempotency(
    * Secret-bearing routes (a pasted API key): the stored body hash is an HMAC under a per-process random secret, so
    * the receipt can't be used to confirm a guess at the body. A retry after a restart is then a conflict, not a replay.
    */
-  options: { secretBody?: boolean } = {},
+  options: {
+    secretBody?: boolean
+    /**
+     * The handler can safely run again with the same key (it reconciles with the upstream's own idempotency): a
+     * server error or a receipt left pending by a crash is dropped instead of replayed, so a retry can succeed.
+     */
+    rerunUncertain?: boolean
+  } = {},
 ): { preHandler: preHandlerHookHandler; onSend: onSendHookHandler } {
   const owners = new WeakMap<FastifyRequest, { key: string; route: string; finish: () => void }>()
   const flights = new Map<string, Promise<void>>()
@@ -81,6 +88,19 @@ export function requestIdempotency(
           value = read()
           receipt = ReceiptSchema.parse(value)
         }
+        if (
+          options.rerunUncertain &&
+          !flights.has(identity) &&
+          (receipt.status === null || receipt.status >= 500)
+        ) {
+          db.sqlite
+            .prepare('DELETE FROM request_receipts WHERE key = ? AND route = ?')
+            .run(key, route)
+          value = undefined
+        }
+      }
+      if (value) {
+        const receipt = ReceiptSchema.parse(value)
         // A crash may leave an uncertain side effect: never rerun a pending receipt.
         if (receipt.status === null || receipt.response === null)
           throw new HttpError(409, 'idempotency_pending', 'Original request has not completed')

@@ -44,6 +44,7 @@ export const MEMORY_DETAIL_ITEMS = 5
 export function pageMemory(
   all: readonly MemoryItem[],
   query: z.infer<typeof MemoryQuerySchema>,
+  writable = true,
 ): MemoryPage {
   const needle = query.q?.trim().toLowerCase()
   const matches = needle ? all.filter((item) => item.text.toLowerCase().includes(needle)) : all
@@ -52,5 +53,6 @@ export function pageMemory(
   return {
     items: [...items],
     nextCursor: start + MEMORY_PAGE_SIZE < matches.length ? String(start + MEMORY_PAGE_SIZE) : null,
+    ...(writable ? {} : { writable: false }),
   }
 }

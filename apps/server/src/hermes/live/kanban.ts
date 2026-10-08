@@ -129,6 +129,22 @@ export function readTaskEvents(db: DatabaseSync, taskId: string) {
   }
 }
 
+/** The newest review event of a task, whatever the 50-event activity window holds. */
+export function readLatestReviewEvent(db: DatabaseSync, taskId: string) {
+  z.string().min(1).parse(taskId)
+  const batch = readBatch(
+    db,
+    'task_events',
+    TaskEventRowSchema,
+    "WHERE task_id = ? AND kind IN ('review_requested', 'changes_requested') ORDER BY id DESC LIMIT 1",
+    [taskId],
+  )
+  return {
+    ...batch,
+    rows: batch.rows.map((row) => ({ ...row, payload: parseJson(row.payload).value })),
+  }
+}
+
 export function readTaskRuns(db: DatabaseSync, input: z.input<typeof TaskIdsSchema>) {
   const { taskIds } = TaskIdsSchema.parse(input)
   return readByIds(db, 'task_runs', TaskRunSchema, taskIds, ['task_id'], 'id')

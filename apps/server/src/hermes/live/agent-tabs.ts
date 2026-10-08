@@ -27,10 +27,13 @@ import {
   readDisabledSkills,
   readPlugins,
   readTools,
+  RUN_TOOL_PLATFORM,
+  WORKER_TOOL_PLATFORM,
 } from './agent-config.ts'
 import { runHermes, type HermesRunner } from './cli.ts'
 import { readMemory } from './memory.ts'
-import { messagingRows, readGatewayPlatforms } from './settings.ts'
+import { messagingRows, readProfilePlatforms } from './settings.ts'
+import { ProfileLocks } from './profile-locks.ts'
 import { ProfileNameSchema } from './paths.ts'
 import { skillNames } from './profiles.ts'
 
@@ -38,19 +41,17 @@ const HUB_LIMIT = 20
 
 /** Model, skills, memory and tool edits for one Hermes profile, all through the `hermes` CLI. */
 export class LiveAgentTabs {
-  private tail: Promise<unknown> = Promise.resolve()
   constructor(
     private readonly hermesHome: string,
     private readonly homeOf: (profile: string) => string | null,
     private readonly invalidate: (profile: string) => void,
     private readonly runner: HermesRunner = runHermes,
+    private readonly locks: ProfileLocks = new ProfileLocks(),
   ) {}
 
-  // Skill and tool toggles read the list, change it and write it back; serialize them within this process.
-  private serial<T>(work: () => Promise<T>): Promise<T> {
-    const result = this.tail.then(work, work)
-    this.tail = result.catch(() => undefined)
-    return result
+  // Every change to a profile's config.yaml (model, skills, tools, plugins, approvals) shares one queue.
+  private serial<T>(profile: string, work: () => Promise<T>): Promise<T> {
+    return this.locks.run(profile, work)
   }
   private profile(agentId: string): { profile: string; home: string } {
     const parsed = ProfileNameSchema.safeParse(agentId)
@@ -75,15 +76,18 @@ export class LiveAgentTabs {
   async setModel(agentId: string, input: z.infer<typeof SetModelSchema>): Promise<void> {
     const req = SetModelSchema.parse(input)
     const { profile } = this.profile(agentId)
-    await this.mutate(profile, ['config', 'set', 'model.default', req.model])
-    if (req.provider) await this.mutate(profile, ['config', 'set', 'model.provider', req.provider])
+    await this.serial(profile, async () => {
+      await this.mutate(profile, ['config', 'set', 'model.default', req.model])
+      if (req.provider)
+        await this.mutate(profile, ['config', 'set', 'model.provider', req.provider])
+    })
   }
 
   /** Gateway state from this profile's own home; the connect command is shown, never run. */
   listChannels(agentId: string): AgentChannelsResponse {
-    const { profile, home } = this.profile(agentId)
+    const { profile } = this.profile(agentId)
     return {
-      items: messagingRows(readGatewayPlatforms(home)).map((row) => ({
+      items: messagingRows(readProfilePlatforms(this.hermesHome, profile)).map((row) => ({
         ...row,
         connectCommand: `hermes -p ${profile} gateway setup`,
       })),
@@ -103,13 +107,15 @@ export class LiveAgentTabs {
   ): Promise<SkillItem[]> {
     const req = InstallSkillSchema.parse(input)
     const { profile } = this.profile(agentId)
-    await this.mutate(profile, ['skills', 'install', '--yes', '--', req.name], 120000)
+    await this.serial(profile, () =>
+      this.mutate(profile, ['skills', 'install', '--yes', '--', req.name], 120000),
+    )
     return this.listSkills(agentId)
   }
   async setSkillEnabled(agentId: string, name: string, enabled: boolean): Promise<SkillItem> {
     SkillNameSchema.parse(name)
     const { profile } = this.profile(agentId)
-    return this.serial(async () => {
+    return this.serial(profile, async () => {
       const skills = await this.listSkills(agentId)
       if (!skills.some((skill) => skill.name === name))
         throw new HttpError(404, 'not_found', 'Skill not found')
@@ -160,7 +166,8 @@ export class LiveAgentTabs {
     return readMemory(this.profile(agentId).home)
   }
   listMemory(agentId: string, query: z.infer<typeof MemoryQuerySchema>): MemoryPage {
-    return pageMemory(this.memory(agentId), MemoryQuerySchema.parse(query))
+    // Hermes has no per-entry memory command, so the page says it is read-only.
+    return pageMemory(this.memory(agentId), MemoryQuerySchema.parse(query), false)
   }
   unsupportedMemoryWrite(agentId: string): never {
     this.profile(agentId)
@@ -173,12 +180,12 @@ export class LiveAgentTabs {
 
   async tools(agentId: string): Promise<AgentTool[]> {
     const { profile } = this.profile(agentId)
-    return readTools(this.runner, this.hermesHome, profile)
+    return (await readTools(this.runner, this.hermesHome, profile)) ?? []
   }
   async setToolEnabled(agentId: string, toolId: string, enabled: boolean): Promise<AgentTool> {
     ToolIdSchema.parse(toolId)
     const { profile } = this.profile(agentId)
-    return this.serial(async () => {
+    return this.serial(profile, async () => {
       const tool = (await this.tools(agentId)).find((candidate) => candidate.id === toolId)
       if (!tool) throw new HttpError(404, 'not_found', 'Tool not found')
       if (tool.kind === 'mcp')
@@ -187,8 +194,20 @@ export class LiveAgentTabs {
           'not_implemented',
           'MCP servers are toggled per tool in Hermes; Score shows them read-only',
         )
-      if (tool.enabled !== enabled)
-        await this.mutate(profile, ['tools', enabled ? 'enable' : 'disable', '--', toolId])
+      if (tool.enabled !== enabled) {
+        const verb = enabled ? 'enable' : 'disable'
+        // Kanban workers read the cli platform; a toolset that platform refuses doesn't block the change
+        // for Score's own runs, which are verified below.
+        await this.mutate(profile, [
+          'tools',
+          verb,
+          '--platform',
+          WORKER_TOOL_PLATFORM,
+          '--',
+          toolId,
+        ]).catch(() => undefined)
+        await this.mutate(profile, ['tools', verb, '--platform', RUN_TOOL_PLATFORM, '--', toolId])
+      }
       const after = (await this.tools(agentId)).find((candidate) => candidate.id === toolId)
       if (!after || after.enabled !== enabled)
         throw new HttpError(409, 'conflict', 'Hermes did not apply the change')
@@ -212,7 +231,7 @@ export class LiveAgentTabs {
         'conflict',
         'The Score bridge stays on: Score needs it to see Hermes',
       )
-    return this.serial(async () => {
+    return this.serial(profile, async () => {
       const before = (await this.listPlugins(agentId)).find((plugin) => plugin.id === id)
       if (!before) throw new HttpError(404, 'not_found', 'Plugin not found')
       if (before.enabled !== enabled)

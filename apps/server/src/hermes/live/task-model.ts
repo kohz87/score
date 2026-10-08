@@ -17,6 +17,7 @@ import {
   readTaskLinks,
   readTaskRuns,
   type TaskEvent,
+  readLatestReviewEvent,
 } from './kanban.ts'
 
 export function taskColumn(status: string): TaskColumn | null {
@@ -92,18 +93,29 @@ export function readTaskDetails(db: DatabaseSync, now = Date.now()): TaskDetail[
         ...comments.rows.map((comment) => comment.created_at),
       ) * 1000,
     ).toISOString()
-    const reviewRequest = events.rows.findLast((event) => event.kind === 'review_requested')
-    const reviewChange = events.rows.findLast((event) => event.kind === 'changes_requested')
-    const requestedReviewer = z
-      .object({ reviewer: AgentIdSchema.optional() })
-      .safeParse(reviewRequest?.payload)
-    const reviewActor = z
-      .object({ author: AgentIdSchema.optional(), profile: AgentIdSchema.optional() })
-      .safeParse(reviewChange?.payload)
-    const reviewer = requestedReviewer.success ? requestedReviewer.data.reviewer : undefined
-    const actor = reviewActor.success
-      ? (reviewActor.data.author ?? reviewActor.data.profile)
-      : undefined
+    // Hermes records the reviewer on both review events (kanban_db request_review / request_changes);
+    // the newest one wins. Events are newest first, so this is a plain find, not findLast.
+    const latestReview = readLatestReviewEvent(db, task.id)
+    const reviewEvent =
+      latestReview.rows[0] ??
+      events.rows.find((event) => ['review_requested', 'changes_requested'].includes(event.kind))
+    const named = z
+      .object({
+        reviewer: AgentIdSchema.nullish(),
+        author: AgentIdSchema.optional(),
+        profile: AgentIdSchema.optional(),
+      })
+      .safeParse(reviewEvent?.payload)
+    const fallback =
+      reviewEvent?.kind === 'changes_requested'
+        ? named.success
+          ? (named.data.author ?? named.data.profile)
+          : undefined
+        : undefined
+    // The task may be reassigned to its reviewer, so an explicit `reviewer` is kept even when it is the assignee.
+    const reviewer =
+      (named.success ? named.data.reviewer : undefined) ??
+      (fallback && fallback !== task.assignee ? fallback : undefined)
     const needsInput = ['needs_input', 'capability'].includes(task.block_kind ?? '')
     return TaskDetailSchema.parse(
       redactValue({
@@ -113,9 +125,7 @@ export function readTaskDetails(db: DatabaseSync, now = Date.now()): TaskDetail[
         column,
         hermesStatus: task.status,
         assignee: task.assignee,
-        reviewer:
-          reviewer ??
-          (actor && actor !== 'score' && actor !== 'you' && actor !== task.assignee ? actor : null),
+        reviewer: reviewer && reviewer !== 'score' && reviewer !== 'you' ? reviewer : null,
         roomId: null,
         badge:
           task.status === 'blocked'

@@ -2,23 +2,9 @@
   "0240fa4a84": {
     "approvalApi": {
       "detectDangerousCommand": true,
-      "entrySlots": [
-        "acknowledged",
-        "cancelled",
-        "data",
-        "event",
-        "reason",
-        "result",
-        "settle"
-      ],
-      "functions": [
-        "list_gateway_approvals",
-        "resolve_gateway_approval"
-      ],
-      "state": [
-        "_gateway_queues",
-        "_lock"
-      ]
+      "entrySlots": ["acknowledged", "cancelled", "data", "event", "reason", "result", "settle"],
+      "functions": ["list_gateway_approvals", "resolve_gateway_approval"],
+      "state": ["_gateway_queues", "_lock"]
     },
     "capabilities": [
       "approval_events",
@@ -219,23 +205,9 @@
   "e97923c38a": {
     "approvalApi": {
       "detectDangerousCommand": true,
-      "entrySlots": [
-        "acknowledged",
-        "cancelled",
-        "data",
-        "event",
-        "reason",
-        "result",
-        "settle"
-      ],
-      "functions": [
-        "list_gateway_approvals",
-        "resolve_gateway_approval"
-      ],
-      "state": [
-        "_gateway_queues",
-        "_lock"
-      ]
+      "entrySlots": ["acknowledged", "cancelled", "data", "event", "reason", "result", "settle"],
+      "functions": ["list_gateway_approvals", "resolve_gateway_approval"],
+      "state": ["_gateway_queues", "_lock"]
     },
     "capabilities": [
       "approval_events",

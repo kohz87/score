@@ -125,6 +125,7 @@ export function skillNames(home: string): string[] {
   return [...new Set(names)].sort().map(redact)
 }
 
+const FAILED_READ_RETRY_MS = 15_000
 interface Settings {
   disabledSkills: string[]
   tools: AgentDetail['tools']
@@ -133,7 +134,10 @@ interface Settings {
 }
 export class ProfilesReader {
   private readonly models = new Map<string, { signature: string; value: AgentDetail['model'] }>()
-  private readonly settings = new Map<string, { signature: string; value: Settings }>()
+  private readonly settings = new Map<
+    string,
+    { signature: string; value: Settings; retryAt: number }
+  >()
   constructor(
     private readonly hermesHome: string,
     private readonly runner: HermesRunner = runHermes,
@@ -176,7 +180,8 @@ export class ProfilesReader {
     if (!stat) return unknown
     const signature = `${stat.mtimeMs}:${stat.size}:${stat.ino}`
     const cached = this.settings.get(profile)
-    if (cached?.signature === signature) return cached.value
+    // A read that failed is retried after RETRY_MS even though config.yaml is unchanged.
+    if (cached?.signature === signature && Date.now() < cached.retryAt) return cached.value
     const [disabled, tools, helpersMax, approvals] = await Promise.all([
       readDisabledSkills(this.runner, this.hermesHome, profile),
       readTools(this.runner, this.hermesHome, profile),
@@ -185,11 +190,17 @@ export class ProfilesReader {
     ])
     const value = {
       disabledSkills: disabled ?? [],
-      tools,
+      tools: tools ?? [],
       helpersMax,
       permissions: permissionsOf(approvals),
     }
-    this.settings.set(profile, { signature, value })
+    const complete =
+      disabled !== null && tools !== null && helpersMax !== null && approvals !== null
+    this.settings.set(profile, {
+      signature,
+      value,
+      retryAt: complete ? Infinity : Date.now() + FAILED_READ_RETRY_MS,
+    })
     return value
   }
   private async model(profile: string, home: string | null): Promise<AgentDetail['model']> {

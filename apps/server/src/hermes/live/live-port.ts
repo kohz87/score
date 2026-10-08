@@ -49,6 +49,7 @@ import { createTask, patchTask } from './task-writes.ts'
 import { LiveRoutines } from './routines.ts'
 import { LiveAgentTabs } from './agent-tabs.ts'
 import { MemoryIdSchema } from '../agent-tabs.ts'
+import { ProfileLocks } from './profile-locks.ts'
 import { createLiveConfigService } from './config.ts'
 import { LiveSettings } from './settings.ts'
 import { readApprovalConfig, updateProfileApprovals } from './approvals.ts'
@@ -118,6 +119,7 @@ export class LivePort implements HermesPort {
     async () => (await this.gateway?.modelOptions())?.providers ?? null,
   )
   private readonly config: ReturnType<typeof createLiveConfigService>
+  private readonly locks = new ProfileLocks()
   private readonly profileFiles = new ProfileFiles()
   private readonly profileManagement: LiveProfileManagement
   constructor(private readonly options: LivePortOptions) {
@@ -129,6 +131,7 @@ export class LivePort implements HermesPort {
       (profile) => this.profiles.profileHome(profile),
       (profile) => this.profiles.invalidate(profile),
       options.runner,
+      this.locks,
     )
     this.settings = new LiveSettings(
       options.hermesHome,
@@ -139,8 +142,9 @@ export class LivePort implements HermesPort {
       },
       options.settingsProfile,
       options.spawner,
+      this.locks,
     )
-    this.config = createLiveConfigService(options.hermesHome, options.runner)
+    this.config = createLiveConfigService(options.hermesHome, options.runner, this.locks)
     this.profileManagement = new LiveProfileManagement({
       ...options,
       hermesHome: resolveHermesHome(options.hermesHome),
@@ -407,7 +411,6 @@ export class LivePort implements HermesPort {
     this.requireStarted()
     return this.tabs.setPluginEnabled(agentId, id, enabled)
   }
-  private approvalTail: Promise<unknown> = Promise.resolve()
   private approvalProfile(agentId: string): string {
     const parsed = ProfileNameSchema.safeParse(agentId)
     if (!parsed.success || !this.profiles.profileHome(parsed.data))
@@ -421,22 +424,20 @@ export class LivePort implements HermesPort {
       this.approvalProfile(agentId),
     )
   }
-  // Writers within this process queue up; Hermes itself is the only other writer left to merge with.
+  // Writers within this process share the profile's queue; Hermes itself is the only other writer left to merge with.
   updateApprovals(
     agentId: string,
     edit: (current: ApprovalConfig) => ApprovalConfig,
   ): Promise<ApprovalConfig> {
     const profile = this.approvalProfile(agentId)
-    const work = () =>
+    return this.locks.run(profile, () =>
       updateProfileApprovals(
         this.options.runner ?? runHermes,
         resolveHermesHome(this.options.hermesHome),
         profile,
         edit,
-      ).finally(() => this.profiles.invalidate(profile))
-    const result = this.approvalTail.then(work, work)
-    this.approvalTail = result.catch(() => undefined)
-    return result
+      ).finally(() => this.profiles.invalidate(profile)),
+    )
   }
   async listProviders() {
     return this.settings.listProviders()
