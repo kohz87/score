@@ -10,7 +10,7 @@ function idempotencyKey() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-const choiceText: Record<ApprovalChoice, string> = {
+export const choiceText: Record<ApprovalChoice, string> = {
   once: 'You approved',
   session: 'You approved for this session',
   always: 'You approved always',
@@ -79,11 +79,39 @@ function useApprovalById(approvalId: string, enabled: boolean) {
   })
 }
 
-export function ApprovalCard({ approvalId }: { approvalId: string }) {
-  const { data, status } = useStreamQuery(approvalsQuery)
+// The one decision path for every approval card (Chat and Now): POST once with an idempotency key.
+export function useApprovalDecision(approvalId: string) {
   const [posted, setPosted] = useState<Approval | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  async function decide(choice: ApprovalChoice) {
+    setBusy(true)
+    setError(null)
+    try {
+      const result = ApprovalSchema.parse(
+        await apiFetch(`approvals/${encodeURIComponent(approvalId)}/decision`, {
+          method: 'POST',
+          headers: { 'Idempotency-Key': idempotencyKey() },
+          body: JSON.stringify({ choice }),
+        }),
+      )
+      setPosted(result)
+      return result
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError ? caught.message : 'The request failed. Please try again.',
+      )
+      return null
+    } finally {
+      setBusy(false)
+    }
+  }
+  return { posted, busy, error, decide }
+}
+
+export function ApprovalCard({ approvalId }: { approvalId: string }) {
+  const { data, status } = useStreamQuery(approvalsQuery)
+  const { posted, busy, error, decide: submit } = useApprovalDecision(approvalId)
   const [more, setMore] = useState(false)
   const listed = data?.find((item) => item.id === approvalId)
   const byId = useApprovalById(approvalId, status === 'success' && !listed)
@@ -109,26 +137,8 @@ export function ApprovalCard({ approvalId }: { approvalId: string }) {
   const open = approval.actionable && outcome === null && !busy
   const retrying = approval.actionable && approval.delivery === 'failed'
   async function decide(choice: ApprovalChoice) {
-    setBusy(true)
-    setError(null)
     setMore(false)
-    try {
-      setPosted(
-        ApprovalSchema.parse(
-          await apiFetch(`approvals/${encodeURIComponent(approvalId)}/decision`, {
-            method: 'POST',
-            headers: { 'Idempotency-Key': idempotencyKey() },
-            body: JSON.stringify({ choice }),
-          }),
-        ),
-      )
-    } catch (caught) {
-      setError(
-        caught instanceof ApiError ? caught.message : 'The request failed. Please try again.',
-      )
-    } finally {
-      setBusy(false)
-    }
+    await submit(choice)
   }
   const showButtons = approval.actionable && (outcome === null || retrying)
   return (
