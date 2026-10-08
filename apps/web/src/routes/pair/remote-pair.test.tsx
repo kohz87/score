@@ -67,7 +67,11 @@ test.each(['http', 'tls'])('%s shows the appropriate permanent transport warning
   document.documentElement.setAttribute('data-score-transport', transport)
   const router = createMemoryRouter([{ path: '/', Component: AppShell }])
   routers.push(router)
-  render(<RouterProvider router={router} />)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.reject(new Error('offline'))),
+  )
+  render(withClient(<RouterProvider router={router} />))
   if (transport === 'http') {
     expect(screen.getByLabelText('Transport warning').textContent).toContain(
       'Plain HTTP: anyone on this network could read and control Score',

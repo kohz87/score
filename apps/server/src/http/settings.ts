@@ -4,6 +4,7 @@ import {
   ConfigApplyRequestSchema,
   ConfigPreviewRequestSchema,
   ConfigSearchQuerySchema,
+  HermesAcceptRequestSchema,
   LocalProviderRequestSchema,
   PlatformParamSchema,
   ToolServerRequestSchema,
@@ -65,6 +66,14 @@ export function registerSettingsRoutes(
   app.get('/api/settings/config', async (request) => ({
     items: await port.searchConfig(ConfigSearchQuerySchema.parse(request.query).q),
   }))
+  // A check only reads (the CLI version, the gateway, Hermes's sources); it is still a person's action.
+  app.post('/api/settings/hermes/check', { preHandler: [humanGuard(app.pairing)] }, async () =>
+    port.checkHermes(),
+  )
+  app.post('/api/settings/hermes/accept', mutation, async (request) => {
+    await port.acceptHermes(HermesAcceptRequestSchema.parse(request.body).hash)
+    return { ok: true }
+  })
   // Preview changes nothing; it still goes through the CSRF hook like every POST.
   app.post('/api/settings/config/preview', async (request) =>
     port.previewConfig(ConfigPreviewRequestSchema.parse(request.body).changes),

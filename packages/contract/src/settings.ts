@@ -162,3 +162,27 @@ export const ConfigApplyResponseSchema = z.object({
   restartRequired: z.boolean(),
 })
 export type ConfigApplyResponse = z.infer<typeof ConfigApplyResponseSchema>
+
+export const HermesCheckPartSchema = z.object({
+  name: z.string().min(1),
+  status: z.enum(['same', 'added', 'changed', 'removed']),
+  detail: z.string(),
+})
+export type HermesCheckPart = z.infer<typeof HermesCheckPartSchema>
+export const HermesCheckSchema = z.object({
+  /** sha256 over the build and parts; `accept` must send it back unchanged. */
+  hash: z.string().regex(/^[0-9a-f]{64}$/),
+  build: z.object({
+    version: z.string().nullable(),
+    codeSha: z.string().nullable(),
+    fingerprint: z.string(),
+  }),
+  parts: z.array(HermesCheckPartSchema),
+  compatible: z.boolean(),
+})
+export type HermesCheck = z.infer<typeof HermesCheckSchema>
+export const HermesAcceptRequestSchema = z
+  .object({ hash: z.string().regex(/^[0-9a-f]{64}$/) })
+  .strict()
+export type HermesAcceptRequest = z.infer<typeof HermesAcceptRequestSchema>
+export const HermesAcceptResponseSchema = z.object({ ok: z.literal(true) })

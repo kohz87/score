@@ -4,6 +4,7 @@ import { AdvancedSection } from './AdvancedSection.tsx'
 import { ConnectionsSection } from './ConnectionsSection.tsx'
 import { RulesSection } from './RulesSection.tsx'
 import { ProvidersSection } from './ProvidersSection.tsx'
+import { HermesVersionBanner } from './HermesVersionBanner.tsx'
 import { RemoteSection } from './RemoteSection.tsx'
 import { remoteTransport } from '../../data/session.ts'
 import './settings.css'
@@ -31,6 +32,7 @@ export function SettingsPage() {
         {remoteTransport() && <a href="#remote-access">Remote access</a>}
       </nav>
       <div className="settings-content">
+        <HermesVersionBanner />
         <ProvidersSection agents={agents} />
         <ConnectionsSection agents={agents} />
         <RulesSection agents={agents} />
