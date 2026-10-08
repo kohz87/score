@@ -2,6 +2,14 @@ import { describe, expect, test } from 'vitest'
 import * as contract from '../src/index.ts'
 import * as f from './fixtures.ts'
 
+const provider = {
+  id: 'openrouter',
+  label: 'OpenRouter',
+  status: 'connected',
+  detail: 'API key (1)',
+  usedBy: ['lead'],
+}
+const toolServer = { id: 'files', label: 'files', status: 'ok', usedBy: 'everyone' }
 const cases = [
   ['AgentIdSchema', 'lead', ''],
   ['ShapeSchema', 'circle-dot', 'oval'],
@@ -116,6 +124,35 @@ const cases = [
   ['BridgeDecisionSchema', f.bridgeDecision, { ...f.bridgeDecision, requestId: null }],
   ['BridgeDecisionsResponseSchema', { items: [f.bridgeDecision] }, { items: [{}] }],
   ['BridgeDecisionAckRequestSchema', f.bridgeAck, { ...f.bridgeAck, outcome: 'denied' }],
+  ['ProviderItemSchema', provider, { ...provider, status: 'broken' }],
+  ['ProvidersResponseSchema', { items: [provider] }, { items: [{}] }],
+  [
+    'ConnectResultSchema',
+    { next: 'run_in_terminal', command: 'hermes auth add x' },
+    { next: 'now' },
+  ],
+  [
+    'LocalProviderRequestSchema',
+    { label: 'Lab', baseUrl: 'http://127.0.0.1:8080/v1', model: 'm' },
+    { label: 'Lab', baseUrl: 'ftp://x', model: '--m' },
+  ],
+  ['ToolServerSchema', toolServer, { ...toolServer, usedBy: 'nobody' }],
+  [
+    'MessagingPlatformSchema',
+    { platform: 'slack', label: 'Slack', status: 'connected', detail: null },
+    { platform: 'slack', label: 'Slack', status: 'ok', detail: null },
+  ],
+  [
+    'ConnectionsResponseSchema',
+    { toolServers: [toolServer], messaging: [] },
+    { toolServers: [{}], messaging: [] },
+  ],
+  [
+    'ToolServerRequestSchema',
+    { name: 'docs', url: 'https://mcp.example.com/sse' },
+    { name: 'docs', url: 'https://mcp.example.com/sse', command: ['x'] },
+  ],
+  ['PlatformParamSchema', 'telegram', 'Bad Name'],
 ] as const satisfies ReadonlyArray<readonly [keyof typeof contract, unknown, unknown]>
 
 test('every exported schema has valid and invalid fixtures', () => {

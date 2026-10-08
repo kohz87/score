@@ -24,6 +24,10 @@ import { approvalDraft, patchApproval, readApprovalRow } from '../../domain/appr
 import type {
   AgentSummary,
   Approval,
+  ConnectResult,
+  ConnectionsResponse,
+  LocalProviderRequest,
+  ToolServerRequest,
   RoutineSummary,
   RunSummary,
   TaskDetail,
@@ -51,6 +55,7 @@ import {
   matchesTask,
   type HermesPort,
   type HermesPortDeps,
+  type ProviderBase,
   type ObservationSink,
   type Scheduler,
 } from '../port.ts'
@@ -446,6 +451,64 @@ export class FakePort implements HermesPort {
   async runRoutine(id: string): Promise<void> {
     // Real Hermes runs on its next tick; the fake records the run immediately.
     this.routine(id).lastRunAt = this.now()
+  }
+  private readonly fakeProviders: ProviderBase[] = [
+    { id: 'demo', label: 'Demo', status: 'connected', detail: 'Built-in demo models' },
+    { id: 'openrouter', label: 'OpenRouter', status: 'missing', detail: 'Not connected' },
+    { id: 'anthropic', label: 'Anthropic', status: 'needs_signin', detail: 'Session expired' },
+    {
+      id: 'openai-codex',
+      label: 'ChatGPT (Codex)',
+      status: 'connected',
+      detail: 'Your ChatGPT plan',
+    },
+  ]
+  async listProviders(): Promise<ProviderBase[]> {
+    return structuredClone(this.fakeProviders)
+  }
+  async connectProvider(id: string): Promise<ConnectResult> {
+    if (!this.fakeProviders.some((provider) => provider.id === id))
+      throw new HttpError(404, 'not_found', 'Unknown provider')
+    return { next: 'run_in_terminal', command: `hermes auth add ${id}` }
+  }
+  async addLocalProvider(req: LocalProviderRequest): Promise<ProviderBase> {
+    const id = req.label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+    if (!id) throw new HttpError(400, 'bad_request', 'Invalid request')
+    if (this.fakeProviders.some((provider) => provider.id === id))
+      throw new HttpError(409, 'conflict', 'A provider with that name already exists')
+    const provider: ProviderBase = {
+      id,
+      label: req.label,
+      status: 'connected',
+      detail: new URL(req.baseUrl).host,
+    }
+    this.fakeProviders.push(provider)
+    return structuredClone(provider)
+  }
+  async listConnections(): Promise<ConnectionsResponse> {
+    return {
+      toolServers: [
+        { id: 'files', label: 'files', status: 'ok', usedBy: 'everyone' },
+        { id: 'web-search', label: 'web-search', status: 'needs_signin', usedBy: 'everyone' },
+        { id: 'issue-tracker', label: 'issue-tracker', status: 'error', usedBy: 'everyone' },
+      ],
+      messaging: [
+        { platform: 'telegram', label: 'Telegram', status: 'connected', detail: null },
+        { platform: 'discord', label: 'Discord', status: 'disconnected', detail: null },
+        { platform: 'slack', label: 'Slack', status: 'disconnected', detail: 'auth_failed' },
+      ],
+    }
+  }
+  async addToolServer(req: ToolServerRequest): Promise<ConnectResult> {
+    return { next: 'run_in_terminal', command: `hermes mcp add ${req.name}` }
+  }
+  async connectMessaging(platform: string): Promise<ConnectResult> {
+    if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(platform))
+      throw new HttpError(404, 'not_found', 'Unknown platform')
+    return { next: 'run_in_terminal', command: 'hermes gateway setup' }
   }
   async readAgentFile(agentId: string, file: AgentFileName): Promise<AgentFile> {
     if (!this.agents.has(agentId)) throw new HttpError(404, 'not_found', 'Agent not found')
