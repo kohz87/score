@@ -315,20 +315,50 @@ const plan: Extract<MessagePart, { kind: 'plan' }> = {
   ],
 }
 
-test('the plan card renders each block state on a shared axis and links to Score', () => {
+function renderPlan() {
+  const queryClient = createQueryClient()
   render(
     <MemoryRouter>
-      <PlanCard part={plan} agents={[agent]} />
+      <QueryClientProvider client={queryClient}>
+        <PlanCard part={plan} agents={[agent]} roomId="room 1" messageId="m 1" />
+      </QueryClientProvider>
     </MemoryRouter>,
   )
+}
+
+test('Start plan posts to the plan/start endpoint, reports failure with a retry, then the result', async () => {
+  fetchMock.mockImplementationOnce(
+    async () =>
+      new Response(
+        JSON.stringify({ error: { code: 'upstream_failed', message: 'Kanban is down.' } }),
+        {
+          status: 502,
+        },
+      ),
+  )
+  fetchMock.mockImplementationOnce(
+    async () => new Response(JSON.stringify({ briefId: 'brief 1', taskIds: ['t1', 't2'] })),
+  )
+  renderPlan()
+  fireEvent.click(screen.getByRole('button', { name: 'Start plan' }))
+  expect((await screen.findByRole('alert')).textContent).toBe('Kanban is down.')
+  fireEvent.click(screen.getByRole('button', { name: 'Try starting again' }))
+  expect((await screen.findByRole('status')).textContent).toContain('2 tasks created')
+  const [first] = fetchMock.mock.calls[0]!
+  expect(first).toBe('/api/rooms/room%201/messages/m%201/plan/start')
+  expect(fetchMock.mock.calls[0]![1]?.method).toBe('POST')
+})
+
+test('the plan card renders each block state on a shared axis and links to Flow', () => {
+  renderPlan()
   for (const state of ['done', 'working', 'planned', 'waiting']) {
     const block = screen.getByTitle(new RegExp(`Block ${state}`))
     expect(block.className).toContain(`chat-plan-block--${state}`)
   }
   expect(screen.getByText('Builder')).toBeDefined()
   expect(screen.getByText('ghost')).toBeDefined()
-  expect(screen.getByRole('link', { name: 'Open in Score' }).getAttribute('href')).toBe(
-    '/now?brief=brief%201',
+  expect(screen.getByRole('link', { name: 'Open in Flow' }).getAttribute('href')).toBe(
+    '/now/flow/brief%201',
   )
   const axis = planAxis(plan.lanes)!
   expect(axis.get('b-done')!.left).toBe(0)

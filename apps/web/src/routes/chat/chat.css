@@ -266,6 +266,26 @@
   font-weight: 600;
   color: var(--ink);
 }
+.chat-plan-start {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.chat-plan-start-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 16px;
+  background: var(--ink);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chat-plan-start-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 .chat-plan-grid {
   display: grid;
   row-gap: 8px;

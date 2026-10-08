@@ -4,7 +4,15 @@ import { agentTextColor } from './agent-text-color.ts'
 import { ApprovalCard } from './ApprovalCard.tsx'
 import { PlanCard } from './PlanCard.tsx'
 
-function Part({ part, agents }: { part: MessagePart; agents: AgentSummary[] }) {
+function Part({
+  part,
+  agents,
+  message,
+}: {
+  part: MessagePart
+  agents: AgentSummary[]
+  message: Message
+}) {
   switch (part.kind) {
     case 'text':
       return <p className="chat-text">{part.text}</p>
@@ -36,7 +44,7 @@ function Part({ part, agents }: { part: MessagePart; agents: AgentSummary[] }) {
     case 'approval':
       return <ApprovalCard approvalId={part.approvalId} />
     case 'plan':
-      return <PlanCard part={part} agents={agents} />
+      return <PlanCard part={part} agents={agents} roomId={message.roomId} messageId={message.id} />
   }
 }
 
@@ -69,7 +77,7 @@ export function MessageItem({ message, agents }: { message: Message; agents: Age
           aria-atomic="false"
         >
           {message.parts.map((part, index) => (
-            <Part key={index} part={part} agents={agents} />
+            <Part key={index} part={part} agents={agents} message={message} />
           ))}
         </div>
       </div>
