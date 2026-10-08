@@ -73,7 +73,8 @@ cmd_stop() {
     return 0
   fi
   kill -TERM "$pid"
-  for ((i = 0; i < 150; i++)); do
+  # A clean stop drains in-flight Hermes reads, task tailing and the approval outbox first (~17 s seen live).
+  for ((i = 0; i < 450; i++)); do
     if ! kill -0 "$pid" 2>/dev/null; then
       rm -f "$pid_file"
       echo "Score stopped."
@@ -81,7 +82,7 @@ cmd_stop() {
     fi
     sleep 0.1
   done
-  echo "Score (pid $pid) did not exit within 15s." >&2
+  echo "Score (pid $pid) did not exit within 45s." >&2
   return 1
 }
 
