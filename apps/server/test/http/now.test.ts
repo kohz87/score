@@ -91,8 +91,15 @@ test('finished fake scenario lists the task under made today with its review run
   await port.start(ingest)
   await scheduler.advance(scenarioDuration)
   const now = NowSnapshotSchema.parse((await get()).json())
-  expect(now.madeToday.map((item) => item.title)).toEqual(['Add pagination to the activity feed'])
-  expect(now.madeToday[0]!.ref).toEqual({ kind: 'task', taskId: 'task-pagination-0' })
+  // The brief's review step (3.4) is its own task and finishes too.
+  expect(now.madeToday.map((item) => item.title).sort()).toEqual([
+    'Add pagination to the activity feed',
+    'Review pagination',
+  ])
+  expect(now.madeToday.map((item) => item.ref)).toContainEqual({
+    kind: 'task',
+    taskId: 'task-pagination-0',
+  })
   const reviewer = now.lanes.find((lane) => lane.agent.id === 'reviewer')!
   expect(reviewer.blocks.length).toBeGreaterThan(0)
 })

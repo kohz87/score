@@ -18,6 +18,17 @@ const provider = {
   usedBy: ['lead'],
 }
 const toolServer = { id: 'files', label: 'files', status: 'ok', usedBy: 'everyone' }
+const flowNode = {
+  id: 'task:t_1',
+  kind: 'step',
+  title: 'Build',
+  agentId: 'builder',
+  state: 'working',
+  subtitle: 'builder',
+  taskId: 't_1',
+  layout: { col: 1, row: 0 },
+}
+const flowEdge = { id: 'e1', from: 'brief:brief-1', to: 'task:t_1', kind: 'flow', label: null }
 const cases = [
   ['AgentIdSchema', 'lead', ''],
   ['ShapeSchema', 'circle-dot', 'oval'],
@@ -136,6 +147,39 @@ const cases = [
   ['ApprovalSchema', f.approval, { ...f.approval, createdAt: 'yesterday' }],
   ['TaskColumnSchema', 'planned', 'queued'],
   ['TaskSummarySchema', f.task, { ...f.task, progress: 1.1 }],
+  ['BriefStatusSchema', 'paused', 'queued'],
+  ['BriefSummarySchema', f.brief, { ...f.brief, status: 'queued' }],
+  ['BriefsListSchema', { items: [f.brief] }, { items: [{}] }],
+  ['FlowNodeSchema', flowNode, { ...flowNode, state: 'queued' }],
+  ['FlowEdgeSchema', flowEdge, { ...flowEdge, kind: 'other' }],
+  [
+    'BriefFlowSchema',
+    {
+      asOfSeq: 1,
+      brief: f.brief,
+      nodes: [flowNode],
+      edges: [flowEdge],
+      stats: { runningSec: 1, steps: 1, handoffs: 0, spendUsd: null, eta: null },
+    },
+    { asOfSeq: 1, brief: f.brief, nodes: [flowNode], edges: [flowEdge] },
+  ],
+  [
+    'FlowNodeDetailSchema',
+    {
+      node: flowNode,
+      description: '',
+      steps: [],
+      approval: null,
+      run: null,
+      model: null,
+      tools: [],
+      watch: null,
+    },
+    { node: flowNode },
+  ],
+  ['BriefLogPageSchema', { items: [f.log], nextCursor: null }, { items: [f.log] }],
+  ['PlanStartResponseSchema', { briefId: 'b', taskIds: ['t'] }, { briefId: 'b', taskIds: [1] }],
+  ['NodeStopResponseSchema', { ok: true }, { ok: false }],
   ['TaskStepSchema', f.step, { ...f.step, done: 'yes' }],
   ['TaskActivitySchema', f.activity, { ...f.activity, agentId: '' }],
   ['TaskDetailSchema', f.detail, { ...f.detail, dependsOn: [''] }],

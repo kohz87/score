@@ -23,7 +23,9 @@ import {
   storeMessage,
 } from '../domain/rooms.ts'
 import { roomFilesInPlay, roomLearned } from '../domain/room-panels.ts'
+import { createBrief } from '../domain/briefs.ts'
 import { reserveMessageRun } from '../domain/message-runs.ts'
+import { PLAN_FIRST_ADDENDUM } from '../domain/plan.ts'
 import { COMMANDS } from '../domain/parse.ts'
 import { routeMessage, modelCommand } from '../domain/routing.ts'
 import { RoutingDispatcher } from '../domain/routing-dispatch.ts'
@@ -72,7 +74,7 @@ export function registerRoomRoutes(
   db: ScoreDb,
   ingest: Ingest,
   clock = Date.now,
-): void {
+): () => Promise<void> {
   // JSON escaping can expand a valid 16 KB text beyond the default receipt limit.
   const receipts = requestIdempotency(db, clock, (app.initialConfig.bodyLimit ?? 1048576) + 65536)
   const mutation = {
@@ -287,6 +289,13 @@ export function registerRoomRoutes(
       command = { kind: 'routine', routineId: created.id }
     }
     let message: Message | undefined
+    // Plan first goes to the lead when it is among the recipients, otherwise to the first recipient.
+    const planner =
+      body.planFirst && route.routedTo.length
+        ? route.routedTo.includes(room.leadAgentId ?? '')
+          ? room.leadAgentId
+          : route.routedTo[0]
+        : undefined
     await ingest.submit({
       source: 'rooms',
       identity: randomUUID(),
@@ -311,11 +320,28 @@ export function registerRoomRoutes(
               agentId,
               chainId: id,
               hop: 0,
-              input: route.input,
+              input: agentId === planner ? route.input + PLAN_FIRST_ADDENDUM : route.input,
               agents: known,
+              ...(agentId === planner ? { planFirst: true } : {}),
               ...((route.model ?? body.model) ? { model: route.model ?? body.model } : {}),
             },
             now,
+          )
+        // Every human message that starts a turn (or creates a task with /assign) is a brief. It is created after
+        // the turns are reserved so its first status already counts them.
+        if (route.routedTo.length || command?.kind === 'assign')
+          drafts.push(
+            ...createBrief(
+              sqlite,
+              {
+                id,
+                roomId,
+                text: body.text,
+                tasks:
+                  command?.kind === 'assign' ? [{ taskId: command.taskId, origin: 'assign' }] : [],
+              },
+              now,
+            ),
           )
         return drafts
       },
@@ -323,4 +349,5 @@ export function registerRoomRoutes(
     await routing.dispatch()
     return { message, routedTo: route.routedTo, command }
   })
+  return () => routing.dispatch()
 }

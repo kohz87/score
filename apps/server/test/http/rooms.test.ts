@@ -303,6 +303,7 @@ test('room creates, updates and message posts replay exact receipts with no repe
     'room.upserted',
     'room.upserted',
     'message.created',
+    'brief.upserted',
   ])
   expect(
     (await post(`/api/rooms/${room.id}/messages`, { text: 'Changed' }, 'message')).statusCode,
@@ -449,6 +450,7 @@ test('fake scenario persists full conversation, deltas, completion and unread vi
     'message-review-0',
     'approval:approval-score-run-0',
     'message-plan-0',
+    'message-brief-0',
   ])
   expect(page.items.every((message) => !message.streaming)).toBe(true)
   expect(page.items[0]!.parts).toEqual([

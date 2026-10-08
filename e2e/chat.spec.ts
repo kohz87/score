@@ -16,9 +16,10 @@ test('fake Chat opens rooms and directs with keyboard access and an enabled comp
   await expect(page.getByText('Unaddressed messages go to lead')).toBeVisible()
   const history = page.getByRole('region', { name: 'Message history' })
   await expect(history.getByRole('article').first()).toBeVisible({ timeout: 15_000 })
+  // The scripted ask comes first; the lead's reply follows as the scenario plays.
   await expect(
     history.getByText(/Let’s add pagination while keeping the newest activity visible./).first(),
-  ).toBeAttached()
+  ).toBeAttached({ timeout: 15_000 })
   await history.focus()
   await expect(history).toBeFocused()
   await page.keyboard.press('End')

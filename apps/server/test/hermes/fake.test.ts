@@ -346,7 +346,7 @@ test('fake status and agent styles match the defaults; returned objects cannot m
   await port.start(sink)
   await port.start(sink)
   await scheduler.advance(900 * 18)
-  expect(observations).toHaveLength(13)
+  expect(observations).toHaveLength(15)
   expect((await port.listAgents())[1]!.status).toBe('working')
 })
 

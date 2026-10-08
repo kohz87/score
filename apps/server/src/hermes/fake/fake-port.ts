@@ -13,6 +13,7 @@ import {
   type AgentFileName,
 } from '../agent-files.ts'
 import { updateProjectedAgent } from '../../domain/agents.ts'
+import { createBrief, linkTask, readBriefRow } from '../../domain/briefs.ts'
 import {
   recordKanbanDenial,
   closeKanbanDenialIds,
@@ -171,6 +172,49 @@ export function stepToObservation(
           events.push(...roomChanged(sqlite, message.roomId, now))
         return events
       }
+      if (step.kind === 'brief.upserted') {
+        // The script's brief starts with the lead's plan turn, so Flow has a hand-off to draw.
+        const brief = step.data
+        const planMessage = brief.id.replace(/^message-brief-/, 'message-plan-')
+        if (planMessage !== brief.id)
+          sqlite
+            .prepare(
+              `INSERT INTO message_runs (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, state, created_at)
+               VALUES (?, ?, 'lead', ?, 0, ?, ?, ?, ?, 'active', ?) ON CONFLICT DO NOTHING`,
+            )
+            .run(
+              planMessage,
+              brief.roomId,
+              brief.id,
+              `fake-turn:${brief.id}`,
+              brief.id,
+              brief.title,
+              JSON.stringify(exampleAgents().map((agent) => agent.id)),
+              now,
+            )
+        // The step itself is the event; createBrief only stores the row (and would emit the same summary).
+        createBrief(
+          sqlite,
+          {
+            id: brief.id,
+            roomId: brief.roomId,
+            text: brief.title,
+            startedBy: brief.startedBy,
+            startedAt: brief.startedAt,
+          },
+          now,
+        )
+        return [structuredClone(draft)] as ReturnType<Observation['apply']>
+      }
+      if (step.kind === 'lane.upserted' && step.data.briefId && step.data.block.taskId)
+        if (readBriefRow(sqlite, step.data.briefId))
+          linkTask(sqlite, step.data.briefId, step.data.block.taskId, 'assign', now)
+      if (step.kind === 'message.completed')
+        sqlite
+          .prepare(
+            "UPDATE message_runs SET state = 'completed' WHERE message_id = ? AND run_id IS NULL AND state = 'active'",
+          )
+          .run(step.data.messageId)
       if (step.kind === 'message.delta' || step.kind === 'message.completed')
         return updateMessage(
           sqlite,

@@ -69,7 +69,9 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
   const agents = exampleAgents()
   const taskId = id('task-pagination')
   const roomId = 'room-activity-feed'
-  const briefId = id('brief-pagination')
+  // A brief's id is its root message, here the person's ask at the top of the room.
+  const briefId = id('message-brief')
+  const reviewTaskId = id('task-review')
   const run = {
     ...exampleRun('builder', id('scenario-build'), time(600)),
     refs: [{ kind: 'task' as const, taskId }],
@@ -325,6 +327,7 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
           id: id('block-review'),
           label: 'Review pagination',
           start: time(6600),
+          taskId: reviewTaskId,
           runId: null,
         },
       },
@@ -540,6 +543,7 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
           start: time(6600),
           end: time(9500),
           state: 'done',
+          taskId: reviewTaskId,
           runId: null,
         },
       },
@@ -591,6 +595,96 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
     blocking: 'Only this command is waiting; the rest of the team can continue.',
     refs: [{ kind: 'task', taskId: docsTaskId }],
   }
+  // The brief: the person's ask, the lead's plan turn, the build task, and its review (with one round sent back).
+  // The docs task above is not linked to it, so Flow leaves it out.
+  const reviewTask = {
+    ...task,
+    id: reviewTaskId,
+    key: 'T-103',
+    title: 'Review pagination',
+    assignee: 'reviewer',
+    reviewer: null,
+    column: 'working' as const,
+    hermesStatus: 'running',
+    progress: 0.3,
+    note: null,
+    updatedAt: time(6550),
+  }
+  const ask = 'Add pagination to the activity feed'
+  steps.push(
+    {
+      at: 560,
+      kind: 'message.created',
+      data: {
+        id: briefId,
+        roomId,
+        author: { kind: 'you' },
+        to: ['lead'],
+        parts: [{ kind: 'text', text: ask }],
+        createdAt: time(560),
+        streaming: false,
+        refs: [],
+      },
+    },
+    {
+      at: 570,
+      kind: 'brief.upserted',
+      data: {
+        id: briefId,
+        title: ask,
+        roomId,
+        startedAt: time(570),
+        startedBy: 'you',
+        status: 'running',
+      },
+    },
+    {
+      at: 1650,
+      kind: 'handoff.created',
+      data: {
+        briefId,
+        handoff: {
+          id: id('handoff-build'),
+          from: { agentId: 'lead', blockId: id('message-plan') },
+          to: { agentId: 'builder', blockId: block.id },
+          kind: 'handoff',
+          at: time(1650),
+        },
+      },
+    },
+    { at: 6550, kind: 'task.upserted', data: reviewTask },
+    {
+      at: 7900,
+      kind: 'handoff.created',
+      data: {
+        briefId,
+        handoff: {
+          id: id('handoff-sent-back'),
+          from: { agentId: 'reviewer', blockId: id('block-review') },
+          to: { agentId: 'builder', blockId: block.id },
+          kind: 'sent_back',
+          at: time(7900),
+        },
+      },
+    },
+    {
+      at: 7910,
+      kind: 'task.upserted',
+      data: { ...task, progress: 0.9, elapsedSec: 140, updatedAt: time(7910) },
+    },
+    {
+      at: 9500,
+      kind: 'task.upserted',
+      data: {
+        ...reviewTask,
+        column: 'done',
+        hermesStatus: 'done',
+        progress: 1,
+        elapsedSec: 52,
+        updatedAt: time(9500),
+      },
+    },
+  )
   steps.push(
     { at: 150, kind: 'task.upserted', data: docsTask },
     { at: 160, kind: 'approval.requested', data: docsApproval },

@@ -231,6 +231,14 @@ export const handoffCreated = {
   briefId: 'brief-1',
   handoff,
 } satisfies Contract.HandoffCreated
+export const brief = {
+  id: 'brief-1',
+  title: 'Add pagination',
+  roomId: 'room-1',
+  startedAt: at,
+  startedBy: 'you',
+  status: 'running',
+} satisfies Contract.BriefSummary
 export const gap = {
   source: 'bridge',
   runId: 'run-1',
