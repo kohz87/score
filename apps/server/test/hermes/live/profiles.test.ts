@@ -45,7 +45,6 @@ test('fixture profiles yield validated details, metadata, nested skills and stab
     expect(detail).toMatchObject({
       id: name,
       served: name === 'lead',
-      memory: [],
       tools: [],
       routines: name === 'builder' ? expect.any(Array) : [],
       channels: [],
@@ -94,16 +93,18 @@ test('routines come from the profile cron jobs file, redacted and skipping malfo
     (await reader.read('builder', 0, true, { status: 'idle', activity: null })).routines,
   ).toEqual([])
 })
+const modelCalls = () =>
+  runner.mock.calls.filter(([args]) => args.join(' ') === '-p builder config get --json model')
 test('model reads cache by config mtime and refresh on change', async () => {
   await reader.read('builder', 0, true, { status: 'idle', activity: null })
   await reader.read('builder', 0, true, { status: 'working', activity: 'Running a turn' })
-  expect(runner).toHaveBeenCalledOnce()
+  expect(modelCalls()).toHaveLength(1)
   fs.utimesSync(join(home, 'profiles', 'builder', 'config.yaml'), 200, 200)
   runner.mockResolvedValue({ exitCode: 0, stdout: '"changed-model"' })
   expect(
     (await reader.read('builder', 0, true, { status: 'idle', activity: null })).model!.id,
   ).toBe('changed-model')
-  expect(runner).toHaveBeenCalledTimes(2)
+  expect(modelCalls()).toHaveLength(2)
 })
 test.each([
   { exitCode: 2, stdout: 'private output' },
@@ -154,7 +155,9 @@ test('reads only allowlisted profile files, never secrets or symlink targets (fs
     await reader.read(name, index, true, { status: 'idle', activity: null })
   expect(open.mock.calls.length).toBeGreaterThan(0)
   for (const [path, flags] of open.mock.calls) {
-    expect(['SOUL.md', 'profile.yaml', 'jobs.json']).toContain(basename(path.toString()))
+    expect(['SOUL.md', 'profile.yaml', 'jobs.json', 'MEMORY.md', 'USER.md']).toContain(
+      basename(path.toString()),
+    )
     expect(path.toString()).not.toMatch(/credentials|linked|designer\/SOUL/)
     expect(Number(flags) & fs.constants.O_NOFOLLOW).toBe(fs.constants.O_NOFOLLOW)
   }

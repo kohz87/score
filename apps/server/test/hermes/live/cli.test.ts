@@ -142,3 +142,49 @@ test.each([
   )
   expect(execute).not.toHaveBeenCalled()
 })
+
+test.each([
+  ['-p', 'builder', 'config', 'get', '--json', 'skills.disabled'],
+  ['-p', 'builder', 'config', 'get', '--json', 'delegation.max_concurrent_children'],
+  ['-p', 'builder', 'tools', 'list'],
+  ['skills', 'search', '--json', '--limit', '20', '--', 'changelog'],
+])('captureRead returns stdout for allowlisted read %j', async (...args) => {
+  const execute = vi.fn<NonNullable<CliOptions['execute']>>((_file, _args, _options, callback) =>
+    callback(null, 'out', 'private stderr'),
+  )
+  await expect(runHermes(args, { timeoutMs: 100, captureRead: true, execute })).resolves.toEqual({
+    exitCode: 0,
+    stdout: 'out',
+  })
+})
+test.each([
+  ['-p', 'builder', 'config', 'get', '--json', 'api_key'],
+  ['-p', 'builder', 'config', 'get', '--raw', 'skills.disabled'],
+  ['-p', 'builder', 'tools', 'list', '--platform', 'x'],
+  ['-p', '../x', 'tools', 'list'],
+  ['skills', 'search', '--json', '--limit', '20', 'unquoted'],
+  ['skills', 'search', '--json', '--limit', 'x', '--', 'q'],
+  ['skills', 'install', '--yes', '--', 'a/b'],
+  ['-p', 'builder', 'config', 'set', 'model.default', 'm'],
+])('captureRead rejects nonallowlisted command %j', async (...args) => {
+  const execute = vi.fn<NonNullable<CliOptions['execute']>>()
+  await expect(runHermes(args, { timeoutMs: 100, captureRead: true, execute })).rejects.toThrow(
+    /allowlisted reads/,
+  )
+  expect(execute).not.toHaveBeenCalled()
+})
+test('captureRead drops oversized output and failed commands stay private', async () => {
+  const args = ['-p', 'builder', 'tools', 'list']
+  const execute = vi.fn<NonNullable<CliOptions['execute']>>((_file, _args, _options, callback) =>
+    callback(null, 'x'.repeat(512 * 1024 + 1)),
+  )
+  await expect(runHermes(args, { timeoutMs: 100, captureRead: true, execute })).resolves.toEqual({
+    exitCode: 0,
+  })
+  execute.mockImplementation((_file, _args, _options, callback) =>
+    callback(Object.assign(new Error('private'), { code: 3 }), 'private stdout'),
+  )
+  await expect(runHermes(args, { timeoutMs: 100, captureRead: true, execute })).resolves.toEqual({
+    exitCode: 3,
+  })
+})

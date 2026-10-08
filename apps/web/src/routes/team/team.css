@@ -651,3 +651,64 @@
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
+
+/* Model, Skills, Memory and Tools tabs */
+.team-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.team-block {
+  display: block;
+}
+button.team-toggle {
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+}
+button.team-toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button.team-toggle:focus-visible,
+.team-search :is(input, button):focus-visible,
+.team-pill-button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.team-search {
+  display: flex;
+  gap: 8px;
+}
+.team-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+.team-search button,
+.team-pill-button {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+  align-self: center;
+}
+.team-search button:disabled,
+.team-pill-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.team-routine-form .team-primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #ffffff;
+}

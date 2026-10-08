@@ -21,6 +21,7 @@ import type {
 } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
 import type { AgentFile, AgentFileName } from './agent-files.ts'
+import type { AgentTool, HubSkill, MemoryItem, MemoryPage, SkillItem } from './agent-tabs.ts'
 import type { IngestResult, Observation } from '../hub/ingest.ts'
 
 export interface ObservationSink {
@@ -156,6 +157,17 @@ export interface HermesPort {
     content: string,
     etag: string,
   ): Promise<{ etag: string }>
+  /** Sets the profile's default model (and provider when given). */
+  setAgentModel(agentId: string, req: { model: string; provider?: string }): Promise<void>
+  listSkills(agentId: string): Promise<SkillItem[]>
+  /** Installs a skill from the hub by identifier; resolves with the skills list afterwards. */
+  installSkill(agentId: string, identifier: string): Promise<SkillItem[]>
+  setSkillEnabled(agentId: string, name: string, enabled: boolean): Promise<SkillItem>
+  searchSkillHub(query: string): Promise<HubSkill[]>
+  listMemory(agentId: string, query: { q?: string; cursor?: string }): Promise<MemoryPage>
+  addMemory(agentId: string, text: string): Promise<MemoryItem>
+  deleteMemory(agentId: string, id: string): Promise<void>
+  setToolEnabled(agentId: string, toolId: string, enabled: boolean): Promise<AgentTool>
   /** Status only (never secrets); `usedBy` is added by the route from the agents' models. */
   listProviders(): Promise<ProviderBase[]>
   /** Interactive sign-ins are never run by Score: the result carries the command to run in a terminal. */

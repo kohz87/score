@@ -47,3 +47,23 @@ export {
   TaskActionRequestSchema,
   matchesTask,
 } from './port.ts'
+export {
+  AddMemorySchema,
+  HubQuerySchema,
+  InstallSkillSchema,
+  MemoryIdSchema,
+  MemoryQuerySchema,
+  PatchSkillSchema,
+  PatchToolSchema,
+  SetModelSchema,
+  SkillNameSchema,
+  ToolIdSchema,
+  HubSkillSchema,
+  MemoryItemSchema,
+  MemoryPageSchema,
+  SkillItemSchema,
+  type HubSkill,
+  type MemoryItem,
+  type MemoryPage,
+  type SkillItem,
+} from './agent-tabs.ts'

@@ -9,6 +9,9 @@ import { runHermes, type HermesRunner } from './cli.ts'
 import { excerpt } from '../agent-files.ts'
 import { ProfileNameSchema } from './paths.ts'
 import { readRoutines } from './routines.ts'
+import { readDisabledSkills, readHelpersMax, readTools } from './agent-config.ts'
+import { readMemory } from './memory.ts'
+import { MEMORY_DETAIL_ITEMS } from '../agent-tabs.ts'
 
 const allowedFiles = z.enum(['SOUL.md', 'AGENTS.md', 'profile.yaml', 'config.yaml'])
 const readableFiles = allowedFiles.extract(['SOUL.md', 'profile.yaml'])
@@ -92,7 +95,7 @@ function metadata(text: string): z.infer<typeof MetadataSchema> {
   }
   return MetadataSchema.parse(values)
 }
-function skillNames(home: string): string[] {
+export function skillNames(home: string): string[] {
   const names: string[] = []
   const walk = (path: string, depth: number) => {
     if (depth > 8 || !directory(path)) return
@@ -120,8 +123,14 @@ function skillNames(home: string): string[] {
   return [...new Set(names)].sort().map(redact)
 }
 
+interface Settings {
+  disabledSkills: string[]
+  tools: AgentDetail['tools']
+  helpersMax: number | null
+}
 export class ProfilesReader {
   private readonly models = new Map<string, { signature: string; value: AgentDetail['model'] }>()
+  private readonly settings = new Map<string, { signature: string; value: Settings }>()
   constructor(
     private readonly hermesHome: string,
     private readonly runner: HermesRunner = runHermes,
@@ -150,6 +159,29 @@ export class ProfilesReader {
     const parent = join(this.hermesHome, 'profiles')
     const path = join(parent, ProfileNameSchema.parse(profile))
     return directory(parent) && directory(path) ? path : null
+  }
+  /** Drops cached CLI reads for a profile after Score changed its settings. */
+  invalidate(profile: string): void {
+    this.models.delete(profile)
+    this.settings.delete(profile)
+  }
+  // Settings kept in config.yaml are read through the CLI and cached by the file's signature.
+  private async configSettings(profile: string, home: string | null): Promise<Settings> {
+    const unknown: Settings = { disabledSkills: [], tools: [], helpersMax: null }
+    if (!home) return unknown
+    const stat = fileStat(home, 'config.yaml')
+    if (!stat) return unknown
+    const signature = `${stat.mtimeMs}:${stat.size}:${stat.ino}`
+    const cached = this.settings.get(profile)
+    if (cached?.signature === signature) return cached.value
+    const [disabled, tools, helpersMax] = await Promise.all([
+      readDisabledSkills(this.runner, this.hermesHome, profile),
+      readTools(this.runner, this.hermesHome, profile),
+      readHelpersMax(this.runner, this.hermesHome, profile),
+    ])
+    const value = { disabledSkills: disabled ?? [], tools, helpersMax }
+    this.settings.set(profile, { signature, value })
+    return value
   }
   private async model(profile: string, home: string | null): Promise<AgentDetail['model']> {
     // The contract's detail model is null when it can't be read (§8).
@@ -194,6 +226,8 @@ export class ProfilesReader {
     const home = this.profileHome(profile)
     const meta = metadata(home ? readText(home, 'profile.yaml') : '')
     const soul = redact(home ? readText(home, 'SOUL.md') : '')
+    const settings = await this.configSettings(profile, home)
+    const disabled = new Set(settings.disabledSkills)
     return AgentDetailSchema.parse({
       id: profile,
       name: meta.display_name || profile,
@@ -210,10 +244,10 @@ export class ProfilesReader {
       worksIn: null,
       rulesFile: home && fileStat(home, 'AGENTS.md') ? 'AGENTS.md' : null,
       model: await this.model(profile, home),
-      skills: home ? skillNames(home).map((name) => ({ name, enabled: true })) : [],
-      memory: [],
-      tools: [],
-      helpersMax: null,
+      skills: home ? skillNames(home).map((name) => ({ name, enabled: !disabled.has(name) })) : [],
+      memory: home ? readMemory(home).slice(0, MEMORY_DETAIL_ITEMS) : [],
+      tools: settings.tools,
+      helpersMax: settings.helpersMax,
       routines: home ? readRoutines(this.hermesHome, profile) : [],
       channels: [],
       permissions: [],

@@ -206,7 +206,7 @@ test('profile shows an error for an unknown agent', async () => {
   expect(within(alert).getByText('Agent unavailable')).toBeDefined()
 })
 
-test('tabs move with the arrow keys and other tabs show a coming-soon panel', async () => {
+test('tabs move with the arrow keys and unbuilt tabs show a coming-soon panel', async () => {
   renderTeam('/team/builder')
   const overview = await screen.findByRole('tab', { name: 'Overview' })
   expect(overview.getAttribute('aria-selected')).toBe('true')
@@ -216,6 +216,8 @@ test('tabs move with the arrow keys and other tabs show a coming-soon panel', as
   expect(document.activeElement).toBe(personality)
   expect(personality.getAttribute('aria-selected')).toBe('true')
   fireEvent.keyDown(personality, { key: 'ArrowRight' })
+  expect(within(screen.getByRole('tabpanel')).getByRole('heading', { name: 'Model' })).toBeDefined()
+  fireEvent.click(screen.getByRole('tab', { name: 'Channels' }))
   expect(within(screen.getByRole('tabpanel')).getByText(/coming soon/)).toBeDefined()
   fireEvent.keyDown(document.activeElement!, { key: 'End' })
   expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'History' }))
@@ -510,4 +512,281 @@ test('the rules file opens from the overview and drafts survive switching files'
   fireEvent.click(screen.getByRole('button', { name: /Operating rules · AGENTS.md/ }))
   const again = await screen.findByRole('textbox', { name: 'AGENTS.md contents' })
   expect((again as HTMLTextAreaElement).value).toBe('- be nice\n')
+})
+
+interface Call {
+  path: string
+  method: string
+  body: Record<string, unknown>
+  init?: RequestInit
+}
+function tabsApi(handler: (call: Call) => Response | undefined) {
+  const calls: Call[] = []
+  const baseline = respond
+  respond = (path, init) => {
+    const method = init?.method ?? 'GET'
+    const call = { path, method, body: init?.body ? JSON.parse(String(init.body)) : {}, init }
+    if (method !== 'GET' || path.includes('/skills') || path.includes('/memory')) calls.push(call)
+    return handler(call) ?? baseline(path, init)
+  }
+  return calls
+}
+const memoryEntries = [
+  {
+    id: 'm-111111111111',
+    text: 'Prefers short updates.',
+    source: 'About you',
+    at: '2026-10-01T10:00:00.000Z',
+  },
+  {
+    id: 'm-222222222222',
+    text: 'Tests run with pnpm test.',
+    source: 'Agent notes',
+    at: '2026-10-02T10:00:00.000Z',
+  },
+]
+
+test('the Model tab changes the model with provider and shows the outcome', async () => {
+  renderTeam('/team/builder')
+  const calls = tabsApi((call) =>
+    call.method === 'PUT'
+      ? json({
+          ...builderDetail,
+          model: {
+            id: call.body.model,
+            label: call.body.model,
+            via: call.body.provider,
+            fallback: null,
+          },
+        })
+      : undefined,
+  )
+  fireEvent.click(await screen.findByRole('tab', { name: 'Model' }))
+  const panel = screen.getByRole('tabpanel')
+  expect(within(panel).getByText('Model Two')).toBeDefined()
+  const form = within(panel).getByRole('form', { name: 'Change model' })
+  fireEvent.change(within(form).getByLabelText('Model'), { target: { value: 'next/model' } })
+  fireEvent.change(within(form).getByLabelText('Provider (optional)'), {
+    target: { value: 'acme' },
+  })
+  fireEvent.click(within(form).getByRole('button', { name: 'Change model' }))
+  expect(await screen.findByText('Model changed to next/model.')).toBeDefined()
+  const put = calls.find((call) => call.method === 'PUT')!
+  expect(put.path).toBe('/api/agents/builder/model')
+  expect(put.body).toEqual({ model: 'next/model', provider: 'acme' })
+  expect(new Headers(put.init?.headers).get('X-Score-Client')).toBe('web')
+  expect(new Headers(put.init?.headers).get('Idempotency-Key')).toBeTruthy()
+})
+
+test('a rejected model change explains itself and keeps the form', async () => {
+  renderTeam('/team/builder')
+  tabsApi((call) =>
+    call.method === 'PUT'
+      ? json({ error: { code: 'conflict', message: 'Hermes rejected the change' } }, 409)
+      : undefined,
+  )
+  fireEvent.click(await screen.findByRole('tab', { name: 'Model' }))
+  const form = screen.getByRole('form', { name: 'Change model' })
+  fireEvent.change(within(form).getByLabelText('Model'), { target: { value: 'bad' } })
+  fireEvent.click(within(form).getByRole('button', { name: 'Change model' }))
+  expect((await screen.findByRole('alert')).textContent).toMatch(/Hermes rejected the change/)
+  expect((within(form).getByLabelText('Model') as HTMLInputElement).value).toBe('bad')
+})
+
+test('the Skills tab toggles a skill and searches and installs from the hub', async () => {
+  renderTeam('/team/builder')
+  let skills = [{ name: 'Git', enabled: true }]
+  const calls = tabsApi((call) => {
+    if (call.path === '/api/agents/builder/skills' && call.method === 'GET')
+      return json({ items: skills })
+    if (call.method === 'PATCH') {
+      skills = skills.map((skill) => ({ ...skill, enabled: Boolean(call.body.enabled) }))
+      return json(skills[0])
+    }
+    if (call.path.startsWith('/api/skills/hub'))
+      return json({
+        items: [
+          {
+            name: 'Git',
+            identifier: 'x/git',
+            source: 'official',
+            trust: 'builtin',
+            description: 'Already here.',
+          },
+          {
+            name: 'changelog-writer',
+            identifier: 'x/changelog-writer',
+            source: 'official',
+            trust: 'builtin',
+            description: 'Drafts a changelog.',
+          },
+        ],
+      })
+    if (call.method === 'POST') {
+      skills = [...skills, { name: 'changelog-writer', enabled: true }]
+      return json({ items: skills })
+    }
+    return undefined
+  })
+  fireEvent.click(await screen.findByRole('tab', { name: 'Skills' }))
+  const toggle = await screen.findByRole('switch', { name: 'Git enabled for Builder' })
+  expect(toggle.getAttribute('aria-checked')).toBe('true')
+  fireEvent.click(toggle)
+  await waitFor(() =>
+    expect(
+      screen.getByRole('switch', { name: 'Git enabled for Builder' }).getAttribute('aria-checked'),
+    ).toBe('false'),
+  )
+  const patch = calls.find((call) => call.method === 'PATCH')!
+  expect(patch.path).toBe('/api/agents/builder/skills/Git')
+  expect(patch.body).toEqual({ enabled: false })
+
+  fireEvent.change(screen.getByLabelText('Search skills'), { target: { value: 'change' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+  expect(await screen.findByText('Drafts a changelog.')).toBeDefined()
+  expect(calls.some((call) => call.path === '/api/skills/hub?q=change')).toBe(true)
+  expect(screen.getByRole('button', { name: 'Installed Git' }).hasAttribute('disabled')).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: 'Install changelog-writer' }))
+  expect(await screen.findByText('Installed changelog-writer for Builder.')).toBeDefined()
+  const post = calls.find((call) => call.method === 'POST')!
+  expect(post.path).toBe('/api/agents/builder/skills')
+  expect(post.body).toEqual({ name: 'x/changelog-writer' })
+  expect(
+    await screen.findByRole('switch', { name: 'changelog-writer enabled for Builder' }),
+  ).toBeDefined()
+})
+
+test('an empty hub search and a failed install both say so', async () => {
+  renderTeam('/team/builder')
+  tabsApi((call) => {
+    if (call.path === '/api/agents/builder/skills' && call.method === 'GET')
+      return json({ items: [] })
+    if (call.path.startsWith('/api/skills/hub?q=none')) return json({ items: [] })
+    if (call.path.startsWith('/api/skills/hub'))
+      return json({
+        items: [{ name: 'a', identifier: 'x/a', source: '', trust: '', description: 'd' }],
+      })
+    if (call.method === 'POST') return json({ error: { code: 'conflict', message: 'no' } }, 409)
+    return undefined
+  })
+  fireEvent.click(await screen.findByRole('tab', { name: 'Skills' }))
+  expect(await screen.findByText('No skills installed.')).toBeDefined()
+  fireEvent.change(screen.getByLabelText('Search skills'), { target: { value: 'none' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+  expect(await screen.findByText(/No skills found for/)).toBeDefined()
+  fireEvent.change(screen.getByLabelText('Search skills'), { target: { value: 'a' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Install a' }))
+  expect((await screen.findByRole('alert')).textContent).toMatch(/Hermes rejected/)
+})
+
+test('the Memory tab searches, pages, adds once per submission and deletes after confirming', async () => {
+  renderTeam('/team/builder')
+  let entries = [...memoryEntries]
+  const calls = tabsApi((call) => {
+    const url = new URL(call.path, 'http://x')
+    if (url.pathname === '/api/agents/builder/memory' && call.method === 'GET') {
+      const q = url.searchParams.get('q')?.toLowerCase()
+      const matches = q ? entries.filter((entry) => entry.text.toLowerCase().includes(q)) : entries
+      return url.searchParams.get('cursor')
+        ? json({ items: matches.slice(1), nextCursor: null })
+        : json({ items: matches.slice(0, 1), nextCursor: matches.length > 1 ? '1' : null })
+    }
+    if (call.method === 'POST') {
+      const created = {
+        id: 'm-333333333333',
+        text: String(call.body.text),
+        source: 'Agent notes',
+        at: '2026-10-03T10:00:00.000Z',
+      }
+      entries = [created, ...entries]
+      return json(created)
+    }
+    if (call.method === 'DELETE') {
+      entries = entries.filter((entry) => !call.path.endsWith(entry.id))
+      return json({ id: 'x' })
+    }
+    return undefined
+  })
+  fireEvent.click(await screen.findByRole('tab', { name: 'Memory' }))
+  expect(await screen.findByText('Prefers short updates.')).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'Show more' }))
+  expect(await screen.findByText('Tests run with pnpm test.')).toBeDefined()
+  expect(calls.some((call) => call.path.includes('cursor=1'))).toBe(true)
+
+  fireEvent.change(screen.getAllByLabelText('Search memory')[1]!, { target: { value: 'pnpm' } })
+  fireEvent.submit(screen.getByRole('search', { name: 'Search memory' }))
+  await waitFor(() => expect(screen.queryByText('Prefers short updates.')).toBeNull())
+  expect(calls.some((call) => call.path.includes('q=pnpm'))).toBe(true)
+
+  const form = screen.getByRole('form', { name: 'Add memory' })
+  fireEvent.change(within(form).getByLabelText('New memory'), {
+    target: { value: ' Demo on Friday. ' },
+  })
+  fireEvent.click(within(form).getByRole('button', { name: 'Add memory' }))
+  expect(await screen.findByText('Memory added.')).toBeDefined()
+  const post = calls.find((call) => call.method === 'POST')!
+  expect(post.body).toEqual({ text: 'Demo on Friday.' })
+  expect(new Headers(post.init?.headers).get('Idempotency-Key')).toBeTruthy()
+
+  fireEvent.click(screen.getByRole('button', { name: /^Delete memory: Tests run/ }))
+  expect(calls.filter((call) => call.method === 'DELETE')).toHaveLength(0)
+  fireEvent.click(screen.getByRole('button', { name: /^Confirm deleting memory: Tests run/ }))
+  expect(await screen.findByText('Memory deleted.')).toBeDefined()
+  expect(calls.find((call) => call.method === 'DELETE')!.path).toBe(
+    '/api/agents/builder/memory/m-222222222222',
+  )
+})
+
+test('memory writes Hermes cannot do show its reason', async () => {
+  renderTeam('/team/builder')
+  tabsApi((call) => {
+    if (call.method === 'GET' && call.path.includes('/memory'))
+      return json({ items: [], nextCursor: null })
+    if (call.method === 'POST')
+      return json(
+        { error: { code: 'not_implemented', message: 'Memory is read-only in Score' } },
+        501,
+      )
+    return undefined
+  })
+  fireEvent.click(await screen.findByRole('tab', { name: 'Memory' }))
+  expect(await screen.findByText('No memories yet.')).toBeDefined()
+  fireEvent.change(screen.getByLabelText('New memory'), { target: { value: 'Remember' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Add memory' }))
+  expect((await screen.findByRole('alert')).textContent).toMatch(
+    /does not support this yet: Memory is read-only/,
+  )
+})
+
+test('the Tools tab toggles built-in tools; MCP servers are read-only', async () => {
+  const detail = {
+    ...builderDetail,
+    tools: [
+      ...builderDetail.tools,
+      { id: 'tracker', label: 'tracker', kind: 'mcp' as const, enabled: true },
+    ],
+  }
+  respond = (path) =>
+    path === '/api/agents'
+      ? json({ asOfSeq: 0, items: [lead, builder] })
+      : path === '/api/agents/builder'
+        ? json(detail)
+        : json({ error: { code: 'not_found', message: 'x' } }, 404)
+  renderTeam('/team/builder')
+  const calls = tabsApi((call) =>
+    call.method === 'PATCH' ? json({ ...detail.tools[0], enabled: false }) : undefined,
+  )
+  fireEvent.click(await screen.findByRole('tab', { name: 'Tools' }))
+  const panel = screen.getByRole('tabpanel')
+  expect(within(panel).queryByRole('switch', { name: /tracker/ })).toBeNull()
+  expect(within(panel).getByText(/managed in Hermes/)).toBeDefined()
+  expect(within(panel).getByText('Up to 3')).toBeDefined()
+  const toggle = within(panel).getByRole('switch', { name: 'Terminal enabled for Builder' })
+  expect(toggle.getAttribute('aria-checked')).toBe('true')
+  fireEvent.click(toggle)
+  await waitFor(() => expect(calls.some((call) => call.method === 'PATCH')).toBe(true))
+  const patch = calls.find((call) => call.method === 'PATCH')!
+  expect(patch.path).toBe('/api/agents/builder/tools/terminal')
+  expect(patch.body).toEqual({ enabled: false })
 })

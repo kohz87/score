@@ -7,6 +7,10 @@ import { AgentOverview } from './AgentOverview.tsx'
 import { AgentStylePicker } from './AgentStylePicker.tsx'
 import { RoutinesTab } from './RoutinesTab.tsx'
 import { AgentFiles } from './AgentFiles.tsx'
+import { MemoryTab } from './MemoryTab.tsx'
+import { ModelTab } from './ModelTab.tsx'
+import { SkillsTab } from './SkillsTab.tsx'
+import { ToolsTab } from './ToolsTab.tsx'
 import type { AgentFileName } from './file-queries.ts'
 
 // Dark text on light agent colors, white on dark ones (the design's jade band uses #08241C).
@@ -151,6 +155,14 @@ function AgentProfile({ agentId }: { agentId: string }) {
           />
         ) : tab === 'Personality' ? (
           <AgentFiles agent={agent} file={file} onFile={setFile} />
+        ) : tab === 'Model' ? (
+          <ModelTab agent={agent} />
+        ) : tab === 'Skills' ? (
+          <SkillsTab agentId={agent.id} agentName={agent.name} />
+        ) : tab === 'Memory' ? (
+          <MemoryTab agentId={agent.id} agentName={agent.name} />
+        ) : tab === 'Tools' ? (
+          <ToolsTab agent={agent} />
         ) : (
           <section className="team-card">
             <h2>{tab}</h2>
