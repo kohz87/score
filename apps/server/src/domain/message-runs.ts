@@ -260,11 +260,22 @@ export function completeRunMessage(
   const message = messageFromRow(
     sqlite.prepare('SELECT * FROM messages WHERE id = ?').get(mapping.message_id),
   )
-  // Polling/recovery may only have the final output. Never duplicate text already streamed.
-  if (!message.parts.some((part) => part.kind === 'text') && output) {
+  // Polling/recovery may only have the final output. Never duplicate text already streamed, but when streaming stopped
+  // short (a restart, a lost replay) and the final output continues what was streamed, append the rest: plan parsing and
+  // hand-offs below must see the whole reply ("… @reviewer please check" can come after the cut; audit 2026-10-08).
+  if (output) {
     const text = redactBounded(output, 8192)
-    drafts.push(...updateMessage(sqlite, mapping.room_id, message.id, text, now))
-    message.parts.push({ kind: 'text', text })
+    const streamed = message.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('')
+    const rest = !streamed ? text : text.startsWith(streamed) ? text.slice(streamed.length) : ''
+    if (rest) {
+      drafts.push(...updateMessage(sqlite, mapping.room_id, message.id, rest, now))
+      const last = message.parts.findLast((part) => part.kind === 'text')
+      if (last?.kind === 'text') last.text += rest
+      else message.parts.push({ kind: 'text', text: rest })
+    }
   }
   // Each chunk was redacted as it settled; redact the whole text once more in case a pattern spans chunks.
   message.parts = message.parts.map((part) =>

@@ -499,3 +499,42 @@ test('held text is sealed in the database while the run streams', async () => {
   expect(pending).not.toContain('sk-or')
   expect(replyMessage().parts).toEqual([])
 })
+
+test('a reply cut short (restart, lost replay) is completed from the final output, and its hand-off still happens', async () => {
+  const context = await admittedMessage()
+  const base = { run_id: context.runId, timestamp: Date.now() / 1000 }
+  const events = [
+    { ...base, event: 'message.delta', delta: 'I have completed ', seq: 1 },
+    // Deltas for "the work. @reviewer please check." never arrived (audit 2026-10-08).
+    {
+      ...base,
+      event: 'run.completed',
+      output: 'I have completed the work. @reviewer please check.',
+      completed: true,
+      partial: false,
+      interrupted: false,
+      seq: 9,
+    },
+  ]
+  for (const event of events)
+    await env.ingest.submit(translateRunEvent(context, event, { unknownEvents: 0 }))
+  expect(replyMessage()).toMatchObject({
+    streaming: false,
+    parts: [{ kind: 'text', text: 'I have completed the work. @reviewer please check.' }],
+  })
+  const reviewer = env.db.sqlite
+    .prepare("SELECT agent_id, hop FROM message_runs WHERE agent_id = 'reviewer'")
+    .get()
+  expect(reviewer).toMatchObject({ agent_id: 'reviewer', hop: 1 })
+})
+
+test('when the final output does not continue the streamed text, the streamed text is kept as is', async () => {
+  const context = await admittedMessage()
+  const base = { run_id: context.runId, timestamp: Date.now() / 1000 }
+  for (const event of [
+    { ...base, event: 'message.delta', delta: 'Working on it. ', seq: 1 },
+    { ...base, event: 'run.completed', output: 'Different summary.', completed: true, seq: 2 },
+  ])
+    await env.ingest.submit(translateRunEvent(context, event, { unknownEvents: 0 }))
+  expect(replyMessage().parts).toEqual([{ kind: 'text', text: 'Working on it. ' }])
+})
