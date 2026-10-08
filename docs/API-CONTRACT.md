@@ -216,7 +216,8 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 ### Watch view (event replay)
 - **S** `GET /api/agents/:agentId/watch?from=<seq>&limit=` →
   ```ts
-  { asOfSeq; agent: AgentSummary; live: boolean
+  { asOfSeq; agent: AgentSummary; live: boolean /* an active run right now */
+    sessionId: string | null /* latest Hermes session: Watch's Open in terminal copies `hermes -p <agent> --resume <session>` */
     frames: WatchFrame[]; markers: { seq: number; at: string; kind: 'command' | 'file' | 'browser' | 'asked' }[] }
   type WatchFrame = { seq: number; at: string; agentId: AgentId; runId: string | null; surface: 'terminal' | 'editor' | 'browser'
     terminal?: { cwd: string; command: string; output: string /* tail, ≤64 KB */; status: 'running' | 'ok' | 'error' | 'paused' }
@@ -225,8 +226,13 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
     caption: string /* "Checked the latest ws version" */ }
   ```
 - `GET /api/media/:mediaId` → image bytes (screenshots).
-- **S** `GET /api/watch/overview` → `{ items: { agent: AgentSummary; thumbnail: string | null; status: string }[] }`
-- `POST /api/agents/:agentId/pause` / `/resume` → `AgentSummary`
+- **S** `GET /api/watch/overview` → `{ items: { agent: AgentSummary; thumbnail: string | null; status: string; live: boolean
+  surface: 'terminal' | 'editor' | 'browser' | null /* last frame, for a miniature */ }[] }`
+- Frames are upserted by `seq` (per agent); a terminal frame is re-emitted with the same `seq` when it finishes. Schemas live in
+  `packages/contract/src/watch.ts`. The Flow inspector's `watch` field carries the step agent's last frame surface (null when it has none).
+- **H** `POST /api/agents/:agentId/pause` / `/resume` → `AgentSummary` (status `paused` while held). Pause holds Score's dispatch
+  queue for that agent and blocks its not-started Kanban tasks (`hermes kanban block`); a running turn finishes. Resume unblocks only
+  what Score blocked. Same semantics as brief pause.
 
 ## 5. Chat
 

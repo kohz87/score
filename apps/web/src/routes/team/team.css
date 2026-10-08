@@ -176,6 +176,12 @@
   font-size: 14px;
   font-weight: 600;
 }
+.team-watch-link {
+  font-size: 14px;
+  font-weight: 600;
+  color: inherit;
+  text-underline-offset: 3px;
+}
 .team-band .team-status {
   font-size: 15px;
 }

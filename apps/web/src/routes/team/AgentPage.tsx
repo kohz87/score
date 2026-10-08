@@ -1,5 +1,5 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { agentTint } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery, statusLabels, useAgentDetail } from './team-queries.ts'
@@ -107,6 +107,11 @@ function AgentProfile({ agentId }: { agentId: string }) {
                 : statusLabels[agent.status]}
             {agent.activity && ` · ${agent.activity}`}
           </span>
+          {agent.lifecycle?.state !== 'removed' && agent.served && (
+            <Link className="team-watch-link" to={`/now/watch/${encodeURIComponent(agent.id)}`}>
+              Watch {agent.name} work
+            </Link>
+          )}
         </div>
       </header>
       {detail.isError && (

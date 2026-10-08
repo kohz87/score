@@ -45,6 +45,17 @@
   --flow-edge-planned: #b9bdc6;
   --flow-edge-sent-back: #c28200;
   --flow-done-border: #c9cdd5;
+  --watch-stage: #1a1c23;
+  --watch-window: #0f1116;
+  --watch-window-bar: #20232c;
+  --watch-window-dot: #3a3e4a;
+  --watch-tree: #151821;
+  --watch-text: #c9ccd4;
+  --watch-muted: #a9adb8;
+  --watch-faint: #8a8f9c;
+  --watch-bright: #e8eaf0;
+  --watch-live: #d93a4e;
+  --agent-blue: #6b8cff;
   --radius-pill: 999px;
   --radius-card: 28px;
   --radius-20: 20px;

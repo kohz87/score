@@ -464,6 +464,32 @@
   color: var(--ink-muted);
   font-size: 14px;
 }
+.flow-watch--link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+.flow-watch__screen {
+  flex: 0 0 96px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-8);
+  background: var(--watch-stage);
+  color: var(--watch-faint);
+  font-size: 11px;
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.flow-watch__screen img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .flow-inspector__facts {
   margin: 0;
   font-size: 14px;

@@ -4,6 +4,7 @@ import { AskingCard, MadeTodayCard, NowComposer, ThreadCard } from './NowCards.t
 import { FlowView } from './flow/FlowView.tsx'
 import { RoutinesView } from './RoutinesView.tsx'
 import { ScoreTimeline } from './ScoreTimeline.tsx'
+import { WatchPage } from '../watch/WatchPage.tsx'
 import './now.css'
 
 const views = [
@@ -22,7 +23,11 @@ export function NowPage() {
     ? 'flow'
     : pathname.startsWith('/now/routines')
       ? 'routines'
-      : 'score'
+      : pathname.startsWith('/now/watch/')
+        ? 'watch'
+        : 'score'
+  // Watch has its own heading; it lives under Now but is not one of its three views.
+  if (view === 'watch') return <WatchPage />
   return (
     <div className="now-page">
       <section className="now-title">
