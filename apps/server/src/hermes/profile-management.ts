@@ -17,6 +17,8 @@ export interface ProfileStepContext {
   createdAt: string
   input: AgentCreateInput | null
   baseline: Baseline
+  /** Never globs of the baseline already applied (a rebaseline replaces them; the rest of the deny list is Hermes's). */
+  previousNever?: string[]
   exportPath: string | null
 }
 export interface ProfileManagementPort {

@@ -416,3 +416,12 @@ test('a retried export reuses its own earlier file instead of failing, but never
   symlinkSync(join(env.home, 'elsewhere'), context.exportPath)
   await expect(step('export')).rejects.toThrow(/unsafe or already exists/)
 })
+
+test('a rebaseline removes the Never rules Score applied before, and keeps Hermes-owned ones', async () => {
+  await provision()
+  deny = ['git push*', 'hermes-own *']
+  context.baseline = { ...context.baseline, never: [] }
+  context.previousNever = ['git push*']
+  await step('permissions')
+  expect(deny).toEqual(['hermes-own *'])
+})
