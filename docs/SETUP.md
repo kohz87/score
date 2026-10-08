@@ -163,6 +163,8 @@ SCORE_BRIDGE_INSTALL_URL='file:///home/<you>/score#hermes-plugin/score_bridge'  
 SCORE_BRIDGE_INSTALL_REF=<full 40-character commit hash>   # e.g. $(git -C ~/score rev-parse HEAD)
 ```
 
+If Score runs with a custom `SCORE_HOME`, start Hermes with the same `SCORE_HOME`: the plugin reads its token and writes its spool there (default `~/.score`).
+
 Without them, Add agent stops with "Configure a pinned bridge installation URL first." Agent management works on
 this machine or over remote access with TLS; plain-HTTP remote access refuses it. Deleting an agent keeps a private
 export in `$SCORE_HOME/profile-backups/` (it omits credentials and is not a full undo).

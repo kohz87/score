@@ -196,3 +196,28 @@ def test_a_tail_window_that_cuts_off_a_private_keys_header_keeps_none_of_its_bod
     for line in body_lines:
         assert line[:24] not in safe
     assert "line 699: build step ok" in safe
+
+
+def test_credential_file_read_result_and_error_are_not_sent(sender):
+    make_hook("post_tool_call", sender)(tool_name="read_file", status="error", tool_call_id="r",
+                                         args={"path": "/home/u/.netrc"},
+                                         result="machine h login me password willow-tree-17",
+                                         error_message="cannot parse: password willow-tree-17")
+    sender.process_once()
+    sent = json.dumps(sender.transport.acked)
+    assert "willow-tree-17" not in sent and "/home/u/.netrc" in sent
+
+
+def test_empty_hook_ids_are_null_in_envelope_and_payload(sender):
+    make_hook("pre_tool_call", sender)(tool_name="terminal", tool_call_id="", session_id="", turn_id="",
+                                        args={"command": "ls"})
+    sender.process_once()
+    event = sender.transport.acked[0]
+    assert event["toolCallId"] is None and event["sessionId"] is None
+    assert event["payload"]["tool_call_id"] is None and event["payload"]["turn_id"] is None
+
+
+def test_score_home_sets_token_and_spool_directories(monkeypatch, tmp_path):
+    monkeypatch.setenv("SCORE_HOME", str(tmp_path / "custom"))
+    assert ScoreClient().token_path == tmp_path / "custom" / "bridge.token"
+    assert Spool("abc").directory == tmp_path / "custom" / "spool"

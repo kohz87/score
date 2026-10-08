@@ -205,3 +205,26 @@ test('secrets are absent from projections, event log and SQLite bytes; previews 
   expect(logs.filter((row) => row.type === 'log.line')).toHaveLength(4)
   expect(JSON.stringify(logs)).not.toContain(secret)
 })
+
+test('credential-file reads keep neither result, error nor content in previews or logs', async () => {
+  const token = await server.token()
+  await server.send(token, [
+    event(1, 'pre_tool_call', {
+      tool_name: 'read_file',
+      args: { path: '/home/u/.netrc', content: 'password willow-tree-17' },
+    }),
+    event(2, 'post_tool_call', {
+      tool_name: 'read_file',
+      status: 'ok',
+      args: { path: '/home/u/.netrc' },
+      result: '{"content":"machine h login me password willow-tree-17"}',
+      error_message: 'password willow-tree-17',
+    }),
+  ])
+  const dump = JSON.stringify([
+    server.db.sqlite.prepare('SELECT * FROM session_tool_calls').all(),
+    server.db.sqlite.prepare('SELECT data FROM events').all(),
+  ])
+  expect(dump).not.toContain('willow-tree-17')
+  expect(dump).toContain('.netrc')
+})
