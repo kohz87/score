@@ -3,9 +3,17 @@ import type { StreamEvent } from '@score/contract'
 import type { DeepReadonly, Ingest } from './ingest.ts'
 
 export interface FanoutOptions {
+  /** Backlog a subscriber may hold while its socket is blocked. */
   byteBudget?: number
+  /** Largest single frame sent as is. A bigger one is replaced by a reset so clients refetch snapshots. */
+  maxFrameBytes?: number
   writeTimeoutMs?: number
 }
+
+export const MAX_FRAME_BYTES = 8 * 1024 * 1024
+// "pruned" is the existing "your cursor no longer leads to a complete replay" reason; the client refetches
+// its snapshots and carries on from the head, which skips the oversized event.
+export const OVERSIZED_RESET_FRAME = `event: stream.reset\ndata: ${JSON.stringify({ type: 'stream.reset', data: { reason: 'pruned' } })}\n\n`
 
 export function eventFrame(event: DeepReadonly<StreamEvent>): string {
   return `id: ${event.seq}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`
@@ -21,7 +29,11 @@ export interface Subscriber {
 
 export function createFanout(
   ingest: Ingest,
-  { byteBudget = 1024 * 1024, writeTimeoutMs = 10_000 }: FanoutOptions = {},
+  {
+    byteBudget = 1024 * 1024,
+    maxFrameBytes = MAX_FRAME_BYTES,
+    writeTimeoutMs = 10_000,
+  }: FanoutOptions = {},
 ) {
   const subscribers = new Set<ReturnType<typeof connect>>()
   let closed = false
@@ -75,7 +87,10 @@ export function createFanout(
     // larger than the budget disconnect healthy clients. A stuck client still trips the budget or
     // the write timeout.
     function withinBudget(extra = 0): boolean {
-      if (bufferedBytes + queuedBytes + extra <= byteBudget) return true
+      const held = bufferedBytes + queuedBytes
+      if (held + extra <= byteBudget) return true
+      // One big frame into an empty backlog is not a slow client; the write timeout still guards the socket.
+      if (held === 0 && extra <= maxFrameBytes) return true
       destroy()
       return false
     }
@@ -122,7 +137,8 @@ export function createFanout(
       },
       deliver(event: DeepReadonly<StreamEvent>): void {
         if (stopped || (!buffering && event.seq <= lastSeq)) return
-        const frame = eventFrame(event)
+        let frame = eventFrame(event)
+        if (Buffer.byteLength(frame) > maxFrameBytes) frame = OVERSIZED_RESET_FRAME
         if (buffering) {
           const bytes = Buffer.byteLength(frame)
           if (!withinBudget(bytes)) return
@@ -164,6 +180,7 @@ export function createFanout(
   }
 
   return {
+    maxFrameBytes,
     subscribe(raw: ServerResponse): Subscriber {
       return connect(raw)
     },

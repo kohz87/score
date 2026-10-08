@@ -199,6 +199,7 @@ type Handoff = {
 - **Durable events**: `id: <seq>`, `event: <type>`, `data: <envelope json>`. `seq` is strictly increasing; gaps
   are allowed. Nothing between replay and live is lost or duplicated (server-side subscription fence).
 - **Control frames** (`stream.hello`, `stream.reset`) have **no `id:`**. Comment heartbeat every 15 s (`: hb`).
+- A single event too large to send (frame over 8 MiB; completion `parts` over 256 KiB are omitted at the source) is replaced on the wire by `stream.reset` reason `pruned`, live and in replay, so a reconnect cannot loop on it.
 - `stream.hello` is always first and carries the log `epoch`. The server sends `stream.reset` instead of replaying
   when the cursor's epoch differs, the cursor is older than retention, or it is ahead of the head.
 - Slow clients are disconnected (byte budget / write timeout); they reconnect with `Last-Event-ID`.

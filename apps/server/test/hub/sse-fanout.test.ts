@@ -181,3 +181,34 @@ test('write exceptions and socket errors disconnect only that subscriber', () =>
   expect(fast.destroyed).toBe(true)
   fanout.close()
 })
+
+test('one frame larger than the backlog budget reaches a healthy client; a too-large one becomes a reset', () => {
+  const { fanout } = setup({ byteBudget: 100, maxFrameBytes: 1000 })
+  const healthy = new TestResponse()
+  const subscriber = fanout.subscribe(healthy.raw)
+  subscriber.release(0)
+  const big = 'x'.repeat(500)
+  subscriber.write(big)
+  expect(healthy.destroyed).toBe(false)
+  expect(healthy.frames).toEqual([big])
+  fanout.close()
+})
+
+test('a live event above the maximum frame size is replaced by a stream reset', () => {
+  let deliver: CommittedListener = () => {}
+  const ingest = {
+    onCommitted: vi.fn((listener: CommittedListener) => {
+      deliver = listener
+      return () => {}
+    }),
+  }
+  const fanout = createFanout(ingest as unknown as Ingest, { maxFrameBytes: 400 })
+  const raw = new TestResponse()
+  fanout.subscribe(raw.raw).release(0)
+  deliver([{ ...event(1), data: { roomId: 'room', messageId: 'm'.repeat(1000) } } as StreamEvent])
+  deliver([event(2)])
+  expect(raw.destroyed).toBe(false)
+  expect(raw.frames[0]).toContain('event: stream.reset')
+  expect(raw.frames[1]).toBe(eventFrame(event(2)))
+  fanout.close()
+})

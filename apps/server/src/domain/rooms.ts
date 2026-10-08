@@ -187,10 +187,20 @@ export function updateMessage(
       'UPDATE messages SET parts = ?, streaming = ?, updated_at = ?, version = version + 1 WHERE id = ?',
     )
     .run(JSON.stringify(message.parts), Number(message.streaming), now, messageId)
+  // The completion event repeats every part; a very long reply would make one huge frame. Clients already
+  // hold the streamed text, so past the bound they keep it and a reload reads the stored message.
+  const parts = JSON.stringify(message.parts).length <= MAX_COMPLETION_PARTS_CHARS
   return append === null
-    ? [{ type: 'message.completed', data: { messageId, roomId, parts: message.parts } }]
+    ? [
+        {
+          type: 'message.completed',
+          data: parts ? { messageId, roomId, parts: message.parts } : { messageId, roomId },
+        },
+      ]
     : [{ type: 'message.delta', data: { messageId, roomId, append } }]
 }
+
+const MAX_COMPLETION_PARTS_CHARS = 256 * 1024
 
 const CursorSchema = z
   .object({ roomId: z.string(), createdAt: z.iso.datetime(), id: z.string().min(1) })
