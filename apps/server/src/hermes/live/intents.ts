@@ -144,7 +144,9 @@ async function dispatch(
           payload.credentialGeneration,
           payload.sessionId ?? null,
           payload.model ?? null,
-          now,
+          // Rebuilding the row after a crash must keep the real start: crash recovery only trusts Hermes history
+          // written after it.
+          row.first_sent_at ?? now,
           now,
         )
       return [

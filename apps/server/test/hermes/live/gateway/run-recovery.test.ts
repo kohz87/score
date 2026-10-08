@@ -203,3 +203,19 @@ test('an answer written after compression moved the session is recovered from th
   expect(readRun(env.db.sqlite, context.runId)).toMatchObject({ status: 'completed' })
   expect(JSON.stringify(reply().parts)).toContain('Finished after compression.')
 })
+
+test('a run row rebuilt from an accepted admission keeps the original send time', async () => {
+  const context = await admittedMessage()
+  const sentAt = '2026-10-06T10:00:00.000Z'
+  env.db.sqlite.prepare('UPDATE command_intents SET first_sent_at = ?').run(sentAt)
+  env.db.sqlite.exec('PRAGMA foreign_keys = OFF')
+  env.db.sqlite.prepare('DELETE FROM runs WHERE id = ?').run(context.runId)
+  env.db.sqlite.exec('PRAGMA foreign_keys = ON')
+  // A crash before the runs insert also means the observation was never recorded.
+  env.db.sqlite.exec("DELETE FROM ingest_keys WHERE identity LIKE 'admitted:%'")
+  await env.intents.startRunIntent(
+    { profile: 'builder', input: 'fixture' },
+    messageTurnId('human', 'builder'),
+  )
+  expect(readRun(env.db.sqlite, context.runId).started_at).toBe(sentAt)
+})
