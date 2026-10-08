@@ -41,6 +41,8 @@ import { taskAction, taskReader } from './task-actions.ts'
 import { LiveTasks } from './tasks.ts'
 import { createTask, patchTask } from './task-writes.ts'
 import { LiveRoutines } from './routines.ts'
+import { LiveAgentTabs } from './agent-tabs.ts'
+import { MemoryIdSchema } from '../agent-tabs.ts'
 import type { HermesRunner } from './cli.ts'
 import { readRun, RunRowSchema, runLifecycle, type RunMetrics } from './translate.ts'
 
@@ -90,10 +92,17 @@ export class LivePort implements HermesPort {
   }
   private readonly profiles: ProfilesReader
   private readonly routines: LiveRoutines
+  private readonly tabs: LiveAgentTabs
   private readonly profileFiles = new ProfileFiles()
   constructor(private readonly options: LivePortOptions) {
     this.profiles = new ProfilesReader(resolveHermesHome(options.hermesHome), options.runner)
     this.routines = new LiveRoutines(options.hermesHome, options.runner)
+    this.tabs = new LiveAgentTabs(
+      resolveHermesHome(options.hermesHome),
+      (profile) => this.profiles.profileHome(profile),
+      (profile) => this.profiles.invalidate(profile),
+      options.runner,
+    )
   }
 
   async start(sink: ObservationSink): Promise<void> {
@@ -290,6 +299,38 @@ export class LivePort implements HermesPort {
   async runRoutine(id: string) {
     this.requireStarted()
     await this.routines.run(id)
+  }
+  async setAgentModel(agentId: string, req: Parameters<HermesPort['setAgentModel']>[1]) {
+    this.requireStarted()
+    await this.tabs.setModel(agentId, req)
+  }
+  async listSkills(agentId: string) {
+    return this.tabs.listSkills(agentId)
+  }
+  async installSkill(agentId: string, identifier: string) {
+    this.requireStarted()
+    return this.tabs.installSkill(agentId, { name: identifier })
+  }
+  async setSkillEnabled(agentId: string, name: string, enabled: boolean) {
+    this.requireStarted()
+    return this.tabs.setSkillEnabled(agentId, name, enabled)
+  }
+  async searchSkillHub(query: string) {
+    return this.tabs.searchHub(query)
+  }
+  async listMemory(agentId: string, query: Parameters<HermesPort['listMemory']>[1]) {
+    return this.tabs.listMemory(agentId, query)
+  }
+  async addMemory(agentId: string): Promise<never> {
+    return this.tabs.unsupportedMemoryWrite(agentId)
+  }
+  async deleteMemory(agentId: string, id: string): Promise<never> {
+    MemoryIdSchema.parse(id)
+    return this.tabs.unsupportedMemoryWrite(agentId)
+  }
+  async setToolEnabled(agentId: string, toolId: string, enabled: boolean) {
+    this.requireStarted()
+    return this.tabs.setToolEnabled(agentId, toolId, enabled)
   }
   private agentHome(agentId: string): string {
     const parsed = ProfileNameSchema.safeParse(agentId)

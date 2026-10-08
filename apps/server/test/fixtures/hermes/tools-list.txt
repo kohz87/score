@@ -1,0 +1,11 @@
+Built-in toolsets (cli):
+  ✓ enabled  web  🔍 Web Search & Scraping
+  ✓ enabled  terminal  💻 Terminal & Processes
+  ✗ disabled  video  🎬 Video Analysis
+
+Plugin toolsets (cli):
+  ✗ disabled  a2a  🔌 A2A
+
+MCP servers:
+  tracker  all tools enabled
+  docs  [include only: (none)]

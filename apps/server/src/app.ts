@@ -3,6 +3,7 @@ import { CONTRACT_VERSION, type SystemStatus } from '@score/contract'
 import type { Config } from './config.ts'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
 import { registerAgentRoutes } from './http/agents.ts'
+import { registerAgentTabRoutes } from './http/agent-tabs.ts'
 import { registerTaskRoutes } from './http/tasks.ts'
 import { registerRoutineRoutes } from './http/routines.ts'
 import { registerRoomRoutes } from './http/rooms.ts'
@@ -125,6 +126,7 @@ export function buildApp({
   }
   registerTaskRoutes(app, port, ingest, db, clock)
   registerAgentRoutes(app, port, ingest, db, clock)
+  registerAgentTabRoutes(app, port, ingest, db, clock)
   registerRoutineRoutes(app, port, db, clock)
   if (db && ingest) registerRoomRoutes(app, port, db, ingest, clock)
   app.get('/api/health', async () => ({ ok: true, contract: CONTRACT_VERSION }))

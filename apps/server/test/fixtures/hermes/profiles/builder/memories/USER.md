@@ -1,0 +1,1 @@
+Prefers short status updates.

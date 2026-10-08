@@ -37,6 +37,19 @@ import {
   taskSummary,
 } from '../../domain/tasks.ts'
 import { createHash, randomUUID } from 'node:crypto'
+import {
+  AddMemorySchema,
+  HubQuerySchema,
+  InstallSkillSchema,
+  MEMORY_DETAIL_ITEMS,
+  MemoryQuerySchema,
+  SetModelSchema,
+  pageMemory,
+  type AgentTool,
+  type HubSkill,
+  type MemoryItem,
+  type SkillItem,
+} from '../agent-tabs.ts'
 import { z } from 'zod'
 import { HttpError } from '../../errors.ts'
 import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
@@ -67,6 +80,20 @@ const realScheduler: Scheduler = {
   setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
   clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 }
+
+const memoryId = (text: string) => `m-${createHash('sha1').update(text).digest('hex').slice(0, 12)}`
+const fakeHub: HubSkill[] = [
+  ['changelog-writer', 'Drafts a changelog from merged pull requests.'],
+  ['test-triage', 'Groups failing tests by likely cause.'],
+  ['release-checklist', 'Walks through a release checklist step by step.'],
+  ['meeting-notes', 'Turns a transcript into notes and action items.'],
+].map(([name, description]) => ({
+  name: name!,
+  identifier: `example/skills/${name}`,
+  source: 'official',
+  trust: 'builtin',
+  description: description!,
+}))
 
 export function stepToObservation(
   step: ScenarioStep,
@@ -265,6 +292,10 @@ export class FakePort implements HermesPort {
   private readonly routineKeys = new Map<string, string>()
   private routineCount = 0
   private readonly files = new Map<string, string>()
+  private readonly models = new Map<string, { model: AgentSummary['model']; via: string }>()
+  private readonly skills = new Map<string, SkillItem[]>()
+  private readonly memory = new Map<string, MemoryItem[]>()
+  private readonly tools = new Map<string, AgentTool[]>()
   private sink: ObservationSink | undefined
   private sessionId = ''
   private nextIdentity = 0
@@ -306,6 +337,33 @@ export class FakePort implements HermesPort {
     this.turns.clear()
     this.routines.clear()
     this.routineKeys.clear()
+    this.models.clear()
+    this.skills.clear()
+    this.memory.clear()
+    this.tools.clear()
+    const at = new Date(this.scheduler.now()).toISOString()
+    for (const agent of this.agents.values()) {
+      this.skills.set(agent.id, [
+        { name: 'collaboration', enabled: true },
+        { name: 'code-review', enabled: true },
+        { name: 'release-notes', enabled: false },
+      ])
+      this.memory.set(
+        agent.id,
+        [
+          ['Prefers short status updates.', 'About you'],
+          ['The test suite runs with pnpm test.', 'Agent notes'],
+          ['Releases go out on Fridays.', 'Agent notes'],
+        ].map(([text, source]) => ({ id: memoryId(text!), text: text!, source: source!, at })),
+      )
+      this.tools.set(agent.id, [
+        { id: 'terminal', label: 'Terminal & Processes', kind: 'builtin', enabled: true },
+        { id: 'file', label: 'File Operations', kind: 'builtin', enabled: true },
+        { id: 'web', label: 'Web Search & Scraping', kind: 'builtin', enabled: true },
+        { id: 'browser', label: 'Browser Automation', kind: 'builtin', enabled: false },
+        { id: 'tracker', label: 'tracker', kind: 'mcp', enabled: true },
+      ])
+    }
   }
 
   async start(sink: ObservationSink): Promise<void> {
@@ -379,16 +437,96 @@ export class FakePort implements HermesPort {
         reportsTo: agent.id === 'lead' ? null : 'lead',
         worksIn: null,
         rulesFile: 'AGENTS.md',
-        model: { ...agent.model, via: 'Demo', fallback: null },
-        skills: [{ name: 'collaboration', enabled: true }],
-        memory: [],
-        tools: [],
-        helpersMax: null,
+        model: agent.model
+          ? { ...agent.model, via: this.models.get(agent.id)?.via ?? 'Demo', fallback: null }
+          : null,
+        skills: structuredClone(this.skills.get(agent.id) ?? []),
+        memory: structuredClone((this.memory.get(agent.id) ?? []).slice(0, MEMORY_DETAIL_ITEMS)),
+        tools: structuredClone(this.tools.get(agent.id) ?? []),
+        helpersMax: 3,
         routines: this.routinesOf(agent.id),
         channels: [],
         permissions: [],
       }),
     )
+  }
+
+  private agentOrThrow(agentId: string): AgentSummary {
+    const agent = this.agents.get(agentId)
+    if (!agent) throw new HttpError(404, 'not_found', 'Agent not found')
+    return agent
+  }
+  async setAgentModel(agentId: string, input: Parameters<HermesPort['setAgentModel']>[1]) {
+    const req = SetModelSchema.parse(input)
+    const agent = this.agentOrThrow(agentId)
+    const model = { id: req.model, label: req.model }
+    agent.model = model
+    this.models.set(agentId, {
+      model,
+      via: req.provider ?? this.models.get(agentId)?.via ?? 'Demo',
+    })
+  }
+  async listSkills(agentId: string): Promise<SkillItem[]> {
+    this.agentOrThrow(agentId)
+    return structuredClone(this.skills.get(agentId) ?? [])
+  }
+  async installSkill(agentId: string, identifier: string): Promise<SkillItem[]> {
+    this.agentOrThrow(agentId)
+    const name = InstallSkillSchema.parse({ name: identifier }).name.split('/').pop()!
+    const skills = this.skills.get(agentId) ?? []
+    if (!skills.some((skill) => skill.name === name)) skills.push({ name, enabled: true })
+    this.skills.set(agentId, skills)
+    return structuredClone(skills)
+  }
+  async setSkillEnabled(agentId: string, name: string, enabled: boolean): Promise<SkillItem> {
+    this.agentOrThrow(agentId)
+    const skill = this.skills.get(agentId)?.find((candidate) => candidate.name === name)
+    if (!skill) throw new HttpError(404, 'not_found', 'Skill not found')
+    skill.enabled = enabled
+    return structuredClone(skill)
+  }
+  async searchSkillHub(query: string): Promise<HubSkill[]> {
+    const q = HubQuerySchema.parse(query).trim().toLowerCase()
+    if (!q) return []
+    return fakeHub.filter((skill) => `${skill.name} ${skill.description}`.toLowerCase().includes(q))
+  }
+  async listMemory(agentId: string, query: Parameters<HermesPort['listMemory']>[1]) {
+    this.agentOrThrow(agentId)
+    return pageMemory(this.memory.get(agentId) ?? [], MemoryQuerySchema.parse(query))
+  }
+  async addMemory(agentId: string, text: string): Promise<MemoryItem> {
+    this.agentOrThrow(agentId)
+    const clean = AddMemorySchema.parse({ text }).text.trim()
+    const items = this.memory.get(agentId) ?? []
+    const existing = items.find((item) => item.text === clean)
+    if (existing) return structuredClone(existing)
+    const item = {
+      id: memoryId(clean),
+      text: clean,
+      source: 'Agent notes',
+      at: new Date(this.scheduler.now()).toISOString(),
+    }
+    this.memory.set(agentId, [item, ...items])
+    return structuredClone(item)
+  }
+  async deleteMemory(agentId: string, id: string): Promise<void> {
+    this.agentOrThrow(agentId)
+    const items = this.memory.get(agentId) ?? []
+    if (!items.some((item) => item.id === id))
+      throw new HttpError(404, 'not_found', 'Memory not found')
+    this.memory.set(
+      agentId,
+      items.filter((item) => item.id !== id),
+    )
+  }
+  async setToolEnabled(agentId: string, toolId: string, enabled: boolean): Promise<AgentTool> {
+    this.agentOrThrow(agentId)
+    const tool = this.tools.get(agentId)?.find((candidate) => candidate.id === toolId)
+    if (!tool) throw new HttpError(404, 'not_found', 'Tool not found')
+    if (tool.kind === 'mcp')
+      throw new HttpError(501, 'not_implemented', 'MCP servers are shown read-only')
+    tool.enabled = enabled
+    return structuredClone(tool)
   }
 
   private routinesOf(agentId: string): RoutineSummary[] {
@@ -498,6 +636,9 @@ export class FakePort implements HermesPort {
     index = `${this.loop}:command:${this.nextIdentity++}`,
     detail?: TaskDetail,
   ): Promise<void> {
+    // A model chosen through the Team page outlives the script's own agent updates.
+    if (step.kind === 'agent.updated' && this.models.has(step.data.id))
+      step = { ...step, data: { ...step.data, model: this.models.get(step.data.id)!.model } }
     // Delayed script steps cannot undo commands delivered while the scenario was playing.
     const suppressed = Boolean(
       (step.kind === 'task.upserted' &&
