@@ -15,7 +15,10 @@ import { registerSettingsRoutes } from './http/settings.ts'
 import { registerRoomRoutes } from './http/rooms.ts'
 import { registerBriefRoutes } from './http/briefs.ts'
 import { createBriefControl } from './http/brief-control.ts'
+import { createPlanStarter } from './http/plan-start.ts'
 import { createTaskHolds } from './http/task-holds.ts'
+import type { HoldOwner } from './domain/holds.ts'
+import { teamPausedAt } from './domain/team-pause.ts'
 import { registerTeamPauseRoutes } from './http/team-pause.ts'
 import { registerMediaRoutes } from './http/media.ts'
 import { MediaStore } from './media/store.ts'
@@ -51,6 +54,7 @@ declare module 'fastify' {
     media?: MediaStore
     // Present when the app has a database. Resolves to the number of held tasks that still need another attempt.
     recoverTaskHolds?: () => Promise<number>
+    recoverPlanStarts?: () => Promise<number>
   }
 }
 
@@ -190,22 +194,53 @@ export function buildApp({
     const control = createBriefControl({ port, db, ingest, holds, dispatch })
     // A crash between "pause recorded" and "task parked" (or "resumed" and "unparked") leaves holds behind. The
     // server runs this once the adapter has started, and again until nothing is left (Hermes may be unreachable).
-    app.decorate('recoverTaskHolds', () =>
-      holds.recover((owner) =>
-        db.read(
-          (sqlite) =>
-            sqlite
-              .prepare(
-                owner.kind === 'brief'
-                  ? 'SELECT 1 FROM briefs WHERE id = ? AND paused_at IS NOT NULL'
-                  : 'SELECT 1 FROM agent_pauses WHERE agent_id = ?',
-              )
-              .get(owner.id) !== undefined,
-        ),
-      ),
-    )
-    registerBriefRoutes(app, { port, db, ingest, control, ...(clock ? { clock } : {}) })
-    registerTeamPauseRoutes(app, { db, ingest, control, dispatch, ...(clock ? { clock } : {}) })
+    const ownerPaused = (owner: HoldOwner) =>
+      db.read((sqlite) => {
+        if (owner.kind === 'team') return teamPausedAt(sqlite) !== null
+        return (
+          sqlite
+            .prepare(
+              owner.kind === 'brief'
+                ? 'SELECT 1 FROM briefs WHERE id = ? AND paused_at IS NOT NULL'
+                : 'SELECT 1 FROM agent_pauses WHERE agent_id = ?',
+            )
+            .get(owner.id) !== undefined
+        )
+      })
+    app.decorate('recoverTaskHolds', () => holds.recover(ownerPaused))
+    // Tasks that arrive after a Pause get their pending hold in the observation's transaction (deriveBriefEvents);
+    // this parks them once it commits. One pass at a time; a pass that finds more pending rows runs again.
+    let parking: Promise<void> | undefined
+    let again = false
+    const park = (): Promise<void> => {
+      if (parking) {
+        again = true
+        return parking
+      }
+      parking = (async () => {
+        do {
+          again = false
+          await holds.applyPending(ownerPaused).catch(() => 1)
+        } while (again)
+      })().finally(() => {
+        parking = undefined
+      })
+      return parking
+    }
+    ingest.onCommitted((events) => {
+      if (events.some((event) => event.type === 'task.upserted')) return park()
+    })
+    const plans = createPlanStarter({ port, db, ingest })
+    app.decorate('recoverPlanStarts', () => plans.recover())
+    registerBriefRoutes(app, { port, db, ingest, control, plans, ...(clock ? { clock } : {}) })
+    registerTeamPauseRoutes(app, {
+      db,
+      ingest,
+      control,
+      holds,
+      dispatch,
+      ...(clock ? { clock } : {}),
+    })
     registerWatchRoutes(app, { port, db, ingest })
     registerAgentHistoryRoutes(app, { port, db })
     registerAgentPauseRoutes(app, {

@@ -365,7 +365,7 @@ test('plan first: addendum, parsed plan part, no hand-offs, nothing created unti
   expect(briefId).toBe(id)
   expect(taskIds).toHaveLength(2)
   expect(create.mock.calls.map(([req]) => [req.title, req.assignee, req.dependsOn])).toEqual([
-    ['Build the endpoint', 'builder', undefined],
+    // The first step was recorded by the failed attempt, so the retry resumes at the second.
     ['Review the endpoint', 'reviewer', [taskIds[0]]],
   ])
   expect(

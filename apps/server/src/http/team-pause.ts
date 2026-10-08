@@ -9,6 +9,7 @@ import { HttpError } from '../errors.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import type { BriefControl } from './brief-control.ts'
 import { requestIdempotency } from './idempotency.ts'
+import type { TaskHolds } from './task-holds.ts'
 
 const IdRow = z.object({ brief_id: z.string() })
 
@@ -20,11 +21,12 @@ export function registerTeamPauseRoutes(
     db: ScoreDb
     ingest: Ingest
     control: BriefControl
+    holds: TaskHolds
     dispatch?: () => Promise<void>
     clock?: () => number
   },
 ): void {
-  const { db, ingest, control, dispatch } = deps
+  const { db, ingest, control, holds, dispatch } = deps
   const receipts = requestIdempotency(db, deps.clock ?? Date.now)
   const mutation = {
     preHandler: [humanGuard(app.pairing), receipts.preHandler],
@@ -101,12 +103,14 @@ export function registerTeamPauseRoutes(
         failed.push(id)
       }
     }
-    if (failed.length)
+    // Tasks that arrived while everyone was paused are held under the team owner.
+    const teamFailed = await holds.release({ kind: 'team', id: 'team' })
+    if (failed.length || teamFailed.length)
       throw new HttpError(
         502,
         'hermes_unavailable',
         'Resumed, but some briefs could not be fully resumed. Try Resume again.',
-        { briefIds: failed },
+        { briefIds: failed, taskIds: teamFailed },
       )
     return response(false)
   })
