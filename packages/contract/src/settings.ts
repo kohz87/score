@@ -120,3 +120,19 @@ export const ConfigApplyResponseSchema = z.object({
   restartRequired: z.boolean(),
 })
 export type ConfigApplyResponse = z.infer<typeof ConfigApplyResponseSchema>
+
+// Contract §10 (Settings: plugins per profile). `locked` marks the Score bridge, which Score never disables.
+export const PluginIdSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/)
+export const PluginItemSchema = z.object({
+  id: PluginIdSchema,
+  label: z.string().min(1),
+  enabled: z.boolean(),
+  locked: z.boolean(),
+  description: z.string().nullable(),
+})
+export type PluginItem = z.infer<typeof PluginItemSchema>
+export const PluginsQuerySchema = z.object({ agent: AgentIdSchema }).strict()
+export const PluginsResponseSchema = z.object({ items: z.array(PluginItemSchema) })
+export type PluginsResponse = z.infer<typeof PluginsResponseSchema>
+export const PatchPluginRequestSchema = z.object({ enabled: z.boolean() }).strict()
+export type PatchPluginRequest = z.infer<typeof PatchPluginRequestSchema>

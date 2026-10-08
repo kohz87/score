@@ -365,6 +365,14 @@ export class LivePort implements HermesPort {
     this.requireStarted()
     return this.tabs.setToolEnabled(agentId, toolId, enabled)
   }
+  async listPlugins(agentId: string) {
+    this.requireStarted()
+    return this.tabs.listPlugins(agentId)
+  }
+  async setPluginEnabled(agentId: string, id: string, enabled: boolean) {
+    this.requireStarted()
+    return this.tabs.setPluginEnabled(agentId, id, enabled)
+  }
   private approvalTail: Promise<unknown> = Promise.resolve()
   private approvalProfile(agentId: string): string {
     const parsed = ProfileNameSchema.safeParse(agentId)

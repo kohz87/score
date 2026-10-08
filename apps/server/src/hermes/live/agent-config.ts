@@ -1,6 +1,7 @@
 import { z } from 'zod'
-import { redact } from '../../redact.ts'
+import { redact, redactBounded } from '../../redact.ts'
 import type { AgentTool } from '../agent-tabs.ts'
+import { PluginIdSchema, type PluginItem } from '@score/contract'
 import { type HermesRunner } from './cli.ts'
 
 // Reads of per-profile settings that Hermes keeps in config.yaml. Score never opens that file: it asks the
@@ -117,3 +118,45 @@ export const HubRowsSchema = z.array(
     })
     .passthrough(),
 )
+
+const PluginRowsSchema = z.array(
+  z.object({
+    name: PluginIdSchema,
+    status: z.string(),
+    description: z.string().nullish(),
+  }),
+)
+/** The Score bridge is how Score sees Hermes: disabling it from Score would cut Score off. */
+export function isBridgePlugin(name: string): boolean {
+  return name.replaceAll('_', '-') === 'score-bridge'
+}
+/** `plugins list --json` for one profile; null when Hermes can't answer. Rows with odd names are skipped. */
+export async function readPlugins(
+  runner: HermesRunner,
+  hermesHome: string,
+  profile: string,
+): Promise<PluginItem[] | null> {
+  const text = await capture(runner, hermesHome, ['-p', profile, 'plugins', 'list', '--json'])
+  if (text === null) return null
+  let json: unknown
+  try {
+    json = JSON.parse(text)
+  } catch {
+    return null
+  }
+  if (!Array.isArray(json)) return null
+  return json.flatMap((row): PluginItem[] => {
+    const parsed = PluginRowsSchema.element.safeParse(row)
+    if (!parsed.success) return []
+    const { name, status, description } = parsed.data
+    return [
+      {
+        id: name,
+        label: redact(name),
+        enabled: status === 'enabled',
+        locked: isBridgePlugin(name),
+        description: description ? redactBounded(description, 300) : null,
+      },
+    ]
+  })
+}

@@ -309,7 +309,7 @@
 .flow-node.flow-node--brief {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--card);
 }
 .flow-node.flow-node--brief .flow-node__subtitle {
   color: var(--rules-muted);
@@ -326,12 +326,12 @@
 }
 .flow-node--needs_you {
   background: var(--agent-jade-tint);
-  background: color-mix(in srgb, var(--node-agent) 15%, #fff);
+  background: color-mix(in srgb, var(--node-agent) 15%, var(--card));
   border: 2px solid var(--ink);
   box-shadow: 0 0 0 5px color-mix(in srgb, var(--node-agent) 28%, transparent);
 }
 .flow-node--planned {
-  border: 1.5px dashed color-mix(in srgb, var(--node-agent) 60%, #fff);
+  border: 1.5px dashed color-mix(in srgb, var(--node-agent) 60%, var(--card));
 }
 .flow-node--failed {
   border: 2px solid var(--agent-coral-text);
@@ -349,7 +349,7 @@
   font-size: 12px;
   font-weight: 600;
   background: var(--ink);
-  color: #fff;
+  color: var(--card);
   border-radius: var(--radius-pill);
   padding: 1px 8px;
 }

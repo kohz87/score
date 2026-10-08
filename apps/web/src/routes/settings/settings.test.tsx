@@ -2,7 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import type { AgentSummary, ConnectionsResponse, ProviderItem } from '@score/contract'
+import type { AgentSummary, ConnectionsResponse, PluginItem, ProviderItem } from '@score/contract'
 import { App, appRoutes } from '../../App.tsx'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry } from '../../data/resync.ts'
@@ -86,6 +86,7 @@ function mount() {
   )
 }
 afterEach(() => {
+  document.documentElement.removeAttribute('data-theme')
   cleanup()
   router.dispose()
   registry.dispose()
@@ -107,7 +108,7 @@ test('shows the section nav, providers with status and who uses them, and connec
   expect(await within(connectionsRegion).findByText('files')).toBeDefined()
   expect(within(connectionsRegion).getByText(/Everyone/)).toBeDefined()
   expect(within(connectionsRegion).getByText('Auth failed')).toBeDefined()
-  expect(screen.getAllByText('Coming soon.')).toHaveLength(1)
+  expect(screen.queryByText('Coming soon.')).toBeNull()
 })
 
 test('connecting a provider shows the terminal command and never sends a credential', async () => {
@@ -237,4 +238,103 @@ test('advanced: editing after a preview clears the diff', async () => {
   await within(advanced).findByText(/\+agent.max_turns: 30/)
   fireEvent.click(within(advanced).getByRole('button', { name: 'Discard agent.max_turns' }))
   expect(within(advanced).queryByText(/\+agent.max_turns: 30/)).toBeNull()
+})
+
+const pluginRows: PluginItem[] = [
+  { id: 'score-bridge', label: 'score-bridge', enabled: true, locked: true, description: null },
+  { id: 'memory-notes', label: 'memory-notes', enabled: true, locked: false, description: 'Notes' },
+  { id: 'image-tools', label: 'image-tools', enabled: false, locked: false, description: null },
+]
+function pluginServer() {
+  let rows = pluginRows
+  respond = (path, init) => {
+    if (path.startsWith('/api/settings/plugins/') && init?.method === 'PATCH') {
+      const id = decodeURIComponent(path.split('?')[0]!.split('/').pop()!)
+      const enabled = (JSON.parse(init.body as string) as { enabled: boolean }).enabled
+      rows = rows.map((row) => (row.id === id ? { ...row, enabled } : row))
+      return json(rows.find((row) => row.id === id))
+    }
+    if (path.startsWith('/api/settings/plugins')) return json({ items: rows })
+    if (path === '/api/agents') return json({ asOfSeq: 0, items: [builder] })
+    if (path === '/api/settings/providers') return json({ items: providers })
+    return json(connections)
+  }
+}
+
+test('plugins list for the picked agent; toggling patches the CLI-backed setting and re-reads', async () => {
+  pluginServer()
+  mount()
+  const region = await screen.findByRole('region', { name: 'Plugins and look' })
+  const memory = await within(region).findByRole('switch', { name: 'memory-notes for Builder' })
+  expect(memory.getAttribute('aria-checked')).toBe('true')
+  expect(calls.some((call) => call.path === '/api/settings/plugins?agent=builder')).toBe(true)
+  fireEvent.click(memory)
+  await waitFor(() =>
+    expect(
+      within(region)
+        .getByRole('switch', { name: 'memory-notes for Builder' })
+        .getAttribute('aria-checked'),
+    ).toBe('false'),
+  )
+  const patch = calls.find((call) => call.init?.method === 'PATCH')!
+  expect(patch.path).toBe('/api/settings/plugins/memory-notes?agent=builder')
+  expect(JSON.parse(patch.init!.body as string)).toEqual({ enabled: false })
+  expect(new Headers(patch.init!.headers).get('Idempotency-Key')).toBeTruthy()
+})
+
+test('the Score bridge is shown but cannot be switched, and says why', async () => {
+  pluginServer()
+  mount()
+  const region = await screen.findByRole('region', { name: 'Plugins and look' })
+  const bridge = (await within(region).findByRole('switch', {
+    name: 'score-bridge for Builder',
+  })) as HTMLButtonElement
+  expect(bridge.disabled).toBe(true)
+  expect(within(region).getByText(/can't be turned off here/)).toBeDefined()
+  fireEvent.click(bridge)
+  expect(calls.some((call) => call.init?.method === 'PATCH')).toBe(false)
+})
+
+test('a refused plugin change shows the server message', async () => {
+  pluginServer()
+  const ok = respond
+  respond = (path, init) =>
+    init?.method === 'PATCH'
+      ? json({ error: { code: 'conflict', message: 'Hermes did not apply the change' } }, 409)
+      : ok(path, init)
+  mount()
+  fireEvent.click(await screen.findByRole('switch', { name: 'image-tools for Builder' }))
+  expect((await screen.findByText('Hermes did not apply the change')).getAttribute('role')).toBe(
+    'alert',
+  )
+})
+
+test('theme choice applies data-theme, is remembered, and System clears it', async () => {
+  pluginServer()
+  window.localStorage.clear()
+  mount()
+  const group = await screen.findByRole('radiogroup', { name: 'Theme' })
+  fireEvent.click(within(group).getByRole('radio', { name: 'Dark' }))
+  expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+  expect(window.localStorage.getItem('score.theme')).toBe('dark')
+  expect(within(group).getByRole('radio', { name: 'Dark' }).getAttribute('aria-checked')).toBe(
+    'true',
+  )
+  fireEvent.click(within(group).getByRole('radio', { name: 'Light' }))
+  expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+  fireEvent.click(within(group).getByRole('radio', { name: 'System' }))
+  expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
+  expect(window.localStorage.getItem('score.theme')).toBeNull()
+})
+
+test('theme still switches when storage is blocked', async () => {
+  pluginServer()
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new Error('blocked')
+  })
+  mount()
+  const group = await screen.findByRole('radiogroup', { name: 'Theme' })
+  fireEvent.click(within(group).getByRole('radio', { name: 'Dark' }))
+  expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+  vi.restoreAllMocks()
 })

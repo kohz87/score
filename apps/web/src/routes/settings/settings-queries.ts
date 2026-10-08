@@ -4,6 +4,8 @@ import {
   ConfigSearchResponseSchema,
   ConnectResultSchema,
   ConnectionsResponseSchema,
+  PluginItemSchema,
+  PluginsResponseSchema,
   ProviderItemSchema,
   ProvidersResponseSchema,
   type ConfigApplyRequest,
@@ -88,4 +90,35 @@ export function useConfigActions() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings', 'config'] }),
   })
   return { preview, apply }
+}
+
+// Plugins are per profile and not in the stream; a toggle replaces the row from the verified response.
+export const pluginsKey = (agentId: string) => ['settings', 'plugins', agentId] as const
+export function usePlugins(agentId: string | undefined) {
+  return useQuery({
+    queryKey: pluginsKey(agentId ?? ''),
+    enabled: Boolean(agentId),
+    queryFn: async ({ signal }) =>
+      PluginsResponseSchema.parse(
+        await apiFetch(`settings/plugins?agent=${encodeURIComponent(agentId!)}`, { signal }),
+      ).items,
+    retry: false,
+  })
+}
+export function usePluginToggle(agentId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) =>
+      PluginItemSchema.parse(
+        await apiFetch(
+          `settings/plugins/${encodeURIComponent(id)}?agent=${encodeURIComponent(agentId)}`,
+          {
+            method: 'PATCH',
+            headers: { 'Idempotency-Key': crypto.randomUUID() },
+            body: JSON.stringify({ enabled }),
+          },
+        ),
+      ),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: pluginsKey(agentId) }),
+  })
 }

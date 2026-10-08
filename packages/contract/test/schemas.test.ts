@@ -471,6 +471,15 @@ const cases = [
     { id: 'not-a-uuid' },
   ],
   ['PairedBrowsersSchema', { items: [] }, { items: [{ id: 'x' }] }],
+  ['PluginIdSchema', 'memory-notes', '--bad'],
+  [
+    'PluginItemSchema',
+    { id: 'memory-notes', label: 'memory-notes', enabled: true, locked: false, description: null },
+    { id: 'memory-notes', label: 'memory-notes', enabled: 'yes', locked: false, description: null },
+  ],
+  ['PluginsQuerySchema', { agent: 'builder' }, {}],
+  ['PluginsResponseSchema', { items: [] }, { items: [{ id: 'x' }] }],
+  ['PatchPluginRequestSchema', { enabled: false }, { enabled: false, extra: 1 }],
 ] as const satisfies ReadonlyArray<readonly [keyof typeof contract, unknown, unknown]>
 
 test('every exported schema has valid and invalid fixtures', () => {
