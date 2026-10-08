@@ -153,7 +153,22 @@ Install the Score bridge plugin (Python, no runtime dependencies) into every pro
 restart that profile's gateway). Then start Score with `SCORE_MODE=live pnpm dev`. From another machine, reach it through
 an SSH tunnel (`ssh -N -L 5173:127.0.0.1:5173 <user>@<host>`); Score itself only listens on 127.0.0.1.
 
+## 8. Creating agents from Score (Team › Add agent)
+
+Score creates agents with `hermes profile create` and installs its bridge plugin into each one through
+`hermes plugins install`, pinned to a URL and ref you choose. Set both before using **Add agent**:
+
+```bash
+SCORE_BRIDGE_INSTALL_URL=https://<your git host>/<you>/score.git   # or file:///home/<you>/score
+SCORE_BRIDGE_INSTALL_REF=<commit or tag>
+```
+
+Without them, Add agent stops with "Configure a pinned bridge installation URL first." Agent management works on
+this machine or over remote access with TLS; plain-HTTP remote access refuses it. Deleting an agent keeps a private
+export in `$SCORE_HOME/profile-backups/` (it omits credentials and is not a full undo).
+
 ## Changelog of this file
+- 2026-10-08: creating agents (bridge install URL/ref).
 - 2026-10-08: bridge plugin install pointer, live start and SSH tunnel.
 - 2026-10-06: initial (Phase 0).
 - 2026-10-06: live-mode steps verified (per-profile API keys).

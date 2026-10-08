@@ -28,7 +28,17 @@ export { sweepKanbanDenials } from './live/kanban-denials.ts'
 export { pruneBridge } from './bridge/retention.ts'
 
 export function createHermesPort(
-  config: Pick<Config, 'mode' | 'fakeSpeed' | 'fakeLoop' | 'home' | 'hermesHome' | 'hermesUrl'>,
+  config: Pick<
+    Config,
+    | 'mode'
+    | 'fakeSpeed'
+    | 'fakeLoop'
+    | 'home'
+    | 'hermesHome'
+    | 'hermesUrl'
+    | 'bridgeInstallUrl'
+    | 'bridgeInstallRef'
+  >,
   deps: HermesPortDeps = {},
 ): HermesPort {
   return config.mode === 'fake'
@@ -38,6 +48,8 @@ export function createHermesPort(
         scoreHome: config.home,
         ...(config.hermesHome ? { hermesHome: config.hermesHome } : {}),
         ...(config.hermesUrl ? { baseUrl: config.hermesUrl } : {}),
+        ...(config.bridgeInstallUrl ? { bridgeInstallUrl: config.bridgeInstallUrl } : {}),
+        ...(config.bridgeInstallRef ? { bridgeInstallRef: config.bridgeInstallRef } : {}),
       })
 }
 
@@ -87,3 +99,4 @@ export {
   type Baseline,
 } from './approvals.ts'
 export { KNOWN_PATTERN_KEYS } from './pattern-keys.ts'
+export { ProfileInventorySchema, type ProfileStepContext } from './profile-management.ts'

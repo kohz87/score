@@ -5,6 +5,7 @@ import type { ObservationSink } from '../port.ts'
 import { CredentialsUnavailable } from './credentials.ts'
 import { GatewayClient, HermesHttpError, StartRunSchema, type StartRun } from './gateway.ts'
 import { attachRunMessage } from '../../domain/message-runs.ts'
+import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import { runDraft } from './translate.ts'
 
 const PayloadSchema = StartRunSchema.extend({ credentialGeneration: z.int().positive() })
@@ -59,6 +60,7 @@ async function dispatch(
   const payload = PayloadSchema.parse(JSON.parse(row.payload))
   let runId = row.result
   if (row.state !== 'accepted') {
+    assertAgentAdmits(db.sqlite, payload.profile)
     if (row.state === 'failed') throw new Error('Run admission previously failed')
     if (
       ['sent', 'unknown'].includes(row.state) &&
