@@ -3,7 +3,10 @@ import {
   AgentIdSchema,
   AgentSummarySchema,
   ApprovalSchema,
+  HandoffSchema,
+  LaneBlockSchema,
   MessageSchema,
+  RefSchema,
   RoomSchema,
   RoutineSummarySchema,
   TaskColumnSchema,
@@ -98,6 +101,36 @@ export const RoutinesResponseSchema = z.object({ items: z.array(RoutineSummarySc
 export const RoutineDeletedSchema = z.object({ id: z.string().min(1) })
 /** Run-now only marks the job due; it runs on the scheduler's next tick. */
 export const RoutineRunSchema = z.object({ id: z.string().min(1), queued: z.literal(true) })
+
+// §4 Now
+export const NowSnapshotSchema = z.object({
+  asOfSeq: AsOfSeqSchema,
+  now: z.iso.datetime(),
+  headline: z.object({
+    working: z.int().nonnegative(),
+    needsYou: z.int().nonnegative(),
+    text: z.string(),
+  }),
+  lanes: z.array(z.object({ agent: AgentSummarySchema, blocks: z.array(LaneBlockSchema) })),
+  handoffs: z.array(HandoffSchema),
+  focusApproval: ApprovalSchema.nullable(),
+  thread: z.object({ roomId: z.string().min(1), messages: z.array(MessageSchema) }).nullable(),
+  madeToday: z.array(
+    z.object({
+      title: z.string(),
+      ref: RefSchema,
+      files: z.array(
+        z.object({
+          path: z.string(),
+          added: z.int().nonnegative(),
+          removed: z.int().nonnegative(),
+        }),
+      ),
+      checks: z.array(z.object({ label: z.string(), agentId: AgentIdSchema, ok: z.boolean() })),
+    }),
+  ),
+})
+export type NowSnapshot = z.infer<typeof NowSnapshotSchema>
 
 // §9 Reports (not on the stream; refetch)
 export const ReportRangeSchema = z.enum(['today', '7d', '30d'])
