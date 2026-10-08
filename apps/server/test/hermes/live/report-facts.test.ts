@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { afterEach, beforeEach, expect, test } from 'vitest'
-import { readReportFacts } from '../../../src/hermes/live/report-facts.ts'
+import { readProfileSessionCosts, readReportFacts } from '../../../src/hermes/live/report-facts.ts'
 import { createFixtureHome, insertTask } from '../../fixtures/hermes/sqlite-fixture.ts'
 
 let fixture: ReturnType<typeof createFixtureHome>
@@ -102,4 +102,17 @@ test('unknown session cost and sessions carried over from before the window make
     fixture.home,
   )
   expect(facts.spendUsd).toEqual({ builder: null, designer: null })
+})
+
+test('session costs list recently active sessions with cumulative cost in epoch ms', () => {
+  const state = fixture.build('state')
+  addSession(state.db, 'old', 10, 1, null)
+  addSession(state.db, 'new', 5000, null, 0.25)
+  const costs = readProfileSessionCosts(
+    { sinceMs: 1_000_000, agentIds: ['default', 'designer', '../evil'] },
+    fixture.home,
+  )
+  expect(costs).toEqual({
+    default: [{ sessionId: 'new', startedAt: 5_000_000, costUsd: 0.25, estimated: true }],
+  })
 })

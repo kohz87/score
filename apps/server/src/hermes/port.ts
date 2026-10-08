@@ -41,6 +41,7 @@ import type {
 import type { AgentTool } from './agent-tabs.ts'
 import type { ApprovalConfig } from './approvals.ts'
 import type { IngestResult, Observation } from '../hub/ingest.ts'
+import type { SessionCost } from '../domain/spend.ts'
 import type { ReportApproval, ReportFacts, ReportRun } from '../domain/reports.ts'
 import type { ProfileManagementPort } from './profile-management.ts'
 
@@ -160,6 +161,11 @@ export interface HermesPort extends ProfileManagementPort {
   patchTask(id: string, req: z.infer<typeof PatchTaskSchema>): Promise<TaskDetail>
   /** Report inputs only Hermes has: reviewer send-backs and per-agent spend in [from, to] (epoch ms). */
   reportFacts(req: { from: number; to: number; agentIds: string[] }): Promise<ReportFacts>
+  /** Live only: sessions active since `sinceMs` with cumulative cost, per readable profile, for Score's spend snapshots. */
+  sessionCosts?(req: {
+    sinceMs: number
+    agentIds: string[]
+  }): Promise<Record<string, SessionCost[]>>
   /** Fake adapter only: seeded runs and approvals that stand in for Score's own tables in demos. */
   reportHistoryRows?(
     now: number,

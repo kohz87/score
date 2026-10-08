@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
+import type { SessionCost } from '../../domain/spend.ts'
 import { parseJson, readBatch, readByIds, TailInputSchema, type JsonValue } from './sqlite.ts'
 
 const TextSchema = z.string().nullable()
@@ -97,4 +98,29 @@ export function sessionSpend(db: DatabaseSync, fromSec: number, toSec: number): 
     total += cost
   }
   return total
+}
+
+/**
+ * Sessions active at or after sinceSec with their cumulative cost, for Score's snapshots. Null when a row is
+ * malformed (the caller then keeps the unknown). Billed cost wins over Hermes' estimate.
+ */
+export function readSessionCosts(db: DatabaseSync, sinceSec: number): SessionCost[] | null {
+  const batch = readBatch(
+    db,
+    'sessions',
+    SessionCostSchema.extend({
+      id: z.string(),
+      last_activity_at: z.number().nullable(),
+      ended_at: z.number().nullable(),
+    }),
+    'WHERE COALESCE(last_activity_at, ended_at, started_at) >= ?',
+    [sinceSec],
+  )
+  if (batch.malformed) return null
+  return batch.rows.map((row) => ({
+    sessionId: row.id,
+    startedAt: row.started_at * 1000,
+    costUsd: row.actual_cost_usd ?? row.estimated_cost_usd,
+    estimated: row.actual_cost_usd === null,
+  }))
 }
