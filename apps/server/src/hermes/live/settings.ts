@@ -93,6 +93,41 @@ function hostOf(url: string): string {
   }
 }
 
+type GatewayPlatforms = NonNullable<z.infer<typeof StateSchema>['platforms']>
+
+/** The gateway's runtime status file in one Hermes home; unreadable or oversized files read as empty. */
+export function readGatewayPlatforms(home: string): GatewayPlatforms {
+  try {
+    const path = join(home, 'gateway_state.json')
+    if (fs.statSync(path).size > MAX_STATE_BYTES) return {}
+    return StateSchema.parse(JSON.parse(fs.readFileSync(path, 'utf8'))).platforms ?? {}
+  } catch {
+    return {}
+  }
+}
+
+/** Known platforms first (disconnected by default), then whatever the gateway reports. */
+export function messagingRows(platforms: GatewayPlatforms): ConnectionsResponse['messaging'] {
+  const rows = new Map<string, ConnectionsResponse['messaging'][number]>()
+  for (const [platform, label] of Object.entries(PLATFORMS))
+    rows.set(platform, { platform, label, status: 'disconnected', detail: null })
+  for (const [key, value] of Object.entries(platforms)) {
+    // Multiplexed gateways key platforms as "<profile>:<platform>".
+    const platform = key.split(':').pop()!
+    if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(platform)) continue
+    const connected = value.state === 'connected'
+    if (rows.get(platform)?.status === 'connected') continue
+    const problem = value.error_code ?? value.error_message
+    rows.set(platform, {
+      platform,
+      label: PLATFORMS[platform] ?? title(platform),
+      status: connected ? 'connected' : 'disconnected',
+      detail: connected ? null : redactBounded(String(problem ?? value.state ?? ''), 200) || null,
+    })
+  }
+  return [...rows.values()]
+}
+
 export class LiveSettings {
   private readonly home: string
   constructor(
@@ -273,33 +308,7 @@ export class LiveSettings {
       })
   }
   private messaging(): ConnectionsResponse['messaging'] {
-    const rows = new Map<string, ConnectionsResponse['messaging'][number]>()
-    for (const [platform, label] of Object.entries(PLATFORMS))
-      rows.set(platform, { platform, label, status: 'disconnected', detail: null })
-    for (const [key, value] of Object.entries(this.gatewayPlatforms())) {
-      // Multiplexed gateways key platforms as "<profile>:<platform>".
-      const platform = key.split(':').pop()!
-      if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(platform)) continue
-      const connected = value.state === 'connected'
-      if (rows.get(platform)?.status === 'connected') continue
-      const problem = value.error_code ?? value.error_message
-      rows.set(platform, {
-        platform,
-        label: PLATFORMS[platform] ?? title(platform),
-        status: connected ? 'connected' : 'disconnected',
-        detail: connected ? null : redactBounded(String(problem ?? value.state ?? ''), 200) || null,
-      })
-    }
-    return [...rows.values()]
-  }
-  private gatewayPlatforms(): NonNullable<z.infer<typeof StateSchema>['platforms']> {
-    try {
-      const path = join(this.home, 'gateway_state.json')
-      if (fs.statSync(path).size > MAX_STATE_BYTES) return {}
-      return StateSchema.parse(JSON.parse(fs.readFileSync(path, 'utf8'))).platforms ?? {}
-    } catch {
-      return {}
-    }
+    return messagingRows(readGatewayPlatforms(this.home))
   }
 
   connectMessaging(platform: string): ConnectResult {

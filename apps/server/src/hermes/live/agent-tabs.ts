@@ -3,6 +3,7 @@ import { HttpError } from '../../errors.ts'
 import { redact, redactBounded } from '../../redact.ts'
 import {
   HubSkillSchema,
+  type AgentChannelsResponse,
   type HubSkill,
   type MemoryItem,
   type MemoryPage,
@@ -21,6 +22,7 @@ import {
 import { HubRowsSchema, readDisabledSkills, readTools } from './agent-config.ts'
 import { runHermes, type HermesRunner } from './cli.ts'
 import { readMemory } from './memory.ts'
+import { messagingRows, readGatewayPlatforms } from './settings.ts'
 import { ProfileNameSchema } from './paths.ts'
 import { skillNames } from './profiles.ts'
 
@@ -67,6 +69,17 @@ export class LiveAgentTabs {
     const { profile } = this.profile(agentId)
     await this.mutate(profile, ['config', 'set', 'model.default', req.model])
     if (req.provider) await this.mutate(profile, ['config', 'set', 'model.provider', req.provider])
+  }
+
+  /** Gateway state from this profile's own home; the connect command is shown, never run. */
+  listChannels(agentId: string): AgentChannelsResponse {
+    const { profile, home } = this.profile(agentId)
+    return {
+      items: messagingRows(readGatewayPlatforms(home)).map((row) => ({
+        ...row,
+        connectCommand: `hermes -p ${profile} gateway setup`,
+      })),
+    }
   }
 
   async listSkills(agentId: string): Promise<SkillItem[]> {

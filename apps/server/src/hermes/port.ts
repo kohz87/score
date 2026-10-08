@@ -27,7 +27,13 @@ import type {
 } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
 import type { AgentFile, AgentFileName } from './agent-files.ts'
-import type { HubSkill, MemoryItem, MemoryPage, SkillItem } from '@score/contract'
+import type {
+  AgentChannelsResponse,
+  HubSkill,
+  MemoryItem,
+  MemoryPage,
+  SkillItem,
+} from '@score/contract'
 import type { AgentTool } from './agent-tabs.ts'
 import type { ApprovalConfig } from './approvals.ts'
 import type { IngestResult, Observation } from '../hub/ingest.ts'
@@ -182,6 +188,8 @@ export interface HermesPort extends ProfileManagementPort {
   setSkillEnabled(agentId: string, name: string, enabled: boolean): Promise<SkillItem>
   searchSkillHub(query: string): Promise<HubSkill[]>
   listMemory(agentId: string, query: { q?: string; cursor?: string }): Promise<MemoryPage>
+  /** Read-only messaging platform state for one agent's profile, with the command that connects each. */
+  listAgentChannels(agentId: string): Promise<AgentChannelsResponse>
   addMemory(agentId: string, text: string): Promise<MemoryItem>
   deleteMemory(agentId: string, id: string): Promise<void>
   setToolEnabled(agentId: string, toolId: string, enabled: boolean): Promise<AgentTool>

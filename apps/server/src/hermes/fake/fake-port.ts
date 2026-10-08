@@ -29,6 +29,7 @@ import type {
   Approval,
   ConnectResult,
   ConnectionsResponse,
+  AgentChannelsResponse,
   HermesCheck,
   LocalProviderRequest,
   ToolServerRequest,
@@ -850,6 +851,16 @@ export class FakePort implements HermesPort {
     const q = HubQuerySchema.parse(query).trim().toLowerCase()
     if (!q) return []
     return fakeHub.filter((skill) => `${skill.name} ${skill.description}`.toLowerCase().includes(q))
+  }
+  async listAgentChannels(agentId: string): Promise<AgentChannelsResponse> {
+    this.agentOrThrow(agentId)
+    const { messaging } = await this.listConnections()
+    return {
+      items: messaging.map((row) => ({
+        ...row,
+        connectCommand: `hermes -p ${agentId} gateway setup`,
+      })),
+    }
   }
   async listMemory(agentId: string, query: Parameters<HermesPort['listMemory']>[1]) {
     this.agentOrThrow(agentId)
