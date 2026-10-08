@@ -60,9 +60,9 @@ export interface KanbanTaskState {
 }
 // A denial card is obsolete when its task ended, went to triage, or a newer attempt started. A task that isn't
 // "blocked" yet is not evidence: the worker reports the denial before Hermes marks the task blocked.
-function obsolete(runId: number | null, task: KanbanTaskState): boolean {
+export function obsolete(runId: number | null, task: KanbanTaskState): boolean {
   if (['done', 'archived', 'triage'].includes(task.status)) return true
-  return runId !== null && task.current_run_id !== null && task.current_run_id !== runId
+  return runId !== null && task.current_run_id !== null && task.current_run_id > runId
 }
 export function closeKanbanDenials(
   sqlite: DatabaseSync,
@@ -89,4 +89,35 @@ export function closeKanbanDenials(
     }
   }
   return drafts
+}
+
+export function openKanbanDenialIds(sqlite: DatabaseSync, taskId: string): string[] {
+  return z
+    .array(z.object({ id: z.string() }))
+    .parse(
+      sqlite
+        .prepare(
+          "SELECT id FROM approvals WHERE origin = 'kanban' AND kanban_task_id = ? AND closed_reason IS NULL",
+        )
+        .all(taskId),
+    )
+    .map(({ id }) => id)
+}
+export function closeKanbanDenialIds(
+  sqlite: DatabaseSync,
+  ids: readonly string[],
+  at: string,
+): DomainEventDraft[] {
+  return ids.flatMap((id) => {
+    if (
+      !sqlite
+        .prepare(
+          "SELECT id FROM approvals WHERE id = ? AND origin = 'kanban' AND closed_reason IS NULL",
+        )
+        .get(id)
+    )
+      return []
+    patchApproval(sqlite, id, { closed_reason: 'task_moved', closed_at: at }, at)
+    return approvalDraft(sqlite, id)
+  })
 }

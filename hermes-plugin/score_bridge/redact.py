@@ -11,10 +11,11 @@ _REDACTED = "[redacted]"
 LEAF_CAP = 16_384
 PAYLOAD_CAP = 64 * 1024
 _NAMES = ("password", "passwd", "secret", "token", "apikey", "accesskey", "privatekey",
-          "clientsecret", "authorization", "cookie", "credential", "sessionid")
+          "clientsecret", "authorization", "cookie", "credential")
 _ASSIGNMENT = re.compile(
     r'''(?<![\w-])(["']?([\w-]+(?: +[\w-]+){0,3})["']?\s*[=:]\s*)(?!\[redacted\])("[^"\r\n]*"|'[^'\r\n]*'|[^\s&,;}\]]+)''', re.I)
 _PATTERNS = (
+    (re.compile(r"(\bAuthorization\s*:\s*)(?:Basic|Bearer)\s+[A-Za-z0-9._~+/-]+=*", re.I), r"\1[redacted]"),
     (re.compile(r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[\s\S]*?(?:-----END (?:[A-Z]+ )?PRIVATE KEY-----|$)"), _REDACTED),
     (re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]+=*", re.I), "Bearer [redacted]"),
     (re.compile(r"\bsk-(?:or-)?[A-Za-z0-9_-]{8,}\b"), _REDACTED),

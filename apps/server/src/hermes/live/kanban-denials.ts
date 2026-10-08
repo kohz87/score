@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { Config } from '../../config.ts'
 import type { ScoreDb } from '../../db/index.ts'
-import { closeKanbanDenials, type KanbanTaskState } from '../../domain/kanban-denials.ts'
+import { closeKanbanDenials, obsolete, type KanbanTaskState } from '../../domain/kanban-denials.ts'
 import type { ObservationSink } from '../port.ts'
 import { readTasks } from './kanban.ts'
 import { hermesPaths, resolveHermesHome } from './paths.ts'
@@ -36,6 +36,18 @@ export async function sweepKanbanDenials(
   } finally {
     hermes.close()
   }
+  const open = z
+    .array(z.object({ kanban_task_id: z.string(), kanban_run_id: z.int().nullable() }))
+    .parse(
+      db.sqlite
+        .prepare(
+          "SELECT kanban_task_id, kanban_run_id FROM approvals WHERE origin = 'kanban' AND closed_reason IS NULL",
+        )
+        .all(),
+    )
+  tasks = tasks.filter((task) =>
+    open.some((row) => row.kanban_task_id === task.id && obsolete(row.kanban_run_id, task)),
+  )
   if (!tasks.length) return
   await sink.submit({
     source: 'kanban-denial-sweep',

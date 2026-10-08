@@ -269,6 +269,11 @@ match nothing are kept and replayed when a row gains their key, so arrival order
 Score-started runs without an exact `requestId` are kept as hidden stage records (the run SSE row is the card).
 Coalesced followers are view-only. Decision and completion evidence are stored separately and the phase is recomputed
 from them, so a known choice refines a closure regardless of arrival order.
+**Tool completion (Phase 1 gate review, finding 3):** Hermes runs `pre_tool_call`/`post_tool_call` on bounded worker
+threads with a copied context, while approval hooks run on the caller's thread, and `tool_call_id` isn't unique, so a
+tool's completion can't be tied to its approval exactly. Bridge-observed approvals therefore end at `decided` (never
+`executed`/`blocked`). The server matches completions only by exact gate ids, which no producer sends until Hermes
+offers an exact invocation id.
 
 **"Needs you"** = actionable approvals (D4.1–D4.3) + tasks blocked as `needs_input` (questions).
 

@@ -17,6 +17,9 @@ def reset():
 
 def capture(hook, payload, command_digest, *, raw=None, profile=None):
     if hook in ("pre_tool_call", "on_session_end"):
+        # Hermes runs tool hooks on bounded worker threads with a copied context (plugins_dispatch.py), so this
+        # never touches the approval thread's state, and tool completions can't be tied to a gate exactly. The
+        # context check on (tool_call_id, turn_id, session_id) is what keeps stale gates from linking.
         _state.open = []
         _state.closed_guardian = None
         return payload

@@ -94,3 +94,10 @@ def test_escalation_links_even_when_redaction_changes_the_command():
     smart = capture("pre_approval_request", {**ids, "surface": "smart", "command": "curl -H [redacted]"}, "a" * 64)
     human = capture("pre_approval_request", {**ids, "surface": "gateway", "command": "curl -H token=***"}, "b" * 64)
     assert human["linkedGateId"] == smart["gateId"]
+
+
+def test_tool_completions_carry_no_gate_ids():
+    # Hermes runs tool hooks on other threads than approval hooks, so no exact gate link exists (gate review #3).
+    capture("pre_tool_call", {}, None)
+    pre()
+    assert "gateIds" not in capture("post_tool_call", {}, None)

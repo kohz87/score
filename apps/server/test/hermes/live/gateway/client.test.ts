@@ -254,3 +254,38 @@ test('approval rejects a stale run credential generation without sending', async
   ).rejects.toMatchObject({ profile: 'builder' })
   expect(fetch).not.toHaveBeenCalled()
 })
+
+test('gate #7 gateway JSON validates identifiers before content redaction', async () => {
+  const client = new GatewayClient({
+    scoreHome: env.home,
+    db: env.db,
+    fetch: async () =>
+      Response.json({
+        run_id: 'run_id',
+        status: 'running',
+        created_at: 1791374400,
+        updated_at: 1791374400,
+        session_id: 'sk-identifier12345678',
+        output: 'apiKey=opaque-value',
+      }),
+  })
+  expect(await client.getRun('builder', 'run_id')).toMatchObject({
+    session_id: 'sk-identifier12345678',
+    output: 'apiKey=[redacted]',
+  })
+  const invalid = new GatewayClient({
+    scoreHome: env.home,
+    db: env.db,
+    fetch: async () =>
+      Response.json({
+        run_id: 'run_id',
+        status: 'running',
+        created_at: 1791374400,
+        updated_at: 1791374400,
+        session_id: 'has space',
+      }),
+  })
+  await expect(invalid.getRun('builder', 'run_id')).rejects.toMatchObject({
+    code: 'invalid_response',
+  })
+})

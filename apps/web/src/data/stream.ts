@@ -39,6 +39,7 @@ export function createStreamClient({
   let currentStatus: StreamStatus = 'connecting'
   let epoch: string | undefined
   let lastSeq: number | undefined
+  let headSeq: number | undefined
   let backoff = 500
   let source: EventSourceLike | undefined
   let timer: unknown
@@ -88,7 +89,8 @@ export function createStreamClient({
         const epochChanged =
           control.type === 'stream.hello' && epoch !== undefined && epoch !== control.data.epoch
         if (control.type === 'stream.hello') {
-          if (epochChanged) lastSeq = undefined
+          headSeq = control.data.headSeq
+          if (epochChanged || lastSeq === undefined) lastSeq = headSeq
           epoch = control.data.epoch
           backoff = 500
           setStatus('open')
@@ -100,6 +102,7 @@ export function createStreamClient({
             epochChanged,
           }),
         )
+        if (control.type === 'stream.reset') lastSeq = headSeq
       }
     }
     const types = [

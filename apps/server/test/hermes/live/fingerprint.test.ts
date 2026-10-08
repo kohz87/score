@@ -151,6 +151,7 @@ test('an exact tested fingerprint enables every feature and produces no degraded
     fingerprint: fingerprint.id,
     tested: true,
     disabled: [],
+    matchedHermes: { version: '0.21.5', codeSha },
   })
   const live = createPort(tested)
   await live.start(env.ingest)
@@ -211,6 +212,7 @@ test('CLI-only drift is informational and does not disable features', async () =
     fingerprint: fingerprint.id,
     tested: false,
     disabled: [],
+    matchedHermes: { version: '0.21.5', codeSha },
   })
 })
 

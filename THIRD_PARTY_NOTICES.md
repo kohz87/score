@@ -1,6 +1,8 @@
 # Third-party notices
 
-Score's own source code does not yet include code copied or adapted from third-party sources.
+`hermes-plugin/score_bridge/hermes_private.py:resolve_exact_bounded` adapts the request-id branch of
+NousResearch/hermes-agent `tools/approval.py:resolve_gateway_approval` at e97923c3.
+Copyright (c) 2025 Nous Research. MIT license (below).
 When code is copied or closely adapted, add an entry below with the source path(s) in the upstream repository
 and the full copyright notice, and keep the upstream license text.
 
@@ -13,7 +15,7 @@ ship inside `node_modules`. A generated notices file for distribution builds is 
 |---|---|---|
 | github.com/JPeetz/Hermes-Studio | Copyright (c) 2026 JPeetz; portions copyright (c) 2026 Eric (outsourc-e), original hermes-workspace | not yet |
 | github.com/outsourc-e/hermes-workspace | Copyright (c) 2026 Eric (outsourc-e) | not yet |
-| github.com/NousResearch/hermes-agent | Copyright (c) 2025 Nous Research | not yet |
+| github.com/NousResearch/hermes-agent | Copyright (c) 2025 Nous Research | `hermes-plugin/score_bridge/hermes_private.py` |
 | github.com/NousResearch/hermes-example-plugins | Copyright (c) 2026 Nous Research | not yet |
 
 ## MIT License text (applies to each source above)

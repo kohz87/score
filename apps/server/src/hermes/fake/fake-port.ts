@@ -1,4 +1,8 @@
-import { recordKanbanDenial, closeKanbanDenials } from '../../domain/kanban-denials.ts'
+import {
+  recordKanbanDenial,
+  closeKanbanDenialIds,
+  openKanbanDenialIds,
+} from '../../domain/kanban-denials.ts'
 import { requestRunApproval, respondRunApproval } from '../../domain/approvals.ts'
 import { approvalDraft, patchApproval, readApprovalRow } from '../../domain/approval-store.ts'
 import type { AgentSummary, Approval, RunSummary, TaskSummary } from '@score/contract'
@@ -342,6 +346,19 @@ export class FakePort implements HermesPort {
       const req = TaskActionRequestSchema.parse(request)
       const task = this.tasks.get(req.taskId)
       if (!task) throw new HttpError(404, 'not_found', 'Unknown task')
+      const oldIds =
+        req.action !== 'unblock'
+          ? []
+          : this.db
+            ? openKanbanDenialIds(this.db.sqlite, task.id)
+            : [...this.approvals.values()]
+                .filter(
+                  (approval) =>
+                    approval.origin === 'kanban' &&
+                    approval.status === 'pending' &&
+                    approval.refs.some((ref) => ref.kind === 'task' && ref.taskId === task.id),
+                )
+                .map((approval) => approval.id)
       if (req.action === 'unblock') {
         if (task.hermesStatus !== 'blocked')
           throw new HttpError(409, 'conflict', 'Task is not blocked', {
@@ -360,11 +377,11 @@ export class FakePort implements HermesPort {
         })
         this.taskOverrides.set(task.id, 'ready')
       }
-      if (req.action === 'unblock')
+      if (oldIds.length)
         await this.requireSink().submit({
           source: 'fake',
           identity: `${this.sessionId}:${this.loop}:command:${this.nextIdentity++}`,
-          apply: ({ sqlite, now }) => closeKanbanDenials(sqlite, [task.id], now),
+          apply: ({ sqlite, now }) => closeKanbanDenialIds(sqlite, oldIds, now),
         })
       return { hermesStatus: this.tasks.get(task.id)!.hermesStatus }
     })

@@ -23,8 +23,11 @@ export const hello: BridgeHelloRequest = {
   kanbanTaskId: 'task-1',
   isolation: 'in_process',
   pluginVersion: '0.1.0',
-  hermes: { version: '0.21.0', codeSha: 'fixture' },
+  // Hermes reports `<version>+<build>`; tested fingerprints store the plain version.
+  hermes: { version: '0.21.0+1234', codeSha: 'fixture' },
   privateApis: {
+    'tools.approval._lock': true,
+    'tools.approval._gateway_queues': true,
     'tools.approval.list_gateway_approvals': true,
     'tools.approval.resolve_gateway_approval': true,
   },
@@ -76,7 +79,12 @@ export function setup({
       bootstrapHash,
       clock,
       metrics,
-      getCompatibility: () => ({ fingerprint: 'fixture', tested: true, disabled }),
+      getCompatibility: () => ({
+        fingerprint: 'fixture',
+        tested: true,
+        disabled,
+        matchedHermes: { version: '0.21.0', codeSha: 'fixture' },
+      }),
     },
   })
   const headers = (token: string) => ({ authorization: `Bearer ${token}` })

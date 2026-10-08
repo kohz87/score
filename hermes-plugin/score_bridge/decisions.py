@@ -58,12 +58,14 @@ class DecisionPoller:
                 ack["error"] = "not_reported"
             else:
                 try:
-                    # Hermes's resolver waits on its approval lock without a bound. Only start while the lease has
-                    # a safe margin and the lock is free, so a resolution can't land long after the lease.
-                    margin = lease_until - self.client.clock() - 2.0
-                    if self.stop_event.is_set() or margin <= 0 or not hermes_private.approval_lock_free(min(margin, 1.0)):
+                    remaining = lease_until - self.client.clock()
+                    if self.stop_event.is_set() or remaining <= 0:
                         raise TimeoutError("not_attempted")
-                    resolved = hermes_private.resolve_exact(item["sessionKey"], item["choice"], item["requestId"])
+                    resolved = hermes_private.resolve_exact_bounded(
+                        item["sessionKey"], item["choice"], item["requestId"], time.monotonic() + remaining,
+                        cancelled=self.stop_event)
+                    if resolved is None:
+                        raise TimeoutError("not_attempted")
                     if type(resolved) is not int or resolved not in (0, 1):
                         ack["error"] = "invalid_resolution"
                     else:

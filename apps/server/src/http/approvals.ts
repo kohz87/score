@@ -2,6 +2,7 @@ import { ApprovalChoiceSchema, type Approval } from '@score/contract'
 import { randomUUID } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import { requestIdempotency } from './idempotency.ts'
 import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import { HttpError } from '../errors.ts'
@@ -87,9 +88,10 @@ export function registerApprovalRoutes(
     })
     return { asOfSeq: result.asOfSeq, ...result.data }
   })
+  const receipts = requestIdempotency(db, clock)
   app.post(
     '/api/approvals/:approvalId/decision',
-    { preHandler: humanGuard(app.pairing) },
+    { preHandler: [humanGuard(app.pairing), receipts.preHandler], onSend: receipts.onSend },
     async (request, reply) => {
       const { approvalId } = z
         .object({ approvalId: z.string().min(1).max(256) })

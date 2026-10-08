@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
   const mocksRelease = vi.fn()
-  const db = { close: vi.fn() }
+  const db = { close: vi.fn(), sqlite: { prepare: vi.fn(() => ({ get: vi.fn(() => undefined) })) } }
   const app = {
     pairing: { createToken: vi.fn(() => 'pairing-token') },
     listen: vi.fn(async () => undefined),

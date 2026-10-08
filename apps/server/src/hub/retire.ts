@@ -2,6 +2,16 @@ import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
 import { heldIngestPositions } from './ingest.ts'
 
+export const INTERNAL_OBSERVATION_SOURCES = [
+  'approval-sweep',
+  'approval-expiry',
+  'approval-outbox',
+  'approval-decision',
+  'kanban-denial-sweep',
+  'task-actions',
+  'fake',
+] as const
+
 const OptionsSchema = z.object({
   keepPositions: z.int().nonnegative(),
   batchSize: z.int().positive(),
@@ -19,7 +29,8 @@ export function retireIngestKeys(
   {
     keepPositions = 10_000,
     batchSize = 5_000,
-  }: { keepPositions?: number; batchSize?: number } = {},
+    now = Date.now(),
+  }: { keepPositions?: number; batchSize?: number; now?: number } = {},
 ): { retired: number; floors: number } {
   const options = OptionsSchema.parse({ keepPositions, batchSize })
   const checkpoints = z.array(CheckpointRowSchema).parse(
@@ -33,7 +44,19 @@ export function retireIngestKeys(
       )
       .all(),
   )
-  let retired = 0
+  const cutoff = new Date(now - 24 * 60 * 60 * 1000).toISOString()
+  let retired = db.tx((sqlite) =>
+    Number(
+      sqlite
+        .prepare(
+          `DELETE FROM ingest_keys WHERE source IN (${INTERNAL_OBSERVATION_SOURCES.map(() => '?').join(',')}) AND created_at <= ?`,
+        )
+        .run(...INTERNAL_OBSERVATION_SOURCES, cutoff).changes,
+    ),
+  )
+  db.sqlite
+    .prepare('DELETE FROM request_receipts WHERE created_at <= ? AND status IS NOT NULL')
+    .run(cutoff)
   // Gap scopes are temporary coverage ranges, not key streams; a floor would outlive their consumption.
   let floors = 0
   for (const checkpoint of checkpoints) {

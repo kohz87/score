@@ -1,4 +1,5 @@
 import type { SystemStatus } from '@score/contract'
+import type { CompatibilityEvaluation } from '../port.ts'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -129,14 +130,22 @@ const requiredCapabilities = [
 ] as const
 const equal = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right)
 
+function matchedBuild(entry: TestedFingerprint): Pick<CompatibilityEvaluation, 'matchedHermes'> {
+  const { codeVersion, codeSha } = entry.parts
+  return codeVersion && codeSha ? { matchedHermes: { version: codeVersion, codeSha } } : {}
+}
+
 export function evaluateCompatibility(
   fingerprint: Fingerprint,
   tested: readonly TestedFingerprint[],
-): SystemStatus['compatibility'] {
+): CompatibilityEvaluation {
   // The placeholder is a reminder to seed the registry, never a compatibility baseline.
   const entries = tested.filter((entry) => entry.id !== 'unseeded')
-  if (entries.some(({ id }) => id === fingerprint.id))
-    return { fingerprint: fingerprint.id, tested: true, disabled: [] }
+  const exact = entries.find(
+    (entry) => entry.id === fingerprint.id && equal(fingerprint.parts, entry.parts),
+  )
+  if (exact)
+    return { fingerprint: fingerprint.id, tested: true, disabled: [], ...matchedBuild(exact) }
   const { parts } = fingerprint
   const keys = Object.keys(parts) as (keyof FingerprintParts)[]
   let closest: TestedFingerprint | undefined
@@ -158,7 +167,12 @@ export function evaluateCompatibility(
     disabled.push('gateway-approvals')
   if (requiredCapabilities.some((feature) => !parts.capabilities?.includes(feature)))
     disabled.push('score-runs')
-  return { fingerprint: fingerprint.id, tested: false, disabled }
+  return {
+    fingerprint: fingerprint.id,
+    tested: false,
+    disabled,
+    ...(!disabled.includes('gateway-approvals') && closest ? matchedBuild(closest) : {}),
+  }
 }
 
 export function assertFeature(status: Pick<SystemStatus, 'compatibility'>, feature: string): void {

@@ -1,4 +1,4 @@
-import { rmSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { openDatabase } from '../../../../src/db/index.ts'
 import { createIngest } from '../../../../src/hub/ingest.ts'
@@ -262,4 +262,85 @@ test('a queued dispatch advances through status polling while SSE is quiet', asy
   stream!.close()
   await pending
   expect(readRun(env.db.sqlite, runContext.runId).status).toBe('completed')
+})
+
+test.each(['sent', 'unknown'] as const)(
+  'gate #4 %s admission beyond replay window never resubmits after Hermes drops its record',
+  async (state) => {
+    env.fake.crashAfterAdmission = true
+    await expect(
+      env.intents.startRunIntent({ profile: 'builder', input: 'fixture' }, 'old-turn'),
+    ).rejects.toThrow()
+    const firstSent = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
+    env.db.sqlite
+      .prepare('UPDATE command_intents SET state = ?, first_sent_at = ?')
+      .run(state, firstSent)
+    env.fake.admissions.clear()
+    const before = env.fake.calls.length
+    await env.intents.recoverIntents()
+    await env.intents.recoverIntents()
+    expect(env.fake.calls).toHaveLength(before)
+    expect(env.fake.creations).toBe(1)
+    expect(
+      env.db.sqlite
+        .prepare('SELECT state, last_error, attempts, first_sent_at FROM command_intents')
+        .get(),
+    ).toEqual({
+      state: 'unknown',
+      last_error: 'replay_window_passed',
+      attempts: 1,
+      first_sent_at: firstSent,
+    })
+  },
+)
+
+test('gate #4 uncertain admission inside 23 hours replays and preserves first-send time', async () => {
+  env.fake.crashAfterAdmission = true
+  await expect(
+    env.intents.startRunIntent({ profile: 'builder', input: 'fixture' }, 'young-turn'),
+  ).rejects.toThrow()
+  const firstSent = new Date(Date.now() - 22 * 60 * 60 * 1000).toISOString()
+  env.db.sqlite.prepare('UPDATE command_intents SET first_sent_at = ?').run(firstSent)
+  await env.intents.recoverIntents()
+  expect(env.fake.creations).toBe(1)
+  expect(env.db.sqlite.prepare('SELECT state, first_sent_at FROM command_intents').get()).toEqual({
+    state: 'accepted',
+    first_sent_at: firstSent,
+  })
+})
+
+test('gate #1 gateway run SSE redacts assignments, headers and temporary AWS keys before durable storage', async () => {
+  const text =
+    'apiKey=opaque-one AWS_SECRET_ACCESS_KEY=opaque-two "clientSecret": "opaque-three" Authorization: Basic b3BhcXVl Authorization: Bearer opaque-four ASIA1234567890ABCDEF AKIA1234567890ABCDEF'
+  const runContext = await context()
+  const timestamp = 1791374400
+  env.fake.events = [
+    {
+      run_id: runContext.runId,
+      event: 'tool.started',
+      seq: 1,
+      timestamp,
+      tool: 'terminal',
+      preview: text,
+    },
+    {
+      run_id: runContext.runId,
+      event: 'tool.completed',
+      seq: 2,
+      timestamp,
+      tool: 'terminal',
+      preview: text,
+      error: false,
+      duration: 1,
+    },
+    { run_id: runContext.runId, event: 'run.completed', seq: 3, timestamp, output: text },
+  ]
+  await follow(runContext)
+  const durable = Buffer.concat(
+    ['score.db', 'score.db-wal'].map((file) => readFileSync(join(env.home, file))),
+  ).toString()
+  expect(durable).not.toMatch(
+    /opaque-one|opaque-two|opaque-three|opaque-four|b3BhcXVl|ASIA1234567890ABCDEF|AKIA1234567890ABCDEF/,
+  )
+  expect(readRun(env.db.sqlite, runContext.runId).output).toContain('[redacted]')
 })

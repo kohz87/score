@@ -345,10 +345,11 @@ class Spool:
                     continue
             return [p for _, p in sorted(identities, key=lambda entry: entry[0])]
 
-    def peek(self):
+    def peek(self, after=0):
         with self._locked():
             records = self._read(self.path)
-            return next((r["events"] for r in records if not r.get("pendingGap")), [])
+            return next(([e for e in r["events"] if e["counter"] > after]
+                         for r in records if not r.get("pendingGap") and r["events"][-1]["counter"] > after), [])
 
     def pending_gap(self):
         with self._locked():

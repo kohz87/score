@@ -120,7 +120,7 @@ export function buildApp({
       await approvalsOutbox.stop()
     })
   }
-  registerTaskRoutes(app, port, ingest)
+  registerTaskRoutes(app, port, ingest, db, clock)
   app.get('/api/health', async () => ({ ok: true, contract: CONTRACT_VERSION }))
   registerSessionRoutes(app, app.pairing)
   registerSystemRoutes(app, getSystemStatus)

@@ -1,4 +1,6 @@
 import { BridgeEventsResponseSchema, BridgeHelloResponseSchema } from '@score/contract'
+import { readFileSync } from 'node:fs'
+import { SHIPPED_PLUGIN_VERSION } from '../../../src/hermes/bridge/routes.ts'
 import { Writable } from 'node:stream'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { hashBridgeToken } from '../../../src/hermes/bridge/bootstrap.ts'
@@ -64,9 +66,12 @@ test.each(flagCases)(
   'enabled flags: $isolation private API mask $mask disabled=$disabled',
   async ({ isolation, mask, disabled }) => {
     const names = ['list_gateway_approvals', 'resolve_gateway_approval']
-    const privateApis = Object.fromEntries(
-      names.map((name, bit) => [`tools.approval.${name}`, Boolean(mask & (1 << bit))]),
-    )
+    const privateApis = {
+      ...hello.privateApis,
+      ...Object.fromEntries(
+        names.map((name, bit) => [`tools.approval.${name}`, Boolean(mask & (1 << bit))]),
+      ),
+    }
     server.disable(disabled ? ['gateway-approvals'] : [])
     const response = await server.handshake({ ...hello, isolation, privateApis })
     expect(BridgeHelloResponseSchema.parse(response.json()).enabled).toEqual({
@@ -278,3 +283,47 @@ test('logs never contain bootstrap or producer credentials, including failed req
     stream.end()
   }
 })
+
+test.each([
+  { pluginVersion: 'unknown' },
+  { hermes: { ...hello.hermes, version: 'untested' } },
+  { hermes: { ...hello.hermes, codeSha: 'untested' } },
+  { privateApis: { ...hello.privateApis, 'tools.approval._lock': false } },
+  { privateApis: { ...hello.privateApis, 'tools.approval._gateway_queues': false } },
+])('gate #2 untested producer is observe-only: %j', async (patch) => {
+  const response = await server.handshake({ ...hello, ...patch })
+  expect(response.statusCode).toBe(200)
+  expect(response.json().enabled).toMatchObject({ watch: true, gatewayApprovals: false })
+})
+
+test('gate #2 server plugin version mirrors the shipped Python client', () => {
+  const python = readFileSync(
+    new URL('../../../../../hermes-plugin/score_bridge/client.py', import.meta.url),
+    'utf8',
+  )
+  expect(python.match(/^PLUGIN_VERSION = "([^"]+)"/m)?.[1]).toBe(SHIPPED_PLUGIN_VERSION)
+})
+
+test.each([Array.from({ length: 17 }, (_, i) => `gate-${i}`), ['invalid gate']])(
+  'gate #3 rejects malformed completion gate IDs atomically: %j',
+  async (gateIds) => {
+    const token = await server.token()
+    expect(
+      (await server.send(token, [event(1), event(2, 'post_tool_call', { gateIds })])).statusCode,
+    ).toBe(400)
+    expect(server.db.sqlite.prepare('SELECT * FROM ingest_keys').all()).toEqual([])
+  },
+)
+
+test.each([
+  ['0.21.0+1234', 'fixture', true],
+  ['0.21.0', 'fixture', true],
+  ['0.21.1+1', 'fixture', false],
+  ['0.21.0+1234', 'other-sha', false],
+])(
+  'producer build %s / %s qualifies for gateway approvals: %s',
+  async (version, codeSha, enabled) => {
+    const response = await server.handshake({ ...hello, hermes: { version, codeSha } })
+    expect(response.json().enabled.gatewayApprovals).toBe(enabled)
+  },
+)

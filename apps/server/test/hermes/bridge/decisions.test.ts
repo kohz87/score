@@ -232,3 +232,13 @@ test('a resolution signal before applied is upgraded to you; mismatched applied 
     decision: { by: 'elsewhere', choice: 'deny' },
   })
 })
+
+test('gate follow-up: an unqualified producer receives no decisions, even ones already queued for it', async () => {
+  env.db.sqlite.prepare('UPDATE producers SET gateway_approvals = 0').run()
+  expect(await poll()).toEqual([])
+  expect(env.db.sqlite.prepare('SELECT state FROM approval_deliveries').get()).toEqual({
+    state: 'intent',
+  })
+  env.db.sqlite.prepare('UPDATE producers SET gateway_approvals = 1').run()
+  expect(await poll()).toHaveLength(1)
+})

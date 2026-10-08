@@ -88,6 +88,7 @@ class Sender:
         self._contention = deque(maxlen=10_000)
         self._reported_contention = 0
         self._orphan_backoff = {}
+        self._drain_positions = {}
         self._wake, self._stop = threading.Event(), threading.Event()
         self._thread = None
         self._lazy_start = False
@@ -185,10 +186,16 @@ class Sender:
     def _build(self, raw):
         if "raw" not in raw:
             return {key: value for key, value in raw.items() if key != "profile"}
-        safe = raw["context"].run(scrub, raw["raw"], hermes_private.redact)
+        identifiers = {key: value for key, value in raw["raw"].items()
+                       if key in ("session_key", "sessionKey", "session_id", "sessionId", "tool_call_id", "toolCallId",
+                                  "turn_id", "turnId", "gateId", "linkedGateId", "supersedesGateId", "requestId",
+                                  "request_id", "transportRequestId") and (value is None or type(value) is str)}
+        content = {key: value for key, value in raw["raw"].items() if key not in identifiers}
+        safe = raw["context"].run(scrub, content, hermes_private.redact)
         if raw["digest"]:
             safe["command_digest"] = raw["digest"]
         safe = bound_payload(safe)
+        safe.update(identifiers)
         def lifted(snake, camel):
             value = safe.get(snake, safe.get(camel))
             return value if type(value) is str and value else None
@@ -245,9 +252,11 @@ class Sender:
         finally:
             self._persist_lock.release()
 
-    def _drain(self, spool=None, client=None, *, limit=None):
+    def _drain(self, spool=None, client=None):
         spool, client = spool or self.spool, client or self.client
         batches = 0
+        spool_key = str(spool.path)
+        sent_through = self._drain_positions.get(spool_key, 0)
         while not self._stop.is_set():
             # Materialize losses regardless of queue depth, before admitting new batches.
             if self._persist_lock.acquire(timeout=0.002):
@@ -258,8 +267,9 @@ class Sender:
                                                             spool.next_counter() - 1)
                 finally:
                     self._persist_lock.release()
-            events = spool.peek()
+            events = spool.peek(after=sent_through)
             if not events:
+                self._drain_positions.pop(spool_key, None)
                 return True
             # Use the HTTP encoder, including the envelope and its default escaping/separators.
             # Encode each event once: the body is '{"events": [' + items joined by ", " + ']}'.
@@ -273,11 +283,11 @@ class Sender:
                 raise ValueError("event exceeds request budget")
             events = prefix
             ack = client.send(events)
-            if ack < events[0]["counter"]:
-                return False
-            spool.acknowledge(min(ack, events[-1]["counter"]))
+            spool.acknowledge(ack)
+            sent_through = events[-1]["counter"]
+            self._drain_positions[spool_key] = sent_through
             batches += 1
-            if limit is not None and batches >= limit:
+            if batches >= 20:
                 return True
         return False
 
@@ -296,7 +306,7 @@ class Sender:
             spool = Spool(incarnation, self.spool.directory,
                           file_cap=self.spool.file_cap, directory_cap=self.spool.directory_cap)
             try:
-                if not self._drain(spool, recovered, limit=1):
+                if not self._drain(spool, recovered):
                     raise ConnectionError()
                 self._orphan_backoff.pop(incarnation, None)
             except Exception as exc:

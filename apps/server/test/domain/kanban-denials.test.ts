@@ -111,6 +111,7 @@ test.each([
   ['ready', 4, true],
   // Not evidence: the worker reports the denial before Hermes marks the task blocked.
   ['running', 3, false],
+  ['running', 2, false],
   ['ready', null, false],
   ['scheduled', 3, false],
   ['review', null, false],
@@ -134,6 +135,11 @@ test.each([
         .run(status, currentRun, 'task-1')
       await sweepKanbanDenials(env.db, env.ingest, { hermesHome: env.home })
       if (!closes) {
+        expect(
+          env.db.sqlite
+            .prepare("SELECT count(*) AS n FROM ingest_keys WHERE source = 'kanban-denial-sweep'")
+            .get()?.n,
+        ).toBe(0)
         expect(env.db.sqlite.prepare('SELECT status, closed_reason FROM approvals').get()).toEqual({
           status: 'pending',
           closed_reason: null,

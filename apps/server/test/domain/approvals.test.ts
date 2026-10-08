@@ -564,7 +564,7 @@ test.each(['sse-first', 'hook-first'] as const)(
     ).toEqual({ count: 1 })
   },
 )
-test('post after a closure refines evidence, newest human receives informational tool outcome', async () => {
+test('post after a closure refines evidence, exact human gate receives informational tool outcome', async () => {
   const token = await env.token()
   await send(token, 1, 'pre_approval_request', { gateId: 'first', requestId: 'request-1' })
   await send(token, 2, 'post_approval_response', { gateId: 'first', choice: 'timeout' })
@@ -572,6 +572,7 @@ test('post after a closure refines evidence, newest human receives informational
   expect(view(rows()[0]!.id)).toMatchObject({ phase: 'decided', decision: { by: 'elsewhere' } })
   await send(token, 4, 'pre_approval_request', { gateId: 'second', requestId: 'request-2' })
   await send(token, 5, 'post_tool_call', {
+    gateIds: ['second'],
     tool_name: 'terminal',
     result: { status: 'blocked' },
     status: 'error',
@@ -766,7 +767,11 @@ test('a pre hook proving the request also folds the hidden stage, keeping one ca
 
 test('a tool completion ingested before its gate is claimed when the gate appears (review #3)', async () => {
   const token = await env.token()
-  await send(token, 3, 'post_tool_call', { tool_name: 'terminal', result: { output: 'ok' } })
+  await send(token, 3, 'post_tool_call', {
+    gateIds: ['late-gate'],
+    tool_name: 'terminal',
+    result: { output: 'ok' },
+  })
   await send(token, 1, 'pre_approval_request', { gateId: 'late-gate', requestId: 'request-late' })
   await send(token, 2, 'post_approval_response', { gateId: 'late-gate', choice: 'once' })
   expect(view(rows()[0]!.id)).toMatchObject({ phase: 'executed', status: 'approved' })
@@ -786,4 +791,160 @@ test('approval.responded without a request id is ignored by the ledger, not fata
     { unknownEvents: 0 },
   )
   expect(observation.identity).toBe('sse:run-x:9')
+})
+
+test.each(['same-session', 'different-session'] as const)(
+  'gate #3 repeated tool IDs across %s complete only the listed gates',
+  async (scenario) => {
+    const token = await env.token()
+    const otherSession = scenario === 'same-session' ? 'session-a' : 'session-b'
+    await send(
+      token,
+      1,
+      'pre_approval_request',
+      { gateId: 'gate-a', requestId: 'request-a' },
+      'session-a',
+    )
+    await send(
+      token,
+      2,
+      'pre_approval_request',
+      { gateId: 'gate-b', requestId: 'request-b' },
+      otherSession,
+    )
+    await send(
+      token,
+      3,
+      'post_tool_call',
+      { tool_name: 'terminal', result: 'ok', gateIds: ['gate-a'] },
+      'session-a',
+    )
+    expect(rows().find((row) => row.gate_id === 'gate-a')?.tool_outcome).toBe('ok')
+    expect(rows().find((row) => row.gate_id === 'gate-b')?.tool_outcome).toBeNull()
+    await send(token, 4, 'post_tool_call', { tool_name: 'terminal', result: 'ok' }, otherSession)
+    expect(rows().find((row) => row.gate_id === 'gate-b')?.tool_outcome).toBeNull()
+  },
+)
+
+test('gate #3 delayed completion evidence pairs only by producer incarnation and gate, regardless of tool reuse', async () => {
+  const token = await env.token()
+  await send(
+    token,
+    5,
+    'post_tool_call',
+    { gateIds: ['gate-a', 'gate-c'], result: 'ok' },
+    'session-a',
+  )
+  await send(
+    token,
+    2,
+    'pre_approval_request',
+    { gateId: 'gate-b', requestId: 'request-b' },
+    'session-b',
+  )
+  await send(
+    token,
+    1,
+    'pre_approval_request',
+    { gateId: 'gate-a', requestId: 'request-a' },
+    'session-a',
+  )
+  await send(
+    token,
+    3,
+    'pre_approval_request',
+    { gateId: 'gate-c', requestId: 'request-c' },
+    'session-a',
+  )
+  const other = await env.token({ ...hello, incarnation: 'another-process' })
+  await send(
+    other,
+    1,
+    'pre_approval_request',
+    { gateId: 'gate-a', requestId: 'another-request' },
+    'session-a',
+  )
+  expect(rows().map((row) => [row.request_id, row.tool_outcome])).toEqual([
+    ['request-b', null],
+    ['request-a', 'ok'],
+    ['request-c', 'ok'],
+    ['another-request', null],
+  ])
+})
+
+test('gate #12 keyed approval retry returns the original 202 and body, different body conflicts', async () => {
+  const id = await request('receipt-approval')
+  const headers = { cookie, 'x-score-client': 'web', 'idempotency-key': 'decision-retry' }
+  const [first, concurrent] = await Promise.all([
+    decide(id, 'once', headers),
+    decide(id, 'once', headers),
+  ])
+  expect(first.statusCode).toBe(202)
+  expect(concurrent.statusCode).toBe(202)
+  expect(concurrent.json()).toEqual(first.json())
+  expect((await decide(id, 'once', headers)).json()).toEqual(first.json())
+  const conflict = await decide(id, 'deny', headers)
+  expect(conflict.statusCode).toBe(409)
+  expect(conflict.json().error.code).toBe('idempotency_conflict')
+  expect(
+    env.db.sqlite
+      .prepare("SELECT count(*) AS n FROM ingest_keys WHERE source = 'approval-decision'")
+      .get()?.n,
+  ).toBe(1)
+  expect(env.db.sqlite.prepare('SELECT count(*) AS n FROM approval_deliveries').get()?.n).toBe(1)
+})
+
+test('gate #13 idle delivery sweeps and startup do not allocate observation keys', async () => {
+  const before = env.db.sqlite.prepare('SELECT count(*) AS n FROM ingest_keys').get()?.n
+  await outbox.start()
+  for (let i = 0; i < 20; i++) await outbox.sweep()
+  await outbox.runOnce()
+  expect(env.db.sqlite.prepare('SELECT count(*) AS n FROM ingest_keys').get()?.n).toBe(before)
+  const id = await request('future-delivery')
+  await intent(id)
+  const withIntent = env.db.sqlite.prepare('SELECT count(*) AS n FROM ingest_keys').get()?.n
+  await outbox.sweep()
+  expect(env.db.sqlite.prepare('SELECT count(*) AS n FROM ingest_keys').get()?.n).toBe(withIntent)
+})
+
+test('gate #13 expiry sweep reads first and records only due changes', async () => {
+  const { sweepExpiredApprovals } = await import('../../src/domain/approval-expiry.ts')
+  const submit = vi.spyOn(env.ingest, 'submit')
+  await sweepExpiredApprovals(env.db, env.ingest, () => now)
+  expect(submit).not.toHaveBeenCalled()
+  const id = await request('expires-later', { expiresAt: new Date(now + 1000).toISOString() })
+  submit.mockClear()
+  await sweepExpiredApprovals(env.db, env.ingest, () => now)
+  expect(submit).not.toHaveBeenCalled()
+  advance(1000)
+  await sweepExpiredApprovals(env.db, env.ingest, () => now)
+  expect(submit).toHaveBeenCalledOnce()
+  expect(readApprovalRow(env.db.sqlite, id)?.closed_reason).toBe('expired')
+  await sweepExpiredApprovals(env.db, env.ingest, () => now)
+  expect(submit).toHaveBeenCalledOnce()
+  submit.mockRestore()
+})
+
+test('gate #3 stored completion also pairs when a gate attaches to an existing run-SSE approval', async () => {
+  const id = await request('preexisting-request', { runId: 'preexisting-run' })
+  const token = await env.token()
+  await send(
+    token,
+    3,
+    'post_tool_call',
+    { gateIds: ['attached-gate'], result: 'ok' },
+    'preexisting-run',
+  )
+  await send(
+    token,
+    1,
+    'pre_approval_request',
+    { gateId: 'attached-gate', requestId: 'preexisting-request' },
+    'preexisting-run',
+  )
+  expect(rows()).toHaveLength(1)
+  expect(readApprovalRow(env.db.sqlite, id)).toMatchObject({
+    gate_id: 'attached-gate',
+    tool_outcome: 'ok',
+  })
 })

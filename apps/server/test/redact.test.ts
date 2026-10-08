@@ -33,7 +33,10 @@ const cases: [string, string][] = [
     '-----BEGIN PUBLIC KEY-----\nabc\n-----END PUBLIC KEY-----',
   ],
   ['key short token count', 'key short token count'],
-  ['monkey=banana tokenizer=ok secretive=yes', 'monkey=banana tokenizer=ok secretive=yes'],
+  [
+    'monkey=banana tokenizer=ok secretive=yes',
+    'monkey=banana tokenizer=[redacted] secretive=[redacted]',
+  ],
   ['0123456789abcdef0123456789abcdef', '0123456789abcdef0123456789abcdef'],
 ]
 test.each(cases)('redacts %j', (input, expected) => {
@@ -81,7 +84,6 @@ test('structured redaction scrubs keys and masks entire credential subtrees', ()
     'authorization',
     'Cookie',
     'credentials',
-    'session_id',
     'AWS_SECRET_ACCESS_KEY',
     'AWS_ACCESS_KEY_ID',
     'x-api-key',
@@ -107,4 +109,29 @@ test('credential-named fields keep numbers, booleans and null but mask anything 
     tokens: '[redacted]',
     secret: '[redacted]',
   })
+})
+
+const gateForms = [
+  'apiKey=opaque-value',
+  'AWS_SECRET_ACCESS_KEY=opaque-value',
+  'AWS_ACCESS_KEY_ID: opaque-value',
+  'clientSecret: opaque-value',
+  '"apiKey": "opaque-value"',
+  'Authorization: Basic b3BhcXVlLXZhbHVl',
+  'Authorization: Bearer opaque-value',
+  'ASIA1234567890ABCDEF',
+  'AKIA1234567890ABCDEF',
+]
+test.each(gateForms)('gate #1 free text and nested value remove %s', (form) => {
+  expect(redact(form)).toContain('[redacted]')
+  expect(redact(form)).not.toMatch(/opaque-value|b3BhcXVlLXZhbHVl|[A-Z]{4}1234567890ABCDEF/)
+  expect(redactValue({ command: form, result: [form] })).toEqual({
+    command: redact(form),
+    result: [redact(form)],
+  })
+})
+test('gate #7 session identifiers survive while cookies remain credentials', () => {
+  expect(
+    redactValue({ session_id: 'session-a', sessionId: 'session-b', cookie: 'opaque' }),
+  ).toEqual({ session_id: 'session-a', sessionId: 'session-b', cookie: '[redacted]' })
 })

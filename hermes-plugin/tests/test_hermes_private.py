@@ -123,16 +123,20 @@ def test_boundary_propagates_cancellation(private, monkeypatch, cancel):
 
 @pytest.mark.parametrize("request_id", [None, "", 0, False, [], {}, "exact-1"])
 def test_resolution_never_uses_fifo(private, monkeypatch, request_id):
-    calls = []
-    def resolve(session, choice, **kwargs):
-        assert set(kwargs) == {"request_id"}
-        assert type(kwargs["request_id"]) is str and kwargs["request_id"]
-        calls.append((session, choice, kwargs))
-        return 1
-    monkeypatch.setattr(private.importlib, "import_module", lambda name: SimpleNamespace(
-        resolve_gateway_approval=resolve))
-    assert private.resolve_exact("s", "once", request_id) == (1 if request_id == "exact-1" else 0)
-    assert len(calls) == (1 if request_id == "exact-1" else 0)
+    import threading
+    import time
+    first = SimpleNamespace(data={"request_id": "other"}, result=None, event=threading.Event())
+    exact = SimpleNamespace(data={"request_id": "exact-1"}, result=None, event=threading.Event())
+    queues = {"s": [first, exact]}
+    lock = threading.Lock()
+    monkeypatch.setattr(private.importlib, "import_module", lambda name: _approval_module(lock, queues))
+    assert private.resolve_exact_bounded("s", "once", request_id, time.monotonic() + 1) == (1 if request_id == "exact-1" else 0)
+    assert first.result is None and not first.event.is_set()
+    assert exact.event.is_set() == (request_id == "exact-1")
+    if request_id == "exact-1":
+        assert exact.result == "once" and queues["s"] == [first]
+        assert private.resolve_exact_bounded("s", "deny", "other", time.monotonic() + 1) == 1
+        assert "s" not in queues
 
 
 def test_no_settle_slot_reference_in_plugin():
@@ -159,16 +163,18 @@ def test_snapshot_is_bounded_and_never_waits_on_a_held_lock(private, monkeypatch
     try:
         started = time.perf_counter()
         assert private.snapshot_gateway_approvals("s") is None
-        assert private.approval_lock_free(0.01) is False
+        assert private.resolve_exact_bounded("s", "once", "r1", time.monotonic() + 0.01) is None
         assert time.perf_counter() - started < 0.2
     finally:
         lock.release()
-    assert private.approval_lock_free(0.01) is True
+    assert lock.acquire(timeout=0.01)
+    lock.release()
 
 
 def test_snapshot_without_hermes_internals_is_none(private):
     assert private.snapshot_gateway_approvals("s") is None
-    assert private.approval_lock_free(0.01) is False
+    import time
+    assert private.resolve_exact_bounded("s", "once", "r1", time.monotonic() + 0.01) is None
 
 
 @pytest.mark.parametrize("result, expected", [
@@ -195,3 +201,56 @@ def test_danger_detection_missing_or_throwing(private, monkeypatch):
         raise ValueError()
     monkeypatch.setattr(private.importlib, "import_module", lambda name: SimpleNamespace(detect_dangerous_command=broken))
     assert private.detect_dangerous("rm x") is None
+
+
+def test_deadline_rechecked_inside_same_lock(private, monkeypatch):
+    import threading
+    import time
+    lock = threading.Lock()
+    entry = SimpleNamespace(data={"request_id": "r"}, result=None, event=threading.Event())
+    queues = {"s": [entry]}
+    class DelayedLock:
+        def acquire(self, timeout):
+            acquired = lock.acquire(timeout=timeout)
+            time.sleep(0.02)
+            return acquired
+        def release(self):
+            lock.release()
+    monkeypatch.setattr(private.importlib, "import_module", lambda name: _approval_module(DelayedLock(), queues))
+    assert private.resolve_exact_bounded("s", "once", "r", time.monotonic() + 0.01) is None
+    assert entry.result is None and not entry.event.is_set() and queues["s"] == [entry]
+    assert lock.acquire(timeout=0.01)
+    lock.release()
+
+
+def test_real_lock_contention_never_resolves_after_lease(private, monkeypatch):
+    import threading
+    import time
+    lock = threading.Lock()
+    entry = SimpleNamespace(data={"request_id": "r"}, result=None, event=threading.Event())
+    monkeypatch.setattr(private.importlib, "import_module", lambda name: _approval_module(lock, {"s": [entry]}))
+    lock.acquire()
+    results = []
+    worker = threading.Thread(target=lambda: results.append(private.resolve_exact_bounded("s", "deny", "r", time.monotonic() + 0.02)))
+    worker.start()
+    worker.join(0.2)
+    lock.release()
+    assert results == [None] and entry.result is None and not entry.event.is_set()
+
+
+def test_bounded_resolution_observes_shutdown_while_waiting(private, monkeypatch):
+    import threading
+    import time
+    lock = threading.Lock()
+    entry = SimpleNamespace(data={"request_id": "r1"}, result=None, event=threading.Event())
+    queues = {"s": [entry]}
+    monkeypatch.setattr(private.importlib, "import_module", lambda name: _approval_module(lock, queues))
+    stop = threading.Event()
+    lock.acquire()
+    threading.Timer(0.15, stop.set).start()
+    threading.Timer(0.3, lock.release).start()
+    started = time.monotonic()
+    assert private.resolve_exact_bounded("s", "always", "r1", time.monotonic() + 30, cancelled=stop) is None
+    assert time.monotonic() - started < 1.0
+    time.sleep(0.35)
+    assert entry.result is None and not entry.event.is_set() and queues == {"s": [entry]}
