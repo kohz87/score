@@ -454,3 +454,40 @@ export function runLostObservation(context: RunContext): Observation {
     },
   }
 }
+
+/** Hermes forgot the run, but its session history still holds the final answer: complete the reply with it. */
+export function runRecoveredObservation(context: RunContext, output: string): Observation {
+  return {
+    source: `run-sse:${context.profile}`,
+    identity: `run_lost:${context.runId}`,
+    apply({ sqlite, now }) {
+      const row = readRun(sqlite, context.runId)
+      if (runLifecycle.isTerminal(row.status)) return []
+      const reason = 'Run record expired; the result was recovered from the session history'
+      const changed = updateRun(sqlite, row, now, {
+        status: 'completed',
+        ended_at: now,
+        output: redactBounded(output, 8192),
+        error: null,
+      })
+      sqlite
+        .prepare('INSERT INTO gaps (source, run_id, from_ts, to_ts, reason) VALUES (?, ?, ?, ?, ?)')
+        .run(`run-sse:${context.profile}`, context.runId, row.updated_at, now, reason)
+      return [
+        {
+          type: 'gap.recorded',
+          data: {
+            source: `run-sse:${context.profile}`,
+            runId: context.runId,
+            from: row.updated_at,
+            to: now,
+            reason,
+          },
+        },
+        ...(changed ? [runDraft(sqlite, row.id)] : []),
+        ...closeRunApprovals(sqlite, row.id, now),
+        ...completeRunMessage(sqlite, row.id, now, { output, handoffs: true, status: 'completed' }),
+      ]
+    },
+  }
+}
