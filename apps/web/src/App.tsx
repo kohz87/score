@@ -3,6 +3,7 @@ import type { DataRouter, RouteObject } from 'react-router'
 import { PairPage, pairBrowser } from './routes/pair/PairPage.tsx'
 import { AppShell } from './shell/AppShell.tsx'
 import { destinations } from './shell/destinations.ts'
+import { ChatPage } from './routes/chat/ChatPage.tsx'
 
 function StubPage({ title }: { title: string }) {
   return <h1>{title}</h1>
@@ -17,7 +18,7 @@ export const appRoutes: RouteObject[] = [
       ...destinations.map(({ path, title }) => ({
         path,
         children: [
-          { index: true, element: <StubPage title={title} /> },
+          { index: true, element: path === '/chat' ? <ChatPage /> : <StubPage title={title} /> },
           ...(path === '/now'
             ? ['flow', 'routines', 'watch/:agentId']
             : path === '/chat'
@@ -25,7 +26,10 @@ export const appRoutes: RouteObject[] = [
               : path === '/team'
                 ? [':agentId']
                 : []
-          ).map((child) => ({ path: child, element: <StubPage title={title} /> })),
+          ).map((child) => ({
+            path: child,
+            element: path === '/chat' ? <ChatPage /> : <StubPage title={title} />,
+          })),
         ],
       })),
       { path: '/pair', loader: pairBrowser, Component: PairPage },
