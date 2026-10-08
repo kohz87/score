@@ -11,6 +11,7 @@ import { redact, redactBounded, redactValue } from '../../redact.ts'
 import { KanbanDenialSchema, recordKanbanDenial } from '../../domain/kanban-denials.ts'
 import { isSensitiveTool, recordToolFrames, WatchInfoSchema } from '../../domain/watch-frames.ts'
 import type { Producer } from './registry.ts'
+import type { ScreenshotImporter } from './screenshots.ts'
 
 export interface BridgeMetrics {
   unknownHooks: number
@@ -153,6 +154,7 @@ export function translateBridgeEvent(
   value: BridgeEvent,
   metrics: BridgeMetrics,
   disabled: readonly string[] = [],
+  importScreenshot?: ScreenshotImporter,
 ): Observation {
   const parsed = BridgeEventSchema.parse(value)
   const source = `bridge:${producer.incarnation}`
@@ -212,6 +214,11 @@ export function translateBridgeEvent(
   const post = event.hook === 'post_tool_call'
   const tool = pre || post ? ToolPayloadSchema.parse(event.payload) : undefined
   const result = post ? redactValue(decodeResult(tool?.result)) : undefined
+  // Stored here, outside the ingest transaction; the frame only keeps the resulting id.
+  const screenshotMediaId =
+    post && tool?.tool_name === 'browser_vision' && tool.watch?.screenshotPath && importScreenshot
+      ? importScreenshot(producer.profile, tool.watch.screenshotPath)
+      : null
   const nested = z.object({ status: z.string().optional() }).safeParse(result)
   const approval = approvalHooks.has(event.hook)
     ? ApprovalPayloadSchema.parse(event.payload)
@@ -356,6 +363,7 @@ export function translateBridgeEvent(
               result,
               status,
               watch: tool.watch ?? null,
+              screenshotMediaId,
             },
           ))
             frameDrafts.push({ type: 'watch.frame', data: frame })
