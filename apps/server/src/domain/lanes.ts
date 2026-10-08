@@ -55,6 +55,9 @@ interface Draft {
 }
 
 const FINISHED = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
+// Hermes retries a failed attempt within seconds; a longer pause is a separate piece of work and the gap
+// must stay visible. Two minutes covers dispatcher latency without hiding a real break.
+export const MERGE_GAP_MS = 2 * 60_000
 const iso = (ms: number) => new Date(ms).toISOString()
 
 function runDrafts(input: LaneInput, tasks: Map<string, LaneTaskInput>): Draft[] {
@@ -92,7 +95,8 @@ function runDrafts(input: LaneInput, tasks: Map<string, LaneTaskInput>): Draft[]
       previous &&
       previous.agentId === run.agentId &&
       previous.state !== 'waiting' &&
-      state !== 'waiting'
+      state !== 'waiting' &&
+      (previous.end === null || start - previous.end <= MERGE_GAP_MS)
     ) {
       previous.state = state
       previous.end = end

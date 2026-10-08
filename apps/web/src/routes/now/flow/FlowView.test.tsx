@@ -67,7 +67,9 @@ beforeEach(() => {
         return response(
           stopStatus === 200
             ? { ok: true }
-            : { error: { code: 'conflict', message: 'Nothing is running in this step' } },
+            : stopStatus === 501
+              ? { error: { code: 'unsupported', message: 'Stop is not available for this run.' } }
+              : { error: { code: 'conflict', message: 'Nothing is running in this step' } },
           stopStatus,
         )
       if (url.startsWith('/api/flow/nodes/'))
@@ -209,6 +211,17 @@ test('stops only the selected active step with an idempotency key and shows fail
   expect(await within(inspector).findByRole('button', { name: 'Stopped' })).toHaveProperty(
     'disabled',
     true,
+  )
+})
+
+test('shows the server message when Stop is unsupported for the run', async () => {
+  stopStatus = 501
+  setup()
+  const inspector = await screen.findByRole('complementary', { name: 'Selected step' })
+  await within(inspector).findByRole('heading', { name: 'Event stream' })
+  fireEvent.click(within(inspector).getByRole('button', { name: 'Stop this step' }))
+  expect((await within(inspector).findByRole('alert')).textContent).toBe(
+    'Stop is not available for this run.',
   )
 })
 

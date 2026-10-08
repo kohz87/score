@@ -195,7 +195,7 @@ test('7d report has known numbers', () => {
     },
   ])
   expect(report.timeSplit).toEqual([
-    { agentId: 'builder', workingPct: 33, waitingOnYouPct: 26, waitingOnAgentPct: 41 },
+    { agentId: 'builder', workingPct: 45, waitingOnYouPct: 15, waitingOnAgentPct: 40 },
     { agentId: 'designer', workingPct: 7, waitingOnYouPct: 43, waitingOnAgentPct: 50 },
     { agentId: 'reviewer', workingPct: 0, waitingOnYouPct: 0, waitingOnAgentPct: 0 },
   ])
@@ -254,9 +254,49 @@ test('a run still open counts until now, hides waiting it overlaps, and approvin
     approvals: Array.from({ length: 5 }, () => approval({})),
   })
   expect(report.timeSplit[0]).toMatchObject({
-    workingPct: 29,
-    waitingOnYouPct: 33,
-    waitingOnAgentPct: 38,
+    workingPct: 40,
+    waitingOnYouPct: 7,
+    waitingOnAgentPct: 53,
   })
   expect(report.approvals.insight).toContain('all 5')
+})
+
+test('time categories are disjoint: an hour working with the same hour waiting on you counts once, as working', () => {
+  const hour = (iso: string) => Date.parse(`2026-03-10T${iso}Z`)
+  const report = computeReports({
+    ...input,
+    agentIds: ['builder'],
+    runs: [run('builder', '2026-03-10T08:00:00.000Z', '2026-03-10T09:00:00.000Z')],
+    approvals: [
+      approval({ createdAt: '2026-03-10T08:00:00.000Z', decidedAt: '2026-03-10T09:00:00.000Z' }),
+    ],
+    facts: { tasks: [], spendUsd: {} },
+  })
+  expect(report.timeSplit[0]).toEqual({
+    agentId: 'builder',
+    workingPct: 100,
+    waitingOnYouPct: 0,
+    waitingOnAgentPct: 0,
+  })
+  // Waiting on you beats waiting on another agent where they overlap (08:00-09:00 both).
+  const both = computeReports({
+    ...input,
+    agentIds: ['builder'],
+    runs: [],
+    approvals: [
+      approval({ createdAt: '2026-03-10T08:00:00.000Z', decidedAt: '2026-03-10T09:00:00.000Z' }),
+    ],
+    facts: {
+      tasks: [
+        kanban('w', {
+          status: 'review',
+          createdAt: hour('07:00:00'),
+          events: [['review_requested', '03-10T08:00:00']],
+        }),
+      ],
+      spendUsd: {},
+    },
+  })
+  // you: 08:00-09:00 (60m); agent: 09:00-10:00 (60m, still in review) - never 120m of agent time.
+  expect(both.timeSplit[0]).toMatchObject({ waitingOnYouPct: 50, waitingOnAgentPct: 50 })
 })

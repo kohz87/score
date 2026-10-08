@@ -350,7 +350,7 @@ run: RunSummary | null; model: string | null; tools: string[]; watch: { agentId;
   `type LogLine = { id; at; agentId; kind: 'tool' | 'message' | 'handoff' | 'approval' | 'system'; text }`
 - **H** `POST /api/briefs/:briefId/pause` / `/resume` → `BriefSummary`. Pause holds Score's queue for the brief and blocks
   its not-started tasks (`hermes kanban block`); running steps finish. Resume unblocks only what Score blocked.
-- **H** `POST /api/flow/nodes/:nodeId/stop` → `{ ok: true }`: stops that node's active run (409 when nothing is running).
+- **H** `POST /api/flow/nodes/:nodeId/stop` → `{ ok: true }`: stops that node's active run (409 when nothing is running; 501 `unsupported` with a message when the active run was not started by Score, e.g. a Kanban or gateway run).
 - **H** `POST /api/rooms/:roomId/messages/:messageId/plan/start` → `{ briefId; taskIds: string[] }`: creates one Kanban task
   per plan step of that `plan` message (idempotent per message).
 - A brief is a human room message plus what it causes (`briefId` = that message id; turns, hand-offs, and tasks Score
@@ -598,9 +598,11 @@ costUsd: number | null; task: { id; title } | null; brief: { id; title } | null;
   Definitions (from Hermes Kanban history, read-only): a task is finished when `completed_at` falls in the range (day
   buckets in the server's time zone); task time = created → completed; reviewed = had `review_requested`, first pass =
   reviewed and never `changes_requested` (null when nothing was reviewed). Time split per agent (integer %, sum 100):
-  working = a run is active (guardian approval time included); waiting on you = open human approvals and `blocked`
-  intervals; waiting on another agent = waiting for dependencies (created → `promoted`) and in review
-  (`review_requested` → outcome), minus any overlap with working. Spend = Hermes session costs (actual, else estimated);
+  the three categories are disjoint, with precedence working > waiting on you > waiting on another agent: working =
+  a run is active (guardian approval time included); waiting on you = open human approvals and `blocked` intervals,
+  minus time already working; waiting on another agent = waiting for dependencies (created → `promoted`) and in review
+  (`review_requested` → outcome), minus time already working or waiting on you. An hour of active run with a human
+  approval open the whole hour counts as working only. Spend = Hermes session costs (actual, else estimated);
   null when unknown.
 - `GET /api/reports/export.csv?range=&tz=` → `text/csv`
 - Both take an optional `tz` (IANA zone, e.g. `Europe/London`): days and "today" are the viewer's, not the server's

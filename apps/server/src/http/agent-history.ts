@@ -103,8 +103,12 @@ export function registerAgentHistoryRoutes(
              b.id AS brief_id, b.title AS brief_title,
              (SELECT MIN(f.seq) FROM watch_frames f WHERE f.agent_id = r.profile AND f.run_id = r.id) AS replay_seq
            FROM runs r
-           LEFT JOIN message_runs mr ON mr.run_id = r.id
-           LEFT JOIN briefs b ON b.id = mr.chain_id
+           LEFT JOIN briefs b ON b.id = COALESCE(
+             (SELECT mr.chain_id FROM message_runs mr WHERE mr.run_id = r.id LIMIT 1),
+             -- A Kanban run has no message; its brief is the one that linked its task.
+             (SELECT bt.brief_id FROM brief_tasks bt
+                WHERE bt.task_id = (SELECT t.id FROM task_projections t, json_each(t.detail, '$.runIds') j WHERE j.value = r.id LIMIT 1)
+                ORDER BY bt.linked_at LIMIT 1))
            WHERE r.profile = ?
          ) ${filters.length ? `WHERE ${filters.join(' AND ')}` : ''}
          ORDER BY started_at DESC, id DESC LIMIT ? OFFSET ?`,

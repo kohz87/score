@@ -23,6 +23,7 @@ import {
   briefTasks,
   briefTurns,
   requireBrief,
+  newestFirst,
   taskFailed,
   type BriefRow,
   type TurnRow,
@@ -96,6 +97,7 @@ function taskNode(sqlite: DatabaseSync, taskId: string, detail: TaskDetail | und
       taskId,
       layout: { col: 0, row: 0 },
     }
+  const implementer = implementerOf(sqlite, detail)
   const state: FlowNode['state'] = taskFailed(sqlite, detail)
     ? 'failed'
     : detail.column === 'done'
@@ -109,9 +111,9 @@ function taskNode(sqlite: DatabaseSync, taskId: string, detail: TaskDetail | und
     id: `task:${taskId}`,
     kind: 'step',
     title: detail.title,
-    agentId: detail.assignee,
+    agentId: implementer,
     state,
-    subtitle: [detail.assignee ?? 'Unassigned', detail.key].join(', '),
+    subtitle: [implementer ?? 'Unassigned', detail.key].join(', '),
     taskId,
     layout: { col: 0, row: 0 },
   }
@@ -352,7 +354,9 @@ export function readBriefFlow(
       .get(id)
     return row === undefined ? [] : [RunRowSchema.parse(row)]
   })
+  // A total with an unknown component is unknown, never a partial sum shown as the total.
   const costs = runs.flatMap((run) => (run.cost_usd === null ? [] : [run.cost_usd]))
+  const costKnown = runs.length > 0 && costs.length === runs.length
   const firstStart = graph.turns[0]?.created_at ?? graph.row.started_at
   const active =
     graph.summary.status === 'running' ||
@@ -366,7 +370,7 @@ export function readBriefFlow(
     runningSec: Math.max(0, Math.round((endMs - Date.parse(firstStart)) / 1000)),
     steps: all.length - 1,
     handoffs: graph.edges.filter((edge) => edge.kind === 'handoff').length,
-    spendUsd: costs.length ? Number(costs.reduce((sum, cost) => sum + cost, 0).toFixed(6)) : null,
+    spendUsd: costKnown ? Number(costs.reduce((sum, cost) => sum + cost, 0).toFixed(6)) : null,
     eta: null,
   }
   let nodes = all
@@ -499,9 +503,26 @@ export function latestRunId(runIds: string[], sqlite: DatabaseSync): string | un
       const row = sqlite.prepare('SELECT started_at FROM runs WHERE id = ?').get(id)
       return row === undefined
         ? []
-        : [{ id, at: z.object({ started_at: z.string() }).parse(row).started_at }]
+        : [{ id, started_at: z.object({ started_at: z.string() }).parse(row).started_at }]
     })
-    .sort((left, right) => (left.at < right.at ? 1 : left.at > right.at ? -1 : 0))[0]?.id
+    .sort(newestFirst)[0]?.id
+}
+
+/**
+ * The agent that did the task's implementation work, from the runs themselves. Hermes reassigns a task to
+ * its reviewer on request-review, so the current assignee alone would move the implementation node (and
+ * its run) to the reviewer.
+ */
+export function implementerOf(sqlite: DatabaseSync, detail: TaskDetail): string | null {
+  if (!detail.assignee || !detail.reviewer || detail.assignee !== detail.reviewer)
+    return detail.assignee
+  const others = detail.runIds.flatMap((id) => {
+    const row = sqlite.prepare('SELECT profile, started_at FROM runs WHERE id = ?').get(id)
+    if (row === undefined) return []
+    const run = z.object({ profile: z.string(), started_at: z.string() }).parse(row)
+    return run.profile === detail.reviewer ? [] : [{ id, ...run }]
+  })
+  return others.sort(newestFirst)[0]?.profile ?? detail.assignee
 }
 
 function runsForAgent(sqlite: DatabaseSync, runIds: string[], agentId: string | null): string[] {
@@ -617,6 +638,14 @@ export function activeRunOfNode(sqlite: DatabaseSync, nodeId: string): Stoppable
     if (row === undefined) continue
     const run = z.object({ profile: z.string(), status: z.string(), origin: z.string() }).parse(row)
     if (!ACTIVE_RUN_STATUSES.includes(run.status)) continue
+    // Only runs Score started through the gateway can be stopped through it; Hermes has no fenced stop for
+    // Kanban worker attempts yet (5.17b), and a wrong guess would stop nothing or the wrong thing.
+    if (run.origin !== 'score')
+      throw new HttpError(
+        501,
+        'unsupported',
+        'Stop is not available for this run: it was not started by Score. Stop it in Hermes.',
+      )
     return { agentId: run.profile, runId }
   }
   throw new HttpError(409, 'conflict', 'Nothing is running in this step')

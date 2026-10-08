@@ -133,6 +133,21 @@ function merge(intervals: Interval[], from: number, to: number): Interval[] {
   }
   return out
 }
+/** Parts of `intervals` not covered by `cut` (both merged and sorted). */
+function subtract(intervals: Interval[], cut: Interval[]): Interval[] {
+  const out: Interval[] = []
+  for (const [s, e] of intervals) {
+    let start = s
+    for (const [cs, ce] of cut) {
+      if (ce <= start || cs >= e) continue
+      if (cs > start) out.push([start, cs])
+      start = Math.max(start, ce)
+      if (start >= e) break
+    }
+    if (start < e) out.push([start, e])
+  }
+  return out
+}
 const measure = (intervals: Interval[]): number =>
   intervals.reduce((total, [s, e]) => total + (e - s), 0)
 
@@ -263,9 +278,9 @@ export function computeReports(input: ReportInput): Reports {
       to,
     )
     const mine = input.facts.tasks.filter((task) => task.assignee === agentId)
-    // Waiting on you: your approval queue and tasks blocked on you. Guardian reviews of a gate happen
-    // inside an active run, so they stay "working".
-    const waitingYou = measure(
+    // Disjoint categories, by precedence: working > waiting on you > waiting on another agent.
+    // Guardian reviews of a gate happen inside an active run, so they stay "working".
+    const youSet = subtract(
       merge(
         [
           ...input.approvals
@@ -276,14 +291,18 @@ export function computeReports(input: ReportInput): Reports {
         from,
         to,
       ),
+      working,
     )
-    // Waiting on another agent counts only while the agent is not busy with a run.
-    const waits = merge(
-      mine.flatMap((task) => agentWaits(task, input.now)),
-      from,
-      to,
+    const agentSet = subtract(
+      merge(
+        mine.flatMap((task) => agentWaits(task, input.now)),
+        from,
+        to,
+      ),
+      merge([...working, ...youSet], from, to),
     )
-    const waitingAgent = measure(merge([...waits, ...working], from, to)) - measure(working)
+    const waitingYou = measure(youSet)
+    const waitingAgent = measure(agentSet)
     const [workingPct, waitingOnYouPct, waitingOnAgentPct] = percentages([
       measure(working),
       waitingYou,
