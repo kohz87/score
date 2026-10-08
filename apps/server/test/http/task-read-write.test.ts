@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { TaskDetailSchema, TaskSummarySchema } from '@score/contract'
 import { buildApp } from '../../src/app.ts'
+import { HttpError } from '../../src/errors.ts'
 import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { deriveTaskEvents } from '../../src/domain/tasks.ts'
@@ -253,4 +254,33 @@ test('a keyed task detail larger than 64 KB is persisted and replayed', async ()
   expect(Buffer.byteLength(first.body)).toBeGreaterThan(65536)
   expect((await app.inject(request)).body).toBe(first.body)
   expect(create).toHaveBeenCalledTimes(1)
+})
+
+test('a server error or a crash-pending receipt on task creation is retried, not replayed forever', async () => {
+  const real = port.createTask.bind(port)
+  const create = vi
+    .spyOn(port, 'createTask')
+    .mockRejectedValueOnce(new HttpError(502, 'hermes_unavailable', 'timed out'))
+  const request = {
+    method: 'POST' as const,
+    url: '/api/tasks',
+    headers: { ...headers, 'idempotency-key': 'retry-create' },
+    payload: { title: 'Retry me' },
+  }
+  expect((await app.inject(request)).statusCode).toBe(502)
+  create.mockImplementation(real)
+  const retried = await app.inject(request)
+  expect(retried.statusCode).toBe(200)
+  expect(create).toHaveBeenCalledTimes(2)
+  // The same key then replays the success.
+  expect((await app.inject(request)).json()).toEqual(retried.json())
+  expect(create).toHaveBeenCalledTimes(2)
+  // A receipt left pending by a crash (no response recorded) is also rerun.
+  db.sqlite
+    .prepare(
+      "UPDATE request_receipts SET status = NULL, response = NULL WHERE key = 'retry-create'",
+    )
+    .run()
+  expect((await app.inject(request)).statusCode).toBe(200)
+  expect(create).toHaveBeenCalledTimes(3)
 })

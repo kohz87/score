@@ -1,3 +1,4 @@
+import { basename, dirname } from 'node:path'
 import { execFile, spawn, type ExecFileException, type ExecFileOptions } from 'node:child_process'
 import { z } from 'zod'
 import { isExcludedConfigKey } from '../config-keys.ts'
@@ -56,11 +57,11 @@ export function captureReadShape(argv: string[]): boolean {
     if (rest === 'config get --json' && ReadConfigKeys.includes(argv[5]!)) return true
   }
   if (
-    argv.length === 4 &&
+    argv.length === 6 &&
     argv[0] === '-p' &&
     ProfileNameSchema.safeParse(argv[1]).success &&
-    argv[2] === 'tools' &&
-    argv[3] === 'list'
+    argv.slice(2, 5).join(' ') === 'tools list --platform' &&
+    argv[5] === 'api_server'
   )
     return true
   // Plugin list for one profile (Settings › Plugins and look).
@@ -145,7 +146,7 @@ export const spawnHermes: HermesSpawner = (args, options) => {
   if ((shape === 'api_key') !== (options.input !== undefined))
     throw new Error('Only the API key sign-in takes stdin')
   // detached = new session: no controlling terminal, so a password prompt reads stdin instead of /dev/tty.
-  const child = spawn('hermes', argv, {
+  const child = spawn('hermes', pinScope(argv, options.hermesHome), {
     detached: true,
     env: hermesEnv(options.hermesHome),
     stdio: ['pipe', options.onStdout ? 'pipe' : 'ignore', 'ignore'],
@@ -182,6 +183,25 @@ export const spawnHermes: HermesSpawner = (args, options) => {
       }, 2000).unref()
     },
   }
+}
+
+/**
+ * Hermes picks the profile from its sticky `active_profile` file and the Kanban board from its persisted
+ * "current" pointer when a command names neither (hermes_cli/main.py `_apply_profile_override`, kanban_db
+ * `get_current_board`). Score's unscoped commands mean the default profile and the default board (the one
+ * its read-only database reads see), so both are spelled out here, after the allowlists have matched.
+ */
+export function pinScope(argv: string[], hermesHome: string | undefined): string[] {
+  let out = argv
+  const first = out[0]
+  // A home that already is a profile directory pins the profile on its own.
+  const homeIsProfile = basename(dirname(resolveHermesHome(hermesHome))) === 'profiles'
+  if (!homeIsProfile && first !== undefined && !first.startsWith('-') && first !== 'profile')
+    out = ['-p', 'default', ...out]
+  const at = out[0] === '-p' ? 2 : 0
+  if (out[at] === 'kanban' && out[at + 1] !== '--board')
+    out = [...out.slice(0, at + 1), '--board', 'default', ...out.slice(at + 1)]
+  return out
 }
 
 export const runHermes: HermesRunner = async (args, options) => {
@@ -224,7 +244,7 @@ export const runHermes: HermesRunner = async (args, options) => {
     try {
       ;(options.execute ?? execFile)(
         'hermes',
-        argv,
+        pinScope(argv, options.hermesHome),
         { timeout, env, maxBuffer: captureLimit },
         (error, stdout) => {
           const exitCode = error ? (typeof error.code === 'number' ? error.code : -1) : 0

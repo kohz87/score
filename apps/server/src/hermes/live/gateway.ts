@@ -46,6 +46,8 @@ export const GatewayRunSchema = z.object({
     .nullish()
     .transform((value) => value ?? null),
   usage: UsageSchema.nullish(),
+  // The pending approval.request while the run waits (api_server_runs `_set_run_status`); validated by the consumer.
+  approval: z.unknown().optional(),
 })
 export type GatewayRun = z.infer<typeof GatewayRunSchema>
 export const StartRunSchema = z.object({

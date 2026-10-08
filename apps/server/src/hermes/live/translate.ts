@@ -332,6 +332,55 @@ export function translateRunEvent(
   }
 }
 
+/**
+ * The approval a polled run status carries while the run waits. SSE normally delivers it, but a stream that
+ * was truncated or gave up would otherwise leave the run waiting with nobody asked. Idempotent per request id.
+ */
+export function statusApprovalObservation(
+  context: RunContext,
+  run: GatewayRun,
+): Observation | null {
+  if (run.status !== 'waiting_for_approval') return null
+  const safe = redactRunPayload(run.approval)
+  const parsed = ApprovalSchema.safeParse(safe)
+  if (!parsed.success) return null
+  const approval = parsed.data
+  const stamp = z.object({ timestamp: z.number().finite().nonnegative() }).safeParse(safe)
+  return {
+    source: `run-sse:${context.profile}`,
+    identity: `run_approval:${context.runId}:${approval.request_id}`,
+    apply({ sqlite, now }) {
+      const row = readRun(sqlite, context.runId)
+      if (
+        row.profile !== context.profile ||
+        row.credential_generation !== context.credentialGeneration
+      )
+        throw new Error('Run credential mapping mismatch')
+      if (runLifecycle.isTerminal(row.status)) return []
+      const at = stamp.success ? new Date(stamp.data.timestamp * 1000).toISOString() : now
+      const drafts = requestRunApproval(
+        sqlite,
+        {
+          profile: row.profile,
+          runId: row.id,
+          requestId: approval.request_id,
+          command: approval.command,
+          description: approval.description,
+          choices: approval.choices,
+          patternKeys:
+            approval.pattern_keys ?? (approval.pattern_key ? [approval.pattern_key] : []),
+          ...(approval.expires_at ? { expiresAt: approval.expires_at } : {}),
+        },
+        at,
+        { disabled: context.getDisabled?.() ?? [] },
+      )
+      if (updateRun(sqlite, row, now, { status: 'waiting_for_approval' }))
+        drafts.push(runDraft(sqlite, row.id))
+      return drafts
+    },
+  }
+}
+
 export function runStatusObservation(context: RunContext, run: GatewayRun): Observation {
   const safe = GatewayRunSchema.parse(redactValue(run))
   if (safe.run_id !== context.runId) throw new Error('Run status belongs to a different run')

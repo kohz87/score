@@ -19,6 +19,7 @@ import {
   type HermesSpawner,
 } from './cli.ts'
 import { SignInManager } from './sign-in.ts'
+import { ProfileLocks } from './profile-locks.ts'
 import { resolveHermesHome } from './paths.ts'
 import type { ProviderBase } from '../port.ts'
 
@@ -140,6 +141,21 @@ export function readGatewayPlatforms(home: string): GatewayPlatforms {
   }
 }
 
+/**
+ * One profile's platforms. A multiplexing gateway records every served profile in the host's file as
+ * "<profile>:<platform>" and its own adapters as flat keys; a standalone gateway writes flat keys into the
+ * profile's own file (hermes gateway/status.py `profile_platforms_from_multiplexer`).
+ */
+export function readProfilePlatforms(root: string, profile: string): GatewayPlatforms {
+  const platforms: GatewayPlatforms =
+    profile === 'default' ? {} : { ...readGatewayPlatforms(join(root, 'profiles', profile)) }
+  for (const [key, value] of Object.entries(readGatewayPlatforms(root))) {
+    if (key.startsWith(`${profile}:`)) platforms[key.slice(profile.length + 1)] = value
+    else if (profile === 'default' && !key.includes(':')) platforms[key] = value
+  }
+  return platforms
+}
+
 /** Known platforms first (disconnected by default), then whatever the gateway reports. */
 export function messagingRows(platforms: GatewayPlatforms): ConnectionsResponse['messaging'] {
   const rows = new Map<string, ConnectionsResponse['messaging'][number]>()
@@ -174,6 +190,7 @@ export class LiveSettings {
     /** The profile whose credentials the provider routes act on; none = Hermes's default. */
     private readonly profile?: string,
     private readonly spawner: HermesSpawner = spawnHermes,
+    private readonly locks: ProfileLocks = new ProfileLocks(),
   ) {
     this.home = resolveHermesHome(hermesHome)
     this.signIns = new SignInManager({
@@ -416,18 +433,20 @@ export class LiveSettings {
     if (slug in CATALOG || (await this.listProviders()).some((item) => item.id === slug))
       throw new HttpError(409, 'conflict', 'A provider with that name already exists')
     const base = `providers.${slug}`
-    for (const [key, value] of [
-      ['name', req.label],
-      ['base_url', req.baseUrl],
-      ['default_model', req.model],
-    ] as const) {
-      const result = await this.runner(['config', 'set', `${base}.${key}`, value], {
-        timeoutMs: READ_TIMEOUT_MS,
-        hermesHome: this.home,
-      })
-      if (result.exitCode !== 0)
-        throw new HttpError(502, 'hermes_write_failed', 'Hermes did not accept the provider')
-    }
+    await this.locks.run(this.profile ?? 'default', async () => {
+      for (const [key, value] of [
+        ['name', req.label],
+        ['base_url', req.baseUrl],
+        ['default_model', req.model],
+      ] as const) {
+        const result = await this.runner(
+          [...this.profileArgs(), 'config', 'set', `${base}.${key}`, value],
+          { timeoutMs: READ_TIMEOUT_MS, hermesHome: this.home },
+        )
+        if (result.exitCode !== 0)
+          throw new HttpError(502, 'hermes_write_failed', 'Hermes did not accept the provider')
+      }
+    })
     return {
       id: slug,
       label: redactBounded(req.label, 80),
@@ -461,7 +480,7 @@ export class LiveSettings {
       })
   }
   private messaging(): ConnectionsResponse['messaging'] {
-    return messagingRows(readGatewayPlatforms(this.home))
+    return messagingRows(readProfilePlatforms(this.home, this.profile ?? 'default'))
   }
 
   connectMessaging(platform: string): ConnectResult {

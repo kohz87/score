@@ -16,6 +16,8 @@ export const SkillHubResponseSchema = z.object({ items: z.array(HubSkillSchema) 
 export const MemoryPageSchema = z.object({
   items: AgentDetailSchema.shape.memory,
   nextCursor: z.string().nullable(),
+  // false when Hermes offers no way to change single entries; absent means writable.
+  writable: z.boolean().optional(),
 })
 export type SkillItem = z.infer<typeof SkillItemSchema>
 export type MemoryItem = z.infer<typeof MemoryItemSchema>

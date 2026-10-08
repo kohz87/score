@@ -41,6 +41,8 @@ export function registerTaskRoutes(
 ): void {
   // Details repeat checklist text and include activity, so their receipts need more room than actions.
   const receipts = requestIdempotency(db, clock, 512 * 1024)
+  // Creation reconciles with Hermes's own idempotency key, so a timed-out or interrupted attempt may be retried.
+  const creates = requestIdempotency(db, clock, 512 * 1024, { rerunUncertain: true })
   const mutation = {
     preHandler: [humanGuard(app.pairing), receipts.preHandler],
     onSend: receipts.onSend,
@@ -89,15 +91,23 @@ export function registerTaskRoutes(
         )
       : task
   })
-  app.post('/api/tasks', mutation, async (request) => {
-    const req = CreateTaskSchema.parse(request.body)
-    if (db) for (const id of [req.assignee, req.reviewer]) if (id) assertAgentAdmits(db.sqlite, id)
-    const key = z
-      .string()
-      .regex(/^[\x21-\x7e]{1,256}$/)
-      .parse(request.headers['idempotency-key'] ?? randomUUID())
-    return port.createTask(req, key)
-  })
+  app.post(
+    '/api/tasks',
+    {
+      preHandler: [humanGuard(app.pairing), creates.preHandler],
+      onSend: creates.onSend,
+    },
+    async (request) => {
+      const req = CreateTaskSchema.parse(request.body)
+      if (db)
+        for (const id of [req.assignee, req.reviewer]) if (id) assertAgentAdmits(db.sqlite, id)
+      const key = z
+        .string()
+        .regex(/^[\x21-\x7e]{1,256}$/)
+        .parse(request.headers['idempotency-key'] ?? randomUUID())
+      return port.createTask(req, key)
+    },
+  )
   app.patch('/api/tasks/:taskId', mutation, async (request) => {
     const { taskId } = ParamsSchema.parse(request.params)
     const req = PatchTaskSchema.parse(request.body)

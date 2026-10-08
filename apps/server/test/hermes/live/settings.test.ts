@@ -106,7 +106,14 @@ test('connections: tool servers from config (launch target only) and messaging f
   ])
   const byPlatform = Object.fromEntries(connections.messaging.map((row) => [row.platform, row]))
   expect(byPlatform.telegram).toMatchObject({ status: 'connected', detail: null })
-  expect(byPlatform.slack).toMatchObject({ status: 'disconnected', detail: 'auth_failed' })
+  // "lead:slack" belongs to the lead profile, not to the default agent these settings describe.
+  expect(byPlatform.slack).toMatchObject({ status: 'disconnected', detail: null })
+  const lead = await new LiveSettings(home, runner, undefined, 'lead').listConnections()
+  expect(lead.messaging.find((row) => row.platform === 'slack')).toMatchObject({
+    status: 'disconnected',
+    detail: 'auth_failed',
+  })
+  expect(lead.messaging.find((row) => row.platform === 'telegram')?.status).toBe('disconnected')
   expect(byPlatform.discord).toMatchObject({ status: 'disconnected', detail: null })
   expect(JSON.stringify(connections)).not.toContain(SECRET)
 })

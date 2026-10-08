@@ -6,10 +6,11 @@ Hermes URLs, no files). Types are written in TypeScript notation. The executable
 sides, in the same PR.
 
 Conventions
+
 - Base path `/api`. JSON in and out, UTF-8. Times are ISO-8601 strings (UTC). IDs are opaque strings.
 - Every mutating request (`POST`/`PUT`/`PATCH`/`DELETE`) must send `X-Score-Client: web` (CSRF guard) and may send
   `Idempotency-Key`. Replays with the same key return the first response.
-- Endpoints marked **H** are *human decisions*: they also require the paired session cookie (`score_session`,
+- Endpoints marked **H** are _human decisions_: they also require the paired session cookie (`score_session`,
   HttpOnly, SameSite=Strict, see §3). Without it they return `401 not_paired`. (ARCHITECTURE D7.1)
 - Errors: HTTP 4xx/5xx with `{ "error": { "code": string, "message": string, "details"?: unknown } }`.
   Common codes: `bad_request`, `not_found`, `conflict`, `not_paired`, `hermes_unavailable`, `hermes_unsupported`,
@@ -23,36 +24,61 @@ Conventions
 ## 1. Shared types
 
 ```ts
-type AgentId = string                      // = Hermes profile name
-type Shape = 'circle-dot' | 'triangle' | 'diamond' | 'square' | 'hexagon' | 'star' | 'pill' | 'cross'
+type AgentId = string // = Hermes profile name
+type Shape =
+  'circle-dot' | 'triangle' | 'diamond' | 'square' | 'hexagon' | 'star' | 'pill' | 'cross'
 type AgentStyle = { color: string /* #RRGGBB */; shape: Shape }
-type AgentStatus = 'idle' | 'working' | 'waiting' /* on a human */ | 'paused' | 'offline' | 'up-next'
+type AgentStatus =
+  'idle' | 'working' | 'waiting' /* on a human */ | 'paused' | 'offline' | 'up-next'
 
 type AgentSummary = {
-  id: AgentId; name: string; role: string /* "Leads the team" */; style: AgentStyle
-  status: AgentStatus; activity: string | null /* "Re-reading the read layer" */
+  id: AgentId
+  name: string
+  role: string /* "Leads the team" */
+  style: AgentStyle
+  status: AgentStatus
+  activity: string | null /* "Re-reading the read layer" */
   model: { id: string; label: string } | null
   served: boolean /* gateway serves this profile; false → can't start runs */
 }
 
-type Ref =                                   // what an item points at, for "Open in…" links
-  | { kind: 'room'; roomId: string } | { kind: 'task'; taskId: string }
-  | { kind: 'run'; runId: string }   | { kind: 'brief'; briefId: string }
+type Ref =
+  // what an item points at, for "Open in…" links
+  | { kind: 'room'; roomId: string }
+  | { kind: 'task'; taskId: string }
+  | { kind: 'run'; runId: string }
+  | { kind: 'brief'; briefId: string }
 
 type ApprovalChoice = 'once' | 'session' | 'always' | 'deny'
 type Approval = {
   id: string /* Score operation id */
   origin: 'score-run' | 'gateway' | 'kanban'
-  phase: 'guardian_evaluating' | 'escalated' | 'human_pending' | 'decided' | 'executed' | 'blocked' | 'withdrawn' | 'expired'
-  linkedTo: string | null      /* guardian stage → the human approval it escalated into (UI shows that one) */
+  phase:
+    | 'guardian_evaluating'
+    | 'escalated'
+    | 'human_pending'
+    | 'decided'
+    | 'executed'
+    | 'blocked'
+    | 'withdrawn'
+    | 'expired'
+  linkedTo:
+    string | null /* guardian stage → the human approval it escalated into (UI shows that one) */
   status: 'pending' | 'approved' | 'denied' | 'expired' | 'withdrawn' | 'unknown'
-  actionable: boolean          /* false = no exact target captured; answer on the originating surface */
-  agentId: AgentId; title: string /* "Can I install a package?" */
-  command: string /* redacted (two layers) */; cwd: string | null
+  actionable: boolean /* false = no exact target captured; answer on the originating surface */
+  agentId: AgentId
+  title: string /* "Can I install a package?" */
+  command: string /* redacted (two layers) */
+  cwd: string | null
   description: string /* why it was flagged / which rule */
-  choices: ApprovalChoice[]    /* kanban: ['once','always','deny'] */
-  createdAt: string; expiresAt: string | null
-  decision: { choice: ApprovalChoice; by: 'you' | 'guardian' | 'elsewhere' | 'timeout' | 'rule'; at: string } | null
+  choices: ApprovalChoice[] /* kanban: ['once','always','deny'] */
+  createdAt: string
+  expiresAt: string | null
+  decision: {
+    choice: ApprovalChoice
+    by: 'you' | 'guardian' | 'elsewhere' | 'timeout' | 'rule'
+    at: string
+  } | null
   delivery: 'none' | 'intent' | 'delivering' | 'applied' | 'not_pending' | 'failed' | 'unknown'
   blocking: string /* "Nothing else is blocked; reviewer keeps going" */ | null
   refs: Ref[]
@@ -60,50 +86,109 @@ type Approval = {
 
 type TaskColumn = 'planned' | 'working' | 'in_review' | 'needs_you' | 'done'
 type TaskSummary = {
-  id: string; key: string /* "T-114" */; title: string; column: TaskColumn
+  id: string
+  key: string /* "T-114" */
+  title: string
+  column: TaskColumn
   hermesStatus: string /* raw: triage|todo|scheduled|ready|running|blocked|review|done|archived */
-  assignee: AgentId | null; reviewer: AgentId | null; roomId: string | null
-  badge: { kind: 'changes_requested' | 'starts_after' | 'blocked' | 'needs_you' | 'triage'; label: string } | null
-  progress: number | null /* 0..1 while working */; elapsedSec: number | null
+  assignee: AgentId | null
+  reviewer: AgentId | null
+  roomId: string | null
+  badge: {
+    kind: 'changes_requested' | 'starts_after' | 'blocked' | 'needs_you' | 'triage'
+    label: string
+  } | null
+  progress: number | null /* 0..1 while working */
+  elapsedSec: number | null
   note: string | null /* "after stream", "tomorrow", "queued", "Wants to install ws@8" */
   updatedAt: string
 }
 type TaskStep = { id: string; text: string; done: boolean }
 type TaskActivity = { at: string; agentId: AgentId | 'you' | null; text: string }
 type TaskDetail = TaskSummary & {
-  body: string; createdBy: string; steps: TaskStep[]; activity: TaskActivity[]
-  pendingApproval: Approval | null; dependsOn: string[]; blocks: string[]; runIds: string[]
+  body: string
+  createdBy: string
+  steps: TaskStep[]
+  activity: TaskActivity[]
+  pendingApproval: Approval | null
+  dependsOn: string[]
+  blocks: string[]
+  runIds: string[]
 }
 
-type Room = { id: string; name: string /* "#dashboard-mvp" */; kind: 'room' | 'direct'
-  leadAgentId: AgentId | null /* unaddressed messages go here */; members: AgentId[]
-  unread: number; activeAgents: AgentId[]; channels: { platform: string; label: string }[] }
+type Room = {
+  id: string
+  name: string /* "#dashboard-mvp" */
+  kind: 'room' | 'direct'
+  leadAgentId: AgentId | null /* unaddressed messages go here */
+  members: AgentId[]
+  unread: number
+  activeAgents: AgentId[]
+  channels: { platform: string; label: string }[]
+}
 
 type MessagePart =
   | { kind: 'text'; text: string }
   | { kind: 'plan'; lanes: { agentId: AgentId; blocks: LaneBlock[] }[]; briefId: string }
   | { kind: 'tools'; summary: string /* "Ran 6 commands and edited 2 files" */; runId: string }
   | { kind: 'file'; path: string; added: number; removed: number }
-  | { kind: 'image'; mediaId: string }                 // an uploaded image, served by GET /api/media/:mediaId
+  | { kind: 'image'; mediaId: string } // an uploaded image, served by GET /api/media/:mediaId
   | { kind: 'approval'; approvalId: string }
   | { kind: 'review'; verdict: 'approved' | 'changes_requested'; taskId: string | null }
-type Message = { id: string; roomId: string; author: { kind: 'you' } | { kind: 'agent'; agentId: AgentId }
-  to: AgentId[]; parts: MessagePart[]; createdAt: string; streaming: boolean; refs: Ref[] }
+type Message = {
+  id: string
+  roomId: string
+  author: { kind: 'you' } | { kind: 'agent'; agentId: AgentId }
+  to: AgentId[]
+  parts: MessagePart[]
+  createdAt: string
+  streaming: boolean
+  refs: Ref[]
+}
 
-type LaneBlock = { id: string; label: string; state: 'done' | 'working' | 'planned' | 'waiting'
-  start: string; end: string | null /* null = open-ended */; taskId: string | null; runId: string | null }
-type RunSummary = { id: string; agentId: AgentId; origin: 'score' | 'kanban' | 'gateway' | 'cron'
-  status: 'queued' | 'running' | 'waiting_for_approval' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
-  startedAt: string; endedAt: string | null; model: string | null; toolsUsed: string[]
-  tokens: { input: number; output: number } | null; costUsd: number | null; refs: Ref[]
-  gaps: { from: string; to: string | null; reason: string }[] /* unrecoverable intervals */ }
-type Handoff = { id: string; from: { agentId: AgentId; blockId: string }; to: { agentId: AgentId; blockId: string }
-  kind: 'handoff' | 'review' | 'sent_back'; at: string }
+type LaneBlock = {
+  id: string
+  label: string
+  state: 'done' | 'working' | 'planned' | 'waiting'
+  start: string
+  end: string | null /* null = open-ended */
+  taskId: string | null
+  runId: string | null
+}
+type RunSummary = {
+  id: string
+  agentId: AgentId
+  origin: 'score' | 'kanban' | 'gateway' | 'cron'
+  status:
+    | 'queued'
+    | 'running'
+    | 'waiting_for_approval'
+    | 'completed'
+    | 'failed'
+    | 'cancelled'
+    | 'interrupted'
+  startedAt: string
+  endedAt: string | null
+  model: string | null
+  toolsUsed: string[]
+  tokens: { input: number; output: number } | null
+  costUsd: number | null
+  refs: Ref[]
+  gaps: { from: string; to: string | null; reason: string }[] /* unrecoverable intervals */
+}
+type Handoff = {
+  id: string
+  from: { agentId: AgentId; blockId: string }
+  to: { agentId: AgentId; blockId: string }
+  kind: 'handoff' | 'review' | 'sent_back'
+  at: string
+}
 ```
 
 ## 2. Stream
 
 ### `GET /api/stream?since=<seq>&epoch=<epoch>`, `text/event-stream`
+
 - Resume with the `Last-Event-ID` header (wins over `since`). `epoch` is the value from the last `stream.hello`
   the client saw. The first connection has no epoch yet, so the client **manages reconnects itself**:
   close the EventSource on error and open a new one with `?since=<lastSeq>&epoch=<epoch>` (backoff 0.5–10 s).
@@ -120,40 +205,56 @@ type Handoff = { id: string; from: { agentId: AgentId; blockId: string }; to: { 
 
 Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 
-| type | data | Consumers |
-|---|---|---|
-| `stream.hello` | `{ epoch: string, headSeq: number, mode: 'live'\|'fake', system: SystemStatus }` (no id) | all |
-| `stream.reset` | `{ reason: 'pruned'\|'epoch'\|'future_cursor' }` (no id) | all → resync |
-| `system.status` | `SystemStatus` | header banner, Settings |
-| `agent.updated` | `AgentSummary` | everywhere agents render |
-| `room.upserted` | `Room` | Chat rooms list |
-| `message.created` | `Message` | Chat, Now thread |
-| `message.delta` | `{ messageId, roomId, append: string }` | Chat (streaming text) |
-| `message.completed` | `{ messageId, roomId }` | Chat |
-| `typing` | `{ roomId, agentId, text /* "is re-reading the read layer" */ \| null }` | Chat, Now thread |
-| `approval.requested` | `Approval` | Now card, Chat, Flow, Watch, Tasks, header dot |
-| `approval.updated` | `Approval` (phase / decision / delivery changes) | same |
-| `task.upserted` | `TaskSummary` | Tasks, Now, Flow |
-| `task.activity` | `{ taskId, item: TaskActivity }` | task drawer, Flow inspector |
-| `lane.upserted` | `{ briefId \| null, agentId, block: LaneBlock }` | Now › Score, Chat plan card |
-| `handoff.created` | `{ briefId \| null, handoff: Handoff }` | Score connectors, Flow edges, live log |
-| `brief.upserted` | `BriefSummary` | Flow brief picker and header; refetch that brief's graph |
-| `run.updated` | `RunSummary` | Flow inspector, Watch header |
-| `gap.recorded` | `{ source: string; runId: string \| null; from: string; to: string \| null; reason: string }` | Watch, Flow log |
-| `log.line` | `LogLine` | Flow live log, Watch "What she's doing" |
-| `watch.frame` | `WatchFrame` | Watch |
-| `memory.saved` | `{ agentIds: AgentId[], text, source: Ref \| null }` | Chat "Learned here", Team memory |
+| type                 | data                                                                                          | Consumers                                                |
+| -------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `stream.hello`       | `{ epoch: string, headSeq: number, mode: 'live'\|'fake', system: SystemStatus }` (no id)      | all                                                      |
+| `stream.reset`       | `{ reason: 'pruned'\|'epoch'\|'future_cursor' }` (no id)                                      | all → resync                                             |
+| `system.status`      | `SystemStatus`                                                                                | header banner, Settings                                  |
+| `agent.updated`      | `AgentSummary`                                                                                | everywhere agents render                                 |
+| `room.upserted`      | `Room`                                                                                        | Chat rooms list                                          |
+| `message.created`    | `Message`                                                                                     | Chat, Now thread                                         |
+| `message.delta`      | `{ messageId, roomId, append: string }`                                                       | Chat (streaming text)                                    |
+| `message.completed`  | `{ messageId, roomId }`                                                                       | Chat                                                     |
+| `typing`             | `{ roomId, agentId, text /* "is re-reading the read layer" */ \| null }`                      | Chat, Now thread                                         |
+| `approval.requested` | `Approval`                                                                                    | Now card, Chat, Flow, Watch, Tasks, header dot           |
+| `approval.updated`   | `Approval` (phase / decision / delivery changes)                                              | same                                                     |
+| `task.upserted`      | `TaskSummary`                                                                                 | Tasks, Now, Flow                                         |
+| `task.activity`      | `{ taskId, item: TaskActivity }`                                                              | task drawer, Flow inspector                              |
+| `lane.upserted`      | `{ briefId \| null, agentId, block: LaneBlock }`                                              | Now › Score, Chat plan card                              |
+| `handoff.created`    | `{ briefId \| null, handoff: Handoff }`                                                       | Score connectors, Flow edges, live log                   |
+| `brief.upserted`     | `BriefSummary`                                                                                | Flow brief picker and header; refetch that brief's graph |
+| `run.updated`        | `RunSummary`                                                                                  | Flow inspector, Watch header                             |
+| `gap.recorded`       | `{ source: string; runId: string \| null; from: string; to: string \| null; reason: string }` | Watch, Flow log                                          |
+| `log.line`           | `LogLine`                                                                                     | Flow live log, Watch "What she's doing"                  |
+| `watch.frame`        | `WatchFrame`                                                                                  | Watch                                                    |
+| `memory.saved`       | `{ agentIds: AgentId[], text, source: Ref \| null }`                                          | Chat "Learned here", Team memory                         |
 
 ## 3. System and search
 
 - `GET /api/system` → `SystemStatus`
   ```ts
-  type SystemStatus = { mode: 'live' | 'fake'; hermes: { version: string | null; reachable: boolean
-    apiServer: boolean; capabilities: string[]; servedProfiles: string[] }
-    bridge: { producers: number; lastSeenAt: string | null; isolation: 'in_process' | 'host' | 'unknown' }
-    compatibility: { fingerprint: string; tested: boolean; disabled: string[] /* features off by the gate */ }
+  type SystemStatus = {
+    mode: 'live' | 'fake'
+    hermes: {
+      version: string | null
+      reachable: boolean
+      apiServer: boolean
+      capabilities: string[]
+      servedProfiles: string[]
+    }
+    bridge: {
+      producers: number
+      lastSeenAt: string | null
+      isolation: 'in_process' | 'host' | 'unknown'
+    }
+    compatibility: {
+      fingerprint: string
+      tested: boolean
+      disabled: string[] /* features off by the gate */
+    }
     agentIsolation: 'same_user' | 'sandboxed' | 'unknown' /* D7.1 threat-model indicator */
-    degraded: string[] /* human-readable reasons */ }
+    degraded: string[] /* human-readable reasons */
+  }
   ```
 - `POST /api/session/pair` `{ token: string }` → `204` + `Set-Cookie: score_session=…` (one-time token printed by
   the server on its terminal). `GET /api/session` → `{ paired: boolean }`. `DELETE /api/session` → `204`.
@@ -165,14 +266,15 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   Sessions expire after 7 days idle or 30 days absolute (stream heartbeats do not renew). Revocation and expiry close that
   session's open `/api/stream` connections. Bridge routes (`/bridge/v1/*`) are served only on a separate loopback listener.
   - `GET /api/session/browsers` → `{ items: { id: uuid; label: string; address: string; createdAt: iso; lastSeenAt: iso;
-    expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a management id, never a credential.
+expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a management id, never a credential.
   - `DELETE /api/session/browsers/:id` → `204` (revokes that browser; idempotent).
 - `GET /api/search?q=` → `{ items: { kind: 'agent'|'task'|'room'|'message'|'command'|'setting'; id: string;
-  label: string; hint: string | null; ref: Ref | { kind: 'route'; path: string } }[] }` (⌘K palette)
+label: string; hint: string | null; ref: Ref | { kind: 'route'; path: string } }[] }` (⌘K palette)
 
 ## 4. Now
 
 ### Score view
+
 - **S** `GET /api/now?from=<iso>&to=<iso>` →
   ```ts
   { asOfSeq: number; now: string; paused: boolean /* Pause everyone is on */
@@ -187,21 +289,49 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 - Composer: same as `POST /api/rooms/:roomId/messages`, with `roomId` = the current room.
 
 ### Flow view
+
 - **S** `GET /api/briefs?status=active|recent` → `{ items: BriefSummary[] }`
   `type BriefSummary = { id; title; roomId; startedAt; startedBy: 'you' | AgentId; status: 'running'|'paused'|'done'|'failed' }`
 - **S** `GET /api/briefs/:briefId/flow` →
   ```ts
-  { asOfSeq; brief: BriefSummary
-    nodes: { id: string; kind: 'brief' | 'step'; title: string; agentId: AgentId | null
-             state: 'done' | 'working' | 'needs_you' | 'planned' | 'failed'; subtitle: string /* "reviewer, 2 passes" */
-             taskId: string | null; layout: { col: number; row: number } /* server hint; client may re-layout */ }[]
-    edges: { id: string; from: string; to: string; kind: 'flow' | 'handoff' | 'review' | 'sent_back' | 'planned'
-             label: string | null }[]
-    stats: { runningSec: number; steps: number; handoffs: number; spendUsd: number | null; eta: string | null }
-    notice: string | null /* the brief's agents also worked on tasks not linked to it; links stay exact */ }
+  {
+    asOfSeq
+    brief: BriefSummary
+    nodes: {
+      id: string
+      kind: 'brief' | 'step'
+      title: string
+      agentId: AgentId | null
+      state: 'done' | 'working' | 'needs_you' | 'planned' | 'failed'
+      subtitle: string /* "reviewer, 2 passes" */
+      taskId: string | null
+      layout: {
+        col: number
+        row: number
+      } /* server hint; client may re-layout */
+    }
+    ;[]
+    edges: {
+      id: string
+      from: string
+      to: string
+      kind: 'flow' | 'handoff' | 'review' | 'sent_back' | 'planned'
+      label: string | null
+    }
+    ;[]
+    stats: {
+      runningSec: number
+      steps: number
+      handoffs: number
+      spendUsd: number | null
+      eta: string | null
+    }
+    notice: string |
+      null /* the brief's agents also worked on tasks not linked to it; links stay exact */
+  }
   ```
 - **S** `GET /api/flow/nodes/:nodeId` → `{ node; description: string; steps: TaskStep[]; approval: Approval | null
-  run: RunSummary | null; model: string | null; tools: string[]; watch: { agentId; thumbnail: string | null; front: string } | null }`
+run: RunSummary | null; model: string | null; tools: string[]; watch: { agentId; thumbnail: string | null; front: string } | null }`
 - **S** `GET /api/briefs/:briefId/log?agent=&kind=tool|all&cursor=` → `{ items: LogLine[]; nextCursor }`
   `type LogLine = { id; at; agentId; kind: 'tool' | 'message' | 'handoff' | 'approval' | 'system'; text }`
 - **H** `POST /api/briefs/:briefId/pause` / `/resume` → `BriefSummary`. Pause holds Score's queue for the brief and blocks
@@ -214,6 +344,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   derived (`paused` > `running` > `failed` > `done`). Links are exact only; see `docs/reviews/2026-10-08-3.4-briefs-design-lead.md`.
 
 ### Watch view (event replay)
+
 - **S** `GET /api/agents/:agentId/watch?from=<seq>&limit=` →
   ```ts
   { asOfSeq; agent: AgentSummary; live: boolean /* an active run right now */
@@ -227,7 +358,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   ```
 - `GET /api/media/:mediaId` → image bytes (screenshots).
 - **S** `GET /api/watch/overview` → `{ items: { agent: AgentSummary; thumbnail: string | null; status: string; live: boolean
-  surface: 'terminal' | 'editor' | 'browser' | null /* last frame, for a miniature */ }[] }`
+surface: 'terminal' | 'editor' | 'browser' | null /* last frame, for a miniature */ }[] }`
 - Frames are upserted by `seq` (per agent); a terminal frame is re-emitted with the same `seq` when it finishes. Schemas live in
   `packages/contract/src/watch.ts`. The Flow inspector's `watch` field carries the step agent's last frame surface (null when it has none).
 - **H** `POST /api/agents/:agentId/pause` / `/resume` → `AgentSummary` (status `paused` while held). Pause holds Score's dispatch
@@ -240,26 +371,29 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 - `POST /api/rooms` `{ name: string; leadAgentId?: AgentId; members?: AgentId[] }` → `Room`
 - `PATCH /api/rooms/:roomId` `{ name?, leadAgentId?, members? }` → `Room`
 - **S** `GET /api/rooms/:roomId` → `{ asOfSeq; room: Room; filesInPlay: string[]
-  learned: { text: string; savedTo: AgentId[]; at: string }[] }`
+learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 - **S** `GET /api/rooms/:roomId/messages?before=<cursor>&limit=50` → `{ asOfSeq; items: Message[]; nextCursor }`
 - `POST /api/rooms/:roomId/messages`
+
   ```ts
   req: { text: string; to?: AgentId[] /* explicit "To" chips; @mentions in text are merged */
          planFirst?: boolean; model?: string /* one-shot /model */; attachments?: { mediaId: string }[] }
   res: { message: Message; routedTo: AgentId[]; command: CommandResult | null }
   ```
+
   Text starting with a slash command is parsed server-side:
 
-  | Command | Syntax | Effect | `CommandResult` |
-  |---|---|---|---|
-  | `/assign` | `/assign @agent <title> [-- body]` | creates a Kanban task | `{ kind: 'assign', taskId, taskKey }` |
-  | `/routine` | `/routine @agent <schedule> <prompt>` | creates a cron job | `{ kind: 'routine', routineId }` |
-  | `/remember` | `/remember [@agent…] <fact>` | writes agent memory | `{ kind: 'remember', agentIds }` |
-  | `/skill` | `/skill @agent <name>` (use) · `/skill install <name>` | loads or installs a skill | `{ kind: 'skill', name, installed: boolean }` |
-  | `/model` | `/model <model> <message…>` | runs this message on another model | `{ kind: 'model', model }` |
+  | Command     | Syntax                                                 | Effect                             | `CommandResult`                               |
+  | ----------- | ------------------------------------------------------ | ---------------------------------- | --------------------------------------------- |
+  | `/assign`   | `/assign @agent <title> [-- body]`                     | creates a Kanban task              | `{ kind: 'assign', taskId, taskKey }`         |
+  | `/routine`  | `/routine @agent <schedule> <prompt>`                  | creates a cron job                 | `{ kind: 'routine', routineId }`              |
+  | `/remember` | `/remember [@agent…] <fact>`                           | writes agent memory                | `{ kind: 'remember', agentIds }`              |
+  | `/skill`    | `/skill @agent <name>` (use) · `/skill install <name>` | loads or installs a skill          | `{ kind: 'skill', name, installed: boolean }` |
+  | `/model`    | `/model <model> <message…>`                            | runs this message on another model | `{ kind: 'model', model }`                    |
+
 - `GET /api/commands` → `{ items: { name: string; usage: string; description: string }[] }` (slash menu)
 - **H** `POST /api/media` (multipart, one part named `file`) → `201 { mediaId: string; name: string; size: number;
-  contentType: string }`. Types come from the bytes (png, jpeg, gif, webp); `400` empty or malformed, `413` over 8 MB,
+contentType: string }`. Types come from the bytes (png, jpeg, gif, webp); `400` empty or malformed, `413` over 8 MB,
   `415` unsupported or contradicting type, `507 media_quota_exceeded`. Messages reference uploads with an `image`
   part (at most 8 per message).
 
@@ -279,6 +413,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 - **S** `GET /api/tasks?room=&agent=&needsYou=true&column=` → `{ asOfSeq; columns: Record<TaskColumn, TaskSummary[]> }`
 - **S** `GET /api/tasks/:taskId` → `TaskDetail`
 - `POST /api/tasks` `{ title; body?; assignee?: AgentId; reviewer?: AgentId; roomId?; dependsOn?: string[]; steps?: string[] }` → `TaskDetail`
+  `reviewer` on create and on `PATCH` answers 501 `not_implemented` (Hermes names a reviewer only when review is requested); `roomId` is kept by Score, must name an existing room (else 400) and is shown on `TaskDetail.roomId`.
 - `PATCH /api/tasks/:taskId` `{ title?; body?; assignee?; reviewer?; steps?: TaskStep[] }` → `TaskDetail`
 - **H** `POST /api/tasks/:taskId/actions`
   `{ action: 'start' | 'block' | 'unblock' | 'request_review' | 'request_changes' | 'complete' | 'archive' | 'comment'; text?: string }`
@@ -320,21 +455,43 @@ historical attribution, but have no routing, room membership or lead selection. 
 assignments, verifies a private export first, and retires the name. Exports omit credentials and are not a full undo;
 their local path is displayed but their bytes are never served. Retired-name reuse is currently refused until an
 incarnation-aware reuse confirmation contract is agreed.
+
 - `PATCH /api/agents/:agentId/style` `{ color?; shape? }` → `AgentSummary`
 - **S** `GET /api/agents/:agentId` → `AgentDetail`
   ```ts
   type AgentDetail = AgentSummary & {
     tagline: string /* "Builds what X plans. Working on …" */
-    personality: { excerpt: string; source: 'SOUL.md' }; reportsTo: AgentId | null; worksIn: string | null
+    personality: { excerpt: string; source: 'SOUL.md' }
+    reportsTo: AgentId | null
+    worksIn: string | null
     rulesFile: 'AGENTS.md' | null
-    model: { id: string; label: string; via: string /* "Codex sign-in" */; fallback: string | null } | null /* unreadable */
+    model: {
+      id: string
+      label: string
+      via: string /* "Codex sign-in" */
+      fallback: string | null
+    } | null /* unreadable */
     skills: { name: string; enabled: boolean }[]
-    memory: { id: string; text: string; source: string; at: string }[]       // latest few
-    tools: { id: string; label: string; kind: 'builtin' | 'mcp'; enabled: boolean }[]; helpersMax: number | null
+    memory: { id: string; text: string; source: string; at: string }[] // latest few
+    tools: { id: string; label: string; kind: 'builtin' | 'mcp'; enabled: boolean }[]
+    helpersMax: number | null
     routines: RoutineSummary[]
     channels: { platform: string; label: string; connected: boolean }[]
-    permissions: { id: string; label: string; level: 'allowed' | 'asks' | 'never'; inherited: boolean }[] }
-  type RoutineSummary = { id; title; schedule: string /* "1h" */; description; lastRunAt: string | null; enabled: boolean }
+    permissions: {
+      id: string
+      label: string
+      level: 'allowed' | 'asks' | 'never'
+      inherited: boolean
+    }[]
+  }
+  type RoutineSummary = {
+    id
+    title
+    schedule: string /* "1h" */
+    description
+    lastRunAt: string | null
+    enabled: boolean
+  }
   ```
 - `GET /api/agents/:agentId/files/:file` (`file` ∈ `SOUL.md|AGENTS.md`) → `{ content: string; etag: string }`
 - `POST /api/agents/:agentId/files/:file/preview` `{ content }` → `{ diff: string }`
@@ -346,6 +503,7 @@ incarnation-aware reuse confirmation contract is agreed.
   `GET /api/skills/hub?q=` → `SkillHubResponse` `{ items: { name; identifier; source; trust; description }[] }`
 - `GET /api/agents/:agentId/memory?q=&cursor=` → `MemoryPage` `{ items: AgentDetail['memory']; nextCursor: string | null }` ·
   `POST …/memory` `{ text }` · `DELETE …/memory/:id`
+  `MemoryPage.writable: false` (live Hermes has no per-entry memory command) means both writes answer 501 and clients hide the controls; absent = writable.
 - `PATCH /api/agents/:agentId/tools/:toolId` `{ enabled }` → `AgentDetail['tools'][number]`
 - `GET /api/agents/:agentId/routines` → `{ items: RoutineSummary[] }` · `POST …/routines` `{ title; schedule; prompt }` →
   `RoutineSummary` · `PATCH /api/routines/:id` `{ enabled?; schedule?; prompt? }` → `RoutineSummary` ·
@@ -363,8 +521,8 @@ incarnation-aware reuse confirmation contract is agreed.
   Read-only gateway state for this agent's profile (secret-free); `connectCommand` is e.g. `hermes -p builder gateway setup`,
   shown for the person to run in their own terminal.
 - `GET /api/agents/:agentId/history?q=&outcome=&cursor=` → `AgentHistoryPage` `{ items: { runId; title; origin; outcome:
-  'completed' | 'failed' | 'stopped' | 'waiting' | 'running'; startedAt; durationSec: number | null; model: string | null;
-  costUsd: number | null; task: { id; title } | null; brief: { id; title } | null; replaySeq: number | null }[]; nextCursor }`.
+'completed' | 'failed' | 'stopped' | 'waiting' | 'running'; startedAt; durationSec: number | null; model: string | null;
+costUsd: number | null; task: { id; title } | null; brief: { id; title } | null; replaySeq: number | null }[]; nextCursor }`.
   Score's own runs for the agent (all origins), newest first, 50 per page; the cursor is an offset. `outcome` filters,
   `q` matches task/brief title and model. Replay opens `/now/watch/:agentId?from=<replaySeq>`.
 
@@ -372,12 +530,45 @@ incarnation-aware reuse confirmation contract is agreed.
 
 - `GET /api/reports?range=today|7d|30d` →
   ```ts
-  { range; summary: string
-    totals: { tasksFinished: number; runs: number; firstPassRate: number | null; medianTaskSec: number | null; spendUsd: number | null }
-    byDay: { date: string; perAgent: Record<AgentId, number> }[]
-    timeSplit: { agentId; workingPct: number; waitingOnYouPct: number; waitingOnAgentPct: number }[]
-    byAgent: { agentId; finished: number; runs: number; medianSec: number | null; firstPassRate: number | null /* null = n/a, reviews */; spendUsd: number | null }[]
-    approvals: { asked: number; approved: number; denied: number; medianWaitSec: number | null; insight: string | null } }
+  {
+    range
+    summary: string
+    totals: {
+      tasksFinished: number
+      runs: number
+      firstPassRate: number | null
+      medianTaskSec: number | null
+      spendUsd: number | null
+    }
+    byDay: {
+      date: string
+      perAgent: Record<AgentId, number>
+    }
+    ;[]
+    timeSplit: {
+      agentId
+      workingPct: number
+      waitingOnYouPct: number
+      waitingOnAgentPct: number
+    }
+    ;[]
+    byAgent: {
+      agentId
+      finished: number
+      runs: number
+      medianSec: number | null
+      firstPassRate: number | null /* null = n/a, reviews */
+      spendUsd: number | null
+    }
+    ;[]
+    approvals: {
+      asked: number
+      approved: number
+      denied: number
+      medianWaitSec: number | null
+      insight: string | null
+    }
+  }
   ```
   Definitions (from Hermes Kanban history, read-only): a task is finished when `completed_at` falls in the range (day
   buckets in the server's time zone); task time = created → completed; reviewed = had `review_requested`, first pass =
@@ -391,15 +582,15 @@ incarnation-aware reuse confirmation contract is agreed.
 ## 10. Settings
 
 - `GET /api/settings/providers` → `{ items: { id: string; label: string; status: 'connected' | 'needs_signin' | 'missing'
-  detail: string /* "sk-or-••••", "Your ChatGPT plan" */; usedBy: AgentId[];
-  signIn?: 'device_code' | 'api_key' | 'terminal' /* how Connect works from the browser (D2.7); absent = terminal */ }[] }`
+detail: string /* "sk-or-••••", "Your ChatGPT plan" */; usedBy: AgentId[];
+signIn?: 'device_code' | 'api_key' | 'terminal' /* how Connect works from the browser (D2.7); absent = terminal */ }[] }`
 - **H** `POST /api/settings/providers/:id/connect` → `{ next: 'done' | 'device_code' | 'run_in_terminal'; command?: string; url?: string;
-  code?: string; signInId?: string; expiresAt?: string }`. For a `device_code` provider this starts the sign-in (D2.7) and
+code?: string; signInId?: string; expiresAt?: string }`. For a `device_code` provider this starts the sign-in (D2.7) and
   returns its link, code and id; `command` is always included as the terminal fallback. A second call while one is
   waiting returns the same sign-in. If Hermes prints no link and code within 30 s (e.g. the profile is set to a browser
   login), the answer is `run_in_terminal` with the command.
 - `GET /api/settings/sign-ins/:signInId` → `SignIn` `{ id; providerId; state: 'waiting' | 'connected' | 'failed' | 'expired' |
-  'cancelled'; url: string | null; code: string | null; expiresAt: string; message: string | null }` · **H**
+'cancelled'; url: string | null; code: string | null; expiresAt: string; message: string | null }` · **H**
   `DELETE /api/settings/sign-ins/:signInId` → `SignIn` (cancelled). In-memory; unknown ids → 404.
 - **H** `POST /api/settings/providers/:id/key` `{ apiKey: string; label?: string; acknowledgeInsecure?: boolean }` → the
   provider item, after `hermes auth list` shows the new credential (`409 not_verified` otherwise). Plain-HTTP remote
@@ -407,15 +598,15 @@ incarnation-aware reuse confirmation contract is agreed.
   a key already being added for that provider → `409 conflict`. The key never appears in any response, log or receipt
   (the receipt's body hash is an HMAC under a per-process secret, so a retry after a restart is `409`, not a replay).
 - `GET /api/models?q=` → `{ items: ModelOption[] }`, `ModelOption = { provider: string; providerLabel: string; model: string;
-  available: boolean; reason: string | null /* "Not on your plan" */; free: boolean; price: { input: string; output: string } | null }`.
+available: boolean; reason: string | null /* "Not on your plan" */; free: boolean; price: { input: string; output: string } | null }`.
   Models of connected providers only (Hermes model options); `q` matches model or provider label, case-insensitive;
   at most 200 items, available first.
 - `POST /api/settings/providers/local` `{ label; baseUrl; model }` → provider item
 - `GET /api/settings/connections` → `{ toolServers: { id; label; status: 'ok'|'needs_signin'|'error'; usedBy: AgentId[] | 'everyone' }[]
-  messaging: { platform; label; status: 'connected'|'disconnected'; detail: string | null }[] }`
+messaging: { platform; label; status: 'connected'|'disconnected'; detail: string | null }[] }`
 - `POST /api/settings/tool-servers` `{ name; command?: string[]; url?: string }` · `POST /api/settings/messaging/:platform/connect`
 - `GET /api/settings/rules` → `{ mode: 'manual' | 'smart' | 'off'; goAhead: Rule[]; askMe: Rule[]; never: Rule[];
-  drift: { agentId; differs: boolean }[] }` with `type Rule = { id; label; pattern: string | null; readOnly: boolean }`.
+drift: { agentId; differs: boolean }[] }` with `type Rule = { id; label; pattern: string | null; readOnly: boolean }`.
   Hermes mapping (docs/reviews/2026-10-08-2.18-design-lead.md): Go ahead = pattern keys in `command_allowlist`, Ask me
   = known dangerous categories not allowlisted, Never = globs in `approvals.deny`, `mode` = `approvals.mode`. Allowlist
   keys Score doesn't know are `readOnly`. A Never rule's id is `never:<glob>`.
@@ -426,7 +617,7 @@ incarnation-aware reuse confirmation contract is agreed.
 - **H** `POST /api/settings/rules/apply/:agentId` → the GET shape: re-applies the team baseline to a drifted profile.
   These three keys are not editable through the advanced config endpoints.
 - `GET /api/settings/plugins?agent=<id>` → `PluginsResponse` `{ items: { id; label; enabled: boolean; locked: boolean;
-  description: string | null }[] }` (one profile's `hermes plugins list`, bundled included) · **H**
+description: string | null }[] }` (one profile's `hermes plugins list`, bundled included) · **H**
   `PATCH /api/settings/plugins/:id?agent=<id>` `{ enabled }` → the verified item. `locked` = the Score bridge, which Score
   never disables (`409`); `409` too when Hermes didn't apply the change; `404` for an unknown agent or plugin. Enabling a
   non-bundled plugin that declares capabilities leaves them ungranted (Hermes fails closed without a terminal).
@@ -439,8 +630,8 @@ incarnation-aware reuse confirmation contract is agreed.
   `409 conflict` when the recomputed hash differs (config changed since the preview; preview again), `502` when Hermes
   refuses or doesn't keep a value.
 - **H** `POST /api/settings/hermes/check` → `HermesCheck` = `{ hash: string; build: { version: string | null; codeSha: string | null;
-  fingerprint: string }; parts: { name: string; status: 'same' | 'added' | 'changed' | 'removed'; detail: string }[];
-  compatible: boolean }`. Read-only: compares the running build (version, code sha, CLI string, capabilities, kanban and
+fingerprint: string }; parts: { name: string; status: 'same' | 'added' | 'changed' | 'removed'; detail: string }[];
+compatible: boolean }`. Read-only: compares the running build (version, code sha, CLI string, capabilities, kanban and
   state schema hashes, the bridge's hook names, the private approval functions, pattern keys) with the tested and accepted
   builds. `compatible` = capabilities, schemas, hooks and private functions unchanged (new pattern keys are allowed).
   `hash` = sha256 over `build` and `parts`.
@@ -455,20 +646,39 @@ Served under `/bridge/v1` on the same port. Bridge tokens can't call `/api/*`, a
 `/bridge/*`.
 
 **Handshake**
+
 - `POST /bridge/v1/hello`, auth `Bearer <~/.score/bridge.token>` (bootstrap secret, allowed for this call only):
   ```ts
-  req: { profile: string; pid: number; incarnation: string /* random per process */; kanbanTaskId: string | null
-         isolation: 'in_process' | 'host' | 'unknown' /* unknown → observe only; actions disabled */
-         pluginVersion: string; hermes: { version: string; codeSha: string }
-         privateApis: Record<string, boolean> /* which hermes_private functions resolved */ }
-  res: { producerToken: string; expiresAt: string; enabled: { gatewayApprovals: boolean; kanbanGrants: boolean; watch: boolean } }
+  req: {
+    profile: string
+    pid: number
+    incarnation: string /* random per process */
+    kanbanTaskId: string | null
+    isolation: 'in_process' | 'host' | 'unknown' /* unknown → observe only; actions disabled */
+    pluginVersion: string
+    hermes: {
+      version: string
+      codeSha: string
+    }
+    privateApis: Record<string, boolean> /* which hermes_private functions resolved */
+  }
+  res: {
+    producerToken: string
+    expiresAt: string
+    enabled: {
+      gatewayApprovals: boolean
+      kanbanGrants: boolean
+      watch: boolean
+    }
+  }
   ```
   Every other call uses `Authorization: Bearer <producerToken>`. The token is scoped to profile, incarnation and
   `kanbanTaskId`, and is renewed by calling `hello` again.
 
 **Events** (all redacted in-plugin with `force=True` before truncation)
+
 - `POST /bridge/v1/events` `{ events: { counter: number; hook: string; at: string; sessionKey: string | null;
-  sessionId: string | null; toolCallId: string | null; payload: object }[] }` → `{ ackedThrough: number }`.
+sessionId: string | null; toolCallId: string | null; payload: object }[] }` → `{ ackedThrough: number }`.
   `(incarnation, counter)` is the ingest key; redelivery after a spool drain is harmless.
   Limits: ≤ 200 events and ≤ 2 MiB of request body; each event's `payload` is ≤ 64 KiB serialized. Producers split
   a backlog into byte-bounded requests in counter order. `profile` is `^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$` and
@@ -476,6 +686,7 @@ Served under `/bridge/v1` on the same port. Bridge tokens can't call `/api/*`, a
   acknowledged and ignored.
 
 **Gateway approvals** (D4.2)
+
 - Every `pre_approval_request` / `post_approval_response` event payload carries a producer-minted **`gateId`** (uuid,
   unique per gate occurrence; the post hook carries its pre hook's id, matched in the same thread) and, on a human
   prompt that follows an unanswered or denied guardian (`smart`) gate in the same thread, **`linkedGateId`**. A fresh
@@ -485,7 +696,7 @@ Served under `/bridge/v1` on the same port. Bridge tokens can't call `/api/*`, a
   id as `transportRequestId`. Gateway human prompts may add `requestId` (see the exactness rule below) and a
   `commandDigest`.
 - `GET /bridge/v1/decisions?wait=25` (long-poll; `wait` = integer seconds 0–30, default 25) → `{ items: { deliveryId; leaseId; leaseUntil;
-  sessionKey; requestId; choice: ApprovalChoice; reason: string | null }[] }`. Only decisions for approvals **this producer
+sessionKey; requestId; choice: ApprovalChoice; reason: string | null }[] }`. Only decisions for approvals **this producer
   reported** are returned. Polls and acks count as producer liveness.
 - `POST /bridge/v1/decisions/:deliveryId/ack` `{ leaseId; outcome: 'applied' | 'not_pending' | 'failed'; resolved: number; error?: string }`
   → `204`. `applied` requires `resolved === 1` (exact target). `leaseId` fences stale acks; a late `applied` still

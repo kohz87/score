@@ -371,7 +371,7 @@ test('spawnHermes runs detached with stdin closed or fed, and the key never reac
     expect(await child.exited).toBe(0)
     expect(parseDeviceCode(seen)).toEqual({ url: 'https://example.com/device', code: 'ABCD-1234' })
     const recorded = fs.readFileSync(out, 'utf8')
-    expect(recorded).toContain('ARGV:auth add openrouter --type api-key --label x')
+    expect(recorded).toContain('ARGV:-p default auth add openrouter --type api-key --label x')
     expect(recorded).toContain(`STDIN:${KEY}`)
     expect(recorded.replace(`STDIN:${KEY}`, '')).not.toContain(KEY)
     const [, sid, pid] = /SID:(\d+) PID:(\d+)/.exec(recorded)!

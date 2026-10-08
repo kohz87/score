@@ -10,42 +10,62 @@ const DisabledSchema = z.array(z.string().min(1).max(200)).max(5000)
 const HelpersSchema = z.int().nonnegative().max(1000)
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
 
+type Captured = { state: 'ok'; text: string } | { state: 'unset' } | { state: 'unavailable' }
+async function captureResult(
+  runner: HermesRunner,
+  hermesHome: string,
+  args: string[],
+): Promise<Captured> {
+  try {
+    const result = await runner(args, { timeoutMs: 10000, hermesHome, captureRead: true })
+    if (result.exitCode === 0 && result.stdout) return { state: 'ok', text: result.stdout }
+    // `config get` exits 1 for a key that was never set (hermes_cli/config.py `_exit_invalid`); a timeout,
+    // a signal or a missing binary reports -1 and says nothing about the setting.
+    return result.exitCode === 1 ? { state: 'unset' } : { state: 'unavailable' }
+  } catch {
+    return { state: 'unavailable' }
+  }
+}
 async function capture(
   runner: HermesRunner,
   hermesHome: string,
   args: string[],
 ): Promise<string | null> {
-  try {
-    const result = await runner(args, { timeoutMs: 10000, hermesHome, captureRead: true })
-    return result.exitCode === 0 && result.stdout ? result.stdout : null
-  } catch {
-    return null
-  }
+  const result = await captureResult(runner, hermesHome, args)
+  return result.state === 'ok' ? result.text : null
 }
 async function configJson(
   runner: HermesRunner,
   hermesHome: string,
   profile: string,
   key: string,
-): Promise<unknown> {
-  const text = await capture(runner, hermesHome, ['-p', profile, 'config', 'get', '--json', key])
-  if (text === null) return undefined
+): Promise<{ state: 'ok'; value: unknown } | { state: 'unset' } | { state: 'unavailable' }> {
+  const result = await captureResult(runner, hermesHome, [
+    '-p',
+    profile,
+    'config',
+    'get',
+    '--json',
+    key,
+  ])
+  if (result.state !== 'ok') return result
   try {
-    return JSON.parse(text)
+    return { state: 'ok', value: JSON.parse(result.text) }
   } catch {
-    return undefined
+    return { state: 'unavailable' }
   }
 }
 
-/** Disabled skill names; null when unreadable. A key that was never set reads as an empty list. */
+/** Disabled skill names; null when unreadable (callers that write must stop). A never-set key is an empty list. */
 export async function readDisabledSkills(
   runner: HermesRunner,
   hermesHome: string,
   profile: string,
 ): Promise<string[] | null> {
-  const value = await configJson(runner, hermesHome, profile, 'skills.disabled')
-  if (value === undefined) return []
-  const parsed = DisabledSchema.safeParse(value)
+  const read = await configJson(runner, hermesHome, profile, 'skills.disabled')
+  if (read.state === 'unset') return []
+  if (read.state === 'unavailable') return null
+  const parsed = DisabledSchema.safeParse(read.value)
   return parsed.success ? parsed.data : null
 }
 export async function readHelpersMax(
@@ -53,9 +73,9 @@ export async function readHelpersMax(
   hermesHome: string,
   profile: string,
 ): Promise<number | null> {
-  const parsed = HelpersSchema.safeParse(
-    await configJson(runner, hermesHome, profile, 'delegation.max_concurrent_children'),
-  )
+  const read = await configJson(runner, hermesHome, profile, 'delegation.max_concurrent_children')
+  if (read.state !== 'ok') return null
+  const parsed = HelpersSchema.safeParse(read.value)
   return parsed.success ? parsed.data : null
 }
 
@@ -98,13 +118,27 @@ export function parseToolList(text: string): AgentTool[] {
       !!seen.add(tool.id),
   )
 }
+/**
+ * Score-started runs go through the gateway's API server, so its toolset list is what a toggle must change.
+ * `hermes tools` defaults to the `cli` platform (hermes_cli/subcommands/tools.py), which Kanban workers use.
+ */
+export const RUN_TOOL_PLATFORM = 'api_server'
+export const WORKER_TOOL_PLATFORM = 'cli'
+/** null when Hermes can't answer, so callers can tell "no tools" from "unknown". */
 export async function readTools(
   runner: HermesRunner,
   hermesHome: string,
   profile: string,
-): Promise<AgentTool[]> {
-  const text = await capture(runner, hermesHome, ['-p', profile, 'tools', 'list'])
-  return text === null ? [] : parseToolList(text)
+): Promise<AgentTool[] | null> {
+  const text = await capture(runner, hermesHome, [
+    '-p',
+    profile,
+    'tools',
+    'list',
+    '--platform',
+    RUN_TOOL_PLATFORM,
+  ])
+  return text === null ? null : parseToolList(text)
 }
 
 export const HubRowsSchema = z.array(

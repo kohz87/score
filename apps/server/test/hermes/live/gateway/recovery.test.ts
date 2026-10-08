@@ -110,11 +110,10 @@ test('process restart resumes the persisted sequence', async () => {
   expect(env.db.sqlite.prepare('SELECT count(*) AS n FROM tool_calls').get()?.n).toBe(3)
 })
 
-test.each(['404', 'truncation', 'give-up', 'EOF'] as const)(
+test.each(['404', 'give-up', 'EOF'] as const)(
   '%s records a gap and reconciles terminal status by polling',
   async (mode) => {
     env.fake.sse404 = mode === '404'
-    env.fake.truncate = mode === 'truncation'
     env.fake.empty = mode === 'give-up'
     env.fake.eof = mode === 'EOF'
     const runContext = await context()
@@ -135,6 +134,39 @@ test.each(['404', 'truncation', 'give-up', 'EOF'] as const)(
     ).toBe(`run_status:${runContext.runId}@completed`)
   },
 )
+
+test('a truncated replay records a gap and still delivers the retained events, including an approval', async () => {
+  env.fake.truncate = true
+  const runContext = await context()
+  await follow(runContext)
+  expect(readRun(env.db.sqlite, runContext.runId).status).toBe('completed')
+  expect(env.db.sqlite.prepare('SELECT reason FROM gaps').all()).toEqual([
+    { reason: 'SSE replay truncated (oldest retained 10)' },
+  ])
+  // Events from the retained part reached the projection: the stream was not abandoned for polling.
+  expect(env.fake.polls).toBeLessThanOrEqual(1)
+  expect(env.db.sqlite.prepare('SELECT count(*) AS n FROM tool_calls').get()?.n).toBeGreaterThan(0)
+  const approval = env.fake.events.find((event) => event.event === 'approval.request')
+  expect(approval && approval.seq >= 10).toBe(true)
+  expect(env.db.sqlite.prepare('SELECT count(*) AS n FROM approvals').get()?.n).toBe(1)
+})
+
+test('status polling surfaces a pending approval the stream never delivered', async () => {
+  env.fake.empty = true
+  env.fake.terminalAfterPoll = 3
+  env.fake.statusApproval = {
+    ...env.fake.events.find((event) => event.event === 'approval.request')!,
+    timestamp: Date.now() / 1000,
+  }
+  delete env.fake.statusApproval.seq
+  const runContext = await context()
+  await follow(runContext)
+  expect(
+    env.db.sqlite
+      .prepare("SELECT count(*) AS n FROM approvals WHERE origin = 'score-run' AND run_id = ?")
+      .get(runContext.runId)?.n,
+  ).toBe(1)
+})
 
 test('polling is bounded when the run remains unavailable', async () => {
   env.fake.sse404 = true

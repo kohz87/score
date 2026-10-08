@@ -25,6 +25,8 @@ function hermes(args: string[]): { exitCode: number; stdout?: string } {
     return { exitCode: exit[rest[0] + ' ' + rest[1]]! }
   if (verb === 'config get --json skills.disabled')
     return disabled ? { exitCode: 0, stdout: JSON.stringify(disabled) } : { exitCode: 1 }
+  if (verb === 'config get --json command_allowlist') return { exitCode: 0, stdout: '[]' }
+  if (verb === 'config get --json approvals') return { exitCode: 0, stdout: '{}' }
   if (verb === 'config get --json delegation.max_concurrent_children')
     return { exitCode: 0, stdout: '4' }
   if (verb === 'config get --json model')
@@ -33,7 +35,7 @@ function hermes(args: string[]): { exitCode: number; stdout?: string } {
     disabled = JSON.parse(rest[3]!)
     return { exitCode: 0 }
   }
-  if (rest[0] === 'tools' && rest[1] === 'list')
+  if (rest[0] === 'tools' && rest[1] === 'list' && rest.at(-1) === 'api_server')
     return {
       exitCode: 0,
       stdout: toolsText
@@ -47,7 +49,8 @@ function hermes(args: string[]): { exitCode: number; stdout?: string } {
         .join('\n'),
     }
   if (rest[0] === 'tools' && (rest[1] === 'enable' || rest[1] === 'disable')) {
-    tools.set(rest[3]!, rest[1] === 'enable')
+    // Only the api_server platform decides what a Score-started run can use; the cli platform is a separate list.
+    if (rest[3] === 'api_server') tools.set(rest[5]!, rest[1] === 'enable')
     return { exitCode: 0 }
   }
   if (rest[0] === 'skills' && rest[1] === 'search')
@@ -122,7 +125,9 @@ test('details carry skills, tools, helpers and the latest memory from the same r
   expect(JSON.stringify(detail)).not.toContain('private-value')
   await reader.read('builder', 0, true, { status: 'idle', activity: null })
   expect(
-    runner.mock.calls.filter(([args]) => args.join(' ') === '-p builder tools list'),
+    runner.mock.calls.filter(
+      ([args]) => args.join(' ') === '-p builder tools list --platform api_server',
+    ),
   ).toHaveLength(1)
 })
 
@@ -212,12 +217,19 @@ test('hub search validates, redacts and bounds the result', async () => {
 test('tool toggles use tools enable/disable on the toolset id and verify the result', async () => {
   const on = await tabs.setToolEnabled('builder', 'video', true)
   expect(on).toMatchObject({ id: 'video', enabled: true })
-  expect(writes()).toEqual([['-p', 'builder', 'tools', 'enable', '--', 'video']])
+  // Score's runs use the api_server platform; Kanban workers use cli. Both are switched, the run platform is verified.
+  expect(writes()).toEqual([
+    ['-p', 'builder', 'tools', 'enable', '--platform', 'cli', '--', 'video'],
+    ['-p', 'builder', 'tools', 'enable', '--platform', 'api_server', '--', 'video'],
+  ])
   runner.mockClear()
   await tabs.setToolEnabled('builder', 'video', true)
   expect(writes()).toEqual([])
   await tabs.setToolEnabled('builder', 'web', false)
-  expect(writes()).toEqual([['-p', 'builder', 'tools', 'disable', '--', 'web']])
+  expect(writes().map((args) => args.slice(2, 6))).toEqual([
+    ['tools', 'disable', '--platform', 'cli'],
+    ['tools', 'disable', '--platform', 'api_server'],
+  ])
   await expect(tabs.setToolEnabled('builder', 'nope', true)).rejects.toMatchObject({ status: 404 })
   await expect(tabs.setToolEnabled('builder', 'tracker', false)).rejects.toMatchObject({
     status: 501,
@@ -269,4 +281,85 @@ test('reads and writes touch only allowlisted files, never credentials (fs spy)'
   expect(readFile).not.toHaveBeenCalled()
   // The adapter never writes Hermes files itself: only the CLI stub changed state.
   expect(fs.readFileSync(join(profile, 'config.yaml'), 'utf8')).toContain('fixture-model')
+})
+
+test('concurrent model changes cannot interleave their two config writes', async () => {
+  const order: string[] = []
+  runner.mockImplementation(async (args) => {
+    if (args.includes('set')) {
+      order.push(args.slice(-2).join('='))
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+    return hermes(args)
+  })
+  await Promise.all([
+    tabs.setModel('builder', { model: 'model-a', provider: 'prov-a' }),
+    tabs.setModel('builder', { model: 'model-b', provider: 'prov-b' }),
+  ])
+  expect(order).toEqual([
+    'model.default=model-a',
+    'model.provider=prov-a',
+    'model.default=model-b',
+    'model.provider=prov-b',
+  ])
+})
+
+test('a skill toggle never rewrites skills.disabled when the current list could not be read', async () => {
+  disabled = ['private-skill']
+  exit['config get'] = -1
+  await expect(tabs.setSkillEnabled('builder', 'implementation', false)).rejects.toMatchObject({
+    status: 502,
+  })
+  expect(writes()).toEqual([])
+  expect(disabled).toEqual(['private-skill'])
+  // A key Hermes says is not set (exit 1) is an empty list, not a failure.
+  exit['config get'] = 1
+  await tabs.setSkillEnabled('builder', 'implementation', false)
+  expect(disabled).toEqual(['implementation'])
+})
+
+test('a failed settings read is retried after a short delay even though config.yaml is unchanged', async () => {
+  const now = vi.spyOn(Date, 'now')
+  const at = Date.now()
+  now.mockReturnValue(at)
+  exit['tools list'] = -1
+  const first = await reader.read('builder', 0, true, { status: 'idle', activity: null })
+  expect(first.tools).toEqual([])
+  delete exit['tools list']
+  now.mockReturnValue(at + 1000)
+  expect((await reader.read('builder', 0, true, { status: 'idle', activity: null })).tools).toEqual(
+    [],
+  )
+  now.mockReturnValue(at + 60_000)
+  const later = await reader.read('builder', 0, true, { status: 'idle', activity: null })
+  expect(later.tools).toHaveLength(6)
+  // Once everything answered, the result is cached against the file as before.
+  runner.mockClear()
+  now.mockReturnValue(at + 600_000)
+  await reader.read('builder', 0, true, { status: 'idle', activity: null })
+  expect(runner.mock.calls.filter(([args]) => args.includes('tools'))).toHaveLength(0)
+})
+
+test('memory pages say they are read-only against live Hermes', () => {
+  expect(tabs.listMemory('builder', {}).writable).toBe(false)
+})
+
+test('channels for a profile come from the multiplexer host file, scoped to that profile', () => {
+  fs.writeFileSync(
+    join(home, 'gateway_state.json'),
+    JSON.stringify({
+      platforms: {
+        telegram: { state: 'connected' },
+        'builder:discord': { state: 'connected' },
+        'other:slack': { state: 'connected' },
+      },
+    }),
+  )
+  const connected = (agent: string) =>
+    tabs
+      .listChannels(agent)
+      .items.filter((row) => row.status === 'connected')
+      .map((row) => row.platform)
+  expect(connected('builder')).toEqual(['discord'])
+  expect(connected('default')).toEqual(['telegram'])
 })

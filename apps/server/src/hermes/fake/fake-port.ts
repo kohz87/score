@@ -1335,6 +1335,13 @@ export class FakePort implements HermesPort {
     return this.enqueue(async () => {
       this.requireSink()
       const req = CreateTaskSchema.parse(input)
+      // Same as the live adapter: Hermes takes a reviewer only when review is requested.
+      if (req.reviewer !== undefined)
+        throw new HttpError(
+          501,
+          'not_implemented',
+          'Creating tasks with a reviewer is not supported by Hermes',
+        )
       const id = `fake-task:${key}`
       if (this.tasks.has(id)) return this.getTask(id)
       const body =
@@ -1375,6 +1382,8 @@ export class FakePort implements HermesPort {
     return this.enqueue(async () => {
       this.requireSink()
       const req = PatchTaskSchema.parse(input)
+      if (req.reviewer !== undefined)
+        throw new HttpError(501, 'not_implemented', 'Editing reviewer is not supported by Hermes')
       const old = this.tasks.get(id)
       if (!old) throw new HttpError(404, 'not_found', 'Unknown task')
       const body =

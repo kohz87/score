@@ -9,6 +9,7 @@ import {
   runDraft,
   runLifecycle,
   runStatusObservation,
+  statusApprovalObservation,
   translateRunEvent,
   type RunContext,
   type RunMetrics,
@@ -39,8 +40,6 @@ export function waitForRun(ms: number, signal?: AbortSignal): Promise<void> {
     if (signal?.aborted) finish()
   })
 }
-class ReplayTruncated extends Error {}
-
 async function pollQueuedRun(options: FollowOptions, signal: AbortSignal): Promise<void> {
   const { db, gateway, sink, context } = options
   while (!signal.aborted && readRun(db.sqlite, context.runId).status === 'queued') {
@@ -97,6 +96,26 @@ export async function followRun(options: FollowOptions): Promise<void> {
     if (error instanceof CredentialsUnavailable) throw error
     if (!(error instanceof HermesHttpError)) throw error
   }
+  const source = `run-sse:${context.profile}`
+  const recordGap = async (why: string, tag: string) => {
+    const from = readRun(db.sqlite, context.runId).updated_at
+    const to = new Date(now()).toISOString()
+    await sink.submit({
+      source,
+      identity: `gap:${context.runId}:${initial.last_seq ?? 'none'}:${tag}:${to}`,
+      apply({ sqlite }) {
+        sqlite
+          .prepare(
+            'INSERT INTO gaps (source, run_id, from_ts, to_ts, reason) VALUES (?, ?, ?, ?, ?)',
+          )
+          .run(source, context.runId, from, to, why)
+        return [
+          { type: 'gap.recorded', data: { source, runId: context.runId, from, to, reason: why } },
+          runDraft(sqlite, context.runId),
+        ]
+      },
+    })
+  }
   const queuedController = new AbortController()
   const queuedSignal = signal
     ? AbortSignal.any([signal, queuedController.signal])
@@ -120,8 +139,13 @@ export async function followRun(options: FollowOptions): Promise<void> {
         if (event.id !== String(seq)) throw new Error('SSE ID does not match event sequence')
         await sink.submit(translateRunEvent(context, value, options.metrics))
       },
-      onTruncated: () => {
-        throw new ReplayTruncated()
+      // Hermes sends the retained events right after the notice (api_server_runs `_write_event` loop), so
+      // keep reading: record the gap and let the stream deliver what is left, including a pending approval.
+      onTruncated: async (truncated) => {
+        await recordGap(
+          `SSE replay truncated (oldest retained ${truncated.oldestRetainedSeq})`,
+          `truncated:${truncated.oldestRetainedSeq}`,
+        )
       },
       ...(initial.last_seq === null ? {} : { lastEventId: String(initial.last_seq) }),
       ...(signal ? { signal } : {}),
@@ -136,30 +160,14 @@ export async function followRun(options: FollowOptions): Promise<void> {
     if (result.ended === 'server_closed') reason = 'SSE closed without terminal status'
   } catch (error) {
     if (signal?.aborted) return
-    if (error instanceof ReplayTruncated) reason = 'SSE replay truncated'
-    else if (error instanceof SseHttpError) reason = `SSE unavailable (HTTP ${error.status})`
+    if (error instanceof SseHttpError) reason = `SSE unavailable (HTTP ${error.status})`
     else throw error
   } finally {
     queuedController.abort()
     await queuedPolling
   }
   if (signal?.aborted) return
-  const source = `run-sse:${context.profile}`
-  const from = readRun(db.sqlite, context.runId).updated_at
-  const to = new Date(now()).toISOString()
-  await sink.submit({
-    source,
-    identity: `gap:${context.runId}:${initial.last_seq ?? 'none'}:${to}`,
-    apply({ sqlite }) {
-      sqlite
-        .prepare('INSERT INTO gaps (source, run_id, from_ts, to_ts, reason) VALUES (?, ?, ?, ?, ?)')
-        .run(source, context.runId, from, to, reason)
-      return [
-        { type: 'gap.recorded', data: { source, runId: context.runId, from, to, reason } },
-        runDraft(sqlite, context.runId),
-      ]
-    },
-  })
+  await recordGap(reason, 'end')
   const deadline = now() + (options.pollLimitMs ?? 30 * 60 * 1000)
   while (!signal?.aborted && now() < deadline) {
     try {
@@ -171,6 +179,9 @@ export async function followRun(options: FollowOptions): Promise<void> {
           ? AbortSignal.any([signal, AbortSignal.timeout(Math.max(1, deadline - now()))])
           : AbortSignal.timeout(Math.max(1, deadline - now())),
       )
+      // A pending approval is not on the status-polling path otherwise: surface it so someone is asked.
+      const pending = statusApprovalObservation(context, run)
+      if (pending) await sink.submit(pending)
       // Only the terminal reconciliation is immutable by status; interim waiting cycles can repeat.
       if (runLifecycle.isTerminal(run.status)) {
         await sink.submit(runStatusObservation(context, run))

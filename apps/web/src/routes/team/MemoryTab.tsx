@@ -14,6 +14,7 @@ export function MemoryTab({ agentId, agentName }: { agentId: string; agentName: 
   // One key per distinct text, so a retry after a lost response cannot add a second entry.
   const attempt = useRef<{ text: string; key: string } | null>(null)
   const items = memory.data?.pages.flatMap((page) => page.items) ?? []
+  const writable = memory.data?.pages[0]?.writable !== false
 
   function search(event: FormEvent) {
     event.preventDefault()
@@ -52,25 +53,32 @@ export function MemoryTab({ agentId, agentName }: { agentId: string; agentName: 
         />
         <button type="submit">Search</button>
       </form>
-      <form className="team-routine-form" aria-label="Add memory" onSubmit={submit}>
-        <label>
-          New memory
-          <textarea
-            required
-            rows={3}
-            maxLength={2000}
-            placeholder={`Something ${agentName} should remember`}
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-          />
-        </label>
-        {add.isError && <p role="alert">{tabFailure(add.error, 'add the memory')}</p>}
-        <div className="team-style-actions">
-          <button type="submit" className="team-primary" disabled={add.isPending || !text.trim()}>
-            {add.isPending ? 'Adding…' : 'Add memory'}
-          </button>
-        </div>
-      </form>
+      {!writable && (
+        <p className="team-muted" role="status">
+          Memory is read-only here: Hermes has no way to add or remove a single entry from Score.
+        </p>
+      )}
+      {writable && (
+        <form className="team-routine-form" aria-label="Add memory" onSubmit={submit}>
+          <label>
+            New memory
+            <textarea
+              required
+              rows={3}
+              maxLength={2000}
+              placeholder={`Something ${agentName} should remember`}
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+            />
+          </label>
+          {add.isError && <p role="alert">{tabFailure(add.error, 'add the memory')}</p>}
+          <div className="team-style-actions">
+            <button type="submit" className="team-primary" disabled={add.isPending || !text.trim()}>
+              {add.isPending ? 'Adding…' : 'Add memory'}
+            </button>
+          </div>
+        </form>
+      )}
       <p className="team-muted" role="status">
         {notice}
       </p>
@@ -93,36 +101,38 @@ export function MemoryTab({ agentId, agentName }: { agentId: string; agentName: 
                 {entry.source} · {new Date(entry.at).toLocaleDateString()}
               </p>
             </div>
-            <div className="team-routine-actions">
-              {confirming === entry.id ? (
-                <button
-                  type="button"
-                  className="team-danger"
-                  autoFocus
-                  disabled={remove.isPending}
-                  aria-label={`Confirm deleting memory: ${entry.text.slice(0, 40)}`}
-                  onBlur={() => setConfirming(null)}
-                  onClick={() =>
-                    remove.mutate(entry.id, {
-                      onSuccess: () => {
-                        setConfirming(null)
-                        setNotice('Memory deleted.')
-                      },
-                    })
-                  }
-                >
-                  Confirm delete
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  aria-label={`Delete memory: ${entry.text.slice(0, 40)}`}
-                  onClick={() => setConfirming(entry.id)}
-                >
-                  Delete
-                </button>
-              )}
-            </div>
+            {writable && (
+              <div className="team-routine-actions">
+                {confirming === entry.id ? (
+                  <button
+                    type="button"
+                    className="team-danger"
+                    autoFocus
+                    disabled={remove.isPending}
+                    aria-label={`Confirm deleting memory: ${entry.text.slice(0, 40)}`}
+                    onBlur={() => setConfirming(null)}
+                    onClick={() =>
+                      remove.mutate(entry.id, {
+                        onSuccess: () => {
+                          setConfirming(null)
+                          setNotice('Memory deleted.')
+                        },
+                      })
+                    }
+                  >
+                    Confirm delete
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    aria-label={`Delete memory: ${entry.text.slice(0, 40)}`}
+                    onClick={() => setConfirming(entry.id)}
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            )}
           </li>
         ))}
       </ul>
