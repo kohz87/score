@@ -1,4 +1,9 @@
 import { AgentDetailSchema, type AgentDetail } from '@score/contract'
+import {
+  attachRunMessage,
+  appendRunMessage,
+  completeRunMessage,
+} from '../../domain/message-runs.ts'
 import { updateProjectedAgent } from '../../domain/agents.ts'
 import {
   recordKanbanDenial,
@@ -18,8 +23,9 @@ import {
   taskSummary,
 } from '../../domain/tasks.ts'
 import { createHash, randomUUID } from 'node:crypto'
+import { z } from 'zod'
 import { HttpError } from '../../errors.ts'
-import type { Observation } from '../../hub/ingest.ts'
+import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
 import {
   DecisionDeliveryRequestSchema,
   TaskActionRequestSchema,
@@ -77,6 +83,23 @@ export function stepToObservation(
       }
       if (step.kind === 'agent.updated')
         return [{ type: 'agent.updated', data: updateProjectedAgent(sqlite, step.data) }]
+      if (step.kind === 'room.upserted') {
+        // Announce a room only once it exists, so the API and the stream never disagree.
+        const room = step.data
+        if (!sqlite.prepare('SELECT id FROM rooms WHERE id = ?').get(room.id))
+          insertRoom(
+            sqlite,
+            {
+              id: room.id,
+              name: room.name,
+              kind: room.kind,
+              leadAgentId: room.leadAgentId,
+              members: room.members,
+            },
+            now,
+          )
+        return roomChanged(sqlite, room.id, now)
+      }
       if (step.kind === 'message.created') {
         const message = step.data
         const exists = sqlite.prepare('SELECT id FROM rooms WHERE id = ?').get(message.roomId)
@@ -109,10 +132,25 @@ export function stepToObservation(
         const run = step.data
         sqlite
           .prepare(
-            `INSERT INTO runs (id, profile, origin, status, started_at, ended_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT (id) DO UPDATE SET status = excluded.status, ended_at = excluded.ended_at, updated_at = excluded.updated_at`,
+            `INSERT INTO runs (id, profile, origin, status, started_at, ended_at, model, tools_used, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT (id) DO UPDATE SET status = excluded.status, ended_at = excluded.ended_at, model = excluded.model, tools_used = excluded.tools_used, updated_at = excluded.updated_at`,
           )
-          .run(run.id, run.agentId, run.origin, run.status, run.startedAt, run.endedAt, now)
+          .run(
+            run.id,
+            run.agentId,
+            run.origin,
+            run.status,
+            run.startedAt,
+            run.endedAt,
+            run.model,
+            JSON.stringify(run.toolsUsed),
+            now,
+          )
+        if (['completed', 'failed', 'cancelled', 'interrupted'].includes(run.status))
+          return [
+            structuredClone(draft) as DomainEventDraft,
+            ...completeRunMessage(sqlite, run.id, now, { handoffs: run.status === 'completed' }),
+          ]
       }
       if (step.kind === 'approval.requested') {
         const approval = step.data
@@ -218,6 +256,13 @@ export class FakePort implements HermesPort {
     private readonly speed = 1,
     deps: HermesPortDeps = {},
     private readonly looping = true,
+    private readonly reply: (req: Parameters<HermesPort['startRun']>[0]) => {
+      text: string
+      tools: string[]
+    } = () => ({
+      text: 'I have reviewed the room context. The work is ready for the next step.',
+      tools: ['terminal', 'terminal', 'terminal', 'edit_file', 'edit_file'],
+    }),
   ) {
     if (!Number.isFinite(speed) || speed <= 0)
       throw new Error('Fake speed must be positive and finite')
@@ -478,7 +523,16 @@ export class FakePort implements HermesPort {
     })
   }
 
-  startRun(req: { agentId: string; input: string; turnId: string }): Promise<{ runId: string }> {
+  startRun(input: Parameters<HermesPort['startRun']>[0]): Promise<{ runId: string }> {
+    const req = z
+      .object({
+        agentId: z.string().min(1),
+        input: z.string().min(1),
+        turnId: z.string().min(1),
+        sessionId: z.string().min(1).optional(),
+        model: z.string().min(1).optional(),
+      })
+      .parse(input)
     return this.enqueue(async () => {
       this.requireSink()
       const existing = this.turns.get(req.turnId)
@@ -486,14 +540,68 @@ export class FakePort implements HermesPort {
       if (!this.agents.has(req.agentId)) throw new HttpError(404, 'not_found', 'Unknown agent')
       const runId = `fake-run:${req.turnId}`
       const startedAt = this.scheduler.now()
-      const run = exampleRun(req.agentId, runId, this.now())
-      await this.emit({ at: 0, kind: 'run.updated', data: run })
+      const run = { ...exampleRun(req.agentId, runId, this.now()), model: req.model ?? null }
+      const response = this.reply(req)
+      await this.requireSink().submit({
+        source: 'fake',
+        identity: `${this.sessionId}:admitted:${req.turnId}`,
+        apply({ sqlite, now }) {
+          sqlite
+            .prepare(
+              `INSERT INTO runs (id, profile, origin, score_turn_id, session_id, status, model, started_at, updated_at)
+            VALUES (?, ?, 'score', ?, ?, 'queued', ?, ?, ?) ON CONFLICT DO NOTHING`,
+            )
+            .run(runId, req.agentId, req.turnId, req.sessionId ?? null, req.model ?? null, now, now)
+          return [
+            { type: 'run.updated', data: run },
+            ...attachRunMessage(sqlite, req.turnId, runId, now),
+          ]
+        },
+      })
+      this.runs.set(runId, run)
       this.turns.set(req.turnId, runId)
       this.schedule(Math.max(0, startedAt + 250 / this.speed - this.scheduler.now()), async () => {
         await this.transitionRun(runId, 'running')
         if (this.runs.get(runId)?.status !== 'running') return
-        const remaining = Math.max(0, startedAt + 1000 / this.speed - this.scheduler.now())
-        this.schedule(remaining, () => this.transitionRun(runId, 'completed'))
+        const chunks = response.text.match(/.{1,24}/gs) ?? []
+        const stream = (index: number): void => {
+          const chunk = chunks[index]
+          const at =
+            chunk === undefined ? Math.max(1000, 400 + chunks.length * 150) : 400 + index * 150
+          this.schedule(
+            Math.max(0, startedAt + at / this.speed - this.scheduler.now()),
+            async () => {
+              if (this.runs.get(runId)?.status !== 'running') return
+              if (chunk !== undefined) {
+                await this.requireSink().submit({
+                  source: 'fake',
+                  identity: `${this.sessionId}:delta:${runId}:${index}`,
+                  apply: ({ sqlite, now }) => appendRunMessage(sqlite, runId, chunk, now),
+                })
+                stream(index + 1)
+              } else {
+                await this.requireSink().submit({
+                  source: 'fake',
+                  identity: `${this.sessionId}:tools:${runId}`,
+                  apply({ sqlite, now }) {
+                    for (const [seq, tool] of response.tools.entries())
+                      sqlite
+                        .prepare(
+                          `INSERT INTO tool_calls
+                    (run_id, seq, tool, status, started_at, ended_at) VALUES (?, ?, ?, 'ok', ?, ?) ON CONFLICT DO NOTHING`,
+                        )
+                        .run(runId, seq, tool, now, now)
+                    return []
+                  },
+                })
+                const current = this.runs.get(runId)!
+                this.runs.set(runId, { ...current, toolsUsed: [...new Set(response.tools)] })
+                await this.transitionRun(runId, 'completed')
+              }
+            },
+          )
+        }
+        stream(0)
       })
       return { runId }
     })
