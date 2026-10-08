@@ -1,3 +1,5 @@
+import { AgentDetailSchema, type AgentDetail } from '@score/contract'
+import { updateProjectedAgent } from '../../domain/agents.ts'
 import {
   recordKanbanDenial,
   closeKanbanDenialIds,
@@ -43,6 +45,8 @@ export function stepToObservation(
     identity,
     apply({ sqlite, now }) {
       if (suppressed) return []
+      if (step.kind === 'agent.updated')
+        return [{ type: 'agent.updated', data: updateProjectedAgent(sqlite, step.data) }]
       if (step.kind === 'message.created') {
         const message = step.data
         const exists = sqlite.prepare('SELECT id FROM rooms WHERE id = ?').get(message.roomId)
@@ -255,6 +259,27 @@ export class FakePort implements HermesPort {
 
   async listAgents(): Promise<AgentSummary[]> {
     return structuredClone([...this.agents.values()])
+  }
+
+  async listAgentDetails(): Promise<AgentDetail[]> {
+    return (await this.listAgents()).map((agent) =>
+      AgentDetailSchema.parse({
+        ...agent,
+        tagline: agent.role,
+        personality: { excerpt: `I am ${agent.id}. ${agent.role}.`, source: 'SOUL.md' },
+        reportsTo: agent.id === 'lead' ? null : 'lead',
+        worksIn: null,
+        rulesFile: 'AGENTS.md',
+        model: { ...agent.model, via: 'Demo', fallback: null },
+        skills: [{ name: 'collaboration', enabled: true }],
+        memory: [],
+        tools: [],
+        helpersMax: null,
+        routines: [],
+        channels: [],
+        permissions: [],
+      }),
+    )
   }
 
   private enqueue<T>(work: () => Promise<T>): Promise<T> {

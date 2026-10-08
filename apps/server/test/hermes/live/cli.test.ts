@@ -77,3 +77,39 @@ test('stdout, stderr and failure messages never reach logs or results', async ()
     for (const log of logs) log.mockRestore()
   }
 })
+
+test('only the exact model read may capture bounded stdout; stderr and failures stay private', async () => {
+  const execute = vi.fn<NonNullable<CliOptions['execute']>>((_file, _args, _options, callback) =>
+    callback(null, '"fixture-model"', 'private stderr'),
+  )
+  const args = ['-p', 'builder', 'config', 'get', '--json', 'model']
+  await expect(runHermes(args, { timeoutMs: 100, captureModel: true, execute })).resolves.toEqual({
+    exitCode: 0,
+    stdout: '"fixture-model"',
+  })
+  execute.mockImplementation((_file, _args, _options, callback) =>
+    callback(null, 'x'.repeat(16385)),
+  )
+  await expect(runHermes(args, { timeoutMs: 100, captureModel: true, execute })).resolves.toEqual({
+    exitCode: 0,
+  })
+  execute.mockImplementation((_file, _args, _options, callback) =>
+    callback(Object.assign(new Error('private'), { code: 2 }), 'private stdout'),
+  )
+  await expect(runHermes(args, { timeoutMs: 100, captureModel: true, execute })).resolves.toEqual({
+    exitCode: 2,
+  })
+})
+test.each([
+  ['config', 'get', '--json', 'model'],
+  ['-p', '../outside', 'config', 'get', '--json', 'model'],
+  ['-p', 'builder', 'config', 'get', '--json', 'api_key'],
+  ['-p', 'builder', 'config', 'get', '--json', 'model', '--raw'],
+  ['profile', 'describe', 'builder', '--text', 'new description'],
+])('capture rejects nonallowlisted command %j', async (...args) => {
+  const execute = vi.fn<NonNullable<CliOptions['execute']>>()
+  await expect(runHermes(args, { timeoutMs: 100, captureModel: true, execute })).rejects.toThrow(
+    'restricted',
+  )
+  expect(execute).not.toHaveBeenCalled()
+})

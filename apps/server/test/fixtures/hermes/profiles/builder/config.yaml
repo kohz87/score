@@ -1,0 +1,3 @@
+model:
+  default: fixture-model
+  provider: fixture-provider

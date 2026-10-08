@@ -5,6 +5,7 @@ import {
   type SystemStatus,
 } from '@score/contract'
 import { z } from 'zod'
+import type { AgentDetail } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
 import type { IngestResult, Observation } from '../hub/ingest.ts'
 
@@ -45,6 +46,7 @@ export interface HermesPort {
     compatibility: CompatibilityEvaluation
   }
   listAgents(): Promise<AgentSummary[]>
+  listAgentDetails(): Promise<AgentDetail[]>
   startRun(req: {
     agentId: string
     input: string
