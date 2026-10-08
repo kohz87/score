@@ -121,7 +121,12 @@ export function reduceMessages(
     ...data,
     items: data.items.map((message) => {
       if (message.id !== update.data.messageId) return message
-      if (update.type === 'message.completed') return { ...message, streaming: false }
+      if (update.type === 'message.completed')
+        return {
+          ...message,
+          streaming: false,
+          ...(update.data.parts ? { parts: update.data.parts } : {}),
+        }
       const parts = [...message.parts]
       const index = parts.findLastIndex((part) => part.kind === 'text')
       const part = parts[index]

@@ -83,6 +83,7 @@ export function registerWatchRoutes(
         live: isLive(sqlite, agentId),
         sessionId: latestSession(sqlite, agentId),
         ...readWatch(sqlite, agentId, query),
+        gaps: agentGaps(sqlite, agentId),
       }
     })
     return WatchResponseSchema.parse({ asOfSeq: result.asOfSeq, ...result.data })
@@ -93,4 +94,20 @@ export function registerWatchRoutes(
     const result = snapshot(db, (sqlite) => overview(sqlite, ids))
     return WatchOverviewSchema.parse({ items: result.data })
   })
+}
+
+function agentGaps(sqlite: DatabaseSync, agentId: string) {
+  return z
+    .array(
+      z.object({ from: z.iso.datetime(), to: z.iso.datetime().nullable(), reason: z.string() }),
+    )
+    .parse(
+      sqlite
+        .prepare(
+          `SELECT g.from_ts AS "from", g.to_ts AS "to", g.reason FROM gaps g JOIN runs r ON r.id = g.run_id
+           WHERE r.profile = ? ORDER BY g.id DESC LIMIT 50`,
+        )
+        .all(agentId),
+    )
+    .reverse()
 }

@@ -88,9 +88,8 @@ Conversations with your team. The list on the left has **Rooms** (several agents
   recipients with **Add someone** and the small x on each chip. **Plan first** asks the team to lay out a plan (shown as a plan card)
   before doing the work. Attach files with the paperclip.
 - **Slash commands.** Typing `/` opens a menu: `/assign @agent <title> [-- body]` creates a task,
-  `/routine @agent <schedule> <prompt>` a scheduled routine, `/remember [@agent] <fact>` saves a fact to memory,
-  `/skill @agent <name>` (or `/skill install <name>`) uses or installs a skill, and `/model <model> <message>`
-  uses a different model for one message.
+  `/routine @agent <schedule> <prompt>` a scheduled routine, and `/model <model> <message>` uses a different
+  model for one message. Memory and skills are managed on the agent's Team page.
 - **Approvals in the thread.** When an agent needs permission, an approval card appears in the conversation with
   **Approve** and **Deny**. **More** offers **Approve for this session** and **Always approve** where Hermes allows
   them. If delivery to Hermes fails, the card says so and you can try again. Some approvals can only be answered

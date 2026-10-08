@@ -215,6 +215,20 @@ test('frames link to the run of their session and the watch endpoints page them'
   const latest = (await get('/api/agents/builder/watch?limit=2')).json()
   expect(latest.frames.map((f: { seq: number }) => f.seq)).toEqual([4, 5])
 
+  expect(all.gaps).toEqual([])
+  const at = '2026-10-08T10:00:00.000Z'
+  server.db.sqlite
+    .prepare(
+      "INSERT OR IGNORE INTO runs (id, profile, origin, status, started_at, updated_at) VALUES ('gap-run', 'builder', 'score', 'running', ?, ?)",
+    )
+    .run(at, at)
+  server.db.sqlite
+    .prepare(
+      "INSERT INTO gaps (source, run_id, from_ts, to_ts, reason) VALUES ('run-sse:builder', 'gap-run', ?, NULL, 'SSE replay truncated')",
+    )
+    .run(at)
+  const gapped = (await get('/api/agents/builder/watch')).json()
+  expect(gapped.gaps).toEqual([{ from: at, to: null, reason: 'SSE replay truncated' }])
   server.db.sqlite.prepare("UPDATE runs SET status = 'completed'").run()
   expect((await get('/api/agents/builder/watch')).json().live).toBe(false)
   expect((await get('/api/agents/nobody/watch')).statusCode).toBe(404)

@@ -7,6 +7,7 @@ import { GatewayClient, HermesHttpError, StartRunSchema, type StartRun } from '.
 import { attachRunMessage } from '../../domain/message-runs.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import { runDraft } from './translate.ts'
+import { HttpError } from '../../errors.ts'
 
 const PayloadSchema = StartRunSchema.extend({ credentialGeneration: z.int().positive() })
 const IntentRowSchema = z.object({
@@ -61,7 +62,9 @@ async function dispatch(
   let runId = row.result
   if (row.state !== 'accepted') {
     assertAgentAdmits(db.sqlite, payload.profile)
-    if (row.state === 'failed') throw new Error('Run admission previously failed')
+    // Typed so routing fails the turn instead of replaying this refusal forever.
+    if (row.state === 'failed')
+      throw new HttpError(422, 'admission_refused', 'Hermes refused this run earlier')
     if (
       ['sent', 'unknown'].includes(row.state) &&
       (row.first_sent_at === null ||

@@ -18,6 +18,7 @@ import {
   type HermesPort,
 } from './hermes/index.ts'
 import { acquireHomeLock, getEpoch, migrate, openDatabase, type ScoreDb } from './db/index.ts'
+import { deriveAgentStatusEvents } from './domain/agent-status.ts'
 import { deriveBriefEvents } from './domain/briefs.ts'
 import { deriveTaskEvents } from './domain/tasks.ts'
 import { createIngest, type Ingest } from './hub/ingest.ts'
@@ -110,6 +111,7 @@ export async function startServer(
       deriveEvents: (sqlite, drafts, context) => [
         ...deriveTaskEvents(sqlite, drafts, context),
         ...deriveBriefEvents(sqlite, drafts, context),
+        ...deriveAgentStatusEvents(sqlite, drafts, context),
       ],
     })
     port = createHermesPort(config, {

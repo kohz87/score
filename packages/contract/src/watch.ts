@@ -19,6 +19,10 @@ export const WatchResponseSchema = z.object({
   sessionId: z.string().min(1).nullable(),
   frames: z.array(WatchFrameSchema),
   markers: z.array(WatchMarkerSchema),
+  /** Recorded intervals where events were lost (truncated replay, dropped spool): the history has holes there. */
+  gaps: z.array(
+    z.object({ from: z.iso.datetime(), to: z.iso.datetime().nullable(), reason: z.string() }),
+  ),
 })
 export type WatchResponse = z.infer<typeof WatchResponseSchema>
 export const WatchOverviewItemSchema = z.object({

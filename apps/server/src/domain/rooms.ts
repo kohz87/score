@@ -188,7 +188,7 @@ export function updateMessage(
     )
     .run(JSON.stringify(message.parts), Number(message.streaming), now, messageId)
   return append === null
-    ? [{ type: 'message.completed', data: { messageId, roomId } }]
+    ? [{ type: 'message.completed', data: { messageId, roomId, parts: message.parts } }]
     : [{ type: 'message.delta', data: { messageId, roomId, append } }]
 }
 

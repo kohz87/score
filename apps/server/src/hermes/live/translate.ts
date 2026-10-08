@@ -325,6 +325,8 @@ export function translateRunEvent(
           ...completeRunMessage(sqlite, row.id, at, {
             output: terminal.output,
             handoffs: event === 'run.completed',
+            status: event.slice(4),
+            error: terminal.error,
           }),
         )
       return drafts
@@ -417,8 +419,37 @@ export function runStatusObservation(context: RunContext, run: GatewayRun): Obse
           ? completeRunMessage(sqlite, row.id, now, {
               output: safe.output,
               handoffs: safe.status === 'completed',
+              status: safe.status,
+              error: safe.error,
             })
           : []),
+      ]
+    },
+  }
+}
+
+/** Hermes forgot the run (its record outlived the 24 h retention): end it visibly instead of waiting forever. */
+export function runLostObservation(context: RunContext): Observation {
+  return {
+    source: `run-sse:${context.profile}`,
+    identity: `run_lost:${context.runId}`,
+    apply({ sqlite, now }) {
+      const row = readRun(sqlite, context.runId)
+      if (runLifecycle.isTerminal(row.status)) return []
+      const error = 'Hermes no longer has a record of this run'
+      const changed = updateRun(sqlite, row, now, {
+        status: 'interrupted',
+        ended_at: now,
+        error,
+      })
+      return [
+        ...(changed ? [runDraft(sqlite, row.id)] : []),
+        ...closeRunApprovals(sqlite, row.id, now),
+        ...completeRunMessage(sqlite, row.id, now, {
+          handoffs: false,
+          status: 'interrupted',
+          error,
+        }),
       ]
     },
   }

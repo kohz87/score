@@ -62,7 +62,8 @@ export function reserveMessageRun(
       turnId,
       req.parentMessageId,
       req.fromAgentId ?? null,
-      redact(req.input),
+      // The person's instruction is kept verbatim (the adapter strips the gateway key); agent text is redacted by callers.
+      req.input,
       req.model ?? null,
       JSON.stringify(req.agents),
       now,
@@ -155,7 +156,8 @@ function seal(text: string): string {
   const body = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()])
   return Buffer.concat([iv, cipher.getAuthTag(), body]).toString('base64')
 }
-function unseal(value: string): string {
+// null: sealed by an earlier process, so it can't be opened.
+function unseal(value: string): string | null {
   if (!value) return ''
   try {
     const raw = Buffer.from(value, 'base64')
@@ -163,9 +165,18 @@ function unseal(value: string): string {
     decipher.setAuthTag(raw.subarray(12, 28))
     return Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()]).toString('utf8')
   } catch {
-    return '' // sealed by an earlier process
+    return null
   }
 }
+// "!" marks a reply whose held text was lost to a restart: later chunks then leave an interior gap that only the
+// run's final output can repair. "!" is not base64, so it can't collide with sealed text.
+const LOST = '!'
+function readPending(value: string): { text: string; lost: boolean } {
+  const lost = value.startsWith(LOST)
+  const text = unseal(lost ? value.slice(1) : value)
+  return { text: text ?? '', lost: lost || text === null }
+}
+const writePending = (text: string, lost: boolean) => (lost ? LOST : '') + seal(text)
 
 export function appendRunMessage(
   sqlite: DatabaseSync,
@@ -176,11 +187,12 @@ export function appendRunMessage(
   const value = sqlite.prepare('SELECT * FROM message_runs WHERE run_id = ?').get(runId)
   if (!value) return []
   const mapping = MessageRunSchema.parse(value)
-  const text = unseal(mapping.pending) + append
+  const held = readPending(mapping.pending)
+  const text = held.text + append
   const cut = settledLength(text)
   sqlite
     .prepare('UPDATE message_runs SET pending = ? WHERE message_id = ?')
-    .run(seal(text.slice(cut)), mapping.message_id)
+    .run(writePending(text.slice(cut), held.lost), mapping.message_id)
   return cut > 0
     ? updateMessage(sqlite, mapping.room_id, mapping.message_id, redact(text.slice(0, cut)), now)
     : []
@@ -188,7 +200,7 @@ export function appendRunMessage(
 
 function flushHeld(sqlite: DatabaseSync, mapping: MessageRun, now: string): DomainEventDraft[] {
   if (!mapping.pending) return []
-  const held = unseal(mapping.pending)
+  const held = readPending(mapping.pending).text
   sqlite
     .prepare("UPDATE message_runs SET pending = '' WHERE message_id = ?")
     .run(mapping.message_id)
@@ -245,17 +257,30 @@ export function toolsSummary(tools: string[]): string | null {
   return parts.join(' and ')
 }
 
+function failureNotice(status: string, error: string | null | undefined): string {
+  const detail = error ? `: ${redactBounded(error, 300)}` : ''
+  if (status === 'cancelled') return 'This run was stopped.'
+  if (status === 'interrupted') return `This run was interrupted${detail}`
+  return `This run failed${detail}`
+}
+
 export function completeRunMessage(
   sqlite: DatabaseSync,
   runId: string,
   now: string,
-  { output, handoffs = true }: { output?: string | null; handoffs?: boolean } = {},
+  {
+    output,
+    handoffs = true,
+    status = 'completed',
+    error,
+  }: { output?: string | null; handoffs?: boolean; status?: string; error?: string | null } = {},
 ): DomainEventDraft[] {
   const value = sqlite.prepare('SELECT * FROM message_runs WHERE run_id = ?').get(runId)
   if (!value) return []
   const mapping = MessageRunSchema.parse(value)
   if (mapping.state !== 'active') return []
   // Nothing can extend the held text any more.
+  const lostHeld = readPending(mapping.pending).lost
   const drafts: DomainEventDraft[] = flushHeld(sqlite, mapping, now)
   const message = messageFromRow(
     sqlite.prepare('SELECT * FROM messages WHERE id = ?').get(mapping.message_id),
@@ -269,6 +294,14 @@ export function completeRunMessage(
       .filter((part) => part.kind === 'text')
       .map((part) => part.text)
       .join('')
+    // Held text lost to a restart leaves an interior gap, so the streamed text is no prefix of the output: the
+    // authoritative output then replaces it (hand-offs after the gap would otherwise be missed). Without a
+    // known loss a differing output is just a different summary and the streamed text stays.
+    if (lostHeld && streamed && !text.startsWith(streamed) && !streamed.startsWith(text))
+      message.parts = [
+        { kind: 'text', text },
+        ...message.parts.filter((part) => part.kind !== 'text'),
+      ]
     const rest = !streamed ? text : text.startsWith(streamed) ? text.slice(streamed.length) : ''
     if (rest) {
       drafts.push(...updateMessage(sqlite, mapping.room_id, message.id, rest, now))
@@ -281,6 +314,9 @@ export function completeRunMessage(
   message.parts = message.parts.map((part) =>
     part.kind === 'text' ? { ...part, text: redact(part.text) } : part,
   )
+  // A run that did not complete would otherwise end as an empty or truncated bubble with no explanation.
+  if (status !== 'completed')
+    message.parts.push({ kind: 'text', text: failureNotice(status, error) })
   const tools = z
     .array(z.object({ tool: z.string() }))
     .parse(sqlite.prepare('SELECT tool FROM tool_calls WHERE run_id = ? ORDER BY seq').all(runId))

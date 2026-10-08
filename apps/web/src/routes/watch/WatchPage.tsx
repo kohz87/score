@@ -220,6 +220,12 @@ function WatchView({ agentId }: { agentId: string }) {
           one available.
         </p>
       )}
+      {data.gaps.length > 0 && (
+        <p className="watch-state" role="status">
+          Some events were not recorded ({data.gaps.length} gap{data.gaps.length === 1 ? '' : 's'}),
+          so this replay may have holes.
+        </p>
+      )}
       {terminal && (
         <p className="watch-state watch-state--command" role="status">
           {terminal.copied

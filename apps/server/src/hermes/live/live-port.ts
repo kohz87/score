@@ -606,15 +606,28 @@ export class LivePort implements HermesPort {
     assertFeature(this.current, 'score-runs')
     if (!this.current.hermes.servedProfiles.includes(req.agentId))
       throw new HttpError(503, 'hermes_unavailable', 'Profile is not served')
-    const result = await intents.startRunIntent(
-      {
-        profile: req.agentId,
-        input: req.input,
-        ...(req.model ? { model: req.model } : {}),
-        ...(req.sessionId ? { sessionId: req.sessionId } : {}),
-      },
-      req.turnId,
-    )
+    const result = await intents
+      .startRunIntent(
+        {
+          profile: req.agentId,
+          input: req.input,
+          ...(req.model ? { model: req.model } : {}),
+          ...(req.sessionId ? { sessionId: req.sessionId } : {}),
+        },
+        req.turnId,
+      )
+      .catch((error: unknown) => {
+        // A definite refusal (4xx other than timeout/conflict/rate limit) is permanent: surface it as an
+        // HttpError so the caller fails the turn instead of retrying it forever.
+        if (
+          error instanceof HermesHttpError &&
+          error.status >= 400 &&
+          error.status < 500 &&
+          ![408, 409, 429].includes(error.status)
+        )
+          throw new HttpError(422, error.code, 'Hermes refused this run')
+        throw error
+      })
     this.follow(result.runId)
     return result
   }

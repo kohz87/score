@@ -32,7 +32,7 @@ function requireMaterialized(value: unknown, depth = 0): void {
   ) {
     throw new Error('Snapshot data must be materialized, not iterable')
   }
-  if (depth >= 8) throw new Error('Snapshot data exceeds the maximum depth of 8')
+  if (depth >= 16) throw new Error('Snapshot data exceeds the maximum depth of 16')
   for (const key of Reflect.ownKeys(value)) {
     if (typeof key === 'symbol') throw new Error('Snapshot data must not contain symbol properties')
     const descriptor = Object.getOwnPropertyDescriptor(value, key)!

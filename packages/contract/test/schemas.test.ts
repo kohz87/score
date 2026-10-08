@@ -26,6 +26,7 @@ const watchResponse = {
   sessionId: 'sess-1',
   frames: [f.watch],
   markers: [watchMarker],
+  gaps: [{ from: watchMarker.at, to: null, reason: 'SSE replay truncated' }],
 }
 const watchOverviewItem = {
   agent: f.agent,

@@ -273,6 +273,16 @@ test('links are exact: /assign and Kanban children join, an unlinked agent task 
   expect((await get(`/api/briefs/${id}/flow`)).json().brief.status).toBe('running')
 })
 
+test('plan first with several recipients admits only the planner and keeps the team in its prompt', async () => {
+  const run = vi.spyOn(port, 'startRun')
+  const id = await ask('Ship the endpoint', { planFirst: true, to: ['lead', 'builder'] })
+  expect(run.mock.calls.map(([req]) => req.agentId)).toEqual(['lead'])
+  expect(run.mock.calls[0]![0].input).toContain('@lead, @builder')
+  expect(rows('SELECT agent_id FROM message_runs WHERE chain_id = ?', id)).toEqual([
+    { agent_id: 'lead' },
+  ])
+})
+
 test('plan first: addendum, parsed plan part, no hand-offs, nothing created until Start plan', async () => {
   replies.lead = [
     'Here is the plan:',
@@ -293,6 +303,12 @@ test('plan first: addendum, parsed plan part, no hand-offs, nothing created unti
   const reply = messages().find((message) => message.author.kind === 'agent')!
   const plan = reply.parts.find((part) => part.kind === 'plan')
   expect(plan).toMatchObject({ kind: 'plan', briefId: id })
+  // A stored plan (lanes, blocks) must still fit the snapshot guard (audit 2026-10-08: history returned 500).
+  const page = await get(`/api/rooms/${roomId}/messages`)
+  expect(page.statusCode).toBe(200)
+  expect(page.json().items.some((item: Message) => item.parts.some((p) => p.kind === 'plan'))).toBe(
+    true,
+  )
   expect(
     plan?.kind === 'plan' &&
       plan.lanes.map((lane) => [lane.agentId, lane.blocks.map((b) => b.label)]),
@@ -483,6 +499,17 @@ test('node detail and the log describe a step', async () => {
   expect((await get('/api/flow/nodes/nonsense')).statusCode).toBe(404)
   const all = BriefLogPageSchema.parse((await get(`/api/briefs/${turnId}/log`)).json())
   expect(all.items.map((line) => line.kind)).toEqual(['system', 'message', 'tool', 'tool'])
+  const runId = detail.run!.id
+  db.sqlite
+    .prepare(
+      "INSERT INTO gaps (source, run_id, from_ts, to_ts, reason) VALUES ('run-sse:lead', ?, ?, NULL, 'SSE replay truncated')",
+    )
+    .run(runId, new Date(scheduler.now()).toISOString())
+  const gapped = BriefLogPageSchema.parse((await get(`/api/briefs/${turnId}/log`)).json())
+  expect(
+    gapped.items.some((line) => line.kind === 'system' && line.text.includes('not recorded')),
+  ).toBe(true)
+  db.sqlite.prepare('DELETE FROM gaps').run()
   const tools = BriefLogPageSchema.parse((await get(`/api/briefs/${turnId}/log?kind=tool`)).json())
   expect(tools.items.map((line) => line.text)).toEqual(['Used terminal', 'Used edit_file'])
   expect(
