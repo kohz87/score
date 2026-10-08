@@ -4,6 +4,8 @@ import { AdvancedSection } from './AdvancedSection.tsx'
 import { ConnectionsSection } from './ConnectionsSection.tsx'
 import { RulesSection } from './RulesSection.tsx'
 import { ProvidersSection } from './ProvidersSection.tsx'
+import { RemoteSection } from './RemoteSection.tsx'
+import { remoteTransport } from '../../data/session.ts'
 import './settings.css'
 
 const sections = [
@@ -26,6 +28,7 @@ export function SettingsPage() {
           </a>
         ))}
         <p>Settings for one agent live on their page in Team.</p>
+        {remoteTransport() && <a href="#remote-access">Remote access</a>}
       </nav>
       <div className="settings-content">
         <ProvidersSection agents={agents} />
@@ -45,6 +48,7 @@ export function SettingsPage() {
             </section>
           ))}
         <AdvancedSection />
+        <RemoteSection />
       </div>
     </div>
   )

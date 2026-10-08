@@ -373,6 +373,20 @@ const cases = [
     { ok: true, restartRequired: false },
     { ok: false, restartRequired: false },
   ],
+  [
+    'PairedBrowserSchema',
+    {
+      id: '3f1c2b8e-5d0a-4c1e-9a77-0b1d2e3f4a5b',
+      label: 'Firefox',
+      address: '192.168.1.5',
+      createdAt: '2026-10-08T00:00:00.000Z',
+      lastSeenAt: '2026-10-08T00:00:00.000Z',
+      expiresAt: '2026-10-15T00:00:00.000Z',
+      current: true,
+    },
+    { id: 'not-a-uuid' },
+  ],
+  ['PairedBrowsersSchema', { items: [] }, { items: [{ id: 'x' }] }],
 ] as const satisfies ReadonlyArray<readonly [keyof typeof contract, unknown, unknown]>
 
 test('every exported schema has valid and invalid fixtures', () => {

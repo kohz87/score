@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Outlet } from 'react-router'
 import { CommandPalette } from './CommandPalette.tsx'
 import { TopBar } from './TopBar.tsx'
+import { remoteTransport } from '../data/session.ts'
 
 export function AppShell() {
   const [commandOpen, setCommandOpen] = useState(false)
@@ -27,6 +28,12 @@ export function AppShell() {
   }, [])
   return (
     <div className="app-shell">
+      {remoteTransport() === 'http' && (
+        <aside className="remote-warning" aria-label="Transport warning">
+          Plain HTTP: anyone on this network could read and control Score{' '}
+          <a href="https://tailscale.com/docs/how-to/set-up-https-certificates">TLS setup</a>
+        </aside>
+      )}
       <div inert={commandOpen} className="shell-content">
         <TopBar
           commandButtonRef={commandButtonRef}

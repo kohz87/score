@@ -180,3 +180,16 @@ export const ReportsSchema = z.object({
   }),
 })
 export type Reports = z.infer<typeof ReportsSchema>
+
+// §3 Remote access: paired browsers (management ids never authenticate anything)
+export const PairedBrowserSchema = z.object({
+  id: z.uuid(),
+  label: z.string(),
+  address: z.string(),
+  createdAt: z.iso.datetime(),
+  lastSeenAt: z.iso.datetime(),
+  expiresAt: z.iso.datetime(),
+  current: z.boolean(),
+})
+export const PairedBrowsersSchema = z.object({ items: z.array(PairedBrowserSchema) })
+export type PairedBrowser = z.infer<typeof PairedBrowserSchema>

@@ -18,12 +18,19 @@ import { App, appRoutes } from './App.tsx'
 import { createQueryClient, StreamContext } from './data/query-client.ts'
 import { createStreamClient } from './data/stream.ts'
 import { createStreamQueryRegistry } from './data/resync.ts'
+import { clearBrowserSession } from './data/session.ts'
 
 const queryClient = createQueryClient()
 const stream = createStreamClient()
 const streamContext = { client: stream, queries: createStreamQueryRegistry(queryClient, stream) }
+const handleLogout = () => {
+  clearBrowserSession(queryClient, streamContext)
+  window.location.assign('/pair')
+}
+window.addEventListener('score:logout', handleLogout)
 if (import.meta.hot)
   import.meta.hot.dispose(() => {
+    window.removeEventListener('score:logout', handleLogout)
     streamContext.queries.dispose()
     stream.close()
   })

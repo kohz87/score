@@ -17,6 +17,6 @@ export function readCookie(header: string | undefined, name: string): string | u
   return value
 }
 
-export function sessionCookie(id: string, maxAge = SESSION_MAX_AGE): string {
-  return `${SESSION_COOKIE}=${encodeURIComponent(id)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}`
+export function sessionCookie(id: string, maxAge = SESSION_MAX_AGE, secure = false): string {
+  return `${SESSION_COOKIE}=${encodeURIComponent(id)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${secure ? '; Secure' : ''}`
 }

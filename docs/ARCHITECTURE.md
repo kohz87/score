@@ -323,6 +323,15 @@ Reports read `runs`, `tool_calls`, `approvals` and `tasks_proj` history, kept โ
 ### D7. Security posture (single user, local first)
 - **Network.** The server binds `127.0.0.1`.
 - **Browser.** Mutations require `X-Score-Client` + same-origin (CSRF).
+- **D7.2 Remote access (task 3.13, opt-in).** Local mode is the default and refuses a non-loopback `SCORE_HOST`.
+  `SCORE_REMOTE=1` enables a browser listener on a numeric address (wildcards also need `SCORE_REMOTE_ANY=1`) plus a
+  separate loopback-only HTTP listener (`SCORE_BRIDGE_PORT`, default 8740) that alone carries `/bridge/*`. Remote mode
+  denies by default with an exact public list (API-CONTRACT ยง3), serves the built web app from Fastify, checks Host
+  and Origin against `SCORE_PUBLIC_ORIGINS` (no proxy trust), and uses server-enforced idle/absolute session expiry,
+  bounded pairing attempts, a consent step on the pair page, and revocation that closes open streams. Transport is
+  TLS (`SCORE_TLS_CERT`/`SCORE_TLS_KEY`, recommended) or, only with `SCORE_REMOTE_INSECURE_HTTP=accept`, plain HTTP with
+  a permanent in-app banner: plain HTTP lets anyone on the network read and control Score (owner accepted, 2026-10-08).
+  Remote mode never touches Hermes configuration, keys, plugins or gateways.
 - **D7.1 Human decisions** (approval decisions, grants, rule changes, credential actions) additionally require a
   **paired browser session**. On first run the server prints a one-time pairing URL **to its own terminal**. The
   browser exchanges it for an HttpOnly, SameSite=Strict session cookie. The server stores only a hash, never in a
