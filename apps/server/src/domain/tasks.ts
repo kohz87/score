@@ -7,7 +7,7 @@ import {
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import { ApprovalRowSchema, approvalView } from './approval-store.ts'
-import type { DomainEventDraft } from '../hub/ingest.ts'
+import type { DeriveEvents, DomainEventDraft } from '../hub/ingest.ts'
 
 const RowSchema = z.object({
   detail: z.string(),
@@ -118,3 +118,8 @@ export function approvalTaskUpdates(
       : []
   })
 }
+
+// Ingest hook (createIngest deriveEvents): live approval changes refresh their task cards atomically; the fake
+// script schedules its own task cards.
+export const deriveTaskEvents: DeriveEvents = (sqlite, drafts, { source, now }) =>
+  source === 'fake' ? [] : approvalTaskUpdates(sqlite, drafts, Date.parse(now))

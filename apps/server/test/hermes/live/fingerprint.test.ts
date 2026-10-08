@@ -170,7 +170,7 @@ test('unknown code disables private actions, preserves reads and public run cont
     compatibility: { tested: false, disabled: ['gateway-approvals'] },
     degraded: ['Untested Hermes build: 0.21.5 (12345678)'],
   })
-  expect((await live.listAgents()).map(({ id }) => id)).toEqual(['default', 'builder'])
+  expect((await live.listAgents()).map(({ id }) => id)).toEqual(['builder', 'default'])
   expect(() => assertFeature(live.status(), 'score-runs')).not.toThrow()
   expect(() => assertFeature(live.status(), 'gateway-approvals')).toThrow(HttpError)
 })

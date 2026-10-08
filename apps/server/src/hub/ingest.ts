@@ -1,7 +1,6 @@
 import { StreamEventSchema, type StreamEvent } from '@score/contract'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
-import { approvalTaskUpdates } from '../domain/tasks.ts'
 import type { ScoreDb } from '../db/index.ts'
 
 export type DomainEventDraft = {
@@ -110,9 +109,17 @@ function logListenerError(error: unknown): void {
   console.error('Ingest committed listener failed', error)
 }
 
+// Derived events computed in the same transaction as an observation's own drafts (e.g. a task card whose
+// "needs you" state follows an approval). Keeps this hub free of domain imports.
+export type DeriveEvents = (
+  sqlite: DatabaseSync,
+  drafts: DomainEventDraft[],
+  context: { source: string; now: string },
+) => DomainEventDraft[]
+
 export function createIngest(
   db: ScoreDb,
-  { clock = Date.now }: { clock?: () => number } = {},
+  { clock = Date.now, deriveEvents }: { clock?: () => number; deriveEvents?: DeriveEvents } = {},
 ): Ingest {
   if (owners.has(db)) throw new Error('This ScoreDb already has an open ingest')
   let tail: Promise<void> = Promise.resolve()
@@ -217,7 +224,6 @@ export function createIngest(
           throw new Error('Observation apply must return an array of drafts')
         const events: StreamEvent[] = []
         const append = sqlite.prepare('INSERT INTO events (ts, type, data) VALUES (?, ?, ?)')
-        // The fake script already schedules its task cards; live approval changes update them atomically.
         const normalizedDrafts = (drafts as DomainEventDraft[]).map((draft) => {
           const event = StreamEventSchema.parse({
             seq: 1,
@@ -227,11 +233,8 @@ export function createIngest(
           })
           return { type: event.type, data: event.data } as DomainEventDraft
         })
-        const relatedTasks =
-          obs.source === 'fake'
-            ? []
-            : approvalTaskUpdates(sqlite, normalizedDrafts, Date.parse(now))
-        for (const draft of [...normalizedDrafts, ...relatedTasks]) {
+        const derived = deriveEvents?.(sqlite, normalizedDrafts, { source: obs.source, now }) ?? []
+        for (const draft of [...normalizedDrafts, ...derived]) {
           // Normalize before storage so replay and live subscribers receive the same payload.
           const parsed = StreamEventSchema.parse({
             seq: 1,

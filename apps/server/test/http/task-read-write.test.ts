@@ -7,6 +7,7 @@ import { TaskDetailSchema, TaskSummarySchema } from '@score/contract'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
+import { deriveTaskEvents } from '../../src/domain/tasks.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { createScenario } from '../../src/hermes/fake/scenario.ts'
@@ -26,7 +27,7 @@ beforeEach(async () => {
   home = mkdtempSync(join(tmpdir(), 'score-tasks-api-'))
   db = openDatabase(join(home, 'score.db'))
   migrate(db, fileURLToPath(new URL('../../migrations/', import.meta.url)))
-  ingest = createIngest(db)
+  ingest = createIngest(db, { deriveEvents: deriveTaskEvents })
   scheduler = new FakeScheduler()
   port = new FakePort(1, { db, scheduler }, false)
   await port.start(ingest)

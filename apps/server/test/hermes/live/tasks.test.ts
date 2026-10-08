@@ -167,7 +167,7 @@ test('create uses exact safe argv, steps and parent flags, then rereads and dedu
       '--',
       '--help $(never)',
     ],
-    { timeoutMs: 10000, hermesHome: fixture.home },
+    { timeoutMs: 10000, captureTaskCreate: true, hermesHome: fixture.home },
   )
   expect((await createTask(req, 'create-key', writeDeps(runner))).id).toBe(task.id)
   expect(runner).toHaveBeenCalledTimes(1)

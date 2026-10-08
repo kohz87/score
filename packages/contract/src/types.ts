@@ -43,6 +43,57 @@ export const AgentSummarySchema = z.object({
 })
 export type AgentSummary = z.infer<typeof AgentSummarySchema>
 
+export const RoutineSummarySchema = z.object({
+  id: z.string().min(1),
+  title: z.string(),
+  schedule: z.string(),
+  description: z.string(),
+  lastRunAt: z.iso.datetime().nullable(),
+  enabled: z.boolean(),
+})
+export type RoutineSummary = z.infer<typeof RoutineSummarySchema>
+
+export const AgentDetailSchema = AgentSummarySchema.extend({
+  tagline: z.string(),
+  personality: z.object({ excerpt: z.string(), source: z.literal('SOUL.md') }),
+  reportsTo: AgentIdSchema.nullable(),
+  worksIn: z.string().nullable(),
+  rulesFile: z.literal('AGENTS.md').nullable(),
+  // Null when the model can't be read (unlike the summary, the detail adds where it comes from).
+  model: z
+    .object({
+      id: z.string().min(1),
+      label: z.string(),
+      via: z.string(),
+      fallback: z.string().nullable(),
+    })
+    .nullable(),
+  skills: z.array(z.object({ name: z.string().min(1), enabled: z.boolean() })),
+  memory: z.array(
+    z.object({ id: z.string().min(1), text: z.string(), source: z.string(), at: z.iso.datetime() }),
+  ),
+  tools: z.array(
+    z.object({
+      id: z.string().min(1),
+      label: z.string(),
+      kind: z.enum(['builtin', 'mcp']),
+      enabled: z.boolean(),
+    }),
+  ),
+  helpersMax: z.int().nonnegative().nullable(),
+  routines: z.array(RoutineSummarySchema),
+  channels: z.array(z.object({ platform: z.string(), label: z.string(), connected: z.boolean() })),
+  permissions: z.array(
+    z.object({
+      id: z.string().min(1),
+      label: z.string(),
+      level: z.enum(['allowed', 'asks', 'never']),
+      inherited: z.boolean(),
+    }),
+  ),
+})
+export type AgentDetail = z.infer<typeof AgentDetailSchema>
+
 export const RefSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('room'), roomId: z.string().min(1) }),
   z.object({ kind: z.literal('task'), taskId: z.string().min(1) }),

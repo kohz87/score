@@ -14,6 +14,35 @@ export const agent = {
   model: { id: 'example-model', label: 'Example model' },
   served: true,
 } satisfies Contract.AgentSummary
+export const routine = {
+  id: 'routine-1',
+  title: 'Nightly check',
+  schedule: '1d',
+  description: 'Runs the test suite.',
+  lastRunAt: null,
+  enabled: true,
+} satisfies Contract.RoutineSummary
+export const agentDetail = {
+  ...agent,
+  tagline: 'Builds what lead plans.',
+  personality: { excerpt: 'Careful builder.', source: 'SOUL.md' },
+  reportsTo: null,
+  worksIn: null,
+  rulesFile: 'AGENTS.md',
+  model: {
+    id: 'example-model',
+    label: 'Example model',
+    via: 'Hermes configuration',
+    fallback: null,
+  },
+  skills: [{ name: 'git', enabled: true }],
+  memory: [],
+  tools: [{ id: 'terminal', label: 'Terminal', kind: 'builtin', enabled: true }],
+  helpersMax: null,
+  routines: [routine],
+  channels: [],
+  permissions: [{ id: 'installs', label: 'Installs', level: 'asks', inherited: true }],
+} satisfies Contract.AgentDetail
 
 export const refs = [
   { kind: 'room', roomId: 'room-1' },

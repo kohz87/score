@@ -112,8 +112,8 @@ test.each([
     )
     expect(violations).toHaveLength(allowed ? 0 : 1)
   },
-  15000,
-) // Loading ESLint's plugins can exceed five seconds alongside other workspace checks.
+  60_000,
+) // A cold ESLint type-aware run can exceed the default 5 s when the machine is busy.
 
 test('ESLint permits internal imports within the adapter', async () => {
   const eslint = new ESLint({ cwd: repoRoot })
@@ -121,4 +121,4 @@ test('ESLint permits internal imports within the adapter', async () => {
     filePath: join(serverRoot, 'src/hermes/fake/boundary-probe.ts'),
   })
   expect(result!.messages).toEqual([])
-})
+}, 60_000)

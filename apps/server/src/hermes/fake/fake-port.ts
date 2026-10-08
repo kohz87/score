@@ -1,9 +1,12 @@
+import { AgentDetailSchema, type AgentDetail } from '@score/contract'
+import { updateProjectedAgent } from '../../domain/agents.ts'
 import {
   recordKanbanDenial,
   closeKanbanDenialIds,
   openKanbanDenialIds,
 } from '../../domain/kanban-denials.ts'
 import { requestRunApproval, respondRunApproval } from '../../domain/approvals.ts'
+import { insertRoom, roomChanged, storeMessage, updateMessage } from '../../domain/rooms.ts'
 import { approvalDraft, patchApproval, readApprovalRow } from '../../domain/approval-store.ts'
 import type { AgentSummary, Approval, RunSummary, TaskDetail } from '@score/contract'
 import { parseSteps, writeSteps } from '../../domain/steps.ts'
@@ -72,6 +75,36 @@ export function stepToObservation(
             activity: [step.data.item, ...task.activity].slice(0, 50),
           })
       }
+      if (step.kind === 'agent.updated')
+        return [{ type: 'agent.updated', data: updateProjectedAgent(sqlite, step.data) }]
+      if (step.kind === 'message.created') {
+        const message = step.data
+        const exists = sqlite.prepare('SELECT id FROM rooms WHERE id = ?').get(message.roomId)
+        if (!exists)
+          insertRoom(
+            sqlite,
+            {
+              id: message.roomId,
+              name: '#activity-feed',
+              kind: 'room',
+              leadAgentId: 'lead',
+              members: exampleAgents().map((agent) => agent.id),
+            },
+            now,
+          )
+        const events = storeMessage(sqlite, message, now)
+        if (!exists && !events.some((event) => event.type === 'room.upserted'))
+          events.push(...roomChanged(sqlite, message.roomId, now))
+        return events
+      }
+      if (step.kind === 'message.delta' || step.kind === 'message.completed')
+        return updateMessage(
+          sqlite,
+          step.data.roomId,
+          step.data.messageId,
+          step.kind === 'message.delta' ? step.data.append : null,
+          now,
+        )
       if (step.kind === 'run.updated') {
         const run = step.data
         sqlite
@@ -260,6 +293,27 @@ export class FakePort implements HermesPort {
 
   async listAgents(): Promise<AgentSummary[]> {
     return structuredClone([...this.agents.values()])
+  }
+
+  async listAgentDetails(): Promise<AgentDetail[]> {
+    return (await this.listAgents()).map((agent) =>
+      AgentDetailSchema.parse({
+        ...agent,
+        tagline: agent.role,
+        personality: { excerpt: `I am ${agent.id}. ${agent.role}.`, source: 'SOUL.md' },
+        reportsTo: agent.id === 'lead' ? null : 'lead',
+        worksIn: null,
+        rulesFile: 'AGENTS.md',
+        model: { ...agent.model, via: 'Demo', fallback: null },
+        skills: [{ name: 'collaboration', enabled: true }],
+        memory: [],
+        tools: [],
+        helpersMax: null,
+        routines: [],
+        channels: [],
+        permissions: [],
+      }),
+    )
   }
 
   private enqueue<T>(work: () => Promise<T>): Promise<T> {

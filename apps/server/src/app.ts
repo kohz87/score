@@ -2,7 +2,9 @@ import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastif
 import { CONTRACT_VERSION, type SystemStatus } from '@score/contract'
 import type { Config } from './config.ts'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
+import { registerAgentRoutes } from './http/agents.ts'
 import { registerTaskRoutes } from './http/tasks.ts'
+import { registerRoomRoutes } from './http/rooms.ts'
 import { registerApprovalRoutes } from './http/approvals.ts'
 import { registerErrorHandlers } from './errors.ts'
 import { registerCsrfGuard } from './auth/csrf.ts'
@@ -121,6 +123,8 @@ export function buildApp({
     })
   }
   registerTaskRoutes(app, port, ingest, db, clock)
+  registerAgentRoutes(app, port, ingest, db, clock)
+  if (db && ingest) registerRoomRoutes(app, port, db, ingest, clock)
   app.get('/api/health', async () => ({ ok: true, contract: CONTRACT_VERSION }))
   registerSessionRoutes(app, app.pairing)
   registerSystemRoutes(app, getSystemStatus)

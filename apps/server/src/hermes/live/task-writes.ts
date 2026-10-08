@@ -18,6 +18,7 @@ interface WriteDeps {
 async function execute(args: string[], deps: WriteDeps) {
   const result = await (deps.runner ?? runHermes)(args, {
     timeoutMs: 10000,
+    ...(args.slice(0, 3).join(' ') === 'kanban create --json' ? { captureTaskCreate: true } : {}),
     ...(deps.hermesHome ? { hermesHome: deps.hermesHome } : {}),
   }).catch((): { exitCode: number; stdout?: string } => ({ exitCode: -1 }))
   if (result.exitCode !== 0)

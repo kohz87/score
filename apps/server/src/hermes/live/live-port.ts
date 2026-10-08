@@ -1,4 +1,6 @@
-import { AgentSummarySchema, type AgentSummary } from '@score/contract'
+import { type AgentSummary } from '@score/contract'
+import { ProfilesReader, agentSummary } from './profiles.ts'
+import type { AgentDetail } from '@score/contract'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -19,7 +21,7 @@ import {
   type HermesPortDeps,
   type ObservationSink,
 } from '../port.ts'
-import { CredentialsUnavailable, readKey } from './credentials.ts'
+import { CredentialsUnavailable } from './credentials.ts'
 import {
   assertFeature,
   computeFingerprint,
@@ -39,12 +41,6 @@ import { createTask, patchTask } from './task-writes.ts'
 import type { HermesRunner } from './cli.ts'
 import { readRun, RunRowSchema, runLifecycle, type RunMetrics } from './translate.ts'
 
-const palette = [
-  { color: '#6B4EFF', shape: 'circle-dot' },
-  { color: '#19C39A', shape: 'triangle' },
-  { color: '#FFB61E', shape: 'diamond' },
-  { color: '#FF6B8A', shape: 'square' },
-] as const
 const StateSchema = z.object({ served_profiles: z.array(ProfileNameSchema) })
 export interface LivePortOptions extends HermesPortDeps {
   scoreHome: string
@@ -89,7 +85,10 @@ export class LivePort implements HermesPort {
     agentIsolation: 'same_user',
     degraded: ['Gateway status unavailable'],
   }
-  constructor(private readonly options: LivePortOptions) {}
+  private readonly profiles: ProfilesReader
+  constructor(private readonly options: LivePortOptions) {
+    this.profiles = new ProfilesReader(resolveHermesHome(options.hermesHome), options.runner)
+  }
 
   async start(sink: ObservationSink): Promise<void> {
     if (this.sink) return
@@ -236,33 +235,32 @@ export class LivePort implements HermesPort {
     }
   }
   async listAgents(): Promise<AgentSummary[]> {
-    const agents: AgentSummary[] = []
-    for (const [index, profile] of this.current.hermes.servedProfiles.entries()) {
-      try {
-        readKey(this.options.scoreHome, profile)
-      } catch {
-        continue
-      }
-      const active = this.db?.sqlite
-        .prepare(
-          `SELECT * FROM runs WHERE profile = ? AND status IN ('queued','running','waiting_for_approval') ORDER BY started_at DESC LIMIT 1`,
-        )
-        .get(profile)
-      const row = active === undefined ? undefined : RunRowSchema.parse(active)
-      agents.push(
-        AgentSummarySchema.parse({
-          id: profile,
-          name: profile,
-          role: 'Agent',
-          style: palette[index % palette.length],
-          status: row?.status === 'waiting_for_approval' ? 'waiting' : row ? 'working' : 'idle',
+    return (await this.listAgentDetails()).map(agentSummary)
+  }
+  async listAgentDetails(): Promise<AgentDetail[]> {
+    const served = this.current.hermes.servedProfiles
+    const names = this.profiles.names(served)
+    return Promise.all(
+      names.map((profile, index) => {
+        const active = (this.db ?? this.options.db)?.sqlite
+          .prepare(
+            `SELECT * FROM runs WHERE profile = ? AND status IN ('queued','running','waiting_for_approval') ORDER BY started_at DESC LIMIT 1`,
+          )
+          .get(profile)
+        const row = active === undefined ? undefined : RunRowSchema.parse(active)
+        return this.profiles.read(profile, index, served.includes(profile), {
+          status:
+            row?.status === 'waiting_for_approval'
+              ? 'waiting'
+              : row
+                ? 'working'
+                : served.includes(profile)
+                  ? 'idle'
+                  : 'offline',
           activity: row ? 'Running a turn' : null,
-          model: row?.model ? { id: row.model, label: row.model } : null,
-          served: true,
-        }),
-      )
-    }
-    return agents
+        })
+      }),
+    )
   }
   private requireStarted() {
     if (

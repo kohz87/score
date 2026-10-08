@@ -10,6 +10,7 @@ import {
   type TaskSummary,
 } from '@score/contract'
 import { z } from 'zod'
+import type { AgentDetail } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
 import type { IngestResult, Observation } from '../hub/ingest.ts'
 
@@ -107,6 +108,7 @@ export interface HermesPort {
   getTask(id: string): Promise<TaskDetail>
   createTask(req: z.infer<typeof CreateTaskSchema>, idempotencyKey: string): Promise<TaskDetail>
   patchTask(id: string, req: z.infer<typeof PatchTaskSchema>): Promise<TaskDetail>
+  listAgentDetails(): Promise<AgentDetail[]>
   startRun(req: {
     agentId: string
     input: string

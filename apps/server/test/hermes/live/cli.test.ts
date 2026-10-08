@@ -83,7 +83,13 @@ test('create JSON output has enough bounded space for task bodies and is returne
   const execute = vi.fn<NonNullable<CliOptions['execute']>>((_file, _args, _options, callback) =>
     callback(null, stdout),
   )
-  expect(await runHermes(['kanban', 'create', '--json'], { timeoutMs: 100, execute })).toEqual({
+  expect(
+    await runHermes(['kanban', 'create', '--json'], {
+      timeoutMs: 100,
+      captureTaskCreate: true,
+      execute,
+    }),
+  ).toEqual({
     exitCode: 0,
     stdout,
   })
@@ -91,7 +97,48 @@ test('create JSON output has enough bounded space for task bodies and is returne
   execute.mockImplementation((_file, _args, _options, callback) =>
     callback(Object.assign(new Error('secret'), { code: 1 }), stdout),
   )
-  expect(await runHermes(['kanban', 'create', '--json'], { timeoutMs: 100, execute })).toEqual({
+  expect(
+    await runHermes(['kanban', 'create', '--json'], {
+      timeoutMs: 100,
+      captureTaskCreate: true,
+      execute,
+    }),
+  ).toEqual({
     exitCode: 1,
   })
+})
+test('only the exact model read may capture bounded stdout; stderr and failures stay private', async () => {
+  const execute = vi.fn<NonNullable<CliOptions['execute']>>((_file, _args, _options, callback) =>
+    callback(null, '"fixture-model"', 'private stderr'),
+  )
+  const args = ['-p', 'builder', 'config', 'get', '--json', 'model']
+  await expect(runHermes(args, { timeoutMs: 100, captureModel: true, execute })).resolves.toEqual({
+    exitCode: 0,
+    stdout: '"fixture-model"',
+  })
+  execute.mockImplementation((_file, _args, _options, callback) =>
+    callback(null, 'x'.repeat(16385)),
+  )
+  await expect(runHermes(args, { timeoutMs: 100, captureModel: true, execute })).resolves.toEqual({
+    exitCode: 0,
+  })
+  execute.mockImplementation((_file, _args, _options, callback) =>
+    callback(Object.assign(new Error('private'), { code: 2 }), 'private stdout'),
+  )
+  await expect(runHermes(args, { timeoutMs: 100, captureModel: true, execute })).resolves.toEqual({
+    exitCode: 2,
+  })
+})
+test.each([
+  ['config', 'get', '--json', 'model'],
+  ['-p', '../outside', 'config', 'get', '--json', 'model'],
+  ['-p', 'builder', 'config', 'get', '--json', 'api_key'],
+  ['-p', 'builder', 'config', 'get', '--json', 'model', '--raw'],
+  ['profile', 'describe', 'builder', '--text', 'new description'],
+])('capture rejects nonallowlisted command %j', async (...args) => {
+  const execute = vi.fn<NonNullable<CliOptions['execute']>>()
+  await expect(runHermes(args, { timeoutMs: 100, captureModel: true, execute })).rejects.toThrow(
+    'restricted',
+  )
+  expect(execute).not.toHaveBeenCalled()
 })
