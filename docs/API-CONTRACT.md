@@ -396,13 +396,16 @@ incarnation-aware reuse confirmation contract is agreed.
 - **H** `POST /api/settings/providers/:id/connect` → `{ next: 'done' | 'device_code' | 'run_in_terminal'; command?: string; url?: string;
   code?: string; signInId?: string; expiresAt?: string }`. For a `device_code` provider this starts the sign-in (D2.7) and
   returns its link, code and id; `command` is always included as the terminal fallback. A second call while one is
-  waiting returns the same sign-in.
+  waiting returns the same sign-in. If Hermes prints no link and code within 30 s (e.g. the profile is set to a browser
+  login), the answer is `run_in_terminal` with the command.
 - `GET /api/settings/sign-ins/:signInId` → `SignIn` `{ id; providerId; state: 'waiting' | 'connected' | 'failed' | 'expired' |
   'cancelled'; url: string | null; code: string | null; expiresAt: string; message: string | null }` · **H**
   `DELETE /api/settings/sign-ins/:signInId` → `SignIn` (cancelled). In-memory; unknown ids → 404.
 - **H** `POST /api/settings/providers/:id/key` `{ apiKey: string; label?: string; acknowledgeInsecure?: boolean }` → the
   provider item, after `hermes auth list` shows the new credential (`409 not_verified` otherwise). Plain-HTTP remote
-  without `acknowledgeInsecure: true` → `400 insecure_transport`. The key never appears in any response, log or receipt.
+  without `acknowledgeInsecure: true` → `400 insecure_transport`; a provider that doesn't take a key → `409 not_supported`;
+  a key already being added for that provider → `409 conflict`. The key never appears in any response, log or receipt
+  (the receipt's body hash is an HMAC under a per-process secret, so a retry after a restart is `409`, not a replay).
 - `GET /api/models?q=` → `{ items: ModelOption[] }`, `ModelOption = { provider: string; providerLabel: string; model: string;
   available: boolean; reason: string | null /* "Not on your plan" */; free: boolean; price: { input: string; output: string } | null }`.
   Models of connected providers only (Hermes model options); `q` matches model or provider label, case-insensitive;
