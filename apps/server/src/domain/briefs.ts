@@ -10,6 +10,8 @@ import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DeriveEvents, DomainEventDraft } from '../hub/ingest.ts'
 import { redact } from '../redact.ts'
+import { holdable, recordHolds, type HoldOwner } from './holds.ts'
+import { teamPausedAt } from './team-pause.ts'
 
 // Briefs (design review 3.4): a human room message plus what it causes. Links to tasks are exact only; nothing
 // here guesses from timing.
@@ -64,7 +66,7 @@ export function briefTaskIds(sqlite: DatabaseSync, briefId: string): string[] {
     .map((row) => row.task_id)
 }
 
-function projectedDetail(sqlite: DatabaseSync, taskId: string): TaskDetail | undefined {
+export function projectedDetail(sqlite: DatabaseSync, taskId: string): TaskDetail | undefined {
   const row = sqlite.prepare('SELECT detail FROM task_projections WHERE id = ?').get(taskId)
   if (!row) return undefined
   return TaskDetailSchema.parse(JSON.parse(z.object({ detail: z.string() }).parse(row).detail))
@@ -286,12 +288,45 @@ const forRun = (sqlite: DatabaseSync, id: string) => [
 const forTask = (sqlite: DatabaseSync, id: string) =>
   briefIdsFor(sqlite, 'SELECT brief_id FROM brief_tasks WHERE task_id = ?', id)
 
+/**
+ * Pause covers tasks that arrive later: a task linked to a paused brief, assigned to a paused agent, or seen while
+ * the team is paused gets a pending hold per paused owner, in the observation's own transaction. The server parks
+ * them after the commit (task-holds.ts), and recovery finishes them after a crash.
+ */
+function recordArrivalHolds(sqlite: DatabaseSync, taskIds: Iterable<string>, now: string): void {
+  const teamPaused = teamPausedAt(sqlite) !== null
+  for (const taskId of taskIds) {
+    const detail = projectedDetail(sqlite, taskId)
+    if (!detail || !holdable(sqlite, taskId, taskStatus(detail))) continue
+    const owners: HoldOwner[] = z
+      .array(z.object({ brief_id: z.string() }))
+      .parse(
+        sqlite
+          .prepare(
+            `SELECT b.brief_id FROM brief_tasks b JOIN briefs r ON r.id = b.brief_id
+             WHERE b.task_id = ? AND r.paused_at IS NOT NULL`,
+          )
+          .all(taskId),
+      )
+      .map((row) => ({ kind: 'brief', id: row.brief_id }))
+    if (
+      detail.assignee &&
+      sqlite.prepare('SELECT 1 FROM agent_pauses WHERE agent_id = ?').get(detail.assignee) !==
+        undefined
+    )
+      owners.push({ kind: 'agent', id: detail.assignee })
+    if (teamPaused) owners.push({ kind: 'team', id: 'team' })
+    for (const owner of owners) recordHolds(sqlite, owner, [taskId], now)
+  }
+}
+
 // Ingest hook: keeps the brief tables in step with the events an observation produced, and emits
 // `brief.upserted` when a brief's derived status changed. Same transaction as the observation itself.
 export const deriveBriefEvents: DeriveEvents = (sqlite, drafts, { now }) => {
   const affected = new Set<string>()
   const add = (ids: string[]) => ids.forEach((id) => affected.add(id))
   const explicit = new Set<string>()
+  const arrived = new Set<string>()
   for (const draft of drafts) {
     switch (draft.type) {
       case 'brief.upserted':
@@ -314,6 +349,7 @@ export const deriveBriefEvents: DeriveEvents = (sqlite, drafts, { now }) => {
           for (const briefId of forTask(sqlite, parent))
             linkTask(sqlite, briefId, draft.data.id, 'child', now)
         add(forTask(sqlite, draft.data.id))
+        arrived.add(draft.data.id)
         break
       }
       case 'approval.requested':
@@ -363,6 +399,7 @@ export const deriveBriefEvents: DeriveEvents = (sqlite, drafts, { now }) => {
         break
     }
   }
+  recordArrivalHolds(sqlite, arrived, now)
   return [...affected].filter((id) => !explicit.has(id)).flatMap((id) => emitBrief(sqlite, id))
 }
 

@@ -11,7 +11,8 @@ import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { requestIdempotency } from './idempotency.ts'
-import { holdable, recordHolds, type TaskHolds } from './task-holds.ts'
+import { holdable, recordHolds } from '../domain/holds.ts'
+import type { TaskHolds } from './task-holds.ts'
 
 const ParamsSchema = z.object({ agentId: z.string().min(1).max(256) })
 const DetailRow = z.object({ detail: z.string() })

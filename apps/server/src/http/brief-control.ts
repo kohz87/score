@@ -4,7 +4,8 @@ import { briefTasks, emitBriefChange, requireBrief, taskStatus } from '../domain
 import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
-import { holdable, recordHolds, type TaskHolds } from './task-holds.ts'
+import { holdable, recordHolds } from '../domain/holds.ts'
+import type { TaskHolds } from './task-holds.ts'
 
 export interface BriefControl {
   pause(briefId: string): Promise<void>

@@ -191,7 +191,11 @@ export async function startServer(
     }
     await port.start(ingest)
     // Only now can the adapter read tasks. Retried (bounded) while Hermes or a write keeps failing.
-    const recoverHolds = app.recoverTaskHolds
+    const { recoverTaskHolds, recoverPlanStarts } = app
+    const recoverHolds =
+      recoverTaskHolds && recoverPlanStarts
+        ? async () => (await recoverTaskHolds()) + (await recoverPlanStarts())
+        : recoverTaskHolds
     if (recoverHolds) {
       let attempts = 0
       const attempt = () => {

@@ -6,60 +6,14 @@ import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { taskStatus } from '../domain/briefs.ts'
+import { HOLD_KINDS, otherHold, PARKABLE, TABLES, type HoldOwner } from '../domain/holds.ts'
 
 const PAUSE_REASON = 'Paused from Score'
 const RESUME_REASON = 'Resumed from Score'
-/** Statuses Score parks. Triage is not dispatchable, and anything else has started or moved on. */
-const PARKABLE = ['ready', 'todo']
-
-export type HoldOwner = { kind: 'brief' | 'agent'; id: string }
-
-const TABLES = {
-  brief: { table: 'brief_paused_tasks', column: 'brief_id' },
-  agent: { table: 'agent_paused_tasks', column: 'agent_id' },
-} as const
 
 const StateRow = z.object({ state: z.enum(['pending', 'held']) })
 const TaskRow = z.object({ task_id: z.string() })
 const OwnerRow = z.object({ owner: z.string() })
-
-/** Whether any hold (any owner, any state) other than `except` still wants the task parked. */
-function otherHold(sqlite: DatabaseSync, taskId: string, except: HoldOwner): boolean {
-  return (['brief', 'agent'] as const).some((kind) => {
-    const { table, column } = TABLES[kind]
-    const exclude = kind === except.kind ? `AND ${column} <> ?` : ''
-    return (
-      sqlite
-        .prepare(`SELECT 1 FROM ${table} WHERE task_id = ? ${exclude}`)
-        .get(...(kind === except.kind ? [taskId, except.id] : [taskId])) !== undefined
-    )
-  })
-}
-
-export function anyHold(sqlite: DatabaseSync, taskId: string): boolean {
-  return otherHold(sqlite, taskId, { kind: 'brief', id: '\0' })
-}
-
-/** Not-started tasks a pause should hold: parkable now, or already parked by another hold. */
-export function holdable(sqlite: DatabaseSync, taskId: string, status: string): boolean {
-  return PARKABLE.includes(status) || (status === 'scheduled' && anyHold(sqlite, taskId))
-}
-
-/** Records the intent in the caller's transaction (before Hermes is touched). Existing rows keep their state. */
-export function recordHolds(
-  sqlite: DatabaseSync,
-  owner: HoldOwner,
-  taskIds: string[],
-  now: string,
-): void {
-  const { table, column } = TABLES[owner.kind]
-  for (const taskId of taskIds)
-    sqlite
-      .prepare(
-        `INSERT OR IGNORE INTO ${table} (${column}, task_id, blocked_at, state) VALUES (?, ?, ?, 'pending')`,
-      )
-      .run(owner.id, taskId, now)
-}
 
 export interface TaskHolds {
   /** Parks every pending hold of the owner. Returns the tasks Hermes would not park (they stay pending). */
@@ -71,6 +25,8 @@ export interface TaskHolds {
    * that are no longer paused. Returns how many tasks still need another attempt.
    */
   recover(isPaused: (owner: HoldOwner) => boolean): Promise<number>
+  /** Parks the pending holds of paused owners only (tasks that arrived after a Pause). Returns the failures. */
+  applyPending(isPaused: (owner: HoldOwner) => boolean): Promise<number>
 }
 
 /**
@@ -239,6 +195,23 @@ export function createTaskHolds(deps: {
     return failed
   }
 
+  const owners = (pendingOnly: boolean) =>
+    db.read((sqlite) =>
+      HOLD_KINDS.flatMap((kind) => {
+        const { table, column } = TABLES[kind]
+        return z
+          .array(OwnerRow)
+          .parse(
+            sqlite
+              .prepare(
+                `SELECT DISTINCT ${column} AS owner FROM ${table} ${pendingOnly ? "WHERE state = 'pending'" : ''}`,
+              )
+              .all(),
+          )
+          .map((row): HoldOwner => ({ kind, id: row.owner }))
+      }),
+    )
+
   const holds: TaskHolds = {
     apply: (owner, stillPaused) =>
       each(taskIdsOf(owner, true), (taskId) => applyOne(owner, taskId, stillPaused)),
@@ -248,22 +221,19 @@ export function createTaskHolds(deps: {
         return true
       }),
     async recover(isPaused) {
-      const owners = db.read((sqlite) =>
-        (['brief', 'agent'] as const).flatMap((kind) => {
-          const { table, column } = TABLES[kind]
-          return z
-            .array(OwnerRow)
-            .parse(sqlite.prepare(`SELECT DISTINCT ${column} AS owner FROM ${table}`).all())
-            .map((row): HoldOwner => ({ kind, id: row.owner }))
-        }),
-      )
       let unresolved = 0
-      for (const owner of owners) {
+      for (const owner of owners(false)) {
         const failed = await (isPaused(owner)
           ? holds.apply(owner, () => isPaused(owner))
           : holds.release(owner))
         unresolved += failed.length
       }
+      return unresolved
+    },
+    async applyPending(isPaused) {
+      let unresolved = 0
+      for (const owner of owners(true))
+        if (isPaused(owner)) unresolved += (await holds.apply(owner, () => isPaused(owner))).length
       return unresolved
     },
   }
