@@ -130,7 +130,9 @@ export function ConnectionsSection({ agents }: { agents: AgentSummary[] }) {
                     {row.label}
                   </span>
                   <span className="settings-muted">
-                    {row.status === 'connected' ? 'Connected' : (row.detail ?? 'Not connected')}
+                    {row.status === 'connected'
+                      ? 'Connected'
+                      : (readable(row.detail) ?? 'Not connected')}
                   </span>
                   {row.status !== 'connected' && (
                     <button
@@ -157,4 +159,12 @@ export function ConnectionsSection({ agents }: { agents: AgentSummary[] }) {
       )}
     </section>
   )
+}
+
+// Gateway states can arrive as codes ("auth_failed"); show them as words.
+function readable(detail: string | null): string | null {
+  if (!detail) return null
+  if (!/^[a-z0-9_]+$/.test(detail)) return detail
+  const words = detail.replace(/_/g, ' ')
+  return words.charAt(0).toUpperCase() + words.slice(1)
 }

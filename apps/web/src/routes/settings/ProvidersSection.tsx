@@ -81,7 +81,10 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
               {item.label}
             </span>
             <UsedBy ids={item.usedBy} agents={agents} />
-            <span className="settings-detail">{item.detail}</span>
+            {/* Don't repeat the status ("Not connected · Not connected"). */}
+            {item.detail.toLowerCase() !== statusText[item.status].toLowerCase() && (
+              <span className="settings-detail">{item.detail}</span>
+            )}
             <span className="settings-status" data-status={item.status}>
               {statusText[item.status]}
             </span>

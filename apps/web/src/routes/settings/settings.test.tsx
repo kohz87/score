@@ -106,7 +106,7 @@ test('shows the section nav, providers with status and who uses them, and connec
   const connectionsRegion = await screen.findByRole('region', { name: 'Connections' })
   expect(await within(connectionsRegion).findByText('files')).toBeDefined()
   expect(within(connectionsRegion).getByText(/Everyone/)).toBeDefined()
-  expect(within(connectionsRegion).getByText('auth_failed')).toBeDefined()
+  expect(within(connectionsRegion).getByText('Auth failed')).toBeDefined()
   expect(screen.getAllByText('Coming soon.')).toHaveLength(3)
 })
 
