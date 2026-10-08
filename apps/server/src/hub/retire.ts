@@ -1,6 +1,15 @@
 import { z } from 'zod'
+import type { MediaStore } from '../media/store.ts'
 import type { ScoreDb } from '../db/index.ts'
 import { heldIngestPositions } from './ingest.ts'
+
+export function retireMedia(media: MediaStore): {
+  removed: number
+  missing: number
+  orphans: number
+} {
+  return media.sweep()
+}
 
 export const INTERNAL_OBSERVATION_SOURCES = [
   'approval-sweep',

@@ -84,6 +84,7 @@ type MessagePart =
   | { kind: 'plan'; lanes: { agentId: AgentId; blocks: LaneBlock[] }[]; briefId: string }
   | { kind: 'tools'; summary: string /* "Ran 6 commands and edited 2 files" */; runId: string }
   | { kind: 'file'; path: string; added: number; removed: number }
+  | { kind: 'image'; mediaId: string }                 // an uploaded image, served by GET /api/media/:mediaId
   | { kind: 'approval'; approvalId: string }
   | { kind: 'review'; verdict: 'approved' | 'changes_requested'; taskId: string | null }
 type Message = { id: string; roomId: string; author: { kind: 'you' } | { kind: 'agent'; agentId: AgentId }
@@ -156,6 +157,16 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   ```
 - `POST /api/session/pair` `{ token: string }` → `204` + `Set-Cookie: score_session=…` (one-time token printed by
   the server on its terminal). `GET /api/session` → `{ paired: boolean }`. `DELETE /api/session` → `204`.
+- **Remote access mode** (`SCORE_REMOTE=1`, ARCHITECTURE D7.2; absent in local mode). The server denies every request that
+  lacks a paired session except this exact public list: `POST /api/session/pair`, `GET /api/session` (boolean only),
+  `GET /api/health` (`{ ok, contract }` only) and the built static web assets (`GET` only). HEAD, encoded aliases, previews,
+  `/api/stream`, media and all other routes return `401 not_paired`; a Host not in `SCORE_PUBLIC_ORIGINS` returns `403`.
+  Mutations also need an allowed `Origin` (missing or `null` is refused). Private responses carry `Cache-Control: no-store`.
+  Sessions expire after 7 days idle or 30 days absolute (stream heartbeats do not renew). Revocation and expiry close that
+  session's open `/api/stream` connections. Bridge routes (`/bridge/v1/*`) are served only on a separate loopback listener.
+  - `GET /api/session/browsers` → `{ items: { id: uuid; label: string; address: string; createdAt: iso; lastSeenAt: iso;
+    expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a management id, never a credential.
+  - `DELETE /api/session/browsers/:id` → `204` (revokes that browser; idempotent).
 - `GET /api/search?q=` → `{ items: { kind: 'agent'|'task'|'room'|'message'|'command'|'setting'; id: string;
   label: string; hint: string | null; ref: Ref | { kind: 'route'; path: string } }[] }` (⌘K palette)
 
@@ -241,7 +252,10 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   | `/skill` | `/skill @agent <name>` (use) · `/skill install <name>` | loads or installs a skill | `{ kind: 'skill', name, installed: boolean }` |
   | `/model` | `/model <model> <message…>` | runs this message on another model | `{ kind: 'model', model }` |
 - `GET /api/commands` → `{ items: { name: string; usage: string; description: string }[] }` (slash menu)
-- `POST /api/media` (multipart) → `{ mediaId: string; name: string; size: number; contentType: string }`
+- **H** `POST /api/media` (multipart, one part named `file`) → `201 { mediaId: string; name: string; size: number;
+  contentType: string }`. Types come from the bytes (png, jpeg, gif, webp); `400` empty or malformed, `413` over 8 MB,
+  `415` unsupported or contradicting type, `507 media_quota_exceeded`. Messages reference uploads with an `image`
+  part (at most 8 per message).
 
 ## 6. Approvals
 
@@ -270,7 +284,32 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 ## 8. Team
 
 - **S** `GET /api/agents` → `{ asOfSeq; items: AgentSummary[] }`
-- `POST /api/agents` `{ id: string; name: string; role: string; style: AgentStyle; model?: string; cloneFrom?: AgentId }` → `AgentDetail`
+- **H** `POST /api/agents/preview` → `AgentPreview` (§8 lifecycle below).
+- **H** `POST /api/agents` `{ id; name; role; style; model; cloneFrom?; previewHash; confirmInheritance? }` → `202 AgentOperation`.
+- **H** `PATCH /api/agents/:agentId` `{ name?; role? }` → `AgentDetail`. Name is a Score display name; profile id never changes. Role is nonempty description text.
+- **H** `DELETE /api/agents/:agentId` `{ typedName; previewHash }` → `202 AgentOperation`.
+- `GET /api/agents/operations/:opId` → `AgentOperation` (paired session required).
+
+Lifecycle schemas live in `packages/contract/src/profiles.ts`. Preview accepts `{ kind: 'create', id, name, role,
+style, model, cloneFrom? }` or `{ kind: 'delete', agentId }`. Canonical names are lowercase ASCII letters/digits,
+underscore or hyphen, 1–64 characters with an alphanumeric first character; `default` and retired names are reserved.
+Preview returns `{ kind; targetName; hash; inherited: { memories: string[]; skills: string[]; plugins: string[];
+approvalSettings: string[]; credentialsPresent: string[] }; effects: string[]; blockers: string[];
+pendingWork: { activeRuns; queuedTurns; pendingApprovals; assignments; disposition }; exportPath: string|null }`.
+Inheritance lists contain names only, never credential values or memory contents. Unknown inventory blocks cloning.
+Create/delete recompute the preview; a stale hash is `409 conflict`. Cloning requires `confirmInheritance: true`.
+All mutations accept Idempotency-Key receipts. Operations are durable and lock their target through completion or
+needs-attention; no automatic adoption, rollback, credential rotation, destructive retry, or gateway restart.
+`AgentOperation` is `{ id; kind: 'create'|'delete'; targetName; incarnationId; requestHash;
+state: 'running'|'needs_attention'|'completed'; steps: { name; state: 'pending'|'running'|'completed' }[];
+createdAt; updatedAt; nextStep: string|null; error: string|null; exportPath: string|null }`.
+Managed summaries have optional `lifecycle: { state: 'setting_up'|'ready'|'deleting'|'needs_attention'|'removed';
+incarnationId; operationId: string|null }`. Only ready agents admit work. Removed agents remain in snapshots for
+historical attribution, but have no routing, room membership or lead selection. Lifecycle changes emit only
+`agent.updated`. Deletion freezes admissions, refuses active runs, queued turns, pending approvals or unfinished
+assignments, verifies a private export first, and retires the name. Exports omit credentials and are not a full undo;
+their local path is displayed but their bytes are never served. Retired-name reuse is currently refused until an
+incarnation-aware reuse confirmation contract is agreed.
 - `PATCH /api/agents/:agentId/style` `{ color?; shape? }` → `AgentSummary`
 - **S** `GET /api/agents/:agentId` → `AgentDetail`
   ```ts

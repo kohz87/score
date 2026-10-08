@@ -25,9 +25,10 @@ test('flow canvas renders the brief, zooms, fits and moves focus across nodes', 
   await expect.poll(() => nodes.count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(2)
   await expect(page.locator('[data-flow-edge]').first()).toBeAttached()
   await expect(page.locator('[data-flow-edge][data-kind="flow"]').first()).toBeAttached()
+  // The inspector can show a step with the same words as its own heading; the brief title comes first.
   await expect(
-    page.getByRole('heading', { level: 2 }).filter({ hasText: 'pagination' }),
-  ).toBeVisible()
+    page.getByRole('heading', { level: 2 }).filter({ hasText: 'pagination' }).first(),
+  ).toBeVisible({ timeout: 15_000 })
 
   const level = page.getByRole('status', { name: 'Zoom level' })
   const world = page.getByTestId('flow-world')

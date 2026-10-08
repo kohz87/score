@@ -4,6 +4,7 @@ import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { StreamContext, useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery, statusLabels } from './team-queries.ts'
 import './team.css'
+import { AddAgent } from './AddAgent.tsx'
 
 export function TeamLayout() {
   const agents = useStreamQuery(agentsQuery)
@@ -13,12 +14,15 @@ export function TeamLayout() {
         <NavLink className="team-all" to="/team" end>
           All agents
         </NavLink>
-        {agents.data?.map((agent) => (
-          <NavLink key={agent.id} to={`/team/${encodeURIComponent(agent.id)}`}>
-            <AgentGlyph agent={agent} decorative contrast="high" />
-            <span>{agent.name}</span>
-          </NavLink>
-        ))}
+        {agents.data
+          ?.filter((agent) => agent.lifecycle?.state !== 'removed')
+          .map((agent) => (
+            <NavLink key={agent.id} to={`/team/${encodeURIComponent(agent.id)}`}>
+              <AgentGlyph agent={agent} decorative contrast="high" />
+              <span>{agent.name}</span>
+            </NavLink>
+          ))}
+        <AddAgent agents={agents.data ?? []} />
       </nav>
       <div className="team-content">
         <Outlet />
@@ -59,21 +63,29 @@ export function TeamPage() {
         </section>
       )}
       <ul className="team-list">
-        {agents.data?.map((agent) => (
-          <li key={agent.id}>
-            <Link
-              className="team-card team-agent-card"
-              to={`/team/${encodeURIComponent(agent.id)}`}
-            >
-              <AgentGlyph agent={agent} describeShape contrast="high" />
-              <h2>{agent.name}</h2>
-              <p className="team-muted-strong">{agent.role || 'No role set'}</p>
-              <p className="team-status">{statusLabels[agent.status]}</p>
-              <p aria-live="polite">{agent.activity ?? 'No current activity'}</p>
-              <span className="team-muted">{agent.model?.label ?? 'Model unavailable'}</span>
-            </Link>
-          </li>
-        ))}
+        {agents.data
+          ?.filter((agent) => agent.lifecycle?.state !== 'removed')
+          .map((agent) => (
+            <li key={agent.id}>
+              <Link
+                className="team-card team-agent-card"
+                to={`/team/${encodeURIComponent(agent.id)}`}
+              >
+                <AgentGlyph agent={agent} describeShape contrast="high" />
+                <h2>{agent.name}</h2>
+                <p className="team-muted-strong">{agent.role || 'No role set'}</p>
+                <p className="team-status">
+                  {agent.lifecycle?.state === 'ready'
+                    ? 'Ready'
+                    : agent.lifecycle
+                      ? agent.activity
+                      : statusLabels[agent.status]}
+                </p>
+                <p aria-live="polite">{agent.activity ?? 'No current activity'}</p>
+                <span className="team-muted">{agent.model?.label ?? 'Model unavailable'}</span>
+              </Link>
+            </li>
+          ))}
       </ul>
     </>
   )

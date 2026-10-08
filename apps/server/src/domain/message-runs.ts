@@ -45,6 +45,7 @@ export function reserveMessageRun(
   },
   now: string,
 ): void {
+  assertAgentAdmits(sqlite, req.agentId)
   const turnId = messageTurnId(req.parentMessageId, req.agentId)
   sqlite
     .prepare(
@@ -305,7 +306,7 @@ export function completeRunMessage(
     })
     // The contract currently has no system message part; keep the visible notice as text.
     if (decision.stopped) message.parts.push({ kind: 'text', text: 'Hand-off limit reached' })
-    for (const agentId of decision.targets)
+    for (const agentId of decision.targets.filter((id) => agentAdmits(sqlite, id)))
       reserveMessageRun(
         sqlite,
         {
@@ -383,3 +384,4 @@ export function failMessageRun(
     now,
   )
 }
+import { agentAdmits, assertAgentAdmits } from './agent-lifecycle.ts'

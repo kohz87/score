@@ -44,25 +44,7 @@ function bearerHash(value: unknown): Buffer {
   return hashBridgeToken(parsed.data.slice(7))
 }
 
-export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): void {
-  const {
-    db,
-    ingest,
-    bootstrapHash,
-    getCompatibility,
-    clock = Date.now,
-    metrics = { unknownHooks: 0 },
-  } = deps
-
-  // Recover a crash between observation commit and the response's contiguous acknowledgement.
-  db.sqlite
-    .prepare(
-      `UPDATE ingest_checkpoints SET cursor = (
-    SELECT CAST(acked_through AS TEXT) FROM producers WHERE 'bridge:' || incarnation = ingest_checkpoints.source
-  ) WHERE scope = 'events' AND source IN (SELECT 'bridge:' || incarnation FROM producers)`,
-    )
-    .run()
-
+export function registerBridgeCredentialGuard(app: FastifyInstance): void {
   // Browser mutations have their own credentials. A bridge bearer never authorizes an API call.
   app.addHook('onRequest', async (request) => {
     const path = request.routeOptions.url ?? request.url.split('?', 1)[0] ?? ''
@@ -72,6 +54,26 @@ export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): vo
     // Reject the bridge credential format even after rotation removes its hash from the registry.
     throw unauthorized()
   })
+}
+
+export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): void {
+  const {
+    db,
+    ingest,
+    bootstrapHash,
+    getCompatibility,
+    clock = Date.now,
+    metrics = { unknownHooks: 0 },
+  } = deps
+  // Recover a crash between observation commit and the response's contiguous acknowledgement.
+  db.sqlite
+    .prepare(
+      `UPDATE ingest_checkpoints SET cursor = (
+    SELECT CAST(acked_through AS TEXT) FROM producers WHERE 'bridge:' || incarnation = ingest_checkpoints.source
+  ) WHERE scope = 'events' AND source IN (SELECT 'bridge:' || incarnation FROM producers)`,
+    )
+    .run()
+  registerBridgeCredentialGuard(app)
 
   app.post(
     '/bridge/v1/hello',

@@ -81,7 +81,7 @@ test('the whole fake scenario passes real ingest validation and covers every scr
   const stored = events()
   const expectedTypes = StreamEventSchema.options.map((schema) => schema.shape.type.value)
   expect([...new Set(stored.map((event) => event.type))].sort()).toEqual(expectedTypes.sort())
-  expect(stored).toHaveLength(createScenario(schedulerStart).length + 3)
+  expect(stored).toHaveLength(createScenario(schedulerStart).length + 4)
   expect(
     stored.filter((event) => event.type === 'approval.requested').map((event) => event.data.origin),
   ).toEqual(['score-run', 'score-run', 'gateway', 'kanban'])
@@ -304,7 +304,7 @@ test('stop is idempotent, drains in-flight submissions and cancels remaining tim
   await scheduler.advance(20000)
   expect(events()).toHaveLength(1)
   await play()
-  expect(events()).toHaveLength(4 + createScenario(schedulerStart).length)
+  expect(events()).toHaveLength(5 + createScenario(schedulerStart).length)
 })
 
 test('stopping a scripted run prevents later script steps from undoing the cancellation', async () => {
@@ -328,7 +328,7 @@ test('scheduled ingest failures are reported and do not produce unhandled reject
   vi.spyOn(sink, 'submit').mockRejectedValueOnce(failure)
   await play()
   expect(onError).toHaveBeenCalledExactlyOnceWith(failure)
-  expect(events()).toHaveLength(createScenario(schedulerStart).length + 2)
+  expect(events()).toHaveLength(createScenario(schedulerStart).length + 3)
   expect(scheduler.pending).toBe(0)
 })
 
@@ -369,7 +369,7 @@ test('speed scales timer delays while scenario data stays deterministic', async 
   await scheduler.advance(scenarioDuration / 100 - 1)
   expect(events().at(-1)?.type).toBe('agent.updated')
   await scheduler.advance(1)
-  expect(events()).toHaveLength(createScenario(schedulerStart).length + 3)
+  expect(events()).toHaveLength(createScenario(schedulerStart).length + 4)
   expect(events().at(-1)?.data).toMatchObject({ updatedAt: '2026-01-01T12:03:00.000Z' })
 })
 
@@ -415,7 +415,7 @@ test('looping pauses ten seconds then emits fresh identities and entities on the
   port = createHermesPort(loadConfig({}), { scheduler, onError })
   await play()
   const first = events()
-  expect(first).toHaveLength(createScenario(schedulerStart).length + 3)
+  expect(first).toHaveLength(createScenario(schedulerStart).length + 4)
   expect(scheduler.pending).toBe(1)
   await scheduler.advance(9999)
   expect(events()).toEqual(first)

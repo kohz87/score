@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
 
-const RoomRowSchema = z.object({
+export const RoomRowSchema = z.object({
   id: z.string(),
   name: z.string(),
   kind: RoomSchema.shape.kind,

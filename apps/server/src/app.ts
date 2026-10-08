@@ -3,6 +3,7 @@ import { CONTRACT_VERSION, type SystemStatus } from '@score/contract'
 import type { Config } from './config.ts'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
 import { registerAgentRoutes } from './http/agents.ts'
+import { registerProfileRoutes } from './http/profiles.ts'
 import { registerAgentTabRoutes } from './http/agent-tabs.ts'
 import { registerReportRoutes } from './http/reports.ts'
 import { registerTaskRoutes } from './http/tasks.ts'
@@ -13,11 +14,16 @@ import { registerRoomRoutes } from './http/rooms.ts'
 import { registerBriefRoutes } from './http/briefs.ts'
 import { createBriefControl } from './http/brief-control.ts'
 import { registerTeamPauseRoutes } from './http/team-pause.ts'
+import { registerMediaRoutes } from './http/media.ts'
+import { MediaStore } from './media/store.ts'
+import { join } from 'node:path'
 import { registerNowRoutes } from './http/now.ts'
 import { registerWatchRoutes } from './http/watch.ts'
 import { registerApprovalRoutes } from './http/approvals.ts'
 import { registerErrorHandlers } from './errors.ts'
 import { registerCsrfGuard } from './auth/csrf.ts'
+import { registerRemoteGuard } from './auth/remote.ts'
+import { registerWebAssets, type WebAssets } from './http/web-assets.ts'
 import { PairingService } from './auth/pairing.ts'
 import type { SessionStore } from './auth/session-store.ts'
 import { registerSessionRoutes } from './http/session.ts'
@@ -29,6 +35,7 @@ import { getSystemStatus as defaultSystemStatus } from './system-status.ts'
 import {
   createHermesPort,
   registerBridgeRoutes,
+  registerBridgeCredentialGuard,
   type BridgeDeps,
   type HermesPort,
 } from './hermes/index.ts'
@@ -36,6 +43,8 @@ import {
 declare module 'fastify' {
   interface FastifyInstance {
     pairing: PairingService
+    // Present when the app has a database; Watch frame capture stores screenshots with media.store().
+    media?: MediaStore
   }
 }
 
@@ -52,6 +61,9 @@ interface BuildAppOptions {
   streamOptions?: Pick<StreamRouteOptions, 'heartbeatMs' | 'fanoutOptions'>
   bridge?: BridgeDeps
   outbox?: ApprovalOutbox
+  media?: MediaStore
+  https?: { cert: Buffer; key: Buffer }
+  webAssets?: WebAssets
 }
 
 export function buildApp({
@@ -67,9 +79,14 @@ export function buildApp({
   streamOptions,
   bridge,
   outbox,
+  media,
+  https,
+  webAssets,
 }: BuildAppOptions): FastifyInstance {
   const logging = logger ?? process.env.NODE_ENV !== 'test'
   const app = Fastify({
+    ...(https ? { https } : {}),
+    trustProxy: false,
     logger:
       logging === false
         ? false
@@ -97,9 +114,12 @@ export function buildApp({
             },
           },
   })
-  app.decorate('pairing', new PairingService(sessionStore, clock))
+  app.decorate('pairing', new PairingService(sessionStore, clock, Boolean(config.remote)))
   registerErrorHandlers(app)
+  registerRemoteGuard(app, config, new Set(webAssets ? [...webAssets.keys(), '/', '/pair'] : []))
+  if (config.remote) registerBridgeCredentialGuard(app)
   registerCsrfGuard(app, config)
+  app.addHook('preClose', async () => app.pairing.close())
   const approvalsOutbox =
     outbox ??
     (db && ingest
@@ -112,7 +132,7 @@ export function buildApp({
           ...(clock ? { clock } : {}),
         })
       : undefined)
-  if (bridge)
+  if (bridge && !config.remote)
     registerBridgeRoutes(app, {
       ...bridge,
       ...(approvalsOutbox ? { outbox: approvalsOutbox } : {}),
@@ -132,15 +152,29 @@ export function buildApp({
       await approvalsOutbox.stop()
     })
   }
+  const mediaStore =
+    media ??
+    (db
+      ? new MediaStore(db, join(config.home, 'media'), {
+          ...(config.mediaQuotaMb ? { quotaBytes: config.mediaQuotaMb * 1024 * 1024 } : {}),
+          ...(clock ? { clock } : {}),
+        })
+      : undefined)
+  if (mediaStore) {
+    app.decorate('media', mediaStore)
+    registerMediaRoutes(app, mediaStore)
+  }
   registerTaskRoutes(app, port, ingest, db, clock)
   registerReportRoutes(app, port, db, clock)
   registerAgentRoutes(app, port, ingest, db, clock)
+  if (db && ingest)
+    registerProfileRoutes(app, { db, ingest, port, config, ...(clock ? { clock } : {}) })
   registerAgentTabRoutes(app, port, ingest, db, clock)
   registerRoutineRoutes(app, port, db, clock)
   registerSettingsRoutes(app, port, db, clock)
   registerRulesRoutes(app, port, ingest, db, clock)
   if (db && ingest) {
-    const dispatch = registerRoomRoutes(app, port, db, ingest, clock)
+    const dispatch = registerRoomRoutes(app, port, db, ingest, clock, mediaStore)
     const control = createBriefControl({ port, db, ingest, dispatch })
     registerBriefRoutes(app, { port, db, ingest, control, ...(clock ? { clock } : {}) })
     registerTeamPauseRoutes(app, { db, ingest, control, dispatch, ...(clock ? { clock } : {}) })
@@ -154,10 +188,40 @@ export function buildApp({
     })
   }
   app.get('/api/health', async () => ({ ok: true, contract: CONTRACT_VERSION }))
-  registerSessionRoutes(app, app.pairing)
+  registerSessionRoutes(app, app.pairing, Boolean(config.remote?.tlsCert))
   registerSystemRoutes(app, getSystemStatus)
   if (db && ingest && getEpoch) {
-    registerStreamRoute(app, { db, ingest, getEpoch, getSystemStatus, ...streamOptions })
+    registerStreamRoute(app, {
+      db,
+      ingest,
+      getEpoch,
+      getSystemStatus,
+      remote: Boolean(config.remote),
+      ...streamOptions,
+    })
   }
+  if (webAssets)
+    registerWebAssets(
+      app,
+      webAssets,
+      config.remote ? (config.remote.insecureHttp ? 'http' : 'tls') : undefined,
+    )
+  return app
+}
+
+export function buildBridgeApp(
+  bridge?: BridgeDeps,
+  outbox?: ApprovalOutbox,
+  logger: FastifyServerOptions['logger'] = false,
+): FastifyInstance {
+  const app = Fastify({ logger, trustProxy: false })
+  registerErrorHandlers(app)
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.ip !== '127.0.0.1' && request.ip !== '::1')
+      return reply
+        .code(403)
+        .send({ error: { code: 'forbidden', message: 'Loopback listener only' } })
+  })
+  if (bridge) registerBridgeRoutes(app, { ...bridge, ...(outbox ? { outbox } : {}) })
   return app
 }

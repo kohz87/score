@@ -5,6 +5,7 @@ import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import { CreateRoutineSchema, PatchRoutineSchema, type HermesPort } from '../hermes/index.ts'
 import { requestIdempotency } from './idempotency.ts'
+import { assertAgentAdmits } from '../domain/agent-lifecycle.ts'
 
 const AgentParamsSchema = z.object({ agentId: z.string().min(1).max(256) })
 const RoutineParamsSchema = z.object({ routineId: z.string().min(1).max(256) })
@@ -27,6 +28,7 @@ export function registerRoutineRoutes(
   })
   app.post('/api/agents/:agentId/routines', mutation, async (request) => {
     const { agentId } = AgentParamsSchema.parse(request.params)
+    if (db) assertAgentAdmits(db.sqlite, agentId)
     const req = CreateRoutineSchema.parse(request.body)
     const key = KeySchema.parse(request.headers['idempotency-key'] ?? randomUUID())
     return port.createRoutine(agentId, req, key)
@@ -42,6 +44,7 @@ export function registerRoutineRoutes(
   })
   app.post('/api/routines/:routineId/run', mutation, async (request) => {
     const { routineId } = RoutineParamsSchema.parse(request.params)
+    if (db) assertAgentAdmits(db.sqlite, routineId.split(':', 1)[0]!)
     await port.runRoutine(routineId)
     return { id: routineId, queued: true }
   })
