@@ -41,7 +41,15 @@ export function registerBridgeDecisionRoutes(
         do {
           const revision = deps.outbox.notifier.revision(producer.id)
           items = await deps.outbox.claimBridge(producer.id)
-          if (items.length || signal.aborted || performance.now() >= deadline) break
+          // A closed notifier (shutdown) answers every wait at once: stop here, or this loop claims thousands of times
+          // a second until the bridge listener closes (seen live 2026-10-08: ~2,000/s for ~20 s per restart).
+          if (
+            items.length ||
+            signal.aborted ||
+            deps.outbox.notifier.isClosed ||
+            performance.now() >= deadline
+          )
+            break
           await deps.outbox.notifier.wait(
             producer.id,
             revision,

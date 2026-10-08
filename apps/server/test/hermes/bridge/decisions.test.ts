@@ -1,5 +1,5 @@
 import { BridgeDecisionsResponseSchema } from '@score/contract'
-import { afterEach, beforeEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ApprovalOutbox } from '../../../src/domain/approval-outbox.ts'
 import { readApprovalRow, readDelivery, approvalView } from '../../../src/domain/approval-store.ts'
 import { createHermesPort } from '../../../src/hermes/index.ts'
@@ -221,6 +221,30 @@ test('shutdown ends pending long polls cleanly', async () => {
   const close = env.app.close()
   expect(await waiting).toEqual([])
   await close
+})
+test('a long poll stops once the outbox notifier closes, instead of claiming in a loop until the bridge closes', async () => {
+  // The app's own outbox this time, as in production (start-server shares it with the bridge listener).
+  await outbox.stop()
+  await env.close()
+  let shared!: ApprovalOutbox
+  env = setup({
+    outbox: (deps) =>
+      (shared = new ApprovalOutbox({
+        ...deps,
+        port: createHermesPort({ mode: 'fake', home: env.home, fakeSpeed: 1, fakeLoop: false }),
+      })),
+  })
+  outbox = shared
+  token = await env.token()
+  const claims = vi.spyOn(shared, 'claimBridge')
+  const waiting = poll(token, 30)
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  const started = performance.now()
+  // Shutdown closes the notifier before the bridge listener (seen live: ~2,000 claims/s for ~20 s per restart).
+  shared.notifier.close()
+  expect(await waiting).toEqual([])
+  expect(performance.now() - started).toBeLessThan(1000)
+  expect(claims.mock.calls.length).toBeLessThanOrEqual(2)
 })
 test('a resolution signal before applied is upgraded to you; mismatched applied stays unknown', async () => {
   const [lease] = await poll()

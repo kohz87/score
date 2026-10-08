@@ -1,3 +1,5 @@
+import type { ScoreDb } from '../../../src/db/index.ts'
+import type { ApprovalOutbox } from '../../../src/domain/approval-outbox.ts'
 import {
   BridgeHelloResponseSchema,
   type BridgeEvent,
@@ -53,7 +55,13 @@ export function event(
 export function setup({
   logger = false,
   mode = 'live',
-}: { logger?: FastifyServerOptions['logger']; mode?: 'live' | 'fake' } = {}) {
+  outbox,
+}: {
+  logger?: FastifyServerOptions['logger']
+  mode?: 'live' | 'fake'
+  /** Builds the outbox the app's bridge routes use (from the test's db, ingest and clock). */
+  outbox?: (deps: { db: ScoreDb; ingest: ReturnType<typeof createIngest> }) => ApprovalOutbox
+} = {}) {
   const home = mkdtempSync(join(tmpdir(), 'score-bridge-'))
   const db = openDatabase(join(home, 'score.db'))
   migrate(db, fileURLToPath(new URL('../../../migrations/', import.meta.url)))
@@ -72,6 +80,7 @@ export function setup({
     config,
     db,
     ingest,
+    ...(outbox ? { outbox: outbox({ db, ingest }) } : {}),
     logger,
     clock,
     port,

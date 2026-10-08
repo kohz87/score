@@ -106,6 +106,10 @@ export class ApprovalNotifier {
     this.closed = true
     for (const set of this.listeners.values()) for (const finish of [...set]) finish()
   }
+  /** After close, waits return at once: long-polls must stop instead of claiming in a loop. */
+  get isClosed(): boolean {
+    return this.closed
+  }
 }
 
 export class ApprovalOutbox {
