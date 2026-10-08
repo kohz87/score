@@ -210,7 +210,7 @@ export async function startServer(
       60 * 60 * 1000,
     )
     retention.unref()
-    return { app, bridgeApp, pairingToken: token, close }
+    return { app, bridgeApp, pairingToken: token, ingest, db: database, close }
   } catch (error) {
     try {
       await close()

@@ -15,13 +15,14 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r typecheck && tsc -p scripts/tsconfig.json",
     "test": "pnpm -r test",
     "e2e": "playwright test",
     "e2e:install": "playwright install chromium",
     "license:check": "node scripts/license-check.mjs",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm test:plugin && pnpm license:check",
-    "test:plugin": "cd hermes-plugin && uv run --offline pytest -q"
+    "test:plugin": "cd hermes-plugin && uv run --offline pytest -q",
+    "load-test": "pnpm --filter @score/server exec tsx ../../scripts/load-test.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
