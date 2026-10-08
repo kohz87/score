@@ -247,6 +247,13 @@ export function linkTasks(
     ),
   )
   for (const { taskId } of fresh) linkDescendants(sqlite, briefId, taskId, now)
+  // A task can arrive before its link (Start plan links after Hermes created it); if the brief was paused in
+  // between, the arrival hook found nothing to hold.
+  recordArrivalHolds(
+    sqlite,
+    fresh.map(({ taskId }) => taskId),
+    now,
+  )
 }
 
 export const linkTask = (

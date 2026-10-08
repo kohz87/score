@@ -555,6 +555,7 @@ export class ProfileOperations {
       createdAt: operation.createdAt,
       input: stored.input,
       baseline: current,
+      previousNever: stored.baseline.never,
       exportPath: operation.exportPath,
     })
     stored.baseline = current

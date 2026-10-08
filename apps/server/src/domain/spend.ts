@@ -10,9 +10,12 @@ export interface SessionCost {
 }
 
 const HOUR = 3_600_000
+// Readings are bucketed per quarter hour, not per hour: every real UTC offset is a multiple of 15 minutes, so a
+// bucket never spans a local midnight and a later reading cannot overwrite the baseline taken before it.
+const BUCKET = 900_000
 export const SNAPSHOT_RETENTION_MS = 60 * 24 * HOUR
 
-/** Upserts one snapshot per session per hour (the later reading wins), then prunes rows past retention. */
+/** Upserts one snapshot per session per quarter hour (the later reading wins), then prunes rows past retention. */
 export function recordSessionCosts(
   sqlite: DatabaseSync,
   profile: string,
@@ -30,7 +33,7 @@ export function recordSessionCosts(
     upsert.run(
       profile,
       session.sessionId,
-      Math.floor(now / HOUR),
+      Math.floor(now / BUCKET), // the `hour` column holds the bucket number
       now,
       session.costUsd,
       session.estimated ? 1 : 0,

@@ -13,6 +13,7 @@ import {
   fetchCurrentSession,
   pendingApprovalsQuery,
   useAgentPause,
+  useWatchLiveRefresh,
   useWatchOverview,
   watchQuery,
 } from './watch-queries.ts'
@@ -49,6 +50,7 @@ function WatchView({ agentId }: { agentId: string }) {
   // The frame window starts at the newest frames; replaying a moment outside it re-anchors the window there.
   const [anchor, setAnchor] = useState<number | null>(from)
   const watch = useStreamQuery(watchQuery(agentId, anchor))
+  useWatchLiveRefresh(agentId, anchor, watch.data?.agent.status === 'paused')
   const approvals = useStreamQuery(approvalsQuery)
   const waiting = useStreamQuery(pendingApprovalsQuery(agentId))
   const overview = useWatchOverview()

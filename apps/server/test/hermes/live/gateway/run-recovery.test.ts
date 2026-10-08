@@ -25,7 +25,7 @@ afterEach(async () => {
 const SESSION = 'score-chat-builder'
 type Row = [role: string, content: string | null, at: number, toolCalls?: string]
 
-function writeHistory(rows: Row[]) {
+function writeHistory(rows: Row[], compressedInto?: { id: string; rows: Row[] }) {
   mkdirSync(`${hermes.home}/profiles/builder`, { recursive: true })
   const { db } = hermes.build('state', 'profiles/builder/state.db')
   db.prepare(
@@ -36,6 +36,17 @@ function writeHistory(rows: Row[]) {
     db.prepare(
       'INSERT INTO messages (session_id, role, content, tool_calls, timestamp) VALUES (?, ?, ?, ?, ?)',
     ).run(SESSION, role, content, toolCalls ?? null, at)
+  if (compressedInto) {
+    db.prepare("UPDATE sessions SET end_reason = 'compression' WHERE id = ?").run(SESSION)
+    db.prepare(
+      `INSERT INTO sessions (id, source, profile_name, model, started_at, parent_session_id)
+       VALUES (?, 'api_server', 'builder', 'example-model', 1, ?)`,
+    ).run(compressedInto.id, SESSION)
+    for (const [role, content, at] of compressedInto.rows)
+      db.prepare(
+        'INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)',
+      ).run(compressedInto.id, role, content, at)
+  }
 }
 
 async function admittedMessage() {
@@ -161,4 +172,50 @@ test.each([
     error: 'Hermes no longer has a record of this run',
   })
   expect(JSON.stringify(reply().parts)).toContain('interrupted')
+})
+
+test("a later turn in the same session is not recovered as this run's answer", async () => {
+  const context = await admittedMessage()
+  const s = Date.parse(readRun(env.db.sqlite, context.runId).started_at) / 1000
+  writeHistory([
+    ['user', 'fixture', s + 1],
+    ['assistant', null, s + 2, '[{"id":"c1"}]'],
+    ['user', 'resumed by the owner', s + 500],
+    ['assistant', 'Unrelated. @reviewer do things', s + 501],
+  ])
+  await follow(context)
+  expect(readRun(env.db.sqlite, context.runId).status).toBe('interrupted')
+  expect(
+    env.db.sqlite
+      .prepare("SELECT count(*) AS n FROM message_runs WHERE agent_id = 'reviewer'")
+      .get(),
+  ).toMatchObject({ n: 0 })
+})
+
+test('an answer written after compression moved the session is recovered from the continuation', async () => {
+  const context = await admittedMessage()
+  const s = Date.parse(readRun(env.db.sqlite, context.runId).started_at) / 1000
+  writeHistory([['user', 'fixture', s + 1]], {
+    id: 'score-chat-builder-2',
+    rows: [['assistant', 'Finished after compression.', s + 9]],
+  })
+  await follow(context)
+  expect(readRun(env.db.sqlite, context.runId)).toMatchObject({ status: 'completed' })
+  expect(JSON.stringify(reply().parts)).toContain('Finished after compression.')
+})
+
+test('a run row rebuilt from an accepted admission keeps the original send time', async () => {
+  const context = await admittedMessage()
+  const sentAt = '2026-10-06T10:00:00.000Z'
+  env.db.sqlite.prepare('UPDATE command_intents SET first_sent_at = ?').run(sentAt)
+  env.db.sqlite.exec('PRAGMA foreign_keys = OFF')
+  env.db.sqlite.prepare('DELETE FROM runs WHERE id = ?').run(context.runId)
+  env.db.sqlite.exec('PRAGMA foreign_keys = ON')
+  // A crash before the runs insert also means the observation was never recorded.
+  env.db.sqlite.exec("DELETE FROM ingest_keys WHERE identity LIKE 'admitted:%'")
+  await env.intents.startRunIntent(
+    { profile: 'builder', input: 'fixture' },
+    messageTurnId('human', 'builder'),
+  )
+  expect(readRun(env.db.sqlite, context.runId).started_at).toBe(sentAt)
 })

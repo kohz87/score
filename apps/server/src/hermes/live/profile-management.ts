@@ -375,7 +375,12 @@ export class LiveProfileManagement implements ProfileManagementPort {
       if (detail.model?.id !== input.model) throw failure('Model readback did not match.')
     } else if (step === 'permissions') {
       await this.options.port.updateApprovals(name, (current) =>
-        expectedConfig(current, context.baseline, { withoutGoAhead: [], extraNever: [] }),
+        expectedConfig(
+          current,
+          context.baseline,
+          { withoutGoAhead: [], extraNever: [] },
+          context.previousNever,
+        ),
       )
       const config = await this.options.port.readApprovals(name)
       if (

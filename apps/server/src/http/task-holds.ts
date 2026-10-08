@@ -93,7 +93,9 @@ export function createTaskHolds(deps: {
       const { table, column } = TABLES[owner.kind]
       return (
         sqlite
-          .prepare(`SELECT 1 FROM ${table} WHERE ${column} = ? AND task_id = ? AND legacy = 1`)
+          .prepare(
+            `SELECT 1 FROM ${table} WHERE ${column} = ? AND task_id = ? AND legacy = 1 AND state = 'held'`,
+          )
           .get(owner.id, taskId) !== undefined
       )
     })

@@ -58,6 +58,13 @@ export function createPlanStarter(deps: {
     const brief = db.read((sqlite) => readBriefRow(sqlite, run.brief_id))
     if (!brief) throw new HttpError(404, 'not_found', 'Unknown brief')
     for (const step of run.steps.slice(taskIds.length)) {
+      // Pause may land between steps (or while Hermes creates one): no further tasks for a paused brief.
+      if (db.read((sqlite) => readBriefRow(sqlite, run.brief_id))?.paused_at)
+        throw new HttpError(
+          409,
+          'conflict',
+          'The brief was paused; resume it and start the plan again',
+        )
       const task = await port.createTask(
         {
           title: step.title,

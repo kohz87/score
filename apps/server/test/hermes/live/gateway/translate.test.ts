@@ -587,3 +587,31 @@ test('output that diverges after a restart lost held text replaces the streamed 
     env.db.sqlite.prepare("SELECT hop FROM message_runs WHERE agent_id = 'reviewer'").get(),
   ).toMatchObject({ hop: 1 })
 })
+
+test('a token streamed after a restart lost its "Bearer " label never reaches the events log', async () => {
+  const context = await admittedMessage()
+  const base = { run_id: context.runId, timestamp: Date.now() / 1000 }
+  await env.ingest.submit(
+    translateRunEvent(
+      context,
+      { ...base, event: 'message.delta', delta: 'Send Authorization: Bearer ', seq: 1 },
+      { unknownEvents: 0 },
+    ),
+  )
+  env.db.sqlite
+    .prepare("UPDATE message_runs SET pending = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'")
+    .run()
+  const token = 'Zx9vQ2mLpR4tY8wE1uI3oP6aS5dF0gHjKlMn'
+  for (const event of [
+    { ...base, event: 'message.delta', delta: `${token}\nnext`, seq: 2 },
+    {
+      ...base,
+      event: 'run.completed',
+      output: `Send Authorization: Bearer ${token}\nnext`,
+      seq: 3,
+    },
+  ])
+    await env.ingest.submit(translateRunEvent(context, event, { unknownEvents: 0 }))
+  const logged = JSON.stringify(env.db.sqlite.prepare('SELECT * FROM events').all())
+  expect(logged).not.toContain(token)
+})

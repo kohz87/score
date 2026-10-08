@@ -55,15 +55,23 @@ test('spend is unknown before the first snapshot of a session that started earli
   expect(spend(midnight, midnight + 24 * H, null, midnight + 1)).toBeNull()
 })
 
-test('growth is bounded: one row per session per hour, nothing older than 60 days', () => {
+test('growth is bounded: one row per session per quarter hour, nothing older than 60 days', () => {
   for (let minute = 0; minute < 60; minute += 10) record(minute, midnight + minute * 60_000)
   record(99, midnight + H)
   const count = () =>
     (db.sqlite.prepare('SELECT COUNT(*) AS n FROM session_cost_snapshots').get() as { n: number }).n
-  expect(count()).toBe(2)
+  expect(count()).toBe(5)
   expect(
     db.sqlite.prepare('SELECT cost_usd FROM session_cost_snapshots ORDER BY hour LIMIT 1').get(),
-  ).toEqual({ cost_usd: 50 })
+  ).toEqual({ cost_usd: 10 })
   record(100, midnight + SNAPSHOT_RETENTION_MS + 2 * H)
   expect(count()).toBe(1)
+})
+
+test('readings either side of a half-hour-offset local midnight keep their baseline (Asia/Kolkata)', () => {
+  const local = Date.parse('2026-03-09T18:30:00Z') // Kolkata midnight
+  record(2, local - 40 * 60_000)
+  record(5, local - 10 * 60_000)
+  record(6, local + 10 * 60_000)
+  expect(spend(local, local + 24 * H, 6)).toBeCloseTo(1)
 })

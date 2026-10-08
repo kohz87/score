@@ -470,3 +470,30 @@ test('gate #4 migration bounds legacy uncertain admissions by creation time; rec
     insert.run('oversized-after-upgrade', JSON.stringify('x'.repeat(65536)), at),
   ).toThrow()
 })
+
+test('migration 0026 does not treat a pending pause hold as a confirmed legacy block', () => {
+  const copy = join(dir, 'legacy-holds')
+  mkdirSync(copy)
+  const names = readdirSync(migrationDir).sort()
+  for (const name of names.filter((item) => item < '0024'))
+    cpSync(join(migrationDir, name), join(copy, name))
+  const db = open()
+  migrate(db, copy)
+  const at = '2026-10-01T00:00:00.000Z'
+  for (const state of ['pending', 'held'])
+    db.sqlite
+      .prepare(
+        'INSERT INTO agent_paused_tasks (agent_id, task_id, blocked_at, state) VALUES (?, ?, ?, ?)',
+      )
+      .run('builder', state, at, state)
+  db.sqlite.exec('UPDATE agent_paused_tasks SET legacy = 1')
+  for (const name of names.filter((item) => item >= '0024'))
+    cpSync(join(migrationDir, name), join(copy, name))
+  migrate(db, copy)
+  expect(
+    db.sqlite.prepare('SELECT task_id, legacy FROM agent_paused_tasks ORDER BY task_id').all(),
+  ).toEqual([
+    { task_id: 'held', legacy: 1 },
+    { task_id: 'pending', legacy: 0 },
+  ])
+})

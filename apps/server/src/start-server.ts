@@ -9,6 +9,7 @@ import { buildApp, buildBridgeApp } from './app.ts'
 import { loadWebAssets, type WebAssets } from './http/web-assets.ts'
 import { SqliteSessionStore } from './auth/sqlite-session-store.ts'
 import type { Config } from './config.ts'
+import { retryUntilResolved } from './retry-until-resolved.ts'
 import {
   createHermesPort,
   createScreenshotImporter,
@@ -69,7 +70,7 @@ export async function startServer(
   let deliverySweep: NodeJS.Timeout | undefined
   let retention: NodeJS.Timeout | undefined
   let logRotation: NodeJS.Timeout | undefined
-  let holdRecovery: NodeJS.Timeout | undefined
+  let holdRecovery: { stop(): void } | undefined
   let spendSnapshots: NodeJS.Timeout | undefined
   let port: HermesPort | undefined
   let closing: Promise<void> | undefined
@@ -77,7 +78,7 @@ export async function startServer(
   async function closeResources(): Promise<void> {
     clearInterval(retention)
     clearInterval(logRotation)
-    clearInterval(holdRecovery)
+    holdRecovery?.stop()
     clearInterval(spendSnapshots)
     clearInterval(deliverySweep)
     try {
@@ -201,20 +202,8 @@ export async function startServer(
         ? async () => (await recoverTaskHolds()) + (await recoverPlanStarts())
         : recoverTaskHolds
     if (recoverHolds) {
-      let attempts = 0
-      const attempt = () => {
-        attempts++
-        void recoverHolds()
-          .then((unresolved) => {
-            if (unresolved === 0 || attempts >= 20) clearInterval(holdRecovery)
-          })
-          .catch(() => {
-            if (attempts >= 20) clearInterval(holdRecovery)
-          })
-      }
-      holdRecovery = setInterval(attempt, 30_000)
-      holdRecovery.unref()
-      attempt()
+      // 20 fast passes (30 s apart), then every 5 minutes for as long as anything is unresolved.
+      holdRecovery = retryUntilResolved(recoverHolds, [...Array<number>(20).fill(30_000), 300_000])
     }
     // Warm the per-profile caches, so the first page load after a restart doesn't wait ~15 s on cold Hermes reads.
     const warming = port

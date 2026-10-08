@@ -11,7 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { apiFetch } from '../../data/api.ts'
 import { defineStreamQuery } from '../../data/resync.ts'
-import { useStream } from '../../data/query-client.ts'
+import { useStream, useStreamQueryRefetch } from '../../data/query-client.ts'
 import { addMarker, surfaceMarker, upsertFrame } from './watch-model.ts'
 import { newId } from '../../data/ids.ts'
 
@@ -172,4 +172,21 @@ export async function fetchCurrentSession(agentId: string): Promise<string | nul
     await apiFetch(`agents/${encodeURIComponent(agentId)}/watch?limit=1`),
   )
   return sessionId
+}
+
+// A paused agent sends no status updates when its last run ends, so Watch would stay "live" forever: re-read it then.
+export function useWatchLiveRefresh(agentId: string, from: number | null, paused: boolean) {
+  const stream = useStream()
+  const refetch = useStreamQueryRefetch(watchQuery(agentId, from))
+  useEffect(() => {
+    if (!paused) return
+    return stream.subscribe((event) => {
+      if (
+        event.type === 'run.updated' &&
+        event.data.agentId === agentId &&
+        !ACTIVE_RUN.includes(event.data.status)
+      )
+        void refetch()
+    })
+  }, [stream, refetch, agentId, paused])
 }
