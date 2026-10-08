@@ -172,7 +172,7 @@ export function buildApp({
     registerProfileRoutes(app, { db, ingest, port, config, ...(clock ? { clock } : {}) })
   registerAgentTabRoutes(app, port, ingest, db, clock)
   registerRoutineRoutes(app, port, db, clock)
-  registerSettingsRoutes(app, port, db, clock)
+  registerSettingsRoutes(app, port, db, clock, config)
   registerRulesRoutes(app, port, ingest, db, clock)
   if (db && ingest) {
     const dispatch = registerRoomRoutes(app, port, db, ingest, clock, mediaStore)

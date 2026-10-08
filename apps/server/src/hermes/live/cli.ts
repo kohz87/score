@@ -1,4 +1,4 @@
-import { execFile, type ExecFileException, type ExecFileOptions } from 'node:child_process'
+import { execFile, spawn, type ExecFileException, type ExecFileOptions } from 'node:child_process'
 import { z } from 'zod'
 import { isExcludedConfigKey } from '../config-keys.ts'
 import { ProfileNameSchema, resolveHermesHome } from './paths.ts'
@@ -74,6 +74,107 @@ export function captureReadShape(argv: string[]): boolean {
   )
 }
 const SETTINGS_READS = ['auth list', 'config get --json mcp_servers', 'config get --json providers']
+/** The settings reads, optionally scoped to one profile with a leading `-p <name>`. */
+function settingsRead(argv: string[]): boolean {
+  const scoped = argv[0] === '-p' && ProfileNameSchema.safeParse(argv[1]).success
+  return SETTINGS_READS.includes((scoped ? argv.slice(2) : argv).join(' '))
+}
+function hermesEnv(hermesHome: string | undefined): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { HERMES_HOME: resolveHermesHome(hermesHome) }
+  for (const name of ['PATH', 'HOME', 'LANG', 'LC_ALL', 'TMPDIR']) {
+    if (process.env[name] !== undefined) env[name] = process.env[name]
+  }
+  return env
+}
+
+// Provider sign-in (ARCHITECTURE D2.7): the only long-running or stdin-fed Hermes commands. Exact shapes only,
+// with an optional leading `-p <profile>`; the provider id and label are validated here as well as by callers.
+const SignInProviderSchema = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/)
+const SignInLabelSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$/)
+export type SignInShape = 'device_code' | 'api_key'
+export function signInShape(argv: string[]): SignInShape | null {
+  const rest =
+    argv[0] === '-p' && ProfileNameSchema.safeParse(argv[1]).success ? argv.slice(2) : argv
+  if (rest[0] !== 'auth' || rest[1] !== 'add' || !SignInProviderSchema.safeParse(rest[2]).success)
+    return null
+  if (
+    rest.length === 6 &&
+    rest[3] === '--type' &&
+    rest[4] === 'oauth' &&
+    rest[5] === '--no-browser'
+  )
+    return 'device_code'
+  if (
+    rest.length === 7 &&
+    rest[3] === '--type' &&
+    rest[4] === 'api-key' &&
+    rest[5] === '--label' &&
+    SignInLabelSchema.safeParse(rest[6]).success
+  )
+    return 'api_key'
+  return null
+}
+
+export interface HermesChild {
+  /** Kills the whole process group by the handle's pid; never by name or pattern. */
+  kill(): void
+  /** Exit code; -1 when it could not start or died from a signal. */
+  readonly exited: Promise<number>
+}
+export interface SpawnOptions {
+  hermesHome?: string | undefined
+  /** Written to stdin (then closed). Without it stdin is closed immediately. Never logged or captured. */
+  input?: string
+  /** Receives stdout text; without it stdout is discarded. stderr is always discarded. */
+  onStdout?: (chunk: string) => void
+}
+export type HermesSpawner = (argv: string[], options: SpawnOptions) => HermesChild
+
+export const spawnHermes: HermesSpawner = (args, options) => {
+  const argv = z.array(z.string().refine((value) => !value.includes('\0'))).parse(args)
+  const shape = signInShape(argv)
+  if (!shape) throw new Error('Spawning is restricted to provider sign-in commands')
+  if ((shape === 'api_key') !== (options.input !== undefined))
+    throw new Error('Only the API key sign-in takes stdin')
+  // detached = new session: no controlling terminal, so a password prompt reads stdin instead of /dev/tty.
+  const child = spawn('hermes', argv, {
+    detached: true,
+    env: hermesEnv(options.hermesHome),
+    stdio: ['pipe', options.onStdout ? 'pipe' : 'ignore', 'ignore'],
+  })
+  const exited = new Promise<number>((resolve) => {
+    child.once('error', () => resolve(-1))
+    child.once('close', (code) => resolve(code ?? -1))
+  })
+  child.stdin?.on('error', () => undefined)
+  child.stdin?.end(options.input)
+  if (options.onStdout) {
+    const onStdout = options.onStdout
+    child.stdout?.setEncoding('utf8')
+    child.stdout?.on('data', (chunk: string) => onStdout(chunk))
+  }
+  let finished = false
+  void exited.then(() => {
+    finished = true
+  })
+  return {
+    exited,
+    kill() {
+      if (finished || child.pid === undefined) return
+      const signal = (name: NodeJS.Signals) => {
+        try {
+          process.kill(-child.pid!, name)
+        } catch {
+          // Already gone.
+        }
+      }
+      signal('SIGTERM')
+      setTimeout(() => {
+        if (!finished) signal('SIGKILL')
+      }, 2000).unref()
+    },
+  }
+}
 
 export const runHermes: HermesRunner = async (args, options) => {
   const argv = z.array(z.string().refine((value) => !value.includes('\0'))).parse(args)
@@ -92,7 +193,7 @@ export const runHermes: HermesRunner = async (args, options) => {
     throw new Error('CLI stdout capture is restricted to task creation')
   if (options.captureRead && !captureReadShape(argv))
     throw new Error('CLI stdout capture is restricted to allowlisted reads')
-  if (options.captureSettings && !SETTINGS_READS.includes(argv.join(' ')))
+  if (options.captureSettings && !settingsRead(argv))
     throw new Error('CLI stdout capture is restricted to settings status reads')
   const capture =
     options.captureModel ||
@@ -109,10 +210,7 @@ export const runHermes: HermesRunner = async (args, options) => {
         ? 256 * 1024
         : 16 * 1024
   const timeout = z.int().positive().parse(options.timeoutMs)
-  const env: NodeJS.ProcessEnv = { HERMES_HOME: resolveHermesHome(options.hermesHome) }
-  for (const name of ['PATH', 'HOME', 'LANG', 'LC_ALL', 'TMPDIR']) {
-    if (process.env[name] !== undefined) env[name] = process.env[name]
-  }
+  const env = hermesEnv(options.hermesHome)
   return new Promise((resolve) => {
     // Only the allowlisted model read and task creation may return stdout; errors and stderr stay private.
     try {

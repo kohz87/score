@@ -1,6 +1,8 @@
-import { useState, type FormEvent } from 'react'
-import type { AgentSummary, ProviderItem } from '@score/contract'
+import { useCallback, useState, type FormEvent } from 'react'
+import type { AgentSummary, ConnectResult, ProviderItem } from '@score/contract'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { ApiKeyPanel } from './ApiKeyPanel.tsx'
+import { SignInPanel } from './SignInPanel.tsx'
 import { failure, TerminalCommand } from './TerminalCommand.tsx'
 import { useProviders, useRecheckSettings, useSettingsActions } from './settings-queries.ts'
 
@@ -31,6 +33,10 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
   const [showAll, setShowAll] = useState(false)
   const { connectProvider, addLocal } = useSettingsActions()
   const [command, setCommand] = useState<{ id: string; text: string } | null>(null)
+  // Which provider shows a browser sign-in panel: a device-code sign-in or a key form (ARCHITECTURE D2.7).
+  const [panel, setPanel] = useState<
+    { id: string; kind: 'key' } | { id: string; kind: 'device'; start: ConnectResult } | null
+  >(null)
   const providers = useProviders(command !== null)
   const recheck = useRecheckSettings()
   const [adding, setAdding] = useState(false)
@@ -38,14 +44,36 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
   const [notice, setNotice] = useState('')
 
   function connect(item: ProviderItem) {
+    setNotice('')
+    setCommand(null)
+    setPanel(null)
+    if (item.signIn === 'api_key') {
+      setPanel({ id: item.id, kind: 'key' })
+      return
+    }
     connectProvider.mutate(item.id, {
       onSuccess: (result) => {
-        if (result.next === 'run_in_terminal' && result.command)
-          setCommand({ id: item.id, text: result.command })
+        if (result.next === 'device_code' && result.signInId)
+          setPanel({ id: item.id, kind: 'device', start: result })
+        else if (result.command) setCommand({ id: item.id, text: result.command })
         else setNotice(`${item.label} is connected.`)
       },
     })
   }
+  // The terminal command is the fallback for every panel; the server hands it back with the connect result.
+  function openTerminal(item: ProviderItem, from?: ConnectResult) {
+    setPanel(null)
+    if (from?.command) {
+      setCommand({ id: item.id, text: from.command })
+      return
+    }
+    connectProvider.mutate(item.id, {
+      onSuccess: (result) => {
+        if (result.command) setCommand({ id: item.id, text: result.command })
+      },
+    })
+  }
+  const signedIn = useCallback(() => recheck(), [recheck])
   function submit(event: FormEvent) {
     event.preventDefault()
     addLocal.mutate(
@@ -107,6 +135,29 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
             >
               {item.status === 'connected' ? 'Edit' : 'Connect'}
             </button>
+            {panel?.id === item.id && panel.kind === 'key' && (
+              <ApiKeyPanel
+                providerId={item.id}
+                label={item.label}
+                onSaved={() => {
+                  setPanel(null)
+                  setNotice(`${item.label} is connected.`)
+                  recheck()
+                }}
+                onClose={() => setPanel(null)}
+                onTerminal={() => openTerminal(item)}
+              />
+            )}
+            {panel?.id === item.id && panel.kind === 'device' && (
+              <SignInPanel
+                label={item.label}
+                start={panel.start}
+                onConnected={signedIn}
+                onClose={() => setPanel(null)}
+                onRetry={() => connect(item)}
+                onTerminal={() => openTerminal(item, panel.start)}
+              />
+            )}
             {command?.id === item.id && (
               <TerminalCommand
                 command={command.text}

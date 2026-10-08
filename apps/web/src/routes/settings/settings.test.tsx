@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { createMemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { AgentSummary, ConnectionsResponse, ProviderItem } from '@score/contract'
+import { crossesNetworkUnencrypted } from './ApiKeyPanel.tsx'
 import { App, appRoutes } from '../../App.tsx'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry } from '../../data/resync.ts'
@@ -33,9 +34,18 @@ const providers: ProviderItem[] = [
     status: 'connected',
     detail: 'API key (1)',
     usedBy: ['builder'],
+    signIn: 'api_key',
   },
   { id: 'anthropic', label: 'Anthropic', status: 'needs_signin', detail: 'Signed in', usedBy: [] },
   { id: 'nous', label: 'Nous Portal', status: 'missing', detail: 'Not connected', usedBy: [] },
+  {
+    id: 'openai-codex',
+    label: 'ChatGPT (Codex)',
+    status: 'missing',
+    detail: 'Not connected',
+    usedBy: [],
+    signIn: 'device_code',
+  },
 ]
 const connections: ConnectionsResponse = {
   toolServers: [
@@ -265,4 +275,189 @@ test('after signing in from the terminal, Done re-checks and the provider shows 
   )
   const models = screen.getByRole('region', { name: 'Models and keys' })
   expect(within(models).getAllByText('Connected')).toHaveLength(2)
+})
+
+const waitingSignIn = {
+  id: 'si-1',
+  providerId: 'openai-codex',
+  state: 'waiting',
+  url: 'https://auth.example.com/device',
+  code: 'ABCD-EFGH',
+  expiresAt: '2026-10-08T12:15:00.000Z',
+  message: null,
+}
+const deviceResult = {
+  next: 'device_code',
+  command: 'hermes auth add openai-codex',
+  url: 'https://auth.example.com/device',
+  code: 'ABCD-EFGH',
+  signInId: 'si-1',
+  expiresAt: '2026-10-08T12:15:00.000Z',
+}
+function respondWith(extra: (path: string, init?: RequestInit) => Response | undefined) {
+  respond = (path, init) =>
+    extra(path, init) ??
+    (path === '/api/settings/providers'
+      ? json({ items: providers })
+      : path === '/api/agents'
+        ? json({ asOfSeq: 0, items: [builder] })
+        : json(connections))
+}
+
+test('a device sign-in shows the link and code, follows the status and ends as connected', async () => {
+  let state = 'waiting'
+  respondWith((path, init) => {
+    if (path === '/api/settings/providers/openai-codex/connect' && init?.method === 'POST')
+      return json(deviceResult)
+    if (path === '/api/settings/sign-ins/si-1')
+      return json(
+        state === 'waiting'
+          ? waitingSignIn
+          : { ...waitingSignIn, state: 'connected', url: null, code: null },
+      )
+    return undefined
+  })
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Connect ChatGPT (Codex)' }))
+  const panel = await screen.findByRole('group', { name: 'Sign in to ChatGPT (Codex)' })
+  const link = within(panel).getByRole('link', { name: 'Open the sign-in page' })
+  expect(link.getAttribute('href')).toBe('https://auth.example.com/device')
+  expect(link.getAttribute('target')).toBe('_blank')
+  expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+  expect(within(panel).getByLabelText('Sign-in code').textContent).toBe('ABCD-EFGH')
+  expect(within(panel).getByText('Waiting for you to approve…')).toBeDefined()
+  expect(within(panel).getByRole('button', { name: 'Copy code' })).toBeDefined()
+  expect(within(panel).getByRole('button', { name: 'Use a terminal instead' })).toBeDefined()
+  // The next poll finds the sign-in approved: the panel says connected and the providers are re-read.
+  state = 'connected'
+  const before = calls.filter((call) => call.path === '/api/settings/providers').length
+  await within(panel).findByText('ChatGPT (Codex) is connected.', {}, { timeout: 4000 })
+  await waitFor(() =>
+    expect(calls.filter((call) => call.path === '/api/settings/providers').length).toBeGreaterThan(
+      before,
+    ),
+  )
+}, 10_000)
+
+test('cancelling a device sign-in calls DELETE and closes the panel; the terminal fallback shows the command', async () => {
+  respondWith((path, init) => {
+    if (path === '/api/settings/providers/openai-codex/connect' && init?.method === 'POST')
+      return json(deviceResult)
+    if (path === '/api/settings/sign-ins/si-1' && init?.method === 'DELETE')
+      return json({ ...waitingSignIn, state: 'cancelled', url: null, code: null })
+    if (path === '/api/settings/sign-ins/si-1') return json(waitingSignIn)
+    return undefined
+  })
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Connect ChatGPT (Codex)' }))
+  const panel = await screen.findByRole('group', { name: 'Sign in to ChatGPT (Codex)' })
+  fireEvent.click(within(panel).getByRole('button', { name: 'Use a terminal instead' }))
+  expect(await screen.findByText('hermes auth add openai-codex')).toBeDefined()
+  expect(screen.queryByRole('group', { name: 'Sign in to ChatGPT (Codex)' })).toBeNull()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Connect ChatGPT (Codex)' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+  await waitFor(() =>
+    expect(screen.queryByRole('group', { name: 'Sign in to ChatGPT (Codex)' })).toBeNull(),
+  )
+  expect(
+    calls.some(
+      (call) => call.path === '/api/settings/sign-ins/si-1' && call.init?.method === 'DELETE',
+    ),
+  ).toBe(true)
+})
+
+test('a failed device sign-in offers to try again', async () => {
+  respondWith((path, init) => {
+    if (path === '/api/settings/providers/openai-codex/connect' && init?.method === 'POST')
+      return json(deviceResult)
+    if (path === '/api/settings/sign-ins/si-1')
+      return json({
+        ...waitingSignIn,
+        state: 'expired',
+        url: null,
+        code: null,
+        message: 'The code expired. Start the sign-in again.',
+      })
+    return undefined
+  })
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Connect ChatGPT (Codex)' }))
+  expect(await screen.findByText('The code expired. Start the sign-in again.')).toBeDefined()
+  expect(screen.getByRole('button', { name: 'Try again' })).toBeDefined()
+})
+
+const KEY = 'sk-or-v1-typed-by-the-person-0001'
+test('a pasted key is sent once in the request body, never shown, and cleared afterwards', async () => {
+  respondWith((path, init) =>
+    path === '/api/settings/providers/openrouter/key' && init?.method === 'POST'
+      ? json({ ...providers[0], detail: 'API key (2)' })
+      : undefined,
+  )
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit OpenRouter' }))
+  const form = await screen.findByRole('form', { name: 'Add a key for OpenRouter' })
+  const input = within(form).getByLabelText('API key') as HTMLInputElement
+  expect(input.type).toBe('password')
+  expect(input.autocomplete).toBe('off')
+  expect(input.getAttribute('spellcheck')).toBe('false')
+  // Loopback in tests: no acknowledgement is asked for.
+  expect(within(form).queryByRole('checkbox')).toBeNull()
+  fireEvent.change(input, { target: { value: KEY } })
+  fireEvent.change(within(form).getByLabelText('Label (optional)'), { target: { value: 'work' } })
+  fireEvent.click(within(form).getByRole('button', { name: 'Save key' }))
+  await screen.findByText('OpenRouter is connected.')
+  const post = calls.find((call) => call.path === '/api/settings/providers/openrouter/key')!
+  expect(JSON.parse(post.init!.body as string)).toEqual({ apiKey: KEY, label: 'work' })
+  expect(new Headers(post.init!.headers).get('Idempotency-Key')).toBeTruthy()
+  expect(screen.queryByRole('form', { name: 'Add a key for OpenRouter' })).toBeNull()
+  expect(document.body.innerHTML).not.toContain(KEY)
+  // The terminal command was never fetched for a key provider.
+  expect(calls.some((call) => call.path.endsWith('/connect'))).toBe(false)
+})
+
+test('a rejected key shows a generic message and clears the field', async () => {
+  respondWith((path, init) =>
+    path === '/api/settings/providers/openrouter/key' && init?.method === 'POST'
+      ? json({ error: { code: 'not_verified', message: 'No' } }, 409)
+      : undefined,
+  )
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit OpenRouter' }))
+  const form = await screen.findByRole('form', { name: 'Add a key for OpenRouter' })
+  const input = within(form).getByLabelText('API key') as HTMLInputElement
+  fireEvent.change(input, { target: { value: KEY } })
+  fireEvent.click(within(form).getByRole('button', { name: 'Save key' }))
+  expect(await within(form).findByText(/Hermes did not accept that key/)).toBeDefined()
+  expect(input.value).toBe('')
+  expect(document.body.innerHTML).not.toContain(KEY)
+  fireEvent.click(within(form).getByRole('button', { name: 'Use a terminal instead' }))
+  respondWith(() => undefined)
+})
+
+test('over plain HTTP on a network address the key form warns and needs an acknowledgement', async () => {
+  expect(crossesNetworkUnencrypted({ protocol: 'http:', hostname: '192.168.1.5' })).toBe(true)
+  expect(crossesNetworkUnencrypted({ protocol: 'http:', hostname: 'localhost' })).toBe(false)
+  expect(crossesNetworkUnencrypted({ protocol: 'http:', hostname: '127.0.0.1' })).toBe(false)
+  expect(crossesNetworkUnencrypted({ protocol: 'https:', hostname: 'score.lan' })).toBe(false)
+  vi.stubGlobal('location', { ...window.location, protocol: 'http:', hostname: '192.168.1.5' })
+  respondWith((path, init) =>
+    path === '/api/settings/providers/openrouter/key' && init?.method === 'POST'
+      ? json({ ...providers[0] })
+      : undefined,
+  )
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit OpenRouter' }))
+  const form = await screen.findByRole('form', { name: 'Add a key for OpenRouter' })
+  expect(within(form).getByRole('alert').textContent).toContain('not encrypted')
+  fireEvent.change(within(form).getByLabelText('API key'), { target: { value: KEY } })
+  const save = within(form).getByRole('button', { name: 'Save key' }) as HTMLButtonElement
+  expect(save.disabled).toBe(true)
+  fireEvent.click(within(form).getByRole('checkbox', { name: /crosses my network unencrypted/ }))
+  expect(save.disabled).toBe(false)
+  fireEvent.click(save)
+  await screen.findByText('OpenRouter is connected.')
+  const post = calls.find((call) => call.path.endsWith('/key'))!
+  expect(JSON.parse(post.init!.body as string)).toMatchObject({ acknowledgeInsecure: true })
 })

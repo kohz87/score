@@ -30,6 +30,7 @@ import type {
   ConnectResult,
   ConnectionsResponse,
   LocalProviderRequest,
+  SignIn,
   ToolServerRequest,
   RoutineSummary,
   RunSummary,
@@ -945,24 +946,110 @@ export class FakePort implements HermesPort {
     // Real Hermes runs on its next tick; the fake records the run immediately.
     this.routine(id).lastRunAt = this.now()
   }
+  // One provider of each sign-in kind: nous (device code), openrouter (pasted key), anthropic (terminal only).
   private readonly fakeProviders: ProviderBase[] = [
-    { id: 'demo', label: 'Demo', status: 'connected', detail: 'Built-in demo models' },
-    { id: 'openrouter', label: 'OpenRouter', status: 'missing', detail: 'Not connected' },
-    { id: 'anthropic', label: 'Anthropic', status: 'needs_signin', detail: 'Session expired' },
+    {
+      id: 'demo',
+      label: 'Demo',
+      status: 'connected',
+      detail: 'Built-in demo models',
+      signIn: 'terminal',
+    },
+    {
+      id: 'openrouter',
+      label: 'OpenRouter',
+      status: 'missing',
+      detail: 'Not connected',
+      signIn: 'api_key',
+    },
+    {
+      id: 'anthropic',
+      label: 'Anthropic',
+      status: 'needs_signin',
+      detail: 'Session expired',
+      signIn: 'terminal',
+    },
     {
       id: 'openai-codex',
       label: 'ChatGPT (Codex)',
       status: 'connected',
       detail: 'Your ChatGPT plan',
+      signIn: 'device_code',
+    },
+    {
+      id: 'nous',
+      label: 'Nous Portal',
+      status: 'missing',
+      detail: 'Not connected',
+      signIn: 'device_code',
     },
   ]
+  // Fake sign-ins finish on the third status read (the mount read plus two 2 s polls), so e2e is deterministic.
+  private readonly fakeSignIns = new Map<string, { signIn: SignIn; reads: number }>()
   async listProviders(): Promise<ProviderBase[]> {
     return structuredClone(this.fakeProviders)
   }
   async connectProvider(id: string): Promise<ConnectResult> {
-    if (!this.fakeProviders.some((provider) => provider.id === id))
-      throw new HttpError(404, 'not_found', 'Unknown provider')
-    return { next: 'run_in_terminal', command: `hermes auth add ${id}` }
+    const provider = this.fakeProviders.find((candidate) => candidate.id === id)
+    if (!provider) throw new HttpError(404, 'not_found', 'Unknown provider')
+    const command = `hermes auth add ${id}`
+    if (provider.signIn !== 'device_code') return { next: 'run_in_terminal', command }
+    let entry = [...this.fakeSignIns.values()].find(
+      (candidate) => candidate.signIn.providerId === id && candidate.signIn.state === 'waiting',
+    )
+    if (!entry) {
+      entry = {
+        reads: 0,
+        signIn: {
+          id: `fake-${this.fakeSignIns.size + 1}`,
+          providerId: id,
+          state: 'waiting',
+          url: 'https://example.com/device',
+          code: 'WXYZ-1234',
+          expiresAt: new Date(this.scheduler.now() + 15 * 60_000).toISOString(),
+          message: null,
+        },
+      }
+      this.fakeSignIns.set(entry.signIn.id, entry)
+    }
+    const { signIn } = entry
+    return {
+      next: 'device_code',
+      command,
+      url: signIn.url!,
+      code: signIn.code!,
+      signInId: signIn.id,
+      expiresAt: signIn.expiresAt,
+    }
+  }
+  private fakeSignIn(id: string) {
+    const entry = this.fakeSignIns.get(id)
+    if (!entry) throw new HttpError(404, 'not_found', 'Unknown sign-in')
+    return entry
+  }
+  async getSignIn(id: string): Promise<SignIn> {
+    const entry = this.fakeSignIn(id)
+    if (entry.signIn.state === 'waiting' && ++entry.reads >= 3) {
+      entry.signIn = { ...entry.signIn, state: 'connected', url: null, code: null }
+      const provider = this.fakeProviders.find((p) => p.id === entry.signIn.providerId)
+      if (provider) Object.assign(provider, { status: 'connected', detail: 'Signed in' })
+    }
+    return structuredClone(entry.signIn)
+  }
+  async cancelSignIn(id: string): Promise<SignIn> {
+    const entry = this.fakeSignIn(id)
+    if (entry.signIn.state === 'waiting')
+      entry.signIn = { ...entry.signIn, state: 'cancelled', url: null, code: null }
+    return structuredClone(entry.signIn)
+  }
+  async addProviderKey(id: string): Promise<ProviderBase> {
+    const provider = this.fakeProviders.find((candidate) => candidate.id === id)
+    if (!provider) throw new HttpError(404, 'not_found', 'Unknown provider')
+    if (provider.signIn !== 'api_key')
+      throw new HttpError(409, 'not_supported', 'This provider does not take a pasted key')
+    // The fake keeps no key, just like the live adapter.
+    Object.assign(provider, { status: 'connected', detail: 'API key (1)' })
+    return structuredClone(provider)
   }
   async addLocalProvider(req: LocalProviderRequest): Promise<ProviderBase> {
     const id = req.label

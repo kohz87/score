@@ -22,6 +22,8 @@ import type {
   ConnectionsResponse,
   LocalProviderRequest,
   ProviderItem,
+  ProviderKeyRequest,
+  SignIn,
   ToolServerRequest,
 } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
@@ -196,8 +198,16 @@ export interface HermesPort extends ProfileManagementPort {
   ): Promise<ApprovalConfig>
   /** Status only (never secrets); `usedBy` is added by the route from the agents' models. */
   listProviders(): Promise<ProviderBase[]>
-  /** Interactive sign-ins are never run by Score: the result carries the command to run in a terminal. */
+  /**
+   * Device-code providers start a sign-in (link + code in the result, D2.7); everything else carries the command
+   * to run in a terminal.
+   */
   connectProvider(id: string): Promise<ConnectResult>
+  /** In-memory sign-ins; unknown ids are 404. */
+  getSignIn(id: string): Promise<SignIn>
+  cancelSignIn(id: string): Promise<SignIn>
+  /** Relays a pasted key to Hermes (stdin); only for `signIn: 'api_key'` providers. Never stored or logged. */
+  addProviderKey(id: string, req: ProviderKeyRequest): Promise<ProviderBase>
   addLocalProvider(req: LocalProviderRequest): Promise<ProviderBase>
   listConnections(): Promise<ConnectionsResponse>
   addToolServer(req: ToolServerRequest): Promise<ConnectResult>

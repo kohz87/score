@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { copyText, selectText } from '../../data/clipboard.ts'
 
-// Score never runs an interactive sign-in or handles a credential: it shows the command instead.
+// The fallback for every sign-in: the person runs the command themselves, on the machine that runs Hermes.
 export function TerminalCommand({ command, onClose }: { command: string; onClose: () => void }) {
   const [state, setState] = useState<'idle' | 'copied' | 'manual'>('idle')
   const code = useRef<HTMLElement>(null)
@@ -14,7 +14,7 @@ export function TerminalCommand({ command, onClose }: { command: string; onClose
   }
   return (
     <div className="settings-command" role="group" aria-label="Run in a terminal">
-      <p>Run this in a terminal. Score never asks for your keys or sign-in details.</p>
+      <p>Run this in a terminal on the machine that runs Hermes.</p>
       <code ref={code} className="settings-command-text" onClick={() => selectText(code.current)}>
         {command}
       </code>

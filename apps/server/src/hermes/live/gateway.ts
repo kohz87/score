@@ -141,7 +141,16 @@ export interface GatewayOptions {
 
 const ModelOptionsSchema = z.object({
   providers: z
-    .array(z.object({ slug: z.string().min(1).max(64), name: z.string().min(1).max(120) }).loose())
+    .array(
+      z
+        .object({
+          slug: z.string().min(1).max(64),
+          name: z.string().min(1).max(120),
+          // How Hermes authenticates the provider (inventory.py `_provider_auth_hint`): "api_key", "oauth_device_code", …
+          auth_type: z.string().max(64).optional(),
+        })
+        .loose(),
+    )
     .max(500),
 })
 
