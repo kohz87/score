@@ -206,7 +206,7 @@ test('profile shows an error for an unknown agent', async () => {
   expect(within(alert).getByText('Agent unavailable')).toBeDefined()
 })
 
-test('tabs move with the arrow keys and unbuilt tabs show a coming-soon panel', async () => {
+test('tabs move with the arrow keys, Home and End', async () => {
   renderTeam('/team/builder')
   const overview = await screen.findByRole('tab', { name: 'Overview' })
   expect(overview.getAttribute('aria-selected')).toBe('true')
@@ -218,7 +218,9 @@ test('tabs move with the arrow keys and unbuilt tabs show a coming-soon panel', 
   fireEvent.keyDown(personality, { key: 'ArrowRight' })
   expect(within(screen.getByRole('tabpanel')).getByRole('heading', { name: 'Model' })).toBeDefined()
   fireEvent.click(screen.getByRole('tab', { name: 'Channels' }))
-  expect(within(screen.getByRole('tabpanel')).getByText(/coming soon/)).toBeDefined()
+  expect(
+    within(screen.getByRole('tabpanel')).getByRole('heading', { name: 'Channels' }),
+  ).toBeDefined()
   fireEvent.keyDown(document.activeElement!, { key: 'End' })
   expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'History' }))
   fireEvent.keyDown(document.activeElement!, { key: 'Home' })
@@ -847,4 +849,102 @@ test('the Permissions tab offers Use team rule on this agent’s own choices', a
   expect(calls.filter((call) => call.method === 'DELETE')[1]!.path).toBe(
     '/api/agents/builder/permissions/never%3Arm%20-rf%20%2Ftmp%2F*',
   )
+})
+
+test('the Channels tab shows platform state and the exact connect command without running it', async () => {
+  const base = respond
+  respond = (path, init) =>
+    path === '/api/agents/builder/channels'
+      ? json({
+          items: [
+            {
+              platform: 'telegram',
+              label: 'Telegram',
+              status: 'connected',
+              detail: null,
+              connectCommand: 'hermes -p builder gateway setup',
+            },
+            {
+              platform: 'slack',
+              label: 'Slack',
+              status: 'disconnected',
+              detail: 'auth_failed',
+              connectCommand: 'hermes -p builder gateway setup',
+            },
+          ],
+        })
+      : base(path, init)
+  renderTeam('/team/builder')
+  fireEvent.click(await screen.findByRole('tab', { name: 'Channels' }))
+  const panel = within(screen.getByRole('tabpanel'))
+  expect(await panel.findByText('Connected')).toBeDefined()
+  expect(panel.getByText('auth failed')).toBeDefined()
+  expect(panel.queryByRole('button', { name: 'Connect Telegram' })).toBeNull()
+  fireEvent.click(panel.getByRole('button', { name: 'Connect Slack' }))
+  expect(panel.getByText('hermes -p builder gateway setup')).toBeDefined()
+  expect(
+    vi.mocked(fetch).mock.calls.every(([, init]) => !init?.method || init.method === 'GET'),
+  ).toBe(true)
+})
+
+test('the History tab lists runs with links, filters by outcome, searches and pages', async () => {
+  const run = (n: number, outcome: string, extra = {}) => ({
+    runId: `run-${n}`,
+    title: `Run ${n}`,
+    origin: 'kanban',
+    outcome,
+    startedAt: '2026-01-01T12:00:00.000Z',
+    durationSec: 90,
+    model: 'm-2',
+    costUsd: 0.5,
+    task: null,
+    brief: null,
+    replaySeq: null,
+    ...extra,
+  })
+  const urls: string[] = []
+  const base = respond
+  respond = (path, init) => {
+    if (!path.startsWith('/api/agents/builder/history')) return base(path, init)
+    urls.push(path)
+    if (path.includes('cursor=50')) return json({ items: [run(3, 'completed')], nextCursor: null })
+    if (path.includes('outcome=failed'))
+      return json({ items: [run(2, 'failed')], nextCursor: null })
+    return json({
+      items: [
+        run(1, 'completed', {
+          task: { id: 't-1', title: 'Wire the stream' },
+          brief: { id: 'b-1', title: 'Ship it' },
+          replaySeq: 4,
+        }),
+      ],
+      nextCursor: '50',
+    })
+  }
+  renderTeam('/team/builder')
+  fireEvent.click(await screen.findByRole('tab', { name: 'History' }))
+  const panel = within(screen.getByRole('tabpanel'))
+  expect(await panel.findByText('Run 1')).toBeDefined()
+  expect(panel.getByRole('link', { name: /Task: Wire the stream/ }).getAttribute('href')).toBe(
+    '/tasks/t-1',
+  )
+  expect(panel.getByRole('link', { name: /Brief: Ship it/ }).getAttribute('href')).toBe(
+    '/now/flow/b-1',
+  )
+  expect(panel.getByRole('link', { name: 'Replay Run 1 in Watch' }).getAttribute('href')).toBe(
+    '/now/watch/builder?from=4',
+  )
+  expect(panel.getByText(/2 min/)).toBeDefined()
+  fireEvent.click(panel.getByRole('button', { name: 'Show more' }))
+  expect(await panel.findByText('Run 3')).toBeDefined()
+  fireEvent.change(panel.getByRole('combobox', { name: 'Outcome' }), {
+    target: { value: 'failed' },
+  })
+  expect(await panel.findByText('Run 2')).toBeDefined()
+  expect(panel.queryByText('Run 1')).toBeNull()
+  fireEvent.change(panel.getByRole('searchbox', { name: 'Search history' }), {
+    target: { value: 'stream' },
+  })
+  fireEvent.click(panel.getByRole('button', { name: 'Search' }))
+  await waitFor(() => expect(urls.some((url) => url.includes('q=stream'))).toBe(true))
 })

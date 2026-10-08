@@ -121,7 +121,7 @@
   cursor: pointer;
 }
 .team-text-action:hover {
-  color: #5236e6;
+  color: var(--link-hover);
 }
 
 /* Header band */
@@ -241,7 +241,7 @@
 .team-style-actions .team-primary {
   background: var(--ink);
   border-color: var(--ink);
-  color: #ffffff;
+  color: var(--card);
 }
 
 /* Tabs */
@@ -268,7 +268,7 @@
 .team-tabs button[aria-selected='true'] {
   background: var(--ink);
   border-color: var(--ink);
-  color: #ffffff;
+  color: var(--card);
   font-weight: 600;
 }
 
@@ -474,7 +474,7 @@
 .team-segment button[aria-pressed='true'] {
   background: var(--ink);
   border-color: var(--ink);
-  color: #ffffff;
+  color: var(--card);
 }
 .team-file-editor {
   display: flex;
@@ -515,7 +515,7 @@
 .team-file-actions .team-primary {
   background: var(--ink);
   border-color: var(--ink);
-  color: #ffffff;
+  color: var(--card);
 }
 .team-file-editor h3 {
   margin: 0 0 6px;
@@ -721,7 +721,7 @@ button.team-toggle:focus-visible,
 .team-routine-form .team-primary {
   background: var(--ink);
   border-color: var(--ink);
-  color: #ffffff;
+  color: var(--card);
 }
 
 /* Permissions tab */
@@ -815,4 +815,47 @@ button.team-toggle:focus-visible,
 .team-profile-dialog :focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
+}
+
+/* Channels and History tabs */
+.team-channel-state {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--subtle);
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.team-channel-state[data-status='connected'],
+.team-channel-state[data-outcome='completed'] {
+  background: var(--agent-jade-tint);
+  color: var(--agent-jade-text);
+}
+.team-search select {
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+.team-command {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-16);
+  background: var(--subtle);
+}
+.team-command code {
+  display: block;
+  margin: 8px 0;
+  font-family: var(--font-code);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+a.team-pill-button {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }

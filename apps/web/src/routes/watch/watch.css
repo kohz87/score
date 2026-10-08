@@ -553,10 +553,10 @@
 }
 .watch-track__rail {
   right: 0;
-  background: #e3e5ea;
+  background: var(--tasks-border);
 }
 .watch-track__played {
-  background: #b9bdc6;
+  background: var(--profile-dashed);
 }
 .watch-marker {
   position: absolute;

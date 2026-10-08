@@ -4,10 +4,14 @@ import {
   ConfigApplyRequestSchema,
   ConfigPreviewRequestSchema,
   ConfigSearchQuerySchema,
+  HermesAcceptRequestSchema,
   LocalProviderRequestSchema,
   ModelsQuerySchema,
   ModelsResponseSchema,
+  PatchPluginRequestSchema,
   PlatformParamSchema,
+  PluginIdSchema,
+  PluginsQuerySchema,
   ToolServerRequestSchema,
   type ProviderItem,
 } from '@score/contract'
@@ -71,6 +75,14 @@ export function registerSettingsRoutes(
   app.get('/api/settings/config', async (request) => ({
     items: await port.searchConfig(ConfigSearchQuerySchema.parse(request.query).q),
   }))
+  // A check only reads (the CLI version, the gateway, Hermes's sources); it is still a person's action.
+  app.post('/api/settings/hermes/check', { preHandler: [humanGuard(app.pairing)] }, async () =>
+    port.checkHermes(),
+  )
+  app.post('/api/settings/hermes/accept', mutation, async (request) => {
+    await port.acceptHermes(HermesAcceptRequestSchema.parse(request.body).hash)
+    return { ok: true }
+  })
   // Preview changes nothing; it still goes through the CSRF hook like every POST.
   app.post('/api/settings/config/preview', async (request) =>
     port.previewConfig(ConfigPreviewRequestSchema.parse(request.body).changes),
@@ -78,4 +90,14 @@ export function registerSettingsRoutes(
   app.post('/api/settings/config/apply', mutation, async (request) =>
     port.applyConfig(ConfigApplyRequestSchema.parse(request.body)),
   )
+  // Plugins are per profile: `?agent=` picks whose list this is.
+  app.get('/api/settings/plugins', async (request) => ({
+    items: await port.listPlugins(PluginsQuerySchema.parse(request.query).agent),
+  }))
+  app.patch('/api/settings/plugins/:id', mutation, async (request) => {
+    const { id } = z.object({ id: PluginIdSchema }).parse(request.params)
+    const { agent } = PluginsQuerySchema.parse(request.query)
+    const { enabled } = PatchPluginRequestSchema.parse(request.body)
+    return port.setPluginEnabled(agent, id, enabled)
+  })
 }

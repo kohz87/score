@@ -1,4 +1,5 @@
 import {
+  AgentChannelsResponseSchema,
   AgentDetailSchema,
   AgentSummarySchema,
   MemoryPageSchema,
@@ -94,6 +95,11 @@ export function registerAgentTabRoutes(
   app.get('/api/skills/hub', async (request) => {
     const { q } = z.object({ q: HubQuerySchema.default('') }).parse(request.query)
     return SkillHubResponseSchema.parse({ items: await port.searchSkillHub(q) })
+  })
+
+  app.get('/api/agents/:agentId/channels', async (request) => {
+    const { agentId } = AgentParams.parse(request.params)
+    return AgentChannelsResponseSchema.parse(await port.listAgentChannels(agentId))
   })
 
   app.get('/api/agents/:agentId/memory', async (request) => {

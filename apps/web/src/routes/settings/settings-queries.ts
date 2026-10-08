@@ -4,11 +4,17 @@ import {
   ConfigSearchResponseSchema,
   ConnectResultSchema,
   ConnectionsResponseSchema,
+  PluginItemSchema,
+  PluginsResponseSchema,
+  HermesAcceptResponseSchema,
+  HermesCheckSchema,
   ProviderItemSchema,
   ProvidersResponseSchema,
+  SystemStatusSchema,
   type ConfigApplyRequest,
   type ConfigChange,
   type LocalProviderRequest,
+  type SystemStatus,
   type ToolServerRequest,
 } from '@score/contract'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -108,4 +114,66 @@ export function useConfigActions() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings', 'config'] }),
   })
   return { preview, apply }
+}
+
+// Plugins are per profile and not in the stream; a toggle replaces the row from the verified response.
+export const pluginsKey = (agentId: string) => ['settings', 'plugins', agentId] as const
+export function usePlugins(agentId: string | undefined) {
+  return useQuery({
+    queryKey: pluginsKey(agentId ?? ''),
+    enabled: Boolean(agentId),
+    queryFn: async ({ signal }) =>
+      PluginsResponseSchema.parse(
+        await apiFetch(`settings/plugins?agent=${encodeURIComponent(agentId!)}`, { signal }),
+      ).items,
+    retry: false,
+  })
+}
+export function usePluginToggle(agentId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) =>
+      PluginItemSchema.parse(
+        await apiFetch(
+          `settings/plugins/${encodeURIComponent(id)}?agent=${encodeURIComponent(agentId)}`,
+          {
+            method: 'PATCH',
+            headers: { 'Idempotency-Key': newId() },
+            body: JSON.stringify({ enabled }),
+          },
+        ),
+      ),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: pluginsKey(agentId) }),
+  })
+}
+
+// Not in the stream as a query: the Settings banner and the nav dot poll it, and an accept refetches it.
+export const systemKey = ['system'] as const
+export function useSystemStatus() {
+  return useQuery({
+    queryKey: systemKey,
+    queryFn: async ({ signal }) => SystemStatusSchema.parse(await apiFetch('system', { signal })),
+    refetchInterval: 60_000,
+    retry: false,
+  })
+}
+/** True when the compatibility gate paused approvals because the Hermes build is not one Score has checked. */
+export function needsHermesCheck(status: SystemStatus | undefined): boolean {
+  return Boolean(
+    status &&
+    !status.compatibility.tested &&
+    status.compatibility.disabled.includes('gateway-approvals'),
+  )
+}
+export function useHermesCheck() {
+  const queryClient = useQueryClient()
+  const check = useMutation({
+    mutationFn: async () => HermesCheckSchema.parse(await post('settings/hermes/check')),
+  })
+  const accept = useMutation({
+    mutationFn: async (hash: string) =>
+      HermesAcceptResponseSchema.parse(await post('settings/hermes/accept', { hash })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: systemKey }),
+  })
+  return { check, accept }
 }

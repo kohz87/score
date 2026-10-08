@@ -52,7 +52,7 @@
 }
 .reports-tabs button[aria-pressed='true'] {
   background: var(--ink);
-  color: #fff;
+  color: var(--card);
   font-weight: 600;
 }
 .reports-export {
@@ -69,7 +69,7 @@
 }
 .reports-export:hover {
   background: var(--ink);
-  color: #fff;
+  color: var(--card);
 }
 .reports-error {
   margin: 0;

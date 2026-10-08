@@ -65,9 +65,6 @@
   font-size: 15px;
   font-weight: 700;
 }
-.tasks-new:disabled {
-  cursor: not-allowed;
-}
 .tasks-layout {
   display: flex;
   flex-wrap: wrap;
@@ -313,7 +310,7 @@
 .task-drawer-badge--needs {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--card);
 }
 .task-drawer-muted {
   color: var(--muted);
@@ -391,14 +388,14 @@
   width: 20px;
   height: 20px;
   box-sizing: border-box;
-  border: 1.5px solid #b9bdc6;
+  border: 1.5px solid var(--profile-dashed);
   border-radius: var(--radius-key);
   color: transparent;
 }
 .task-step--done .task-step-box {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--card);
 }
 .task-step--done .task-step-text {
   color: var(--muted);
@@ -464,7 +461,7 @@
 .task-drawer-primary {
   border: 0;
   background: var(--ink);
-  color: #fff;
+  color: var(--card);
   font-weight: 700;
 }
 .task-drawer-secondary {
@@ -495,6 +492,75 @@
   margin: 0;
 }
 .task-drawer :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.task-new-dialog {
+  width: min(600px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  padding: 24px 28px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--ink);
+  overflow: auto;
+}
+.task-new-dialog::backdrop {
+  background: rgb(18 19 26 / 40%);
+}
+.task-new-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.task-new-heading h2 {
+  margin: 0;
+  font-weight: 600;
+  font-size: 28px;
+  letter-spacing: -0.025em;
+}
+.task-new-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+.task-new-form label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.task-new-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.task-new-form input,
+.task-new-form textarea,
+.task-new-form select {
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+}
+.task-new-form button[type='submit'] {
+  align-self: flex-start;
+  flex: none;
+  padding: 6px 28px;
+}
+.task-new-dialog button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.task-new-dialog :focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }

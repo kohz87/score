@@ -12,6 +12,8 @@ import { ModelTab } from './ModelTab.tsx'
 import { SkillsTab } from './SkillsTab.tsx'
 import { PermissionsTab } from './PermissionsTab.tsx'
 import { ToolsTab } from './ToolsTab.tsx'
+import { ChannelsTab } from './ChannelsTab.tsx'
+import { HistoryTab } from './HistoryTab.tsx'
 import type { AgentFileName } from './file-queries.ts'
 
 // Dark text on light agent colors, white on dark ones (the design's jade band uses #08241C).
@@ -179,11 +181,10 @@ function AgentProfile({ agentId }: { agentId: string }) {
           <ToolsTab agent={agent} />
         ) : tab === 'Permissions' ? (
           <PermissionsTab agent={agent} />
+        ) : tab === 'Channels' ? (
+          <ChannelsTab agentId={agent.id} agentName={agent.name} />
         ) : (
-          <section className="team-card">
-            <h2>{tab}</h2>
-            <p>{tab} settings are coming soon.</p>
-          </section>
+          <HistoryTab agentId={agent.id} agentName={agent.name} />
         )}
       </div>
     </div>
