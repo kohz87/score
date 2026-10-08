@@ -148,6 +148,8 @@ test.each([
   ['-p', 'builder', 'config', 'get', '--json', 'delegation.max_concurrent_children'],
   ['-p', 'builder', 'tools', 'list'],
   ['skills', 'search', '--json', '--limit', '20', '--', 'changelog'],
+  ['config', 'get', '--json', 'display'],
+  ['config', 'get', '--json', 'agent'],
 ])('captureRead returns stdout for allowlisted read %j', async (...args) => {
   const execute = vi.fn<NonNullable<CliOptions['execute']>>((_file, _args, _options, callback) =>
     callback(null, 'out', 'private stderr'),
@@ -166,6 +168,16 @@ test.each([
   ['skills', 'search', '--json', '--limit', 'x', '--', 'q'],
   ['skills', 'install', '--yes', '--', 'a/b'],
   ['-p', 'builder', 'config', 'set', 'model.default', 'm'],
+  ['config', 'set', 'agent', 'x'],
+  ['config', 'get', '--raw', 'agent'],
+  ['config', 'get', '--json', 'OPENROUTER_API_KEY'],
+  ['config', 'get', '--json', 'openrouter_api_key'],
+  ['config', 'get', '--json', 'providers'],
+  ['config', 'get', '--json', 'mcp_servers'],
+  ['config', 'get', '--json', 'credential_pool_strategies'],
+  ['config', 'get', '--json', 'agent.api_key'],
+  ['config', 'get', '--json', '--', 'agent'],
+  ['config', 'get', '--json', '-x'],
 ])('captureRead rejects nonallowlisted command %j', async (...args) => {
   const execute = vi.fn<NonNullable<CliOptions['execute']>>()
   await expect(runHermes(args, { timeoutMs: 100, captureRead: true, execute })).rejects.toThrow(

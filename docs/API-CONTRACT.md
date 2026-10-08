@@ -318,8 +318,13 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 - **H** `PUT /api/settings/rules` `{ goAhead; askMe; never }` → same (writes Hermes approval config via adapter; returns `{ preview: diff }` when `?dryRun=1`)
 - `GET /api/settings/plugins` → `{ items: { id; label; enabled: boolean }[] }` · `PATCH /api/settings/plugins/:id` `{ enabled }`
 - `GET /api/settings/config?q=` → `{ items: { key: string; value: unknown; file: string; description: string | null }[] }`
-- `POST /api/settings/config/preview` `{ changes: { key; value }[] }` → `{ diff: string; file: string }`
-- **H** `POST /api/settings/config/apply` `{ changes; expectedDiffHash: string }` → `{ ok: true; restartRequired: boolean }`
+  (name and comment search, ≤ 50). Secret-bearing and env-backed keys (credential-shaped names, env/header maps,
+  provider and MCP server containers) are never listed or writable; only keys known to the tested Hermes version are.
+- `POST /api/settings/config/preview` `{ changes: { key; value }[] }` → `{ diff: string; file: string; hash: string }`
+  (`hash` = sha256 over the diff, the current values and the new values). `400` for unknown or protected keys.
+- **H** `POST /api/settings/config/apply` `{ changes; expectedDiffHash: string }` → `{ ok: true; restartRequired: boolean }`;
+  `409 conflict` when the recomputed hash differs (config changed since the preview; preview again), `502` when Hermes
+  refuses or doesn't keep a value.
 - `GET /api/settings/ui` · `PATCH /api/settings/ui` `{ theme?: 'light' | 'dark' }`
 
 ## 11. Internal: bridge plugin ↔ server (not for the front end)

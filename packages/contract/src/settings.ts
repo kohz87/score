@@ -72,3 +72,51 @@ export const ToolServerRequestSchema = z
   .refine((value) => (value.command === undefined) !== (value.url === undefined))
 export type ToolServerRequest = z.infer<typeof ToolServerRequestSchema>
 export const PlatformParamSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/)
+
+// Contract §10 (Settings: advanced config). Secret-bearing and env-backed keys never appear here: the server
+// leaves them out of search and refuses to write them.
+export const ConfigKeySchema = z
+  .string()
+  .regex(/^[A-Za-z_][A-Za-z0-9_-]{0,63}(\.[A-Za-z0-9_-]{1,64}){0,11}$/)
+  .max(256)
+export const ConfigItemSchema = z.object({
+  key: ConfigKeySchema,
+  value: z.unknown(),
+  file: z.string(),
+  description: z.string().nullable(),
+})
+export type ConfigItem = z.infer<typeof ConfigItemSchema>
+export const ConfigSearchQuerySchema = z.object({ q: z.string().max(200).default('') }).strict()
+export const ConfigSearchResponseSchema = z.object({ items: z.array(ConfigItemSchema).max(50) })
+export type ConfigSearchResponse = z.infer<typeof ConfigSearchResponseSchema>
+
+const ConfigValueSchema = z.json().refine((value) => JSON.stringify(value).length <= 10_000)
+export const ConfigChangeSchema = z
+  .object({ key: ConfigKeySchema, value: ConfigValueSchema })
+  .strict()
+export type ConfigChange = z.infer<typeof ConfigChangeSchema>
+const ConfigChangesSchema = z
+  .array(ConfigChangeSchema)
+  .min(1)
+  .max(50)
+  .refine((changes) => new Set(changes.map((change) => change.key)).size === changes.length)
+export const ConfigPreviewRequestSchema = z.object({ changes: ConfigChangesSchema }).strict()
+export type ConfigPreviewRequest = z.infer<typeof ConfigPreviewRequestSchema>
+export const ConfigPreviewResponseSchema = z.object({
+  diff: z.string(),
+  file: z.string(),
+  hash: z.string().regex(/^[0-9a-f]{64}$/),
+})
+export type ConfigPreviewResponse = z.infer<typeof ConfigPreviewResponseSchema>
+export const ConfigApplyRequestSchema = z
+  .object({
+    changes: ConfigChangesSchema,
+    expectedDiffHash: z.string().regex(/^[0-9a-f]{64}$/),
+  })
+  .strict()
+export type ConfigApplyRequest = z.infer<typeof ConfigApplyRequestSchema>
+export const ConfigApplyResponseSchema = z.object({
+  ok: z.literal(true),
+  restartRequired: z.boolean(),
+})
+export type ConfigApplyResponse = z.infer<typeof ConfigApplyResponseSchema>

@@ -107,7 +107,7 @@ test('shows the section nav, providers with status and who uses them, and connec
   expect(await within(connectionsRegion).findByText('files')).toBeDefined()
   expect(within(connectionsRegion).getByText(/Everyone/)).toBeDefined()
   expect(within(connectionsRegion).getByText('Auth failed')).toBeDefined()
-  expect(screen.getAllByText('Coming soon.')).toHaveLength(3)
+  expect(screen.getAllByText('Coming soon.')).toHaveLength(2)
 })
 
 test('connecting a provider shows the terminal command and never sends a credential', async () => {
@@ -169,4 +169,72 @@ test('an unpaired browser gets a pairing hint, and a failed load shows an alert'
   expect(await screen.findByText(/Could not load providers/)).toBeDefined()
   fireEvent.click(await screen.findByRole('button', { name: 'Connect Slack' }))
   expect(await screen.findByText(/Pair this browser/)).toBeDefined()
+})
+
+const HASH = 'a'.repeat(64)
+const configItems = [
+  { key: 'agent.max_turns', value: 60, file: 'config.yaml', description: 'Turn cap.' },
+  { key: 'display.language', value: 'en', file: 'config.yaml', description: null },
+]
+function advancedRespond(apply: () => Response) {
+  respond = (path, init) => {
+    if (path.startsWith('/api/settings/config?')) return json({ items: configItems })
+    if (path === '/api/settings/config/preview')
+      return json({
+        diff: '--- current\n+++ proposed\n-agent.max_turns: 60\n+agent.max_turns: 30\n',
+        file: 'config.yaml',
+        hash: HASH,
+      })
+    if (path === '/api/settings/config/apply' && init?.method === 'POST') return apply()
+    if (path === '/api/agents') return json({ asOfSeq: 0, items: [builder] })
+    if (path === '/api/settings/providers') return json({ items: providers })
+    return json(connections)
+  }
+}
+async function stageTurns() {
+  const advanced = await screen.findByRole('region', { name: 'Advanced' })
+  fireEvent.click(await within(advanced).findByRole('button', { name: 'Edit agent.max_turns' }))
+  fireEvent.change(within(advanced).getByLabelText('New value for agent.max_turns'), {
+    target: { value: '30' },
+  })
+  fireEvent.click(within(advanced).getByRole('button', { name: 'Stage change' }))
+  return advanced
+}
+
+test('advanced: search, stage a change, preview the diff, then apply with the hash', async () => {
+  advancedRespond(() => json({ ok: true, restartRequired: true }))
+  mount()
+  const advanced = await stageTurns()
+  const apply = within(advanced).getByRole('button', { name: 'Apply' })
+  expect((apply as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.click(within(advanced).getByRole('button', { name: 'Preview' }))
+  expect(await within(advanced).findByText(/\+agent.max_turns: 30/)).toBeDefined()
+  fireEvent.click(apply)
+  expect(await within(advanced).findByText(/Restart the gateway/)).toBeDefined()
+  const post = calls.find((call) => call.path === '/api/settings/config/apply')!
+  expect(JSON.parse(String(post.init!.body))).toEqual({
+    changes: [{ key: 'agent.max_turns', value: 30 }],
+    expectedDiffHash: HASH,
+  })
+  expect(within(advanced).queryByRole('group', { name: 'Pending changes' })).toBeNull()
+})
+test('advanced: a 409 asks for a new preview and disables apply', async () => {
+  advancedRespond(() => json({ error: { code: 'conflict', message: 'Changed' } }, 409))
+  mount()
+  const advanced = await stageTurns()
+  fireEvent.click(within(advanced).getByRole('button', { name: 'Preview' }))
+  await within(advanced).findByText(/\+agent.max_turns: 30/)
+  fireEvent.click(within(advanced).getByRole('button', { name: 'Apply' }))
+  expect(await within(advanced).findByText(/Preview again/)).toBeDefined()
+  const apply = within(advanced).getByRole('button', { name: 'Apply' }) as HTMLButtonElement
+  expect(apply.disabled).toBe(true)
+})
+test('advanced: editing after a preview clears the diff', async () => {
+  advancedRespond(() => json({ ok: true, restartRequired: false }))
+  mount()
+  const advanced = await stageTurns()
+  fireEvent.click(within(advanced).getByRole('button', { name: 'Preview' }))
+  await within(advanced).findByText(/\+agent.max_turns: 30/)
+  fireEvent.click(within(advanced).getByRole('button', { name: 'Discard agent.max_turns' }))
+  expect(within(advanced).queryByText(/\+agent.max_turns: 30/)).toBeNull()
 })
