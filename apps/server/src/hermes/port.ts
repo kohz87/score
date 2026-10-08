@@ -13,6 +13,11 @@ import {
 import { z } from 'zod'
 import type {
   AgentDetail,
+  ConfigApplyRequest,
+  ConfigApplyResponse,
+  ConfigChange,
+  ConfigItem,
+  ConfigPreviewResponse,
   ConnectResult,
   ConnectionsResponse,
   LocalProviderRequest,
@@ -176,6 +181,10 @@ export interface HermesPort {
   listConnections(): Promise<ConnectionsResponse>
   addToolServer(req: ToolServerRequest): Promise<ConnectResult>
   connectMessaging(platform: string): Promise<ConnectResult>
+  /** Advanced config (contract §10). Secret-bearing and env-backed keys are never returned or written. */
+  searchConfig(query: string): Promise<ConfigItem[]>
+  previewConfig(changes: ConfigChange[]): Promise<ConfigPreviewResponse>
+  applyConfig(req: ConfigApplyRequest): Promise<ConfigApplyResponse>
   startRun(req: {
     agentId: string
     input: string

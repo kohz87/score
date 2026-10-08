@@ -1,5 +1,6 @@
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery } from '../team/team-queries.ts'
+import { AdvancedSection } from './AdvancedSection.tsx'
 import { ConnectionsSection } from './ConnectionsSection.tsx'
 import { ProvidersSection } from './ProvidersSection.tsx'
 import './settings.css'
@@ -9,7 +10,7 @@ const sections = [
   { id: 'connections', label: 'Connections', built: true },
   { id: 'rules', label: 'Rules and approvals', built: false },
   { id: 'plugins', label: 'Plugins and look', built: false },
-  { id: 'advanced', label: 'Advanced', built: false },
+  { id: 'advanced', label: 'Advanced', built: true },
 ] as const
 
 export function SettingsPage() {
@@ -41,6 +42,7 @@ export function SettingsPage() {
               <p className="settings-muted-strong">Coming soon.</p>
             </section>
           ))}
+        <AdvancedSection />
       </div>
     </div>
   )

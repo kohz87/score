@@ -1,6 +1,9 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import {
+  ConfigApplyRequestSchema,
+  ConfigPreviewRequestSchema,
+  ConfigSearchQuerySchema,
   LocalProviderRequestSchema,
   PlatformParamSchema,
   ToolServerRequestSchema,
@@ -56,4 +59,14 @@ export function registerSettingsRoutes(
     const { platform } = z.object({ platform: PlatformParamSchema }).parse(request.params)
     return port.connectMessaging(platform)
   })
+  app.get('/api/settings/config', async (request) => ({
+    items: await port.searchConfig(ConfigSearchQuerySchema.parse(request.query).q),
+  }))
+  // Preview changes nothing; it still goes through the CSRF hook like every POST.
+  app.post('/api/settings/config/preview', async (request) =>
+    port.previewConfig(ConfigPreviewRequestSchema.parse(request.body).changes),
+  )
+  app.post('/api/settings/config/apply', mutation, async (request) =>
+    port.applyConfig(ConfigApplyRequestSchema.parse(request.body)),
+  )
 }

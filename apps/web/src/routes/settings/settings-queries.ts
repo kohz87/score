@@ -1,8 +1,13 @@
 import {
+  ConfigApplyResponseSchema,
+  ConfigPreviewResponseSchema,
+  ConfigSearchResponseSchema,
   ConnectResultSchema,
   ConnectionsResponseSchema,
   ProviderItemSchema,
   ProvidersResponseSchema,
+  type ConfigApplyRequest,
+  type ConfigChange,
   type LocalProviderRequest,
   type ToolServerRequest,
 } from '@score/contract'
@@ -57,4 +62,30 @@ export function useSettingsActions() {
       ),
   })
   return { connectProvider, addLocal, addToolServer, connectMessaging }
+}
+
+// Advanced config. Search results come from the server, which leaves out every credential-shaped key.
+export function useConfigSearch(q: string) {
+  return useQuery({
+    queryKey: ['settings', 'config', q],
+    queryFn: async ({ signal }) =>
+      ConfigSearchResponseSchema.parse(
+        await apiFetch(`settings/config?q=${encodeURIComponent(q)}`, { signal }),
+      ).items,
+    retry: false,
+    placeholderData: (previous) => previous,
+  })
+}
+export function useConfigActions() {
+  const queryClient = useQueryClient()
+  const preview = useMutation({
+    mutationFn: async (changes: ConfigChange[]) =>
+      ConfigPreviewResponseSchema.parse(await post('settings/config/preview', { changes })),
+  })
+  const apply = useMutation({
+    mutationFn: async (req: ConfigApplyRequest) =>
+      ConfigApplyResponseSchema.parse(await post('settings/config/apply', req)),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings', 'config'] }),
+  })
+  return { preview, apply }
 }

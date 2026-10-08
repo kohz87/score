@@ -56,6 +56,7 @@ import {
 } from '../agent-tabs.ts'
 import { z } from 'zod'
 import { HttpError } from '../../errors.ts'
+import { createFakeConfigService } from './fake-config.ts'
 import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
 import {
   DecisionDeliveryRequestSchema,
@@ -647,6 +648,16 @@ export class FakePort implements HermesPort {
     if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(platform))
       throw new HttpError(404, 'not_found', 'Unknown platform')
     return { next: 'run_in_terminal', command: 'hermes gateway setup' }
+  }
+  private readonly config = createFakeConfigService()
+  async searchConfig(query: string) {
+    return this.config.search(query)
+  }
+  async previewConfig(changes: Parameters<HermesPort['previewConfig']>[0]) {
+    return this.config.preview(changes)
+  }
+  async applyConfig(req: Parameters<HermesPort['applyConfig']>[0]) {
+    return this.config.apply(req)
   }
   async readAgentFile(agentId: string, file: AgentFileName): Promise<AgentFile> {
     if (!this.agents.has(agentId)) throw new HttpError(404, 'not_found', 'Agent not found')

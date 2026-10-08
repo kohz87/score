@@ -153,6 +153,58 @@ const cases = [
     { name: 'docs', url: 'https://mcp.example.com/sse', command: ['x'] },
   ],
   ['PlatformParamSchema', 'telegram', 'Bad Name'],
+  ['ConfigKeySchema', 'agent.max_turns', 'agent..x'],
+  [
+    'ConfigItemSchema',
+    { key: 'agent.max_turns', value: 60, file: 'config.yaml', description: null },
+    { key: 'agent.max_turns', file: 'config.yaml' },
+  ],
+  ['ConfigSearchQuerySchema', { q: 'turns' }, { q: 'x', extra: 1 }],
+  [
+    'ConfigSearchResponseSchema',
+    { items: [] },
+    {
+      items: Array.from({ length: 51 }, () => ({
+        key: 'a',
+        value: 1,
+        file: 'f',
+        description: null,
+      })),
+    },
+  ],
+  ['ConfigChangeSchema', { key: 'agent.max_turns', value: 30 }, { key: 'agent.max_turns' }],
+  [
+    'ConfigPreviewRequestSchema',
+    { changes: [{ key: 'a', value: true }] },
+    {
+      changes: [
+        { key: 'a', value: 1 },
+        { key: 'a', value: 2 },
+      ],
+    },
+  ],
+  [
+    'ConfigPreviewResponseSchema',
+    {
+      diff: '',
+      file: 'config.yaml',
+      hash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    },
+    { diff: '', file: 'config.yaml', hash: 'short' },
+  ],
+  [
+    'ConfigApplyRequestSchema',
+    {
+      changes: [{ key: 'a', value: 'x' }],
+      expectedDiffHash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    },
+    { changes: [{ key: 'a', value: 'x' }] },
+  ],
+  [
+    'ConfigApplyResponseSchema',
+    { ok: true, restartRequired: false },
+    { ok: false, restartRequired: false },
+  ],
 ] as const satisfies ReadonlyArray<readonly [keyof typeof contract, unknown, unknown]>
 
 test('every exported schema has valid and invalid fixtures', () => {
