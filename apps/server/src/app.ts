@@ -9,6 +9,7 @@ import { registerRoutineRoutes } from './http/routines.ts'
 import { registerRulesRoutes } from './http/rules.ts'
 import { registerSettingsRoutes } from './http/settings.ts'
 import { registerRoomRoutes } from './http/rooms.ts'
+import { registerNowRoutes } from './http/now.ts'
 import { registerApprovalRoutes } from './http/approvals.ts'
 import { registerErrorHandlers } from './errors.ts'
 import { registerCsrfGuard } from './auth/csrf.ts'
@@ -133,6 +134,14 @@ export function buildApp({
   registerSettingsRoutes(app, port, db, clock)
   registerRulesRoutes(app, port, ingest, db, clock)
   if (db && ingest) registerRoomRoutes(app, port, db, ingest, clock)
+  if (db && ingest)
+    registerNowRoutes(app, {
+      port,
+      db,
+      ingest,
+      disabled: () => bridge?.getCompatibility().disabled ?? port.status().compatibility.disabled,
+      ...(clock ? { clock } : {}),
+    })
   app.get('/api/health', async () => ({ ok: true, contract: CONTRACT_VERSION }))
   registerSessionRoutes(app, app.pairing)
   registerSystemRoutes(app, getSystemStatus)

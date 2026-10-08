@@ -115,13 +115,16 @@ export function stepToObservation(
     apply({ sqlite, now }) {
       if (suppressed) return []
       if (step.kind === 'task.upserted') {
-        projectTask(
-          sqlite,
-          detail ?? {
-            ...(readProjectedTask(sqlite, step.data.id) ?? summaryDetail(step.data)),
-            ...step.data,
-          },
-        )
+        const existing = readProjectedTask(sqlite, step.data.id)
+        const next = detail ?? {
+          ...(existing ?? summaryDetail(step.data)),
+          ...step.data,
+        }
+        // Run links come from run.updated steps; a task command's detail must not drop them.
+        projectTask(sqlite, {
+          ...next,
+          runIds: [...new Set([...(existing?.runIds ?? []), ...next.runIds])],
+        })
       }
       if (step.kind === 'task.activity') {
         const task = readProjectedTask(sqlite, step.data.taskId)
@@ -196,6 +199,13 @@ export function stepToObservation(
             JSON.stringify(run.toolsUsed),
             now,
           )
+        // Runs carry their task as a ref; the task detail lists its runs (Now › Score lanes read them).
+        for (const ref of run.refs) {
+          if (ref.kind !== 'task') continue
+          const task = readProjectedTask(sqlite, ref.taskId)
+          if (task && !task.runIds.includes(run.id))
+            projectTask(sqlite, { ...task, runIds: [...task.runIds, run.id] })
+        }
         if (['completed', 'failed', 'cancelled', 'interrupted'].includes(run.status))
           return [
             structuredClone(draft) as DomainEventDraft,
@@ -266,8 +276,17 @@ export function stepToObservation(
           patchApproval(sqlite, row.id, { closed_reason: 'task_moved', closed_at: now }, now)
           return approvalDraft(sqlite, row.id)
         }
-        if (step.data.decision)
-          return respondRunApproval(
+        // The demo run that carried the approval stops waiting once it is decided or withdrawn.
+        const closeRun = () => {
+          if (step.data.status !== 'pending')
+            sqlite
+              .prepare(
+                `UPDATE runs SET status = 'completed', ended_at = ?, updated_at = ? WHERE id = ? AND status = 'waiting_for_approval'`,
+              )
+              .run(now, now, `fake-approval-run:${row.id}`)
+        }
+        if (step.data.decision) {
+          const drafts = respondRunApproval(
             sqlite,
             row.profile,
             row.session_key,
@@ -275,7 +294,11 @@ export function stepToObservation(
             step.data.decision.choice,
             step.data.decision.at,
           )
+          closeRun()
+          return drafts
+        }
         patchApproval(sqlite, row.id, { blocking: step.data.blocking }, now)
+        closeRun()
         return approvalDraft(sqlite, row.id, { now: Date.parse(now) })
       }
       return [structuredClone(draft)] as ReturnType<Observation['apply']>

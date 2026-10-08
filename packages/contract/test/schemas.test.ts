@@ -54,6 +54,27 @@ const cases = [
     },
     { asOfSeq: 0, columns: { backlog: [] } },
   ],
+  [
+    'NowSnapshotSchema',
+    {
+      asOfSeq: 0,
+      now: f.at,
+      headline: { working: 1, needsYou: 1, text: 'One agent is working. One thing needs you.' },
+      lanes: [{ agent: f.agent, blocks: [f.lane] }],
+      handoffs: [f.handoff],
+      focusApproval: f.approval,
+      thread: { roomId: 'room-1', messages: [f.message] },
+      madeToday: [
+        {
+          title: 'Feed',
+          ref: { kind: 'task', taskId: 'task-1' },
+          files: [{ path: 'a.ts', added: 0, removed: 0 }],
+          checks: [{ label: 'Tests pass', agentId: 'builder', ok: true }],
+        },
+      ],
+    },
+    { asOfSeq: 0, now: f.at, headline: { working: -1, needsYou: 0, text: '' } },
+  ],
   ['AgentsSnapshotSchema', { asOfSeq: 0, items: [f.agent] }, { asOfSeq: 0.5, items: [] }],
   [
     'CommandsResponseSchema',
