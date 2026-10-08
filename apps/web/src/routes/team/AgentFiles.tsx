@@ -89,6 +89,18 @@ export function AgentFiles({
         agentId={agent.id}
         file={file}
         draft={drafts[file]}
+        // Reconciled against the current draft here: the editor that sent the save may be gone by the time it ends.
+        onSaved={(submitted, etag) =>
+          setDrafts((current) => {
+            const draft = current[file]
+            if (!draft || draft.text === submitted) {
+              const rest = { ...current }
+              delete rest[file]
+              return rest
+            }
+            return { ...current, [file]: { text: draft.text, base: { content: submitted, etag } } }
+          })
+        }
         onDraft={(value) =>
           setDrafts((current) => {
             const next = { ...current }
@@ -106,11 +118,13 @@ function FileEditor({
   agentId,
   file,
   draft,
+  onSaved,
   onDraft,
 }: {
   agentId: string
   file: AgentFileName
   draft: FileDraft | undefined
+  onSaved: (submitted: string, etag: string) => void
   onDraft: (value: FileDraft | undefined) => void
 }) {
   const queryClient = useQueryClient()
@@ -150,8 +164,7 @@ function FileEditor({
       queryClient.setQueryData(fileKey(agentId, file), { content: submit.content, etag })
       void queryClient.invalidateQueries({ queryKey: ['team', 'detail', agentId], exact: true })
       // Edits typed while the request was in flight stay a draft on top of what was saved.
-      if (latest.current === submit.content) onDraft(undefined)
-      else onDraft({ text: latest.current, base: { content: submit.content, etag } })
+      onSaved(submit.content, etag)
       setPreview(null)
       setConflict(null)
       setSaved(latest.current === submit.content)

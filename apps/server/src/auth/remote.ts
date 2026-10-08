@@ -32,7 +32,8 @@ export function registerRemoteGuard(
       throw new HttpError(401, 'not_paired', 'Pair this browser to access Score')
     if (path !== '/api/stream') app.pairing.touch(request.headers.cookie, request.ip)
     // Session routes set their own cookie (sign out clears it); everything else keeps the cookie as long as the session.
-    if (!path.startsWith('/api/session')) {
+    // The stream hijacks its response and never sends this header, so it must not consume the refresh.
+    if (!path.startsWith('/api/session') && path !== '/api/stream') {
       const maxAge = app.pairing.cookieRefresh(request.headers.cookie)
       const id = readCookie(request.headers.cookie, SESSION_COOKIE)
       if (maxAge !== undefined && id)

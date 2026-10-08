@@ -580,6 +580,38 @@ test('edits typed while a save is in flight stay unsaved', async () => {
   expect(second).toEqual({ content: 'AB\n', etag: etagB })
 })
 
+test('a save that ends after you switched files and came back keeps the newer draft', async () => {
+  const calls: { path: string; init?: RequestInit }[] = []
+  fileMutation = () => json({ etag: etagB })
+  filesResponder(calls)
+  const box = await openEditor()
+  const inner = globalThis.fetch as unknown as (
+    path: string,
+    init?: RequestInit,
+  ) => Promise<Response>
+  let release: () => void = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (path: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') await gate
+      return inner(path, init)
+    }),
+  )
+  fireEvent.change(box, { target: { value: 'sent draft\n' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  fireEvent.click(screen.getByRole('button', { name: /Operating rules · AGENTS.md/ }))
+  await screen.findByRole('textbox', { name: 'AGENTS.md contents' })
+  fireEvent.click(screen.getByRole('button', { name: /Personality · SOUL.md/ }))
+  const again = await screen.findByRole('textbox', { name: 'SOUL.md contents' })
+  fireEvent.change(again, { target: { value: 'newer unsaved draft\n' } })
+  release()
+  await waitFor(() => expect(calls.some((call) => call.init?.method === 'PUT')).toBe(true))
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect((again as HTMLTextAreaElement).value).toBe('newer unsaved draft\n')
+  expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(false)
+})
+
 interface Call {
   path: string
   method: string

@@ -53,7 +53,10 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
     }
     connectProvider.mutate(item.id, {
       onSuccess: (result) => {
-        if (result.next === 'device_code' && result.signInId)
+        if (result.next === 'done') {
+          setNotice(`${item.label} is connected.`)
+          recheck()
+        } else if (result.next === 'device_code' && result.signInId)
           setPanel({ id: item.id, kind: 'device', start: result })
         else if (result.command) setCommand({ id: item.id, text: result.command })
         else setNotice(`${item.label} is connected.`)
