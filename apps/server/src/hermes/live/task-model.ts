@@ -1,5 +1,6 @@
 import {
   TaskDetailSchema,
+  AgentIdSchema,
   type TaskColumn,
   type TaskDetail,
   type TaskActivity,
@@ -91,6 +92,18 @@ export function readTaskDetails(db: DatabaseSync, now = Date.now()): TaskDetail[
         ...comments.rows.map((comment) => comment.created_at),
       ) * 1000,
     ).toISOString()
+    const reviewRequest = events.rows.findLast((event) => event.kind === 'review_requested')
+    const reviewChange = events.rows.findLast((event) => event.kind === 'changes_requested')
+    const requestedReviewer = z
+      .object({ reviewer: AgentIdSchema.optional() })
+      .safeParse(reviewRequest?.payload)
+    const reviewActor = z
+      .object({ author: AgentIdSchema.optional(), profile: AgentIdSchema.optional() })
+      .safeParse(reviewChange?.payload)
+    const reviewer = requestedReviewer.success ? requestedReviewer.data.reviewer : undefined
+    const actor = reviewActor.success
+      ? (reviewActor.data.author ?? reviewActor.data.profile)
+      : undefined
     const needsInput = ['needs_input', 'capability'].includes(task.block_kind ?? '')
     return TaskDetailSchema.parse(
       redactValue({
@@ -100,7 +113,9 @@ export function readTaskDetails(db: DatabaseSync, now = Date.now()): TaskDetail[
         column,
         hermesStatus: task.status,
         assignee: task.assignee,
-        reviewer: null,
+        reviewer:
+          reviewer ??
+          (actor && actor !== 'score' && actor !== 'you' && actor !== task.assignee ? actor : null),
         roomId: null,
         badge:
           task.status === 'blocked'
