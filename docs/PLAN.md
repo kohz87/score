@@ -248,6 +248,14 @@ build is checked, and offers "Check this Hermes version": print the fingerprint,
 pattern keys with the tested version, and record the build (union of pattern keys and config keys) only when they match;
 otherwise show what changed. Done when an update with unchanged internals is re-enabled by one confirmed click and a
 changed one stays off with a clear report.
+**5.7 Stream batching** · Apply stream events in the browser once per animation frame (per query), so bursts don't block
+the main thread. Done when the load test's browser budgets pass at 1,000 events/min on an idle machine.
+**5.8 Agent Channels and History tabs** · Channels: the messaging platforms this agent is reachable on (gateway state),
+with connect commands; History: the agent's past runs (outcome, duration, cost, task/brief links, Watch replay). Done when
+both tabs match team.png's tab style with fake data and live adapters read only.
+**5.9 Plugins and look + New task** · Settings › Plugins and look: Hermes plugins per profile (list, enable/disable via the
+CLI) and Score's theme (light, dark, system); Tasks › New task dialog on the existing create path. Done when each works in
+fake mode with tests and e2e.
 
 ---
 
