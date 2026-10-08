@@ -196,6 +196,28 @@
 .pair-card p {
   margin: 0;
 }
+.pair-card button {
+  margin-top: 18px;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--card);
+  cursor: pointer;
+}
+.remote-warning {
+  padding: 14px 28px;
+  background: var(--ink);
+  color: var(--card);
+}
+.remote-warning a {
+  margin-left: 14px;
+  color: inherit;
+  text-decoration: underline;
+}
+.remote-warning a:focus-visible {
+  outline-color: var(--card);
+}
 @media (width < 720px) {
   .main-nav {
     order: 1;
