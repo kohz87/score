@@ -94,12 +94,34 @@ function runStatuses(sqlite: DatabaseSync, runIds: string[]) {
   })
 }
 
-/** A task counts as failed when its most recent run failed and the task did not finish afterwards. */
+// Statuses in which Hermes still intends to run or hand the task on (retry, input, review): a failed
+// attempt is then one step of the task's story, not its outcome.
+const OPEN_TASK_STATUSES = ['triage', 'todo', 'ready', 'running', 'scheduled', 'blocked', 'review']
+
+/** Newest first; Hermes timestamps have second resolution, so the id breaks ties deterministically. */
+export function newestFirst(
+  left: { id: string; started_at: string },
+  right: { id: string; started_at: string },
+): number {
+  return left.started_at < right.started_at
+    ? 1
+    : left.started_at > right.started_at
+      ? -1
+      : left.id < right.id
+        ? 1
+        : left.id > right.id
+          ? -1
+          : 0
+}
+
+/**
+ * A task counts as failed when its most recent run failed, the task did not finish afterwards and Hermes
+ * is not waiting on a retry, input or review (attempt failure is not task disposition).
+ */
 export function taskFailed(sqlite: DatabaseSync, detail: TaskDetail): boolean {
   if (detail.column === 'done') return false
-  const last = runStatuses(sqlite, detail.runIds).sort((left, right) =>
-    left.started_at < right.started_at ? 1 : left.started_at > right.started_at ? -1 : 0,
-  )[0]
+  if (OPEN_TASK_STATUSES.includes(taskStatus(detail))) return false
+  const last = runStatuses(sqlite, detail.runIds).sort(newestFirst)[0]
   return last !== undefined && FAILED_RUN_STATUSES.includes(last.status)
 }
 

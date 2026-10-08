@@ -100,6 +100,24 @@ test('history lists this agent runs newest first with outcome, duration, cost an
   expect(page.items[3]!.brief).toEqual({ id: 'm1', title: 'Ship it' })
 })
 
+test('a Kanban run finds its brief through the task link, not only through a message', async () => {
+  seed()
+  env.db.sqlite
+    .prepare(
+      "INSERT INTO brief_tasks (brief_id, task_id, origin, linked_at) VALUES ('m1', 't-1', 'assign', '2026-10-01T00:00:00.000Z')",
+    )
+    .run()
+  const page = AgentHistoryPageSchema.parse((await get('/api/agents/builder/history')).json())
+  const done = page.items.find((item) => item.runId === 'r-done')!
+  expect(done.brief).toEqual({ id: 'm1', title: 'Ship it' })
+  // The message link still wins for runs that have one, and unlinked runs stay unlinked.
+  expect(page.items.find((item) => item.runId === 'r-fail')!.brief).toEqual({
+    id: 'm1',
+    title: 'Ship it',
+  })
+  expect(page.items.find((item) => item.runId === 'r-live')!.brief).toBeNull()
+})
+
 test('history filters by outcome and search, pages by 50, and rejects bad input', async () => {
   seed()
   const failed = AgentHistoryPageSchema.parse(

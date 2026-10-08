@@ -11,6 +11,7 @@ import {
   listBriefs,
   readBriefRow,
 } from '../../src/domain/briefs.ts'
+import { activeRunOfNode, readBriefFlow, readFlowNode } from '../../src/domain/brief-flow.ts'
 import { insertRoom } from '../../src/domain/rooms.ts'
 import { projectTask, summaryDetail } from '../../src/domain/tasks.ts'
 
@@ -211,4 +212,135 @@ test('an old unfinished brief is still listed as active behind 500 newer finishe
   })
   const active = listBriefs(db.sqlite, 'active', Date.parse(at) + 3_600_000)
   expect(active.map((entry) => entry.id)).toEqual(['m1'])
+})
+
+function taskWith(
+  id: string,
+  over: { assignee: string; reviewer: string | null; hermesStatus: string; column: string },
+  runIds: string[],
+) {
+  db.tx((sqlite) => {
+    projectTask(sqlite, {
+      ...summaryDetail({
+        id,
+        key: 'T-1',
+        title: id,
+        column: over.column as 'done',
+        hermesStatus: over.hermesStatus,
+        assignee: over.assignee,
+        reviewer: over.reviewer,
+        roomId: 'room',
+        badge: null,
+        progress: null,
+        elapsedSec: null,
+        note: null,
+        updatedAt: at,
+      }),
+      runIds,
+    })
+    sqlite
+      .prepare(
+        "INSERT INTO brief_tasks (brief_id, task_id, origin, linked_at) VALUES ('m1', ?, 'assign', ?)",
+      )
+      .run(id, at)
+  })
+}
+function addRun(
+  id: string,
+  profile: string,
+  runStatus: string,
+  startedAt: string,
+  cost: number | null,
+  origin = 'kanban',
+) {
+  db.tx((sqlite) =>
+    sqlite
+      .prepare(
+        `INSERT INTO runs (id, profile, origin, status, started_at, ended_at, cost_usd, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        profile,
+        origin,
+        runStatus,
+        startedAt,
+        runStatus === 'running' ? null : startedAt,
+        cost,
+        at,
+      ),
+  )
+}
+const nowMs = Date.parse('2026-10-08T12:00:00.000Z')
+const flow = () => db.read((sqlite) => readBriefFlow(sqlite, 'm1', nowMs))
+
+test('flow: spend is null when any run cost is unknown, never a partial sum', () => {
+  create()
+  addRun('k1', 'builder', 'completed', at, 0.5)
+  addRun('k2', 'builder', 'completed', at, null)
+  taskWith('t1', { assignee: 'builder', reviewer: null, hermesStatus: 'done', column: 'done' }, [
+    'k1',
+  ])
+  expect(flow().stats.spendUsd).toBe(0.5)
+  taskWith('t2', { assignee: 'builder', reviewer: null, hermesStatus: 'done', column: 'done' }, [
+    'k2',
+  ])
+  expect(flow().stats.spendUsd).toBeNull()
+})
+
+test('flow: a task reassigned to its reviewer keeps the implementer run on the implementation node', () => {
+  create()
+  addRun('k-impl', 'builder', 'completed', '2026-10-08T10:00:00.000Z', null)
+  addRun('k-rev', 'reviewer', 'running', '2026-10-08T11:00:00.000Z', null)
+  taskWith(
+    't1',
+    { assignee: 'reviewer', reviewer: 'reviewer', hermesStatus: 'review', column: 'in_review' },
+    ['k-impl', 'k-rev'],
+  )
+  const node = flow().nodes.find((item) => item.id === 'task:t1')!
+  expect(node.agentId).toBe('builder')
+  const detail = db.read((sqlite) => readFlowNode(sqlite, 'task:t1', nowMs))
+  expect(detail.run?.id).toBe('k-impl')
+  expect(detail.run?.agentId).toBe('builder')
+})
+
+test('flow: same-second runs resolve by id, and a failed attempt of a retrying task is not a failed task', () => {
+  create()
+  addRun('k-a', 'builder', 'completed', at, null)
+  addRun('k-b', 'builder', 'failed', at, null)
+  taskWith(
+    't1',
+    { assignee: 'builder', reviewer: null, hermesStatus: 'ready', column: 'planned' },
+    ['k-a', 'k-b'],
+  )
+  expect(db.read((sqlite) => readFlowNode(sqlite, 'task:t1', nowMs)).run?.id).toBe('k-b')
+  // Hermes will retry: the attempt failed, the task did not.
+  expect(flow().nodes.find((item) => item.id === 'task:t1')!.state).not.toBe('failed')
+  expect(status()).not.toBe('failed')
+  db.tx((sqlite) =>
+    sqlite
+      .prepare(
+        "UPDATE task_projections SET detail = json_set(detail, '$.hermesStatus', 'archived') WHERE id = 't1'",
+      )
+      .run(),
+  )
+  expect(flow().nodes.find((item) => item.id === 'task:t1')!.state).toBe('failed')
+})
+
+test('stop: a running run that Score did not start is unsupported (501), not sent to the gateway', () => {
+  create()
+  addRun('k1', 'builder', 'running', at, null)
+  taskWith(
+    't1',
+    { assignee: 'builder', reviewer: null, hermesStatus: 'running', column: 'working' },
+    ['k1'],
+  )
+  expect(() => db.read((sqlite) => activeRunOfNode(sqlite, 'task:t1'))).toThrow(
+    expect.objectContaining({ status: 501, code: 'unsupported' }),
+  )
+  db.tx((sqlite) => sqlite.prepare("UPDATE runs SET origin = 'score'").run())
+  expect(db.read((sqlite) => activeRunOfNode(sqlite, 'task:t1'))).toEqual({
+    agentId: 'builder',
+    runId: 'k1',
+  })
 })

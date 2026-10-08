@@ -125,6 +125,25 @@ test('consecutive runs for one task merge; another agent in between splits them'
   expect(split.handoffs.map((h) => h.kind)).toEqual(['review', 'sent_back'])
 })
 
+test('same-agent runs for one task separated by a real gap stay separate blocks', () => {
+  const out = buildLanes({
+    ...base,
+    tasks: [task('t', 'Ship it', 'builder', 'reviewer')],
+    hops: [],
+    waitingRunIds: [],
+    runs: [
+      run('a', 'builder', 'failed', '20:40', '20:50', 't'),
+      run('b', 'builder', 'completed', '21:00', '21:10', 't'),
+      run('c', 'builder', 'completed', '21:11', '21:20', 't'),
+    ],
+  })
+  // a and b are 10 minutes apart; b and c are retried one minute apart and merge.
+  expect(out.lanes[1]!.blocks.map((b) => [b.id, b.start, b.end])).toEqual([
+    ['run:a', at('20:40'), at('20:50')],
+    ['run:b', at('21:00'), at('21:20')],
+  ])
+})
+
 test('a pending approval turns its run into a waiting block', () => {
   const out = buildLanes({
     ...base,
