@@ -57,6 +57,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
   const bridgeSql = readFileSync(join(migrationDir, '0004_bridge.sql'), 'utf8')
   const denialsSql = readFileSync(join(migrationDir, '0006_kanban_denials.sql'), 'utf8')
   const gateSql = readFileSync(join(migrationDir, '0007_gate_fixes.sql'), 'utf8')
+  const roomsSql = readFileSync(join(migrationDir, '0008_rooms.sql'), 'utf8')
   const approvalsSql = readFileSync(join(migrationDir, '0005_approvals.sql'), 'utf8')
   expect(db.sqlite.prepare('SELECT * FROM schema_migrations').all()).toEqual([
     {
@@ -101,6 +102,12 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
       checksum: createHash('sha256').update(gateSql).digest('hex'),
       applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
     },
+    {
+      version: 8,
+      name: '0008_rooms.sql',
+      checksum: createHash('sha256').update(roomsSql).digest('hex'),
+      applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
+    },
   ])
   const tables = db.sqlite
     .prepare(
@@ -119,9 +126,12 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'ingest_checkpoints',
     'ingest_floors',
     'ingest_keys',
+    'messages',
     'meta',
     'producers',
     'request_receipts',
+    'room_reads',
+    'rooms',
     'runs',
     'schema_migrations',
     'session_tool_calls',
@@ -203,9 +213,9 @@ test('database from a newer Score is rejected', () => {
   migrate(db, migrationDir)
   db.sqlite
     .prepare('INSERT INTO schema_migrations VALUES (?, ?, ?, ?)')
-    .run(8, '0008_newer.sql', 'a'.repeat(64), new Date().toISOString())
+    .run(9, '0009_newer.sql', 'a'.repeat(64), new Date().toISOString())
   expect(() => migrate(db, migrationDir)).toThrow(
-    'Database is from a newer Score: unknown applied migration 8',
+    'Database is from a newer Score: unknown applied migration 9',
   )
 })
 

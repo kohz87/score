@@ -9,6 +9,7 @@ export const INTERNAL_OBSERVATION_SOURCES = [
   'approval-decision',
   'kanban-denial-sweep',
   'task-actions',
+  'rooms',
   'fake',
 ] as const
 
