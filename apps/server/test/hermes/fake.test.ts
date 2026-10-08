@@ -84,7 +84,7 @@ test('the whole fake scenario passes real ingest validation and covers every scr
   expect(stored).toHaveLength(createScenario(schedulerStart).length + 2)
   expect(
     stored.filter((event) => event.type === 'approval.requested').map((event) => event.data.origin),
-  ).toEqual(['score-run', 'gateway', 'kanban'])
+  ).toEqual(['score-run', 'score-run', 'gateway', 'kanban'])
   expect(
     stored.filter((event) => event.type === 'watch.frame').map((event) => event.data.surface),
   ).toEqual(['terminal', 'editor', 'browser'])
@@ -138,8 +138,12 @@ test('restart replays scenario observations while keeping durable approval decis
   )
   expect(
     second.filter((event) => event.type.startsWith('approval.')).map((event) => event.type),
-  ).toEqual(['approval.updated', 'approval.updated', 'approval.updated', 'approval.updated'])
-  expect(second.find((event) => event.type === 'approval.updated')?.data).toMatchObject({
+  ).toEqual(Array(6).fill('approval.updated'))
+  expect(
+    second.find(
+      (event) => event.type === 'approval.updated' && event.data.id === 'approval-score-run-0',
+    )?.data,
+  ).toMatchObject({
     status: 'approved',
     decision: { by: 'elsewhere' },
   })
@@ -342,7 +346,7 @@ test('fake status and agent styles match the defaults; returned objects cannot m
   await port.start(sink)
   await port.start(sink)
   await scheduler.advance(900 * 18)
-  expect(observations).toHaveLength(10)
+  expect(observations).toHaveLength(13)
   expect((await port.listAgents())[1]!.status).toBe('working')
 })
 
@@ -446,8 +450,8 @@ test('SCORE_FAKE_LOOP=false idles after a three-minute scenario with distinct re
   await scheduler.advance(scenarioDuration * 3)
   expect(events()).toEqual(stored)
   const approvals = stored.filter((event) => event.type === 'approval.requested')
-  expect(new Set(approvals.map((event) => event.data.command)).size).toBe(3)
-  expect(new Set(approvals.map((event) => event.data.title)).size).toBe(3)
+  expect(new Set(approvals.map((event) => event.data.command)).size).toBe(4)
+  expect(new Set(approvals.map((event) => event.data.title)).size).toBe(4)
   expect(createScenario(schedulerStart).at(-1)?.at).toBe(scenarioDuration)
 })
 
