@@ -12,6 +12,8 @@ export const ProviderItemSchema = z.object({
   status: z.enum(['connected', 'needs_signin', 'missing']),
   detail: z.string(),
   usedBy: z.array(AgentIdSchema),
+  /** How Connect works from the browser (ARCHITECTURE D2.7); absent = run in a terminal. */
+  signIn: z.enum(['device_code', 'api_key', 'terminal']).optional(),
 })
 export type ProviderItem = z.infer<typeof ProviderItemSchema>
 export const ProvidersResponseSchema = z.object({ items: z.array(ProviderItemSchema) })
@@ -22,8 +24,48 @@ export const ConnectResultSchema = z.object({
   command: z.string().optional(),
   url: z.string().optional(),
   code: z.string().optional(),
+  signInId: z.string().optional(),
+  expiresAt: z.iso.datetime().optional(),
 })
 export type ConnectResult = z.infer<typeof ConnectResultSchema>
+
+export const SignInSchema = z.object({
+  id: z.string().min(1),
+  providerId: z.string().min(1),
+  state: z.enum(['waiting', 'connected', 'failed', 'expired', 'cancelled']),
+  url: z.url({ protocol: /^https$/ }).nullable(),
+  code: z.string().max(64).nullable(),
+  expiresAt: z.iso.datetime(),
+  message: z.string().nullable(),
+})
+export type SignIn = z.infer<typeof SignInSchema>
+
+// The key goes to `hermes auth add` on stdin and nowhere else (D2.7): no whitespace, so it can't smuggle a second answer.
+export const ProviderKeyRequestSchema = z
+  .object({
+    apiKey: z.string().regex(/^[\x21-\x7e]{8,512}$/),
+    label: z
+      .string()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$/)
+      .optional(),
+    acknowledgeInsecure: z.boolean().optional(),
+  })
+  .strict()
+export type ProviderKeyRequest = z.infer<typeof ProviderKeyRequestSchema>
+
+export const ModelOptionSchema = z.object({
+  provider: z.string().min(1),
+  providerLabel: z.string().min(1),
+  model: z.string().min(1).max(256),
+  available: z.boolean(),
+  reason: z.string().nullable(),
+  free: z.boolean(),
+  price: z.object({ input: z.string(), output: z.string() }).nullable(),
+})
+export type ModelOption = z.infer<typeof ModelOptionSchema>
+export const ModelsQuerySchema = z.object({ q: z.string().max(100).optional() })
+export const ModelsResponseSchema = z.object({ items: z.array(ModelOptionSchema).max(200) })
+export type ModelsResponse = z.infer<typeof ModelsResponseSchema>
 
 export const LocalProviderRequestSchema = z
   .object({

@@ -173,6 +173,23 @@ mappings record the generation they were admitted under, because Hermes scopes r
   has none). The adapter writes exactly these two files: path-checked inside `<profile home>`, etag = sha256 of the
   current content, write temp + fsync + rename. Never `.env`, `auth.json`, `config.yaml` or anything else.
 
+**D2.7 Provider sign-in from the browser (owner request, 2026-10-08).** Score still never *reads* a credential store
+and never *keeps* a credential, but it may now relay one the person types, so providers can be connected without a
+terminal on the Hermes machine.
+- **Device-code sign-in** (providers whose `hermes auth add <id> --no-browser` prints a verification link and a user
+  code): Score runs that command detached (no controlling terminal, stdin closed), parses only the `https` link and the
+  code, shows them, and watches the process until it exits; success is confirmed by re-reading `hermes auth list`. The
+  tokens go from the provider to Hermes; Score never sees them. One sign-in per provider at a time; cancelled after 15
+  minutes or on request (the process is killed by its handle). Safe over plain-HTTP remote: only a short-lived code crosses
+  the network, and approving it signs in the Hermes machine, not the viewer.
+- **API key paste**: `POST …/providers/:id/key` runs `hermes auth add <id> --type api-key --label <label>` in a new
+  session without a controlling terminal, writing the key to **stdin** (getpass falls back to stdin), never to argv or
+  the environment. The key is validated (printable, no whitespace, 8–512 chars), held only in the request handler, and
+  never stored, logged, put in an idempotency receipt, a stream event or an error message (the receipt for this route
+  keys on the Idempotency-Key and route only). Allowed on loopback and TLS; over plain-HTTP remote mode only with an
+  explicit per-request acknowledgement after a warning (the key crosses the LAN unencrypted).
+- Interactive flows that need a localhost redirect on the Hermes machine (PKCE callbacks) stay "run in a terminal".
+
 ### D3. Starting agent work
 | Intent | Mechanism | Canonical live events | Approvals |
 |---|---|---|---|
