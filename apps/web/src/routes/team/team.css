@@ -444,3 +444,116 @@
     font-size: 48px;
   }
 }
+
+/* File editor (SOUL.md / AGENTS.md) */
+.team-segment {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.team-segment button {
+  padding: 8px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+.team-segment button[aria-pressed='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #ffffff;
+}
+.team-file-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.team-file-text {
+  min-height: 260px;
+  padding: 14px 16px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-16);
+  background: var(--subtle);
+  color: var(--ink);
+  font-family: var(--font-code);
+  font-size: 13px;
+  line-height: 1.55;
+  resize: vertical;
+}
+.team-file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.team-file-actions button {
+  padding: 9px 16px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+.team-file-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.team-file-actions .team-primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #ffffff;
+}
+.team-file-editor h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+.team-diff {
+  margin: 0;
+  padding: 12px 0;
+  overflow: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  background: var(--card);
+  font-family: var(--font-code);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.team-diff span {
+  display: block;
+  padding: 0 14px;
+  white-space: pre-wrap;
+}
+.team-diff [data-kind='add'] {
+  background: var(--agent-jade-tint);
+  color: var(--agent-jade-text);
+}
+.team-diff [data-kind='del'] {
+  background: var(--agent-coral-tint);
+  color: var(--agent-coral-text);
+}
+.team-diff [data-kind='hunk'] {
+  color: var(--muted);
+}
+.team-conflict {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--agent-saffron);
+  border-radius: var(--radius-16);
+  background: var(--agent-saffron-tint);
+}
+.team-conflict p {
+  margin: 0;
+}
+.team-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
