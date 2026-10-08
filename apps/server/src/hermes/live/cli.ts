@@ -14,6 +14,8 @@ export interface CliOptions {
   // Settings status reads (`auth list`, `config get --json mcp_servers|providers`): Hermes prints no secrets for
   // these, and callers parse only the fields they need.
   captureSettings?: boolean
+  /** These values reach execFile only; the runner never returns stdout or exception argv for them. */
+  sensitiveArgIndices?: number[]
   execute?: (
     file: string,
     args: string[],
@@ -36,6 +38,7 @@ const ReadConfigKeys = [
   'delegation.max_concurrent_children',
   'command_allowlist',
   'approvals',
+  'plugins.enabled',
 ]
 /** Exact argv shapes whose stdout Score may read. Everything else keeps its output private. */
 export function captureReadShape(argv: string[]): boolean {
@@ -96,6 +99,8 @@ export const runHermes: HermesRunner = async (args, options) => {
     options.captureTaskCreate ||
     options.captureRead ||
     options.captureSettings
+  if ((options.sensitiveArgIndices?.length || argv.includes('API_SERVER_KEY')) && capture)
+    throw new Error('Sensitive CLI arguments cannot be captured')
   // The create echo includes the task body and reads can list many tools; the model value is tiny.
   const captureLimit =
     options.captureTaskCreate || options.captureRead

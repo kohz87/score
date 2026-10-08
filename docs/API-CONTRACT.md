@@ -269,7 +269,32 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 ## 8. Team
 
 - **S** `GET /api/agents` → `{ asOfSeq; items: AgentSummary[] }`
-- `POST /api/agents` `{ id: string; name: string; role: string; style: AgentStyle; model?: string; cloneFrom?: AgentId }` → `AgentDetail`
+- **H** `POST /api/agents/preview` → `AgentPreview` (§8 lifecycle below).
+- **H** `POST /api/agents` `{ id; name; role; style; model; cloneFrom?; previewHash; confirmInheritance? }` → `202 AgentOperation`.
+- **H** `PATCH /api/agents/:agentId` `{ name?; role? }` → `AgentDetail`. Name is a Score display name; profile id never changes. Role is nonempty description text.
+- **H** `DELETE /api/agents/:agentId` `{ typedName; previewHash }` → `202 AgentOperation`.
+- `GET /api/agents/operations/:opId` → `AgentOperation` (paired session required).
+
+Lifecycle schemas live in `packages/contract/src/profiles.ts`. Preview accepts `{ kind: 'create', id, name, role,
+style, model, cloneFrom? }` or `{ kind: 'delete', agentId }`. Canonical names are lowercase ASCII letters/digits,
+underscore or hyphen, 1–64 characters with an alphanumeric first character; `default` and retired names are reserved.
+Preview returns `{ kind; targetName; hash; inherited: { memories: string[]; skills: string[]; plugins: string[];
+approvalSettings: string[]; credentialsPresent: string[] }; effects: string[]; blockers: string[];
+pendingWork: { activeRuns; queuedTurns; pendingApprovals; assignments; disposition }; exportPath: string|null }`.
+Inheritance lists contain names only, never credential values or memory contents. Unknown inventory blocks cloning.
+Create/delete recompute the preview; a stale hash is `409 conflict`. Cloning requires `confirmInheritance: true`.
+All mutations accept Idempotency-Key receipts. Operations are durable and lock their target through completion or
+needs-attention; no automatic adoption, rollback, credential rotation, destructive retry, or gateway restart.
+`AgentOperation` is `{ id; kind: 'create'|'delete'; targetName; incarnationId; requestHash;
+state: 'running'|'needs_attention'|'completed'; steps: { name; state: 'pending'|'running'|'completed' }[];
+createdAt; updatedAt; nextStep: string|null; error: string|null; exportPath: string|null }`.
+Managed summaries have optional `lifecycle: { state: 'setting_up'|'ready'|'deleting'|'needs_attention'|'removed';
+incarnationId; operationId: string|null }`. Only ready agents admit work. Removed agents remain in snapshots for
+historical attribution, but have no routing, room membership or lead selection. Lifecycle changes emit only
+`agent.updated`. Deletion freezes admissions, refuses active runs, queued turns, pending approvals or unfinished
+assignments, verifies a private export first, and retires the name. Exports omit credentials and are not a full undo;
+their local path is displayed but their bytes are never served. Retired-name reuse is currently refused until an
+incarnation-aware reuse confirmation contract is agreed.
 - `PATCH /api/agents/:agentId/style` `{ color?; shape? }` → `AgentSummary`
 - **S** `GET /api/agents/:agentId` → `AgentDetail`
   ```ts

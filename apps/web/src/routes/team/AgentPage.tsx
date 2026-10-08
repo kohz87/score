@@ -100,7 +100,11 @@ function AgentProfile({ agentId }: { agentId: string }) {
           <h1>{agent.name}</h1>
           <p>{agent.tagline || agent.role}</p>
           <span className="team-status" aria-live="polite">
-            {statusLabels[agent.status]}
+            {agent.lifecycle?.state === 'ready'
+              ? 'Ready'
+              : agent.lifecycle
+                ? agent.activity
+                : statusLabels[agent.status]}
             {agent.activity && ` · ${agent.activity}`}
           </span>
         </div>
@@ -134,6 +138,9 @@ function AgentProfile({ agentId }: { agentId: string }) {
           </button>
         ))}
       </div>
+      {tab === 'Overview' && (
+        <ProfileSettings key={`${agent.id}:${agent.name}:${agent.role}`} agent={agent} />
+      )}
       <div id="team-tab-panel" role="tabpanel" aria-labelledby={`team-tab-${tab}`} tabIndex={0}>
         {tab === 'Overview' ? (
           <AgentOverview
@@ -176,3 +183,4 @@ function AgentProfile({ agentId }: { agentId: string }) {
     </div>
   )
 }
+import { ProfileSettings } from './ProfileSettings.tsx'

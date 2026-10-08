@@ -18,6 +18,52 @@ const provider = {
   usedBy: ['lead'],
 }
 const toolServer = { id: 'files', label: 'files', status: 'ok', usedBy: 'everyone' }
+const uuid = '00000000-0000-4000-8000-000000000001'
+const hash = 'a'.repeat(64)
+const createInput = {
+  id: 'helper',
+  name: 'Helper',
+  role: 'Builds',
+  style: f.style,
+  model: 'm',
+}
+const createRequest = { ...createInput, previewHash: hash }
+const preview = {
+  kind: 'create',
+  targetName: 'helper',
+  hash,
+  inherited: {
+    memories: [],
+    skills: [],
+    plugins: [],
+    approvalSettings: [],
+    credentialsPresent: [],
+  },
+  effects: [],
+  blockers: [],
+  pendingWork: {
+    activeRuns: 0,
+    queuedTurns: 0,
+    pendingApprovals: 0,
+    assignments: 0,
+    disposition: '',
+  },
+  exportPath: null,
+}
+const operation = {
+  id: uuid,
+  kind: 'create',
+  targetName: 'helper',
+  incarnationId: uuid,
+  requestHash: hash,
+  state: 'running',
+  steps: [{ name: 'create_profile', state: 'pending' }],
+  createdAt: '2026-10-08T00:00:00.000Z',
+  updatedAt: '2026-10-08T00:00:00.000Z',
+  nextStep: 'create_profile',
+  error: null,
+  exportPath: null,
+}
 const flowNode = {
   id: 'task:t_1',
   kind: 'step',
@@ -30,6 +76,15 @@ const flowNode = {
 }
 const flowEdge = { id: 'e1', from: 'brief:brief-1', to: 'task:t_1', kind: 'flow', label: null }
 const cases = [
+  ['AgentCreateInputSchema', createInput, { ...createInput, id: 'Bad Id' }],
+  ['AgentCreateRequestSchema', createRequest, { ...createRequest, previewHash: 'x' }],
+  ['AgentPatchRequestSchema', { name: 'New' }, {}],
+  ['AgentDeleteRequestSchema', { typedName: 'helper', previewHash: hash }, { typedName: 'helper' }],
+  ['AgentPreviewRequestSchema', { kind: 'delete', agentId: 'helper' }, { kind: 'delete' }],
+  ['AgentPreviewSchema', preview, { ...preview, hash: undefined }],
+  ['AgentOperationSchema', operation, { ...operation, state: 'bogus' }],
+  ['ProfileNameSchema', 'helper', 'Helper'],
+  ['ProfileStepNameSchema', 'create_profile', 'other'],
   ['AgentIdSchema', 'lead', ''],
   ['ShapeSchema', 'circle-dot', 'oval'],
   ['AgentStyleSchema', f.style, { ...f.style, color: '#abc' }],

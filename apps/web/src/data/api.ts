@@ -1,4 +1,4 @@
-import { AgentIdSchema } from '@score/contract'
+import { ErrorEnvelopeSchema } from '@score/contract'
 
 export class ApiError extends Error {
   constructor(
@@ -10,10 +10,6 @@ export class ApiError extends Error {
     super(message)
     this.name = 'ApiError'
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<unknown> {
@@ -32,15 +28,13 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<un
   })
   if (!response.ok) {
     const payload: unknown = await response.json().catch(() => null)
-    const error = isRecord(payload) && isRecord(payload.error) ? payload.error : {}
-    // The contract exports string validation, but does not yet export an error-envelope schema.
-    const code = AgentIdSchema.safeParse(error.code)
-    const message = AgentIdSchema.safeParse(error.message)
+    const envelope = ErrorEnvelopeSchema.safeParse(payload)
+    const error = envelope.success ? envelope.data.error : null
     throw new ApiError(
       response.status,
-      code.success ? code.data : 'request_failed',
-      message.success ? message.data : 'The request failed. Please try again.',
-      error.details,
+      error?.code ?? 'request_failed',
+      error?.message ?? 'The request failed. Please try again.',
+      error?.details,
     )
   }
   return response.status === 204 ? undefined : response.json()

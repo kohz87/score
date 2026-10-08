@@ -47,6 +47,8 @@ export class RoutingDispatcher {
             .prepare(
               `
         SELECT q.* FROM message_runs q WHERE q.state = 'pending' AND NOT EXISTS (
+          SELECT 1 FROM agent_lifecycle l WHERE l.agent_id = q.agent_id AND l.state != 'ready'
+        ) AND NOT EXISTS (
           SELECT 1 FROM team_state WHERE paused_at IS NOT NULL
         ) AND NOT EXISTS (
           SELECT 1 FROM briefs paused WHERE paused.id = q.chain_id AND paused.paused_at IS NOT NULL

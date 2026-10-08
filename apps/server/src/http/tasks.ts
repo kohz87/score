@@ -15,6 +15,7 @@ import type { ScoreDb } from '../db/index.ts'
 import { requestIdempotency } from './idempotency.ts'
 import { humanGuard } from '../auth/human.ts'
 import { HttpError } from '../errors.ts'
+import { assertAgentAdmits } from '../domain/agent-lifecycle.ts'
 import {
   CreateTaskSchema,
   PatchTaskSchema,
@@ -90,6 +91,7 @@ export function registerTaskRoutes(
   })
   app.post('/api/tasks', mutation, async (request) => {
     const req = CreateTaskSchema.parse(request.body)
+    if (db) for (const id of [req.assignee, req.reviewer]) if (id) assertAgentAdmits(db.sqlite, id)
     const key = z
       .string()
       .regex(/^[\x21-\x7e]{1,256}$/)
@@ -98,7 +100,9 @@ export function registerTaskRoutes(
   })
   app.patch('/api/tasks/:taskId', mutation, async (request) => {
     const { taskId } = ParamsSchema.parse(request.params)
-    return port.patchTask(taskId, PatchTaskSchema.parse(request.body))
+    const req = PatchTaskSchema.parse(request.body)
+    if (db) for (const id of [req.assignee, req.reviewer]) if (id) assertAgentAdmits(db.sqlite, id)
+    return port.patchTask(taskId, req)
   })
   app.post('/api/tasks/:taskId/actions', mutation, async (request) => {
     const { taskId } = ParamsSchema.parse(request.params)

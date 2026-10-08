@@ -747,3 +747,61 @@ button.team-toggle:focus-visible,
   opacity: 0.5;
   cursor: default;
 }
+.team-add-agent {
+  margin-top: 6px;
+  height: 48px;
+  border-radius: 18px;
+  border: 1.5px dashed var(--profile-dashed);
+  background: transparent;
+  color: var(--profile-add-ink);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+.team-profile-dialog {
+  width: min(640px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  padding: 24px 28px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--ink);
+  overflow: auto;
+}
+.team-profile-dialog::backdrop {
+  background: rgb(18 19 26 / 40%);
+}
+.team-profile-appearance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.team-profile-confirm {
+  flex-direction: row !important;
+  align-items: center;
+}
+.team-profile-danger {
+  border-color: var(--agent-coral);
+}
+.team-operation-steps {
+  margin: 0;
+  padding-left: 20px;
+}
+.team-profile-dialog code,
+.team-profile-danger code {
+  overflow-wrap: anywhere;
+}
+.team-routine-form select {
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+.team-add-agent:focus-visible,
+.team-profile-dialog :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}

@@ -31,6 +31,7 @@ import type { AgentTool } from './agent-tabs.ts'
 import type { ApprovalConfig } from './approvals.ts'
 import type { IngestResult, Observation } from '../hub/ingest.ts'
 import type { ReportFacts } from '../domain/reports.ts'
+import type { ProfileManagementPort } from './profile-management.ts'
 
 export interface ObservationSink {
   submit(obs: Observation): Promise<IngestResult>
@@ -133,7 +134,7 @@ export type CompatibilityEvaluation = SystemStatus['compatibility'] & {
 
 export type ProviderBase = Omit<ProviderItem, 'usedBy'>
 
-export interface HermesPort {
+export interface HermesPort extends ProfileManagementPort {
   readonly mode: 'live' | 'fake'
   start(sink: ObservationSink): Promise<void>
   stop(): Promise<void>

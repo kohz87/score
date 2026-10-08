@@ -4,6 +4,19 @@ import { join } from 'node:path'
 import { z } from 'zod'
 
 const ConfigSchema = z.object({
+  bridgeInstallUrl: z
+    .url()
+    .refine((value) => {
+      const url = new URL(value)
+      return (
+        ['https:', 'file:'].includes(url.protocol) && !url.username && !url.password && !url.search
+      )
+    })
+    .optional(),
+  bridgeInstallRef: z
+    .string()
+    .regex(/^[a-f0-9]{40}$/)
+    .optional(),
   home: z.string().min(1).default(join(homedir(), '.score')),
   // Default (the user's Hermes home) is resolved inside the Hermes adapter.
   hermesHome: z.string().min(1).optional(),
@@ -43,6 +56,8 @@ export type Config = z.infer<typeof ConfigSchema>
 
 export function loadConfig(env: Record<string, string | undefined>): Config {
   return ConfigSchema.parse({
+    bridgeInstallUrl: env.SCORE_BRIDGE_INSTALL_URL,
+    bridgeInstallRef: env.SCORE_BRIDGE_INSTALL_REF,
     home: env.SCORE_HOME,
     hermesHome: env.SCORE_HERMES_HOME,
     hermesUrl: env.SCORE_HERMES_URL,

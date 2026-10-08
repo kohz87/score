@@ -42,7 +42,15 @@ export function registerAgentRoutes(
     const { db, ingest } = storage()
     const details = z.array(AgentDetailSchema).parse(await port.listAgentDetails())
     await reconcileAgents(ingest, details)
-    return { db, ids: details.map((agent) => agent.id) }
+    const managed = z
+      .array(z.object({ agent_id: z.string() }))
+      .parse(db.sqlite.prepare('SELECT agent_id FROM agent_lifecycle').all())
+    return {
+      db,
+      ids: [
+        ...new Set([...details.map((agent) => agent.id), ...managed.map((row) => row.agent_id)]),
+      ].filter((id) => readAgent(db.sqlite, id)),
+    }
   }
   app.get('/api/agents', async () => {
     const { db, ids } = await refresh()

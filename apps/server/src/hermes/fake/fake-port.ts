@@ -56,6 +56,10 @@ import type { HubSkill, MemoryItem, SkillItem } from '@score/contract'
 import { z } from 'zod'
 import { permissionsOf, updateApprovalConfig, type ApprovalConfig } from '../approvals.ts'
 import { HttpError } from '../../errors.ts'
+import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
+import type { ProfileInventory, ProfileStepContext } from '../profile-management.ts'
+import type { ProfileStepName } from '@score/contract'
+import { ProfileNameSchema } from '../live/paths.ts'
 import { createFakeConfigService } from './fake-config.ts'
 import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
 import {
@@ -369,6 +373,8 @@ export class FakePort implements HermesPort {
   private readonly memory = new Map<string, MemoryItem[]>()
   private readonly tools = new Map<string, AgentTool[]>()
   private readonly approvalConfigs = new Map<string, ApprovalConfig>()
+  private readonly profileIdentities = new Map<string, string>()
+  private readonly profileSteps = new Map<string, Set<ProfileStepName>>()
   private sink: ObservationSink | undefined
   private sessionId = ''
   private nextIdentity = 0
@@ -437,6 +443,38 @@ export class FakePort implements HermesPort {
         { id: 'tracker', label: 'tracker', kind: 'mcp', enabled: true },
       ])
     }
+    if (this.db) {
+      const rows = z
+        .array(z.object({ name: z.string(), state: z.string() }))
+        .parse(this.db.sqlite.prepare('SELECT * FROM fake_profiles').all())
+      for (const row of rows) {
+        const saved = z
+          .object({
+            detail: AgentDetailSchema.nullable(),
+            identity: z.string().nullable(),
+            steps: z.array(z.string()),
+            approvals: z.object({
+              mode: z.enum(['manual', 'smart', 'off']),
+              allowlist: z.array(z.string()),
+              deny: z.array(z.string()),
+            }),
+            soul: z.string(),
+          })
+          .parse(JSON.parse(row.state))
+        if (!saved.detail) {
+          this.agents.delete(row.name)
+          continue
+        }
+        this.agents.set(row.name, saved.detail)
+        this.memory.set(row.name, saved.detail.memory)
+        this.skills.set(row.name, saved.detail.skills)
+        this.tools.set(row.name, saved.detail.tools)
+        this.approvalConfigs.set(row.name, saved.approvals)
+        this.files.set(`${row.name}/SOUL.md`, saved.soul)
+        if (saved.identity) this.profileIdentities.set(row.name, saved.identity)
+        this.profileSteps.set(row.name, new Set(saved.steps as ProfileStepName[]))
+      }
+    }
   }
 
   async start(sink: ObservationSink): Promise<void> {
@@ -496,6 +534,132 @@ export class FakePort implements HermesPort {
 
   async listAgents(): Promise<AgentSummary[]> {
     return structuredClone([...this.agents.values()])
+  }
+  async profileInventory(name: string, cloneFrom?: string): Promise<ProfileInventory> {
+    ProfileNameSchema.parse(name)
+    const source = cloneFrom ? this.agentOrThrow(cloneFrom) : null
+    const inherited = {
+      memories: source ? ['MEMORY.md', 'USER.md'] : [],
+      skills: source ? (this.skills.get(source.id) ?? []).map((item) => item.name) : [],
+      plugins: source ? ['score-bridge'] : [],
+      approvalSettings: source ? ['mode: smart', 'command allowlist', 'deny rules'] : [],
+      credentialsPresent: source ? ['example-provider'] : [],
+    }
+    const exists = this.agents.has(name)
+    return {
+      exists,
+      identity: exists ? (this.profileIdentities.get(name) ?? `fake-existing:${name}`) : null,
+      revision: createHash('sha256')
+        .update(
+          JSON.stringify([
+            this.agents.get(name),
+            source,
+            inherited,
+            source ? this.memory.get(source.id) : null,
+            source ? this.approvalConfigs.get(source.id) : null,
+          ]),
+        )
+        .digest('hex'),
+      inherited,
+      blockers: [],
+    }
+  }
+  profileExportPath(name: string, revision: string) {
+    ProfileNameSchema.parse(name)
+    // Fake mode never writes an archive; this is the private destination shown by the simulated adapter.
+    return `${this.db ? this.profileScoreHome() : '/tmp/score-fake'}/profile-backups/${name}-${revision.slice(0, 24)}.tar.gz`
+  }
+  private profileScoreHome() {
+    const row = z
+      .object({ file: z.string() })
+      .parse(this.db!.sqlite.prepare('PRAGMA database_list').get())
+    return row.file.slice(0, row.file.lastIndexOf('/'))
+  }
+  async describeProfile(name: string, description: string) {
+    this.agentOrThrow(name).role = description
+  }
+  async profileStep(step: ProfileStepName, context: ProfileStepContext) {
+    const name = ProfileNameSchema.parse(context.targetName)
+    const input = context.input
+    let current =
+      this.profileIdentities.get(name) ?? (this.agents.has(name) ? `fake-existing:${name}` : null)
+    if (
+      step !== 'create_profile' &&
+      !['purge_identity', 'retire'].includes(step) &&
+      current !== context.targetIdentity
+    )
+      throw new HttpError(409, 'conflict', 'Profile identity changed')
+    if (step === 'create_profile') {
+      if (this.agents.has(name) || !input)
+        throw new HttpError(409, 'conflict', 'Profile already exists')
+      // A small observable provisioning interval keeps fake mode faithful to the asynchronous operation UI.
+      await new Promise<void>((resolve) => setTimeout(resolve, 150))
+      const source = input.cloneFrom ? this.agentOrThrow(input.cloneFrom) : null
+      this.agents.set(name, {
+        ...(source ?? exampleAgents()[0]!),
+        id: name,
+        name: input.name,
+        role: input.role,
+        style: input.style,
+        status: 'idle',
+        activity: null,
+        served: true,
+      })
+      if (source) {
+        this.skills.set(name, structuredClone(this.skills.get(source.id) ?? []))
+        this.memory.set(name, structuredClone(this.memory.get(source.id) ?? []))
+        this.files.set(`${name}/SOUL.md`, this.files.get(`${source.id}/SOUL.md`) ?? '')
+      }
+      current = `fake:${context.operationId}`
+      this.profileIdentities.set(name, current)
+    } else if (step === 'model') {
+      await this.setAgentModel(name, { model: input!.model })
+    } else if (step === 'permissions') {
+      await this.updateApprovals(name, () => ({
+        mode: context.baseline.mode,
+        allowlist: context.baseline.goAhead,
+        deny: context.baseline.never,
+      }))
+    } else if (step === 'delete_profile') {
+      if (!this.profileSteps.get(name)?.has('export'))
+        throw new HttpError(409, 'conflict', 'No verified export')
+      this.agents.delete(name)
+      this.profileIdentities.delete(name)
+    } else if (step === 'verify_ready') {
+      const steps = this.profileSteps.get(name)
+      if (
+        ![
+          'preserve_key',
+          'configure_key',
+          'model',
+          'permissions',
+          'install_bridge',
+          'enable_bridge',
+        ].every((key) => steps?.has(key as ProfileStepName))
+      )
+        throw new HttpError(409, 'conflict', 'Provisioning checks failed')
+    }
+    const steps = this.profileSteps.get(name) ?? new Set<ProfileStepName>()
+    steps.add(step)
+    this.profileSteps.set(name, steps)
+    if (this.db) {
+      const detail = (await this.listAgentDetails()).find((agent) => agent.id === name) ?? null
+      this.db.sqlite
+        .prepare(
+          'INSERT INTO fake_profiles (name, state) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET state = excluded.state',
+        )
+        .run(
+          name,
+          JSON.stringify({
+            detail,
+            identity: current,
+            steps: [...steps],
+            approvals: this.approvalConfigs.get(name) ?? { mode: 'smart', allowlist: [], deny: [] },
+            soul: this.files.get(`${name}/SOUL.md`) ?? '',
+          }),
+        )
+    }
+    return { identity: current ?? context.targetIdentity }
   }
 
   async reportFacts(req: Parameters<HermesPort['reportFacts']>[0]) {
@@ -973,6 +1137,7 @@ export class FakePort implements HermesPort {
       })
       .parse(input)
     return this.enqueue(async () => {
+      if (this.db) assertAgentAdmits(this.db.sqlite, input.agentId)
       this.requireSink()
       const existing = this.turns.get(req.turnId)
       if (existing) return { runId: existing }
