@@ -82,7 +82,6 @@ afterEach(() => {
 
 const routes = [
   ['/now', 'Now'],
-  ['/now/flow', 'Now'],
   ['/now/routines', 'Now'],
   ['/now/watch/builder', 'Now'],
   ['/chat', 'Chat'],
