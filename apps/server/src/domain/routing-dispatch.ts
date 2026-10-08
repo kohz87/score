@@ -51,6 +51,8 @@ export class RoutingDispatcher {
         ) AND NOT EXISTS (
           SELECT 1 FROM team_state WHERE paused_at IS NOT NULL
         ) AND NOT EXISTS (
+          SELECT 1 FROM agent_pauses held WHERE held.agent_id = q.agent_id
+        ) AND NOT EXISTS (
           SELECT 1 FROM briefs paused WHERE paused.id = q.chain_id AND paused.paused_at IS NOT NULL
         ) AND NOT EXISTS (
           SELECT 1 FROM message_runs active WHERE active.room_id = q.room_id AND active.agent_id = q.agent_id AND active.state = 'active'

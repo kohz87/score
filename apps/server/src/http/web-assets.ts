@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { extname, join } from 'node:path'
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyReply } from 'fastify'
 
 const contentTypes: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -28,16 +28,38 @@ export function loadWebAssets(directory: string): Map<string, { body: Buffer; ty
   try {
     read('')
   } catch (error) {
-    throw new Error('Remote mode requires a readable built web app; run pnpm build', {
+    throw new Error('Serving the web app requires a readable built web app; run pnpm build', {
       cause: error,
     })
   }
   if (!assets.has('/index.html'))
-    throw new Error('Remote mode requires the built web app; run pnpm build')
+    throw new Error('Serving the web app requires the built web app; run pnpm build')
   return assets
 }
 
 export type WebAssets = ReturnType<typeof loadWebAssets>
+
+// The built app has no inline scripts; React style attributes need inline styles. Images include /api/media.
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+].join('; ')
+
+function withSecurityHeaders(reply: FastifyReply): FastifyReply {
+  return reply
+    .header('content-security-policy', CONTENT_SECURITY_POLICY)
+    .header('x-content-type-options', 'nosniff')
+    .header('x-frame-options', 'DENY')
+    .header('referrer-policy', 'no-referrer')
+}
 
 export function registerWebAssets(
   app: FastifyInstance,
@@ -59,14 +81,16 @@ export function registerWebAssets(
   for (const [path, asset] of assets)
     app.get(path, async (_request, reply) => {
       const result = path === '/index.html' ? index : asset
-      return reply.type(result.type).send(result.body)
+      return withSecurityHeaders(reply).type(result.type).send(result.body)
     })
   for (const path of ['/', '/pair'])
-    app.get(path, async (_request, reply) => reply.type(index.type).send(index.body))
+    app.get(path, async (_request, reply) =>
+      withSecurityHeaders(reply).type(index.type).send(index.body),
+    )
   app.get('/*', async (request, reply) => {
     const path = request.url.split('?', 1)[0]!
     if (path.startsWith('/api/') || path.startsWith('/bridge/') || extname(path))
       return reply.code(404).send({ error: { code: 'not_found', message: 'Not found' } })
-    return reply.type(index.type).send(index.body)
+    return withSecurityHeaders(reply).type(index.type).send(index.body)
   })
 }

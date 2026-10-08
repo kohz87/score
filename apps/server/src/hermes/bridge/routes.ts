@@ -16,6 +16,7 @@ import type { Ingest } from '../../hub/ingest.ts'
 import { redact } from '../../redact.ts'
 import { hashBridgeToken } from './bootstrap.ts'
 import { acknowledge, ProducerSchema, retainedBridgePosition } from './registry.ts'
+import type { ScreenshotImporter } from './screenshots.ts'
 import { translateBridgeEvent, type BridgeMetrics } from './translate.ts'
 
 export interface BridgeDeps {
@@ -26,6 +27,8 @@ export interface BridgeDeps {
   clock?: () => number
   metrics?: BridgeMetrics
   outbox?: ApprovalOutbox
+  /** Stores a browser_vision screenshot named by a tool result; live mode only. */
+  importScreenshot?: ScreenshotImporter
 }
 
 export const SHIPPED_PLUGIN_VERSION = '0.1.0'
@@ -194,7 +197,13 @@ export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): vo
       const { events } = BatchSchema.parse(request.body)
       // Validate the whole batch before accepting any part of it.
       const observations = events.map((event) =>
-        translateBridgeEvent(producer, event, metrics, getCompatibility().disabled),
+        translateBridgeEvent(
+          producer,
+          event,
+          metrics,
+          getCompatibility().disabled,
+          deps.importScreenshot,
+        ),
       )
       let ackedThrough: number
       try {

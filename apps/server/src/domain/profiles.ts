@@ -57,6 +57,18 @@ function hash(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
 }
 
+// Steps whose repeat is harmless: reads, idempotent config writes, the export (a retry reuses its own file) and
+// Score-side retirement.
+const RETRYABLE_STEPS: ReadonlySet<string> = new Set([
+  'model',
+  'permissions',
+  'enable_bridge',
+  'verify_ready',
+  'export',
+  'purge_identity',
+  'retire',
+])
+
 export class ProfileOperations {
   private readonly flights = new Map<string, Promise<void>>()
   private closed = false
@@ -304,6 +316,35 @@ export class ProfileOperations {
       )
     for (const { id } of ids) this.launch(id)
   }
+  /**
+   * A person retries a step that failed with a recorded error after fixing its cause. Only steps whose repeat is
+   * harmless qualify; creating the profile, installing the plugin and the delete itself never run twice.
+   */
+  retry(id: string) {
+    const operation = this.get(id)
+    const step = operation.steps.find((item) => item.name === operation.nextStep)
+    // Operations saved before `retryable` existed: a recorded (not generic) error on a harmless step qualifies.
+    const retryable =
+      operation.retryable ??
+      (step !== undefined &&
+        RETRYABLE_STEPS.has(step.name) &&
+        !operation.error?.includes('could not be verified'))
+    if (operation.state !== 'needs_attention' || !retryable || !step)
+      throw new HttpError(
+        409,
+        'conflict',
+        'This step cannot be retried from Score. Check the profile locally first.',
+      )
+    step.state = 'pending'
+    operation.state = 'running'
+    operation.error = null
+    operation.retryable = false
+    operation.updatedAt = new Date(this.clock()).toISOString()
+    return this.save(operation).then(() => {
+      this.launch(id)
+      return operation
+    })
+  }
   refresh(id: string) {
     const operation = this.get(id)
     if (operation.state === 'needs_attention' && operation.nextStep === 'verify_ready')
@@ -434,6 +475,10 @@ export class ProfileOperations {
         await reconcileAgents(this.ingest, await this.port.listAgentDetails())
     } catch (error) {
       operation.state = 'needs_attention'
+      operation.retryable =
+        error instanceof HttpError &&
+        operation.nextStep !== null &&
+        RETRYABLE_STEPS.has(operation.nextStep)
       operation.error = `Next step: ${operation.nextStep}. ${error instanceof HttpError ? error.message : 'The step could not be verified. Inspect the profile locally; no automatic retry or rollback was attempted.'}`
       operation.updatedAt = new Date(this.clock()).toISOString()
       await this.save(operation, identity)

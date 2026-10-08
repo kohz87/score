@@ -440,6 +440,10 @@
   margin: 0 auto;
   position: relative;
 }
+.chat-composer-box:focus-within {
+  /* The textarea has no outline of its own; the box shows keyboard focus. */
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 22%, transparent);
+}
 .chat-composer-box {
   border: 1.5px solid var(--ink);
   border-radius: 26px;

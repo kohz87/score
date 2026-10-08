@@ -126,7 +126,7 @@ test('selects the waiting node and renders its checklist, approval, facts, Chat 
   expect(within(inspector).getByText('Completed:')).toBeTruthy()
   expect(within(inspector).getByText('Demo model')).toBeTruthy()
   expect(within(inspector).getByText('terminal, files')).toBeTruthy()
-  expect(within(inspector).getByText('Watch arrives in a later update')).toBeTruthy()
+  expect(within(inspector).getByText('No desktop open for this step')).toBeTruthy()
   expect(within(inspector).getByRole('link', { name: 'Open in Chat' }).getAttribute('href')).toBe(
     '/chat/room-flow',
   )

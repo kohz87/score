@@ -486,3 +486,43 @@ test('agent management needs loopback or a TLS remote connection', async () => {
     profileManagementAllowed({ host: '192.168.1.5', remote: { insecureHttp: true } } as never),
   ).toBe(false)
 })
+
+test('a person can retry a harmless step that failed with a recorded error, never create_profile', async () => {
+  const { HttpError } = await import('../../src/errors.ts')
+  const real = port.profileStep.bind(port)
+  let failPermissions = true
+  vi.spyOn(port, 'profileStep').mockImplementation(async (step, context) => {
+    if (step === 'permissions' && failPermissions)
+      throw new HttpError(409, 'conflict', 'Team permission readback did not match.')
+    return real(step, context)
+  })
+  const added = await create()
+  const stuck = await finished(added.id)
+  expect(stuck).toMatchObject({
+    state: 'needs_attention',
+    nextStep: 'permissions',
+    retryable: true,
+  })
+  failPermissions = false
+  const retried = await mutate(`/api/agents/operations/${added.id}/retry`, {}, 'POST', {
+    'idempotency-key': 'retry-permissions',
+  })
+  expect(retried.statusCode).toBe(200)
+  await vi.waitFor(async () => expect((await finished(added.id)).state).toBe('completed'), {
+    timeout: 5000,
+  })
+})
+
+test('create_profile failures are not retryable from Score', async () => {
+  const { HttpError } = await import('../../src/errors.ts')
+  vi.spyOn(port, 'profileStep').mockImplementation(async (step) => {
+    if (step === 'create_profile') throw new HttpError(409, 'conflict', 'Hermes refused.')
+    throw new Error('unreachable')
+  })
+  const added = await create()
+  expect(await finished(added.id)).toMatchObject({ nextStep: 'create_profile', retryable: false })
+  const refused = await mutate(`/api/agents/operations/${added.id}/retry`, {}, 'POST', {
+    'idempotency-key': 'retry-create',
+  })
+  expect(refused.statusCode).toBe(409)
+})

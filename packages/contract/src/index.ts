@@ -9,3 +9,4 @@ export * from './briefs.ts'
 export * from './profiles.ts'
 
 export const CONTRACT_VERSION = 1
+export * from './watch.ts'

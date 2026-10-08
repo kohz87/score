@@ -87,6 +87,8 @@ const ConfigSchema = z.object({
     .enum(['true', 'false'])
     .transform((value) => value === 'true')
     .default(true),
+  // Serve the built web app from this server (production); Vite does it in development.
+  serveWeb: z.boolean().default(false),
   remote: RemoteSchema.optional(),
 })
 
@@ -110,6 +112,9 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     mediaQuotaMb: env.SCORE_MEDIA_QUOTA_MB,
     fakeSpeed: env.SCORE_FAKE_SPEED,
     fakeLoop: env.SCORE_FAKE_LOOP,
+    serveWeb:
+      z.enum(['0', '1']).optional().parse(env.SCORE_SERVE_WEB) === '1' ||
+      env.NODE_ENV === 'production',
     ...(remote
       ? {
           remote: {

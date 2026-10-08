@@ -1,4 +1,10 @@
-import { AgentDetailSchema, AgentSummarySchema, WatchFrameSchema } from '@score/contract'
+import {
+  AgentDetailSchema,
+  AgentSummarySchema,
+  WatchOverviewSchema,
+  type WatchOverviewItem,
+  WatchResponseSchema,
+} from '@score/contract'
 import type { FastifyInstance } from 'fastify'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
@@ -11,54 +17,42 @@ import type { Ingest } from '../hub/ingest.ts'
 import { snapshot } from '../hub/snapshot.ts'
 
 const ParamsSchema = z.object({ agentId: z.string().min(1).max(256) })
+const LastFrameRow = z.object({
+  caption: z.string(),
+  surface: z.enum(['terminal', 'editor', 'browser']),
+})
 const QuerySchema = z.object({
   from: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().min(1).max(500).default(200),
 })
-export const WatchResponseSchema = z.object({
-  asOfSeq: z.int().nonnegative(),
-  agent: AgentSummarySchema,
-  live: z.boolean(),
-  frames: z.array(WatchFrameSchema),
-  markers: z.array(
-    z.object({
-      seq: z.int().positive(),
-      at: z.iso.datetime(),
-      kind: z.enum(['command', 'file', 'browser', 'asked']),
-    }),
-  ),
-})
-export const WatchOverviewSchema = z.object({
-  items: z.array(
-    z.object({
-      agent: AgentSummarySchema,
-      thumbnail: z.string().nullable(),
-      status: z.string(),
-    }),
-  ),
-})
+function latestSession(sqlite: DatabaseSync, agentId: string): string | null {
+  const row = sqlite
+    .prepare(
+      'SELECT session_id FROM runs WHERE profile = ? AND session_id IS NOT NULL ORDER BY started_at DESC LIMIT 1',
+    )
+    .get(agentId)
+  return row ? z.object({ session_id: z.string().min(1) }).parse(row).session_id : null
+}
 
-function overview(
-  sqlite: DatabaseSync,
-  agentIds: string[],
-): { agent: z.infer<typeof AgentSummarySchema>; thumbnail: string | null; status: string }[] {
-  const items: {
-    agent: z.infer<typeof AgentSummarySchema>
-    thumbnail: string | null
-    status: string
-  }[] = []
+function overview(sqlite: DatabaseSync, agentIds: string[]): WatchOverviewItem[] {
+  const items: WatchOverviewItem[] = []
   for (const id of agentIds) {
     const detail = readAgent(sqlite, id)
     if (!detail) continue
     const last = sqlite
-      .prepare('SELECT caption FROM watch_frames WHERE agent_id = ? ORDER BY seq DESC LIMIT 1')
+      .prepare(
+        'SELECT caption, surface FROM watch_frames WHERE agent_id = ? ORDER BY seq DESC LIMIT 1',
+      )
       .get(id)
-    const caption = last ? z.object({ caption: z.string() }).parse(last).caption : null
+    const row = last ? LastFrameRow.parse(last) : null
+    const live = isLive(sqlite, id)
     items.push({
       agent: AgentSummarySchema.parse(detail),
       // Screenshots arrive with the media store (task 4.3).
       thumbnail: null,
-      status: isLive(sqlite, id) ? (caption ?? 'Working') : (caption ?? 'Idle'),
+      status: live ? (row?.caption ?? 'Working') : (row?.caption ?? 'Idle'),
+      live,
+      surface: row?.surface ?? null,
     })
   }
   return items
@@ -87,6 +81,7 @@ export function registerWatchRoutes(
       return {
         agent: AgentSummarySchema.parse(agent),
         live: isLive(sqlite, agentId),
+        sessionId: latestSession(sqlite, agentId),
         ...readWatch(sqlite, agentId, query),
       }
     })

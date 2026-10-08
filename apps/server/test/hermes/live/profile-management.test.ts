@@ -48,6 +48,34 @@ function archive(name: string) {
   header.write(`${checksum.toString(8).padStart(6, '0')}\0 `, 148)
   return gzipSync(Buffer.concat([header, Buffer.alloc(1024)]))
 }
+// GNU tar, as Hermes writes it: a ././@LongLink ("L") record carries a name over 100 bytes for the next entry.
+function gnuArchive(longName: string) {
+  const block = (name: string, type: string, size: number) => {
+    const header = Buffer.alloc(512)
+    header.write(name.slice(0, 99), 0)
+    header.write('0000644\0', 100)
+    header.write('0000000\0', 108)
+    header.write('0000000\0', 116)
+    header.write(`${size.toString(8).padStart(11, '0')}\0`, 124)
+    header.write('00000000000\0', 136)
+    header.fill(32, 148, 156)
+    header.write(type, 156)
+    header.write('ustar  \0', 257)
+    const checksum = header.reduce((sum, byte) => sum + byte, 0)
+    header.write(`${checksum.toString(8).padStart(6, '0')}\0 `, 148)
+    return header
+  }
+  const name = Buffer.from(`${longName}\0`)
+  const data = Buffer.concat([name, Buffer.alloc(Math.ceil(name.length / 512) * 512 - name.length)])
+  return gzipSync(
+    Buffer.concat([
+      block('././@LongLink', 'L', name.length),
+      data,
+      block(longName, '0', 0),
+      Buffer.alloc(1024),
+    ]),
+  )
+}
 beforeEach(() => {
   env = setup()
   upstream = join(env.home, 'upstream')
@@ -173,7 +201,7 @@ async function provision() {
   ] as const)
     await step(name)
 }
-test('every create/provision command has exact argv, private key precedes config set, and readiness needs a new handshake', async () => {
+test('every create/provision command has exact argv, private key precedes config set, and readiness does not wait for a first-run handshake', async () => {
   await provision()
   expect(calls[0]).toEqual([
     '-p',
@@ -197,9 +225,19 @@ test('every create/provision command has exact argv, private key precedes config
     '["sudo *","rm *"]',
   ])
   expect(calls).toContainEqual(['-p', 'helper', 'config', 'set', 'approvals.mode', 'smart'])
-  expect(calls).toContainEqual(['-p', 'helper', 'plugins', 'install', source, '--ref', pin])
+  expect(calls).toContainEqual([
+    '-p',
+    'helper',
+    'plugins',
+    'install',
+    source,
+    '--ref',
+    pin,
+    '--no-enable',
+  ])
   expect(calls).toContainEqual(['-p', 'helper', 'plugins', 'enable', 'score-bridge'])
-  await expect(step('verify_ready')).rejects.toThrow(/No new bridge handshake/)
+  // Ready without a handshake: the bridge connects on the profile's first run.
+  await expect(step('verify_ready')).resolves.not.toThrow()
   env.db.sqlite
     .prepare(
       "INSERT INTO producers (id, profile, incarnation, pid, isolation, plugin_version, private_apis, token_hash, token_expires_at, created_at, last_seen_at) VALUES ('bridge', 'helper', 'new-bridge', 1, 'in_process', '0.1.0', '{}', ?, ?, ?, ?)",
@@ -296,6 +334,16 @@ test('archive verifier rejects wrong root, truncation and checksum corruption', 
   writeFileSync(path, archive('helper').subarray(0, 30))
   expect(() => verifyProfileArchive(path, 'helper')).toThrow()
 })
+test('archive verifier reads GNU long names (as Hermes exports them) and still checks their root', () => {
+  const path = join(env.home, 'archive.tar.gz')
+  const deep = `helper/skills/${'nested-directory/'.repeat(8)}SKILL.md`
+  writeFileSync(path, gnuArchive(deep), { mode: 0o600 })
+  expect(() => verifyProfileArchive(path, 'helper')).not.toThrow()
+  writeFileSync(path, gnuArchive(`other/${'nested-directory/'.repeat(8)}x`), { mode: 0o600 })
+  expect(() => verifyProfileArchive(path, 'helper')).toThrow(/unexpected root/)
+  writeFileSync(path, gnuArchive(`helper/${'../'.repeat(40)}etc/passwd`), { mode: 0o600 })
+  expect(() => verifyProfileArchive(path, 'helper')).toThrow(/unexpected root/)
+})
 test('credential-bearing CLI exceptions and output never reach logs or captures', async () => {
   const logs = [vi.spyOn(console, 'error'), vi.spyOn(console, 'log'), vi.spyOn(console, 'warn')]
   const secret = 'private-test-key'
@@ -317,4 +365,16 @@ test('credential-bearing CLI exceptions and output never reach logs or captures'
       execute,
     }),
   ).rejects.toThrow(/cannot be captured/)
+})
+
+test('a retried export reuses its own earlier file instead of failing, but never a symlink', async () => {
+  await step('create_profile')
+  context.exportPath = adapter.profileExportPath('helper', 'retry')
+  await step('export')
+  const exports = calls.filter((args) => args.includes('export')).length
+  await step('export')
+  expect(calls.filter((args) => args.includes('export'))).toHaveLength(exports)
+  rmSync(context.exportPath)
+  symlinkSync(join(env.home, 'elsewhere'), context.exportPath)
+  await expect(step('export')).rejects.toThrow(/unsafe or already exists/)
 })

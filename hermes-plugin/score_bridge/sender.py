@@ -35,6 +35,29 @@ def merge_ranges(ranges, first, last, at):
     ranges[:] = merged
 
 
+_SCREENSHOT_NAME = re.compile(r"browser_screenshot_[0-9a-f]+\.png")
+
+
+def _screenshot_watch(result):
+    """Only the path of a browser_vision screenshot leaves the process; the server validates and reads the file."""
+    if type(result) is str and len(result) <= 1_000_000 and result.lstrip()[:1] == "{":
+        try:
+            result = json.loads(result)
+        except ValueError:
+            return None
+    if type(result) is not dict:
+        return None
+    meta = result.get("meta")
+    path = result.get("screenshot_path")
+    if path is None and type(meta) is dict:
+        path = meta.get("screenshot_path")
+    if type(path) is not str or not 0 < len(path) <= 4096 or "\0" in path:
+        return None
+    if not _SCREENSHOT_NAME.fullmatch(path.replace("\\", "/").rsplit("/", 1)[-1]):
+        return None
+    return {"screenshot_path": path}
+
+
 def _watch_capture(hook, kwargs, args):
     """Tool-hook inputs for Watch: (kwargs, args, raw terminal capture or None).
 
@@ -53,6 +76,8 @@ def _watch_capture(hook, kwargs, args):
             kept["args"] = {key: value for key, value in tool_args.items()
                             if key not in ("content", "patch", "old_string", "new_string")}
             return kept, args, None
+        if hook == "post_tool_call" and name == "browser_vision":
+            return kwargs, args, _screenshot_watch(kwargs.get("result"))
         if hook != "post_tool_call" or name not in ("terminal", "execute_code"):
             return kwargs, args, None
         result = kwargs.get("result")
