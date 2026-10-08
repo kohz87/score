@@ -215,7 +215,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `room.upserted`      | `Room`                                                                                        | Chat rooms list                                          |
 | `message.created`    | `Message`                                                                                     | Chat, Now thread                                         |
 | `message.delta`      | `{ messageId, roomId, append: string }`                                                       | Chat (streaming text)                                    |
-| `message.completed`  | `{ messageId, roomId }`                                                                       | Chat                                                     |
+| `message.completed`  | `{ messageId, roomId, parts?: MessagePart[] }` (final parts replace the cached message's)     | Chat                                                     |
 | `typing`             | `{ roomId, agentId, text /* "is re-reading the read layer" */ \| null }`                      | Chat, Now thread                                         |
 | `approval.requested` | `Approval`                                                                                    | Now card, Chat, Flow, Watch, Tasks, header dot           |
 | `approval.updated`   | `Approval` (phase / decision / delivery changes)                                              | same                                                     |
@@ -363,7 +363,8 @@ run: RunSummary | null; model: string | null; tools: string[]; watch: { agentId;
   ```ts
   { asOfSeq; agent: AgentSummary; live: boolean /* an active run right now */
     sessionId: string | null /* latest Hermes session: Watch's Open in terminal copies `hermes -p <agent> --resume <session>` */
-    frames: WatchFrame[]; markers: { seq: number; at: string; kind: 'command' | 'file' | 'browser' | 'asked' }[] }
+    frames: WatchFrame[]; markers: { seq: number; at: string; kind: 'command' | 'file' | 'browser' | 'asked' }[];
+    gaps: { from: string; to: string | null; reason: string }[] }
   type WatchFrame = { seq: number; at: string; agentId: AgentId; runId: string | null; surface: 'terminal' | 'editor' | 'browser'
     terminal?: { cwd: string; command: string; output: string /* tail, ≤64 KB */; status: 'running' | 'ok' | 'error' | 'paused' }
     editor?: { path: string; diff: string /* unified */; language: string | null }
@@ -405,7 +406,11 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   | `/skill`    | `/skill @agent <name>` (use) · `/skill install <name>` | loads or installs a skill          | `{ kind: 'skill', name, installed: boolean }` |
   | `/model`    | `/model <model> <message…>`                            | runs this message on another model | `{ kind: 'model', model }`                    |
 
-- `GET /api/commands` → `{ items: { name: string; usage: string; description: string }[] }` (slash menu)
+  `/remember` and `/skill` are parsed but not implemented yet: they answer `501 not_implemented` and are left out of
+  the slash menu. Use the agent's Memory and Skills tabs instead.
+
+- `GET /api/commands` → `{ items: { name: string; usage: string; description: string }[] }` (slash menu: only the
+  supported commands)
 - **H** `POST /api/media` (multipart, one part named `file`) → `201 { mediaId: string; name: string; size: number;
 contentType: string }`. Types come from the bytes (png, jpeg, gif, webp); `400` empty or malformed, `413` over 8 MB,
   `415` unsupported or contradicting type, `507 media_quota_exceeded`. Messages reference uploads with an `image`

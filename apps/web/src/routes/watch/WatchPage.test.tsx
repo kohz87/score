@@ -1,3 +1,4 @@
+import { watchQuery } from './watch-queries.ts'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { StreamEvent } from '@score/contract'
@@ -227,6 +228,45 @@ test('pause posts once with an idempotency key and the button follows the agent 
     2,
   )
   expect(await screen.findByRole('button', { name: 'Resume builder' })).toBeTruthy()
+})
+
+test('one run ending does not mark the agent idle; the agent update decides', async () => {
+  setup()
+  await screen.findByRole('heading', { name: 'Watching builder', level: 1 })
+  const run = {
+    id: 'run-b',
+    agentId: 'builder',
+    origin: 'score',
+    status: 'completed',
+    startedAt: '2026-10-08T21:30:00.000Z',
+    endedAt: '2026-10-08T21:31:00.000Z',
+    model: null,
+    toolsUsed: [],
+    tokens: null,
+    costUsd: null,
+    refs: [],
+    gaps: [],
+  }
+  emit({ type: 'run.updated', data: run } as unknown as StreamEvent, 2)
+  const { reduce } = watchQuery('builder')
+  const ended = { type: 'run.updated', data: run } as unknown as StreamEvent
+  expect(reduce({ ...watchFixture, live: true }, ended).live).toBe(true)
+  const idle = { type: 'agent.updated', data: { ...watchFixture.agent, status: 'idle' } }
+  expect(reduce({ ...watchFixture, live: true }, idle as unknown as StreamEvent).live).toBe(false)
+  emit(
+    {
+      type: 'gap.recorded',
+      data: {
+        source: 'run-sse:builder',
+        runId: 'run-b',
+        from: run.startedAt,
+        to: run.endedAt,
+        reason: 'x',
+      },
+    } as StreamEvent,
+    3,
+  )
+  expect(await screen.findByText(/Some events were not recorded \(1 gap\)/)).toBeTruthy()
 })
 
 test('open in terminal copies the resume command and confirms it', async () => {

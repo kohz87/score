@@ -8,6 +8,7 @@ import {
   readRun,
   runDraft,
   runLifecycle,
+  runLostObservation,
   runStatusObservation,
   statusApprovalObservation,
   translateRunEvent,
@@ -73,6 +74,8 @@ async function pollQueuedRun(options: FollowOptions, signal: AbortSignal): Promi
   }
 }
 
+const isRunGone = (error: HermesHttpError) => error.status === 404 && error.code === 'run_not_found'
+
 export async function followRun(options: FollowOptions): Promise<void> {
   const { db, gateway, sink, context, signal } = options
   const initial = readRun(db.sqlite, context.runId)
@@ -95,6 +98,10 @@ export async function followRun(options: FollowOptions): Promise<void> {
     if (signal?.aborted) return
     if (error instanceof CredentialsUnavailable) throw error
     if (!(error instanceof HermesHttpError)) throw error
+    if (isRunGone(error)) {
+      await sink.submit(runLostObservation(context))
+      return
+    }
   }
   const source = `run-sse:${context.profile}`
   const recordGap = async (why: string, tag: string) => {
@@ -190,6 +197,10 @@ export async function followRun(options: FollowOptions): Promise<void> {
     } catch (error) {
       if (signal?.aborted) return
       if (!(error instanceof HermesHttpError)) throw error
+      if (isRunGone(error)) {
+        await sink.submit(runLostObservation(context))
+        return
+      }
     }
     await wait(Math.min(options.pollIntervalMs ?? 2000, Math.max(0, deadline - now())), signal)
   }

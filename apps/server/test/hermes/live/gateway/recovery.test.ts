@@ -191,6 +191,16 @@ test('polling is bounded when the run remains unavailable', async () => {
   expect(env.db.sqlite.prepare('SELECT * FROM gaps').all()).toHaveLength(1)
 })
 
+test('a run Hermes no longer knows ends as interrupted instead of polling forever', async () => {
+  const runContext = await context()
+  env.fake.runs.delete(`builder:${runContext.runId}`)
+  await follow(runContext)
+  expect(readRun(env.db.sqlite, runContext.runId)).toMatchObject({
+    status: 'interrupted',
+    error: 'Hermes no longer has a record of this run',
+  })
+})
+
 test('abort interrupts SSE backoff and polling without terminalizing the run', async () => {
   env.fake.sse404 = true
   env.fake.terminalAfterPoll = Infinity

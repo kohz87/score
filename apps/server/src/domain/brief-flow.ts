@@ -705,6 +705,20 @@ export function readBriefLog(
         kind: 'tool',
         text: tool.status === 'error' ? `${tool.tool} failed` : `Used ${tool.tool}`,
       })
+    for (const gap of z
+      .array(z.object({ id: z.int(), from_ts: z.string(), reason: z.string() }))
+      .parse(
+        sqlite
+          .prepare('SELECT id, from_ts, reason FROM gaps WHERE run_id = ? ORDER BY id')
+          .all(runId),
+      ))
+      lines.push({
+        id: `gap:${gap.id}`,
+        at: gap.from_ts,
+        agentId: profile,
+        kind: 'system',
+        text: `Some events were not recorded here (${gap.reason})`,
+      })
     const approval = pendingRunApproval(sqlite, runId)
     if (approval)
       lines.push({

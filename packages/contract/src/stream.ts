@@ -7,6 +7,7 @@ import {
   HandoffSchema,
   LaneBlockSchema,
   LogLineSchema,
+  MessagePartSchema,
   MessageSchema,
   RoomSchema,
   RefSchema,
@@ -27,6 +28,8 @@ export type MessageDelta = z.infer<typeof MessageDeltaSchema>
 export const MessageCompletedSchema = z.object({
   messageId: z.string().min(1),
   roomId: z.string().min(1),
+  /** The authoritative final parts: completion can add a plan, tools summary or notice no delta carried. */
+  parts: z.array(MessagePartSchema).optional(),
 })
 export type MessageCompleted = z.infer<typeof MessageCompletedSchema>
 

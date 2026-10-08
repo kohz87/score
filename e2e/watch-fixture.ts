@@ -91,6 +91,7 @@ export const watchFixture = WatchResponseSchema.parse({
   sessionId: 'score-room-activity-feed-builder',
   frames,
   markers,
+  gaps: [],
 })
 export const watchOverviewFixture = WatchOverviewSchema.parse({
   items: [

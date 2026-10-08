@@ -129,7 +129,10 @@ export function registerRoomRoutes(
     clearInterval(timer)
   })
 
-  app.get('/api/commands', async () => ({ items: COMMANDS }))
+  // /remember and /skill parse but have no write path yet (they answer 501), so the slash menu does not offer them.
+  app.get('/api/commands', async () => ({
+    items: COMMANDS.filter(({ name }) => name !== 'remember' && name !== 'skill'),
+  }))
 
   app.get('/api/rooms', async () => {
     const listed = await agents()
@@ -247,13 +250,17 @@ export function registerRoomRoutes(
     const before =
       query.before === undefined ? undefined : decodeMessageCursor(query.before, roomId)
     const page = snapshot(db, (sqlite) => messagePage(sqlite, roomId, query.limit, before))
-    // Acknowledge only what this snapshot returned; later arrivals must remain unread.
+    // Acknowledge only what this snapshot returned; later arrivals must remain unread. An empty streaming
+    // placeholder has no content yet, so read state stops before the oldest one (its answer is still unseen).
+    const items = page.data.items
+    const oldestEmpty = items.findLastIndex((item) => item.streaming && item.parts.length === 0)
+    const newest = items[oldestEmpty + 1]
     if (!before)
       await ingest.submit({
         source: 'rooms',
         identity: randomUUID(),
         apply({ sqlite, now }) {
-          return markRoomRead(sqlite, roomId, now, page.data.items[0])
+          return markRoomRead(sqlite, roomId, now, newest)
         },
       })
     return { asOfSeq: page.asOfSeq, ...page.data }
@@ -328,7 +335,12 @@ export function registerRoomRoutes(
         // Inside the same transaction, so an item deleted since the check above fails the whole message.
         media?.retain(sqlite, mediaIds, now)
         const drafts = storeMessage(sqlite, message, now)
-        for (const agentId of route.routedTo)
+        // Plan first admits only the planner; the others are named in its prompt and start from the plan.
+        const team = route.routedTo.filter((agentId) => agentId !== planner)
+        const teamNote = team.length
+          ? `\n\nThe request was addressed to the team: ${route.routedTo.map((id) => `@${id}`).join(', ')}.`
+          : ''
+        for (const agentId of planner ? [planner] : route.routedTo)
           reserveMessageRun(
             sqlite,
             {
@@ -337,7 +349,8 @@ export function registerRoomRoutes(
               agentId,
               chainId: id,
               hop: 0,
-              input: agentId === planner ? route.input + PLAN_FIRST_ADDENDUM : route.input,
+              input:
+                agentId === planner ? route.input + teamNote + PLAN_FIRST_ADDENDUM : route.input,
               agents: known,
               ...(agentId === planner ? { planFirst: true } : {}),
               ...((route.model ?? body.model) ? { model: route.model ?? body.model } : {}),

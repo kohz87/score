@@ -85,6 +85,12 @@ function StepDetail({
           ))}
         </ul>
       )}
+      {run && run.gaps.length > 0 && (
+        <p className="flow-inspector__state" role="status">
+          Some events from this step were not recorded ({run.gaps.length} gap
+          {run.gaps.length === 1 ? '' : 's'}).
+        </p>
+      )}
       {approval && <ApprovalCard key={approval.id} approvalId={approval.id} />}
       {detail.watch ? (
         <Link

@@ -120,6 +120,21 @@ test('starts idempotently, follows to completion and forwards stop', async () =>
   ).rejects.toMatchObject({ status: 503 })
 })
 
+test('a permanent Hermes refusal becomes an HttpError, also when the failed intent is replayed', async () => {
+  const live = create()
+  await live.start(env.ingest)
+  env.fake.keys.set('builder', 'different-fixture-key')
+  const request = { agentId: 'builder', input: 'hello', turnId: 'refused-turn' }
+  await expect(live.startRun(request)).rejects.toMatchObject({
+    name: 'HttpError',
+    status: 422,
+  })
+  await expect(live.startRun(request)).rejects.toMatchObject({
+    name: 'HttpError',
+    code: 'admission_refused',
+  })
+})
+
 test('startup recovers an uncertain admission and follows its original run', async () => {
   env.fake.crashAfterAdmission = true
   await expect(

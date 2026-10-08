@@ -238,6 +238,25 @@ test('message failures show an error and retry successfully', async () => {
   )
   await screen.findByText('Hello team')
 })
+test('completion replaces the cached parts with the final ones (plan card, tools summary)', async () => {
+  const { queryClient } = setup()
+  await screen.findByText('Hello team')
+  emit(
+    'message.completed',
+    {
+      roomId: 'general',
+      messageId: message.id,
+      parts: [
+        { kind: 'text', text: 'Hello team' },
+        { kind: 'tools', summary: 'Ran 2 commands', runId: 'run-1' },
+      ],
+    },
+    2,
+  )
+  expect(queryClient.getQueryData(messagesQuery('general').key)).toMatchObject({
+    data: { items: [{ streaming: false, parts: [{ kind: 'text' }, { kind: 'tools' }] }] },
+  })
+})
 test('stream appends once, completes messages and clears typing and unread via room updates', async () => {
   const { queryClient } = setup()
   await screen.findByText('Hello team')

@@ -124,6 +124,12 @@ test('direct room defaults to its agent and a leadless room rejects without stor
   expect((await app.inject({ url: `/api/rooms/${room.id}/messages` })).json().items).toEqual([])
 })
 
+test('the instruction reaches the agent verbatim, credential-looking values included', async () => {
+  const run = vi.spyOn(port, 'startRun')
+  expect((await send({ text: 'Set token=fixture-value in the test.' })).statusCode).toBe(200)
+  expect(run.mock.calls[0]![0].input).toContain('token=fixture-value')
+})
+
 test('assign creates one task and receipt replay never reroutes', async () => {
   const task = vi.spyOn(port, 'createTask')
   const run = vi.spyOn(port, 'startRun')
@@ -233,6 +239,12 @@ test('deltas append to one reply, finish with tools and concurrent receipts star
       (event) => event.type === 'message.completed' && event.data.messageId === reply.id,
     ),
   ).toHaveLength(1)
+  // The completion event carries the final parts (the tools summary was added at completion, not by a delta).
+  expect(
+    events().find(
+      (event) => event.type === 'message.completed' && event.data.messageId === reply.id,
+    )?.data,
+  ).toMatchObject({ parts: complete.parts })
 })
 
 test('reply mentions hand off and stop A to B to A with a visible notice', async () => {

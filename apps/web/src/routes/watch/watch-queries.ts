@@ -31,7 +31,7 @@ export function watchQuery(agentId: string, from: number | null = null) {
       )
       return { asOfSeq, data }
     },
-    types: ['watch.frame', 'agent.updated', 'run.updated', 'approval.requested'],
+    types: ['watch.frame', 'agent.updated', 'run.updated', 'approval.requested', 'gap.recorded'],
     reduce(data, event) {
       switch (event.type) {
         case 'watch.frame': {
@@ -47,11 +47,23 @@ export function watchQuery(agentId: string, from: number | null = null) {
             }),
           }
         }
-        case 'agent.updated':
-          return event.data.id === agentId ? { ...data, agent: event.data } : data
+        case 'gap.recorded': {
+          // Run-follower gaps carry the profile in their source ("run-sse:<profile>").
+          if (!event.data.source.endsWith(`:${agentId}`)) return data
+          const { from, to, reason } = event.data
+          return { ...data, gaps: [...data.gaps, { from, to, reason }] }
+        }
+        case 'agent.updated': {
+          if (event.data.id !== agentId) return data
+          // The agent's status aggregates all its runs, so it (not one run's) says when it is idle.
+          const status = event.data.status
+          const live = status === 'idle' ? false : status === 'working' || status === 'waiting'
+          return { ...data, agent: event.data, live: status === 'paused' ? data.live : live }
+        }
         case 'run.updated':
-          return event.data.agentId === agentId
-            ? { ...data, live: ACTIVE_RUN.includes(event.data.status) }
+          // One run ending says nothing about the agent's other runs; the agent.updated that follows decides.
+          return event.data.agentId === agentId && ACTIVE_RUN.includes(event.data.status)
+            ? { ...data, live: true }
             : data
         case 'approval.requested': {
           const last = data.frames.at(-1)

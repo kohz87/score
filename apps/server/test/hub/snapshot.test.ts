@@ -88,7 +88,7 @@ test('materialized primitives, plain objects, SQLite rows and large primitive ar
 
 test('deep or cyclic structures are rejected at a bounded depth', () => {
   let nested: unknown = 'leaf'
-  for (let index = 0; index < 8; index++) nested = { child: nested }
+  for (let index = 0; index < 16; index++) nested = { child: nested }
   expect(snapshot(db, () => nested).data).toBe(nested)
   nested = { child: nested }
   expect(() => snapshot(db, () => nested)).toThrow('maximum depth')

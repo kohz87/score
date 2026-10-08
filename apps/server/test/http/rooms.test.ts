@@ -8,7 +8,7 @@ import { z } from 'zod'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
-import { storeMessage } from '../../src/domain/rooms.ts'
+import { storeMessage, updateMessage } from '../../src/domain/rooms.ts'
 import { createHermesPort, type HermesPort } from '../../src/hermes/index.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
@@ -235,6 +235,35 @@ test('paging uses descending timestamp/id, has no overlap, and older pages do no
   await agentMessage(room.id, 'd')
   expect(DetailSchema.parse((await get(`/api/rooms/${room.id}`)).json()).room.unread).toBe(1)
   await get(`/api/rooms/${room.id}/messages?before=${first.nextCursor}`)
+  expect(DetailSchema.parse((await get(`/api/rooms/${room.id}`)).json()).room.unread).toBe(1)
+})
+
+test('reading an empty streaming placeholder does not acknowledge the answer that fills it', async () => {
+  const room = await create()
+  const placeholder: Message = {
+    id: 'placeholder',
+    roomId: room.id,
+    author: { kind: 'agent', agentId: 'builder' },
+    to: [],
+    parts: [],
+    refs: [],
+    createdAt: new Date(scheduler.now()).toISOString(),
+    streaming: true,
+  }
+  await ingest.submit({
+    source: 'test',
+    identity: 'placeholder',
+    apply: ({ sqlite, now }) => storeMessage(sqlite, placeholder, now),
+  })
+  await get(`/api/rooms/${room.id}/messages`)
+  await ingest.submit({
+    source: 'test',
+    identity: 'placeholder-fill',
+    apply: ({ sqlite, now }) => [
+      ...updateMessage(sqlite, room.id, 'placeholder', 'The answer.', now),
+      ...updateMessage(sqlite, room.id, 'placeholder', null, now),
+    ],
+  })
   expect(DetailSchema.parse((await get(`/api/rooms/${room.id}`)).json()).room.unread).toBe(1)
 })
 
@@ -765,13 +794,7 @@ test('GET /api/commands lists the slash commands for the composer menu', async (
       ),
     })
     .parse(response.json())
-  expect(body.items.map((item) => item.name)).toEqual([
-    'assign',
-    'routine',
-    'remember',
-    'skill',
-    'model',
-  ])
+  expect(body.items.map((item) => item.name)).toEqual(['assign', 'routine', 'model'])
 })
 
 test('filesInPlay lists distinct file-tool paths of this room runs, newest first', async () => {
