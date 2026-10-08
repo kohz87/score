@@ -211,8 +211,10 @@ function Actions({ task, agents }: { task: TaskDetail; agents: AgentSummary[] })
             className="task-drawer-primary"
             disabled={busy}
             onClick={() => approve(approval)}
+            // The request is shown in full just above; the pill stays one short line (tasks.png).
+            aria-label={approveLabel(approval.title)}
           >
-            {approveLabel(approval.title)}
+            Approve once
           </button>
         )}
         <Link
