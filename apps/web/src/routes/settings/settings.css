@@ -149,6 +149,12 @@
   background: var(--ink);
   color: var(--card);
 }
+.settings-pill:disabled,
+.settings-primary:disabled {
+  /* Disabled must look it: Save key stays off until a key and the plain-HTTP acknowledgement are in. */
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .settings-columns {
   display: flex;
   flex-wrap: wrap;
