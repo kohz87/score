@@ -167,7 +167,35 @@ Without them, Add agent stops with "Configure a pinned bridge installation URL f
 this machine or over remote access with TLS; plain-HTTP remote access refuses it. Deleting an agent keeps a private
 export in `$SCORE_HOME/profile-backups/` (it omits credentials and is not a full undo).
 
+## 9. Run Score every day (built app, one port)
+`pnpm dev` is for development. For daily use build once and serve everything from one loopback port:
+```bash
+pnpm build           # builds apps/web and typechecks the server
+pnpm start           # http://127.0.0.1:8740 (SCORE_PORT to change); prints a one-time pairing link
+```
+`pnpm start` sets `SCORE_SERVE_WEB=1` (`NODE_ENV=production` does the same), so the server serves `apps/web/dist` and the API
+on the same port, with SPA fallback. It runs the TypeScript sources through `tsx` (the same runner as `pnpm dev`). Set
+`SCORE_MODE=live` for a real Hermes (default is `fake`).
+
+Launcher (background process, PID file `$SCORE_HOME/score.pid`, log `$SCORE_HOME/score.log`):
+```bash
+scripts/score start     # start in the background and print the first pairing link
+scripts/score status    # running? pid and URL
+scripts/score pair      # mint a fresh pairing link (SIGUSR2 -> 0600 file in $SCORE_HOME; no network endpoint)
+scripts/score logs [-f] # last 100 log lines, or follow
+scripts/score stop
+```
+Put it on your PATH if you like: `ln -s "$PWD/scripts/score" ~/.local/bin/score`.
+
+systemd user unit (not installed by Score): copy `docs/score.service.example` to `~/.config/systemd/user/score.service`,
+edit `WorkingDirectory`, then `systemctl --user enable --now score`. Use either the launcher or systemd for one `SCORE_HOME`, not both.
+
+Upgrades: stop Score, back up `$SCORE_HOME` (at least `score.db`, `score.db-wal`/`-shm` if present, and `media/`), `git pull`,
+`pnpm install && pnpm build`, start again. Migrations run automatically at start and are forward-only, so keep the backup
+if you may want to go back to the previous version.
+
 ## Changelog of this file
+- 2026-10-08: section 9, running the built app (pnpm start, launcher, systemd unit).
 - 2026-10-08: creating agents (bridge install URL/ref).
 - 2026-10-08: bridge plugin install pointer, live start and SSH tunnel.
 - 2026-10-06: initial (Phase 0).
