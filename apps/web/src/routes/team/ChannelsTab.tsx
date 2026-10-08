@@ -1,19 +1,11 @@
 import { useState } from 'react'
+import { TerminalCommand } from '../settings/TerminalCommand.tsx'
 import { useChannels } from './agent-tab-queries.ts'
 
 // Score never runs an interactive login or handles a bot token: it shows the command for the person to run.
 export function ChannelsTab({ agentId, agentName }: { agentId: string; agentName: string }) {
   const channels = useChannels(agentId)
   const [open, setOpen] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-  async function copy(command: string) {
-    try {
-      await navigator.clipboard.writeText(command)
-      setCopied(true)
-    } catch {
-      setCopied(false)
-    }
-  }
   return (
     <section className="team-card" aria-labelledby="team-channels-heading">
       <h2 id="team-channels-heading">Channels</h2>
@@ -39,18 +31,13 @@ export function ChannelsTab({ agentId, agentName }: { agentId: string; agentName
                 <p className="team-muted">{row.detail.replace(/_/g, ' ')}</p>
               )}
               {open === row.platform && (
-                <div role="group" aria-label={`Connect ${row.label}`} className="team-command">
-                  <p>Run this in a terminal. Score never asks for your keys or sign-in details.</p>
-                  <code>{row.connectCommand}</code>
-                  <div className="team-routine-actions">
-                    <button type="button" onClick={() => void copy(row.connectCommand)}>
-                      {copied ? 'Copied' : 'Copy command'}
-                    </button>
-                    <button type="button" onClick={() => setOpen(null)}>
-                      Done
-                    </button>
-                  </div>
-                </div>
+                <TerminalCommand
+                  command={row.connectCommand}
+                  onClose={() => {
+                    setOpen(null)
+                    void channels.refetch()
+                  }}
+                />
               )}
             </div>
             {row.status !== 'connected' && open !== row.platform && (
@@ -58,10 +45,7 @@ export function ChannelsTab({ agentId, agentName }: { agentId: string; agentName
                 <button
                   type="button"
                   aria-label={`Connect ${row.label}`}
-                  onClick={() => {
-                    setCopied(false)
-                    setOpen(row.platform)
-                  }}
+                  onClick={() => setOpen(row.platform)}
                 >
                   Connect
                 </button>

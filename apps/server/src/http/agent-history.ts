@@ -1,6 +1,6 @@
 import {
-  AgentDetailSchema,
   AgentHistoryPageSchema,
+  AgentSummarySchema,
   HistoryOutcomeSchema,
   RunSummarySchema,
   type AgentHistoryItem,
@@ -71,7 +71,8 @@ export function registerAgentHistoryRoutes(
   app.get('/api/agents/:agentId/history', async (request) => {
     const { agentId } = ParamsSchema.parse(request.params)
     const query = QuerySchema.parse(request.query)
-    const known = z.array(AgentDetailSchema).parse(await port.listAgentDetails())
+    // The summary list, not listAgentDetails: the tab refetches every 10 s and details spawn Hermes processes.
+    const known = z.array(AgentSummarySchema).parse(await port.listAgents())
     if (!known.some((agent) => agent.id === agentId))
       throw new HttpError(404, 'not_found', 'Agent not found')
     const filters: string[] = []
