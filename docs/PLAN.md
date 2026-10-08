@@ -264,6 +264,8 @@ and cancelled; a dummy key added and removed).
 **5.11 Model picker** · `GET /api/models` from Hermes's model options (connected providers only); a searchable picker in Add
 agent and the agent's Model tab; picking sets model and provider. Done when typing "gpt" lists matching models from each
 connected provider with availability and price, and a created agent has both set (fake + tests + e2e).
+**5.12 Attachments to agents** · Image attachments in Chat reach the addressed agents' runs as image parts (Hermes
+`/v1/runs` list input; ≤ 6 MB raw per message, a note for what didn't fit). Done when tests and a fake e2e show it.
 
 ---
 
