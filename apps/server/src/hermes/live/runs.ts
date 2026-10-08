@@ -9,6 +9,7 @@ import {
   runDraft,
   runLifecycle,
   runLostObservation,
+  runRecoveredObservation,
   runStatusObservation,
   statusApprovalObservation,
   translateRunEvent,
@@ -27,6 +28,12 @@ export interface FollowOptions {
   pollIntervalMs?: number
   pollLimitMs?: number
   now?: () => number
+  /** Final answer of a turn Hermes forgot (read from its session history), or null. */
+  recoverOutput?: (request: {
+    profile: string
+    sessionId: string
+    startedAt: number
+  }) => string | null
   wait?: (ms: number, signal?: AbortSignal) => Promise<void>
 }
 export function waitForRun(ms: number, signal?: AbortSignal): Promise<void> {
@@ -74,6 +81,32 @@ async function pollQueuedRun(options: FollowOptions, signal: AbortSignal): Promi
   }
 }
 
+/** Complete from Hermes's own records when they hold the answer, else end the run as interrupted. */
+async function runGone(options: FollowOptions): Promise<void> {
+  const { db, sink, context } = options
+  const row = readRun(db.sqlite, context.runId)
+  const mapped = db.sqlite
+    .prepare('SELECT room_id, agent_id FROM message_runs WHERE run_id = ?')
+    .get(context.runId)
+  const parsed = z.object({ room_id: z.string(), agent_id: z.string() }).safeParse(mapped)
+  const sessionId =
+    row.session_id ??
+    (parsed.success ? `score-${parsed.data.room_id}-${parsed.data.agent_id}` : null)
+  let output: string | null = null
+  if (options.recoverOutput && sessionId) {
+    try {
+      output = options.recoverOutput({
+        profile: context.profile,
+        sessionId,
+        startedAt: Date.parse(row.started_at) / 1000,
+      })
+    } catch {
+      // Unreadable history is the same as no history: the run ends interrupted.
+    }
+  }
+  await sink.submit(output ? runRecoveredObservation(context, output) : runLostObservation(context))
+}
+
 const isRunGone = (error: HermesHttpError) => error.status === 404 && error.code === 'run_not_found'
 
 export async function followRun(options: FollowOptions): Promise<void> {
@@ -99,7 +132,7 @@ export async function followRun(options: FollowOptions): Promise<void> {
     if (error instanceof CredentialsUnavailable) throw error
     if (!(error instanceof HermesHttpError)) throw error
     if (isRunGone(error)) {
-      await sink.submit(runLostObservation(context))
+      await runGone(options)
       return
     }
   }
@@ -198,7 +231,7 @@ export async function followRun(options: FollowOptions): Promise<void> {
       if (signal?.aborted) return
       if (!(error instanceof HermesHttpError)) throw error
       if (isRunGone(error)) {
-        await sink.submit(runLostObservation(context))
+        await runGone(options)
         return
       }
     }

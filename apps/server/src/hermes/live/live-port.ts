@@ -41,6 +41,7 @@ import { KNOWN_PATTERN_KEYS } from '../pattern-keys.ts'
 import { GatewayClient, HermesHttpError } from './gateway.ts'
 import { RunIntents } from './intents.ts'
 import { ProfileNameSchema, resolveHermesHome } from './paths.ts'
+import { recoverRunOutput } from './recover.ts'
 import { followRun, waitForRun, type FollowOptions } from './runs.ts'
 import { taskAction, taskReader } from './task-actions.ts'
 import { LiveTasks } from './tasks.ts'
@@ -578,6 +579,7 @@ export class LivePort implements HermesPort {
               getDisabled: () => this.current.compatibility.disabled,
             },
             metrics: this.metrics,
+            recoverOutput: (request) => recoverRunOutput(request, this.options.hermesHome),
             ...this.options.following,
           })
         } catch (error) {
