@@ -304,6 +304,13 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
     byAgent: { agentId; finished: number; runs: number; medianSec: number | null; firstPassRate: number | null /* null = n/a, reviews */; spendUsd: number | null }[]
     approvals: { asked: number; approved: number; denied: number; medianWaitSec: number | null; insight: string | null } }
   ```
+  Definitions (from Hermes Kanban history, read-only): a task is finished when `completed_at` falls in the range (day
+  buckets in the server's time zone); task time = created → completed; reviewed = had `review_requested`, first pass =
+  reviewed and never `changes_requested` (null when nothing was reviewed). Time split per agent (integer %, sum 100):
+  working = a run is active (guardian approval time included); waiting on you = open human approvals and `blocked`
+  intervals; waiting on another agent = waiting for dependencies (created → `promoted`) and in review
+  (`review_requested` → outcome), minus any overlap with working. Spend = Hermes session costs (actual, else estimated);
+  null when unknown.
 - `GET /api/reports/export.csv?range=` → `text/csv`
 
 ## 10. Settings

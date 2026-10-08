@@ -39,6 +39,7 @@ import { ProfileNameSchema, resolveHermesHome } from './paths.ts'
 import { followRun, waitForRun, type FollowOptions } from './runs.ts'
 import { taskAction, taskReader } from './task-actions.ts'
 import { LiveTasks } from './tasks.ts'
+import { readReportFacts } from './report-facts.ts'
 import { createTask, patchTask } from './task-writes.ts'
 import { LiveRoutines } from './routines.ts'
 import { LiveAgentTabs } from './agent-tabs.ts'
@@ -518,6 +519,9 @@ export class LivePort implements HermesPort {
     })
     await this.refreshTasks()
     return result
+  }
+  async reportFacts(req: Parameters<HermesPort['reportFacts']>[0]) {
+    return readReportFacts(req, this.options.hermesHome)
   }
   async listTasks(filter: Parameters<HermesPort['listTasks']>[0] = {}) {
     const { db } = this.requireStarted()

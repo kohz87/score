@@ -66,3 +66,23 @@ export function tailMessages(db: DatabaseSync, input: z.input<typeof TailInputSc
 export function readSessions(db: DatabaseSync, ids: string[]) {
   return readByIds(db, 'sessions', SessionSchema, ids, ['id'], 'id')
 }
+
+const SessionCostSchema = z.object({
+  estimated_cost_usd: z.number().nullable(),
+  actual_cost_usd: z.number().nullable(),
+})
+
+/** Spend of the sessions started in [fromSec, toSec]: the billed cost when known, else Hermes' estimate. */
+export function sessionSpend(db: DatabaseSync, fromSec: number, toSec: number): number {
+  const batch = readBatch(
+    db,
+    'sessions',
+    SessionCostSchema,
+    'WHERE started_at >= ? AND started_at <= ?',
+    [fromSec, toSec],
+  )
+  return batch.rows.reduce(
+    (total, row) => total + (row.actual_cost_usd ?? row.estimated_cost_usd ?? 0),
+    0,
+  )
+}

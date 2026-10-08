@@ -98,3 +98,50 @@ export const RoutinesResponseSchema = z.object({ items: z.array(RoutineSummarySc
 export const RoutineDeletedSchema = z.object({ id: z.string().min(1) })
 /** Run-now only marks the job due; it runs on the scheduler's next tick. */
 export const RoutineRunSchema = z.object({ id: z.string().min(1), queued: z.literal(true) })
+
+// §9 Reports (not on the stream; refetch)
+export const ReportRangeSchema = z.enum(['today', '7d', '30d'])
+export type ReportRange = z.infer<typeof ReportRangeSchema>
+export const ReportsSchema = z.object({
+  range: ReportRangeSchema,
+  summary: z.string(),
+  totals: z.object({
+    tasksFinished: z.int().nonnegative(),
+    runs: z.int().nonnegative(),
+    firstPassRate: z.number().min(0).max(1).nullable(),
+    medianTaskSec: z.number().nonnegative().nullable(),
+    spendUsd: z.number().nonnegative().nullable(),
+  }),
+  byDay: z.array(
+    z.object({
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      perAgent: z.record(AgentIdSchema, z.int().nonnegative()),
+    }),
+  ),
+  timeSplit: z.array(
+    z.object({
+      agentId: AgentIdSchema,
+      workingPct: z.number().min(0).max(100),
+      waitingOnYouPct: z.number().min(0).max(100),
+      waitingOnAgentPct: z.number().min(0).max(100),
+    }),
+  ),
+  byAgent: z.array(
+    z.object({
+      agentId: AgentIdSchema,
+      finished: z.int().nonnegative(),
+      runs: z.int().nonnegative(),
+      medianSec: z.number().nonnegative().nullable(),
+      firstPassRate: z.number().min(0).max(1).nullable(),
+      spendUsd: z.number().nonnegative().nullable(),
+    }),
+  ),
+  approvals: z.object({
+    asked: z.int().nonnegative(),
+    approved: z.int().nonnegative(),
+    denied: z.int().nonnegative(),
+    medianWaitSec: z.number().nonnegative().nullable(),
+    insight: z.string().nullable(),
+  }),
+})
+export type Reports = z.infer<typeof ReportsSchema>

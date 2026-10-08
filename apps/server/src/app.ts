@@ -4,6 +4,7 @@ import type { Config } from './config.ts'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
 import { registerAgentRoutes } from './http/agents.ts'
 import { registerAgentTabRoutes } from './http/agent-tabs.ts'
+import { registerReportRoutes } from './http/reports.ts'
 import { registerTaskRoutes } from './http/tasks.ts'
 import { registerRoutineRoutes } from './http/routines.ts'
 import { registerRulesRoutes } from './http/rules.ts'
@@ -127,6 +128,7 @@ export function buildApp({
     })
   }
   registerTaskRoutes(app, port, ingest, db, clock)
+  registerReportRoutes(app, port, db, clock)
   registerAgentRoutes(app, port, ingest, db, clock)
   registerAgentTabRoutes(app, port, ingest, db, clock)
   registerRoutineRoutes(app, port, db, clock)
