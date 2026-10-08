@@ -197,6 +197,21 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
     { at: 1600, kind: 'message.completed', data: { messageId: id('message-plan'), roomId } },
     { at: 1700, kind: 'typing', data: { roomId, agentId: 'lead', text: null } },
     { at: 2000, kind: 'approval.requested', data: scoreApproval },
+    {
+      // Score-run approvals show up in the room as their own card message.
+      at: 2050,
+      kind: 'message.created',
+      data: {
+        id: `approval:${scoreApproval.id}`,
+        roomId,
+        author: { kind: 'agent', agentId: scoreApproval.agentId },
+        to: [],
+        parts: [{ kind: 'approval', approvalId: scoreApproval.id }],
+        createdAt: time(2050),
+        streaming: false,
+        refs: [],
+      },
+    },
     { at: 2300, kind: 'approval.requested', data: approval('gateway', 'designer', 2300) },
     {
       at: 2500,
