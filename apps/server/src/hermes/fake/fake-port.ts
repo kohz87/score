@@ -169,6 +169,41 @@ export function stepToObservation(
             now,
           )
         const events = storeMessage(sqlite, message, now)
+        const tools = message.parts.find((part) => part.kind === 'tools')
+        const files = message.parts.filter((part) => part.kind === 'file')
+        if (tools && files.length && !message.streaming && message.author.kind === 'agent') {
+          // Scripted file replies link their run to the room, just like admitted Chat turns.
+          sqlite
+            .prepare(
+              `INSERT INTO message_runs
+               (message_id, run_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, state, created_at)
+               VALUES (?, ?, ?, ?, ?, 1, ?, ?, '', '[]', 'completed', ?) ON CONFLICT DO NOTHING`,
+            )
+            .run(
+              message.id,
+              tools.runId,
+              message.roomId,
+              message.author.agentId,
+              message.id,
+              `fake-turn:${message.id}`,
+              message.id,
+              message.createdAt,
+            )
+          for (const [seq, file] of files.entries())
+            sqlite
+              .prepare(
+                `INSERT INTO tool_calls
+                 (run_id, seq, tool, preview, status, started_at, ended_at)
+                 VALUES (?, ?, 'edit_file', ?, 'ok', ?, ?) ON CONFLICT DO NOTHING`,
+              )
+              .run(
+                tools.runId,
+                seq,
+                JSON.stringify({ path: file.path }),
+                message.createdAt,
+                message.createdAt,
+              )
+        }
         if (!exists && !events.some((event) => event.type === 'room.upserted'))
           events.push(...roomChanged(sqlite, message.roomId, now))
         return events

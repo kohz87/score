@@ -95,6 +95,7 @@ export function AgentStylePicker({ agent }: { agent: AgentSummary }) {
             <label>
               Shape
               <select
+                className="score-select"
                 value={shape}
                 onChange={(event) => setShape(ShapeSchema.parse(event.target.value))}
               >

@@ -404,10 +404,11 @@
 }
 .rules-columns {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 .rules-column {
+  overflow-wrap: anywhere;
   border-radius: var(--radius-20);
   background: var(--rules-panel);
   padding: 16px 18px;
@@ -527,11 +528,21 @@
 .rules-forms input,
 .rules-forms select {
   height: 40px;
-  padding: 0 12px;
   border: 1px solid var(--chat-dark-border);
   border-radius: var(--radius-14);
-  background: var(--ink);
+  background-color: var(--ink);
   color: #fff;
+}
+.rules-forms input {
+  padding: 0 12px;
+}
+.rules-forms .score-select {
+  --select-focus: var(--card);
+}
+@media (width < 900px) {
+  .rules-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .rules-save {
   display: flex;

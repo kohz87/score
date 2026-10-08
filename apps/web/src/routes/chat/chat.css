@@ -814,6 +814,9 @@
   }
 }
 @media (width < 480px) {
+  .chat-thread-header > div {
+    flex-basis: 100%;
+  }
   .chat-thread-header,
   .chat-messages {
     padding: 20px 16px;
@@ -823,6 +826,7 @@
   }
   .chat-score-link {
     max-width: 100%;
+    flex-shrink: 0;
   }
   .chat-message {
     gap: 10px;

@@ -215,7 +215,11 @@
   gap: 8px;
 }
 .reports-table-scroll {
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
+  padding: 4px;
+  margin: -4px;
 }
 .reports-table {
   width: 100%;

@@ -37,6 +37,7 @@ export function TopBar({ commandButtonRef, onOpenCommand, commandOpen }: TopBarP
         aria-haspopup="dialog"
         aria-expanded={commandOpen}
         aria-keyshortcuts="Meta+K Control+K"
+        aria-label="Search or run a command"
       >
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.6" />

@@ -254,7 +254,11 @@ export function RulesSection({ agents }: { agents: AgentSummary[] }) {
               <form onSubmit={addGoAhead} aria-label="Add a Go ahead rule">
                 <label>
                   Let agents do this without asking
-                  <select value={category} onChange={(event) => setCategory(event.target.value)}>
+                  <select
+                    className="score-select score-select--dark"
+                    value={category}
+                    onChange={(event) => setCategory(event.target.value)}
+                  >
                     <option value="">Choose a kind of command…</option>
                     {askMe.map((rule) => (
                       <option key={rule.id} value={rule.id}>
