@@ -224,7 +224,8 @@ test('connect starts a device sign-in for device-code providers and a terminal c
   const catalog = async () => [
     { slug: 'nous', name: 'Nous Portal', auth_type: 'oauth_device_code' },
     { slug: 'openrouter', name: 'OpenRouter', auth_type: 'api_key' },
-    { slug: 'anthropic', name: 'Anthropic', auth_type: 'oauth_external' },
+    { slug: 'anthropic', name: 'Anthropic' },
+    { slug: 'qwen-oauth', name: 'Qwen', auth_type: 'oauth_external' },
   ]
   const settings = new LiveSettings(
     home,
@@ -237,7 +238,9 @@ test('connect starts a device sign-in for device-code providers and a terminal c
   expect(Object.fromEntries(items.map((item) => [item.id, item.signIn]))).toEqual({
     nous: 'device_code',
     openrouter: 'api_key',
-    anthropic: 'terminal',
+    // No auth_type from Hermes, but it takes a console key.
+    anthropic: 'api_key',
+    'qwen-oauth': 'terminal',
   })
   const started = settings.connectProvider('nous')
   await vi.waitFor(() => expect(children).toHaveLength(1))
@@ -260,7 +263,7 @@ test('connect starts a device sign-in for device-code providers and a terminal c
     code: 'WDJB-MJHT',
   })
   expect((await settings.cancelSignIn(result.signInId!)).state).toBe('cancelled')
-  expect((await settings.connectProvider('anthropic')).next).toBe('run_in_terminal')
+  expect((await settings.connectProvider('qwen-oauth')).next).toBe('run_in_terminal')
   expect(children).toHaveLength(1)
   settings.close()
 })

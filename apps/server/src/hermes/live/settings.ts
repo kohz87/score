@@ -20,7 +20,8 @@ import type { ProviderBase } from '../port.ts'
 // material), `hermes config get --json …` (Hermes masks secret-shaped values) and the gateway's runtime
 // status file. Score never opens .env, auth.json or any credential store.
 const MAX_STATE_BYTES = 1024 * 1024
-const READ_TIMEOUT_MS = 8000
+// The first reads after a start run several cold Python processes at once; 8 s timed out (2026-10-08 live).
+const READ_TIMEOUT_MS = 20_000
 const ProviderIdSchema = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/)
 
 // Providers worth showing even when Hermes has no credential for them yet.
@@ -42,9 +43,12 @@ const DEVICE_CODE_PROVIDERS = new Set(['openai-codex', 'nous', 'xai-oauth', 'min
 // Used when the gateway can't be read: the short built-in list's key providers.
 const FALLBACK_KEY_PROVIDERS = new Set(['openrouter', 'anthropic'])
 type SignInKind = NonNullable<ProviderBase['signIn']>
+// Hermes 0.21.5 reports no auth_type for anthropic, but `auth add anthropic --type api-key` takes a console key
+// (auth_commands.py `_add_credential` → `_add_api_key_credential` for any provider); its subscription login stays PKCE.
+const ALSO_KEY_PROVIDERS = new Set(['anthropic'])
 export function signInKind(id: string, authType: string | undefined): SignInKind {
   if (DEVICE_CODE_PROVIDERS.has(id)) return 'device_code'
-  return authType === 'api_key' ? 'api_key' : 'terminal'
+  return authType === 'api_key' || ALSO_KEY_PROVIDERS.has(id) ? 'api_key' : 'terminal'
 }
 const KEY_TIMEOUT_MS = 30_000
 
@@ -201,8 +205,11 @@ export class LiveSettings {
     }
   }
 
+  /** The last `auth list` that answered: a failed or timed-out read keeps it instead of showing everything missing. */
+  private lastAuthList: string | null = null
   private async pooled(): Promise<ProviderBase[]> {
-    const text = await this.read(['auth', 'list'])
+    const text = (await this.read(['auth', 'list'])) ?? this.lastAuthList
+    this.lastAuthList = text
     const found = new Map<string, { n: number; failed: number; oauth: boolean }>()
     const free: ProviderBase[] = []
     let current: { n: number; failed: number; oauth: boolean } | undefined

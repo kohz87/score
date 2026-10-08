@@ -80,7 +80,7 @@ test('providers come from `hermes auth list` with statuses, details and no key m
   expect(byId['my-proxy']).toMatchObject({ label: 'My proxy', detail: '127.0.0.1:4000' })
   expect(JSON.stringify(items)).not.toContain(SECRET)
   expect(runner).toHaveBeenCalledWith(['auth', 'list'], {
-    timeoutMs: 8000,
+    timeoutMs: 20_000,
     hermesHome: home,
     captureSettings: true,
   })
@@ -233,4 +233,12 @@ test('the provider list is every provider the gateway reports, with the short li
   })
   // Answered from the gateway catalog: no Hermes process, so Connect responds at once.
   expect(runner).not.toHaveBeenCalled()
+})
+
+test('a failed auth list keeps the last known statuses instead of showing every provider missing', async () => {
+  const settings = new LiveSettings(home, runner)
+  expect((await settings.listProviders()).some((item) => item.status === 'connected')).toBe(true)
+  runner.mockImplementation(async () => ({ exitCode: 1 }))
+  const again = await settings.listProviders()
+  expect(again.some((item) => item.status === 'connected')).toBe(true)
 })
