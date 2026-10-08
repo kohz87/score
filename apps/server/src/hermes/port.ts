@@ -26,7 +26,8 @@ import type {
 } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
 import type { AgentFile, AgentFileName } from './agent-files.ts'
-import type { AgentTool, HubSkill, MemoryItem, MemoryPage, SkillItem } from './agent-tabs.ts'
+import type { HubSkill, MemoryItem, MemoryPage, SkillItem } from '@score/contract'
+import type { AgentTool } from './agent-tabs.ts'
 import type { ApprovalConfig } from './approvals.ts'
 import type { IngestResult, Observation } from '../hub/ingest.ts'
 

@@ -1,52 +1,22 @@
-import { AgentDetailSchema, type AgentDetail } from '@score/contract'
+import {
+  AgentDetailSchema,
+  MemoryPageSchema,
+  SkillHubResponseSchema,
+  SkillsResponseSchema,
+  type AgentDetail,
+} from '@score/contract'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
 
-// The contract (§8) names these routes but has no response schemas for them yet, so the shared
-// AgentDetail pieces validate what they can and the hub rows get a small local guard.
 export type Skill = AgentDetail['skills'][number]
 export type MemoryEntry = AgentDetail['memory'][number]
 export type Tool = AgentDetail['tools'][number]
-export interface HubSkill {
-  name: string
-  identifier: string
-  source: string
-  trust: string
-  description: string
-}
-export interface MemoryPageData {
-  items: MemoryEntry[]
-  nextCursor: string | null
-}
+export type { HubSkill, MemoryPage as MemoryPageData } from '@score/contract'
 
-const record = (value: unknown): Record<string, unknown> =>
-  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
-const text = (value: unknown): string => (typeof value === 'string' ? value : '')
-
-export const parseSkills = (body: unknown): Skill[] =>
-  AgentDetailSchema.shape.skills.parse(record(body).items)
+export const parseSkills = (body: unknown): Skill[] => SkillsResponseSchema.parse(body).items
 export const parseTool = (body: unknown): Tool => AgentDetailSchema.shape.tools.element.parse(body)
-export function parseHub(body: unknown): HubSkill[] {
-  const items = record(body).items
-  if (!Array.isArray(items)) throw new Error('Unexpected skills hub response')
-  return items.map((row) => {
-    const item = record(row)
-    if (!text(item.identifier)) throw new Error('Unexpected skills hub response')
-    return {
-      name: text(item.name) || text(item.identifier),
-      identifier: text(item.identifier),
-      source: text(item.source),
-      trust: text(item.trust),
-      description: text(item.description),
-    }
-  })
-}
-export function parseMemoryPage(body: unknown): MemoryPageData {
-  const page = record(body)
-  const next = page.nextCursor
-  if (next !== null && typeof next !== 'string') throw new Error('Unexpected memory response')
-  return { items: AgentDetailSchema.shape.memory.parse(page.items), nextCursor: next }
-}
+export const parseHub = (body: unknown) => SkillHubResponseSchema.parse(body).items
+export const parseMemoryPage = (body: unknown) => MemoryPageSchema.parse(body)
 
 const agentPath = (agentId: string) => `agents/${encodeURIComponent(agentId)}`
 const detailKey = (agentId: string) => ['team', 'detail', agentId] as const

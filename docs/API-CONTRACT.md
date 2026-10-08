@@ -237,6 +237,8 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 ## 6. Approvals
 
 - **S** `GET /api/approvals?status=pending|all&agent=&cursor=` → `{ asOfSeq; items: Approval[]; nextCursor }`
+- **S** `GET /api/approvals/:approvalId` → `Approval` (`404 not_found`). Same view as a list item, for approvals beyond
+  the first page; the card reads it by id and then follows `approval.updated`.
 - **H** `POST /api/approvals/:approvalId/decision` `{ choice: ApprovalChoice; note?: string }` → `202 Approval`
   with `delivery: 'intent'|'delivering'`; the outcome arrives as `approval.updated`.
   `409 conflict` (current `Approval` in `details`) if already decided or `actionable: false`.
@@ -281,8 +283,11 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 - **H** `PUT /api/agents/:agentId/files/:file` `{ content; etag }` → `{ etag }` (409 `conflict` on etag mismatch, with
   `details: { etag /* current */; diff /* current → submitted */ }`)
 - `PUT /api/agents/:agentId/model` `{ model: string; provider?: string }` → `AgentDetail`
-- `GET /api/agents/:agentId/skills` · `POST …/skills` `{ name }` (install) · `PATCH …/skills/:name` `{ enabled }` · `GET /api/skills/hub?q=`
-- `GET /api/agents/:agentId/memory?q=&cursor=` · `POST …/memory` `{ text }` · `DELETE …/memory/:id`
+- `GET /api/agents/:agentId/skills` → `SkillsResponse` `{ items: AgentDetail['skills'] }` · `POST …/skills` `{ name }`
+  (install) → `SkillsResponse` · `PATCH …/skills/:name` `{ enabled }` → `AgentDetail['skills'][number]` ·
+  `GET /api/skills/hub?q=` → `SkillHubResponse` `{ items: { name; identifier; source; trust; description }[] }`
+- `GET /api/agents/:agentId/memory?q=&cursor=` → `MemoryPage` `{ items: AgentDetail['memory']; nextCursor: string | null }` ·
+  `POST …/memory` `{ text }` · `DELETE …/memory/:id`
 - `PATCH /api/agents/:agentId/tools/:toolId` `{ enabled }` → `AgentDetail['tools'][number]`
 - `GET /api/agents/:agentId/routines` → `{ items: RoutineSummary[] }` · `POST …/routines` `{ title; schedule; prompt }` →
   `RoutineSummary` · `PATCH /api/routines/:id` `{ enabled?; schedule?; prompt? }` → `RoutineSummary` ·
@@ -291,6 +296,11 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   private).
 - **H** `PATCH /api/agents/:agentId/permissions/:permId` `{ level }` → the permission row. Stricter only: take back a
   Go-ahead (`asks`) or add a Never (`permId = never:<glob>`, `level: never`); anything looser is `400 not_stricter`.
+- **H** `DELETE /api/agents/:agentId/permissions/:permId` → `{ items: AgentDetail['permissions'] }`. Removes this agent's
+  own override (a taken-back Go-ahead, or an agent-only Never `never:<glob>`) and re-applies the team baseline to the
+  profile through the verified write loop, so the agent is never looser than the team. A rule that belongs to the team
+  is `400 not_an_override`; an unknown override `404 not_found`; Hermes refusing the write `409 conflict` (the override
+  is kept).
 - `GET /api/agents/:agentId/history?cursor=` → `{ items: { sessionId; title; model; messages: number; tokens: number; costUsd: number | null; at: string; ref: Ref | null }[]; nextCursor }`
 
 ## 9. Reports

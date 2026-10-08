@@ -88,6 +88,17 @@ export function registerApprovalRoutes(
     })
     return { asOfSeq: result.asOfSeq, ...result.data }
   })
+  app.get('/api/approvals/:approvalId', async (request) => {
+    const { approvalId } = z
+      .object({ approvalId: z.string().min(1).max(256) })
+      .parse(request.params)
+    const found = snapshot(db, (sqlite) => {
+      const row = readApprovalRow(sqlite, approvalId)
+      return row?.visible ? approvalView(sqlite, row, { now: clock(), disabled: disabled() }) : null
+    }).data
+    if (!found) throw new HttpError(404, 'not_found', 'Unknown approval')
+    return found
+  })
   const receipts = requestIdempotency(db, clock)
   app.post(
     '/api/approvals/:approvalId/decision',

@@ -173,6 +173,56 @@ const cases = [
     { mode: 'manual', goAhead: [], never: ['*'] },
   ],
   ['PatchPermissionRequestSchema', { level: 'asks' }, { level: 'sometimes' }],
+  [
+    'AgentPermissionsResponseSchema',
+    { items: [{ id: 'SQL DROP', label: 'SQL DROP', level: 'allowed', inherited: true }] },
+    { items: [{ id: 'SQL DROP', label: 'SQL DROP', level: 'maybe', inherited: true }] },
+  ],
+  ['SkillItemSchema', { name: 'git', enabled: true }, { name: '', enabled: true }],
+  [
+    'MemoryItemSchema',
+    { id: 'm-1', text: 'x', source: 'About you', at: '2026-10-01T10:00:00.000Z' },
+    { id: 'm-1', text: 'x', source: 'About you', at: 'yesterday' },
+  ],
+  [
+    'HubSkillSchema',
+    {
+      name: 'git',
+      identifier: 'official/git',
+      source: 'official',
+      trust: 'trusted',
+      description: '',
+    },
+    { name: 'git', identifier: '', source: 'official', trust: 'trusted', description: '' },
+  ],
+  [
+    'SkillsResponseSchema',
+    { items: [{ name: 'git', enabled: false }] },
+    { items: [{ name: 'git' }] },
+  ],
+  [
+    'SkillHubResponseSchema',
+    {
+      items: [
+        {
+          name: 'git',
+          identifier: 'official/git',
+          source: 'official',
+          trust: 'trusted',
+          description: '',
+        },
+      ],
+    },
+    { items: [{ name: 'git' }] },
+  ],
+  [
+    'MemoryPageSchema',
+    {
+      items: [{ id: 'm-1', text: 'x', source: 'About you', at: '2026-10-01T10:00:00.000Z' }],
+      nextCursor: null,
+    },
+    { items: [] },
+  ],
   ['ConfigKeySchema', 'agent.max_turns', 'agent..x'],
   [
     'ConfigItemSchema',

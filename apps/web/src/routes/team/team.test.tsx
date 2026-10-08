@@ -790,3 +790,64 @@ test('the Tools tab toggles built-in tools; MCP servers are read-only', async ()
   expect(patch.path).toBe('/api/agents/builder/tools/terminal')
   expect(patch.body).toEqual({ enabled: false })
 })
+
+test('the Permissions tab offers Use team rule on this agent’s own choices', async () => {
+  const detail = {
+    ...builderDetail,
+    permissions: [
+      { id: 'SQL DROP', label: 'SQL DROP', level: 'allowed' as const, inherited: true },
+      {
+        id: 'never:rm -rf /tmp/*',
+        label: 'rm -rf /tmp/*',
+        level: 'never' as const,
+        inherited: false,
+      },
+      {
+        id: 'never:git push*',
+        label: 'git push*',
+        level: 'never' as const,
+        inherited: true,
+      },
+    ],
+  }
+  respond = (path) =>
+    path === '/api/agents'
+      ? json({ asOfSeq: 0, items: [lead, builder] })
+      : path === '/api/agents/builder'
+        ? json(detail)
+        : json({ error: { code: 'not_found', message: 'x' } }, 404)
+  renderTeam('/team/builder')
+  const calls = tabsApi((call) => {
+    if (call.path === '/api/settings/rules')
+      return json({
+        mode: 'manual',
+        goAhead: [
+          { id: 'SQL DROP', label: 'SQL DROP', pattern: 'SQL DROP', readOnly: false },
+          { id: 'SQL TRUNCATE', label: 'SQL TRUNCATE', pattern: 'SQL TRUNCATE', readOnly: false },
+        ],
+        askMe: [],
+        never: [],
+        drift: [],
+      })
+    if (call.method === 'DELETE') return json({ items: detail.permissions })
+    return undefined
+  })
+  fireEvent.click(await screen.findByRole('tab', { name: 'Permissions' }))
+  const panel = screen.getByRole('tabpanel')
+  // Only the agent's own Never and the Go-ahead it took back get the control; team rows do not.
+  await within(panel).findByRole('button', { name: 'Use team rule: SQL TRUNCATE' })
+  expect(within(panel).queryByRole('button', { name: /Use team rule.*SQL DROP/ })).toBeNull()
+  expect(within(panel).queryByRole('button', { name: /Use team rule.*git push/ })).toBeNull()
+  fireEvent.click(within(panel).getByRole('button', { name: 'Use team rule: SQL TRUNCATE' }))
+  await waitFor(() => expect(calls.some((call) => call.method === 'DELETE')).toBe(true))
+  expect(calls.find((call) => call.method === 'DELETE')!.path).toBe(
+    '/api/agents/builder/permissions/SQL%20TRUNCATE',
+  )
+  fireEvent.click(
+    within(panel).getByRole('button', { name: 'Use team rule instead of: rm -rf /tmp/*' }),
+  )
+  await waitFor(() => expect(calls.filter((call) => call.method === 'DELETE')).toHaveLength(2))
+  expect(calls.filter((call) => call.method === 'DELETE')[1]!.path).toBe(
+    '/api/agents/builder/permissions/never%3Arm%20-rf%20%2Ftmp%2F*',
+  )
+})

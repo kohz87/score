@@ -1,4 +1,11 @@
-import { ApprovalsPageSchema, RoomSchema, StreamEventSchema, type Message } from '@score/contract'
+import {
+  ApprovalSchema,
+  ApprovalsPageSchema,
+  ErrorEnvelopeSchema,
+  RoomSchema,
+  StreamEventSchema,
+  type Message,
+} from '@score/contract'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -195,4 +202,21 @@ test('approvals of runs that were not started from a room add no card', () => {
   expect(request().map((event) => event.type)).toEqual(['approval.requested'])
   expect(db.tx((sqlite) => approvalMessage(sqlite, 'scripted-approval', at))).toEqual([])
   expect(db.tx((sqlite) => approvalMessage(sqlite, 'missing', at))).toEqual([])
+})
+
+test('GET /api/approvals/:id returns the same approval as the list, 404 when unknown', async () => {
+  await send({ text: 'ask for approval please' })
+  await advance(5000)
+  const [listed] = await ledger()
+  const found = await app.inject({
+    url: `/api/approvals/${encodeURIComponent(listed!.id)}`,
+    headers,
+  })
+  expect(found.statusCode).toBe(200)
+  expect(ApprovalSchema.parse(found.json())).toEqual(listed)
+  const missing = await app.inject({ url: '/api/approvals/nope', headers })
+  expect(missing.statusCode).toBe(404)
+  expect(ErrorEnvelopeSchema.parse(missing.json()).error.code).toBe('not_found')
+  const tooLong = await app.inject({ url: `/api/approvals/${'x'.repeat(300)}`, headers })
+  expect(tooLong.statusCode).toBe(414) // Fastify's own parameter-length guard
 })
