@@ -173,6 +173,15 @@ export function layoutFlow(
       const mx = (p.x + q.x) / 2
       return { id: e.id, back: false, points: [p, { x: mx, y: p.y }, { x: mx, y: q.y }, q] }
     }
+    if (e.kind === 'sent_back' && layerOf[a]! === layerOf[b]! + 1) {
+      const p = mid(a, 'l')
+      const q = mid(b, 'r')
+      // Separate the return arrow from the forward review arrow, inside the column gap.
+      p.y += input.nodes[a]!.height / 3
+      q.y += input.nodes[b]!.height / 3
+      const mx = (p.x + q.x) / 2
+      return { id: e.id, back: true, points: [p, { x: mx, y: p.y }, { x: mx, y: q.y }, q] }
+    }
     const p = mid(a, 'b')
     const q = mid(b, 'b')
     const ly = contentBottom + o.backLaneGap * (1 + lane++)

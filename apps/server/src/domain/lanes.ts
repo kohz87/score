@@ -153,11 +153,14 @@ function plannedDrafts(input: LaneInput, drafts: Draft[]): Draft[] {
   return planned
 }
 
-function handoffKind(from: Draft, to: Draft, tasks: Map<string, LaneTaskInput>): Handoff['kind'] {
-  const task = tasks.get(to.taskId ?? '') ?? tasks.get(from.taskId ?? '')
+export function taskHandoffKind(
+  fromAgentId: string,
+  toAgentId: string,
+  task: Pick<LaneTaskInput, 'assignee' | 'reviewer'> | undefined,
+): Handoff['kind'] {
   if (task?.assignee && task.reviewer) {
-    if (from.agentId === task.assignee && to.agentId === task.reviewer) return 'review'
-    if (from.agentId === task.reviewer && to.agentId === task.assignee) return 'sent_back'
+    if (fromAgentId === task.assignee && toAgentId === task.reviewer) return 'review'
+    if (fromAgentId === task.reviewer && toAgentId === task.assignee) return 'sent_back'
   }
   return 'handoff'
 }
@@ -179,7 +182,11 @@ function buildHandoffs(
         id: `handoff:${key}`,
         from: { agentId: from.agentId, blockId: from.id },
         to: { agentId: to.agentId, blockId: to.id },
-        kind: handoffKind(from, to, tasks),
+        kind: taskHandoffKind(
+          from.agentId,
+          to.agentId,
+          tasks.get(to.taskId ?? '') ?? tasks.get(from.taskId ?? ''),
+        ),
         at: iso(at),
       },
     })

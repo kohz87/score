@@ -18,7 +18,11 @@ export {
 } from './agent-files.ts'
 export { assertFeature } from './live/fingerprint.ts'
 export { loadBridgeBootstrap } from './bridge/bootstrap.ts'
-export { registerBridgeRoutes, type BridgeDeps } from './bridge/routes.ts'
+export {
+  registerBridgeRoutes,
+  registerBridgeCredentialGuard,
+  type BridgeDeps,
+} from './bridge/routes.ts'
 export { getBridgeStatus } from './bridge/registry.ts'
 export { sweepKanbanDenials } from './live/kanban-denials.ts'
 export { pruneBridge } from './bridge/retention.ts'

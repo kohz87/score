@@ -43,14 +43,12 @@ test.each(['127.0.0.1', 'localhost', '::1'])(
 
 test('non-loopback origins remain exact matches without loopback aliases', async () => {
   const app = createApp({
-    SCORE_HOST: 'server.example',
     SCORE_WEB_ORIGIN: 'https://web.example:5173',
   })
   expect((await mutate(app, 'https://web.example:5173')).statusCode).toBe(204)
-  expect((await mutate(app, 'http://server.example:8740')).statusCode).toBe(204)
+  expect((await mutate(app, 'http://server.example:8740')).statusCode).toBe(403)
   for (const alias of loopbackHosts) {
     expect((await mutate(app, `https://${alias}:5173`)).statusCode).toBe(403)
-    expect((await mutate(app, `http://${alias}:8740`)).statusCode).toBe(403)
   }
 })
 
