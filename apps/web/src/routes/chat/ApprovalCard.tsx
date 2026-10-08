@@ -1,8 +1,9 @@
 import { ApprovalSchema, type Approval, type ApprovalChoice } from '@score/contract'
-import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { ApiError, apiFetch } from '../../data/api.ts'
-import { useStreamQuery } from '../../data/query-client.ts'
+import { useStream, useStreamQuery } from '../../data/query-client.ts'
 import { approvalsQuery } from './queries.ts'
 
 function idempotencyKey() {
@@ -50,6 +51,34 @@ function whereToAnswer(approval: Approval) {
   return <p className="chat-approval-note">This approval can only be answered in Hermes.</p>
 }
 
+const approvalKey = (approvalId: string) => ['chat', 'approval', approvalId] as const
+
+// The list only holds the newest approvals, so an older one is read by id and kept live from the stream.
+function useApprovalById(approvalId: string, enabled: boolean) {
+  const queryClient = useQueryClient()
+  const stream = useStream()
+  useEffect(
+    () =>
+      stream.subscribe((event) => {
+        if (
+          (event.type === 'approval.updated' || event.type === 'approval.requested') &&
+          event.data.id === approvalId
+        )
+          queryClient.setQueryData(approvalKey(approvalId), event.data)
+      }),
+    [stream, queryClient, approvalId],
+  )
+  return useQuery({
+    queryKey: approvalKey(approvalId),
+    queryFn: async ({ signal }) =>
+      ApprovalSchema.parse(
+        await apiFetch(`approvals/${encodeURIComponent(approvalId)}`, { signal }),
+      ),
+    enabled,
+    retry: false,
+  })
+}
+
 export function ApprovalCard({ approvalId }: { approvalId: string }) {
   const { data, status } = useStreamQuery(approvalsQuery)
   const [posted, setPosted] = useState<Approval | null>(null)
@@ -57,20 +86,25 @@ export function ApprovalCard({ approvalId }: { approvalId: string }) {
   const [error, setError] = useState<string | null>(null)
   const [more, setMore] = useState(false)
   const listed = data?.find((item) => item.id === approvalId)
+  const byId = useApprovalById(approvalId, status === 'success' && !listed)
+  const known = listed ?? byId.data
   // The POST response is fresher than the list until the stream catches up.
-  const approval = posted && (!listed || listed.delivery === 'none') ? posted : listed
-  if (!approval)
+  const approval = posted && (!known || known.delivery === 'none') ? posted : known
+  if (!approval) {
+    const loading = status === 'pending' || byId.isLoading
+    const notFound = byId.error instanceof ApiError && byId.error.status === 404
     return (
       <div className="chat-approval chat-approval--done" role="status">
         <span>
-          {status === 'pending'
+          {loading
             ? 'Loading approval…'
-            : status === 'error'
+            : status === 'error' || (byId.isError && !notFound)
               ? 'Could not load this approval.'
               : 'This approval is no longer available.'}
         </span>
       </div>
     )
+  }
   const outcome = approvalOutcome(approval)
   const open = approval.actionable && outcome === null && !busy
   const retrying = approval.actionable && approval.delivery === 'failed'

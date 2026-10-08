@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AgentIdSchema } from './types.ts'
+import { AgentDetailSchema, AgentIdSchema } from './types.ts'
 
 // Contract §10 (Settings: rules and approvals) and §8 (agent permissions).
 // Go ahead = Hermes `command_allowlist` pattern keys; Never = `approvals.deny` globs; Ask me = every other
@@ -49,3 +49,9 @@ export const RulesPreviewResponseSchema = z.object({ preview: z.string() })
 export const PatchPermissionRequestSchema = z
   .object({ level: z.enum(['allowed', 'asks', 'never']) })
   .strict()
+
+// DELETE /api/agents/:agentId/permissions/:permId: the agent's permissions after it went back to the team rule.
+export const AgentPermissionsResponseSchema = z.object({
+  items: AgentDetailSchema.shape.permissions,
+})
+export type AgentPermissionsResponse = z.infer<typeof AgentPermissionsResponseSchema>

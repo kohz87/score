@@ -1,5 +1,6 @@
 import {
   AgentDetailSchema,
+  AgentPermissionsResponseSchema,
   PatchPermissionRequestSchema,
   RulesPreviewResponseSchema,
   RulesResponseSchema,
@@ -10,7 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
 
 const rulesKey = ['settings', 'rules'] as const
-const send = (path: string, method: 'PUT' | 'POST' | 'PATCH', body?: unknown) =>
+const send = (path: string, method: 'PUT' | 'POST' | 'PATCH' | 'DELETE', body?: unknown) =>
   apiFetch(path, {
     method,
     headers: { 'Idempotency-Key': crypto.randomUUID() },
@@ -70,6 +71,21 @@ export function usePermissionAction(agentId: string) {
           PatchPermissionRequestSchema.parse({ level }),
         ),
       ),
+    onSuccess: refresh,
+  })
+}
+
+/** Takes back this agent's own choice so it follows the team rule again. */
+export function useUseTeamRule(agentId: string) {
+  const refresh = useRefreshRules()
+  return useMutation({
+    mutationFn: async (id: string) =>
+      AgentPermissionsResponseSchema.parse(
+        await send(
+          `agents/${encodeURIComponent(agentId)}/permissions/${encodeURIComponent(id)}`,
+          'DELETE',
+        ),
+      ).items,
     onSuccess: refresh,
   })
 }
