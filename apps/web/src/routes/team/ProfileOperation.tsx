@@ -1,5 +1,5 @@
 import { AgentOperationSchema, type AgentOperation } from '@score/contract'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
 
 const stepLabels: Record<string, string> = {
@@ -33,6 +33,17 @@ export function useProfileOperation(id: string | null) {
   })
 }
 export function ProfileOperation({ operation }: { operation: AgentOperation }) {
+  const client = useQueryClient()
+  const retry = useMutation({
+    mutationFn: async () =>
+      AgentOperationSchema.parse(
+        await apiFetch(`agents/operations/${operation.id}/retry`, {
+          method: 'POST',
+          headers: { 'Idempotency-Key': crypto.randomUUID() },
+        }),
+      ),
+    onSuccess: (next) => client.setQueryData(['team', 'operation', operation.id], next),
+  })
   return (
     <section className="team-card" aria-live="polite">
       <h2>
@@ -59,6 +70,21 @@ export function ProfileOperation({ operation }: { operation: AgentOperation }) {
         ))}
       </ol>
       {operation.error && <p role="alert">{operation.error}</p>}
+      {operation.state === 'needs_attention' && operation.retryable && (
+        <button
+          type="button"
+          className="team-primary"
+          disabled={retry.isPending}
+          onClick={() => retry.mutate()}
+        >
+          {retry.isPending
+            ? 'Retrying…'
+            : `Retry: ${stepLabels[operation.nextStep ?? ''] ?? 'step'}`}
+        </button>
+      )}
+      {retry.isError && (
+        <p role="alert">Score could not retry this step. Check the profile locally.</p>
+      )}
       {operation.exportPath && (
         <p>
           Private export: <code>{operation.exportPath}</code>

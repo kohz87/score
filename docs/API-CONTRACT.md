@@ -295,6 +295,9 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 - **H** `PATCH /api/agents/:agentId` `{ name?; role? }` → `AgentDetail`. Name is a Score display name; profile id never changes. Role is nonempty description text.
 - **H** `DELETE /api/agents/:agentId` `{ typedName; previewHash }` → `202 AgentOperation`.
 - `GET /api/agents/operations/:opId` → `AgentOperation` (paired session required).
+- **H** `POST /api/agents/operations/:opId/retry` → `AgentOperation`: runs the failed step again when `retryable` (a recorded
+  error on a step whose repeat is harmless: model, permissions, enable bridge, readiness, export, identity purge,
+  retire); otherwise `409`. Creating the profile, installing the plugin and deleting it are never repeated.
 
 Lifecycle schemas live in `packages/contract/src/profiles.ts`. Preview accepts `{ kind: 'create', id, name, role,
 style, model, cloneFrom? }` or `{ kind: 'delete', agentId }`. Canonical names are lowercase ASCII letters/digits,

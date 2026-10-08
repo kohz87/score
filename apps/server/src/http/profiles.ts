@@ -83,6 +83,10 @@ export function registerProfileRoutes(
       return operations.refresh(opId)
     },
   )
+  app.post('/api/agents/operations/:opId/retry', mutation, async (request) => {
+    const { opId } = z.object({ opId: z.uuid() }).parse(request.params)
+    return operations.retry(opId)
+  })
   app.patch('/api/agents/:agentId', mutation, async (request) => {
     const { agentId } = Params.parse(request.params)
     const body = AgentPatchRequestSchema.parse(request.body)
