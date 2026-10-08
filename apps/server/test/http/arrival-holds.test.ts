@@ -221,3 +221,23 @@ test('a plan start that cannot be finished is marked failed with a notice in the
   expect(PlanStartResponseSchema.parse(done.json()).taskIds).toHaveLength(2)
   expect(rows('SELECT state FROM plan_start_runs')).toEqual([{ state: 'done' }])
 })
+
+test('Pause landing while a plan step is being created still holds that step', async () => {
+  const { briefId, messageId } = await planMessage()
+  const create = vi.spyOn(port, 'createTask')
+  const real = Object.getPrototypeOf(port).createTask.bind(port)
+  create.mockImplementationOnce(async (...args: unknown[]) => {
+    const task = await real(...args)
+    expect((await post(`/api/briefs/${briefId}/pause`, {}, 'p1')).statusCode).toBe(200)
+    return task
+  })
+  create.mockImplementation(real)
+  const started = await post(startUrl(messageId), {}, 'k1')
+  expect(started.statusCode).toBe(409)
+  await ingest.flushListeners()
+  const [first] = rows('SELECT task_id FROM brief_tasks WHERE brief_id = ?', briefId)
+  expect(first).toBeDefined()
+  expect(await status(String(first!.task_id))).toBe('scheduled')
+  expect(rows('SELECT state FROM brief_paused_tasks')).toEqual([{ state: 'held' }])
+  expect(await port.listTasks()).toHaveLength(1)
+})

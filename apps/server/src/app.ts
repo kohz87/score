@@ -228,7 +228,8 @@ export function buildApp({
       return parking
     }
     ingest.onCommitted((events) => {
-      if (events.some((event) => event.type === 'task.upserted')) return park()
+      if (events.some((event) => event.type === 'task.upserted' || event.type === 'brief.upserted'))
+        return park()
     })
     const plans = createPlanStarter({ port, db, ingest })
     app.decorate('recoverPlanStarts', () => plans.recover())
