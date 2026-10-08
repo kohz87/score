@@ -11,7 +11,14 @@ import {
   type TaskSummary,
 } from '@score/contract'
 import { z } from 'zod'
-import type { AgentDetail } from '@score/contract'
+import type {
+  AgentDetail,
+  ConnectResult,
+  ConnectionsResponse,
+  LocalProviderRequest,
+  ProviderItem,
+  ToolServerRequest,
+} from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
 import type { AgentFile, AgentFileName } from './agent-files.ts'
 import type { IngestResult, Observation } from '../hub/ingest.ts'
@@ -115,6 +122,8 @@ export type CompatibilityEvaluation = SystemStatus['compatibility'] & {
   matchedHermes?: { version: string; codeSha: string }
 }
 
+export type ProviderBase = Omit<ProviderItem, 'usedBy'>
+
 export interface HermesPort {
   readonly mode: 'live' | 'fake'
   start(sink: ObservationSink): Promise<void>
@@ -147,6 +156,14 @@ export interface HermesPort {
     content: string,
     etag: string,
   ): Promise<{ etag: string }>
+  /** Status only (never secrets); `usedBy` is added by the route from the agents' models. */
+  listProviders(): Promise<ProviderBase[]>
+  /** Interactive sign-ins are never run by Score: the result carries the command to run in a terminal. */
+  connectProvider(id: string): Promise<ConnectResult>
+  addLocalProvider(req: LocalProviderRequest): Promise<ProviderBase>
+  listConnections(): Promise<ConnectionsResponse>
+  addToolServer(req: ToolServerRequest): Promise<ConnectResult>
+  connectMessaging(platform: string): Promise<ConnectResult>
   startRun(req: {
     agentId: string
     input: string

@@ -41,6 +41,7 @@ import { taskAction, taskReader } from './task-actions.ts'
 import { LiveTasks } from './tasks.ts'
 import { createTask, patchTask } from './task-writes.ts'
 import { LiveRoutines } from './routines.ts'
+import { LiveSettings } from './settings.ts'
 import type { HermesRunner } from './cli.ts'
 import { readRun, RunRowSchema, runLifecycle, type RunMetrics } from './translate.ts'
 
@@ -90,10 +91,12 @@ export class LivePort implements HermesPort {
   }
   private readonly profiles: ProfilesReader
   private readonly routines: LiveRoutines
+  private readonly settings: LiveSettings
   private readonly profileFiles = new ProfileFiles()
   constructor(private readonly options: LivePortOptions) {
     this.profiles = new ProfilesReader(resolveHermesHome(options.hermesHome), options.runner)
     this.routines = new LiveRoutines(options.hermesHome, options.runner)
+    this.settings = new LiveSettings(options.hermesHome, options.runner)
   }
 
   async start(sink: ObservationSink): Promise<void> {
@@ -290,6 +293,24 @@ export class LivePort implements HermesPort {
   async runRoutine(id: string) {
     this.requireStarted()
     await this.routines.run(id)
+  }
+  async listProviders() {
+    return this.settings.listProviders()
+  }
+  async connectProvider(id: string) {
+    return this.settings.connectProvider(id)
+  }
+  async addLocalProvider(req: Parameters<HermesPort['addLocalProvider']>[0]) {
+    return this.settings.addLocalProvider(req)
+  }
+  async listConnections() {
+    return this.settings.listConnections()
+  }
+  async addToolServer(req: Parameters<HermesPort['addToolServer']>[0]) {
+    return this.settings.addToolServer(req)
+  }
+  async connectMessaging(platform: string) {
+    return this.settings.connectMessaging(platform)
   }
   private agentHome(agentId: string): string {
     const parsed = ProfileNameSchema.safeParse(agentId)
