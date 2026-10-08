@@ -10,7 +10,6 @@ import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { deriveTaskEvents } from '../../src/domain/tasks.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
-import { createScenario } from '../../src/hermes/fake/scenario.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
 import { taskWithApproval } from '../../src/domain/tasks.ts'
 import { recordKanbanDenial } from '../../src/domain/kanban-denials.ts'
@@ -61,13 +60,12 @@ afterEach(async () => {
 
 test('fake GET returns the scenario task at the same stream watermark', async () => {
   await scheduler.advance(700 * 18)
-  const expected = createScenario(0).find((step) => step.kind === 'task.upserted')!
   const response = await app.inject('/api/tasks')
   expect(response.statusCode).toBe(200)
   const body = response.json()
   const task = TaskSummarySchema.parse(body.columns.working[0])
   expect(task).toMatchObject({
-    id: expected.data.id,
+    id: 'task-pagination-0',
     title: 'Add pagination to the activity feed',
     key: 'T-101',
   })

@@ -289,3 +289,212 @@
     max-width: none;
   }
 }
+
+/* Task drawer (docs/design/html/tasks.html) */
+.task-drawer h2 {
+  font-family: var(--font-heading);
+}
+.task-drawer h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.task-drawer-spacer {
+  flex: 1;
+}
+.task-drawer-badge {
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--hairline);
+  color: var(--ink);
+  border-radius: var(--radius-pill);
+  padding: 2px 10px;
+}
+.task-drawer-badge--needs {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.task-drawer-muted {
+  color: var(--muted);
+}
+.task-drawer-rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  font-size: 14px;
+}
+.task-drawer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ground);
+}
+.task-drawer-row:last-child {
+  border-bottom: 0;
+}
+.task-drawer-row dt {
+  color: var(--ink-muted);
+}
+.task-drawer-row dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.task-drawer-row a {
+  color: var(--ink);
+}
+.task-drawer-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.task-drawer .task-drawer-body {
+  color: var(--ink);
+  white-space: pre-wrap;
+  font-size: 14px;
+}
+.task-drawer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.task-steps,
+.task-activity {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.task-step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 0;
+  cursor: pointer;
+}
+.task-step input {
+  position: absolute;
+  opacity: 0;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+.task-step-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border: 1.5px solid #b9bdc6;
+  border-radius: var(--radius-key);
+  color: transparent;
+}
+.task-step--done .task-step-box {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.task-step--done .task-step-text {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.task-step input:focus-visible + .task-step-box {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.task-step input:disabled + .task-step-box {
+  opacity: 0.6;
+}
+.task-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+.task-activity li {
+  display: flex;
+  gap: 12px;
+}
+.task-activity time {
+  flex: 0 0 44px;
+  color: var(--muted);
+}
+.task-drawer-approval {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: var(--radius-16);
+  background: var(--subtle);
+  font-size: 14px;
+}
+.task-drawer-approval p {
+  margin: 0;
+}
+.task-drawer-approval code {
+  font-family: var(--font-code);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.task-drawer-buttons {
+  display: flex;
+  gap: 8px;
+}
+.task-drawer-primary,
+.task-drawer-secondary {
+  flex: 1;
+  min-height: 48px;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6px 14px;
+  text-decoration: none;
+}
+.task-drawer-primary {
+  border: 0;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 700;
+}
+.task-drawer-secondary {
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--ink);
+  font-weight: 600;
+}
+.task-drawer button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.task-drawer-comment {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+.task-drawer-comment textarea {
+  font: inherit;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  padding: 8px 10px;
+  resize: vertical;
+}
+.task-drawer p[role='alert'],
+.task-drawer p[role='status'] {
+  margin: 0;
+}
+.task-drawer :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}

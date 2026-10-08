@@ -1,8 +1,9 @@
 import { useContext, useEffect, useRef, type KeyboardEvent } from 'react'
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { StreamContext, useStreamQuery } from '../../data/query-client.ts'
 import { TaskCard } from './TaskCard.tsx'
+import { TaskDrawer } from './TaskDrawer.tsx'
 import { taskAgentsQuery, taskColumns, taskRoomsQuery, tasksQuery } from './task-queries.ts'
 import './tasks.css'
 
@@ -212,30 +213,21 @@ export function TasksPage() {
           </div>
         </div>
         {taskId && (
-          <aside
-            className="task-placeholder"
-            aria-label="Task details"
+          <TaskDrawer
+            key={taskId}
+            taskId={taskId}
+            summary={selected}
+            agents={agents.data ?? []}
+            rooms={rooms.data ?? []}
+            closeTo={`/tasks${search}`}
+            closeRef={closeDetails}
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
                 event.preventDefault()
                 void navigate(`/tasks${search}`)
               }
             }}
-          >
-            <div className="task-placeholder-heading">
-              <span>{selected?.key ?? taskId}</span>
-              <Link
-                ref={closeDetails}
-                className="task-close"
-                to={`/tasks${search}`}
-                aria-label="Close details"
-              >
-                ×
-              </Link>
-            </div>
-            <h2>{selected?.title ?? 'Task details'}</h2>
-            <p>Task details are coming soon.</p>
-          </aside>
+          />
         )}
       </div>
     </div>
