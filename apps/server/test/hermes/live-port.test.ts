@@ -57,7 +57,7 @@ test('adapter factory configures live mode and unstarted controls fail without a
   await live.stop()
 })
 
-test('health and capabilities are cached, served agents require keys and use neutral color plus shape', async () => {
+test('health and capabilities are cached; profile readers include agents without keys', async () => {
   const live = create()
   await live.start(env.ingest)
   expect(SystemStatusSchema.parse({ mode: 'live', ...live.status() })).toMatchObject({
@@ -77,8 +77,9 @@ test('health and capabilities are cached, served agents require keys and use neu
   const agents = await live.listAgents()
   expect(env.fake.calls).toHaveLength(before)
   expect(agents).toMatchObject([
-    { id: 'default', served: true, style: { color: '#6B4EFF', shape: 'circle-dot' } },
-    { id: 'builder', served: true, style: { color: '#19C39A', shape: 'triangle' } },
+    { id: 'builder', served: true, style: { color: '#6B4EFF', shape: 'circle-dot' } },
+    { id: 'default', served: true, style: { color: '#19C39A', shape: 'triangle' } },
+    { id: 'reviewer', served: true, style: { color: '#FFB61E', shape: 'diamond' } },
   ])
   await expect(
     live.deliverDecision({

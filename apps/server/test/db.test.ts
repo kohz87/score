@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -51,63 +52,27 @@ function insertEvent(sqlite: DatabaseSync, type: string): void {
 test('fresh db migrates all infrastructure tables and records checksums', () => {
   const db = open()
   migrate(db, migrationDir)
-  const sql = readFileSync(join(migrationDir, '0001_infra.sql'), 'utf8')
-  const floorsSql = readFileSync(join(migrationDir, '0002_ingest_floors.sql'), 'utf8')
-  const runsSql = readFileSync(join(migrationDir, '0003_runs.sql'), 'utf8')
-  const bridgeSql = readFileSync(join(migrationDir, '0004_bridge.sql'), 'utf8')
-  const denialsSql = readFileSync(join(migrationDir, '0006_kanban_denials.sql'), 'utf8')
-  const gateSql = readFileSync(join(migrationDir, '0007_gate_fixes.sql'), 'utf8')
-  const approvalsSql = readFileSync(join(migrationDir, '0005_approvals.sql'), 'utf8')
-  expect(db.sqlite.prepare('SELECT * FROM schema_migrations').all()).toEqual([
-    {
-      version: 1,
-      name: '0001_infra.sql',
-      checksum: createHash('sha256').update(sql).digest('hex'),
+  const migrations = readdirSync(migrationDir)
+    .filter((name) => name.endsWith('.sql'))
+    .sort()
+  expect(db.sqlite.prepare('SELECT * FROM schema_migrations').all()).toEqual(
+    migrations.map((name) => ({
+      version: Number(name.slice(0, 4)),
+      name,
+      checksum: createHash('sha256')
+        .update(readFileSync(join(migrationDir, name)))
+        .digest('hex'),
       applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
-    },
-    {
-      version: 2,
-      name: '0002_ingest_floors.sql',
-      checksum: createHash('sha256').update(floorsSql).digest('hex'),
-      applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
-    },
-    {
-      version: 3,
-      name: '0003_runs.sql',
-      checksum: createHash('sha256').update(runsSql).digest('hex'),
-      applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
-    },
-    {
-      version: 4,
-      name: '0004_bridge.sql',
-      checksum: createHash('sha256').update(bridgeSql).digest('hex'),
-      applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
-    },
-    {
-      version: 5,
-      name: '0005_approvals.sql',
-      checksum: createHash('sha256').update(approvalsSql).digest('hex'),
-      applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
-    },
-    {
-      version: 6,
-      name: '0006_kanban_denials.sql',
-      checksum: createHash('sha256').update(denialsSql).digest('hex'),
-      applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
-    },
-    {
-      version: 7,
-      name: '0007_gate_fixes.sql',
-      checksum: createHash('sha256').update(gateSql).digest('hex'),
-      applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
-    },
-  ])
+    })),
+  )
   const tables = db.sqlite
     .prepare(
       "SELECT name FROM sqlite_schema WHERE type = 'table' AND name != 'sqlite_sequence' ORDER BY name",
     )
     .all()
   expect(tables.map((row) => row.name)).toEqual([
+    'agent_styles',
+    'agents_proj',
     'approval_deliveries',
     'approval_delivery_leases',
     'approval_signals',
@@ -119,9 +84,12 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'ingest_checkpoints',
     'ingest_floors',
     'ingest_keys',
+    'messages',
     'meta',
     'producers',
     'request_receipts',
+    'room_reads',
+    'rooms',
     'runs',
     'schema_migrations',
     'session_tool_calls',
@@ -203,9 +171,9 @@ test('database from a newer Score is rejected', () => {
   migrate(db, migrationDir)
   db.sqlite
     .prepare('INSERT INTO schema_migrations VALUES (?, ?, ?, ?)')
-    .run(8, '0008_newer.sql', 'a'.repeat(64), new Date().toISOString())
+    .run(1000, '1000_newer.sql', 'a'.repeat(64), new Date().toISOString())
   expect(() => migrate(db, migrationDir)).toThrow(
-    'Database is from a newer Score: unknown applied migration 8',
+    'Database is from a newer Score: unknown applied migration 1000',
   )
 })
 
