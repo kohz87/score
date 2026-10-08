@@ -18,6 +18,7 @@ import { startServer } from '../src/start-server.ts'
 import { createHermesPort } from '../src/hermes/index.ts'
 import { readStream } from './hub/sse-helpers.ts'
 import { testCert, testKey } from './fixtures/tls.ts'
+import { SecurityPassword } from '../src/auth/security-password.ts'
 
 const origin = 'http://score.lan:8741'
 const headers = { host: 'score.lan:8741', origin, 'x-score-client': 'web' }
@@ -65,9 +66,26 @@ function makeApp(clock?: () => number, tls = false) {
         }
       : env,
   )
-  const app = buildApp({ config, clock, logger: false })
+  const securityHome = mkdtempSync(join(tmpdir(), 'score-security-'))
+  cleanup.push(() => rmSync(securityHome, { recursive: true, force: true }))
+  const app = buildApp({
+    config,
+    clock,
+    logger: false,
+    security: new SecurityPassword(securityHome, clock),
+  })
   cleanup.push(() => app.close())
   return app
+}
+const PASSWORD = 'correct horse battery'
+async function setPassword(app: FastifyInstance, cookie: string) {
+  const response = await app.inject({
+    method: 'PUT',
+    url: '/api/session/security/password',
+    headers: { ...headers, cookie },
+    payload: { password: PASSWORD },
+  })
+  expect(response.statusCode).toBe(204)
 }
 async function pair(app: FastifyInstance, origin = headers.origin) {
   const response = await app.inject({
@@ -565,11 +583,21 @@ test('paired browsers can be listed and revoked over HTTP without exposing crede
   expect(body.items).toHaveLength(2)
   expect(JSON.stringify(body)).not.toContain(first.split('=')[1]!)
   const other = body.items.find((item) => !item.current)!
-  const revoke = await app.inject({
-    method: 'DELETE',
-    url: `/api/session/browsers/${other.id}`,
-    headers: { ...headers, cookie: first },
-  })
+  // Terminating a pairing needs the security password: first it must be set, and a wrong one is refused.
+  const terminate = (password?: string) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/session/browsers/${other.id}/revoke`,
+      headers: { ...headers, cookie: first },
+      payload: password === undefined ? {} : { password },
+    })
+  expect((await terminate(PASSWORD)).statusCode).toBe(409)
+  await setPassword(app, first)
+  expect((await terminate('not the password')).statusCode).toBe(403)
+  expect(
+    (await app.inject({ url: '/api/system', headers: { ...headers, cookie: second } })).statusCode,
+  ).toBe(200)
+  const revoke = await terminate(PASSWORD)
   expect(revoke.statusCode).toBe(204)
   expect(
     (await app.inject({ url: '/api/system', headers: { ...headers, cookie: second } })).statusCode,
@@ -578,9 +606,10 @@ test('paired browsers can be listed and revoked over HTTP without exposing crede
   expect(
     (
       await app.inject({
-        method: 'DELETE',
-        url: `/api/session/browsers/${other.id}`,
+        method: 'POST',
+        url: `/api/session/browsers/${other.id}/revoke`,
         headers,
+        payload: { password: PASSWORD },
       })
     ).statusCode,
   ).toBe(401)
@@ -596,4 +625,145 @@ test('remote responses stay no-store even when a handler sets its own cache poli
   const response = await app.inject({ url: '/api/cache-probe', headers: { ...headers, cookie } })
   expect(response.statusCode).toBe(200)
   expect(response.headers['cache-control']).toBe('no-store')
+})
+
+test('a paired browser can mint a one-time link that pairs a second device exactly once', async () => {
+  const app = makeApp()
+  const cookie = await pair(app)
+  await setPassword(app, cookie)
+  const minted = await app.inject({
+    method: 'POST',
+    url: '/api/session/pairing-links',
+    headers: { ...headers, cookie },
+    payload: { password: PASSWORD },
+  })
+  expect(minted.statusCode).toBe(200)
+  const { url, expiresAt } = minted.json()
+  expect(url.startsWith(`${origin}/pair#`)).toBe(true)
+  expect(Date.parse(expiresAt)).toBeGreaterThan(Date.now())
+  const token = String(url).split('#')[1]
+  const second = await app.inject({
+    method: 'POST',
+    url: '/api/session/pair',
+    headers,
+    payload: { token },
+  })
+  expect(second.statusCode).toBe(204)
+  const again = await app.inject({
+    method: 'POST',
+    url: '/api/session/pair',
+    headers,
+    payload: { token },
+  })
+  expect(again.statusCode).toBe(401)
+  const list = await app.inject({ url: '/api/session/browsers', headers: { ...headers, cookie } })
+  expect(list.json().items).toHaveLength(2)
+  // Unpaired callers cannot mint links.
+  expect(
+    (await app.inject({ method: 'POST', url: '/api/session/pairing-links', headers })).statusCode,
+  ).toBe(401)
+})
+
+test('Renew gives a browser a fresh 30 days and its next request re-sends the cookie', async () => {
+  let now = Date.parse('2026-10-08T00:00:00Z')
+  const app = makeApp(() => now)
+  const first = await pair(app)
+  const other = await pair(app)
+  await setPassword(app, first)
+  // The first request after pairing re-sends the cookie once; later ones within the hour don't.
+  await app.inject({ url: '/api/system', headers: { ...headers, cookie: other } })
+  const quiet = await app.inject({ url: '/api/system', headers: { ...headers, cookie: other } })
+  expect(quiet.headers['set-cookie']).toBeUndefined()
+  // Six days on (inside the 7-day idle limit), renew the other browser from this one.
+  now += 6 * 24 * 60 * 60 * 1000
+  const items = (
+    await app.inject({ url: '/api/session/browsers', headers: { ...headers, cookie: first } })
+  ).json().items as { id: string; current: boolean; expiresAt: string }[]
+  const target = items.find((item) => !item.current)!
+  const renewed = await app.inject({
+    method: 'POST',
+    url: `/api/session/browsers/${target.id}/renew`,
+    headers: { ...headers, cookie: first },
+    payload: { password: PASSWORD },
+  })
+  expect(renewed.statusCode).toBe(200)
+  const day = 24 * 60 * 60 * 1000
+  // Effective expiry is the earlier of the 30-day limit and the 7-day idle limit, both restarted by Renew.
+  expect(Date.parse(renewed.json().expiresAt)).toBe(now + 7 * day)
+  const next = await app.inject({ url: '/api/system', headers: { ...headers, cookie: other } })
+  expect(String(next.headers['set-cookie'])).toContain(`Max-Age=${30 * 24 * 60 * 60}`)
+  // Used every six days, the renewed browser is still paired at day 30, when its original 30 days ran out.
+  for (let i = 0; i < 4; i++) {
+    now += 6 * day
+    const used = await app.inject({ url: '/api/system', headers: { ...headers, cookie: other } })
+    expect(used.statusCode).toBe(200)
+  }
+  expect(
+    (
+      await app.inject({
+        method: 'POST',
+        url: `/api/session/browsers/${target.id}/renew`,
+        headers,
+      })
+    ).statusCode,
+  ).toBe(401)
+})
+
+test('the security password: set once, change needs the current one, wrong guesses are rate-limited', async () => {
+  const app = makeApp()
+  const cookie = await pair(app)
+  const second = await pair(app)
+  const put = (payload: object) =>
+    app.inject({
+      method: 'PUT',
+      url: '/api/session/security/password',
+      headers: { ...headers, cookie },
+      payload,
+    })
+  const status = async () =>
+    (await app.inject({ url: '/api/session/security', headers: { ...headers, cookie } })).json()
+  expect(await status()).toEqual({ passwordSet: false })
+  expect((await put({ password: 'short' })).statusCode).toBe(400)
+  await setPassword(app, cookie)
+  expect(await status()).toEqual({ passwordSet: true })
+  // Changing it needs the current password, so a compromised browser can't take it over.
+  expect((await put({ password: 'another password' })).statusCode).toBe(403)
+  expect((await put({ password: 'another password', current: PASSWORD })).statusCode).toBe(204)
+  const others = (password: string) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/session/browsers/revoke-others',
+      headers: { ...headers, cookie },
+      payload: { password },
+    })
+  // The refused change above was the first wrong guess; three more, then the fifth still answers 403…
+  for (let i = 0; i < 3; i++) expect((await others('wrong guess')).statusCode).toBe(403)
+  // …and after five even the right password waits out the 15-minute window.
+  expect((await others('wrong guess')).statusCode).toBe(403)
+  expect((await others('another password')).statusCode).toBe(429)
+  expect(
+    (await app.inject({ url: '/api/system', headers: { ...headers, cookie: second } })).statusCode,
+  ).toBe(200)
+})
+
+test('Terminate all other pairings keeps only the caller', async () => {
+  const app = makeApp()
+  const cookie = await pair(app)
+  const a = await pair(app)
+  const b = await pair(app)
+  await setPassword(app, cookie)
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/session/browsers/revoke-others',
+    headers: { ...headers, cookie },
+    payload: { password: PASSWORD },
+  })
+  expect(response.json()).toEqual({ revoked: 2 })
+  for (const gone of [a, b])
+    expect(
+      (await app.inject({ url: '/api/system', headers: { ...headers, cookie: gone } })).statusCode,
+    ).toBe(401)
+  expect(
+    (await app.inject({ url: '/api/system', headers: { ...headers, cookie } })).statusCode,
+  ).toBe(200)
 })

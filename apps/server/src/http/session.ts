@@ -3,6 +3,9 @@ import { z } from 'zod'
 import { sessionCookie } from '../auth/cookies.ts'
 import type { PairingService } from '../auth/pairing.ts'
 import { humanGuard } from '../auth/human.ts'
+import { HttpError } from '../errors.ts'
+import { PairingLinkSchema } from '@score/contract'
+import type { SecurityPassword } from '../auth/security-password.ts'
 
 const PairBodySchema = z.object({ token: z.string().max(256) })
 
@@ -10,7 +13,18 @@ export function registerSessionRoutes(
   app: FastifyInstance,
   pairing: PairingService,
   secure = false,
+  /** Where a new device opens Score (the browser origin), for "Pair another device" links. */
+  origin?: string,
+  /** Guards pairing management; without it (tests) those routes are unavailable. */
+  security?: SecurityPassword,
 ): void {
+  const guarded = { preHandler: humanGuard(pairing) }
+  const PasswordBody = z.object({ password: z.unknown() }).loose()
+  async function checkPassword(body: unknown): Promise<void> {
+    if (!security)
+      throw new HttpError(501, 'unsupported', 'Pairing management is not available here')
+    await security.verify(PasswordBody.parse(body ?? {}).password)
+  }
   app.post('/api/session/pair', async (request, reply) => {
     const { token } = PairBodySchema.parse(request.body)
     const id = pairing.pair(token, request.ip, request.headers['user-agent'] ?? 'Browser')
@@ -37,13 +51,48 @@ export function registerSessionRoutes(
     items: app.pairing.browsers(request.headers.cookie),
   }))
 
-  app.delete(
-    '/api/session/browsers/:id',
-    { preHandler: humanGuard(pairing) },
-    async (request, reply) => {
-      const { id } = z.object({ id: z.uuid() }).parse(request.params)
-      app.pairing.revokeBrowser(id)
-      return reply.code(204).send()
-    },
-  )
+  app.get('/api/session/security', guarded, async () => ({
+    passwordSet: security?.isSet() ?? false,
+  }))
+  // First time from any paired browser; changing it needs the current password; a forgotten one is reset on the host.
+  app.put('/api/session/security/password', guarded, async (request, reply) => {
+    if (!security) throw new HttpError(501, 'unsupported', 'Not available here')
+    const body = z
+      .object({ password: z.unknown(), current: z.unknown().optional() })
+      .parse(request.body)
+    await security.set(body.password, body.current)
+    return reply.code(204).send()
+  })
+
+  // Pairing management needs the security password, so a compromised paired browser can't invite another device,
+  // keep itself alive or terminate the owner's pairings. The link is the same one-time, 15-minute token the console
+  // prints (minting one replaces any earlier unused token).
+  app.post('/api/session/pairing-links', guarded, async (request) => {
+    await checkPassword(request.body)
+    if (!origin) throw new HttpError(501, 'unsupported', 'Pairing links are not available here')
+    const token = pairing.createToken()
+    return PairingLinkSchema.parse({
+      url: `${origin}/pair#${token}`,
+      expiresAt: new Date(pairing.tokenExpiresAt()).toISOString(),
+    })
+  })
+
+  app.post('/api/session/browsers/:id/renew', guarded, async (request) => {
+    const { id } = z.object({ id: z.uuid() }).parse(request.params)
+    await checkPassword(request.body)
+    return app.pairing.renewBrowser(id)
+  })
+
+  app.post('/api/session/browsers/:id/revoke', guarded, async (request, reply) => {
+    const { id } = z.object({ id: z.uuid() }).parse(request.params)
+    await checkPassword(request.body)
+    app.pairing.revokeBrowser(id)
+    return reply.code(204).send()
+  })
+
+  // "Terminate all other pairings": for a device found compromised, or when unsure which one it is.
+  app.post('/api/session/browsers/revoke-others', guarded, async (request) => {
+    await checkPassword(request.body)
+    return { revoked: app.pairing.revokeOthers(request.headers.cookie) }
+  })
 }

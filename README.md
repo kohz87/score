@@ -70,6 +70,7 @@ To keep Score running in the background, use the launcher. It writes `score.pid`
 scripts/score start     # start in the background and print the first pairing link
 scripts/score status    # running? which pid and URL
 scripts/score pair      # print a fresh pairing link for another browser
+scripts/score password  # set or reset the security password for managing paired devices
 scripts/score logs -f   # follow the log (without -f: the last 100 lines)
 scripts/score stop
 ```
@@ -95,7 +96,8 @@ Score has no user accounts. A browser proves it may control Score by opening a o
 someone with access to the server's terminal (or `$SCORE_HOME`) can get.
 
 - The link is printed at startup, is valid for 15 minutes and works once. A newer link replaces an older one.
-- To get another one: run `scripts/score pair` (if you started Score with the launcher), restart the server, or, in
+- From a browser that is already paired: Settings › Remote access › **Pair another device** (needs the security
+  password). Or run `scripts/score pair` (if you started Score with the launcher), restart the server, or, in
   remote mode, type `pair` in the server terminal.
 - A paired browser stays paired for up to 30 days (7 days without use). Clearing cookies unpairs it.
 

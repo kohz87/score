@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import type { Config } from '../config.ts'
 import { HttpError } from '../errors.ts'
+import { readCookie, SESSION_COOKIE, sessionCookie } from './cookies.ts'
 
 const publicRoutes = new Set(['POST /api/session/pair', 'GET /api/session', 'GET /api/health'])
 
@@ -30,6 +31,13 @@ export function registerRemoteGuard(
     if (!app.pairing.isPaired(request.headers.cookie))
       throw new HttpError(401, 'not_paired', 'Pair this browser to access Score')
     if (path !== '/api/stream') app.pairing.touch(request.headers.cookie, request.ip)
+    // Session routes set their own cookie (sign out clears it); everything else keeps the cookie as long as the session.
+    if (!path.startsWith('/api/session')) {
+      const maxAge = app.pairing.cookieRefresh(request.headers.cookie)
+      const id = readCookie(request.headers.cookie, SESSION_COOKIE)
+      if (maxAge !== undefined && id)
+        reply.header('set-cookie', sessionCookie(id, maxAge, Boolean(config.remote?.tlsCert)))
+    }
   })
 }
 

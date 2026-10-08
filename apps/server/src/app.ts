@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify'
 import { CONTRACT_VERSION, type SystemStatus } from '@score/contract'
-import type { Config } from './config.ts'
+import { serverOrigin, type Config } from './config.ts'
+import { SecurityPassword } from './auth/security-password.ts'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
 import { registerAgentRoutes } from './http/agents.ts'
 import { registerProfileRoutes } from './http/profiles.ts'
@@ -67,6 +68,8 @@ interface BuildAppOptions {
   media?: MediaStore
   https?: { cert: Buffer; key: Buffer }
   webAssets?: WebAssets
+  /** Pairing-management password; defaults to one stored in the Score home when there is a database (a real server). */
+  security?: SecurityPassword
 }
 
 export function buildApp({
@@ -85,6 +88,7 @@ export function buildApp({
   media,
   https,
   webAssets,
+  security,
 }: BuildAppOptions): FastifyInstance {
   const logging = logger ?? process.env.NODE_ENV !== 'test'
   const app = Fastify({
@@ -220,7 +224,15 @@ export function buildApp({
     })
   }
   app.get('/api/health', async () => ({ ok: true, contract: CONTRACT_VERSION }))
-  registerSessionRoutes(app, app.pairing, Boolean(config.remote?.tlsCert))
+  // The same origin the console prints in its pairing link.
+  const pairingOrigin = config.remote || config.serveWeb ? serverOrigin(config) : config.webOrigin
+  registerSessionRoutes(
+    app,
+    app.pairing,
+    Boolean(config.remote?.tlsCert),
+    pairingOrigin,
+    security ?? (db ? new SecurityPassword(config.home, clock) : undefined),
+  )
   registerSystemRoutes(app, getSystemStatus)
   if (db && ingest && getEpoch) {
     registerStreamRoute(app, {

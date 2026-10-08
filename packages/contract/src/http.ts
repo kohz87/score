@@ -192,4 +192,13 @@ export const PairedBrowserSchema = z.object({
   current: z.boolean(),
 })
 export const PairedBrowsersSchema = z.object({ items: z.array(PairedBrowserSchema) })
+/** "Pair another device": a one-time link for a new browser (contract §3). */
+export const PairingLinkSchema = z.object({
+  url: z.url({ protocol: /^https?$/ }),
+  expiresAt: z.iso.datetime(),
+})
+export type PairingLink = z.infer<typeof PairingLinkSchema>
+/** Whether the security password that guards pairing management is set (contract §3). */
+export const SecurityStatusSchema = z.object({ passwordSet: z.boolean() })
+export const RevokeOthersResponseSchema = z.object({ revoked: z.int().nonnegative() })
 export type PairedBrowser = z.infer<typeof PairedBrowserSchema>

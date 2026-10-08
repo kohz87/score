@@ -46,6 +46,12 @@ export class SqliteSessionStore implements SessionStore {
       .run(now, address, hash)
   }
 
+  renewRemote(hash: string, now: number, expiresAt: number): void {
+    this.db.sqlite
+      .prepare('UPDATE remote_sessions SET last_seen_at = ?, expires_at = ? WHERE hash = ?')
+      .run(now, expiresAt, hash)
+  }
+
   revokeRemote(hash: string): void {
     this.db.sqlite.prepare('DELETE FROM remote_sessions WHERE hash = ?').run(hash)
   }

@@ -19,6 +19,8 @@ export interface SessionStore {
   getRemote(hash: string): RemoteSession | undefined
   listRemote(): RemoteSession[]
   touchRemote(hash: string, now: number, address: string): void
+  /** A fresh lifetime from `now`: renewing counts as activity, so the idle clock restarts too. */
+  renewRemote(hash: string, now: number, expiresAt: number): void
   revokeRemote(hash: string): void
 }
 
@@ -38,6 +40,10 @@ export class InMemorySessionStore implements SessionStore {
   touchRemote(hash: string, now: number, address: string): void {
     const session = this.#remote.get(hash)
     if (session) this.#remote.set(hash, { ...session, lastSeenAt: now, address })
+  }
+  renewRemote(hash: string, now: number, expiresAt: number): void {
+    const session = this.#remote.get(hash)
+    if (session) this.#remote.set(hash, { ...session, lastSeenAt: now, expiresAt })
   }
   revokeRemote(hash: string): void {
     this.#remote.delete(hash)

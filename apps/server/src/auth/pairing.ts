@@ -22,6 +22,8 @@ export class PairingService {
   #global: Attempt = { count: 0, until: 0, window: 0 }
   readonly #streams = new Map<string, Set<() => void>>()
   readonly #timers = new Map<string, NodeJS.Timeout>()
+  /** When each session's cookie lifetime was last re-sent (in memory: a restart just re-sends once). */
+  readonly #cookieSentAt = new Map<string, number>()
 
   constructor(
     private readonly sessions: SessionStore = new InMemorySessionStore(),
@@ -70,6 +72,42 @@ export class PairingService {
     return false
   }
 
+  /** The token's expiry, for a link minted from a paired browser ("Pair another device"). */
+  tokenExpiresAt(): number {
+    return this.#tokenExpiresAt
+  }
+
+  /** Gives one paired browser a fresh lifetime (Settings › Remote access › Renew). Remote mode only. */
+  renewBrowser(id: string) {
+    if (!this.remote) throw new HttpError(404, 'not_found', 'Paired browser not found')
+    const session = this.sessions.listRemote().find((candidate) => candidate.id === id)
+    if (
+      !session ||
+      this.clock() >= Math.min(session.expiresAt, session.lastSeenAt + SESSION_IDLE_MS)
+    )
+      throw new HttpError(404, 'not_found', 'Paired browser not found')
+    this.sessions.renewRemote(session.hash, this.clock(), this.clock() + SESSION_ABSOLUTE_MS)
+    // That browser's cookie still has its old Max-Age: re-send it on its next request.
+    this.#cookieSentAt.delete(session.hash)
+    this.scheduleExpiry(session.hash)
+    return this.browsers(undefined).find((browser) => browser.id === id)!
+  }
+
+  /**
+   * Seconds left on this browser's session when its cookie should be re-sent (at most hourly, or right after a
+   * renewal), so the cookie never expires before the server-side session does. Undefined otherwise.
+   */
+  cookieRefresh(cookie: string | undefined): number | undefined {
+    if (!this.remote) return undefined
+    const hash = this.sessionHash(cookie)
+    const session = hash === undefined ? undefined : this.sessions.getRemote(hash)
+    if (!hash || !session) return undefined
+    const sent = this.#cookieSentAt.get(hash)
+    if (sent !== undefined && this.clock() - sent < 60 * 60 * 1000) return undefined
+    this.#cookieSentAt.set(hash, this.clock())
+    return Math.max(0, Math.floor((session.expiresAt - this.clock()) / 1000))
+  }
+
   touch(cookie: string | undefined, address: string): void {
     if (!this.remote || !this.isPaired(cookie)) return
     const hash = this.sessionHash(cookie)!
@@ -98,6 +136,14 @@ export class PairingService {
         },
       ]
     })
+  }
+
+  /** Terminates every paired browser except the caller's; returns how many. */
+  revokeOthers(cookie: string | undefined): number {
+    const current = this.sessionHash(cookie)
+    const others = this.sessions.listRemote().filter((session) => session.hash !== current)
+    for (const session of others) this.revokeHash(session.hash)
+    return others.length
   }
 
   revokeBrowser(id: string): void {
@@ -139,6 +185,7 @@ export class PairingService {
   }
 
   private revokeHash(hash: string): void {
+    this.#cookieSentAt.delete(hash)
     if (this.remote) this.sessions.revokeRemote(hash)
     else this.sessions.revoke(hash)
     clearTimeout(this.#timers.get(hash))

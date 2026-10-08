@@ -1,5 +1,5 @@
 import { StrictMode } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
@@ -136,4 +136,101 @@ test('unauthorized background reads on the pairing page cannot reload and lose i
   } finally {
     window.removeEventListener('score:logout', logout)
   }
+})
+
+const twoBrowsers = {
+  items: [
+    {
+      id: '11111111-1111-4111-8111-111111111111',
+      label: 'Desktop',
+      address: '10.1.1.20',
+      createdAt: '2026-10-08T00:00:00.000Z',
+      lastSeenAt: '2026-10-08T01:00:00.000Z',
+      expiresAt: '2026-10-15T01:00:00.000Z',
+      current: true,
+    },
+    {
+      id: '22222222-2222-4222-8222-222222222222',
+      label: 'Old phone',
+      address: '10.1.1.30',
+      createdAt: '2026-10-01T00:00:00.000Z',
+      lastSeenAt: '2026-10-07T01:00:00.000Z',
+      expiresAt: '2026-10-14T01:00:00.000Z',
+      current: false,
+    },
+  ],
+}
+function managementFetch(passwordSet: boolean, wrong = false) {
+  return vi.fn((url: string, init?: RequestInit) => {
+    if (url.endsWith('/api/session/security'))
+      return Promise.resolve(Response.json({ passwordSet }))
+    if (url.endsWith('/api/session/browsers')) return Promise.resolve(Response.json(twoBrowsers))
+    if (wrong)
+      return Promise.resolve(
+        Response.json({ error: { code: 'wrong_password', message: 'No' } }, { status: 403 }),
+      )
+    if (url.endsWith('/api/session/pairing-links'))
+      return Promise.resolve(
+        Response.json({
+          url: 'http://10.1.1.199:8741/pair#tok',
+          expiresAt: '2026-10-08T02:00:00.000Z',
+        }),
+      )
+    if (init?.method === 'PUT') return Promise.resolve(new Response(null, { status: 204 }))
+    return Promise.resolve(new Response(null, { status: 204 }))
+  })
+}
+
+test('pairing management stays locked until the security password is entered, then sends it', async () => {
+  document.documentElement.setAttribute('data-score-transport', 'http')
+  const fetch = managementFetch(true)
+  vi.stubGlobal('fetch', fetch)
+  render(withClient(<RemoteSection />))
+  const terminate = await screen.findByRole('button', { name: 'Terminate Old phone' })
+  expect(terminate.hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('button', { name: 'Pair another device' }).hasAttribute('disabled')).toBe(
+    true,
+  )
+  fireEvent.change(screen.getByLabelText('Security password'), {
+    target: { value: 'correct horse battery' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Terminate Old phone' }))
+  await screen.findByText('Pairing terminated.')
+  const call = fetch.mock.calls.find(([url]) => String(url).endsWith('/revoke'))!
+  expect(call[0]).toBe('/api/session/browsers/22222222-2222-4222-8222-222222222222/revoke')
+  expect(JSON.parse(String(call[1]!.body))).toEqual({ password: 'correct horse battery' })
+  fireEvent.click(screen.getByRole('button', { name: 'Pair another device' }))
+  expect((await screen.findByRole('group', { name: 'Pairing link' })).textContent).toContain(
+    'http://10.1.1.199:8741/pair#tok',
+  )
+})
+
+test('a wrong security password says so', async () => {
+  document.documentElement.setAttribute('data-score-transport', 'http')
+  vi.stubGlobal('fetch', managementFetch(true, true))
+  render(withClient(<RemoteSection />))
+  fireEvent.change(await screen.findByLabelText('Security password'), {
+    target: { value: 'not the password' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Terminate all other pairings' }))
+  expect((await screen.findByRole('alert')).textContent).toBe('That is not the security password.')
+})
+
+test('without a password yet, Settings asks to set one first', async () => {
+  document.documentElement.setAttribute('data-score-transport', 'http')
+  const fetch = managementFetch(false)
+  vi.stubGlobal('fetch', fetch)
+  render(withClient(<RemoteSection />))
+  const form = await screen.findByRole('form', { name: 'Set a security password' })
+  expect(screen.getByText('Set a security password to manage pairings.')).toBeTruthy()
+  fireEvent.change(within(form).getByLabelText('New password (8+ characters)'), {
+    target: { value: 'correct horse battery' },
+  })
+  fireEvent.change(within(form).getByLabelText('New password again'), {
+    target: { value: 'correct horse battery' },
+  })
+  fireEvent.click(within(form).getByRole('button', { name: 'Set password' }))
+  await waitFor(() =>
+    expect(fetch.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(true),
+  )
 })

@@ -1,24 +1,181 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PairedBrowsersSchema } from '@score/contract'
+import {
+  PairedBrowserSchema,
+  PairedBrowsersSchema,
+  PairingLinkSchema,
+  RevokeOthersResponseSchema,
+  SecurityStatusSchema,
+} from '@score/contract'
 import { apiFetch } from '../../data/api.ts'
+import { copyText, selectText } from '../../data/clipboard.ts'
 import { announceLogout, remoteTransport } from '../../data/session.ts'
+
+const browsersKey = ['session', 'browsers'] as const
+const securityKey = ['session', 'security'] as const
+
+function failure(error: unknown, action: string): string {
+  const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : null
+  if (code === 'wrong_password') return 'That is not the security password.'
+  if (code === 'too_many_attempts')
+    return 'Too many wrong passwords. Wait 15 minutes and try again.'
+  if (code === 'password_not_set') return 'Set a security password first.'
+  if (code === 'bad_request') return 'Use 8 to 256 characters for the security password.'
+  return `Could not ${action}. Please try again.`
+}
+
+// Over plain HTTP on a LAN the password crosses the network unencrypted when it is used.
+function plainHttp(): boolean {
+  return (
+    window.location.protocol === 'http:' &&
+    !['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
+  )
+}
+
+function SetPassword({ change, onDone }: { change: boolean; onDone: () => void }) {
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [again, setAgain] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    if (next !== again) {
+      setError('The two entries differ.')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      await apiFetch('session/security/password', {
+        method: 'PUT',
+        body: JSON.stringify({ password: next, ...(change ? { current } : {}) }),
+      })
+      onDone()
+    } catch (caught) {
+      setError(failure(caught, 'save the password'))
+    } finally {
+      setCurrent('')
+      setNext('')
+      setAgain('')
+      setBusy(false)
+    }
+  }
+  return (
+    <form
+      className="settings-form"
+      aria-label={change ? 'Change the security password' : 'Set a security password'}
+      onSubmit={(event) => void submit(event)}
+    >
+      {change && (
+        <label>
+          Current password
+          <input
+            type="password"
+            autoComplete="current-password"
+            required
+            value={current}
+            onChange={(event) => setCurrent(event.target.value)}
+          />
+        </label>
+      )}
+      <label>
+        New password (8+ characters)
+        <input
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={8}
+          maxLength={256}
+          value={next}
+          onChange={(event) => setNext(event.target.value)}
+        />
+      </label>
+      <label>
+        New password again
+        <input
+          type="password"
+          autoComplete="new-password"
+          required
+          value={again}
+          onChange={(event) => setAgain(event.target.value)}
+        />
+      </label>
+      {error && <p role="alert">{error}</p>}
+      <button type="submit" className="settings-primary settings-start" disabled={busy}>
+        {busy ? 'Saving…' : change ? 'Change password' : 'Set password'}
+      </button>
+    </form>
+  )
+}
 
 export function RemoteSection() {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
+  const [password, setPassword] = useState('')
+  const [changing, setChanging] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [copied, setCopied] = useState<'idle' | 'copied' | 'manual'>('idle')
+  const link = useRef<HTMLElement>(null)
   const queryClient = useQueryClient()
   const remote = remoteTransport() !== undefined
+  // The password lives only in this component while the page is open.
+  useEffect(() => () => setPassword(''), [])
   const browsers = useQuery({
-    queryKey: ['session', 'browsers'],
+    queryKey: browsersKey,
     enabled: remote,
     queryFn: async () => PairedBrowsersSchema.parse(await apiFetch('session/browsers')).items,
   })
+  const security = useQuery({
+    queryKey: securityKey,
+    enabled: remote,
+    queryFn: async () => SecurityStatusSchema.parse(await apiFetch('session/security')),
+  })
+  const withPassword = () => ({ method: 'POST', body: JSON.stringify({ password }) })
+  const refresh = () => queryClient.invalidateQueries({ queryKey: browsersKey })
   const revoke = useMutation({
-    mutationFn: (id: string) => apiFetch(`session/browsers/${id}`, { method: 'DELETE' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['session', 'browsers'] }),
+    mutationFn: (id: string) => apiFetch(`session/browsers/${id}/revoke`, withPassword()),
+    onSuccess: () => {
+      setNotice('Pairing terminated.')
+      return refresh()
+    },
+  })
+  const revokeOthers = useMutation({
+    mutationFn: async () =>
+      RevokeOthersResponseSchema.parse(
+        await apiFetch('session/browsers/revoke-others', withPassword()),
+      ),
+    onSuccess: ({ revoked }) => {
+      setNotice(
+        revoked === 1 ? 'Terminated 1 other pairing.' : `Terminated ${revoked} other pairings.`,
+      )
+      return refresh()
+    },
+  })
+  const renew = useMutation({
+    mutationFn: async (id: string) =>
+      PairedBrowserSchema.parse(await apiFetch(`session/browsers/${id}/renew`, withPassword())),
+    onSuccess: () => {
+      setNotice('Pairing renewed.')
+      return refresh()
+    },
+  })
+  // A one-time link for a new device; it replaces any earlier unused link (including the console's).
+  const invite = useMutation({
+    mutationFn: async () =>
+      PairingLinkSchema.parse(await apiFetch('session/pairing-links', withPassword())),
+    onSuccess: () => setCopied('idle'),
   })
   if (!remote) return null
+  const passwordSet = security.data?.passwordSet === true
+  const ready = passwordSet && password.length >= 8
+  const actionError =
+    (revoke.error && failure(revoke.error, 'terminate the pairing')) ||
+    (revokeOthers.error && failure(revokeOthers.error, 'terminate the pairings')) ||
+    (renew.error && failure(renew.error, 'renew the pairing')) ||
+    (invite.error && failure(invite.error, 'create a pairing link')) ||
+    ''
+  const busy = revoke.isPending || revokeOthers.isPending || renew.isPending || invite.isPending
   return (
     <section id="remote-access" className="settings-card" aria-labelledby="settings-remote-access">
       <h2 id="settings-remote-access">Remote access</h2>
@@ -32,33 +189,155 @@ export function RemoteSection() {
         <code>SCORE_TLS_KEY</code>, set <code>SCORE_PUBLIC_ORIGINS</code> to its HTTPS origin, and
         remove <code>SCORE_REMOTE_INSECURE_HTTP</code> before restarting.
       </p>
+
+      <h3>Security password</h3>
       <p>
-        To pair another browser, type <code>pair</code> in the server terminal and open the new
-        link.
+        Pairing another device, renewing and terminating pairings need this password, so a lost or
+        compromised device can&apos;t invite others or lock you out. If you forget it, reset it on
+        the Score machine with <code>scripts/score password</code>.
       </p>
+      {plainHttp() && (
+        <p className="settings-warning">
+          This page is not encrypted (plain HTTP). The password crosses your network when you use
+          it.
+        </p>
+      )}
+      {security.isSuccess && !passwordSet && (
+        <SetPassword change={false} onDone={() => void security.refetch()} />
+      )}
+      {passwordSet && (
+        <>
+          <label className="settings-password">
+            Security password
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className="settings-link settings-start"
+            aria-expanded={changing}
+            onClick={() => setChanging((open) => !open)}
+          >
+            Change password
+          </button>
+          {changing && (
+            <SetPassword
+              change
+              onDone={() => {
+                setChanging(false)
+                setNotice('Security password changed.')
+              }}
+            />
+          )}
+        </>
+      )}
+
+      <h3>Pair another device</h3>
+      <p>
+        Get a one-time link and open it on the new phone or computer. It works once and expires in
+        15 minutes. (Typing <code>pair</code> in the server terminal still works too.)
+      </p>
+      <button
+        className="settings-pill settings-start"
+        type="button"
+        disabled={!ready || busy}
+        onClick={() => invite.mutate()}
+      >
+        {invite.data ? 'Get a new link' : 'Pair another device'}
+      </button>
+      {invite.data && (
+        <div className="settings-command" role="group" aria-label="Pairing link">
+          <p>
+            Open this on the new device before{' '}
+            {new Date(invite.data.expiresAt).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+            . Anyone with this link can pair, so send it only to yourself.
+          </p>
+          <code
+            ref={link}
+            className="settings-command-text"
+            onClick={() => selectText(link.current)}
+          >
+            {invite.data.url}
+          </code>
+          <div className="settings-command-actions">
+            <button
+              type="button"
+              className="settings-pill"
+              onClick={async () => {
+                if (await copyText(invite.data.url)) setCopied('copied')
+                else {
+                  selectText(link.current)
+                  setCopied('manual')
+                }
+              }}
+            >
+              {copied === 'copied' ? 'Copied' : 'Copy link'}
+            </button>
+          </div>
+          {copied === 'manual' && (
+            <p role="status">The link is selected: press Ctrl+C (or ⌘C) to copy it.</p>
+          )}
+        </div>
+      )}
+
       <h3>Paired browsers</h3>
       <ul aria-label="Paired browsers">
         {browsers.data?.map((browser) => (
           <li key={browser.id}>
             {browser.label.slice(0, 60)} from {browser.address}, last seen{' '}
-            {new Date(browser.lastSeenAt).toLocaleString()}
+            {new Date(browser.lastSeenAt).toLocaleString()}, access until{' '}
+            {new Date(browser.expiresAt).toLocaleDateString()}
             {browser.current ? ' (this browser)' : ''}{' '}
+            <button
+              className="settings-pill"
+              type="button"
+              aria-label={`Renew ${browser.current ? 'this browser' : browser.label.slice(0, 60)}`}
+              disabled={!ready || busy}
+              onClick={() => renew.mutate(browser.id)}
+            >
+              Renew
+            </button>{' '}
             {!browser.current && (
               <button
                 className="settings-pill"
                 type="button"
-                disabled={revoke.isPending}
+                aria-label={`Terminate ${browser.label.slice(0, 60)}`}
+                disabled={!ready || busy}
                 onClick={() => revoke.mutate(browser.id)}
               >
-                Revoke
+                Terminate
               </button>
             )}
           </li>
         ))}
       </ul>
-      {(browsers.isError || revoke.isError) && (
-        <p role="alert">Could not update paired browsers.</p>
+      {(browsers.data?.length ?? 0) > 1 && (
+        <button
+          className="settings-pill settings-start"
+          type="button"
+          disabled={!ready || busy}
+          onClick={() => revokeOthers.mutate()}
+        >
+          Terminate all other pairings
+        </button>
       )}
+      {security.isSuccess && !passwordSet && (
+        <p className="settings-muted">Set a security password to manage pairings.</p>
+      )}
+      {passwordSet && password.length < 8 && (
+        <p className="settings-muted">Enter the security password above to manage pairings.</p>
+      )}
+      {actionError && <p role="alert">{actionError}</p>}
+      {notice && !actionError && <p role="status">{notice}</p>}
+      {browsers.isError && <p role="alert">Could not load paired browsers.</p>}
+
       <button
         className="settings-pill settings-start"
         type="button"

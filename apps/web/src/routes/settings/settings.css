@@ -766,3 +766,19 @@
 .settings-form label.settings-check input {
   height: auto;
 }
+
+.settings-password {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 360px;
+  font-weight: 600;
+}
+.settings-password input {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: var(--radius-14);
+  border: 1px solid var(--hairline);
+  background: var(--card);
+  color: var(--ink);
+}

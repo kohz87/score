@@ -184,6 +184,7 @@ Launcher (background process, PID file `$SCORE_HOME/score.pid`, log `$SCORE_HOME
 scripts/score start     # start in the background and print the first pairing link
 scripts/score status    # running? pid and URL
 scripts/score pair      # mint a fresh pairing link (SIGUSR2 -> 0600 file in $SCORE_HOME; no network endpoint)
+scripts/score password  # set or reset the security password (guards pairing, renewing and terminating devices)
 scripts/score logs [-f] # last 100 log lines, or follow
 scripts/score stop
 ```

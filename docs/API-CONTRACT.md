@@ -267,7 +267,19 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   session's open `/api/stream` connections. Bridge routes (`/bridge/v1/*`) are served only on a separate loopback listener.
   - `GET /api/session/browsers` → `{ items: { id: uuid; label: string; address: string; createdAt: iso; lastSeenAt: iso;
 expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a management id, never a credential.
-  - `DELETE /api/session/browsers/:id` → `204` (revokes that browser; idempotent).
+  - **Pairing management needs the security password** (owner, 2026-10-08), so a compromised paired browser can't invite
+    devices, keep itself alive or terminate the owner's pairings. Body `{ password }`; `409 password_not_set`,
+    `403 wrong_password`, `429 too_many_attempts` (5 wrong in 15 minutes, across all sessions).
+    - `GET /api/session/security` → `{ passwordSet: boolean }` · `PUT /api/session/security/password`
+      `{ password; current? }` → `204` (first time without `current`; afterwards `current` is required; a forgotten
+      password is reset on the host with `scripts/score password`). Stored as a salted scrypt hash, 0600.
+    - `POST /api/session/pairing-links` `{ password }` → `{ url; expiresAt }`: the same one-time, 15-minute token the
+      console prints (minting replaces any unused one).
+    - `POST /api/session/browsers/:id/renew` `{ password }` → the browser with a fresh 30-day limit and 7-day idle
+      window (renewing counts as activity); that browser's cookie is re-sent on its next request.
+    - `POST /api/session/browsers/:id/revoke` `{ password }` → `204` (idempotent) · `POST /api/session/browsers/revoke-others`
+      `{ password }` → `{ revoked: number }` (keeps only the caller).
+  - Paired browsers' cookies are re-sent at most hourly with Max-Age = the session's remaining lifetime.
 - `GET /api/search?q=` → `{ items: { kind: 'agent'|'task'|'room'|'message'|'command'|'setting'; id: string;
 label: string; hint: string | null; ref: Ref | { kind: 'route'; path: string } }[] }` (⌘K palette)
 

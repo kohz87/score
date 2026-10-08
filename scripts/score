@@ -14,7 +14,7 @@ port="${SCORE_PORT:-8740}"
 host="${SCORE_HOST:-127.0.0.1}"
 
 usage() {
-  echo "Usage: score start|stop|status|logs [-f]|pair" >&2
+  echo "Usage: score start|stop|status|logs [-f]|pair|password" >&2
   exit 2
 }
 
@@ -136,5 +136,7 @@ case "${1:-}" in
   status) cmd_status ;;
   logs) shift; cmd_logs "${1:-}" ;;
   pair) cmd_pair ;;
+  # Sets or resets the security password that guards pairing management (a forgotten one is reset only here).
+  password) SCORE_HOME="$home" exec node "$root/scripts/set-password.mjs" ;;
   *) usage ;;
 esac
