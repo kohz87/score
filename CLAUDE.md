@@ -68,6 +68,10 @@ briefs model), run an adversarial review at `max` (read-only sandbox; prompt sav
 committed to `docs/reviews/`). Record findings and responses in the doc's review log.
 
 ## Working with the owner
+- *Owner, 2026-10-08:* keep working on implementation and deployment until the application is complete; the lead
+  reviews all code (including phase gates and design reviews) itself. If a question to the owner gets no reply within
+  5 minutes, proceed with the recommended option and keep going. Writes to the owner's real Hermes profiles (not the
+  test profiles) are still prepared and asked about first, with other work continuing meanwhile.
 - Plan first; no feature code without an approved plan task.
 - System-level or global installs, and anything that writes to `~/.hermes` beyond the approved test profiles:
   give the exact command plus the reason, and wait for an OK.
