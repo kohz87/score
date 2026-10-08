@@ -10,6 +10,7 @@ import { createStreamClient } from './data/stream.ts'
 import { createStreamQueryRegistry } from './data/resync.ts'
 
 vi.mock('./shell/use-needs-you.ts', () => ({ useNeedsYou: vi.fn(() => false) }))
+vi.mock('./routes/chat/ChatPage.tsx', () => ({ ChatPage: () => <h1>Chat</h1> }))
 
 const routers: ReturnType<typeof createMemoryRouter>[] = []
 const disposers: (() => void)[] = []

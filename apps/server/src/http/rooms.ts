@@ -16,6 +16,9 @@ import {
   roomRow,
   storeMessage,
 } from '../domain/rooms.ts'
+import { reserveMessageRun } from '../domain/message-runs.ts'
+import { routeMessage, modelCommand } from '../domain/routing.ts'
+import { RoutingDispatcher } from '../domain/routing-dispatch.ts'
 import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
@@ -43,7 +46,7 @@ const MessageBodySchema = z
       .refine((text) => Buffer.byteLength(text, 'utf8') <= 16384),
     to: z.array(AgentIdSchema).optional(),
     planFirst: z.boolean().optional(),
-    model: z.string().optional(),
+    model: z.string().min(1).max(256).optional(),
     attachments: z.array(z.object({ mediaId: z.string().min(1) }).strict()).optional(),
   })
   .strict()
@@ -54,12 +57,6 @@ const QuerySchema = z
     limit: z.coerce.number().int().min(1).max(100).default(50),
   })
   .strict()
-
-// Task 2.3 replaces this seam with mention/command parsing and turn admission.
-export function routeMessage(message: Message): { routedTo: string[]; command: null } {
-  void message
-  return { routedTo: [], command: null }
-}
 
 export function registerRoomRoutes(
   app: FastifyInstance,
@@ -74,6 +71,12 @@ export function registerRoomRoutes(
     preHandler: [humanGuard(app.pairing), receipts.preHandler],
     onSend: receipts.onSend,
   }
+  const routing = new RoutingDispatcher(db, ingest, port, (error) =>
+    app.log.error({ err: error }, 'Room run admission failed'),
+  )
+  app.addHook('preClose', async () => {
+    await routing.close()
+  })
   const agents = async () => z.array(AgentSummarySchema).parse(await port.listAgents())
   async function validateAgents(ids: string[]) {
     const known = new Set((await agents()).map((agent) => agent.id))
@@ -239,14 +242,34 @@ export function registerRoomRoutes(
     const { roomId } = ParamsSchema.parse(request.params)
     const body = MessageBodySchema.parse(request.body)
     const to = [...new Set(body.to ?? [])]
-    await validateAgents(to)
+    const known = (await agents()).map((agent) => agent.id)
+    if (to.some((id) => !known.includes(id)))
+      throw new HttpError(400, 'bad_request', 'Unknown agent')
+    const room = db.read((sqlite) => readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at))
+    const route = routeMessage(body.text, to, room, known)
+    let command: { kind: 'assign'; taskId: string } | { kind: 'model'; model: string } | null =
+      modelCommand(route.model)
+    const id = randomUUID()
+    if (route.parsed.command?.kind === 'assign') {
+      const assigned = route.parsed.command
+      const task = await port.createTask(
+        {
+          title: assigned.title,
+          assignee: assigned.agentId,
+          roomId,
+          ...(assigned.body === null ? {} : { body: assigned.body }),
+        },
+        `assign:${id}`,
+      )
+      command = { kind: 'assign', taskId: task.id }
+    }
     let message: Message | undefined
     await ingest.submit({
       source: 'rooms',
       identity: randomUUID(),
       apply({ sqlite, now }) {
         message = {
-          id: randomUUID(),
+          id,
           roomId,
           author: { kind: 'you' },
           to,
@@ -255,9 +278,26 @@ export function registerRoomRoutes(
           streaming: false,
           refs: [],
         }
-        return storeMessage(sqlite, message, now)
+        const drafts = storeMessage(sqlite, message, now)
+        for (const agentId of route.routedTo)
+          reserveMessageRun(
+            sqlite,
+            {
+              parentMessageId: id,
+              roomId,
+              agentId,
+              chainId: id,
+              hop: 0,
+              input: route.input,
+              agents: known,
+              ...((route.model ?? body.model) ? { model: route.model ?? body.model } : {}),
+            },
+            now,
+          )
+        return drafts
       },
     })
-    return { message, ...routeMessage(message!) }
+    await routing.dispatch()
+    return { message, routedTo: route.routedTo, command }
   })
 }

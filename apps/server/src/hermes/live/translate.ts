@@ -16,6 +16,7 @@ import {
   redactRunPayload,
   type GatewayRun,
 } from './gateway.ts'
+import { appendRunMessage, completeRunMessage } from '../../domain/message-runs.ts'
 import { ProfileNameSchema } from './paths.ts'
 
 export const terminalStatuses = ['completed', 'failed', 'cancelled', 'interrupted'] as const
@@ -96,6 +97,8 @@ const ToolCompletedSchema = ToolStartedSchema.extend({
   duration: z.number().finite().nonnegative(),
   error: z.boolean(),
 })
+const DeltaSchema = z.object({ delta: z.string() })
+const InterimSchema = z.object({ text: z.string(), already_streamed: z.boolean().optional() })
 const TerminalSchema = z.object({
   output: z.string().nullish(),
   error: z.string().nullish(),
@@ -177,9 +180,18 @@ export function translateRunEvent(
     event.startsWith('run.') && runLifecycle.isTerminal(event.slice(4) as RunSummary['status'])
       ? TerminalSchema.parse(safe)
       : undefined
-  const ignored = ['message.delta', 'message.interim', 'reasoning.available'].includes(event)
+  const delta = event === 'message.delta' ? DeltaSchema.parse(safe) : undefined
+  const interim = event === 'message.interim' ? InterimSchema.parse(safe) : undefined
+  const ignored = event === 'reasoning.available'
   const known = Boolean(
-    started || completed || approval || terminal || event === 'approval.responded' || ignored,
+    started ||
+    completed ||
+    approval ||
+    terminal ||
+    delta ||
+    interim ||
+    event === 'approval.responded' ||
+    ignored,
   )
   return {
     source: `run-sse:${context.profile}`,
@@ -233,11 +245,15 @@ export function translateRunEvent(
         )
       // Approval evidence may refine a closed row even when run lifecycle observations are stale.
       if (runLifecycle.isTerminal(row.status) || seq <= (row.last_seq ?? -1)) return drafts
-      if (ignored || !known) {
+      if (delta || interim || ignored || !known) {
         sqlite
           .prepare('UPDATE runs SET last_seq = ?, updated_at = ? WHERE id = ?')
           .run(seq, at, row.id)
-        return []
+        return delta
+          ? appendRunMessage(sqlite, row.id, delta.delta, at)
+          : interim && !interim.already_streamed
+            ? appendRunMessage(sqlite, row.id, interim.text, at)
+            : []
       }
       const values: Record<string, SQLInputValue> = { last_seq: seq }
       if (!ignored && known) values.status = 'running'
@@ -302,6 +318,13 @@ export function translateRunEvent(
       }
       if (updateRun(sqlite, row, at, values) && !ignored && known)
         drafts.push(runDraft(sqlite, row.id))
+      if (terminal)
+        drafts.push(
+          ...completeRunMessage(sqlite, row.id, at, {
+            output: terminal.output,
+            handoffs: event === 'run.completed',
+          }),
+        )
       return drafts
     },
   }
@@ -339,6 +362,12 @@ export function runStatusObservation(context: RunContext, run: GatewayRun): Obse
       return [
         ...(changed ? [runDraft(sqlite, row.id)] : []),
         ...(terminal ? closeRunApprovals(sqlite, row.id, now) : []),
+        ...(terminal
+          ? completeRunMessage(sqlite, row.id, now, {
+              output: safe.output,
+              handoffs: safe.status === 'completed',
+            })
+          : []),
       ]
     },
   }
