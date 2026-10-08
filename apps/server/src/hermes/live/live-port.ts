@@ -307,7 +307,16 @@ export class LivePort implements HermesPort {
   describeProfile(name: string, description: string) {
     return this.profileManagement.describeProfile(name, description)
   }
-  async listAgentDetails(): Promise<AgentDetail[]> {
+  // Agents, Rooms and Now ask at once on a page load; on a cold cache each read starts several Hermes processes per
+  // profile, so concurrent callers share one read (15 s per request after a restart, 2026-10-08 live).
+  private agentDetailsFlight: Promise<AgentDetail[]> | undefined
+  listAgentDetails(): Promise<AgentDetail[]> {
+    this.agentDetailsFlight ??= this.readAgentDetails().finally(() => {
+      this.agentDetailsFlight = undefined
+    })
+    return this.agentDetailsFlight.then((details) => structuredClone(details))
+  }
+  private async readAgentDetails(): Promise<AgentDetail[]> {
     const served = this.current.hermes.servedProfiles
     const names = this.profiles.names(served)
     return Promise.all(

@@ -173,6 +173,11 @@ export async function startServer(
       throw new Error('Could not bind the browser listener', { cause: error })
     }
     await port.start(ingest)
+    // Warm the per-profile caches, so the first page load after a restart doesn't wait ~15 s on cold Hermes reads.
+    const warming = port
+    void Promise.resolve()
+      .then(() => warming.listAgents())
+      .catch(() => undefined)
     await outbox.start()
     const observations = ingest
     deliverySweep = setInterval(() => {
