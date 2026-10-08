@@ -13,6 +13,7 @@ import * as f from './fixtures.ts'
 const eventData = {
   'system.status': f.system,
   'agent.updated': f.agent,
+  'room.upserted': f.room,
   'message.created': f.message,
   'message.delta': f.delta,
   'message.completed': f.completed,

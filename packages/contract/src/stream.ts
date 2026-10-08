@@ -7,6 +7,7 @@ import {
   LaneBlockSchema,
   LogLineSchema,
   MessageSchema,
+  RoomSchema,
   RefSchema,
   RunSummarySchema,
   SystemStatusSchema,
@@ -81,6 +82,7 @@ export type StreamEnvelope = z.infer<typeof StreamEnvelopeSchema>
 export const StreamEventSchema = z.discriminatedUnion('type', [
   StreamEnvelopeSchema.extend({ type: z.literal('system.status'), data: SystemStatusSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('agent.updated'), data: AgentSummarySchema }),
+  StreamEnvelopeSchema.extend({ type: z.literal('room.upserted'), data: RoomSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('message.created'), data: MessageSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('message.delta'), data: MessageDeltaSchema }),
   StreamEnvelopeSchema.extend({

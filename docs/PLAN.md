@@ -163,8 +163,13 @@ Revised after the architecture review (ARCHITECTURE v0.2). Section refs like D1 
 - Test: `pnpm --filter @score/server test -- approvals`
 
 **Phase 1 gate** · Codex code review at `max` against `main` + Gemini whole-repo review (you)
+  **Done 2026-10-08:** Codex gate review (fail → 13 + 3 findings fixed, merged); Gemini review **skipped by the owner**.
 
 ## Phase 2: Chat, Tasks, Team, Settings
+
+**Execution (owner, 2026-10-08):** independent tasks run in parallel, each in its own worktree with its own Codex CLI
+session (gpt-6.1-sol, high). The lead assigns migration numbers up front, reviews and merges one at a time, and
+resolves integration conflicts. Migrations from Phase 1 end at `0007`; numbers below are reassigned per brief.
 
 **2.1 Rooms + messages store/API** · Lead: migrations `0003_rooms.sql`; `/api/rooms*`; tests. Done when §5 room endpoints pass contract tests.
 **2.2 Mention + slash parser** · Codex: `apps/server/src/domain/parse.ts` (pure). Done when table-driven tests cover all §5 command syntaxes and edge cases (emails, code spans, unknown agents).

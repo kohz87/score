@@ -125,6 +125,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `stream.reset` | `{ reason: 'pruned'\|'epoch'\|'future_cursor' }` (no id) | all → resync |
 | `system.status` | `SystemStatus` | header banner, Settings |
 | `agent.updated` | `AgentSummary` | everywhere agents render |
+| `room.upserted` | `Room` | Chat rooms list |
 | `message.created` | `Message` | Chat, Now thread |
 | `message.delta` | `{ messageId, roomId, append: string }` | Chat (streaming text) |
 | `message.completed` | `{ messageId, roomId }` | Chat |
