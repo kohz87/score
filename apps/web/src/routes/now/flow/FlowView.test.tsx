@@ -20,6 +20,8 @@ let fixture: ReturnType<typeof flowFixture>
 let requests: { url: string; init?: RequestInit }[]
 let stopStatus: number
 let nodeStatus: number
+let pauseFails = false
+let flowDelayMs = 0
 const dispose: (() => void)[] = []
 const response = (data: unknown, status = 200) =>
   Promise.resolve(new Response(JSON.stringify(data), { status }))
@@ -28,6 +30,8 @@ beforeEach(() => {
   requests = []
   stopStatus = 200
   nodeStatus = 200
+  pauseFails = false
+  flowDelayMs = 0
   vi.stubGlobal(
     'fetch',
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -53,7 +57,29 @@ beforeEach(() => {
         })
       if (url.startsWith('/api/briefs?'))
         return response({ items: url.endsWith('active') ? [fixture.flow.brief] : [] })
-      if (url.endsWith('/flow')) return response(fixture.flow)
+      if (url.endsWith('/pause')) {
+        if (pauseFails) {
+          fixture.flow.brief.status = 'paused'
+          return response(
+            { error: { code: 'upstream_failed', message: '1 task could not be held.' } },
+            502,
+          )
+        }
+        return response({ ...fixture.flow.brief, status: 'paused' })
+      }
+      if (url.endsWith('/flow')) {
+        if (flowDelayMs === 0) return response(fixture.flow)
+        return new Promise<Response>((resolve, reject) => {
+          const timer = setTimeout(
+            () => resolve(new Response(JSON.stringify(fixture.flow))),
+            flowDelayMs,
+          )
+          init?.signal?.addEventListener('abort', () => {
+            clearTimeout(timer)
+            reject(new DOMException('aborted', 'AbortError'))
+          })
+        })
+      }
       if (url.includes('/log?')) {
         const params = new URL(url, 'http://localhost').searchParams
         const items = fixture.log.items.filter(
@@ -233,4 +259,42 @@ test('handles missing node details with a retry', async () => {
   nodeStatus = 200
   fireEvent.click(within(inspector).getByRole('button', { name: 'Try again' }))
   expect(await within(inspector).findByRole('heading', { name: 'Event stream' })).toBeTruthy()
+})
+
+test('a partial pause shows the server error and keeps a retry for the failed action', async () => {
+  pauseFails = true
+  setup()
+  fireEvent.click(await screen.findByRole('button', { name: 'Pause run' }))
+  expect((await screen.findByRole('alert')).textContent).toBe('1 task could not be held.')
+  // The brief is now paused, yet the failed action stays retryable.
+  await screen.findByText('Paused')
+  expect(screen.getByRole('button', { name: 'Try pause again' })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'Resume run' })).toBeNull()
+})
+
+test('continuous unrelated events do not cancel a slow flow read', async () => {
+  flowDelayMs = 400
+  setup()
+  await screen.findByText('Loading the flow...')
+  let seq = 10
+  const deltas = setInterval(() => {
+    Source.current.dispatchEvent(
+      new MessageEvent('message.delta', {
+        data: JSON.stringify({
+          seq: ++seq,
+          ts: '2026-10-08T21:31:01.000Z',
+          type: 'message.delta',
+          data: { messageId: 'other', roomId: 'room-other', append: 'x' },
+        }),
+        lastEventId: String(seq),
+      }),
+    )
+  }, 50)
+  try {
+    await waitFor(() => expect(screen.queryByText('Loading the flow...')).toBeNull(), {
+      timeout: 3000,
+    })
+  } finally {
+    clearInterval(deltas)
+  }
 })

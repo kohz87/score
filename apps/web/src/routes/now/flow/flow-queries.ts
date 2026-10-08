@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { useEffect } from 'react'
 import {
   BriefFlowSchema,
+  type BriefFlow,
   BriefSummarySchema,
   BriefsListSchema,
   BriefLogPageSchema,
@@ -54,13 +55,44 @@ export function useBriefFlow(briefId: string | undefined) {
   const queryClient = useQueryClient()
   useEffect(() => {
     if (!briefId) return
-    const refresh = throttle(
-      () =>
-        void queryClient
-          .cancelQueries({ queryKey: briefFlowKey(briefId) })
-          .then(() => queryClient.invalidateQueries({ queryKey: briefFlowKey(briefId) })),
-      REFRESH_MS,
-    )
+    // Let a slow read finish and queue one more after it; cancelling on every event would starve it.
+    let inFlight = false
+    let again = false
+    let stopped = false
+    const run = () => {
+      if (inFlight) {
+        again = true
+        return
+      }
+      inFlight = true
+      // Node detail and log reads are short and may start from the UI, so they refetch as usual.
+      void queryClient.invalidateQueries({
+        queryKey: briefFlowKey(briefId),
+        predicate: (query) => query.queryKey.length > briefFlowKey(briefId).length,
+      })
+      void queryClient
+        .invalidateQueries(
+          { queryKey: briefFlowKey(briefId), exact: true },
+          { cancelRefetch: false },
+        )
+        .finally(() => {
+          inFlight = false
+          if (again && !stopped) {
+            again = false
+            run()
+          }
+        })
+    }
+    const refresh = throttle(run, REFRESH_MS)
+    const cancel = () => {
+      stopped = true
+      refresh.cancel()
+    }
+    // Chat traffic only matters when it is in this run's room (unknown room: refresh to be safe).
+    const inRunRoom = (roomId: string) => {
+      const known = queryClient.getQueryData<BriefFlow>(briefFlowKey(briefId))?.brief.roomId
+      return known === undefined || known === roomId
+    }
     const offEvent = stream.subscribe((event) => {
       if (
         (event.type === 'brief.upserted' && event.data.id === briefId) ||
@@ -68,9 +100,9 @@ export function useBriefFlow(briefId: string | undefined) {
           (event.data.briefId === briefId || event.data.briefId === null)) ||
         event.type === 'task.upserted' ||
         event.type === 'run.updated' ||
-        event.type === 'message.created' ||
-        event.type === 'message.delta' ||
-        event.type === 'message.completed' ||
+        (event.type === 'message.created' && inRunRoom(event.data.roomId)) ||
+        (event.type === 'message.delta' && inRunRoom(event.data.roomId)) ||
+        (event.type === 'message.completed' && inRunRoom(event.data.roomId)) ||
         event.type === 'approval.requested' ||
         event.type === 'approval.updated' ||
         event.type === 'task.activity' ||
@@ -86,7 +118,7 @@ export function useBriefFlow(briefId: string | undefined) {
     return () => {
       offEvent()
       offControl()
-      refresh.cancel()
+      cancel()
     }
   }, [stream, queryClient, briefId])
   return useQuery({
@@ -110,7 +142,8 @@ export function useBriefRunControl(briefId: string) {
           headers: { 'Idempotency-Key': newId() },
         }),
       ),
-    onSuccess: async () => {
+    // Also after a failure: a partial pause/resume has already changed the brief.
+    onSettled: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: briefFlowKey(briefId), exact: true }),
         queryClient.invalidateQueries({ queryKey: ['flow', 'briefs'] }),

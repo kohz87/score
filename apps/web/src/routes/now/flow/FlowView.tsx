@@ -21,17 +21,30 @@ const clock = (iso: string) =>
 
 function RunControl({ brief }: { brief: BriefSummary }) {
   const control = useBriefRunControl(brief.id)
-  if (brief.status !== 'running' && brief.status !== 'paused') return null
+  // A partial pause or resume still changes the brief's status, so the failed action is offered again
+  // from the error itself instead of following the status.
+  const failed = control.isError ? control.variables : undefined
+  if (brief.status !== 'running' && brief.status !== 'paused' && !failed) return null
   const paused = brief.status === 'paused'
+  const action = failed ?? (paused ? 'resume' : 'pause')
   return (
-    <button
-      type="button"
-      className="flow-run-button"
-      disabled={control.isPending}
-      onClick={() => control.mutate(paused ? 'resume' : 'pause')}
-    >
-      {paused ? 'Resume run' : 'Pause run'}
-    </button>
+    <>
+      <button
+        type="button"
+        className="flow-run-button"
+        disabled={control.isPending}
+        onClick={() => control.mutate(action)}
+      >
+        {failed ? `Try ${failed} again` : paused ? 'Resume run' : 'Pause run'}
+      </button>
+      {control.isError && (
+        <p role="alert" className="flow-notice">
+          {control.error instanceof Error
+            ? control.error.message
+            : 'That did not work. Please try again.'}
+        </p>
+      )}
+    </>
   )
 }
 
