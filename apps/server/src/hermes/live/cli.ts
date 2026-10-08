@@ -30,7 +30,13 @@ export type HermesRunner = (
   options: CliOptions,
 ) => Promise<{ exitCode: number; stdout?: string }>
 
-const ReadConfigKeys = ['model', 'skills.disabled', 'delegation.max_concurrent_children']
+const ReadConfigKeys = [
+  'model',
+  'skills.disabled',
+  'delegation.max_concurrent_children',
+  'command_allowlist',
+  'approvals',
+]
 /** Exact argv shapes whose stdout Score may read. Everything else keeps its output private. */
 export function captureReadShape(argv: string[]): boolean {
   // Advanced config reads one top-level section; a credential-shaped or env-backed name is never read.

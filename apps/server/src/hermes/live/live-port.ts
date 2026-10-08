@@ -45,7 +45,9 @@ import { LiveAgentTabs } from './agent-tabs.ts'
 import { MemoryIdSchema } from '../agent-tabs.ts'
 import { createLiveConfigService } from './config.ts'
 import { LiveSettings } from './settings.ts'
-import type { HermesRunner } from './cli.ts'
+import { readApprovalConfig, updateProfileApprovals } from './approvals.ts'
+import type { ApprovalConfig } from '../approvals.ts'
+import { runHermes, type HermesRunner } from './cli.ts'
 import { readRun, RunRowSchema, runLifecycle, type RunMetrics } from './translate.ts'
 
 const StateSchema = z.object({ served_profiles: z.array(ProfileNameSchema) })
@@ -337,6 +339,37 @@ export class LivePort implements HermesPort {
   async setToolEnabled(agentId: string, toolId: string, enabled: boolean) {
     this.requireStarted()
     return this.tabs.setToolEnabled(agentId, toolId, enabled)
+  }
+  private approvalTail: Promise<unknown> = Promise.resolve()
+  private approvalProfile(agentId: string): string {
+    const parsed = ProfileNameSchema.safeParse(agentId)
+    if (!parsed.success || !this.profiles.profileHome(parsed.data))
+      throw new HttpError(404, 'not_found', 'Agent not found')
+    return parsed.data
+  }
+  async readApprovals(agentId: string): Promise<ApprovalConfig> {
+    return readApprovalConfig(
+      this.options.runner ?? runHermes,
+      resolveHermesHome(this.options.hermesHome),
+      this.approvalProfile(agentId),
+    )
+  }
+  // Writers within this process queue up; Hermes itself is the only other writer left to merge with.
+  updateApprovals(
+    agentId: string,
+    edit: (current: ApprovalConfig) => ApprovalConfig,
+  ): Promise<ApprovalConfig> {
+    const profile = this.approvalProfile(agentId)
+    const work = () =>
+      updateProfileApprovals(
+        this.options.runner ?? runHermes,
+        resolveHermesHome(this.options.hermesHome),
+        profile,
+        edit,
+      ).finally(() => this.profiles.invalidate(profile))
+    const result = this.approvalTail.then(work, work)
+    this.approvalTail = result.catch(() => undefined)
+    return result
   }
   async listProviders() {
     return this.settings.listProviders()

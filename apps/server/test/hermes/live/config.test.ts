@@ -185,6 +185,10 @@ test.each([
   'agent.not_a_known_setting',
   'agent.max_turns.deeper..x',
   '_config_version',
+  // Owned by Rules and approvals (2.18): never editable here.
+  'approvals.mode',
+  'approvals.deny',
+  'command_allowlist',
 ])('writing %j is a 400 for preview and apply, and no argv is built', async (key) => {
   const changes = [{ key, value: 'x' }]
   await expect(service().preview(changes)).rejects.toMatchObject({ status: 400 })
@@ -270,4 +274,11 @@ test('the real runner refuses a config read of an excluded name even if asked', 
     }),
   ).rejects.toThrow(/allowlisted reads/)
   expect(execute).not.toHaveBeenCalled()
+})
+
+test('the approval keys Rules and approvals owns are not searchable here', async () => {
+  const keys = (await service().search('approval')).map((item) => item.key)
+  expect(keys).not.toContain('approvals.mode')
+  expect(keys).not.toContain('approvals.deny')
+  expect(await service().search('command_allowlist')).toEqual([])
 })

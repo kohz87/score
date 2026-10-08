@@ -29,6 +29,12 @@
   --agent-jade-text: #00694f;
   --agent-saffron-text: #8a5a00;
   --agent-coral-text: #b01e43;
+  --rules-panel: #1e2029;
+  --rules-text: #d6d8de;
+  --rules-muted: #c9cbd2;
+  --rules-go: #5ee3bf;
+  --rules-ask: #ffc94d;
+  --rules-never: #ff97ae;
   --radius-pill: 999px;
   --radius-card: 28px;
   --radius-20: 20px;

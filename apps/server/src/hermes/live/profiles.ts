@@ -12,6 +12,8 @@ import { readRoutines } from './routines.ts'
 import { readDisabledSkills, readHelpersMax, readTools } from './agent-config.ts'
 import { readMemory } from './memory.ts'
 import { MEMORY_DETAIL_ITEMS } from '../agent-tabs.ts'
+import { permissionsOf } from '../approvals.ts'
+import { readApprovalConfig } from './approvals.ts'
 
 const allowedFiles = z.enum(['SOUL.md', 'AGENTS.md', 'profile.yaml', 'config.yaml'])
 const readableFiles = allowedFiles.extract(['SOUL.md', 'profile.yaml'])
@@ -127,6 +129,7 @@ interface Settings {
   disabledSkills: string[]
   tools: AgentDetail['tools']
   helpersMax: number | null
+  permissions: AgentDetail['permissions']
 }
 export class ProfilesReader {
   private readonly models = new Map<string, { signature: string; value: AgentDetail['model'] }>()
@@ -167,19 +170,25 @@ export class ProfilesReader {
   }
   // Settings kept in config.yaml are read through the CLI and cached by the file's signature.
   private async configSettings(profile: string, home: string | null): Promise<Settings> {
-    const unknown: Settings = { disabledSkills: [], tools: [], helpersMax: null }
+    const unknown: Settings = { disabledSkills: [], tools: [], helpersMax: null, permissions: [] }
     if (!home) return unknown
     const stat = fileStat(home, 'config.yaml')
     if (!stat) return unknown
     const signature = `${stat.mtimeMs}:${stat.size}:${stat.ino}`
     const cached = this.settings.get(profile)
     if (cached?.signature === signature) return cached.value
-    const [disabled, tools, helpersMax] = await Promise.all([
+    const [disabled, tools, helpersMax, approvals] = await Promise.all([
       readDisabledSkills(this.runner, this.hermesHome, profile),
       readTools(this.runner, this.hermesHome, profile),
       readHelpersMax(this.runner, this.hermesHome, profile),
+      readApprovalConfig(this.runner, this.hermesHome, profile).catch(() => null),
     ])
-    const value = { disabledSkills: disabled ?? [], tools, helpersMax }
+    const value = {
+      disabledSkills: disabled ?? [],
+      tools,
+      helpersMax,
+      permissions: permissionsOf(approvals),
+    }
     this.settings.set(profile, { signature, value })
     return value
   }
@@ -250,7 +259,7 @@ export class ProfilesReader {
       helpersMax: settings.helpersMax,
       routines: home ? readRoutines(this.hermesHome, profile) : [],
       channels: [],
-      permissions: [],
+      permissions: settings.permissions,
     })
   }
 }

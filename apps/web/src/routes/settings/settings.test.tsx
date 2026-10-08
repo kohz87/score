@@ -107,7 +107,7 @@ test('shows the section nav, providers with status and who uses them, and connec
   expect(await within(connectionsRegion).findByText('files')).toBeDefined()
   expect(within(connectionsRegion).getByText(/Everyone/)).toBeDefined()
   expect(within(connectionsRegion).getByText('Auth failed')).toBeDefined()
-  expect(screen.getAllByText('Coming soon.')).toHaveLength(2)
+  expect(screen.getAllByText('Coming soon.')).toHaveLength(1)
 })
 
 test('connecting a provider shows the terminal command and never sends a credential', async () => {

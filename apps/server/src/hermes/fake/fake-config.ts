@@ -1,13 +1,14 @@
 import { ConfigService, type ConfigBackend, type ConfigIndexEntry } from '../config-service.ts'
 
-// Neutral in-memory config for fake mode and e2e. The last two entries are credential-shaped on purpose: the
-// service must keep them out of search and writes, exactly as it does for the real index.
+// Neutral in-memory config for fake mode and e2e. `approvals.mode` (owned by Rules and approvals) and the
+// credential-shaped key are here on purpose: the service must keep them out of search and writes, as it does
+// for the real index.
 const INDEX: ConfigIndexEntry[] = [
   { key: 'agent.max_turns', description: 'Most tool-use turns an agent takes before it stops.' },
   { key: 'agent.verbose', description: 'Show extra detail about what the agent is doing.' },
   {
     key: 'approvals.mode',
-    description: 'How Hermes asks before running risky commands: ask, smart or off.',
+    description: 'How Hermes asks before running risky commands: manual, smart or off.',
   },
   { key: 'display.compact', description: 'Use the compact layout for tool output.' },
   { key: 'display.language', description: 'Language for Hermes messages.' },
@@ -23,7 +24,7 @@ class FakeConfigBackend implements ConfigBackend {
   readonly file = 'config.yaml'
   private config: Record<string, unknown> = {
     agent: { max_turns: 60, verbose: false },
-    approvals: { mode: 'ask' },
+    approvals: { mode: 'smart' },
     display: { compact: false, language: 'en' },
     terminal: { backend: 'local', timeout: 180 },
     gateway: { port: 8642 },

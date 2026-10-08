@@ -8,6 +8,7 @@ import type {
 } from '@score/contract'
 import { unifiedDiff } from '../domain/line-diff.ts'
 import { HttpError } from '../errors.ts'
+import { APPROVAL_WRITE_KEYS } from './approvals.ts'
 import { configRestartRequired, isExcludedConfigKey, scrubConfigValue } from './config-keys.ts'
 
 export interface ConfigIndexEntry {
@@ -93,8 +94,12 @@ export class ConfigService {
     private readonly backend: ConfigBackend,
     index: ConfigIndexEntry[],
   ) {
+    // The approval keys belong to Rules and approvals (team baseline, stricter-only, verified writes); editing
+    // them here would bypass all of that.
+    const managed = new Set<string>(APPROVAL_WRITE_KEYS)
     for (const entry of index)
-      if (!isExcludedConfigKey(entry.key)) this.entries.set(entry.key, entry)
+      if (!isExcludedConfigKey(entry.key) && !managed.has(entry.key))
+        this.entries.set(entry.key, entry)
   }
 
   private reader() {

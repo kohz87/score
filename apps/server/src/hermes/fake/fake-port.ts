@@ -55,6 +55,7 @@ import {
   type SkillItem,
 } from '../agent-tabs.ts'
 import { z } from 'zod'
+import { permissionsOf, updateApprovalConfig, type ApprovalConfig } from '../approvals.ts'
 import { HttpError } from '../../errors.ts'
 import { createFakeConfigService } from './fake-config.ts'
 import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
@@ -302,6 +303,7 @@ export class FakePort implements HermesPort {
   private readonly skills = new Map<string, SkillItem[]>()
   private readonly memory = new Map<string, MemoryItem[]>()
   private readonly tools = new Map<string, AgentTool[]>()
+  private readonly approvalConfigs = new Map<string, ApprovalConfig>()
   private sink: ObservationSink | undefined
   private sessionId = ''
   private nextIdentity = 0
@@ -452,11 +454,32 @@ export class FakePort implements HermesPort {
         helpersMax: 3,
         routines: this.routinesOf(agent.id),
         channels: [],
-        permissions: [],
+        permissions: permissionsOf(this.approvalConfigs.get(agent.id) ?? null),
       }),
     )
   }
 
+  async readApprovals(agentId: string): Promise<ApprovalConfig> {
+    this.agentOrThrow(agentId)
+    return structuredClone(
+      this.approvalConfigs.get(agentId) ?? { mode: 'smart', allowlist: [], deny: [] },
+    )
+  }
+  async updateApprovals(
+    agentId: string,
+    edit: (current: ApprovalConfig) => ApprovalConfig,
+  ): Promise<ApprovalConfig> {
+    // Same loop as the live adapter, over an in-memory "config".
+    return updateApprovalConfig(
+      {
+        read: () => this.readApprovals(agentId),
+        write: async (_current, next) => {
+          this.approvalConfigs.set(agentId, structuredClone(next))
+        },
+      },
+      edit,
+    )
+  }
   private agentOrThrow(agentId: string): AgentSummary {
     const agent = this.agents.get(agentId)
     if (!agent) throw new HttpError(404, 'not_found', 'Agent not found')

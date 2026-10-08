@@ -18,7 +18,7 @@ test('settings shows providers and connections and the command to run for a sign
   const connections = page.getByRole('region', { name: 'Connections' })
   await expect(connections.getByText('web-search')).toBeVisible()
   await expect(connections.getByText('Telegram')).toBeVisible()
-  await expect(page.getByText('Coming soon.')).toHaveCount(2)
+  await expect(page.getByText('Coming soon.')).toHaveCount(1)
 
   // Connecting needs a paired browser, so the request is stubbed; the UI contract is what is checked.
   await page.route('**/api/settings/providers/openrouter/connect', (route) =>

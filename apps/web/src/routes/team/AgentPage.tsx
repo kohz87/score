@@ -10,6 +10,7 @@ import { AgentFiles } from './AgentFiles.tsx'
 import { MemoryTab } from './MemoryTab.tsx'
 import { ModelTab } from './ModelTab.tsx'
 import { SkillsTab } from './SkillsTab.tsx'
+import { PermissionsTab } from './PermissionsTab.tsx'
 import { ToolsTab } from './ToolsTab.tsx'
 import type { AgentFileName } from './file-queries.ts'
 
@@ -163,6 +164,8 @@ function AgentProfile({ agentId }: { agentId: string }) {
           <MemoryTab agentId={agent.id} agentName={agent.name} />
         ) : tab === 'Tools' ? (
           <ToolsTab agent={agent} />
+        ) : tab === 'Permissions' ? (
+          <PermissionsTab agent={agent} />
         ) : (
           <section className="team-card">
             <h2>{tab}</h2>

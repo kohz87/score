@@ -116,7 +116,8 @@ export function AdvancedSection() {
         />
       </div>
       <p className="settings-muted">
-        Keys, tokens, passwords and other credentials are never shown or changed here.
+        Keys, tokens, passwords and other credentials are never shown or changed here. Approval
+        rules live in Rules and approvals.
       </p>
       {search.status === 'error' && <p role="alert">Could not search settings.</p>}
       {search.data && (

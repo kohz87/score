@@ -67,3 +67,17 @@ export {
   type MemoryPage,
   type SkillItem,
 } from './agent-tabs.ts'
+export {
+  NEVER_PREFIX,
+  drifted,
+  expectedConfig,
+  goAheadRule,
+  isKnownPatternKey,
+  neverId,
+  neverRule,
+  patternLabel,
+  type AgentOverrides,
+  type ApprovalConfig,
+  type Baseline,
+} from './approvals.ts'
+export { KNOWN_PATTERN_KEYS } from './pattern-keys.ts'
