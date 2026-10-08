@@ -191,7 +191,8 @@ resolves integration conflicts. Migrations from Phase 1 end at `0007`; numbers b
 **2.18 Permissions + team rules** · Lead · *adversarial review*: map Go ahead / Ask me / Never to Hermes approval config; per-agent stricter-only. Done when tests reject loosening.
 **2.19 Settings: providers + connections** · Lead. Done when status renders without ever reading secrets (test asserts no access to `.env`/`auth.json`).
 **2.20 Settings: advanced config** · Codex: config search index + diff preview UI. Done when search finds keys by name and comment; apply requires a matching diff hash.
-**Phase 2 gate** · Gemini + `/codex:review --base main`
+**Phase 2 gate** · Gemini + `/codex:review --base main` — **done 2026-10-08**: lead review (Codex out of credits; owner: "do it yourself"), pass after 6 fixes
+(`docs/reviews/2026-10-08-phase2-gate-lead.md`); Gemini not run (owner's call).
 
 ## Phase 3: Score, Flow, Reports
 
