@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { sessionCookie } from '../auth/cookies.ts'
+import { createHash } from 'node:crypto'
+import { readCookie, SESSION_COOKIE, sessionCookie } from '../auth/cookies.ts'
 import type { PairingService } from '../auth/pairing.ts'
 import { humanGuard } from '../auth/human.ts'
 import { HttpError } from '../errors.ts'
@@ -20,10 +21,15 @@ export function registerSessionRoutes(
 ): void {
   const guarded = { preHandler: humanGuard(pairing) }
   const PasswordBody = z.object({ password: z.unknown() }).loose()
-  async function checkPassword(body: unknown): Promise<void> {
+  // Rate limits count per paired browser; the cookie's hash names it without keeping the secret.
+  const sessionOf = (cookie: string | undefined) =>
+    createHash('sha256')
+      .update(readCookie(cookie, SESSION_COOKIE) ?? '')
+      .digest('hex')
+  async function checkPassword(body: unknown, cookie: string | undefined): Promise<void> {
     if (!security)
       throw new HttpError(501, 'unsupported', 'Pairing management is not available here')
-    await security.verify(PasswordBody.parse(body ?? {}).password)
+    await security.verify(PasswordBody.parse(body ?? {}).password, sessionOf(cookie))
   }
   app.post('/api/session/pair', async (request, reply) => {
     const { token } = PairBodySchema.parse(request.body)
@@ -60,7 +66,7 @@ export function registerSessionRoutes(
     const body = z
       .object({ password: z.unknown(), current: z.unknown().optional() })
       .parse(request.body)
-    await security.set(body.password, body.current)
+    await security.set(body.password, body.current, sessionOf(request.headers.cookie))
     return reply.code(204).send()
   })
 
@@ -68,7 +74,7 @@ export function registerSessionRoutes(
   // keep itself alive or terminate the owner's pairings. The link is the same one-time, 15-minute token the console
   // prints (minting one replaces any earlier unused token).
   app.post('/api/session/pairing-links', guarded, async (request) => {
-    await checkPassword(request.body)
+    await checkPassword(request.body, request.headers.cookie)
     if (!origin) throw new HttpError(501, 'unsupported', 'Pairing links are not available here')
     const token = pairing.createToken()
     return PairingLinkSchema.parse({
@@ -79,20 +85,20 @@ export function registerSessionRoutes(
 
   app.post('/api/session/browsers/:id/renew', guarded, async (request) => {
     const { id } = z.object({ id: z.uuid() }).parse(request.params)
-    await checkPassword(request.body)
+    await checkPassword(request.body, request.headers.cookie)
     return app.pairing.renewBrowser(id)
   })
 
   app.post('/api/session/browsers/:id/revoke', guarded, async (request, reply) => {
     const { id } = z.object({ id: z.uuid() }).parse(request.params)
-    await checkPassword(request.body)
+    await checkPassword(request.body, request.headers.cookie)
     app.pairing.revokeBrowser(id)
     return reply.code(204).send()
   })
 
   // "Terminate all other pairings": for a device found compromised, or when unsure which one it is.
   app.post('/api/session/browsers/revoke-others', guarded, async (request) => {
-    await checkPassword(request.body)
+    await checkPassword(request.body, request.headers.cookie)
     return { revoked: app.pairing.revokeOthers(request.headers.cookie) }
   })
 }

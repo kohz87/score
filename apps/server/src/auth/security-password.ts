@@ -21,7 +21,10 @@ const StoredSchema = z.string().regex(/^scrypt\$15\$8\$1\$[A-Za-z0-9_-]{22}\$[A-
 export const PasswordSchema = z.string().min(8).max(256)
 
 const WINDOW_MS = 15 * 60 * 1000
-const MAX_FAILURES = 5
+// Per session, so one compromised browser can't lock the owner out by guessing wrong; the global cap still bounds a
+// guess spread across several paired browsers.
+const MAX_FAILURES_PER_SESSION = 5
+const MAX_FAILURES = 20
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16)
@@ -37,7 +40,9 @@ export function writePasswordFile(home: string, stored: string): void {
 }
 
 export class SecurityPassword {
-  #failures: number[] = []
+  #failures: { at: number; session: string }[] = []
+  /** The stored hash the failures counted against: a new password (e.g. reset on the host) clears them. */
+  #against: string | undefined
   constructor(
     private readonly home: string | undefined,
     private readonly clock: () => number = Date.now,
@@ -57,14 +62,22 @@ export class SecurityPassword {
     return this.stored() !== undefined
   }
 
-  /** Throws unless `password` matches. Failures are rate-limited across all sessions (5 per 15 minutes). */
-  async verify(password: unknown): Promise<void> {
+  /**
+   * Throws unless `password` matches. Wrong guesses are limited per session (5 per 15 minutes) and overall (20), and
+   * forgotten when the password changes.
+   */
+  async verify(password: unknown, session = ''): Promise<void> {
     const stored = this.stored()
     if (!stored)
       throw new HttpError(409, 'password_not_set', 'Set a security password in Settings first')
+    if (stored !== this.#against) {
+      this.#failures = []
+      this.#against = stored
+    }
     const now = this.clock()
-    this.#failures = this.#failures.filter((at) => now - at < WINDOW_MS)
-    if (this.#failures.length >= MAX_FAILURES)
+    this.#failures = this.#failures.filter((failure) => now - failure.at < WINDOW_MS)
+    const mine = this.#failures.filter((failure) => failure.session === session).length
+    if (mine >= MAX_FAILURES_PER_SESSION || this.#failures.length >= MAX_FAILURES)
       throw new HttpError(429, 'too_many_attempts', 'Too many wrong passwords. Try again later.')
     const candidate = PasswordSchema.safeParse(password)
     const [, , , , salt, key] = stored.split('$')
@@ -73,18 +86,18 @@ export class SecurityPassword {
       ? await scrypt(candidate.data, Buffer.from(salt!, 'base64url'), KEY_LENGTH, PARAMS)
       : Buffer.alloc(KEY_LENGTH)
     if (!candidate.success || !timingSafeEqual(actual, expected)) {
-      this.#failures.push(now)
+      this.#failures.push({ at: now, session })
       throw new HttpError(403, 'wrong_password', 'That is not the security password')
     }
   }
 
   /** First time: no current password needed. After that, changing it needs the current one. */
-  async set(password: unknown, current: unknown): Promise<void> {
+  async set(password: unknown, current: unknown, session = ''): Promise<void> {
     if (!this.home) throw new HttpError(501, 'unsupported', 'No Score home to store the password')
     const next = PasswordSchema.safeParse(password)
     if (!next.success)
       throw new HttpError(400, 'bad_request', 'Use 8 to 256 characters for the security password')
-    if (this.isSet()) await this.verify(current)
+    if (this.isSet()) await this.verify(current, session)
     writePasswordFile(this.home, await hashPassword(next.data))
   }
 }

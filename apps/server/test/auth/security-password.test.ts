@@ -42,3 +42,21 @@ test('the stored file holds only a salted hash and is private to the owner', asy
   const { readFileSync } = await import('node:fs')
   expect(readFileSync(path, 'utf8')).not.toContain('plain text secret')
 })
+
+test("one browser's wrong guesses don't lock out another, and a new password clears the lockout", async () => {
+  const dir = home()
+  const security = new SecurityPassword(dir)
+  await security.set('owner password', undefined)
+  for (let i = 0; i < 5; i++)
+    await expect(security.verify('wrong guess!', 'compromised')).rejects.toMatchObject({
+      status: 403,
+    })
+  await expect(security.verify('owner password', 'compromised')).rejects.toMatchObject({
+    status: 429,
+  })
+  // The owner's own browser is not locked out by the compromised one.
+  await expect(security.verify('owner password', 'owner')).resolves.toBeUndefined()
+  // Resetting the password (e.g. `scripts/score password` on the host) clears the lockout.
+  await new SecurityPassword(dir).set('fresh password', 'owner password', 'owner')
+  await expect(security.verify('fresh password', 'compromised')).resolves.toBeUndefined()
+})

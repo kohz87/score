@@ -736,10 +736,8 @@ test('the security password: set once, change needs the current one, wrong guess
       headers: { ...headers, cookie },
       payload: { password },
     })
-  // The refused change above was the first wrong guess; three more, then the fifth still answers 403…
-  for (let i = 0; i < 3; i++) expect((await others('wrong guess')).statusCode).toBe(403)
-  // …and after five even the right password waits out the 15-minute window.
-  expect((await others('wrong guess')).statusCode).toBe(403)
+  // The change cleared earlier wrong guesses; five more lock this browser's management out for 15 minutes…
+  for (let i = 0; i < 5; i++) expect((await others('wrong guess')).statusCode).toBe(403)
   expect((await others('another password')).statusCode).toBe(429)
   expect(
     (await app.inject({ url: '/api/system', headers: { ...headers, cookie: second } })).statusCode,

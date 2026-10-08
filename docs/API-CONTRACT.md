@@ -269,7 +269,8 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a management id, never a credential.
   - **Pairing management needs the security password** (owner, 2026-10-08), so a compromised paired browser can't invite
     devices, keep itself alive or terminate the owner's pairings. Body `{ password }`; `409 password_not_set`,
-    `403 wrong_password`, `429 too_many_attempts` (5 wrong in 15 minutes, across all sessions).
+    `403 wrong_password`, `429 too_many_attempts` (5 wrong in 15 minutes per paired browser, 20 overall; a new
+    password clears the count).
     - `GET /api/session/security` → `{ passwordSet: boolean }` · `PUT /api/session/security/password`
       `{ password; current? }` → `204` (first time without `current`; afterwards `current` is required; a forgotten
       password is reset on the host with `scripts/score password`). Stored as a salted scrypt hash, 0600.
