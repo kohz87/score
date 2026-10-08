@@ -13,6 +13,7 @@ test('loads defaults without reading process.env', () => {
     mode: 'fake',
     fakeSpeed: 1,
     fakeLoop: true,
+    serveWeb: false,
   })
 })
 
@@ -36,6 +37,7 @@ test('loads explicit config and normalizes the web origin', () => {
     mode: 'live',
     fakeSpeed: 2.5,
     fakeLoop: false,
+    serveWeb: false,
   })
   expect(env.SCORE_WEB_ORIGIN).toBe('https://localhost:5173/')
 })

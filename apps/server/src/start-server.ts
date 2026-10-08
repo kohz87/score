@@ -42,10 +42,11 @@ export async function startServer(
       https = { cert: readFileSync(config.remote.tlsCert), key: readFileSync(config.remote.tlsKey) }
       createSecureContext(https)
     }
+  }
+  if (config.remote || config.serveWeb)
     webAssets = loadWebAssets(
       webDirectory ?? fileURLToPath(new URL('../../web/dist/', import.meta.url)),
     )
-  }
   let db: ScoreDb | undefined
   let app: FastifyInstance | undefined
   let bridgeApp: FastifyInstance | undefined
