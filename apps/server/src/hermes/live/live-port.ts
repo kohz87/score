@@ -351,6 +351,9 @@ export class LivePort implements HermesPort {
   async searchSkillHub(query: string) {
     return this.tabs.searchHub(query)
   }
+  async listAgentChannels(agentId: string) {
+    return this.tabs.listChannels(agentId)
+  }
   async listMemory(agentId: string, query: Parameters<HermesPort['listMemory']>[1]) {
     return this.tabs.listMemory(agentId, query)
   }

@@ -1,5 +1,8 @@
 import {
+  AgentChannelsResponseSchema,
   AgentDetailSchema,
+  AgentHistoryPageSchema,
+  type HistoryOutcome,
   MemoryPageSchema,
   SkillHubResponseSchema,
   SkillsResponseSchema,
@@ -153,5 +156,37 @@ export function useToolAction(agentId: string) {
         }),
       ),
     onSuccess: () => refresh(),
+  })
+}
+
+export function useChannels(agentId: string) {
+  return useQuery({
+    queryKey: ['team', 'channels', agentId] as const,
+    queryFn: async ({ signal }) =>
+      AgentChannelsResponseSchema.parse(
+        await apiFetch(`${agentPath(agentId)}/channels`, { signal }),
+      ).items,
+    retry: false,
+  })
+}
+
+export function useHistory(agentId: string, q: string, outcome: HistoryOutcome | '') {
+  return useInfiniteQuery({
+    queryKey: ['team', 'history', agentId, q, outcome] as const,
+    initialPageParam: '',
+    queryFn: async ({ pageParam, signal }) => {
+      const params = new URLSearchParams()
+      if (q) params.set('q', q)
+      if (outcome) params.set('outcome', outcome)
+      if (pageParam) params.set('cursor', pageParam)
+      const query = params.toString()
+      return AgentHistoryPageSchema.parse(
+        await apiFetch(`${agentPath(agentId)}/history${query ? `?${query}` : ''}`, { signal }),
+      )
+    },
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    // Runs start and finish while the tab is open; the history has no stream event of its own.
+    refetchInterval: 10_000,
+    retry: false,
   })
 }

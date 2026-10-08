@@ -358,7 +358,14 @@ incarnation-aware reuse confirmation contract is agreed.
   profile through the verified write loop, so the agent is never looser than the team. A rule that belongs to the team
   is `400 not_an_override`; an unknown override `404 not_found`; Hermes refusing the write `409 conflict` (the override
   is kept).
-- `GET /api/agents/:agentId/history?cursor=` → `{ items: { sessionId; title; model; messages: number; tokens: number; costUsd: number | null; at: string; ref: Ref | null }[]; nextCursor }`
+- `GET /api/agents/:agentId/channels` → `AgentChannelsResponse` `{ items: { platform; label; status: 'connected' | 'disconnected'; detail: string | null; connectCommand: string }[] }`.
+  Read-only gateway state for this agent's profile (secret-free); `connectCommand` is e.g. `hermes -p builder gateway setup`,
+  shown for the person to run in their own terminal.
+- `GET /api/agents/:agentId/history?q=&outcome=&cursor=` → `AgentHistoryPage` `{ items: { runId; title; origin; outcome:
+  'completed' | 'failed' | 'stopped' | 'waiting' | 'running'; startedAt; durationSec: number | null; model: string | null;
+  costUsd: number | null; task: { id; title } | null; brief: { id; title } | null; replaySeq: number | null }[]; nextCursor }`.
+  Score's own runs for the agent (all origins), newest first, 50 per page; the cursor is an offset. `outcome` filters,
+  `q` matches task/brief title and model. Replay opens `/now/watch/:agentId?from=<replaySeq>`.
 
 ## 9. Reports
 
