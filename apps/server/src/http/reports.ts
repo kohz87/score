@@ -11,11 +11,24 @@ export function registerReportRoutes(
   port: HermesPort,
   db?: ScoreDb,
   clock = Date.now,
-  tz?: string,
+  serverTz?: string,
 ): void {
-  const query = z.object({ range: ReportRangeSchema }).strict()
+  // Days are the viewer's days: the browser sends its IANA time zone (the server's is often UTC).
+  const ZoneSchema = z
+    .string()
+    .max(64)
+    .refine((zone) => {
+      try {
+        new Intl.DateTimeFormat('en-US', { timeZone: zone })
+        return true
+      } catch {
+        return false
+      }
+    })
+  const query = z.object({ range: ReportRangeSchema, tz: ZoneSchema.optional() }).strict()
 
-  async function load(range: z.infer<typeof ReportRangeSchema>) {
+  async function load(range: z.infer<typeof ReportRangeSchema>, viewerTz?: string) {
+    const tz = viewerTz ?? serverTz
     const now = clock()
     const window = reportWindow(range, now, tz)
     const agents = await port.listAgents()
@@ -35,12 +48,15 @@ export function registerReportRoutes(
     return { report, agents, today: window.days.at(-1) ?? new Date(now).toISOString().slice(0, 10) }
   }
 
-  app.get('/api/reports', async (request) => (await load(query.parse(request.query).range)).report)
+  app.get('/api/reports', async (request) => {
+    const { range, tz } = query.parse(request.query)
+    return (await load(range, tz)).report
+  })
 
   // The same aggregation as the page, so the file's columns match the By agent table.
   app.get('/api/reports/export.csv', async (request, reply) => {
-    const { range } = query.parse(request.query)
-    const { report, agents, today } = await load(range)
+    const { range, tz } = query.parse(request.query)
+    const { report, agents, today } = await load(range, tz)
     const names = Object.fromEntries(agents.map((agent) => [agent.id, agent.name]))
     return reply
       .header('content-type', 'text/csv; charset=utf-8')

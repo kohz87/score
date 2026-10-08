@@ -25,6 +25,8 @@ test.beforeEach(async ({ page }) => {
       })
       return
     }
+    // The viewer's time zone (Reports) depends on the machine; fixtures are keyed without it.
+    url.searchParams.delete('tz')
     const key = `${url.pathname}${url.search}`
     const fixture = visualFixtures[key]
     expect(fixture, `Missing visual fixture: ${key}`).toBeDefined()

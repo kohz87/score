@@ -114,3 +114,17 @@ test('the seeded demo history fills every part of the report', async () => {
     await seeded.stop()
   }
 })
+
+test('days follow the viewer time zone the browser sends, and a bogus zone is refused', async () => {
+  // 10:00 UTC on 10 March is already 11 March in Kiritimati (UTC+14) and still 9 March in Pago Pago (UTC-11).
+  const dayIn = async (tz: string) => {
+    const response = await app.inject(`/api/reports?range=today&tz=${encodeURIComponent(tz)}`)
+    expect(response.statusCode).toBe(200)
+    return ReportsSchema.parse(response.json()).byDay.map((day) => day.date)
+  }
+  expect(await dayIn('Pacific/Kiritimati')).toEqual(['2026-03-11'])
+  expect(await dayIn('Pacific/Pago_Pago')).toEqual(['2026-03-09'])
+  expect((await app.inject('/api/reports?range=today&tz=Not%2FAZone')).statusCode).toBe(400)
+  const csv = await app.inject('/api/reports/export.csv?range=today&tz=Pacific%2FKiritimati')
+  expect(csv.headers['content-disposition']).toContain('2026-03-11')
+})

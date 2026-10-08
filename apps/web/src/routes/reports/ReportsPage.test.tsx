@@ -191,15 +191,17 @@ test('range tabs refetch, update the URL and the CSV link', async () => {
   mount()
   await screen.findByText('Summary for 7d.')
   expect(screen.getByRole('button', { name: '7 days' }).getAttribute('aria-pressed')).toBe('true')
+  const zone = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)
+  // Days are the viewer's: the browser's time zone goes with every Reports request.
   expect(screen.getByRole('link', { name: 'Export CSV' }).getAttribute('href')).toBe(
-    '/api/reports/export.csv?range=7d',
+    `/api/reports/export.csv?range=7d&tz=${zone}`,
   )
   fireEvent.click(screen.getByRole('button', { name: '30 days' }))
   expect(await screen.findByText('Summary for 30d.')).toBeDefined()
   expect(router.state.location.search).toBe('?range=30d')
-  expect(calls).toContain('/api/reports?range=30d')
+  expect(calls).toContain(`/api/reports?range=30d&tz=${zone}`)
   expect(screen.getByRole('link', { name: 'Export CSV' }).getAttribute('href')).toBe(
-    '/api/reports/export.csv?range=30d',
+    `/api/reports/export.csv?range=30d&tz=${zone}`,
   )
 })
 

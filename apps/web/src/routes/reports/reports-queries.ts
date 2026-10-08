@@ -12,7 +12,20 @@ export const reportRanges: { id: ReportRange; label: string }[] = [
 
 const THROTTLE_MS = 5_000
 export const reportsKey = (range: ReportRange) => ['reports', range] as const
-export const reportCsvHref = (range: ReportRange) => `/api/reports/export.csv?range=${range}`
+// Days are bucketed in the viewer's time zone, not the server's (often UTC).
+const viewerZone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone
+  } catch {
+    return undefined
+  }
+}
+const zoneParam = () => {
+  const zone = viewerZone()
+  return zone ? `&tz=${encodeURIComponent(zone)}` : ''
+}
+export const reportCsvHref = (range: ReportRange) =>
+  `/api/reports/export.csv?range=${range}${zoneParam()}`
 
 // Reports are an aggregate read, not on the stream: refetch (throttled) when something that feeds them changes.
 export function useReports(range: ReportRange) {
@@ -21,7 +34,7 @@ export function useReports(range: ReportRange) {
   const query = useQuery({
     queryKey: reportsKey(range),
     queryFn: async ({ signal }) =>
-      ReportsSchema.parse(await apiFetch(`reports?range=${range}`, { signal })),
+      ReportsSchema.parse(await apiFetch(`reports?range=${range}${zoneParam()}`, { signal })),
     placeholderData: keepPreviousData, // switching range keeps the page up while the new numbers load
     retry: false,
   })
