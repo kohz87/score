@@ -7,6 +7,8 @@ root="$(dirname "$(dirname "$script")")"
 home="${SCORE_HOME:-$HOME/.score}"
 pid_file="$home/score.pid"
 log_file="$home/score.log"
+# The browser address the running server printed (remote mode serves the browser on another host and port).
+url_file="$home/score.url"
 pair_file="$home/pair-link"
 port="${SCORE_PORT:-8740}"
 host="${SCORE_HOST:-127.0.0.1}"
@@ -57,6 +59,8 @@ cmd_start() {
     if tail -c +"$((offset + 1))" "$log_file" | grep -q 'Pair this browser'; then
       echo "Score started (pid $(running_pid)). Log: $log_file"
       tail -c +"$((offset + 1))" "$log_file" | grep 'Pair this browser' | head -n 1
+      tail -c +"$((offset + 1))" "$log_file" | grep -m1 'Pair this browser' |
+        sed -E 's#^Pair this browser: (https?://[^/]+)/.*#\1#' >"$url_file" || true
       return 0
     fi
     sleep 0.2
@@ -89,7 +93,11 @@ cmd_stop() {
 cmd_status() {
   local pid
   if pid="$(running_pid)"; then
-    echo "Score is running (pid $pid) at http://$host:$port"
+    if [[ -s "$url_file" ]]; then
+      echo "Score is running (pid $pid). Open $(<"$url_file") in your browser."
+    else
+      echo "Score is running (pid $pid) at http://$host:$port"
+    fi
   else
     echo "Score is not running."
     return 1
