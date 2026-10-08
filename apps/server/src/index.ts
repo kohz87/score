@@ -10,8 +10,7 @@ try {
   const config = loadConfig(process.env)
   const server = await startServer(config)
   const pairingOrigin = config.remote || config.serveWeb ? serverOrigin(config) : config.webOrigin
-  const consoleInput =
-    config.remote && process.stdin.isTTY ? createInterface({ input: process.stdin }) : undefined
+  const consoleInput = process.stdin.isTTY ? createInterface({ input: process.stdin }) : undefined
   consoleInput?.on('line', (line) => {
     if (line.trim() === 'pair')
       process.stdout.write(
@@ -39,8 +38,7 @@ try {
       })
     })
   }
-  if (config.remote)
-    process.stdout.write('Type pair in this terminal to mint a new pairing link.\n')
+  if (consoleInput) process.stdout.write('Type pair in this terminal to mint a new pairing link.\n')
   process.stdout.write(`Pair this browser: ${pairingOrigin}/pair#${server.pairingToken}\n`)
 } catch (error) {
   process.stderr.write(`${formatStartupError(error)}\n`)

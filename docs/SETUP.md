@@ -159,8 +159,8 @@ Score creates agents with `hermes profile create` and installs its bridge plugin
 `hermes plugins install`, pinned to a URL and ref you choose. Set both before using **Add agent**:
 
 ```bash
-SCORE_BRIDGE_INSTALL_URL=https://<your git host>/<you>/score.git   # or file:///home/<you>/score
-SCORE_BRIDGE_INSTALL_REF=<commit or tag>
+SCORE_BRIDGE_INSTALL_URL='file:///home/<you>/score#hermes-plugin/score_bridge'   # or https://<host>/<you>/score.git#hermes-plugin/score_bridge
+SCORE_BRIDGE_INSTALL_REF=<full 40-character commit hash>   # e.g. $(git -C ~/score rev-parse HEAD)
 ```
 
 Without them, Add agent stops with "Configure a pinned bridge installation URL first." Agent management works on
