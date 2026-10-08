@@ -154,3 +154,16 @@ describe('layoutFlow properties', () => {
     }
   })
 })
+
+it('keeps adjacent sent-back arrows in the gap and separate from the review arrow', () => {
+  const out = layoutFlow({
+    nodes: [node('build'), node('review')],
+    edges: [edge('build', 'review', 'review'), edge('review', 'build', 'sent_back')],
+  })
+  const back = out.edges.find((item) => item.back)!
+  const forward = out.edges.find((item) => !item.back)!
+  expect(back.points[0]!.x).toBe(out.nodes[1]!.x)
+  expect(back.points.at(-1)!.x).toBe(out.nodes[0]!.x + 200)
+  expect(back.points[0]!.y).toBeGreaterThan(forward.points[0]!.y)
+  expect(Math.max(...back.points.map((point) => point.y))).toBeLessThan(out.nodes[0]!.y + 80)
+})
