@@ -29,7 +29,13 @@ export type HermesRunner = (
   options: CliOptions,
 ) => Promise<{ exitCode: number; stdout?: string }>
 
-const ReadConfigKeys = ['model', 'skills.disabled', 'delegation.max_concurrent_children']
+const ReadConfigKeys = [
+  'model',
+  'skills.disabled',
+  'delegation.max_concurrent_children',
+  'command_allowlist',
+  'approvals',
+]
 /** Exact argv shapes whose stdout Score may read. Everything else keeps its output private. */
 export function captureReadShape(argv: string[]): boolean {
   if (argv.length === 6 && argv[0] === '-p' && ProfileNameSchema.safeParse(argv[1]).success) {

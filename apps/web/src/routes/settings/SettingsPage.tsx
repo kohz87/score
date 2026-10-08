@@ -1,13 +1,14 @@
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery } from '../team/team-queries.ts'
 import { ConnectionsSection } from './ConnectionsSection.tsx'
+import { RulesSection } from './RulesSection.tsx'
 import { ProvidersSection } from './ProvidersSection.tsx'
 import './settings.css'
 
 const sections = [
   { id: 'models', label: 'Models and keys', built: true },
   { id: 'connections', label: 'Connections', built: true },
-  { id: 'rules', label: 'Rules and approvals', built: false },
+  { id: 'rules', label: 'Rules and approvals', built: true },
   { id: 'plugins', label: 'Plugins and look', built: false },
   { id: 'advanced', label: 'Advanced', built: false },
 ] as const
@@ -28,6 +29,7 @@ export function SettingsPage() {
       <div className="settings-content">
         <ProvidersSection agents={agents} />
         <ConnectionsSection agents={agents} />
+        <RulesSection agents={agents} />
         {sections
           .filter((section) => !section.built)
           .map((section) => (

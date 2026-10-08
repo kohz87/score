@@ -71,6 +71,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     )
     .all()
   expect(tables.map((row) => row.name)).toEqual([
+    'agent_rule_overrides',
     'agent_styles',
     'agents_proj',
     'approval_deliveries',
@@ -96,6 +97,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'session_tool_calls',
     'sessions',
     'task_projections',
+    'team_rules',
     'tool_calls',
   ])
   expect(

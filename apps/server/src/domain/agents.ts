@@ -10,6 +10,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import type { Ingest } from '../hub/ingest.ts'
 import { AgentDetailSchema, type AgentDetail } from '@score/contract'
+import { withInheritance } from './team-rules.ts'
 
 const colors = ['#6B4EFF', '#19C39A', '#FFB61E', '#FF6B8A'] as const
 export function defaultAgentStyle(index: number): AgentStyle {
@@ -30,7 +31,8 @@ export function readAgentStyle(sqlite: DatabaseSync, id: string): AgentStyle | n
     .get(id)
   return row ? AgentStyleSchema.parse(StyleRowSchema.parse(row)) : null
 }
-export function storeAgent(sqlite: DatabaseSync, agent: AgentDetail): void {
+export function storeAgent(sqlite: DatabaseSync, raw: AgentDetail): void {
+  const agent = withInheritance(sqlite, raw)
   sqlite
     .prepare(
       'INSERT INTO agents_proj (id, detail) VALUES (?, ?) ON CONFLICT (id) DO UPDATE SET detail = excluded.detail',
@@ -52,7 +54,7 @@ export async function reconcileAgents(
           style: readAgentStyle(sqlite, detail.id) ?? detail.style,
         })
         const previous = readAgent(sqlite, agent.id)
-        if (JSON.stringify(previous) === JSON.stringify(agent)) return []
+        if (JSON.stringify(previous) === JSON.stringify(withInheritance(sqlite, agent))) return []
         storeAgent(sqlite, agent)
         const summary = AgentSummarySchema.parse(agent)
         return JSON.stringify(previous && AgentSummarySchema.parse(previous)) ===

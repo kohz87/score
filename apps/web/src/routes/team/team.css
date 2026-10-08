@@ -712,3 +712,38 @@ button.team-toggle:focus-visible,
   border-color: var(--ink);
   color: #ffffff;
 }
+
+/* Permissions tab */
+.team-card h3.team-subheading {
+  margin: 8px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.team-permission-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+.team-permission-form label {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.team-permission-form input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+.team-permission-form button:disabled,
+.team-rows button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

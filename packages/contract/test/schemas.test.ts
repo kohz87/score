@@ -2,6 +2,14 @@ import { describe, expect, test } from 'vitest'
 import * as contract from '../src/index.ts'
 import * as f from './fixtures.ts'
 
+const rule = { id: 'SQL DROP', label: 'SQL DROP', pattern: 'SQL DROP', readOnly: false }
+const rules = {
+  mode: 'smart',
+  goAhead: [rule],
+  askMe: [],
+  never: [],
+  drift: [{ agentId: 'builder', differs: false }],
+}
 const provider = {
   id: 'openrouter',
   label: 'OpenRouter',
@@ -153,6 +161,18 @@ const cases = [
     { name: 'docs', url: 'https://mcp.example.com/sse', command: ['x'] },
   ],
   ['PlatformParamSchema', 'telegram', 'Bad Name'],
+  ['ApprovalModeSchema', 'manual', 'yolo'],
+  ['RuleSchema', rule, { ...rule, id: '' }],
+  ['RulesResponseSchema', rules, { ...rules, drift: [{ agentId: 'builder' }] }],
+  ['RulesWriteResponseSchema', { ...rules, failed: ['builder'] }, rules],
+  ['RulesPreviewResponseSchema', { preview: '+mode: manual' }, { preview: 1 }],
+  ['NeverGlobSchema', 'git push*', '**'],
+  [
+    'PutRulesRequestSchema',
+    { mode: 'manual', goAhead: ['SQL DROP'], never: ['git push*'] },
+    { mode: 'manual', goAhead: [], never: ['*'] },
+  ],
+  ['PatchPermissionRequestSchema', { level: 'asks' }, { level: 'sometimes' }],
 ] as const satisfies ReadonlyArray<readonly [keyof typeof contract, unknown, unknown]>
 
 test('every exported schema has valid and invalid fixtures', () => {

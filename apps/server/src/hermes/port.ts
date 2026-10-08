@@ -22,6 +22,7 @@ import type {
 import type { ScoreDb } from '../db/index.ts'
 import type { AgentFile, AgentFileName } from './agent-files.ts'
 import type { AgentTool, HubSkill, MemoryItem, MemoryPage, SkillItem } from './agent-tabs.ts'
+import type { ApprovalConfig } from './approvals.ts'
 import type { IngestResult, Observation } from '../hub/ingest.ts'
 
 export interface ObservationSink {
@@ -168,6 +169,16 @@ export interface HermesPort {
   addMemory(agentId: string, text: string): Promise<MemoryItem>
   deleteMemory(agentId: string, id: string): Promise<void>
   setToolEnabled(agentId: string, toolId: string, enabled: boolean): Promise<AgentTool>
+  /** A profile's Hermes approval settings (command_allowlist, approvals.deny, approvals.mode). */
+  readApprovals(agentId: string): Promise<ApprovalConfig>
+  /**
+   * Read → `edit` → write → re-read verify with a bounded merge retry (409 `conflict` when a concurrent writer
+   * keeps winning). Only the three approval keys are ever written. Resolves with the verified settings.
+   */
+  updateApprovals(
+    agentId: string,
+    edit: (current: ApprovalConfig) => ApprovalConfig,
+  ): Promise<ApprovalConfig>
   /** Status only (never secrets); `usedBy` is added by the route from the agents' models. */
   listProviders(): Promise<ProviderBase[]>
   /** Interactive sign-ins are never run by Score: the result carries the command to run in a terminal. */
