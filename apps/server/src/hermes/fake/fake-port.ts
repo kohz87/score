@@ -1618,7 +1618,7 @@ export class FakePort implements HermesPort {
                 )
                 .map((approval) => approval.id)
       if (req.action === 'unblock') {
-        if (task.hermesStatus !== 'blocked')
+        if (task.hermesStatus !== 'blocked' && task.hermesStatus !== 'scheduled')
           throw new HttpError(409, 'conflict', 'Task is not blocked', {
             hermesStatus: task.hermesStatus,
           })
@@ -1635,8 +1635,13 @@ export class FakePort implements HermesPort {
         })
         this.taskOverrides.set(task.id, 'ready')
       } else if (req.action !== 'comment') {
+        if (req.action === 'schedule' && !['ready', 'todo'].includes(task.hermesStatus))
+          throw new HttpError(409, 'conflict', 'Task is not waiting to start', {
+            hermesStatus: task.hermesStatus,
+          })
         const status = {
           start: 'ready',
+          schedule: 'scheduled',
           block: 'blocked',
           request_review: 'review',
           request_changes: 'ready',
@@ -1646,7 +1651,7 @@ export class FakePort implements HermesPort {
         if (task.hermesStatus === 'archived')
           throw new HttpError(409, 'conflict', 'Task is archived')
         const column =
-          status === 'ready'
+          status === 'ready' || status === 'scheduled'
             ? 'planned'
             : status === 'blocked'
               ? 'needs_you'

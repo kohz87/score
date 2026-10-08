@@ -111,7 +111,7 @@ test('pause holds the agent queue and blocks only its not-started tasks; resume 
   expect(paused.statusCode).toBe(200)
   expect(AgentSummarySchema.parse(paused.json())).toMatchObject({ id: 'builder', status: 'paused' })
   expect(actions.mock.calls.map(([req]) => [req.taskId, req.action, req.text])).toEqual([
-    [mine.id, 'block', 'Paused from Score'],
+    [mine.id, 'schedule', 'Paused from Score'],
   ])
   expect((await port.getTask(other.id)).hermesStatus).not.toBe('blocked')
   expect(agentEvents().at(-1)).toMatchObject({ data: { id: 'builder', status: 'paused' } })
@@ -143,13 +143,79 @@ test('pause holds the agent queue and blocks only its not-started tasks; resume 
   expect(actions).not.toHaveBeenCalled()
 })
 
-test('a failed block is forgotten, so resume never touches that task', async () => {
+test('a refused park is reported and stays pending; a later pause retries it', async () => {
   const task = await port.createTask({ title: 'Stuck', assignee: 'builder', roomId }, 'a')
   const actions = vi.spyOn(port, 'taskAction').mockRejectedValueOnce(new Error('hermes down'))
-  expect((await post('/api/agents/builder/pause', {}, 'p')).statusCode).toBe(200)
-  expect(rows('SELECT task_id FROM agent_paused_tasks')).toEqual([])
+  const first = await post('/api/agents/builder/pause', {}, 'p')
+  expect(first.statusCode).toBe(502)
+  expect(first.json().error.details).toEqual({ taskIds: [task.id] })
+  expect(rows('SELECT state FROM agent_paused_tasks')).toEqual([{ state: 'pending' }])
+  // The agent still shows as paused, and pausing again finishes the job (as does recovery after a crash).
+  expect((await post('/api/agents/builder/pause', {}, 'p2')).statusCode).toBe(200)
+  expect(rows('SELECT state FROM agent_paused_tasks')).toEqual([{ state: 'held' }])
+  expect((await port.getTask(task.id)).hermesStatus).toBe('scheduled')
   actions.mockClear()
   await post('/api/agents/builder/resume', {}, 'r')
+  expect(actions.mock.calls.map(([req]) => req.action)).toEqual(['unblock'])
+  expect((await port.getTask(task.id)).hermesStatus).toBe('ready')
+})
+
+test('pause never parks a task that has already started', async () => {
+  const task = await port.createTask({ title: 'Going', assignee: 'builder', roomId }, 'a')
+  // Hermes claimed it between Score's snapshot and the park.
+  vi.spyOn(port, 'getTask').mockResolvedValue({
+    ...(await port.getTask(task.id)),
+    hermesStatus: 'running',
+  })
+  const actions = vi.spyOn(port, 'taskAction')
+  expect((await post('/api/agents/builder/pause', {}, 'p')).statusCode).toBe(200)
   expect(actions).not.toHaveBeenCalled()
-  expect((await port.getTask(task.id)).hermesStatus).not.toBe('blocked')
+  expect(rows('SELECT 1 FROM agent_paused_tasks')).toEqual([])
+})
+
+test('pausing twice in a row keeps the task parked and restorable (no triage)', async () => {
+  const task = await port.createTask({ title: 'Again', assignee: 'builder', roomId }, 'a')
+  for (const round of ['1', '2', '3']) {
+    expect((await post('/api/agents/builder/pause', {}, `p${round}`)).statusCode).toBe(200)
+    expect((await port.getTask(task.id)).hermesStatus).toBe('scheduled')
+    expect((await post('/api/agents/builder/resume', {}, `r${round}`)).statusCode).toBe(200)
+    expect((await port.getTask(task.id)).hermesStatus).toBe('ready')
+  }
+})
+
+test('a task held by two pauses stays parked until the last one resumes', async () => {
+  const task = await port.createTask({ title: 'Shared', assignee: 'builder', roomId }, 'a')
+  const brief = await send({ text: '/assign @builder Shared work' })
+  const briefId = brief.json().message.id as string
+  // Link the existing task to the brief so both pauses apply to it.
+  db.sqlite
+    .prepare(
+      "INSERT OR IGNORE INTO brief_tasks (brief_id, task_id, origin, linked_at) VALUES (?, ?, 'assign', 'x')",
+    )
+    .run(briefId, task.id)
+  await post('/api/agents/builder/pause', {}, 'p')
+  await post(`/api/briefs/${briefId}/pause`, {}, 'bp')
+  expect(rows('SELECT task_id FROM brief_paused_tasks WHERE task_id = ?', task.id)).toHaveLength(1)
+  await post(`/api/briefs/${briefId}/resume`, {}, 'br')
+  expect((await port.getTask(task.id)).hermesStatus).toBe('scheduled')
+  await post('/api/agents/builder/resume', {}, 'r')
+  expect((await port.getTask(task.id)).hermesStatus).toBe('ready')
+})
+
+test('resume while the park is still in flight waits for it and leaves nothing parked', async () => {
+  const task = await port.createTask({ title: 'Racing', assignee: 'builder', roomId }, 'a')
+  const real = port.taskAction.bind(port)
+  let release: () => void = () => undefined
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  vi.spyOn(port, 'taskAction').mockImplementation(async (req) => {
+    if (req.action === 'schedule') await gate
+    return real(req)
+  })
+  const pausing = post('/api/agents/builder/pause', {}, 'p')
+  await vi.waitFor(() => expect(rows('SELECT 1 FROM agent_paused_tasks')).toHaveLength(1))
+  const resuming = post('/api/agents/builder/resume', {}, 'r')
+  release()
+  await Promise.all([pausing, resuming])
+  expect((await port.getTask(task.id)).hermesStatus).toBe('ready')
+  expect(rows('SELECT 1 FROM agent_paused_tasks')).toEqual([])
 })

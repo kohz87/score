@@ -20,6 +20,11 @@ export const INTERNAL_OBSERVATION_SOURCES = [
   'kanban-denial-sweep',
   'task-actions',
   'rooms',
+  'task-holds',
+  'agent-pause',
+  'briefs',
+  'team',
+  'agents',
   'fake',
 ] as const
 

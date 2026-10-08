@@ -52,7 +52,21 @@ export function registerTeamPauseRoutes(
         return []
       },
     })
-    for (const id of targets) await control.pause(id)
+    const failed: string[] = []
+    for (const id of targets) {
+      try {
+        await control.pause(id)
+      } catch {
+        failed.push(id)
+      }
+    }
+    if (failed.length)
+      throw new HttpError(
+        502,
+        'hermes_unavailable',
+        'Paused, but some briefs could not hold all their tasks. Try Pause again.',
+        { briefIds: failed },
+      )
     return response(true)
   })
 

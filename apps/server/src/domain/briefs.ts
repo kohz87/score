@@ -31,6 +31,7 @@ export const taskStatus = ({ hermesStatus }: { hermesStatus: string }) => hermes
 export const TERMINAL_TASK_STATUSES = ['done', 'archived']
 export const ACTIVE_RUN_STATUSES = ['queued', 'running', 'waiting_for_approval']
 const FAILED_RUN_STATUSES = ['failed', 'interrupted']
+const PAGE = 500
 const WEEK_MS = 7 * 24 * 3600 * 1000
 
 const TaskIdRowSchema = z.object({ task_id: z.string() })
@@ -382,17 +383,24 @@ export function listBriefs(
   status: 'active' | 'recent',
   nowMs: number,
 ): BriefSummary[] {
-  const rows = z
-    .array(BriefRowSchema)
-    .parse(sqlite.prepare('SELECT * FROM briefs ORDER BY started_at DESC, id DESC LIMIT 500').all())
   const cutoff = new Date(nowMs - WEEK_MS).toISOString()
   const result: BriefSummary[] = []
-  for (const row of rows) {
-    const summary = briefSummary(sqlite, row)
-    const active = summary.status === 'running' || summary.status === 'paused'
-    if (status === 'active' ? active : !active && briefLastEnd(sqlite, row) >= cutoff)
-      result.push(summary)
-    if (status === 'recent' && result.length >= 50) break
+  // Page through the table: a limit applied before the status filter would hide older unfinished briefs.
+  for (let offset = 0; ; offset += PAGE) {
+    const rows = z
+      .array(BriefRowSchema)
+      .parse(
+        sqlite
+          .prepare('SELECT * FROM briefs ORDER BY started_at DESC, id DESC LIMIT ? OFFSET ?')
+          .all(PAGE, offset),
+      )
+    for (const row of rows) {
+      const summary = briefSummary(sqlite, row)
+      const active = summary.status === 'running' || summary.status === 'paused'
+      if (status === 'active' ? active : !active && briefLastEnd(sqlite, row) >= cutoff)
+        result.push(summary)
+      if (status === 'recent' && result.length >= 50) return result
+    }
+    if (rows.length < PAGE) return result
   }
-  return result
 }

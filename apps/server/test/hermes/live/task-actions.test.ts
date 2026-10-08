@@ -109,3 +109,36 @@ test.each(['comment', 'unblock'] as const)(
     ).rejects.toMatchObject({ status: 409, code: 'conflict' })
   },
 )
+
+test('schedule parks a ready task with exact argv and unblock accepts a scheduled one', async () => {
+  const { db, deps, runner } = setup('ready')
+  runner.mockImplementation(async () => {
+    db.prepare("UPDATE tasks SET status = 'scheduled'").run()
+    return { exitCode: 0 }
+  })
+  await expect(
+    taskAction({ taskId: 't_test', action: 'schedule', text: 'Paused from Score' }, deps),
+  ).resolves.toEqual({ hermesStatus: 'scheduled' })
+  expect(runner).toHaveBeenCalledWith(
+    ['kanban', 'schedule', '--', 't_test', 'Paused from Score'],
+    expect.anything(),
+  )
+  runner.mockImplementation(async () => {
+    db.prepare("UPDATE tasks SET status = 'ready'").run()
+    return { exitCode: 0 }
+  })
+  await expect(taskAction({ taskId: 't_test', action: 'unblock' }, deps)).resolves.toEqual({
+    hermesStatus: 'ready',
+  })
+})
+
+test.each(['running', 'blocked', 'triage'])(
+  'schedule refuses a %s task without spawning',
+  async (status) => {
+    const { deps, runner } = setup(status)
+    await expect(taskAction({ taskId: 't_test', action: 'schedule' }, deps)).rejects.toMatchObject({
+      status: 409,
+    })
+    expect(runner).not.toHaveBeenCalled()
+  },
+)

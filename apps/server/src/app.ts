@@ -14,6 +14,7 @@ import { registerSettingsRoutes } from './http/settings.ts'
 import { registerRoomRoutes } from './http/rooms.ts'
 import { registerBriefRoutes } from './http/briefs.ts'
 import { createBriefControl } from './http/brief-control.ts'
+import { createTaskHolds } from './http/task-holds.ts'
 import { registerTeamPauseRoutes } from './http/team-pause.ts'
 import { registerMediaRoutes } from './http/media.ts'
 import { MediaStore } from './media/store.ts'
@@ -179,12 +180,37 @@ export function buildApp({
   registerRulesRoutes(app, port, ingest, db, clock)
   if (db && ingest) {
     const dispatch = registerRoomRoutes(app, port, db, ingest, clock, mediaStore)
-    const control = createBriefControl({ port, db, ingest, dispatch })
+    const holds = createTaskHolds({ port, db, ingest })
+    const control = createBriefControl({ port, db, ingest, holds, dispatch })
+    // A crash between "pause recorded" and "task parked" leaves pending holds; finish them once Hermes is reachable.
+    app.addHook('onReady', () => {
+      void holds
+        .recover((owner) =>
+          db.read(
+            (sqlite) =>
+              sqlite
+                .prepare(
+                  owner.kind === 'brief'
+                    ? 'SELECT 1 FROM briefs WHERE id = ? AND paused_at IS NOT NULL'
+                    : 'SELECT 1 FROM agent_pauses WHERE agent_id = ?',
+                )
+                .get(owner.id) !== undefined,
+          ),
+        )
+        .catch(() => undefined)
+    })
     registerBriefRoutes(app, { port, db, ingest, control, ...(clock ? { clock } : {}) })
     registerTeamPauseRoutes(app, { db, ingest, control, dispatch, ...(clock ? { clock } : {}) })
     registerWatchRoutes(app, { port, db, ingest })
     registerAgentHistoryRoutes(app, { port, db })
-    registerAgentPauseRoutes(app, { db, ingest, port, dispatch, ...(clock ? { clock } : {}) })
+    registerAgentPauseRoutes(app, {
+      db,
+      ingest,
+      port,
+      holds,
+      dispatch,
+      ...(clock ? { clock } : {}),
+    })
     registerNowRoutes(app, {
       port,
       db,

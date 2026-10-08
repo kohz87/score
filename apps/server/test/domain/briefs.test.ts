@@ -8,6 +8,7 @@ import {
   briefTitle,
   createBrief,
   deriveBriefStatus,
+  listBriefs,
   readBriefRow,
 } from '../../src/domain/briefs.ts'
 import { insertRoom } from '../../src/domain/rooms.ts'
@@ -183,4 +184,31 @@ test('titles are the first non-empty line, redacted and capped', () => {
     'sk-abcdefghij',
   )
   expect(briefTitle('   ')).toBe('Untitled brief')
+})
+
+test('an old unfinished brief is still listed as active behind 500 newer finished ones', () => {
+  db.tx((sqlite) => {
+    const add = sqlite.prepare(
+      `INSERT INTO messages (id, room_id, author_kind, "to", parts, refs, streaming, created_at, updated_at)
+       VALUES (?, 'room', 'you', '[]', '[]', '[]', 0, ?, ?)`,
+    )
+    const brief = sqlite.prepare(
+      "INSERT INTO briefs (id, room_id, title, started_at, started_by) VALUES (?, 'room', 'b', ?, 'you')",
+    )
+    for (let index = 0; index < 501; index += 1) {
+      const id = `new${index}`
+      const started = new Date(Date.parse(at) + 1000 * (index + 1)).toISOString()
+      add.run(id, started, started)
+      brief.run(id, started)
+    }
+    // The oldest one ('m1' from setup) is waiting on a task that has not finished.
+    brief.run('m1', at)
+    sqlite
+      .prepare(
+        "INSERT INTO brief_tasks (brief_id, task_id, origin, linked_at) VALUES ('m1', 't1', 'assign', ?)",
+      )
+      .run(at)
+  })
+  const active = listBriefs(db.sqlite, 'active', Date.parse(at) + 3_600_000)
+  expect(active.map((entry) => entry.id)).toEqual(['m1'])
 })

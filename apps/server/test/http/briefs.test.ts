@@ -371,8 +371,8 @@ test('pause holds the queue and blocks only not-started tasks; resume unblocks o
   const blocked = actions.mock.calls.map(([req]) => [req.taskId, req.action, req.text])
   expect(blocked).toEqual(
     expect.arrayContaining([
-      [first, 'block', 'Paused from Score'],
-      [second.id, 'block', 'Paused from Score'],
+      [first, 'schedule', 'Paused from Score'],
+      [second.id, 'schedule', 'Paused from Score'],
     ]),
   )
   expect(blocked.map(([task]) => task)).not.toContain(fourth.id)
@@ -405,11 +405,17 @@ test('pause holds the queue and blocks only not-started tasks; resume unblocks o
   expect((await post(`/api/briefs/${id}/pause`, {}, undefined, false)).statusCode).toBe(401)
 })
 
-test('a failed block is forgotten, so resume never touches that task', async () => {
+test('a refused park is reported and kept pending; resume then drops it without touching the task', async () => {
   const response = await send({ text: '/assign @builder Only' })
   const id = MessageSchema.parse(response.json().message).id
-  vi.spyOn(port, 'taskAction').mockRejectedValue(new Error('hermes down'))
-  expect((await post(`/api/briefs/${id}/pause`)).statusCode).toBe(200)
+  const actions = vi.spyOn(port, 'taskAction').mockRejectedValue(new Error('hermes down'))
+  expect((await post(`/api/briefs/${id}/pause`)).statusCode).toBe(502)
+  expect(rows('SELECT state FROM brief_paused_tasks WHERE brief_id = ?', id)).toEqual([
+    { state: 'pending' },
+  ])
+  actions.mockClear()
+  expect((await post(`/api/briefs/${id}/resume`)).statusCode).toBe(200)
+  expect(actions).not.toHaveBeenCalled()
   expect(rows('SELECT 1 FROM brief_paused_tasks WHERE brief_id = ?', id)).toEqual([])
 })
 
