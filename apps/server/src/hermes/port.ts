@@ -21,6 +21,7 @@ import type {
   ConnectResult,
   ConnectionsResponse,
   LocalProviderRequest,
+  ModelOption,
   ProviderItem,
   ToolServerRequest,
 } from '@score/contract'
@@ -196,6 +197,8 @@ export interface HermesPort extends ProfileManagementPort {
   ): Promise<ApprovalConfig>
   /** Status only (never secrets); `usedBy` is added by the route from the agents' models. */
   listProviders(): Promise<ProviderBase[]>
+  /** Models of connected providers matching `q` (at most 200, available first); [] when Hermes can't say. */
+  listModels(q?: string): Promise<ModelOption[]>
   /** Interactive sign-ins are never run by Score: the result carries the command to run in a terminal. */
   connectProvider(id: string): Promise<ConnectResult>
   addLocalProvider(req: LocalProviderRequest): Promise<ProviderBase>

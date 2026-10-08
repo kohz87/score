@@ -72,6 +72,9 @@ const LocalProvidersSchema = z.record(
   z.object({ name: z.string().optional(), base_url: z.string().optional() }).passthrough(),
 )
 
+export function providerLabel(id: string, name?: string): string {
+  return CATALOG[id] ?? name ?? title(id)
+}
 function title(id: string): string {
   return id.replace(/[-_.]+/g, ' ').replace(/^./, (c) => c.toUpperCase())
 }

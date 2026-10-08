@@ -10,6 +10,7 @@ import {
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
+import { ModelPicker } from '../../components/ModelPicker.tsx'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { ProfileOperation, useProfileOperation } from './ProfileOperation.tsx'
@@ -82,7 +83,11 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
     },
   })
   const change = (patch: Partial<AgentCreateInput>) => {
-    setInput((current) => ({ ...current, ...patch }))
+    setInput((current) => {
+      const next = { ...current, ...patch }
+      if (next.provider === undefined) delete next.provider
+      return next
+    })
     setPreview(null)
     setConfirmed(false)
     review.reset()
@@ -155,7 +160,11 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
               value={input.cloneFrom ?? ''}
               onChange={(event) => {
                 const source = agents.find((agent) => agent.id === event.target.value)
-                change({ cloneFrom: source?.id, model: source?.model?.id ?? input.model })
+                change({
+                  cloneFrom: source?.id,
+                  model: source?.model?.id ?? input.model,
+                  provider: source?.model?.id ? undefined : input.provider,
+                })
               }}
             >
               <option value="">Blank</option>
@@ -168,21 +177,14 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
                 ))}
             </select>
           </label>
-          <label>
-            Model
-            <input
-              required
-              maxLength={256}
-              value={input.model}
-              onChange={(event) => change({ model: event.target.value })}
-              list="profile-models"
-            />
-          </label>
-          <datalist id="profile-models">
-            {[...new Set(agents.map((agent) => agent.model?.id).filter(Boolean))].map((model) => (
-              <option key={model} value={model!} />
-            ))}
-          </datalist>
+          <ModelPicker
+            label="Model"
+            required
+            value={{ model: input.model, provider: input.provider ?? null }}
+            onChange={(choice) => {
+              change({ model: choice.model, provider: choice.provider ?? undefined })
+            }}
+          />
           <div className="team-profile-appearance">
             <AgentGlyph
               agent={{ id: input.id || 'new', name: input.id || 'New agent', style: input.style }}

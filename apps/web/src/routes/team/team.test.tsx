@@ -546,7 +546,7 @@ const memoryEntries = [
   },
 ]
 
-test('the Model tab changes the model with provider and shows the outcome', async () => {
+test('the Model tab changes the model (a typed name has no provider) and shows the outcome', async () => {
   renderTeam('/team/builder')
   const calls = tabsApi((call) =>
     call.method === 'PUT'
@@ -555,7 +555,7 @@ test('the Model tab changes the model with provider and shows the outcome', asyn
           model: {
             id: call.body.model,
             label: call.body.model,
-            via: call.body.provider,
+            via: call.body.provider ?? 'a sign-in',
             fallback: null,
           },
         })
@@ -566,14 +566,11 @@ test('the Model tab changes the model with provider and shows the outcome', asyn
   expect(within(panel).getByText('Model Two')).toBeDefined()
   const form = within(panel).getByRole('form', { name: 'Change model' })
   fireEvent.change(within(form).getByLabelText('Model'), { target: { value: 'next/model' } })
-  fireEvent.change(within(form).getByLabelText('Provider (optional)'), {
-    target: { value: 'acme' },
-  })
   fireEvent.click(within(form).getByRole('button', { name: 'Change model' }))
   expect(await screen.findByText('Model changed to next/model.')).toBeDefined()
   const put = calls.find((call) => call.method === 'PUT')!
   expect(put.path).toBe('/api/agents/builder/model')
-  expect(put.body).toEqual({ model: 'next/model', provider: 'acme' })
+  expect(put.body).toEqual({ model: 'next/model' })
   expect(new Headers(put.init?.headers).get('X-Score-Client')).toBe('web')
   expect(new Headers(put.init?.headers).get('Idempotency-Key')).toBeTruthy()
 })

@@ -33,6 +33,7 @@ import {
   type FingerprintInputs,
   type TestedFingerprint,
 } from './fingerprint.ts'
+import { LiveModels } from './models.ts'
 import { GatewayClient, HermesHttpError } from './gateway.ts'
 import { RunIntents } from './intents.ts'
 import { ProfileNameSchema, resolveHermesHome } from './paths.ts'
@@ -103,6 +104,9 @@ export class LivePort implements HermesPort {
   private readonly routines: LiveRoutines
   private readonly tabs: LiveAgentTabs
   private readonly settings: LiveSettings
+  private readonly models = new LiveModels(
+    async () => (await this.gateway?.modelOptions())?.providers ?? null,
+  )
   private readonly config: ReturnType<typeof createLiveConfigService>
   private readonly profileFiles = new ProfileFiles()
   private readonly profileManagement: LiveProfileManagement
@@ -401,6 +405,9 @@ export class LivePort implements HermesPort {
   }
   async listProviders() {
     return this.settings.listProviders()
+  }
+  async listModels(q?: string) {
+    return this.models.list(q)
   }
   async connectProvider(id: string) {
     return this.settings.connectProvider(id)
