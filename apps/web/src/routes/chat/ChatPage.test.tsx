@@ -137,11 +137,13 @@ test('index invites room selection and handles an empty rooms list', async () =>
   await screen.findByText('No rooms yet.')
   expect(screen.getByText('Choose a conversation to see its messages.')).toBeDefined()
 })
-test('shows an empty thread and disabled composer', async () => {
+test('shows an empty thread and an empty composer with Send disabled', async () => {
   items = []
   setup()
   await screen.findByText('No messages yet.')
-  expect(screen.getByRole('textbox').hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('combobox', { name: 'Message general' }).hasAttribute('disabled')).toBe(
+    false,
+  )
   expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(true)
 })
 test('populated room uses API agents, badges, landmarks and chronological messages', async () => {

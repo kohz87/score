@@ -226,7 +226,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 
   | Command | Syntax | Effect | `CommandResult` |
   |---|---|---|---|
-  | `/assign` | `/assign @agent <title> [-- body]` | creates a Kanban task | `{ kind: 'assign', taskId }` |
+  | `/assign` | `/assign @agent <title> [-- body]` | creates a Kanban task | `{ kind: 'assign', taskId, taskKey }` |
   | `/routine` | `/routine @agent <schedule> <prompt>` | creates a cron job | `{ kind: 'routine', routineId }` |
   | `/remember` | `/remember [@agent…] <fact>` | writes agent memory | `{ kind: 'remember', agentIds }` |
   | `/skill` | `/skill @agent <name>` (use) · `/skill install <name>` | loads or installs a skill | `{ kind: 'skill', name, installed: boolean }` |
@@ -278,12 +278,17 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   ```
 - `GET /api/agents/:agentId/files/:file` (`file` ∈ `SOUL.md|AGENTS.md`) → `{ content: string; etag: string }`
 - `POST /api/agents/:agentId/files/:file/preview` `{ content }` → `{ diff: string }`
-- **H** `PUT /api/agents/:agentId/files/:file` `{ content; etag }` → `{ etag }` (409 on etag mismatch)
+- **H** `PUT /api/agents/:agentId/files/:file` `{ content; etag }` → `{ etag }` (409 `conflict` on etag mismatch, with
+  `details: { etag /* current */; diff /* current → submitted */ }`)
 - `PUT /api/agents/:agentId/model` `{ model: string; provider?: string }` → `AgentDetail`
 - `GET /api/agents/:agentId/skills` · `POST …/skills` `{ name }` (install) · `PATCH …/skills/:name` `{ enabled }` · `GET /api/skills/hub?q=`
 - `GET /api/agents/:agentId/memory?q=&cursor=` · `POST …/memory` `{ text }` · `DELETE …/memory/:id`
 - `PATCH /api/agents/:agentId/tools/:toolId` `{ enabled }` → `AgentDetail['tools'][number]`
-- `GET /api/agents/:agentId/routines` · `POST …/routines` `{ title; schedule; prompt }` · `PATCH /api/routines/:id` `{ enabled?; schedule?; prompt? }` · `DELETE /api/routines/:id` · `POST /api/routines/:id/run`
+- `GET /api/agents/:agentId/routines` → `{ items: RoutineSummary[] }` · `POST …/routines` `{ title; schedule; prompt }` →
+  `RoutineSummary` · `PATCH /api/routines/:id` `{ enabled?; schedule?; prompt? }` → `RoutineSummary` ·
+  `DELETE /api/routines/:id` → `{ id }` · `POST /api/routines/:id/run` → `{ id; queued: true }` (runs on the scheduler's next
+  tick). Routine ids are `<profile>:<jobId>`. Hermes rejecting a schedule or prompt → `409 conflict` (CLI output stays
+  private).
 - **H** `PATCH /api/agents/:agentId/permissions/:permId` `{ level }` (only stricter than team rules; 400 otherwise)
 - `GET /api/agents/:agentId/history?cursor=` → `{ items: { sessionId; title; model; messages: number; tokens: number; costUsd: number | null; at: string; ref: Ref | null }[]; nextCursor }`
 

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('fake Chat opens rooms and directs with keyboard access and a passive composer', async ({
+test('fake Chat opens rooms and directs with keyboard access and an enabled composer', async ({
   page,
 }) => {
   await page.goto('/chat')
@@ -22,7 +22,7 @@ test('fake Chat opens rooms and directs with keyboard access and a passive compo
   await history.focus()
   await expect(history).toBeFocused()
   await page.keyboard.press('End')
-  await expect(page.getByRole('textbox')).toBeDisabled()
+  await expect(page.getByRole('combobox', { name: /^Message/ })).toBeEnabled()
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled()
   await expect(conversations.getByRole('link', { name: /lead/i }).last()).toBeVisible()
   const direct = conversations.getByRole('link').filter({ hasText: /^lead/ }).first()
