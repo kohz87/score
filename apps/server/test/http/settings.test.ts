@@ -1,11 +1,12 @@
 import fs from 'node:fs'
-import { afterEach, beforeEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import {
   ConfigApplyResponseSchema,
   ConfigPreviewResponseSchema,
   ConfigSearchResponseSchema,
   ConnectResultSchema,
   ConnectionsResponseSchema,
+  ModelsResponseSchema,
   HermesCheckSchema,
   ProvidersResponseSchema,
   ProviderItemSchema,
@@ -193,6 +194,30 @@ test('credential-shaped, env-backed and unknown keys are 400 on preview and appl
     ],
   ])
     expect((await post('/api/settings/config/preview', { changes: bad })).statusCode).toBe(400)
+})
+
+test('GET /api/models filters by every term, lists available first and validates the query', async () => {
+  const all = ModelsResponseSchema.parse((await app.inject('/api/models')).json()).items
+  expect(all.length).toBeGreaterThan(4)
+  const firstUnavailable = all.findIndex((item) => !item.available)
+  expect(all.slice(firstUnavailable).every((item) => !item.available)).toBe(true)
+  const gpt = ModelsResponseSchema.parse((await app.inject('/api/models?q=GPT')).json()).items
+  expect(new Set(gpt.map((item) => item.provider))).toEqual(
+    new Set(['openai-codex', 'nous', 'local']),
+  )
+  expect(gpt.every((item) => /gpt/i.test(item.model))).toBe(true)
+  expect(gpt.find((item) => item.model === 'openai/gpt-6.1-sol')).toMatchObject({
+    available: false,
+    reason: 'Not on your plan',
+  })
+  const narrow = ModelsResponseSchema.parse((await app.inject('/api/models?q=gpt%20nous')).json())
+  expect(narrow.items.map((item) => item.model)).toEqual(['openai/gpt-6.1-sol'])
+  expect((await app.inject(`/api/models?q=${'x'.repeat(101)}`)).statusCode).toBe(400)
+})
+
+test('GET /api/models answers an empty list when Hermes cannot say', async () => {
+  vi.spyOn(port, 'listModels').mockResolvedValue([])
+  expect((await app.inject('/api/models')).json()).toEqual({ items: [] })
 })
 
 const patch = (url: string, payload: object) =>

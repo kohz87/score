@@ -32,6 +32,7 @@ import type {
   AgentChannelsResponse,
   HermesCheck,
   LocalProviderRequest,
+  ModelOption,
   ToolServerRequest,
   RoutineSummary,
   RunSummary,
@@ -59,6 +60,7 @@ import {
 import type { HubSkill, MemoryItem, SkillItem } from '@score/contract'
 import { z } from 'zod'
 import { permissionsOf, updateApprovalConfig, type ApprovalConfig } from '../approvals.ts'
+import { filterModels } from '../model-options.ts'
 import { HttpError } from '../../errors.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import type { ProfileInventory, ProfileStepContext } from '../profile-management.ts'
@@ -671,7 +673,10 @@ export class FakePort implements HermesPort {
       current = `fake:${context.operationId}`
       this.profileIdentities.set(name, current)
     } else if (step === 'model') {
-      await this.setAgentModel(name, { model: input!.model })
+      await this.setAgentModel(name, {
+        model: input!.model,
+        ...(input!.provider ? { provider: input!.provider } : {}),
+      })
     } else if (step === 'permissions') {
       await this.updateApprovals(name, () => ({
         mode: context.baseline.mode,
@@ -1007,6 +1012,47 @@ export class FakePort implements HermesPort {
       detail: 'Your ChatGPT plan',
     },
   ]
+  private readonly fakeModels: ModelOption[] = [
+    ...['gpt-6.1-sol', 'gpt-6-luna'].map((model) => ({
+      provider: 'openai-codex',
+      providerLabel: 'ChatGPT (Codex)',
+      model,
+      available: true,
+      reason: null,
+      free: false,
+      price: { input: '$2.00', output: '$10.00' },
+    })),
+    {
+      provider: 'nous',
+      providerLabel: 'Nous Portal',
+      model: 'openai/gpt-6.1-sol',
+      available: false,
+      reason: 'Not on your plan',
+      free: false,
+      price: { input: '$2.50', output: '$12.00' },
+    },
+    {
+      provider: 'nous',
+      providerLabel: 'Nous Portal',
+      model: 'upstage/solar-mini4:free',
+      available: true,
+      reason: null,
+      free: true,
+      price: null,
+    },
+    {
+      provider: 'local',
+      providerLabel: 'Local server',
+      model: 'local-gpt-mini',
+      available: true,
+      reason: null,
+      free: true,
+      price: null,
+    },
+  ]
+  async listModels(q?: string): Promise<ModelOption[]> {
+    return structuredClone(filterModels(this.fakeModels, q))
+  }
   async listProviders(): Promise<ProviderBase[]> {
     return structuredClone(this.fakeProviders)
   }

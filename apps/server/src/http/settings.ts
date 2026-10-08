@@ -6,6 +6,8 @@ import {
   ConfigSearchQuerySchema,
   HermesAcceptRequestSchema,
   LocalProviderRequestSchema,
+  ModelsQuerySchema,
+  ModelsResponseSchema,
   PatchPluginRequestSchema,
   PlatformParamSchema,
   PluginIdSchema,
@@ -50,6 +52,10 @@ export function registerSettingsRoutes(
   app.get('/api/settings/providers', async () => ({
     items: await withUsage(port.listProviders()),
   }))
+  app.get('/api/models', async (request) => {
+    const { q } = ModelsQuerySchema.parse(request.query)
+    return ModelsResponseSchema.parse({ items: await port.listModels(q) })
+  })
   app.post('/api/settings/providers/local', mutation, async (request) => {
     const req = LocalProviderRequestSchema.parse(request.body)
     return (await withUsage([await port.addLocalProvider(req)]))[0]

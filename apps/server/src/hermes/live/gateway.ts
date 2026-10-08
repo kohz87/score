@@ -141,7 +141,29 @@ export interface GatewayOptions {
 
 const ModelOptionsSchema = z.object({
   providers: z
-    .array(z.object({ slug: z.string().min(1).max(64), name: z.string().min(1).max(120) }).loose())
+    .array(
+      z
+        .object({
+          slug: z.string().min(1).max(64),
+          name: z.string().min(1).max(120),
+          authenticated: z.boolean().optional(),
+          models: z.array(z.string().min(1).max(256)).max(2000).optional(),
+          unavailable_models: z.array(z.string().max(256)).max(2000).optional(),
+          pricing: z
+            .record(
+              z.string().max(256),
+              z
+                .object({
+                  input: z.unknown().optional(),
+                  output: z.unknown().optional(),
+                  free: z.unknown().optional(),
+                })
+                .loose(),
+            )
+            .optional(),
+        })
+        .loose(),
+    )
     .max(500),
 })
 
