@@ -289,7 +289,8 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   `DELETE /api/routines/:id` → `{ id }` · `POST /api/routines/:id/run` → `{ id; queued: true }` (runs on the scheduler's next
   tick). Routine ids are `<profile>:<jobId>`. Hermes rejecting a schedule or prompt → `409 conflict` (CLI output stays
   private).
-- **H** `PATCH /api/agents/:agentId/permissions/:permId` `{ level }` (only stricter than team rules; 400 otherwise)
+- **H** `PATCH /api/agents/:agentId/permissions/:permId` `{ level }` → the permission row. Stricter only: take back a
+  Go-ahead (`asks`) or add a Never (`permId = never:<glob>`, `level: never`); anything looser is `400 not_stricter`.
 - `GET /api/agents/:agentId/history?cursor=` → `{ items: { sessionId; title; model; messages: number; tokens: number; costUsd: number | null; at: string; ref: Ref | null }[]; nextCursor }`
 
 ## 9. Reports
@@ -314,12 +315,26 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 - `GET /api/settings/connections` → `{ toolServers: { id; label; status: 'ok'|'needs_signin'|'error'; usedBy: AgentId[] | 'everyone' }[]
   messaging: { platform; label; status: 'connected'|'disconnected'; detail: string | null }[] }`
 - `POST /api/settings/tool-servers` `{ name; command?: string[]; url?: string }` · `POST /api/settings/messaging/:platform/connect`
-- `GET /api/settings/rules` → `{ goAhead: Rule[]; askMe: Rule[]; never: Rule[] }` with `type Rule = { id; label; pattern: string | null }`
-- **H** `PUT /api/settings/rules` `{ goAhead; askMe; never }` → same (writes Hermes approval config via adapter; returns `{ preview: diff }` when `?dryRun=1`)
+- `GET /api/settings/rules` → `{ mode: 'manual' | 'smart' | 'off'; goAhead: Rule[]; askMe: Rule[]; never: Rule[];
+  drift: { agentId; differs: boolean }[] }` with `type Rule = { id; label; pattern: string | null; readOnly: boolean }`.
+  Hermes mapping (docs/reviews/2026-10-08-2.18-design-lead.md): Go ahead = pattern keys in `command_allowlist`, Ask me
+  = known dangerous categories not allowlisted, Never = globs in `approvals.deny`, `mode` = `approvals.mode`. Allowlist
+  keys Score doesn't know are `readOnly`. A Never rule's id is `never:<glob>`.
+- **H** `PUT /api/settings/rules` `{ mode; goAhead: string[] (pattern keys); never: string[] (globs) }` → the GET shape
+  plus `failed: AgentId[]` (profiles whose write didn't verify); `?dryRun=1` → `{ preview: diff }`. The team baseline is
+  written to every profile, keeping each agent's stricter overrides. Only `command_allowlist`, `approvals.deny` and
+  `approvals.mode` are ever written (read → write → re-read verify, ≤ 3 merges; `409 conflict` after that).
+- **H** `POST /api/settings/rules/apply/:agentId` → the GET shape: re-applies the team baseline to a drifted profile.
+  These three keys are not editable through the advanced config endpoints.
 - `GET /api/settings/plugins` → `{ items: { id; label; enabled: boolean }[] }` · `PATCH /api/settings/plugins/:id` `{ enabled }`
 - `GET /api/settings/config?q=` → `{ items: { key: string; value: unknown; file: string; description: string | null }[] }`
-- `POST /api/settings/config/preview` `{ changes: { key; value }[] }` → `{ diff: string; file: string }`
-- **H** `POST /api/settings/config/apply` `{ changes; expectedDiffHash: string }` → `{ ok: true; restartRequired: boolean }`
+  (name and comment search, ≤ 50). Secret-bearing and env-backed keys (credential-shaped names, env/header maps,
+  provider and MCP server containers) are never listed or writable; only keys known to the tested Hermes version are.
+- `POST /api/settings/config/preview` `{ changes: { key; value }[] }` → `{ diff: string; file: string; hash: string }`
+  (`hash` = sha256 over the diff, the current values and the new values). `400` for unknown or protected keys.
+- **H** `POST /api/settings/config/apply` `{ changes; expectedDiffHash: string }` → `{ ok: true; restartRequired: boolean }`;
+  `409 conflict` when the recomputed hash differs (config changed since the preview; preview again), `502` when Hermes
+  refuses or doesn't keep a value.
 - `GET /api/settings/ui` · `PATCH /api/settings/ui` `{ theme?: 'light' | 'dark' }`
 
 ## 11. Internal: bridge plugin ↔ server (not for the front end)

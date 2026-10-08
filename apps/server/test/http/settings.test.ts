@@ -1,6 +1,9 @@
 import fs from 'node:fs'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import {
+  ConfigApplyResponseSchema,
+  ConfigPreviewResponseSchema,
+  ConfigSearchResponseSchema,
   ConnectResultSchema,
   ConnectionsResponseSchema,
   ProvidersResponseSchema,
@@ -102,4 +105,89 @@ test('connections list, tool server and messaging connect', async () => {
   const messaging = await post('/api/settings/messaging/telegram/connect')
   expect(ConnectResultSchema.parse(messaging.json()).command).toBe('hermes gateway setup')
   expect((await post('/api/settings/messaging/BAD/connect')).statusCode).toBe(400)
+})
+
+const PLANTED = 'fake-secret-do-not-show'
+test('config search finds by name and comment and never returns credential-shaped keys', async () => {
+  const byName = ConfigSearchResponseSchema.parse(
+    (await app.inject('/api/settings/config?q=max_turns')).json(),
+  )
+  expect(byName.items.map((item) => item.key)).toEqual(['agent.max_turns'])
+  expect(byName.items[0]).toMatchObject({ value: 60, file: 'config.yaml' })
+  const byComment = ConfigSearchResponseSchema.parse(
+    (await app.inject('/api/settings/config?q=long-term%20memory')).json(),
+  )
+  expect(byComment.items.map((item) => item.key)).toEqual(['memory.enabled'])
+  for (const q of ['api_key', 'vision', 'key', '']) {
+    const response = await app.inject(`/api/settings/config?q=${q}`)
+    expect(response.statusCode).toBe(200)
+    expect(response.body).not.toContain(PLANTED)
+    expect(response.body).not.toContain('api_key')
+  }
+  expect((await app.inject('/api/settings/config?q=a&extra=1')).statusCode).toBe(400)
+  expect((await app.inject(`/api/settings/config?q=${'a'.repeat(201)}`)).statusCode).toBe(400)
+})
+test('config apply needs a human session and the preview hash; stale hashes are 409', async () => {
+  const changes = [{ key: 'display.compact', value: true }]
+  const preview = ConfigPreviewResponseSchema.parse(
+    (await post('/api/settings/config/preview', { changes })).json(),
+  )
+  expect(preview.diff).toContain('+display.compact: true')
+  const body = { changes, expectedDiffHash: preview.hash }
+  expect(
+    (await app.inject({ method: 'POST', url: '/api/settings/config/apply', payload: body }))
+      .statusCode,
+  ).toBeGreaterThanOrEqual(401)
+  const wrong = await post('/api/settings/config/apply', {
+    ...body,
+    expectedDiffHash: 'f'.repeat(64),
+  })
+  expect(wrong.statusCode).toBe(409)
+  expect(wrong.json()).toMatchObject({ error: { code: 'conflict' } })
+  expect((await post('/api/settings/config/apply', { changes })).statusCode).toBe(400)
+  const applied = await post('/api/settings/config/apply', body)
+  expect(ConfigApplyResponseSchema.parse(applied.json())).toEqual({
+    ok: true,
+    restartRequired: false,
+  })
+  const after = ConfigSearchResponseSchema.parse(
+    (await app.inject('/api/settings/config?q=display.compact')).json(),
+  )
+  expect(after.items[0]!.value).toBe(true)
+  // The applied change moved the baseline: the old hash no longer matches.
+  expect((await post('/api/settings/config/apply', body)).statusCode).toBe(409)
+  const restart = [{ key: 'gateway.port', value: 9001 }]
+  const second = ConfigPreviewResponseSchema.parse(
+    (await post('/api/settings/config/preview', { changes: restart })).json(),
+  )
+  expect(
+    (
+      await post('/api/settings/config/apply', { changes: restart, expectedDiffHash: second.hash })
+    ).json(),
+  ).toEqual({ ok: true, restartRequired: true })
+})
+test('credential-shaped, env-backed and unknown keys are 400 on preview and apply', async () => {
+  for (const key of [
+    'auxiliary.vision.api_key',
+    'OPENROUTER_API_KEY',
+    'providers.x.base_url',
+    'nope.nothing',
+  ]) {
+    const changes = [{ key, value: 'x' }]
+    expect((await post('/api/settings/config/preview', { changes })).statusCode).toBe(400)
+    expect(
+      (await post('/api/settings/config/apply', { changes, expectedDiffHash: 'a'.repeat(64) }))
+        .statusCode,
+    ).toBe(400)
+  }
+  const search = await app.inject('/api/settings/config?q=vision')
+  expect(search.body).not.toContain(PLANTED)
+  for (const bad of [
+    [],
+    [
+      { key: 'display.compact', value: true },
+      { key: 'display.compact', value: false },
+    ],
+  ])
+    expect((await post('/api/settings/config/preview', { changes: bad })).statusCode).toBe(400)
 })

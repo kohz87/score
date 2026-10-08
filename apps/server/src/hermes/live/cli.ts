@@ -1,5 +1,6 @@
 import { execFile, type ExecFileException, type ExecFileOptions } from 'node:child_process'
 import { z } from 'zod'
+import { isExcludedConfigKey } from '../config-keys.ts'
 import { ProfileNameSchema, resolveHermesHome } from './paths.ts'
 
 export interface CliOptions {
@@ -38,6 +39,15 @@ const ReadConfigKeys = [
 ]
 /** Exact argv shapes whose stdout Score may read. Everything else keeps its output private. */
 export function captureReadShape(argv: string[]): boolean {
+  // Advanced config reads one top-level section; a credential-shaped or env-backed name is never read.
+  if (
+    argv.length === 4 &&
+    argv[0] === 'config' &&
+    argv[1] === 'get' &&
+    argv[2] === '--json' &&
+    /^[a-z][a-z0-9_-]{0,63}$/.test(argv[3]!)
+  )
+    return !isExcludedConfigKey(argv[3]!)
   if (argv.length === 6 && argv[0] === '-p' && ProfileNameSchema.safeParse(argv[1]).success) {
     const rest = argv.slice(2, 5).join(' ')
     if (rest === 'config get --json' && ReadConfigKeys.includes(argv[5]!)) return true

@@ -43,6 +43,7 @@ import { createTask, patchTask } from './task-writes.ts'
 import { LiveRoutines } from './routines.ts'
 import { LiveAgentTabs } from './agent-tabs.ts'
 import { MemoryIdSchema } from '../agent-tabs.ts'
+import { createLiveConfigService } from './config.ts'
 import { LiveSettings } from './settings.ts'
 import { readApprovalConfig, updateProfileApprovals } from './approvals.ts'
 import type { ApprovalConfig } from '../approvals.ts'
@@ -97,6 +98,7 @@ export class LivePort implements HermesPort {
   private readonly routines: LiveRoutines
   private readonly tabs: LiveAgentTabs
   private readonly settings: LiveSettings
+  private readonly config: ReturnType<typeof createLiveConfigService>
   private readonly profileFiles = new ProfileFiles()
   constructor(private readonly options: LivePortOptions) {
     this.profiles = new ProfilesReader(resolveHermesHome(options.hermesHome), options.runner)
@@ -108,6 +110,7 @@ export class LivePort implements HermesPort {
       options.runner,
     )
     this.settings = new LiveSettings(options.hermesHome, options.runner)
+    this.config = createLiveConfigService(options.hermesHome, options.runner)
   }
 
   async start(sink: ObservationSink): Promise<void> {
@@ -385,6 +388,15 @@ export class LivePort implements HermesPort {
   }
   async connectMessaging(platform: string) {
     return this.settings.connectMessaging(platform)
+  }
+  async searchConfig(query: string) {
+    return this.config.search(query)
+  }
+  async previewConfig(changes: Parameters<HermesPort['previewConfig']>[0]) {
+    return this.config.preview(changes)
+  }
+  async applyConfig(req: Parameters<HermesPort['applyConfig']>[0]) {
+    return this.config.apply(req)
   }
   private agentHome(agentId: string): string {
     const parsed = ProfileNameSchema.safeParse(agentId)

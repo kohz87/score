@@ -52,8 +52,8 @@ Pre-assign migration numbers; merge one at a time.
 `codex-task.sh` exits 75 with `CODEX QUOTA EXHAUSTED` (or Codex stops otherwise). **Don't pause**: continue the
 affected and remaining tasks with **Sonnet 5.5** subagents (Agent tool, `model: sonnet`; reasoning effort can't be
 set there, so it runs at its default). Same briefs, worktrees, review, tests and live checks as Codex work; at most
-four in parallel. Adversarial reviews and phase gates are not done on Sonnet: they wait for Codex (`max`) or the lead
-does them. **Check hourly** whether Codex is available again (a tiny `codex exec` call, quota check on its output;
+four in parallel. Adversarial reviews and phase gates are not done on Sonnet: if Codex is unavailable the lead does them
+(owner, 2026-10-08), otherwise Codex at `max`. **Check hourly** whether Codex is available again (a tiny `codex exec` call, quota check on its output;
 schedule a ~60-minute wake-up). When it is, new tasks go back to Codex; a task already started on Sonnet finishes on
 Sonnet. Record the switch and each hourly result in `docs/TASKLOG.md`. (This replaces the 2026-10-07 pause rule.)
 

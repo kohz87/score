@@ -6,12 +6,14 @@ test('a run that asks for approval shows a card in the room and approving it res
 }) => {
   await pair(page)
   await page.goto('/chat')
+  // A direct of its own, so the other Chat specs' room traffic can't interleave with this one.
   await page
     .getByRole('navigation', { name: 'Conversations' })
-    .getByRole('link', { name: /#activity-feed/ })
+    .getByRole('link')
+    .filter({ hasText: /^designer/ })
+    .first()
     .click({ timeout: 15_000 })
   const history = page.getByRole('region', { name: 'Message history' })
-  await expect(history.getByRole('article').first()).toBeVisible({ timeout: 15_000 })
   const composer = page.getByRole('combobox', { name: /^Message/ })
   await expect(composer).toBeEnabled()
 
