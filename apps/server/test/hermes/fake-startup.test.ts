@@ -41,18 +41,33 @@ test('fake startup streams the scenario and exposes the same adapter status in s
       `/api/stream?since=0&epoch=${hello.data.epoch}`,
       replayAbort.signal,
     )
-    const total = createScenario(0).length + 3
+    // The script's own brief step, plus derived brief.upserted events whenever its status changes.
+    const briefStatuses = () =>
+      replay.frames.flatMap((frame) =>
+        frame.type === 'brief.upserted'
+          ? [(frame.data as { data: { status: string } }).data.status]
+          : [],
+      )
+    await vi.waitFor(() => expect(briefStatuses().at(-1)).toBe('done'), { timeout: 5000 })
+    const derived = briefStatuses().length - 1
+    const total = createScenario(0).length + 3 + derived
     await vi.waitFor(() => expect(replay.seqs).toHaveLength(total), { timeout: 5000 })
     expect(replay.seqs).toEqual(Array.from({ length: total }, (_, index) => index + 1))
     expect(
       replay.frames
-        .filter((frame) => frame.id !== undefined && frame.type !== 'room.upserted')
+        .filter(
+          (frame) =>
+            frame.id !== undefined &&
+            frame.type !== 'room.upserted' &&
+            frame.type !== 'brief.upserted',
+        )
         .map((frame) => frame.type),
     ).toEqual(
       createScenario(0)
         .map((step) => step.kind)
-        .filter((kind) => kind !== 'room.upserted'),
+        .filter((kind) => kind !== 'room.upserted' && kind !== 'brief.upserted'),
     )
+    expect(briefStatuses()[0]).toBe('running')
     expect(stream.frames.some((frame) => frame.type === 'task.upserted')).toBe(true)
     expect(replay.failure).toBeUndefined()
     expect(stream.failure).toBeUndefined()

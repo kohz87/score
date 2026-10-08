@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { BriefSummarySchema } from './briefs.ts'
 import {
   AgentIdSchema,
   AgentSummarySchema,
@@ -96,6 +97,7 @@ export const StreamEventSchema = z.discriminatedUnion('type', [
   StreamEnvelopeSchema.extend({ type: z.literal('task.activity'), data: TaskActivityDataSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('lane.upserted'), data: LaneUpsertedSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('handoff.created'), data: HandoffCreatedSchema }),
+  StreamEnvelopeSchema.extend({ type: z.literal('brief.upserted'), data: BriefSummarySchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('run.updated'), data: RunSummarySchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('gap.recorded'), data: GapRecordedSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('log.line'), data: LogLineSchema }),

@@ -47,10 +47,15 @@ export class RoutingDispatcher {
             .prepare(
               `
         SELECT q.* FROM message_runs q WHERE q.state = 'pending' AND NOT EXISTS (
+          SELECT 1 FROM briefs paused WHERE paused.id = q.chain_id AND paused.paused_at IS NOT NULL
+        ) AND NOT EXISTS (
           SELECT 1 FROM message_runs active WHERE active.room_id = q.room_id AND active.agent_id = q.agent_id AND active.state = 'active'
         ) AND NOT EXISTS (
           SELECT 1 FROM message_runs earlier WHERE earlier.room_id = q.room_id AND earlier.agent_id = q.agent_id
             AND earlier.state = 'pending' AND (earlier.created_at, earlier.rowid) < (q.created_at, q.rowid)
+            AND NOT EXISTS (
+              SELECT 1 FROM briefs held WHERE held.id = earlier.chain_id AND held.paused_at IS NOT NULL
+            )
         ) ORDER BY q.created_at, q.rowid`,
             )
             .all(),

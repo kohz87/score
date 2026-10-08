@@ -6,6 +6,7 @@ import { redact, redactBounded } from '../redact.ts'
 import { parseMessage } from './parse.ts'
 import { decideHandoffs, messageTurnId } from './routing.ts'
 import { messageFromRow, storeMessage, updateMessage } from './rooms.ts'
+import { parsePlanSteps, planPart } from './plan.ts'
 
 export const MessageRunSchema = z.object({
   message_id: z.string(),
@@ -24,6 +25,7 @@ export const MessageRunSchema = z.object({
   state: z.enum(['pending', 'active', 'completed', 'failed']),
   created_at: z.iso.datetime(),
   pending: z.string(),
+  plan_first: z.int().min(0).max(1),
 })
 export type MessageRun = z.infer<typeof MessageRunSchema>
 
@@ -39,6 +41,7 @@ export function reserveMessageRun(
     agents: string[]
     model?: string
     fromAgentId?: string
+    planFirst?: boolean
   },
   now: string,
 ): void {
@@ -46,8 +49,8 @@ export function reserveMessageRun(
   sqlite
     .prepare(
       `INSERT INTO message_runs
-    (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, from_agent_id, input, model, agents, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+    (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, from_agent_id, input, model, agents, created_at, plan_first)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
     )
     .run(
       `reply:${turnId}`,
@@ -62,6 +65,7 @@ export function reserveMessageRun(
       req.model ?? null,
       JSON.stringify(req.agents),
       now,
+      req.planFirst ? 1 : 0,
     )
 }
 
@@ -96,7 +100,9 @@ export function attachRunMessage(
     drafts.push({
       type: 'handoff.created',
       data: {
-        briefId: null,
+        briefId: sqlite.prepare('SELECT id FROM briefs WHERE id = ?').get(mapping.chain_id)
+          ? mapping.chain_id
+          : null,
         handoff: {
           id: turnId,
           from: { agentId: mapping.from_agent_id, blockId: mapping.parent_message_id },
@@ -268,7 +274,16 @@ export function completeRunMessage(
     .parse(sqlite.prepare('SELECT tool FROM tool_calls WHERE run_id = ? ORDER BY seq').all(runId))
   const summary = toolsSummary(tools.map(({ tool }) => tool))
   if (summary) message.parts.push({ kind: 'tools', summary, runId })
-  if (handoffs) {
+  // A plan-first turn only proposes: the checklist becomes a plan part, and nothing is handed off until the
+  // person presses Start plan.
+  if (mapping.plan_first) {
+    const text = message.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+    const plan = planPart(mapping.chain_id, parsePlanSteps(text, mapping.agents), now)
+    if (plan) message.parts.push(plan)
+  } else if (handoffs) {
     const text = message.parts
       .filter((part) => part.kind === 'text')
       .map((part) => redact(part.text))

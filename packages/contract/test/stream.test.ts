@@ -24,6 +24,7 @@ const eventData = {
   'task.activity': f.taskActivity,
   'lane.upserted': f.laneUpserted,
   'handoff.created': f.handoffCreated,
+  'brief.upserted': f.brief,
   'run.updated': f.run,
   'gap.recorded': f.gap,
   'log.line': f.log,
