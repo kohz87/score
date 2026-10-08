@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import { AgentIdSchema, AgentSummarySchema, type Message, type Room } from '@score/contract'
+import {
+  AgentIdSchema,
+  AgentSummarySchema,
+  type CommandResult,
+  type Message,
+  type Room,
+} from '@score/contract'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { humanGuard } from '../auth/human.ts'
@@ -250,8 +256,7 @@ export function registerRoomRoutes(
       throw new HttpError(400, 'bad_request', 'Unknown agent')
     const room = db.read((sqlite) => readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at))
     const route = routeMessage(body.text, to, room, known)
-    let command: { kind: 'assign'; taskId: string } | { kind: 'model'; model: string } | null =
-      modelCommand(route.model)
+    let command: CommandResult | null = modelCommand(route.model)
     const id = randomUUID()
     if (route.parsed.command?.kind === 'assign') {
       const assigned = route.parsed.command
@@ -264,7 +269,7 @@ export function registerRoomRoutes(
         },
         `assign:${id}`,
       )
-      command = { kind: 'assign', taskId: task.id }
+      command = { kind: 'assign', taskId: task.id, taskKey: task.key }
     }
     let message: Message | undefined
     await ingest.submit({

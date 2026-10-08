@@ -232,7 +232,11 @@ test('501 and network errors explain themselves; a retry reuses the idempotency 
 test('/assign result links to the created task', async () => {
   fetchMock.mockImplementation(async (input, init) =>
     init?.method === 'POST'
-      ? json({ message: stored, routedTo: [], command: { kind: 'assign', taskId: 'T-1' } })
+      ? json({
+          message: stored,
+          routedTo: [],
+          command: { kind: 'assign', taskId: 't_1', taskKey: 'T-1' },
+        })
       : json({ items: commands }),
   )
   mount()
@@ -240,7 +244,7 @@ test('/assign result links to the created task', async () => {
   press('Enter')
   const status = await screen.findByRole('status')
   expect(status.textContent).toBe('Created task T-1')
-  expect(within(status).getByRole('link', { name: 'T-1' }).getAttribute('href')).toBe('/tasks/T-1')
+  expect(within(status).getByRole('link', { name: 'T-1' }).getAttribute('href')).toBe('/tasks/t_1')
 })
 
 test('drafts persist per room and are restored', () => {

@@ -43,7 +43,7 @@ function CommandNotice({ command }: { command: CommandResult | null }) {
     return (
       <>
         Created task{' '}
-        <Link to={`/tasks/${encodeURIComponent(command.taskId)}`}>{command.taskId}</Link>
+        <Link to={`/tasks/${encodeURIComponent(command.taskId)}`}>{command.taskKey}</Link>
       </>
     )
   if (command.kind === 'model') return <>Sent using {command.model}</>

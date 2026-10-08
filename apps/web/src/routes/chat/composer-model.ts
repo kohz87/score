@@ -1,39 +1,20 @@
-import { MessageSchema, type Message } from '@score/contract'
+import {
+  CommandsResponseSchema,
+  PostMessageResponseSchema,
+  type CommandResult,
+  type Message,
+} from '@score/contract'
 
+export type { CommandResult }
 export type SlashCommand = { name: string; usage: string; description: string }
-export type CommandResult =
-  | { kind: 'assign'; taskId: string }
-  | { kind: 'model'; model: string }
-  | { kind: 'routine'; routineId: string }
-  | { kind: 'remember'; agentIds: string[] }
-  | { kind: 'skill'; name: string; installed: boolean }
 export type SendResult = { message: Message; routedTo: string[]; command: CommandResult | null }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-// The contract has no schema for these two payloads yet, so they are checked by hand here.
 export function parseCommands(payload: unknown): SlashCommand[] {
-  if (!isRecord(payload) || !Array.isArray(payload.items)) throw new TypeError('Invalid commands')
-  return payload.items.map((item: unknown) => {
-    if (
-      !isRecord(item) ||
-      typeof item.name !== 'string' ||
-      typeof item.usage !== 'string' ||
-      typeof item.description !== 'string'
-    )
-      throw new TypeError('Invalid command')
-    return { name: item.name, usage: item.usage, description: item.description }
-  })
+  return CommandsResponseSchema.parse(payload).items
 }
 
 export function parseSendResult(payload: unknown): SendResult {
-  if (!isRecord(payload) || !Array.isArray(payload.routedTo)) throw new TypeError('Invalid reply')
-  const message = MessageSchema.parse(payload.message)
-  const routedTo = payload.routedTo.filter((id): id is string => typeof id === 'string')
-  const command = isRecord(payload.command) ? (payload.command as CommandResult) : null
-  return { message, routedTo, command }
+  return PostMessageResponseSchema.parse(payload)
 }
 
 /** The word being typed after an `@` at the caret, or null. */
