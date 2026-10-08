@@ -408,3 +408,10 @@ test('gate #13 internal random-identity sources retire after 24 hours while repl
   ).toBe(INTERNAL_OBSERVATION_SOURCES.length + 1)
   expect(db.sqlite.prepare('SELECT * FROM request_receipts').all()).toEqual([])
 })
+
+test('routine pause and refresh observations are retired with the other random-identity sources', async () => {
+  const { INTERNAL_OBSERVATION_SOURCES } = await import('../../src/hub/retire.ts')
+  expect(INTERNAL_OBSERVATION_SOURCES).toEqual(
+    expect.arrayContaining(['agents', 'briefs', 'team', 'agent-pause', 'task-holds']),
+  )
+})

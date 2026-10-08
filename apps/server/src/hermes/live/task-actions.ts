@@ -42,8 +42,14 @@ export async function taskAction(
     }
   }
   const task = read()
-  if (req.action === 'unblock' && task.status !== 'blocked')
+  const unblockable = ['blocked', 'scheduled']
+  if (req.action === 'unblock' && !unblockable.includes(task.status))
     throw new HttpError(409, 'conflict', 'Task is not blocked', { hermesStatus: task.status })
+  // Hermes would also park a running task; Score's pause must let started work finish.
+  if (req.action === 'schedule' && !['ready', 'todo'].includes(task.status))
+    throw new HttpError(409, 'conflict', 'Task is not waiting to start', {
+      hermesStatus: task.status,
+    })
   let text: string
   try {
     text = deps.withoutCredential(
@@ -60,7 +66,7 @@ export async function taskAction(
   }).catch(() => ({ exitCode: -1 }))
   const current = read()
   if (result.exitCode !== 0) {
-    if (req.action === 'unblock' && current.status !== 'blocked')
+    if (req.action === 'unblock' && !unblockable.includes(current.status))
       throw new HttpError(409, 'conflict', 'Task state changed', { hermesStatus: current.status })
     throw new HttpError(
       result.exitCode < 0 ? 502 : 409,
@@ -86,6 +92,8 @@ function actionArgs(
       return ['kanban', 'promote', '--', taskId, text || 'Started in Score']
     case 'block':
       return ['kanban', 'block', '--', taskId, text || 'Blocked in Score']
+    case 'schedule':
+      return ['kanban', 'schedule', '--', taskId, text || 'Scheduled in Score']
     case 'request_review':
       return ['kanban', 'request-review', ...(text ? [`--summary=${text}`] : []), '--', taskId]
     case 'request_changes':

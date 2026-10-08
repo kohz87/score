@@ -63,6 +63,7 @@ export const TaskActionRequestSchema = z
     action: z.enum([
       'start',
       'block',
+      'schedule',
       'unblock',
       'request_review',
       'request_changes',
