@@ -17,6 +17,7 @@ import {
   storeMessage,
 } from '../domain/rooms.ts'
 import { reserveMessageRun } from '../domain/message-runs.ts'
+import { COMMANDS } from '../domain/parse.ts'
 import { routeMessage, modelCommand } from '../domain/routing.ts'
 import { RoutingDispatcher } from '../domain/routing-dispatch.ts'
 import { HttpError } from '../errors.ts'
@@ -109,6 +110,8 @@ export function registerRoomRoutes(
   app.addHook('preClose', async () => {
     clearInterval(timer)
   })
+
+  app.get('/api/commands', async () => ({ items: COMMANDS }))
 
   app.get('/api/rooms', async () => {
     const listed = await agents()
