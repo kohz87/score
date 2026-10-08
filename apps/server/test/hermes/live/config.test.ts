@@ -189,6 +189,8 @@ test.each([
   'approvals.mode',
   'approvals.deny',
   'command_allowlist',
+  // Owned by the Skills tab.
+  'skills.disabled',
 ])('writing %j is a 400 for preview and apply, and no argv is built', async (key) => {
   const changes = [{ key, value: 'x' }]
   await expect(service().preview(changes)).rejects.toMatchObject({ status: 400 })

@@ -319,10 +319,15 @@ test.each(['l2', 'l4a'] as const)(
       summary: expect.stringMatching(/^Ran \d+ commands?$/),
       runId: context.runId,
     })
-    expect(
+    // Unsettled text is held back, so some deltas emit nothing until a later one settles them.
+    const emitted = Number(
       env.db.sqlite.prepare("SELECT COUNT(*) AS n FROM events WHERE type = 'message.delta'").get()
         ?.n,
-    ).toBe(recorded.filter((event) => event.event === 'message.delta').length)
+    )
+    expect(emitted).toBeGreaterThan(0)
+    expect(emitted).toBeLessThanOrEqual(
+      recorded.filter((event) => event.event === 'message.delta').length,
+    )
     expect(
       env.db.sqlite
         .prepare("SELECT COUNT(*) AS n FROM events WHERE type = 'message.completed'")
@@ -352,7 +357,8 @@ test('non-streamed interim and recovered terminal output are redacted, with no h
       { unknownEvents: 0 },
     ),
   )
-  expect(replyMessage().parts).toEqual([{ kind: 'text', text: 'password=[redacted] @reviewer' }])
+  // The last word could still grow, so it is held until the run ends.
+  expect(replyMessage().parts).toEqual([{ kind: 'text', text: 'password=[redacted] ' }])
   await env.ingest.submit(
     translateRunEvent(
       context,
@@ -360,7 +366,10 @@ test('non-streamed interim and recovered terminal output are redacted, with no h
       { unknownEvents: 0 },
     ),
   )
-  expect(replyMessage().streaming).toBe(false)
+  expect(replyMessage()).toMatchObject({
+    streaming: false,
+    parts: [{ kind: 'text', text: 'password=[redacted] @reviewer' }],
+  })
   expect(env.db.sqlite.prepare('SELECT COUNT(*) AS n FROM message_runs').get()?.n).toBe(1)
 })
 
@@ -385,7 +394,7 @@ test('failed delta projection rolls back its text and checkpoint together', asyn
       timestamp: 1791290587,
       event: 'message.delta',
       seq: 0,
-      delta: 'hello',
+      delta: 'hello ',
     },
     { unknownEvents: 0 },
   )
@@ -399,8 +408,94 @@ test('failed delta projection rolls back its text and checkpoint together', asyn
     }),
   ).rejects.toThrow('rollback')
   expect(replyMessage().parts).toEqual([])
+  expect(env.db.sqlite.prepare('SELECT pending FROM message_runs').get()?.pending).toBe('')
   expect(readRun(env.db.sqlite, context.runId).last_seq).toBeNull()
   expect(env.db.sqlite.prepare('SELECT * FROM ingest_checkpoints').all()).toEqual([])
   await env.ingest.submit(observation)
-  expect(replyMessage().parts).toEqual([{ kind: 'text', text: 'hello' }])
+  expect(replyMessage().parts).toEqual([{ kind: 'text', text: 'hello ' }])
+})
+
+const delta = (seq: number, text: string) => ({
+  run_id: '',
+  timestamp: 1791290587,
+  event: 'message.delta',
+  seq,
+  delta: text,
+})
+test.each([
+  ['a token split mid-word', ['Your key is sk-or-ab', 'cdef1234567890 and more.']],
+  [
+    'a bearer label split from its value',
+    ['Send Authorization: Bearer', ' eyJhbGciOiJIUzI1NiJ9.e30.abc then go.'],
+  ],
+  [
+    'a key/value split after the colon',
+    ['config:\napi_key: ', 'Zx9vQ2mL7pR4tY8wE1uI3oP6aS5dF0gH\nok.'],
+  ],
+  [
+    'a quoted password split inside the quotes',
+    ['password = "correct horse', ' battery staple" done.'],
+  ],
+  [
+    'a private key over many chunks',
+    [
+      'Here:\n-----BEGIN PRIVATE',
+      ' KEY-----\nMIIEvQIBADANBgkq\n',
+      'hkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----\nDone.',
+    ],
+  ],
+])('%s never reaches the stored reply or the events log', async (_name, chunks) => {
+  const context = await admittedMessage()
+  for (const [seq, text] of chunks.entries())
+    await env.ingest.submit(
+      translateRunEvent(
+        context,
+        { ...delta(seq, text), run_id: context.runId },
+        { unknownEvents: 0 },
+      ),
+    )
+  await env.ingest.submit(
+    translateRunEvent(
+      context,
+      {
+        run_id: context.runId,
+        timestamp: 1791290587,
+        event: 'run.completed',
+        seq: chunks.length,
+        output: null,
+      },
+      { unknownEvents: 0 },
+    ),
+  )
+  const stored = JSON.stringify(replyMessage().parts)
+  const events = JSON.stringify(env.db.sqlite.prepare('SELECT data FROM events').all())
+  for (const secret of [
+    'cdef1234567890',
+    'eyJhbGciOiJIUzI1NiJ9',
+    'Zx9vQ2mL7pR4tY8wE1uI3oP6aS5dF0gH',
+    'battery',
+    'MIIEvQIBADANBgkq',
+    'hkiG9w0BAQEFAASC',
+  ]) {
+    expect(stored).not.toContain(secret)
+    expect(events).not.toContain(secret)
+  }
+  expect(stored).toContain('[redacted]')
+  // Held text is sealed at rest, never stored raw.
+  expect(env.db.sqlite.prepare('SELECT pending FROM message_runs').get()?.pending).toBe('')
+})
+
+test('held text is sealed in the database while the run streams', async () => {
+  const context = await admittedMessage()
+  await env.ingest.submit(
+    translateRunEvent(
+      context,
+      { ...delta(0, 'token: sk-or-abcdef12345678'), run_id: context.runId },
+      { unknownEvents: 0 },
+    ),
+  )
+  const pending = String(env.db.sqlite.prepare('SELECT pending FROM message_runs').get()?.pending)
+  expect(pending).not.toBe('')
+  expect(pending).not.toContain('sk-or')
+  expect(replyMessage().parts).toEqual([])
 })
