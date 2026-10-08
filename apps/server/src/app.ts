@@ -18,6 +18,7 @@ import { registerMediaRoutes } from './http/media.ts'
 import { MediaStore } from './media/store.ts'
 import { join } from 'node:path'
 import { registerNowRoutes } from './http/now.ts'
+import { registerAgentPauseRoutes } from './http/agent-pause.ts'
 import { registerWatchRoutes } from './http/watch.ts'
 import { registerApprovalRoutes } from './http/approvals.ts'
 import { registerErrorHandlers } from './errors.ts'
@@ -179,6 +180,7 @@ export function buildApp({
     registerBriefRoutes(app, { port, db, ingest, control, ...(clock ? { clock } : {}) })
     registerTeamPauseRoutes(app, { db, ingest, control, dispatch, ...(clock ? { clock } : {}) })
     registerWatchRoutes(app, { port, db, ingest })
+    registerAgentPauseRoutes(app, { db, ingest, port, dispatch, ...(clock ? { clock } : {}) })
     registerNowRoutes(app, {
       port,
       db,

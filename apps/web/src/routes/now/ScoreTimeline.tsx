@@ -1,6 +1,6 @@
 import type { NowSnapshot } from '@score/contract'
 import type { CSSProperties } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import {
   axisTicks,
@@ -51,7 +51,12 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
                 <AgentGlyph agent={agent} size="lg" />
                 <div className="now-lane-name">
                   <span className="now-lane-title">
-                    {agent.name}
+                    <Link
+                      to={`/now/watch/${encodeURIComponent(agent.id)}`}
+                      className="now-lane-link"
+                    >
+                      {agent.name}
+                    </Link>
                     {agent.status === 'working' && (
                       <span
                         className="now-lane-dot"

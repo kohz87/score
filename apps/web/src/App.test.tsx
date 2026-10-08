@@ -83,7 +83,6 @@ afterEach(() => {
 const routes = [
   ['/now', 'Now'],
   ['/now/routines', 'Now'],
-  ['/now/watch/builder', 'Now'],
   ['/chat', 'Chat'],
   ['/chat/general', 'Chat'],
   ['/tasks', 'Tasks'],
@@ -319,4 +318,14 @@ test('nav links navigate between all destinations', async () => {
     expect(router.state.location.pathname).toBe(path)
     expect(screen.getByRole('heading', { level: 1, name: title })).toBeDefined()
   }
+})
+
+// Watch has its own heading (it names the agent), but it sits in the shell under Now.
+test('/now/watch/:agentId renders inside the shell with Now active', async () => {
+  renderRoute('/now/watch/builder')
+  const main = screen.getByRole('main')
+  expect(within(main).getByText('Loading the screen…')).toBeDefined()
+  expect(screen.getByRole('banner')).toBeDefined()
+  const nav = within(screen.getByRole('navigation', { name: 'Main' }))
+  expect(nav.getByRole('link', { name: 'Now' }).getAttribute('aria-current')).toBe('page')
 })

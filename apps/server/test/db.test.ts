@@ -72,6 +72,8 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     .all()
   expect(tables.map((row) => row.name)).toEqual([
     'agent_lifecycle',
+    'agent_paused_tasks',
+    'agent_pauses',
     'agent_rule_overrides',
     'agent_styles',
     'agents_proj',

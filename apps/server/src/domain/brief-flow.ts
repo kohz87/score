@@ -522,6 +522,17 @@ function pendingRunApproval(sqlite: DatabaseSync, runId: string) {
   return row === undefined ? null : approvalView(sqlite, ApprovalRowSchema.parse(row))
 }
 
+/** The step's agent as the Watch page knows it: a link target and the surface of its last frame. */
+function watchOf(sqlite: DatabaseSync, agentId: string | null): FlowNodeDetail['watch'] {
+  if (!agentId) return null
+  const row = sqlite
+    .prepare('SELECT surface FROM watch_frames WHERE agent_id = ? ORDER BY seq DESC LIMIT 1')
+    .get(agentId)
+  return row
+    ? { agentId, thumbnail: null, front: z.object({ surface: z.string() }).parse(row).surface }
+    : null
+}
+
 export function readFlowNode(sqlite: DatabaseSync, nodeId: string, nowMs: number): FlowNodeDetail {
   const briefId = briefOfNode(sqlite, nodeId)
   const flow = readBriefFlow(sqlite, briefId, nowMs)
@@ -539,6 +550,7 @@ export function readFlowNode(sqlite: DatabaseSync, nodeId: string, nowMs: number
       run,
       model: run?.model ?? null,
       tools: run?.toolsUsed ?? [],
+      watch: watchOf(sqlite, node.agentId),
     })
   }
   if (node.taskId) {
@@ -562,6 +574,7 @@ export function readFlowNode(sqlite: DatabaseSync, nodeId: string, nowMs: number
       run,
       model: run?.model ?? null,
       tools: run?.toolsUsed ?? [],
+      watch: watchOf(sqlite, node.agentId),
     })
   }
   return FlowNodeDetailSchema.parse({ node, ...empty, description: node.title })

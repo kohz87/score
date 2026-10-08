@@ -18,6 +18,22 @@ const provider = {
   usedBy: ['lead'],
 }
 const toolServer = { id: 'files', label: 'files', status: 'ok', usedBy: 'everyone' }
+const watchMarker = { seq: 1, at: '2026-10-08T21:30:00.000Z', kind: 'command' }
+const watchResponse = {
+  asOfSeq: 1,
+  agent: f.agent,
+  live: true,
+  sessionId: 'sess-1',
+  frames: [f.watch],
+  markers: [watchMarker],
+}
+const watchOverviewItem = {
+  agent: f.agent,
+  thumbnail: null,
+  status: 'Working',
+  live: true,
+  surface: 'terminal',
+}
 const uuid = '00000000-0000-4000-8000-000000000001'
 const hash = 'a'.repeat(64)
 const createInput = {
@@ -249,6 +265,19 @@ const cases = [
   ['SystemStatusSchema', f.system, { ...f.system, agentIsolation: 'host' }],
   ['LogLineSchema', f.log, { ...f.log, kind: 'debug' }],
   ['WatchFrameSchema', f.watch, { ...f.watch, surface: 'desktop' }],
+  ['WatchMarkerKindSchema', 'command', 'typing'],
+  ['WatchMarkerSchema', watchMarker, { ...watchMarker, seq: 0 }],
+  [
+    'WatchResponseSchema',
+    watchResponse,
+    { ...watchResponse, frames: [{ ...f.watch, surface: 'desktop' }] },
+  ],
+  ['WatchOverviewItemSchema', watchOverviewItem, { ...watchOverviewItem, surface: 'desktop' }],
+  [
+    'WatchOverviewSchema',
+    { items: [watchOverviewItem] },
+    { items: [{ ...watchOverviewItem, live: 'yes' }] },
+  ],
   ['MessageDeltaSchema', f.delta, { ...f.delta, append: null }],
   ['MessageCompletedSchema', f.completed, { ...f.completed, roomId: '' }],
   ['TypingSchema', f.typing, { ...f.typing, text: 1 }],
