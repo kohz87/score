@@ -5,13 +5,25 @@ import {
 } from '../../domain/kanban-denials.ts'
 import { requestRunApproval, respondRunApproval } from '../../domain/approvals.ts'
 import { approvalDraft, patchApproval, readApprovalRow } from '../../domain/approval-store.ts'
-import type { AgentSummary, Approval, RunSummary, TaskSummary } from '@score/contract'
+import type { AgentSummary, Approval, RunSummary, TaskDetail } from '@score/contract'
+import { parseSteps, writeSteps } from '../../domain/steps.ts'
+import {
+  projectTask,
+  readProjectedTask,
+  summaryDetail,
+  taskWithApproval,
+  taskSummary,
+} from '../../domain/tasks.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { HttpError } from '../../errors.ts'
 import type { Observation } from '../../hub/ingest.ts'
 import {
   DecisionDeliveryRequestSchema,
   TaskActionRequestSchema,
+  CreateTaskSchema,
+  PatchTaskSchema,
+  TaskFilterSchema,
+  matchesTask,
   type HermesPort,
   type HermesPortDeps,
   type ObservationSink,
@@ -35,6 +47,7 @@ export function stepToObservation(
   step: ScenarioStep,
   identity: string,
   suppressed = false,
+  detail?: TaskDetail,
 ): Observation {
   const draft = structuredClone({ type: step.kind, data: step.data })
   return {
@@ -42,6 +55,23 @@ export function stepToObservation(
     identity,
     apply({ sqlite, now }) {
       if (suppressed) return []
+      if (step.kind === 'task.upserted') {
+        projectTask(
+          sqlite,
+          detail ?? {
+            ...(readProjectedTask(sqlite, step.data.id) ?? summaryDetail(step.data)),
+            ...step.data,
+          },
+        )
+      }
+      if (step.kind === 'task.activity') {
+        const task = readProjectedTask(sqlite, step.data.taskId)
+        if (task)
+          projectTask(sqlite, {
+            ...task,
+            activity: [step.data.item, ...task.activity].slice(0, 50),
+          })
+      }
       if (step.kind === 'run.updated') {
         const run = step.data
         sqlite
@@ -92,7 +122,11 @@ export function stepToObservation(
         patchApproval(
           sqlite,
           approval.id,
-          { origin: approval.origin, blocking: approval.blocking },
+          {
+            origin: approval.origin,
+            blocking: approval.blocking,
+            kanban_task_id: approval.refs.find((ref) => ref.kind === 'task')?.taskId ?? null,
+          },
           now,
         )
         return drafts.length
@@ -135,7 +169,7 @@ export class FakePort implements HermesPort {
   private readonly onError: (error: unknown) => void
   private readonly timers = new Set<unknown>()
   private readonly approvals = new Map<string, Approval>()
-  private readonly tasks = new Map<string, TaskSummary>()
+  private readonly tasks = new Map<string, TaskDetail>()
   private readonly taskOverrides = new Map<string, string>()
   private readonly runs = new Map<string, RunSummary>()
   private readonly turns = new Map<string, string>()
@@ -258,10 +292,12 @@ export class FakePort implements HermesPort {
   private async emit(
     step: ScenarioStep,
     index = `${this.loop}:command:${this.nextIdentity++}`,
+    detail?: TaskDetail,
   ): Promise<void> {
     // Delayed script steps cannot undo commands delivered while the scenario was playing.
     const suppressed = Boolean(
       (step.kind === 'task.upserted' &&
+        !index.includes(':command:') &&
         this.taskOverrides.has(step.data.id) &&
         step.data.hermesStatus !== this.taskOverrides.get(step.data.id)) ||
       (step.kind === 'approval.updated' && this.approvals.get(step.data.id)?.decision) ||
@@ -271,16 +307,21 @@ export class FakePort implements HermesPort {
         )),
     )
     await this.requireSink().submit(
-      stepToObservation(step, `${this.sessionId}:${index}`, suppressed),
+      stepToObservation(step, `${this.sessionId}:${index}`, suppressed, detail),
     )
     if (suppressed) return
     switch (step.kind) {
       case 'task.upserted':
         this.tasks.set(step.data.id, {
+          ...(detail ?? this.tasks.get(step.data.id) ?? summaryDetail(step.data)),
           ...structuredClone(step.data),
-          hermesStatus: this.taskOverrides.get(step.data.id) ?? step.data.hermesStatus,
         })
         break
+      case 'task.activity': {
+        const task = this.tasks.get(step.data.taskId)
+        if (task) task.activity = [structuredClone(step.data.item), ...task.activity].slice(0, 50)
+        break
+      }
       case 'agent.updated':
         this.agents.set(step.data.id, structuredClone(step.data))
         break
@@ -296,6 +337,91 @@ export class FakePort implements HermesPort {
 
   private now(): string {
     return new Date(this.scheduler.now()).toISOString()
+  }
+
+  async listTasks(filter: Parameters<HermesPort['listTasks']>[0] = {}) {
+    const parsed = TaskFilterSchema.parse(filter)
+    return [...this.tasks.values()]
+      .map((task) => this.viewTask(task))
+      .filter((task) => matchesTask(task, parsed))
+      .map(taskSummary)
+  }
+  private viewTask(task: TaskDetail): TaskDetail {
+    if (this.db)
+      return this.db.read((sqlite) => taskWithApproval(sqlite, task, this.scheduler.now()))
+    const approval =
+      [...this.approvals.values()].find(
+        (approval) =>
+          approval.status === 'pending' &&
+          approval.refs.some((ref) => ref.kind === 'task' && ref.taskId === task.id),
+      ) ?? null
+    return structuredClone(
+      approval ? { ...task, column: 'needs_you', progress: null, pendingApproval: approval } : task,
+    )
+  }
+  async getTask(id: string): Promise<TaskDetail> {
+    const task = this.tasks.get(id)
+    if (!task) throw new HttpError(404, 'not_found', 'Unknown task')
+    return this.viewTask(task)
+  }
+  createTask(input: Parameters<HermesPort['createTask']>[0], key: string): Promise<TaskDetail> {
+    return this.enqueue(async () => {
+      this.requireSink()
+      const req = CreateTaskSchema.parse(input)
+      const id = `fake-task:${key}`
+      if (this.tasks.has(id)) return this.getTask(id)
+      const body =
+        req.steps === undefined
+          ? (req.body ?? '')
+          : writeSteps(
+              req.body ?? '',
+              req.steps.map((text, index) => ({ id: String(index), text, done: false })),
+            )
+      const task: TaskDetail = {
+        id,
+        key: `T-${this.tasks.size + 1}`,
+        title: req.title,
+        body,
+        steps: parseSteps(body),
+        createdBy: 'you',
+        column: 'planned',
+        hermesStatus: 'todo',
+        assignee: req.assignee ?? null,
+        reviewer: req.reviewer ?? null,
+        roomId: req.roomId ?? null,
+        badge: null,
+        progress: null,
+        elapsedSec: null,
+        note: null,
+        updatedAt: this.now(),
+        pendingApproval: null,
+        dependsOn: req.dependsOn ?? [],
+        blocks: [],
+        runIds: [],
+        activity: [],
+      }
+      await this.emit({ at: 0, kind: 'task.upserted', data: taskSummary(task) }, undefined, task)
+      return this.getTask(id)
+    })
+  }
+  patchTask(id: string, input: Parameters<HermesPort['patchTask']>[1]): Promise<TaskDetail> {
+    return this.enqueue(async () => {
+      this.requireSink()
+      const req = PatchTaskSchema.parse(input)
+      const old = this.tasks.get(id)
+      if (!old) throw new HttpError(404, 'not_found', 'Unknown task')
+      const body =
+        req.steps === undefined
+          ? (req.body ?? old.body)
+          : writeSteps(req.body ?? old.body, req.steps)
+      const task = { ...old, ...req, body, steps: parseSteps(body), updatedAt: this.now() }
+      task.progress =
+        task.column === 'working' && task.steps.length
+          ? task.steps.filter((step) => step.done).length / task.steps.length
+          : null
+      await this.emit({ at: 0, kind: 'task.upserted', data: taskSummary(task) }, undefined, task)
+      return this.getTask(id)
+    })
   }
 
   startRun(req: { agentId: string; input: string; turnId: string }): Promise<{ runId: string }> {
@@ -376,7 +502,45 @@ export class FakePort implements HermesPort {
           },
         })
         this.taskOverrides.set(task.id, 'ready')
+      } else if (req.action !== 'comment') {
+        const status = {
+          start: 'ready',
+          block: 'blocked',
+          request_review: 'review',
+          request_changes: 'ready',
+          complete: 'done',
+          archive: 'archived',
+        }[req.action]
+        if (task.hermesStatus === 'archived')
+          throw new HttpError(409, 'conflict', 'Task is archived')
+        const column =
+          status === 'ready'
+            ? 'planned'
+            : status === 'blocked'
+              ? 'needs_you'
+              : status === 'review'
+                ? 'in_review'
+                : 'done'
+        await this.emit({
+          at: 0,
+          kind: 'task.upserted',
+          data: {
+            ...taskSummary(task),
+            hermesStatus: status,
+            column,
+            badge: status === 'blocked' ? { kind: 'blocked', label: 'Blocked' } : null,
+            progress: null,
+            updatedAt: this.now(),
+          },
+        })
+        this.taskOverrides.set(task.id, status)
       }
+      if (req.action === 'comment' || req.text)
+        await this.emit({
+          at: 0,
+          kind: 'task.activity',
+          data: { taskId: task.id, item: { at: this.now(), agentId: 'you', text: req.text ?? '' } },
+        })
       if (oldIds.length)
         await this.requireSink().submit({
           source: 'fake',

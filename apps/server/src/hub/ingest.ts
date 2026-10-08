@@ -1,6 +1,7 @@
 import { StreamEventSchema, type StreamEvent } from '@score/contract'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
+import { approvalTaskUpdates } from '../domain/tasks.ts'
 import type { ScoreDb } from '../db/index.ts'
 
 export type DomainEventDraft = {
@@ -216,7 +217,21 @@ export function createIngest(
           throw new Error('Observation apply must return an array of drafts')
         const events: StreamEvent[] = []
         const append = sqlite.prepare('INSERT INTO events (ts, type, data) VALUES (?, ?, ?)')
-        for (const draft of drafts as DomainEventDraft[]) {
+        // The fake script already schedules its task cards; live approval changes update them atomically.
+        const normalizedDrafts = (drafts as DomainEventDraft[]).map((draft) => {
+          const event = StreamEventSchema.parse({
+            seq: 1,
+            ts: now,
+            type: draft.type,
+            data: draft.data,
+          })
+          return { type: event.type, data: event.data } as DomainEventDraft
+        })
+        const relatedTasks =
+          obs.source === 'fake'
+            ? []
+            : approvalTaskUpdates(sqlite, normalizedDrafts, Date.parse(now))
+        for (const draft of [...normalizedDrafts, ...relatedTasks]) {
           // Normalize before storage so replay and live subscribers receive the same payload.
           const parsed = StreamEventSchema.parse({
             seq: 1,

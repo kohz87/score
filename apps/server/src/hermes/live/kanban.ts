@@ -97,6 +97,38 @@ export function readTasks(db: DatabaseSync, ids: string[]) {
   return readByIds(db, 'tasks', TaskSchema, ids, ['id'], 'id')
 }
 
+export const TaskBoardRowSchema = TaskSchema.extend({ task_rowid: z.int().positive() })
+export function readTaskBoard(db: DatabaseSync) {
+  const batch = readBatch(db, 'tasks', TaskSchema, 'ORDER BY rowid', [])
+  const ids = new Map(
+    z
+      .array(z.object({ id: z.string(), task_rowid: z.int().positive() }))
+      .parse(db.prepare('SELECT id, rowid AS task_rowid FROM tasks').all())
+      .map((row) => [row.id, row.task_rowid]),
+  )
+  return {
+    ...batch,
+    rows: batch.rows.map((row) =>
+      TaskBoardRowSchema.parse({ ...row, task_rowid: ids.get(row.id) }),
+    ),
+  }
+}
+
+export function readTaskEvents(db: DatabaseSync, taskId: string) {
+  z.string().min(1).parse(taskId)
+  const batch = readBatch(
+    db,
+    'task_events',
+    TaskEventRowSchema,
+    'WHERE task_id = ? ORDER BY id DESC LIMIT 50',
+    [taskId],
+  )
+  return {
+    ...batch,
+    rows: batch.rows.map((row) => ({ ...row, payload: parseJson(row.payload).value })),
+  }
+}
+
 export function readTaskRuns(db: DatabaseSync, input: z.input<typeof TaskIdsSchema>) {
   const { taskIds } = TaskIdsSchema.parse(input)
   return readByIds(db, 'task_runs', TaskRunSchema, taskIds, ['task_id'], 'id')

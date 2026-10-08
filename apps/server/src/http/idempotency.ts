@@ -22,6 +22,7 @@ function canonical(value: unknown): string {
 export function requestIdempotency(
   db: ScoreDb | undefined,
   clock = Date.now,
+  maxResponseBytes = 65536,
 ): { preHandler: preHandlerHookHandler; onSend: onSendHookHandler } {
   const owners = new WeakMap<FastifyRequest, { key: string; route: string; finish: () => void }>()
   const flights = new Map<string, Promise<void>>()
@@ -88,8 +89,8 @@ export function requestIdempotency(
       if (!owner || !db) return payload
       try {
         const response = z.string().parse(payload)
-        if (Buffer.byteLength(response) > 65536)
-          throw new Error('Idempotency response exceeds 64 KB')
+        if (Buffer.byteLength(response) > maxResponseBytes)
+          throw new Error('Idempotency response exceeds its byte limit')
         JSON.parse(response)
         db.sqlite
           .prepare(

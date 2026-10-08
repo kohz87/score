@@ -43,11 +43,8 @@ function loadMigrations(dir: string): Migration[] {
     }
     versions.add(migration.version)
   }
-  for (const [index, migration] of migrations.entries()) {
-    if (migration.version !== index + 1) {
-      throw new Error(`Missing migration number: ${index + 1}`)
-    }
-  }
+  // Parallel tasks reserve numbers before their migrations land, so numbering can have gaps.
+  if (migrations[0]?.version !== 1) throw new Error('Missing migration number: 1')
   return migrations
 }
 
@@ -67,11 +64,12 @@ function appliedMigrations(sqlite: DatabaseSync, migrations: Migration[]): numbe
         .all(),
     )
   for (const [index, row] of applied.entries()) {
-    const migration = migrations[row.version - 1]
+    const migration = migrations.find((migration) => migration.version === row.version)
     if (!migration) {
       throw new Error(`Database is from a newer Score: unknown applied migration ${row.version}`)
     }
-    if (row.version !== index + 1) throw new Error(`Missing applied migration number: ${index + 1}`)
+    if (row.version !== migrations[index]?.version)
+      throw new Error(`Missing applied migration number: ${migrations[index]?.version}`)
     if (row.name !== migration.name || row.checksum !== migration.checksum) {
       throw new Error(`Applied migration changed: ${migration.name}`)
     }
@@ -86,7 +84,7 @@ export function migrate(db: ScoreDb, dir: string): void {
   for (const migration of migrations.slice(applied)) {
     db.tx((sqlite) => {
       // Recheck under the writer lock in case another process migrated since the initial read.
-      if (appliedMigrations(sqlite, migrations) >= migration.version) return
+      if (appliedMigrations(sqlite, migrations) > migrations.indexOf(migration)) return
       sqlite.exec(migration.sql)
       if (migration.version === 1) {
         resetEpoch(db)

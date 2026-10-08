@@ -101,6 +101,14 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
       checksum: createHash('sha256').update(gateSql).digest('hex'),
       applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
     },
+    {
+      version: 10,
+      name: '0010_tasks.sql',
+      checksum: createHash('sha256')
+        .update(readFileSync(join(migrationDir, '0010_tasks.sql'), 'utf8'))
+        .digest('hex'),
+      applied_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
+    },
   ])
   const tables = db.sqlite
     .prepare(
@@ -126,6 +134,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'schema_migrations',
     'session_tool_calls',
     'sessions',
+    'task_projections',
     'tool_calls',
   ])
   expect(
@@ -165,18 +174,14 @@ test('modified applied migration is rejected before any further migration', () =
   expect(db.sqlite.prepare("SELECT * FROM meta WHERE key = 'next'").get()).toBeUndefined()
 })
 
-test.each(['0003_gap.sql', '0001_duplicate.sql', 'invalid.sql'])(
+test.each(['0001_duplicate.sql', 'invalid.sql'])(
   'invalid migration sequence %s is rejected before applying SQL',
   (name) => {
     const db = open()
     const copy = copyMigrations()
     writeFileSync(join(copy, name), 'SELECT 1;')
     expect(() => migrate(db, copy)).toThrow(
-      name.includes('gap')
-        ? 'Missing migration number: 2'
-        : name.includes('duplicate')
-          ? 'Duplicate migration number: 1'
-          : 'Invalid migration filename',
+      name.includes('duplicate') ? 'Duplicate migration number: 1' : 'Invalid migration filename',
     )
     expect(db.sqlite.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all()).toEqual(
       [],
@@ -468,4 +473,25 @@ test('gate #4 migration bounds legacy uncertain admissions by creation time; rec
   expect(() => insert.run('invalid', 'not JSON', at)).toThrow()
   expect(() => insert.run('oversized', JSON.stringify('x'.repeat(65536)), at)).toThrow()
   expect(() => insert.run('bounded', JSON.stringify('x'.repeat(65534)), at)).not.toThrow()
+  cpSync(join(migrationDir, '0010_tasks.sql'), join(copy, '0010_tasks.sql'))
+  migrate(db, copy)
+  expect(
+    db.sqlite.prepare("SELECT status, response FROM request_receipts WHERE key = 'bounded'").get(),
+  ).toEqual({ status: 200, response: JSON.stringify('x'.repeat(65534)) })
+  expect(() =>
+    insert.run('oversized-after-upgrade', JSON.stringify('x'.repeat(65536)), at),
+  ).toThrow()
+})
+
+test('reserved migration gaps apply in order and remain a no-op on rerun', () => {
+  const db = open()
+  const copy = copyMigrations()
+  writeFileSync(join(copy, '0010_reserved.sql'), "INSERT INTO meta VALUES ('reserved', 'yes');")
+  migrate(db, copy)
+  migrate(db, copy)
+  expect(db.sqlite.prepare('SELECT version FROM schema_migrations ORDER BY version').all()).toEqual(
+    [{ version: 1 }, { version: 10 }],
+  )
+  writeFileSync(join(copy, '0008_late.sql'), 'SELECT 1;')
+  expect(() => migrate(db, copy)).toThrow('Missing applied migration number: 8')
 })

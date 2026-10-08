@@ -77,3 +77,21 @@ test('stdout, stderr and failure messages never reach logs or results', async ()
     for (const log of logs) log.mockRestore()
   }
 })
+
+test('create JSON output has enough bounded space for task bodies and is returned only on success', async () => {
+  const stdout = JSON.stringify({ id: 't_created', body: 'body'.repeat(8000) })
+  const execute = vi.fn<NonNullable<CliOptions['execute']>>((_file, _args, _options, callback) =>
+    callback(null, stdout),
+  )
+  expect(await runHermes(['kanban', 'create', '--json'], { timeoutMs: 100, execute })).toEqual({
+    exitCode: 0,
+    stdout,
+  })
+  expect(execute.mock.calls[0]![2].maxBuffer).toBe(512 * 1024)
+  execute.mockImplementation((_file, _args, _options, callback) =>
+    callback(Object.assign(new Error('secret'), { code: 1 }), stdout),
+  )
+  expect(await runHermes(['kanban', 'create', '--json'], { timeoutMs: 100, execute })).toEqual({
+    exitCode: 1,
+  })
+})

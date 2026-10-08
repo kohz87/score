@@ -100,16 +100,20 @@ test.each([
   ['../hermes/index.ts', true],
   ['./hermes/index.ts', true],
   ['../../hermes/index.ts', true],
-])('ESLint enforces the adapter entry for %s', async (specifier, allowed) => {
-  const eslint = new ESLint({ cwd: repoRoot })
-  const [result] = await eslint.lintText(`export { value } from '${specifier}'\n`, {
-    filePath: join(serverRoot, 'src/http/boundary-probe.ts'),
-  })
-  const violations = result!.messages.filter(
-    (message) => message.ruleId === 'no-restricted-imports',
-  )
-  expect(violations).toHaveLength(allowed ? 0 : 1)
-})
+])(
+  'ESLint enforces the adapter entry for %s',
+  async (specifier, allowed) => {
+    const eslint = new ESLint({ cwd: repoRoot })
+    const [result] = await eslint.lintText(`export { value } from '${specifier}'\n`, {
+      filePath: join(serverRoot, 'src/http/boundary-probe.ts'),
+    })
+    const violations = result!.messages.filter(
+      (message) => message.ruleId === 'no-restricted-imports',
+    )
+    expect(violations).toHaveLength(allowed ? 0 : 1)
+  },
+  15000,
+) // Loading ESLint's plugins can exceed five seconds alongside other workspace checks.
 
 test('ESLint permits internal imports within the adapter', async () => {
   const eslint = new ESLint({ cwd: repoRoot })

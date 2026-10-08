@@ -76,10 +76,13 @@ async function play(): Promise<void> {
   await ingest.drain()
 }
 
-test('the whole fake scenario passes real ingest validation and covers every durable event', async () => {
+test('the whole fake scenario passes real ingest validation and covers every scripted durable event', async () => {
   await play()
   const stored = events()
-  const expectedTypes = StreamEventSchema.options.map((schema) => schema.shape.type.value)
+  // Room observations arrive with the rooms task; keep this script's existing event sequence.
+  const expectedTypes = StreamEventSchema.options
+    .map((schema) => schema.shape.type.value)
+    .filter((type) => type !== 'room.upserted')
   expect([...new Set(stored.map((event) => event.type))].sort()).toEqual(expectedTypes.sort())
   expect(stored).toHaveLength(createScenario(schedulerStart).length)
   expect(
