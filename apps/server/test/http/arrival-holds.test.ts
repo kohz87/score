@@ -241,3 +241,20 @@ test('Pause landing while a plan step is being created still holds that step', a
   expect(rows('SELECT state FROM brief_paused_tasks')).toEqual([{ state: 'held' }])
   expect(await port.listTasks()).toHaveLength(1)
 })
+
+test('a failed park of an arrived task is retried without another task event', async () => {
+  expect((await post('/api/team/pause')).statusCode).toBe(200)
+  vi.useFakeTimers({ toFake: ['setTimeout'] })
+  try {
+    vi.spyOn(port, 'taskAction').mockRejectedValueOnce(new Error('down'))
+    const made = await port.createTask({ title: 'Late', assignee: 'builder', roomId }, 'late')
+    await ingest.flushListeners()
+    expect(await status(made.id)).not.toBe('scheduled')
+    await vi.advanceTimersByTimeAsync(6_000)
+    await ingest.flushListeners()
+    expect(await status(made.id)).toBe('scheduled')
+    expect(rows('SELECT state FROM team_paused_tasks')).toEqual([{ state: 'held' }])
+  } finally {
+    vi.useRealTimers()
+  }
+})
