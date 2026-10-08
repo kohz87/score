@@ -756,9 +756,21 @@ export class FakePort implements HermesPort {
                       sqlite
                         .prepare(
                           `INSERT INTO tool_calls
-                    (run_id, seq, tool, status, started_at, ended_at) VALUES (?, ?, ?, 'ok', ?, ?) ON CONFLICT DO NOTHING`,
+                    (run_id, seq, tool, preview, status, started_at, ended_at) VALUES (?, ?, ?, ?, 'ok', ?, ?) ON CONFLICT DO NOTHING`,
                         )
-                        .run(runId, seq, tool, now, now)
+                        .run(
+                          runId,
+                          seq,
+                          tool,
+                          // File tools carry a path so the Chat "Files in play" panel has demo data.
+                          tool === 'edit_file'
+                            ? JSON.stringify({
+                                path: `src/${seq % 2 ? 'feed-card.css' : 'activity-feed.ts'}`,
+                              })
+                            : null,
+                          now,
+                          now,
+                        )
                     return []
                   },
                 })

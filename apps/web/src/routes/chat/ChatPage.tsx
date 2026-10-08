@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { StreamContext, useStreamQuery } from '../../data/query-client.ts'
 import { ChatThread, QueryError } from './ChatThread.tsx'
+import { RoomPanels } from './RoomPanels.tsx'
 import { agentsQuery, roomsQuery } from './queries.ts'
 import { roomLabel } from './room-label.ts'
 import { agentTextColor } from './agent-text-color.ts'
@@ -114,7 +115,7 @@ export function ChatPage() {
           <p>Choose a conversation to see its messages.</p>
         </section>
       )}
-      <div className="chat-side-column" aria-hidden="true" />
+      {roomId && <RoomPanels key={roomId} roomId={roomId} agents={agents.data ?? []} />}
     </div>
   )
 }
