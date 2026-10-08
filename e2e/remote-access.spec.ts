@@ -1,10 +1,17 @@
-import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { once } from 'node:events'
 import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
+
+// Remote mode serves the built web app; build it when a fresh checkout doesn't have one yet.
+test.beforeAll(() => {
+  const dist = fileURLToPath(new URL('../apps/web/dist/index.html', import.meta.url))
+  if (!existsSync(dist))
+    execFileSync('pnpm', ['--filter', '@score/web', 'build'], { stdio: 'ignore', timeout: 120_000 })
+})
 
 test('remote pairing requires consent, protects reads, warns about HTTP, and logs out', async ({
   page,

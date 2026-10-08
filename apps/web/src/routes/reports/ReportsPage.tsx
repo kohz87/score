@@ -97,7 +97,12 @@ function ByAgent({ report, agents }: { report: Reports; agents: AgentSummary[] }
   return (
     <section className="reports-card reports-table-card" aria-labelledby="reports-agents-title">
       <h2 id="reports-agents-title">By agent</h2>
-      <div className="reports-table-scroll">
+      <div
+        className="reports-table-scroll"
+        role="region"
+        aria-label="By agent table, scroll to see all columns"
+        tabIndex={0}
+      >
         <table className="reports-table" aria-labelledby="reports-agents-title">
           <thead>
             <tr>

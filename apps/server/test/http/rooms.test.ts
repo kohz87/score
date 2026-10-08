@@ -442,12 +442,13 @@ test('fake scenario persists full conversation, deltas, completion and unread vi
   const room = list.rooms.find((room) => room.id === 'room-activity-feed')!
   expect(room).toMatchObject({
     name: '#activity-feed',
-    unread: 3,
+    unread: 4,
     activeAgents: ['builder', 'lead', 'reviewer'],
   })
   const page = PageSchema.parse((await get(`/api/rooms/${room.id}/messages`)).json())
   expect(page.items.map((message) => message.id)).toEqual([
     'message-review-0',
+    'message-build-files-0',
     'approval:approval-score-run-0',
     'message-plan-0',
     'message-brief-0',
@@ -459,11 +460,15 @@ test('fake scenario persists full conversation, deltas, completion and unread vi
       text: 'The cursor and loading states look good. Keyboard focus stays in place after loading. Ready to merge after the final checks.',
     },
   ])
-  expect(page.items[1]!.parts).toEqual([{ kind: 'approval', approvalId: 'approval-score-run-0' }])
-  expect(page.items[2]!.parts[0]).toMatchObject({
+  expect(page.items[2]!.parts).toEqual([{ kind: 'approval', approvalId: 'approval-score-run-0' }])
+  expect(page.items[3]!.parts[0]).toMatchObject({
     kind: 'text',
     text: expect.stringContaining('Keep keyboard focus on the load button.'),
   })
+  expect(DetailSchema.parse((await get(`/api/rooms/${room.id}`)).json()).filesInPlay).toEqual([
+    'src/activity-feed.ts',
+    'src/feed-card.css',
+  ])
   expect(DetailSchema.parse((await get(`/api/rooms/${room.id}`)).json()).room.unread).toBe(0)
   const count = events().length
   const replay = createScenario(scheduler.now()).filter((step) => step.kind.startsWith('message.'))

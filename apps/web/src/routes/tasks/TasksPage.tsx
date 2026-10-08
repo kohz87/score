@@ -81,7 +81,7 @@ export function TasksPage() {
         <h1>Tasks</h1>
         <div className="tasks-filters" role="group" aria-label="Filter tasks">
           <select
-            className={`task-filter task-room-filter${!filters.room ? ' task-filter--selected' : ''}`}
+            className={`score-select task-room-filter${!filters.room ? ' score-select--dark' : ''}`}
             aria-label="Room"
             value={filters.room}
             onChange={(event) => setFilter('room', event.target.value)}

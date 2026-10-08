@@ -148,88 +148,95 @@ export function TasksByDayChart({ byDay, agents }: TasksByDayChartProps) {
           </li>
         ))}
       </ul>
-      <svg
-        className="tasks-by-day__svg"
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        role="img"
-        aria-label={summary}
-        data-testid="tasks-by-day-svg"
+      <div
+        className="tasks-by-day__scroll"
+        role="region"
+        aria-label="Tasks by day chart, scroll to see all days"
+        tabIndex={0}
       >
-        <defs>
-          {usedPatterns.map((kind) => (
-            <pattern
-              key={kind}
-              id={patternId(kind)}
-              width="8"
-              height="8"
-              patternUnits="userSpaceOnUse"
-            >
-              <PatternBody kind={kind} />
-            </pattern>
-          ))}
-        </defs>
-        {gridLevels.map((level) => (
-          <line
-            key={level}
-            className="tasks-by-day__grid"
-            x1={0}
-            x2={WIDTH}
-            y1={baseline - PLOT_HEIGHT * level}
-            y2={baseline - PLOT_HEIGHT * level}
-            strokeDasharray={level === 1 ? '4 4' : undefined}
-          />
-        ))}
-        <line className="tasks-by-day__grid" x1={0} x2={WIDTH} y1={baseline} y2={baseline} />
-        {byDay.map((day, index) => {
-          const x = index * slot + (slot - barWidth) / 2
-          let y = baseline
-          return (
-            <g key={`${day.date}-${index}`} data-day={day.date}>
-              {series.map((s) => {
-                const n = count(day, s.id)
-                if (n === 0) return null
-                const height = Math.max(2, n * unit - SEGMENT_GAP)
-                y -= n * unit
-                const top = y + SEGMENT_GAP
-                const rx = Math.min(8, barWidth / 2, height / 2)
-                return (
-                  <g key={s.id} data-agent={s.id} data-count={n}>
-                    <rect
-                      data-part="fill"
-                      x={x}
-                      y={top}
-                      width={barWidth}
-                      height={height}
-                      rx={rx}
-                      fill={s.color}
-                    />
-                    <rect
-                      data-part="pattern"
-                      data-pattern={s.pattern}
-                      x={x}
-                      y={top}
-                      width={barWidth}
-                      height={height}
-                      rx={rx}
-                      fill={`url(#${patternId(s.pattern)})`}
-                    />
-                  </g>
-                )
-              })}
-              <text
-                className="tasks-by-day__total"
-                x={x + barWidth / 2}
-                y={baseline - totals[index]! * unit - 8}
+        <svg
+          className="tasks-by-day__svg"
+          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+          role="img"
+          aria-label={summary}
+          data-testid="tasks-by-day-svg"
+        >
+          <defs>
+            {usedPatterns.map((kind) => (
+              <pattern
+                key={kind}
+                id={patternId(kind)}
+                width="8"
+                height="8"
+                patternUnits="userSpaceOnUse"
               >
-                {totals[index]}
-              </text>
-              <text className="tasks-by-day__label" x={x + barWidth / 2} y={baseline + 20}>
-                {dayLabel(day.date, byDay.length, index)}
-              </text>
-            </g>
-          )
-        })}
-      </svg>
+                <PatternBody kind={kind} />
+              </pattern>
+            ))}
+          </defs>
+          {gridLevels.map((level) => (
+            <line
+              key={level}
+              className="tasks-by-day__grid"
+              x1={0}
+              x2={WIDTH}
+              y1={baseline - PLOT_HEIGHT * level}
+              y2={baseline - PLOT_HEIGHT * level}
+              strokeDasharray={level === 1 ? '4 4' : undefined}
+            />
+          ))}
+          <line className="tasks-by-day__grid" x1={0} x2={WIDTH} y1={baseline} y2={baseline} />
+          {byDay.map((day, index) => {
+            const x = index * slot + (slot - barWidth) / 2
+            let y = baseline
+            return (
+              <g key={`${day.date}-${index}`} data-day={day.date}>
+                {series.map((s) => {
+                  const n = count(day, s.id)
+                  if (n === 0) return null
+                  const height = Math.max(2, n * unit - SEGMENT_GAP)
+                  y -= n * unit
+                  const top = y + SEGMENT_GAP
+                  const rx = Math.min(8, barWidth / 2, height / 2)
+                  return (
+                    <g key={s.id} data-agent={s.id} data-count={n}>
+                      <rect
+                        data-part="fill"
+                        x={x}
+                        y={top}
+                        width={barWidth}
+                        height={height}
+                        rx={rx}
+                        fill={s.color}
+                      />
+                      <rect
+                        data-part="pattern"
+                        data-pattern={s.pattern}
+                        x={x}
+                        y={top}
+                        width={barWidth}
+                        height={height}
+                        rx={rx}
+                        fill={`url(#${patternId(s.pattern)})`}
+                      />
+                    </g>
+                  )
+                })}
+                <text
+                  className="tasks-by-day__total"
+                  x={x + barWidth / 2}
+                  y={baseline - totals[index]! * unit - 8}
+                >
+                  {totals[index]}
+                </text>
+                <text className="tasks-by-day__label" x={x + barWidth / 2} y={baseline + 20}>
+                  {dayLabel(day.date, byDay.length, index)}
+                </text>
+              </g>
+            )
+          })}
+        </svg>
+      </div>
       <table className="tasks-by-day__sr-only">
         <caption>Tasks finished per day, by agent</caption>
         <thead>

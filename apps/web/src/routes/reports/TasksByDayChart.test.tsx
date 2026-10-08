@@ -74,6 +74,11 @@ test('has a summary label and a legend entry per agent', () => {
   expect(screen.getByRole('img', { name: /10 in total over 3 days/ })).toBeTruthy()
   const legend = screen.getByRole('list', { name: 'Agents' })
   expect(within(legend).getAllByRole('listitem')).toHaveLength(4)
+  expect(
+    screen
+      .getByRole('region', { name: 'Tasks by day chart, scroll to see all days' })
+      .getAttribute('tabindex'),
+  ).toBe('0')
 })
 
 test('unknown agents render in neutral grey with their id', () => {
