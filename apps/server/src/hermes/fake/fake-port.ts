@@ -13,7 +13,13 @@ import {
 import { requestRunApproval, respondRunApproval } from '../../domain/approvals.ts'
 import { insertRoom, roomChanged, storeMessage, updateMessage } from '../../domain/rooms.ts'
 import { approvalDraft, patchApproval, readApprovalRow } from '../../domain/approval-store.ts'
-import type { AgentSummary, Approval, RunSummary, TaskDetail } from '@score/contract'
+import type {
+  AgentSummary,
+  Approval,
+  RoutineSummary,
+  RunSummary,
+  TaskDetail,
+} from '@score/contract'
 import { parseSteps, writeSteps } from '../../domain/steps.ts'
 import {
   projectTask,
@@ -29,7 +35,9 @@ import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
 import {
   DecisionDeliveryRequestSchema,
   TaskActionRequestSchema,
+  CreateRoutineSchema,
   CreateTaskSchema,
+  PatchRoutineSchema,
   PatchTaskSchema,
   TaskFilterSchema,
   matchesTask,
@@ -245,6 +253,9 @@ export class FakePort implements HermesPort {
   private readonly runs = new Map<string, RunSummary>()
   private readonly turns = new Map<string, string>()
   private agents = new Map<string, AgentSummary>()
+  private readonly routines = new Map<string, RoutineSummary>()
+  private readonly routineKeys = new Map<string, string>()
+  private routineCount = 0
   private sink: ObservationSink | undefined
   private sessionId = ''
   private nextIdentity = 0
@@ -279,6 +290,8 @@ export class FakePort implements HermesPort {
     this.taskOverrides.clear()
     this.runs.clear()
     this.turns.clear()
+    this.routines.clear()
+    this.routineKeys.clear()
   }
 
   async start(sink: ObservationSink): Promise<void> {
@@ -354,11 +367,68 @@ export class FakePort implements HermesPort {
         memory: [],
         tools: [],
         helpersMax: null,
-        routines: [],
+        routines: this.routinesOf(agent.id),
         channels: [],
         permissions: [],
       }),
     )
+  }
+
+  private routinesOf(agentId: string): RoutineSummary[] {
+    return structuredClone(
+      [...this.routines.values()].filter((routine) => routine.id.startsWith(`${agentId}:`)),
+    )
+  }
+  private routine(id: string): RoutineSummary {
+    const routine = this.routines.get(id)
+    if (!routine) throw new HttpError(404, 'not_found', 'Unknown routine')
+    return routine
+  }
+  async listRoutines(agentId: string): Promise<RoutineSummary[]> {
+    if (!this.agents.has(agentId)) throw new HttpError(404, 'not_found', 'Agent not found')
+    return this.routinesOf(agentId)
+  }
+  async createRoutine(
+    agentId: string,
+    input: Parameters<HermesPort['createRoutine']>[1],
+    key: string,
+  ): Promise<RoutineSummary> {
+    const req = CreateRoutineSchema.parse(input)
+    if (!this.agents.has(agentId)) throw new HttpError(404, 'not_found', 'Agent not found')
+    const intent = `${agentId}:${key}`
+    const known = this.routineKeys.get(intent)
+    if (known) return structuredClone(this.routine(known))
+    const id = `${agentId}:fake-routine-${++this.routineCount}`
+    const routine: RoutineSummary = {
+      id,
+      title: req.title,
+      schedule: req.schedule,
+      description: req.prompt.slice(0, 600),
+      lastRunAt: null,
+      enabled: true,
+    }
+    this.routines.set(id, routine)
+    this.routineKeys.set(intent, id)
+    return structuredClone(routine)
+  }
+  async patchRoutine(
+    id: string,
+    input: Parameters<HermesPort['patchRoutine']>[1],
+  ): Promise<RoutineSummary> {
+    const req = PatchRoutineSchema.parse(input)
+    const routine = this.routine(id)
+    if (req.enabled !== undefined) routine.enabled = req.enabled
+    if (req.schedule !== undefined) routine.schedule = req.schedule
+    if (req.prompt !== undefined) routine.description = req.prompt.slice(0, 600)
+    return structuredClone(routine)
+  }
+  async deleteRoutine(id: string): Promise<void> {
+    this.routine(id)
+    this.routines.delete(id)
+  }
+  async runRoutine(id: string): Promise<void> {
+    // Real Hermes runs on its next tick; the fake records the run immediately.
+    this.routine(id).lastRunAt = this.now()
   }
 
   private enqueue<T>(work: () => Promise<T>): Promise<T> {

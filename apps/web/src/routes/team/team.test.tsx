@@ -265,3 +265,127 @@ test('the glyph popover closes with Escape and reports a failed save', async () 
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(document.activeElement).toBe(trigger)
 })
+
+const digest = {
+  id: 'builder:abc123',
+  title: 'Morning digest',
+  schedule: '0 9 * * *',
+  description: 'Summarise yesterday.',
+  lastRunAt: null,
+  enabled: true,
+}
+// A small stand-in for the routines endpoints that keeps the list the tab re-reads.
+function routinesApi(initial = [digest]) {
+  let items = [...initial]
+  const calls: { method: string; path: string; init?: RequestInit }[] = []
+  const baseline = respond
+  respond = (path, init) => {
+    const method = init?.method ?? 'GET'
+    if (path === '/api/agents/builder/routines' && method === 'GET') return json({ items })
+    if (path.startsWith('/api/agents/builder/routines') || path.startsWith('/api/routines/')) {
+      calls.push({ method, path, init })
+      const body = init?.body ? JSON.parse(String(init.body)) : {}
+      if (method === 'POST' && path.endsWith('/routines')) {
+        const created = {
+          ...digest,
+          id: 'builder:new1',
+          title: body.title,
+          schedule: body.schedule,
+        }
+        items = [...items, created]
+        return json(created)
+      }
+      if (method === 'PATCH') {
+        items = items.map((item) => ({ ...item, enabled: body.enabled }))
+        return json(items[0])
+      }
+      if (method === 'DELETE') items = []
+      return json({ id: 'builder:abc123', queued: true })
+    }
+    return baseline(path, init)
+  }
+  return calls
+}
+
+test('the Routines tab lists routines and pauses, runs and deletes them', async () => {
+  renderTeam('/team/builder')
+  const calls = routinesApi()
+  fireEvent.click(await screen.findByRole('tab', { name: 'Routines' }))
+  const row = (await screen.findByText('Morning digest')).closest('li')!
+  expect(within(row).getByText('0 9 * * *')).toBeDefined()
+  expect(within(row).getByText('Not run yet')).toBeDefined()
+
+  fireEvent.click(within(row).getByRole('button', { name: 'Pause Morning digest' }))
+  expect(await screen.findByRole('button', { name: 'Resume Morning digest' })).toBeDefined()
+  expect(calls.at(-1)).toMatchObject({ method: 'PATCH', path: '/api/routines/builder%3Aabc123' })
+  expect(JSON.parse(String(calls.at(-1)!.init?.body))).toEqual({ enabled: false })
+  expect(new Headers(calls.at(-1)!.init?.headers).get('Idempotency-Key')).toBeTruthy()
+  expect(screen.getByText(/Morning digest · Paused/)).toBeDefined()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Run Morning digest now' }))
+  expect((await screen.findAllByText(/will run on the next tick/)).length).toBeGreaterThan(0)
+  expect(calls.at(-1)).toMatchObject({ method: 'POST', path: '/api/routines/builder%3Aabc123/run' })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Delete Morning digest' }))
+  expect(calls.filter((call) => call.method === 'DELETE')).toHaveLength(0)
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm deleting Morning digest' }))
+  expect(await screen.findByText('No routines configured.')).toBeDefined()
+})
+
+test('the create form sends the routine once per submission and shows it', async () => {
+  renderTeam('/team/builder')
+  const calls = routinesApi([])
+  fireEvent.click(await screen.findByRole('tab', { name: 'Routines' }))
+  expect(await screen.findByText('No routines configured.')).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'New routine' }))
+  const form = screen.getByRole('form', { name: 'New routine' })
+  fireEvent.change(within(form).getByLabelText('Title'), { target: { value: 'Build check' } })
+  fireEvent.change(within(form).getByLabelText('Schedule'), { target: { value: 'every 2h' } })
+  fireEvent.change(within(form).getByLabelText('Prompt'), { target: { value: 'Check the build.' } })
+  fireEvent.click(within(form).getByRole('button', { name: 'Create routine' }))
+  expect(await screen.findByText('Build check')).toBeDefined()
+  const post = calls.find((call) => call.method === 'POST')!
+  expect(post.path).toBe('/api/agents/builder/routines')
+  expect(JSON.parse(String(post.init?.body))).toEqual({
+    title: 'Build check',
+    schedule: 'every 2h',
+    prompt: 'Check the build.',
+  })
+  expect(new Headers(post.init?.headers).get('Idempotency-Key')).toBeTruthy()
+  expect(screen.queryByRole('form', { name: 'New routine' })).toBeNull()
+})
+
+test('a failed create keeps the form and reuses its key on retry', async () => {
+  renderTeam('/team/builder')
+  routinesApi([])
+  const keys: string[] = []
+  const baseline = respond
+  respond = (path, init) => {
+    if (init?.method === 'POST' && path.endsWith('/routines')) {
+      keys.push(new Headers(init.headers).get('Idempotency-Key')!)
+      return keys.length === 1
+        ? json({ error: { code: 'not_paired', message: 'Pair first' } }, 403)
+        : baseline(path, init)
+    }
+    return baseline(path, init)
+  }
+  fireEvent.click(await screen.findByRole('tab', { name: 'Routines' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'New routine' }))
+  const form = screen.getByRole('form', { name: 'New routine' })
+  fireEvent.change(within(form).getByLabelText('Title'), { target: { value: 'Build check' } })
+  fireEvent.change(within(form).getByLabelText('Schedule'), { target: { value: 'every 2h' } })
+  fireEvent.change(within(form).getByLabelText('Prompt'), { target: { value: 'Check it.' } })
+  fireEvent.click(within(form).getByRole('button', { name: 'Create routine' }))
+  expect((await within(form).findByRole('alert')).textContent).toMatch(/Pair this browser/)
+  fireEvent.click(within(form).getByRole('button', { name: 'Create routine' }))
+  await waitFor(() => expect(keys).toHaveLength(2))
+  expect(keys[0]).toBe(keys[1])
+})
+
+test('the Overview New routine link opens the form on the Routines tab', async () => {
+  renderTeam('/team/builder')
+  routinesApi([])
+  fireEvent.click(await screen.findByRole('button', { name: 'New routine' }))
+  expect(screen.getByRole('tab', { name: 'Routines' }).getAttribute('aria-selected')).toBe('true')
+  expect(screen.getByRole('form', { name: 'New routine' })).toBeDefined()
+})

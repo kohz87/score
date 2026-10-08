@@ -247,8 +247,11 @@ export function registerRoomRoutes(
       throw new HttpError(400, 'bad_request', 'Unknown agent')
     const room = db.read((sqlite) => readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at))
     const route = routeMessage(body.text, to, room, known)
-    let command: { kind: 'assign'; taskId: string } | { kind: 'model'; model: string } | null =
-      modelCommand(route.model)
+    let command:
+      | { kind: 'assign'; taskId: string }
+      | { kind: 'routine'; routineId: string }
+      | { kind: 'model'; model: string }
+      | null = modelCommand(route.model)
     const id = randomUUID()
     if (route.parsed.command?.kind === 'assign') {
       const assigned = route.parsed.command
@@ -262,6 +265,20 @@ export function registerRoomRoutes(
         `assign:${id}`,
       )
       command = { kind: 'assign', taskId: task.id }
+    }
+    if (route.parsed.command?.kind === 'routine') {
+      const routine = route.parsed.command
+      if (!known.includes(routine.agentId)) throw new HttpError(400, 'bad_request', 'Unknown agent')
+      const created = await port.createRoutine(
+        routine.agentId,
+        {
+          title: routine.prompt.replace(/\s+/g, ' ').trim().slice(0, 50),
+          schedule: routine.schedule,
+          prompt: routine.prompt,
+        },
+        `routine:${id}`,
+      )
+      command = { kind: 'routine', routineId: created.id }
     }
     let message: Message | undefined
     await ingest.submit({

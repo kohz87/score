@@ -18,11 +18,12 @@ export function routeMessage(
       error: command.error,
       usage: command.usage,
     })
-  if (command && ['routine', 'remember', 'skill'].includes(command.kind))
+  if (command && ['remember', 'skill'].includes(command.kind))
     throw new HttpError(501, 'not_implemented', 'Command is not implemented', {
       usage: COMMANDS.find((item) => item.name === command.kind)!.usage,
     })
-  if (command?.kind === 'assign') return { parsed, routedTo: [], input: text, model: undefined }
+  if (command?.kind === 'assign' || command?.kind === 'routine')
+    return { parsed, routedTo: [], input: text, model: undefined }
   const input = command?.kind === 'model' ? command.message : text
   const mentions =
     command?.kind === 'model' ? parseMessage(input, agents).mentions : parsed.mentions

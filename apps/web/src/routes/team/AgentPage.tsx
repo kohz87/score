@@ -5,6 +5,7 @@ import { useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery, statusLabels, useAgentDetail } from './team-queries.ts'
 import { AgentOverview } from './AgentOverview.tsx'
 import { AgentStylePicker } from './AgentStylePicker.tsx'
+import { RoutinesTab } from './RoutinesTab.tsx'
 
 // Dark text on light agent colors, white on dark ones (the design's jade band uses #08241C).
 function bandInk(color: string) {
@@ -34,6 +35,8 @@ function AgentProfile({ agentId }: { agentId: string }) {
   const detail = useAgentDetail(agentId)
   const agents = useStreamQuery(agentsQuery)
   const [tab, setTab] = useState('Overview')
+  // The Overview's "New routine" link opens the form; clicking the tab itself shows the list.
+  const [composing, setComposing] = useState(false)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   if (!detail.data && detail.isPending) return <p role="status">Loading agent…</p>
   if (!detail.data && detail.isError)
@@ -68,6 +71,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
               : null
     if (next === null) return
     event.preventDefault()
+    setComposing(false)
     setTab(tabs[next]!)
     tabRefs.current[next]?.focus()
   }
@@ -113,7 +117,10 @@ function AgentProfile({ agentId }: { agentId: string }) {
               tabRefs.current[index] = element
             }}
             onKeyDown={(event) => navigateTabs(event, index)}
-            onClick={() => setTab(name)}
+            onClick={() => {
+              setComposing(false)
+              setTab(name)
+            }}
           >
             {name}
           </button>
@@ -125,9 +132,17 @@ function AgentProfile({ agentId }: { agentId: string }) {
             agent={agent}
             agents={agents.data ?? []}
             selectTab={(name) => {
+              setComposing(name === 'Routines')
               setTab(name)
               tabRefs.current[tabs.indexOf(name)]?.focus()
             }}
+          />
+        ) : tab === 'Routines' ? (
+          <RoutinesTab
+            key={String(composing)}
+            agentId={agent.id}
+            agentName={agent.name}
+            startCreating={composing}
           />
         ) : (
           <section className="team-card">

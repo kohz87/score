@@ -6,6 +6,7 @@ import {
   AgentIdSchema,
   TaskColumnSchema,
   TaskStepSchema,
+  type RoutineSummary,
   type TaskDetail,
   type TaskSummary,
 } from '@score/contract'
@@ -74,6 +75,23 @@ export const PatchTaskSchema = z
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0)
+const RoutineTextSchema = (max: number) =>
+  InputTextSchema.refine((value) => value.trim().length > 0).refine((value) => value.length <= max)
+export const CreateRoutineSchema = z
+  .object({
+    title: RoutineTextSchema(200).refine((value) => !/[\r\n]/.test(value)),
+    schedule: RoutineTextSchema(200).refine((value) => !/[\r\n]/.test(value)),
+    prompt: RoutineTextSchema(32000),
+  })
+  .strict()
+export const PatchRoutineSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    schedule: CreateRoutineSchema.shape.schedule.optional(),
+    prompt: CreateRoutineSchema.shape.prompt.optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0)
 export const TaskFilterSchema = z.object({
   room: z.string().min(1).optional(),
   agent: AgentIdSchema.optional(),
@@ -109,6 +127,16 @@ export interface HermesPort {
   createTask(req: z.infer<typeof CreateTaskSchema>, idempotencyKey: string): Promise<TaskDetail>
   patchTask(id: string, req: z.infer<typeof PatchTaskSchema>): Promise<TaskDetail>
   listAgentDetails(): Promise<AgentDetail[]>
+  listRoutines(agentId: string): Promise<RoutineSummary[]>
+  createRoutine(
+    agentId: string,
+    req: z.infer<typeof CreateRoutineSchema>,
+    idempotencyKey: string,
+  ): Promise<RoutineSummary>
+  patchRoutine(id: string, req: z.infer<typeof PatchRoutineSchema>): Promise<RoutineSummary>
+  deleteRoutine(id: string): Promise<void>
+  /** Asks Hermes to run the job on its next scheduler tick; resolves once it is queued. */
+  runRoutine(id: string): Promise<void>
   startRun(req: {
     agentId: string
     input: string

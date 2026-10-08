@@ -165,7 +165,7 @@ test('model command routes remaining text with a one-shot model and stable sessi
 test.each([
   ['/assign @builder', 400, '/assign'],
   ['/model', 400, '/model'],
-  ['/routine @builder 1h check', 501, '/routine'],
+  ['/routine @builder', 400, '/routine'],
   ['/remember fact', 501, '/remember'],
   ['/skill @builder example', 501, '/skill'],
 ])('command %s rejects with usage and no stored message', async (text, status, usage) => {
@@ -173,6 +173,23 @@ test.each([
   expect(response.statusCode).toBe(status)
   expect(response.json().error.details.usage).toContain(usage)
   expect(messages()).toEqual([])
+})
+
+test('/routine creates a routine for the agent, stores the message and starts no run', async () => {
+  const run = vi.spyOn(port, 'startRun')
+  const response = await send({ text: '/routine @builder every 2h check the build' }, 'routine-key')
+  expect(response.statusCode).toBe(200)
+  const { command, routedTo } = response.json()
+  expect(routedTo).toEqual([])
+  expect(command).toEqual({ kind: 'routine', routineId: expect.stringMatching(/^builder:/) })
+  expect(run).not.toHaveBeenCalled()
+  expect(await port.listRoutines('builder')).toMatchObject([
+    { id: command.routineId, schedule: 'every 2h', description: 'check the build', enabled: true },
+  ])
+  expect(messages()).toHaveLength(1)
+  const replay = await send({ text: '/routine @builder every 2h check the build' }, 'routine-key')
+  expect(replay.json().command).toEqual(command)
+  expect(await port.listRoutines('builder')).toHaveLength(1)
 })
 
 test('deltas append to one reply, finish with tools and concurrent receipts start once', async () => {
