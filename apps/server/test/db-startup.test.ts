@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => {
     getEpoch: vi.fn(() => 'epoch'),
     pruneEvents: vi.fn(),
     pruneBridge: vi.fn(),
+    createScreenshotImporter: vi.fn(() => vi.fn()),
     sweepKanbanDenials: vi.fn(async () => undefined),
     retireIngestKeys: vi.fn(),
     loadBridgeBootstrap: vi.fn(() => Buffer.alloc(32)),
@@ -65,6 +66,7 @@ vi.mock('../src/hermes/index.ts', () => ({
   createHermesPort: mocks.createHermesPort,
   loadBridgeBootstrap: mocks.loadBridgeBootstrap,
   pruneBridge: mocks.pruneBridge,
+  createScreenshotImporter: mocks.createScreenshotImporter,
   sweepKanbanDenials: mocks.sweepKanbanDenials,
 }))
 vi.mock('../src/hub/retention.ts', () => ({ pruneEvents: mocks.pruneEvents }))
@@ -129,6 +131,7 @@ test('startup opens and migrates the configured database before building and lis
     config: expect.objectContaining({ home: '/tmp/score-test-startup' }),
     port: mocks.port,
     outbox: mocks.outbox,
+    media: expect.any(Object),
     sessionStore: expect.any(Object),
     db: mocks.db,
     ingest: mocks.ingest,

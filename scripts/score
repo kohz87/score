@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# Score launcher: score start|stop|status|logs|pair. State lives in $SCORE_HOME (default ~/.score).
+set -euo pipefail
+
+script="$(readlink -f "${BASH_SOURCE[0]}")"
+root="$(dirname "$(dirname "$script")")"
+home="${SCORE_HOME:-$HOME/.score}"
+pid_file="$home/score.pid"
+log_file="$home/score.log"
+pair_file="$home/pair-link"
+port="${SCORE_PORT:-8740}"
+host="${SCORE_HOST:-127.0.0.1}"
+
+usage() {
+  echo "Usage: score start|stop|status|logs [-f]|pair" >&2
+  exit 2
+}
+
+# Prints the PID when the recorded process is a live Score server (guards against PID reuse).
+running_pid() {
+  local pid
+  [[ -f "$pid_file" ]] || return 1
+  pid="$(<"$pid_file")"
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null | grep -q 'scripts/start.mjs' || return 1
+  echo "$pid"
+}
+
+cmd_start() {
+  local pid offset i
+  if pid="$(running_pid)"; then
+    echo "Score is already running (pid $pid). Use 'score pair' for a new pairing link."
+    return 0
+  fi
+  if [[ ! -f "$root/apps/web/dist/index.html" ]]; then
+    echo "Score is not built yet. Run 'pnpm build' in $root first." >&2
+    return 1
+  fi
+  mkdir -p "$home"
+  touch "$log_file"
+  offset="$(wc -c <"$log_file")"
+  (
+    cd "$root"
+    SCORE_HOME="$home" SCORE_SERVE_WEB=1 nohup node scripts/start.mjs >>"$log_file" 2>&1 </dev/null &
+    echo $! >"$pid_file"
+  )
+  for ((i = 0; i < 100; i++)); do
+    if ! running_pid >/dev/null; then
+      echo "Score failed to start:" >&2
+      tail -n 20 "$log_file" >&2
+      rm -f "$pid_file"
+      return 1
+    fi
+    if tail -c +"$((offset + 1))" "$log_file" | grep -q 'Pair this browser'; then
+      echo "Score started (pid $(running_pid)). Log: $log_file"
+      tail -c +"$((offset + 1))" "$log_file" | grep 'Pair this browser' | head -n 1
+      return 0
+    fi
+    sleep 0.2
+  done
+  echo "Score did not report ready within 20s; see $log_file" >&2
+  return 1
+}
+
+cmd_stop() {
+  local pid i
+  if ! pid="$(running_pid)"; then
+    rm -f "$pid_file"
+    echo "Score is not running."
+    return 0
+  fi
+  kill -TERM "$pid"
+  for ((i = 0; i < 150; i++)); do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      rm -f "$pid_file"
+      echo "Score stopped."
+      return 0
+    fi
+    sleep 0.1
+  done
+  echo "Score (pid $pid) did not exit within 15s." >&2
+  return 1
+}
+
+cmd_status() {
+  local pid
+  if pid="$(running_pid)"; then
+    echo "Score is running (pid $pid) at http://$host:$port"
+  else
+    echo "Score is not running."
+    return 1
+  fi
+}
+
+cmd_logs() {
+  [[ -f "$log_file" ]] || { echo "No log yet: $log_file" >&2; return 1; }
+  if [[ "${1:-}" == "-f" ]]; then tail -n 100 -f "$log_file"; else tail -n 100 "$log_file"; fi
+}
+
+cmd_pair() {
+  local pid i
+  if ! pid="$(running_pid)"; then
+    echo "Score is not running. Start it with 'score start'." >&2
+    return 1
+  fi
+  rm -f "$pair_file"
+  kill -USR2 "$pid"
+  for ((i = 0; i < 50; i++)); do
+    if [[ -f "$pair_file" ]]; then
+      echo "Pair this browser: $(<"$pair_file")"
+      rm -f "$pair_file"
+      return 0
+    fi
+    sleep 0.1
+  done
+  echo "Score did not produce a pairing link; see $log_file" >&2
+  return 1
+}
+
+case "${1:-}" in
+  start) cmd_start ;;
+  stop) cmd_stop ;;
+  status) cmd_status ;;
+  logs) shift; cmd_logs "${1:-}" ;;
+  pair) cmd_pair ;;
+  *) usage ;;
+esac
