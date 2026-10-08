@@ -14,6 +14,7 @@ import { registerBriefRoutes } from './http/briefs.ts'
 import { createBriefControl } from './http/brief-control.ts'
 import { registerTeamPauseRoutes } from './http/team-pause.ts'
 import { registerNowRoutes } from './http/now.ts'
+import { registerWatchRoutes } from './http/watch.ts'
 import { registerApprovalRoutes } from './http/approvals.ts'
 import { registerErrorHandlers } from './errors.ts'
 import { registerCsrfGuard } from './auth/csrf.ts'
@@ -143,6 +144,7 @@ export function buildApp({
     const control = createBriefControl({ port, db, ingest, dispatch })
     registerBriefRoutes(app, { port, db, ingest, control, ...(clock ? { clock } : {}) })
     registerTeamPauseRoutes(app, { db, ingest, control, dispatch, ...(clock ? { clock } : {}) })
+    registerWatchRoutes(app, { port, db, ingest })
     registerNowRoutes(app, {
       port,
       db,

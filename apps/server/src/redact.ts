@@ -21,25 +21,33 @@ function credentialKey(key: string): boolean {
 
 /** Scrub before cutting: a truncated secret must never become an unrecognizable prefix. */
 export function redact(text: string): string {
-  return text
-    .replace(
-      /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[\s\S]*?(?:-----END (?:[A-Z]+ )?PRIVATE KEY-----|$)/g,
-      '[redacted]',
-    )
-    .replace(/(\bAuthorization\s*:\s*)(?:Basic|Bearer)\s+[A-Za-z0-9._~+/-]+=*/gi, '$1[redacted]')
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [redacted]')
-    .replace(/\bsk-(?:or-)?[A-Za-z0-9_-]{8,}\b/g, '[redacted]')
-    .replace(/\b(?:ghp_|github_pat_)[A-Za-z0-9_]{8,}\b/g, '[redacted]')
-    .replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, '[redacted]')
-    .replace(
-      /(?<![\w-])(["']?([\w-]+(?: +[\w-]+){0,3})["']?\s*[=:]\s*)(?!\[redacted\])("[^"\r\n]*"|'[^'\r\n]*'|[^\s&,;}\]]+)/gi,
-      (match: string, prefix: string, key: string) =>
-        credentialKey(key) ? `${prefix}[redacted]` : match,
-    )
-    .replace(
-      /(\b(?:key|token|secret|password)["']?\s*(?:[=:]\s*|\s+)["']?)[A-Za-z0-9_-]{32,}=*/gi,
-      '$1[redacted]',
-    )
+  return (
+    text
+      // URL query secrets and userinfo: the assignment pass below would otherwise swallow "https:" + the whole URL.
+      .replace(
+        /([?&;][\w.-]*?(?:token|key|secret|passw(?:or)?d|auth|sig|signature|credential|session|cookie)[\w.-]*=)[^&\s#"'<>]+/gi,
+        '$1[redacted]',
+      )
+      .replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:)[^\s/@]+@/gi, '$1[redacted]@')
+      .replace(
+        /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[\s\S]*?(?:-----END (?:[A-Z]+ )?PRIVATE KEY-----|$)/g,
+        '[redacted]',
+      )
+      .replace(/(\bAuthorization\s*:\s*)(?:Basic|Bearer)\s+[A-Za-z0-9._~+/-]+=*/gi, '$1[redacted]')
+      .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [redacted]')
+      .replace(/\bsk-(?:or-)?[A-Za-z0-9_-]{8,}\b/g, '[redacted]')
+      .replace(/\b(?:ghp_|github_pat_)[A-Za-z0-9_]{8,}\b/g, '[redacted]')
+      .replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, '[redacted]')
+      .replace(
+        /(?<![\w-])(["']?([\w-]+(?: +[\w-]+){0,3})["']?\s*[=:]\s*)(?!\[redacted\])("[^"\r\n]*"|'[^'\r\n]*'|[^\s&,;}\]]+)/gi,
+        (match: string, prefix: string, key: string) =>
+          credentialKey(key) ? `${prefix}[redacted]` : match,
+      )
+      .replace(
+        /(\b(?:key|token|secret|password)["']?\s*(?:[=:]\s*|\s+)["']?)[A-Za-z0-9_-]{32,}=*/gi,
+        '$1[redacted]',
+      )
+  )
 }
 
 export function redactBounded(text: string, bytes: number): string {

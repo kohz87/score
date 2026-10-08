@@ -88,6 +88,16 @@ test('the whole fake scenario passes real ingest validation and covers every scr
   expect(
     stored.filter((event) => event.type === 'watch.frame').map((event) => event.data.surface),
   ).toEqual(['terminal', 'editor', 'browser'])
+  // Scripted frames are stored with a per-agent seq, so the Watch endpoints can replay them.
+  expect(
+    db.sqlite
+      .prepare('SELECT agent_id, seq, surface FROM watch_frames ORDER BY agent_id, seq')
+      .all(),
+  ).toEqual([
+    { agent_id: 'builder', seq: 1, surface: 'terminal' },
+    { agent_id: 'builder', seq: 2, surface: 'editor' },
+    { agent_id: 'designer', seq: 1, surface: 'browser' },
+  ])
   expect(stored.find((event) => event.type === 'gap.recorded')?.data).toMatchObject({
     from: '2026-01-01T12:01:12.000Z',
     to: '2026-01-01T12:01:30.000Z',
@@ -382,6 +392,8 @@ test('overdue timers cannot reorder scripted events or skip the running transiti
       .filter(
         (event) =>
           event.type !== 'room.upserted' &&
+          // The run's own tool frames (neutral demo content) are not part of the script.
+          !(event.type === 'watch.frame' && event.data.runId === runId) &&
           !(event.type === 'run.updated' && event.data.id === runId),
       )
       .map((event) => event.type),
