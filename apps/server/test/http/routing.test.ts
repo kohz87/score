@@ -213,7 +213,8 @@ test('deltas append to one reply, finish with tools and concurrent receipts star
   await advance(410)
   expect(messages().find((message) => message.id === reply.id)).toMatchObject({
     streaming: true,
-    parts: [{ kind: 'text', text: 'The streamed reply is re' }],
+    // The unfinished word is held back until it settles (split-secret redaction).
+    parts: [{ kind: 'text', text: 'The streamed reply is ' }],
   })
   await advance(1000)
   const complete = MessageSchema.parse(messages().find((message) => message.id === reply.id))

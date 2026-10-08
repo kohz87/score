@@ -181,7 +181,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   ```ts
   { asOfSeq; brief: BriefSummary
     nodes: { id: string; kind: 'brief' | 'step'; title: string; agentId: AgentId | null
-             state: 'done' | 'working' | 'needs_you' | 'planned' | 'failed'; subtitle: string /* "Fern, 2 passes" */
+             state: 'done' | 'working' | 'needs_you' | 'planned' | 'failed'; subtitle: string /* "reviewer, 2 passes" */
              taskId: string | null; layout: { col: number; row: number } /* server hint; client may re-layout */ }[]
     edges: { id: string; from: string; to: string; kind: 'flow' | 'handoff' | 'review' | 'sent_back' | 'planned'
              label: string | null }[]
