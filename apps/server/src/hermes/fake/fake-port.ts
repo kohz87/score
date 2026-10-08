@@ -208,7 +208,7 @@ export function stepToObservation(
       }
       if (step.kind === 'lane.upserted' && step.data.briefId && step.data.block.taskId)
         if (readBriefRow(sqlite, step.data.briefId))
-          linkTask(sqlite, step.data.briefId, step.data.block.taskId, 'assign', now)
+          linkTask(sqlite, step.data.briefId, step.data.block.taskId, 'plan', now)
       if (step.kind === 'message.completed')
         sqlite
           .prepare(

@@ -186,7 +186,8 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
              taskId: string | null; layout: { col: number; row: number } /* server hint; client may re-layout */ }[]
     edges: { id: string; from: string; to: string; kind: 'flow' | 'handoff' | 'review' | 'sent_back' | 'planned'
              label: string | null }[]
-    stats: { runningSec: number; steps: number; handoffs: number; spendUsd: number | null; eta: string | null } }
+    stats: { runningSec: number; steps: number; handoffs: number; spendUsd: number | null; eta: string | null }
+    notice: string | null /* the brief's agents also worked on tasks not linked to it; links stay exact */ }
   ```
 - **S** `GET /api/flow/nodes/:nodeId` → `{ node; description: string; steps: TaskStep[]; approval: Approval | null
   run: RunSummary | null; model: string | null; tools: string[]; watch: { agentId; thumbnail: string | null; front: string } | null }`

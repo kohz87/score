@@ -507,3 +507,25 @@ test('a flow is capped at 200 nodes with a "+N more steps" summary', async () =>
   const ids = new Set(graph.nodes.map((node) => node.id))
   expect(graph.edges.every((edge) => ids.has(edge.from) && ids.has(edge.to))).toBe(true)
 })
+
+test('stop requires CSRF, validates inputs and replays its receipt without another adapter call', async () => {
+  const id = await ask('Stop once')
+  await advance(300)
+  const turn = (await flow(id)).nodes.find((node) => node.id.startsWith('turn:'))!
+  const url = `/api/flow/nodes/${encodeURIComponent(turn.id)}/stop`
+  const stop = vi.spyOn(port, 'stopRun')
+  const noCsrf = await app.inject({
+    method: 'POST',
+    url,
+    headers: { cookie: headers.cookie },
+    payload: {},
+  })
+  expect(noCsrf.statusCode).toBe(403)
+  expect(stop).not.toHaveBeenCalled()
+  const first = await post(url, {}, 'stop-receipt')
+  const replay = await post(url, {}, 'stop-receipt')
+  expect(first.statusCode).toBe(200)
+  expect(replay.json()).toEqual(first.json())
+  expect(stop).toHaveBeenCalledTimes(1)
+  expect((await post('/api/flow/nodes/invalid/stop')).statusCode).toBe(404)
+})

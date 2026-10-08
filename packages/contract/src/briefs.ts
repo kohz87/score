@@ -57,6 +57,8 @@ export const BriefFlowSchema = z.object({
     spendUsd: z.number().nonnegative().nullable(),
     eta: z.string().nullable(),
   }),
+  /** Set when the brief's agents also worked on tasks not linked to it (links are exact, never guessed). */
+  notice: z.string().nullable(),
 })
 export type BriefFlow = z.infer<typeof BriefFlowSchema>
 
