@@ -21,12 +21,70 @@ export function defineStreamQuery<T>(definition: StreamQueryDefinition<T>) {
 
 type Entry = {
   event: (event: StreamEvent) => void
+  flush: () => void
   refetch: (fence?: boolean) => Promise<void>
   dispose: () => void
 }
 
-export function createStreamQueryRegistry(queryClient: QueryClient, stream: StreamSource) {
+// Calls `run` once, on the next animation frame. Hidden tabs never get frames, so they use a short
+// timer instead, and a backstop timer covers a tab that is hidden after the frame was requested.
+// `cancel` drops it. Tests inject their own.
+export type FrameScheduler = (run: () => void) => () => void
+export const defaultFrameScheduler: FrameScheduler = (run) => {
+  let done = false
+  let frame: number | undefined
+  let timer: ReturnType<typeof setTimeout>
+  const fire = () => {
+    if (done) return
+    done = true
+    if (frame !== undefined) cancelAnimationFrame(frame)
+    clearTimeout(timer)
+    run()
+  }
+  const visible = typeof document === 'undefined' || !document.hidden
+  if (visible && typeof requestAnimationFrame === 'function') {
+    frame = requestAnimationFrame(fire)
+    timer = setTimeout(fire, 100)
+  } else timer = setTimeout(fire, 16)
+  return () => {
+    done = true
+    if (frame !== undefined) cancelAnimationFrame(frame)
+    clearTimeout(timer)
+  }
+}
+
+// Applies events in the same tick; page tests use it so their assertions need not wait for a frame.
+export const immediateFrameScheduler: FrameScheduler = (run) => {
+  run()
+  return () => {}
+}
+
+export function createStreamQueryRegistry(
+  queryClient: QueryClient,
+  stream: StreamSource,
+  schedule: FrameScheduler = defaultFrameScheduler,
+) {
   const entries = new Map<string, Entry>()
+  // Entries with queued events share one frame callback; each entry applies its queue in one write.
+  const dirty = new Set<Entry>()
+  let cancelFrame: (() => void) | undefined
+  function runFrame() {
+    cancelFrame = undefined
+    const batch = [...dirty]
+    dirty.clear()
+    batch.forEach((entry) => entry.flush())
+  }
+  function markDirty(entry: Entry) {
+    dirty.add(entry)
+    if (cancelFrame) return
+    let ran = false
+    const cancel = schedule(() => {
+      ran = true
+      runFrame()
+    })
+    // A scheduler may run the frame before it returns (tests); there is nothing left to cancel then.
+    if (!ran) cancelFrame = cancel
+  }
   const unsubscribe = stream.subscribe((event) => entries.forEach((entry) => entry.event(event)))
   // Every resync fences: after a reset or an epoch change the client may have missed events, so
   // buffered deltas must never be applied on top of the old snapshot, even if the refetch fails.
@@ -47,6 +105,8 @@ export function createStreamQueryRegistry(queryClient: QueryClient, stream: Stre
     let fetching = false
     let fenced = false
     let buffer: StreamEvent[] = []
+    // Events that arrived while the cache was settled; applied together on the next frame.
+    let pending: StreamEvent[] = []
     let disposed = false
     let releaseObserver: (() => void) | undefined
     const listeners = new Set<() => void>()
@@ -72,6 +132,10 @@ export function createStreamQueryRegistry(queryClient: QueryClient, stream: Stre
     }
     async function refetch(fence = false) {
       if (!observers || disposed) return
+      // Settled-state events keep their order ahead of anything buffered during this fetch. A fence
+      // drops them, like it drops the buffer: the client may have missed events around them.
+      if (fence) pending = []
+      else flush()
       const request = ++generation
       fetching = true
       if (fence) {
@@ -112,6 +176,18 @@ export function createStreamQueryRegistry(queryClient: QueryClient, stream: Stre
         queryClient.removeQueries({ queryKey: requestKey, exact: true })
       }
     }
+    function flush() {
+      dirty.delete(entry)
+      if (!pending.length) return
+      const events = pending
+      pending = []
+      const current = cached()
+      if (!current) return
+      const next = events.reduce(apply, current)
+      if (next === current) return
+      queryClient.setQueryData(definition.key, next)
+      publish('success', null)
+    }
     const unsubscribeCache = queryClient.getQueryCache().subscribe((event) => {
       if (event.query.queryHash === hash) publish()
     })
@@ -121,15 +197,17 @@ export function createStreamQueryRegistry(queryClient: QueryClient, stream: Stre
         if (!observers || !definition.types.includes(event.type)) return
         if (fetching || fenced || !cached()) buffer.push(event)
         else {
-          if (event.seq <= cached()!.asOfSeq) return
-          queryClient.setQueryData(definition.key, apply(cached()!, event))
-          publish('success', null)
+          pending.push(event)
+          markDirty(entry)
         }
       },
+      flush,
       dispose() {
         disposed = true
         generation++
         buffer = []
+        pending = []
+        dirty.delete(entry)
         releaseObserver?.()
         unsubscribeCache()
         listeners.clear()
@@ -155,6 +233,7 @@ export function createStreamQueryRegistry(queryClient: QueryClient, stream: Stre
           if (--observers === 0) {
             releaseObserver?.()
             releaseObserver = undefined
+            flush()
             generation++
             fetching = false
             buffer = []
@@ -171,6 +250,9 @@ export function createStreamQueryRegistry(queryClient: QueryClient, stream: Stre
     dispose() {
       unsubscribe()
       unsubscribeControl()
+      cancelFrame?.()
+      cancelFrame = undefined
+      dirty.clear()
       entries.forEach((entry) => entry.dispose())
       entries.clear()
       handles.clear()
