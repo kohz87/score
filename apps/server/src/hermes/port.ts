@@ -12,6 +12,7 @@ import {
 import { z } from 'zod'
 import type { AgentDetail } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
+import type { AgentFile, AgentFileName } from './agent-files.ts'
 import type { IngestResult, Observation } from '../hub/ingest.ts'
 
 export interface ObservationSink {
@@ -109,6 +110,15 @@ export interface HermesPort {
   createTask(req: z.infer<typeof CreateTaskSchema>, idempotencyKey: string): Promise<TaskDetail>
   patchTask(id: string, req: z.infer<typeof PatchTaskSchema>): Promise<TaskDetail>
   listAgentDetails(): Promise<AgentDetail[]>
+  /** SOUL.md / AGENTS.md of a profile. A missing file reads as empty text. */
+  readAgentFile(agentId: string, file: AgentFileName): Promise<AgentFile>
+  /** Compare-and-swap write; rejects with AgentFileConflictError when `etag` is stale. */
+  writeAgentFile(
+    agentId: string,
+    file: AgentFileName,
+    content: string,
+    etag: string,
+  ): Promise<{ etag: string }>
   startRun(req: {
     agentId: string
     input: string

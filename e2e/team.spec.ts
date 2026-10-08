@@ -20,7 +20,7 @@ test('team list opens an agent profile with tabs and a style popover', async ({ 
   await overview.focus()
   await page.keyboard.press('ArrowRight')
   await expect(page.getByRole('tab', { name: 'Personality' })).toBeFocused()
-  await expect(page.getByRole('tabpanel')).toContainText('coming soon')
+  await expect(page.getByRole('textbox', { name: 'SOUL.md contents' })).toBeVisible()
 
   // Saving needs a paired browser, so the request is stubbed; the UI contract is what is checked.
   let body: unknown

@@ -6,6 +6,7 @@ import { AgentDetailSchema, type AgentDetail } from '@score/contract'
 import { defaultAgentStyle } from '../../domain/agents.ts'
 import { redact, redactBounded } from '../../redact.ts'
 import { runHermes, type HermesRunner } from './cli.ts'
+import { excerpt } from '../agent-files.ts'
 import { ProfileNameSchema } from './paths.ts'
 
 const allowedFiles = z.enum(['SOUL.md', 'AGENTS.md', 'profile.yaml', 'config.yaml'])
@@ -60,20 +61,6 @@ function readText(home: string, name: z.infer<typeof readableFiles>): string {
   } catch {
     return ''
   }
-}
-// Read only presentation scalars; YAML tags, aliases and nested config are never interpreted.
-function excerpt(text: string): string {
-  const paragraph =
-    text
-      .split(/\r?\n\s*\r?\n/)
-      .map((part) => part.replace(/^#{1,6}\s+[^\n]*(?:\r?\n|$)/gm, '').trim())
-      .find(Boolean) ?? ''
-  let result = ''
-  for (const char of paragraph.replace(/\s+/g, ' ')) {
-    if (result.length + char.length > 280) break
-    result += char
-  }
-  return result
 }
 function metadata(text: string): z.infer<typeof MetadataSchema> {
   const values: Record<string, string> = {}
@@ -155,7 +142,8 @@ export class ProfilesReader {
     }
     return [...names].sort()
   }
-  private home(profile: string): string | null {
+  /** The profile's directory when it exists and is not a symlink; the only input to the file writer. */
+  profileHome(profile: string): string | null {
     if (!directory(this.hermesHome)) return null
     if (profile === 'default') return this.hermesHome
     const parent = join(this.hermesHome, 'profiles')
@@ -202,7 +190,7 @@ export class ProfilesReader {
     activity: Pick<AgentSummary, 'status' | 'activity'>,
   ): Promise<AgentDetail> {
     ProfileNameSchema.parse(profile)
-    const home = this.home(profile)
+    const home = this.profileHome(profile)
     const meta = metadata(home ? readText(home, 'profile.yaml') : '')
     const soul = redact(home ? readText(home, 'SOUL.md') : '')
     return AgentDetailSchema.parse({

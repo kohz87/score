@@ -1,5 +1,7 @@
 import { type AgentSummary } from '@score/contract'
 import { ProfilesReader, agentSummary } from './profiles.ts'
+import { ProfileFiles } from './profile-files.ts'
+import type { AgentFile, AgentFileName } from '../agent-files.ts'
 import type { AgentDetail } from '@score/contract'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -86,6 +88,7 @@ export class LivePort implements HermesPort {
     degraded: ['Gateway status unavailable'],
   }
   private readonly profiles: ProfilesReader
+  private readonly profileFiles = new ProfileFiles()
   constructor(private readonly options: LivePortOptions) {
     this.profiles = new ProfilesReader(resolveHermesHome(options.hermesHome), options.runner)
   }
@@ -261,6 +264,23 @@ export class LivePort implements HermesPort {
         })
       }),
     )
+  }
+  private agentHome(agentId: string): string {
+    const parsed = ProfileNameSchema.safeParse(agentId)
+    const home = parsed.success ? this.profiles.profileHome(parsed.data) : null
+    if (!home) throw new HttpError(404, 'not_found', 'Agent not found')
+    return home
+  }
+  async readAgentFile(agentId: string, file: AgentFileName): Promise<AgentFile> {
+    return this.profileFiles.read(this.agentHome(agentId), file)
+  }
+  async writeAgentFile(
+    agentId: string,
+    file: AgentFileName,
+    content: string,
+    etag: string,
+  ): Promise<{ etag: string }> {
+    return this.profileFiles.write(this.agentHome(agentId), file, content, etag)
   }
   private requireStarted() {
     if (

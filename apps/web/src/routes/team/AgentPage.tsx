@@ -5,6 +5,8 @@ import { useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery, statusLabels, useAgentDetail } from './team-queries.ts'
 import { AgentOverview } from './AgentOverview.tsx'
 import { AgentStylePicker } from './AgentStylePicker.tsx'
+import { AgentFiles } from './AgentFiles.tsx'
+import type { AgentFileName } from './file-queries.ts'
 
 // Dark text on light agent colors, white on dark ones (the design's jade band uses #08241C).
 function bandInk(color: string) {
@@ -34,6 +36,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
   const detail = useAgentDetail(agentId)
   const agents = useStreamQuery(agentsQuery)
   const [tab, setTab] = useState('Overview')
+  const [file, setFile] = useState<AgentFileName>('SOUL.md')
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   if (!detail.data && detail.isPending) return <p role="status">Loading agent…</p>
   if (!detail.data && detail.isError)
@@ -124,11 +127,14 @@ function AgentProfile({ agentId }: { agentId: string }) {
           <AgentOverview
             agent={agent}
             agents={agents.data ?? []}
-            selectTab={(name) => {
+            selectTab={(name, target) => {
+              if (target) setFile(target)
               setTab(name)
               tabRefs.current[tabs.indexOf(name)]?.focus()
             }}
           />
+        ) : tab === 'Personality' ? (
+          <AgentFiles agent={agent} file={file} onFile={setFile} />
         ) : (
           <section className="team-card">
             <h2>{tab}</h2>
