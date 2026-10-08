@@ -42,11 +42,17 @@ def urllib_transport(url: str, token: str, body: dict, timeout: float) -> dict:
     return json.loads(raw)
 
 
+def score_home() -> Path:
+    """Same rule as the server: SCORE_HOME, else ~/.score. Hermes must be started with the same SCORE_HOME."""
+    configured = os.environ.get("SCORE_HOME")
+    return Path(configured).expanduser() if configured else Path.home() / ".score"
+
+
 class ScoreClient:
     def __init__(self, base_url: str | None = None, token_path: str | Path | None = None,
                  transport=None, *, clock=time.time, profile: str | None = None):
         self.base_url = (base_url or os.environ.get("SCORE_URL", "http://127.0.0.1:8740")).rstrip("/")
-        self.token_path = Path(token_path) if token_path else Path.home() / ".score" / "bridge.token"
+        self.token_path = Path(token_path) if token_path else score_home() / "bridge.token"
         self.transport = transport or urllib_transport
         self.decision_transport = DecisionTransport() if transport is None or transport is urllib_transport else transport
         self.clock = clock

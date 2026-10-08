@@ -12,6 +12,8 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .client import score_home
+
 FILE_CAP = 5 * 1024 * 1024
 DIRECTORY_CAP = 50 * 1024 * 1024
 # Close every inherited lock descriptor in the child without acquiring inherited locks.
@@ -96,7 +98,7 @@ class Spool:
             raise ValueError("invalid incarnation")
         if file_cap < 1024 or directory_cap < file_cap:
             raise ValueError("caps must leave room for a gap record")
-        self.directory = Path(directory) if directory else Path.home() / ".score" / "spool"
+        self.directory = Path(directory) if directory else score_home() / "spool"
         self.path = self.directory / f"{incarnation}.jsonl"
         self.file_cap, self.directory_cap = file_cap, directory_cap
         self.dropped = self.corrupt = self.refused = self.quarantined = 0

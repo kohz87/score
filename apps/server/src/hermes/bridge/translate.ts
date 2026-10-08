@@ -9,7 +9,12 @@ import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
 import { defineLifecycle, guardedUpsert } from '../../hub/projections.ts'
 import { redact, redactBounded, redactValue } from '../../redact.ts'
 import { KanbanDenialSchema, recordKanbanDenial } from '../../domain/kanban-denials.ts'
-import { isSensitiveTool, recordToolFrames, WatchInfoSchema } from '../../domain/watch-frames.ts'
+import {
+  isSensitiveTool,
+  recordToolFrames,
+  touchesCredentialFile,
+  WatchInfoSchema,
+} from '../../domain/watch-frames.ts'
 import type { Producer } from './registry.ts'
 import type { ScreenshotImporter } from './screenshots.ts'
 
@@ -196,6 +201,18 @@ export function translateBridgeEvent(
   ) {
     for (const name of ['args', 'result', 'command', 'watch', 'error_message', 'positional_args'])
       delete payload[name]
+  }
+  // File tools that touch a credential file keep their path but lose content and results, as in the plugin.
+  if (
+    (parsed.hook === 'pre_tool_call' || parsed.hook === 'post_tool_call') &&
+    touchesCredentialFile(payload.args)
+  ) {
+    for (const name of ['result', 'watch', 'error_message']) delete payload[name]
+    const args = { ...(payload.args as Record<string, unknown>) }
+    // Replaced, not deleted: the editor frame still needs a body to show its "hidden" note.
+    for (const name of ['content', 'patch', 'old_string', 'new_string'])
+      if (name in args) args[name] = '[hidden]'
+    payload.args = args
   }
   // Validate structural identifiers even if the rest of the supported payload will be omitted.
   for (const name of payloadIdentifierNames) {

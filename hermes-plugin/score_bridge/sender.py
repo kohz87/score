@@ -35,6 +35,7 @@ def merge_ranges(ranges, first, last, at):
     ranges[:] = merged
 
 
+_VALID_ID = re.compile(r"[\x21-\x7e]{1,256}")
 _SCREENSHOT_NAME = re.compile(r"browser_screenshot_[0-9a-f]+\.png")
 
 
@@ -71,8 +72,9 @@ def _watch_capture(hook, kwargs, args):
             return ({key: value for key, value in kwargs.items()
                      if key not in ("args", "result", "command", "error_message")}, (), None)
         tool_args = kwargs.get("args")
-        if name in ("write_file", "patch") and touches_credential_file(tool_args):
-            kept = {key: value for key, value in kwargs.items() if key != "result"}
+        # Reads too: a credential file's content comes back in the result, and errors can echo it.
+        if touches_credential_file(tool_args):
+            kept = {key: value for key, value in kwargs.items() if key not in ("result", "error_message")}
             kept["args"] = {key: value for key, value in tool_args.items()
                             if key not in ("content", "patch", "old_string", "new_string")}
             return kept, args, None
@@ -265,6 +267,10 @@ class Sender:
                                   "turn_id", "turnId", "gateId", "linkedGateId", "supersedesGateId", "requestId",
                                   "request_id", "transportRequestId") and (value is None or type(value) is str)}
         content = {key: value for key, value in raw["raw"].items() if key not in identifiers}
+        # Hermes sends "" for absent ids (nested execute_code tool calls); the server accepts only null or 1-256 printable
+        # ASCII, so anything else is null in the payload exactly as it is in the envelope.
+        identifiers = {key: value if type(value) is str and _VALID_ID.fullmatch(value) else None
+                       for key, value in identifiers.items()}
         safe = raw["context"].run(scrub, content, hermes_private.redact)
         if raw.get("watch"):
             safe["watch"] = raw["context"].run(redact_watch, raw["watch"], hermes_private.redact)
