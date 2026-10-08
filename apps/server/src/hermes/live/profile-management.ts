@@ -47,6 +47,20 @@ function identity(path: string): string | null {
 }
 function privateDirectory(path: string) {
   mkdirSync(path, { mode: 0o700 })
+  syncPath(dirname(path))
+}
+// Reading cached bytes doesn't prove durability: sync the file or directory itself.
+function syncPath(path: string, flags = constants.O_RDONLY) {
+  const fd = openSync(path, flags | constants.O_NOFOLLOW)
+  try {
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+}
+function syncBackup(path: string) {
+  syncPath(path)
+  syncPath(dirname(path), constants.O_RDONLY | constants.O_DIRECTORY)
 }
 function ensurePrivateDirectory(path: string) {
   if (!stat(path)) privateDirectory(path)
@@ -458,10 +472,18 @@ export class LiveProfileManagement implements ProfileManagementPort {
         closeSync(fd)
       }
       verifyProfileArchive(path, name)
+      syncBackup(path)
     } else if (step === 'delete_profile') {
       if (!context.exportPath) throw failure('No private export exists.')
       verifyProfileArchive(context.exportPath, name)
-      await this.cli(['-p', 'default', 'profile', 'delete', '-y', name])
+      syncBackup(context.exportPath)
+      // Hermes can remove the profile and then fail identity settlement (non-zero exit). The directory being
+      // gone is the postcondition; purge_identity is the retryable step that finishes the rest.
+      try {
+        await this.cli(['-p', 'default', 'profile', 'delete', '-y', name])
+      } catch (error) {
+        if (stat(home)) throw error
+      }
       if (stat(home)) throw failure('The profile directory still exists.')
     } else if (step === 'purge_identity') {
       if (stat(home))

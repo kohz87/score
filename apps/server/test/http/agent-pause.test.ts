@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
+import { applyLifecycle } from '../../src/domain/agent-lifecycle.ts'
 import { deriveBriefEvents } from '../../src/domain/briefs.ts'
 import { deriveTaskEvents } from '../../src/domain/tasks.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
@@ -218,4 +219,11 @@ test('resume while the park is still in flight waits for it and leaves nothing p
   await Promise.all([pausing, resuming])
   expect((await port.getTask(task.id)).hermesStatus).toBe('ready')
   expect(rows('SELECT 1 FROM agent_paused_tasks')).toEqual([])
+})
+
+test('a paused agent that goes offline still reads as paused, so Resume stays reachable', async () => {
+  expect((await post('/api/agents/lead/pause')).statusCode).toBe(200)
+  const lead = (await port.listAgentDetails()).find((agent) => agent.id === 'lead')!
+  const shown = applyLifecycle(db.sqlite, { ...lead, status: 'offline', activity: null })
+  expect(shown).toMatchObject({ status: 'paused', activity: 'Paused' })
 })

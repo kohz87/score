@@ -159,8 +159,8 @@ Score creates agents with `hermes profile create` and installs its bridge plugin
 `hermes plugins install`, pinned to a URL and ref you choose. Set both before using **Add agent**:
 
 ```bash
-SCORE_BRIDGE_INSTALL_URL='file:///home/<you>/score#hermes-plugin/score_bridge'   # or https://<host>/<you>/score.git#hermes-plugin/score_bridge
-SCORE_BRIDGE_INSTALL_REF=<full 40-character commit hash>   # e.g. $(git -C ~/score rev-parse HEAD)
+export SCORE_BRIDGE_INSTALL_URL='file:///home/<you>/score#hermes-plugin/score_bridge'   # or https://<host>/<you>/score.git#hermes-plugin/score_bridge
+export SCORE_BRIDGE_INSTALL_REF=<full 40-character commit hash>   # e.g. $(git -C ~/score rev-parse HEAD)
 ```
 
 If Score runs with a custom `SCORE_HOME`, start Hermes with the same `SCORE_HOME`: the plugin reads its token and writes its spool there (default `~/.score`).

@@ -24,11 +24,17 @@ const FRAME_CAP = 500
 const MARKER_CAP = 2000
 
 /** Frames are upserted by seq: a terminal frame is re-emitted with the same seq when it finishes. */
-export function upsertFrame(frames: WatchFrame[], frame: WatchFrame): WatchFrame[] {
+export function upsertFrame(
+  frames: WatchFrame[],
+  frame: WatchFrame,
+  /** An anchored (historical) window keeps its start, so the frame being replayed is never evicted by live events. */
+  keep: 'newest' | 'oldest' = 'newest',
+): WatchFrame[] {
   const index = frames.findIndex((item) => item.seq === frame.seq)
   if (index >= 0) return frames.map((item, at) => (at === index ? frame : item))
   const next = [...frames, frame].sort((a, b) => a.seq - b.seq)
-  return next.length > FRAME_CAP ? next.slice(next.length - FRAME_CAP) : next
+  if (next.length <= FRAME_CAP) return next
+  return keep === 'newest' ? next.slice(next.length - FRAME_CAP) : next.slice(0, FRAME_CAP)
 }
 
 /** A frame that is re-emitted keeps its marker; an ask is new when no ask exists at that time. */

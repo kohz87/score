@@ -39,7 +39,7 @@ export function watchQuery(agentId: string, from: number | null = null) {
           const frame = event.data
           return {
             ...data,
-            frames: upsertFrame(data.frames, frame),
+            frames: upsertFrame(data.frames, frame, from === null ? 'newest' : 'oldest'),
             markers: addMarker(data.markers, {
               seq: frame.seq,
               at: frame.at,

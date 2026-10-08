@@ -5,6 +5,9 @@ set -euo pipefail
 script="$(readlink -f "${BASH_SOURCE[0]}")"
 root="$(dirname "$(dirname "$script")")"
 home="${SCORE_HOME:-$HOME/.score}"
+# The launcher changes directory; a relative home would then name a different place.
+mkdir -p "$home"
+home="$(cd "$home" && pwd -P)"
 pid_file="$home/score.pid"
 log_file="$home/score.log"
 # The browser address the running server printed (remote mode serves the browser on another host and port).
@@ -29,8 +32,15 @@ running_pid() {
   echo "$pid"
 }
 
+# Start and stop take turns: two at once would overwrite each other's PID file.
+lock_launcher() {
+  exec 9>"$home/score.launcher.lock"
+  flock 9
+}
+
 cmd_start() {
-  local pid offset i
+  local pid offset i child
+  lock_launcher
   if pid="$(running_pid)"; then
     echo "Score is already running (pid $pid). Use 'score pair' for a new pairing link."
     return 0
@@ -48,16 +58,18 @@ cmd_start() {
   offset="$(wc -c <"$log_file")"
   (
     cd "$root"
-    SCORE_HOME="$home" SCORE_SERVE_WEB=1 nohup node scripts/start.mjs >>"$log_file" 2>&1 </dev/null &
+    # 9>&- keeps the launcher lock from being inherited by the long-running server.
+    SCORE_HOME="$home" SCORE_LOG_FILE="$log_file" SCORE_SERVE_WEB=1 nohup node scripts/start.mjs >>"$log_file" 2>&1 </dev/null 9>&- &
     echo $! >"$pid_file"
   )
+  child="$(<"$pid_file")"
   for ((i = 0; i < 100; i++)); do
     # Only a dead process is a failure here: right after the fork its cmdline is still nohup's, so
     # running_pid's start.mjs check could misreport a healthy start under load.
-    if ! kill -0 "$(<"$pid_file")" 2>/dev/null; then
+    if ! kill -0 "$child" 2>/dev/null; then
       echo "Score failed to start:" >&2
       tail -n 20 "$log_file" >&2
-      rm -f "$pid_file"
+      [[ "$(cat "$pid_file" 2>/dev/null)" == "$child" ]] && rm -f "$pid_file"
       return 1
     fi
     if tail -c +"$((offset + 1))" "$log_file" | grep -q 'Pair this browser'; then
@@ -76,6 +88,7 @@ cmd_start() {
 
 cmd_stop() {
   local pid i
+  lock_launcher
   if ! pid="$(running_pid)"; then
     rm -f "$pid_file"
     echo "Score is not running."

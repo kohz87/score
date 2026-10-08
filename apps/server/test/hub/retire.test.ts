@@ -154,6 +154,18 @@ test('only current incarnation keys at or below the floor retire; other sources,
   ).toEqual({ status: 'applied', seqs: [8] })
 })
 
+test('a scope idle for 30 days retires every key through its final position and keeps rejecting them', async () => {
+  for (let position = 1; position <= 5; position++)
+    await ingest.submit(
+      observation(position, { checkpoint: { scope: 'messages', incarnation: null, position } }),
+    )
+  expect(retireIngestKeys(db, { now: Date.now() })).toEqual({ retired: 0, floors: 0 })
+  const later = Date.now() + 31 * 24 * 60 * 60 * 1000
+  expect(retireIngestKeys(db, { now: later })).toEqual({ retired: 5, floors: 1 })
+  expect(floors()[0]?.floor).toBe(5)
+  expect(keys()).toHaveLength(0)
+})
+
 test('the floor is written before any delete, then ten deletes use bounded batches', async () => {
   await seed(10)
   const transaction = db.tx.bind(db)

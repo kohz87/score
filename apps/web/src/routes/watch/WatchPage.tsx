@@ -1,4 +1,4 @@
-import type { Approval } from '@score/contract'
+import type { Approval, WatchMarker } from '@score/contract'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
@@ -53,7 +53,8 @@ function WatchView({ agentId }: { agentId: string }) {
   const waiting = useStreamQuery(pendingApprovalsQuery(agentId))
   const overview = useWatchOverview()
   const pause = useAgentPause(agentId)
-  const [cursor, setCursor] = useState<number | null>(null)
+  // The moment is remembered by identity, not position: the marker list drops its oldest entries at the cap.
+  const [selected, setSelected] = useState<WatchMarker | null>(null)
   const [playing, setPlaying] = useState(false)
   const [terminal, setTerminal] = useState<{ command: string; copied: boolean } | null>(null)
   const [fromApplied, setFromApplied] = useState(from === null)
@@ -61,7 +62,17 @@ function WatchView({ agentId }: { agentId: string }) {
   const data = watch.data
   const markers = useMemo(() => data?.markers ?? [], [data?.markers])
   const frames = useMemo(() => data?.frames ?? [], [data?.frames])
-  const marker = cursor === null ? null : (markers[Math.min(cursor, markers.length - 1)] ?? null)
+  const found = selected
+    ? markers.findIndex(
+        (item) =>
+          item.seq === selected.seq && item.at === selected.at && item.kind === selected.kind,
+      )
+    : -1
+  // A frozen moment that fell off the oldest end shows the oldest marker left, never the live view.
+  const cursor = selected === null || markers.length === 0 ? null : found >= 0 ? found : 0
+  const setCursor = (index: number | null) =>
+    setSelected(index === null ? null : (markers[index] ?? null))
+  const marker = cursor === null ? null : (markers[cursor] ?? null)
   const seq = marker?.seq ?? null
   const firstFrame = frames[0]?.seq
   const lastFrame = frames.at(-1)?.seq
@@ -82,17 +93,13 @@ function WatchView({ agentId }: { agentId: string }) {
   useEffect(() => {
     if (cursor === null || !playing) return
     const timer = setInterval(() => {
-      setCursor((current) => {
-        if (current === null) return null
-        if (current + 1 >= markers.length) {
-          setPlaying(false)
-          return null
-        }
-        return current + 1
-      })
+      if (cursor + 1 >= markers.length) {
+        setPlaying(false)
+        setSelected(null)
+      } else setSelected(markers[cursor + 1] ?? null)
     }, PLAY_MS)
     return () => clearInterval(timer)
-  }, [cursor, playing, markers.length])
+  }, [cursor, playing, markers])
 
   const stage = useMemo(() => stageAt(frames, seq), [frames, seq])
   const mine = useMemo(() => {
@@ -244,7 +251,7 @@ function WatchView({ agentId }: { agentId: string }) {
           <ScrubTimeline
             agent={agent}
             markers={markers}
-            cursor={cursor === null ? null : Math.min(cursor, markers.length - 1)}
+            cursor={cursor}
             playing={playing}
             onSelect={select}
             onLive={goLive}

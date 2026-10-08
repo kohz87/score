@@ -481,6 +481,31 @@ test.each(['bridge', 'browser'] as const)(
   },
 )
 
+test('every start gets a new epoch, so a restored database cannot pass for the one a browser remembers', async () => {
+  const dir = directory()
+  const web = join(dir, 'web')
+  mkdirSync(web)
+  writeFileSync(join(web, 'index.html'), '<div id="root"></div>')
+  const config = loadConfig({ ...env, SCORE_HOME: join(dir, 'home') })
+  const options = {
+    logger: false as const,
+    webDirectory: web,
+    listen: async (app: FastifyInstance) => {
+      await app.ready()
+    },
+    listenBridge: async (app: FastifyInstance) => {
+      await app.ready()
+    },
+  }
+  const first = await startServer(config, options)
+  const before = getEpoch(first.db)
+  await first.close()
+  const second = await startServer(config, options)
+  const after = getEpoch(second.db)
+  await second.close()
+  expect(after).not.toBe(before)
+})
+
 test('remote session metadata persists with independent management identifiers', () => {
   const dir = directory()
   const db = openDatabase(join(dir, 'score.db'))

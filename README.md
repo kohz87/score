@@ -164,11 +164,11 @@ Team, then Add agent, creates a Hermes profile (blank or copied from an existing
 into it and gives it a color and shape. Before the first use, tell Score where to install the plugin from:
 
 ```bash
-export SCORE_BRIDGE_INSTALL_URL=https://<your git host>/<you>/score.git   # or file:///home/<you>/score
+export SCORE_BRIDGE_INSTALL_URL='https://<your git host>/<you>/score.git#hermes-plugin/score_bridge'   # or 'file:///home/<you>/score#hermes-plugin/score_bridge'
 export SCORE_BRIDGE_INSTALL_REF=<full 40-character commit hash>
 ```
 
-Without these, Add agent stops with "Configure a pinned bridge installation URL first." (Only `https://` and
+Without these, Add agent stops with "Configure a pinned bridge installation URL first." The `#hermes-plugin/score_bridge` part selects the plugin inside the repository. (Only `https://` and
 `file://` URLs are accepted, and the ref must be a full commit hash, not a tag or branch name.) Each step of a
 create or delete is previewed before it runs. Deleting an agent asks you to type its name and keeps a private
 export in `$SCORE_HOME/profile-backups/`. Details: [docs/SETUP.md](docs/SETUP.md) section 8.

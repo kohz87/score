@@ -46,6 +46,12 @@ test('a re-emitted frame replaces the one with the same seq', () => {
   expect(upsertFrame(next, terminal(3, 9)).map((frame) => frame.seq)).toEqual([1, 2, 3])
 })
 
+test('an anchored window keeps its oldest frames when live frames push it past the cap', () => {
+  const frames = Array.from({ length: 500 }, (_, index) => editor(index + 1, index))
+  expect(upsertFrame(frames, editor(501, 501), 'newest')[0]?.seq).toBe(2)
+  expect(upsertFrame(frames, editor(501, 501), 'oldest')[0]?.seq).toBe(1)
+})
+
 test('a repeated frame keeps one marker, and each ask at a new time adds one', () => {
   const markers: WatchMarker[] = [{ seq: 1, at: at(0), kind: 'command' }]
   expect(addMarker(markers, { seq: 1, at: at(0), kind: 'command' })).toBe(markers)
