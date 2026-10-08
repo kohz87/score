@@ -69,6 +69,8 @@ export function verifyProfileArchive(path: string, name: string): void {
       throw failure('The private export could not be verified.')
     const data = gunzipSync(readFileSync(fd), { maxOutputLength: 512 * 1024 * 1024 })
     let entries = 0
+    // GNU tar (what Hermes writes) puts names over 100 bytes in a ././@LongLink record ("L") before the entry.
+    let longName: string | undefined
     for (let offset = 0; offset + 512 <= data.length;) {
       const header = data.subarray(offset, offset + 512)
       if (header.every((byte) => byte === 0)) {
@@ -95,10 +97,25 @@ export function verifyProfileArchive(path: string, name: string): void {
         offset + 512 + size > data.length
       )
         throw failure('The export archive is corrupt.')
-      const entry = [text(345, 500), text(0, 100)].filter(Boolean).join('/')
+      const type = text(156, 157)
+      if (type === 'L' || type === 'K') {
+        // "K" is a long link target; Score never extracts the archive, so only "L" names are checked.
+        if (type === 'L')
+          longName = data
+            .subarray(offset + 512, offset + 512 + size)
+            .toString()
+            .split('\0')[0]!
+        offset += 512 + Math.ceil(size / 512) * 512
+        continue
+      }
+      // The prefix field exists only in POSIX ustar headers; GNU headers use those bytes for timestamps.
+      const ustar = header.subarray(257, 263).toString() === 'ustar\0'
+      const entry =
+        longName ?? [ustar ? text(345, 500) : '', text(0, 100)].filter(Boolean).join('/')
+      longName = undefined
       // Python tarfile may prepend a PAX extended header for timestamps; it carries no extracted entry.
       if (
-        !['x', 'g'].includes(text(156, 157)) &&
+        !['x', 'g'].includes(type) &&
         ((!entry.startsWith(`${name}/`) && entry !== name) ||
           entry.split('/').includes('..') ||
           entry.startsWith('/'))
@@ -422,9 +439,14 @@ export class LiveProfileManagement implements ProfileManagementPort {
       ensurePrivateDirectory(resolve(this.options.scoreHome))
       ensurePrivateDirectory(directory)
       const path = context.exportPath
-      if (!path || dirname(resolve(path)) !== directory || stat(path))
+      if (!path || dirname(resolve(path)) !== directory)
         throw failure('The export path is unsafe or already exists.')
-      await this.cli(['-p', 'default', 'profile', 'export', name, '-o', path])
+      // The path is unique to this operation, so a file there is our own earlier attempt: a retry reuses it (it is
+      // verified before anything is deleted) instead of failing forever. Anything but a plain file is refused.
+      const earlier = stat(path)
+      if (earlier && (!earlier.isFile() || earlier.isSymbolicLink()))
+        throw failure('The export path is unsafe or already exists.')
+      if (!earlier) await this.cli(['-p', 'default', 'profile', 'export', name, '-o', path])
       if (!stat(path)?.isFile()) throw failure('The export is missing.')
       const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
       try {
