@@ -119,6 +119,44 @@ export function appendRunMessage(
   return updateMessage(sqlite, mapping.room_id, mapping.message_id, redact(append), now)
 }
 
+// Surfaces a Score-run approval in the room that started the run. Messages are append-only, so the
+// card is its own agent message; the fixed id makes this idempotent per approval.
+export function approvalMessage(
+  sqlite: DatabaseSync,
+  approvalId: string,
+  now: string,
+): DomainEventDraft[] {
+  const value = sqlite
+    .prepare(
+      `SELECT m.room_id, m.agent_id, a.run_id FROM approvals a
+       LEFT JOIN message_runs m ON m.run_id = a.run_id WHERE a.id = ? AND a.origin = 'score-run'`,
+    )
+    .get(approvalId)
+  if (!value) return []
+  const row = z
+    .object({
+      room_id: z.string().nullable(),
+      agent_id: z.string().nullable(),
+      run_id: z.string().nullable(),
+    })
+    .parse(value)
+  if (!row.room_id || !row.agent_id) return []
+  return storeMessage(
+    sqlite,
+    {
+      id: `approval:${approvalId}`,
+      roomId: row.room_id,
+      author: { kind: 'agent', agentId: row.agent_id },
+      to: [],
+      parts: [{ kind: 'approval', approvalId }],
+      refs: row.run_id ? [{ kind: 'run', runId: row.run_id }] : [],
+      streaming: false,
+      createdAt: now,
+    },
+    now,
+  )
+}
+
 export function toolsSummary(tools: string[]): string | null {
   if (!tools.length) return null
   const commands = tools.filter((tool) => tool === 'terminal').length

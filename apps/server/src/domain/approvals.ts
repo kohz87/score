@@ -4,6 +4,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import type { DomainEventDraft } from '../hub/ingest.ts'
 import { redactBounded } from '../redact.ts'
+import { approvalMessage } from './message-runs.ts'
 import {
   ApprovalRowSchema,
   collectApprovalChanges,
@@ -517,7 +518,7 @@ export function requestRunApproval(
   at: string,
   options: ApprovalReadOptions = {},
 ): DomainEventDraft[] {
-  return mutate(sqlite, at, options, () => {
+  const drafts = mutate(sqlite, at, options, () => {
     const row = byRequest(sqlite, req.profile, req.runId, req.requestId)
     if (!row) {
       insertApproval(sqlite, {
@@ -557,6 +558,12 @@ export function requestRunApproval(
       )
     replaySignals(sqlite, touchedApprovalIds(sqlite), at)
   })
+  return [
+    ...drafts,
+    ...drafts.flatMap((draft) =>
+      draft.type === 'approval.requested' ? approvalMessage(sqlite, draft.data.id, at) : [],
+    ),
+  ]
 }
 export function respondRunApproval(
   sqlite: DatabaseSync,

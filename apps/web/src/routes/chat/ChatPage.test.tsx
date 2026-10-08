@@ -6,6 +6,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import {
   MessageSchema,
   type AgentSummary,
+  type Approval,
+  type LaneBlock,
   type Message,
   type Room,
   type StreamEvent,
@@ -62,6 +64,26 @@ class Source extends EventTarget {
 }
 const disposers: (() => void)[] = []
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>
+const pendingApproval: Approval = {
+  id: 'approval',
+  origin: 'score-run',
+  phase: 'human_pending',
+  status: 'pending',
+  actionable: true,
+  linkedTo: null,
+  agentId: 'lead',
+  title: 'Approval requested',
+  command: 'pnpm add ws',
+  cwd: null,
+  description: '',
+  choices: ['once', 'deny'],
+  createdAt: '2026-10-08T10:00:00.000Z',
+  expiresAt: null,
+  decision: null,
+  delivery: 'none',
+  blocking: null,
+  refs: [],
+}
 let items: Message[]
 let rooms: Room[]
 function response(payload: unknown, status = 200) {
@@ -97,6 +119,8 @@ beforeEach(() => {
   rooms = [room]
   fetchMock = vi.fn(async (input) => {
     const url = String(input)
+    if (url.startsWith('/api/approvals?'))
+      return response({ asOfSeq: 1, items: [pendingApproval], nextCursor: null })
     if (url === '/api/agents') return response({ asOfSeq: 1, items: [agent] })
     if (url === '/api/rooms') return response({ asOfSeq: 1, rooms, directs: [direct] })
     if (url.includes('/messages'))
@@ -296,7 +320,7 @@ test('cursor pagination prepends history, deduplicates overlaps and updates hist
   expect(screen.getByText('Earlier message updated')).toBeDefined()
   expect(screen.queryByRole('button', { name: 'Load older messages' })).toBeNull()
 })
-test('renders every message part and keeps approval and plan placeholders passive', async () => {
+test('renders every message part and shows approval and plan cards', async () => {
   items = [
     MessageSchema.parse({
       ...message,
@@ -337,15 +361,58 @@ test('renders every message part and keeps approval and plan placeholders passiv
     '+182',
     '−12',
     'Changes requested',
-    'Approval requested',
     'Review work',
   ])
     expect(screen.getByText(text)).toBeDefined()
-  expect(screen.getByRole('button', { name: 'Approve' }).hasAttribute('disabled')).toBe(true)
-  expect(screen.getByRole('button', { name: 'Deny' }).hasAttribute('disabled')).toBe(true)
+  expect(await screen.findByRole('button', { name: 'Approve' })).toBeDefined()
+  expect(screen.getByRole('button', { name: 'Deny' })).toBeDefined()
   expect(screen.getByText('Ready for review').parentElement?.getAttribute('aria-live')).toBe(
     'polite',
   )
+})
+test('lane.upserted updates the plan block of its brief live', () => {
+  const block: LaneBlock = {
+    id: 'b1',
+    label: 'Old',
+    state: 'planned',
+    start: message.createdAt,
+    end: null,
+    taskId: null,
+    runId: null,
+  }
+  const data = {
+    items: [
+      {
+        ...message,
+        parts: [
+          {
+            kind: 'plan' as const,
+            briefId: 'brief',
+            lanes: [{ agentId: 'lead', blocks: [block] }],
+          },
+        ],
+      },
+    ],
+    nextCursor: null,
+    typing: {},
+  }
+  const lane = (briefId: string | null, agentId: string, next: typeof block) =>
+    ({
+      type: 'lane.upserted',
+      seq: 2,
+      ts: message.createdAt,
+      data: { briefId, agentId, block: next },
+    }) as StreamEvent
+  const plan = (event: StreamEvent) => {
+    const part = reduceMessages(data, event, 'general', true).items[0]!.parts[0]
+    return part?.kind === 'plan' ? part.lanes : []
+  }
+  expect(
+    plan(lane('brief', 'lead', { ...block, label: 'New', state: 'working' }))[0]!.blocks,
+  ).toEqual([{ ...block, label: 'New', state: 'working' }])
+  expect(plan(lane('brief', 'lead', { ...block, id: 'b2' }))[0]!.blocks).toHaveLength(2)
+  expect(plan(lane('brief', 'builder', block))).toHaveLength(2)
+  expect(plan(lane('other', 'lead', { ...block, label: 'No' }))[0]!.blocks[0]!.label).toBe('Old')
 })
 test('reducers ignore other rooms, append missing text parts and exclude new messages from history', () => {
   const data = { items: [{ ...message, parts: [] }], nextCursor: null, typing: {} }

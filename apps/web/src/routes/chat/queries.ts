@@ -1,5 +1,7 @@
 import {
   AgentsSnapshotSchema,
+  ApprovalsPageSchema,
+  type Approval,
   MessagePageSchema,
   RoomDetailSnapshotSchema,
   RoomsSnapshotSchema,
@@ -61,12 +63,44 @@ export type MessagePageData = {
   nextCursor: string | null
   typing: Record<string, string>
 }
+function applyLane(
+  message: Message,
+  event: Extract<StreamEvent, { type: 'lane.upserted' }>,
+): Message {
+  const { briefId, agentId, block } = event.data
+  if (!message.parts.some((part) => part.kind === 'plan' && part.briefId === briefId))
+    return message
+  return {
+    ...message,
+    parts: message.parts.map((part) => {
+      if (part.kind !== 'plan' || part.briefId !== briefId) return part
+      const lanes = part.lanes.some((lane) => lane.agentId === agentId)
+        ? part.lanes
+        : [...part.lanes, { agentId, blocks: [] }]
+      return {
+        ...part,
+        lanes: lanes.map((lane) =>
+          lane.agentId !== agentId
+            ? lane
+            : {
+                ...lane,
+                blocks: lane.blocks.some((item) => item.id === block.id)
+                  ? lane.blocks.map((item) => (item.id === block.id ? block : item))
+                  : [...lane.blocks, block],
+              },
+        ),
+      }
+    }),
+  }
+}
 export function reduceMessages(
   data: MessagePageData,
   event: StreamEvent,
   roomId: string,
   latest: boolean,
 ) {
+  if (event.type === 'lane.upserted' && event.data.briefId)
+    return { ...data, items: data.items.map((message) => applyLane(message, event)) }
   if (!('roomId' in event.data) || event.data.roomId !== roomId) return data
   if (event.type === 'typing') {
     const typing = { ...data.typing }
@@ -109,7 +143,22 @@ export function messagesQuery(roomId: string, before: string | null = null) {
       )
       return { asOfSeq, data: { ...page, typing: {} } }
     },
-    types: ['message.created', 'message.delta', 'message.completed', 'typing'],
+    types: ['message.created', 'message.delta', 'message.completed', 'typing', 'lane.upserted'],
     reduce: (data, event) => reduceMessages(data, event, roomId, before === null),
   })
 }
+
+// All approvals, newest first, kept live by the stream; cards look theirs up by id.
+export const approvalsQuery = defineStreamQuery<Approval[]>({
+  key: ['chat', 'approvals'],
+  async fetch() {
+    const { asOfSeq, items } = ApprovalsPageSchema.parse(await apiFetch('approvals?status=all'))
+    return { asOfSeq, data: items }
+  },
+  types: ['approval.requested', 'approval.updated'],
+  reduce(data, event) {
+    if (event.type !== 'approval.requested' && event.type !== 'approval.updated') return data
+    const approval = event.data
+    return [approval, ...data.filter((item) => item.id !== approval.id)]
+  },
+})

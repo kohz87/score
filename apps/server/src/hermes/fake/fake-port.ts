@@ -685,23 +685,41 @@ export class FakePort implements HermesPort {
                 })
                 stream(index + 1)
               } else {
-                await this.requireSink().submit({
-                  source: 'fake',
-                  identity: `${this.sessionId}:tools:${runId}`,
-                  apply({ sqlite, now }) {
-                    for (const [seq, tool] of response.tools.entries())
-                      sqlite
-                        .prepare(
-                          `INSERT INTO tool_calls
-                    (run_id, seq, tool, status, started_at, ended_at) VALUES (?, ?, ?, 'ok', ?, ?) ON CONFLICT DO NOTHING`,
-                        )
-                        .run(runId, seq, tool, now, now)
-                    return []
-                  },
-                })
-                const current = this.runs.get(runId)!
-                this.runs.set(runId, { ...current, toolsUsed: [...new Set(response.tools)] })
-                await this.transitionRun(runId, 'completed')
+                const complete = async (): Promise<void> => {
+                  await this.requireSink().submit({
+                    source: 'fake',
+                    identity: `${this.sessionId}:tools:${runId}`,
+                    apply({ sqlite, now }) {
+                      for (const [seq, tool] of response.tools.entries())
+                        sqlite
+                          .prepare(
+                            `INSERT INTO tool_calls
+                      (run_id, seq, tool, status, started_at, ended_at) VALUES (?, ?, ?, 'ok', ?, ?) ON CONFLICT DO NOTHING`,
+                          )
+                          .run(runId, seq, tool, now, now)
+                      return []
+                    },
+                  })
+                  const current = this.runs.get(runId)!
+                  this.runs.set(runId, { ...current, toolsUsed: [...new Set(response.tools)] })
+                  await this.transitionRun(runId, 'completed')
+                }
+                // Demo hook: a message that says "ask for approval" makes the run raise one and wait.
+                if (!/ask for approval/i.test(req.input.split('\n\nRoom context:')[0] ?? ''))
+                  await complete()
+                else {
+                  await this.requestRunApproval(runId, req.agentId)
+                  const deadline = this.scheduler.now() + 600_000
+                  const wait = (): void =>
+                    this.schedule(250, async () => {
+                      if (this.runs.get(runId)?.status !== 'waiting_for_approval') return
+                      if (!this.approvalAnswered(runId) && this.scheduler.now() < deadline)
+                        return wait()
+                      await this.transitionRun(runId, 'running')
+                      await complete()
+                    })
+                  wait()
+                }
               }
             },
           )
@@ -712,16 +730,48 @@ export class FakePort implements HermesPort {
     })
   }
 
+  private async requestRunApproval(runId: string, agentId: string): Promise<void> {
+    await this.requireSink().submit({
+      source: 'fake',
+      identity: `${this.sessionId}:approval:${runId}`,
+      apply: ({ sqlite, now }) =>
+        requestRunApproval(
+          sqlite,
+          {
+            id: `fake-approval:${runId}`,
+            profile: agentId,
+            runId,
+            requestId: `${runId}:approval`,
+            command: 'pnpm add ws@8.18.0',
+            description: 'Install the websocket library\nThe run needs it to keep going.',
+            choices: ['once', 'session', 'always', 'deny'],
+          },
+          now,
+        ),
+    })
+    await this.transitionRun(runId, 'waiting_for_approval')
+  }
+
+  private approvalAnswered(runId: string): boolean {
+    if (!this.db) return true
+    const row = readApprovalRow(this.db.sqlite, `fake-approval:${runId}`)
+    return !row || row.phase !== 'human_pending'
+  }
+
   private async transitionRun(
     runId: string,
-    status: 'running' | 'completed' | 'cancelled',
+    status: 'running' | 'completed' | 'cancelled' | 'waiting_for_approval',
   ): Promise<void> {
     const run = this.runs.get(runId)
     if (!run || !['queued', 'running', 'waiting_for_approval'].includes(run.status)) return
     await this.emit({
       at: 0,
       kind: 'run.updated',
-      data: { ...run, status, endedAt: status === 'running' ? null : this.now() },
+      data: {
+        ...run,
+        status,
+        endedAt: status === 'running' || status === 'waiting_for_approval' ? null : this.now(),
+      },
     })
   }
 

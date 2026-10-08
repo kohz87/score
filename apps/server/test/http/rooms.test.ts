@@ -441,11 +441,15 @@ test('fake scenario persists full conversation, deltas, completion and unread vi
   const room = list.rooms.find((room) => room.id === 'room-activity-feed')!
   expect(room).toMatchObject({
     name: '#activity-feed',
-    unread: 2,
-    activeAgents: ['lead', 'reviewer'],
+    unread: 3,
+    activeAgents: ['builder', 'lead', 'reviewer'],
   })
   const page = PageSchema.parse((await get(`/api/rooms/${room.id}/messages`)).json())
-  expect(page.items.map((message) => message.id)).toEqual(['message-review-0', 'message-plan-0'])
+  expect(page.items.map((message) => message.id)).toEqual([
+    'message-review-0',
+    'approval:approval-score-run-0',
+    'message-plan-0',
+  ])
   expect(page.items.every((message) => !message.streaming)).toBe(true)
   expect(page.items[0]!.parts).toEqual([
     {
@@ -453,7 +457,8 @@ test('fake scenario persists full conversation, deltas, completion and unread vi
       text: 'The cursor and loading states look good. Keyboard focus stays in place after loading. Ready to merge after the final checks.',
     },
   ])
-  expect(page.items[1]!.parts[0]).toMatchObject({
+  expect(page.items[1]!.parts).toEqual([{ kind: 'approval', approvalId: 'approval-score-run-0' }])
+  expect(page.items[2]!.parts[0]).toMatchObject({
     kind: 'text',
     text: expect.stringContaining('Keep keyboard focus on the load button.'),
   })
