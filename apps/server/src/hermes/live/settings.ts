@@ -210,7 +210,12 @@ export class LiveSettings {
   async connectProvider(id: string): Promise<ConnectResult> {
     const providerId = ProviderIdSchema.safeParse(id)
     if (!providerId.success) throw new HttpError(404, 'not_found', 'Unknown provider')
-    const known = (await this.listProviders()).find((item) => item.id === providerId.data)
+    // The catalog alone answers "is this a provider?"; the full list would spawn two Hermes processes.
+    const catalog = await this.providerCatalog().catch(() => null)
+    const known =
+      (catalog?.some((entry) => entry.slug === providerId.data) ?? false) ||
+      providerId.data in CATALOG ||
+      (await this.listProviders()).some((item) => item.id === providerId.data)
     if (!known) throw new HttpError(404, 'not_found', 'Unknown provider')
     // Sign-in prompts for keys or opens a browser: only the person can do it, in their own terminal.
     return { next: 'run_in_terminal', command: `hermes auth add ${providerId.data}` }

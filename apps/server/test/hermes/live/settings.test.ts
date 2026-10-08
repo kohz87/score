@@ -226,8 +226,11 @@ test('the provider list is every provider the gateway reports, with the short li
     expect.arrayContaining(['openrouter', 'anthropic']),
   )
   // Connect works for any listed provider and only ever hands back a terminal command.
+  runner.mockClear()
   expect(await new LiveSettings(home, runner, catalog).connectProvider('deepseek')).toEqual({
     next: 'run_in_terminal',
     command: 'hermes auth add deepseek',
   })
+  // Answered from the gateway catalog: no Hermes process, so Connect responds at once.
+  expect(runner).not.toHaveBeenCalled()
 })

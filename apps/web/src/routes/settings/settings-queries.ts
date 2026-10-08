@@ -37,6 +37,8 @@ export function useProviders(watching = false) {
     retry: false,
     refetchOnWindowFocus: true,
     refetchInterval: watching ? WATCH_MS : false,
+    // The sign-in happens in another window, so keep checking while this tab is in the background.
+    refetchIntervalInBackground: watching,
   })
 }
 export function useConnections(watching = false) {
@@ -47,6 +49,8 @@ export function useConnections(watching = false) {
     retry: false,
     refetchOnWindowFocus: true,
     refetchInterval: watching ? WATCH_MS : false,
+    // The sign-in happens in another window, so keep checking while this tab is in the background.
+    refetchIntervalInBackground: watching,
   })
 }
 export function useRecheckSettings() {
