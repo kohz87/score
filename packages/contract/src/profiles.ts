@@ -31,6 +31,7 @@ export const AgentCreateRequestSchema = AgentCreateInputSchema.extend({
   previewHash: z.string().regex(/^[a-f0-9]{64}$/),
   confirmInheritance: z.boolean().optional(),
 }).strict()
+export const OperationConfirmRequestSchema = z.object({ step: z.string().min(1).max(64) }).strict()
 export const AgentPatchRequestSchema = z
   .object({ name: Text.max(100).optional(), role: Text.optional() })
   .strict()
@@ -72,6 +73,8 @@ export const AgentOperationSchema = z.object({
   exportPath: z.string().nullable(),
   /** The step failed with a recorded, repeatable error (not an unknown interruption): POST …/retry may run it again. */
   retryable: z.boolean().optional(),
+  /** Score lost track of the step (restart mid-step): the person may check it locally and confirm it finished. */
+  confirmable: z.boolean().optional(),
 })
 export const AgentPreviewSchema = z.object({
   kind: z.enum(['create', 'delete']),

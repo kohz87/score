@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import {
+  OperationConfirmRequestSchema,
   AgentCreateRequestSchema,
   AgentDeleteRequestSchema,
   AgentPatchRequestSchema,
@@ -86,6 +87,11 @@ export function registerProfileRoutes(
   app.post('/api/agents/operations/:opId/retry', mutation, async (request) => {
     const { opId } = z.object({ opId: z.uuid() }).parse(request.params)
     return operations.retry(opId)
+  })
+  app.post('/api/agents/operations/:opId/confirm', mutation, async (request) => {
+    const { opId } = z.object({ opId: z.uuid() }).parse(request.params)
+    const { step } = OperationConfirmRequestSchema.parse(request.body)
+    return operations.confirm(opId, step)
   })
   app.patch('/api/agents/:agentId', mutation, async (request) => {
     const { agentId } = Params.parse(request.params)

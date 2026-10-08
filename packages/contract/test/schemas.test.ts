@@ -321,6 +321,7 @@ const cases = [
   ],
   ['SecurityStatusSchema', { passwordSet: true }, { passwordSet: 'yes' }],
   ['RevokeOthersResponseSchema', { revoked: 2 }, { revoked: -1 }],
+  ['OperationConfirmRequestSchema', { step: 'create_profile' }, { step: 'x', extra: 1 }],
   ['ProviderItemSchema', provider, { ...provider, status: 'broken' }],
   ['ProvidersResponseSchema', { items: [provider] }, { items: [{}] }],
   [

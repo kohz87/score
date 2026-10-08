@@ -550,3 +550,83 @@ test('create with a provider sets model and provider together and names it in th
     provider: 'openai-codex',
   })
 })
+
+test('after an interrupted create_profile the person can confirm it finished, and Score continues to Ready', async () => {
+  const real = port.profileStep.bind(port)
+  let interrupt = true
+  vi.spyOn(port, 'profileStep').mockImplementation(async (step, context) => {
+    if (step === 'create_profile' && interrupt) {
+      interrupt = false
+      // The profile was created, but Score lost the result (a restart mid-step).
+      await real(step, context)
+      throw new Error('connection reset')
+    }
+    return real(step, context)
+  })
+  const added = await create()
+  expect(await finished(added.id)).toMatchObject({
+    state: 'needs_attention',
+    nextStep: 'create_profile',
+    retryable: false,
+    confirmable: true,
+  })
+  const wrongStep = await mutate(
+    `/api/agents/operations/${added.id}/confirm`,
+    { step: 'model' },
+    'POST',
+    {
+      'idempotency-key': 'confirm-wrong',
+    },
+  )
+  expect(wrongStep.statusCode).toBe(409)
+  const confirmed = await mutate(
+    `/api/agents/operations/${added.id}/confirm`,
+    { step: 'create_profile' },
+    'POST',
+    { 'idempotency-key': 'confirm-create' },
+  )
+  expect(confirmed.statusCode).toBe(200)
+  await vi.waitFor(async () => expect((await finished(added.id)).state).toBe('completed'), {
+    timeout: 5000,
+  })
+})
+
+test('a recorded failure is never confirmable, and an interrupted create that made nothing cannot continue', async () => {
+  const { HttpError } = await import('../../src/errors.ts')
+  vi.spyOn(port, 'profileStep').mockImplementation(async (step) => {
+    if (step === 'create_profile') throw new HttpError(409, 'conflict', 'Profile already exists.')
+    throw new Error('unreachable')
+  })
+  const refusedOp = await create()
+  // "Continue" after "already exists" would adopt someone else's profile.
+  expect(await finished(refusedOp.id)).toMatchObject({ confirmable: false })
+  expect(
+    (
+      await mutate(
+        `/api/agents/operations/${refusedOp.id}/confirm`,
+        { step: 'create_profile' },
+        'POST',
+        {
+          'idempotency-key': 'confirm-recorded',
+        },
+      )
+    ).statusCode,
+  ).toBe(409)
+})
+
+test('Score refuses to continue an interrupted create when the profile does not exist', async () => {
+  vi.spyOn(port, 'profileStep').mockImplementation(async (step) => {
+    if (step === 'create_profile') throw new Error('connection reset before anything happened')
+    throw new Error('unreachable')
+  })
+  const added = await create()
+  expect(await finished(added.id)).toMatchObject({ confirmable: true })
+  const response = await mutate(
+    `/api/agents/operations/${added.id}/confirm`,
+    { step: 'create_profile' },
+    'POST',
+    { 'idempotency-key': 'confirm-nothing' },
+  )
+  expect(response.statusCode).toBe(409)
+  expect(response.json().error.message).toContain('does not exist')
+})

@@ -447,6 +447,10 @@ contentType: string }`. Types come from the bytes (png, jpeg, gif, webp); `400` 
 - **H** `POST /api/agents/operations/:opId/retry` → `AgentOperation`: runs the failed step again when `retryable` (a recorded
   error on a step whose repeat is harmless: model, permissions, enable bridge, readiness, export, identity purge,
   retire); otherwise `409`. Creating the profile, installing the plugin and deleting it are never repeated.
+- **H** `POST /api/agents/operations/:opId/confirm` `{ step }` → `AgentOperation`: when Score lost track of a step
+  (`confirmable`: it was interrupted, not refused), the person checks it on the Hermes machine and confirms it finished;
+  Score marks it done and continues. Score still checks what it can see (a created profile must exist, a deleted one
+  must be gone) and never confirms a recorded failure. `step` must be the interrupted step; otherwise `409`.
 
 Lifecycle schemas live in `packages/contract/src/profiles.ts`. Preview accepts `{ kind: 'create', id, name, role,
 style, model, cloneFrom? }` or `{ kind: 'delete', agentId }`. Canonical names are lowercase ASCII letters/digits,
