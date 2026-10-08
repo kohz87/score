@@ -218,7 +218,8 @@ beyond loopback. Done when an unpaired LAN client gets nothing but the pairing p
 **3.14 Visual QA pass** · Lead audit → Codex fixes (owner: "button and arrow alignment are off"): every screen against
 its design HTML at 1440, 1024 and 390 px; fix alignment of buttons, arrows, icons and baselines. Done when the audit list is
 empty and screenshot e2e covers each destination.
-**Phase 3 gate** · Gemini + `/codex:review --base main`
+**Phase 3 gate** · Gemini + `/codex:review --base main` — **done 2026-10-08**: lead review per the owner ("review the code yourself"), pass
+(`docs/reviews/2026-10-08-phase3-gate-lead.md`).
 
 ## Phase 4: Watch
 
