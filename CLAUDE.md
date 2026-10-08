@@ -28,7 +28,8 @@ reviews and phase gates. Never enable any auto-review/review-gate loop.
 
 ## Task loop (one PLAN task at a time unless tasks are independent)
 *Owner, 2026-10-08:* run independent tasks in parallel (separate worktrees and Codex CLI sessions, gpt-6.1-sol
-high). Only Codex CLI agents, no other model subagents. Pre-assign migration numbers; merge one at a time.
+high). Only Codex CLI agents, except the Sonnet 5.5 fallback when Codex stops or runs out of quota (below).
+Pre-assign migration numbers; merge one at a time.
 1. **Brief**: write `docs/briefs/<plan-id>.md` with: the task goal and "done when" criteria copied from
    `docs/PLAN.md`, the relevant `docs/API-CONTRACT.md` section(s), files in scope, constraints ("Follow AGENTS.md,
    including the licensing rules"; no new dependencies, list any you need instead; don't edit
