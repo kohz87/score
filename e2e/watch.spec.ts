@@ -8,6 +8,12 @@ test.use({ timezoneId: 'UTC', locale: 'en-GB' })
 const fixtures: Record<string, unknown> = {
   ...visualFixtures,
   '/api/agents/builder/watch?limit=500': watchFixture,
+  '/api/agents/builder/watch?limit=1': watchFixture,
+  '/api/approvals?status=pending&agent=builder': {
+    asOfSeq: 1,
+    items: [watchApprovalFixture],
+    nextCursor: null,
+  },
   '/api/watch/overview': watchOverviewFixture,
   '/api/approvals?status=all': {
     asOfSeq: 1,

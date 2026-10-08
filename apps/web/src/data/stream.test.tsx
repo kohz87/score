@@ -187,6 +187,7 @@ test('stream superseded fetch resolving first leaves deltas buffered for its suc
 
 test('stream epoch changes and resets refetch every active query; epochs discard old buffered deltas', async () => {
   const { queries, source } = setup()
+  hello(source) // the first hello happens before any snapshot exists
   const first = definition('first')
   const second = definition('second')
   const inactive = definition('inactive')
@@ -211,6 +212,7 @@ test('stream epoch changes and resets refetch every active query; epochs discard
 
 test('after a reset, a failed refetch never applies buffered deltas to the old snapshot', async () => {
   const { queries, source } = setup()
+  hello(source)
   const { def, requests, reduce } = definition()
   const handle = queries.register(def)
   handle.subscribe(() => {})
@@ -398,6 +400,7 @@ test('stream failed refetch applies buffered deltas to the existing snapshot in 
 
 test('stream epoch recovery never applies new epoch deltas to old data after a fetch failure', async () => {
   const { queries, source } = setup()
+  hello(source)
   const { def, requests } = definition()
   const handle = queries.register(def)
   handle.subscribe(() => {})
@@ -600,6 +603,7 @@ test('batching: a refetch that fails still keeps queued and buffered events in o
 test('batching: a resync fence drops queued events so they never land on the old snapshot', async () => {
   const context = setup()
   const { source, frames } = context
+  hello(source)
   const { handle, requests, reduce, off } = await settled(context, 'old', 1)
   hello(source)
   delta(source, 2, 'queued before the reset')
@@ -615,6 +619,7 @@ test('batching: a resync fence drops queued events so they never land on the old
 test('batching: events queued before a resync are replaced by the new snapshot, later ones apply', async () => {
   const context = setup()
   const { source, frames } = context
+  hello(source)
   const { handle, requests, off } = await settled(context, 'old', 1)
   hello(source)
   delta(source, 2, 'x')
@@ -684,4 +689,21 @@ test('default scheduler applies on an animation frame and does not lose events w
   delta(source, 4, 'd')
   expect(raf).not.toHaveBeenCalled()
   await vi.waitFor(() => expect(handle.getSnapshot()).toMatchObject({ data: 'abcd', asOfSeq: 4 }))
+})
+
+test('the first hello refetches snapshots fetched while the stream was still connecting', async () => {
+  const { queries, source } = setup()
+  const { def, requests } = definition()
+  const handle = queries.register(def)
+  handle.subscribe(() => {})
+  // The snapshot completes before the stream ever connects, so it may predate the stream's head.
+  await resolve(requests[0]!, 'early', 1)
+  hello(source)
+  expect(requests).toHaveLength(2)
+  delta(source, 5, '!')
+  requests[1]!.resolve({ data: 'fresh', asOfSeq: 4 })
+  await vi.waitFor(() => expect(handle.getSnapshot().data).toBe('fresh!'))
+  // Reconnecting to the same epoch is not a first hello.
+  hello(source)
+  expect(requests).toHaveLength(2)
 })

@@ -82,6 +82,18 @@ export function Composer({
   const [notice, setNotice] = useState<Notice | null>(null)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [uploading, setUploading] = useState(0)
+  // Latest values for the send callback, which resolves long after the closure was created.
+  const live = useRef({ text, attachments })
+  useEffect(() => {
+    live.current = { text, attachments }
+  })
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
   const fileInput = useRef<HTMLInputElement>(null)
 
   const commands = useQuery({
@@ -210,16 +222,28 @@ export function Composer({
       )
       update((data) => withMessage(data, result.message, temporary))
       sendKey.current = null
-      setText('')
-      setCaret(0)
-      setAttachments([])
+      if (!mounted.current) {
+        // The composer moved to another conversation mid-send: only drop the stored draft if it is still what we sent.
+        if (loadDraft(roomId).trim() === body) saveDraft(roomId, '')
+        return
+      }
+      // Keep whatever was typed or attached while the request was in flight.
+      if (live.current.text.trim() === body) {
+        setText('')
+        setCaret(0)
+      }
+      setAttachments((current) =>
+        current.filter(({ mediaId }) => !sent.some((item) => item.mediaId === mediaId)),
+      )
       setNotice({ kind: 'result', command: result.command })
     } catch (error) {
       update((data) => withoutMessage(data, temporary))
       setNotice({ kind: 'error', text: errorText(error) })
     } finally {
-      setPending(false)
-      textarea.current?.focus()
+      if (mounted.current) {
+        setPending(false)
+        textarea.current?.focus()
+      }
     }
   }
 

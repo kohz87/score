@@ -9,7 +9,13 @@ import { approvalsQuery } from '../chat/queries.ts'
 import { ScrubTimeline } from './ScrubTimeline.tsx'
 import { OtherScreens, WhatTheyAreDoing } from './SidePanels.tsx'
 import { WatchStage } from './WatchStage.tsx'
-import { useAgentPause, useWatchOverview, watchQuery } from './watch-queries.ts'
+import {
+  fetchCurrentSession,
+  pendingApprovalsQuery,
+  useAgentPause,
+  useWatchOverview,
+  watchQuery,
+} from './watch-queries.ts'
 import {
   activityItems,
   backFrom,
@@ -37,16 +43,19 @@ export function WatchPage() {
 }
 
 function WatchView({ agentId }: { agentId: string }) {
-  const watch = useStreamQuery(watchQuery(agentId))
+  // ?from=<seq> (History's "Replay in Watch") opens the replay at that moment, once the markers load.
+  const [params] = useSearchParams()
+  const from = /^\d{1,12}$/.test(params.get('from') ?? '') ? Number(params.get('from')) : null
+  // The frame window starts at the newest frames; replaying a moment outside it re-anchors the window there.
+  const [anchor, setAnchor] = useState<number | null>(from)
+  const watch = useStreamQuery(watchQuery(agentId, anchor))
   const approvals = useStreamQuery(approvalsQuery)
+  const waiting = useStreamQuery(pendingApprovalsQuery(agentId))
   const overview = useWatchOverview()
   const pause = useAgentPause(agentId)
   const [cursor, setCursor] = useState<number | null>(null)
   const [playing, setPlaying] = useState(false)
   const [terminal, setTerminal] = useState<{ command: string; copied: boolean } | null>(null)
-  // ?from=<seq> (History's "Replay in Watch") opens the replay at that moment, once the markers load.
-  const [params] = useSearchParams()
-  const from = /^\d{1,12}$/.test(params.get('from') ?? '') ? Number(params.get('from')) : null
   const [fromApplied, setFromApplied] = useState(from === null)
 
   const data = watch.data
@@ -54,6 +63,16 @@ function WatchView({ agentId }: { agentId: string }) {
   const frames = useMemo(() => data?.frames ?? [], [data?.frames])
   const marker = cursor === null ? null : (markers[Math.min(cursor, markers.length - 1)] ?? null)
   const seq = marker?.seq ?? null
+  const firstFrame = frames[0]?.seq
+  const lastFrame = frames.at(-1)?.seq
+  if (
+    seq !== null &&
+    anchor !== seq &&
+    firstFrame !== undefined &&
+    lastFrame !== undefined &&
+    (seq < firstFrame || seq > lastFrame)
+  )
+    setAnchor(seq)
   if (!fromApplied && from !== null && markers.length > 0) {
     setFromApplied(true)
     const index = markers.findIndex((candidate) => candidate.seq >= from)
@@ -76,10 +95,15 @@ function WatchView({ agentId }: { agentId: string }) {
   }, [cursor, playing, markers.length])
 
   const stage = useMemo(() => stageAt(frames, seq), [frames, seq])
-  const mine = useMemo(
-    () => (approvals.data ?? []).filter((item) => item.agentId === agentId),
-    [approvals.data, agentId],
-  )
+  const mine = useMemo(() => {
+    // The pending list is authoritative for open questions; the shared list adds answered ones.
+    const open = waiting.data ?? []
+    const ids = new Set(open.map((item) => item.id))
+    return [
+      ...open,
+      ...(approvals.data ?? []).filter((item) => item.agentId === agentId && !ids.has(item.id)),
+    ]
+  }, [approvals.data, waiting.data, agentId])
   const items = useMemo(() => activityItems(frames, mine), [frames, mine])
 
   if (!data) {
@@ -118,6 +142,7 @@ function WatchView({ agentId }: { agentId: string }) {
   function goLive() {
     setPlaying(false)
     setCursor(null)
+    setAnchor(null)
   }
   function toggle() {
     if (cursor === null) {
@@ -139,7 +164,9 @@ function WatchView({ agentId }: { agentId: string }) {
     if (found >= 0) select(found)
   }
   async function openInTerminal() {
-    const command = resumeCommand(agent.id, data?.sessionId ?? null)
+    // Run events do not carry the session, so ask for the current one rather than trust the snapshot.
+    const session = await fetchCurrentSession(agent.id).catch(() => data?.sessionId ?? null)
+    const command = resumeCommand(agent.id, session)
     setTerminal({ command, copied: await copyText(command) })
   }
 
@@ -185,6 +212,12 @@ function WatchView({ agentId }: { agentId: string }) {
       {pause.isError && (
         <p className="watch-state" role="alert">
           Could not {paused ? 'resume' : 'pause'} {agent.name}. Please try again.
+        </p>
+      )}
+      {from !== null && markers.length > 0 && from < markers[0]!.seq && (
+        <p className="watch-state" role="status">
+          That moment is older than the history Watch keeps, so the replay starts at the earliest
+          one available.
         </p>
       )}
       {terminal && (

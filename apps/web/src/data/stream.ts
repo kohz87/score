@@ -7,7 +7,13 @@ import {
 } from '@score/contract'
 
 export type StreamStatus = 'connecting' | 'open' | 'reconnecting'
-export type StreamControl = { frame: StreamControlFrame; resync: boolean; epochChanged: boolean }
+export type StreamControl = {
+  frame: StreamControlFrame
+  resync: boolean
+  epochChanged: boolean
+  /** The very first hello: snapshots fetched before it may predate the stream's head. */
+  first: boolean
+}
 export type StreamSource = {
   subscribe: (listener: (event: StreamEvent) => void) => () => void
   onControl: (listener: (control: StreamControl) => void) => () => void
@@ -88,6 +94,7 @@ export function createStreamClient({
         const control = parsed.frame
         const epochChanged =
           control.type === 'stream.hello' && epoch !== undefined && epoch !== control.data.epoch
+        const first = control.type === 'stream.hello' && epoch === undefined
         if (control.type === 'stream.hello') {
           headSeq = control.data.headSeq
           if (epochChanged || lastSeq === undefined) lastSeq = headSeq
@@ -100,6 +107,7 @@ export function createStreamClient({
             frame: control,
             resync: epochChanged || control.type === 'stream.reset',
             epochChanged,
+            first,
           }),
         )
         if (control.type === 'stream.reset') lastSeq = headSeq

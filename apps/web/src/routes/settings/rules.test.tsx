@@ -230,3 +230,30 @@ test('adding a Never rule on the Permissions tab sends the never: id', async () 
   expect(decodeURIComponent(patch.path)).toBe('/api/agents/builder/permissions/never:rm -rf /tmp/*')
   expect(patch.body).toEqual({ level: 'never' })
 })
+
+test('a preview that returns after the draft changed is ignored, and Save sends what was reviewed', async () => {
+  let release: () => void = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  const slow = vi.mocked(globalThis.fetch)
+  const original = slow.getMockImplementation()!
+  let asked = false
+  slow.mockImplementation(async (path, init) => {
+    if (String(path) === '/api/settings/rules?dryRun=1' && init?.method === 'PUT') {
+      asked = true
+      await gate
+      return json({ preview: '+mode: manual' })
+    }
+    return original(path, init)
+  })
+  mount('/settings')
+  const section = await screen.findByRole('region', { name: 'Rules and approvals' })
+  await within(section).findByRole('group', { name: 'Go ahead' })
+  fireEvent.click(within(section).getByRole('radio', { name: /Always ask me/ }))
+  fireEvent.click(within(section).getByRole('button', { name: 'Review changes' }))
+  fireEvent.click(within(section).getByRole('radio', { name: /Never ask/ }))
+  release()
+  await waitFor(() => expect(asked).toBe(true))
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  expect(within(section).queryByLabelText('Changes')).toBeNull()
+  expect(within(section).queryByRole('button', { name: 'Save for the whole team' })).toBeNull()
+})

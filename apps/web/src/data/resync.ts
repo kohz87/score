@@ -88,8 +88,10 @@ export function createStreamQueryRegistry(
   const unsubscribe = stream.subscribe((event) => entries.forEach((entry) => entry.event(event)))
   // Every resync fences: after a reset or an epoch change the client may have missed events, so
   // buffered deltas must never be applied on top of the old snapshot, even if the refetch fails.
-  const unsubscribeControl = stream.onControl(({ resync }) => {
-    if (resync)
+  const unsubscribeControl = stream.onControl(({ resync, first }) => {
+    // A first connection has no replay cursor, so snapshots fetched while it was still connecting
+    // may be missing events committed before the server's head; refetch them behind a fence.
+    if (resync || first)
       entries.forEach((entry) => {
         void entry.refetch(true)
       })
