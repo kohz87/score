@@ -188,6 +188,14 @@ export function appendRunMessage(
   if (!value) return []
   const mapping = MessageRunSchema.parse(value)
   const held = readPending(mapping.pending)
+  // The redaction context (a "Bearer " label, a PEM start) went with the lost held text, so a continuation can't be
+  // redacted safely: show nothing more until the run's final output arrives and is redacted whole.
+  if (held.lost) {
+    sqlite
+      .prepare('UPDATE message_runs SET pending = ? WHERE message_id = ?')
+      .run(writePending('', true), mapping.message_id)
+    return []
+  }
   const text = held.text + append
   const cut = settledLength(text)
   sqlite
