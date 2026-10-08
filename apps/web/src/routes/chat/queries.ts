@@ -162,3 +162,19 @@ export const approvalsQuery = defineStreamQuery<Approval[]>({
     return [approval, ...data.filter((item) => item.id !== approval.id)]
   },
 })
+
+// Files in play / Learned here are read models the server computes on request, so stream events
+// only trigger a refetch (see RoomPanels); the reducer never changes them.
+export function roomPanelsQuery(roomId: string) {
+  return defineStreamQuery({
+    key: ['chat', 'room-panels', roomId],
+    async fetch() {
+      const { asOfSeq, filesInPlay, learned } = RoomSnapshotSchema.parse(
+        await apiFetch(`rooms/${encodeURIComponent(roomId)}`),
+      )
+      return { asOfSeq, data: { filesInPlay, learned } }
+    },
+    types: [],
+    reduce: (data) => data,
+  })
+}

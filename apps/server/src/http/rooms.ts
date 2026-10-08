@@ -22,6 +22,7 @@ import {
   roomRow,
   storeMessage,
 } from '../domain/rooms.ts'
+import { roomFilesInPlay, roomLearned } from '../domain/room-panels.ts'
 import { reserveMessageRun } from '../domain/message-runs.ts'
 import { COMMANDS } from '../domain/parse.ts'
 import { routeMessage, modelCommand } from '../domain/routing.ts'
@@ -223,8 +224,8 @@ export function registerRoomRoutes(
     await refresh()
     const result = snapshot(db, (sqlite) => ({
       room: readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at),
-      filesInPlay: [],
-      learned: [],
+      filesInPlay: roomFilesInPlay(sqlite, roomId),
+      learned: roomLearned(sqlite, roomId),
     }))
     return { asOfSeq: result.asOfSeq, ...result.data }
   })
