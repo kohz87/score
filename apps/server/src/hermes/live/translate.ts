@@ -180,8 +180,10 @@ export function translateRunEvent(
     event.startsWith('run.') && runLifecycle.isTerminal(event.slice(4) as RunSummary['status'])
       ? TerminalSchema.parse(safe)
       : undefined
-  const delta = event === 'message.delta' ? DeltaSchema.parse(safe) : undefined
-  const interim = event === 'message.interim' ? InterimSchema.parse(safe) : undefined
+  // Reply text stays raw here: redacting each chunk on its own would destroy the context a secret split across
+  // chunks needs ("Authorization: Bearer" + token). appendRunMessage redacts it once it settles.
+  const delta = event === 'message.delta' ? DeltaSchema.parse(value) : undefined
+  const interim = event === 'message.interim' ? InterimSchema.parse(value) : undefined
   const ignored = event === 'reasoning.available'
   const known = Boolean(
     started ||

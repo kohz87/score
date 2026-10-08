@@ -94,9 +94,9 @@ export class ConfigService {
     private readonly backend: ConfigBackend,
     index: ConfigIndexEntry[],
   ) {
-    // The approval keys belong to Rules and approvals (team baseline, stricter-only, verified writes); editing
-    // them here would bypass all of that.
-    const managed = new Set<string>(APPROVAL_WRITE_KEYS)
+    // The approval keys belong to Rules and approvals (team baseline, stricter-only, verified writes), and
+    // skills.disabled to the Skills tab's serialized read-modify-write; editing them here would bypass that.
+    const managed = new Set<string>([...APPROVAL_WRITE_KEYS, 'skills.disabled'])
     for (const entry of index)
       if (!isExcludedConfigKey(entry.key) && !managed.has(entry.key))
         this.entries.set(entry.key, entry)

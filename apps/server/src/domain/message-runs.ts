@@ -1,3 +1,4 @@
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import type { DomainEventDraft } from '../hub/ingest.ts'
@@ -22,6 +23,7 @@ export const MessageRunSchema = z.object({
   agents: z.string().transform((value) => z.array(z.string()).parse(JSON.parse(value))),
   state: z.enum(['pending', 'active', 'completed', 'failed']),
   created_at: z.iso.datetime(),
+  pending: z.string(),
 })
 export type MessageRun = z.infer<typeof MessageRunSchema>
 
@@ -107,6 +109,57 @@ export function attachRunMessage(
   return drafts
 }
 
+// Redaction matches whole patterns, but a run streams text in arbitrary chunks: a token, or a label and its value
+// ("Authorization: Bearer" + "eyJ…", "api_key:" + value, a private key over many chunks), can arrive split. Text a
+// later chunk could still turn into a secret is held back (not stored in the message, not emitted) until it settles
+// or the run completes. The held text is sealed with a per-process key so raw fragments never sit on disk; after a
+// restart it can't be opened and is dropped (at worst the last words of an interrupted reply).
+const MAX_HELD = 8192
+const SECRET_CONTEXT =
+  /(?:[=:]|\b(?:authorization|bearer|basic|key|token|secret|password|passwd))["']?\s*$/i
+const OPEN_QUOTE = /[=:]\s*(["'])(?:(?!\1)[^\n])*$/
+const lineStart = (text: string, index: number) => text.lastIndexOf('\n', index - 1) + 1
+
+/** How much of `text` no later chunk can change: the rest stays held. */
+export function settledLength(text: string): number {
+  let cut = 0
+  for (let index = text.length - 1; index >= 0; index--)
+    if (/\s/.test(text[index]!)) {
+      cut = index + 1
+      break
+    }
+  // A label that a value may still follow holds its whole line back.
+  const from = Math.max(0, cut - 200)
+  const context = SECRET_CONTEXT.exec(text.slice(from, cut))
+  if (context) cut = Math.min(cut, lineStart(text, from + context.index))
+  if (OPEN_QUOTE.test(text.slice(lineStart(text, cut), cut))) cut = lineStart(text, cut)
+  // An unterminated PEM block holds everything from its start.
+  const begin = text.lastIndexOf('-----BEGIN')
+  if (begin !== -1 && !/-----END [A-Z0-9 ]+-----/.test(text.slice(begin)))
+    cut = Math.min(cut, lineStart(text, begin))
+  return text.length - cut > MAX_HELD ? text.length : cut
+}
+
+const SEAL_KEY = randomBytes(32)
+function seal(text: string): string {
+  if (!text) return ''
+  const iv = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', SEAL_KEY, iv)
+  const body = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()])
+  return Buffer.concat([iv, cipher.getAuthTag(), body]).toString('base64')
+}
+function unseal(value: string): string {
+  if (!value) return ''
+  try {
+    const raw = Buffer.from(value, 'base64')
+    const decipher = createDecipheriv('aes-256-gcm', SEAL_KEY, raw.subarray(0, 12))
+    decipher.setAuthTag(raw.subarray(12, 28))
+    return Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()]).toString('utf8')
+  } catch {
+    return '' // sealed by an earlier process
+  }
+}
+
 export function appendRunMessage(
   sqlite: DatabaseSync,
   runId: string,
@@ -116,7 +169,23 @@ export function appendRunMessage(
   const value = sqlite.prepare('SELECT * FROM message_runs WHERE run_id = ?').get(runId)
   if (!value) return []
   const mapping = MessageRunSchema.parse(value)
-  return updateMessage(sqlite, mapping.room_id, mapping.message_id, redact(append), now)
+  const text = unseal(mapping.pending) + append
+  const cut = settledLength(text)
+  sqlite
+    .prepare('UPDATE message_runs SET pending = ? WHERE message_id = ?')
+    .run(seal(text.slice(cut)), mapping.message_id)
+  return cut > 0
+    ? updateMessage(sqlite, mapping.room_id, mapping.message_id, redact(text.slice(0, cut)), now)
+    : []
+}
+
+function flushHeld(sqlite: DatabaseSync, mapping: MessageRun, now: string): DomainEventDraft[] {
+  if (!mapping.pending) return []
+  const held = unseal(mapping.pending)
+  sqlite
+    .prepare("UPDATE message_runs SET pending = '' WHERE message_id = ?")
+    .run(mapping.message_id)
+  return held ? updateMessage(sqlite, mapping.room_id, mapping.message_id, redact(held), now) : []
 }
 
 // Surfaces a Score-run approval in the room that started the run. Messages are append-only, so the
@@ -179,15 +248,21 @@ export function completeRunMessage(
   if (!value) return []
   const mapping = MessageRunSchema.parse(value)
   if (mapping.state !== 'active') return []
+  // Nothing can extend the held text any more.
+  const drafts: DomainEventDraft[] = flushHeld(sqlite, mapping, now)
   const message = messageFromRow(
     sqlite.prepare('SELECT * FROM messages WHERE id = ?').get(mapping.message_id),
   )
-  const drafts: DomainEventDraft[] = []
   // Polling/recovery may only have the final output. Never duplicate text already streamed.
   if (!message.parts.some((part) => part.kind === 'text') && output) {
-    drafts.push(...appendRunMessage(sqlite, runId, redactBounded(output, 8192), now))
-    message.parts.push({ kind: 'text', text: redactBounded(output, 8192) })
+    const text = redactBounded(output, 8192)
+    drafts.push(...updateMessage(sqlite, mapping.room_id, message.id, text, now))
+    message.parts.push({ kind: 'text', text })
   }
+  // Each chunk was redacted as it settled; redact the whole text once more in case a pattern spans chunks.
+  message.parts = message.parts.map((part) =>
+    part.kind === 'text' ? { ...part, text: redact(part.text) } : part,
+  )
   const tools = z
     .array(z.object({ tool: z.string() }))
     .parse(sqlite.prepare('SELECT tool FROM tool_calls WHERE run_id = ? ORDER BY seq').all(runId))
