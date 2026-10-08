@@ -75,7 +75,9 @@ docs/                plan, architecture, contract, setup, spike, design referenc
 - Record new prerequisites or setup steps in `docs/SETUP.md`.
 
 ## Licensing rules (non-negotiable)
-1. Score must be distributable with full rights: code is ours or MIT-compatible.
+1. Score is licensed under **PolyForm Noncommercial 1.0.0** (`LICENSE.md`, `NOTICE`; commercial use needs a separate
+   license, see `COMMERCIAL.md`; owner decision 2026-10-08). The owner must be able to relicense it commercially, so
+   all code stays ours or MIT-compatible.
 2. You MAY read, copy and adapt code from these MIT sources, cloned **outside** this repo in `../reference/`:
    JPeetz/Hermes-Studio, outsourc-e/hermes-workspace, NousResearch/hermes-agent,
    NousResearch/hermes-example-plugins. When you copy or closely adapt code, add the source file path and its

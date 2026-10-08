@@ -4,3 +4,5 @@ docs/
 # Recorded evidence (Hermes captures) keeps its original bytes.
 hermes-plugin/tests/fixtures/
 apps/server/test/fixtures/hermes/*.json
+# Official license text stays byte-exact.
+LICENSE.md

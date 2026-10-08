@@ -2,7 +2,7 @@
   "name": "@score/contract",
   "version": "0.0.0",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

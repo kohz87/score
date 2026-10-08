@@ -1,4 +1,4 @@
-# Draft proposal (not sent): one-shot grants for unattended workers in Hermes
+# Draft proposal (not sent): one-shot grants for unattended workers, and request ids in approval hooks
 
 **Status:** draft by Score's lead for the owner. Nothing has been posted to NousResearch. The owner decides whether and
 where to propose it (issue or PR on `NousResearch/hermes-agent`).
@@ -17,9 +17,17 @@ a plugin:
   guaranteed;
 - `tool_call_id` is not unique, so nothing identifies which call owns the grant.
 
-## Proposal
-A scoped capability that Hermes itself checks and consumes **inside** `_unattended_deny`, after all argument
-rewriting:
+## Proposal 1: opt-in one-shot grants
+**Opt-in, off by default.** Nothing changes for installations that don't enable it:
+
+```yaml
+approvals:
+  unattended_grants: false   # default; true enables stage/consume below for this profile
+```
+
+With the setting off, `stage_unattended_grant` refuses (raises or returns `None`), and `_unattended_deny` behaves
+exactly as today. With it on, a scoped capability that Hermes itself checks and consumes **inside**
+`_unattended_deny`, after all argument rewriting:
 
 ```python
 # tools/approval.py (sketch)
@@ -40,7 +48,24 @@ def revoke_unattended_grant(grant_id: str) -> bool: ...
   `hermes kanban grant --once --command-sha256 … <task>`, read by the next worker at start), so the operator's tool
   never needs to run code inside the worker.
 
+## Proposal 2: the request id in approval hooks
+`pre_approval_request` / `post_approval_response` don't carry the gateway queue entry's `request_id`
+(`tools/approval_gateway_wait.py`: the payload is built from `approval_data` without it). An observer that wants to
+answer through `resolve_gateway_approval(..., request_id=...)` has to guess the id from `list_gateway_approvals`, which is
+ambiguous when two identical commands are pending in one session (e.g. terminal approval batching), or when the prompt
+is answered on another surface between the enqueue and the hook.
+
+**Change:** add `request_id=entry.data["request_id"]` to the hook payload in `_await_gateway_decision` (and to the
+coalesced follower's hooks, plus `leader_request_id`), so `pre_approval_request` and its matching
+`post_approval_response` name the exact entry. It's additive: existing hook callbacks that accept `**kwargs` keep
+working, and narrow-signature callbacks are already filtered by `_hook_callback_kwargs`. The same applies to the
+transport path (it already passes `request_id`) and the CLI path (which has no queue entry; omit it there).
+
+Score would then report exact targets for every gateway prompt and drop its "exactly one matching entry" heuristic
+(ARCHITECTURE D4.2, known limit).
+
 ## What Score would do with it
 "Approve once" on a blocked Kanban card → `hermes kanban grant --once …` + `hermes kanban unblock --reason …`;
-the next worker consumes the grant inside Hermes's own guard. Until then Score shows these cards view-only, with Deny
-and Unblock-with-a-note (ARCHITECTURE D4.3).
+the next worker consumes the grant inside Hermes's own guard (only where the profile opted in). Until then Score
+shows these cards view-only, with Deny and Unblock-with-a-note (ARCHITECTURE D4.3). With proposal 2, gateway approvals
+become exact in every case.

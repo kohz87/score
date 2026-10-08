@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "A multi-agent workspace for Hermes Agent",
-  "license": "UNLICENSED",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "packageManager": "pnpm@12.9.1",
   "engines": {
