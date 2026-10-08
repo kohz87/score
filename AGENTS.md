@@ -60,7 +60,8 @@ docs/                plan, architecture, contract, setup, spike, design referenc
 - Every task ships with tests; the task's "done when" criteria in `docs/PLAN.md` are the acceptance tests.
 - Unit and integration: Vitest (`pnpm test`, or `pnpm --filter <pkg> test`). Server routes are tested with
   Fastify `inject()`.
-- E2E: Playwright (`pnpm e2e`) against `SCORE_MODE=fake`. Never against a live Hermes, and never spending model tokens.
+- E2E: Playwright (`pnpm e2e`) against `SCORE_MODE=fake`, on the production build (`SCORE_E2E_DEV=1` uses the Vite dev
+  server instead). Never against a live Hermes, and never spending model tokens.
 - Hermes behaviour is tested with recorded fixtures (`apps/server/test/fixtures/`). Never hit a live Hermes in tests.
 - Before you say a task is done: `pnpm check` (lint + format + typecheck + test + license) is green.
 

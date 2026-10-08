@@ -18,12 +18,29 @@ export default defineConfig({
   reporter: [['list']],
   use: { baseURL, trace: 'on-first-retry' },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: {
-    command: `pnpm dev 2>&1 | tee ${join(scoreHome, 'dev.log')}`,
-    // The server only accepts mutations from its own web origin, so it must follow SCORE_WEB_PORT.
-    env: { SCORE_HOME: scoreHome, SCORE_MODE: 'fake', SCORE_WEB_ORIGIN: baseURL },
-    url: baseURL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
-  },
+  // E2E runs the production build (what the owner runs): one Score process serving the built web app on the web port.
+  // The unbundled dev server loads ~130 modules per page, and on full page loads headless Chromium dropped some with
+  // ERR_INSUFFICIENT_RESOURCES (2026-10-08), so the page never started. SCORE_E2E_DEV=1 keeps the Vite dev server.
+  webServer: process.env.SCORE_E2E_DEV
+    ? {
+        command: `pnpm dev 2>&1 | tee ${join(scoreHome, 'dev.log')}`,
+        // The server only accepts mutations from its own web origin, so it must follow SCORE_WEB_PORT.
+        env: { SCORE_HOME: scoreHome, SCORE_MODE: 'fake', SCORE_WEB_ORIGIN: baseURL },
+        url: baseURL,
+        reuseExistingServer: !process.env.CI,
+        timeout: 60_000,
+      }
+    : {
+        command: `pnpm build >/dev/null && node scripts/start.mjs 2>&1 | tee ${join(scoreHome, 'dev.log')}`,
+        env: {
+          SCORE_HOME: scoreHome,
+          SCORE_MODE: 'fake',
+          SCORE_SERVE_WEB: '1',
+          SCORE_PORT: webPort,
+          SCORE_WEB_ORIGIN: baseURL,
+        },
+        url: baseURL,
+        reuseExistingServer: !process.env.CI,
+        timeout: 300_000,
+      },
 })

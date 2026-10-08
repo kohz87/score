@@ -119,8 +119,9 @@ test('Pause everyone and Resume everyone round trip', async ({ page }) => {
   await page.getByRole('button', { name: 'Pause everyone' }).click()
   await expect(page.getByRole('button', { name: 'Resume everyone' })).toBeVisible()
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Everyone is paused.')
-  // A reload keeps the state: it lives on the server.
-  await page.reload()
+  // A fresh load keeps the state: it lives on the server. (goto, not reload: on a reload of the unbundled dev build
+  // Chromium fails some of its ~130 module requests with ERR_INSUFFICIENT_RESOURCES and the page never starts.)
+  await page.goto('/now')
   await expect(page.getByRole('button', { name: 'Resume everyone' })).toBeVisible()
   await page.getByRole('button', { name: 'Resume everyone' }).click()
   await expect(page.getByRole('button', { name: 'Pause everyone' })).toBeVisible()
