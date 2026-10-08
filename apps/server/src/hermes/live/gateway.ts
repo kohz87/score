@@ -148,6 +148,21 @@ const ModelOptionsSchema = z.object({
           name: z.string().min(1).max(120),
           // How Hermes authenticates the provider (inventory.py `_provider_auth_hint`): "api_key", "oauth_device_code", …
           auth_type: z.string().max(64).optional(),
+          authenticated: z.boolean().optional(),
+          models: z.array(z.string().min(1).max(256)).max(2000).optional(),
+          unavailable_models: z.array(z.string().max(256)).max(2000).optional(),
+          pricing: z
+            .record(
+              z.string().max(256),
+              z
+                .object({
+                  input: z.unknown().optional(),
+                  output: z.unknown().optional(),
+                  free: z.unknown().optional(),
+                })
+                .loose(),
+            )
+            .optional(),
         })
         .loose(),
     )

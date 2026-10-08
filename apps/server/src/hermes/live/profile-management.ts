@@ -349,7 +349,10 @@ export class LiveProfileManagement implements ProfileManagementPort {
       await gateway().capabilities(name)
     } else if (step === 'model') {
       if (!input) throw failure('Create input is missing.')
-      await this.options.port.setAgentModel(name, { model: input.model })
+      await this.options.port.setAgentModel(name, {
+        model: input.model,
+        ...(input.provider ? { provider: input.provider } : {}),
+      })
       this.options.profiles.invalidate(name)
       const detail = await this.options.profiles.read(name, 0, true, {
         status: 'idle',

@@ -1,13 +1,17 @@
 import fs from 'node:fs'
-import { afterEach, beforeEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import {
   ConfigApplyResponseSchema,
   ConfigPreviewResponseSchema,
   ConfigSearchResponseSchema,
   ConnectResultSchema,
   ConnectionsResponseSchema,
+  ModelsResponseSchema,
+  HermesCheckSchema,
   ProvidersResponseSchema,
   ProviderItemSchema,
+  PluginItemSchema,
+  PluginsResponseSchema,
 } from '@score/contract'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
@@ -196,4 +200,75 @@ test('credential-shaped, env-backed and unknown keys are 400 on preview and appl
     ],
   ])
     expect((await post('/api/settings/config/preview', { changes: bad })).statusCode).toBe(400)
+})
+
+test('GET /api/models filters by every term, lists available first and validates the query', async () => {
+  const all = ModelsResponseSchema.parse((await app.inject('/api/models')).json()).items
+  expect(all.length).toBeGreaterThan(4)
+  const firstUnavailable = all.findIndex((item) => !item.available)
+  expect(all.slice(firstUnavailable).every((item) => !item.available)).toBe(true)
+  const gpt = ModelsResponseSchema.parse((await app.inject('/api/models?q=GPT')).json()).items
+  expect(new Set(gpt.map((item) => item.provider))).toEqual(
+    new Set(['openai-codex', 'nous', 'local']),
+  )
+  expect(gpt.every((item) => /gpt/i.test(item.model))).toBe(true)
+  expect(gpt.find((item) => item.model === 'openai/gpt-6.1-sol')).toMatchObject({
+    available: false,
+    reason: 'Not on your plan',
+  })
+  const narrow = ModelsResponseSchema.parse((await app.inject('/api/models?q=gpt%20nous')).json())
+  expect(narrow.items.map((item) => item.model)).toEqual(['openai/gpt-6.1-sol'])
+  expect((await app.inject(`/api/models?q=${'x'.repeat(101)}`)).statusCode).toBe(400)
+})
+
+test('GET /api/models answers an empty list when Hermes cannot say', async () => {
+  vi.spyOn(port, 'listModels').mockResolvedValue([])
+  expect((await app.inject('/api/models')).json()).toEqual({ items: [] })
+})
+
+const patch = (url: string, payload: object) =>
+  app.inject({ method: 'PATCH', url, headers, payload })
+
+test('plugins list per profile; enable and disable stick, the bridge stays locked', async () => {
+  const list = async (agent: string) =>
+    PluginsResponseSchema.parse((await app.inject(`/api/settings/plugins?agent=${agent}`)).json())
+      .items
+  const before = await list('builder')
+  expect(before.find((item) => item.id === 'score-bridge')).toMatchObject({
+    enabled: true,
+    locked: true,
+  })
+  const off = await patch('/api/settings/plugins/memory-notes?agent=builder', { enabled: false })
+  expect(PluginItemSchema.parse(off.json())).toMatchObject({ id: 'memory-notes', enabled: false })
+  expect((await list('builder')).find((item) => item.id === 'memory-notes')!.enabled).toBe(false)
+  // Another profile keeps its own state.
+  expect((await list('lead')).find((item) => item.id === 'memory-notes')!.enabled).toBe(true)
+  expect(
+    (await patch('/api/settings/plugins/score-bridge?agent=builder', { enabled: false }))
+      .statusCode,
+  ).toBe(409)
+  expect(
+    (await patch('/api/settings/plugins/nope?agent=builder', { enabled: true })).statusCode,
+  ).toBe(404)
+  expect(
+    (await patch('/api/settings/plugins/memory-notes?agent=builder', { enabled: 'yes' }))
+      .statusCode,
+  ).toBe(400)
+  expect((await app.inject('/api/settings/plugins')).statusCode).toBe(400)
+  expect((await app.inject('/api/settings/plugins?agent=ghost')).statusCode).toBe(404)
+})
+test('plugin changes need a human session', async () => {
+  const response = await app.inject({
+    method: 'PATCH',
+    url: '/api/settings/plugins/memory-notes?agent=builder',
+    payload: { enabled: false },
+  })
+  expect(response.statusCode).toBeGreaterThanOrEqual(401)
+})
+
+test('the fake adapter answers the Hermes version check cleanly', async () => {
+  const check = HermesCheckSchema.parse((await post('/api/settings/hermes/check')).json())
+  expect(check.compatible).toBe(true)
+  const accepted = await post('/api/settings/hermes/accept', { hash: check.hash })
+  expect(accepted.json()).toEqual({ ok: true })
 })

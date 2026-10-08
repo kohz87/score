@@ -48,7 +48,12 @@ test('Model, Skills, Memory and Tools tabs read and edit', async ({ page }) => {
   await page.route('**/api/agents/reviewer/model', async (route) => {
     const body = route.request().postDataJSON() as { model: string; provider?: string }
     sent.push(`model ${body.model} ${body.provider}`)
-    state.model = { id: body.model, label: body.model, via: body.provider!, fallback: null }
+    state.model = {
+      id: body.model,
+      label: body.model,
+      via: body.provider ?? 'Demo',
+      fallback: null,
+    }
     await route.fulfill({ json: { ...state } })
   })
   await page.route('**/api/agents/reviewer/memory*', async (route) => {
@@ -91,7 +96,6 @@ test('Model, Skills, Memory and Tools tabs read and edit', async ({ page }) => {
   await page.getByRole('tab', { name: 'Model' }).click()
   const modelForm = page.getByRole('form', { name: 'Change model' })
   await modelForm.getByLabel('Model', { exact: true }).fill('demo/next-model')
-  await modelForm.getByLabel('Provider (optional)').fill('demo-provider')
   await modelForm.getByRole('button', { name: 'Change model' }).click()
   await expect(page.getByText('Model changed to demo/next-model.')).toBeVisible()
 
@@ -137,7 +141,7 @@ test('Model, Skills, Memory and Tools tabs read and edit', async ({ page }) => {
   await expect(page.getByText('code-review · Disabled')).toBeVisible()
   await expect(page.getByText('changelog-writer')).toBeVisible()
   expect(sent).toEqual([
-    'model demo/next-model demo-provider',
+    'model demo/next-model undefined',
     'skill code-review false',
     'install example/skills/changelog-writer',
     'remember The demo is on Monday.',

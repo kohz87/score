@@ -20,6 +20,9 @@ import { createQueryClient, StreamContext } from './data/query-client.ts'
 import { createStreamClient } from './data/stream.ts'
 import { createStreamQueryRegistry } from './data/resync.ts'
 import { clearBrowserSession } from './data/session.ts'
+import { applyTheme, readTheme } from './data/theme.ts'
+
+applyTheme(readTheme())
 
 const queryClient = createQueryClient()
 const stream = createStreamClient()

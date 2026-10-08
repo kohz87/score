@@ -1,26 +1,25 @@
 import { useState, type FormEvent } from 'react'
 import type { AgentDetail } from '@score/contract'
+import { ModelPicker, type ModelChoice } from '../../components/ModelPicker.tsx'
 import { useModelAction } from './agent-tab-queries.ts'
 import { tabFailure } from './tab-errors.ts'
 
 export function ModelTab({ agent }: { agent: AgentDetail }) {
   const change = useModelAction(agent.id)
-  const [model, setModel] = useState('')
-  const [provider, setProvider] = useState('')
+  const [choice, setChoice] = useState<ModelChoice>({ model: '', provider: null })
   const [notice, setNotice] = useState('')
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    const next = model.trim()
-    const via = provider.trim()
+    const next = choice.model.trim()
+    const via = choice.provider
     setNotice('')
     change.mutate(
       { model: next, ...(via ? { provider: via } : {}) },
       {
         onSuccess: () => {
           setNotice(`Model changed to ${next}.`)
-          setModel('')
-          setProvider('')
+          setChoice({ model: '', provider: null })
         },
       },
     )
@@ -38,28 +37,7 @@ export function ModelTab({ agent }: { agent: AgentDetail }) {
         </p>
       )}
       <form className="team-routine-form" aria-label="Change model" onSubmit={submit}>
-        <label>
-          Model
-          <input
-            required
-            maxLength={200}
-            pattern="[A-Za-z0-9][A-Za-z0-9._:/@+#\-]*"
-            title="Letters, digits and . _ : / @ + # -"
-            placeholder="for example provider/model-name"
-            value={model}
-            onChange={(event) => setModel(event.target.value)}
-          />
-        </label>
-        <label>
-          Provider (optional)
-          <input
-            maxLength={200}
-            pattern="[A-Za-z0-9][A-Za-z0-9._:/@+#\-]*"
-            title="Letters, digits and . _ : / @ + # -"
-            value={provider}
-            onChange={(event) => setProvider(event.target.value)}
-          />
-        </label>
+        <ModelPicker label="Model" required value={choice} onChange={setChoice} maxLength={200} />
         {change.isError && <p role="alert">{tabFailure(change.error, 'change the model')}</p>}
         <div className="team-style-actions">
           <button type="submit" className="team-primary" disabled={change.isPending}>

@@ -63,6 +63,14 @@ export function captureReadShape(argv: string[]): boolean {
     argv[3] === 'list'
   )
     return true
+  // Plugin list for one profile (Settings › Plugins and look).
+  if (
+    argv.length === 5 &&
+    argv[0] === '-p' &&
+    ProfileNameSchema.safeParse(argv[1]).success &&
+    argv.slice(2).join(' ') === 'plugins list --json'
+  )
+    return true
   return (
     argv.length === 7 &&
     argv.slice(0, 3).join(' ') === 'skills search --json' &&

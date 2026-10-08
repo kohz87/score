@@ -3,9 +3,12 @@ import { HttpError } from '../../errors.ts'
 import { redact, redactBounded } from '../../redact.ts'
 import {
   HubSkillSchema,
+  type AgentChannelsResponse,
   type HubSkill,
   type MemoryItem,
   type MemoryPage,
+  type PluginItem,
+  PluginIdSchema,
   type SkillItem,
 } from '@score/contract'
 import {
@@ -18,9 +21,16 @@ import {
   MemoryQuerySchema,
   type AgentTool,
 } from '../agent-tabs.ts'
-import { HubRowsSchema, readDisabledSkills, readTools } from './agent-config.ts'
+import {
+  HubRowsSchema,
+  isBridgePlugin,
+  readDisabledSkills,
+  readPlugins,
+  readTools,
+} from './agent-config.ts'
 import { runHermes, type HermesRunner } from './cli.ts'
 import { readMemory } from './memory.ts'
+import { messagingRows, readGatewayPlatforms } from './settings.ts'
 import { ProfileNameSchema } from './paths.ts'
 import { skillNames } from './profiles.ts'
 
@@ -67,6 +77,17 @@ export class LiveAgentTabs {
     const { profile } = this.profile(agentId)
     await this.mutate(profile, ['config', 'set', 'model.default', req.model])
     if (req.provider) await this.mutate(profile, ['config', 'set', 'model.provider', req.provider])
+  }
+
+  /** Gateway state from this profile's own home; the connect command is shown, never run. */
+  listChannels(agentId: string): AgentChannelsResponse {
+    const { profile, home } = this.profile(agentId)
+    return {
+      items: messagingRows(readGatewayPlatforms(home)).map((row) => ({
+        ...row,
+        connectCommand: `hermes -p ${profile} gateway setup`,
+      })),
+    }
   }
 
   async listSkills(agentId: string): Promise<SkillItem[]> {
@@ -172,6 +193,34 @@ export class LiveAgentTabs {
       if (!after || after.enabled !== enabled)
         throw new HttpError(409, 'conflict', 'Hermes did not apply the change')
       return { ...after, label: redact(after.label) }
+    })
+  }
+
+  async listPlugins(agentId: string): Promise<PluginItem[]> {
+    const { profile } = this.profile(agentId)
+    const plugins = await readPlugins(this.runner, this.hermesHome, profile)
+    if (!plugins) throw new HttpError(502, 'hermes_unavailable', 'Hermes could not list plugins')
+    return plugins
+  }
+  /** `plugins enable|disable <name>`, then a re-read to verify. The Score bridge is never touched. */
+  async setPluginEnabled(agentId: string, id: string, enabled: boolean): Promise<PluginItem> {
+    PluginIdSchema.parse(id)
+    const { profile } = this.profile(agentId)
+    if (isBridgePlugin(id))
+      throw new HttpError(
+        409,
+        'conflict',
+        'The Score bridge stays on: Score needs it to see Hermes',
+      )
+    return this.serial(async () => {
+      const before = (await this.listPlugins(agentId)).find((plugin) => plugin.id === id)
+      if (!before) throw new HttpError(404, 'not_found', 'Plugin not found')
+      if (before.enabled !== enabled)
+        await this.mutate(profile, ['plugins', enabled ? 'enable' : 'disable', id])
+      const after = (await this.listPlugins(agentId)).find((plugin) => plugin.id === id)
+      if (!after || after.enabled !== enabled)
+        throw new HttpError(409, 'conflict', 'Hermes did not apply the change')
+      return after
     })
   }
 }

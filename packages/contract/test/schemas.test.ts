@@ -446,6 +446,37 @@ const cases = [
     },
     { items: [] },
   ],
+  [
+    'AgentChannelSchema',
+    {
+      platform: 'slack',
+      label: 'Slack',
+      status: 'disconnected',
+      detail: null,
+      connectCommand: 'hermes -p builder gateway setup',
+    },
+    { platform: 'slack', label: 'Slack', status: 'on', detail: null, connectCommand: 'x' },
+  ],
+  ['AgentChannelsResponseSchema', { items: [] }, { items: [{ platform: 'x' }] }],
+  ['HistoryOutcomeSchema', 'stopped', 'cancelled'],
+  [
+    'AgentHistoryItemSchema',
+    {
+      runId: 'r-1',
+      title: 'Fix the pager',
+      origin: 'kanban',
+      outcome: 'completed',
+      startedAt: '2026-10-01T10:00:00.000Z',
+      durationSec: 90,
+      model: null,
+      costUsd: null,
+      task: { id: 't-1', title: 'Fix the pager' },
+      brief: null,
+      replaySeq: 3,
+    },
+    { runId: 'r-1', outcome: 'done' },
+  ],
+  ['AgentHistoryPageSchema', { items: [], nextCursor: null }, { items: [] }],
   ['ConfigKeySchema', 'agent.max_turns', 'agent..x'],
   [
     'ConfigItemSchema',
@@ -499,6 +530,23 @@ const cases = [
     { ok: false, restartRequired: false },
   ],
   [
+    'HermesCheckPartSchema',
+    { name: 'Capabilities', status: 'same', detail: 'ok' },
+    { name: 'Capabilities', status: 'weird', detail: 'ok' },
+  ],
+  [
+    'HermesCheckSchema',
+    {
+      hash: 'a'.repeat(64),
+      build: { version: '1', codeSha: null, fingerprint: 'f' },
+      parts: [],
+      compatible: true,
+    },
+    { hash: 'short', build: {}, parts: [], compatible: true },
+  ],
+  ['HermesAcceptRequestSchema', { hash: 'a'.repeat(64) }, { hash: 'x' }],
+  ['HermesAcceptResponseSchema', { ok: true }, { ok: false }],
+  [
     'PairedBrowserSchema',
     {
       id: '3f1c2b8e-5d0a-4c1e-9a77-0b1d2e3f4a5b',
@@ -512,6 +560,15 @@ const cases = [
     { id: 'not-a-uuid' },
   ],
   ['PairedBrowsersSchema', { items: [] }, { items: [{ id: 'x' }] }],
+  ['PluginIdSchema', 'memory-notes', '--bad'],
+  [
+    'PluginItemSchema',
+    { id: 'memory-notes', label: 'memory-notes', enabled: true, locked: false, description: null },
+    { id: 'memory-notes', label: 'memory-notes', enabled: 'yes', locked: false, description: null },
+  ],
+  ['PluginsQuerySchema', { agent: 'builder' }, {}],
+  ['PluginsResponseSchema', { items: [] }, { items: [{ id: 'x' }] }],
+  ['PatchPluginRequestSchema', { enabled: false }, { enabled: false, extra: 1 }],
 ] as const satisfies ReadonlyArray<readonly [keyof typeof contract, unknown, unknown]>
 
 test('every exported schema has valid and invalid fixtures', () => {
