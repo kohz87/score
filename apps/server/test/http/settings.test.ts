@@ -257,6 +257,24 @@ test('plugins list per profile; enable and disable stick, the bridge stays locke
   expect((await app.inject('/api/settings/plugins')).statusCode).toBe(400)
   expect((await app.inject('/api/settings/plugins?agent=ghost')).statusCode).toBe(404)
 })
+test("one Idempotency-Key reused with another ?agent= never replays the first profile's answer", async () => {
+  const keyed = (agent: string) =>
+    app.inject({
+      method: 'PATCH',
+      url: `/api/settings/plugins/memory-notes?agent=${agent}`,
+      headers: { ...headers, 'idempotency-key': 'same-key' },
+      payload: { enabled: false },
+    })
+  expect((await keyed('reviewer')).statusCode).toBe(200)
+  // Audit 2026-10-08: this used to replay reviewer's 200 and leave builder's plugin on.
+  expect((await keyed('builder')).statusCode).toBe(409)
+  const builder = PluginsResponseSchema.parse(
+    (await app.inject('/api/settings/plugins?agent=builder')).json(),
+  ).items
+  expect(builder.find((item) => item.id === 'memory-notes')!.enabled).toBe(true)
+  // The same request again is still a replay.
+  expect((await keyed('reviewer')).statusCode).toBe(200)
+})
 test('plugin changes need a human session', async () => {
   const response = await app.inject({
     method: 'PATCH',

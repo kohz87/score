@@ -585,3 +585,15 @@ test('paired browsers can be listed and revoked over HTTP without exposing crede
     ).statusCode,
   ).toBe(401)
 })
+
+test('remote responses stay no-store even when a handler sets its own cache policy (media)', async () => {
+  const app = makeApp()
+  // Stands in for the media route, which sets `private, max-age=3600` (audit 2026-10-08).
+  app.get('/api/cache-probe', async (_request, reply) =>
+    reply.header('cache-control', 'private, max-age=3600').send({ ok: true }),
+  )
+  const cookie = await pair(app)
+  const response = await app.inject({ url: '/api/cache-probe', headers: { ...headers, cookie } })
+  expect(response.statusCode).toBe(200)
+  expect(response.headers['cache-control']).toBe('no-store')
+})

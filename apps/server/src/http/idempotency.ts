@@ -49,7 +49,11 @@ export function requestIdempotency(
       const route = request.url.split('?', 1)[0]!
       const identity = JSON.stringify([key, route])
       const hash = (options.secretBody ? createHmac('sha256', secret) : createHash('sha256'))
-        .update(canonical(request.body))
+        // Method and query are part of the request: `?agent=` picks the profile and `?dryRun=1` turns an apply into a
+        // preview, so the same key and body with another query must not replay the first answer (audit 2026-10-08).
+        .update(
+          canonical({ method: request.method, query: request.query ?? {}, body: request.body }),
+        )
         .digest('hex')
       const read = () =>
         db.sqlite

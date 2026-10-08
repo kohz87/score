@@ -11,6 +11,11 @@ export function registerRemoteGuard(
 ): void {
   if (!config.remote) return
   const authorities = new Set(config.remote.origins.map((origin) => new URL(origin).host))
+  // Handlers may set their own cache policy (media: private, 1 h); remote responses must never outlive the session.
+  app.addHook('onSend', async (_request, reply, payload) => {
+    reply.header('cache-control', 'no-store')
+    return payload
+  })
   app.addHook('onRequest', async (request, reply) => {
     reply.header('cache-control', 'no-store')
     if (!request.headers.host || !authorities.has(request.headers.host))
