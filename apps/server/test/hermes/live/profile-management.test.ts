@@ -197,7 +197,16 @@ test('every create/provision command has exact argv, private key precedes config
     '["sudo *","rm *"]',
   ])
   expect(calls).toContainEqual(['-p', 'helper', 'config', 'set', 'approvals.mode', 'smart'])
-  expect(calls).toContainEqual(['-p', 'helper', 'plugins', 'install', source, '--ref', pin])
+  expect(calls).toContainEqual([
+    '-p',
+    'helper',
+    'plugins',
+    'install',
+    source,
+    '--ref',
+    pin,
+    '--no-enable',
+  ])
   expect(calls).toContainEqual(['-p', 'helper', 'plugins', 'enable', 'score-bridge'])
   await expect(step('verify_ready')).rejects.toThrow(/No new bridge handshake/)
   env.db.sqlite

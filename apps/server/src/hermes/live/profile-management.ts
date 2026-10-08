@@ -365,6 +365,8 @@ export class LiveProfileManagement implements ProfileManagementPort {
           .string()
           .regex(/^[a-f0-9]{40}$/)
           .parse(this.options.bridgeInstallRef),
+        // Hermes otherwise asks whether to enable it; nobody answers a prompt here. Enabling is the next step.
+        '--no-enable',
       ])
       if (
         !['score-bridge', 'score_bridge'].some((dir) =>

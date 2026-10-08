@@ -234,6 +234,16 @@ empty and screenshot e2e covers each destination.
 ## Phase 5: Hardening
 Packaging (`pnpm build && pnpm start`), a11y audit, perf (1k events/min), Hermes-upgrade drill (re-run fixtures against the newest Hermes), docs.
 
+**5.1 Packaging** · `pnpm build && pnpm start` serves the built app and API from one loopback port, a `score` launcher
+script, a systemd user unit example, upgrade-safe data in `$SCORE_HOME`. Done when a fresh clone builds, starts and passes
+a smoke e2e against the built app.
+**5.2 Accessibility audit** · Lead audit (keyboard, focus, names, contrast, reduced motion) → fixes. Done when the audit
+list is empty.
+**5.3 Performance** · 1k events/min sustained through ingest → SSE → web; budgets for ingest latency, stream lag, page
+render, DB growth. Done when a repeatable load test meets the budgets.
+**5.4 Hermes upgrade drill** · Re-run recorded fixtures and the fingerprint against the newest Hermes; record breakages.
+**5.5 Docs** · README user guide (install, demo, live setup, remote access, agents, troubleshooting).
+
 ---
 
 ## First five tasks
