@@ -14,6 +14,9 @@ import { registerRoomRoutes } from './http/rooms.ts'
 import { registerBriefRoutes } from './http/briefs.ts'
 import { createBriefControl } from './http/brief-control.ts'
 import { registerTeamPauseRoutes } from './http/team-pause.ts'
+import { registerMediaRoutes } from './http/media.ts'
+import { MediaStore } from './media/store.ts'
+import { join } from 'node:path'
 import { registerNowRoutes } from './http/now.ts'
 import { registerApprovalRoutes } from './http/approvals.ts'
 import { registerErrorHandlers } from './errors.ts'
@@ -39,6 +42,8 @@ import {
 declare module 'fastify' {
   interface FastifyInstance {
     pairing: PairingService
+    // Present when the app has a database; Watch frame capture stores screenshots with media.store().
+    media?: MediaStore
   }
 }
 
@@ -55,6 +60,7 @@ interface BuildAppOptions {
   streamOptions?: Pick<StreamRouteOptions, 'heartbeatMs' | 'fanoutOptions'>
   bridge?: BridgeDeps
   outbox?: ApprovalOutbox
+  media?: MediaStore
   https?: { cert: Buffer; key: Buffer }
   webAssets?: WebAssets
 }
@@ -72,6 +78,7 @@ export function buildApp({
   streamOptions,
   bridge,
   outbox,
+  media,
   https,
   webAssets,
 }: BuildAppOptions): FastifyInstance {
@@ -144,6 +151,18 @@ export function buildApp({
       await approvalsOutbox.stop()
     })
   }
+  const mediaStore =
+    media ??
+    (db
+      ? new MediaStore(db, join(config.home, 'media'), {
+          ...(config.mediaQuotaMb ? { quotaBytes: config.mediaQuotaMb * 1024 * 1024 } : {}),
+          ...(clock ? { clock } : {}),
+        })
+      : undefined)
+  if (mediaStore) {
+    app.decorate('media', mediaStore)
+    registerMediaRoutes(app, mediaStore)
+  }
   registerTaskRoutes(app, port, ingest, db, clock)
   registerReportRoutes(app, port, db, clock)
   registerAgentRoutes(app, port, ingest, db, clock)
@@ -154,7 +173,7 @@ export function buildApp({
   registerSettingsRoutes(app, port, db, clock)
   registerRulesRoutes(app, port, ingest, db, clock)
   if (db && ingest) {
-    const dispatch = registerRoomRoutes(app, port, db, ingest, clock)
+    const dispatch = registerRoomRoutes(app, port, db, ingest, clock, mediaStore)
     const control = createBriefControl({ port, db, ingest, dispatch })
     registerBriefRoutes(app, { port, db, ingest, control, ...(clock ? { clock } : {}) })
     registerTeamPauseRoutes(app, { db, ingest, control, dispatch, ...(clock ? { clock } : {}) })

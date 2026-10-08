@@ -832,3 +832,51 @@
     gap: 10px;
   }
 }
+
+.chat-attachments {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chat-attachment {
+  height: 44px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  max-width: 100%;
+}
+.chat-attachment img {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+.chat-attachment span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+.chat-attachment button {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.chat-image {
+  display: block;
+  max-width: min(100%, 360px);
+  max-height: 280px;
+  border-radius: 16px;
+  border: 1px solid var(--hairline);
+}

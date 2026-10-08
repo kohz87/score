@@ -93,6 +93,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'ingest_checkpoints',
     'ingest_floors',
     'ingest_keys',
+    'media',
     'message_runs',
     'messages',
     'meta',

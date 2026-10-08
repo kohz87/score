@@ -21,7 +21,7 @@ import { deriveBriefEvents } from './domain/briefs.ts'
 import { deriveTaskEvents } from './domain/tasks.ts'
 import { createIngest, type Ingest } from './hub/ingest.ts'
 import { pruneEvents } from './hub/retention.ts'
-import { retireIngestKeys } from './hub/retire.ts'
+import { retireIngestKeys, retireMedia } from './hub/retire.ts'
 
 interface StartServerOptions {
   logger?: FastifyServerOptions['logger']
@@ -191,6 +191,11 @@ export async function startServer(
           retireIngestKeys(database)
         } catch (error) {
           app?.log.error({ err: error }, 'Ingest key retirement failed')
+        }
+        try {
+          if (app?.media) retireMedia(app.media)
+        } catch (error) {
+          app?.log.error({ err: error }, 'Media cleanup failed')
         }
         try {
           pruneBridge(database)

@@ -237,6 +237,8 @@ export const MessagePartSchema = z.discriminatedUnion('kind', [
     added: z.int().nonnegative(),
     removed: z.int().nonnegative(),
   }),
+  // An uploaded image (`/api/media/:mediaId`) attached to a human message.
+  z.object({ kind: z.literal('image'), mediaId: z.string().min(1) }),
   z.object({ kind: z.literal('approval'), approvalId: z.string().min(1) }),
   z.object({
     kind: z.literal('review'),

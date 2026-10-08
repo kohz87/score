@@ -84,6 +84,7 @@ type MessagePart =
   | { kind: 'plan'; lanes: { agentId: AgentId; blocks: LaneBlock[] }[]; briefId: string }
   | { kind: 'tools'; summary: string /* "Ran 6 commands and edited 2 files" */; runId: string }
   | { kind: 'file'; path: string; added: number; removed: number }
+  | { kind: 'image'; mediaId: string }                 // an uploaded image, served by GET /api/media/:mediaId
   | { kind: 'approval'; approvalId: string }
   | { kind: 'review'; verdict: 'approved' | 'changes_requested'; taskId: string | null }
 type Message = { id: string; roomId: string; author: { kind: 'you' } | { kind: 'agent'; agentId: AgentId }
@@ -251,7 +252,10 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   | `/skill` | `/skill @agent <name>` (use) · `/skill install <name>` | loads or installs a skill | `{ kind: 'skill', name, installed: boolean }` |
   | `/model` | `/model <model> <message…>` | runs this message on another model | `{ kind: 'model', model }` |
 - `GET /api/commands` → `{ items: { name: string; usage: string; description: string }[] }` (slash menu)
-- `POST /api/media` (multipart) → `{ mediaId: string; name: string; size: number; contentType: string }`
+- **H** `POST /api/media` (multipart, one part named `file`) → `201 { mediaId: string; name: string; size: number;
+  contentType: string }`. Types come from the bytes (png, jpeg, gif, webp); `400` empty or malformed, `413` over 8 MB,
+  `415` unsupported or contradicting type, `507 media_quota_exceeded`. Messages reference uploads with an `image`
+  part (at most 8 per message).
 
 ## 6. Approvals
 

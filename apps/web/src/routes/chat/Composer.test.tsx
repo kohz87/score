@@ -259,7 +259,7 @@ test('drafts persist per room and are restored', () => {
   expect((screen.getByRole('combobox') as HTMLTextAreaElement).value).toBe('')
 })
 
-test('works when storage is blocked and attach is disabled with a tooltip', () => {
+test('works when storage is blocked and attach stays available', () => {
   vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
     throw new Error('blocked')
   })
@@ -270,7 +270,31 @@ test('works when storage is blocked and attach is disabled with a tooltip', () =
   type('still works')
   expect(box().value).toBe('still works')
   const attach = screen.getByRole('button', { name: 'Attach files' })
-  expect(attach.hasAttribute('disabled')).toBe(true)
-  expect(attach.getAttribute('title')).toBe('Attachments are coming soon')
+  expect(attach.hasAttribute('disabled')).toBe(false)
   vi.restoreAllMocks()
+})
+
+test('attached images upload as multipart and are sent as attachments', async () => {
+  fetchMock.mockImplementation(async (input, init) => {
+    if (String(input) === '/api/commands') return json({ items: commands })
+    if (String(input) === '/api/media')
+      return json({ mediaId: 'm1', name: 'dot.png', size: 3, contentType: 'image/png' }, 201)
+    if (init?.method === 'POST') return json({ message: stored, routedTo: ['lead'], command: null })
+    return json({})
+  })
+  mount()
+  const input = screen.getByTestId('attach-input') as HTMLInputElement
+  fireEvent.change(input, {
+    target: { files: [new File([new Uint8Array([1, 2, 3])], 'dot.png', { type: 'image/png' })] },
+  })
+  await screen.findByText('dot.png')
+  const upload = posts()[0]!
+  expect(String(upload[0])).toBe('/api/media')
+  expect(upload[1]!.body).toBeInstanceOf(FormData)
+  expect(new Headers(upload[1]!.headers).get('content-type')).toBeNull()
+  type('see this')
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+  await waitFor(() => expect(posts()).toHaveLength(2))
+  expect(body(1)).toEqual({ text: 'see this', attachments: [{ mediaId: 'm1' }] })
+  await waitFor(() => expect(screen.queryByText('dot.png')).toBeNull())
 })

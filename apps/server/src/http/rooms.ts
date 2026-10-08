@@ -33,6 +33,7 @@ import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { snapshot } from '../hub/snapshot.ts'
+import type { MediaStore } from '../media/store.ts'
 import { requestIdempotency } from './idempotency.ts'
 
 const NameSchema = z
@@ -57,7 +58,10 @@ const MessageBodySchema = z
     to: z.array(AgentIdSchema).optional(),
     planFirst: z.boolean().optional(),
     model: z.string().min(1).max(256).optional(),
-    attachments: z.array(z.object({ mediaId: z.string().min(1) }).strict()).optional(),
+    attachments: z
+      .array(z.object({ mediaId: z.string().min(1) }).strict())
+      .max(8)
+      .optional(),
   })
   .strict()
 const ParamsSchema = z.object({ roomId: z.string().min(1).max(256) })
@@ -74,6 +78,7 @@ export function registerRoomRoutes(
   db: ScoreDb,
   ingest: Ingest,
   clock = Date.now,
+  media?: MediaStore,
 ): () => Promise<void> {
   // JSON escaping can expand a valid 16 KB text beyond the default receipt limit.
   const receipts = requestIdempotency(db, clock, (app.initialConfig.bodyLimit ?? 1048576) + 65536)
@@ -258,6 +263,9 @@ export function registerRoomRoutes(
     const { roomId } = ParamsSchema.parse(request.params)
     const body = MessageBodySchema.parse(request.body)
     const to = [...new Set(body.to ?? [])]
+    const mediaIds = [...new Set((body.attachments ?? []).map((item) => item.mediaId))]
+    if (mediaIds.length && (!media || !mediaIds.every((item) => media.has(item))))
+      throw new HttpError(400, 'bad_request', 'Unknown attachment')
     const known = (await agents()).map((agent) => agent.id)
     if (to.some((id) => !known.includes(id)))
       throw new HttpError(400, 'bad_request', 'Unknown agent')
@@ -309,11 +317,16 @@ export function registerRoomRoutes(
           roomId,
           author: { kind: 'you' },
           to,
-          parts: [{ kind: 'text', text: body.text }],
+          parts: [
+            { kind: 'text', text: body.text },
+            ...mediaIds.map((mediaId) => ({ kind: 'image' as const, mediaId })),
+          ],
           createdAt: now,
           streaming: false,
           refs: [],
         }
+        // Inside the same transaction, so an item deleted since the check above fails the whole message.
+        media?.retain(sqlite, mediaIds, now)
         const drafts = storeMessage(sqlite, message, now)
         for (const agentId of route.routedTo)
           reserveMessageRun(

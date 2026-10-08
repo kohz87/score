@@ -18,6 +18,15 @@ function Part({ part, agents }: { part: MessagePart; agents: AgentSummary[] }) {
           <span className="chat-removed">−{part.removed}</span>
         </div>
       )
+    case 'image':
+      return (
+        <img
+          className="chat-image"
+          src={`/api/media/${encodeURIComponent(part.mediaId)}`}
+          alt="Attached image"
+          loading="lazy"
+        />
+      )
     case 'review':
       return (
         <div className={`chat-compact chat-review chat-review--${part.verdict}`}>
