@@ -232,6 +232,9 @@ def redact_watch(watch: dict, redact_fn: Callable[[str], str]) -> dict:
     code = watch.get("exit_code")
     if type(code) is int and type(code) is not bool:
         result["exitCode"] = code
+    shot = watch.get("screenshot_path")
+    if type(shot) is str and 0 < len(shot) <= 4096:
+        result["screenshotPath"] = shot
     cwd = watch.get("cwd")
     if type(cwd) is str:
         try:

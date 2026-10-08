@@ -11,6 +11,7 @@ import { SqliteSessionStore } from './auth/sqlite-session-store.ts'
 import type { Config } from './config.ts'
 import {
   createHermesPort,
+  createScreenshotImporter,
   loadBridgeBootstrap,
   pruneBridge,
   sweepKanbanDenials,
@@ -21,6 +22,7 @@ import { deriveBriefEvents } from './domain/briefs.ts'
 import { deriveTaskEvents } from './domain/tasks.ts'
 import { createIngest, type Ingest } from './hub/ingest.ts'
 import { pruneEvents } from './hub/retention.ts'
+import { MediaStore } from './media/store.ts'
 import { retireIngestKeys, retireMedia } from './hub/retire.ts'
 
 interface StartServerOptions {
@@ -122,6 +124,9 @@ export async function startServer(
       onError: (error) => app?.log.error({ err: error }, 'Approval delivery failed'),
     })
     const dispatcher = outbox
+    const media = new MediaStore(database, join(config.home, 'media'), {
+      ...(config.mediaQuotaMb ? { quotaBytes: config.mediaQuotaMb * 1024 * 1024 } : {}),
+    })
     const bridge =
       config.mode === 'live'
         ? {
@@ -129,12 +134,14 @@ export async function startServer(
             ingest,
             bootstrapHash: loadBridgeBootstrap(config.home),
             getCompatibility: () => adapter.status().compatibility,
+            importScreenshot: createScreenshotImporter(config, media),
           }
         : undefined
     app = buildApp({
       config,
       port,
       outbox,
+      media,
       ...(logger === undefined ? {} : { logger }),
       db: database,
       ingest,

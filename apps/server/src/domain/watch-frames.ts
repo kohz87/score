@@ -29,6 +29,8 @@ export const WatchInfoSchema = z.object({
   tail: z.boolean().optional(),
   exitCode: z.int().nullish(),
   cwd: z.string().nullish(),
+  // Only used by the bridge translator, which swaps it for a media id; never stored.
+  screenshotPath: z.string().max(4096).optional(),
 })
 export type WatchInfo = z.infer<typeof WatchInfoSchema>
 
@@ -91,6 +93,8 @@ export interface ToolFrameInput {
   status: 'running' | 'ok' | 'error' | 'blocked'
   watch: WatchInfo | null
   lastBrowser: { url: string; title: string | null } | null
+  /** Media id of this call's screenshot (browser_vision only), already stored by the bridge route. */
+  screenshotMediaId?: string | null
 }
 export interface FrameDraft {
   suffix: string
@@ -197,7 +201,14 @@ export function framesForTool(input: ToolFrameInput): FrameDraft[] {
       {
         suffix: '',
         surface: 'browser',
-        payload: { url, title: r.title ?? input.lastBrowser?.title ?? null, imageUrl: null },
+        payload: {
+          url,
+          title: r.title ?? input.lastBrowser?.title ?? null,
+          imageUrl:
+            tool === 'browser_vision' && input.screenshotMediaId
+              ? `/api/media/${input.screenshotMediaId}`
+              : null,
+        },
         caption:
           tool === 'browser_navigate'
             ? known
@@ -352,6 +363,44 @@ export function runIdForSession(
   return row ? z.object({ id: z.string() }).parse(row).id : null
 }
 
+const MEDIA_URL = /^\/api\/media\/([0-9a-f-]{36})$/
+export function mediaIdOf(imageUrl: string | null | undefined): string | null {
+  return imageUrl ? (MEDIA_URL.exec(imageUrl)?.[1] ?? null) : null
+}
+
+// A frame that shows an image holds one reference, so the media quota sweep keeps it; retention releases it.
+function retainFrameImage(
+  sqlite: DatabaseSync,
+  draft: FrameDraft,
+  context: { agentId: string; at: string; sessionId: string | null; toolCallId: string | null },
+  mediaId: string | null | undefined,
+): void {
+  if (draft.surface !== 'browser') return
+  const browser = draft.payload as NonNullable<WatchFrame['browser']>
+  if (!mediaId || mediaIdOf(browser.imageUrl) !== mediaId) return
+  const key = context.toolCallId
+    ? `${context.sessionId ?? ''}:${context.toolCallId}${draft.suffix}`
+    : null
+  // A redelivered hook rewrites the same frame; it must not take a second reference.
+  const prior = key
+    ? sqlite
+        .prepare('SELECT payload FROM watch_frames WHERE agent_id = ? AND call_key = ?')
+        .get(context.agentId, key)
+    : undefined
+  if (
+    prior &&
+    mediaIdOf(
+      (JSON.parse(String((prior as { payload: unknown }).payload)) as { imageUrl?: string })
+        .imageUrl,
+    ) === mediaId
+  )
+    return
+  const changed = sqlite
+    .prepare('UPDATE media SET refs = refs + 1, last_used_at = ? WHERE id = ?')
+    .run(context.at, mediaId).changes
+  if (Number(changed) === 0) browser.imageUrl = null
+}
+
 /** Frames for one bridge tool hook, stored in the caller's transaction. */
 export function recordToolFrames(
   sqlite: DatabaseSync,
@@ -365,6 +414,7 @@ export function recordToolFrames(
 ): WatchFrame[] {
   const lastBrowser = lastBrowserFrame(sqlite, context.agentId)
   const drafts = framesForTool({ ...input, lastBrowser })
+  for (const draft of drafts) retainFrameImage(sqlite, draft, context, input.screenshotMediaId)
   const runId = runIdForSession(sqlite, context.agentId, context.sessionId)
   return drafts.map((draft) =>
     recordFrame(sqlite, {
