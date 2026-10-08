@@ -458,6 +458,23 @@ const cases = [
     { ok: false, restartRequired: false },
   ],
   [
+    'HermesCheckPartSchema',
+    { name: 'Capabilities', status: 'same', detail: 'ok' },
+    { name: 'Capabilities', status: 'weird', detail: 'ok' },
+  ],
+  [
+    'HermesCheckSchema',
+    {
+      hash: 'a'.repeat(64),
+      build: { version: '1', codeSha: null, fingerprint: 'f' },
+      parts: [],
+      compatible: true,
+    },
+    { hash: 'short', build: {}, parts: [], compatible: true },
+  ],
+  ['HermesAcceptRequestSchema', { hash: 'a'.repeat(64) }, { hash: 'x' }],
+  ['HermesAcceptResponseSchema', { ok: true }, { ok: false }],
+  [
     'PairedBrowserSchema',
     {
       id: '3f1c2b8e-5d0a-4c1e-9a77-0b1d2e3f4a5b',

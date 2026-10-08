@@ -409,6 +409,15 @@ incarnation-aware reuse confirmation contract is agreed.
 - **H** `POST /api/settings/config/apply` `{ changes; expectedDiffHash: string }` → `{ ok: true; restartRequired: boolean }`;
   `409 conflict` when the recomputed hash differs (config changed since the preview; preview again), `502` when Hermes
   refuses or doesn't keep a value.
+- **H** `POST /api/settings/hermes/check` → `HermesCheck` = `{ hash: string; build: { version: string | null; codeSha: string | null;
+  fingerprint: string }; parts: { name: string; status: 'same' | 'added' | 'changed' | 'removed'; detail: string }[];
+  compatible: boolean }`. Read-only: compares the running build (version, code sha, CLI string, capabilities, kanban and
+  state schema hashes, the bridge's hook names, the private approval functions, pattern keys) with the tested and accepted
+  builds. `compatible` = capabilities, schemas, hooks and private functions unchanged (new pattern keys are allowed).
+  `hash` = sha256 over `build` and `parts`.
+- **H** `POST /api/settings/hermes/accept` `{ hash }` → `{ ok: true }`: records this build in Score's own accepted-builds
+  store (`$SCORE_HOME`, never the repo registry) so the compatibility gate re-enables `gateway-approvals`. `409 conflict`
+  when the build changed since the check (hash differs), `409 not_compatible` when the check is not compatible.
 - `GET /api/settings/ui` · `PATCH /api/settings/ui` `{ theme?: 'light' | 'dark' }`
 
 ## 11. Internal: bridge plugin ↔ server (not for the front end)
