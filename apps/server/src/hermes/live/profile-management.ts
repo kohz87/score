@@ -414,15 +414,9 @@ export class LiveProfileManagement implements ProfileManagementPort {
         )
       )
         throw failure('Permissions changed during setup.')
-      const seen = db?.sqlite
-        .prepare(
-          "SELECT id FROM producers WHERE profile = ? AND created_at >= ? AND plugin_version = '0.1.0' AND isolation = 'in_process' AND last_seen_at >= ?",
-        )
-        .get(name, context.createdAt, new Date(Date.now() - 60_000).toISOString())
-      if (!seen)
-        throw failure(
-          'No new bridge handshake has been seen. Start a bridge-enabled session locally and verify its handshake; Score will not launch a conversation automatically.',
-        )
+      // The bridge plugin loads when the profile runs its first session, and Score never starts one by itself, so a
+      // handshake can't gate readiness (checked live 2026-10-08: it connects within seconds of the first run). The
+      // gateway key, model and team rules above are what must hold before Score routes work here.
     } else if (step === 'export') {
       const directory = join(resolve(this.options.scoreHome), 'profile-backups')
       ensurePrivateDirectory(resolve(this.options.scoreHome))

@@ -173,7 +173,7 @@ async function provision() {
   ] as const)
     await step(name)
 }
-test('every create/provision command has exact argv, private key precedes config set, and readiness needs a new handshake', async () => {
+test('every create/provision command has exact argv, private key precedes config set, and readiness does not wait for a first-run handshake', async () => {
   await provision()
   expect(calls[0]).toEqual([
     '-p',
@@ -208,7 +208,8 @@ test('every create/provision command has exact argv, private key precedes config
     '--no-enable',
   ])
   expect(calls).toContainEqual(['-p', 'helper', 'plugins', 'enable', 'score-bridge'])
-  await expect(step('verify_ready')).rejects.toThrow(/No new bridge handshake/)
+  // Ready without a handshake: the bridge connects on the profile's first run.
+  await expect(step('verify_ready')).resolves.not.toThrow()
   env.db.sqlite
     .prepare(
       "INSERT INTO producers (id, profile, incarnation, pid, isolation, plugin_version, private_apis, token_hash, token_expires_at, created_at, last_seen_at) VALUES ('bridge', 'helper', 'new-bridge', 1, 'in_process', '0.1.0', '{}', ?, ?, ?, ?)",
