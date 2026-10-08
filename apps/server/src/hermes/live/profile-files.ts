@@ -123,7 +123,9 @@ export class ProfileFiles {
     )
     try {
       try {
-        fs.writeSync(fd, bytes)
+        // writeSync may write fewer bytes than asked; loop so a short write can't truncate the file.
+        for (let offset = 0; offset < bytes.length;)
+          offset += fs.writeSync(fd, bytes, offset, bytes.length - offset)
         fs.fchmodSync(fd, before.mode ?? 0o644)
         fs.fsyncSync(fd)
       } finally {
