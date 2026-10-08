@@ -267,7 +267,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
     tagline: string /* "Builds what X plans. Working on …" */
     personality: { excerpt: string; source: 'SOUL.md' }; reportsTo: AgentId | null; worksIn: string | null
     rulesFile: 'AGENTS.md' | null
-    model: { id: string; label: string; via: string /* "Codex sign-in" */; fallback: string | null }
+    model: { id: string; label: string; via: string /* "Codex sign-in" */; fallback: string | null } | null /* unreadable */
     skills: { name: string; enabled: boolean }[]
     memory: { id: string; text: string; source: string; at: string }[]       // latest few
     tools: { id: string; label: string; kind: 'builtin' | 'mcp'; enabled: boolean }[]; helpersMax: number | null

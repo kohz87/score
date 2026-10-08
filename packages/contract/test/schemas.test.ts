@@ -8,6 +8,8 @@ const cases = [
   ['AgentStyleSchema', f.style, { ...f.style, color: '#abc' }],
   ['AgentStatusSchema', 'working', 'busy'],
   ['AgentSummarySchema', f.agent, { ...f.agent, id: '' }],
+  ['AgentDetailSchema', f.agentDetail, { ...f.agentDetail, rulesFile: 'SOUL.md' }],
+  ['RoutineSummarySchema', f.routine, { ...f.routine, lastRunAt: 'yesterday' }],
   ['RefSchema', f.refs[0], { kind: 'room', roomId: '' }],
   ['ApprovalChoiceSchema', 'once', 'forever'],
   ['ApprovalSchema', f.approval, { ...f.approval, createdAt: 'yesterday' }],
@@ -76,4 +78,27 @@ describe.each(cases)('%s', (name, valid, invalid) => {
   test('rejects an invalid fixture', () => {
     expect(schema.safeParse(invalid).success).toBe(false)
   })
+})
+
+test('AgentDetail extends the summary and accepts an unreadable model', () => {
+  const detail = {
+    ...f.agent,
+    tagline: 'Builds what lead plans.',
+    personality: { excerpt: 'Careful builder.', source: 'SOUL.md' },
+    reportsTo: 'lead',
+    worksIn: null,
+    rulesFile: 'AGENTS.md',
+    model: null,
+    skills: [{ name: 'git', enabled: true }],
+    memory: [],
+    tools: [],
+    helpersMax: null,
+    routines: [],
+    channels: [],
+    permissions: [],
+  }
+  expect(contract.AgentDetailSchema.parse(detail)).toEqual(detail)
+  expect(contract.AgentDetailSchema.safeParse({ ...detail, rulesFile: 'SOUL.md' }).success).toBe(
+    false,
+  )
 })
