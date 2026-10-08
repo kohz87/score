@@ -5,18 +5,36 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { App, appRoutes } from './App.tsx'
 import { destinations } from './shell/destinations.ts'
 import { useNeedsYou } from './shell/use-needs-you.ts'
+import { createQueryClient, StreamContext } from './data/query-client.ts'
+import { createStreamClient } from './data/stream.ts'
+import { createStreamQueryRegistry } from './data/resync.ts'
 
 vi.mock('./shell/use-needs-you.ts', () => ({ useNeedsYou: vi.fn(() => false) }))
 vi.mock('./routes/chat/ChatPage.tsx', () => ({ ChatPage: () => <h1>Chat</h1> }))
 
 const routers: ReturnType<typeof createMemoryRouter>[] = []
+const disposers: (() => void)[] = []
+
+class ShellEventSource extends EventTarget {
+  close() {}
+}
 
 function renderRoute(path: string) {
   const router = createMemoryRouter(appRoutes, { initialEntries: [path] })
+  const queryClient = createQueryClient()
+  const client = createStreamClient({ EventSourceImpl: ShellEventSource })
+  const queries = createStreamQueryRegistry(queryClient, client)
+  disposers.push(() => {
+    queries.dispose()
+    client.close()
+    queryClient.clear()
+  })
   routers.push(router)
   render(
     <StrictMode>
-      <App router={router} />
+      <StreamContext value={{ client, queries }}>
+        <App router={router} />
+      </StreamContext>
     </StrictMode>,
   )
   return router
@@ -29,11 +47,27 @@ function commandButton() {
 beforeEach(() => {
   vi.mocked(useNeedsYou).mockReturnValue(false)
   window.history.replaceState(null, '', '/')
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            asOfSeq: 0,
+            items: [],
+            rooms: [],
+            directs: [],
+            columns: { planned: [], working: [], in_review: [], needs_you: [], done: [] },
+          }),
+        ),
+    ),
+  )
 })
 
 afterEach(() => {
   cleanup()
   routers.splice(0).forEach((router) => router.dispose())
+  disposers.splice(0).forEach((dispose) => dispose())
   vi.unstubAllGlobals()
 })
 
@@ -45,6 +79,7 @@ const routes = [
   ['/chat', 'Chat'],
   ['/chat/general', 'Chat'],
   ['/tasks', 'Tasks'],
+  ['/tasks/demo', 'Tasks'],
   ['/team', 'Team'],
   ['/team/lead', 'Team'],
   ['/reports', 'Reports'],
@@ -72,7 +107,7 @@ test('/ redirects to /now', async () => {
   expect(router.state.location.pathname).toBe('/now')
 })
 
-test.each(['/unknown', '/now/unknown', '/tasks/unknown'])(
+test.each(['/unknown', '/now/unknown', '/tasks/demo/unknown'])(
   '%s shows not-found inside the shell',
   (path) => {
     renderRoute(path)
