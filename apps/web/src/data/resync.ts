@@ -23,8 +23,21 @@ type Entry = {
   event: (event: StreamEvent) => void
   flush: () => void
   refetch: (fence?: boolean) => Promise<void>
+  /** A reconnect is a chance to retry a snapshot that failed behind a fence. */
+  recover: () => void
   dispose: () => void
 }
+
+// An unobserved registration is dropped after this long (about TanStack's own gc time), together with its
+// handle and cache listener; the next use registers it again.
+const IDLE_EVICT_MS = 5 * 60_000
+// A failed fenced snapshot is retried with doubling delays up to this cap.
+const RETRY_BASE_MS = 1000
+const RETRY_MAX_MS = 30_000
+// Events held behind a fence beyond this restart the snapshot instead of growing without bound.
+const MAX_BUFFERED_EVENTS = 2000
+
+export type RegistryOptions = { idleEvictMs?: number; retryBaseMs?: number; maxBuffered?: number }
 
 // Calls `run` once, on the next animation frame. Hidden tabs never get frames, so they use a short
 // timer instead, and a backstop timer covers a tab that is hidden after the frame was requested.
@@ -63,7 +76,11 @@ export function createStreamQueryRegistry(
   queryClient: QueryClient,
   stream: StreamSource,
   schedule: FrameScheduler = defaultFrameScheduler,
+  options: RegistryOptions = {},
 ) {
+  const idleEvictMs = options.idleEvictMs ?? IDLE_EVICT_MS
+  const retryBaseMs = options.retryBaseMs ?? RETRY_BASE_MS
+  const maxBuffered = options.maxBuffered ?? MAX_BUFFERED_EVENTS
   const entries = new Map<string, Entry>()
   // Entries with queued events share one frame callback; each entry applies its queue in one write.
   const dirty = new Set<Entry>()
@@ -95,6 +112,7 @@ export function createStreamQueryRegistry(
       entries.forEach((entry) => {
         void entry.refetch(true)
       })
+    else entries.forEach((entry) => entry.recover())
   })
 
   function register<T>(definition: StreamQueryDefinition<T>) {
@@ -110,6 +128,10 @@ export function createStreamQueryRegistry(
     // Events that arrived while the cache was settled; applied together on the next frame.
     let pending: StreamEvent[] = []
     let disposed = false
+    let evicted = false
+    let failures = 0
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
     let releaseObserver: (() => void) | undefined
     const listeners = new Set<() => void>()
     const cached = () => queryClient.getQueryData<StreamSnapshot<T>>(definition.key)
@@ -159,6 +181,7 @@ export function createStreamQueryRegistry(
         buffer = []
         fetching = false
         fenced = false
+        failures = 0
         queryClient.setQueryData(definition.key, next)
         publish('success', null)
       } catch (error) {
@@ -173,10 +196,19 @@ export function createStreamQueryRegistry(
             buffer = []
           }
           publish('error', error)
+          // The fence stays until a snapshot succeeds, so keep trying rather than buffering forever.
+          if (fenced) {
+            clearTimeout(retryTimer)
+            const delay = Math.min(retryBaseMs * 2 ** failures++, RETRY_MAX_MS)
+            retryTimer = setTimeout(() => void recover(), delay)
+          }
         }
       } finally {
         queryClient.removeQueries({ queryKey: requestKey, exact: true })
       }
+    }
+    function recover() {
+      if (fenced && !fetching && observers > 0 && !disposed) void refetch(true)
     }
     function flush() {
       dirty.delete(entry)
@@ -197,15 +229,21 @@ export function createStreamQueryRegistry(
       refetch,
       event(event) {
         if (!observers || !definition.types.includes(event.type)) return
-        if (fetching || fenced || !cached()) buffer.push(event)
-        else {
+        if (fetching || fenced || !cached()) {
+          buffer.push(event)
+          // Restart the snapshot instead of holding an unbounded backlog; it covers everything buffered.
+          if (fenced && buffer.length > maxBuffered) void refetch(true)
+        } else {
           pending.push(event)
           markDirty(entry)
         }
       },
       flush,
+      recover,
       dispose() {
         disposed = true
+        clearTimeout(retryTimer)
+        clearTimeout(idleTimer)
         generation++
         buffer = []
         pending = []
@@ -220,7 +258,10 @@ export function createStreamQueryRegistry(
       getSnapshot: () => state,
       refetch,
       subscribe(listener) {
+        // The registration was evicted while idle: register again and subscribe to the fresh one.
+        if (evicted) return register(definition).subscribe(listener)
         listeners.add(listener)
+        clearTimeout(idleTimer)
         if (++observers === 1) {
           // Keep the canonical cache entry alive while the hook has subscribers.
           const observer = new QueryObserver<StreamSnapshot<T>>(queryClient, {
@@ -239,6 +280,14 @@ export function createStreamQueryRegistry(
             generation++
             fetching = false
             buffer = []
+            clearTimeout(retryTimer)
+            idleTimer = setTimeout(() => {
+              if (observers > 0) return
+              evicted = true
+              entry.dispose()
+              entries.delete(hash)
+              handles.delete(hash)
+            }, idleEvictMs)
           }
         }
       },
