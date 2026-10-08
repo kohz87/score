@@ -60,3 +60,20 @@ test("one browser's wrong guesses don't lock out another, and a new password cle
   await new SecurityPassword(dir).set('fresh password', 'owner password', 'owner')
   await expect(security.verify('fresh password', 'compromised')).resolves.toBeUndefined()
 })
+
+test('parallel guesses from one session are counted before they are verified', async () => {
+  const dir = home()
+  const security = new SecurityPassword(dir)
+  await security.set('the right password', undefined)
+  const results = await Promise.allSettled(
+    Array.from({ length: 12 }, (_, i) => security.verify(`wrong guess ${i}`, 'browser-a')),
+  )
+  const codes = results.map((result) =>
+    result.status === 'rejected' ? (result.reason as { status: number }).status : 200,
+  )
+  expect(codes.filter((code) => code === 403)).toHaveLength(5)
+  expect(codes.filter((code) => code === 429)).toHaveLength(7)
+  // Another browser is not locked out, and a right answer does not leave a failure behind.
+  await expect(security.verify('the right password', 'browser-b')).resolves.toBeUndefined()
+  await expect(security.verify('the right password', 'browser-b')).resolves.toBeUndefined()
+})

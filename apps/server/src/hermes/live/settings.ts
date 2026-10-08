@@ -359,6 +359,8 @@ export class LiveSettings {
     // Checked after the awaits above: shutdown may have started while the catalog was being read.
     this.admit()
     const signIn = await this.signIns.start(providerId.data)
+    // Hermes imported an existing credential: nothing left to do (the command stays as a courtesy).
+    if (signIn.state === 'connected') return { next: 'done', command }
     if (signIn.state !== 'waiting' || !signIn.url || !signIn.code)
       return { next: 'run_in_terminal', command }
     return {

@@ -323,6 +323,35 @@ test('a browser cannot renew past absolute expiry, and idle expiry is server enf
   ).toEqual({ paired: false })
 })
 
+test('an event-stream request does not consume the cookie refresh a renewal queued', async () => {
+  const dir = directory()
+  const db = openDatabase(join(dir, 'score.db'))
+  migrate(db, fileURLToPath(new URL('../migrations/', import.meta.url)))
+  cleanup.push(() => db.close())
+  const ingest = createIngest(db)
+  cleanup.push(() => ingest.close())
+  const app = buildApp({
+    config: loadConfig(env),
+    db,
+    ingest,
+    getEpoch: () => getEpoch(db),
+    logger: false,
+    streamOptions: { heartbeatMs: 5 },
+    sessionStore: new SqliteSessionStore(db),
+  })
+  cleanup.push(() => app.close())
+  const cookie = await pair(app)
+  await app.inject({ url: '/api/system', headers: { ...headers, cookie } })
+  app.pairing.renewBrowser(app.pairing.browsers(cookie)[0]!.id)
+  const abort = new AbortController()
+  cleanup.push(() => abort.abort())
+  const stream = await readStream(app, '/api/stream', abort.signal, { ...headers, cookie })
+  expect(stream.response.headers['set-cookie']).toBeUndefined()
+  abort.abort()
+  const next = await app.inject({ url: '/api/system', headers: { ...headers, cookie } })
+  expect(String(next.headers['set-cookie'])).toContain('Max-Age=')
+})
+
 test.each(['logout', 'revoke', 'idle', 'absolute'] as const)(
   '%s closes open streams without allowing heartbeats to renew sessions',
   async (action) => {

@@ -58,11 +58,13 @@ export async function startServer(
   let denialSweep: Promise<void> | undefined
   let deliverySweep: NodeJS.Timeout | undefined
   let retention: NodeJS.Timeout | undefined
+  let holdRecovery: NodeJS.Timeout | undefined
   let port: HermesPort | undefined
   let closing: Promise<void> | undefined
 
   async function closeResources(): Promise<void> {
     clearInterval(retention)
+    clearInterval(holdRecovery)
     clearInterval(deliverySweep)
     try {
       try {
@@ -173,6 +175,24 @@ export async function startServer(
       throw new Error('Could not bind the browser listener', { cause: error })
     }
     await port.start(ingest)
+    // Only now can the adapter read tasks. Retried (bounded) while Hermes or a write keeps failing.
+    const recoverHolds = app.recoverTaskHolds
+    if (recoverHolds) {
+      let attempts = 0
+      const attempt = () => {
+        attempts++
+        void recoverHolds()
+          .then((unresolved) => {
+            if (unresolved === 0 || attempts >= 20) clearInterval(holdRecovery)
+          })
+          .catch(() => {
+            if (attempts >= 20) clearInterval(holdRecovery)
+          })
+      }
+      holdRecovery = setInterval(attempt, 30_000)
+      holdRecovery.unref()
+      attempt()
+    }
     // Warm the per-profile caches, so the first page load after a restart doesn't wait ~15 s on cold Hermes reads.
     const warming = port
     void Promise.resolve()

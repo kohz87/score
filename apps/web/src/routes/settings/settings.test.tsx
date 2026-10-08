@@ -460,6 +460,28 @@ test('after signing in from the terminal, Done re-checks and the provider shows 
   expect(within(models).getAllByText('Connected')).toHaveLength(2)
 })
 
+test('a connect that finished at once shows the provider as connected without a command', async () => {
+  let signedIn = false
+  respond = (path, init) =>
+    init?.method === 'POST'
+      ? ((signedIn = true), json({ next: 'done', command: 'hermes auth add nous' }))
+      : path === '/api/settings/providers'
+        ? json({
+            items: providers.map((item) =>
+              item.id === 'nous' && signedIn
+                ? { ...item, status: 'connected', detail: 'Signed in' }
+                : item,
+            ),
+          })
+        : path === '/api/agents'
+          ? json({ asOfSeq: 0, items: [builder] })
+          : json(connections)
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Connect Nous Portal' }))
+  await screen.findByText('Nous Portal is connected.')
+  expect(screen.queryByRole('group', { name: 'Run in a terminal' })).toBeNull()
+})
+
 const waitingSignIn = {
   id: 'si-1',
   providerId: 'openai-codex',

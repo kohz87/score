@@ -268,6 +268,21 @@ test('connect starts a device sign-in for device-code providers and a terminal c
   settings.close()
 })
 
+test('a credential Hermes imports without a prompt is reported as done, not as a terminal fallback', async () => {
+  const settings = new LiveSettings(
+    home,
+    runner(() => 'nous (1 credentials):\n  #1  imported   oauth id=abc123 priority=0 manual\n'),
+    async () => [{ slug: 'nous', name: 'Nous Portal', auth_type: 'oauth_device_code' }],
+    'scoretesta',
+    spawn,
+  )
+  const started = settings.connectProvider('nous')
+  await vi.waitFor(() => expect(children).toHaveLength(1))
+  children[0]!.exit(0) // imported at once: no code printed, auth list confirms it
+  expect(await started).toMatchObject({ next: 'done', command: 'hermes auth add nous' })
+  settings.close()
+})
+
 test('a pasted key goes to stdin only, then is verified through auth list', async () => {
   let listing = ''
   const catalog = async () => [

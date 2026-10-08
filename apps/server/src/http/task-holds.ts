@@ -66,8 +66,11 @@ export interface TaskHolds {
   apply(owner: HoldOwner, stillPaused: () => boolean): Promise<string[]>
   /** Drops the owner's holds and unparks each task whose last hold this was. Returns the tasks that failed. */
   release(owner: HoldOwner): Promise<string[]>
-  /** Finishes holds a crash left half-done. */
-  recover(isPaused: (owner: HoldOwner) => boolean): Promise<void>
+  /**
+   * Finishes holds a crash left half-done: parks pending holds of paused owners and releases every hold of owners
+   * that are no longer paused. Returns how many tasks still need another attempt.
+   */
+  recover(isPaused: (owner: HoldOwner) => boolean): Promise<number>
 }
 
 /**
@@ -129,6 +132,16 @@ export function createTaskHolds(deps: {
         .run(owner.id, taskId)
     })
 
+  const legacyOf = (owner: HoldOwner, taskId: string) =>
+    db.read((sqlite) => {
+      const { table, column } = TABLES[owner.kind]
+      return (
+        sqlite
+          .prepare(`SELECT 1 FROM ${table} WHERE ${column} = ? AND task_id = ? AND legacy = 1`)
+          .get(owner.id, taskId) !== undefined
+      )
+    })
+
   const taskOf = (taskId: string) =>
     port.getTask(taskId).catch((error: unknown) => {
       if (error instanceof HttpError && error.status === 404) return undefined
@@ -139,8 +152,14 @@ export function createTaskHolds(deps: {
     if (stateOf(owner, taskId) === undefined) return
     const task = await taskOf(taskId)
     const last = !db.read((sqlite) => otherHold(sqlite, taskId, owner))
-    // Only what Score parked, and only if it is still parked (the person may have moved it since).
-    if (task && last && taskStatus(task) === 'scheduled')
+    // Only what Score parked, and only if it is still parked (the person may have moved it since). Holds from before
+    // tasks were parked as `scheduled` (legacy) parked them as `blocked`.
+    const parked = task ? taskStatus(task) : undefined
+    if (
+      task &&
+      last &&
+      (parked === 'scheduled' || (parked === 'blocked' && legacyOf(owner, taskId)))
+    )
       await port.taskAction({ taskId, action: 'unblock', text: RESUME_REASON })
     await drop(owner, taskId)
   }
@@ -178,8 +197,9 @@ export function createTaskHolds(deps: {
       })
       if (hermesStatus !== 'scheduled') return false
     } catch {
-      // Refused because the task moved on (started, finished, archived): nothing to hold any more.
-      const now = await taskOf(taskId).catch(() => undefined)
+      // Refused because the task moved on (started, finished, archived): nothing to hold any more. If the read that
+      // tells us so fails too, the outcome is unknown: the intent stays pending and the caller sees a failure.
+      const now = await taskOf(taskId)
       if (now && (PARKABLE.includes(taskStatus(now)) || taskStatus(now) === 'scheduled'))
         return false
       await drop(owner, taskId)
@@ -233,16 +253,18 @@ export function createTaskHolds(deps: {
           const { table, column } = TABLES[kind]
           return z
             .array(OwnerRow)
-            .parse(
-              sqlite
-                .prepare(`SELECT DISTINCT ${column} AS owner FROM ${table} WHERE state = 'pending'`)
-                .all(),
-            )
+            .parse(sqlite.prepare(`SELECT DISTINCT ${column} AS owner FROM ${table}`).all())
             .map((row): HoldOwner => ({ kind, id: row.owner }))
         }),
       )
-      for (const owner of owners)
-        await (isPaused(owner) ? holds.apply(owner, () => isPaused(owner)) : holds.release(owner))
+      let unresolved = 0
+      for (const owner of owners) {
+        const failed = await (isPaused(owner)
+          ? holds.apply(owner, () => isPaused(owner))
+          : holds.release(owner))
+        unresolved += failed.length
+      }
+      return unresolved
     },
   }
   return holds

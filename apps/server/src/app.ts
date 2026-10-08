@@ -49,6 +49,8 @@ declare module 'fastify' {
     pairing: PairingService
     // Present when the app has a database; Watch frame capture stores screenshots with media.store().
     media?: MediaStore
+    // Present when the app has a database. Resolves to the number of held tasks that still need another attempt.
+    recoverTaskHolds?: () => Promise<number>
   }
 }
 
@@ -186,23 +188,22 @@ export function buildApp({
     const dispatch = registerRoomRoutes(app, port, db, ingest, clock, mediaStore)
     const holds = createTaskHolds({ port, db, ingest })
     const control = createBriefControl({ port, db, ingest, holds, dispatch })
-    // A crash between "pause recorded" and "task parked" leaves pending holds; finish them once Hermes is reachable.
-    app.addHook('onReady', () => {
-      void holds
-        .recover((owner) =>
-          db.read(
-            (sqlite) =>
-              sqlite
-                .prepare(
-                  owner.kind === 'brief'
-                    ? 'SELECT 1 FROM briefs WHERE id = ? AND paused_at IS NOT NULL'
-                    : 'SELECT 1 FROM agent_pauses WHERE agent_id = ?',
-                )
-                .get(owner.id) !== undefined,
-          ),
-        )
-        .catch(() => undefined)
-    })
+    // A crash between "pause recorded" and "task parked" (or "resumed" and "unparked") leaves holds behind. The
+    // server runs this once the adapter has started, and again until nothing is left (Hermes may be unreachable).
+    app.decorate('recoverTaskHolds', () =>
+      holds.recover((owner) =>
+        db.read(
+          (sqlite) =>
+            sqlite
+              .prepare(
+                owner.kind === 'brief'
+                  ? 'SELECT 1 FROM briefs WHERE id = ? AND paused_at IS NOT NULL'
+                  : 'SELECT 1 FROM agent_pauses WHERE agent_id = ?',
+              )
+              .get(owner.id) !== undefined,
+        ),
+      ),
+    )
     registerBriefRoutes(app, { port, db, ingest, control, ...(clock ? { clock } : {}) })
     registerTeamPauseRoutes(app, { db, ingest, control, dispatch, ...(clock ? { clock } : {}) })
     registerWatchRoutes(app, { port, db, ingest })

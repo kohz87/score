@@ -219,3 +219,58 @@ test('resume while the park is still in flight waits for it and leaves nothing p
   expect((await port.getTask(task.id)).hermesStatus).toBe('ready')
   expect(rows('SELECT 1 FROM agent_paused_tasks')).toEqual([])
 })
+
+test('recovery runs when asked (after the adapter starts), not when the app becomes ready', async () => {
+  const task = await port.createTask({ title: 'Pending', assignee: 'builder', roomId }, 'a')
+  db.sqlite.prepare("INSERT INTO agent_pauses (agent_id, paused_at) VALUES ('builder', 'x')").run()
+  db.sqlite
+    .prepare(
+      "INSERT INTO agent_paused_tasks (agent_id, task_id, blocked_at, state) VALUES ('builder', ?, 'x', 'pending')",
+    )
+    .run(task.id)
+  const read = vi.spyOn(port, 'getTask')
+  await app.ready()
+  expect(read).not.toHaveBeenCalled()
+  expect(await app.recoverTaskHolds!()).toBe(0)
+  expect((await port.getTask(task.id)).hermesStatus).toBe('scheduled')
+  expect(rows('SELECT state FROM agent_paused_tasks')).toEqual([{ state: 'held' }])
+})
+
+test('recovery releases confirmed holds of an owner that was resumed before the release finished', async () => {
+  const task = await port.createTask({ title: 'Held', assignee: 'builder', roomId }, 'a')
+  await post('/api/agents/builder/pause', {}, 'p')
+  expect((await port.getTask(task.id)).hermesStatus).toBe('scheduled')
+  // Resume cleared the pause, then the server stopped before unparking.
+  db.sqlite.prepare('DELETE FROM agent_pauses').run()
+  expect(await app.recoverTaskHolds!()).toBe(0)
+  expect((await port.getTask(task.id)).hermesStatus).toBe('ready')
+  expect(rows('SELECT 1 FROM agent_paused_tasks')).toEqual([])
+})
+
+test('a task blocked by the previous implementation (legacy hold) is unblocked on resume', async () => {
+  const task = await port.createTask({ title: 'Old pause', assignee: 'builder', roomId }, 'a')
+  await port.taskAction({ taskId: task.id, action: 'block', text: 'Paused from Score' })
+  db.sqlite.prepare("INSERT INTO agent_pauses (agent_id, paused_at) VALUES ('builder', 'x')").run()
+  db.sqlite
+    .prepare(
+      "INSERT INTO agent_paused_tasks (agent_id, task_id, blocked_at, state, legacy) VALUES ('builder', ?, 'x', 'held', 1)",
+    )
+    .run(task.id)
+  expect((await post('/api/agents/builder/resume', {}, 'r')).statusCode).toBe(200)
+  expect((await port.getTask(task.id)).hermesStatus).toBe('ready')
+  expect(rows('SELECT 1 FROM agent_paused_tasks')).toEqual([])
+})
+
+test('when the park is uncertain and the follow-up read fails too, the intent stays pending', async () => {
+  const task = await port.createTask({ title: 'Unknown', assignee: 'builder', roomId }, 'a')
+  const original = port.getTask.bind(port)
+  let reads = 0
+  vi.spyOn(port, 'getTask').mockImplementation((id) =>
+    ++reads === 1 ? original(id) : Promise.reject(new Error('hermes down')),
+  )
+  vi.spyOn(port, 'taskAction').mockRejectedValueOnce(new Error('timed out'))
+  const response = await post('/api/agents/builder/pause', {}, 'p')
+  expect(response.statusCode).toBe(502)
+  expect(response.json().error.details).toEqual({ taskIds: [task.id] })
+  expect(rows('SELECT state FROM agent_paused_tasks')).toEqual([{ state: 'pending' }])
+})

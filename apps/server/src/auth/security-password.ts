@@ -79,6 +79,9 @@ export class SecurityPassword {
     const mine = this.#failures.filter((failure) => failure.session === session).length
     if (mine >= MAX_FAILURES_PER_SESSION || this.#failures.length >= MAX_FAILURES)
       throw new HttpError(429, 'too_many_attempts', 'Too many wrong passwords. Try again later.')
+    // Counted before the slow hash starts, so parallel guesses can't all pass the check; a match gives it back.
+    const attempt = { at: now, session }
+    this.#failures.push(attempt)
     const candidate = PasswordSchema.safeParse(password)
     const [, , , , salt, key] = stored.split('$')
     const expected = Buffer.from(key!, 'base64url')
@@ -86,9 +89,9 @@ export class SecurityPassword {
       ? await scrypt(candidate.data, Buffer.from(salt!, 'base64url'), KEY_LENGTH, PARAMS)
       : Buffer.alloc(KEY_LENGTH)
     if (!candidate.success || !timingSafeEqual(actual, expected)) {
-      this.#failures.push({ at: now, session })
       throw new HttpError(403, 'wrong_password', 'That is not the security password')
     }
+    this.#failures = this.#failures.filter((failure) => failure !== attempt)
   }
 
   /** First time: no current password needed. After that, changing it needs the current one. */
