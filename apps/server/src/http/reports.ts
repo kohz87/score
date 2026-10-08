@@ -4,6 +4,7 @@ import { ReportRangeSchema, ReportsSchema } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
 import { computeReports, readReportRows, reportWindow } from '../domain/reports.ts'
 import { reportsToCsv } from '../domain/reports-csv.ts'
+import { profileSpendInWindow, recordSessionCosts } from '../domain/spend.ts'
 import type { HermesPort } from '../hermes/index.ts'
 
 export function registerReportRoutes(
@@ -34,6 +35,16 @@ export function registerReportRoutes(
     const agents = await port.listAgents()
     const agentIds = agents.map((agent) => agent.id)
     const facts = await port.reportFacts({ from: window.from, to: now, agentIds })
+    if (db && port.sessionCosts) {
+      // Snapshot first, so the window always holds a reading and each session's share is its delta.
+      const costs = await port.sessionCosts({ sinceMs: window.from, agentIds })
+      for (const [profile, sessions] of Object.entries(costs)) {
+        facts.spendUsd[profile] = db.tx((sqlite) => {
+          recordSessionCosts(sqlite, profile, sessions, now)
+          return profileSpendInWindow(sqlite, profile, sessions, window.from, now)
+        })
+      }
+    }
     const own = db
       ? db.read((sqlite) => readReportRows(sqlite, window.from, now))
       : { runs: [], approvals: [] }

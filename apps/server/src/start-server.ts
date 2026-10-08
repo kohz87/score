@@ -30,6 +30,7 @@ import { deriveBriefEvents } from './domain/briefs.ts'
 import { deriveTaskEvents } from './domain/tasks.ts'
 import { createIngest, type Ingest } from './hub/ingest.ts'
 import { rotateLog } from './log-rotation.ts'
+import { snapshotSessionCosts } from './domain/spend.ts'
 import { pruneEvents } from './hub/retention.ts'
 import { MediaStore } from './media/store.ts'
 import { retireIngestKeys, retireMedia } from './hub/retire.ts'
@@ -69,6 +70,7 @@ export async function startServer(
   let retention: NodeJS.Timeout | undefined
   let logRotation: NodeJS.Timeout | undefined
   let holdRecovery: NodeJS.Timeout | undefined
+  let spendSnapshots: NodeJS.Timeout | undefined
   let port: HermesPort | undefined
   let closing: Promise<void> | undefined
 
@@ -76,6 +78,7 @@ export async function startServer(
     clearInterval(retention)
     clearInterval(logRotation)
     clearInterval(holdRecovery)
+    clearInterval(spendSnapshots)
     clearInterval(deliverySweep)
     try {
       try {
@@ -258,6 +261,14 @@ export async function startServer(
       60 * 60 * 1000,
     )
     retention.unref()
+    const sampler = port
+    const sampleSpend = () =>
+      void snapshotSessionCosts(database, sampler, Date.now()).catch((error: unknown) =>
+        app?.log.error({ err: error }, 'Spend snapshot failed'),
+      )
+    spendSnapshots = setInterval(sampleSpend, 10 * 60 * 1000)
+    spendSnapshots.unref()
+    sampleSpend()
     // The launcher names the file its output goes to; without it (tests, dev) nothing is rotated.
     const logFile = process.env.SCORE_LOG_FILE
     if (logFile) {
