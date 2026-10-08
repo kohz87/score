@@ -89,6 +89,8 @@ export function buildApp({
   const app = Fastify({
     ...(https ? { https } : {}),
     trustProxy: false,
+    // Live streams (SSE) never go idle, so the default ('idle') left `score stop` waiting on open browsers.
+    forceCloseConnections: true,
     logger:
       logging === false
         ? false
@@ -218,7 +220,7 @@ export function buildBridgeApp(
   outbox?: ApprovalOutbox,
   logger: FastifyServerOptions['logger'] = false,
 ): FastifyInstance {
-  const app = Fastify({ logger, trustProxy: false })
+  const app = Fastify({ logger, trustProxy: false, forceCloseConnections: true })
   registerErrorHandlers(app)
   app.addHook('onRequest', async (request, reply) => {
     if (request.ip !== '127.0.0.1' && request.ip !== '::1')
