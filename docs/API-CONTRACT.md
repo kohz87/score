@@ -136,6 +136,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `task.activity` | `{ taskId, item: TaskActivity }` | task drawer, Flow inspector |
 | `lane.upserted` | `{ briefId \| null, agentId, block: LaneBlock }` | Now › Score, Chat plan card |
 | `handoff.created` | `{ briefId \| null, handoff: Handoff }` | Score connectors, Flow edges, live log |
+| `brief.upserted` | `BriefSummary` | Flow brief picker and header; refetch that brief's graph |
 | `run.updated` | `RunSummary` | Flow inspector, Watch header |
 | `gap.recorded` | `{ source: string; runId: string \| null; from: string; to: string \| null; reason: string }` | Watch, Flow log |
 | `log.line` | `LogLine` | Flow live log, Watch "What she's doing" |
@@ -191,7 +192,14 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   run: RunSummary | null; model: string | null; tools: string[]; watch: { agentId; thumbnail: string | null; front: string } | null }`
 - **S** `GET /api/briefs/:briefId/log?agent=&kind=tool|all&cursor=` → `{ items: LogLine[]; nextCursor }`
   `type LogLine = { id; at; agentId; kind: 'tool' | 'message' | 'handoff' | 'approval' | 'system'; text }`
-- `POST /api/briefs/:briefId/pause` / `/resume`, `POST /api/flow/nodes/:nodeId/stop` → `{ ok: true }`
+- **H** `POST /api/briefs/:briefId/pause` / `/resume` → `BriefSummary`. Pause holds Score's queue for the brief and blocks
+  its not-started tasks (`hermes kanban block`); running steps finish. Resume unblocks only what Score blocked.
+- **H** `POST /api/flow/nodes/:nodeId/stop` → `{ ok: true }`: stops that node's active run (409 when nothing is running).
+- **H** `POST /api/rooms/:roomId/messages/:messageId/plan/start` → `{ briefId; taskIds: string[] }`: creates one Kanban task
+  per plan step of that `plan` message (idempotent per message).
+- A brief is a human room message plus what it causes (`briefId` = that message id; turns, hand-offs, and tasks Score
+  created for it or their Kanban children). Node ids: `brief:<id>`, `task:<taskId>`, `turn:<messageId>`. Status is
+  derived (`paused` > `running` > `failed` > `done`). Links are exact only; see `docs/reviews/2026-10-08-3.4-briefs-design-lead.md`.
 
 ### Watch view (event replay)
 - **S** `GET /api/agents/:agentId/watch?from=<seq>&limit=` →
