@@ -115,6 +115,7 @@ type TaskDetail = TaskSummary & {
   blocks: string[]
   runIds: string[]
   completedAt?: string | null /* kanban completed_at; "Made today" uses it, not updatedAt */
+  briefId?: string | null /* newest brief Score linked this task to (GET /api/tasks/:taskId); "See it in Flow" opens /now/flow/:briefId */
 }
 
 type Room = {

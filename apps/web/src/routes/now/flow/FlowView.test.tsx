@@ -125,7 +125,7 @@ afterEach(() => {
   dispose.splice(0).forEach((fn) => fn())
   vi.unstubAllGlobals()
 })
-function setup() {
+function setup(path = '/now/flow/fixture-flow') {
   const queryClient = createQueryClient()
   const client = createStreamClient({ EventSourceImpl: Source })
   const queries = createStreamQueryRegistry(queryClient, client)
@@ -135,7 +135,7 @@ function setup() {
     queryClient.clear()
   })
   const router = createMemoryRouter([{ path: '/now/flow/:briefId', element: <FlowView /> }], {
-    initialEntries: ['/now/flow/fixture-flow'],
+    initialEntries: [path],
   })
   render(
     <QueryClientProvider client={queryClient}>
@@ -297,4 +297,12 @@ test('continuous unrelated events do not cancel a slow flow read', async () => {
   } finally {
     clearInterval(deltas)
   }
+})
+
+test('?node= selects that step when the flow opens', async () => {
+  setup('/now/flow/fixture-flow?node=task%3Astates')
+  await waitFor(() =>
+    expect(requests.some((request) => request.url === '/api/flow/nodes/task%3Astates')).toBe(true),
+  )
+  expect(requests.some((request) => request.url === '/api/flow/nodes/task%3Astream')).toBe(false)
 })

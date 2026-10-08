@@ -218,12 +218,14 @@ function Actions({ task, agents }: { task: TaskDetail; agents: AgentSummary[] })
             Approve once
           </button>
         )}
-        <Link
-          className="task-drawer-secondary"
-          to={`/now/flow?task=${encodeURIComponent(task.id)}`}
-        >
-          See it in Flow
-        </Link>
+        {task.briefId && (
+          <Link
+            className="task-drawer-secondary"
+            to={`/now/flow/${encodeURIComponent(task.briefId)}?node=${encodeURIComponent(`task:${task.id}`)}`}
+          >
+            See it in Flow
+          </Link>
+        )}
       </div>
       {!canApprove && task.hermesStatus === 'blocked' && (
         <button

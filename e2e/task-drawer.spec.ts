@@ -50,10 +50,8 @@ test('approves a pending approval from the task drawer', async ({ page }) => {
     '/chat/room-activity-feed',
   )
   await expect(drawer.getByText('Asked to install typedoc@0.28.0')).toBeVisible()
-  await expect(drawer.getByRole('link', { name: 'See it in Flow' })).toHaveAttribute(
-    'href',
-    /\/now\/flow\?task=task-docs-\d+$/,
-  )
+  // A task outside any run has no Flow to open.
+  await expect(drawer.getByRole('link', { name: 'See it in Flow' })).toHaveCount(0)
   await drawer.getByRole('button', { name: 'Approve: install the docs generator' }).click()
   await expect.poll(() => decision?.url).toMatch(/^\/api\/approvals\/approval-docs-\d+\/decision$/)
   expect(decision?.body).toEqual({ choice: 'once' })

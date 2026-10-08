@@ -199,6 +199,8 @@ export const TaskDetailSchema = TaskSummarySchema.extend({
   runIds: z.array(z.string().min(1)),
   /** Kanban's own completion time; absent on older projections and in the fake adapter. */
   completedAt: z.iso.datetime().nullable().optional(),
+  /** The newest brief Score linked this task to; Flow opens that run. Absent when none (or unknown). */
+  briefId: z.string().min(1).nullable().optional(),
 })
 export type TaskDetail = z.infer<typeof TaskDetailSchema>
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import type { BriefStatus, BriefSummary } from '@score/contract'
 import { useStreamQuery } from '../../../data/query-client.ts'
 import { taskAgentsQuery, taskRoomsQuery } from '../../tasks/task-queries.ts'
@@ -53,6 +53,9 @@ export type FlowViewProps = { onSelect?: (nodeId: string | null) => void }
 export function FlowView({ onSelect }: FlowViewProps = {}) {
   const { briefId: routeBriefId } = useParams()
   const navigate = useNavigate()
+  // `?node=` comes from links such as a task's "See it in Flow"; a click in the graph takes over.
+  const [search] = useSearchParams()
+  const requestedNode = search.get('node')
   const { active, recent } = useBriefLists()
   const agents = useStreamQuery(taskAgentsQuery)
   const rooms = useStreamQuery(taskRoomsQuery)
@@ -70,7 +73,8 @@ export function FlowView({ onSelect }: FlowViewProps = {}) {
     selection.briefId === briefId &&
     flow.data?.nodes.some((node) => node.id === selection.nodeId)
       ? selection.nodeId
-      : (flow.data?.nodes.find((node) => node.state === 'needs_you')?.id ??
+      : (flow.data?.nodes.find((node) => node.id === requestedNode)?.id ??
+        flow.data?.nodes.find((node) => node.state === 'needs_you')?.id ??
         flow.data?.nodes.find((node) => node.kind === 'step')?.id ??
         null)
   const [now, setNow] = useState(Date.now)

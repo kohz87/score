@@ -284,3 +284,27 @@ test('a server error or a crash-pending receipt on task creation is retried, not
   expect((await app.inject(request)).statusCode).toBe(200)
   expect(create).toHaveBeenCalledTimes(3)
 })
+
+test('task detail names the newest brief it is linked to', async () => {
+  await scheduler.advance(700 * 18)
+  const id = 'task-pagination-0'
+  expect((await app.inject(`/api/tasks/${id}`)).json().briefId).toBeUndefined()
+  db.sqlite.exec('PRAGMA foreign_keys = OFF')
+  for (const [brief, at] of [
+    ['m-old', '2026-10-08T10:00:00.000Z'],
+    ['m-new', '2026-10-08T11:00:00.000Z'],
+  ] as const) {
+    db.sqlite
+      .prepare(
+        "INSERT INTO briefs (id, room_id, title, started_at, started_by) VALUES (?, 'room', 'b', ?, 'you')",
+      )
+      .run(brief, at)
+    db.sqlite
+      .prepare(
+        "INSERT INTO brief_tasks (brief_id, task_id, origin, linked_at) VALUES (?, ?, 'assign', ?)",
+      )
+      .run(brief, id, at)
+  }
+  const detail = TaskDetailSchema.parse((await app.inject(`/api/tasks/${id}`)).json())
+  expect(detail.briefId).toBe('m-new')
+})
