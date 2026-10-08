@@ -30,6 +30,7 @@ import type { HubSkill, MemoryItem, MemoryPage, SkillItem } from '@score/contrac
 import type { AgentTool } from './agent-tabs.ts'
 import type { ApprovalConfig } from './approvals.ts'
 import type { IngestResult, Observation } from '../hub/ingest.ts'
+import type { ReportFacts } from '../domain/reports.ts'
 
 export interface ObservationSink {
   submit(obs: Observation): Promise<IngestResult>
@@ -144,6 +145,8 @@ export interface HermesPort {
   getTask(id: string): Promise<TaskDetail>
   createTask(req: z.infer<typeof CreateTaskSchema>, idempotencyKey: string): Promise<TaskDetail>
   patchTask(id: string, req: z.infer<typeof PatchTaskSchema>): Promise<TaskDetail>
+  /** Report inputs only Hermes has: reviewer send-backs and per-agent spend in [from, to] (epoch ms). */
+  reportFacts(req: { from: number; to: number; agentIds: string[] }): Promise<ReportFacts>
   listAgentDetails(): Promise<AgentDetail[]>
   listRoutines(agentId: string): Promise<RoutineSummary[]>
   createRoutine(

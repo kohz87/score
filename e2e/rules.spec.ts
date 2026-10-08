@@ -92,4 +92,6 @@ test('Settings rules: staged edit with a reviewed diff, then a stricter-only age
     .poll(() => decodeURIComponent(sent.at(-1)!.url))
     .toContain('permissions/never:rm -rf /tmp/*')
   expect(sent.at(-1)!.body).toBeNull()
+  // A refetch can still be inside the route handler; without this the worker errors and skips the next test.
+  await page.unrouteAll({ behavior: 'ignoreErrors' })
 })

@@ -4,12 +4,14 @@ import type { Config } from './config.ts'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
 import { registerAgentRoutes } from './http/agents.ts'
 import { registerAgentTabRoutes } from './http/agent-tabs.ts'
+import { registerReportRoutes } from './http/reports.ts'
 import { registerTaskRoutes } from './http/tasks.ts'
 import { registerRoutineRoutes } from './http/routines.ts'
 import { registerRulesRoutes } from './http/rules.ts'
 import { registerSettingsRoutes } from './http/settings.ts'
 import { registerRoomRoutes } from './http/rooms.ts'
 import { registerBriefRoutes } from './http/briefs.ts'
+import { registerNowRoutes } from './http/now.ts'
 import { registerApprovalRoutes } from './http/approvals.ts'
 import { registerErrorHandlers } from './errors.ts'
 import { registerCsrfGuard } from './auth/csrf.ts'
@@ -128,6 +130,7 @@ export function buildApp({
     })
   }
   registerTaskRoutes(app, port, ingest, db, clock)
+  registerReportRoutes(app, port, db, clock)
   registerAgentRoutes(app, port, ingest, db, clock)
   registerAgentTabRoutes(app, port, ingest, db, clock)
   registerRoutineRoutes(app, port, db, clock)
@@ -136,6 +139,13 @@ export function buildApp({
   if (db && ingest) {
     const dispatch = registerRoomRoutes(app, port, db, ingest, clock)
     registerBriefRoutes(app, { port, db, ingest, dispatch, ...(clock ? { clock } : {}) })
+    registerNowRoutes(app, {
+      port,
+      db,
+      ingest,
+      disabled: () => bridge?.getCompatibility().disabled ?? port.status().compatibility.disabled,
+      ...(clock ? { clock } : {}),
+    })
   }
   app.get('/api/health', async () => ({ ok: true, contract: CONTRACT_VERSION }))
   registerSessionRoutes(app, app.pairing)

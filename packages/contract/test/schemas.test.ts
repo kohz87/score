@@ -65,6 +65,27 @@ const cases = [
     },
     { asOfSeq: 0, columns: { backlog: [] } },
   ],
+  [
+    'NowSnapshotSchema',
+    {
+      asOfSeq: 0,
+      now: f.at,
+      headline: { working: 1, needsYou: 1, text: 'One agent is working. One thing needs you.' },
+      lanes: [{ agent: f.agent, blocks: [f.lane] }],
+      handoffs: [f.handoff],
+      focusApproval: f.approval,
+      thread: { roomId: 'room-1', messages: [f.message] },
+      madeToday: [
+        {
+          title: 'Feed',
+          ref: { kind: 'task', taskId: 'task-1' },
+          files: [{ path: 'a.ts', added: 0, removed: 0 }],
+          checks: [{ label: 'Tests pass', agentId: 'builder', ok: true }],
+        },
+      ],
+    },
+    { asOfSeq: 0, now: f.at, headline: { working: -1, needsYou: 0, text: '' } },
+  ],
   ['AgentsSnapshotSchema', { asOfSeq: 0, items: [f.agent] }, { asOfSeq: 0.5, items: [] }],
   [
     'CommandsResponseSchema',
@@ -88,6 +109,37 @@ const cases = [
   ['RoutinesResponseSchema', { items: [f.routine] }, { items: [{}] }],
   ['RoutineDeletedSchema', { id: 'builder:j1' }, { id: '' }],
   ['RoutineRunSchema', { id: 'builder:j1', queued: true }, { id: 'builder:j1', queued: false }],
+  ['ReportRangeSchema', '7d', 'year'],
+  [
+    'ReportsSchema',
+    {
+      range: 'today',
+      summary: 'No tasks finished today.',
+      totals: {
+        tasksFinished: 0,
+        runs: 0,
+        firstPassRate: null,
+        medianTaskSec: null,
+        spendUsd: null,
+      },
+      byDay: [{ date: '2026-03-10', perAgent: { builder: 1 } }],
+      timeSplit: [
+        { agentId: 'builder', workingPct: 50, waitingOnYouPct: 50, waitingOnAgentPct: 0 },
+      ],
+      byAgent: [
+        {
+          agentId: 'builder',
+          finished: 1,
+          runs: 1,
+          medianSec: 60,
+          firstPassRate: null,
+          spendUsd: 0.1,
+        },
+      ],
+      approvals: { asked: 0, approved: 0, denied: 0, medianWaitSec: null, insight: null },
+    },
+    { range: 'today' },
+  ],
   ['AgentDetailSchema', f.agentDetail, { ...f.agentDetail, rulesFile: 'SOUL.md' }],
   ['RoutineSummarySchema', f.routine, { ...f.routine, lastRunAt: 'yesterday' }],
   ['RefSchema', f.refs[0], { kind: 'room', roomId: '' }],

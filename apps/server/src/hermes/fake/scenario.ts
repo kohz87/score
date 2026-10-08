@@ -100,6 +100,10 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
     taskId,
     runId: run.id,
   }
+  const reviewRun = {
+    ...exampleRun('reviewer', id('scenario-review'), time(6650)),
+    refs: [{ kind: 'task' as const, taskId }],
+  }
   const approval = (origin: Approval['origin'], agentId: string, at: number): Approval => ({
     id: id(`approval-${origin}`),
     origin,
@@ -545,6 +549,13 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
       },
     },
     { at: 9800, kind: 'agent.updated', data: agents[2]! },
+    // The review pass is a run of its own, so Now › Score draws the reviewer's lane from real run data.
+    { at: 6650, kind: 'run.updated', data: { ...reviewRun, status: 'running' } },
+    {
+      at: 9500,
+      kind: 'run.updated',
+      data: { ...reviewRun, status: 'completed', endedAt: time(9500), toolsUsed: ['editor'] },
+    },
   )
   // A second task keeps an actionable approval open for most of the loop, so the task drawer can be
   // exercised without racing the first approval's short life.

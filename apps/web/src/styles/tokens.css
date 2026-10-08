@@ -6,6 +6,7 @@
   --ink-muted: #5e626c;
   --muted: #6e727c;
   --hairline: #dfe2e8;
+  --agent-unknown: #9aa0ab; /* agents Score doesn't know (removed profiles) */
   --subtle: #f4f5f8;
   --tasks-ground: #e3e6eb;
   --tasks-border: #e3e5ea;
