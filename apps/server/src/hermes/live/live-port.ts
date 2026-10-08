@@ -173,7 +173,12 @@ export class LivePort implements HermesPort {
         void this.tasks?.poll().catch((error: unknown) => this.options.onError?.(error))
       }, 1000)
       this.taskTimer.unref()
-      this.intents = new RunIntents({ db: this.db, gateway: this.gateway, sink })
+      this.intents = new RunIntents({
+        db: this.db,
+        gateway: this.gateway,
+        sink,
+        ...(this.options.imageReader ? { imageReader: this.options.imageReader } : {}),
+      })
       await this.refreshStatus()
       await this.intents.recoverIntents()
       const rows = z
@@ -600,6 +605,7 @@ export class LivePort implements HermesPort {
     turnId: string
     sessionId?: string
     model?: string
+    images?: string[]
   }): Promise<{ runId: string }> {
     const { intents } = this.requireStarted()
     assertAgentAdmits(this.db!.sqlite, req.agentId)
@@ -613,6 +619,7 @@ export class LivePort implements HermesPort {
           input: req.input,
           ...(req.model ? { model: req.model } : {}),
           ...(req.sessionId ? { sessionId: req.sessionId } : {}),
+          ...(req.images?.length ? { images: req.images } : {}),
         },
         req.turnId,
       )

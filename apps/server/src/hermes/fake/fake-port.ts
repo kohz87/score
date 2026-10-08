@@ -1408,6 +1408,7 @@ export class FakePort implements HermesPort {
         turnId: z.string().min(1),
         sessionId: z.string().min(1).optional(),
         model: z.string().min(1).optional(),
+        images: z.array(z.string().min(1)).optional(),
       })
       .parse(input)
     return this.enqueue(async () => {
@@ -1419,7 +1420,11 @@ export class FakePort implements HermesPort {
       const runId = `fake-run:${req.turnId}`
       const startedAt = this.scheduler.now()
       const run = { ...exampleRun(req.agentId, runId, this.now()), model: req.model ?? null }
-      const response = this.reply(req)
+      const base = this.reply(req)
+      const seen = req.images?.length ?? 0
+      const response = seen
+        ? { ...base, text: `${base.text} I can see ${seen} image${seen === 1 ? '' : 's'}.` }
+        : base
       await this.requireSink().submit({
         source: 'fake',
         identity: `${this.sessionId}:admitted:${req.turnId}`,

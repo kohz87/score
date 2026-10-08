@@ -55,6 +55,8 @@ export const StartRunSchema = z.object({
   input: z.string().min(1),
   sessionId: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
+  // Media ids only: bytes are read when the request is sent (never stored in the intent).
+  images: z.array(z.string().min(1)).max(16).optional(),
 })
 export type StartRun = z.infer<typeof StartRunSchema>
 const AdmissionSchema = z.object({
@@ -309,14 +311,19 @@ export class GatewayClient {
     }
   }
 
-  async startRun(request: StartRun, idempotencyKey: string, generation?: number) {
+  async startRun(
+    request: StartRun,
+    idempotencyKey: string,
+    generation?: number,
+    wireInput?: unknown,
+  ) {
     const { profile, input, sessionId, model } = StartRunSchema.parse(request)
     const result = await this.json(
       profile,
       '/v1/runs',
       AdmissionSchema,
       {
-        input,
+        input: wireInput ?? input,
         ...(sessionId === undefined ? {} : { session_id: sessionId }),
         ...(model === undefined ? {} : { model }),
       },

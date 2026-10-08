@@ -90,12 +90,14 @@ export class RoutingDispatcher {
             sqlite.prepare('SELECT * FROM message_runs WHERE turn_id = ?').get(job.turn_id),
           ),
         )
+        const images = job.hop === 0 ? this.imageIds(job.parent_message_id) : []
         await this.port.startRun({
           agentId: job.agent_id,
           input: frozen.admission_input!,
           turnId: job.turn_id,
           sessionId: `score-${job.room_id}-${job.agent_id}`,
           ...(job.model ? { model: job.model } : {}),
+          ...(images.length ? { images } : {}),
         })
       } catch (error) {
         // A permanent refusal (unknown or unserved agent, invalid input) would otherwise be retried every 10 s
@@ -118,6 +120,22 @@ export class RoutingDispatcher {
       }
     }
     if (failure) throw failure
+  }
+
+  // Only the person's own message carries images; hand-offs between agents send none.
+  private imageIds(messageId: string): string[] {
+    const row = this.db.read((sqlite) =>
+      sqlite.prepare('SELECT parts FROM messages WHERE id = ?').get(messageId),
+    )
+    const parts = z
+      .object({ parts: z.string() })
+      .transform((value) => JSON.parse(value.parts) as unknown)
+      .pipe(z.array(z.object({ kind: z.string(), mediaId: z.string().optional() }).loose()))
+      .safeParse(row)
+    if (!parts.success) return []
+    return parts.data.flatMap((part) =>
+      part.kind === 'image' && part.mediaId ? [part.mediaId] : [],
+    )
   }
 
   async close(): Promise<void> {

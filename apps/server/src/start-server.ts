@@ -129,8 +129,12 @@ export async function startServer(
         ...deriveAgentStatusEvents(sqlite, drafts, context),
       ],
     })
+    const media = new MediaStore(database, join(config.home, 'media'), {
+      ...(config.mediaQuotaMb ? { quotaBytes: config.mediaQuotaMb * 1024 * 1024 } : {}),
+    })
     port = createHermesPort(config, {
       db: database,
+      imageReader: (id) => media.read(id),
       onError: (error) => app?.log.error({ err: error }, 'Hermes observation failed'),
     })
     const adapter = port
@@ -141,9 +145,6 @@ export async function startServer(
       onError: (error) => app?.log.error({ err: error }, 'Approval delivery failed'),
     })
     const dispatcher = outbox
-    const media = new MediaStore(database, join(config.home, 'media'), {
-      ...(config.mediaQuotaMb ? { quotaBytes: config.mediaQuotaMb * 1024 * 1024 } : {}),
-    })
     const bridge =
       config.mode === 'live'
         ? {

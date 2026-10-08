@@ -414,7 +414,9 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 - **H** `POST /api/media` (multipart, one part named `file`) → `201 { mediaId: string; name: string; size: number;
 contentType: string }`. Types come from the bytes (png, jpeg, gif, webp); `400` empty or malformed, `413` over 8 MB,
   `415` unsupported or contradicting type, `507 media_quota_exceeded`. Messages reference uploads with an `image`
-  part (at most 8 per message).
+  part (at most 8 per message). Images on a person's message are sent to each addressed agent's run (the person's
+  own message only, never hand-offs between agents): total raw size up to 6 MB per message; images that do not fit
+  or are no longer stored are skipped and the run's text gets a short note saying so.
 
 ## 6. Approvals
 
