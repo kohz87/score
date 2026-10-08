@@ -96,6 +96,10 @@ export type Config = z.infer<typeof ConfigSchema>
 
 export function loadConfig(env: Record<string, string | undefined>): Config {
   const remote = z.enum(['0', '1']).optional().parse(env.SCORE_REMOTE) === '1'
+  if (remote && !env.SCORE_PUBLIC_ORIGINS?.trim())
+    throw new Error(
+      'Remote mode needs SCORE_PUBLIC_ORIGINS: the address browsers use, e.g. https://score.example.ts.net:8741',
+    )
   const any = z.enum(['0', '1']).optional().parse(env.SCORE_REMOTE_ANY) === '1'
   const insecureHttp =
     z.literal('accept').optional().parse(env.SCORE_REMOTE_INSECURE_HTTP) === 'accept'
@@ -107,7 +111,10 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     hermesUrl: env.SCORE_HERMES_URL,
     host: env.SCORE_HOST,
     port: env.SCORE_PORT ?? (remote ? 8741 : undefined),
-    webOrigin: env.SCORE_WEB_ORIGIN,
+    // Changing only the dev web port must not break pairing: the origin follows SCORE_WEB_PORT unless set explicitly.
+    webOrigin:
+      env.SCORE_WEB_ORIGIN ??
+      (env.SCORE_WEB_PORT ? `http://127.0.0.1:${env.SCORE_WEB_PORT}` : undefined),
     mode: env.SCORE_MODE,
     mediaQuotaMb: env.SCORE_MEDIA_QUOTA_MB,
     fakeSpeed: env.SCORE_FAKE_SPEED,

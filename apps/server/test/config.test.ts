@@ -99,3 +99,10 @@ test('bridge install source has no URL credentials and its revision is a full co
     expect(() => loadConfig({ SCORE_BRIDGE_INSTALL_URL: value })).toThrow(ZodError)
   expect(() => loadConfig({ SCORE_BRIDGE_INSTALL_REF: 'main' })).toThrow(ZodError)
 })
+
+test('the dev web origin follows SCORE_WEB_PORT unless SCORE_WEB_ORIGIN is set', () => {
+  expect(loadConfig({ SCORE_WEB_PORT: '5595' }).webOrigin).toBe('http://127.0.0.1:5595')
+  expect(
+    loadConfig({ SCORE_WEB_PORT: '5595', SCORE_WEB_ORIGIN: 'http://127.0.0.1:6000' }).webOrigin,
+  ).toBe('http://127.0.0.1:6000')
+})

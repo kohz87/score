@@ -64,9 +64,19 @@ page (Team, Routines tab) or with `/routine` in Chat.
 
 ### Watch
 
-Watch, an after-the-fact replay of what an agent did (its terminal, the files it changed, the pages it looked at),
-is not in the app yet. The step panel in Flow shows "Watch arrives in a later update". Watch is a replay of recorded
-events, not a remote view of your screen.
+Watch replays what one agent did: its terminal (commands and the end of their output), the files it changed (as diffs)
+and the pages it looked at (with screenshots when the agent captured one). It is a replay of recorded events, not a remote
+view of a screen.
+
+- **Live**: the stage follows the agent as it works; a banner says you're watching and the agent is in control.
+- **Timeline**: markers for commands, file edits, browser pages and approvals. Click or drag back to replay any moment,
+  use the arrow keys to step, and **Live** to return. The agent keeps working while you look at the past.
+- **Approval bar**: when the agent is waiting for you, approve or deny right there.
+- **What they're doing** lists the latest steps; **Other screens** shows what the other agents last had in front.
+- **Pause <agent>** stops new work after the current step (blocked tasks are released on Resume). **Open in terminal**
+  copies `hermes -p <agent> --resume <session>` so you can continue the same session yourself. Score never takes
+  control of an agent's session.
+- Secrets are redacted twice before anything is stored, and nothing from password-vault tools is ever recorded.
 
 ## Chat
 

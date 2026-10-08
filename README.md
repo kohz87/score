@@ -6,7 +6,7 @@ in Chat rooms, and anything that needs your decision (an approval, a review) wai
 It runs on your machine, keeps its own data in `~/.score`, and talks to Hermes through the `hermes` CLI and the
 gateway API. It never reads your Hermes credential files and never writes Hermes databases.
 
-![Score's Now page: a timeline of four agents, a thread, an approval card and a message box](e2e/visual.spec.ts-snapshots/now-1440-chromium-linux.png)
+![Score's Now page: a timeline of four agents, a thread, an approval card and a message box](docs/screenshots/now.png)
 
 (The screenshot shows the built-in demo team: `lead`, `builder`, `reviewer`, `designer`.)
 
@@ -87,7 +87,7 @@ Settings you may want to change (all optional):
 | `SCORE_HOME`       | `~/.score`              | where Score keeps its database, media and launcher files                    |
 | `SCORE_HOST`       | `127.0.0.1`             | bind address; anything but loopback needs remote mode                       |
 | `SCORE_WEB_PORT`   | `5173`                  | Vite's port in `pnpm dev` only                                              |
-| `SCORE_WEB_ORIGIN` | `http://127.0.0.1:5173` | web origin in `pnpm dev`; set it when you change `SCORE_WEB_PORT`           |
+| `SCORE_WEB_ORIGIN` | follows `SCORE_WEB_PORT` | web origin in `pnpm dev`; only needed for a non-default host              |
 
 ## Pairing
 
@@ -188,21 +188,18 @@ Score has six destinations along the top. [docs/USER-GUIDE.md](docs/USER-GUIDE.m
 - **Settings** holds models and keys, connections (tool servers, messaging), team-wide rules and approvals,
   every Hermes setting (Advanced), and remote access.
 
-Watch, a replay of what an agent did (terminal, file diffs, browser), is being added. The data behind it is already
-collected; its screen is not in the app yet.
+- **Watch** (Now › an agent, or "Watch" on its Team page) replays what an agent did: its terminal, the files it changed
+  and the pages it looked at, with a timeline you can drag back. It is a replay of recorded events, not a remote view of
+  a screen; "Pause <agent>" stops new work and "Open in terminal" copies the command to continue its session yourself.
 
 ## Troubleshooting
 
 **The browser says "Pair this browser" or an action fails with "not paired".** This browser has not been paired,
 or its pairing expired. Open the pairing link from the server terminal. If it is older than 15 minutes, was
 already used, or has scrolled away: `scripts/score pair` (launcher), restart the server, or type `pair` in the
-server terminal (remote mode only).
+server terminal (any mode, when it runs in a terminal).
 
 **"This pairing link is invalid or expired."** Same remedy: mint a new link. Only the newest link works.
-
-**Pairing fails in `pnpm dev` after changing `SCORE_WEB_PORT`.** Set `SCORE_WEB_ORIGIN` to the matching address too,
-for example `SCORE_WEB_PORT=5595 SCORE_WEB_ORIGIN=http://127.0.0.1:5595 pnpm dev`. Without it, the printed link still
-points at port 5173 and the server refuses the new origin.
 
 **"Score is not built yet. Run `pnpm build` first."** `pnpm start`, `scripts/score start` and remote mode serve the
 built web app, so `pnpm build` has to run first (and again after every `git pull`).
@@ -226,7 +223,7 @@ browser must match one of the `SCORE_PUBLIC_ORIGINS` exactly (scheme, host and p
 are different hosts.
 
 **The server will not start in remote mode.** The message names the problem. Typical ones: a non-loopback
-`SCORE_HOST` without `SCORE_REMOTE=1`; `SCORE_PUBLIC_ORIGINS` missing ("remote.origins: Too small"); plain HTTP
+`SCORE_HOST` without `SCORE_REMOTE=1`; `SCORE_PUBLIC_ORIGINS` missing; plain HTTP
 without `SCORE_REMOTE_INSECURE_HTTP=accept`; `SCORE_TLS_CERT` without `SCORE_TLS_KEY`; or the browser port equal to
 `SCORE_BRIDGE_PORT`.
 
