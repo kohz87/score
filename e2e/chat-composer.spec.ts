@@ -15,14 +15,20 @@ test('the composer sends a message that gets a streamed reply, and an /assign th
   const composer = page.getByRole('combobox', { name: /^Message/ })
   await expect(composer).toBeEnabled()
 
-  // Plain message: shows up as yours at once, then an agent answers.
-  const before = await history.getByRole('article').count()
-  await composer.fill('Please check the room context')
+  // Plain message: shows up as yours at once, then an agent answers. Other specs may post in this room
+  // at the same time, so wait for the reply after this message rather than counting messages.
+  const text = `Please check the room context ${Date.now()}`
+  await composer.fill(text)
   await composer.press('Enter')
   await expect(composer).toHaveValue('')
-  await expect(history.getByText('Please check the room context')).toBeVisible()
-  await expect(history.getByRole('article')).toHaveCount(before + 2, { timeout: 20_000 })
-  await expect(history.getByRole('article').last()).toHaveAccessibleName(/Message from lead/)
+  const mine = history.getByRole('article').filter({ hasText: text })
+  await expect(mine).toBeVisible()
+  const reply = mine
+    .locator('xpath=following-sibling::*[@role="article" or self::article]')
+    .filter({
+      hasText: 'I have reviewed the room context',
+    })
+  await expect(reply.first()).toHaveAccessibleName(/Message from lead/, { timeout: 20_000 })
 
   // Slash menu and @autocomplete are keyboard driven.
   await composer.fill('/')
