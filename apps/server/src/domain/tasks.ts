@@ -60,38 +60,41 @@ export function readProjectedTask(sqlite: DatabaseSync, id: string): TaskDetail 
   return row ? TaskDetailSchema.parse(JSON.parse(RowSchema.parse(row).detail)) : undefined
 }
 
-export function taskWithApproval(
-  sqlite: DatabaseSync,
-  task: TaskDetail,
-  now = Date.now(),
-): TaskDetail {
-  const rows = sqlite
+function pendingApprovalViews(sqlite: DatabaseSync, now: number) {
+  return sqlite
     .prepare(
       `SELECT * FROM approvals WHERE visible = 1 AND phase = 'human_pending' AND status = 'pending'
     AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at, id`,
     )
     .all(new Date(now).toISOString())
+    .map((row) => approvalView(sqlite, ApprovalRowSchema.parse(row), { now }))
+}
+
+function withApproval(task: TaskDetail, views: ReturnType<typeof pendingApprovalViews>) {
   const approval =
-    rows
-      .map((row) => approvalView(sqlite, ApprovalRowSchema.parse(row), { now }))
-      .find((approval) =>
-        approval.refs.some((ref) => ref.kind === 'task' && ref.taskId === task.id),
-      ) ?? null
+    views.find((view) => view.refs.some((ref) => ref.kind === 'task' && ref.taskId === task.id)) ??
+    null
   return approval
-    ? { ...task, column: 'needs_you', progress: null, pendingApproval: approval }
+    ? { ...task, column: 'needs_you' as const, progress: null, pendingApproval: approval }
     : { ...task, pendingApproval: null }
 }
 
+export function taskWithApproval(
+  sqlite: DatabaseSync,
+  task: TaskDetail,
+  now = Date.now(),
+): TaskDetail {
+  return withApproval(task, pendingApprovalViews(sqlite, now))
+}
+
 export function projectedTasks(sqlite: DatabaseSync, now = Date.now()): TaskDetail[] {
+  // Pending approvals are the same for every task; build their views once, not once per task.
+  const views = pendingApprovalViews(sqlite, now)
   return sqlite
     .prepare('SELECT detail, revision, incarnation FROM task_projections ORDER BY id')
     .all()
     .map((row) =>
-      taskWithApproval(
-        sqlite,
-        TaskDetailSchema.parse(JSON.parse(RowSchema.parse(row).detail)),
-        now,
-      ),
+      withApproval(TaskDetailSchema.parse(JSON.parse(RowSchema.parse(row).detail)), views),
     )
 }
 

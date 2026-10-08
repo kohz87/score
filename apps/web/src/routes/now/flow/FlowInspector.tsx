@@ -86,7 +86,23 @@ function StepDetail({
         </ul>
       )}
       {approval && <ApprovalCard key={approval.id} approvalId={approval.id} />}
-      <div className="flow-watch">Watch arrives in a later update</div>
+      {detail.watch ? (
+        <Link
+          className="flow-watch flow-watch--link"
+          to={`/now/watch/${encodeURIComponent(detail.watch.agentId)}`}
+        >
+          <span className="flow-watch__screen" aria-hidden="true">
+            {detail.watch.thumbnail ? (
+              <img src={detail.watch.thumbnail} alt="" />
+            ) : (
+              <span>{detail.watch.front}</span>
+            )}
+          </span>
+          <span>Watch {agent?.name ?? detail.watch.agentId} work</span>
+        </Link>
+      ) : (
+        <div className="flow-watch">No desktop open for this step</div>
+      )}
       <dl className="flow-inspector__facts">
         <div>
           <dt>Model</dt>

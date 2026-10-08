@@ -65,6 +65,8 @@ export const AgentOperationSchema = z.object({
   nextStep: ProfileStepNameSchema.nullable(),
   error: z.string().nullable(),
   exportPath: z.string().nullable(),
+  /** The step failed with a recorded, repeatable error (not an unknown interruption): POST …/retry may run it again. */
+  retryable: z.boolean().optional(),
 })
 export const AgentPreviewSchema = z.object({
   kind: z.enum(['create', 'delete']),

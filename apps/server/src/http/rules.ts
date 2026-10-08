@@ -25,6 +25,7 @@ import {
 import { HttpError } from '../errors.ts'
 import {
   KNOWN_PATTERN_KEYS,
+  ALWAYS_BLOCKED_KEYS,
   NEVER_PREFIX,
   drifted,
   expectedConfig,
@@ -94,7 +95,9 @@ export function registerRulesRoutes(
     return {
       mode: baseline.mode,
       goAhead: [...baseline.goAhead, ...unknown].map(goAheadRule),
-      askMe: KNOWN_PATTERN_KEYS.filter((key) => !allowed.has(key)).map(goAheadRule),
+      askMe: KNOWN_PATTERN_KEYS.filter(
+        (key) => !allowed.has(key) && !ALWAYS_BLOCKED_KEYS.includes(key),
+      ).map(goAheadRule),
       never: baseline.never.map(neverRule),
       drift: configs.map(([agentId, config]) => ({
         agentId,
@@ -164,6 +167,8 @@ export function registerRulesRoutes(
     const body = PutRulesRequestSchema.parse(request.body)
     if (!body.goAhead.every(isKnownPatternKey))
       throw new HttpError(400, 'bad_request', 'Go ahead accepts known command categories only')
+    if (body.goAhead.some((key) => ALWAYS_BLOCKED_KEYS.includes(key)))
+      throw new HttpError(400, 'always_blocked', 'Hermes always blocks this kind of command')
     const next: Baseline = {
       mode: body.mode,
       goAhead: [...new Set(body.goAhead)],

@@ -469,3 +469,16 @@ test('live adapter: DELETE rewrites only the baseline-derived keys, exact argv, 
     )
   expect((await rules()).drift.every((d) => !d.differs)).toBe(true)
 })
+
+test('commands Hermes always blocks are neither offered nor accepted as Go ahead', async () => {
+  const view = await rules()
+  expect(view.askMe.map((rule) => rule.pattern)).not.toContain('fork bomb')
+  expect(view.askMe.map((rule) => rule.pattern)).not.toContain('kill all processes')
+  const refused = await call('PUT', '/api/settings/rules', {
+    mode: 'manual',
+    goAhead: ['fork bomb'],
+    never: [],
+  })
+  expect(refused.statusCode).toBe(400)
+  expect(refused.json()).toMatchObject({ error: { code: 'always_blocked' } })
+})

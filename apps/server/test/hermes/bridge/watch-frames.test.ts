@@ -224,7 +224,12 @@ test('frames link to the run of their session and the watch endpoints page them'
   const builder = overview.items.find(
     (item: { agent: { id: string } }) => item.agent.id === 'builder',
   )
-  expect(builder).toMatchObject({ thumbnail: null, status: 'Ran step 4' })
+  expect(builder).toMatchObject({
+    thumbnail: null,
+    status: 'Ran step 4',
+    live: false,
+    surface: 'terminal',
+  })
   expect(overview.items.length).toBeGreaterThan(1)
 })
 

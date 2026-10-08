@@ -14,7 +14,17 @@ export function lifecycleOf(sqlite: DatabaseSync, id: string) {
   const row = sqlite.prepare('SELECT * FROM agent_lifecycle WHERE agent_id = ?').get(id)
   return row ? Row.parse(row) : null
 }
+export function agentPausedAt(sqlite: DatabaseSync, id: string): string | null {
+  const row = sqlite.prepare('SELECT paused_at FROM agent_pauses WHERE agent_id = ?').get(id)
+  return row ? z.object({ paused_at: z.string() }).parse(row).paused_at : null
+}
+// "Pause <agent>" shows as the paused status until Resume; an offline or half-set-up agent keeps its own.
 export function applyLifecycle(sqlite: DatabaseSync, agent: AgentDetail): AgentDetail {
+  const next = applyLifecycleRow(sqlite, agent)
+  if (next.status === 'offline' || agentPausedAt(sqlite, agent.id) === null) return next
+  return { ...next, status: 'paused', activity: 'Paused' }
+}
+function applyLifecycleRow(sqlite: DatabaseSync, agent: AgentDetail): AgentDetail {
   const row = lifecycleOf(sqlite, agent.id)
   if (!row) return agent
   const ready = row.state === 'ready'

@@ -6,7 +6,8 @@ import { useStream } from '../../data/query-client.ts'
 
 export const nowKey = ['now', 'score'] as const
 const REFRESH_MS = 30_000
-const THROTTLE_MS = 400
+// At 1,000 events a minute a shorter wait refetches the whole snapshot several times a second (load test, task 5.3).
+const THROTTLE_MS = 1000
 // The Now snapshot is a read model the server recomputes, so these events only say "read it again".
 const REFRESH_ON =
   /^(run|approval|message|brief)\.|^(task\.upserted|lane\.upserted|handoff\.created)$/
