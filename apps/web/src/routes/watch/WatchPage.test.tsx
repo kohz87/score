@@ -334,3 +334,32 @@ test('open in terminal uses the session the agent is on now, not the one from pa
   fireEvent.click(screen.getByRole('button', { name: 'Open in terminal' }))
   expect(await screen.findByText('hermes -p builder --resume session-two')).toBeTruthy()
 })
+
+test('a paused agent whose last run ends re-reads Watch so it stops showing live', async () => {
+  setup()
+  await screen.findByRole('heading', { name: 'Watching builder', level: 1 })
+  emit(
+    { type: 'agent.updated', data: { ...watchFixture.agent, status: 'paused' } } as StreamEvent,
+    2,
+  )
+  await screen.findByRole('button', { name: 'Resume builder' })
+  const reads = () =>
+    requests.filter((r) => r.url.startsWith('/api/agents/builder/watch?limit=500')).length
+  const before = reads()
+  const run = {
+    id: 'run-z',
+    agentId: 'builder',
+    origin: 'score',
+    status: 'completed',
+    startedAt: '2026-10-08T21:30:00.000Z',
+    endedAt: '2026-10-08T21:31:00.000Z',
+    model: null,
+    toolsUsed: [],
+    tokens: null,
+    costUsd: null,
+    refs: [],
+    gaps: [],
+  }
+  emit({ type: 'run.updated', data: run } as unknown as StreamEvent, 3)
+  await waitFor(() => expect(reads()).toBe(before + 1))
+})
