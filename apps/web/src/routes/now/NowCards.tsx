@@ -302,13 +302,13 @@ export function MadeTodayCard({
 /** The Chat composer, posting to the thread's room (or the first room when nothing has been said yet). */
 export function NowComposer({ roomId, agents }: { roomId: string | null; agents: AgentSummary[] }) {
   const rooms = useStreamQuery(roomsQuery)
-  const room =
-    rooms.data?.rooms.find((item) => item.id === roomId) ??
-    (roomId === null ? rooms.data?.rooms[0] : undefined)
+  // The latest thread may be a direct conversation, so look in both collections.
+  const all = rooms.data ? [...rooms.data.rooms, ...rooms.data.directs] : []
+  const room = all.find((item) => item.id === roomId) ?? (roomId === null ? all[0] : undefined)
   return (
     <div className="now-composer">
       {room ? (
-        <Composer roomId={room.id} roomName={room.name} agents={agents} />
+        <Composer key={room.id} roomId={room.id} roomName={room.name} agents={agents} />
       ) : (
         <p className="now-empty" role="status">
           {rooms.status === 'pending'

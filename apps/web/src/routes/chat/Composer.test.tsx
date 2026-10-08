@@ -298,3 +298,26 @@ test('attached images upload as multipart and are sent as attachments', async ()
   expect(body(1)).toEqual({ text: 'see this', attachments: [{ mediaId: 'm1' }] })
   await waitFor(() => expect(screen.queryByText('dot.png')).toBeNull())
 })
+
+test('text typed while a send is in flight survives the response and its draft stays stored', async () => {
+  let release: () => void = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  fetchMock.mockImplementation(async (input, init) => {
+    if (String(input) === '/api/commands') return json({ items: commands })
+    if (init?.method === 'POST') {
+      await gate
+      return json({ message: stored, routedTo: ['lead'], command: null })
+    }
+    return json({})
+  })
+  mount()
+  type('first')
+  press('Enter')
+  await waitFor(() => expect(posts()).toHaveLength(1))
+  type('second')
+  release()
+  await waitFor(() => expect(box().disabled).toBe(false))
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  expect(box().value).toBe('second')
+  expect(localStorage.getItem('score.chat.draft.general')).toBe('second')
+})

@@ -1,6 +1,6 @@
 import type { AgentDetail } from '@score/contract'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ApiError, apiFetch } from '../../data/api.ts'
 import {
   fileKey,
@@ -46,6 +46,10 @@ function DiffView({ diff, label }: { diff: string; label: string }) {
   )
 }
 
+// A draft keeps the content and etag it was based on, so switching files (which drops the query cache)
+// can never rebase old text onto a newer server version.
+export type FileDraft = { text: string; base: { content: string; etag: string } }
+
 export function AgentFiles({
   agent,
   file,
@@ -56,8 +60,11 @@ export function AgentFiles({
   onFile: (file: AgentFileName) => void
 }) {
   // Drafts live here so switching between the two files does not lose edits.
-  const [drafts, setDrafts] = useState<Partial<Record<AgentFileName, string>>>({})
-  const dirty = (name: AgentFileName) => drafts[name] !== undefined
+  const [drafts, setDrafts] = useState<Partial<Record<AgentFileName, FileDraft>>>({})
+  const dirty = (name: AgentFileName) => {
+    const draft = drafts[name]
+    return draft !== undefined && draft.text !== draft.base.content
+  }
   return (
     <section className="team-card" aria-labelledby="team-files-heading">
       <div className="team-card-heading">
@@ -103,16 +110,21 @@ function FileEditor({
 }: {
   agentId: string
   file: AgentFileName
-  draft: string | undefined
-  onDraft: (value: string | undefined) => void
+  draft: FileDraft | undefined
+  onDraft: (value: FileDraft | undefined) => void
 }) {
   const queryClient = useQueryClient()
   const loaded = useAgentFile(agentId, file)
   const [preview, setPreview] = useState<string | null>(null)
   const [conflict, setConflict] = useState<{ etag: string; diff: string } | null>(null)
   const [saved, setSaved] = useState(false)
-  const value = draft ?? loaded.data?.content ?? ''
-  const changed = loaded.data !== undefined && value !== loaded.data.content
+  const base = draft?.base ?? loaded.data
+  const value = draft?.text ?? base?.content ?? ''
+  const changed = base !== undefined && value !== base.content
+  const latest = useRef(value)
+  useEffect(() => {
+    latest.current = value
+  })
 
   const previewMutation = useMutation({
     mutationFn: async () =>
@@ -125,22 +137,24 @@ function FileEditor({
     onSuccess: setPreview,
   })
   const save = useMutation({
-    mutationFn: async (etag: string) => {
+    mutationFn: async (submit: { content: string; etag: string }) => {
       return parseEtag(
         await apiFetch(filePath(agentId, file), {
           method: 'PUT',
           headers: { 'Idempotency-Key': newId() },
-          body: JSON.stringify({ content: value, etag }),
+          body: JSON.stringify(submit),
         }),
       )
     },
-    onSuccess(etag) {
-      queryClient.setQueryData(fileKey(agentId, file), { content: value, etag })
+    onSuccess(etag, submit) {
+      queryClient.setQueryData(fileKey(agentId, file), { content: submit.content, etag })
       void queryClient.invalidateQueries({ queryKey: ['team', 'detail', agentId], exact: true })
-      onDraft(undefined)
+      // Edits typed while the request was in flight stay a draft on top of what was saved.
+      if (latest.current === submit.content) onDraft(undefined)
+      else onDraft({ text: latest.current, base: { content: submit.content, etag } })
       setPreview(null)
       setConflict(null)
-      setSaved(true)
+      setSaved(latest.current === submit.content)
     },
     onError(error) {
       if (error instanceof ApiError && error.status === 409) {
@@ -172,7 +186,8 @@ function FileEditor({
         </button>
       </div>
     )
-  const data = loaded.data
+  const fresh = loaded.data
+  const data = base ?? fresh
   const failure =
     save.isError && !conflict
       ? save.error instanceof ApiError && save.error.code === 'not_paired'
@@ -187,7 +202,7 @@ function FileEditor({
       onSubmit={(event) => {
         event.preventDefault()
         setSaved(false)
-        save.mutate(data.etag)
+        save.mutate({ content: value, etag: data.etag })
       }}
     >
       <label htmlFor={`file-${file}`} className="team-visually-hidden">
@@ -199,7 +214,10 @@ function FileEditor({
         spellCheck={false}
         value={value}
         onChange={(event) => {
-          onDraft(event.target.value === data.content ? undefined : event.target.value)
+          const text = event.target.value
+          onDraft(
+            text === data.content && data.etag === fresh.etag ? undefined : { text, base: data },
+          )
           setPreview(null)
           setSaved(false)
         }}
@@ -257,7 +275,7 @@ function FileEditor({
               disabled={save.isPending}
               onClick={() => {
                 setSaved(false)
-                save.mutate(conflict.etag)
+                save.mutate({ content: value, etag: conflict.etag })
               }}
             >
               Overwrite with mine

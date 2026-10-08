@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import type { AgentSummary, ApprovalMode, PutRulesRequest, RulesResponse } from '@score/contract'
 import { ApiError } from '../../data/api.ts'
 import { useRules, useRulesActions } from './rules-queries.ts'
@@ -64,7 +64,10 @@ export function RulesSection({ agents }: { agents: AgentSummary[] }) {
   const [adding, setAdding] = useState(false)
   const [category, setCategory] = useState('')
   const [glob, setGlob] = useState('')
-  const [diff, setDiff] = useState<string | null>(null)
+  const [reviewed, setReviewed] = useState<{ diff: string; request: PutRulesRequest } | null>(null)
+  const diff = reviewed?.diff ?? null
+  // Bumped on every edit so a slow preview for an older draft cannot be shown or saved.
+  const revision = useRef(0)
   const [notice, setNotice] = useState('')
 
   const data = rules.data
@@ -75,8 +78,9 @@ export function RulesSection({ agents }: { agents: AgentSummary[] }) {
     [...(data?.goAhead ?? []), ...(data?.askMe ?? [])].map((rule) => [rule.id, rule.label]),
   )
   const edit = (next: Draft) => {
+    revision.current += 1
     setDraft(next)
-    setDiff(null)
+    setReviewed(null)
     setNotice('')
   }
   const request = (value: Draft): PutRulesRequest => ({
@@ -100,14 +104,21 @@ export function RulesSection({ agents }: { agents: AgentSummary[] }) {
   }
   function review() {
     if (!current) return
-    preview.mutate(request(current), { onSuccess: setDiff })
+    const asked = request(current)
+    const at = revision.current
+    preview.mutate(asked, {
+      onSuccess: (text) => {
+        if (revision.current === at) setReviewed({ diff: text, request: asked })
+      },
+    })
   }
   function commit() {
-    if (!current) return
-    save.mutate(request(current), {
+    if (!reviewed) return
+    save.mutate(reviewed.request, {
       onSuccess: (result) => {
+        revision.current += 1
         setDraft(null)
-        setDiff(null)
+        setReviewed(null)
         setAdding(false)
         setNotice(
           result.failed.length
@@ -317,8 +328,9 @@ export function RulesSection({ agents }: { agents: AgentSummary[] }) {
                 type="button"
                 className="rules-link"
                 onClick={() => {
+                  revision.current += 1
                   setDraft(null)
-                  setDiff(null)
+                  setReviewed(null)
                 }}
               >
                 Discard

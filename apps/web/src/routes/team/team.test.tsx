@@ -516,6 +516,70 @@ test('the rules file opens from the overview and drafts survive switching files'
   expect((again as HTMLTextAreaElement).value).toBe('- be nice\n')
 })
 
+test('a draft keeps the etag it was started from when you switch files and the file changes', async () => {
+  const calls: { path: string; init?: RequestInit }[] = []
+  fileMutation = () => json({ etag: etagB })
+  filesResponder(calls)
+  renderTeam('/team/builder')
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit rules' }))
+  const rules = await screen.findByRole('textbox', { name: 'AGENTS.md contents' })
+  fireEvent.change(rules, { target: { value: '- mine\n' } })
+  fireEvent.click(screen.getByRole('button', { name: /Personality · SOUL.md/ }))
+  await screen.findByRole('textbox', { name: 'SOUL.md contents' })
+  // Someone else saves AGENTS.md while it is not on screen.
+  const baseline = respond
+  respond = (path, init) =>
+    path === '/api/agents/builder/files/AGENTS.md' && init?.method === 'GET'
+      ? json({ content: '- theirs\n', etag: 'd'.repeat(64) })
+      : baseline(path, init)
+  fireEvent.click(screen.getByRole('button', { name: /Operating rules · AGENTS.md/ }))
+  const again = await screen.findByRole('textbox', { name: 'AGENTS.md contents' })
+  expect((again as HTMLTextAreaElement).value).toBe('- mine\n')
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(calls.some((call) => call.init?.method === 'PUT')).toBe(true))
+  const put = calls.find((call) => call.init?.method === 'PUT')!
+  expect(JSON.parse(String(put.init!.body)).etag).toBe(etagC)
+})
+
+test('edits typed while a save is in flight stay unsaved', async () => {
+  const calls: { path: string; init?: RequestInit }[] = []
+  fileMutation = () => json({ etag: etagB })
+  filesResponder(calls)
+  const box = await openEditor()
+  const inner = globalThis.fetch as unknown as (
+    path: string,
+    init?: RequestInit,
+  ) => Promise<Response>
+  let release: () => void = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (path: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') await gate
+      return inner(path, init)
+    }),
+  )
+  fireEvent.change(box, { target: { value: 'A\n' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  fireEvent.change(box, { target: { value: 'AB\n' } })
+  release()
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeDefined())
+  await waitFor(() => expect(calls.some((call) => call.init?.method === 'PUT')).toBe(true))
+  await waitFor(() =>
+    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  )
+  expect((box as HTMLTextAreaElement).value).toBe('AB\n')
+  expect(screen.queryByText('Saved SOUL.md.')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(calls.filter((call) => call.init?.method === 'PUT')).toHaveLength(2))
+  const second = JSON.parse(
+    String(calls.filter((call) => call.init?.method === 'PUT')[1]!.init!.body),
+  )
+  expect(second).toEqual({ content: 'AB\n', etag: etagB })
+})
+
 interface Call {
   path: string
   method: string

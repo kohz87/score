@@ -21,6 +21,8 @@ class Source extends EventTarget {
   }
   close() {}
 }
+let sharedApprovals: unknown[]
+let currentSession: string
 let requests: { url: string; init?: RequestInit }[]
 const dispose: (() => void)[] = []
 const json = (data: unknown, status = 200) =>
@@ -28,17 +30,23 @@ const json = (data: unknown, status = 200) =>
 
 beforeEach(() => {
   requests = []
+  sharedApprovals = [watchApprovalFixture]
+  currentSession = 'score-room-activity-feed-builder'
   vi.stubGlobal(
     'fetch',
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
       requests.push({ url, ...(init ? { init } : {}) })
-      if (url === '/api/agents/builder/watch?limit=500') return json(watchFixture)
+      if (url === '/api/agents/builder/watch?limit=1')
+        return json({ ...watchFixture, sessionId: currentSession })
+      if (url.startsWith('/api/agents/builder/watch?limit=500')) return json(watchFixture)
+      if (url === '/api/approvals?status=pending&agent=builder')
+        return json({ asOfSeq: 1, items: [watchApprovalFixture], nextCursor: null })
       if (url === '/api/agents/nobody/watch?limit=500')
         return json({ error: { code: 'not_found', message: 'Agent not found' } }, 404)
       if (url === '/api/watch/overview') return json(watchOverviewFixture)
       if (url === '/api/approvals?status=all')
-        return json({ asOfSeq: 1, items: [watchApprovalFixture], nextCursor: null })
+        return json({ asOfSeq: 1, items: sharedApprovals, nextCursor: null })
       if (url.endsWith('/pause'))
         return json({ ...watchFixture.agent, status: 'paused', activity: 'Paused' })
       return json({ error: { code: 'not_found', message: 'Missing fixture' } }, 404)
@@ -215,4 +223,50 @@ test('open in terminal copies the resume command and confirms it', async () => {
 test('an unknown agent says so', async () => {
   setup('nobody')
   expect((await screen.findByRole('alert')).textContent).toContain('That agent does not exist')
+})
+
+test('an outstanding approval shows even when the shared newest-approvals list no longer holds it', async () => {
+  sharedApprovals = []
+  setup()
+  expect(await screen.findByRole('group', { name: 'Approval needed' })).toBeTruthy()
+  expect(requests.some((item) => item.url === '/api/approvals?status=pending&agent=builder')).toBe(
+    true,
+  )
+})
+
+test('the replay window is requested from the moment asked for', async () => {
+  const first = Math.min(...watchFixture.markers.map((marker) => marker.seq))
+  setup('builder', `?from=${first}`)
+  await screen.findByRole('heading', { name: 'Watching builder' })
+  expect(requests.some((item) => item.url.endsWith(`watch?limit=500&from=${first}`))).toBe(true)
+})
+
+test('scrubbing to a moment outside the loaded frames re-anchors the window there', async () => {
+  const late = Math.max(...watchFixture.markers.map((marker) => marker.seq))
+  const frames = watchFixture.frames.filter((frame) => frame.seq < late)
+  const fetchMock = vi.mocked(globalThis.fetch)
+  const original = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation((input, init) =>
+    String(input) === '/api/agents/builder/watch?limit=500'
+      ? json({ ...watchFixture, frames })
+      : original(input, init),
+  )
+  setup()
+  await screen.findByRole('heading', { name: 'Watching builder' })
+  const track = screen.getByRole('group', { name: 'Replay timeline' })
+  const buttons = within(track).getAllByRole('button')
+  fireEvent.click(buttons[buttons.length - 1]!)
+  await waitFor(() =>
+    expect(requests.some((item) => item.url.endsWith(`watch?limit=500&from=${late}`))).toBe(true),
+  )
+})
+
+test('open in terminal uses the session the agent is on now, not the one from page load', async () => {
+  const copied = vi.fn(() => Promise.resolve())
+  vi.stubGlobal('navigator', { clipboard: { writeText: copied } })
+  setup()
+  await screen.findByRole('heading', { name: 'Watching builder' })
+  currentSession = 'session-two'
+  fireEvent.click(screen.getByRole('button', { name: 'Open in terminal' }))
+  expect(await screen.findByText('hermes -p builder --resume session-two')).toBeTruthy()
 })

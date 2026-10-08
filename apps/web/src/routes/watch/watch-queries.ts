@@ -1,5 +1,7 @@
 import {
+  ApprovalsPageSchema,
   AgentSummarySchema,
+  type Approval,
   WatchOverviewSchema,
   WatchResponseSchema,
   type WatchOverviewItem,
@@ -17,12 +19,15 @@ export type WatchData = Omit<WatchResponse, 'asOfSeq'>
 const ACTIVE_RUN = ['queued', 'running', 'waiting_for_approval']
 
 // Frames are upserted by seq (a terminal frame is re-emitted when it finishes); markers follow the frames.
-export function watchQuery(agentId: string) {
+// `from` anchors the frame window at a moment (older replays); null is the newest 500 frames.
+export function watchQuery(agentId: string, from: number | null = null) {
   return defineStreamQuery<WatchData>({
-    key: ['watch', agentId],
+    key: ['watch', agentId, from],
     async fetch() {
       const { asOfSeq, ...data } = WatchResponseSchema.parse(
-        await apiFetch(`agents/${encodeURIComponent(agentId)}/watch?limit=500`),
+        await apiFetch(
+          `agents/${encodeURIComponent(agentId)}/watch?limit=500${from === null ? '' : `&from=${from}`}`,
+        ),
       )
       return { asOfSeq, data }
     },
@@ -116,4 +121,43 @@ export function useAgentPause(agentId: string) {
         }),
       ),
   })
+}
+
+// Every approval this agent is still waiting on, however old: the shared newest-50 list can push one out.
+export function pendingApprovalsQuery(agentId: string) {
+  return defineStreamQuery<Approval[]>({
+    key: ['watch', 'pending-approvals', agentId],
+    async fetch() {
+      const items: Approval[] = []
+      let cursor: string | null = null
+      let asOfSeq = 0
+      for (let page = 0; page < 20; page++) {
+        const params = new URLSearchParams({ status: 'pending', agent: agentId })
+        if (cursor) params.set('cursor', cursor)
+        const result = ApprovalsPageSchema.parse(await apiFetch(`approvals?${params}`))
+        // The first page fixes the snapshot point; later events replay on top of it.
+        if (page === 0) asOfSeq = result.asOfSeq
+        items.push(...result.items)
+        cursor = result.nextCursor
+        if (!cursor) break
+      }
+      return { asOfSeq, data: items }
+    },
+    types: ['approval.requested', 'approval.updated'],
+    reduce(data, event) {
+      if (event.type !== 'approval.requested' && event.type !== 'approval.updated') return data
+      const approval = event.data
+      if (approval.agentId !== agentId) return data
+      const rest = data.filter((item) => item.id !== approval.id)
+      return approval.status === 'pending' ? [approval, ...rest] : rest
+    },
+  })
+}
+
+/** The session the agent is on right now, read fresh because run events do not carry it. */
+export async function fetchCurrentSession(agentId: string): Promise<string | null> {
+  const { sessionId } = WatchResponseSchema.parse(
+    await apiFetch(`agents/${encodeURIComponent(agentId)}/watch?limit=1`),
+  )
+  return sessionId
 }
