@@ -1,6 +1,14 @@
 import { rmSync } from 'node:fs'
 import { afterEach, beforeEach, expect, test } from 'vitest'
-import { readRun, runSummary, translateRunEvent } from '../../../../src/hermes/live/translate.ts'
+import { reserveMessageRun } from '../../../../src/domain/message-runs.ts'
+import { insertRoom, messageFromRow, storeMessage } from '../../../../src/domain/rooms.ts'
+import { messageTurnId } from '../../../../src/domain/routing.ts'
+import {
+  readRun,
+  runSummary,
+  runStatusObservation,
+  translateRunEvent,
+} from '../../../../src/hermes/live/translate.ts'
 import { fixture } from './fake-gateway.ts'
 import { setup } from './helpers.ts'
 
@@ -90,7 +98,11 @@ test('unknown and text events advance the cursor, produce no drafts and count un
   await env.ingest.submit(translateRunEvent(context, unknown, metrics))
   await env.ingest.submit(translateRunEvent(context, unknown, metrics))
   await env.ingest.submit(
-    translateRunEvent(context, { ...unknown, event: 'message.delta', seq: 1 }, metrics),
+    translateRunEvent(
+      context,
+      { ...unknown, event: 'message.delta', delta: 'ignored without a room mapping', seq: 1 },
+      metrics,
+    ),
   )
   expect(metrics.unknownEvents).toBe(1)
   expect(env.db.sqlite.prepare('SELECT * FROM events').all()).toEqual(before)
@@ -229,4 +241,166 @@ test('exact request ids survive redaction; feature gating and supplied expiry ap
   expect(env.db.sqlite.prepare('SELECT request_id FROM approvals').get()?.request_id).toBe(
     'sk-request-exact-aaaaaaaa',
   )
+})
+
+async function admittedMessage() {
+  await env.ingest.submit({
+    source: 'test',
+    identity: 'room-message',
+    apply({ sqlite, now }) {
+      insertRoom(
+        sqlite,
+        { id: 'chat', name: '#chat', kind: 'room', leadAgentId: 'builder', members: ['builder'] },
+        now,
+      )
+      const drafts = storeMessage(
+        sqlite,
+        {
+          id: 'human',
+          roomId: 'chat',
+          author: { kind: 'you' },
+          to: [],
+          parts: [{ kind: 'text', text: 'fixture' }],
+          refs: [],
+          streaming: false,
+          createdAt: now,
+        },
+        now,
+      )
+      reserveMessageRun(
+        sqlite,
+        {
+          parentMessageId: 'human',
+          roomId: 'chat',
+          agentId: 'builder',
+          chainId: 'human',
+          hop: 0,
+          input: 'fixture',
+          agents: ['builder', 'reviewer'],
+        },
+        now,
+      )
+      return drafts
+    },
+  })
+  const { runId } = await env.intents.startRunIntent(
+    { profile: 'builder', input: 'fixture' },
+    messageTurnId('human', 'builder'),
+  )
+  return { profile: 'builder', runId, credentialGeneration: 1 }
+}
+const replyMessage = () =>
+  messageFromRow(env.db.sqlite.prepare("SELECT * FROM messages WHERE author_kind = 'agent'").get())
+
+test.each(['l2', 'l4a'] as const)(
+  '%s streams recorded deltas into one mapped reply without repeating interim text',
+  async (name) => {
+    const context = await admittedMessage()
+    const initial = replyMessage()
+    expect(initial).toMatchObject({
+      streaming: true,
+      parts: [],
+      refs: [{ kind: 'run', runId: context.runId }],
+    })
+    const recorded = fixture(name)
+    for (const event of recorded)
+      await env.ingest.submit(
+        translateRunEvent(context, { ...event, run_id: context.runId }, { unknownEvents: 0 }),
+      )
+    const reply = replyMessage()
+    const text = recorded
+      .filter((event) => event.event === 'message.delta')
+      .map((event) => event.delta)
+      .join('')
+    expect(reply).toMatchObject({ id: initial.id, streaming: false })
+    expect(reply.parts[0]).toEqual({ kind: 'text', text })
+    expect(reply.parts.find((part) => part.kind === 'tools')).toMatchObject({
+      kind: 'tools',
+      summary: expect.stringMatching(/^Ran \d+ commands?$/),
+      runId: context.runId,
+    })
+    expect(
+      env.db.sqlite.prepare("SELECT COUNT(*) AS n FROM events WHERE type = 'message.delta'").get()
+        ?.n,
+    ).toBe(recorded.filter((event) => event.event === 'message.delta').length)
+    expect(
+      env.db.sqlite
+        .prepare("SELECT COUNT(*) AS n FROM events WHERE type = 'message.completed'")
+        .get()?.n,
+    ).toBe(1)
+    for (const event of recorded)
+      await env.ingest.submit(
+        translateRunEvent(context, { ...event, run_id: context.runId }, { unknownEvents: 0 }),
+      )
+    expect(replyMessage()).toEqual(reply)
+  },
+)
+
+test('non-streamed interim and recovered terminal output are redacted, with no hand-off on failure', async () => {
+  const context = await admittedMessage()
+  const base = { run_id: context.runId, timestamp: 1791290587 }
+  await env.ingest.submit(
+    translateRunEvent(
+      context,
+      {
+        ...base,
+        event: 'message.interim',
+        seq: 0,
+        text: 'password=hide-this @reviewer',
+        already_streamed: false,
+      },
+      { unknownEvents: 0 },
+    ),
+  )
+  expect(replyMessage().parts).toEqual([{ kind: 'text', text: 'password=[redacted] @reviewer' }])
+  await env.ingest.submit(
+    translateRunEvent(
+      context,
+      { ...base, event: 'run.failed', seq: 1, output: 'duplicate' },
+      { unknownEvents: 0 },
+    ),
+  )
+  expect(replyMessage().streaming).toBe(false)
+  expect(env.db.sqlite.prepare('SELECT COUNT(*) AS n FROM message_runs').get()?.n).toBe(1)
+})
+
+test('terminal status polling fills an empty reply and completes it in the same transaction', async () => {
+  const context = await admittedMessage()
+  const run = await env.gateway.getRun('builder', context.runId)
+  await env.ingest.submit(
+    runStatusObservation(context, { ...run, status: 'completed', output: 'secret=hidden done' }),
+  )
+  expect(replyMessage()).toMatchObject({
+    streaming: false,
+    parts: [{ kind: 'text', text: 'secret=[redacted] done' }],
+  })
+})
+
+test('failed delta projection rolls back its text and checkpoint together', async () => {
+  const context = await admittedMessage()
+  const observation = translateRunEvent(
+    context,
+    {
+      run_id: context.runId,
+      timestamp: 1791290587,
+      event: 'message.delta',
+      seq: 0,
+      delta: 'hello',
+    },
+    { unknownEvents: 0 },
+  )
+  await expect(
+    env.ingest.submit({
+      ...observation,
+      apply(ctx) {
+        observation.apply(ctx)
+        throw new Error('rollback')
+      },
+    }),
+  ).rejects.toThrow('rollback')
+  expect(replyMessage().parts).toEqual([])
+  expect(readRun(env.db.sqlite, context.runId).last_seq).toBeNull()
+  expect(env.db.sqlite.prepare('SELECT * FROM ingest_checkpoints').all()).toEqual([])
+  await env.ingest.submit(observation)
+  expect(replyMessage().parts).toEqual([{ kind: 'text', text: 'hello' }])
 })

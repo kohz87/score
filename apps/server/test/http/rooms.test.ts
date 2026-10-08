@@ -77,6 +77,7 @@ beforeEach(async () => {
     cookie: paired.headers['set-cookie']!.toString().split(';')[0]!,
   }
   counter = 0
+  vi.spyOn(port, 'startRun').mockResolvedValue({ runId: 'room-test-run' })
 })
 afterEach(async () => {
   vi.restoreAllMocks()
@@ -167,7 +168,7 @@ test('every room endpoint returns its contract shape and mutations emit once', a
   expect(response.statusCode).toBe(200)
   const result = PostSchema.parse(response.json())
   expect(result).toMatchObject({
-    routedTo: [],
+    routedTo: ['builder'],
     command: null,
     message: {
       author: { kind: 'you' },
@@ -274,7 +275,8 @@ test('read marker persists across reopen and activity expires with a single room
 })
 
 test('room creates, updates and message posts replay exact receipts with no repeated events', async () => {
-  const createRequest = () => post('/api/rooms', { name: 'receipted' }, 'create')
+  const createRequest = () =>
+    post('/api/rooms', { name: 'receipted', leadAgentId: 'lead' }, 'create')
   const created = await Promise.all([createRequest(), createRequest()])
   expect(created[1]!.body).toBe(created[0]!.body)
   const room = RoomSchema.parse(created[0]!.json())
