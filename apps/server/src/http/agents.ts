@@ -6,13 +6,23 @@ import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import { AgentDetailSchema } from '@score/contract'
 import { readAgent, readAgentStyle, reconcileAgents, storeAgent } from '../domain/agents.ts'
+import { unifiedDiff } from '../domain/line-diff.ts'
 import { HttpError } from '../errors.ts'
-import type { HermesPort } from '../hermes/index.ts'
+import {
+  AgentFileConflictError,
+  AgentFileNameSchema,
+  EtagSchema,
+  assertFileContent,
+  type HermesPort,
+} from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { snapshot } from '../hub/snapshot.ts'
 import { requestIdempotency } from './idempotency.ts'
 
 const ParamsSchema = z.object({ agentId: z.string().min(1).max(256) })
+const FileParamsSchema = ParamsSchema.extend({ file: z.string() })
+const PreviewBodySchema = z.object({ content: z.string() }).strict()
+const PutFileBodySchema = z.object({ content: z.string(), etag: EtagSchema }).strict()
 const StylePatchSchema = AgentStyleSchema.partial()
   .strict()
   .refine((body) => Object.keys(body).length > 0)
@@ -85,6 +95,67 @@ export function registerAgentRoutes(
         },
       })
       return response
+    },
+  )
+
+  async function fileTarget(params: unknown) {
+    const { agentId, file: name } = FileParamsSchema.parse(params)
+    const file = AgentFileNameSchema.safeParse(name)
+    if (!file.success) throw new HttpError(404, 'not_found', 'File not found')
+    const ids = (await port.listAgents()).map((agent) => agent.id)
+    if (!ids.includes(agentId)) throw new HttpError(404, 'not_found', 'Agent not found')
+    return { agentId, file: file.data }
+  }
+  app.get('/api/agents/:agentId/files/:file', async (request) => {
+    const { agentId, file } = await fileTarget(request.params)
+    return port.readAgentFile(agentId, file)
+  })
+  app.post('/api/agents/:agentId/files/:file/preview', async (request) => {
+    const { agentId, file } = await fileTarget(request.params)
+    const { content } = PreviewBodySchema.parse(request.body)
+    assertFileContent(content)
+    const current = await port.readAgentFile(agentId, file)
+    return { diff: unifiedDiff(current.content, content) }
+  })
+  app.put(
+    '/api/agents/:agentId/files/:file',
+    {
+      preHandler: [humanGuard(app.pairing), receipts.preHandler],
+      onSend: receipts.onSend,
+    },
+    async (request) => {
+      const { agentId, file } = await fileTarget(request.params)
+      const body = PutFileBodySchema.parse(request.body)
+      const { ingest } = storage()
+      let result: { etag: string }
+      try {
+        result = await port.writeAgentFile(agentId, file, body.content, body.etag)
+      } catch (error) {
+        if (!(error instanceof AgentFileConflictError)) throw error
+        throw new HttpError(409, 'conflict', 'The file changed since you loaded it', {
+          etag: error.current.etag,
+          diff: unifiedDiff(error.current.content, body.content),
+        })
+      }
+      // The personality excerpt / rules entry may have changed: refresh the projection and announce it.
+      const detail = z
+        .array(AgentDetailSchema)
+        .parse(await port.listAgentDetails())
+        .find((agent) => agent.id === agentId)
+      if (detail)
+        await ingest.submit({
+          source: 'agent-file',
+          identity: randomUUID(),
+          apply({ sqlite }) {
+            const agent = AgentDetailSchema.parse({
+              ...detail,
+              style: readAgentStyle(sqlite, agentId) ?? detail.style,
+            })
+            storeAgent(sqlite, agent)
+            return [{ type: 'agent.updated', data: AgentSummarySchema.parse(agent) }]
+          },
+        })
+      return result
     },
   )
 }

@@ -5,6 +5,7 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly code: string,
     message: string,
+    public readonly details?: unknown,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -39,6 +40,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<un
       response.status,
       code.success ? code.data : 'request_failed',
       message.success ? message.data : 'The request failed. Please try again.',
+      error.details,
     )
   }
   return response.status === 204 ? undefined : response.json()

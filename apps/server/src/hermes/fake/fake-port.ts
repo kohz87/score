@@ -4,6 +4,14 @@ import {
   appendRunMessage,
   completeRunMessage,
 } from '../../domain/message-runs.ts'
+import {
+  AgentFileConflictError,
+  assertFileContent,
+  etagOf,
+  excerpt,
+  type AgentFile,
+  type AgentFileName,
+} from '../agent-files.ts'
 import { updateProjectedAgent } from '../../domain/agents.ts'
 import {
   recordKanbanDenial,
@@ -256,6 +264,7 @@ export class FakePort implements HermesPort {
   private readonly routines = new Map<string, RoutineSummary>()
   private readonly routineKeys = new Map<string, string>()
   private routineCount = 0
+  private readonly files = new Map<string, string>()
   private sink: ObservationSink | undefined
   private sessionId = ''
   private nextIdentity = 0
@@ -285,6 +294,11 @@ export class FakePort implements HermesPort {
 
   private resetState(): void {
     this.agents = new Map(exampleAgents().map((agent) => [agent.id, agent]))
+    this.files.clear()
+    for (const agent of this.agents.values()) {
+      this.files.set(`${agent.id}/SOUL.md`, `# ${agent.id}\n\nI am ${agent.id}. ${agent.role}.\n`)
+      this.files.set(`${agent.id}/AGENTS.md`, `# Rules for ${agent.id}\n\n- Keep changes small.\n`)
+    }
     this.approvals.clear()
     this.tasks.clear()
     this.taskOverrides.clear()
@@ -358,7 +372,10 @@ export class FakePort implements HermesPort {
       AgentDetailSchema.parse({
         ...agent,
         tagline: agent.role,
-        personality: { excerpt: `I am ${agent.id}. ${agent.role}.`, source: 'SOUL.md' },
+        personality: {
+          excerpt: excerpt(this.files.get(`${agent.id}/SOUL.md`) ?? ''),
+          source: 'SOUL.md',
+        },
         reportsTo: agent.id === 'lead' ? null : 'lead',
         worksIn: null,
         rulesFile: 'AGENTS.md',
@@ -429,6 +446,24 @@ export class FakePort implements HermesPort {
   async runRoutine(id: string): Promise<void> {
     // Real Hermes runs on its next tick; the fake records the run immediately.
     this.routine(id).lastRunAt = this.now()
+  }
+  async readAgentFile(agentId: string, file: AgentFileName): Promise<AgentFile> {
+    if (!this.agents.has(agentId)) throw new HttpError(404, 'not_found', 'Agent not found')
+    const content = this.files.get(`${agentId}/${file}`) ?? ''
+    return { content, etag: etagOf(content) }
+  }
+
+  async writeAgentFile(
+    agentId: string,
+    file: AgentFileName,
+    content: string,
+    etag: string,
+  ): Promise<{ etag: string }> {
+    assertFileContent(content)
+    const current = await this.readAgentFile(agentId, file)
+    if (current.etag !== etag) throw new AgentFileConflictError(current)
+    this.files.set(`${agentId}/${file}`, content)
+    return { etag: etagOf(content) }
   }
 
   private enqueue<T>(work: () => Promise<T>): Promise<T> {

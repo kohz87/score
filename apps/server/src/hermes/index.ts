@@ -4,6 +4,12 @@ import { LivePort } from './live/live-port.ts'
 import type { HermesPort, HermesPortDeps } from './port.ts'
 
 export type { HermesPort, HermesPortDeps, ObservationSink, Scheduler } from './port.ts'
+export {
+  AgentFileConflictError,
+  AgentFileNameSchema,
+  EtagSchema,
+  assertFileContent,
+} from './agent-files.ts'
 export { assertFeature } from './live/fingerprint.ts'
 export { loadBridgeBootstrap } from './bridge/bootstrap.ts'
 export { registerBridgeRoutes, type BridgeDeps } from './bridge/routes.ts'

@@ -10,7 +10,7 @@ export function AgentOverview({
 }: {
   agent: AgentDetail
   agents: AgentSummary[]
-  selectTab: (tab: string) => void
+  selectTab: (tab: string, file?: 'SOUL.md' | 'AGENTS.md') => void
 }) {
   const manager = agents.find((item) => item.id === agent.reportsTo)
   return (
@@ -22,6 +22,13 @@ export function AgentOverview({
             <span className="team-muted">From {agent.personality.source}</span>
           </div>
           <p>{agent.personality.excerpt || 'No personality excerpt available.'}</p>
+          <button
+            type="button"
+            className="team-text-action"
+            onClick={() => selectTab('Personality', 'SOUL.md')}
+          >
+            Edit personality
+          </button>
         </div>
         <dl className="team-facts">
           <div>
@@ -40,7 +47,16 @@ export function AgentOverview({
           </div>
           <div>
             <dt>Operating rules</dt>
-            <dd>{agent.rulesFile ?? 'Not set'}</dd>
+            <dd>
+              {agent.rulesFile ?? 'Not set'}{' '}
+              <button
+                type="button"
+                className="team-text-action"
+                onClick={() => selectTab('Personality', 'AGENTS.md')}
+              >
+                {agent.rulesFile ? 'Edit rules' : 'Create rules'}
+              </button>
+            </dd>
           </div>
         </dl>
       </section>

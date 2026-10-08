@@ -215,8 +215,9 @@ test('tabs move with the arrow keys and other tabs show a coming-soon panel', as
   const personality = screen.getByRole('tab', { name: 'Personality' })
   expect(document.activeElement).toBe(personality)
   expect(personality.getAttribute('aria-selected')).toBe('true')
+  fireEvent.keyDown(personality, { key: 'ArrowRight' })
   expect(within(screen.getByRole('tabpanel')).getByText(/coming soon/)).toBeDefined()
-  fireEvent.keyDown(personality, { key: 'End' })
+  fireEvent.keyDown(document.activeElement!, { key: 'End' })
   expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'History' }))
   fireEvent.keyDown(document.activeElement!, { key: 'Home' })
   expect(document.activeElement).toBe(overview)
@@ -388,4 +389,125 @@ test('the Overview New routine link opens the form on the Routines tab', async (
   fireEvent.click(await screen.findByRole('button', { name: 'New routine' }))
   expect(screen.getByRole('tab', { name: 'Routines' }).getAttribute('aria-selected')).toBe('true')
   expect(screen.getByRole('form', { name: 'New routine' })).toBeDefined()
+})
+
+const etagA = 'a'.repeat(64)
+const etagB = 'b'.repeat(64)
+const etagC = 'c'.repeat(64)
+function filesResponder(calls: { path: string; init?: RequestInit }[]) {
+  const baseline = respond
+  respond = (path, init) => {
+    if (path === '/api/agents/builder/files/SOUL.md' && init?.method === 'GET')
+      return json({ content: 'Calm and precise.\n', etag: etagA })
+    if (path === '/api/agents/builder/files/AGENTS.md' && init?.method === 'GET')
+      return json({ content: '', etag: etagC })
+    if (path.includes('/files/')) {
+      calls.push({ path, init })
+      return fileMutation(path, init)
+    }
+    return baseline(path, init)
+  }
+}
+let fileMutation: Responder
+async function openEditor() {
+  renderTeam('/team/builder')
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit personality' }))
+  return screen.findByRole('textbox', { name: 'SOUL.md contents' })
+}
+
+test('the Personality editor previews the diff and saves with the etag', async () => {
+  const calls: { path: string; init?: RequestInit }[] = []
+  fileMutation = (path) =>
+    path.endsWith('/preview')
+      ? json({ diff: '--- current\n+++ proposed\n@@ -1,1 +1,1 @@\n-Calm and precise.\n+Bold.' })
+      : json({ etag: etagB })
+  filesResponder(calls)
+  const box = await openEditor()
+  const save = screen.getByRole('button', { name: 'Save' })
+  expect(save.hasAttribute('disabled')).toBe(true)
+  fireEvent.change(box, { target: { value: 'Bold.\n' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }))
+  const diff = await screen.findByLabelText('Changes to save')
+  expect(diff.textContent).toContain('+Bold.')
+  expect(calls[0]!.init!.body).toBe(JSON.stringify({ content: 'Bold.\n' }))
+  fireEvent.click(save)
+  await screen.findByText('Saved SOUL.md.')
+  const put = calls.find((call) => call.init?.method === 'PUT')!
+  expect(JSON.parse(String(put.init!.body))).toEqual({ content: 'Bold.\n', etag: etagA })
+  expect(new Headers(put.init!.headers).get('X-Score-Client')).toBe('web')
+  expect(new Headers(put.init!.headers).get('Idempotency-Key')).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true)
+})
+
+test('a 409 shows the server diff; Overwrite with mine re-saves with the new etag', async () => {
+  const calls: { path: string; init?: RequestInit }[] = []
+  let puts = 0
+  fileMutation = () =>
+    ++puts === 1
+      ? json(
+          {
+            error: {
+              code: 'conflict',
+              message: 'The file changed',
+              details: { etag: etagB, diff: '--- current\n+++ proposed\n-Theirs\n+Mine' },
+            },
+          },
+          409,
+        )
+      : json({ etag: etagC })
+  filesResponder(calls)
+  const box = await openEditor()
+  fireEvent.change(box, { target: { value: 'Mine\n' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  const diff = await screen.findByLabelText('Their version compared with yours')
+  expect(diff.textContent).toContain('-Theirs')
+  expect(diff.textContent).toContain('+Mine')
+  expect((box as HTMLTextAreaElement).value).toBe('Mine\n')
+  fireEvent.click(screen.getByRole('button', { name: 'Overwrite with mine' }))
+  await screen.findByText('Saved SOUL.md.')
+  const bodies = calls
+    .filter((c) => c.init?.method === 'PUT')
+    .map((c) => JSON.parse(String(c.init!.body)))
+  expect(bodies).toEqual([
+    { content: 'Mine\n', etag: etagA },
+    { content: 'Mine\n', etag: etagB },
+  ])
+  expect(screen.queryByLabelText('Their version compared with yours')).toBeNull()
+})
+
+test('Reload theirs discards the draft and loads the current file', async () => {
+  const calls: { path: string; init?: RequestInit }[] = []
+  fileMutation = () =>
+    json(
+      { error: { code: 'conflict', message: 'x', details: { etag: etagB, diff: '-a\n+b' } } },
+      409,
+    )
+  filesResponder(calls)
+  const box = await openEditor()
+  fireEvent.change(box, { target: { value: 'Mine\n' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await screen.findByLabelText('Their version compared with yours')
+  const baseline = respond
+  respond = (path, init) =>
+    path === '/api/agents/builder/files/SOUL.md' && init?.method === 'GET'
+      ? json({ content: 'Theirs\n', etag: etagB })
+      : baseline(path, init)
+  fireEvent.click(screen.getByRole('button', { name: 'Reload theirs' }))
+  await waitFor(() => expect((box as HTMLTextAreaElement).value).toBe('Theirs\n'))
+  expect(screen.queryByLabelText('Their version compared with yours')).toBeNull()
+})
+
+test('the rules file opens from the overview and drafts survive switching files', async () => {
+  const calls: { path: string; init?: RequestInit }[] = []
+  fileMutation = () => json({ etag: etagB })
+  filesResponder(calls)
+  renderTeam('/team/builder')
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit rules' }))
+  const rules = await screen.findByRole('textbox', { name: 'AGENTS.md contents' })
+  fireEvent.change(rules, { target: { value: '- be nice\n' } })
+  fireEvent.click(screen.getByRole('button', { name: /Personality · SOUL.md/ }))
+  await screen.findByRole('textbox', { name: 'SOUL.md contents' })
+  fireEvent.click(screen.getByRole('button', { name: /Operating rules · AGENTS.md/ }))
+  const again = await screen.findByRole('textbox', { name: 'AGENTS.md contents' })
+  expect((again as HTMLTextAreaElement).value).toBe('- be nice\n')
 })
