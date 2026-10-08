@@ -9,12 +9,13 @@ import {
 } from '@score/contract'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
+import { newId } from '../../data/ids.ts'
 
 const rulesKey = ['settings', 'rules'] as const
 const send = (path: string, method: 'PUT' | 'POST' | 'PATCH' | 'DELETE', body?: unknown) =>
   apiFetch(path, {
     method,
-    headers: { 'Idempotency-Key': crypto.randomUUID() },
+    headers: { 'Idempotency-Key': newId() },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
 

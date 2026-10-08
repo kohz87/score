@@ -139,6 +139,12 @@ export interface GatewayOptions {
   fetch?: typeof globalThis.fetch
 }
 
+const ModelOptionsSchema = z.object({
+  providers: z
+    .array(z.object({ slug: z.string().min(1).max(64), name: z.string().min(1).max(120) }).loose())
+    .max(500),
+})
+
 export class GatewayClient {
   private readonly baseUrl: string
   private readonly fetch: typeof globalThis.fetch
@@ -348,6 +354,10 @@ export class GatewayClient {
   }
   health() {
     return this.json('default', '/v1/health', HealthSchema)
+  }
+  /** The providers Hermes knows (slug + name); Settings lists them all, not a hard-coded few. */
+  modelOptions(profile = 'default') {
+    return this.json(profile, '/api/model/options', ModelOptionsSchema)
   }
 
   runEvents(

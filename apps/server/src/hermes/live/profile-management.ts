@@ -464,6 +464,11 @@ export class LiveProfileManagement implements ProfileManagementPort {
       if (stat(home))
         throw failure('A profile exists at this name. Score will not purge a replacement identity.')
       await this.cli(['-p', 'default', 'profile', 'purge-identity', name])
+      // The profile and its .env are gone; Score's copy of its API key must not outlive them.
+      const key = join(resolve(this.options.scoreHome), 'hermes-keys', name)
+      const existing = stat(key)
+      if (existing?.isFile()) unlinkSync(key)
+      else if (existing) throw failure('The saved key path is not a plain file; remove it locally.')
     }
     return { identity: context.targetIdentity }
   }

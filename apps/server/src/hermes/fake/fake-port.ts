@@ -29,6 +29,8 @@ import type {
   Approval,
   ConnectResult,
   ConnectionsResponse,
+  AgentChannelsResponse,
+  HermesCheck,
   LocalProviderRequest,
   ToolServerRequest,
   RoutineSummary,
@@ -852,6 +854,16 @@ export class FakePort implements HermesPort {
     if (!q) return []
     return fakeHub.filter((skill) => `${skill.name} ${skill.description}`.toLowerCase().includes(q))
   }
+  async listAgentChannels(agentId: string): Promise<AgentChannelsResponse> {
+    this.agentOrThrow(agentId)
+    const { messaging } = await this.listConnections()
+    return {
+      items: messaging.map((row) => ({
+        ...row,
+        connectCommand: `hermes -p ${agentId} gateway setup`,
+      })),
+    }
+  }
   async listMemory(agentId: string, query: Parameters<HermesPort['listMemory']>[1]) {
     this.agentOrThrow(agentId)
     return pageMemory(this.memory.get(agentId) ?? [], MemoryQuerySchema.parse(query))
@@ -1042,6 +1054,16 @@ export class FakePort implements HermesPort {
       throw new HttpError(404, 'not_found', 'Unknown platform')
     return { next: 'run_in_terminal', command: 'hermes gateway setup' }
   }
+  // The fake Hermes is always the tested build: a check is clean and accepting changes nothing.
+  async checkHermes(): Promise<HermesCheck> {
+    return {
+      hash: '0'.repeat(64),
+      build: { version: null, codeSha: null, fingerprint: 'fake' },
+      parts: [{ name: 'Capabilities', status: 'same', detail: 'Fake adapter' }],
+      compatible: true,
+    }
+  }
+  async acceptHermes(): Promise<void> {}
   private readonly config = createFakeConfigService()
   async searchConfig(query: string) {
     return this.config.search(query)

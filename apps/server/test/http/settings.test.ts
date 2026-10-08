@@ -6,6 +6,7 @@ import {
   ConfigSearchResponseSchema,
   ConnectResultSchema,
   ConnectionsResponseSchema,
+  HermesCheckSchema,
   ProvidersResponseSchema,
   ProviderItemSchema,
   PluginItemSchema,
@@ -232,4 +233,11 @@ test('plugin changes need a human session', async () => {
     payload: { enabled: false },
   })
   expect(response.statusCode).toBeGreaterThanOrEqual(401)
+})
+
+test('the fake adapter answers the Hermes version check cleanly', async () => {
+  const check = HermesCheckSchema.parse((await post('/api/settings/hermes/check')).json())
+  expect(check.compatible).toBe(true)
+  const accepted = await post('/api/settings/hermes/accept', { hash: check.hash })
+  expect(accepted.json()).toEqual({ ok: true })
 })

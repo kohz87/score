@@ -338,3 +338,114 @@ test('theme still switches when storage is blocked', async () => {
   expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
   vi.restoreAllMocks()
 })
+
+const hash = 'a'.repeat(64)
+const checkOf = (compatible: boolean) => ({
+  hash,
+  build: { version: '0.21.6', codeSha: 'b'.repeat(40), fingerprint: 'f'.repeat(16) },
+  compatible,
+  parts: [
+    { name: 'Hermes version', status: 'changed', detail: '0.21.5 → 0.21.6' },
+    {
+      name: 'Kanban database schema',
+      status: compatible ? 'same' : 'changed',
+      detail: compatible ? 'Unchanged.' : 'The database layout differs from the tested build.',
+    },
+  ],
+})
+function untestedHermes(compatible: boolean) {
+  let tested = false
+  respond = (path) => {
+    if (path === '/api/system')
+      return json({
+        mode: 'live',
+        hermes: {
+          version: '0.21.6',
+          reachable: true,
+          apiServer: true,
+          capabilities: [],
+          servedProfiles: [],
+        },
+        bridge: { producers: 0, lastSeenAt: null, isolation: 'unknown' },
+        compatibility: {
+          fingerprint: 'f',
+          tested,
+          disabled: tested ? [] : ['gateway-approvals'],
+        },
+        agentIsolation: 'same_user',
+        degraded: [],
+      })
+    if (path === '/api/settings/hermes/check') return json(checkOf(compatible))
+    if (path === '/api/settings/hermes/accept') {
+      tested = true
+      return json({ ok: true })
+    }
+    if (path === '/api/agents') return json({ asOfSeq: 0, items: [builder] })
+    if (path === '/api/settings/providers') return json({ items: providers })
+    if (path === '/api/settings/connections') return json(connections)
+    return json({ error: { code: 'not_found', message: 'No' } }, 404)
+  }
+}
+
+test('an untested Hermes shows the banner and nav dot; one confirmed click re-enables approvals', async () => {
+  untestedHermes(true)
+  mount()
+  const banner = await screen.findByRole('region', { name: 'Hermes was updated' })
+  expect(banner.textContent).toContain(
+    'Hermes was updated to 0.21.6. Approvals in Score are paused until you check this version.',
+  )
+  expect(await screen.findByRole('img', { name: 'Hermes version needs a check' })).toBeDefined()
+  fireEvent.click(within(banner).getByRole('button', { name: 'Check this Hermes version' }))
+  const table = await within(banner).findByRole('table')
+  expect(within(table).getByText('0.21.5 → 0.21.6')).toBeDefined()
+  fireEvent.click(within(banner).getByRole('button', { name: 'Turn approvals back on' }))
+  await waitFor(() =>
+    expect(screen.queryByRole('region', { name: 'Hermes was updated' })).toBeNull(),
+  )
+  expect(screen.queryByRole('img', { name: 'Hermes version needs a check' })).toBeNull()
+  const accept = calls.find((call) => call.path === '/api/settings/hermes/accept')!
+  expect(JSON.parse(String(accept.init?.body))).toEqual({ hash })
+})
+
+test('a changed Hermes lists what changed and offers no accept', async () => {
+  untestedHermes(false)
+  mount()
+  const banner = await screen.findByRole('region', { name: 'Hermes was updated' })
+  fireEvent.click(within(banner).getByRole('button', { name: 'Check this Hermes version' }))
+  await within(banner).findByRole('table')
+  expect(within(banner).getByRole('status').textContent).toContain(
+    'Approvals stay paused. Changed: Hermes version, Kanban database schema.',
+  )
+  expect(within(banner).queryByRole('button', { name: 'Turn approvals back on' })).toBeNull()
+  fireEvent.click(within(banner).getByRole('button', { name: 'Stay paused' }))
+  expect(within(banner).getByRole('button', { name: 'Check this Hermes version' })).toBeDefined()
+  expect(calls.some((call) => call.path === '/api/settings/hermes/accept')).toBe(false)
+})
+
+test('after signing in from the terminal, Done re-checks and the provider shows as connected', async () => {
+  let signedIn = false
+  respond = (path, init) =>
+    init?.method === 'POST'
+      ? json({ next: 'run_in_terminal', command: 'hermes auth add nous' })
+      : path === '/api/settings/providers'
+        ? json({
+            items: providers.map((item) =>
+              item.id === 'nous' && signedIn
+                ? { ...item, status: 'connected', detail: 'Signed in' }
+                : item,
+            ),
+          })
+        : path === '/api/agents'
+          ? json({ asOfSeq: 0, items: [builder] })
+          : json(connections)
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Connect Nous Portal' }))
+  const group = await screen.findByRole('group', { name: 'Run in a terminal' })
+  signedIn = true // the person ran the command in their terminal
+  fireEvent.click(within(group).getByRole('button', { name: 'Done' }))
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Connect Nous Portal' })).toBeNull(),
+  )
+  const models = screen.getByRole('region', { name: 'Models and keys' })
+  expect(within(models).getAllByText('Connected')).toHaveLength(2)
+})

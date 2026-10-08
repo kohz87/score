@@ -135,6 +135,24 @@ function matchedBuild(entry: TestedFingerprint): Pick<CompatibilityEvaluation, '
   return codeVersion && codeSha ? { matchedHermes: { version: codeVersion, codeSha } } : {}
 }
 
+/** The tested entry sharing the most fingerprint parts with this build (the baseline a check compares against). */
+export function closestTested(
+  fingerprint: Fingerprint,
+  tested: readonly TestedFingerprint[],
+): TestedFingerprint | undefined {
+  const keys = Object.keys(fingerprint.parts) as (keyof FingerprintParts)[]
+  let closest: TestedFingerprint | undefined
+  let mostMatches = -1
+  for (const entry of tested.filter(({ id }) => id !== 'unseeded')) {
+    const matches = keys.filter((key) => equal(fingerprint.parts[key], entry.parts[key])).length
+    if (matches > mostMatches) {
+      closest = entry
+      mostMatches = matches
+    }
+  }
+  return closest
+}
+
 export function evaluateCompatibility(
   fingerprint: Fingerprint,
   tested: readonly TestedFingerprint[],
@@ -147,16 +165,7 @@ export function evaluateCompatibility(
   if (exact)
     return { fingerprint: fingerprint.id, tested: true, disabled: [], ...matchedBuild(exact) }
   const { parts } = fingerprint
-  const keys = Object.keys(parts) as (keyof FingerprintParts)[]
-  let closest: TestedFingerprint | undefined
-  let mostMatches = -1
-  for (const entry of entries) {
-    const matches = keys.filter((key) => equal(parts[key], entry.parts[key])).length
-    if (matches > mostMatches) {
-      closest = entry
-      mostMatches = matches
-    }
-  }
+  const closest = closestTested(fingerprint, entries)
   const disabled: string[] = []
   if (
     !closest ||

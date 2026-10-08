@@ -1,5 +1,8 @@
 import {
+  AgentChannelsResponseSchema,
   AgentDetailSchema,
+  AgentHistoryPageSchema,
+  type HistoryOutcome,
   MemoryPageSchema,
   SkillHubResponseSchema,
   SkillsResponseSchema,
@@ -7,6 +10,7 @@ import {
 } from '@score/contract'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
+import { newId } from '../../data/ids.ts'
 
 export type Skill = AgentDetail['skills'][number]
 export type MemoryEntry = AgentDetail['memory'][number]
@@ -22,7 +26,7 @@ const agentPath = (agentId: string) => `agents/${encodeURIComponent(agentId)}`
 const detailKey = (agentId: string) => ['team', 'detail', agentId] as const
 const skillsKey = (agentId: string) => ['team', 'skills', agentId] as const
 const memoryKey = (agentId: string, q: string) => ['team', 'memory', agentId, q] as const
-const mutationHeaders = (key: string = crypto.randomUUID()) => ({ 'Idempotency-Key': key })
+const mutationHeaders = (key: string = newId()) => ({ 'Idempotency-Key': key })
 
 /** Changes made here also change the agent detail the Overview and the other tabs read. */
 function useRefresh(agentId: string) {
@@ -153,5 +157,37 @@ export function useToolAction(agentId: string) {
         }),
       ),
     onSuccess: () => refresh(),
+  })
+}
+
+export function useChannels(agentId: string) {
+  return useQuery({
+    queryKey: ['team', 'channels', agentId] as const,
+    queryFn: async ({ signal }) =>
+      AgentChannelsResponseSchema.parse(
+        await apiFetch(`${agentPath(agentId)}/channels`, { signal }),
+      ).items,
+    retry: false,
+  })
+}
+
+export function useHistory(agentId: string, q: string, outcome: HistoryOutcome | '') {
+  return useInfiniteQuery({
+    queryKey: ['team', 'history', agentId, q, outcome] as const,
+    initialPageParam: '',
+    queryFn: async ({ pageParam, signal }) => {
+      const params = new URLSearchParams()
+      if (q) params.set('q', q)
+      if (outcome) params.set('outcome', outcome)
+      if (pageParam) params.set('cursor', pageParam)
+      const query = params.toString()
+      return AgentHistoryPageSchema.parse(
+        await apiFetch(`${agentPath(agentId)}/history${query ? `?${query}` : ''}`, { signal }),
+      )
+    },
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    // Runs start and finish while the tab is open; the history has no stream event of its own.
+    refetchInterval: 10_000,
+    retry: false,
   })
 }

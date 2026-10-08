@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { useMemory, useMemoryActions } from './agent-tab-queries.ts'
 import { tabFailure } from './tab-errors.ts'
+import { newId } from '../../data/ids.ts'
 
 export function MemoryTab({ agentId, agentName }: { agentId: string; agentName: string }) {
   const [draft, setDraft] = useState('')
@@ -21,7 +22,7 @@ export function MemoryTab({ agentId, agentName }: { agentId: string; agentName: 
   function submit(event: FormEvent) {
     event.preventDefault()
     const next = text.trim()
-    if (attempt.current?.text !== next) attempt.current = { text: next, key: crypto.randomUUID() }
+    if (attempt.current?.text !== next) attempt.current = { text: next, key: newId() }
     setNotice('')
     add.mutate(
       { text: next, key: attempt.current.key },

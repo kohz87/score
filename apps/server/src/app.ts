@@ -4,6 +4,7 @@ import type { Config } from './config.ts'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
 import { registerAgentRoutes } from './http/agents.ts'
 import { registerProfileRoutes } from './http/profiles.ts'
+import { registerAgentHistoryRoutes } from './http/agent-history.ts'
 import { registerAgentTabRoutes } from './http/agent-tabs.ts'
 import { registerReportRoutes } from './http/reports.ts'
 import { registerTaskRoutes } from './http/tasks.ts'
@@ -180,6 +181,7 @@ export function buildApp({
     registerBriefRoutes(app, { port, db, ingest, control, ...(clock ? { clock } : {}) })
     registerTeamPauseRoutes(app, { db, ingest, control, dispatch, ...(clock ? { clock } : {}) })
     registerWatchRoutes(app, { port, db, ingest })
+    registerAgentHistoryRoutes(app, { port, db })
     registerAgentPauseRoutes(app, { db, ingest, port, dispatch, ...(clock ? { clock } : {}) })
     registerNowRoutes(app, {
       port,

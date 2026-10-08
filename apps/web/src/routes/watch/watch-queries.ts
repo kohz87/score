@@ -11,6 +11,7 @@ import { apiFetch } from '../../data/api.ts'
 import { defineStreamQuery } from '../../data/resync.ts'
 import { useStream } from '../../data/query-client.ts'
 import { addMarker, surfaceMarker, upsertFrame } from './watch-model.ts'
+import { newId } from '../../data/ids.ts'
 
 export type WatchData = Omit<WatchResponse, 'asOfSeq'>
 const ACTIVE_RUN = ['queued', 'running', 'waiting_for_approval']
@@ -110,7 +111,7 @@ export function useAgentPause(agentId: string) {
       AgentSummarySchema.parse(
         await apiFetch(`agents/${encodeURIComponent(agentId)}/${action}`, {
           method: 'POST',
-          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          headers: { 'Idempotency-Key': newId() },
           body: '{}',
         }),
       ),

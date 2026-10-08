@@ -1,28 +1,34 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { copyText, selectText } from '../../data/clipboard.ts'
 
 // Score never runs an interactive sign-in or handles a credential: it shows the command instead.
 export function TerminalCommand({ command, onClose }: { command: string; onClose: () => void }) {
-  const [copied, setCopied] = useState(false)
+  const [state, setState] = useState<'idle' | 'copied' | 'manual'>('idle')
+  const code = useRef<HTMLElement>(null)
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(command)
-      setCopied(true)
-    } catch {
-      setCopied(false)
+    if (await copyText(command)) setState('copied')
+    else {
+      selectText(code.current)
+      setState('manual')
     }
   }
   return (
     <div className="settings-command" role="group" aria-label="Run in a terminal">
       <p>Run this in a terminal. Score never asks for your keys or sign-in details.</p>
-      <code>{command}</code>
+      <code ref={code} className="settings-command-text" onClick={() => selectText(code.current)}>
+        {command}
+      </code>
       <div className="settings-command-actions">
         <button type="button" className="settings-pill" onClick={() => void copy()}>
-          {copied ? 'Copied' : 'Copy command'}
+          {state === 'copied' ? 'Copied' : 'Copy command'}
         </button>
         <button type="button" className="settings-link" onClick={onClose}>
           Done
         </button>
       </div>
+      {state === 'manual' && (
+        <p role="status">The command is selected: press Ctrl+C (or ⌘C) to copy it.</p>
+      )}
     </div>
   )
 }

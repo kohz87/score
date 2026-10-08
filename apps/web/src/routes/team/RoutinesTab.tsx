@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent } from 'react'
 import type { RoutineSummary } from '@score/contract'
 import { ApiError } from '../../data/api.ts'
 import { useRoutineActions, useRoutines, type NewRoutine } from './routine-queries.ts'
+import { newId } from '../../data/ids.ts'
 
 function failure(error: unknown, action: string): string {
   if (error instanceof ApiError && error.code === 'not_paired')
@@ -41,7 +42,7 @@ export function RoutinesTab({
       prompt: draft.prompt.trim(),
     }
     const body = JSON.stringify(routine)
-    if (attempt.current?.body !== body) attempt.current = { body, key: crypto.randomUUID() }
+    if (attempt.current?.body !== body) attempt.current = { body, key: newId() }
     create.mutate(
       { routine, key: attempt.current.key },
       {

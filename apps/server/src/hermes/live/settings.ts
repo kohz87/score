@@ -27,11 +27,27 @@ const CATALOG: Record<string, string> = {
   'openai-codex': 'ChatGPT (Codex)',
   nous: 'Nous Portal',
 }
+// Messaging platforms of the tested Hermes (0.21.5 hermes_cli/platforms.py PLATFORMS, minus cli, api_server and cron,
+// which aren't places to reach an agent). Plugin-registered platforms still appear when gateway_state.json reports them.
 const PLATFORMS: Record<string, string> = {
   telegram: 'Telegram',
   discord: 'Discord',
   slack: 'Slack',
   whatsapp: 'WhatsApp',
+  whatsapp_cloud: 'WhatsApp Business (Cloud)',
+  signal: 'Signal',
+  bluebubbles: 'BlueBubbles',
+  email: 'Email',
+  mattermost: 'Mattermost',
+  matrix: 'Matrix',
+  dingtalk: 'DingTalk',
+  feishu: 'Feishu',
+  wecom: 'WeCom',
+  wecom_callback: 'WeCom Callback',
+  weixin: 'Weixin',
+  qqbot: 'QQBot',
+  yuanbao: 'Yuanbao',
+  webhook: 'Webhook',
 }
 const HEADER = /^([a-z0-9][a-z0-9._-]{0,63}) \((\d+) credentials?\):\s*$/
 const FREE_TIER = /^([a-z0-9][a-z0-9._-]{0,63}): (.{1,120})$/
@@ -77,11 +93,50 @@ function hostOf(url: string): string {
   }
 }
 
+type GatewayPlatforms = NonNullable<z.infer<typeof StateSchema>['platforms']>
+
+/** The gateway's runtime status file in one Hermes home; unreadable or oversized files read as empty. */
+export function readGatewayPlatforms(home: string): GatewayPlatforms {
+  try {
+    const path = join(home, 'gateway_state.json')
+    if (fs.statSync(path).size > MAX_STATE_BYTES) return {}
+    return StateSchema.parse(JSON.parse(fs.readFileSync(path, 'utf8'))).platforms ?? {}
+  } catch {
+    return {}
+  }
+}
+
+/** Known platforms first (disconnected by default), then whatever the gateway reports. */
+export function messagingRows(platforms: GatewayPlatforms): ConnectionsResponse['messaging'] {
+  const rows = new Map<string, ConnectionsResponse['messaging'][number]>()
+  for (const [platform, label] of Object.entries(PLATFORMS))
+    rows.set(platform, { platform, label, status: 'disconnected', detail: null })
+  for (const [key, value] of Object.entries(platforms)) {
+    // Multiplexed gateways key platforms as "<profile>:<platform>".
+    const platform = key.split(':').pop()!
+    if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(platform)) continue
+    const connected = value.state === 'connected'
+    if (rows.get(platform)?.status === 'connected') continue
+    const problem = value.error_code ?? value.error_message
+    rows.set(platform, {
+      platform,
+      label: PLATFORMS[platform] ?? title(platform),
+      status: connected ? 'connected' : 'disconnected',
+      detail: connected ? null : redactBounded(String(problem ?? value.state ?? ''), 200) || null,
+    })
+  }
+  return [...rows.values()]
+}
+
 export class LiveSettings {
   private readonly home: string
   constructor(
     hermesHome: string | undefined,
     private readonly runner: HermesRunner = runHermes,
+    /** Every provider Hermes supports (from the gateway); null when it can't be read. */
+    private readonly providerCatalog: () => Promise<
+      { slug: string; name: string }[] | null
+    > = async () => null,
   ) {
     this.home = resolveHermesHome(hermesHome)
   }
@@ -172,7 +227,16 @@ export class LiveSettings {
   async listProviders(): Promise<ProviderBase[]> {
     const [pooled, local] = await Promise.all([this.pooled(), this.localProviders()])
     const items = new Map<string, ProviderBase>()
-    for (const [id, label] of Object.entries(CATALOG))
+    // Hermes's own list when the gateway answers; the short built-in list only as a fallback.
+    const catalog = await this.providerCatalog().catch(() => null)
+    const entries = catalog?.length
+      ? catalog
+          .filter(
+            (entry) => entry.slug !== 'custom' && ProviderIdSchema.safeParse(entry.slug).success,
+          )
+          .map((entry) => [entry.slug, entry.name] as const)
+      : Object.entries(CATALOG)
+    for (const [id, label] of entries)
       items.set(id, { id, label, status: 'missing', detail: 'Not connected' })
     for (const item of [...pooled, ...local]) items.set(item.id, item)
     return [...items.values()]
@@ -181,7 +245,12 @@ export class LiveSettings {
   async connectProvider(id: string): Promise<ConnectResult> {
     const providerId = ProviderIdSchema.safeParse(id)
     if (!providerId.success) throw new HttpError(404, 'not_found', 'Unknown provider')
-    const known = (await this.listProviders()).find((item) => item.id === providerId.data)
+    // The catalog alone answers "is this a provider?"; the full list would spawn two Hermes processes.
+    const catalog = await this.providerCatalog().catch(() => null)
+    const known =
+      (catalog?.some((entry) => entry.slug === providerId.data) ?? false) ||
+      providerId.data in CATALOG ||
+      (await this.listProviders()).some((item) => item.id === providerId.data)
     if (!known) throw new HttpError(404, 'not_found', 'Unknown provider')
     // Sign-in prompts for keys or opens a browser: only the person can do it, in their own terminal.
     return { next: 'run_in_terminal', command: `hermes auth add ${providerId.data}` }
@@ -239,33 +308,7 @@ export class LiveSettings {
       })
   }
   private messaging(): ConnectionsResponse['messaging'] {
-    const rows = new Map<string, ConnectionsResponse['messaging'][number]>()
-    for (const [platform, label] of Object.entries(PLATFORMS))
-      rows.set(platform, { platform, label, status: 'disconnected', detail: null })
-    for (const [key, value] of Object.entries(this.gatewayPlatforms())) {
-      // Multiplexed gateways key platforms as "<profile>:<platform>".
-      const platform = key.split(':').pop()!
-      if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(platform)) continue
-      const connected = value.state === 'connected'
-      if (rows.get(platform)?.status === 'connected') continue
-      const problem = value.error_code ?? value.error_message
-      rows.set(platform, {
-        platform,
-        label: PLATFORMS[platform] ?? title(platform),
-        status: connected ? 'connected' : 'disconnected',
-        detail: connected ? null : redactBounded(String(problem ?? value.state ?? ''), 200) || null,
-      })
-    }
-    return [...rows.values()]
-  }
-  private gatewayPlatforms(): NonNullable<z.infer<typeof StateSchema>['platforms']> {
-    try {
-      const path = join(this.home, 'gateway_state.json')
-      if (fs.statSync(path).size > MAX_STATE_BYTES) return {}
-      return StateSchema.parse(JSON.parse(fs.readFileSync(path, 'utf8'))).platforms ?? {}
-    } catch {
-      return {}
-    }
+    return messagingRows(readGatewayPlatforms(this.home))
   }
 
   connectMessaging(platform: string): ConnectResult {

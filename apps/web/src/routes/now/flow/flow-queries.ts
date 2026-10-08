@@ -10,6 +10,7 @@ import {
 } from '@score/contract'
 import { apiFetch } from '../../../data/api.ts'
 import { useStream } from '../../../data/query-client.ts'
+import { newId } from '../../../data/ids.ts'
 
 export const briefListKey = (status: 'active' | 'recent') => ['flow', 'briefs', status] as const
 export const briefFlowKey = (briefId: string) => ['flow', 'brief', briefId] as const
@@ -93,7 +94,7 @@ export function useBriefRunControl(briefId: string) {
       BriefSummarySchema.parse(
         await apiFetch(`briefs/${encodeURIComponent(briefId)}/${action}`, {
           method: 'POST',
-          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          headers: { 'Idempotency-Key': newId() },
         }),
       ),
     onSuccess: async () => {
@@ -142,7 +143,7 @@ export function useStopFlowNode(briefId: string, nodeId: string) {
       NodeStopResponseSchema.parse(
         await apiFetch(`flow/nodes/${encodeURIComponent(nodeId)}/stop`, {
           method: 'POST',
-          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          headers: { 'Idempotency-Key': newId() },
         }),
       ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: briefFlowKey(briefId) }),
