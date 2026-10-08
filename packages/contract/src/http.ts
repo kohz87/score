@@ -1,9 +1,11 @@
 import { z } from 'zod'
 import {
+  AgentIdSchema,
   AgentSummarySchema,
   ApprovalSchema,
   MessageSchema,
   RoomSchema,
+  RoutineSummarySchema,
   TaskColumnSchema,
   TaskSummarySchema,
 } from './types.ts'
@@ -59,3 +61,40 @@ export const AgentsSnapshotSchema = z.object({
   asOfSeq: AsOfSeqSchema,
   items: z.array(AgentSummarySchema),
 })
+
+// §5 Chat: commands and the message POST response
+export const CommandsResponseSchema = z.object({
+  items: z.array(z.object({ name: z.string().min(1), usage: z.string(), description: z.string() })),
+})
+export const CommandResultSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('assign'), taskId: z.string().min(1), taskKey: z.string().min(1) }),
+  z.object({ kind: z.literal('routine'), routineId: z.string().min(1) }),
+  z.object({ kind: z.literal('remember'), agentIds: z.array(AgentIdSchema) }),
+  z.object({ kind: z.literal('skill'), name: z.string().min(1), installed: z.boolean() }),
+  z.object({ kind: z.literal('model'), model: z.string().min(1) }),
+])
+export type CommandResult = z.infer<typeof CommandResultSchema>
+export const PostMessageResponseSchema = z.object({
+  message: MessageSchema,
+  routedTo: z.array(AgentIdSchema),
+  command: CommandResultSchema.nullable(),
+})
+
+// §8 Team: SOUL.md / AGENTS.md
+export const AgentFileSchema = z.object({
+  content: z.string(),
+  etag: z.string().regex(/^[a-f0-9]{64}$/),
+})
+export const AgentFilePreviewSchema = z.object({ diff: z.string() })
+export const AgentFileWriteSchema = AgentFileSchema.pick({ etag: true })
+/** `details` of a 409 `conflict` on PUT: the current etag and a diff from the current file to the submitted one. */
+export const AgentFileConflictSchema = z.object({
+  etag: AgentFileSchema.shape.etag,
+  diff: z.string(),
+})
+
+// §8 Team: routines (not on the stream; refetch after mutations)
+export const RoutinesResponseSchema = z.object({ items: z.array(RoutineSummarySchema) })
+export const RoutineDeletedSchema = z.object({ id: z.string().min(1) })
+/** Run-now only marks the job due; it runs on the scheduler's next tick. */
+export const RoutineRunSchema = z.object({ id: z.string().min(1), queued: z.literal(true) })
