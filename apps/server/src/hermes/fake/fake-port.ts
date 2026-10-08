@@ -12,6 +12,7 @@ import {
   type AgentFile,
   type AgentFileName,
 } from '../agent-files.ts'
+import { fakeReportHistory } from './report-history.ts'
 import { updateProjectedAgent } from '../../domain/agents.ts'
 import { createBrief, linkTask, readBriefRow } from '../../domain/briefs.ts'
 import {
@@ -387,6 +388,8 @@ export class FakePort implements HermesPort {
       text: 'I have reviewed the room context. The work is ready for the next step.',
       tools: ['terminal', 'terminal', 'terminal', 'edit_file', 'edit_file'],
     }),
+    // Dev and e2e only: a believable month of finished work so Reports has something to show.
+    private readonly seedReportHistory = false,
   ) {
     if (!Number.isFinite(speed) || speed <= 0)
       throw new Error('Fake speed must be positive and finite')
@@ -501,6 +504,18 @@ export class FakePort implements HermesPort {
   async reportFacts(req: Parameters<HermesPort['reportFacts']>[0]) {
     // Neutral, deterministic numbers that grow with the window so the three ranges look different.
     const days = Math.max(1, Math.ceil((req.to - req.from) / 86_400_000))
+    const history = this.seedReportHistory ? fakeReportHistory(req.to, req.agentIds) : null
+    if (history) {
+      return {
+        tasks: history.tasks,
+        spendUsd: Object.fromEntries(
+          req.agentIds.map((id) => [
+            id,
+            Math.round(days * (history.spendPerDay[id] ?? 0.5) * 100) / 100,
+          ]),
+        ),
+      }
+    }
     return {
       tasks: [...this.tasks.values()].map((task) => {
         const done = task.hermesStatus === 'done'
@@ -527,6 +542,11 @@ export class FakePort implements HermesPort {
         ]),
       ),
     }
+  }
+
+  async reportHistoryRows(now: number, agentIds: string[]) {
+    const { runs, approvals } = fakeReportHistory(now, agentIds)
+    return this.seedReportHistory ? { runs, approvals } : { runs: [], approvals: [] }
   }
 
   async listAgentDetails(): Promise<AgentDetail[]> {
