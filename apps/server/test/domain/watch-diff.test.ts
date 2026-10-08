@@ -1,5 +1,9 @@
 import { expect, test } from 'vitest'
-import { editorFrameFromTool, editorFramesFromTool, type EditorFrame } from '../../src/domain/watch-diff.ts'
+import {
+  editorFrameFromTool,
+  editorFramesFromTool,
+  type EditorFrame,
+} from '../../src/domain/watch-diff.ts'
 
 function single(
   tool: string,
