@@ -6,9 +6,9 @@
   --card: #ffffff;
   --ink: #12131a;
   --ink-muted: #5e626c;
-  --muted: #6e727c;
+  --muted: #626670; /* ≥ 4.5:1 on every ground (WCAG AA small text) */
   --hairline: #dfe2e8;
-  --agent-unknown: #9aa0ab; /* agents Score doesn't know (removed profiles) */
+  --agent-unknown: #8a909b; /* agents Score doesn't know (removed profiles) */
   --subtle: #f4f5f8;
   --tasks-ground: #e3e6eb;
   --tasks-border: #e3e5ea;
@@ -41,9 +41,9 @@
   --flow-log-border: #f0f1f4;
   --flow-canvas: #f7f8fa;
   --flow-canvas-dot: #d9dce2;
-  --flow-edge: #9a9ea7;
+  --flow-edge: #8c9099; /* ≥ 3:1 graphics contrast on the canvas */
   --flow-edge-planned: #b9bdc6;
-  --flow-edge-sent-back: #e0a000;
+  --flow-edge-sent-back: #c28200;
   --flow-done-border: #c9cdd5;
   --watch-stage: #1a1c23;
   --watch-window: #0f1116;

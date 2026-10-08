@@ -106,3 +106,7 @@ export const KNOWN_PATTERN_KEYS: readonly string[] = [
   'sudo with combined-flag privilege escalation',
   'package manager uninstall',
 ]
+
+// Also in Hermes's HARDLINE_PATTERNS: always blocked, even when allowlisted (tools/approval_detection.py), so Score
+// never offers or accepts them as Go ahead and doesn't list them under Ask me.
+export const ALWAYS_BLOCKED_KEYS: readonly string[] = ['fork bomb', 'kill all processes']

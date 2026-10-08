@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { MediaStore } from '../media/store.ts'
 import type { ScoreDb } from '../db/index.ts'
+import { mediaIdOf } from '../domain/watch-frames.ts'
 import { heldIngestPositions } from './ingest.ts'
 
 export function retireMedia(media: MediaStore): {
@@ -34,6 +35,26 @@ const CheckpointRowSchema = z.object({
   floor: z.int().nonnegative().nullable(),
 })
 
+// Frames that showed an image release their media reference as they are deleted.
+function releaseAndDeleteOldFrames(db: ScoreDb, cutoff: string): void {
+  db.tx((sqlite) => {
+    const old = `at <= ? AND seq < (
+         SELECT MAX(newer.seq) FROM watch_frames newer WHERE newer.agent_id = watch_frames.agent_id)`
+    const rows = z
+      .array(z.object({ payload: z.string() }))
+      .parse(
+        sqlite
+          .prepare(`SELECT payload FROM watch_frames WHERE surface = 'browser' AND ${old}`)
+          .all(cutoff),
+      )
+    for (const { payload } of rows) {
+      const id = mediaIdOf((JSON.parse(payload) as { imageUrl?: string | null }).imageUrl)
+      if (id) sqlite.prepare('UPDATE media SET refs = MAX(refs - 1, 0) WHERE id = ?').run(id)
+    }
+    sqlite.prepare(`DELETE FROM watch_frames WHERE ${old}`).run(cutoff)
+  })
+}
+
 export function retireIngestKeys(
   db: ScoreDb,
   {
@@ -65,12 +86,7 @@ export function retireIngestKeys(
     ),
   )
   // Watch frames live 7 days (D6), but each agent keeps its newest frame so per-agent `seq` never restarts.
-  db.sqlite
-    .prepare(
-      `DELETE FROM watch_frames WHERE at <= ? AND seq < (
-         SELECT MAX(newer.seq) FROM watch_frames newer WHERE newer.agent_id = watch_frames.agent_id)`,
-    )
-    .run(new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString())
+  releaseAndDeleteOldFrames(db, new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString())
   db.sqlite
     .prepare('DELETE FROM request_receipts WHERE created_at <= ? AND status IS NOT NULL')
     .run(cutoff)
