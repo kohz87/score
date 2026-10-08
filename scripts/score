@@ -57,10 +57,11 @@ cmd_start() {
       return 1
     fi
     if tail -c +"$((offset + 1))" "$log_file" | grep -q 'Pair this browser'; then
-      echo "Score started (pid $(running_pid)). Log: $log_file"
-      tail -c +"$((offset + 1))" "$log_file" | grep 'Pair this browser' | head -n 1
+      # Before any output: a caller reading only the first line (| head -1) would stop us mid-way.
       tail -c +"$((offset + 1))" "$log_file" | grep -m1 'Pair this browser' |
         sed -E 's#^Pair this browser: (https?://[^/]+)/.*#\1#' >"$url_file" || true
+      echo "Score started (pid $(running_pid)). Log: $log_file"
+      tail -c +"$((offset + 1))" "$log_file" | grep 'Pair this browser' | head -n 1
       return 0
     fi
     sleep 0.2
