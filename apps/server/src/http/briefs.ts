@@ -16,6 +16,7 @@ import {
 import { orderedPlanSteps } from '../domain/plan.ts'
 import { messageFromRow } from '../domain/rooms.ts'
 import { HttpError } from '../errors.ts'
+import { withKeyedLock } from '../keyed-lock.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { snapshot } from '../hub/snapshot.ts'
@@ -100,8 +101,12 @@ export function registerBriefRoutes(
   })
 
   // Start plan (H): the only thing that turns a proposed plan into tasks. Step keys make it idempotent.
-  app.post('/api/rooms/:roomId/messages/:messageId/plan/start', mutation, async (request) => {
+  app.post('/api/rooms/:roomId/messages/:messageId/plan/start', mutation, (request) => {
     const { roomId, messageId } = PlanParams.parse(request.params)
+    // Two starts of one plan (different HTTP keys) must run one after the other and share the step tasks.
+    return withKeyedLock(`plan-start:${messageId}`, () => startPlan(roomId, messageId))
+  })
+  const startPlan = async (roomId: string, messageId: string): Promise<PlanStartResponse> => {
     const found = db.read((sqlite) => {
       const row = sqlite
         .prepare('SELECT * FROM messages WHERE id = ? AND room_id = ?')
@@ -113,11 +118,36 @@ export function registerBriefRoutes(
       if (message.streaming) throw new HttpError(409, 'conflict', 'The plan is still being written')
       const brief = readBriefRow(sqlite, part.briefId)
       if (!brief) throw new HttpError(404, 'not_found', 'Unknown brief')
+      // New tasks would run while the brief claims to be paused, and Pause only holds tasks that exist.
+      if (brief.paused_at !== null)
+        throw new HttpError(409, 'conflict', 'Resume the brief before starting its plan')
       return { part, brief }
     })
     const steps = orderedPlanSteps(found.part)
     if (!steps.length) throw new HttpError(400, 'bad_request', 'The plan has no steps to start')
     const taskIds: string[] = []
+    const link = (taskId: string, record: boolean) =>
+      ingest.submit({
+        source: 'briefs',
+        identity: randomUUID(),
+        apply({ sqlite, now }) {
+          linkTasks(sqlite, found.brief.id, [{ taskId, origin: 'plan' as const }], now)
+          // A step linked earlier may already have claimed this one as its dependency child.
+          sqlite
+            .prepare(
+              "UPDATE brief_tasks SET origin = 'plan' WHERE brief_id = ? AND task_id = ? AND origin = 'child'",
+            )
+            .run(found.brief.id, taskId)
+          if (record)
+            sqlite
+              .prepare(
+                `INSERT INTO brief_plan_starts (message_id, brief_id, started_at) VALUES (?, ?, ?)
+                 ON CONFLICT DO NOTHING`,
+              )
+              .run(messageId, found.brief.id, now)
+          return emitBriefChange(sqlite, found.brief.id, true)
+        },
+      })
     for (const step of steps) {
       const task = await port.createTask(
         {
@@ -130,27 +160,10 @@ export function registerBriefRoutes(
         `plan:${messageId}:${step.index}`,
       )
       taskIds.push(task.id)
+      // Link at once: a later step failing must not leave a running task outside its brief.
+      await link(task.id, taskIds.length === steps.length)
     }
-    await ingest.submit({
-      source: 'briefs',
-      identity: randomUUID(),
-      apply({ sqlite, now }) {
-        linkTasks(
-          sqlite,
-          found.brief.id,
-          taskIds.map((taskId) => ({ taskId, origin: 'plan' as const })),
-          now,
-        )
-        sqlite
-          .prepare(
-            `INSERT INTO brief_plan_starts (message_id, brief_id, started_at) VALUES (?, ?, ?)
-             ON CONFLICT DO NOTHING`,
-          )
-          .run(messageId, found.brief.id, now)
-        return emitBriefChange(sqlite, found.brief.id, true)
-      },
-    })
     const response: PlanStartResponse = { briefId: found.brief.id, taskIds }
     return response
-  })
+  }
 }

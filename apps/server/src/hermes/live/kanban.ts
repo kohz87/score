@@ -129,6 +129,22 @@ export function readTaskEvents(db: DatabaseSync, taskId: string) {
   }
 }
 
+/** Every review event of a task, oldest first, independent of the 50-event activity window (Flow backfill). */
+export function readReviewEvents(db: DatabaseSync, taskId: string) {
+  z.string().min(1).parse(taskId)
+  const batch = readBatch(
+    db,
+    'task_events',
+    TaskEventRowSchema,
+    "WHERE task_id = ? AND kind IN ('review_requested', 'changes_requested') ORDER BY id",
+    [taskId],
+  )
+  return {
+    ...batch,
+    rows: batch.rows.map((row) => ({ ...row, payload: parseJson(row.payload).value })),
+  }
+}
+
 /** The newest review event of a task, whatever the 50-event activity window holds. */
 export function readLatestReviewEvent(db: DatabaseSync, taskId: string) {
   z.string().min(1).parse(taskId)

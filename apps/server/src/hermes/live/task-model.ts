@@ -158,6 +158,8 @@ export function readTaskDetails(db: DatabaseSync, now = Date.now()): TaskDetail[
           .filter((link) => link.parent_id === task.id)
           .map((link) => link.child_id),
         runIds: runs.rows.map((run) => String(run.id)),
+        completedAt:
+          task.completed_at === null ? null : new Date(task.completed_at * 1000).toISOString(),
       }),
     )
   })

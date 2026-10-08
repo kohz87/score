@@ -343,6 +343,11 @@ test('brief review and sent-back edges come from event kinds, survive late links
     INSERT INTO task_events (task_id, kind, payload, created_at) VALUES
     ('t_test', 'review_requested', '{"reviewer":"reviewer","reason":"Custom feedback"}', 2100),
     ('t_test', 'changes_requested', '{"author":"reviewer","reason":"Use a composite cursor"}', 2200);`)
+  // More than the 50-event activity window of later events must not hide the older review events.
+  const pad = upstream.db.prepare(
+    "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES ('t_test', 'edited', NULL, ?)",
+  )
+  for (let index = 0; index < 60; index += 1) pad.run(2201 + index)
   await tasks.poll()
   await ingest.submit({
     source: 'test',
@@ -431,4 +436,18 @@ test('the reviewer is the newest review event, read from its reviewer field even
   )
   event('changes_requested', { implementer: 'builder', reviewer: 'lead' }, 5000)
   expect(readTaskDetails(upstream.db).find((task) => task.id === 't_test')?.reviewer).toBe('lead')
+})
+
+test('concurrent creates with one key reach the CLI once and share the task', async () => {
+  const runner = vi.fn(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    insertTask(upstream.db, 't_once')
+    return { exitCode: 0, stdout: '{"id":"t_once"}' }
+  })
+  const [a, b] = await Promise.all([
+    createTask({ title: 'Once' }, 'race-key', writeDeps(runner)),
+    createTask({ title: 'Once' }, 'race-key', writeDeps(runner)),
+  ])
+  expect([a.id, b.id]).toEqual(['t_once', 't_once'])
+  expect(runner).toHaveBeenCalledTimes(1)
 })

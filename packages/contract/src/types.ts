@@ -197,6 +197,8 @@ export const TaskDetailSchema = TaskSummarySchema.extend({
   dependsOn: z.array(z.string().min(1)),
   blocks: z.array(z.string().min(1)),
   runIds: z.array(z.string().min(1)),
+  /** Kanban's own completion time; absent on older projections and in the fake adapter. */
+  completedAt: z.iso.datetime().nullable().optional(),
 })
 export type TaskDetail = z.infer<typeof TaskDetailSchema>
 

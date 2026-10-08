@@ -37,6 +37,7 @@ const HopRowSchema = z.object({
   message_id: z.string(),
   run_id: z.string().nullable(),
   from_agent_id: z.string().nullable(),
+  parent_run_id: z.string().nullable(),
   agent_id: z.string(),
   created_at: z.iso.datetime(),
 })
@@ -92,7 +93,9 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
     sqlite
       .prepare(
         // Only hops into runs in the window can be drawn; this keeps the read bounded as history grows.
-        `SELECT message_id, run_id, from_agent_id, agent_id, created_at FROM message_runs
+        `SELECT message_id, run_id, from_agent_id, agent_id, created_at,
+                (SELECT p.run_id FROM message_runs p WHERE p.message_id = message_runs.parent_message_id) AS parent_run_id
+           FROM message_runs
           WHERE run_id IN (SELECT id FROM runs WHERE started_at <= ? AND (ended_at IS NULL OR ended_at >= ?))
           ORDER BY created_at, message_id`,
       )
@@ -132,6 +135,7 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
       id: hop.message_id,
       runId: hop.run_id,
       fromAgentId: hop.from_agent_id,
+      parentRunId: hop.parent_run_id,
       agentId: hop.agent_id,
       at: hop.created_at,
     })),
@@ -170,8 +174,10 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
     get: (id: string) => RunRowSchema.optional().parse(runStatement.get(id)),
   }
   const madeToday = tasks
-    .filter((task) => isDone(task) && Date.parse(task.updatedAt) >= midnight.getTime())
-    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+    .map((task) => ({ task, doneAt: Date.parse(task.completedAt ?? task.updatedAt) }))
+    .filter(({ task, doneAt }) => isDone(task) && doneAt >= midnight.getTime())
+    .sort((a, b) => b.doneAt - a.doneAt)
+    .map(({ task }) => task)
     .slice(0, MADE_TODAY_LIMIT)
     .map((task) => {
       const paths = new Set<string>()

@@ -27,9 +27,9 @@ test('spend sums billed cost, falls back to the estimate, and ignores sessions o
   const builder = fixture.build('state', 'profiles/builder/state.db')
   addSession(builder.db, 's1', 1000, 0.5, 0.4)
   addSession(builder.db, 's2', 1500, null, 0.25)
-  addSession(builder.db, 's3', 1600, null, null)
   addSession(builder.db, 's4', 9000, 7, 7)
   addSession(builder.db, 's5', 10, 7, 7)
+  builder.db.prepare("UPDATE sessions SET ended_at = 20 WHERE id = 's5'").run()
   const facts = readReportFacts(
     { from: 1_000_000, to: 2_000_000, agentIds: ['builder', 'designer', '../evil'] },
     fixture.home,
@@ -86,4 +86,20 @@ test('kanban tasks carry completion time, parent flag and the review/block event
       events: [{ kind: 'promoted', at: 5_001_000 }],
     },
   ])
+})
+
+test('unknown session cost and sessions carried over from before the window make spend unknown', () => {
+  mkdirSync(`${fixture.home}/profiles/builder`, { recursive: true })
+  mkdirSync(`${fixture.home}/profiles/designer`, { recursive: true })
+  const builder = fixture.build('state', 'profiles/builder/state.db')
+  addSession(builder.db, 's1', 1500, 0.5, null)
+  addSession(builder.db, 's2', 1600, null, null)
+  const designer = fixture.build('state', 'profiles/designer/state.db')
+  addSession(designer.db, 'd1', 500, 2, null)
+  designer.db.prepare("UPDATE sessions SET last_activity_at = 1500 WHERE id = 'd1'").run()
+  const facts = readReportFacts(
+    { from: 1_000_000, to: 2_000_000, agentIds: ['builder', 'designer'] },
+    fixture.home,
+  )
+  expect(facts.spendUsd).toEqual({ builder: null, designer: null })
 })

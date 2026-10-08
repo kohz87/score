@@ -68,21 +68,33 @@ export function readSessions(db: DatabaseSync, ids: string[]) {
 }
 
 const SessionCostSchema = z.object({
+  started_at: z.number(),
   estimated_cost_usd: z.number().nullable(),
   actual_cost_usd: z.number().nullable(),
 })
 
-/** Spend of the sessions started in [fromSec, toSec]: the billed cost when known, else Hermes' estimate. */
-export function sessionSpend(db: DatabaseSync, fromSec: number, toSec: number): number {
+/**
+ * Spend of the sessions started in [fromSec, toSec]: the billed cost when known, else Hermes' estimate.
+ * Null (unknown, never zero) when a session has no cost, or when a session that started earlier was still active
+ * in the window: Hermes keeps one cumulative cost per session, so its share inside the window is not recoverable.
+ */
+export function sessionSpend(db: DatabaseSync, fromSec: number, toSec: number): number | null {
   const batch = readBatch(
     db,
     'sessions',
-    SessionCostSchema,
-    'WHERE started_at >= ? AND started_at <= ?',
-    [fromSec, toSec],
+    SessionCostSchema.extend({
+      last_activity_at: z.number().nullable(),
+      ended_at: z.number().nullable(),
+    }),
+    'WHERE started_at <= ? AND COALESCE(last_activity_at, ended_at, started_at) >= ?',
+    [toSec, fromSec],
   )
-  return batch.rows.reduce(
-    (total, row) => total + (row.actual_cost_usd ?? row.estimated_cost_usd ?? 0),
-    0,
-  )
+  if (batch.malformed) return null
+  let total = 0
+  for (const row of batch.rows) {
+    const cost = row.actual_cost_usd ?? row.estimated_cost_usd
+    if (cost === null || row.started_at < fromSec) return null
+    total += cost
+  }
+  return total
 }
