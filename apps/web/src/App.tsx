@@ -8,7 +8,7 @@ import { AppShell } from './shell/AppShell.tsx'
 import { destinations } from './shell/destinations.ts'
 import { SettingsPage } from './routes/settings/SettingsPage.tsx'
 import { ChatPage } from './routes/chat/ChatPage.tsx'
-import { FlowView } from './routes/now/flow/FlowView.tsx'
+import { NowPage } from './routes/now/NowPage.tsx'
 
 function StubPage({ title }: { title: string }) {
   return <h1>{title}</h1>
@@ -41,23 +41,24 @@ export const appRoutes: RouteObject[] = [
             ],
           }
         // Built destinations render their page; the rest stay stubs until their tasks land.
-        const page = path === '/chat' ? <ChatPage /> : <StubPage title={title} />
+        const page =
+          path === '/chat' ? (
+            <ChatPage />
+          ) : path === '/now' ? (
+            <NowPage />
+          ) : (
+            <StubPage title={title} />
+          )
         return {
           path,
           children: [
             { index: true, element: page },
             ...(path === '/now'
-              ? ['routines', 'watch/:agentId']
+              ? ['routines', 'flow', 'flow/:briefId', 'watch/:agentId']
               : path === '/chat'
                 ? [':roomId']
                 : []
             ).map((child) => ({ path: child, element: page })),
-            ...(path === '/now'
-              ? [
-                  { path: 'flow', element: <FlowView /> },
-                  { path: 'flow/:briefId', element: <FlowView /> },
-                ]
-              : []),
           ],
         }
       }),

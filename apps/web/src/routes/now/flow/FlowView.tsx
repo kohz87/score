@@ -60,7 +60,7 @@ export function FlowView({ onSelect }: FlowViewProps = {}) {
   if (!briefId) {
     return (
       <div className="flow-view">
-        <h1>Flow</h1>
+        <h2>Flow</h2>
         {listsLoading ? (
           <p role="status">Loading runs...</p>
         ) : (
@@ -84,7 +84,7 @@ export function FlowView({ onSelect }: FlowViewProps = {}) {
               {brief.startedBy}
             </span>
           )}
-          <h1>{brief?.title ?? 'Flow'}</h1>
+          <h2>{brief?.title ?? 'Flow'}</h2>
         </div>
         <div className="flow-heading__controls">
           {(activeItems.length > 0 || recentItems.length > 0) && (

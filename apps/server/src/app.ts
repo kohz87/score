@@ -11,6 +11,8 @@ import { registerRulesRoutes } from './http/rules.ts'
 import { registerSettingsRoutes } from './http/settings.ts'
 import { registerRoomRoutes } from './http/rooms.ts'
 import { registerBriefRoutes } from './http/briefs.ts'
+import { createBriefControl } from './http/brief-control.ts'
+import { registerTeamPauseRoutes } from './http/team-pause.ts'
 import { registerNowRoutes } from './http/now.ts'
 import { registerApprovalRoutes } from './http/approvals.ts'
 import { registerErrorHandlers } from './errors.ts'
@@ -138,7 +140,9 @@ export function buildApp({
   registerRulesRoutes(app, port, ingest, db, clock)
   if (db && ingest) {
     const dispatch = registerRoomRoutes(app, port, db, ingest, clock)
-    registerBriefRoutes(app, { port, db, ingest, dispatch, ...(clock ? { clock } : {}) })
+    const control = createBriefControl({ port, db, ingest, dispatch })
+    registerBriefRoutes(app, { port, db, ingest, control, ...(clock ? { clock } : {}) })
+    registerTeamPauseRoutes(app, { db, ingest, control, dispatch, ...(clock ? { clock } : {}) })
     registerNowRoutes(app, {
       port,
       db,

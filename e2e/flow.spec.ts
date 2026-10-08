@@ -25,7 +25,9 @@ test('flow canvas renders the brief, zooms, fits and moves focus across nodes', 
   await expect.poll(() => nodes.count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(2)
   await expect(page.locator('[data-flow-edge]').first()).toBeAttached()
   await expect(page.locator('[data-flow-edge][data-kind="flow"]').first()).toBeAttached()
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('pagination')
+  await expect(
+    page.getByRole('heading', { level: 2 }).filter({ hasText: 'pagination' }),
+  ).toBeVisible()
 
   const level = page.getByRole('status', { name: 'Zoom level' })
   const world = page.getByTestId('flow-world')
