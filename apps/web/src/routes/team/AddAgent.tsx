@@ -13,6 +13,7 @@ import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { ProfileOperation, useProfileOperation } from './ProfileOperation.tsx'
+import { newId } from '../../data/ids.ts'
 
 export function AddAgent({ agents }: { agents: AgentSummary[] }) {
   const [open, setOpen] = useState(false)
@@ -66,7 +67,7 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
       AgentOperationSchema.parse(
         await apiFetch('agents', {
           method: 'POST',
-          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          headers: { 'Idempotency-Key': newId() },
           body: JSON.stringify({
             ...input,
             previewHash: preview!.hash,

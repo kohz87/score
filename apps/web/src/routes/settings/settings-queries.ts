@@ -13,6 +13,7 @@ import {
 } from '@score/contract'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
+import { newId } from '../../data/ids.ts'
 
 // Status only; the server never sends secrets. Not in the stream, so mutations invalidate these reads.
 const providersKey = ['settings', 'providers'] as const
@@ -20,7 +21,7 @@ const connectionsKey = ['settings', 'connections'] as const
 const post = (path: string, body?: unknown) =>
   apiFetch(path, {
     method: 'POST',
-    headers: { 'Idempotency-Key': crypto.randomUUID() },
+    headers: { 'Idempotency-Key': newId() },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
 

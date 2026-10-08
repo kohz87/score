@@ -5,9 +5,10 @@ import { Link } from 'react-router'
 import { ApiError, apiFetch } from '../../data/api.ts'
 import { useStream, useStreamQuery } from '../../data/query-client.ts'
 import { approvalsQuery } from './queries.ts'
+import { newId } from '../../data/ids.ts'
 
 function idempotencyKey() {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return newId()
 }
 
 export const choiceText: Record<ApprovalChoice, string> = {

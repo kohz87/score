@@ -49,6 +49,22 @@ export default tseslint.config(
           ],
         },
       ],
+      // Undefined on plain-HTTP LAN origins (secure contexts only); it broke every action in remote mode.
+      'no-restricted-properties': [
+        'error',
+        { object: 'crypto', property: 'randomUUID', message: 'Use newId() from data/ids.ts.' },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "MemberExpression[property.name='randomUUID']",
+          message: 'Use newId() from data/ids.ts (crypto.randomUUID needs HTTPS).',
+        },
+      ],
     },
+  },
+  {
+    files: ['apps/web/src/data/ids.test.ts'],
+    rules: { 'no-restricted-properties': 'off', 'no-restricted-syntax': 'off' },
   },
 )

@@ -19,6 +19,7 @@ import {
   type SlashCommand,
 } from './composer-model.ts'
 import { messagesQuery, type MessagePageData } from './queries.ts'
+import { newId } from '../../data/ids.ts'
 
 type Notice = { kind: 'error'; text: string } | { kind: 'result'; command: CommandResult | null }
 type Attachment = { mediaId: string; name: string }
@@ -174,8 +175,7 @@ export function Composer({
     }
     // A retry of the same payload reuses its key, so a lost response cannot post twice.
     const signature = JSON.stringify(payload)
-    if (sendKey.current?.signature !== signature)
-      sendKey.current = { signature, key: crypto.randomUUID() }
+    if (sendKey.current?.signature !== signature) sendKey.current = { signature, key: newId() }
     const key = sendKey.current.key
     const temporary = `pending-${key}`
     const queryKey = messagesQuery(roomId).key

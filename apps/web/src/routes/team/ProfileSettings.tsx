@@ -10,6 +10,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { apiFetch } from '../../data/api.ts'
 import { ProfileOperation, useProfileOperation } from './ProfileOperation.tsx'
+import { newId } from '../../data/ids.ts'
 
 export function ProfileSettings({ agent }: { agent: AgentDetail }) {
   const client = useQueryClient()
@@ -25,7 +26,7 @@ export function ProfileSettings({ agent }: { agent: AgentDetail }) {
       AgentDetailSchema.parse(
         await apiFetch(`agents/${encodeURIComponent(agent.id)}`, {
           method: 'PATCH',
-          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          headers: { 'Idempotency-Key': newId() },
           body: JSON.stringify({ name, role }),
         }),
       ),
@@ -51,7 +52,7 @@ export function ProfileSettings({ agent }: { agent: AgentDetail }) {
       AgentOperationSchema.parse(
         await apiFetch(`agents/${encodeURIComponent(agent.id)}`, {
           method: 'DELETE',
-          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          headers: { 'Idempotency-Key': newId() },
           body: JSON.stringify({ typedName, previewHash: preview!.hash }),
         }),
       ),

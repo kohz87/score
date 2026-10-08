@@ -27,11 +27,27 @@ const CATALOG: Record<string, string> = {
   'openai-codex': 'ChatGPT (Codex)',
   nous: 'Nous Portal',
 }
+// Messaging platforms of the tested Hermes (0.21.5 hermes_cli/platforms.py PLATFORMS, minus cli, api_server and cron,
+// which aren't places to reach an agent). Plugin-registered platforms still appear when gateway_state.json reports them.
 const PLATFORMS: Record<string, string> = {
   telegram: 'Telegram',
   discord: 'Discord',
   slack: 'Slack',
   whatsapp: 'WhatsApp',
+  whatsapp_cloud: 'WhatsApp Business (Cloud)',
+  signal: 'Signal',
+  bluebubbles: 'BlueBubbles',
+  email: 'Email',
+  mattermost: 'Mattermost',
+  matrix: 'Matrix',
+  dingtalk: 'DingTalk',
+  feishu: 'Feishu',
+  wecom: 'WeCom',
+  wecom_callback: 'WeCom Callback',
+  weixin: 'Weixin',
+  qqbot: 'QQBot',
+  yuanbao: 'Yuanbao',
+  webhook: 'Webhook',
 }
 const HEADER = /^([a-z0-9][a-z0-9._-]{0,63}) \((\d+) credentials?\):\s*$/
 const FREE_TIER = /^([a-z0-9][a-z0-9._-]{0,63}): (.{1,120})$/
@@ -82,6 +98,10 @@ export class LiveSettings {
   constructor(
     hermesHome: string | undefined,
     private readonly runner: HermesRunner = runHermes,
+    /** Every provider Hermes supports (from the gateway); null when it can't be read. */
+    private readonly providerCatalog: () => Promise<
+      { slug: string; name: string }[] | null
+    > = async () => null,
   ) {
     this.home = resolveHermesHome(hermesHome)
   }
@@ -172,7 +192,16 @@ export class LiveSettings {
   async listProviders(): Promise<ProviderBase[]> {
     const [pooled, local] = await Promise.all([this.pooled(), this.localProviders()])
     const items = new Map<string, ProviderBase>()
-    for (const [id, label] of Object.entries(CATALOG))
+    // Hermes's own list when the gateway answers; the short built-in list only as a fallback.
+    const catalog = await this.providerCatalog().catch(() => null)
+    const entries = catalog?.length
+      ? catalog
+          .filter(
+            (entry) => entry.slug !== 'custom' && ProviderIdSchema.safeParse(entry.slug).success,
+          )
+          .map((entry) => [entry.slug, entry.name] as const)
+      : Object.entries(CATALOG)
+    for (const [id, label] of entries)
       items.set(id, { id, label, status: 'missing', detail: 'Not connected' })
     for (const item of [...pooled, ...local]) items.set(item.id, item)
     return [...items.values()]

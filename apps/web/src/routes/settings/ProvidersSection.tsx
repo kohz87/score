@@ -28,6 +28,7 @@ function UsedBy({ ids, agents }: { ids: string[]; agents: AgentSummary[] }) {
 }
 
 export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
+  const [showAll, setShowAll] = useState(false)
   const providers = useProviders()
   const { connectProvider, addLocal } = useSettingsActions()
   const [command, setCommand] = useState<{ id: string; text: string } | null>(null)
@@ -62,6 +63,14 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
     )
   }
 
+  // Hermes supports dozens of providers: the ones in use come first, the rest behind "Show all".
+  const all = [...(providers.data ?? [])].sort(
+    (a, b) =>
+      Number(a.status === 'missing') - Number(b.status === 'missing') ||
+      a.label.localeCompare(b.label),
+  )
+  const inUse = all.filter((item) => item.status !== 'missing').length
+  const visible = showAll ? all : all.slice(0, Math.max(inUse + 4, 6))
   return (
     <section id="models" className="settings-card" aria-labelledby="settings-models">
       <div>
@@ -75,7 +84,7 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
         <p role="alert">Could not load providers. Check that the Score server is running.</p>
       )}
       <ul className="settings-rows">
-        {providers.data?.map((item) => (
+        {visible.map((item) => (
           <li key={item.id} className="settings-row">
             <span className="settings-row-name" data-missing={item.status === 'missing'}>
               {item.label}
@@ -117,6 +126,11 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
           </button>
         </li>
       </ul>
+      {all.length > visible.length && (
+        <button type="button" className="settings-link" onClick={() => setShowAll(true)}>
+          Show all {all.length} providers
+        </button>
+      )}
       {adding && (
         <form className="settings-form" onSubmit={submit} aria-label="Add a local model">
           <label>

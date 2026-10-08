@@ -7,6 +7,7 @@ import {
 } from '@score/contract'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
+import { newId } from '../../data/ids.ts'
 
 export type Skill = AgentDetail['skills'][number]
 export type MemoryEntry = AgentDetail['memory'][number]
@@ -22,7 +23,7 @@ const agentPath = (agentId: string) => `agents/${encodeURIComponent(agentId)}`
 const detailKey = (agentId: string) => ['team', 'detail', agentId] as const
 const skillsKey = (agentId: string) => ['team', 'skills', agentId] as const
 const memoryKey = (agentId: string, q: string) => ['team', 'memory', agentId, q] as const
-const mutationHeaders = (key: string = crypto.randomUUID()) => ({ 'Idempotency-Key': key })
+const mutationHeaders = (key: string = newId()) => ({ 'Idempotency-Key': key })
 
 /** Changes made here also change the agent detail the Overview and the other tabs read. */
 function useRefresh(agentId: string) {

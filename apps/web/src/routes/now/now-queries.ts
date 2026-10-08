@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { apiFetch } from '../../data/api.ts'
 import { useStream } from '../../data/query-client.ts'
+import { newId } from '../../data/ids.ts'
 
 export const nowKey = ['now', 'score'] as const
 const REFRESH_MS = 30_000
@@ -66,8 +67,7 @@ export function useTeamPause() {
         await apiFetch(paused ? 'team/pause' : 'team/resume', {
           method: 'POST',
           headers: {
-            'Idempotency-Key':
-              globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+            'Idempotency-Key': newId(),
           },
           body: '{}',
         }),
