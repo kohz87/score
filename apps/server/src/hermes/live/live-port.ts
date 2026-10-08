@@ -40,6 +40,7 @@ import { followRun, waitForRun, type FollowOptions } from './runs.ts'
 import { taskAction, taskReader } from './task-actions.ts'
 import { LiveTasks } from './tasks.ts'
 import { createTask, patchTask } from './task-writes.ts'
+import { LiveRoutines } from './routines.ts'
 import type { HermesRunner } from './cli.ts'
 import { readRun, RunRowSchema, runLifecycle, type RunMetrics } from './translate.ts'
 
@@ -88,9 +89,11 @@ export class LivePort implements HermesPort {
     degraded: ['Gateway status unavailable'],
   }
   private readonly profiles: ProfilesReader
+  private readonly routines: LiveRoutines
   private readonly profileFiles = new ProfileFiles()
   constructor(private readonly options: LivePortOptions) {
     this.profiles = new ProfilesReader(resolveHermesHome(options.hermesHome), options.runner)
+    this.routines = new LiveRoutines(options.hermesHome, options.runner)
   }
 
   async start(sink: ObservationSink): Promise<void> {
@@ -264,6 +267,29 @@ export class LivePort implements HermesPort {
         })
       }),
     )
+  }
+  async listRoutines(agentId: string) {
+    return this.routines.list(agentId)
+  }
+  async createRoutine(
+    agentId: string,
+    req: Parameters<HermesPort['createRoutine']>[1],
+    key: string,
+  ) {
+    const { db } = this.requireStarted()
+    return this.routines.create(agentId, req, key, db)
+  }
+  async patchRoutine(id: string, req: Parameters<HermesPort['patchRoutine']>[1]) {
+    this.requireStarted()
+    return this.routines.patch(id, req)
+  }
+  async deleteRoutine(id: string) {
+    this.requireStarted()
+    await this.routines.remove(id)
+  }
+  async runRoutine(id: string) {
+    this.requireStarted()
+    await this.routines.run(id)
   }
   private agentHome(agentId: string): string {
     const parsed = ProfileNameSchema.safeParse(agentId)

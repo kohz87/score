@@ -47,7 +47,7 @@ test('fixture profiles yield validated details, metadata, nested skills and stab
       served: name === 'lead',
       memory: [],
       tools: [],
-      routines: [],
+      routines: name === 'builder' ? expect.any(Array) : [],
       channels: [],
       permissions: [],
     })
@@ -67,6 +67,32 @@ test('fixture profiles yield validated details, metadata, nested skills and stab
     timeoutMs: 5000,
     captureModel: true,
   })
+})
+test('routines come from the profile cron jobs file, redacted and skipping malformed entries', async () => {
+  const detail = await reader.read('builder', 0, true, { status: 'idle', activity: null })
+  expect(detail.routines).toEqual([
+    {
+      id: 'builder:a1b2c3d4e5f6',
+      title: 'Morning digest',
+      schedule: '0 9 * * *',
+      description:
+        "Summarise yesterday's merged pull requests for the team.\nKeep it short. Use token=[redacted] for the tracker.",
+      lastRunAt: '2026-10-08T07:00:02.000Z',
+      enabled: true,
+    },
+    {
+      id: 'builder:0f1e2d3c4b5a',
+      title: 'Dependency check',
+      schedule: 'every 120m',
+      description: 'Check for outdated dependencies.',
+      lastRunAt: null,
+      enabled: false,
+    },
+  ])
+  fs.writeFileSync(join(home, 'profiles', 'builder', 'cron', 'jobs.json'), '{broken')
+  expect(
+    (await reader.read('builder', 0, true, { status: 'idle', activity: null })).routines,
+  ).toEqual([])
 })
 test('model reads cache by config mtime and refresh on change', async () => {
   await reader.read('builder', 0, true, { status: 'idle', activity: null })
@@ -128,7 +154,7 @@ test('reads only allowlisted profile files, never secrets or symlink targets (fs
     await reader.read(name, index, true, { status: 'idle', activity: null })
   expect(open.mock.calls.length).toBeGreaterThan(0)
   for (const [path, flags] of open.mock.calls) {
-    expect(['SOUL.md', 'profile.yaml']).toContain(basename(path.toString()))
+    expect(['SOUL.md', 'profile.yaml', 'jobs.json']).toContain(basename(path.toString()))
     expect(path.toString()).not.toMatch(/credentials|linked|designer\/SOUL/)
     expect(Number(flags) & fs.constants.O_NOFOLLOW).toBe(fs.constants.O_NOFOLLOW)
   }

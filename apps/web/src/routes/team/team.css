@@ -557,3 +557,97 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* Routines tab */
+.team-routine-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-20);
+  background: var(--subtle);
+}
+.team-routine-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.team-routine-form input,
+.team-routine-form textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+}
+.team-routine-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.team-routine-row {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.team-routine-schedule {
+  min-width: 52px;
+  max-width: 140px;
+  min-height: 52px;
+  padding: 6px 10px;
+  flex: none;
+  border-radius: var(--radius-16);
+  background: var(--subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 14px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.team-routine-body {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.team-routine-body p {
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+.team-routine-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.team-routine-actions button,
+.team-routine-form .team-style-actions button {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+.team-routine-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.team-routine-actions .team-danger {
+  background: var(--agent-coral-tint);
+  border-color: var(--agent-coral);
+  color: var(--agent-coral-text);
+}
+.team-routine-actions button:focus-visible,
+.team-routine-form :is(input, textarea, button):focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}

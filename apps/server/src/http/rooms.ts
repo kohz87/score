@@ -271,6 +271,20 @@ export function registerRoomRoutes(
       )
       command = { kind: 'assign', taskId: task.id, taskKey: task.key }
     }
+    if (route.parsed.command?.kind === 'routine') {
+      const routine = route.parsed.command
+      if (!known.includes(routine.agentId)) throw new HttpError(400, 'bad_request', 'Unknown agent')
+      const created = await port.createRoutine(
+        routine.agentId,
+        {
+          title: routine.prompt.replace(/\s+/g, ' ').trim().slice(0, 50),
+          schedule: routine.schedule,
+          prompt: routine.prompt,
+        },
+        `routine:${id}`,
+      )
+      command = { kind: 'routine', routineId: created.id }
+    }
     let message: Message | undefined
     await ingest.submit({
       source: 'rooms',

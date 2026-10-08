@@ -8,6 +8,7 @@ import { redact, redactBounded } from '../../redact.ts'
 import { runHermes, type HermesRunner } from './cli.ts'
 import { excerpt } from '../agent-files.ts'
 import { ProfileNameSchema } from './paths.ts'
+import { readRoutines } from './routines.ts'
 
 const allowedFiles = z.enum(['SOUL.md', 'AGENTS.md', 'profile.yaml', 'config.yaml'])
 const readableFiles = allowedFiles.extract(['SOUL.md', 'profile.yaml'])
@@ -213,7 +214,7 @@ export class ProfilesReader {
       memory: [],
       tools: [],
       helpersMax: null,
-      routines: [],
+      routines: home ? readRoutines(this.hermesHome, profile) : [],
       channels: [],
       permissions: [],
     })

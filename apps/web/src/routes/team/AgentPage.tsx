@@ -5,6 +5,7 @@ import { useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery, statusLabels, useAgentDetail } from './team-queries.ts'
 import { AgentOverview } from './AgentOverview.tsx'
 import { AgentStylePicker } from './AgentStylePicker.tsx'
+import { RoutinesTab } from './RoutinesTab.tsx'
 import { AgentFiles } from './AgentFiles.tsx'
 import type { AgentFileName } from './file-queries.ts'
 
@@ -36,6 +37,8 @@ function AgentProfile({ agentId }: { agentId: string }) {
   const detail = useAgentDetail(agentId)
   const agents = useStreamQuery(agentsQuery)
   const [tab, setTab] = useState('Overview')
+  // The Overview's "New routine" link opens the form; clicking the tab itself shows the list.
+  const [composing, setComposing] = useState(false)
   const [file, setFile] = useState<AgentFileName>('SOUL.md')
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   if (!detail.data && detail.isPending) return <p role="status">Loading agent…</p>
@@ -71,6 +74,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
               : null
     if (next === null) return
     event.preventDefault()
+    setComposing(false)
     setTab(tabs[next]!)
     tabRefs.current[next]?.focus()
   }
@@ -116,7 +120,10 @@ function AgentProfile({ agentId }: { agentId: string }) {
               tabRefs.current[index] = element
             }}
             onKeyDown={(event) => navigateTabs(event, index)}
-            onClick={() => setTab(name)}
+            onClick={() => {
+              setComposing(false)
+              setTab(name)
+            }}
           >
             {name}
           </button>
@@ -128,10 +135,19 @@ function AgentProfile({ agentId }: { agentId: string }) {
             agent={agent}
             agents={agents.data ?? []}
             selectTab={(name, target) => {
+              // The Overview's "New routine" link opens the form; a file link picks SOUL.md or AGENTS.md.
+              setComposing(name === 'Routines')
               if (target) setFile(target)
               setTab(name)
               tabRefs.current[tabs.indexOf(name)]?.focus()
             }}
+          />
+        ) : tab === 'Routines' ? (
+          <RoutinesTab
+            key={String(composing)}
+            agentId={agent.id}
+            agentName={agent.name}
+            startCreating={composing}
           />
         ) : tab === 'Personality' ? (
           <AgentFiles agent={agent} file={file} onFile={setFile} />
