@@ -92,7 +92,11 @@ export function registerRoomRoutes(
   app.addHook('preClose', async () => {
     await routing.close()
   })
-  const agents = async () => z.array(AgentSummarySchema).parse(await port.listAgents())
+  const agents = async () =>
+    z
+      .array(AgentSummarySchema)
+      .parse(await port.listAgents())
+      .filter((agent) => agentAdmits(db.sqlite, agent.id))
   async function validateAgents(ids: string[]) {
     const known = new Set((await agents()).map((agent) => agent.id))
     if (ids.some((id) => !known.has(id))) throw new HttpError(400, 'bad_request', 'Unknown agent')
@@ -364,3 +368,4 @@ export function registerRoomRoutes(
   })
   return () => routing.dispatch()
 }
+import { agentAdmits } from '../domain/agent-lifecycle.ts'

@@ -50,9 +50,13 @@ import { readApprovalConfig, updateProfileApprovals } from './approvals.ts'
 import type { ApprovalConfig } from '../approvals.ts'
 import { runHermes, type HermesRunner } from './cli.ts'
 import { readRun, RunRowSchema, runLifecycle, type RunMetrics } from './translate.ts'
+import { LiveProfileManagement } from './profile-management.ts'
+import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 
 const StateSchema = z.object({ served_profiles: z.array(ProfileNameSchema) })
 export interface LivePortOptions extends HermesPortDeps {
+  bridgeInstallUrl?: string
+  bridgeInstallRef?: string
   scoreHome: string
   hermesHome?: string
   baseUrl?: string
@@ -101,6 +105,7 @@ export class LivePort implements HermesPort {
   private readonly settings: LiveSettings
   private readonly config: ReturnType<typeof createLiveConfigService>
   private readonly profileFiles = new ProfileFiles()
+  private readonly profileManagement: LiveProfileManagement
   constructor(private readonly options: LivePortOptions) {
     this.profiles = new ProfilesReader(resolveHermesHome(options.hermesHome), options.runner)
     this.routines = new LiveRoutines(options.hermesHome, options.runner)
@@ -112,6 +117,13 @@ export class LivePort implements HermesPort {
     )
     this.settings = new LiveSettings(options.hermesHome, options.runner)
     this.config = createLiveConfigService(options.hermesHome, options.runner)
+    this.profileManagement = new LiveProfileManagement({
+      ...options,
+      hermesHome: resolveHermesHome(options.hermesHome),
+      db: options.db,
+      profiles: this.profiles,
+      port: this,
+    })
   }
 
   async start(sink: ObservationSink): Promise<void> {
@@ -260,6 +272,18 @@ export class LivePort implements HermesPort {
   }
   async listAgents(): Promise<AgentSummary[]> {
     return (await this.listAgentDetails()).map(agentSummary)
+  }
+  profileInventory(name: string, cloneFrom?: string) {
+    return this.profileManagement.profileInventory(name, cloneFrom)
+  }
+  profileExportPath(name: string, revision: string) {
+    return this.profileManagement.profileExportPath(name, revision)
+  }
+  profileStep(...args: Parameters<HermesPort['profileStep']>) {
+    return this.profileManagement.profileStep(...args)
+  }
+  describeProfile(name: string, description: string) {
+    return this.profileManagement.describeProfile(name, description)
   }
   async listAgentDetails(): Promise<AgentDetail[]> {
     const served = this.current.hermes.servedProfiles
@@ -479,6 +503,7 @@ export class LivePort implements HermesPort {
     model?: string
   }): Promise<{ runId: string }> {
     const { intents } = this.requireStarted()
+    assertAgentAdmits(this.db!.sqlite, req.agentId)
     assertFeature(this.current, 'score-runs')
     if (!this.current.hermes.servedProfiles.includes(req.agentId))
       throw new HttpError(503, 'hermes_unavailable', 'Profile is not served')

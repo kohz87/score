@@ -84,3 +84,16 @@ test('gateway URL is optional and must be a credential-free HTTP origin', () => 
     expect(() => loadConfig({ SCORE_HERMES_URL: value })).toThrow(ZodError)
   }
 })
+test('bridge install source has no URL credentials and its revision is a full commit pin', () => {
+  const url = 'https://example.invalid/score.git#hermes-plugin/score_bridge'
+  expect(
+    loadConfig({ SCORE_BRIDGE_INSTALL_URL: url, SCORE_BRIDGE_INSTALL_REF: 'a'.repeat(40) }),
+  ).toMatchObject({ bridgeInstallUrl: url, bridgeInstallRef: 'a'.repeat(40) })
+  for (const value of [
+    'https://user:password@example.invalid/repo.git',
+    'https://example.invalid/repo.git?key=secret',
+    'ssh://example.invalid/repo',
+  ])
+    expect(() => loadConfig({ SCORE_BRIDGE_INSTALL_URL: value })).toThrow(ZodError)
+  expect(() => loadConfig({ SCORE_BRIDGE_INSTALL_REF: 'main' })).toThrow(ZodError)
+})

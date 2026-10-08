@@ -1,9 +1,12 @@
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readFileSync } from 'node:fs'
+import { createSecureContext } from 'node:tls'
 import type { FastifyInstance, FastifyServerOptions } from 'fastify'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
 import { sweepExpiredApprovals } from './domain/approval-expiry.ts'
-import { buildApp } from './app.ts'
+import { buildApp, buildBridgeApp } from './app.ts'
+import { loadWebAssets, type WebAssets } from './http/web-assets.ts'
 import { SqliteSessionStore } from './auth/sqlite-session-store.ts'
 import type { Config } from './config.ts'
 import {
@@ -23,11 +26,29 @@ import { retireIngestKeys, retireMedia } from './hub/retire.ts'
 interface StartServerOptions {
   logger?: FastifyServerOptions['logger']
   listen?: (app: FastifyInstance) => Promise<unknown>
+  listenBridge?: (app: FastifyInstance) => Promise<unknown>
+  webDirectory?: string
 }
 
-export async function startServer(config: Config, { logger, listen }: StartServerOptions = {}) {
+export async function startServer(
+  config: Config,
+  { logger, listen, listenBridge, webDirectory }: StartServerOptions = {},
+) {
+  let https: { cert: Buffer; key: Buffer } | undefined
+  let webAssets: WebAssets | undefined
+  // Validate transport and the build before opening Score state or starting the adapter.
+  if (config.remote) {
+    if (config.remote.tlsCert && config.remote.tlsKey) {
+      https = { cert: readFileSync(config.remote.tlsCert), key: readFileSync(config.remote.tlsKey) }
+      createSecureContext(https)
+    }
+    webAssets = loadWebAssets(
+      webDirectory ?? fileURLToPath(new URL('../../web/dist/', import.meta.url)),
+    )
+  }
   let db: ScoreDb | undefined
   let app: FastifyInstance | undefined
+  let bridgeApp: FastifyInstance | undefined
   let homeLock: ReturnType<typeof acquireHomeLock> | undefined
   let ingest: Ingest | undefined
   let outbox: ApprovalOutbox | undefined
@@ -49,7 +70,11 @@ export async function startServer(config: Config, { logger, listen }: StartServe
       }
     } finally {
       try {
-        await app?.close()
+        try {
+          await bridgeApp?.close()
+        } finally {
+          await app?.close()
+        }
       } finally {
         try {
           await ingest?.close()
@@ -96,6 +121,15 @@ export async function startServer(config: Config, { logger, listen }: StartServe
       onError: (error) => app?.log.error({ err: error }, 'Approval delivery failed'),
     })
     const dispatcher = outbox
+    const bridge =
+      config.mode === 'live'
+        ? {
+            db: database,
+            ingest,
+            bootstrapHash: loadBridgeBootstrap(config.home),
+            getCompatibility: () => adapter.status().compatibility,
+          }
+        : undefined
     app = buildApp({
       config,
       port,
@@ -105,20 +139,31 @@ export async function startServer(config: Config, { logger, listen }: StartServe
       ingest,
       getEpoch: () => getEpoch(database),
       sessionStore: new SqliteSessionStore(database),
-      ...(config.mode === 'live'
-        ? {
-            bridge: {
-              db: database,
-              ingest,
-              bootstrapHash: loadBridgeBootstrap(config.home),
-              getCompatibility: () => adapter.status().compatibility,
-            },
-          }
-        : {}),
+      ...(bridge ? { bridge } : {}),
+      ...(https ? { https } : {}),
+      ...(webAssets ? { webAssets } : {}),
     })
     const token = app.pairing.createToken()
-    if (listen) await listen(app)
-    else await app.listen({ host: config.host, port: config.port })
+    if (config.remote) {
+      bridgeApp = buildBridgeApp(bridge, outbox, logger ?? false)
+      try {
+        if (listenBridge) await listenBridge(bridgeApp)
+        else await bridgeApp.listen({ host: '127.0.0.1', port: config.remote.bridgePort })
+      } catch (error) {
+        throw new Error('Could not bind the loopback bridge listener', { cause: error })
+      }
+      if (config.remote.insecureHttp)
+        app.log.warn(
+          'PLAIN HTTP: anyone on this network could read and control Score. Use TLS; SCORE_REMOTE_INSECURE_HTTP=accept acknowledges this risk.',
+        )
+    }
+    try {
+      if (listen) await listen(app)
+      else await app.listen({ host: config.host, port: config.port })
+    } catch (error) {
+      if (!config.remote) throw error
+      throw new Error('Could not bind the browser listener', { cause: error })
+    }
     await port.start(ingest)
     await outbox.start()
     const observations = ingest
@@ -165,7 +210,7 @@ export async function startServer(config: Config, { logger, listen }: StartServe
       60 * 60 * 1000,
     )
     retention.unref()
-    return { app, pairingToken: token, close }
+    return { app, bridgeApp, pairingToken: token, close }
   } catch (error) {
     try {
       await close()

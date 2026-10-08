@@ -100,7 +100,11 @@ function AgentProfile({ agentId }: { agentId: string }) {
           <h1>{agent.name}</h1>
           <p>{agent.tagline || agent.role}</p>
           <span className="team-status" aria-live="polite">
-            {statusLabels[agent.status]}
+            {agent.lifecycle?.state === 'ready'
+              ? 'Ready'
+              : agent.lifecycle
+                ? agent.activity
+                : statusLabels[agent.status]}
             {agent.activity && ` · ${agent.activity}`}
           </span>
         </div>
@@ -136,17 +140,21 @@ function AgentProfile({ agentId }: { agentId: string }) {
       </div>
       <div id="team-tab-panel" role="tabpanel" aria-labelledby={`team-tab-${tab}`} tabIndex={0}>
         {tab === 'Overview' ? (
-          <AgentOverview
-            agent={agent}
-            agents={agents.data ?? []}
-            selectTab={(name, target) => {
-              // The Overview's "New routine" link opens the form; a file link picks SOUL.md or AGENTS.md.
-              setComposing(name === 'Routines')
-              if (target) setFile(target)
-              setTab(name)
-              tabRefs.current[tabs.indexOf(name)]?.focus()
-            }}
-          />
+          <>
+            <AgentOverview
+              agent={agent}
+              agents={agents.data ?? []}
+              selectTab={(name, target) => {
+                // The Overview's "New routine" link opens the form; a file link picks SOUL.md or AGENTS.md.
+                setComposing(name === 'Routines')
+                if (target) setFile(target)
+                setTab(name)
+                tabRefs.current[tabs.indexOf(name)]?.focus()
+              }}
+            />
+            {/* Settings and the danger zone come after the overview the design shows. */}
+            <ProfileSettings key={`${agent.id}:${agent.name}:${agent.role}`} agent={agent} />
+          </>
         ) : tab === 'Routines' ? (
           <RoutinesTab
             key={String(composing)}
@@ -176,3 +184,4 @@ function AgentProfile({ agentId }: { agentId: string }) {
     </div>
   )
 }
+import { ProfileSettings } from './ProfileSettings.tsx'

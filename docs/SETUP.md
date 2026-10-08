@@ -107,6 +107,26 @@ sudo apt install -y bubblewrap
 codex exec --disable apps -m gpt-6.1-sol -s read-only "run: ls" # should list files, not fail with RTM_NEWADDR
 ```
 
+## 6b. Remote access (optional)
+Default is local only (`127.0.0.1`); a non-loopback `SCORE_HOST` without `SCORE_REMOTE=1` is refused. Build the web app first
+(`pnpm build`); remote mode serves `apps/web/dist` itself.
+
+TLS (recommended; example with a Tailscale certificate):
+```bash
+tailscale cert myhost.tailnet.ts.net        # writes myhost.tailnet.ts.net.crt / .key (run by you, not by Score)
+SCORE_REMOTE=1 SCORE_HOST=100.x.y.z SCORE_PORT=8741 \
+SCORE_TLS_CERT=$PWD/myhost.tailnet.ts.net.crt SCORE_TLS_KEY=$PWD/myhost.tailnet.ts.net.key \
+SCORE_PUBLIC_ORIGINS=https://myhost.tailnet.ts.net:8741 pnpm --filter @score/server start
+```
+Plain HTTP on a trusted LAN (anyone on the network can read and control Score; the app shows a permanent banner):
+```bash
+SCORE_REMOTE=1 SCORE_REMOTE_INSECURE_HTTP=accept SCORE_HOST=192.168.1.20 \
+SCORE_PUBLIC_ORIGINS=http://192.168.1.20:8741 pnpm --filter @score/server start
+```
+Wildcard binds (`0.0.0.0`, `::`) additionally need `SCORE_REMOTE_ANY=1`. `SCORE_PUBLIC_ORIGINS` is a comma-separated list
+of exact origins (scheme, host, port) browsers use. The bridge plugin keeps using loopback (`SCORE_BRIDGE_PORT`, default
+8740). Type `pair` in the server terminal to mint another pairing link; manage and revoke browsers in Settings.
+
 ## 7. Live mode against Hermes
 
 Score talks to the Hermes gateway's API server. **(system: these write Hermes config.)**
@@ -133,7 +153,22 @@ Install the Score bridge plugin (Python, no runtime dependencies) into every pro
 restart that profile's gateway). Then start Score with `SCORE_MODE=live pnpm dev`. From another machine, reach it through
 an SSH tunnel (`ssh -N -L 5173:127.0.0.1:5173 <user>@<host>`); Score itself only listens on 127.0.0.1.
 
+## 8. Creating agents from Score (Team › Add agent)
+
+Score creates agents with `hermes profile create` and installs its bridge plugin into each one through
+`hermes plugins install`, pinned to a URL and ref you choose. Set both before using **Add agent**:
+
+```bash
+SCORE_BRIDGE_INSTALL_URL=https://<your git host>/<you>/score.git   # or file:///home/<you>/score
+SCORE_BRIDGE_INSTALL_REF=<commit or tag>
+```
+
+Without them, Add agent stops with "Configure a pinned bridge installation URL first." Agent management works on
+this machine or over remote access with TLS; plain-HTTP remote access refuses it. Deleting an agent keeps a private
+export in `$SCORE_HOME/profile-backups/` (it omits credentials and is not a full undo).
+
 ## Changelog of this file
+- 2026-10-08: creating agents (bridge install URL/ref).
 - 2026-10-08: bridge plugin install pointer, live start and SSH tunnel.
 - 2026-10-06: initial (Phase 0).
 - 2026-10-06: live-mode steps verified (per-profile API keys).

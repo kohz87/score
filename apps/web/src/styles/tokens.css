@@ -1,5 +1,7 @@
 /* Design tokens: docs/design/html/. The agent palette is neutral and reusable. */
 :root {
+  --profile-dashed: #b9bdc6;
+  --profile-add-ink: #3a3d45;
   --ground: #eceef2;
   --card: #ffffff;
   --ink: #12131a;

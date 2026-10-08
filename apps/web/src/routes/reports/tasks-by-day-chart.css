@@ -30,9 +30,17 @@
   background: var(--agent-unknown);
 }
 
+.tasks-by-day__scroll {
+  min-width: 0;
+  overflow-x: auto;
+  padding: 4px;
+  margin: -4px;
+}
+
 .tasks-by-day__svg {
   display: block;
   width: 100%;
+  min-width: 700px;
   height: auto;
   font-family: var(--font-body);
 }

@@ -1,0 +1,1427 @@
+{
+  "/api/system": {
+    "mode": "fake",
+    "hermes": {
+      "version": null,
+      "reachable": true,
+      "apiServer": true,
+      "capabilities": [],
+      "servedProfiles": ["lead", "builder", "reviewer", "designer"]
+    },
+    "bridge": {
+      "producers": 0,
+      "lastSeenAt": null,
+      "isolation": "unknown"
+    },
+    "compatibility": {
+      "fingerprint": "fake",
+      "tested": true,
+      "disabled": []
+    },
+    "agentIsolation": "same_user",
+    "degraded": []
+  },
+  "/api/agents": {
+    "asOfSeq": 47,
+    "items": [
+      {
+        "id": "lead",
+        "name": "lead",
+        "role": "Leads the team",
+        "style": {
+          "color": "#6B4EFF",
+          "shape": "circle-dot"
+        },
+        "status": "idle",
+        "activity": null,
+        "model": {
+          "id": "fake-model",
+          "label": "Demo model"
+        },
+        "served": true
+      },
+      {
+        "id": "builder",
+        "name": "builder",
+        "role": "Builds features",
+        "style": {
+          "color": "#19C39A",
+          "shape": "triangle"
+        },
+        "status": "working",
+        "activity": "Adding feed pagination",
+        "model": {
+          "id": "fake-model",
+          "label": "Demo model"
+        },
+        "served": true
+      },
+      {
+        "id": "reviewer",
+        "name": "reviewer",
+        "role": "Reviews changes",
+        "style": {
+          "color": "#FFB61E",
+          "shape": "diamond"
+        },
+        "status": "idle",
+        "activity": null,
+        "model": {
+          "id": "fake-model",
+          "label": "Demo model"
+        },
+        "served": true
+      },
+      {
+        "id": "designer",
+        "name": "designer",
+        "role": "Designs interfaces",
+        "style": {
+          "color": "#FF6B8A",
+          "shape": "square"
+        },
+        "status": "idle",
+        "activity": null,
+        "model": {
+          "id": "fake-model",
+          "label": "Demo model"
+        },
+        "served": true
+      }
+    ]
+  },
+  "/api/agents/builder": {
+    "id": "builder",
+    "name": "builder",
+    "role": "Builds features",
+    "style": {
+      "color": "#19C39A",
+      "shape": "triangle"
+    },
+    "status": "working",
+    "activity": "Adding feed pagination",
+    "model": {
+      "id": "fake-model",
+      "label": "Demo model",
+      "via": "Demo",
+      "fallback": null
+    },
+    "served": true,
+    "tagline": "Builds features",
+    "personality": {
+      "excerpt": "I am builder. Builds features.",
+      "source": "SOUL.md"
+    },
+    "reportsTo": "lead",
+    "worksIn": null,
+    "rulesFile": "AGENTS.md",
+    "skills": [
+      {
+        "name": "collaboration",
+        "enabled": true
+      },
+      {
+        "name": "code-review",
+        "enabled": true
+      },
+      {
+        "name": "release-notes",
+        "enabled": false
+      }
+    ],
+    "memory": [
+      {
+        "id": "m-7eef6c8653c3",
+        "text": "Prefers short status updates.",
+        "source": "About you",
+        "at": "2026-01-01T12:00:00.000Z"
+      },
+      {
+        "id": "m-3c74f5a3ae3e",
+        "text": "The test suite runs with pnpm test.",
+        "source": "Agent notes",
+        "at": "2026-01-01T12:00:00.000Z"
+      },
+      {
+        "id": "m-ffb10844c33f",
+        "text": "Releases go out on Fridays.",
+        "source": "Agent notes",
+        "at": "2026-01-01T12:00:00.000Z"
+      }
+    ],
+    "tools": [
+      {
+        "id": "terminal",
+        "label": "Terminal & Processes",
+        "kind": "builtin",
+        "enabled": true
+      },
+      {
+        "id": "file",
+        "label": "File Operations",
+        "kind": "builtin",
+        "enabled": true
+      },
+      {
+        "id": "web",
+        "label": "Web Search & Scraping",
+        "kind": "builtin",
+        "enabled": true
+      },
+      {
+        "id": "browser",
+        "label": "Browser Automation",
+        "kind": "builtin",
+        "enabled": false
+      },
+      {
+        "id": "tracker",
+        "label": "tracker",
+        "kind": "mcp",
+        "enabled": true
+      }
+    ],
+    "helpersMax": 3,
+    "routines": [],
+    "channels": [],
+    "permissions": []
+  },
+  "/api/rooms": {
+    "asOfSeq": 51,
+    "rooms": [
+      {
+        "id": "room-activity-feed",
+        "name": "#activity-feed",
+        "kind": "room",
+        "leadAgentId": "lead",
+        "members": ["lead", "builder", "reviewer", "designer"],
+        "unread": 3,
+        "activeAgents": ["builder", "lead"],
+        "channels": []
+      }
+    ],
+    "directs": [
+      {
+        "id": "e11e4a43-4206-46f1-b8ea-bc355769d0b9",
+        "name": "builder",
+        "kind": "direct",
+        "leadAgentId": "builder",
+        "members": ["builder"],
+        "unread": 0,
+        "activeAgents": [],
+        "channels": []
+      },
+      {
+        "id": "18f5c7f5-f87e-48ca-8293-7b320c089b84",
+        "name": "designer",
+        "kind": "direct",
+        "leadAgentId": "designer",
+        "members": ["designer"],
+        "unread": 0,
+        "activeAgents": [],
+        "channels": []
+      },
+      {
+        "id": "323acd14-fb15-46b1-bcc6-42249a6bda84",
+        "name": "lead",
+        "kind": "direct",
+        "leadAgentId": "lead",
+        "members": ["lead"],
+        "unread": 0,
+        "activeAgents": [],
+        "channels": []
+      },
+      {
+        "id": "801fe692-948b-4b09-bfd3-5ebcf2bd56c5",
+        "name": "reviewer",
+        "kind": "direct",
+        "leadAgentId": "reviewer",
+        "members": ["reviewer"],
+        "unread": 0,
+        "activeAgents": [],
+        "channels": []
+      }
+    ]
+  },
+  "/api/rooms/room-activity-feed": {
+    "asOfSeq": 51,
+    "room": {
+      "id": "room-activity-feed",
+      "name": "#activity-feed",
+      "kind": "room",
+      "leadAgentId": "lead",
+      "members": ["lead", "builder", "reviewer", "designer"],
+      "unread": 3,
+      "activeAgents": ["builder", "lead"],
+      "channels": []
+    },
+    "filesInPlay": ["src/activity-feed.ts", "src/feed-card.css"],
+    "learned": []
+  },
+  "/api/rooms/room-activity-feed/messages?limit=50": {
+    "asOfSeq": 51,
+    "items": [
+      {
+        "id": "message-build-files-0",
+        "roomId": "room-activity-feed",
+        "author": {
+          "kind": "agent",
+          "agentId": "builder"
+        },
+        "to": [],
+        "parts": [
+          {
+            "kind": "tools",
+            "summary": "Edited 2 files",
+            "runId": "scenario-build-0"
+          },
+          {
+            "kind": "file",
+            "path": "src/activity-feed.ts",
+            "added": 24,
+            "removed": 3
+          },
+          {
+            "kind": "file",
+            "path": "src/feed-card.css",
+            "added": 12,
+            "removed": 2
+          }
+        ],
+        "createdAt": "2026-01-01T12:01:08.418Z",
+        "streaming": false,
+        "refs": [
+          {
+            "kind": "run",
+            "runId": "scenario-build-0"
+          }
+        ]
+      },
+      {
+        "id": "approval:approval-score-run-0",
+        "roomId": "room-activity-feed",
+        "author": {
+          "kind": "agent",
+          "agentId": "builder"
+        },
+        "to": [],
+        "parts": [
+          {
+            "kind": "approval",
+            "approvalId": "approval-score-run-0"
+          }
+        ],
+        "createdAt": "2026-01-01T12:00:36.900Z",
+        "streaming": false,
+        "refs": []
+      },
+      {
+        "id": "message-plan-0",
+        "roomId": "room-activity-feed",
+        "author": {
+          "kind": "agent",
+          "agentId": "lead"
+        },
+        "to": ["builder", "reviewer", "designer"],
+        "parts": [
+          {
+            "kind": "text",
+            "text": "Let’s add pagination while keeping the newest activity visible. Load older items in batches of 25. Keep keyboard focus on the load button."
+          }
+        ],
+        "createdAt": "2026-01-01T12:00:21.600Z",
+        "streaming": false,
+        "refs": [
+          {
+            "kind": "task",
+            "taskId": "task-pagination-0"
+          }
+        ]
+      },
+      {
+        "id": "message-brief-0",
+        "roomId": "room-activity-feed",
+        "author": {
+          "kind": "you"
+        },
+        "to": ["lead"],
+        "parts": [
+          {
+            "kind": "text",
+            "text": "Add pagination to the activity feed"
+          }
+        ],
+        "createdAt": "2026-01-01T12:00:10.080Z",
+        "streaming": false,
+        "refs": []
+      }
+    ],
+    "nextCursor": null
+  },
+  "/api/approvals?status=all": {
+    "asOfSeq": 52,
+    "items": [
+      {
+        "id": "approval-kanban-0",
+        "origin": "kanban",
+        "phase": "withdrawn",
+        "status": "withdrawn",
+        "actionable": false,
+        "linkedTo": null,
+        "agentId": "reviewer",
+        "title": "Blocked in unattended mode: Hermes asks nobody for dangerous commands in Kanban workers.",
+        "command": "rm -rf demo-project/dist",
+        "cwd": null,
+        "description": "Blocked in unattended mode: Hermes asks nobody for dangerous commands in Kanban workers.",
+        "choices": [],
+        "createdAt": "2026-01-01T12:00:46.800Z",
+        "expiresAt": null,
+        "decision": null,
+        "delivery": "none",
+        "blocking": "Task task-pagination-0 is blocked",
+        "refs": [
+          {
+            "kind": "task",
+            "taskId": "task-pagination-0"
+          }
+        ]
+      },
+      {
+        "id": "approval-gateway-0",
+        "origin": "gateway",
+        "phase": "human_pending",
+        "status": "pending",
+        "actionable": true,
+        "linkedTo": null,
+        "agentId": "designer",
+        "title": "May I push the pagination branch?",
+        "command": "git push origin task/feed-pagination",
+        "cwd": null,
+        "description": "May I push the pagination branch?\nThis command changes the workspace or remote repository and needs your approval.",
+        "choices": ["once", "session", "always", "deny"],
+        "createdAt": "2026-01-01T12:00:41.400Z",
+        "expiresAt": "2026-01-01T13:00:41.400Z",
+        "decision": null,
+        "delivery": "none",
+        "blocking": "Only this command is waiting; the rest of the team can continue.",
+        "refs": [
+          {
+            "kind": "task",
+            "taskId": "task-pagination-0"
+          }
+        ]
+      },
+      {
+        "id": "approval-score-run-0",
+        "origin": "score-run",
+        "phase": "decided",
+        "status": "approved",
+        "actionable": false,
+        "linkedTo": null,
+        "agentId": "builder",
+        "title": "May I install the pagination dependency?",
+        "command": "pnpm add @tanstack/react-virtual@3.13.12",
+        "cwd": null,
+        "description": "May I install the pagination dependency?\nThis command changes the workspace or remote repository and needs your approval.",
+        "choices": ["once", "session", "always", "deny"],
+        "createdAt": "2026-01-01T12:00:36.000Z",
+        "expiresAt": "2026-01-01T13:00:36.000Z",
+        "decision": {
+          "choice": "once",
+          "by": "elsewhere",
+          "at": "2026-01-01T12:00:54.000Z"
+        },
+        "delivery": "none",
+        "blocking": "Only this command is waiting; the rest of the team can continue.",
+        "refs": [
+          {
+            "kind": "task",
+            "taskId": "task-pagination-0"
+          }
+        ]
+      },
+      {
+        "id": "approval-docs-0",
+        "origin": "score-run",
+        "phase": "human_pending",
+        "status": "pending",
+        "actionable": true,
+        "linkedTo": null,
+        "agentId": "designer",
+        "title": "May I install the docs generator?",
+        "command": "pnpm add -D typedoc@0.28.0",
+        "cwd": null,
+        "description": "May I install the docs generator?\nThis command changes the workspace and needs your approval.",
+        "choices": ["once", "session", "always", "deny"],
+        "createdAt": "2026-01-01T12:00:02.880Z",
+        "expiresAt": "2026-01-01T13:00:02.880Z",
+        "decision": null,
+        "delivery": "none",
+        "blocking": "Only this command is waiting; the rest of the team can continue.",
+        "refs": [
+          {
+            "kind": "task",
+            "taskId": "task-docs-0"
+          }
+        ]
+      }
+    ],
+    "nextCursor": null
+  },
+  "/api/tasks": {
+    "asOfSeq": 52,
+    "columns": {
+      "planned": [],
+      "working": [],
+      "in_review": [],
+      "needs_you": [
+        {
+          "id": "task-docs-0",
+          "key": "T-102",
+          "title": "Publish the pagination notes",
+          "column": "needs_you",
+          "hermesStatus": "running",
+          "assignee": "designer",
+          "reviewer": "reviewer",
+          "roomId": "room-activity-feed",
+          "badge": {
+            "kind": "needs_you",
+            "label": "Needs you"
+          },
+          "progress": null,
+          "elapsedSec": 30,
+          "note": "Wants to install a package",
+          "updatedAt": "2026-01-01T12:00:02.700Z"
+        },
+        {
+          "id": "task-pagination-0",
+          "key": "T-101",
+          "title": "Add pagination to the activity feed",
+          "column": "needs_you",
+          "hermesStatus": "running",
+          "assignee": "builder",
+          "reviewer": "reviewer",
+          "roomId": "room-activity-feed",
+          "badge": null,
+          "progress": null,
+          "elapsedSec": 66,
+          "note": "Keep the newest activity visible",
+          "updatedAt": "2026-01-01T12:01:06.600Z"
+        }
+      ],
+      "done": []
+    }
+  },
+  "/api/reports?range=7d": {
+    "range": "7d",
+    "summary": "26 tasks finished in the last 7 days, typically in 42 minutes.",
+    "totals": {
+      "tasksFinished": 26,
+      "runs": 77,
+      "firstPassRate": 0.47619047619047616,
+      "medianTaskSec": 2490,
+      "spendUsd": 32.9
+    },
+    "byDay": [
+      {
+        "date": "2025-12-26",
+        "perAgent": {
+          "builder": 3,
+          "designer": 0,
+          "lead": 1,
+          "reviewer": 0
+        }
+      },
+      {
+        "date": "2025-12-27",
+        "perAgent": {
+          "builder": 0,
+          "designer": 0,
+          "lead": 0,
+          "reviewer": 1
+        }
+      },
+      {
+        "date": "2025-12-28",
+        "perAgent": {
+          "builder": 1,
+          "designer": 1,
+          "lead": 0,
+          "reviewer": 0
+        }
+      },
+      {
+        "date": "2025-12-29",
+        "perAgent": {
+          "builder": 4,
+          "designer": 0,
+          "lead": 0,
+          "reviewer": 1
+        }
+      },
+      {
+        "date": "2025-12-30",
+        "perAgent": {
+          "builder": 2,
+          "designer": 1,
+          "lead": 0,
+          "reviewer": 1
+        }
+      },
+      {
+        "date": "2025-12-31",
+        "perAgent": {
+          "builder": 2,
+          "designer": 2,
+          "lead": 2,
+          "reviewer": 0
+        }
+      },
+      {
+        "date": "2026-01-01",
+        "perAgent": {
+          "builder": 2,
+          "designer": 2,
+          "lead": 0,
+          "reviewer": 0
+        }
+      }
+    ],
+    "timeSplit": [
+      {
+        "agentId": "builder",
+        "workingPct": 65,
+        "waitingOnYouPct": 8,
+        "waitingOnAgentPct": 27
+      },
+      {
+        "agentId": "designer",
+        "workingPct": 55,
+        "waitingOnYouPct": 25,
+        "waitingOnAgentPct": 20
+      },
+      {
+        "agentId": "lead",
+        "workingPct": 5,
+        "waitingOnYouPct": 92,
+        "waitingOnAgentPct": 3
+      },
+      {
+        "agentId": "reviewer",
+        "workingPct": 100,
+        "waitingOnYouPct": 0,
+        "waitingOnAgentPct": 0
+      }
+    ],
+    "byAgent": [
+      {
+        "agentId": "builder",
+        "finished": 14,
+        "runs": 30,
+        "medianSec": 2880,
+        "firstPassRate": 0.42857142857142855,
+        "spendUsd": 13.65
+      },
+      {
+        "agentId": "designer",
+        "finished": 6,
+        "runs": 14,
+        "medianSec": 2340,
+        "firstPassRate": 0.5,
+        "spendUsd": 8.75
+      },
+      {
+        "agentId": "lead",
+        "finished": 3,
+        "runs": 6,
+        "medianSec": 780,
+        "firstPassRate": 1,
+        "spendUsd": 4.2
+      },
+      {
+        "agentId": "reviewer",
+        "finished": 3,
+        "runs": 27,
+        "medianSec": 600,
+        "firstPassRate": null,
+        "spendUsd": 6.3
+      }
+    ],
+    "approvals": {
+      "asked": 14,
+      "approved": 9,
+      "denied": 2,
+      "medianWaitSec": 120,
+      "insight": null
+    }
+  },
+  "/api/settings/providers": {
+    "items": [
+      {
+        "id": "demo",
+        "label": "Demo",
+        "status": "connected",
+        "detail": "Built-in demo models",
+        "usedBy": ["lead", "builder", "reviewer", "designer"]
+      },
+      {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "status": "missing",
+        "detail": "Not connected",
+        "usedBy": []
+      },
+      {
+        "id": "anthropic",
+        "label": "Anthropic",
+        "status": "needs_signin",
+        "detail": "Session expired",
+        "usedBy": []
+      },
+      {
+        "id": "openai-codex",
+        "label": "ChatGPT (Codex)",
+        "status": "connected",
+        "detail": "Your ChatGPT plan",
+        "usedBy": []
+      }
+    ]
+  },
+  "/api/settings/connections": {
+    "toolServers": [
+      {
+        "id": "files",
+        "label": "files",
+        "status": "ok",
+        "usedBy": "everyone"
+      },
+      {
+        "id": "web-search",
+        "label": "web-search",
+        "status": "needs_signin",
+        "usedBy": "everyone"
+      },
+      {
+        "id": "issue-tracker",
+        "label": "issue-tracker",
+        "status": "error",
+        "usedBy": "everyone"
+      }
+    ],
+    "messaging": [
+      {
+        "platform": "telegram",
+        "label": "Telegram",
+        "status": "connected",
+        "detail": null
+      },
+      {
+        "platform": "discord",
+        "label": "Discord",
+        "status": "disconnected",
+        "detail": null
+      },
+      {
+        "platform": "slack",
+        "label": "Slack",
+        "status": "disconnected",
+        "detail": "auth_failed"
+      }
+    ]
+  },
+  "/api/settings/rules": {
+    "mode": "smart",
+    "goAhead": [],
+    "askMe": [
+      {
+        "id": "delete in root path",
+        "label": "Delete in root path",
+        "pattern": "delete in root path",
+        "readOnly": false
+      },
+      {
+        "id": "recursive delete",
+        "label": "Recursive delete",
+        "pattern": "recursive delete",
+        "readOnly": false
+      },
+      {
+        "id": "recursive delete (long flag)",
+        "label": "Recursive delete (long flag)",
+        "pattern": "recursive delete (long flag)",
+        "readOnly": false
+      },
+      {
+        "id": "recursive delete (flags after operands)",
+        "label": "Recursive delete (flags after operands)",
+        "pattern": "recursive delete (flags after operands)",
+        "readOnly": false
+      },
+      {
+        "id": "Windows cmd destructive delete",
+        "label": "Windows cmd destructive delete",
+        "pattern": "Windows cmd destructive delete",
+        "readOnly": false
+      },
+      {
+        "id": "Windows PowerShell destructive delete",
+        "label": "Windows PowerShell destructive delete",
+        "pattern": "Windows PowerShell destructive delete",
+        "readOnly": false
+      },
+      {
+        "id": "PowerShell encoded command execution",
+        "label": "PowerShell encoded command execution",
+        "pattern": "PowerShell encoded command execution",
+        "readOnly": false
+      },
+      {
+        "id": "PowerShell destructive delete (Remove-Item)",
+        "label": "PowerShell destructive delete (Remove-Item)",
+        "pattern": "PowerShell destructive delete (Remove-Item)",
+        "readOnly": false
+      },
+      {
+        "id": "Windows destructive delete (recursive/quiet switch)",
+        "label": "Windows destructive delete (recursive/quiet switch)",
+        "pattern": "Windows destructive delete (recursive/quiet switch)",
+        "readOnly": false
+      },
+      {
+        "id": "pipe remote content to PowerShell (iwr | iex)",
+        "label": "Pipe remote content to PowerShell (iwr | iex)",
+        "pattern": "pipe remote content to PowerShell (iwr | iex)",
+        "readOnly": false
+      },
+      {
+        "id": "execute remote content via Invoke-Expression",
+        "label": "Execute remote content via Invoke-Expression",
+        "pattern": "execute remote content via Invoke-Expression",
+        "readOnly": false
+      },
+      {
+        "id": "force kill processes (taskkill /F)",
+        "label": "Force kill processes (taskkill /F)",
+        "pattern": "force kill processes (taskkill /F)",
+        "readOnly": false
+      },
+      {
+        "id": "force kill processes (Stop-Process -Force)",
+        "label": "Force kill processes (Stop-Process -Force)",
+        "pattern": "force kill processes (Stop-Process -Force)",
+        "readOnly": false
+      },
+      {
+        "id": "format filesystem (Format-Volume)",
+        "label": "Format filesystem (Format-Volume)",
+        "pattern": "format filesystem (Format-Volume)",
+        "readOnly": false
+      },
+      {
+        "id": "wipe disk (Clear-Disk)",
+        "label": "Wipe disk (Clear-Disk)",
+        "pattern": "wipe disk (Clear-Disk)",
+        "readOnly": false
+      },
+      {
+        "id": "disk partitioning (diskpart)",
+        "label": "Disk partitioning (diskpart)",
+        "pattern": "disk partitioning (diskpart)",
+        "readOnly": false
+      },
+      {
+        "id": "format drive (format.com)",
+        "label": "Format drive (format.com)",
+        "pattern": "format drive (format.com)",
+        "readOnly": false
+      },
+      {
+        "id": "wipe free space (cipher /w)",
+        "label": "Wipe free space (cipher /w)",
+        "pattern": "wipe free space (cipher /w)",
+        "readOnly": false
+      },
+      {
+        "id": "grant Everyone access (icacls)",
+        "label": "Grant Everyone access (icacls)",
+        "pattern": "grant Everyone access (icacls)",
+        "readOnly": false
+      },
+      {
+        "id": "reset ACLs recursively (icacls /reset)",
+        "label": "Reset ACLs recursively (icacls /reset)",
+        "pattern": "reset ACLs recursively (icacls /reset)",
+        "readOnly": false
+      },
+      {
+        "id": "delete volume shadow copies (vssadmin)",
+        "label": "Delete volume shadow copies (vssadmin)",
+        "pattern": "delete volume shadow copies (vssadmin)",
+        "readOnly": false
+      },
+      {
+        "id": "delete backups (wbadmin)",
+        "label": "Delete backups (wbadmin)",
+        "pattern": "delete backups (wbadmin)",
+        "readOnly": false
+      },
+      {
+        "id": "modify boot configuration (bcdedit /set)",
+        "label": "Modify boot configuration (bcdedit /set)",
+        "pattern": "modify boot configuration (bcdedit /set)",
+        "readOnly": false
+      },
+      {
+        "id": "registry delete (reg delete)",
+        "label": "Registry delete (reg delete)",
+        "pattern": "registry delete (reg delete)",
+        "readOnly": false
+      },
+      {
+        "id": "registry value delete (Remove-ItemProperty -Force)",
+        "label": "Registry value delete (Remove-ItemProperty -Force)",
+        "pattern": "registry value delete (Remove-ItemProperty -Force)",
+        "readOnly": false
+      },
+      {
+        "id": "force stop service (Stop-Service -Force)",
+        "label": "Force stop service (Stop-Service -Force)",
+        "pattern": "force stop service (Stop-Service -Force)",
+        "readOnly": false
+      },
+      {
+        "id": "stop/delete service (sc)",
+        "label": "Stop/delete service (sc)",
+        "pattern": "stop/delete service (sc)",
+        "readOnly": false
+      },
+      {
+        "id": "access to SSH keys (Windows path)",
+        "label": "Access to SSH keys (Windows path)",
+        "pattern": "access to SSH keys (Windows path)",
+        "readOnly": false
+      },
+      {
+        "id": "access to Hermes secrets (Windows path)",
+        "label": "Access to Hermes secrets (Windows path)",
+        "pattern": "access to Hermes secrets (Windows path)",
+        "readOnly": false
+      },
+      {
+        "id": "world/other-writable permissions",
+        "label": "World/other-writable permissions",
+        "pattern": "world/other-writable permissions",
+        "readOnly": false
+      },
+      {
+        "id": "recursive world/other-writable (long flag)",
+        "label": "Recursive world/other-writable (long flag)",
+        "pattern": "recursive world/other-writable (long flag)",
+        "readOnly": false
+      },
+      {
+        "id": "recursive chown to root",
+        "label": "Recursive chown to root",
+        "pattern": "recursive chown to root",
+        "readOnly": false
+      },
+      {
+        "id": "recursive chown to root (long flag)",
+        "label": "Recursive chown to root (long flag)",
+        "pattern": "recursive chown to root (long flag)",
+        "readOnly": false
+      },
+      {
+        "id": "format filesystem",
+        "label": "Format filesystem",
+        "pattern": "format filesystem",
+        "readOnly": false
+      },
+      {
+        "id": "disk copy",
+        "label": "Disk copy",
+        "pattern": "disk copy",
+        "readOnly": false
+      },
+      {
+        "id": "write to block device",
+        "label": "Write to block device",
+        "pattern": "write to block device",
+        "readOnly": false
+      },
+      {
+        "id": "SQL DROP",
+        "label": "SQL DROP",
+        "pattern": "SQL DROP",
+        "readOnly": false
+      },
+      {
+        "id": "SQL DELETE without WHERE",
+        "label": "SQL DELETE without WHERE",
+        "pattern": "SQL DELETE without WHERE",
+        "readOnly": false
+      },
+      {
+        "id": "SQL TRUNCATE",
+        "label": "SQL TRUNCATE",
+        "pattern": "SQL TRUNCATE",
+        "readOnly": false
+      },
+      {
+        "id": "overwrite system config",
+        "label": "Overwrite system config",
+        "pattern": "overwrite system config",
+        "readOnly": false
+      },
+      {
+        "id": "stop/restart system service",
+        "label": "Stop/restart system service",
+        "pattern": "stop/restart system service",
+        "readOnly": false
+      },
+      {
+        "id": "kill all processes",
+        "label": "Kill all processes",
+        "pattern": "kill all processes",
+        "readOnly": false
+      },
+      {
+        "id": "force kill processes",
+        "label": "Force kill processes",
+        "pattern": "force kill processes",
+        "readOnly": false
+      },
+      {
+        "id": "force kill processes (killall -KILL)",
+        "label": "Force kill processes (killall -KILL)",
+        "pattern": "force kill processes (killall -KILL)",
+        "readOnly": false
+      },
+      {
+        "id": "force kill processes (killall -s KILL)",
+        "label": "Force kill processes (killall -s KILL)",
+        "pattern": "force kill processes (killall -s KILL)",
+        "readOnly": false
+      },
+      {
+        "id": "kill processes by regex (killall -r)",
+        "label": "Kill processes by regex (killall -r)",
+        "pattern": "kill processes by regex (killall -r)",
+        "readOnly": false
+      },
+      {
+        "id": "fork bomb",
+        "label": "Fork bomb",
+        "pattern": "fork bomb",
+        "readOnly": false
+      },
+      {
+        "id": "pipe remote content to shell",
+        "label": "Pipe remote content to shell",
+        "pattern": "pipe remote content to shell",
+        "readOnly": false
+      },
+      {
+        "id": "execute remote script via process substitution",
+        "label": "Execute remote script via process substitution",
+        "pattern": "execute remote script via process substitution",
+        "readOnly": false
+      },
+      {
+        "id": "execute remote content via command substitution",
+        "label": "Execute remote content via command substitution",
+        "pattern": "execute remote content via command substitution",
+        "readOnly": false
+      },
+      {
+        "id": "cloud metadata endpoint access (instance credentials)",
+        "label": "Cloud metadata endpoint access (instance credentials)",
+        "pattern": "cloud metadata endpoint access (instance credentials)",
+        "readOnly": false
+      },
+      {
+        "id": "pipe decoded content to shell (possible command obfuscation)",
+        "label": "Pipe decoded content to shell (possible command obfuscation)",
+        "pattern": "pipe decoded content to shell (possible command obfuscation)",
+        "readOnly": false
+      },
+      {
+        "id": "pipe xxd-decoded content to shell (possible command obfuscation)",
+        "label": "Pipe xxd-decoded content to shell (possible command obfuscation)",
+        "pattern": "pipe xxd-decoded content to shell (possible command obfuscation)",
+        "readOnly": false
+      },
+      {
+        "id": "pipe tr-transformed output to shell (possible command obfuscation)",
+        "label": "Pipe tr-transformed output to shell (possible command obfuscation)",
+        "pattern": "pipe tr-transformed output to shell (possible command obfuscation)",
+        "readOnly": false
+      },
+      {
+        "id": "pipe openssl-decoded content to shell (possible command obfuscation)",
+        "label": "Pipe openssl-decoded content to shell (possible command obfuscation)",
+        "pattern": "pipe openssl-decoded content to shell (possible command obfuscation)",
+        "readOnly": false
+      },
+      {
+        "id": "overwrite system file via tee",
+        "label": "Overwrite system file via tee",
+        "pattern": "overwrite system file via tee",
+        "readOnly": false
+      },
+      {
+        "id": "overwrite system file via redirection",
+        "label": "Overwrite system file via redirection",
+        "pattern": "overwrite system file via redirection",
+        "readOnly": false
+      },
+      {
+        "id": "overwrite project env/config via tee",
+        "label": "Overwrite project env/config via tee",
+        "pattern": "overwrite project env/config via tee",
+        "readOnly": false
+      },
+      {
+        "id": "overwrite project env/config via redirection",
+        "label": "Overwrite project env/config via redirection",
+        "pattern": "overwrite project env/config via redirection",
+        "readOnly": false
+      },
+      {
+        "id": "xargs with rm",
+        "label": "Xargs with rm",
+        "pattern": "xargs with rm",
+        "readOnly": false
+      },
+      {
+        "id": "find -exec/-execdir rm",
+        "label": "Find -exec/-execdir rm",
+        "pattern": "find -exec/-execdir rm",
+        "readOnly": false
+      },
+      {
+        "id": "find dynamic shell word may expand to destructive flag",
+        "label": "Find dynamic shell word may expand to destructive flag",
+        "pattern": "find dynamic shell word may expand to destructive flag",
+        "readOnly": false
+      },
+      {
+        "id": "find -delete",
+        "label": "Find -delete",
+        "pattern": "find -delete",
+        "readOnly": false
+      },
+      {
+        "id": "dynamic shell word may expand to arbitrary program execution flag",
+        "label": "Dynamic shell word may expand to arbitrary program execution flag",
+        "pattern": "dynamic shell word may expand to arbitrary program execution flag",
+        "readOnly": false
+      },
+      {
+        "id": "stop/restart hermes gateway (kills running agents)",
+        "label": "Stop/restart hermes gateway (kills running agents)",
+        "pattern": "stop/restart hermes gateway (kills running agents)",
+        "readOnly": false
+      },
+      {
+        "id": "hermes update (restarts gateway, kills running agents)",
+        "label": "Hermes update (restarts gateway, kills running agents)",
+        "pattern": "hermes update (restarts gateway, kills running agents)",
+        "readOnly": false
+      },
+      {
+        "id": "docker with remote daemon redirect (-H/--host)",
+        "label": "Docker with remote daemon redirect (-H/--host)",
+        "pattern": "docker with remote daemon redirect (-H/--host)",
+        "readOnly": false
+      },
+      {
+        "id": "docker with daemon redirect (--context: alternate daemon)",
+        "label": "Docker with daemon redirect (--context: alternate daemon)",
+        "pattern": "docker with daemon redirect (--context: alternate daemon)",
+        "readOnly": false
+      },
+      {
+        "id": "docker context use (switches default daemon for future commands)",
+        "label": "Docker context use (switches default daemon for future commands)",
+        "pattern": "docker context use (switches default daemon for future commands)",
+        "readOnly": false
+      },
+      {
+        "id": "podman with remote daemon redirect (--url/--connection/--identity)",
+        "label": "Podman with remote daemon redirect (--url/--connection/--identity)",
+        "pattern": "podman with remote daemon redirect (--url/--connection/--identity)",
+        "readOnly": false
+      },
+      {
+        "id": "podman remote mode (-r/--remote: remote daemon)",
+        "label": "Podman remote mode (-r/--remote: remote daemon)",
+        "pattern": "podman remote mode (-r/--remote: remote daemon)",
+        "readOnly": false
+      },
+      {
+        "id": "docker/podman daemon redirect via environment (DOCKER_HOST/CONTAINER_HOST)",
+        "label": "Docker/podman daemon redirect via environment (DOCKER_HOST/CONTAINER_HOST)",
+        "pattern": "docker/podman daemon redirect via environment (DOCKER_HOST/CONTAINER_HOST)",
+        "readOnly": false
+      },
+      {
+        "id": "docker compose restart/stop/kill/down (container lifecycle)",
+        "label": "Docker compose restart/stop/kill/down (container lifecycle)",
+        "pattern": "docker compose restart/stop/kill/down (container lifecycle)",
+        "readOnly": false
+      },
+      {
+        "id": "docker restart/stop/kill (container lifecycle)",
+        "label": "Docker restart/stop/kill (container lifecycle)",
+        "pattern": "docker restart/stop/kill (container lifecycle)",
+        "readOnly": false
+      },
+      {
+        "id": "start gateway outside systemd (use 'systemctl --user restart hermes-gateway')",
+        "label": "Start gateway outside systemd (use 'systemctl --user restart hermes-gateway')",
+        "pattern": "start gateway outside systemd (use 'systemctl --user restart hermes-gateway')",
+        "readOnly": false
+      },
+      {
+        "id": "kill hermes/gateway process (self-termination)",
+        "label": "Kill hermes/gateway process (self-termination)",
+        "pattern": "kill hermes/gateway process (self-termination)",
+        "readOnly": false
+      },
+      {
+        "id": "kill process via pgrep/pidof expansion (self-termination)",
+        "label": "Kill process via pgrep/pidof expansion (self-termination)",
+        "pattern": "kill process via pgrep/pidof expansion (self-termination)",
+        "readOnly": false
+      },
+      {
+        "id": "kill process via backtick pgrep/pidof expansion (self-termination)",
+        "label": "Kill process via backtick pgrep/pidof expansion (self-termination)",
+        "pattern": "kill process via backtick pgrep/pidof expansion (self-termination)",
+        "readOnly": false
+      },
+      {
+        "id": "stop/restart hermes launchd service (kills running agents)",
+        "label": "Stop/restart hermes launchd service (kills running agents)",
+        "pattern": "stop/restart hermes launchd service (kills running agents)",
+        "readOnly": false
+      },
+      {
+        "id": "copy/move file into system config path",
+        "label": "Copy/move file into system config path",
+        "pattern": "copy/move file into system config path",
+        "readOnly": false
+      },
+      {
+        "id": "overwrite project env/config file",
+        "label": "Overwrite project env/config file",
+        "pattern": "overwrite project env/config file",
+        "readOnly": false
+      },
+      {
+        "id": "copy/move file into sensitive credential/SSH/shell-rc path",
+        "label": "Copy/move file into sensitive credential/SSH/shell-rc path",
+        "pattern": "copy/move file into sensitive credential/SSH/shell-rc path",
+        "readOnly": false
+      },
+      {
+        "id": "in-place edit of sensitive credential/SSH/shell-rc path",
+        "label": "In-place edit of sensitive credential/SSH/shell-rc path",
+        "pattern": "in-place edit of sensitive credential/SSH/shell-rc path",
+        "readOnly": false
+      },
+      {
+        "id": "in-place edit of sensitive credential/SSH/shell-rc path (long flag)",
+        "label": "In-place edit of sensitive credential/SSH/shell-rc path (long flag)",
+        "pattern": "in-place edit of sensitive credential/SSH/shell-rc path (long flag)",
+        "readOnly": false
+      },
+      {
+        "id": "in-place edit of sensitive credential/SSH/shell-rc path (perl/ruby)",
+        "label": "In-place edit of sensitive credential/SSH/shell-rc path (perl/ruby)",
+        "pattern": "in-place edit of sensitive credential/SSH/shell-rc path (perl/ruby)",
+        "readOnly": false
+      },
+      {
+        "id": "in-place edit of system config",
+        "label": "In-place edit of system config",
+        "pattern": "in-place edit of system config",
+        "readOnly": false
+      },
+      {
+        "id": "in-place edit of system config (long flag)",
+        "label": "In-place edit of system config (long flag)",
+        "pattern": "in-place edit of system config (long flag)",
+        "readOnly": false
+      },
+      {
+        "id": "in-place edit of Hermes config/env",
+        "label": "In-place edit of Hermes config/env",
+        "pattern": "in-place edit of Hermes config/env",
+        "readOnly": false
+      },
+      {
+        "id": "in-place edit of Hermes config/env (long flag)",
+        "label": "In-place edit of Hermes config/env (long flag)",
+        "pattern": "in-place edit of Hermes config/env (long flag)",
+        "readOnly": false
+      },
+      {
+        "id": "in-place edit of Hermes config/env (perl/ruby)",
+        "label": "In-place edit of Hermes config/env (perl/ruby)",
+        "pattern": "in-place edit of Hermes config/env (perl/ruby)",
+        "readOnly": false
+      },
+      {
+        "id": "shell execution via heredoc",
+        "label": "Shell execution via heredoc",
+        "pattern": "shell execution via heredoc",
+        "readOnly": false
+      },
+      {
+        "id": "git reset --hard (destroys uncommitted changes)",
+        "label": "Git reset --hard (destroys uncommitted changes)",
+        "pattern": "git reset --hard (destroys uncommitted changes)",
+        "readOnly": false
+      },
+      {
+        "id": "git force push (rewrites remote history)",
+        "label": "Git force push (rewrites remote history)",
+        "pattern": "git force push (rewrites remote history)",
+        "readOnly": false
+      },
+      {
+        "id": "git force push short flag (rewrites remote history)",
+        "label": "Git force push short flag (rewrites remote history)",
+        "pattern": "git force push short flag (rewrites remote history)",
+        "readOnly": false
+      },
+      {
+        "id": "git clean with force (deletes untracked files)",
+        "label": "Git clean with force (deletes untracked files)",
+        "pattern": "git clean with force (deletes untracked files)",
+        "readOnly": false
+      },
+      {
+        "id": "git branch force delete",
+        "label": "Git branch force delete",
+        "pattern": "git branch force delete",
+        "readOnly": false
+      },
+      {
+        "id": "git branch force delete (long flags)",
+        "label": "Git branch force delete (long flags)",
+        "pattern": "git branch force delete (long flags)",
+        "readOnly": false
+      },
+      {
+        "id": "git branch force delete (long flags, force-first)",
+        "label": "Git branch force delete (long flags, force-first)",
+        "pattern": "git branch force delete (long flags, force-first)",
+        "readOnly": false
+      },
+      {
+        "id": "chmod +x followed by immediate execution",
+        "label": "Chmod +x followed by immediate execution",
+        "pattern": "chmod +x followed by immediate execution",
+        "readOnly": false
+      },
+      {
+        "id": "sudo with privilege flag (stdin/askpass/shell/list)",
+        "label": "Sudo with privilege flag (stdin/askpass/shell/list)",
+        "pattern": "sudo with privilege flag (stdin/askpass/shell/list)",
+        "readOnly": false
+      },
+      {
+        "id": "sudo with combined-flag privilege escalation",
+        "label": "Sudo with combined-flag privilege escalation",
+        "pattern": "sudo with combined-flag privilege escalation",
+        "readOnly": false
+      },
+      {
+        "id": "package manager uninstall",
+        "label": "Package manager uninstall",
+        "pattern": "package manager uninstall",
+        "readOnly": false
+      }
+    ],
+    "never": [],
+    "drift": [
+      {
+        "agentId": "lead",
+        "differs": false
+      },
+      {
+        "agentId": "builder",
+        "differs": false
+      },
+      {
+        "agentId": "reviewer",
+        "differs": false
+      },
+      {
+        "agentId": "designer",
+        "differs": false
+      }
+    ]
+  },
+  "/api/settings/config?q=": {
+    "items": [
+      {
+        "key": "agent.max_turns",
+        "value": 60,
+        "file": "config.yaml",
+        "description": "Most tool-use turns an agent takes before it stops."
+      },
+      {
+        "key": "agent.verbose",
+        "value": false,
+        "file": "config.yaml",
+        "description": "Show extra detail about what the agent is doing."
+      },
+      {
+        "key": "auxiliary.vision.provider",
+        "value": "auto",
+        "file": "config.yaml",
+        "description": "Provider for the vision model."
+      },
+      {
+        "key": "display.compact",
+        "value": false,
+        "file": "config.yaml",
+        "description": "Use the compact layout for tool output."
+      },
+      {
+        "key": "display.language",
+        "value": "en",
+        "file": "config.yaml",
+        "description": "Language for Hermes messages."
+      },
+      {
+        "key": "gateway.port",
+        "value": 8642,
+        "file": "config.yaml",
+        "description": "Port the messaging gateway listens on."
+      },
+      {
+        "key": "memory.enabled",
+        "value": true,
+        "file": "config.yaml",
+        "description": "Let agents keep long-term memory."
+      },
+      {
+        "key": "terminal.backend",
+        "value": "local",
+        "file": "config.yaml",
+        "description": "Where terminal commands run: local, docker or ssh."
+      },
+      {
+        "key": "terminal.timeout",
+        "value": 180,
+        "file": "config.yaml",
+        "description": "Seconds before a terminal command is stopped."
+      }
+    ]
+  }
+}

@@ -11,6 +11,7 @@ import { z } from 'zod'
 import type { Ingest } from '../hub/ingest.ts'
 import { AgentDetailSchema, type AgentDetail } from '@score/contract'
 import { withInheritance } from './team-rules.ts'
+import { applyLifecycle } from './agent-lifecycle.ts'
 
 const colors = ['#6B4EFF', '#19C39A', '#FFB61E', '#FF6B8A'] as const
 export function defaultAgentStyle(index: number): AgentStyle {
@@ -32,7 +33,7 @@ export function readAgentStyle(sqlite: DatabaseSync, id: string): AgentStyle | n
   return row ? AgentStyleSchema.parse(StyleRowSchema.parse(row)) : null
 }
 export function storeAgent(sqlite: DatabaseSync, raw: AgentDetail): void {
-  const agent = withInheritance(sqlite, raw)
+  const agent = applyLifecycle(sqlite, withInheritance(sqlite, raw))
   sqlite
     .prepare(
       'INSERT INTO agents_proj (id, detail) VALUES (?, ?) ON CONFLICT (id) DO UPDATE SET detail = excluded.detail',
@@ -49,10 +50,13 @@ export async function reconcileAgents(
     identity: randomUUID(),
     apply({ sqlite }) {
       return agents.flatMap((detail) => {
-        const agent = AgentDetailSchema.parse({
-          ...detail,
-          style: readAgentStyle(sqlite, detail.id) ?? detail.style,
-        })
+        const agent = applyLifecycle(
+          sqlite,
+          AgentDetailSchema.parse({
+            ...detail,
+            style: readAgentStyle(sqlite, detail.id) ?? detail.style,
+          }),
+        )
         const previous = readAgent(sqlite, agent.id)
         if (JSON.stringify(previous) === JSON.stringify(withInheritance(sqlite, agent))) return []
         storeAgent(sqlite, agent)
@@ -66,11 +70,15 @@ export async function reconcileAgents(
   })
 }
 export function updateProjectedAgent(sqlite: DatabaseSync, summary: AgentSummary): AgentSummary {
-  const safe = AgentSummarySchema.parse({
+  let safe = AgentSummarySchema.parse({
     ...summary,
     style: readAgentStyle(sqlite, summary.id) ?? summary.style,
   })
   const previous = readAgent(sqlite, summary.id)
+  if (previous)
+    safe = AgentSummarySchema.parse(
+      applyLifecycle(sqlite, { ...previous, ...safe, model: previous.model }),
+    )
   if (previous)
     storeAgent(sqlite, {
       ...previous,
