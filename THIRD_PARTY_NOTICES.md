@@ -9,6 +9,10 @@ and the full copyright notice, and keep the upstream license text.
 npm dependencies are not listed here. Their licenses are checked by `pnpm license:check` and their notices
 ship inside `node_modules`. A generated notices file for distribution builds is planned for Phase 5.
 
+`apps/server/src/domain/watch-diff.ts` adapts V4A operation parsing and insertion semantics from
+NousResearch/hermes-agent `tools/patch_parser.py` at e97923c38a; tool argument shapes were verified against
+`tools/file_tools.py` at the same revision. Copyright (c) 2025 Nous Research. MIT license (below).
+
 ## Approved reference sources (MIT)
 
 | Source | Copyright | Used in |
