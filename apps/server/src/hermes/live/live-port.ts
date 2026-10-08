@@ -53,7 +53,7 @@ import { createLiveConfigService } from './config.ts'
 import { LiveSettings } from './settings.ts'
 import { readApprovalConfig, updateProfileApprovals } from './approvals.ts'
 import type { ApprovalConfig } from '../approvals.ts'
-import { runHermes, type HermesRunner } from './cli.ts'
+import { runHermes, type HermesRunner, type HermesSpawner } from './cli.ts'
 import { readRun, RunRowSchema, runLifecycle, type RunMetrics } from './translate.ts'
 import { LiveProfileManagement } from './profile-management.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
@@ -67,6 +67,9 @@ export interface LivePortOptions extends HermesPortDeps {
   baseUrl?: string
   db?: ScoreDb
   runner?: HermesRunner
+  spawner?: HermesSpawner
+  /** Profile the provider routes act on (dev/tests only; default: Hermes's default profile). */
+  settingsProfile?: string
   fetch?: typeof globalThis.fetch
   readCliVersion?: FingerprintInputs['readCliVersion']
   testedFingerprints?: readonly TestedFingerprint[]
@@ -127,10 +130,16 @@ export class LivePort implements HermesPort {
       (profile) => this.profiles.invalidate(profile),
       options.runner,
     )
-    this.settings = new LiveSettings(options.hermesHome, options.runner, async () => {
-      const options = await this.gateway?.modelOptions()
-      return options?.providers ?? null
-    })
+    this.settings = new LiveSettings(
+      options.hermesHome,
+      options.runner,
+      async () => {
+        const options = await this.gateway?.modelOptions()
+        return options?.providers ?? null
+      },
+      options.settingsProfile,
+      options.spawner,
+    )
     this.config = createLiveConfigService(options.hermesHome, options.runner)
     this.profileManagement = new LiveProfileManagement({
       ...options,
@@ -183,6 +192,7 @@ export class LivePort implements HermesPort {
     }
   }
   async stop(): Promise<void> {
+    this.settings.close()
     clearInterval(this.timer)
     clearInterval(this.taskTimer)
     this.controller?.abort()
@@ -427,6 +437,15 @@ export class LivePort implements HermesPort {
   }
   async connectProvider(id: string) {
     return this.settings.connectProvider(id)
+  }
+  async getSignIn(id: string) {
+    return this.settings.getSignIn(id)
+  }
+  async cancelSignIn(id: string) {
+    return this.settings.cancelSignIn(id)
+  }
+  async addProviderKey(id: string, req: Parameters<HermesPort['addProviderKey']>[1]) {
+    return this.settings.addProviderKey(id, req)
   }
   async addLocalProvider(req: Parameters<HermesPort['addLocalProvider']>[0]) {
     return this.settings.addLocalProvider(req)

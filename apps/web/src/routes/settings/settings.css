@@ -711,3 +711,52 @@
   user-select: all;
   cursor: text;
 }
+
+/* Browser sign-in (ARCHITECTURE D2.7): same card language as the other inline panels. */
+.settings-signin {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-16);
+  background: var(--subtle);
+}
+.settings-signin-link {
+  color: var(--ink);
+  font-weight: 600;
+}
+.settings-signin-code-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+.settings-signin-code {
+  padding: 10px 16px;
+  border-radius: var(--radius-14);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  font-family: var(--font-code);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  user-select: all;
+}
+.settings-key {
+  flex-basis: 100%;
+}
+.settings-warning {
+  padding: 10px 12px;
+  border-radius: var(--radius-14);
+  background: var(--agent-saffron-tint);
+  font-weight: 600;
+}
+.settings-form label.settings-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.settings-form label.settings-check input {
+  height: auto;
+}

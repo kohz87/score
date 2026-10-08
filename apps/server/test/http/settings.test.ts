@@ -58,7 +58,13 @@ test('providers list validates and carries usedBy from the agents models', async
   const response = await app.inject('/api/settings/providers')
   expect(response.statusCode).toBe(200)
   const { items } = ProvidersResponseSchema.parse(response.json())
-  expect(items.map((item) => item.id)).toEqual(['demo', 'openrouter', 'anthropic', 'openai-codex'])
+  expect(items.map((item) => item.id)).toEqual([
+    'demo',
+    'openrouter',
+    'anthropic',
+    'openai-codex',
+    'nous',
+  ])
   expect(items.find((item) => item.id === 'demo')!.usedBy.length).toBeGreaterThan(0)
   expect(items.find((item) => item.id === 'openrouter')!.usedBy).toEqual([])
 })

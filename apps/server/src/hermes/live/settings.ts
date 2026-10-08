@@ -3,13 +3,16 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import type {
   ConnectResult,
+  ProviderKeyRequest,
+  SignIn,
   ConnectionsResponse,
   LocalProviderRequest,
   ToolServerRequest,
 } from '@score/contract'
 import { HttpError } from '../../errors.ts'
 import { redact, redactBounded } from '../../redact.ts'
-import { runHermes, type HermesRunner } from './cli.ts'
+import { runHermes, spawnHermes, type HermesRunner, type HermesSpawner } from './cli.ts'
+import { SignInManager } from './sign-in.ts'
 import { resolveHermesHome } from './paths.ts'
 import type { ProviderBase } from '../port.ts'
 
@@ -27,6 +30,24 @@ const CATALOG: Record<string, string> = {
   'openai-codex': 'ChatGPT (Codex)',
   nous: 'Nous Portal',
 }
+// Browser sign-in kind per provider (ARCHITECTURE D2.7). Device-code providers are the ones whose
+// `hermes auth add <id> --type oauth --no-browser` prints a verification link and a user code and then polls:
+// hermes_cli/auth_commands.py `_OAUTH_ADD_SPECS` + `_add_nous_oauth_credential`, with the printing in
+// auth_codex.py `_codex_device_code_login` (the default Codex flow), auth_nous.py `_nous_device_code_login`,
+// auth_xai.py `_xai_oauth_device_code_login` and auth_minimax.py `_minimax_oauth_login`
+// (via auth_device_flow.py `_print_device_code_instructions`). Not device-code: `anthropic` (PKCE, needs a localhost
+// callback), `openrouter` (PKCE), `qwen-oauth` (borrows the Qwen CLI's login); they stay "terminal" unless the
+// provider also takes a pasted key (gateway `auth_type: "api_key"`).
+const DEVICE_CODE_PROVIDERS = new Set(['openai-codex', 'nous', 'xai-oauth', 'minimax-oauth'])
+// Used when the gateway can't be read: the short built-in list's key providers.
+const FALLBACK_KEY_PROVIDERS = new Set(['openrouter', 'anthropic'])
+type SignInKind = NonNullable<ProviderBase['signIn']>
+export function signInKind(id: string, authType: string | undefined): SignInKind {
+  if (DEVICE_CODE_PROVIDERS.has(id)) return 'device_code'
+  return authType === 'api_key' ? 'api_key' : 'terminal'
+}
+const KEY_TIMEOUT_MS = 30_000
+
 // Messaging platforms of the tested Hermes (0.21.5 hermes_cli/platforms.py PLATFORMS, minus cli, api_server and cron,
 // which aren't places to reach an agent). Plugin-registered platforms still appear when gateway_state.json reports them.
 const PLATFORMS: Record<string, string> = {
@@ -138,14 +159,32 @@ export class LiveSettings {
     private readonly runner: HermesRunner = runHermes,
     /** Every provider Hermes supports (from the gateway); null when it can't be read. */
     private readonly providerCatalog: () => Promise<
-      { slug: string; name: string }[] | null
+      { slug: string; name: string; auth_type?: string | undefined }[] | null
     > = async () => null,
+    /** The profile whose credentials the provider routes act on; none = Hermes's default. */
+    private readonly profile?: string,
+    private readonly spawner: HermesSpawner = spawnHermes,
   ) {
     this.home = resolveHermesHome(hermesHome)
+    this.signIns = new SignInManager({
+      spawn: this.spawner,
+      hermesHome: this.home,
+      profileArgs: this.profileArgs(),
+      isConnected: async (id) =>
+        (await this.pooled()).some((item) => item.id === id && item.status === 'connected'),
+    })
+  }
+  private readonly signIns: SignInManager
+  private readonly keyInFlight = new Set<string>()
+  private profileArgs(): string[] {
+    return this.profile ? ['-p', this.profile] : []
+  }
+  close(): void {
+    this.signIns.close()
   }
 
   private async read(args: string[]): Promise<string | null> {
-    const result = await this.runner(args, {
+    const result = await this.runner([...this.profileArgs(), ...args], {
       timeoutMs: READ_TIMEOUT_MS,
       hermesHome: this.home,
       captureSettings: true,
@@ -237,26 +276,108 @@ export class LiveSettings {
           .filter(
             (entry) => entry.slug !== 'custom' && ProviderIdSchema.safeParse(entry.slug).success,
           )
-          .map((entry) => [entry.slug, entry.name] as const)
-      : Object.entries(CATALOG)
-    for (const [id, label] of entries)
+          .map((entry) => [entry.slug, entry.name, entry.auth_type] as const)
+      : Object.entries(CATALOG).map(
+          ([id, label]) =>
+            [id, label, FALLBACK_KEY_PROVIDERS.has(id) ? 'api_key' : undefined] as const,
+        )
+    const kinds = new Map<string, SignInKind>()
+    for (const [id, label, authType] of entries) {
       items.set(id, { id, label, status: 'missing', detail: 'Not connected' })
-    for (const item of [...pooled, ...local]) items.set(item.id, item)
-    return [...items.values()]
+      kinds.set(id, signInKind(id, authType))
+    }
+    for (const item of pooled) items.set(item.id, item)
+    // Local endpoints have no sign-in of their own.
+    for (const item of local) {
+      items.set(item.id, item)
+      kinds.delete(item.id)
+    }
+    return [...items.values()].map((item) => ({
+      ...item,
+      signIn: kinds.get(item.id) ?? 'terminal',
+    }))
+  }
+  /** The sign-in kind of one provider, from the gateway catalog (or the built-in list). */
+  private async kindOf(id: string): Promise<SignInKind | null> {
+    const catalog = await this.providerCatalog().catch(() => null)
+    const entry = catalog?.find((candidate) => candidate.slug === id)
+    if (entry) return signInKind(id, entry.auth_type)
+    if (!catalog?.length && id in CATALOG)
+      return signInKind(id, FALLBACK_KEY_PROVIDERS.has(id) ? 'api_key' : undefined)
+    // Connected through other means (pooled credentials, local endpoints): known, but no browser sign-in.
+    return (await this.listProviders()).some((item) => item.id === id) ? 'terminal' : null
   }
 
   async connectProvider(id: string): Promise<ConnectResult> {
     const providerId = ProviderIdSchema.safeParse(id)
     if (!providerId.success) throw new HttpError(404, 'not_found', 'Unknown provider')
     // The catalog alone answers "is this a provider?"; the full list would spawn two Hermes processes.
-    const catalog = await this.providerCatalog().catch(() => null)
-    const known =
-      (catalog?.some((entry) => entry.slug === providerId.data) ?? false) ||
-      providerId.data in CATALOG ||
-      (await this.listProviders()).some((item) => item.id === providerId.data)
-    if (!known) throw new HttpError(404, 'not_found', 'Unknown provider')
-    // Sign-in prompts for keys or opens a browser: only the person can do it, in their own terminal.
-    return { next: 'run_in_terminal', command: `hermes auth add ${providerId.data}` }
+    const kind = await this.kindOf(providerId.data)
+    if (kind === null) throw new HttpError(404, 'not_found', 'Unknown provider')
+    // The terminal command is always included: it is the fallback for every provider (ARCHITECTURE D2.7).
+    const command = `hermes auth add ${providerId.data}`
+    if (kind !== 'device_code') return { next: 'run_in_terminal', command }
+    const signIn = await this.signIns.start(providerId.data)
+    if (signIn.state !== 'waiting' || !signIn.url || !signIn.code)
+      return { next: 'run_in_terminal', command }
+    return {
+      next: 'device_code',
+      command,
+      url: signIn.url,
+      code: signIn.code,
+      signInId: signIn.id,
+      expiresAt: signIn.expiresAt,
+    }
+  }
+  async getSignIn(id: string): Promise<SignIn> {
+    return this.signIns.get(id)
+  }
+  async cancelSignIn(id: string): Promise<SignIn> {
+    return this.signIns.cancel(id)
+  }
+
+  /**
+   * Relays a pasted key to `hermes auth add <id> --type api-key` on stdin (ARCHITECTURE D2.7). The key lives only in
+   * this call: not in argv or the environment, and nothing the process prints is read or kept.
+   */
+  async addProviderKey(id: string, req: ProviderKeyRequest): Promise<ProviderBase> {
+    const providerId = ProviderIdSchema.safeParse(id)
+    if (!providerId.success) throw new HttpError(404, 'not_found', 'Unknown provider')
+    const kind = await this.kindOf(providerId.data)
+    if (kind === null) throw new HttpError(404, 'not_found', 'Unknown provider')
+    if (kind !== 'api_key')
+      throw new HttpError(409, 'not_supported', 'This provider does not take a pasted key')
+    if (this.keyInFlight.has(providerId.data))
+      throw new HttpError(409, 'conflict', 'A key is already being added for this provider')
+    this.keyInFlight.add(providerId.data)
+    try {
+      const label = req.label ?? `score-${new Date().toISOString().slice(0, 10)}`
+      const child = this.spawner(
+        [
+          ...this.profileArgs(),
+          'auth',
+          'add',
+          providerId.data,
+          '--type',
+          'api-key',
+          '--label',
+          label,
+        ],
+        { hermesHome: this.home, input: `${req.apiKey}\n` },
+      )
+      const timer = setTimeout(() => child.kill(), KEY_TIMEOUT_MS)
+      const code = await child.exited.finally(() => clearTimeout(timer))
+      const item =
+        code === 0
+          ? (await this.pooled()).find(
+              (candidate) => candidate.id === providerId.data && candidate.status === 'connected',
+            )
+          : undefined
+      if (!item) throw new HttpError(409, 'not_verified', 'Hermes did not confirm the key')
+      return { ...item, signIn: 'api_key' }
+    } finally {
+      this.keyInFlight.delete(providerId.data)
+    }
   }
 
   async addLocalProvider(req: LocalProviderRequest): Promise<ProviderBase> {

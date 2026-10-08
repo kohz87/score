@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { gzipSync, gunzipSync } from 'node:zlib'
 import type { FastifyRequest, preHandlerHookHandler, onSendHookHandler } from 'fastify'
 import { z } from 'zod'
@@ -29,9 +29,15 @@ export function requestIdempotency(
   db: ScoreDb | undefined,
   clock = Date.now,
   maxResponseBytes = 65536,
+  /**
+   * Secret-bearing routes (a pasted API key): the stored body hash is an HMAC under a per-process random secret, so
+   * the receipt can't be used to confirm a guess at the body. A retry after a restart is then a conflict, not a replay.
+   */
+  options: { secretBody?: boolean } = {},
 ): { preHandler: preHandlerHookHandler; onSend: onSendHookHandler } {
   const owners = new WeakMap<FastifyRequest, { key: string; route: string; finish: () => void }>()
   const flights = new Map<string, Promise<void>>()
+  const secret = randomBytes(32)
   return {
     async preHandler(request, reply) {
       const header = request.headers['idempotency-key']
@@ -42,7 +48,9 @@ export function requestIdempotency(
         .parse(header)
       const route = request.url.split('?', 1)[0]!
       const identity = JSON.stringify([key, route])
-      const hash = createHash('sha256').update(canonical(request.body)).digest('hex')
+      const hash = (options.secretBody ? createHmac('sha256', secret) : createHash('sha256'))
+        .update(canonical(request.body))
+        .digest('hex')
       const read = () =>
         db.sqlite
           .prepare('SELECT * FROM request_receipts WHERE key = ? AND route = ?')

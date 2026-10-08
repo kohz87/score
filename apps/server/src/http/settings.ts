@@ -10,6 +10,7 @@ import {
   ModelsResponseSchema,
   PatchPluginRequestSchema,
   PlatformParamSchema,
+  ProviderKeyRequestSchema,
   PluginIdSchema,
   PluginsQuerySchema,
   ToolServerRequestSchema,
@@ -18,8 +19,12 @@ import {
 import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { HermesPort, ProviderBase } from '../hermes/index.ts'
+import type { Config } from '../config.ts'
+import { HttpError } from '../errors.ts'
+import { profileManagementAllowed } from './profiles.ts'
 import { requestIdempotency } from './idempotency.ts'
 
+const SignInParamsSchema = z.object({ signInId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/) })
 const ProviderParamsSchema = z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/) })
 
 export function registerSettingsRoutes(
@@ -27,8 +32,11 @@ export function registerSettingsRoutes(
   port: HermesPort,
   db?: ScoreDb,
   clock = Date.now,
+  config?: Pick<Config, 'host' | 'remote'>,
 ): void {
   const receipts = requestIdempotency(db, clock)
+  // The pasted key's route: the receipt never holds a plain hash of the body (D2.7).
+  const keyReceipts = requestIdempotency(db, clock, undefined, { secretBody: true })
   const mutation = {
     preHandler: [humanGuard(app.pairing), receipts.preHandler],
     onSend: receipts.onSend,
@@ -64,6 +72,32 @@ export function registerSettingsRoutes(
     const { id } = ProviderParamsSchema.parse(request.params)
     return port.connectProvider(id)
   })
+  app.get('/api/settings/sign-ins/:signInId', async (request) =>
+    port.getSignIn(SignInParamsSchema.parse(request.params).signInId),
+  )
+  app.delete('/api/settings/sign-ins/:signInId', mutation, async (request) =>
+    port.cancelSignIn(SignInParamsSchema.parse(request.params).signInId),
+  )
+  // The key goes to `hermes auth add` on stdin and nowhere else: it is not logged, stored, echoed or put in a receipt.
+  app.post(
+    '/api/settings/providers/:id/key',
+    {
+      preHandler: [humanGuard(app.pairing), keyReceipts.preHandler],
+      onSend: keyReceipts.onSend,
+    },
+    async (request) => {
+      const { id } = ProviderParamsSchema.parse(request.params)
+      const req = ProviderKeyRequestSchema.parse(request.body)
+      // Over plain-HTTP remote the key crosses the LAN unencrypted: only with the person's explicit acknowledgement.
+      if (config && !profileManagementAllowed(config) && req.acknowledgeInsecure !== true)
+        throw new HttpError(
+          400,
+          'insecure_transport',
+          'This connection is not encrypted: confirm that you understand before sending a key',
+        )
+      return (await withUsage([await port.addProviderKey(id, req)]))[0]
+    },
+  )
   app.get('/api/settings/connections', async () => port.listConnections())
   app.post('/api/settings/tool-servers', mutation, async (request) =>
     port.addToolServer(ToolServerRequestSchema.parse(request.body)),

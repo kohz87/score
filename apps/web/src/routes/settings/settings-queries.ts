@@ -10,10 +10,14 @@ import {
   HermesCheckSchema,
   ProviderItemSchema,
   ProvidersResponseSchema,
+  SignInSchema,
   SystemStatusSchema,
   type ConfigApplyRequest,
   type ConfigChange,
+  type ProviderItem,
   type LocalProviderRequest,
+  type ProviderKeyRequest,
+  type SignIn,
   type SystemStatus,
   type ToolServerRequest,
 } from '@score/contract'
@@ -114,6 +118,35 @@ export function useConfigActions() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings', 'config'] }),
   })
   return { preview, apply }
+}
+
+// Sign-in from the browser (ARCHITECTURE D2.7). The server keeps device sign-ins in memory; the page follows one until
+// it ends. Background tabs keep polling, because the approval happens in another window.
+const SIGN_IN_POLL_MS = 2_000
+export function useSignIn(id: string) {
+  return useQuery({
+    queryKey: ['settings', 'sign-in', id],
+    queryFn: async ({ signal }) =>
+      SignInSchema.parse(await apiFetch(`settings/sign-ins/${encodeURIComponent(id)}`, { signal })),
+    retry: false,
+    refetchInterval: (query) =>
+      query.state.data && query.state.data.state !== 'waiting' ? false : SIGN_IN_POLL_MS,
+    refetchIntervalInBackground: true,
+  })
+}
+export async function cancelSignIn(id: string): Promise<SignIn> {
+  return SignInSchema.parse(
+    await apiFetch(`settings/sign-ins/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  )
+}
+/**
+ * Sends a pasted key. Deliberately not a query-client mutation: those keep their variables in a cache, and the key
+ * must exist only in this call and the form's own state.
+ */
+export async function sendProviderKey(id: string, req: ProviderKeyRequest): Promise<ProviderItem> {
+  return ProviderItemSchema.parse(
+    await post(`settings/providers/${encodeURIComponent(id)}/key`, req),
+  )
 }
 
 // Plugins are per profile and not in the stream; a toggle replaces the row from the verified response.

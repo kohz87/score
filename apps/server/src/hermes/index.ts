@@ -1,3 +1,4 @@
+import { ProfileNameSchema } from '@score/contract'
 import type { Config } from '../config.ts'
 import { FakePort } from './fake/fake-port.ts'
 import { LivePort } from './live/live-port.ts'
@@ -42,12 +43,15 @@ export function createHermesPort(
   >,
   deps: HermesPortDeps = {},
 ): HermesPort {
+  // Dev/test only: aim the Settings provider routes at one profile (the live sign-in check uses a test profile).
+  const settingsProfile = ProfileNameSchema.safeParse(process.env.SCORE_SETTINGS_PROFILE)
   return config.mode === 'fake'
     ? new FakePort(config.fakeSpeed, deps, config.fakeLoop, undefined, true)
     : new LivePort({
         ...deps,
         scoreHome: config.home,
         ...(config.hermesHome ? { hermesHome: config.hermesHome } : {}),
+        ...(settingsProfile.success ? { settingsProfile: settingsProfile.data } : {}),
         ...(config.hermesUrl ? { baseUrl: config.hermesUrl } : {}),
         ...(config.bridgeInstallUrl ? { bridgeInstallUrl: config.bridgeInstallUrl } : {}),
         ...(config.bridgeInstallRef ? { bridgeInstallRef: config.bridgeInstallRef } : {}),

@@ -21,12 +21,12 @@ test('settings shows providers and connections and the command to run for a sign
   await expect(page.getByText('Coming soon.')).toHaveCount(0)
 
   // Connecting needs a paired browser, so the request is stubbed; the UI contract is what is checked.
-  await page.route('**/api/settings/providers/openrouter/connect', (route) =>
-    route.fulfill({ json: { next: 'run_in_terminal', command: 'hermes auth add openrouter' } }),
+  await page.route('**/api/settings/providers/anthropic/connect', (route) =>
+    route.fulfill({ json: { next: 'run_in_terminal', command: 'hermes auth add anthropic' } }),
   )
-  await models.getByRole('button', { name: 'Connect OpenRouter' }).click()
+  await models.getByRole('button', { name: 'Connect Anthropic' }).click()
   const command = page.getByRole('group', { name: 'Run in a terminal' })
-  await expect(command.getByText('hermes auth add openrouter')).toBeVisible()
+  await expect(command.getByText('hermes auth add anthropic')).toBeVisible()
   await command.getByRole('button', { name: 'Done' }).click()
   await expect(command).toBeHidden()
 })
