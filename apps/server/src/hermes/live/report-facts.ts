@@ -1,0 +1,82 @@
+import { z } from 'zod'
+import type { KanbanTaskFact, ReportFacts } from '../../domain/reports.ts'
+import { hermesPaths, ProfileNameSchema, resolveHermesHome } from './paths.ts'
+import { HermesDbMissing, HermesSchemaDrift, openReadOnly, readBatch } from './sqlite.ts'
+import { sessionSpend } from './sessions.ts'
+
+const TaskRowSchema = z.object({
+  id: z.string(),
+  assignee: z.string().nullable(),
+  status: z.string(),
+  created_at: z.number(),
+  completed_at: z.number().nullable(),
+})
+const LinkRowSchema = z.object({ child_id: z.string() })
+const EventRowSchema = z.object({ task_id: z.string(), kind: z.string(), created_at: z.number() })
+const EVENT_KINDS = [
+  'review_requested',
+  'changes_requested',
+  'completed',
+  'promoted',
+  'blocked',
+  'unblocked',
+]
+
+/** Read-only: spend comes from each profile's own state.db; send-backs from kanban.db. Missing data is null/empty. */
+export function readReportFacts(
+  req: { from: number; to: number; agentIds: string[] },
+  hermesHome?: string,
+): ReportFacts {
+  const paths = hermesPaths(resolveHermesHome(hermesHome))
+  const spendUsd: Record<string, number | null> = {}
+  for (const agentId of req.agentIds) {
+    spendUsd[agentId] = null
+    if (!ProfileNameSchema.safeParse(agentId).success) continue
+    try {
+      const db = openReadOnly(paths.stateDb(agentId))
+      try {
+        spendUsd[agentId] = sessionSpend(db, req.from / 1000, req.to / 1000)
+      } finally {
+        db.close()
+      }
+    } catch (error) {
+      if (!(error instanceof HermesDbMissing || error instanceof HermesSchemaDrift)) throw error
+    }
+  }
+  let tasks: KanbanTaskFact[] = []
+  try {
+    const db = openReadOnly(paths.kanbanDb)
+    try {
+      const children = new Set(
+        readBatch(db, 'task_links', LinkRowSchema, '', []).rows.map((row) => row.child_id),
+      )
+      const events = Map.groupBy(
+        readBatch(
+          db,
+          'task_events',
+          EventRowSchema,
+          `WHERE kind IN (${EVENT_KINDS.map(() => '?').join(', ')}) ORDER BY created_at, id`,
+          EVENT_KINDS,
+        ).rows,
+        (row) => row.task_id,
+      )
+      tasks = readBatch(db, 'tasks', TaskRowSchema, 'ORDER BY rowid', []).rows.map((row) => ({
+        id: row.id,
+        assignee: row.assignee,
+        status: row.status,
+        createdAt: row.created_at * 1000,
+        completedAt: row.completed_at === null ? null : row.completed_at * 1000,
+        hasParents: children.has(row.id),
+        events: (events.get(row.id) ?? []).map((event) => ({
+          kind: event.kind,
+          at: event.created_at * 1000,
+        })),
+      }))
+    } finally {
+      db.close()
+    }
+  } catch (error) {
+    if (!(error instanceof HermesDbMissing || error instanceof HermesSchemaDrift)) throw error
+  }
+  return { tasks, spendUsd }
+}

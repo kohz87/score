@@ -77,6 +77,37 @@ const cases = [
   ['RoutinesResponseSchema', { items: [f.routine] }, { items: [{}] }],
   ['RoutineDeletedSchema', { id: 'builder:j1' }, { id: '' }],
   ['RoutineRunSchema', { id: 'builder:j1', queued: true }, { id: 'builder:j1', queued: false }],
+  ['ReportRangeSchema', '7d', 'year'],
+  [
+    'ReportsSchema',
+    {
+      range: 'today',
+      summary: 'No tasks finished today.',
+      totals: {
+        tasksFinished: 0,
+        runs: 0,
+        firstPassRate: null,
+        medianTaskSec: null,
+        spendUsd: null,
+      },
+      byDay: [{ date: '2026-03-10', perAgent: { builder: 1 } }],
+      timeSplit: [
+        { agentId: 'builder', workingPct: 50, waitingOnYouPct: 50, waitingOnAgentPct: 0 },
+      ],
+      byAgent: [
+        {
+          agentId: 'builder',
+          finished: 1,
+          runs: 1,
+          medianSec: 60,
+          firstPassRate: null,
+          spendUsd: 0.1,
+        },
+      ],
+      approvals: { asked: 0, approved: 0, denied: 0, medianWaitSec: null, insight: null },
+    },
+    { range: 'today' },
+  ],
   ['AgentDetailSchema', f.agentDetail, { ...f.agentDetail, rulesFile: 'SOUL.md' }],
   ['RoutineSummarySchema', f.routine, { ...f.routine, lastRunAt: 'yesterday' }],
   ['RefSchema', f.refs[0], { kind: 'room', roomId: '' }],

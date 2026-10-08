@@ -431,6 +431,37 @@ export class FakePort implements HermesPort {
     return structuredClone([...this.agents.values()])
   }
 
+  async reportFacts(req: Parameters<HermesPort['reportFacts']>[0]) {
+    // Neutral, deterministic numbers that grow with the window so the three ranges look different.
+    const days = Math.max(1, Math.ceil((req.to - req.from) / 86_400_000))
+    return {
+      tasks: [...this.tasks.values()].map((task) => {
+        const done = task.hermesStatus === 'done'
+        const finishedAt = Date.parse(task.updatedAt)
+        const sentBack = task.badge?.kind === 'changes_requested'
+        const reviewed = Boolean(task.reviewer) || sentBack
+        return {
+          id: task.id,
+          assignee: task.assignee,
+          status: task.hermesStatus,
+          createdAt: finishedAt - (task.elapsedSec ?? 600) * 1000,
+          completedAt: done ? finishedAt : null,
+          hasParents: task.dependsOn.length > 0,
+          events: [
+            ...(reviewed ? [{ kind: 'review_requested', at: finishedAt - 120_000 }] : []),
+            ...(sentBack ? [{ kind: 'changes_requested', at: finishedAt - 60_000 }] : []),
+          ],
+        }
+      }),
+      spendUsd: Object.fromEntries(
+        req.agentIds.map((agentId, i) => [
+          agentId,
+          Math.round(days * (0.35 + 0.1 * i) * 100) / 100,
+        ]),
+      ),
+    }
+  }
+
   async listAgentDetails(): Promise<AgentDetail[]> {
     return (await this.listAgents()).map((agent) =>
       AgentDetailSchema.parse({
