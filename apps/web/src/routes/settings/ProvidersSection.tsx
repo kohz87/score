@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import type { AgentSummary, ProviderItem } from '@score/contract'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { failure, TerminalCommand } from './TerminalCommand.tsx'
-import { useProviders, useSettingsActions } from './settings-queries.ts'
+import { useProviders, useRecheckSettings, useSettingsActions } from './settings-queries.ts'
 
 const statusText = {
   connected: 'Connected',
@@ -29,9 +29,10 @@ function UsedBy({ ids, agents }: { ids: string[]; agents: AgentSummary[] }) {
 
 export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
   const [showAll, setShowAll] = useState(false)
-  const providers = useProviders()
   const { connectProvider, addLocal } = useSettingsActions()
   const [command, setCommand] = useState<{ id: string; text: string } | null>(null)
+  const providers = useProviders(command !== null)
+  const recheck = useRecheckSettings()
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState({ label: '', baseUrl: '', model: '' })
   const [notice, setNotice] = useState('')
@@ -107,7 +108,13 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
               {item.status === 'connected' ? 'Edit' : 'Connect'}
             </button>
             {command?.id === item.id && (
-              <TerminalCommand command={command.text} onClose={() => setCommand(null)} />
+              <TerminalCommand
+                command={command.text}
+                onClose={() => {
+                  setCommand(null)
+                  recheck()
+                }}
+              />
             )}
           </li>
         ))}

@@ -16,6 +16,8 @@ import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 
 // Status only; the server never sends secrets. Not in the stream, so mutations invalidate these reads.
+// Sign-ins and connections finish in a terminal outside Score, so these also re-check on focus, while a
+// command is open (`watching`), and when the person presses Done.
 const providersKey = ['settings', 'providers'] as const
 const connectionsKey = ['settings', 'connections'] as const
 const post = (path: string, body?: unknown) =>
@@ -25,21 +27,34 @@ const post = (path: string, body?: unknown) =>
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
 
-export function useProviders() {
+const WATCH_MS = 5_000
+
+export function useProviders(watching = false) {
   return useQuery({
     queryKey: providersKey,
     queryFn: async ({ signal }) =>
       ProvidersResponseSchema.parse(await apiFetch('settings/providers', { signal })).items,
     retry: false,
+    refetchOnWindowFocus: true,
+    refetchInterval: watching ? WATCH_MS : false,
   })
 }
-export function useConnections() {
+export function useConnections(watching = false) {
   return useQuery({
     queryKey: connectionsKey,
     queryFn: async ({ signal }) =>
       ConnectionsResponseSchema.parse(await apiFetch('settings/connections', { signal })),
     retry: false,
+    refetchOnWindowFocus: true,
+    refetchInterval: watching ? WATCH_MS : false,
   })
+}
+export function useRecheckSettings() {
+  const queryClient = useQueryClient()
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: providersKey })
+    void queryClient.invalidateQueries({ queryKey: connectionsKey })
+  }
 }
 export function useSettingsActions() {
   const queryClient = useQueryClient()

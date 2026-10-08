@@ -60,11 +60,15 @@ export default tseslint.config(
           selector: "MemberExpression[property.name='randomUUID']",
           message: 'Use newId() from data/ids.ts (crypto.randomUUID needs HTTPS).',
         },
+        {
+          selector: "MemberExpression[object.name='navigator'][property.name='clipboard']",
+          message: 'Use copyText() from data/clipboard.ts (navigator.clipboard needs HTTPS).',
+        },
       ],
     },
   },
   {
-    files: ['apps/web/src/data/ids.test.ts'],
+    files: ['apps/web/src/data/ids.test.ts', 'apps/web/src/data/clipboard.test.ts'],
     rules: { 'no-restricted-properties': 'off', 'no-restricted-syntax': 'off' },
   },
 )
