@@ -357,7 +357,7 @@ export function Composer({
           <span className="chat-grow" />
           <button
             type="button"
-            className="chat-plan"
+            className="chat-plan-toggle"
             aria-pressed={planFirst}
             onClick={() => setPlanFirst(!planFirst)}
           >

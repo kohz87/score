@@ -446,7 +446,7 @@
 .chat-add-list button:hover {
   background: #f2f3f6;
 }
-.chat-plan {
+.chat-plan-toggle {
   height: 36px;
   padding: 0 14px;
   border-radius: var(--radius-pill);
@@ -478,10 +478,10 @@
   border-radius: var(--radius-pill);
   background: var(--card);
 }
-.chat-plan[aria-pressed='true'] .chat-switch {
+.chat-plan-toggle[aria-pressed='true'] .chat-switch {
   background: var(--ink);
 }
-.chat-plan[aria-pressed='true'] .chat-switch::after {
+.chat-plan-toggle[aria-pressed='true'] .chat-switch::after {
   left: auto;
   right: 2px;
 }
@@ -606,6 +606,13 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+.chat-side-card a {
+  /* chat.png: links in the side cards are ink, underlined, semibold */
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .chat-side-card h2 {
   margin: 0;
