@@ -414,6 +414,9 @@
   font-weight: 600;
 }
 .flow-inspector__description {
+  /* The inspector is a flex column; without this the paragraph shrinks to a clipped sliver. */
+  flex: none;
+  margin: 0;
   color: var(--chat-text);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
