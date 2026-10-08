@@ -33,6 +33,8 @@ export function redact(text: string): string {
         /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[\s\S]*?(?:-----END (?:[A-Z]+ )?PRIVATE KEY-----|$)/g,
         '[redacted]',
       )
+      // An END left after that has lost its BEGIN (a tail window cut through the key): what precedes it is key body.
+      .replace(/^[\s\S]*?-----END (?:[A-Z]+ )?PRIVATE KEY-----/, '[redacted]')
       .replace(/(\bAuthorization\s*:\s*)(?:Basic|Bearer)\s+[A-Za-z0-9._~+/-]+=*/gi, '$1[redacted]')
       .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [redacted]')
       .replace(/\bsk-(?:or-)?[A-Za-z0-9_-]{8,}\b/g, '[redacted]')

@@ -30,6 +30,8 @@ _PATTERNS = (
     (re.compile(r"(\b[a-z][a-z0-9+.-]*://[^\s/:@]+:)[^\s/@]+@", re.I), r"\1[redacted]@"),
     (re.compile(r"(\bAuthorization\s*:\s*)(?:Basic|Bearer)\s+[A-Za-z0-9._~+/-]+=*", re.I), r"\1[redacted]"),
     (re.compile(r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[\s\S]*?(?:-----END (?:[A-Z]+ )?PRIVATE KEY-----|$)"), _REDACTED),
+    # An END left after that has lost its BEGIN (a tail window cut through the key): what precedes it is key body.
+    (re.compile(r"\A[\s\S]*?-----END (?:[A-Z]+ )?PRIVATE KEY-----"), _REDACTED),
     (re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]+=*", re.I), "Bearer [redacted]"),
     (re.compile(r"\bsk-(?:or-)?[A-Za-z0-9_-]{8,}\b"), _REDACTED),
     (re.compile(r"\b(?:ghp_|github_pat_)[A-Za-z0-9_]{8,}\b"), _REDACTED),

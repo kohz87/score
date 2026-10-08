@@ -178,3 +178,21 @@ def test_other_tools_and_vault_never_forward_a_screenshot_path(sender):
     for index, tool in enumerate(("browser_snapshot", "browser_vault_fill", "terminal")):
         payload = _vision(sender, f"o{index}", tool, json.dumps({"screenshot_path": path}))
         assert "screenshotPath" not in json.dumps(payload.get("watch", {}))
+
+
+def test_a_tail_window_that_cuts_off_a_private_keys_header_keeps_none_of_its_body():
+    # Audit 2026-10-08: ~6 KB of PEM, then ~15 KB of ordinary output; the tail window starts inside the key.
+    import random
+    rng = random.Random(7)
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    body_lines = ["".join(rng.choice(alphabet) for _ in range(64)) for _ in range(95)]
+    pem = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(body_lines) + "\n-----END PRIVATE KEY-----\n"
+    logs = "".join(f"line {i}: build step ok\n" for i in range(700))
+    output = pem + logs
+    raw = output[-(LEAF_CAP + TAIL_MARGIN):]
+    assert "BEGIN PRIVATE KEY" not in raw  # the window really did cut the header off
+    safe, cut = redact_tail(raw, len(output), lambda text: text)
+    assert cut
+    for line in body_lines:
+        assert line[:24] not in safe
+    assert "line 699: build step ok" in safe

@@ -138,3 +138,13 @@ test('gate #7 session identifiers survive while cookies remain credentials', () 
     redactValue({ session_id: 'session-a', sessionId: 'session-b', cookie: 'opaque' }),
   ).toEqual({ session_id: 'session-a', sessionId: 'session-b', cookie: '[redacted]' })
 })
+
+test('an END marker without its BEGIN (a window cut through a key) redacts the key body before it', () => {
+  const body = Array.from(
+    { length: 20 },
+    (_, i) => `MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC${i}`,
+  ).join('\n')
+  const out = redact(`${body}\n-----END PRIVATE KEY-----\nbuild ok`)
+  expect(out).not.toContain('MIIEvQIBADANBgkqhkiG9w0BAQEF')
+  expect(out).toContain('build ok')
+})

@@ -305,6 +305,49 @@ test('a pasted key goes to stdin only, then is verified through auth list', asyn
   await expect(failing).rejects.toMatchObject({ status: 409, code: 'not_verified' })
 })
 
+test('close stops a running key child and refuses sign-ins whose catalog read finishes after it', async () => {
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  const catalog = async () => {
+    await gate
+    return [
+      { slug: 'openrouter', name: 'OpenRouter', auth_type: 'api_key' },
+      { slug: 'nous', name: 'Nous Portal', auth_type: 'oauth_device_code' },
+    ]
+  }
+  const settings = new LiveSettings(
+    home,
+    runner(() => ''),
+    catalog,
+    undefined,
+    spawn,
+  )
+  release()
+  const adding = settings.addProviderKey('openrouter', { apiKey: KEY })
+  await vi.waitFor(() => expect(children).toHaveLength(1))
+  let lateRelease!: () => void
+  const late = new Promise<void>((resolve) => (lateRelease = resolve))
+  const slow = new LiveSettings(
+    home,
+    runner(() => ''),
+    async () => {
+      await late
+      return [{ slug: 'nous', name: 'Nous Portal', auth_type: 'oauth_device_code' }]
+    },
+    undefined,
+    spawn,
+  )
+  const connecting = slow.connectProvider('nous')
+  settings.close()
+  slow.close()
+  expect(children[0]!.kills).toBe(1)
+  await expect(adding).rejects.toMatchObject({ status: 409 })
+  lateRelease()
+  await expect(connecting).rejects.toMatchObject({ status: 503 })
+  // No sign-in child was started after close.
+  expect(children).toHaveLength(1)
+})
+
 // A stand-in `hermes` on PATH: records argv, environment and stdin so the real spawn can be checked end to end.
 test('spawnHermes runs detached with stdin closed or fed, and the key never reaches argv or env', async () => {
   const bin = join(home, 'bin')

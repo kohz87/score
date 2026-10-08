@@ -170,3 +170,36 @@ test('the user message reaches Hermes unchanged, even when it merely looks like 
   const sent = [...env.fake.runs.values()].find((run) => run.id === runId || run.input === input)
   expect(sent?.input).toBe(input)
 })
+
+test('streamed reply text stays raw through the gateway so a secret split across deltas is redacted once joined', async () => {
+  const { redactRunFrame } = await import('../../../../src/hermes/live/gateway.ts')
+  const { redact } = await import('../../../../src/redact.ts')
+  const token = 'Zk3vQ9pLm2Xw8Rt5Yc1Hn7Bd4Fg6Js0A'
+  const first = redactRunFrame('message', {
+    event: 'message.delta',
+    run_id: 'run-1',
+    delta: 'Use Authorization: Bearer ',
+  })
+  const second = redactRunFrame('message', {
+    event: 'message.delta',
+    run_id: 'run-1',
+    delta: `${token} next`,
+  })
+  // Per-chunk redaction used to eat "Bearer" here and leave the bare token in the second chunk.
+  expect(first.delta).toBe('Use Authorization: Bearer ')
+  expect(second.delta).toBe(`${token} next`)
+  expect(redact(`${String(first.delta)}${String(second.delta)}`)).not.toContain(token)
+  // Score's own gateway key is still stripped from stream text, and other fields keep full redaction.
+  const keyed = redactRunFrame(
+    'message',
+    {
+      event: 'message.interim',
+      run_id: 'run-1',
+      text: 'key gw-secret-123 here',
+      note: 'password=hunter2',
+    },
+    ['gw-secret-123'],
+  )
+  expect(keyed.text).toBe('key [redacted] here')
+  expect(JSON.stringify(keyed)).not.toContain('hunter2')
+})

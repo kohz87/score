@@ -11,7 +11,13 @@ import type {
 } from '@score/contract'
 import { HttpError } from '../../errors.ts'
 import { redact, redactBounded } from '../../redact.ts'
-import { runHermes, spawnHermes, type HermesRunner, type HermesSpawner } from './cli.ts'
+import {
+  runHermes,
+  spawnHermes,
+  type HermesChild,
+  type HermesRunner,
+  type HermesSpawner,
+} from './cli.ts'
 import { SignInManager } from './sign-in.ts'
 import { resolveHermesHome } from './paths.ts'
 import type { ProviderBase } from '../port.ts'
@@ -180,11 +186,20 @@ export class LiveSettings {
   }
   private readonly signIns: SignInManager
   private readonly keyInFlight = new Set<string>()
+  /** Key children still running, so shutdown can stop them (audit 2026-10-08). */
+  private readonly keyChildren = new Set<HermesChild>()
+  private closed = false
+  private admit(): void {
+    if (this.closed) throw new HttpError(503, 'unavailable', 'Score is shutting down')
+  }
   private profileArgs(): string[] {
     return this.profile ? ['-p', this.profile] : []
   }
+  /** Stops admitting sign-ins and stops every child still running: device sign-ins and pasted-key adds. */
   close(): void {
+    this.closed = true
     this.signIns.close()
+    for (const child of this.keyChildren) child.kill()
   }
 
   private async read(args: string[]): Promise<string | null> {
@@ -324,6 +339,8 @@ export class LiveSettings {
     // The terminal command is always included: it is the fallback for every provider (ARCHITECTURE D2.7).
     const command = `hermes auth add ${providerId.data}`
     if (kind !== 'device_code') return { next: 'run_in_terminal', command }
+    // Checked after the awaits above: shutdown may have started while the catalog was being read.
+    this.admit()
     const signIn = await this.signIns.start(providerId.data)
     if (signIn.state !== 'waiting' || !signIn.url || !signIn.code)
       return { next: 'run_in_terminal', command }
@@ -354,6 +371,7 @@ export class LiveSettings {
     if (kind === null) throw new HttpError(404, 'not_found', 'Unknown provider')
     if (kind !== 'api_key')
       throw new HttpError(409, 'not_supported', 'This provider does not take a pasted key')
+    this.admit()
     if (this.keyInFlight.has(providerId.data))
       throw new HttpError(409, 'conflict', 'A key is already being added for this provider')
     this.keyInFlight.add(providerId.data)
@@ -372,8 +390,12 @@ export class LiveSettings {
         ],
         { hermesHome: this.home, input: `${req.apiKey}\n` },
       )
+      this.keyChildren.add(child)
       const timer = setTimeout(() => child.kill(), KEY_TIMEOUT_MS)
-      const code = await child.exited.finally(() => clearTimeout(timer))
+      const code = await child.exited.finally(() => {
+        clearTimeout(timer)
+        this.keyChildren.delete(child)
+      })
       const item =
         code === 0
           ? (await this.pooled()).find(
