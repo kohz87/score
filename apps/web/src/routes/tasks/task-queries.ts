@@ -1,7 +1,7 @@
 import {
   AgentSummarySchema,
   RoomSchema,
-  StreamEnvelopeSchema,
+  AsOfSeqSchema,
   TaskSummarySchema,
   type TaskColumn,
   type TaskSummary,
@@ -29,10 +29,10 @@ function record(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
-// Snapshot envelopes are not exported yet; validate their fields with the contract schemas.
+// A fresh server reports asOfSeq 0, which the stream's (positive) seq would reject.
 function snapshot(value: unknown) {
   const fields = record(value)
-  return { fields, asOfSeq: StreamEnvelopeSchema.shape.seq.parse(fields.asOfSeq) }
+  return { fields, asOfSeq: AsOfSeqSchema.parse(fields.asOfSeq) }
 }
 
 export function matchesFilters(task: TaskSummary, filters: TaskFilters) {

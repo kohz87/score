@@ -1,16 +1,11 @@
-import { AgentDetailSchema, AgentSummarySchema } from '@score/contract'
+import { AgentDetailSchema, AgentsSnapshotSchema } from '@score/contract'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { apiFetch } from '../../data/api.ts'
 import { useStream } from '../../data/query-client.ts'
 import { defineStreamQuery } from '../../data/resync.ts'
 
-// The web app has no direct zod dependency; extend an empty pick of a contract schema instead.
-const AgentsSchema = AgentSummarySchema.pick({}).extend({
-  // A fresh server has seq 0, which the envelope's (positive) seq rejects; reuse a plain non-negative int.
-  asOfSeq: AgentDetailSchema.shape.helpersMax.unwrap(),
-  items: AgentSummarySchema.array(),
-})
+const AgentsSchema = AgentsSnapshotSchema
 
 export const agentsQuery = defineStreamQuery({
   key: ['team', 'agents'],

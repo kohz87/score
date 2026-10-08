@@ -8,6 +8,37 @@ const cases = [
   ['AgentStyleSchema', f.style, { ...f.style, color: '#abc' }],
   ['AgentStatusSchema', 'working', 'busy'],
   ['AgentSummarySchema', f.agent, { ...f.agent, id: '' }],
+  ['AsOfSeqSchema', 0, -1],
+  [
+    'ErrorEnvelopeSchema',
+    { error: { code: 'not_found', message: 'Missing' } },
+    { error: { code: '' } },
+  ],
+  ['RoomsSnapshotSchema', { asOfSeq: 0, rooms: [f.room], directs: [] }, { asOfSeq: 0, rooms: [] }],
+  [
+    'RoomDetailSnapshotSchema',
+    { asOfSeq: 3, room: f.room, filesInPlay: [], learned: [] },
+    { asOfSeq: 3, room: f.room, filesInPlay: [] },
+  ],
+  [
+    'MessagePageSchema',
+    { asOfSeq: 2, items: [f.message], nextCursor: null },
+    { items: [f.message], nextCursor: null },
+  ],
+  [
+    'ApprovalsPageSchema',
+    { asOfSeq: 1, items: [f.approval], nextCursor: 'c' },
+    { asOfSeq: 1, items: [], nextCursor: 3 },
+  ],
+  [
+    'TasksSnapshotSchema',
+    {
+      asOfSeq: 0,
+      columns: { planned: [f.task], working: [], in_review: [], needs_you: [], done: [] },
+    },
+    { asOfSeq: 0, columns: { backlog: [] } },
+  ],
+  ['AgentsSnapshotSchema', { asOfSeq: 0, items: [f.agent] }, { asOfSeq: 0.5, items: [] }],
   ['AgentDetailSchema', f.agentDetail, { ...f.agentDetail, rulesFile: 'SOUL.md' }],
   ['RoutineSummarySchema', f.routine, { ...f.routine, lastRunAt: 'yesterday' }],
   ['RefSchema', f.refs[0], { kind: 'room', roomId: '' }],
@@ -101,4 +132,18 @@ test('AgentDetail extends the summary and accepts an unreadable model', () => {
   expect(contract.AgentDetailSchema.safeParse({ ...detail, rulesFile: 'SOUL.md' }).success).toBe(
     false,
   )
+})
+
+test('HTTP snapshots accept asOfSeq 0 (fresh server) and reject negatives', () => {
+  expect(contract.AgentsSnapshotSchema.parse({ asOfSeq: 0, items: [f.agent] }).asOfSeq).toBe(0)
+  expect(contract.AgentsSnapshotSchema.safeParse({ asOfSeq: -1, items: [] }).success).toBe(false)
+  expect(
+    contract.TasksSnapshotSchema.parse({
+      asOfSeq: 0,
+      columns: { planned: [], working: [], in_review: [], needs_you: [], done: [] },
+    }).asOfSeq,
+  ).toBe(0)
+  expect(
+    contract.ErrorEnvelopeSchema.parse({ error: { code: 'not_found', message: 'Unknown room' } }),
+  ).toMatchObject({ error: { code: 'not_found' } })
 })

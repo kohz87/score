@@ -215,7 +215,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 - `PATCH /api/rooms/:roomId` `{ name?, leadAgentId?, members? }` → `Room`
 - **S** `GET /api/rooms/:roomId` → `{ asOfSeq; room: Room; filesInPlay: string[]
   learned: { text: string; savedTo: AgentId[]; at: string }[] }`
-- **S** `GET /api/rooms/:roomId/messages?before=<cursor>&limit=50` → `{ items: Message[]; nextCursor }`
+- **S** `GET /api/rooms/:roomId/messages?before=<cursor>&limit=50` → `{ asOfSeq; items: Message[]; nextCursor }`
 - `POST /api/rooms/:roomId/messages`
   ```ts
   req: { text: string; to?: AgentId[] /* explicit "To" chips; @mentions in text are merged */

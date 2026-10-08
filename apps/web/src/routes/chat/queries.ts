@@ -1,41 +1,16 @@
 import {
-  AgentIdSchema,
-  AgentSummarySchema,
-  MessageSchema,
-  RoomSchema,
-  StreamHelloSchema,
+  AgentsSnapshotSchema,
+  MessagePageSchema,
+  RoomDetailSnapshotSchema,
+  RoomsSnapshotSchema,
   type Message,
   type StreamEvent,
 } from '@score/contract'
 import { apiFetch } from '../../data/api.ts'
 import { defineStreamQuery } from '../../data/resync.ts'
 
-// Endpoint envelopes are composed here because the contract exports entity schemas only.
-const snapshotSchema = RoomSchema.pick({}).extend({
-  asOfSeq: StreamHelloSchema.shape.data.shape.headSeq,
-})
-const RoomsSnapshotSchema = snapshotSchema.extend({
-  rooms: RoomSchema.array(),
-  directs: RoomSchema.array(),
-})
-const AgentsSnapshotSchema = snapshotSchema.extend({
-  items: AgentSummarySchema.array(),
-})
-const RoomSnapshotSchema = snapshotSchema.extend({
-  room: RoomSchema,
-  filesInPlay: RoomSchema.shape.name.array(),
-  learned: RoomSchema.pick({})
-    .extend({
-      text: RoomSchema.shape.name,
-      savedTo: AgentIdSchema.array(),
-      at: MessageSchema.shape.createdAt,
-    })
-    .array(),
-})
-const MessagesSnapshotSchema = snapshotSchema.extend({
-  items: MessageSchema.array(),
-  nextCursor: RoomSchema.shape.name.nullable(),
-})
+const RoomSnapshotSchema = RoomDetailSnapshotSchema
+const MessagesSnapshotSchema = MessagePageSchema
 
 export const roomsQuery = defineStreamQuery({
   key: ['chat', 'rooms'],
