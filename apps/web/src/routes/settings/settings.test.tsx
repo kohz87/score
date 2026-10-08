@@ -321,3 +321,31 @@ test('a changed Hermes lists what changed and offers no accept', async () => {
   expect(within(banner).getByRole('button', { name: 'Check this Hermes version' })).toBeDefined()
   expect(calls.some((call) => call.path === '/api/settings/hermes/accept')).toBe(false)
 })
+
+test('after signing in from the terminal, Done re-checks and the provider shows as connected', async () => {
+  let signedIn = false
+  respond = (path, init) =>
+    init?.method === 'POST'
+      ? json({ next: 'run_in_terminal', command: 'hermes auth add nous' })
+      : path === '/api/settings/providers'
+        ? json({
+            items: providers.map((item) =>
+              item.id === 'nous' && signedIn
+                ? { ...item, status: 'connected', detail: 'Signed in' }
+                : item,
+            ),
+          })
+        : path === '/api/agents'
+          ? json({ asOfSeq: 0, items: [builder] })
+          : json(connections)
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Connect Nous Portal' }))
+  const group = await screen.findByRole('group', { name: 'Run in a terminal' })
+  signedIn = true // the person ran the command in their terminal
+  fireEvent.click(within(group).getByRole('button', { name: 'Done' }))
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Connect Nous Portal' })).toBeNull(),
+  )
+  const models = screen.getByRole('region', { name: 'Models and keys' })
+  expect(within(models).getAllByText('Connected')).toHaveLength(2)
+})

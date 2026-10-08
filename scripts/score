@@ -46,7 +46,9 @@ cmd_start() {
     echo $! >"$pid_file"
   )
   for ((i = 0; i < 100; i++)); do
-    if ! running_pid >/dev/null; then
+    # Only a dead process is a failure here: right after the fork its cmdline is still nohup's, so
+    # running_pid's start.mjs check could misreport a healthy start under load.
+    if ! kill -0 "$(<"$pid_file")" 2>/dev/null; then
       echo "Score failed to start:" >&2
       tail -n 20 "$log_file" >&2
       rm -f "$pid_file"

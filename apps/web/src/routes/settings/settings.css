@@ -599,3 +599,8 @@
   flex-wrap: wrap;
   gap: 12px;
 }
+.settings-command-text {
+  /* One click selects the whole command, so Ctrl+C works even where the copy button can't. */
+  user-select: all;
+  cursor: text;
+}

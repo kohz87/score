@@ -1,6 +1,7 @@
 import { RoutineSummarySchema } from '@score/contract'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
+import { newId } from '../../data/ids.ts'
 
 // Not in the stream, so these reads are plain fetches that mutations invalidate.
 const RoutineListSchema = RoutineSummarySchema.array()
@@ -49,7 +50,7 @@ export function useRoutineActions(agentId: string) {
       RoutineSummarySchema.parse(
         await apiFetch(`routines/${encodeURIComponent(id)}`, {
           method: 'PATCH',
-          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          headers: { 'Idempotency-Key': newId() },
           body: JSON.stringify({ enabled }),
         }),
       ),
@@ -59,7 +60,7 @@ export function useRoutineActions(agentId: string) {
     mutationFn: async (id: string) => {
       await apiFetch(`routines/${encodeURIComponent(id)}/run`, {
         method: 'POST',
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        headers: { 'Idempotency-Key': newId() },
       })
     },
     onSuccess: refresh,
@@ -68,7 +69,7 @@ export function useRoutineActions(agentId: string) {
     mutationFn: async (id: string) => {
       await apiFetch(`routines/${encodeURIComponent(id)}`, {
         method: 'DELETE',
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        headers: { 'Idempotency-Key': newId() },
       })
     },
     onSuccess: refresh,

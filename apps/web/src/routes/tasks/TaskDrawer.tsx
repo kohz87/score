@@ -13,9 +13,10 @@ import {
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { ApiError, apiFetch } from '../../data/api.ts'
 import { taskColumns, taskDetailKey, useTaskDetail } from './task-queries.ts'
+import { newId } from '../../data/ids.ts'
 
 function idempotencyKey() {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return newId()
 }
 
 function errorText(error: unknown) {

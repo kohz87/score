@@ -123,7 +123,10 @@ export class LivePort implements HermesPort {
       (profile) => this.profiles.invalidate(profile),
       options.runner,
     )
-    this.settings = new LiveSettings(options.hermesHome, options.runner)
+    this.settings = new LiveSettings(options.hermesHome, options.runner, async () => {
+      const options = await this.gateway?.modelOptions()
+      return options?.providers ?? null
+    })
     this.config = createLiveConfigService(options.hermesHome, options.runner)
     this.profileManagement = new LiveProfileManagement({
       ...options,

@@ -29,8 +29,11 @@ export function registerSettingsRoutes(
     onSend: receipts.onSend,
   }
   // An agent uses a provider when its model's `via` names it (id or label).
-  async function withUsage(items: ProviderBase[]): Promise<ProviderItem[]> {
-    const agents = await port.listAgentDetails()
+  // Both reads spawn Hermes processes; run them side by side (they were serial: 7-13 s per refresh).
+  async function withUsage(
+    pending: Promise<ProviderBase[]> | ProviderBase[],
+  ): Promise<ProviderItem[]> {
+    const [items, agents] = await Promise.all([pending, port.listAgentDetails()])
     return items.map((item) => ({
       ...item,
       usedBy: agents
@@ -42,7 +45,7 @@ export function registerSettingsRoutes(
     }))
   }
   app.get('/api/settings/providers', async () => ({
-    items: await withUsage(await port.listProviders()),
+    items: await withUsage(port.listProviders()),
   }))
   app.post('/api/settings/providers/local', mutation, async (request) => {
     const req = LocalProviderRequestSchema.parse(request.body)
