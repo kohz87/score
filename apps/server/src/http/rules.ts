@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import {
   AgentDetailSchema,
+  AgentPermissionsResponseSchema,
   AgentSummarySchema,
   NeverGlobSchema,
   PatchPermissionRequestSchema,
@@ -14,7 +15,13 @@ import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import { readAgent, readAgentStyle, storeAgent } from '../domain/agents.ts'
 import { unifiedDiff } from '../domain/line-diff.ts'
-import { addOverride, readBaseline, readOverrides, writeBaseline } from '../domain/team-rules.ts'
+import {
+  addOverride,
+  readBaseline,
+  readOverrides,
+  removeOverride,
+  writeBaseline,
+} from '../domain/team-rules.ts'
 import { HttpError } from '../errors.ts'
 import {
   KNOWN_PATTERN_KEYS,
@@ -26,6 +33,7 @@ import {
   neverId,
   neverRule,
   patternLabel,
+  type AgentOverrides,
   type ApprovalConfig,
   type Baseline,
   type HermesPort,
@@ -261,6 +269,72 @@ export function registerRulesRoutes(
       await announce([agentId])
       const stored = readAgent(db.sqlite, agentId)?.permissions.find((p) => p.id === row.id)
       return stored ?? row
+    })
+  })
+
+  // Takes back an agent's own stricter choice: the profile goes back to exactly what the team baseline asks for
+  // (never looser). Only Score's recorded overrides can be removed; a team rule or a Hermes-owned entry cannot.
+  app.delete('/api/agents/:agentId/permissions/:permId', mutation, async (request) => {
+    const { agentId, permId } = AgentParams.extend({
+      permId: z.string().min(1).max(400),
+    }).parse(request.params)
+    await assertAgent(agentId)
+    const { db, ingest } = storage()
+    return serial(async () => {
+      const baseline = readBaseline(db.sqlite)
+      const overrides = readOverrides(db.sqlite, agentId)
+      let kind: 'without_go_ahead' | 'extra_never'
+      let value: string
+      if (permId.startsWith(NEVER_PREFIX)) {
+        kind = 'extra_never'
+        value = permId.slice(NEVER_PREFIX.length)
+      } else {
+        kind = 'without_go_ahead'
+        value = permId
+      }
+      const recorded = kind === 'extra_never' ? overrides.extraNever : overrides.withoutGoAhead
+      if (!recorded.includes(value)) {
+        // A rule that belongs to the team is not this agent's to remove; anything else is simply unknown.
+        if (baseline.never.includes(value) || baseline.goAhead.includes(value))
+          throw new HttpError(
+            400,
+            'not_an_override',
+            'That rule comes from the team, not this agent',
+          )
+        throw new HttpError(404, 'not_found', 'This agent has no such override')
+      }
+      const remaining: AgentOverrides = {
+        withoutGoAhead: overrides.withoutGoAhead.filter(
+          (v) => kind !== 'without_go_ahead' || v !== value,
+        ),
+        extraNever: overrides.extraNever.filter((v) => kind !== 'extra_never' || v !== value),
+      }
+      try {
+        // The removed glob counts as Score-managed, so it leaves `approvals.deny` unless the team has it too.
+        await port.updateApprovals(agentId, (current) =>
+          expectedConfig(
+            current,
+            baseline,
+            remaining,
+            kind === 'extra_never' ? [...baseline.never, value] : baseline.never,
+          ),
+        )
+      } catch {
+        throw new HttpError(409, 'conflict', 'Hermes did not accept the change')
+      }
+      // Forgotten only once Hermes holds the baseline-derived config, so a failed write leaves the override.
+      await ingest.submit({
+        source: 'agent-rules',
+        identity: randomUUID(),
+        apply({ sqlite }) {
+          removeOverride(sqlite, agentId, kind, value)
+          return []
+        },
+      })
+      await announce([agentId])
+      return AgentPermissionsResponseSchema.parse({
+        items: readAgent(db.sqlite, agentId)?.permissions ?? [],
+      })
     })
   })
 }

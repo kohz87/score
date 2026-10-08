@@ -3,6 +3,12 @@ import { HttpError } from '../../errors.ts'
 import { redact, redactBounded } from '../../redact.ts'
 import {
   HubSkillSchema,
+  type HubSkill,
+  type MemoryItem,
+  type MemoryPage,
+  type SkillItem,
+} from '@score/contract'
+import {
   SetModelSchema,
   SkillNameSchema,
   ToolIdSchema,
@@ -11,10 +17,6 @@ import {
   pageMemory,
   MemoryQuerySchema,
   type AgentTool,
-  type HubSkill,
-  type MemoryItem,
-  type MemoryPage,
-  type SkillItem,
 } from '../agent-tabs.ts'
 import { HubRowsSchema, readDisabledSkills, readTools } from './agent-config.ts'
 import { runHermes, type HermesRunner } from './cli.ts'

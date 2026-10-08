@@ -60,6 +60,17 @@ export function addOverride(
     .run(agentId, kind, value)
 }
 
+export function removeOverride(
+  sqlite: DatabaseSync,
+  agentId: string,
+  kind: 'without_go_ahead' | 'extra_never',
+  value: string,
+): void {
+  sqlite
+    .prepare('DELETE FROM agent_rule_overrides WHERE agent_id = ? AND kind = ? AND value = ?')
+    .run(agentId, kind, value)
+}
+
 /** Marks which permission rows simply come from the team baseline (as opposed to this agent's own choice). */
 export function withInheritance(sqlite: DatabaseSync, agent: AgentDetail): AgentDetail {
   if (agent.permissions.length === 0) return agent

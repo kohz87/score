@@ -1,5 +1,6 @@
 import {
   AgentDetailSchema,
+  AgentPermissionsResponseSchema,
   RulesResponseSchema,
   RulesWriteResponseSchema,
   RulesPreviewResponseSchema,
@@ -51,7 +52,7 @@ afterEach(async () => {
 })
 const human = () => ({ 'x-score-client': 'web', cookie })
 const call = (
-  method: 'GET' | 'PUT' | 'PATCH' | 'POST',
+  method: 'GET' | 'PUT' | 'PATCH' | 'POST' | 'DELETE',
   url: string,
   payload?: object,
   headers: Record<string, string> = human(),
@@ -313,4 +314,158 @@ test('live adapter: drift, unknown keys read-only, verified writes with exact ar
   )
   expect(again.failed).toEqual(['builder'])
   expect(again.drift.find((d) => d.agentId === 'builder')?.differs).toBe(true)
+})
+
+const del = (agent: string, id: string, headers?: Record<string, string>) =>
+  call('DELETE', `/api/agents/${agent}/permissions/${encodeURIComponent(id)}`, undefined, headers)
+
+test('DELETE gives an agent back to the team rule, never looser than the team', async () => {
+  await call('PUT', '/api/settings/rules', team)
+  await call('PATCH', '/api/agents/builder/permissions/SQL%20DROP', { level: 'asks' })
+  await call('PATCH', '/api/agents/builder/permissions/never%3Arm%20-rf%20%2Ftmp%2F*', {
+    level: 'never',
+  })
+  const before = (await permissions('builder')).map((p) => p.id)
+  expect(before).not.toContain('SQL DROP')
+  expect(before).toContain('never:rm -rf /tmp/*')
+
+  // A taken-back Go-ahead returns to the team's.
+  const back = await del('builder', 'SQL DROP')
+  expect(back.statusCode).toBe(200)
+  const restored = AgentPermissionsResponseSchema.parse(back.json()).items
+  expect(restored.find((p) => p.id === 'SQL DROP')).toMatchObject({
+    level: 'allowed',
+    inherited: true,
+  })
+  // The other override stays; the team's Never stays.
+  expect(restored.map((p) => p.id)).toContain('never:rm -rf /tmp/*')
+  expect(restored.map((p) => p.id)).toContain('never:*git* push* --force*')
+
+  // An agent-only Never goes away, the team's remains.
+  const gone = AgentPermissionsResponseSchema.parse(
+    (await del('builder', 'never:rm -rf /tmp/*')).json(),
+  ).items
+  expect(gone.map((p) => p.id)).not.toContain('never:rm -rf /tmp/*')
+  expect(gone.map((p) => p.id)).toContain('never:*git* push* --force*')
+  expect((await permissions('builder')).map((p) => p.id)).toEqual(
+    (await permissions('lead')).map((p) => p.id),
+  )
+  expect((await rules()).drift.every((d) => !d.differs)).toBe(true)
+
+  // Each override can only be removed once; team rules are not overrides.
+  expect((await del('builder', 'SQL DROP')).statusCode).toBe(400) // now a plain team rule
+  expect((await del('builder', 'SQL DROP')).json().error.code).toBe('not_an_override')
+  const teamNever = await del('lead', 'never:*git* push* --force*')
+  expect(teamNever.statusCode).toBe(400)
+  expect(teamNever.json().error.code).toBe('not_an_override')
+  expect((await permissions('lead')).map((p) => p.id)).toContain('never:*git* push* --force*')
+  expect((await del('builder', 'never:rm -rf /tmp/*')).statusCode).toBe(404)
+  expect((await del('builder', 'recursive delete')).statusCode).toBe(400)
+  expect((await del('builder', 'SQL TRUNCATE')).statusCode).toBe(404)
+  expect((await del('nobody', 'SQL DROP')).statusCode).toBe(404)
+  expect((await del('builder', 'SQL DROP', { 'x-score-client': 'web' })).statusCode).toBe(401)
+})
+
+test('live adapter: DELETE rewrites only the baseline-derived keys, exact argv, Hermes-owned entries stay', async () => {
+  extraHome = mkdtempSync(join(tmpdir(), 'score-rules-delete-'))
+  const fixture = fileURLToPath(new URL('../fixtures/hermes/profiles/', import.meta.url))
+  cpSync(join(fixture, 'default'), extraHome, { recursive: true })
+  cpSync(join(fixture, 'builder'), join(extraHome, 'profiles', 'builder'), { recursive: true })
+  const config: Record<
+    string,
+    { allowlist: string[]; approvals: { mode: string; deny: string[] } }
+  > = {
+    default: { allowlist: [], approvals: { mode: 'smart', deny: [] } },
+    builder: { allowlist: ['mystery key'], approvals: { mode: 'smart', deny: ['foreign*'] } },
+  }
+  const writes: string[][] = []
+  let failWrites = false
+  const runner = vi.fn<HermesRunner>(async (args) => {
+    const profile = args[0] === '-p' ? args[1]! : 'default'
+    const state = config[profile]
+    const [, , verb, sub, ...rest] = args
+    if (!state) return { exitCode: 1 }
+    if (verb === 'config' && sub === 'get') {
+      if (rest[1] === 'command_allowlist')
+        return { exitCode: 0, stdout: JSON.stringify(state.allowlist) }
+      if (rest[1] === 'approvals') return { exitCode: 0, stdout: JSON.stringify(state.approvals) }
+      return { exitCode: 0, stdout: rest[1] === 'model' ? '"fixture-model"' : '[]' }
+    }
+    if (verb === 'config' && sub === 'set') {
+      if (failWrites) return { exitCode: 1 }
+      writes.push(args)
+      const [key, value] = rest as [string, string]
+      if (key === 'command_allowlist') state.allowlist = JSON.parse(value)
+      if (key === 'approvals.deny') state.approvals.deny = JSON.parse(value)
+      if (key === 'approvals.mode') state.approvals.mode = value
+      return { exitCode: 0 }
+    }
+    return { exitCode: 0, stdout: '' }
+  })
+  const live = new LivePort({
+    scoreHome: env.home,
+    hermesHome: extraHome,
+    db: env.db,
+    fetch: env.fake.fetch,
+    readCliVersion: async () => null,
+    runner,
+  })
+  await live.start(env.ingest)
+  await app.close()
+  await boot(live)
+
+  await call('PUT', '/api/settings/rules', {
+    mode: 'manual',
+    goAhead: ['SQL DROP'],
+    never: ['git push*'],
+  })
+  expect(config.builder).toEqual({
+    allowlist: ['mystery key', 'SQL DROP'],
+    approvals: { mode: 'manual', deny: ['git push*', 'foreign*'] },
+  })
+  await call('PATCH', '/api/agents/builder/permissions/SQL%20DROP', { level: 'asks' })
+  await call('PATCH', '/api/agents/builder/permissions/never%3Arm%20-rf%20%2Ftmp%2F*', {
+    level: 'never',
+  })
+  expect(config.builder).toEqual({
+    allowlist: ['mystery key'],
+    approvals: { mode: 'manual', deny: ['git push*', 'foreign*', 'rm -rf /tmp/*'] },
+  })
+
+  // A write Hermes refuses: 409, the override is kept, nothing is looser than before.
+  failWrites = true
+  const refused = await del('builder', 'SQL DROP')
+  expect(refused.statusCode).toBe(409)
+  failWrites = false
+  expect(config.builder!.allowlist).toEqual(['mystery key'])
+
+  writes.length = 0
+  expect((await del('builder', 'SQL DROP')).statusCode).toBe(200)
+  expect((await del('builder', 'never:rm -rf /tmp/*')).statusCode).toBe(200)
+  expect(config.builder).toEqual({
+    allowlist: ['mystery key', 'SQL DROP'],
+    approvals: { mode: 'manual', deny: ['git push*', 'foreign*'] },
+  })
+  // Exactly what the baseline-derived apply writes: nothing else is touched.
+  expect(writes).toContainEqual([
+    '-p',
+    'builder',
+    'config',
+    'set',
+    'command_allowlist',
+    '["mystery key","SQL DROP"]',
+  ])
+  expect(writes).toContainEqual([
+    '-p',
+    'builder',
+    'config',
+    'set',
+    'approvals.deny',
+    '["git push*","foreign*"]',
+  ])
+  for (const args of writes)
+    expect(['command_allowlist', 'approvals.deny', 'approvals.mode']).toContain(
+      args[args.indexOf('set') + 1],
+    )
+  expect((await rules()).drift.every((d) => !d.differs)).toBe(true)
 })

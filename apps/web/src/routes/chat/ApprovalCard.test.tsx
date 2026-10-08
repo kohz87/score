@@ -43,6 +43,8 @@ const base: Approval = {
   refs: [],
 }
 let current: Approval[]
+// Approvals beyond the list's first page: only reachable by id.
+let older: Approval[]
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>
 const cleanups: (() => void)[] = []
 
@@ -77,9 +79,22 @@ function emitApproval(approval: Approval, seq: number) {
 }
 beforeEach(() => {
   current = [base]
+  older = []
   fetchMock = vi.fn(async (input) => {
     if (String(input).startsWith('/api/approvals?'))
       return new Response(JSON.stringify({ asOfSeq: 1, items: current, nextCursor: null }))
+    const byId = /^\/api\/approvals\/([^/?]+)$/.exec(String(input))
+    if (byId) {
+      const found = older.find((item) => item.id === byId[1])
+      return found
+        ? new Response(JSON.stringify(found))
+        : new Response(
+            JSON.stringify({ error: { code: 'not_found', message: 'Unknown approval' } }),
+            {
+              status: 404,
+            },
+          )
+    }
     return new Response(JSON.stringify({ ...base, delivery: 'intent' }), { status: 202 })
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -242,6 +257,27 @@ test('non-actionable approvals explain where to answer', async () => {
 test('an unknown approval says so', async () => {
   renderCard('missing')
   await screen.findByText('This approval is no longer available.')
+})
+
+test('an approval outside the list is read by id and follows approval.updated', async () => {
+  older = [{ ...base, id: 'old1', title: 'May I delete the cache?' }]
+  renderCard('old1')
+  await screen.findByText('May I delete the cache?')
+  expect(screen.getByRole('button', { name: 'Approve' })).toBeDefined()
+  expect(fetchMock.mock.calls.some(([u]) => String(u) === '/api/approvals/old1')).toBe(true)
+  emitApproval(
+    {
+      ...base,
+      id: 'old1',
+      phase: 'decided',
+      status: 'approved',
+      actionable: false,
+      delivery: 'applied',
+      decision: { choice: 'once', by: 'you', at: base.createdAt },
+    },
+    2,
+  )
+  await screen.findByText('You approved')
 })
 
 test('outcome is null while an approval is open', () => {

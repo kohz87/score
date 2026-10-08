@@ -98,6 +98,37 @@ const cases = [
   ['RoutinesResponseSchema', { items: [f.routine] }, { items: [{}] }],
   ['RoutineDeletedSchema', { id: 'builder:j1' }, { id: '' }],
   ['RoutineRunSchema', { id: 'builder:j1', queued: true }, { id: 'builder:j1', queued: false }],
+  ['ReportRangeSchema', '7d', 'year'],
+  [
+    'ReportsSchema',
+    {
+      range: 'today',
+      summary: 'No tasks finished today.',
+      totals: {
+        tasksFinished: 0,
+        runs: 0,
+        firstPassRate: null,
+        medianTaskSec: null,
+        spendUsd: null,
+      },
+      byDay: [{ date: '2026-03-10', perAgent: { builder: 1 } }],
+      timeSplit: [
+        { agentId: 'builder', workingPct: 50, waitingOnYouPct: 50, waitingOnAgentPct: 0 },
+      ],
+      byAgent: [
+        {
+          agentId: 'builder',
+          finished: 1,
+          runs: 1,
+          medianSec: 60,
+          firstPassRate: null,
+          spendUsd: 0.1,
+        },
+      ],
+      approvals: { asked: 0, approved: 0, denied: 0, medianWaitSec: null, insight: null },
+    },
+    { range: 'today' },
+  ],
   ['AgentDetailSchema', f.agentDetail, { ...f.agentDetail, rulesFile: 'SOUL.md' }],
   ['RoutineSummarySchema', f.routine, { ...f.routine, lastRunAt: 'yesterday' }],
   ['RefSchema', f.refs[0], { kind: 'room', roomId: '' }],
@@ -194,6 +225,56 @@ const cases = [
     { mode: 'manual', goAhead: [], never: ['*'] },
   ],
   ['PatchPermissionRequestSchema', { level: 'asks' }, { level: 'sometimes' }],
+  [
+    'AgentPermissionsResponseSchema',
+    { items: [{ id: 'SQL DROP', label: 'SQL DROP', level: 'allowed', inherited: true }] },
+    { items: [{ id: 'SQL DROP', label: 'SQL DROP', level: 'maybe', inherited: true }] },
+  ],
+  ['SkillItemSchema', { name: 'git', enabled: true }, { name: '', enabled: true }],
+  [
+    'MemoryItemSchema',
+    { id: 'm-1', text: 'x', source: 'About you', at: '2026-10-01T10:00:00.000Z' },
+    { id: 'm-1', text: 'x', source: 'About you', at: 'yesterday' },
+  ],
+  [
+    'HubSkillSchema',
+    {
+      name: 'git',
+      identifier: 'official/git',
+      source: 'official',
+      trust: 'trusted',
+      description: '',
+    },
+    { name: 'git', identifier: '', source: 'official', trust: 'trusted', description: '' },
+  ],
+  [
+    'SkillsResponseSchema',
+    { items: [{ name: 'git', enabled: false }] },
+    { items: [{ name: 'git' }] },
+  ],
+  [
+    'SkillHubResponseSchema',
+    {
+      items: [
+        {
+          name: 'git',
+          identifier: 'official/git',
+          source: 'official',
+          trust: 'trusted',
+          description: '',
+        },
+      ],
+    },
+    { items: [{ name: 'git' }] },
+  ],
+  [
+    'MemoryPageSchema',
+    {
+      items: [{ id: 'm-1', text: 'x', source: 'About you', at: '2026-10-01T10:00:00.000Z' }],
+      nextCursor: null,
+    },
+    { items: [] },
+  ],
   ['ConfigKeySchema', 'agent.max_turns', 'agent..x'],
   [
     'ConfigItemSchema',

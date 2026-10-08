@@ -136,6 +136,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `task.activity` | `{ taskId, item: TaskActivity }` | task drawer, Flow inspector |
 | `lane.upserted` | `{ briefId \| null, agentId, block: LaneBlock }` | Now › Score, Chat plan card |
 | `handoff.created` | `{ briefId \| null, handoff: Handoff }` | Score connectors, Flow edges, live log |
+| `brief.upserted` | `BriefSummary` | Flow brief picker and header; refetch that brief's graph |
 | `run.updated` | `RunSummary` | Flow inspector, Watch header |
 | `gap.recorded` | `{ source: string; runId: string \| null; from: string; to: string \| null; reason: string }` | Watch, Flow log |
 | `log.line` | `LogLine` | Flow live log, Watch "What she's doing" |
@@ -191,7 +192,14 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   run: RunSummary | null; model: string | null; tools: string[]; watch: { agentId; thumbnail: string | null; front: string } | null }`
 - **S** `GET /api/briefs/:briefId/log?agent=&kind=tool|all&cursor=` → `{ items: LogLine[]; nextCursor }`
   `type LogLine = { id; at; agentId; kind: 'tool' | 'message' | 'handoff' | 'approval' | 'system'; text }`
-- `POST /api/briefs/:briefId/pause` / `/resume`, `POST /api/flow/nodes/:nodeId/stop` → `{ ok: true }`
+- **H** `POST /api/briefs/:briefId/pause` / `/resume` → `BriefSummary`. Pause holds Score's queue for the brief and blocks
+  its not-started tasks (`hermes kanban block`); running steps finish. Resume unblocks only what Score blocked.
+- **H** `POST /api/flow/nodes/:nodeId/stop` → `{ ok: true }`: stops that node's active run (409 when nothing is running).
+- **H** `POST /api/rooms/:roomId/messages/:messageId/plan/start` → `{ briefId; taskIds: string[] }`: creates one Kanban task
+  per plan step of that `plan` message (idempotent per message).
+- A brief is a human room message plus what it causes (`briefId` = that message id; turns, hand-offs, and tasks Score
+  created for it or their Kanban children). Node ids: `brief:<id>`, `task:<taskId>`, `turn:<messageId>`. Status is
+  derived (`paused` > `running` > `failed` > `done`). Links are exact only; see `docs/reviews/2026-10-08-3.4-briefs-design-lead.md`.
 
 ### Watch view (event replay)
 - **S** `GET /api/agents/:agentId/watch?from=<seq>&limit=` →
@@ -237,6 +245,8 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 ## 6. Approvals
 
 - **S** `GET /api/approvals?status=pending|all&agent=&cursor=` → `{ asOfSeq; items: Approval[]; nextCursor }`
+- **S** `GET /api/approvals/:approvalId` → `Approval` (`404 not_found`). Same view as a list item, for approvals beyond
+  the first page; the card reads it by id and then follows `approval.updated`.
 - **H** `POST /api/approvals/:approvalId/decision` `{ choice: ApprovalChoice; note?: string }` → `202 Approval`
   with `delivery: 'intent'|'delivering'`; the outcome arrives as `approval.updated`.
   `409 conflict` (current `Approval` in `details`) if already decided or `actionable: false`.
@@ -281,8 +291,11 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 - **H** `PUT /api/agents/:agentId/files/:file` `{ content; etag }` → `{ etag }` (409 `conflict` on etag mismatch, with
   `details: { etag /* current */; diff /* current → submitted */ }`)
 - `PUT /api/agents/:agentId/model` `{ model: string; provider?: string }` → `AgentDetail`
-- `GET /api/agents/:agentId/skills` · `POST …/skills` `{ name }` (install) · `PATCH …/skills/:name` `{ enabled }` · `GET /api/skills/hub?q=`
-- `GET /api/agents/:agentId/memory?q=&cursor=` · `POST …/memory` `{ text }` · `DELETE …/memory/:id`
+- `GET /api/agents/:agentId/skills` → `SkillsResponse` `{ items: AgentDetail['skills'] }` · `POST …/skills` `{ name }`
+  (install) → `SkillsResponse` · `PATCH …/skills/:name` `{ enabled }` → `AgentDetail['skills'][number]` ·
+  `GET /api/skills/hub?q=` → `SkillHubResponse` `{ items: { name; identifier; source; trust; description }[] }`
+- `GET /api/agents/:agentId/memory?q=&cursor=` → `MemoryPage` `{ items: AgentDetail['memory']; nextCursor: string | null }` ·
+  `POST …/memory` `{ text }` · `DELETE …/memory/:id`
 - `PATCH /api/agents/:agentId/tools/:toolId` `{ enabled }` → `AgentDetail['tools'][number]`
 - `GET /api/agents/:agentId/routines` → `{ items: RoutineSummary[] }` · `POST …/routines` `{ title; schedule; prompt }` →
   `RoutineSummary` · `PATCH /api/routines/:id` `{ enabled?; schedule?; prompt? }` → `RoutineSummary` ·
@@ -291,6 +304,11 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   private).
 - **H** `PATCH /api/agents/:agentId/permissions/:permId` `{ level }` → the permission row. Stricter only: take back a
   Go-ahead (`asks`) or add a Never (`permId = never:<glob>`, `level: never`); anything looser is `400 not_stricter`.
+- **H** `DELETE /api/agents/:agentId/permissions/:permId` → `{ items: AgentDetail['permissions'] }`. Removes this agent's
+  own override (a taken-back Go-ahead, or an agent-only Never `never:<glob>`) and re-applies the team baseline to the
+  profile through the verified write loop, so the agent is never looser than the team. A rule that belongs to the team
+  is `400 not_an_override`; an unknown override `404 not_found`; Hermes refusing the write `409 conflict` (the override
+  is kept).
 - `GET /api/agents/:agentId/history?cursor=` → `{ items: { sessionId; title; model; messages: number; tokens: number; costUsd: number | null; at: string; ref: Ref | null }[]; nextCursor }`
 
 ## 9. Reports
@@ -304,6 +322,13 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
     byAgent: { agentId; finished: number; runs: number; medianSec: number | null; firstPassRate: number | null /* null = n/a, reviews */; spendUsd: number | null }[]
     approvals: { asked: number; approved: number; denied: number; medianWaitSec: number | null; insight: string | null } }
   ```
+  Definitions (from Hermes Kanban history, read-only): a task is finished when `completed_at` falls in the range (day
+  buckets in the server's time zone); task time = created → completed; reviewed = had `review_requested`, first pass =
+  reviewed and never `changes_requested` (null when nothing was reviewed). Time split per agent (integer %, sum 100):
+  working = a run is active (guardian approval time included); waiting on you = open human approvals and `blocked`
+  intervals; waiting on another agent = waiting for dependencies (created → `promoted`) and in review
+  (`review_requested` → outcome), minus any overlap with working. Spend = Hermes session costs (actual, else estimated);
+  null when unknown.
 - `GET /api/reports/export.csv?range=` → `text/csv`
 
 ## 10. Settings
