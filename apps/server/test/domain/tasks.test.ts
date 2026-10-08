@@ -2,10 +2,15 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, beforeEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
-import { projectTask, readProjectedTask, summaryDetail } from '../../src/domain/tasks.ts'
+import {
+  projectedTasks,
+  projectTask,
+  readProjectedTask,
+  summaryDetail,
+} from '../../src/domain/tasks.ts'
 
 let home: string
 let db: ScoreDb
@@ -83,4 +88,19 @@ test('an invalid stream draft rolls back the task projection with its ingest key
   expect(
     db.sqlite.prepare("SELECT * FROM ingest_keys WHERE identity = 'bad'").get(),
   ).toBeUndefined()
+})
+
+test('listing tasks reads the pending approvals once, not once per task', async () => {
+  await ingest.submit({
+    source: 'test',
+    identity: 'many',
+    apply: ({ sqlite }) => {
+      for (let i = 0; i < 40; i += 1) projectTask(sqlite, { ...task, id: `task-${i}` })
+      return []
+    },
+  })
+  const prepare = vi.spyOn(db.sqlite, 'prepare')
+  expect(projectedTasks(db.sqlite)).toHaveLength(40)
+  const approvalReads = prepare.mock.calls.filter(([sql]) => /FROM approvals/.test(sql))
+  expect(approvalReads).toHaveLength(1)
 })
