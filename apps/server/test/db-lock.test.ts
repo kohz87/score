@@ -30,6 +30,7 @@ test('exclusive ownership writes a private lock, rejects a live owner, and relea
   expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
     pid: process.pid,
     startedAt: expect.any(String),
+    nonce: expect.any(String),
   })
   expect(statSync(path).mode & 0o777).toBe(0o600)
   expect(() => acquireHomeLock(home)).toThrow(
@@ -139,4 +140,25 @@ test('a live owner from this boot is still rejected', () => {
     isAlive: () => true,
   }
   expect(() => acquireHomeLock(home, env)).toThrow(`Another Score server (pid ${stalePid})`)
+})
+
+test('a recovery file replaced by another contender is never adopted as our lock', () => {
+  const recovery = join(home, 'score.lock.recovery')
+  writeFileSync(join(home, 'score.lock'), JSON.stringify({ pid: stalePid, startedAt }))
+  const other = JSON.stringify({ pid: stalePid - 1, startedAt, nonce: 'other' })
+  let swapped = false
+  // Contender B replaces our recovery file after we wrote it, before we rename it.
+  const env = {
+    now: () => Date.now(),
+    bootTime: () => 0,
+    isAlive: () => {
+      if (existsSync(recovery) && !swapped) {
+        swapped = true
+        writeFileSync(recovery, other)
+      }
+      return false
+    },
+  }
+  expect(() => acquireHomeLock(home, env)).toThrow('recovering')
+  expect(readFileSync(recovery, 'utf8')).toBe(other)
 })

@@ -1,9 +1,14 @@
+import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { uptime } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
 
-const LockSchema = z.object({ pid: z.int().positive(), startedAt: z.iso.datetime() })
+const LockSchema = z.object({
+  pid: z.int().positive(),
+  startedAt: z.iso.datetime(),
+  nonce: z.string().optional(),
+})
 type LockOwner = z.infer<typeof LockSchema>
 
 // An unreadable lock younger than this is assumed to be mid-write by a starting server.
@@ -75,8 +80,22 @@ export function acquireHomeLock(
   mkdirSync(home, { recursive: true, mode: 0o700 })
   const path = join(home, 'score.lock')
   const recovery = join(home, 'score.lock.recovery')
-  const owner = { pid: process.pid, startedAt: new Date(env.now()).toISOString() }
+  const owner = {
+    pid: process.pid,
+    startedAt: new Date(env.now()).toISOString(),
+    nonce: randomUUID(),
+  }
   const content = JSON.stringify(owner)
+
+  const recoveryRaced = `Another Score server is recovering ${home}; retry in a few seconds`
+
+  function removeOwnRecovery(): void {
+    try {
+      if (readFileSync(recovery, 'utf8') === content) unlinkSync(recovery)
+    } catch (error) {
+      if (!hasCode(error, 'ENOENT')) throw error
+    }
+  }
 
   function rejectLive(state: LockState): void {
     if (state.kind === 'live') {
@@ -98,10 +117,15 @@ export function acquireHomeLock(
     let renamed = false
     try {
       rejectLive(inspect(path, env))
+      // Another contender may have deleted our recovery file as stale and written its own; only
+      // a file that is still ours may become the lock, and we confirm that once it has.
+      if (readFileSync(recovery, 'utf8') !== content)
+        throw new Error(recoveryRaced, { cause: error })
       renameSync(recovery, path)
       renamed = true
+      if (readFileSync(path, 'utf8') !== content) throw new Error(recoveryRaced, { cause: error })
     } finally {
-      if (!renamed) removeIfPresent(recovery)
+      if (!renamed) removeOwnRecovery()
     }
   }
 
@@ -112,7 +136,7 @@ export function acquireHomeLock(
       released = true
       try {
         const stored = LockSchema.parse(JSON.parse(readFileSync(path, 'utf8')))
-        if (stored.pid === owner.pid && stored.startedAt === owner.startedAt) unlinkSync(path)
+        if (stored.nonce === owner.nonce && stored.startedAt === owner.startedAt) unlinkSync(path)
       } catch (error) {
         if (
           !hasCode(error, 'ENOENT') &&

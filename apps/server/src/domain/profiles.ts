@@ -465,6 +465,8 @@ export class ProfileOperations {
               'Work appeared after admissions were frozen. Finish it before the next step.',
             )
         }
+        if (operation.kind === 'create' && step.name === 'verify_ready')
+          await this.rebaseline(operation, stored, identity)
         step.state = 'running'
         operation.updatedAt = new Date(this.clock()).toISOString()
         await this.save(operation)
@@ -492,6 +494,7 @@ export class ProfileOperations {
         )
         if (inventory.identity !== identity)
           throw new HttpError(409, 'conflict', 'Profile identity changed before activation')
+        await this.rebaseline(operation, stored, identity)
         if (JSON.stringify(readBaseline(this.db.sqlite)) !== JSON.stringify(stored.baseline))
           throw new HttpError(
             409,
@@ -533,6 +536,38 @@ export class ProfileOperations {
       operation.updatedAt = new Date(this.clock()).toISOString()
       await this.save(operation, identity)
     }
+  }
+  /**
+   * Team rules changed while the agent was being set up: apply the current rules to it and remember them as the
+   * operation's baseline, so readiness is judged against the rules the agent actually has.
+   */
+  private async rebaseline(
+    operation: AgentOperation,
+    stored: z.infer<typeof StoredRequest>,
+    identity: string | null,
+  ) {
+    const current = readBaseline(this.db.sqlite)
+    if (JSON.stringify(current) === JSON.stringify(stored.baseline)) return
+    await this.port.profileStep('permissions', {
+      operationId: operation.id,
+      targetName: operation.targetName,
+      targetIdentity: identity,
+      createdAt: operation.createdAt,
+      input: stored.input,
+      baseline: current,
+      exportPath: operation.exportPath,
+    })
+    stored.baseline = current
+    await this.ingest.submit({
+      source: 'profile-operations',
+      identity: randomUUID(),
+      apply: ({ sqlite }) => {
+        sqlite
+          .prepare('UPDATE profile_operations SET request = ? WHERE id = ?')
+          .run(JSON.stringify(stored), operation.id)
+        return []
+      },
+    })
   }
   private async retire(operation: AgentOperation) {
     await this.ingest.submit({

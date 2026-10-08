@@ -60,6 +60,7 @@ vi.mock('../src/db/index.ts', () => ({
   migrate: mocks.migrate,
   acquireHomeLock: mocks.acquireHomeLock,
   getEpoch: mocks.getEpoch,
+  resetEpoch: vi.fn(),
 }))
 vi.mock('../src/hub/ingest.ts', () => ({ createIngest: mocks.createIngest }))
 vi.mock('../src/hermes/index.ts', () => ({

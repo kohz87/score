@@ -73,7 +73,11 @@ export function registerWatchRoutes(
   app.get('/api/agents/:agentId/watch', async (request) => {
     const { agentId } = ParamsSchema.parse(request.params)
     const query = QuerySchema.parse(request.query)
-    if (!(await agentIds()).includes(agentId))
+    // A deleted agent leaves the Hermes roster but its retained frames stay readable while Score still lists it.
+    const retained = db.sqlite
+      .prepare('SELECT 1 FROM agent_lifecycle WHERE agent_id = ?')
+      .get(agentId)
+    if (!(await agentIds()).includes(agentId) && !retained)
       throw new HttpError(404, 'not_found', 'Agent not found')
     const result = snapshot(db, (sqlite) => {
       const agent = readAgent(sqlite, agentId)

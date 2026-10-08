@@ -28,6 +28,8 @@ export const INTERNAL_OBSERVATION_SOURCES = [
   'fake',
 ] as const
 
+const IDLE_SCOPE_MS = 30 * 24 * 60 * 60 * 1000
+
 const OptionsSchema = z.object({
   keepPositions: z.int().nonnegative(),
   batchSize: z.int().positive(),
@@ -37,6 +39,7 @@ const CheckpointRowSchema = z.object({
   scope: z.string().min(1),
   cursor: z.string().regex(/^\d+$/).transform(Number).pipe(z.int().nonnegative()),
   incarnation: z.string().nullable(),
+  updated_at: z.string(),
   floor: z.int().nonnegative().nullable(),
 })
 
@@ -72,7 +75,7 @@ export function retireIngestKeys(
   const checkpoints = z.array(CheckpointRowSchema).parse(
     db.sqlite
       .prepare(
-        `SELECT c.source, c.scope, c.cursor, c.incarnation, f.floor
+        `SELECT c.source, c.scope, c.cursor, c.incarnation, c.updated_at, f.floor
          FROM ingest_checkpoints c LEFT JOIN ingest_floors f
            ON f.source = c.source AND f.scope = c.scope
            AND f.incarnation = COALESCE(c.incarnation, '')
@@ -98,7 +101,9 @@ export function retireIngestKeys(
   // Gap scopes are temporary coverage ranges, not key streams; a floor would outlive their consumption.
   let floors = 0
   for (const checkpoint of checkpoints) {
-    let target = checkpoint.cursor - options.keepPositions
+    // A scope untouched this long has finished: nothing will be redelivered, and the floor still rejects it if so.
+    const idle = Date.parse(checkpoint.updated_at) <= now - IDLE_SCOPE_MS
+    let target = checkpoint.cursor - (idle ? 0 : options.keepPositions)
     for (const position of heldIngestPositions(db, checkpoint.source, checkpoint.scope)) {
       target = Math.min(target, position - 1)
     }

@@ -148,6 +148,30 @@ test('playing a replay steps forward and lands back on live', async () => {
   expect(screen.getByText("You're watching. builder is in control.")).toBeTruthy()
 })
 
+test('a frozen replay stays on its moment when a live event shifts the marker list', async () => {
+  setup()
+  await screen.findByRole('heading', { name: 'Watching builder' })
+  const track = screen.getByRole('group', { name: 'Replay timeline' })
+  fireEvent.click(within(track).getAllByRole('button')[1]!)
+  expect(screen.getByRole('group', { name: 'Editor' }).getAttribute('data-front')).toBe('true')
+  // A question asked just after the first frame lands before the selected marker and shifts every later index.
+  const first = watchFixture.frames[0]!
+  emit(
+    {
+      type: 'approval.requested',
+      data: {
+        ...watchApprovalFixture,
+        id: 'early-question',
+        createdAt: new Date(Date.parse(first.at) + 1000).toISOString(),
+      },
+    } as StreamEvent,
+    5,
+  )
+  expect(within(track).getAllByRole('button')).toHaveLength(watchFixture.markers.length + 1)
+  expect(screen.getByRole('status', { name: '' }).textContent).toMatch(/^Replaying/)
+  expect(screen.getByRole('group', { name: 'Editor' }).getAttribute('data-front')).toBe('true')
+})
+
 test('a live frame with a known seq updates in place and a new one extends the stage and the timeline', async () => {
   setup()
   await screen.findByRole('heading', { name: 'Watching builder' })

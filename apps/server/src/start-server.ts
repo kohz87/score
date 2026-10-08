@@ -17,10 +17,18 @@ import {
   sweepKanbanDenials,
   type HermesPort,
 } from './hermes/index.ts'
-import { acquireHomeLock, getEpoch, migrate, openDatabase, type ScoreDb } from './db/index.ts'
+import {
+  acquireHomeLock,
+  getEpoch,
+  migrate,
+  resetEpoch,
+  openDatabase,
+  type ScoreDb,
+} from './db/index.ts'
 import { deriveBriefEvents } from './domain/briefs.ts'
 import { deriveTaskEvents } from './domain/tasks.ts'
 import { createIngest, type Ingest } from './hub/ingest.ts'
+import { rotateLog } from './log-rotation.ts'
 import { pruneEvents } from './hub/retention.ts'
 import { MediaStore } from './media/store.ts'
 import { retireIngestKeys, retireMedia } from './hub/retire.ts'
@@ -58,11 +66,13 @@ export async function startServer(
   let denialSweep: Promise<void> | undefined
   let deliverySweep: NodeJS.Timeout | undefined
   let retention: NodeJS.Timeout | undefined
+  let logRotation: NodeJS.Timeout | undefined
   let port: HermesPort | undefined
   let closing: Promise<void> | undefined
 
   async function closeResources(): Promise<void> {
     clearInterval(retention)
+    clearInterval(logRotation)
     clearInterval(deliverySweep)
     try {
       try {
@@ -105,6 +115,9 @@ export async function startServer(
     homeLock = acquireHomeLock(config.home)
     db = openDatabase(join(config.home, 'score.db'))
     migrate(db, fileURLToPath(new URL('../migrations/', import.meta.url)))
+    // A new epoch per start: a database restored from a backup may have caught up past a browser's cursor,
+    // and only a changed epoch tells that browser its projections came from discarded history.
+    resetEpoch(db)
     const database = db
     ingest = createIngest(database, {
       deriveEvents: (sqlite, drafts, context) => [
@@ -223,6 +236,18 @@ export async function startServer(
       60 * 60 * 1000,
     )
     retention.unref()
+    // The launcher names the file its output goes to; without it (tests, dev) nothing is rotated.
+    const logFile = process.env.SCORE_LOG_FILE
+    if (logFile) {
+      logRotation = setInterval(() => {
+        try {
+          rotateLog(logFile)
+        } catch (error) {
+          app?.log.error({ err: error }, 'Log rotation failed')
+        }
+      }, 60_000)
+      logRotation.unref()
+    }
     return { app, bridgeApp, pairingToken: token, ingest, db: database, close }
   } catch (error) {
     try {

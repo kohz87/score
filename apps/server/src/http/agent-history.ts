@@ -73,7 +73,11 @@ export function registerAgentHistoryRoutes(
     const query = QuerySchema.parse(request.query)
     // The summary list, not listAgentDetails: the tab refetches every 10 s and details spawn Hermes processes.
     const known = z.array(AgentSummarySchema).parse(await port.listAgents())
-    if (!known.some((agent) => agent.id === agentId))
+    // A deleted agent leaves the Hermes roster but its retained runs stay readable while Score still lists it.
+    const retained = db.sqlite
+      .prepare('SELECT 1 FROM agent_lifecycle WHERE agent_id = ?')
+      .get(agentId)
+    if (!retained && !known.some((agent) => agent.id === agentId))
       throw new HttpError(404, 'not_found', 'Agent not found')
     const filters: string[] = []
     const args: (string | number)[] = [agentId]

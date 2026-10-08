@@ -6,6 +6,7 @@ import { loadConfig } from '../../src/config.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { requestRunApproval } from '../../src/domain/approvals.ts'
 import { ProfileOperations } from '../../src/domain/profiles.ts'
+import { writeBaseline } from '../../src/domain/team-rules.ts'
 import { setup } from '../hermes/live/gateway/helpers.ts'
 
 let env: ReturnType<typeof setup>
@@ -208,6 +209,9 @@ test('delete requires typed name and a current preview, exports first, retires m
     lifecycle: { state: 'removed' },
     activity: 'Removed',
   })
+  // Retained History and Watch stay reachable once the agent has left the Hermes roster.
+  expect((await app.inject('/api/agents/helper/history')).statusCode).toBe(200)
+  expect((await app.inject('/api/agents/helper/watch')).statusCode).toBe(200)
   const retainedRoom = (await app.inject(`/api/rooms/${room.json().id}`)).json().room
   expect(retainedRoom).toMatchObject({ members: ['builder'], leadAgentId: null })
   expect(
@@ -341,6 +345,26 @@ test('a delayed readiness handshake converges through status reads without repea
     timeout: 5000,
   })
   expect(spy.mock.calls.every(([step]) => step === 'verify_ready')).toBe(true)
+})
+test('team rules changed during provisioning are applied to the new agent instead of stranding it', async () => {
+  const real = port.profileStep.bind(port)
+  let changed = false
+  const spy = vi.spyOn(port, 'profileStep').mockImplementation(async (step, context) => {
+    if (step === 'permissions' && !changed) {
+      changed = true
+      writeBaseline(
+        env.db.sqlite,
+        { mode: 'manual', goAhead: [], never: [] },
+        new Date().toISOString(),
+      )
+    }
+    return real(step, context)
+  })
+  const added = await create()
+  expect((await finished(added.id)).state).toBe('completed')
+  const permissionCalls = spy.mock.calls.filter(([step]) => step === 'permissions')
+  expect(permissionCalls).toHaveLength(2)
+  expect(permissionCalls[1]![1].baseline.mode).toBe('manual')
 })
 test('concurrent create requests hold one durable lock per target', async () => {
   const preview = (await mutate('/api/agents/preview', { kind: 'create', ...input })).json()

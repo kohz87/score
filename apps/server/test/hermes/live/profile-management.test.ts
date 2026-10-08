@@ -14,6 +14,18 @@ import { runHermes, type CliOptions, type HermesRunner } from '../../../src/herm
 import type { ProfileStepContext } from '../../../src/hermes/profile-management.ts'
 import { setup } from './gateway/helpers.ts'
 
+const synced: string[] = []
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  return {
+    ...actual,
+    fsyncSync(fd: number) {
+      synced.push(actual.readlinkSync(`/proc/self/fd/${fd}`))
+      return actual.fsyncSync(fd)
+    },
+  }
+})
+let partialDelete = false
 let env: ReturnType<typeof setup>
 let upstream: string
 let adapter: LiveProfileManagement
@@ -153,7 +165,10 @@ beforeEach(() => {
       )
     }
     if (verb === 'profile export') writeFileSync(args.at(-1)!, archive('helper'), { mode: 0o600 })
-    if (verb === 'profile delete') rmSync(home, { recursive: true })
+    if (verb === 'profile delete') {
+      rmSync(home, { recursive: true })
+      if (partialDelete) return { exitCode: 1 }
+    }
     return { exitCode: 0 }
   }
   const profiles = new ProfilesReader(upstream, runner)
@@ -307,6 +322,24 @@ test('delete verifies private export before exact delete and purge argv', async 
     ['-p', 'default', 'profile', 'delete', '-y', 'helper'],
     ['-p', 'default', 'profile', 'purge-identity', 'helper'],
   ])
+})
+test('the backup and its directory are synced before the profile is deleted', async () => {
+  await step('create_profile')
+  context.exportPath = adapter.profileExportPath('helper', 'fixture')
+  synced.length = 0
+  await step('export')
+  expect(synced).toContain(context.exportPath)
+  expect(synced).toContain(join(env.home, 'profile-backups'))
+})
+test('a delete that removed the profile but failed identity settlement still advances', async () => {
+  await step('create_profile')
+  context.exportPath = adapter.profileExportPath('helper', 'fixture')
+  await step('export')
+  partialDelete = true
+  await step('delete_profile')
+  partialDelete = false
+  await step('purge_identity')
+  expect(calls.at(-1)).toEqual(['-p', 'default', 'profile', 'purge-identity', 'helper'])
 })
 test('corrupt export and replaced profile identity stop deletion', async () => {
   await step('create_profile')
