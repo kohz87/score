@@ -7,8 +7,16 @@ import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { HttpError } from '../../errors.ts'
 import {
+  projectedTasks,
+  readProjectedTask,
+  taskWithApproval,
+  taskSummary,
+} from '../../domain/tasks.ts'
+import {
   ApprovalDeliveryError,
   DecisionDeliveryRequestSchema,
+  TaskFilterSchema,
+  matchesTask,
   type HermesPort,
   type HermesPortDeps,
   type ObservationSink,
@@ -28,6 +36,8 @@ import { RunIntents } from './intents.ts'
 import { ProfileNameSchema, resolveHermesHome } from './paths.ts'
 import { followRun, waitForRun, type FollowOptions } from './runs.ts'
 import { taskAction, taskReader } from './task-actions.ts'
+import { LiveTasks } from './tasks.ts'
+import { createTask, patchTask } from './task-writes.ts'
 import type { HermesRunner } from './cli.ts'
 import { readRun, RunRowSchema, runLifecycle, type RunMetrics } from './translate.ts'
 
@@ -52,6 +62,8 @@ export class LivePort implements HermesPort {
   private sink: ObservationSink | undefined
   private controller: AbortController | undefined
   private timer: NodeJS.Timeout | undefined
+  private taskTimer: NodeJS.Timeout | undefined
+  private tasks: LiveTasks | undefined
   private refresh: Promise<void> | undefined
   private fingerprint: Fingerprint | undefined
   private fingerprintAt = -Infinity
@@ -91,6 +103,12 @@ export class LivePort implements HermesPort {
       })
       this.controller = new AbortController()
       this.sink = sink
+      this.tasks = new LiveTasks(this.db, sink, this.options.hermesHome)
+      await this.tasks.poll().catch((error: unknown) => this.options.onError?.(error))
+      this.taskTimer = setInterval(() => {
+        void this.tasks?.poll().catch((error: unknown) => this.options.onError?.(error))
+      }, 1000)
+      this.taskTimer.unref()
       this.intents = new RunIntents({ db: this.db, gateway: this.gateway, sink })
       await this.refreshStatus()
       await this.intents.recoverIntents()
@@ -115,7 +133,10 @@ export class LivePort implements HermesPort {
   }
   async stop(): Promise<void> {
     clearInterval(this.timer)
+    clearInterval(this.taskTimer)
     this.controller?.abort()
+    await this.tasks?.close()
+    this.tasks = undefined
     await this.intents?.drain()
     await Promise.allSettled([...this.followers.values()])
     await this.refresh
@@ -329,7 +350,7 @@ export class LivePort implements HermesPort {
     req: Parameters<HermesPort['taskAction']>[0],
   ): Promise<{ hermesStatus: string }> {
     const { gateway } = this.requireStarted()
-    return taskAction(req, {
+    const result = await taskAction(req, {
       readTask: taskReader(this.options.hermesHome),
       withoutCredential: (profile, text) => {
         try {
@@ -342,6 +363,50 @@ export class LivePort implements HermesPort {
       ...(this.options.runner ? { runner: this.options.runner } : {}),
       ...(this.options.hermesHome ? { hermesHome: this.options.hermesHome } : {}),
     })
+    await this.refreshTasks()
+    return result
+  }
+  async listTasks(filter: Parameters<HermesPort['listTasks']>[0] = {}) {
+    const { db } = this.requireStarted()
+    const parsed = TaskFilterSchema.parse(filter)
+    await this.refreshTasks()
+    return db.read((sqlite) =>
+      projectedTasks(sqlite)
+        .filter((task) => matchesTask(task, parsed))
+        .map(taskSummary),
+    )
+  }
+  async getTask(id: string) {
+    const { db } = this.requireStarted()
+    z.string().min(1).max(256).parse(id)
+    await this.refreshTasks()
+    return db.read((sqlite) => {
+      const task = readProjectedTask(sqlite, id)
+      if (!task) throw new HttpError(404, 'not_found', 'Unknown task')
+      return taskWithApproval(sqlite, task)
+    })
+  }
+  async createTask(req: Parameters<HermesPort['createTask']>[0], key: string) {
+    const { db } = this.requireStarted()
+    return createTask(req, key, { db, ...this.writeDeps() })
+  }
+  async patchTask(id: string, req: Parameters<HermesPort['patchTask']>[1]) {
+    this.requireStarted()
+    return patchTask(id, req, this.writeDeps())
+  }
+  private writeDeps() {
+    return {
+      getTask: (id: string) => this.getTask(id),
+      ...(this.options.runner ? { runner: this.options.runner } : {}),
+      ...(this.options.hermesHome ? { hermesHome: this.options.hermesHome } : {}),
+    }
+  }
+  private async refreshTasks(): Promise<void> {
+    try {
+      await this.tasks!.poll()
+    } catch {
+      throw new HttpError(502, 'hermes_unavailable', 'Task data unavailable')
+    }
   }
   async deliverDecision(
     req: Parameters<HermesPort['deliverDecision']>[0],

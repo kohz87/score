@@ -122,7 +122,9 @@ test('startup opens and migrates the configured database before building and lis
     fileURLToPath(new URL('../migrations/', import.meta.url)),
   )
   expect(mocks.storeConstructor).toHaveBeenCalledExactlyOnceWith(mocks.db)
-  expect(mocks.createIngest).toHaveBeenCalledExactlyOnceWith(mocks.db)
+  expect(mocks.createIngest).toHaveBeenCalledExactlyOnceWith(mocks.db, {
+    deriveEvents: expect.any(Function),
+  })
   expect(mocks.buildApp).toHaveBeenCalledWith({
     config: expect.objectContaining({ home: '/tmp/score-test-startup' }),
     port: mocks.port,

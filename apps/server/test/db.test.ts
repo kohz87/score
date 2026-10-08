@@ -94,6 +94,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'schema_migrations',
     'session_tool_calls',
     'sessions',
+    'task_projections',
     'tool_calls',
   ])
   expect(
@@ -436,4 +437,13 @@ test('gate #4 migration bounds legacy uncertain admissions by creation time; rec
   expect(() => insert.run('invalid', 'not JSON', at)).toThrow()
   expect(() => insert.run('oversized', JSON.stringify('x'.repeat(65536)), at)).toThrow()
   expect(() => insert.run('bounded', JSON.stringify('x'.repeat(65534)), at)).not.toThrow()
+  for (const name of ['0008_rooms.sql', '0009_agent_styles.sql', '0010_tasks.sql'])
+    cpSync(join(migrationDir, name), join(copy, name))
+  migrate(db, copy)
+  expect(
+    db.sqlite.prepare("SELECT status, response FROM request_receipts WHERE key = 'bounded'").get(),
+  ).toEqual({ status: 200, response: JSON.stringify('x'.repeat(65534)) })
+  expect(() =>
+    insert.run('oversized-after-upgrade', JSON.stringify('x'.repeat(65536)), at),
+  ).toThrow()
 })

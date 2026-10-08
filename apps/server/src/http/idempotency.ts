@@ -11,6 +11,10 @@ const ReceiptSchema = z.object({
   response: z.string().nullable(),
 })
 const CompressedReceiptSchema = z.object({ scoreReceiptGzip: z.string() }).strict()
+// Mirrors the request_receipts CHECK (migration 0010): task details may be larger than other responses.
+function storageLimit(route: string): number {
+  return route === '/api/tasks' || route.startsWith('/api/tasks/') ? 524288 : 65536
+}
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
   if (value !== null && typeof value === 'object')
@@ -105,10 +109,10 @@ export function requestIdempotency(
         JSON.parse(response)
         // Keep the DB's 64 KB cap while preserving larger, bounded JSON responses exactly.
         const stored =
-          Buffer.byteLength(response) <= 65536
+          Buffer.byteLength(response) <= storageLimit(owner.route)
             ? response
             : JSON.stringify({ scoreReceiptGzip: gzipSync(response).toString('base64') })
-        if (Buffer.byteLength(stored) > 65536)
+        if (Buffer.byteLength(stored) > storageLimit(owner.route))
           throw new Error('Compressed idempotency response exceeds 64 KB')
         db.sqlite
           .prepare(

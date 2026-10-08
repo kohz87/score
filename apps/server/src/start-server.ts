@@ -14,6 +14,7 @@ import {
   type HermesPort,
 } from './hermes/index.ts'
 import { acquireHomeLock, getEpoch, migrate, openDatabase, type ScoreDb } from './db/index.ts'
+import { deriveTaskEvents } from './domain/tasks.ts'
 import { createIngest, type Ingest } from './hub/ingest.ts'
 import { pruneEvents } from './hub/retention.ts'
 import { retireIngestKeys } from './hub/retire.ts'
@@ -76,7 +77,7 @@ export async function startServer(config: Config, { logger, listen }: StartServe
     db = openDatabase(join(config.home, 'score.db'))
     migrate(db, fileURLToPath(new URL('../migrations/', import.meta.url)))
     const database = db
-    ingest = createIngest(database)
+    ingest = createIngest(database, { deriveEvents: deriveTaskEvents })
     port = createHermesPort(config, {
       db: database,
       onError: (error) => app?.log.error({ err: error }, 'Hermes observation failed'),

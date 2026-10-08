@@ -109,9 +109,17 @@ function logListenerError(error: unknown): void {
   console.error('Ingest committed listener failed', error)
 }
 
+// Derived events computed in the same transaction as an observation's own drafts (e.g. a task card whose
+// "needs you" state follows an approval). Keeps this hub free of domain imports.
+export type DeriveEvents = (
+  sqlite: DatabaseSync,
+  drafts: DomainEventDraft[],
+  context: { source: string; now: string },
+) => DomainEventDraft[]
+
 export function createIngest(
   db: ScoreDb,
-  { clock = Date.now }: { clock?: () => number } = {},
+  { clock = Date.now, deriveEvents }: { clock?: () => number; deriveEvents?: DeriveEvents } = {},
 ): Ingest {
   if (owners.has(db)) throw new Error('This ScoreDb already has an open ingest')
   let tail: Promise<void> = Promise.resolve()
@@ -216,7 +224,17 @@ export function createIngest(
           throw new Error('Observation apply must return an array of drafts')
         const events: StreamEvent[] = []
         const append = sqlite.prepare('INSERT INTO events (ts, type, data) VALUES (?, ?, ?)')
-        for (const draft of drafts as DomainEventDraft[]) {
+        const normalizedDrafts = (drafts as DomainEventDraft[]).map((draft) => {
+          const event = StreamEventSchema.parse({
+            seq: 1,
+            ts: now,
+            type: draft.type,
+            data: draft.data,
+          })
+          return { type: event.type, data: event.data } as DomainEventDraft
+        })
+        const derived = deriveEvents?.(sqlite, normalizedDrafts, { source: obs.source, now }) ?? []
+        for (const draft of [...normalizedDrafts, ...derived]) {
           // Normalize before storage so replay and live subscribers receive the same payload.
           const parsed = StreamEventSchema.parse({
             seq: 1,

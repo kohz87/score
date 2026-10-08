@@ -42,6 +42,12 @@ test.each([
   ['unblock', undefined, ['kanban', 'unblock', '--reason=Unblocked in Score', '--', 't_test']],
   // User text that looks like an option stays data.
   ['unblock', '--help -p other', ['kanban', 'unblock', '--reason=--help -p other', '--', 't_test']],
+  ['start', '--help', ['kanban', 'promote', '--', 't_test', '--help']],
+  ['block', '--help', ['kanban', 'block', '--', 't_test', '--help']],
+  ['request_review', '--help', ['kanban', 'request-review', '--summary=--help', '--', 't_test']],
+  ['request_changes', '--help', ['kanban', 'request-changes', '--', 't_test', '--help']],
+  ['complete', '--help', ['kanban', 'complete', '--result=--help', '--', 't_test']],
+  ['archive', '--help', ['kanban', 'archive', '--', 't_test']],
 ] as const)('runs exact %s argv and rereads status', async (action, text, argv) => {
   const { db, deps, runner } = setup()
   runner.mockImplementation(async () => {
@@ -94,12 +100,12 @@ test.each(['ready', 'running', 'triage', 'archived'])(
 )
 
 test.each(['comment', 'unblock'] as const)(
-  'nonzero %s without transition is 502',
+  'nonzero %s without transition is 409',
   async (action) => {
     const { deps, runner } = setup()
     runner.mockResolvedValue({ exitCode: 1 })
     await expect(
       taskAction({ taskId: 't_test', action, text: 'note' }, deps),
-    ).rejects.toMatchObject({ status: 502, code: 'hermes_unavailable' })
+    ).rejects.toMatchObject({ status: 409, code: 'conflict' })
   },
 )

@@ -6,6 +6,8 @@ export interface CliOptions {
   timeoutMs: number
   hermesHome?: string
   captureModel?: boolean
+  // `kanban create --json …`: the only write whose output is read (the new task id).
+  captureTaskCreate?: boolean
   execute?: (
     file: string,
     args: string[],
@@ -35,24 +37,29 @@ export const runHermes: HermesRunner = async (args, options) => {
   ) {
     throw new Error('CLI stdout capture is restricted to model reads')
   }
+  if (options.captureTaskCreate && argv.slice(0, 3).join(' ') !== 'kanban create --json')
+    throw new Error('CLI stdout capture is restricted to task creation')
+  const capture = options.captureModel || options.captureTaskCreate
+  // The create echo includes the task body; the model value is tiny.
+  const captureLimit = options.captureTaskCreate ? 512 * 1024 : 16 * 1024
   const timeout = z.int().positive().parse(options.timeoutMs)
   const env: NodeJS.ProcessEnv = { HERMES_HOME: resolveHermesHome(options.hermesHome) }
   for (const name of ['PATH', 'HOME', 'LANG', 'LC_ALL', 'TMPDIR']) {
     if (process.env[name] !== undefined) env[name] = process.env[name]
   }
   return new Promise((resolve) => {
-    // Only the allowlisted model read may return stdout; errors and stderr stay private.
+    // Only the allowlisted model read and task creation may return stdout; errors and stderr stay private.
     try {
       ;(options.execute ?? execFile)(
         'hermes',
         argv,
-        { timeout, env, maxBuffer: 16 * 1024 },
+        { timeout, env, maxBuffer: captureLimit },
         (error, stdout) => {
           const exitCode = error ? (typeof error.code === 'number' ? error.code : -1) : 0
           const output = stdout?.toString() ?? ''
           resolve({
             exitCode,
-            ...(options.captureModel && exitCode === 0 && Buffer.byteLength(output) <= 16 * 1024
+            ...(capture && exitCode === 0 && Buffer.byteLength(output) <= captureLimit
               ? { stdout: output }
               : {}),
           })

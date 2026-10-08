@@ -26,3 +26,10 @@ export function createHermesPort(
 }
 
 export { ApprovalDeliveryError } from './port.ts'
+export {
+  CreateTaskSchema,
+  PatchTaskSchema,
+  TaskFilterSchema,
+  TaskActionRequestSchema,
+  matchesTask,
+} from './port.ts'

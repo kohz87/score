@@ -31,32 +31,35 @@ function send(payload: unknown, headers = { 'x-score-client': 'web', cookie }) {
   })
 }
 
-test.each(['comment', 'unblock'] as const)(
-  'human %s reaches port and returns task status',
-  async (choice) => {
-    const response = await send({ action: choice, text: 'human note' })
-    expect(response.statusCode).toBe(200)
-    expect(response.json()).toEqual({ taskId: 't_test', action: choice, hermesStatus: 'blocked' })
-    expect(action).toHaveBeenCalledExactlyOnceWith({
-      taskId: 't_test',
-      action: choice,
-      text: 'human note',
-    })
-  },
-)
+test.each([
+  'comment',
+  'unblock',
+  'start',
+  'block',
+  'request_review',
+  'request_changes',
+  'complete',
+  'archive',
+] as const)('human %s reaches port and returns task status', async (choice) => {
+  const response = await send({ action: choice, text: 'human note' })
+  expect(response.statusCode).toBe(200)
+  expect(response.json()).toEqual({ taskId: 't_test', action: choice, hermesStatus: 'blocked' })
+  expect(action).toHaveBeenCalledExactlyOnceWith({
+    taskId: 't_test',
+    action: choice,
+    text: 'human note',
+  })
+})
 test('unblock note is optional', async () => {
   expect((await send({ action: 'unblock' })).statusCode).toBe(200)
   expect(action).toHaveBeenCalledWith({ taskId: 't_test', action: 'unblock' })
 })
-test.each(['start', 'block', 'request_review', 'request_changes', 'complete', 'archive', 'grant'])(
-  'unimplemented action %s is 501',
-  async (choice) => {
-    const response = await send({ action: choice })
-    expect(response.statusCode).toBe(501)
-    expect(response.json().error.code).toBe('not_implemented')
-    expect(action).not.toHaveBeenCalled()
-  },
-)
+test.each(['grant', 'unknown'])('unimplemented action %s is 501', async (choice) => {
+  const response = await send({ action: choice })
+  expect(response.statusCode).toBe(501)
+  expect(response.json().error.code).toBe('not_implemented')
+  expect(action).not.toHaveBeenCalled()
+})
 test.each([
   { action: 'comment' },
   { action: 'comment', text: '' },
