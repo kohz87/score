@@ -1,6 +1,8 @@
 import { redirect, RouterProvider } from 'react-router'
 import type { DataRouter, RouteObject } from 'react-router'
 import { PairPage, pairBrowser } from './routes/pair/PairPage.tsx'
+import { AgentPage } from './routes/team/AgentPage.tsx'
+import { TeamLayout, TeamPage } from './routes/team/TeamPage.tsx'
 import { TasksPage } from './routes/tasks/TasksPage.tsx'
 import { AppShell } from './shell/AppShell.tsx'
 import { destinations } from './shell/destinations.ts'
@@ -26,6 +28,15 @@ export const appRoutes: RouteObject[] = [
               { path: ':taskId', element: <></> },
             ],
           }
+        if (path === '/team')
+          return {
+            path,
+            Component: TeamLayout,
+            children: [
+              { index: true, Component: TeamPage },
+              { path: ':agentId', Component: AgentPage },
+            ],
+          }
         // Built destinations render their page; the rest stay stubs until their tasks land.
         const page = path === '/chat' ? <ChatPage /> : <StubPage title={title} />
         return {
@@ -36,9 +47,7 @@ export const appRoutes: RouteObject[] = [
               ? ['flow', 'routines', 'watch/:agentId']
               : path === '/chat'
                 ? [':roomId']
-                : path === '/team'
-                  ? [':agentId']
-                  : []
+                : []
             ).map((child) => ({ path: child, element: page })),
           ],
         }

@@ -1,0 +1,80 @@
+import { useContext } from 'react'
+import { Link, NavLink, Outlet } from 'react-router'
+import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { StreamContext, useStreamQuery } from '../../data/query-client.ts'
+import { agentsQuery, statusLabels } from './team-queries.ts'
+import './team.css'
+
+export function TeamLayout() {
+  const agents = useStreamQuery(agentsQuery)
+  return (
+    <div className="team-layout">
+      <nav className="team-members" aria-label="Team members">
+        <NavLink className="team-all" to="/team" end>
+          All agents
+        </NavLink>
+        {agents.data?.map((agent) => (
+          <NavLink key={agent.id} to={`/team/${encodeURIComponent(agent.id)}`}>
+            <AgentGlyph agent={agent} decorative contrast="high" />
+            <span>{agent.name}</span>
+          </NavLink>
+        ))}
+      </nav>
+      <div className="team-content">
+        <Outlet />
+      </div>
+    </div>
+  )
+}
+
+export function TeamPage() {
+  const agents = useStreamQuery(agentsQuery)
+  const context = useContext(StreamContext)
+  return (
+    <>
+      <div className="team-list-heading">
+        <h1>Team</h1>
+        <p>Your agents, at a glance.</p>
+      </div>
+      {agents.status === 'pending' && !agents.data && <p role="status">Loading agents…</p>}
+      {agents.status === 'error' && (
+        <section className="team-card" role="alert">
+          <h2>Could not load the team</h2>
+          <p className="team-muted-strong">
+            Check that the Score server is running, then try again.
+          </p>
+          <button
+            type="button"
+            className="team-text-action"
+            onClick={() => void context?.queries.register(agentsQuery).refetch()}
+          >
+            Try again
+          </button>
+        </section>
+      )}
+      {agents.status === 'success' && agents.data?.length === 0 && (
+        <section className="team-card">
+          <h2>No agents yet</h2>
+          <p className="team-muted-strong">Your agent profiles will appear here.</p>
+        </section>
+      )}
+      <ul className="team-list">
+        {agents.data?.map((agent) => (
+          <li key={agent.id}>
+            <Link
+              className="team-card team-agent-card"
+              to={`/team/${encodeURIComponent(agent.id)}`}
+            >
+              <AgentGlyph agent={agent} describeShape contrast="high" />
+              <h2>{agent.name}</h2>
+              <p className="team-muted-strong">{agent.role || 'No role set'}</p>
+              <p className="team-status">{statusLabels[agent.status]}</p>
+              <p aria-live="polite">{agent.activity ?? 'No current activity'}</p>
+              <span className="team-muted">{agent.model?.label ?? 'Model unavailable'}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </>
+  )
+}

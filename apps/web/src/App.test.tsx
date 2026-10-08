@@ -11,6 +11,12 @@ import { createStreamQueryRegistry } from './data/resync.ts'
 
 vi.mock('./shell/use-needs-you.ts', () => ({ useNeedsYou: vi.fn(() => false) }))
 vi.mock('./routes/chat/ChatPage.tsx', () => ({ ChatPage: () => <h1>Chat</h1> }))
+// Team has its own tests (routes/team/team.test.tsx); the shell tests only need the route to resolve.
+vi.mock('./routes/team/TeamPage.tsx', async () => {
+  const { Outlet } = await import('react-router')
+  return { TeamLayout: () => <Outlet />, TeamPage: () => <h1>Team</h1> }
+})
+vi.mock('./routes/team/AgentPage.tsx', () => ({ AgentPage: () => <h1>Team</h1> }))
 
 const routers: ReturnType<typeof createMemoryRouter>[] = []
 const disposers: (() => void)[] = []
