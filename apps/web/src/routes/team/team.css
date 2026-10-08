@@ -121,7 +121,7 @@
   cursor: pointer;
 }
 .team-text-action:hover {
-  color: #5236e6;
+  color: var(--link-hover);
 }
 
 /* Header band */
@@ -241,7 +241,7 @@
 .team-style-actions .team-primary {
   background: var(--ink);
   border-color: var(--ink);
-  color: #ffffff;
+  color: var(--card);
 }
 
 /* Tabs */
@@ -268,7 +268,7 @@
 .team-tabs button[aria-selected='true'] {
   background: var(--ink);
   border-color: var(--ink);
-  color: #ffffff;
+  color: var(--card);
   font-weight: 600;
 }
 
@@ -474,7 +474,7 @@
 .team-segment button[aria-pressed='true'] {
   background: var(--ink);
   border-color: var(--ink);
-  color: #ffffff;
+  color: var(--card);
 }
 .team-file-editor {
   display: flex;
@@ -515,7 +515,7 @@
 .team-file-actions .team-primary {
   background: var(--ink);
   border-color: var(--ink);
-  color: #ffffff;
+  color: var(--card);
 }
 .team-file-editor h3 {
   margin: 0 0 6px;
@@ -721,7 +721,7 @@ button.team-toggle:focus-visible,
 .team-routine-form .team-primary {
   background: var(--ink);
   border-color: var(--ink);
-  color: #ffffff;
+  color: var(--card);
 }
 
 /* Permissions tab */

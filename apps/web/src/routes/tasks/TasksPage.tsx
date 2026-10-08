@@ -1,8 +1,9 @@
-import { useContext, useEffect, useRef, type KeyboardEvent } from 'react'
+import { useContext, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { StreamContext, useStreamQuery } from '../../data/query-client.ts'
 import { TaskCard } from './TaskCard.tsx'
+import { NewTaskDialog } from './NewTaskDialog.tsx'
 import { TaskDrawer } from './TaskDrawer.tsx'
 import { taskAgentsQuery, taskColumns, taskRoomsQuery, tasksQuery } from './task-queries.ts'
 import './tasks.css'
@@ -25,12 +26,23 @@ export function TasksPage() {
   const cards = useRef(new Map<string, HTMLAnchorElement>())
   const closeDetails = useRef<HTMLAnchorElement>(null)
   const previousTaskId = useRef<string | undefined>(undefined)
+  const newTrigger = useRef<HTMLButtonElement>(null)
+  const [creating, setCreating] = useState(false)
+  // The notice lasts until the board announces something newer.
+  const [created, setCreated] = useState<{ title: string; after: string } | null>(null)
 
   useEffect(() => {
     if (taskId) closeDetails.current?.focus()
     else if (previousTaskId.current) cards.current.get(previousTaskId.current)?.focus()
     previousTaskId.current = taskId
   }, [taskId])
+
+  // Focus goes back to the button once the dialog is gone (while it is open the page is inert).
+  const wasCreating = useRef(false)
+  useEffect(() => {
+    if (wasCreating.current && !creating) newTrigger.current?.focus()
+    wasCreating.current = creating
+  }, [creating])
 
   function setFilter(key: string, value: string) {
     setParams((current) => {
@@ -125,7 +137,12 @@ export function TasksPage() {
               Clear agent filter: {filters.agent}
             </button>
           )}
-          <button type="button" className="tasks-new" disabled title="Task creation is coming soon">
+          <button
+            ref={newTrigger}
+            type="button"
+            className="tasks-new"
+            onClick={() => setCreating(true)}
+          >
             New task
           </button>
         </div>
@@ -177,7 +194,9 @@ export function TasksPage() {
             </p>
           )}
           <p className="tasks-sr-only" aria-live="polite" aria-atomic="true">
-            {board.data?.announcement}
+            {created && created.after === board.data?.announcement
+              ? `Task created: ${created.title}.`
+              : board.data?.announcement}
           </p>
           <div className="tasks-board-scroll" role="region" aria-label="Tasks board" tabIndex={0}>
             <div className="tasks-board">
@@ -230,6 +249,18 @@ export function TasksPage() {
           />
         )}
       </div>
+      {creating && (
+        <NewTaskDialog
+          agents={agents.data ?? []}
+          rooms={rooms.data ?? []}
+          defaultRoom={filters.room}
+          close={() => setCreating(false)}
+          created={(task) => {
+            setCreated({ title: task.title, after: board.data?.announcement ?? '' })
+            setCreating(false)
+          }}
+        />
+      )}
     </div>
   )
 }

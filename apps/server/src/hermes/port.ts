@@ -22,6 +22,7 @@ import type {
   ConnectionsResponse,
   HermesCheck,
   LocalProviderRequest,
+  PluginItem,
   ProviderItem,
   ToolServerRequest,
 } from '@score/contract'
@@ -193,6 +194,10 @@ export interface HermesPort extends ProfileManagementPort {
   addMemory(agentId: string, text: string): Promise<MemoryItem>
   deleteMemory(agentId: string, id: string): Promise<void>
   setToolEnabled(agentId: string, toolId: string, enabled: boolean): Promise<AgentTool>
+  /** Hermes plugins of one profile (`plugins list`). */
+  listPlugins(agentId: string): Promise<PluginItem[]>
+  /** Enable or disable via the CLI and verify by re-reading. Never the Score bridge (409). */
+  setPluginEnabled(agentId: string, id: string, enabled: boolean): Promise<PluginItem>
   /** A profile's Hermes approval settings (command_allowlist, approvals.deny, approvals.mode). */
   readApprovals(agentId: string): Promise<ApprovalConfig>
   /**

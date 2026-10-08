@@ -422,7 +422,11 @@ incarnation-aware reuse confirmation contract is agreed.
   `approvals.mode` are ever written (read → write → re-read verify, ≤ 3 merges; `409 conflict` after that).
 - **H** `POST /api/settings/rules/apply/:agentId` → the GET shape: re-applies the team baseline to a drifted profile.
   These three keys are not editable through the advanced config endpoints.
-- `GET /api/settings/plugins` → `{ items: { id; label; enabled: boolean }[] }` · `PATCH /api/settings/plugins/:id` `{ enabled }`
+- `GET /api/settings/plugins?agent=<id>` → `PluginsResponse` `{ items: { id; label; enabled: boolean; locked: boolean;
+  description: string | null }[] }` (one profile's `hermes plugins list`, bundled included) · **H**
+  `PATCH /api/settings/plugins/:id?agent=<id>` `{ enabled }` → the verified item. `locked` = the Score bridge, which Score
+  never disables (`409`); `409` too when Hermes didn't apply the change; `404` for an unknown agent or plugin. Enabling a
+  non-bundled plugin that declares capabilities leaves them ungranted (Hermes fails closed without a terminal).
 - `GET /api/settings/config?q=` → `{ items: { key: string; value: unknown; file: string; description: string | null }[] }`
   (name and comment search, ≤ 50). Secret-bearing and env-backed keys (credential-shaped names, env/header maps,
   provider and MCP server containers) are never listed or writable; only keys known to the tested Hermes version are.
@@ -440,7 +444,7 @@ incarnation-aware reuse confirmation contract is agreed.
 - **H** `POST /api/settings/hermes/accept` `{ hash }` → `{ ok: true }`: records this build in Score's own accepted-builds
   store (`$SCORE_HOME`, never the repo registry) so the compatibility gate re-enables `gateway-approvals`. `409 conflict`
   when the build changed since the check (hash differs), `409 not_compatible` when the check is not compatible.
-- `GET /api/settings/ui` · `PATCH /api/settings/ui` `{ theme?: 'light' | 'dark' }`
+- Theme (light, dark, system) is a per-browser setting in `localStorage` (`score.theme`); there is no settings/ui endpoint.
 
 ## 11. Internal: bridge plugin ↔ server (not for the front end)
 

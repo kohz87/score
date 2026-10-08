@@ -9,6 +9,8 @@ import {
   HermesCheckSchema,
   ProvidersResponseSchema,
   ProviderItemSchema,
+  PluginItemSchema,
+  PluginsResponseSchema,
 } from '@score/contract'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
@@ -191,6 +193,46 @@ test('credential-shaped, env-backed and unknown keys are 400 on preview and appl
     ],
   ])
     expect((await post('/api/settings/config/preview', { changes: bad })).statusCode).toBe(400)
+})
+
+const patch = (url: string, payload: object) =>
+  app.inject({ method: 'PATCH', url, headers, payload })
+
+test('plugins list per profile; enable and disable stick, the bridge stays locked', async () => {
+  const list = async (agent: string) =>
+    PluginsResponseSchema.parse((await app.inject(`/api/settings/plugins?agent=${agent}`)).json())
+      .items
+  const before = await list('builder')
+  expect(before.find((item) => item.id === 'score-bridge')).toMatchObject({
+    enabled: true,
+    locked: true,
+  })
+  const off = await patch('/api/settings/plugins/memory-notes?agent=builder', { enabled: false })
+  expect(PluginItemSchema.parse(off.json())).toMatchObject({ id: 'memory-notes', enabled: false })
+  expect((await list('builder')).find((item) => item.id === 'memory-notes')!.enabled).toBe(false)
+  // Another profile keeps its own state.
+  expect((await list('lead')).find((item) => item.id === 'memory-notes')!.enabled).toBe(true)
+  expect(
+    (await patch('/api/settings/plugins/score-bridge?agent=builder', { enabled: false }))
+      .statusCode,
+  ).toBe(409)
+  expect(
+    (await patch('/api/settings/plugins/nope?agent=builder', { enabled: true })).statusCode,
+  ).toBe(404)
+  expect(
+    (await patch('/api/settings/plugins/memory-notes?agent=builder', { enabled: 'yes' }))
+      .statusCode,
+  ).toBe(400)
+  expect((await app.inject('/api/settings/plugins')).statusCode).toBe(400)
+  expect((await app.inject('/api/settings/plugins?agent=ghost')).statusCode).toBe(404)
+})
+test('plugin changes need a human session', async () => {
+  const response = await app.inject({
+    method: 'PATCH',
+    url: '/api/settings/plugins/memory-notes?agent=builder',
+    payload: { enabled: false },
+  })
+  expect(response.statusCode).toBeGreaterThanOrEqual(401)
 })
 
 test('the fake adapter answers the Hermes version check cleanly', async () => {

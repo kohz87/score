@@ -6,7 +6,10 @@ import {
   ConfigSearchQuerySchema,
   HermesAcceptRequestSchema,
   LocalProviderRequestSchema,
+  PatchPluginRequestSchema,
   PlatformParamSchema,
+  PluginIdSchema,
+  PluginsQuerySchema,
   ToolServerRequestSchema,
   type ProviderItem,
 } from '@score/contract'
@@ -81,4 +84,14 @@ export function registerSettingsRoutes(
   app.post('/api/settings/config/apply', mutation, async (request) =>
     port.applyConfig(ConfigApplyRequestSchema.parse(request.body)),
   )
+  // Plugins are per profile: `?agent=` picks whose list this is.
+  app.get('/api/settings/plugins', async (request) => ({
+    items: await port.listPlugins(PluginsQuerySchema.parse(request.query).agent),
+  }))
+  app.patch('/api/settings/plugins/:id', mutation, async (request) => {
+    const { id } = z.object({ id: PluginIdSchema }).parse(request.params)
+    const { agent } = PluginsQuerySchema.parse(request.query)
+    const { enabled } = PatchPluginRequestSchema.parse(request.body)
+    return port.setPluginEnabled(agent, id, enabled)
+  })
 }

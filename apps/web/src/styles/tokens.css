@@ -56,6 +56,14 @@
   --watch-bright: #e8eaf0;
   --watch-live: #d93a4e;
   --agent-blue: #6b8cff;
+  --subtle-2: #f2f3f6;
+  --line-strong: #9a9ea7;
+  --track: #e8eaee;
+  --track-2: #dde0e6;
+  --link-hover: #5236e6;
+  /* Inverse panels (Rules, approvals, command boxes) keep their own dark look in both themes. */
+  --panel-ink: #12131a;
+  --panel-card: #ffffff;
   --radius-pill: 999px;
   --radius-card: 28px;
   --radius-20: 20px;
@@ -66,6 +74,109 @@
   --font-heading: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif;
   --font-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
   --font-code: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Dark theme: Settings › Plugins and look. "System" leaves data-theme unset and follows the OS. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --profile-dashed: #4d5260;
+  --profile-add-ink: #c9ccd4;
+  --ground: #0f1116;
+  --card: #181a21;
+  --ink: #eceef2;
+  --ink-muted: #a9adb8;
+  --muted: #9fa3ae;
+  --hairline: #2b2e38;
+  --subtle: #20232c;
+  --tasks-ground: #14161c;
+  --tasks-border: #2b2e38;
+  --tasks-done: #1c1e26;
+  --tasks-note: #d6d8de;
+  --chat-text: #d6d8de;
+  --chat-secondary: #c0c3cc;
+  --chat-soft: #1c1e26;
+  --chat-card-border: #2b2e38;
+  --agent-violet-tint: #2b2552;
+  --agent-jade-tint: #12342c;
+  --agent-saffron-tint: #3b2f10;
+  --agent-coral-tint: #3d1a25;
+  --agent-violet-text: #b6a8ff;
+  --agent-jade-text: #4fd6b0;
+  --agent-saffron-text: #f2b84a;
+  --agent-coral-text: #ff8fa8;
+  --flow-log-border: #262932;
+  --flow-canvas: #12141a;
+  --flow-canvas-dot: #2a2d37;
+  --flow-edge: #7a7f8b;
+  --flow-edge-planned: #4d5260;
+  --flow-edge-sent-back: #e0a000;
+  --flow-done-border: #3a3e4a;
+  --subtle-2: #242730;
+  --line-strong: #7b808c;
+  --track: #2a2d37;
+  --track-2: #353946;
+  --link-hover: #a595ff;
+  --panel-ink: #242733;
+  --panel-card: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not([data-theme='dark']) {
+    color-scheme: dark;
+    --profile-dashed: #4d5260;
+    --profile-add-ink: #c9ccd4;
+    --ground: #0f1116;
+    --card: #181a21;
+    --ink: #eceef2;
+    --ink-muted: #a9adb8;
+    --muted: #9fa3ae;
+    --hairline: #2b2e38;
+    --subtle: #20232c;
+    --tasks-ground: #14161c;
+    --tasks-border: #2b2e38;
+    --tasks-done: #1c1e26;
+    --tasks-note: #d6d8de;
+    --chat-text: #d6d8de;
+    --chat-secondary: #c0c3cc;
+    --chat-soft: #1c1e26;
+    --chat-card-border: #2b2e38;
+    --agent-violet-tint: #2b2552;
+    --agent-jade-tint: #12342c;
+    --agent-saffron-tint: #3b2f10;
+    --agent-coral-tint: #3d1a25;
+    --agent-violet-text: #b6a8ff;
+    --agent-jade-text: #4fd6b0;
+    --agent-saffron-text: #f2b84a;
+    --agent-coral-text: #ff8fa8;
+    --flow-log-border: #262932;
+    --flow-canvas: #12141a;
+    --flow-canvas-dot: #2a2d37;
+    --flow-edge: #7a7f8b;
+    --flow-edge-planned: #4d5260;
+    --flow-edge-sent-back: #e0a000;
+    --flow-done-border: #3a3e4a;
+    --subtle-2: #242730;
+    --line-strong: #7b808c;
+    --track: #2a2d37;
+    --track-2: #353946;
+    --link-hover: #a595ff;
+    --panel-ink: #242733;
+    --panel-card: #ffffff;
+  }
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:is(
+  .now-asking,
+  .chat-approval,
+  .reports-approvals,
+  .settings-card.rules-card,
+  .settings-command,
+  .advanced-diff
+) {
+  --ink: var(--panel-ink);
+  --card: var(--panel-card);
 }
 
 * {

@@ -3,6 +3,7 @@ import { agentsQuery } from '../team/team-queries.ts'
 import { AdvancedSection } from './AdvancedSection.tsx'
 import { ConnectionsSection } from './ConnectionsSection.tsx'
 import { RulesSection } from './RulesSection.tsx'
+import { PluginsSection } from './PluginsSection.tsx'
 import { ProvidersSection } from './ProvidersSection.tsx'
 import { HermesVersionBanner } from './HermesVersionBanner.tsx'
 import { RemoteSection } from './RemoteSection.tsx'
@@ -13,7 +14,7 @@ const sections = [
   { id: 'models', label: 'Models and keys', built: true },
   { id: 'connections', label: 'Connections', built: true },
   { id: 'rules', label: 'Rules and approvals', built: true },
-  { id: 'plugins', label: 'Plugins and look', built: false },
+  { id: 'plugins', label: 'Plugins and look', built: true },
   { id: 'advanced', label: 'Advanced', built: true },
 ] as const
 
@@ -36,19 +37,7 @@ export function SettingsPage() {
         <ProvidersSection agents={agents} />
         <ConnectionsSection agents={agents} />
         <RulesSection agents={agents} />
-        {sections
-          .filter((section) => !section.built)
-          .map((section) => (
-            <section
-              key={section.id}
-              id={section.id}
-              className="settings-card"
-              aria-labelledby={`settings-${section.id}`}
-            >
-              <h2 id={`settings-${section.id}`}>{section.label}</h2>
-              <p className="settings-muted-strong">Coming soon.</p>
-            </section>
-          ))}
+        <PluginsSection agents={agents} />
         <AdvancedSection />
         <RemoteSection />
       </div>
