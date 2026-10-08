@@ -1,3 +1,4 @@
+import { QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { createBrowserRouter, createMemoryRouter } from 'react-router'
@@ -38,9 +39,11 @@ function renderRoute(path: string) {
   routers.push(router)
   render(
     <StrictMode>
-      <StreamContext value={{ client, queries }}>
-        <App router={router} />
-      </StreamContext>
+      <QueryClientProvider client={queryClient}>
+        <StreamContext value={{ client, queries }}>
+          <App router={router} />
+        </StreamContext>
+      </QueryClientProvider>
     </StrictMode>,
   )
   return router

@@ -742,3 +742,22 @@ test('an idle activity refresh creates no observation (gate review #13)', async 
     await idle.close()
   }
 })
+
+test('GET /api/commands lists the slash commands for the composer menu', async () => {
+  const response = await get('/api/commands')
+  expect(response.statusCode).toBe(200)
+  const body = z
+    .object({
+      items: z.array(
+        z.object({ name: z.string(), usage: z.string().startsWith('/'), description: z.string() }),
+      ),
+    })
+    .parse(response.json())
+  expect(body.items.map((item) => item.name)).toEqual([
+    'assign',
+    'routine',
+    'remember',
+    'skill',
+    'model',
+  ])
+})

@@ -130,7 +130,11 @@ test('assign creates one task and receipt replay never reroutes', async () => {
   const body = { text: '/assign @builder Implement paging -- Preserve focus' }
   const first = await send(body, 'assign')
   expect(first.statusCode).toBe(200)
-  expect(first.json().command).toMatchObject({ kind: 'assign', taskId: expect.any(String) })
+  expect(first.json().command).toMatchObject({
+    kind: 'assign',
+    taskId: expect.any(String),
+    taskKey: expect.stringMatching(/^T-/),
+  })
   expect(task.mock.calls[0]![0]).toEqual({
     title: 'Implement paging',
     body: 'Preserve focus',

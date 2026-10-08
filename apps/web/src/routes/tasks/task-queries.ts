@@ -1,12 +1,17 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import {
   AgentSummarySchema,
   RoomSchema,
   AsOfSeqSchema,
+  TaskDetailSchema,
   TaskSummarySchema,
   type TaskColumn,
+  type TaskDetail,
   type TaskSummary,
 } from '@score/contract'
 import { apiFetch } from '../../data/api.ts'
+import { useStream } from '../../data/query-client.ts'
 import { defineStreamQuery } from '../../data/resync.ts'
 
 export const taskColumns: { id: TaskColumn; label: string }[] = [
@@ -130,3 +135,41 @@ export const taskRoomsQuery = defineStreamQuery({
       : [...rooms, event.data]
   },
 })
+
+export const taskDetailKey = (taskId: string) => ['tasks', 'detail', taskId] as const
+
+// Details are not a snapshot endpoint, so (like the Team page) the cache is refetched when the stream says
+// this task, its activity or one of its approvals changed, and after any reset.
+export function useTaskDetail(taskId: string) {
+  const stream = useStream()
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    const refresh = () => {
+      void queryClient.invalidateQueries({ queryKey: taskDetailKey(taskId), exact: true })
+    }
+    const offEvent = stream.subscribe((event) => {
+      if (
+        (event.type === 'task.upserted' && event.data.id === taskId) ||
+        (event.type === 'task.activity' && event.data.taskId === taskId) ||
+        ((event.type === 'approval.requested' || event.type === 'approval.updated') &&
+          (event.data.refs.some((ref) => ref.kind === 'task' && ref.taskId === taskId) ||
+            queryClient.getQueryData<TaskDetail>(taskDetailKey(taskId))?.pendingApproval?.id ===
+              event.data.id))
+      )
+        refresh()
+    })
+    const offControl = stream.onControl(({ resync }) => {
+      if (resync) refresh()
+    })
+    return () => {
+      offEvent()
+      offControl()
+    }
+  }, [stream, queryClient, taskId])
+  return useQuery({
+    queryKey: taskDetailKey(taskId),
+    queryFn: async ({ signal }) =>
+      TaskDetailSchema.parse(await apiFetch(`tasks/${encodeURIComponent(taskId)}`, { signal })),
+    retry: false,
+  })
+}

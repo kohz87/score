@@ -12,6 +12,7 @@ import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { StreamContext, useStreamQuery } from '../../data/query-client.ts'
 import { ApiError } from '../../data/api.ts'
+import { Composer } from './Composer.tsx'
 import { MessageItem } from './MessageItem.tsx'
 import { messagesQuery, roomQuery } from './queries.ts'
 import { roomLabel } from './room-label.ts'
@@ -195,18 +196,7 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
           </div>
         </div>
       )}
-      <div className="chat-composer">
-        <div className="chat-composer-box">
-          <label htmlFor="chat-message">Message {room ? room.name : 'this room'}</label>
-          <input id="chat-message" disabled placeholder="Write a message…" />
-          <div>
-            <span>Messaging coming soon</span>
-            <button type="button" disabled>
-              Send
-            </button>
-          </div>
-        </div>
-      </div>
+      {room && <Composer roomId={roomId} roomName={room.name} agents={agents} />}
     </section>
   )
 }
