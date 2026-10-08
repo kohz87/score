@@ -143,9 +143,11 @@ test('restart replays scenario observations while keeping durable approval decis
     status: 'approved',
     decision: { by: 'elsewhere' },
   })
-  expect(
-    second.filter((event) => event.type.startsWith('message.') || event.type === 'room.upserted'),
-  ).toEqual([])
+  expect(second.filter((event) => event.type.startsWith('message.'))).toEqual([])
+  // The scenario's own room.upserted step replays like every other non-message step; messages add none.
+  expect(second.filter((event) => event.type === 'room.upserted')).toHaveLength(
+    createScenario(0).filter((step) => step.kind === 'room.upserted').length,
+  )
   expect(second[0]!.seq).toBe(first.length + 1)
   expect(new Set(observations.map((observation) => observation.identity)).size).toBe(
     createScenario(schedulerStart).length * 2,
@@ -379,7 +381,11 @@ test('overdue timers cannot reorder scripted events or skip the running transiti
           !(event.type === 'run.updated' && event.data.id === runId),
       )
       .map((event) => event.type),
-  ).toEqual(createScenario(schedulerStart).map((step) => step.kind))
+  ).toEqual(
+    createScenario(schedulerStart)
+      .map((step) => step.kind)
+      .filter((kind) => kind !== 'room.upserted'),
+  )
 })
 
 test('stopped runs reject commands and unknown agents cannot start work', async () => {

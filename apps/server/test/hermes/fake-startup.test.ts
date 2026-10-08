@@ -48,7 +48,11 @@ test('fake startup streams the scenario and exposes the same adapter status in s
       replay.frames
         .filter((frame) => frame.id !== undefined && frame.type !== 'room.upserted')
         .map((frame) => frame.type),
-    ).toEqual(createScenario(0).map((step) => step.kind))
+    ).toEqual(
+      createScenario(0)
+        .map((step) => step.kind)
+        .filter((kind) => kind !== 'room.upserted'),
+    )
     expect(stream.frames.some((frame) => frame.type === 'task.upserted')).toBe(true)
     expect(replay.failure).toBeUndefined()
     expect(stream.failure).toBeUndefined()
