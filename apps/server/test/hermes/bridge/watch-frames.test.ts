@@ -6,8 +6,12 @@ import { retireIngestKeys } from '../../../src/hub/retire.ts'
 import { event, setup } from './helpers.ts'
 
 let server: ReturnType<typeof setup>
+let counter = 0
+let cachedToken: string | null = null
 beforeEach(() => {
   server = setup()
+  counter = 0
+  cachedToken = null
 })
 afterEach(async () => {
   await server.close()
@@ -264,4 +268,127 @@ test('retention drops frames older than seven days but keeps each agent its newe
     { agent_id: 'builder', seq: 2 },
     { agent_id: 'old-agent', seq: 2 },
   ])
+})
+
+// --- 4.7 browser screenshots ---
+import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
+import { png } from '../../media-fixtures.ts'
+
+const SHOT = 'browser_screenshot_0123abcd.png'
+function shotDir(sub = join('cache', 'screenshots'), profile = 'builder'): string {
+  const dir = join(server.hermesHome, 'profiles', profile, sub)
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
+async function vision(path: string, tool = 'browser_vision', call = 'v1', redeliver = false) {
+  cachedToken ??= await server.token()
+  const token = cachedToken
+  if (!redeliver) counter += 1
+  const response = await server.send(token, [
+    {
+      ...event(counter, 'post_tool_call', {
+        tool_name: tool,
+        session_id: 's1',
+        tool_call_id: call,
+        status: 'ok',
+        args: {},
+        result: JSON.stringify({ url: 'https://example.test/', screenshot_path: path }),
+        watch: { screenshotPath: path },
+      }),
+      sessionId: 's1',
+      toolCallId: call,
+    },
+  ])
+  expect(response.statusCode).toBe(200)
+  return frames().at(-1)!
+}
+const refs = () =>
+  server.db.sqlite.prepare('SELECT id, refs FROM media').all() as { id: string; refs: number }[]
+
+test('a browser_vision screenshot becomes a served media image held by its frame', async () => {
+  const path = join(shotDir(), SHOT)
+  writeFileSync(path, png(200))
+  const frame = await vision(path)
+  const url = String(frame.payload.imageUrl)
+  expect(url).toMatch(/^\/api\/media\/[0-9a-f-]{36}$/)
+  const res = await server.app.inject({ method: 'GET', url })
+  expect(res.statusCode).toBe(200)
+  expect(res.headers['content-type']).toBe('image/png')
+  expect(refs()).toMatchObject([{ refs: 1 }])
+  // a redelivered hook must not take a second reference
+  await vision(path, 'browser_vision', 'v1', true)
+  expect(refs()).toMatchObject([{ refs: 1 }])
+  // a later hook for the same call (new counter) rewrites the frame without a second reference
+  await vision(path, 'browser_vision', 'v1')
+  expect(frames()).toHaveLength(1)
+  expect(refs()).toMatchObject([{ refs: 1 }])
+})
+
+test('the legacy browser_screenshots directory is accepted', async () => {
+  const path = join(shotDir('browser_screenshots'), SHOT)
+  writeFileSync(path, png(100))
+  expect((await vision(path)).payload.imageUrl).toMatch(/^\/api\/media\//)
+})
+
+test.each([
+  ['non-image bytes', () => Buffer.from('not an image at all')],
+  ['oversize file', () => Buffer.concat([png(10), Buffer.alloc(2 * 1024 * 1024 + 1)])],
+])('%s keeps imageUrl null', async (_label, bytes) => {
+  const path = join(shotDir(), SHOT)
+  writeFileSync(path, bytes())
+  expect((await vision(path)).payload.imageUrl).toBeNull()
+  expect(refs()).toEqual([])
+})
+
+test('paths outside Hermes screenshot directories are refused', async () => {
+  const dir = shotDir()
+  const outside = join(server.home, SHOT)
+  writeFileSync(outside, png(100))
+  const other = join(shotDir(join('cache', 'screenshots'), 'reviewer'), SHOT)
+  writeFileSync(other, png(101))
+  const badName = join(dir, 'secret.png')
+  writeFileSync(badName, png(102))
+  const refused = [
+    outside,
+    other, // another profile's directory
+    badName,
+    `${dir}/../screenshots/${SHOT}`,
+    `${dir}/../../${SHOT}`,
+    `relative/${SHOT}`,
+    join(dir, SHOT) + '\0',
+  ]
+  writeFileSync(join(dir, SHOT), png(103))
+  for (const [index, path] of refused.entries())
+    expect((await vision(path, 'browser_vision', `r${index}`)).payload.imageUrl).toBeNull()
+  expect(refs()).toEqual([])
+})
+
+test('symlinked screenshots are refused', async () => {
+  const dir = shotDir()
+  const target = join(server.home, 'private.png')
+  writeFileSync(target, png(300))
+  const link = join(dir, SHOT)
+  symlinkSync(target, link)
+  expect((await vision(link)).payload.imageUrl).toBeNull()
+  expect(refs()).toEqual([])
+})
+
+test('other browser tools and the vault never store a screenshot', async () => {
+  const path = join(shotDir(), SHOT)
+  writeFileSync(path, png(150))
+  expect((await vision(path, 'browser_snapshot', 'a')).payload.imageUrl).toBeNull()
+  const vault = await vision(path, 'browser_vault_fill', 'b')
+  expect(vault.payload.imageUrl).toBeNull()
+  expect(refs()).toEqual([])
+})
+
+test('retention releases the media reference when old frames are deleted', async () => {
+  const path = join(shotDir(), SHOT)
+  writeFileSync(path, png(120))
+  await vision(path, 'browser_vision', 'old')
+  await vision(path, 'browser_snapshot', 'newer')
+  expect(refs()).toMatchObject([{ refs: 1 }])
+  retireIngestKeys(server.db, { now: Date.parse('2026-10-20T00:00:00Z') })
+  expect(frames()).toHaveLength(1)
+  expect(refs()).toMatchObject([{ refs: 0 }])
 })

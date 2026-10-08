@@ -12,7 +12,8 @@ import { buildApp } from '../../../src/app.ts'
 import { loadConfig } from '../../../src/config.ts'
 import { getEpoch, migrate, openDatabase } from '../../../src/db/index.ts'
 import { createIngest } from '../../../src/hub/ingest.ts'
-import { createHermesPort } from '../../../src/hermes/index.ts'
+import { createHermesPort, createScreenshotImporter } from '../../../src/hermes/index.ts'
+import { MediaStore } from '../../../src/media/store.ts'
 import { loadBridgeBootstrap } from '../../../src/hermes/bridge/bootstrap.ts'
 
 export const initialTime = Date.parse('2026-10-07T12:00:00Z')
@@ -65,6 +66,8 @@ export function setup({
   const config = loadConfig({ SCORE_HOME: home, SCORE_MODE: mode })
   const port = createHermesPort({ ...config, mode: 'fake' })
   const metrics = { unknownHooks: 0 }
+  const hermesHome = join(home, 'hermes-home')
+  const media = new MediaStore(db, join(home, 'media'), { clock })
   const app = buildApp({
     config,
     db,
@@ -72,8 +75,10 @@ export function setup({
     logger,
     clock,
     port,
+    media,
     getEpoch: () => getEpoch(db),
     bridge: {
+      importScreenshot: createScreenshotImporter({ hermesHome }, media),
       db,
       ingest,
       bootstrapHash,
@@ -107,6 +112,8 @@ export function setup({
     db,
     ingest,
     home,
+    hermesHome,
+    media,
     bootstrap,
     bootstrapHash,
     metrics,

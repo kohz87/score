@@ -148,3 +148,33 @@ def test_forced_hermes_redaction_is_used(sender, monkeypatch):
     sender.process_once()
     assert sender.transport.acked[0]["payload"]["watch"]["output"] == "[hermes] value"
     assert any("HERMES-ONLY value" == call for call in calls)
+
+
+def _vision(sender, call, tool, result):
+    make_hook("post_tool_call", sender)("", tool_name=tool, args={}, result=result, status="ok", tool_call_id=call)
+    sender.process_once()
+    return sender.transport.acked[-1]["payload"]
+
+
+def test_browser_vision_forwards_only_the_screenshot_path(sender):
+    path = "/h/cache/screenshots/browser_screenshot_ab12.png"
+    payload = _vision(sender, "v1", "browser_vision", json.dumps({"success": True, "analysis": "x", "screenshot_path": path}))
+    assert payload["watch"] == {"screenshotPath": path}
+    native = {"meta": {"screenshot_path": path}, "image_data_url": "data:image/jpeg;base64," + "A" * 200000}
+    payload = _vision(sender, "v2", "browser_vision", json.dumps(native))
+    assert payload["watch"] == {"screenshotPath": path}
+    assert len(json.dumps(payload)) <= PAYLOAD_CAP
+
+
+@pytest.mark.parametrize("bad", ["/etc/passwd", "/h/x/browser_screenshot_zz.png", "x" * 5000 + "/browser_screenshot_ab.png",
+                                 "/h/browser_screenshot_ab.png\0"])
+def test_browser_vision_rejects_odd_screenshot_paths(sender, bad):
+    payload = _vision(sender, "v3", "browser_vision", json.dumps({"screenshot_path": bad}))
+    assert "watch" not in payload
+
+
+def test_other_tools_and_vault_never_forward_a_screenshot_path(sender):
+    path = "/h/cache/screenshots/browser_screenshot_ab12.png"
+    for index, tool in enumerate(("browser_snapshot", "browser_vault_fill", "terminal")):
+        payload = _vision(sender, f"o{index}", tool, json.dumps({"screenshot_path": path}))
+        assert "screenshotPath" not in json.dumps(payload.get("watch", {}))
