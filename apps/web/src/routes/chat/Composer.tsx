@@ -21,6 +21,13 @@ import {
 import { messagesQuery, type MessagePageData } from './queries.ts'
 
 type Notice = { kind: 'error'; text: string } | { kind: 'result'; command: CommandResult | null }
+type Attachment = { mediaId: string; name: string }
+function parseUpload(value: unknown): Attachment {
+  const record =
+    typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+  if (typeof record.mediaId !== 'string' || !record.mediaId) throw new Error('Bad upload response')
+  return { mediaId: record.mediaId, name: typeof record.name === 'string' ? record.name : 'image' }
+}
 type Snapshot = { asOfSeq: number; data: MessagePageData }
 
 function errorText(error: unknown): string {
@@ -72,6 +79,9 @@ export function Composer({
   const [closed, setClosed] = useState(false)
   const [pending, setPending] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [uploading, setUploading] = useState(0)
+  const fileInput = useRef<HTMLInputElement>(null)
 
   const commands = useQuery({
     queryKey: ['chat', 'commands'],
@@ -124,11 +134,41 @@ export function Composer({
     }
   }
 
+  async function upload(files: FileList | null) {
+    const picked = [...(files ?? [])]
+    if (fileInput.current) fileInput.current.value = ''
+    for (const file of picked) {
+      setUploading((count) => count + 1)
+      try {
+        const form = new FormData()
+        form.append('file', file, file.name)
+        const stored = parseUpload(await apiFetch('media', { method: 'POST', body: form }))
+        setAttachments((current) =>
+          current.length >= 8
+            ? current
+            : [...current, { mediaId: stored.mediaId, name: stored.name }],
+        )
+      } catch (error) {
+        const reason =
+          error instanceof ApiError && error.status === 413
+            ? 'is larger than 8 MB'
+            : error instanceof ApiError && error.status === 415
+              ? 'is not a PNG, JPEG, WebP or GIF image'
+              : 'could not be uploaded'
+        setNotice({ kind: 'error', text: `${file.name} ${reason}.` })
+      } finally {
+        setUploading((count) => count - 1)
+      }
+    }
+  }
+
   async function send() {
     const body = text.trim()
-    if (!body || pending) return
+    if (!body || pending || uploading) return
+    const sent = attachments
     const payload = {
       text: body,
+      ...(sent.length ? { attachments: sent.map(({ mediaId }) => ({ mediaId })) } : {}),
       ...(to.length ? { to } : {}),
       ...(planFirst ? { planFirst: true } : {}),
     }
@@ -151,7 +191,10 @@ export function Composer({
         roomId,
         author: { kind: 'you' },
         to,
-        parts: [{ kind: 'text', text: body }],
+        parts: [
+          { kind: 'text', text: body },
+          ...sent.map(({ mediaId }) => ({ kind: 'image' as const, mediaId })),
+        ],
         createdAt: new Date().toISOString(),
         streaming: false,
         refs: [],
@@ -169,6 +212,7 @@ export function Composer({
       sendKey.current = null
       setText('')
       setCaret(0)
+      setAttachments([])
       setNotice({ kind: 'result', command: result.command })
     } catch (error) {
       update((data) => withoutMessage(data, temporary))
@@ -282,6 +326,26 @@ export function Composer({
           onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
           onKeyDown={onKeyDown}
         />
+        {(attachments.length > 0 || uploading > 0) && (
+          <ul className="chat-attachments" aria-label="Attachments">
+            {attachments.map((item) => (
+              <li key={item.mediaId} className="chat-attachment">
+                <img src={`/api/media/${encodeURIComponent(item.mediaId)}`} alt="" />
+                <span>{item.name}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${item.name}`}
+                  onClick={() =>
+                    setAttachments(attachments.filter(({ mediaId }) => mediaId !== item.mediaId))
+                  }
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+            {uploading > 0 && <li className="chat-attachment">Uploading…</li>}
+          </ul>
+        )}
         <div className="chat-composer-row">
           <span className="chat-composer-label">To</span>
           {to.length === 0 && <span className="chat-composer-default">Room lead</span>}
@@ -364,12 +428,24 @@ export function Composer({
             <span className="chat-switch" aria-hidden="true" />
             Plan first
           </button>
+          <input
+            ref={fileInput}
+            type="file"
+            className="chat-sr-only"
+            tabIndex={-1}
+            aria-hidden="true"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            multiple
+            data-testid="attach-input"
+            onChange={(event) => void upload(event.target.files)}
+          />
           <button
             type="button"
             className="chat-attach"
             aria-label="Attach files"
-            title="Attachments are coming soon"
-            disabled
+            title="Attach images (PNG, JPEG, WebP, GIF; up to 8 MB)"
+            disabled={pending || attachments.length >= 8}
+            onClick={() => fileInput.current?.click()}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path
@@ -380,7 +456,11 @@ export function Composer({
               />
             </svg>
           </button>
-          <button type="submit" className="chat-send" disabled={!text.trim() || pending}>
+          <button
+            type="submit"
+            className="chat-send"
+            disabled={!text.trim() || pending || uploading > 0}
+          >
             Send
           </button>
         </div>

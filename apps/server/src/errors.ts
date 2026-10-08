@@ -35,6 +35,8 @@ export function registerErrorHandlers(app: FastifyInstance): void {
       (frameworkError.success && frameworkError.data.validation)
     ) {
       response = new HttpError(400, 'bad_request', 'Invalid request')
+    } else if (status === 413) {
+      response = new HttpError(413, 'payload_too_large', 'The request body is too large')
     } else if (status && status >= 400 && status < 500) {
       response = new HttpError(status, 'bad_request', 'Invalid request')
     } else {
