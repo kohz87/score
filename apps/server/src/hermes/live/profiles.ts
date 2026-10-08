@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import { basename, join } from 'node:path'
 import { z } from 'zod'
 import { AgentSummarySchema, type AgentSummary } from '@score/contract'
-import { AgentDetailSchema, type AgentDetail } from '../../domain/agent-detail.ts'
+import { AgentDetailSchema, type AgentDetail } from '@score/contract'
 import { defaultAgentStyle } from '../../domain/agents.ts'
 import { redact, redactBounded } from '../../redact.ts'
 import { runHermes, type HermesRunner } from './cli.ts'
@@ -163,12 +163,8 @@ export class ProfilesReader {
     return directory(parent) && directory(path) ? path : null
   }
   private async model(profile: string, home: string | null): Promise<AgentDetail['model']> {
-    const unavailable = {
-      id: 'unknown',
-      label: 'Model unavailable',
-      via: 'Unavailable',
-      fallback: null,
-    }
+    // The contract's detail model is null when it can't be read (§8).
+    const unavailable = null
     if (!home) return unavailable
     const stat = fileStat(home, 'config.yaml')
     if (!stat) return unavailable

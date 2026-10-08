@@ -144,11 +144,11 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
       data: agent,
     })),
     {
-      at: 500,
+      at: 550,
       kind: 'room.upserted',
       data: {
         id: roomId,
-        name: '#demo-project',
+        name: '#activity-feed',
         kind: 'room',
         leadAgentId: 'lead',
         members: agents.map((agent) => agent.id),

@@ -81,7 +81,7 @@ test('the whole fake scenario passes real ingest validation and covers every dur
   const stored = events()
   const expectedTypes = StreamEventSchema.options.map((schema) => schema.shape.type.value)
   expect([...new Set(stored.map((event) => event.type))].sort()).toEqual(expectedTypes.sort())
-  expect(stored).toHaveLength(createScenario(schedulerStart).length)
+  expect(stored).toHaveLength(createScenario(schedulerStart).length + 2)
   expect(
     stored.filter((event) => event.type === 'approval.requested').map((event) => event.data.origin),
   ).toEqual(['score-run', 'gateway', 'kanban'])
@@ -119,11 +119,21 @@ test('restart replays scenario observations while keeping durable approval decis
   const second = events().slice(first.length)
   expect(
     second
-      .filter((event) => !event.type.startsWith('approval.'))
+      .filter(
+        (event) =>
+          !event.type.startsWith('approval.') &&
+          !event.type.startsWith('message.') &&
+          event.type !== 'room.upserted',
+      )
       .map(({ type, data }) => ({ type, data })),
   ).toEqual(
     first
-      .filter((event) => !event.type.startsWith('approval.'))
+      .filter(
+        (event) =>
+          !event.type.startsWith('approval.') &&
+          !event.type.startsWith('message.') &&
+          event.type !== 'room.upserted',
+      )
       .map(({ type, data }) => ({ type, data })),
   )
   expect(
@@ -133,6 +143,11 @@ test('restart replays scenario observations while keeping durable approval decis
     status: 'approved',
     decision: { by: 'elsewhere' },
   })
+  expect(second.filter((event) => event.type.startsWith('message.'))).toEqual([])
+  // The scenario's own room.upserted step replays like every other non-message step; messages add none.
+  expect(second.filter((event) => event.type === 'room.upserted')).toHaveLength(
+    createScenario(0).filter((step) => step.kind === 'room.upserted').length,
+  )
   expect(second[0]!.seq).toBe(first.length + 1)
   expect(new Set(observations.map((observation) => observation.identity)).size).toBe(
     createScenario(schedulerStart).length * 2,
@@ -275,7 +290,7 @@ test('stop is idempotent, drains in-flight submissions and cancels remaining tim
   await scheduler.advance(20000)
   expect(events()).toHaveLength(1)
   await play()
-  expect(events()).toHaveLength(1 + createScenario(schedulerStart).length)
+  expect(events()).toHaveLength(3 + createScenario(schedulerStart).length)
 })
 
 test('stopping a scripted run prevents later script steps from undoing the cancellation', async () => {
@@ -299,7 +314,7 @@ test('scheduled ingest failures are reported and do not produce unhandled reject
   vi.spyOn(sink, 'submit').mockRejectedValueOnce(failure)
   await play()
   expect(onError).toHaveBeenCalledExactlyOnceWith(failure)
-  expect(events()).toHaveLength(createScenario(schedulerStart).length - 1)
+  expect(events()).toHaveLength(createScenario(schedulerStart).length + 1)
   expect(scheduler.pending).toBe(0)
 })
 
@@ -340,7 +355,7 @@ test('speed scales timer delays while scenario data stays deterministic', async 
   await scheduler.advance(scenarioDuration / 100 - 1)
   expect(events().at(-1)?.type).toBe('agent.updated')
   await scheduler.advance(1)
-  expect(events()).toHaveLength(createScenario(schedulerStart).length)
+  expect(events()).toHaveLength(createScenario(schedulerStart).length + 2)
   expect(events().at(-1)?.data).toMatchObject({ updatedAt: '2026-01-01T12:03:00.000Z' })
 })
 
@@ -360,9 +375,17 @@ test('overdue timers cannot reorder scripted events or skip the running transiti
   ).toMatchObject([{ status: 'queued' }, { status: 'running' }, { status: 'completed' }])
   expect(
     stored
-      .filter((event) => !(event.type === 'run.updated' && event.data.id === runId))
+      .filter(
+        (event) =>
+          event.type !== 'room.upserted' &&
+          !(event.type === 'run.updated' && event.data.id === runId),
+      )
       .map((event) => event.type),
-  ).toEqual(createScenario(schedulerStart).map((step) => step.kind))
+  ).toEqual(
+    createScenario(schedulerStart)
+      .map((step) => step.kind)
+      .filter((kind) => kind !== 'room.upserted'),
+  )
 })
 
 test('stopped runs reject commands and unknown agents cannot start work', async () => {
@@ -376,14 +399,16 @@ test('looping pauses ten seconds then emits fresh identities and entities on the
   port = createHermesPort(loadConfig({}), { scheduler, onError })
   await play()
   const first = events()
-  expect(first).toHaveLength(createScenario(schedulerStart).length)
+  expect(first).toHaveLength(createScenario(schedulerStart).length + 2)
   expect(scheduler.pending).toBe(1)
   await scheduler.advance(9999)
   expect(events()).toEqual(first)
   await scheduler.advance(1 + scenarioDuration)
   const second = events().slice(first.length)
   expect(second).toHaveLength(first.length)
-  expect(new Set(observations.map(({ identity }) => identity)).size).toBe(first.length * 2)
+  expect(new Set(observations.map(({ identity }) => identity)).size).toBe(
+    createScenario(schedulerStart).length * 2,
+  )
   const session = observations[0]!.identity.split(':')[0]
   expect(observations[createScenario(schedulerStart).length]!.identity).toBe(`${session}:1:0`)
   const entityIds = (loopEvents: StreamEvent[]) =>
@@ -409,7 +434,7 @@ test('looping pauses ten seconds then emits fresh identities and entities on the
   expect(results.every((result) => result.status === 'applied')).toBe(true)
   expect(onError).not.toHaveBeenCalled()
   await scheduler.advance(10000 + scenarioDuration)
-  expect(observations[first.length * 2]!.identity).toBe(`${session}:2:0`)
+  expect(observations[createScenario(schedulerStart).length * 2]!.identity).toBe(`${session}:2:0`)
   await port.stop()
   expect(scheduler.pending).toBe(0)
 })

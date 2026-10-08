@@ -1,6 +1,6 @@
 import { type AgentSummary } from '@score/contract'
 import { ProfilesReader, agentSummary } from './profiles.ts'
-import type { AgentDetail } from '../../domain/agent-detail.ts'
+import type { AgentDetail } from '@score/contract'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'

@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import type { Ingest } from '../hub/ingest.ts'
-import { AgentDetailSchema, type AgentDetail } from './agent-detail.ts'
+import { AgentDetailSchema, type AgentDetail } from '@score/contract'
 
 const colors = ['#6B4EFF', '#19C39A', '#FFB61E', '#FF6B8A'] as const
 export function defaultAgentStyle(index: number): AgentStyle {
@@ -73,7 +73,10 @@ export function updateProjectedAgent(sqlite: DatabaseSync, summary: AgentSummary
     storeAgent(sqlite, {
       ...previous,
       ...safe,
-      model: { ...previous.model, ...(safe.model ?? {}) },
+      // A summary without a model keeps the detail's known one; a new model keeps its known source.
+      model: safe.model
+        ? { via: 'Hermes configuration', fallback: null, ...previous.model, ...safe.model }
+        : previous.model,
     })
   return safe
 }

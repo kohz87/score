@@ -41,12 +41,18 @@ test('fake startup streams the scenario and exposes the same adapter status in s
       `/api/stream?since=0&epoch=${hello.data.epoch}`,
       replayAbort.signal,
     )
-    const total = createScenario(0).length
+    const total = createScenario(0).length + 2
     await vi.waitFor(() => expect(replay.seqs).toHaveLength(total), { timeout: 5000 })
     expect(replay.seqs).toEqual(Array.from({ length: total }, (_, index) => index + 1))
     expect(
-      replay.frames.filter((frame) => frame.id !== undefined).map((frame) => frame.type),
-    ).toEqual(createScenario(0).map((step) => step.kind))
+      replay.frames
+        .filter((frame) => frame.id !== undefined && frame.type !== 'room.upserted')
+        .map((frame) => frame.type),
+    ).toEqual(
+      createScenario(0)
+        .map((step) => step.kind)
+        .filter((kind) => kind !== 'room.upserted'),
+    )
     expect(stream.frames.some((frame) => frame.type === 'task.upserted')).toBe(true)
     expect(replay.failure).toBeUndefined()
     expect(stream.failure).toBeUndefined()

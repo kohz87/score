@@ -4,7 +4,7 @@ import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { AgentSummarySchema } from '@score/contract'
-import { AgentDetailSchema } from '../../../src/domain/agent-detail.ts'
+import { AgentDetailSchema } from '@score/contract'
 import { defaultAgentStyle } from '../../../src/domain/agents.ts'
 import { ProfilesReader } from '../../../src/hermes/live/profiles.ts'
 import type { HermesRunner } from '../../../src/hermes/live/cli.ts'
@@ -74,9 +74,9 @@ test('model reads cache by config mtime and refresh on change', async () => {
   expect(runner).toHaveBeenCalledOnce()
   fs.utimesSync(join(home, 'profiles', 'builder', 'config.yaml'), 200, 200)
   runner.mockResolvedValue({ exitCode: 0, stdout: '"changed-model"' })
-  expect((await reader.read('builder', 0, true, { status: 'idle', activity: null })).model.id).toBe(
-    'changed-model',
-  )
+  expect(
+    (await reader.read('builder', 0, true, { status: 'idle', activity: null })).model!.id,
+  ).toBe('changed-model')
   expect(runner).toHaveBeenCalledTimes(2)
 })
 test.each([
@@ -86,9 +86,7 @@ test.each([
   { exitCode: 0, stdout: 'x'.repeat(16385) },
 ])('invalid CLI output degrades safely: %j', async (result) => {
   runner.mockResolvedValue(result)
-  expect(
-    (await reader.read('lead', 0, true, { status: 'idle', activity: null })).model,
-  ).toMatchObject({ id: 'unknown', label: 'Model unavailable' })
+  expect((await reader.read('lead', 0, true, { status: 'idle', activity: null })).model).toBeNull()
 })
 test('redacts before truncating the first paragraph and metadata', async () => {
   fs.writeFileSync(
@@ -144,7 +142,7 @@ test('missing files and unavailable directories remain readable; invalid names a
     personality: { excerpt: '' },
     rulesFile: null,
     skills: [],
-    model: { id: 'unknown' },
+    model: null,
   })
   expect(runner).not.toHaveBeenCalled()
   await expect(

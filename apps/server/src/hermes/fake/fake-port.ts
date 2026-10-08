@@ -1,4 +1,4 @@
-import { AgentDetailSchema, type AgentDetail } from '../../domain/agent-detail.ts'
+import { AgentDetailSchema, type AgentDetail } from '@score/contract'
 import { updateProjectedAgent } from '../../domain/agents.ts'
 import {
   recordKanbanDenial,
@@ -6,6 +6,7 @@ import {
   openKanbanDenialIds,
 } from '../../domain/kanban-denials.ts'
 import { requestRunApproval, respondRunApproval } from '../../domain/approvals.ts'
+import { insertRoom, roomChanged, storeMessage, updateMessage } from '../../domain/rooms.ts'
 import { approvalDraft, patchApproval, readApprovalRow } from '../../domain/approval-store.ts'
 import type { AgentSummary, Approval, RunSummary, TaskSummary } from '@score/contract'
 import { createHash, randomUUID } from 'node:crypto'
@@ -46,6 +47,34 @@ export function stepToObservation(
       if (suppressed) return []
       if (step.kind === 'agent.updated')
         return [{ type: 'agent.updated', data: updateProjectedAgent(sqlite, step.data) }]
+      if (step.kind === 'message.created') {
+        const message = step.data
+        const exists = sqlite.prepare('SELECT id FROM rooms WHERE id = ?').get(message.roomId)
+        if (!exists)
+          insertRoom(
+            sqlite,
+            {
+              id: message.roomId,
+              name: '#activity-feed',
+              kind: 'room',
+              leadAgentId: 'lead',
+              members: exampleAgents().map((agent) => agent.id),
+            },
+            now,
+          )
+        const events = storeMessage(sqlite, message, now)
+        if (!exists && !events.some((event) => event.type === 'room.upserted'))
+          events.push(...roomChanged(sqlite, message.roomId, now))
+        return events
+      }
+      if (step.kind === 'message.delta' || step.kind === 'message.completed')
+        return updateMessage(
+          sqlite,
+          step.data.roomId,
+          step.data.messageId,
+          step.kind === 'message.delta' ? step.data.append : null,
+          now,
+        )
       if (step.kind === 'run.updated') {
         const run = step.data
         sqlite
