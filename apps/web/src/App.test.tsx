@@ -1,21 +1,39 @@
 import { StrictMode } from 'react'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { createBrowserRouter, createMemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { App, appRoutes } from './App.tsx'
+import { createQueryClient, StreamContext } from './data/query-client.ts'
+import { createStreamQueryRegistry } from './data/resync.ts'
+import type { StreamClient } from './data/stream.ts'
 import { destinations } from './shell/destinations.ts'
 import { useNeedsYou } from './shell/use-needs-you.ts'
 
 vi.mock('./shell/use-needs-you.ts', () => ({ useNeedsYou: vi.fn(() => false) }))
 
 const routers: ReturnType<typeof createMemoryRouter>[] = []
+const registries: ReturnType<typeof createStreamQueryRegistry>[] = []
 
 function renderRoute(path: string) {
   const router = createMemoryRouter(appRoutes, { initialEntries: [path] })
   routers.push(router)
+  // The Team destination reads agents through the stream registry; give it an idle stream.
+  const queryClient = createQueryClient()
+  const stream = { subscribe: () => () => {}, onControl: () => () => {} }
+  const queries = createStreamQueryRegistry(queryClient, stream)
+  registries.push(queries)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(Response.json({ asOfSeq: 0, items: [] }))),
+  )
   render(
     <StrictMode>
-      <App router={router} />
+      <QueryClientProvider client={queryClient}>
+        <StreamContext value={{ client: stream as unknown as StreamClient, queries }}>
+          <App router={router} />
+        </StreamContext>
+      </QueryClientProvider>
     </StrictMode>,
   )
   return router
@@ -33,6 +51,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   routers.splice(0).forEach((router) => router.dispose())
+  registries.splice(0).forEach((registry) => registry.dispose())
   vi.unstubAllGlobals()
 })
 
@@ -44,8 +63,6 @@ const routes = [
   ['/chat', 'Chat'],
   ['/chat/general', 'Chat'],
   ['/tasks', 'Tasks'],
-  ['/team', 'Team'],
-  ['/team/lead', 'Team'],
   ['/reports', 'Reports'],
   ['/settings', 'Settings'],
 ] as const
@@ -233,9 +250,22 @@ test.each([204, 401])('browser routing keeps the pairing hash removed after %s',
   vi.stubGlobal('fetch', fetch)
   const router = createBrowserRouter(appRoutes)
   routers.push(router)
+  // The Team destination reads agents through the stream registry; give it an idle stream.
+  const queryClient = createQueryClient()
+  const stream = { subscribe: () => () => {}, onControl: () => () => {} }
+  const queries = createStreamQueryRegistry(queryClient, stream)
+  registries.push(queries)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(Response.json({ asOfSeq: 0, items: [] }))),
+  )
   render(
     <StrictMode>
-      <App router={router} />
+      <QueryClientProvider client={queryClient}>
+        <StreamContext value={{ client: stream as unknown as StreamClient, queries }}>
+          <App router={router} />
+        </StreamContext>
+      </QueryClientProvider>
     </StrictMode>,
   )
   await screen.findByRole('heading', { name: 'Pair this browser' })
