@@ -6,6 +6,7 @@ import { buildLanes, type LaneTaskInput } from './lanes.ts'
 import { pathFromPreview } from './room-panels.ts'
 import { messageFromRow } from './rooms.ts'
 import { projectedTasks } from './tasks.ts'
+import { PAUSED_HEADLINE, teamPausedAt } from './team-pause.ts'
 
 // Read model for Now › Score, computed on request from the projections the ingest path already stored.
 const MADE_TODAY_LIMIT = 5
@@ -46,9 +47,10 @@ function count(n: number): string {
   return word.charAt(0).toUpperCase() + word.slice(1)
 }
 
-export function headlineText(working: number, needsYou: number): string {
-  const first =
-    working === 0
+export function headlineText(working: number, needsYou: number, paused = false): string {
+  const first = paused
+    ? PAUSED_HEADLINE
+    : working === 0
       ? 'Nobody is working.'
       : working === 1
         ? 'One agent is working.'
@@ -213,7 +215,12 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
 
   return {
     now: nowIso,
-    headline: { working, needsYou, text: headlineText(working, needsYou) },
+    paused: teamPausedAt(sqlite) !== null,
+    headline: {
+      working,
+      needsYou,
+      text: headlineText(working, needsYou, teamPausedAt(sqlite) !== null),
+    },
     lanes: built.lanes.map((lane) => ({
       agent: agents.find((agent) => agent.id === lane.agentId)!,
       blocks: lane.blocks,

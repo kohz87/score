@@ -103,7 +103,9 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'session_tool_calls',
     'sessions',
     'task_projections',
+    'team_paused_briefs',
     'team_rules',
+    'team_state',
     'tool_calls',
   ])
   expect(

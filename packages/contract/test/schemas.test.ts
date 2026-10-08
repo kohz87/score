@@ -70,6 +70,7 @@ const cases = [
     {
       asOfSeq: 0,
       now: f.at,
+      paused: false,
       headline: { working: 1, needsYou: 1, text: 'One agent is working. One thing needs you.' },
       lanes: [{ agent: f.agent, blocks: [f.lane] }],
       handoffs: [f.handoff],

@@ -18,7 +18,10 @@ for (const [path, title] of destinations) {
       if (request.resourceType() === 'font') fonts.push(request.url())
     })
     await page.goto(path)
-    await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible()
+    // Now's headline is the sentence about the team, not the word "Now".
+    await expect(
+      page.getByRole('heading', title === 'Now' ? { level: 1 } : { name: title, level: 1 }),
+    ).toBeVisible()
     await expect(
       page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: title }),
     ).toHaveAttribute('aria-current', 'page')
@@ -35,7 +38,10 @@ test('each main nav link navigates and the root redirects to Now', async ({ page
   for (const [path, title] of destinations) {
     await nav.getByRole('link', { name: title }).click()
     await expect(page).toHaveURL(path)
-    await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible()
+    // Now's headline is the sentence about the team, not the word "Now".
+    await expect(
+      page.getByRole('heading', title === 'Now' ? { level: 1 } : { name: title, level: 1 }),
+    ).toBeVisible()
     await expect(nav.getByRole('link', { name: title })).toHaveAttribute('aria-current', 'page')
   }
 })

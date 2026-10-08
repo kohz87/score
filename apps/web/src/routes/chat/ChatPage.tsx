@@ -108,14 +108,14 @@ export function ChatPage() {
         </nav>
       </aside>
       {roomId ? (
-        <ChatThread key={roomId} roomId={roomId} agents={agents.data ?? []} />
+        <ChatThread key={`thread:${roomId}`} roomId={roomId} agents={agents.data ?? []} />
       ) : (
         <section className="chat-thread chat-welcome" aria-label="Conversation">
           <h1>Chat</h1>
           <p>Choose a conversation to see its messages.</p>
         </section>
       )}
-      {roomId && <RoomPanels key={roomId} roomId={roomId} agents={agents.data ?? []} />}
+      {roomId && <RoomPanels key={`panels:${roomId}`} roomId={roomId} agents={agents.data ?? []} />}
     </div>
   )
 }
