@@ -98,5 +98,5 @@ export {
   type ApprovalConfig,
   type Baseline,
 } from './approvals.ts'
-export { KNOWN_PATTERN_KEYS } from './pattern-keys.ts'
+export { ALWAYS_BLOCKED_KEYS, KNOWN_PATTERN_KEYS } from './pattern-keys.ts'
 export { ProfileInventorySchema, type ProfileStepContext } from './profile-management.ts'

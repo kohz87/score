@@ -243,6 +243,11 @@ list is empty.
 render, DB growth. Done when a repeatable load test meets the budgets.
 **5.4 Hermes upgrade drill** · Re-run recorded fixtures and the fingerprint against the newest Hermes; record breakages.
 **5.5 Docs** · README user guide (install, demo, live setup, remote access, agents, troubleshooting).
+**5.6 Verify a new Hermes version** · After a Hermes update, Settings says approvals in Score are paused until the new
+build is checked, and offers "Check this Hermes version": print the fingerprint, compare schemas, capabilities, hooks and
+pattern keys with the tested version, and record the build (union of pattern keys and config keys) only when they match;
+otherwise show what changed. Done when an update with unchanged internals is re-enabled by one confirmed click and a
+changed one stays off with a clear report.
 
 ---
 
