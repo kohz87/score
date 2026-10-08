@@ -156,6 +156,44 @@ export function buildBriefGraph(sqlite: DatabaseSync, briefId: string): BriefGra
   }
   for (const turn of turns) push(turnNode(sqlite, turn))
   for (const { taskId, detail } of tasks) push(taskNode(sqlite, taskId, detail))
+  const announced = z
+    .array(EdgeRowSchema)
+    .parse(
+      sqlite
+        .prepare(
+          'SELECT id, kind, from_block, to_block, at FROM brief_edges WHERE brief_id = ? ORDER BY at, rowid',
+        )
+        .all(briefId),
+    )
+  for (const { taskId, detail } of tasks) {
+    const id = `review:${taskId}`
+    const history = announced.filter((edge) => edge.from_block === id || edge.to_block === id)
+    if (!history.length) continue
+    const reviewRunId = detail?.reviewer
+      ? latestRunId(runsForAgent(sqlite, detail.runIds, detail.reviewer), sqlite)
+      : undefined
+    const run = reviewRunId ? runSummary(sqlite, reviewRunId) : null
+    push({
+      id,
+      kind: 'step',
+      title: `Review: ${detail?.title ?? 'Task'}`,
+      agentId: detail?.reviewer ?? null,
+      state: run
+        ? run.status === 'waiting_for_approval'
+          ? 'needs_you'
+          : ACTIVE_RUN_STATUSES.includes(run.status)
+            ? 'working'
+            : FAILED_RUN.includes(run.status)
+              ? 'failed'
+              : 'done'
+        : history.at(-1)?.kind === 'sent_back' || detail?.column === 'done'
+          ? 'done'
+          : 'planned',
+      subtitle: detail?.reviewer ?? 'Review',
+      taskId,
+      layout: { col: 0, row: 0 },
+    })
+  }
 
   // Plan steps nobody started yet are shown as planned nodes.
   const planNodes: { id: string; turn: string }[] = []
@@ -241,15 +279,7 @@ export function buildBriefGraph(sqlite: DatabaseSync, briefId: string): BriefGra
     [blocks.get(block), block, `turn:${block}`, `task:${block}`].find(
       (candidate) => candidate !== undefined && known.has(candidate),
     )
-  for (const edge of z
-    .array(EdgeRowSchema)
-    .parse(
-      sqlite
-        .prepare(
-          'SELECT id, kind, from_block, to_block, at FROM brief_edges WHERE brief_id = ? ORDER BY at, rowid',
-        )
-        .all(briefId),
-    )) {
+  for (const edge of announced) {
     const from = resolve(edge.from_block)
     const to = resolve(edge.to_block)
     if (!from || !to || from === to || edgeKeys.has(edge.id)) continue
@@ -357,7 +387,37 @@ export function readBriefFlow(
     edges = edges.filter((edge) => kept.has(edge.from) && kept.has(edge.to))
     layout(nodes, edges)
   }
-  return { brief: graph.summary, nodes, edges, stats }
+  return {
+    brief: graph.summary,
+    nodes,
+    edges,
+    stats,
+    notice: unlinkedWorkNotice(sqlite, briefId, all, firstStart, endMs),
+  }
+}
+
+// Links stay exact, so other work these agents did during the brief is left out; say so rather than guess.
+function unlinkedWorkNotice(
+  sqlite: DatabaseSync,
+  briefId: string,
+  nodes: readonly FlowNode[],
+  fromIso: string,
+  toMs: number,
+): string | null {
+  const agents = [...new Set(nodes.flatMap((node) => (node.agentId ? [node.agentId] : [])))]
+  if (!agents.length) return null
+  const other = sqlite
+    .prepare(
+      `SELECT 1 FROM task_projections
+        WHERE json_extract(detail, '$.assignee') IN (SELECT value FROM json_each(?))
+          AND json_extract(detail, '$.updatedAt') BETWEEN ? AND ?
+          AND id NOT IN (SELECT task_id FROM brief_tasks WHERE brief_id = ?)
+        LIMIT 1`,
+    )
+    .get(JSON.stringify(agents), fromIso, new Date(toMs).toISOString(), briefId)
+  return other
+    ? "These agents also worked on tasks this brief didn't start; they aren't shown here."
+    : null
 }
 
 /** Which brief a node belongs to: turns by their chain, tasks by their newest link. */
@@ -373,7 +433,7 @@ export function briefOfNode(sqlite: DatabaseSync, nodeId: string): string {
     row = sqlite
       .prepare('SELECT chain_id AS brief_id FROM message_runs WHERE message_id = ?')
       .get(id)
-  else if (kind === 'task')
+  else if (kind === 'task' || kind === 'review')
     row = sqlite
       .prepare(
         'SELECT brief_id FROM brief_tasks WHERE task_id = ? ORDER BY linked_at DESC, rowid DESC LIMIT 1',
@@ -444,6 +504,14 @@ export function latestRunId(runIds: string[], sqlite: DatabaseSync): string | un
     .sort((left, right) => (left.at < right.at ? 1 : left.at > right.at ? -1 : 0))[0]?.id
 }
 
+function runsForAgent(sqlite: DatabaseSync, runIds: string[], agentId: string | null): string[] {
+  if (!agentId) return []
+  return runIds.filter((id) => {
+    const row = sqlite.prepare('SELECT profile FROM runs WHERE id = ?').get(id)
+    return row !== undefined && z.object({ profile: z.string() }).parse(row).profile === agentId
+  })
+}
+
 function pendingRunApproval(sqlite: DatabaseSync, runId: string) {
   const row = sqlite
     .prepare(
@@ -473,17 +541,24 @@ export function readFlowNode(sqlite: DatabaseSync, nodeId: string, nowMs: number
       tools: run?.toolsUsed ?? [],
     })
   }
-  if (nodeId.startsWith('task:')) {
-    const task = briefTasks(sqlite, briefId).find((item) => `task:${item.taskId}` === nodeId)
+  if (node.taskId) {
+    const task = briefTasks(sqlite, briefId).find((item) => item.taskId === node.taskId)
     const detail = task?.detail ? taskWithApproval(sqlite, task.detail, nowMs) : undefined
-    const runId = detail ? latestRunId(detail.runIds, sqlite) : undefined
+    const runId = detail
+      ? latestRunId(runsForAgent(sqlite, detail.runIds, node.agentId), sqlite)
+      : undefined
     const run = runId ? runSummary(sqlite, runId) : null
     return FlowNodeDetailSchema.parse({
       node,
       ...empty,
       description: detail?.body ?? '',
       steps: detail?.steps ?? [],
-      approval: detail?.pendingApproval ?? null,
+      approval:
+        detail?.pendingApproval?.agentId === node.agentId
+          ? detail.pendingApproval
+          : runId
+            ? pendingRunApproval(sqlite, runId)
+            : null,
       run,
       model: run?.model ?? null,
       tools: run?.toolsUsed ?? [],
@@ -517,9 +592,14 @@ export function activeRunOfNode(sqlite: DatabaseSync, nodeId: string): Stoppable
     ? briefTurns(sqlite, briefId)
         .filter((turn) => `turn:${turn.message_id}` === nodeId && turn.run_id)
         .map((turn) => turn.run_id!)
-    : (briefTasks(sqlite, briefId).find((task) => `task:${task.taskId}` === nodeId)?.detail
-        ?.runIds ?? [])
-  for (const runId of candidates) {
+    : (() => {
+        const node = buildBriefGraph(sqlite, briefId).nodes.find((item) => item.id === nodeId)
+        const detail = briefTasks(sqlite, briefId).find(
+          (task) => task.taskId === node?.taskId,
+        )?.detail
+        return detail ? runsForAgent(sqlite, detail.runIds, node?.agentId ?? null) : []
+      })()
+  for (const runId of [...candidates].reverse()) {
     const row = sqlite.prepare('SELECT profile, status, origin FROM runs WHERE id = ?').get(runId)
     if (row === undefined) continue
     const run = z.object({ profile: z.string(), status: z.string(), origin: z.string() }).parse(row)

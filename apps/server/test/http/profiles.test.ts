@@ -475,3 +475,14 @@ test.each([
     lifecycle: { state: 'needs_attention' },
   })
 })
+
+test('agent management needs loopback or a TLS remote connection', async () => {
+  const { profileManagementAllowed } = await import('../../src/http/profiles.ts')
+  expect(profileManagementAllowed({ host: '127.0.0.1', remote: undefined } as never)).toBe(true)
+  expect(
+    profileManagementAllowed({ host: '192.168.1.5', remote: { tlsCert: '/c.pem' } } as never),
+  ).toBe(true)
+  expect(
+    profileManagementAllowed({ host: '192.168.1.5', remote: { insecureHttp: true } } as never),
+  ).toBe(false)
+})

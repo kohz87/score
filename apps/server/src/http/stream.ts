@@ -9,6 +9,7 @@ const QuerySchema = z.object({ since: z.string().optional(), epoch: z.string().o
 
 export interface StreamRouteOptions extends Omit<StreamOptions, 'fanout' | 'logError'> {
   ingest: Ingest
+  remote?: boolean
   fanoutOptions?: FanoutOptions
 }
 
@@ -22,9 +23,12 @@ export function registerStreamRoute(app: FastifyInstance, options: StreamRouteOp
     reply.hijack()
     reply.raw.writeHead(200, {
       'content-type': 'text/event-stream; charset=utf-8',
-      'cache-control': 'no-cache, no-transform',
+      'cache-control': options.remote ? 'no-store' : 'no-cache, no-transform',
       'x-accel-buffering': 'no',
     })
+    const unwatch = app.pairing.watch(request.headers.cookie, () => reply.raw.destroy())
+    reply.raw.once('close', unwatch)
+    if (reply.raw.destroyed) return
     await serveStream(
       reply.raw,
       { cursor, epoch: query.epoch },

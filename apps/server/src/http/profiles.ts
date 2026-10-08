@@ -29,12 +29,14 @@ export function registerProfileRoutes(
   const { db, ingest, port, config } = deps
   const operations = new ProfileOperations(db, ingest, port, deps.clock)
   const receipts = requestIdempotency(db, deps.clock)
+  // Creating agents writes API keys and deleting them removes data, so the transport must be private: loopback, or
+  // remote mode over TLS. Plain-HTTP remote mode (owner-accepted for everyday use) refuses these actions.
   const localOnly = async () => {
-    if (!['localhost', '127.0.0.1', '::1'].includes(config.host))
+    if (!profileManagementAllowed(config))
       throw new HttpError(
         403,
         'feature_disabled',
-        'Profile management is available on loopback only',
+        'Managing agents needs Score on this machine or a TLS connection (SCORE_TLS_CERT)',
       )
   }
   const mutation = {
@@ -115,4 +117,9 @@ export function registerProfileRoutes(
     })
     return response
   })
+}
+
+export function profileManagementAllowed(config: Pick<Config, 'host' | 'remote'>): boolean {
+  const loopback = ['localhost', '127.0.0.1', '::1'].includes(config.host)
+  return loopback || Boolean(config.remote?.tlsCert)
 }

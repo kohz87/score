@@ -33,6 +33,7 @@ test('a flow carries nodes, typed edges and stats, capped at 200 nodes', () => {
     nodes: [node],
     edges: [{ id: 'e1', from: 'brief:brief-1', to: node.id, kind: 'planned', label: null }],
     stats: { runningSec: 12, steps: 1, handoffs: 0, spendUsd: null, eta: null },
+    notice: null,
   }
   expect(BriefFlowSchema.parse(flow)).toEqual(flow)
   for (const kind of ['flow', 'handoff', 'review', 'sent_back', 'planned'])

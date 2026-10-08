@@ -1,6 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { BriefFlowSchema, BriefSummarySchema, BriefsListSchema } from '@score/contract'
+import {
+  BriefFlowSchema,
+  BriefSummarySchema,
+  BriefsListSchema,
+  BriefLogPageSchema,
+  FlowNodeDetailSchema,
+  NodeStopResponseSchema,
+} from '@score/contract'
 import { apiFetch } from '../../../data/api.ts'
 import { useStream } from '../../../data/query-client.ts'
 
@@ -38,7 +45,9 @@ export function useBriefFlow(briefId: string | undefined) {
   useEffect(() => {
     if (!briefId) return
     const refresh = () =>
-      void queryClient.invalidateQueries({ queryKey: briefFlowKey(briefId), exact: true })
+      void queryClient
+        .cancelQueries({ queryKey: briefFlowKey(briefId) })
+        .then(() => queryClient.invalidateQueries({ queryKey: briefFlowKey(briefId) }))
     const offEvent = stream.subscribe((event) => {
       if (
         (event.type === 'brief.upserted' && event.data.id === briefId) ||
@@ -46,7 +55,15 @@ export function useBriefFlow(briefId: string | undefined) {
           (event.data.briefId === briefId || event.data.briefId === null)) ||
         event.type === 'task.upserted' ||
         event.type === 'run.updated' ||
-        event.type === 'message.created'
+        event.type === 'message.created' ||
+        event.type === 'message.delta' ||
+        event.type === 'message.completed' ||
+        event.type === 'approval.requested' ||
+        event.type === 'approval.updated' ||
+        event.type === 'task.activity' ||
+        event.type === 'log.line' ||
+        event.type === 'lane.upserted' ||
+        event.type === 'gap.recorded'
       )
         refresh()
     })
@@ -85,5 +102,49 @@ export function useBriefRunControl(briefId: string) {
         queryClient.invalidateQueries({ queryKey: ['flow', 'briefs'] }),
       ])
     },
+  })
+}
+
+export function useFlowNode(briefId: string, nodeId: string | null) {
+  return useQuery({
+    queryKey: [...briefFlowKey(briefId), 'node', nodeId],
+    enabled: nodeId !== null,
+    queryFn: async ({ signal }) =>
+      FlowNodeDetailSchema.parse(
+        await apiFetch(`flow/nodes/${encodeURIComponent(nodeId!)}`, { signal }),
+      ),
+    retry: false,
+  })
+}
+
+export function useBriefLog(briefId: string, filter: string) {
+  return useInfiniteQuery({
+    queryKey: [...briefFlowKey(briefId), 'log', filter],
+    initialPageParam: null as string | null,
+    queryFn: async ({ signal, pageParam }) => {
+      const params = new URLSearchParams()
+      if (filter === 'tool') params.set('kind', 'tool')
+      else if (filter !== 'all') params.set('agent', filter.slice(6))
+      if (pageParam) params.set('cursor', pageParam)
+      return BriefLogPageSchema.parse(
+        await apiFetch(`briefs/${encodeURIComponent(briefId)}/log?${params}`, { signal }),
+      )
+    },
+    getNextPageParam: (page) => page.nextCursor,
+    retry: false,
+  })
+}
+
+export function useStopFlowNode(briefId: string, nodeId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async () =>
+      NodeStopResponseSchema.parse(
+        await apiFetch(`flow/nodes/${encodeURIComponent(nodeId)}/stop`, {
+          method: 'POST',
+          headers: { 'Idempotency-Key': crypto.randomUUID() },
+        }),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: briefFlowKey(briefId) }),
   })
 }

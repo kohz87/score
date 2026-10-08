@@ -11,6 +11,7 @@ const agentTextTokens: Record<string, string> = {
 }
 
 export function elapsedTime(seconds: number) {
+  if (seconds < 1) return 'just now'
   if (seconds < 60) return `${seconds} sec`
   if (seconds < 3600) return `${Math.floor(seconds / 60)} min`
   const minutes = Math.floor((seconds % 3600) / 60)

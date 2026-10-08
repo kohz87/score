@@ -350,7 +350,10 @@ export function FlowCanvas({ nodes, edges, agents, selectedId = null, onSelect }
                 const a = points[1]!
                 const b = points[2]!
                 const labelAt = routed.back
-                  ? { x: (a.x + b.x) / 2, y: a.y - 6 }
+                  ? {
+                      x: (a.x + b.x) / 2,
+                      y: (a.y + b.y) / 2 + (edge.kind === 'sent_back' && a.x === b.x ? 16 : -6),
+                    }
                   : { x: a.x, y: (points[0]!.y + points[3]!.y) / 2 - 8 }
                 const from = nodeById.get(edge.from)?.title ?? edge.from
                 const to = nodeById.get(edge.to)?.title ?? edge.to

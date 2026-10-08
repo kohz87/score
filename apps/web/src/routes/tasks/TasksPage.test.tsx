@@ -169,6 +169,14 @@ test('empty board explains that there are no tasks', async () => {
   expect(screen.getAllByText('No tasks')).toHaveLength(5)
 })
 
+test('a just-started task says just now', async () => {
+  boardTasks = [task('new', { column: 'working', elapsedSec: 0 })]
+  setup()
+  const card = await screen.findByRole('link', { name: 'T-new: Task new' })
+  expect(within(card).getByText('just now')).toBeDefined()
+  expect(within(card).queryByText('0 sec')).toBeNull()
+})
+
 test('failed task request can be retried', async () => {
   const fetchSnapshot = fetchMock.getMockImplementation()!
   let failed = true

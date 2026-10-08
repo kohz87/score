@@ -102,7 +102,7 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
   }
   const reviewRun = {
     ...exampleRun('reviewer', id('scenario-review'), time(6650)),
-    refs: [{ kind: 'task' as const, taskId }],
+    refs: [{ kind: 'task' as const, taskId: reviewTaskId }],
   }
   const approval = (origin: Approval['origin'], agentId: string, at: number): Approval => ({
     id: id(`approval-${origin}`),
@@ -288,6 +288,24 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
         caption: 'Added the page size to the feed',
       },
     },
+    {
+      at: 3801,
+      kind: 'message.created',
+      data: {
+        id: id('message-build-files'),
+        roomId,
+        author: { kind: 'agent', agentId: 'builder' },
+        to: [],
+        parts: [
+          { kind: 'tools', summary: 'Edited 2 files', runId: run.id },
+          { kind: 'file', path: 'src/activity-feed.ts', added: 24, removed: 3 },
+          { kind: 'file', path: 'src/feed-card.css', added: 12, removed: 2 },
+        ],
+        createdAt: time(3801),
+        streaming: false,
+        refs: [{ kind: 'run', runId: run.id }],
+      },
+    },
     { at: 5000, kind: 'gap.recorded', data: { source: 'fake', runId: run.id, ...gap } },
     { at: 5100, kind: 'run.updated', data: { ...run, status: 'running', gaps: [gap] } },
     {
@@ -339,8 +357,8 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
         briefId,
         handoff: {
           id: id('handoff-review'),
-          from: { agentId: 'builder', blockId: block.id },
-          to: { agentId: 'reviewer', blockId: id('block-review') },
+          from: { agentId: 'builder', blockId: `task:${taskId}` },
+          to: { agentId: 'reviewer', blockId: `task:${reviewTaskId}` },
           kind: 'review',
           at: time(6700),
         },
@@ -364,7 +382,7 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
         ...run,
         status: 'completed',
         endedAt: time(8000),
-        toolsUsed: ['terminal', 'editor'],
+        toolsUsed: ['terminal', 'edit_file'],
         gaps: [gap],
       },
     },
@@ -645,8 +663,8 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
         briefId,
         handoff: {
           id: id('handoff-build'),
-          from: { agentId: 'lead', blockId: id('message-plan') },
-          to: { agentId: 'builder', blockId: block.id },
+          from: { agentId: 'lead', blockId: `turn:${id('message-plan')}` },
+          to: { agentId: 'builder', blockId: `task:${taskId}` },
           kind: 'handoff',
           at: time(1650),
         },
@@ -660,8 +678,8 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
         briefId,
         handoff: {
           id: id('handoff-sent-back'),
-          from: { agentId: 'reviewer', blockId: id('block-review') },
-          to: { agentId: 'builder', blockId: block.id },
+          from: { agentId: 'reviewer', blockId: `task:${reviewTaskId}` },
+          to: { agentId: 'builder', blockId: `task:${taskId}` },
           kind: 'sent_back',
           at: time(7900),
         },

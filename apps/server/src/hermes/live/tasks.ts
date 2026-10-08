@@ -9,8 +9,13 @@ import {
   taskWithApproval,
 } from '../../domain/tasks.ts'
 import type { ObservationSink } from '../port.ts'
-import { tailTaskEvents, type TaskEvent } from './kanban.ts'
+import { readTaskEvents, tailTaskEvents, type TaskEvent } from './kanban.ts'
 import { eventActivity, readTaskDetails } from './task-model.ts'
+import {
+  projectReviewTransitions,
+  reviewTransitionsFrom,
+  type ReviewTransition,
+} from './flow-history.ts'
 import { createTailer } from './tailer.ts'
 import { hermesPaths, resolveHermesHome } from './paths.ts'
 import { incarnationOf, HermesDbMissing } from './sqlite.ts'
@@ -34,8 +39,20 @@ export class LiveTasks {
         try {
           const batch = tailTaskEvents(sqlite, { afterId, limit })
           const tasks = readTaskDetails(sqlite)
+          const reviews = reviewTransitionsFrom(batch.rows)
+          // A task linked to a brief after its review events went past the tailer still needs its edges: read the
+          // history of newly linked tasks once (by id), never the whole board.
+          for (const taskId of this.linkedTaskIds()) {
+            if (this.backfilled.has(taskId)) continue
+            const history = readTaskEvents(sqlite, taskId)
+            if (history.malformed) continue
+            reviews.push(...reviewTransitionsFrom(history.rows))
+            this.backfilled.add(taskId)
+          }
           sqlite.exec('COMMIT')
           this.latest = tasks
+          // A poll can read several batches; keep every batch's transitions until they're projected.
+          this.reviews.push(...reviews)
           return batch
         } catch (error) {
           sqlite.exec('ROLLBACK')
@@ -45,6 +62,14 @@ export class LiveTasks {
     })
   }
   private latest: TaskDetail[] = []
+  private reviews: ReviewTransition[] = []
+  private readonly backfilled = new Set<string>()
+  private linkedTaskIds(): string[] {
+    return z
+      .array(z.object({ task_id: z.string() }))
+      .parse(this.db.sqlite.prepare('SELECT DISTINCT task_id FROM brief_tasks').all())
+      .map((row) => row.task_id)
+  }
 
   poll(): Promise<void> {
     this.flight ??= this.pollOnce().finally(() => {
@@ -105,6 +130,8 @@ export class LiveTasks {
         },
       })
     }
+    const reviews = this.reviews.splice(0)
+    await projectReviewTransitions(this.db.sqlite, this.sink, source, reviews)
     // Mutable fields and tasks without events still need a baseline/reconciliation observation.
     const changed = this.latest.filter((task) => {
       const old = readProjectedTask(this.db.sqlite, task.id)

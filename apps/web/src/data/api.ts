@@ -1,4 +1,5 @@
 import { ErrorEnvelopeSchema } from '@score/contract'
+import { announceLogout, remoteTransport } from './session.ts'
 
 export class ApiError extends Error {
   constructor(
@@ -28,13 +29,19 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<un
   })
   if (!response.ok) {
     const payload: unknown = await response.json().catch(() => null)
-    const envelope = ErrorEnvelopeSchema.safeParse(payload)
-    const error = envelope.success ? envelope.data.error : null
+    const parsed = ErrorEnvelopeSchema.safeParse(payload)
+    if (
+      response.status === 401 &&
+      remoteTransport() &&
+      window.location.pathname !== '/pair' &&
+      !path.replace(/^\/+/, '').startsWith('session')
+    )
+      announceLogout()
     throw new ApiError(
       response.status,
-      error?.code ?? 'request_failed',
-      error?.message ?? 'The request failed. Please try again.',
-      error?.details,
+      parsed.success ? parsed.data.error.code : 'request_failed',
+      parsed.success ? parsed.data.error.message : 'The request failed. Please try again.',
+      parsed.success ? parsed.data.error.details : undefined,
     )
   }
   return response.status === 204 ? undefined : response.json()

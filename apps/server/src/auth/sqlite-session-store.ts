@@ -1,10 +1,54 @@
 import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
-import type { SessionStore } from './session-store.ts'
+import { RemoteSessionSchema, type RemoteSession, type SessionStore } from './session-store.ts'
 
 const SessionRowSchema = z.object({ expires_at: z.number().int() })
 
 export class SqliteSessionStore implements SessionStore {
+  createRemote(session: RemoteSession): void {
+    const value = RemoteSessionSchema.parse(session)
+    this.db.sqlite
+      .prepare(
+        'INSERT INTO remote_sessions (hash, id, label, address, created_at, last_seen_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        value.hash,
+        value.id,
+        value.label,
+        value.address,
+        value.createdAt,
+        value.lastSeenAt,
+        value.expiresAt,
+      )
+  }
+
+  getRemote(hash: string): RemoteSession | undefined {
+    const row = this.db.sqlite
+      .prepare(
+        'SELECT hash, id, label, address, created_at AS createdAt, last_seen_at AS lastSeenAt, expires_at AS expiresAt FROM remote_sessions WHERE hash = ?',
+      )
+      .get(hash)
+    return row === undefined ? undefined : RemoteSessionSchema.parse(row)
+  }
+
+  listRemote(): RemoteSession[] {
+    return this.db.sqlite
+      .prepare(
+        'SELECT hash, id, label, address, created_at AS createdAt, last_seen_at AS lastSeenAt, expires_at AS expiresAt FROM remote_sessions ORDER BY created_at DESC',
+      )
+      .all()
+      .map((row) => RemoteSessionSchema.parse(row))
+  }
+
+  touchRemote(hash: string, now: number, address: string): void {
+    this.db.sqlite
+      .prepare('UPDATE remote_sessions SET last_seen_at = ?, address = ? WHERE hash = ?')
+      .run(now, address, hash)
+  }
+
+  revokeRemote(hash: string): void {
+    this.db.sqlite.prepare('DELETE FROM remote_sessions WHERE hash = ?').run(hash)
+  }
   constructor(
     private readonly db: ScoreDb,
     private readonly clock: () => number = Date.now,

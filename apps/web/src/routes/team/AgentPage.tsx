@@ -138,22 +138,23 @@ function AgentProfile({ agentId }: { agentId: string }) {
           </button>
         ))}
       </div>
-      {tab === 'Overview' && (
-        <ProfileSettings key={`${agent.id}:${agent.name}:${agent.role}`} agent={agent} />
-      )}
       <div id="team-tab-panel" role="tabpanel" aria-labelledby={`team-tab-${tab}`} tabIndex={0}>
         {tab === 'Overview' ? (
-          <AgentOverview
-            agent={agent}
-            agents={agents.data ?? []}
-            selectTab={(name, target) => {
-              // The Overview's "New routine" link opens the form; a file link picks SOUL.md or AGENTS.md.
-              setComposing(name === 'Routines')
-              if (target) setFile(target)
-              setTab(name)
-              tabRefs.current[tabs.indexOf(name)]?.focus()
-            }}
-          />
+          <>
+            <AgentOverview
+              agent={agent}
+              agents={agents.data ?? []}
+              selectTab={(name, target) => {
+                // The Overview's "New routine" link opens the form; a file link picks SOUL.md or AGENTS.md.
+                setComposing(name === 'Routines')
+                if (target) setFile(target)
+                setTab(name)
+                tabRefs.current[tabs.indexOf(name)]?.focus()
+              }}
+            />
+            {/* Settings and the danger zone come after the overview the design shows. */}
+            <ProfileSettings key={`${agent.id}:${agent.name}:${agent.role}`} agent={agent} />
+          </>
         ) : tab === 'Routines' ? (
           <RoutinesTab
             key={String(composing)}

@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import type { BriefStatus, BriefSummary } from '@score/contract'
 import { useStreamQuery } from '../../../data/query-client.ts'
 import { taskAgentsQuery, taskRoomsQuery } from '../../tasks/task-queries.ts'
+import { FlowInspector } from './FlowInspector.tsx'
+import { FlowLog, FlowStats } from './FlowLog.tsx'
 import { FlowCanvas } from './FlowCanvas.tsx'
 import { useBriefFlow, useBriefLists, useBriefRunControl } from './flow-queries.ts'
 import './flow.css'
@@ -50,7 +52,19 @@ export function FlowView({ onSelect }: FlowViewProps = {}) {
   const briefId = routeBriefId ?? activeItems[0]?.id ?? recentItems[0]?.id
   const flow = useBriefFlow(briefId)
 
-  const selectedId = selection && selection.briefId === briefId ? selection.nodeId : null
+  const selectedId =
+    selection &&
+    selection.briefId === briefId &&
+    flow.data?.nodes.some((node) => node.id === selection.nodeId)
+      ? selection.nodeId
+      : (flow.data?.nodes.find((node) => node.state === 'needs_you')?.id ??
+        flow.data?.nodes.find((node) => node.kind === 'step')?.id ??
+        null)
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
   const select = (nodeId: string) => {
     if (briefId) setSelection({ briefId, nodeId })
     onSelect?.(nodeId)
@@ -85,6 +99,7 @@ export function FlowView({ onSelect }: FlowViewProps = {}) {
             </span>
           )}
           <h2>{brief?.title ?? 'Flow'}</h2>
+          {flow.data?.notice && <p className="flow-notice">{flow.data.notice}</p>}
         </div>
         <div className="flow-heading__controls">
           {(activeItems.length > 0 || recentItems.length > 0) && (
@@ -140,16 +155,32 @@ export function FlowView({ onSelect }: FlowViewProps = {}) {
           Loading the flow...
         </p>
       ) : (
-        <section className="flow-panel" aria-label="Flow of work">
-          <FlowCanvas
-            key={flow.data.brief.id}
-            nodes={flow.data.nodes}
-            edges={flow.data.edges}
+        <div className="flow-main">
+          <section className="flow-panel" aria-label="Flow of work">
+            <FlowCanvas
+              key={flow.data.brief.id}
+              nodes={flow.data.nodes}
+              edges={flow.data.edges}
+              agents={agents.data ?? []}
+              selectedId={selectedId}
+              onSelect={select}
+            />
+          </section>
+          <FlowInspector
+            key={briefId}
+            briefId={briefId}
+            nodeId={selectedId}
+            roomId={flow.data.brief.roomId}
             agents={agents.data ?? []}
-            selectedId={selectedId}
-            onSelect={select}
+            now={now}
           />
-        </section>
+        </div>
+      )}
+      {flow.data && (
+        <div className="flow-bottom">
+          <FlowLog key={briefId} briefId={briefId} agents={agents.data ?? []} />
+          <FlowStats stats={flow.data.stats} />
+        </div>
       )}
     </div>
   )
