@@ -83,6 +83,23 @@ export function stepToObservation(
       }
       if (step.kind === 'agent.updated')
         return [{ type: 'agent.updated', data: updateProjectedAgent(sqlite, step.data) }]
+      if (step.kind === 'room.upserted') {
+        // Announce a room only once it exists, so the API and the stream never disagree.
+        const room = step.data
+        if (!sqlite.prepare('SELECT id FROM rooms WHERE id = ?').get(room.id))
+          insertRoom(
+            sqlite,
+            {
+              id: room.id,
+              name: room.name,
+              kind: room.kind,
+              leadAgentId: room.leadAgentId,
+              members: room.members,
+            },
+            now,
+          )
+        return roomChanged(sqlite, room.id, now)
+      }
       if (step.kind === 'message.created') {
         const message = step.data
         const exists = sqlite.prepare('SELECT id FROM rooms WHERE id = ?').get(message.roomId)

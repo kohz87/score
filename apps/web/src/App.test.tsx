@@ -7,6 +7,7 @@ import { destinations } from './shell/destinations.ts'
 import { useNeedsYou } from './shell/use-needs-you.ts'
 
 vi.mock('./shell/use-needs-you.ts', () => ({ useNeedsYou: vi.fn(() => false) }))
+vi.mock('./routes/chat/ChatPage.tsx', () => ({ ChatPage: () => <h1>Chat</h1> }))
 
 const routers: ReturnType<typeof createMemoryRouter>[] = []
 
