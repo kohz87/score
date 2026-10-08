@@ -4,6 +4,7 @@ import type { ScoreDb } from '../../db/index.ts'
 import type { ObservationSink } from '../port.ts'
 import { CredentialsUnavailable } from './credentials.ts'
 import { GatewayClient, HermesHttpError, StartRunSchema, type StartRun } from './gateway.ts'
+import { attachRunMessage } from '../../domain/message-runs.ts'
 import { runDraft } from './translate.ts'
 
 const PayloadSchema = StartRunSchema.extend({ credentialGeneration: z.int().positive() })
@@ -135,7 +136,10 @@ async function dispatch(
           now,
           now,
         )
-      return inserted.changes ? [runDraft(sqlite, id)] : []
+      return [
+        ...(inserted.changes ? [runDraft(sqlite, id)] : []),
+        ...attachRunMessage(sqlite, row.idempotency_key, id, now),
+      ]
     },
   })
   return { runId: id }
