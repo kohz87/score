@@ -64,6 +64,8 @@ const disposers: (() => void)[] = []
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>
 let items: Message[]
 let rooms: Room[]
+let filesInPlay: string[]
+let learned: { text: string; savedTo: string[]; at: string }[]
 function response(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), { status })
 }
@@ -95,6 +97,8 @@ function emit(type: StreamEvent['type'], data: unknown, seq: number) {
 beforeEach(() => {
   items = [message]
   rooms = [room]
+  filesInPlay = []
+  learned = []
   fetchMock = vi.fn(async (input) => {
     const url = String(input)
     if (url === '/api/agents') return response({ asOfSeq: 1, items: [agent] })
@@ -111,8 +115,8 @@ beforeEach(() => {
     return response({
       asOfSeq: 1,
       room: url.includes('direct-lead') ? direct : room,
-      filesInPlay: [],
-      learned: [],
+      filesInPlay,
+      learned,
     })
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -427,4 +431,79 @@ test('resync follows a changed pagination boundary without skipping messages', a
   await act(async () => queries.register(messagesQuery('general')).refetch())
   await screen.findByText('Fresh boundary')
   expect(screen.queryByText('Old boundary')).toBeNull()
+})
+
+const panel = () => screen.findByRole('complementary', { name: 'About this room' })
+test('side panels show empty states for every card', async () => {
+  setup()
+  const aside = within(await panel())
+  expect(await aside.findByText('No files touched yet.')).toBeDefined()
+  expect(aside.getByText('Nothing saved from this room yet.')).toBeDefined()
+  expect(aside.getByText('Not mirrored to any channel.')).toBeDefined()
+  expect(aside.getByRole('link', { name: 'Manage channels' }).getAttribute('href')).toBe(
+    '/settings',
+  )
+})
+test('side panels list files, learned facts with memory links, and channels', async () => {
+  filesInPlay = ['api/events.py', 'web/feed.ts']
+  learned = [
+    { text: 'Page with a cursor.', savedTo: ['lead', 'ghost'], at: '2026-10-08T10:00:00.000Z' },
+  ]
+  rooms = [{ ...room, channels: [{ platform: 'telegram', label: 'Telegram topic' }] }]
+  fetchMock.mockImplementation(async (input) => {
+    const url = String(input)
+    if (url === '/api/agents') return response({ asOfSeq: 1, items: [agent] })
+    if (url === '/api/rooms') return response({ asOfSeq: 1, rooms, directs: [direct] })
+    if (url.includes('/messages')) return response({ asOfSeq: 1, items, nextCursor: null })
+    return response({ asOfSeq: 1, room: rooms[0], filesInPlay, learned })
+  })
+  setup()
+  const aside = within(await panel())
+  expect(await aside.findByText('api/events.py')).toBeDefined()
+  expect(aside.getByText('web/feed.ts')).toBeDefined()
+  expect(aside.getByText('Page with a cursor.')).toBeDefined()
+  expect(aside.getByText('Saved to Lead’s and ghost’s memory')).toBeDefined()
+  expect(aside.getByRole('link', { name: /Open memory/ }).getAttribute('href')).toBe('/team/lead')
+  expect(await aside.findByText('Telegram topic')).toBeDefined()
+})
+test('side panels refetch when this room completes a message or saves a memory', async () => {
+  setup()
+  const aside = within(await panel())
+  await aside.findByText('No files touched yet.')
+  filesInPlay = ['src/new.ts']
+  emit('message.completed', { messageId: 'other', roomId: 'elsewhere' }, 2)
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  expect(aside.queryByText('src/new.ts')).toBeNull()
+  emit('message.completed', { messageId: 'message-one', roomId: 'general' }, 3)
+  expect(await aside.findByText('src/new.ts')).toBeDefined()
+  learned = [{ text: 'Fresh fact', savedTo: ['lead'], at: '2026-10-08T10:00:00.000Z' }]
+  emit(
+    'memory.saved',
+    { agentIds: ['lead'], text: 'Fresh fact', source: { kind: 'room', roomId: 'general' } },
+    4,
+  )
+  expect(await aside.findByText('Fresh fact')).toBeDefined()
+})
+test('the details toggle expands and collapses the side panels', async () => {
+  setup()
+  await panel()
+  const toggle = screen.getByRole('button', { name: 'Show room details' })
+  expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(toggle)
+  expect(
+    screen.getByRole('button', { name: 'Hide room details' }).getAttribute('aria-expanded'),
+  ).toBe('true')
+})
+test('side panels show an error with retry when the room details fail', async () => {
+  fetchMock.mockImplementation(async (input) => {
+    const url = String(input)
+    if (url === '/api/agents') return response({ asOfSeq: 1, items: [agent] })
+    if (url === '/api/rooms') return response({ asOfSeq: 1, rooms, directs: [direct] })
+    if (url.includes('/messages')) return response({ asOfSeq: 1, items, nextCursor: null })
+    return response({ error: { code: 'internal', message: 'x' } }, 500)
+  })
+  setup()
+  const aside = within(await panel())
+  expect(await aside.findByText('Could not load room details.')).toBeDefined()
+  expect(aside.getByRole('button', { name: 'Try again' })).toBeDefined()
 })
