@@ -112,6 +112,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'team_rules',
     'team_state',
     'tool_calls',
+    'watch_frames',
   ])
   expect(
     db.sqlite

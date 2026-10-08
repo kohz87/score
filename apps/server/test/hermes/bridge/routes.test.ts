@@ -142,13 +142,15 @@ test('valid batch uses D2.3 observation keys and dedupes projections, events, me
     })),
   )
   const tools = server.db.sqlite.prepare('SELECT * FROM session_tool_calls').all()
-  const logs = server.db.sqlite.prepare('SELECT * FROM events').all()
+  const logs = server.db.sqlite.prepare("SELECT * FROM events WHERE type = 'log.line'").all()
   expect(tools).toHaveLength(1)
   expect(logs).toHaveLength(2)
   expect(server.metrics.unknownHooks).toBe(1)
   expect((await server.send(token, events)).json()).toEqual({ ackedThrough: 3 })
   expect(server.db.sqlite.prepare('SELECT * FROM session_tool_calls').all()).toEqual(tools)
-  expect(server.db.sqlite.prepare('SELECT * FROM events').all()).toEqual(logs)
+  expect(server.db.sqlite.prepare("SELECT * FROM events WHERE type = 'log.line'").all()).toEqual(
+    logs,
+  )
   expect(server.metrics.unknownHooks).toBe(1)
 })
 

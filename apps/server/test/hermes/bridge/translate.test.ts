@@ -202,6 +202,6 @@ test('secrets are absent from projections, event log and SQLite bytes; previews 
   for (const planted of [secret, 'planted-key-value', 'planted-password'])
     expect(bytes).not.toContain(planted)
   const logs = server.db.sqlite.prepare('SELECT * FROM events').all()
-  expect(logs).toHaveLength(4)
+  expect(logs.filter((row) => row.type === 'log.line')).toHaveLength(4)
   expect(JSON.stringify(logs)).not.toContain(secret)
 })

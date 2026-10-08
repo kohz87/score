@@ -64,6 +64,13 @@ export function retireIngestKeys(
         .run(...INTERNAL_OBSERVATION_SOURCES, cutoff).changes,
     ),
   )
+  // Watch frames live 7 days (D6), but each agent keeps its newest frame so per-agent `seq` never restarts.
+  db.sqlite
+    .prepare(
+      `DELETE FROM watch_frames WHERE at <= ? AND seq < (
+         SELECT MAX(newer.seq) FROM watch_frames newer WHERE newer.agent_id = watch_frames.agent_id)`,
+    )
+    .run(new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString())
   db.sqlite
     .prepare('DELETE FROM request_receipts WHERE created_at <= ? AND status IS NOT NULL')
     .run(cutoff)

@@ -15,7 +15,8 @@ from . import hermes_private
 from .gates import capture
 from .kanban import capture_denial
 from .client import ScoreClient
-from .redact import bound_payload, digest, scrub, snapshot
+from .redact import (bound_payload, digest, redact_watch, scrub, sensitive_tool, snapshot,
+                     tail_source, touches_credential_file)
 from .spool import Spool, gap_event
 
 
@@ -32,6 +33,51 @@ def merge_ranges(ranges, first, last, at):
     if len(merged) > 100:
         merged = merged[:99] + [(merged[99][0], merged[-1][1], merged[-1][2])]
     ranges[:] = merged
+
+
+def _watch_capture(hook, kwargs, args):
+    """Tool-hook inputs for Watch: (kwargs, args, raw terminal capture or None).
+
+    Credential-bearing tools lose their arguments and results here, before anything is snapshotted. File tools that
+    touch a credential file lose their content. Terminal and code output is kept as a tail (see redact.tail_source);
+    it stays raw until the sender thread redacts it, like every other payload.
+    """
+    try:
+        name = kwargs.get("tool_name")
+        if sensitive_tool(name):
+            return ({key: value for key, value in kwargs.items()
+                     if key not in ("args", "result", "command", "error_message")}, (), None)
+        tool_args = kwargs.get("args")
+        if name in ("write_file", "patch") and touches_credential_file(tool_args):
+            kept = {key: value for key, value in kwargs.items() if key != "result"}
+            kept["args"] = {key: value for key, value in tool_args.items()
+                            if key not in ("content", "patch", "old_string", "new_string")}
+            return kept, args, None
+        if hook != "post_tool_call" or name not in ("terminal", "execute_code"):
+            return kwargs, args, None
+        result = kwargs.get("result")
+        if type(result) is str and len(result) <= 1_000_000 and result.lstrip()[:1] == "{":
+            try:
+                result = json.loads(result)
+            except ValueError:
+                return kwargs, args, None
+        if type(result) is not dict:
+            return kwargs, args, None
+        source = tail_source(result.get("output"))
+        watch = {}
+        if source is not None:
+            watch["raw_output"], watch["full_length"] = source
+        code = result.get("exit_code")
+        if type(code) is int and type(code) is not bool:
+            watch["exit_code"] = code
+        cwd = result.get("cwd") or (tool_args.get("workdir") if type(tool_args) is dict else None)
+        if type(cwd) is str and len(cwd) <= 4096:
+            watch["cwd"] = cwd
+        return kwargs, args, watch or None
+    except Exception:
+        # Fail closed: if the checks above could not run, the arguments and result are not sent at all.
+        return ({key: value for key, value in kwargs.items()
+                 if key not in ("args", "result", "command", "error_message")}, (), None)
 
 
 class HookQueue(queue.Queue):
@@ -120,6 +166,9 @@ class Sender:
     def enqueue(self, hook, args, kwargs):
         profile = hermes_private.current_profile()
         at = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        watch = None
+        if hook in ("pre_tool_call", "post_tool_call"):
+            kwargs, args, watch = _watch_capture(hook, kwargs, args)
         if args:
             # Apply one shared node budget to args and kwargs together.
             payload = snapshot({"kwargs": kwargs, "positional_args": args})
@@ -137,7 +186,7 @@ class Sender:
             denial = capture_denial(kwargs)
             if denial is not None:
                 payload["kanbanDenial"] = denial
-        self.queue.put_nowait({"hook": hook, "at": at, "raw": payload, "digest": command_digest,
+        self.queue.put_nowait({"hook": hook, "at": at, "raw": payload, "digest": command_digest, "watch": watch,
                                "profile": profile, "context": contextvars.copy_context()})
 
     def _take(self, deadline=None):
@@ -192,6 +241,8 @@ class Sender:
                                   "request_id", "transportRequestId") and (value is None or type(value) is str)}
         content = {key: value for key, value in raw["raw"].items() if key not in identifiers}
         safe = raw["context"].run(scrub, content, hermes_private.redact)
+        if raw.get("watch"):
+            safe["watch"] = raw["context"].run(redact_watch, raw["watch"], hermes_private.redact)
         if raw["digest"]:
             safe["command_digest"] = raw["digest"]
         safe = bound_payload(safe)

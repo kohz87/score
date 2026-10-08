@@ -9,6 +9,7 @@ import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
 import { defineLifecycle, guardedUpsert } from '../../hub/projections.ts'
 import { redact, redactBounded, redactValue } from '../../redact.ts'
 import { KanbanDenialSchema, recordKanbanDenial } from '../../domain/kanban-denials.ts'
+import { isSensitiveTool, recordToolFrames, WatchInfoSchema } from '../../domain/watch-frames.ts'
 import type { Producer } from './registry.ts'
 
 export interface BridgeMetrics {
@@ -27,6 +28,8 @@ const ToolPayloadSchema = z.object({
     .string()
     .regex(/^[a-f0-9]{64}$/)
     .nullish(),
+  // The plugin's redacted terminal tail; a malformed one only costs the frame its output.
+  watch: WatchInfoSchema.optional().catch(undefined),
 })
 const ExpirySchema = z.union([
   z.iso.datetime(),
@@ -182,6 +185,16 @@ export function translateBridgeEvent(
     ...parsed.payload,
     ...(parsed.hook === 'post_tool_call' ? { result: decodeResult(parsed.payload.result) } : {}),
   }
+  // Credential-bearing tools keep a name and a status only, whatever the producer sent (D6).
+  if (
+    (parsed.hook === 'pre_tool_call' || parsed.hook === 'post_tool_call') &&
+    isSensitiveTool(
+      typeof parsed.payload.tool_name === 'string' ? parsed.payload.tool_name : undefined,
+    )
+  ) {
+    for (const name of ['args', 'result', 'command', 'watch', 'error_message', 'positional_args'])
+      delete payload[name]
+  }
   // Validate structural identifiers even if the rest of the supported payload will be omitted.
   for (const name of payloadIdentifierNames) {
     if (Object.hasOwn(payload, name)) BridgeIdentifierSchema.nullable().parse(payload[name])
@@ -326,8 +339,33 @@ export function translateBridgeEvent(
             },
           })
         }
+        const frameDrafts: DomainEventDraft[] = []
+        try {
+          for (const frame of recordToolFrames(
+            sqlite,
+            {
+              agentId: producer.profile,
+              at: event.at,
+              sessionId: event.sessionId,
+              toolCallId: event.toolCallId,
+            },
+            {
+              hook: pre ? 'pre' : 'post',
+              tool: tool.tool_name ?? 'unknown',
+              args: tool.args,
+              result,
+              status,
+              watch: tool.watch ?? null,
+            },
+          ))
+            frameDrafts.push({ type: 'watch.frame', data: frame })
+        } catch (error) {
+          // The replay is best effort; a frame that fails validation must not stall the producer's checkpoint.
+          console.error('Watch frame skipped', error)
+        }
         return [
           ...denialDrafts,
+          ...frameDrafts,
           ...(post && tool.gateIds?.length
             ? completeApprovalTool(
                 sqlite,

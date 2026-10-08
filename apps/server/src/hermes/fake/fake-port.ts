@@ -21,6 +21,7 @@ import {
   openKanbanDenialIds,
 } from '../../domain/kanban-denials.ts'
 import { requestRunApproval, respondRunApproval } from '../../domain/approvals.ts'
+import { recordFrame } from '../../domain/watch-frames.ts'
 import { insertRoom, roomChanged, storeMessage, updateMessage } from '../../domain/rooms.ts'
 import { approvalDraft, patchApproval, readApprovalRow } from '../../domain/approval-store.ts'
 import type {
@@ -293,6 +294,21 @@ export function stepToObservation(
             structuredClone(draft) as DomainEventDraft,
             ...completeRunMessage(sqlite, run.id, now, { handoffs: run.status === 'completed' }),
           ]
+      }
+      if (step.kind === 'watch.frame') {
+        // Scripted frames get a per-agent seq like real ones; the script's own seq is only a sort hint.
+        const frame = step.data
+        const stored = recordFrame(sqlite, {
+          agentId: frame.agentId,
+          runId: frame.runId,
+          at: frame.at,
+          // Replaying the script (restart, loop) updates the same frame instead of adding a copy.
+          callKey: `fake:${frame.at}:${frame.seq}`,
+          surface: frame.surface,
+          payload: (frame[frame.surface] ?? frame.terminal)!,
+          caption: frame.caption,
+        })
+        return [{ type: 'watch.frame', data: stored }]
       }
       if (step.kind === 'approval.requested') {
         const approval = step.data
@@ -1263,7 +1279,46 @@ export class FakePort implements HermesPort {
                             now,
                             now,
                           )
-                      return []
+                      // Neutral demo frames so Watch has something to replay in fake mode.
+                      const frames: DomainEventDraft[] = []
+                      for (const [seq, tool] of response.tools.entries()) {
+                        const path = `src/${seq % 2 ? 'feed-card.css' : 'activity-feed.ts'}`
+                        const draft =
+                          tool === 'terminal'
+                            ? {
+                                surface: 'terminal' as const,
+                                payload: {
+                                  cwd: 'demo-project',
+                                  command: ['pnpm test', 'pnpm lint', 'git status'][seq % 3]!,
+                                  output: '3 checks passed',
+                                  status: 'ok' as const,
+                                },
+                                caption: `Ran ${['pnpm test', 'pnpm lint', 'git status'][seq % 3]!}`,
+                              }
+                            : tool === 'edit_file'
+                              ? {
+                                  surface: 'editor' as const,
+                                  payload: {
+                                    path,
+                                    diff: `--- ${path}\n+++ ${path}\n@@ -1,1 +1,2 @@\n const demo = true\n+const edited = true\n`,
+                                    language: path.endsWith('.ts') ? 'typescript' : 'css',
+                                  },
+                                  caption: `Edited ${path}`,
+                                }
+                              : null
+                        if (draft)
+                          frames.push({
+                            type: 'watch.frame',
+                            data: recordFrame(sqlite, {
+                              agentId: req.agentId,
+                              runId,
+                              at: now,
+                              callKey: null,
+                              ...draft,
+                            }),
+                          })
+                      }
+                      return frames
                     },
                   })
                   const current = this.runs.get(runId)!
