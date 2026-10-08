@@ -12,7 +12,8 @@ export interface ModelChoice {
 
 export function formatPrice(option: ModelOption): string {
   if (option.free) return 'Free'
-  return option.price ? `${option.price.input} / ${option.price.output} per 1M` : 'Price unknown'
+  // Subscription providers (e.g. a ChatGPT plan) have no per-token price; say nothing rather than "unknown".
+  return option.price ? `${option.price.input} / ${option.price.output} per 1M` : ''
 }
 
 interface Props {

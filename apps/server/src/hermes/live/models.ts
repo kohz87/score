@@ -3,7 +3,9 @@ import { filterModels } from '../model-options.ts'
 import type { GatewayClient } from './gateway.ts'
 import { providerLabel } from './settings.ts'
 
-const CACHE_MS = 30_000
+// Short: right after a gateway start Hermes answers before it has loaded plans and prices (every Nous model
+// "unavailable", no prices), and a long cache kept that partial answer. The gateway answers in ~0.2 s.
+const CACHE_MS = 5_000
 type Providers = Awaited<ReturnType<GatewayClient['modelOptions']>>['providers']
 
 /** Model choices of the connected providers, from Hermes's own model options (cached briefly). */

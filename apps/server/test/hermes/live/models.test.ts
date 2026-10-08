@@ -58,10 +58,10 @@ test('caps at 200, caches for 30 s and answers [] when the gateway is down', asy
   const load = vi.fn(async () => many)
   const models = new LiveModels(load, () => now)
   expect((await models.list()).length).toBe(200)
-  now = 29_000
+  now = 4_000
   await models.list()
   expect(load).toHaveBeenCalledTimes(1)
-  now = 31_000
+  now = 6_000
   await models.list()
   expect(load).toHaveBeenCalledTimes(2)
   const down = new LiveModels(async () => {
