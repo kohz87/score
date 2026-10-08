@@ -1,6 +1,7 @@
 import { AgentOperationSchema, type AgentOperation } from '@score/contract'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
+import { newId } from '../../data/ids.ts'
 
 const stepLabels: Record<string, string> = {
   create_profile: 'Create profile',
@@ -39,7 +40,7 @@ export function ProfileOperation({ operation }: { operation: AgentOperation }) {
       AgentOperationSchema.parse(
         await apiFetch(`agents/operations/${operation.id}/retry`, {
           method: 'POST',
-          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          headers: { 'Idempotency-Key': newId() },
         }),
       ),
     onSuccess: (next) => client.setQueryData(['team', 'operation', operation.id], next),

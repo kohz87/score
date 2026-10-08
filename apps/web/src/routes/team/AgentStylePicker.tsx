@@ -8,6 +8,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch, ApiError } from '../../data/api.ts'
+import { newId } from '../../data/ids.ts'
 
 export function AgentStylePicker({ agent }: { agent: AgentSummary }) {
   const [open, setOpen] = useState(false)
@@ -22,7 +23,7 @@ export function AgentStylePicker({ agent }: { agent: AgentSummary }) {
       return AgentSummarySchema.parse(
         await apiFetch(`agents/${encodeURIComponent(agent.id)}/style`, {
           method: 'PATCH',
-          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          headers: { 'Idempotency-Key': newId() },
           body: JSON.stringify(style),
         }),
       )

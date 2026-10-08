@@ -80,7 +80,7 @@ test('providers come from `hermes auth list` with statuses, details and no key m
   expect(byId['my-proxy']).toMatchObject({ label: 'My proxy', detail: '127.0.0.1:4000' })
   expect(JSON.stringify(items)).not.toContain(SECRET)
   expect(runner).toHaveBeenCalledWith(['auth', 'list'], {
-    timeoutMs: 8000,
+    timeoutMs: 20_000,
     hermesHome: home,
     captureSettings: true,
   })
@@ -202,4 +202,43 @@ test('the CLI runner only captures the allowlisted settings reads and caps them'
     await expect(
       runHermes(args, { timeoutMs: 1000, captureSettings: true, execute }),
     ).rejects.toThrow(/restricted/)
+})
+
+test('the provider list is every provider the gateway reports, with the short list only as a fallback', async () => {
+  const catalog = async () => [
+    { slug: 'nous', name: 'Nous Portal' },
+    { slug: 'deepseek', name: 'DeepSeek' },
+    { slug: 'gemini', name: 'Google Gemini' },
+    { slug: 'custom', name: 'Custom endpoint' },
+  ]
+  const items = await new LiveSettings(home, runner, catalog).listProviders()
+  const ids = items.map((item) => item.id)
+  expect(ids).toEqual(expect.arrayContaining(['nous', 'deepseek', 'gemini']))
+  expect(ids).not.toContain('custom')
+  expect(items.find((item) => item.id === 'deepseek')).toMatchObject({
+    label: 'DeepSeek',
+    status: 'missing',
+  })
+  const fallback = await new LiveSettings(home, runner, async () => {
+    throw new Error('gateway down')
+  }).listProviders()
+  expect(fallback.map((item) => item.id)).toEqual(
+    expect.arrayContaining(['openrouter', 'anthropic']),
+  )
+  // Connect works for any listed provider and only ever hands back a terminal command.
+  runner.mockClear()
+  expect(await new LiveSettings(home, runner, catalog).connectProvider('deepseek')).toEqual({
+    next: 'run_in_terminal',
+    command: 'hermes auth add deepseek',
+  })
+  // Answered from the gateway catalog: no Hermes process, so Connect responds at once.
+  expect(runner).not.toHaveBeenCalled()
+})
+
+test('a failed auth list keeps the last known statuses instead of showing every provider missing', async () => {
+  const settings = new LiveSettings(home, runner)
+  expect((await settings.listProviders()).some((item) => item.status === 'connected')).toBe(true)
+  runner.mockImplementation(async () => ({ exitCode: 1 }))
+  const again = await settings.listProviders()
+  expect(again.some((item) => item.status === 'connected')).toBe(true)
 })

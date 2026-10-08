@@ -68,6 +68,11 @@ briefs model), run an adversarial review at `max` (read-only sandbox; prompt sav
 committed to `docs/reviews/`). Record findings and responses in the doc's review log.
 
 ## Working with the owner
+- *Owner, 2026-10-08 (later):* don't use Codex CLI for implementation any more. Use it only for **auditing** for bugs and
+  problems: up to 6 parallel `gpt-6.1-sol` sessions at `high`, read-only. Implementation continues with Sonnet agents and
+  the lead. *Revised the same day:* keep the audit running as a full audit (more waves as needed, not just one); when
+  Codex runs out of quota, check hourly and resume auditing when it recovers, while the findings are fixed meanwhile (by
+  the lead, with Sonnet agents where useful).
 - *Owner, 2026-10-08:* keep working on implementation and deployment until the application is complete; the lead
   reviews all code (including phase gates and design reviews) itself. If a question to the owner gets no reply within
   5 minutes, proceed with the recommended option and keep going. Writes to the owner's real Hermes profiles (not the

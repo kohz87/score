@@ -20,13 +20,24 @@ import type {
   ConfigPreviewResponse,
   ConnectResult,
   ConnectionsResponse,
+  HermesCheck,
   LocalProviderRequest,
+  ModelOption,
+  PluginItem,
   ProviderItem,
+  ProviderKeyRequest,
+  SignIn,
   ToolServerRequest,
 } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
 import type { AgentFile, AgentFileName } from './agent-files.ts'
-import type { HubSkill, MemoryItem, MemoryPage, SkillItem } from '@score/contract'
+import type {
+  AgentChannelsResponse,
+  HubSkill,
+  MemoryItem,
+  MemoryPage,
+  SkillItem,
+} from '@score/contract'
 import type { AgentTool } from './agent-tabs.ts'
 import type { ApprovalConfig } from './approvals.ts'
 import type { IngestResult, Observation } from '../hub/ingest.ts'
@@ -181,9 +192,15 @@ export interface HermesPort extends ProfileManagementPort {
   setSkillEnabled(agentId: string, name: string, enabled: boolean): Promise<SkillItem>
   searchSkillHub(query: string): Promise<HubSkill[]>
   listMemory(agentId: string, query: { q?: string; cursor?: string }): Promise<MemoryPage>
+  /** Read-only messaging platform state for one agent's profile, with the command that connects each. */
+  listAgentChannels(agentId: string): Promise<AgentChannelsResponse>
   addMemory(agentId: string, text: string): Promise<MemoryItem>
   deleteMemory(agentId: string, id: string): Promise<void>
   setToolEnabled(agentId: string, toolId: string, enabled: boolean): Promise<AgentTool>
+  /** Hermes plugins of one profile (`plugins list`). */
+  listPlugins(agentId: string): Promise<PluginItem[]>
+  /** Enable or disable via the CLI and verify by re-reading. Never the Score bridge (409). */
+  setPluginEnabled(agentId: string, id: string, enabled: boolean): Promise<PluginItem>
   /** A profile's Hermes approval settings (command_allowlist, approvals.deny, approvals.mode). */
   readApprovals(agentId: string): Promise<ApprovalConfig>
   /**
@@ -196,12 +213,27 @@ export interface HermesPort extends ProfileManagementPort {
   ): Promise<ApprovalConfig>
   /** Status only (never secrets); `usedBy` is added by the route from the agents' models. */
   listProviders(): Promise<ProviderBase[]>
+  /**
+   * Device-code providers start a sign-in (link + code in the result, D2.7); everything else carries the command
+   * to run in a terminal.
+   */
+  /** Models of connected providers matching `q` (at most 200, available first); [] when Hermes can't say. */
+  listModels(q?: string): Promise<ModelOption[]>
   /** Interactive sign-ins are never run by Score: the result carries the command to run in a terminal. */
   connectProvider(id: string): Promise<ConnectResult>
+  /** In-memory sign-ins; unknown ids are 404. */
+  getSignIn(id: string): Promise<SignIn>
+  cancelSignIn(id: string): Promise<SignIn>
+  /** Relays a pasted key to Hermes (stdin); only for `signIn: 'api_key'` providers. Never stored or logged. */
+  addProviderKey(id: string, req: ProviderKeyRequest): Promise<ProviderBase>
   addLocalProvider(req: LocalProviderRequest): Promise<ProviderBase>
   listConnections(): Promise<ConnectionsResponse>
   addToolServer(req: ToolServerRequest): Promise<ConnectResult>
   connectMessaging(platform: string): Promise<ConnectResult>
+  /** Compares the running Hermes build with the tested and accepted ones. Read-only. */
+  checkHermes(): Promise<HermesCheck>
+  /** Records the checked build as accepted and re-enables the gate. 409 `conflict` when the hash is stale, 409 `not_compatible`. */
+  acceptHermes(hash: string): Promise<void>
   /** Advanced config (contract §10). Secret-bearing and env-backed keys are never returned or written. */
   searchConfig(query: string): Promise<ConfigItem[]>
   previewConfig(changes: ConfigChange[]): Promise<ConfigPreviewResponse>

@@ -1,8 +1,9 @@
 import type { Approval } from '@score/contract'
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { ApiError } from '../../data/api.ts'
+import { copyText } from '../../data/clipboard.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { approvalsQuery } from '../chat/queries.ts'
 import { ScrubTimeline } from './ScrubTimeline.tsx'
@@ -43,12 +44,21 @@ function WatchView({ agentId }: { agentId: string }) {
   const [cursor, setCursor] = useState<number | null>(null)
   const [playing, setPlaying] = useState(false)
   const [terminal, setTerminal] = useState<{ command: string; copied: boolean } | null>(null)
+  // ?from=<seq> (History's "Replay in Watch") opens the replay at that moment, once the markers load.
+  const [params] = useSearchParams()
+  const from = /^\d{1,12}$/.test(params.get('from') ?? '') ? Number(params.get('from')) : null
+  const [fromApplied, setFromApplied] = useState(from === null)
 
   const data = watch.data
   const markers = useMemo(() => data?.markers ?? [], [data?.markers])
   const frames = useMemo(() => data?.frames ?? [], [data?.frames])
   const marker = cursor === null ? null : (markers[Math.min(cursor, markers.length - 1)] ?? null)
   const seq = marker?.seq ?? null
+  if (!fromApplied && from !== null && markers.length > 0) {
+    setFromApplied(true)
+    const index = markers.findIndex((candidate) => candidate.seq >= from)
+    setCursor(index >= 0 ? index : markers.length - 1)
+  }
 
   useEffect(() => {
     if (cursor === null || !playing) return
@@ -130,12 +140,7 @@ function WatchView({ agentId }: { agentId: string }) {
   }
   async function openInTerminal() {
     const command = resumeCommand(agent.id, data?.sessionId ?? null)
-    try {
-      await navigator.clipboard.writeText(command)
-      setTerminal({ command, copied: true })
-    } catch {
-      setTerminal({ command, copied: false })
-    }
+    setTerminal({ command, copied: await copyText(command) })
   }
 
   return (
@@ -186,7 +191,7 @@ function WatchView({ agentId }: { agentId: string }) {
         <p className="watch-state watch-state--command" role="status">
           {terminal.copied
             ? 'Copied. Paste this in a terminal:'
-            : 'Could not copy. Run this in a terminal:'}{' '}
+            : 'Select the command and press Ctrl+C, then run it in a terminal:'}{' '}
           <code>{terminal.command}</code>
         </p>
       )}

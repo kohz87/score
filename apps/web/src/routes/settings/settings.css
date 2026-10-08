@@ -147,7 +147,13 @@
 }
 .settings-primary {
   background: var(--ink);
-  color: #fff;
+  color: var(--card);
+}
+.settings-pill:disabled,
+.settings-primary:disabled {
+  /* Disabled must look it: Save key stays off until a key and the plain-HTTP acknowledgement are in. */
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .settings-columns {
   display: flex;
@@ -191,7 +197,7 @@
 }
 .settings-dot[data-status='disconnected'] {
   background: transparent;
-  border: 1.5px solid #9a9ea7;
+  border: 1.5px solid var(--line-strong);
 }
 .settings-form {
   display: flex;
@@ -564,4 +570,199 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Plugins and look: cards and radii from docs/design/html/settings.html (#plugins). */
+.plugins-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.plugins-card {
+  flex: 1 1 240px;
+  border-radius: var(--radius-20);
+  border: 1px solid var(--tasks-border);
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.plugins-card-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.plugins-card-name {
+  flex: 1;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.plugins-card-text .plugins-card-name {
+  flex: none;
+}
+.plugins-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.plugin-toggle {
+  position: relative;
+  width: 40px;
+  height: 24px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--line-strong);
+  cursor: pointer;
+}
+.plugin-toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+}
+.plugin-toggle[data-enabled='true'] {
+  background: var(--ink);
+}
+.plugin-toggle[data-enabled='true']::after {
+  left: auto;
+  right: 3px;
+}
+.plugin-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.plugins-theme-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.plugins-theme-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px 0 8px;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+.plugins-theme-choice[aria-checked='true'] {
+  border-color: var(--ink);
+}
+.plugins-theme-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--ink);
+  background: #eceef2;
+}
+.plugins-theme-swatch[data-choice='dark'] {
+  background: #12131a;
+}
+.plugins-theme-swatch[data-choice='system'] {
+  background: linear-gradient(90deg, #eceef2 50%, #12131a 50%);
+}
+.settings-banner {
+  background: var(--agent-saffron-tint);
+  border-color: var(--agent-saffron);
+}
+.settings-check-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background: var(--card);
+  border-radius: var(--radius-16);
+}
+.settings-check-table caption {
+  text-align: left;
+  padding-bottom: 8px;
+}
+.settings-check-table th,
+.settings-check-table td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ground);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.settings-check-table td[data-status='changed'],
+.settings-check-table td[data-status='removed'] {
+  font-weight: 700;
+  color: var(--agent-saffron-text);
+}
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.settings-command-text {
+  /* One click selects the whole command, so Ctrl+C works even where the copy button can't. */
+  user-select: all;
+  cursor: text;
+}
+
+/* Browser sign-in (ARCHITECTURE D2.7): same card language as the other inline panels. */
+.settings-signin {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-16);
+  background: var(--subtle);
+}
+.settings-signin-link {
+  color: var(--ink);
+  font-weight: 600;
+}
+.settings-signin-code-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+.settings-signin-code {
+  padding: 10px 16px;
+  border-radius: var(--radius-14);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  font-family: var(--font-code);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  user-select: all;
+}
+.settings-key {
+  flex-basis: 100%;
+}
+.settings-warning {
+  padding: 10px 12px;
+  border-radius: var(--radius-14);
+  background: var(--agent-saffron-tint);
+  font-weight: 600;
+}
+.settings-form label.settings-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.settings-form label.settings-check input {
+  height: auto;
 }

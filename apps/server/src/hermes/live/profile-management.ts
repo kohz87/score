@@ -349,7 +349,10 @@ export class LiveProfileManagement implements ProfileManagementPort {
       await gateway().capabilities(name)
     } else if (step === 'model') {
       if (!input) throw failure('Create input is missing.')
-      await this.options.port.setAgentModel(name, { model: input.model })
+      await this.options.port.setAgentModel(name, {
+        model: input.model,
+        ...(input.provider ? { provider: input.provider } : {}),
+      })
       this.options.profiles.invalidate(name)
       const detail = await this.options.profiles.read(name, 0, true, {
         status: 'idle',
@@ -464,6 +467,11 @@ export class LiveProfileManagement implements ProfileManagementPort {
       if (stat(home))
         throw failure('A profile exists at this name. Score will not purge a replacement identity.')
       await this.cli(['-p', 'default', 'profile', 'purge-identity', name])
+      // The profile and its .env are gone; Score's copy of its API key must not outlive them.
+      const key = join(resolve(this.options.scoreHome), 'hermes-keys', name)
+      const existing = stat(key)
+      if (existing?.isFile()) unlinkSync(key)
+      else if (existing) throw failure('The saved key path is not a plain file; remove it locally.')
     }
     return { identity: context.targetIdentity }
   }

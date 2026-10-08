@@ -526,3 +526,27 @@ test('create_profile failures are not retryable from Score', async () => {
   })
   expect(refused.statusCode).toBe(409)
 })
+test('create with a provider sets model and provider together and names it in the plan', async () => {
+  const setModel = vi.spyOn(port, 'setAgentModel')
+  const body = { ...input, model: 'gpt-6.1-sol', provider: 'openai-codex' }
+  const preview = AgentPreviewSchema.parse(
+    (await mutate('/api/agents/preview', { kind: 'create', ...body })).json(),
+  )
+  expect(preview.effects).toContain('Set the model to gpt-6.1-sol via ChatGPT (Codex).')
+  const other = AgentPreviewSchema.parse(
+    (
+      await mutate('/api/agents/preview', {
+        kind: 'create',
+        ...body,
+        provider: 'nous',
+      })
+    ).json(),
+  )
+  expect(other.hash).not.toBe(preview.hash)
+  const operation = await create(body)
+  expect(await finished(operation.id)).toMatchObject({ state: 'completed' })
+  expect(setModel).toHaveBeenCalledWith('helper', {
+    model: 'gpt-6.1-sol',
+    provider: 'openai-codex',
+  })
+})

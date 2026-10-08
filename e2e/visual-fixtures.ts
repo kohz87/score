@@ -8,6 +8,7 @@ import {
   ConnectionsResponseSchema,
   MessagePageSchema,
   NowSnapshotSchema,
+  PluginsResponseSchema,
   ProvidersResponseSchema,
   ReportsSchema,
   RoomDetailSnapshotSchema,
@@ -31,6 +32,8 @@ export const visualFixtures: Record<string, unknown> = {
   '/api/commands': CommandsResponseSchema.parse({ items: [] }),
   '/api/agents': AgentsSnapshotSchema.parse(recorded['/api/agents']),
   '/api/agents/builder': AgentDetailSchema.parse(recorded['/api/agents/builder']),
+  // The tab keyboard test lands on the History tab, which reads this.
+  '/api/agents/builder/history': { items: [], nextCursor: null },
   '/api/rooms': RoomsSnapshotSchema.parse(recorded['/api/rooms']),
   '/api/rooms/room-activity-feed': RoomDetailSnapshotSchema.parse(
     recorded['/api/rooms/room-activity-feed'],
@@ -46,6 +49,25 @@ export const visualFixtures: Record<string, unknown> = {
   '/api/settings/connections': ConnectionsResponseSchema.parse(
     recorded['/api/settings/connections'],
   ),
+  '/api/settings/plugins?agent=lead': PluginsResponseSchema.parse({
+    items: [
+      {
+        id: 'score-bridge',
+        label: 'score-bridge',
+        enabled: true,
+        locked: true,
+        description: 'Lets Score see what this agent does.',
+      },
+      {
+        id: 'memory-notes',
+        label: 'memory-notes',
+        enabled: true,
+        locked: false,
+        description: 'Keeps short notes between sessions.',
+      },
+      { id: 'image-tools', label: 'image-tools', enabled: false, locked: false, description: null },
+    ],
+  }),
   '/api/settings/rules': RulesResponseSchema.parse(recorded['/api/settings/rules']),
   '/api/settings/config?q=': ConfigSearchResponseSchema.parse(recorded['/api/settings/config?q=']),
 }

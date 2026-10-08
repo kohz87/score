@@ -11,6 +11,7 @@ import {
   useAgentFile,
   type AgentFileName,
 } from './file-queries.ts'
+import { newId } from '../../data/ids.ts'
 
 const labels = {
   'SOUL.md': { title: 'Personality', blurb: 'Who this agent is and how it talks.' },
@@ -128,7 +129,7 @@ function FileEditor({
       return parseEtag(
         await apiFetch(filePath(agentId, file), {
           method: 'PUT',
-          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          headers: { 'Idempotency-Key': newId() },
           body: JSON.stringify({ content: value, etag }),
         }),
       )

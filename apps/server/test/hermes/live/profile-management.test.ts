@@ -296,8 +296,13 @@ test('delete verifies private export before exact delete and purge argv', async 
     '-o',
     context.exportPath,
   ])
+  await step('preserve_key')
+  const key = join(env.home, 'hermes-keys', 'helper')
+  expect(statSync(key).isFile()).toBe(true)
   await step('delete_profile')
   await step('purge_identity')
+  // Score's copy of the deleted profile's API key goes with it.
+  expect(() => statSync(key)).toThrow()
   expect(calls.slice(-2)).toEqual([
     ['-p', 'default', 'profile', 'delete', '-y', 'helper'],
     ['-p', 'default', 'profile', 'purge-identity', 'helper'],

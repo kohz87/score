@@ -138,6 +138,13 @@ export class ProfileOperations {
     }
     if (lifecycle && !['ready', 'removed'].includes(lifecycle.state))
       blockers.push('An operation already holds this agent.')
+    let providerLabel = request.kind === 'create' ? (request.provider ?? '') : ''
+    if (request.kind === 'create' && request.provider) {
+      const match = (await this.port.listModels(request.model).catch(() => [])).find(
+        (item) => item.provider === request.provider && item.model === request.model,
+      )
+      if (match) providerLabel = match.providerLabel
+    }
     const exportPath =
       request.kind === 'delete' ? this.port.profileExportPath(name, inventory.revision) : null
     const data = {
@@ -152,6 +159,9 @@ export class ProfileOperations {
                 : 'Seed the default model configuration and bundled skills; no existing conversations or jobs.',
               'No channel credentials, session history, jobs or AGENTS.md are cloned.',
               'The host gateway may discover the profile during setup. Score routes no work until all checks pass.',
+              request.provider
+                ? `Set the model to ${request.model} via ${providerLabel}.`
+                : `Set the model to ${request.model}.`,
               'Preserve a fresh private Score key; set the chosen model and team rules; install and enable the bridge; verify authenticated gateway access and a new bridge handshake.',
             ]
           : [
@@ -190,6 +200,7 @@ export class ProfileOperations {
             role: redact(request.role),
             style: request.style,
             model: request.model,
+            ...(request.provider ? { provider: request.provider } : {}),
             ...(request.cloneFrom ? { cloneFrom: request.cloneFrom } : {}),
           })
         : null

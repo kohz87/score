@@ -291,7 +291,8 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 
 - **S** `GET /api/agents` → `{ asOfSeq; items: AgentSummary[] }`
 - **H** `POST /api/agents/preview` → `AgentPreview` (§8 lifecycle below).
-- **H** `POST /api/agents` `{ id; name; role; style; model; cloneFrom?; previewHash; confirmInheritance? }` → `202 AgentOperation`.
+- **H** `POST /api/agents` `{ id; name; role; style; model; provider?; cloneFrom?; previewHash; confirmInheritance? }` → `202 AgentOperation`.
+  `provider` (a provider id from `GET /api/models`) is set with the model; preview takes the same fields.
 - **H** `PATCH /api/agents/:agentId` `{ name?; role? }` → `AgentDetail`. Name is a Score display name; profile id never changes. Role is nonempty description text.
 - **H** `DELETE /api/agents/:agentId` `{ typedName; previewHash }` → `202 AgentOperation`.
 - `GET /api/agents/operations/:opId` → `AgentOperation` (paired session required).
@@ -358,7 +359,14 @@ incarnation-aware reuse confirmation contract is agreed.
   profile through the verified write loop, so the agent is never looser than the team. A rule that belongs to the team
   is `400 not_an_override`; an unknown override `404 not_found`; Hermes refusing the write `409 conflict` (the override
   is kept).
-- `GET /api/agents/:agentId/history?cursor=` → `{ items: { sessionId; title; model; messages: number; tokens: number; costUsd: number | null; at: string; ref: Ref | null }[]; nextCursor }`
+- `GET /api/agents/:agentId/channels` → `AgentChannelsResponse` `{ items: { platform; label; status: 'connected' | 'disconnected'; detail: string | null; connectCommand: string }[] }`.
+  Read-only gateway state for this agent's profile (secret-free); `connectCommand` is e.g. `hermes -p builder gateway setup`,
+  shown for the person to run in their own terminal.
+- `GET /api/agents/:agentId/history?q=&outcome=&cursor=` → `AgentHistoryPage` `{ items: { runId; title; origin; outcome:
+  'completed' | 'failed' | 'stopped' | 'waiting' | 'running'; startedAt; durationSec: number | null; model: string | null;
+  costUsd: number | null; task: { id; title } | null; brief: { id; title } | null; replaySeq: number | null }[]; nextCursor }`.
+  Score's own runs for the agent (all origins), newest first, 50 per page; the cursor is an offset. `outcome` filters,
+  `q` matches task/brief title and model. Replay opens `/now/watch/:agentId?from=<replaySeq>`.
 
 ## 9. Reports
 
@@ -383,8 +391,25 @@ incarnation-aware reuse confirmation contract is agreed.
 ## 10. Settings
 
 - `GET /api/settings/providers` → `{ items: { id: string; label: string; status: 'connected' | 'needs_signin' | 'missing'
-  detail: string /* "sk-or-••••", "Your ChatGPT plan" */; usedBy: AgentId[] }[] }`
-- **H** `POST /api/settings/providers/:id/connect` → `{ next: 'done' | 'device_code' | 'run_in_terminal'; command?: string; url?: string; code?: string }`
+  detail: string /* "sk-or-••••", "Your ChatGPT plan" */; usedBy: AgentId[];
+  signIn?: 'device_code' | 'api_key' | 'terminal' /* how Connect works from the browser (D2.7); absent = terminal */ }[] }`
+- **H** `POST /api/settings/providers/:id/connect` → `{ next: 'done' | 'device_code' | 'run_in_terminal'; command?: string; url?: string;
+  code?: string; signInId?: string; expiresAt?: string }`. For a `device_code` provider this starts the sign-in (D2.7) and
+  returns its link, code and id; `command` is always included as the terminal fallback. A second call while one is
+  waiting returns the same sign-in. If Hermes prints no link and code within 30 s (e.g. the profile is set to a browser
+  login), the answer is `run_in_terminal` with the command.
+- `GET /api/settings/sign-ins/:signInId` → `SignIn` `{ id; providerId; state: 'waiting' | 'connected' | 'failed' | 'expired' |
+  'cancelled'; url: string | null; code: string | null; expiresAt: string; message: string | null }` · **H**
+  `DELETE /api/settings/sign-ins/:signInId` → `SignIn` (cancelled). In-memory; unknown ids → 404.
+- **H** `POST /api/settings/providers/:id/key` `{ apiKey: string; label?: string; acknowledgeInsecure?: boolean }` → the
+  provider item, after `hermes auth list` shows the new credential (`409 not_verified` otherwise). Plain-HTTP remote
+  without `acknowledgeInsecure: true` → `400 insecure_transport`; a provider that doesn't take a key → `409 not_supported`;
+  a key already being added for that provider → `409 conflict`. The key never appears in any response, log or receipt
+  (the receipt's body hash is an HMAC under a per-process secret, so a retry after a restart is `409`, not a replay).
+- `GET /api/models?q=` → `{ items: ModelOption[] }`, `ModelOption = { provider: string; providerLabel: string; model: string;
+  available: boolean; reason: string | null /* "Not on your plan" */; free: boolean; price: { input: string; output: string } | null }`.
+  Models of connected providers only (Hermes model options); `q` matches model or provider label, case-insensitive;
+  at most 200 items, available first.
 - `POST /api/settings/providers/local` `{ label; baseUrl; model }` → provider item
 - `GET /api/settings/connections` → `{ toolServers: { id; label; status: 'ok'|'needs_signin'|'error'; usedBy: AgentId[] | 'everyone' }[]
   messaging: { platform; label; status: 'connected'|'disconnected'; detail: string | null }[] }`
@@ -400,7 +425,11 @@ incarnation-aware reuse confirmation contract is agreed.
   `approvals.mode` are ever written (read → write → re-read verify, ≤ 3 merges; `409 conflict` after that).
 - **H** `POST /api/settings/rules/apply/:agentId` → the GET shape: re-applies the team baseline to a drifted profile.
   These three keys are not editable through the advanced config endpoints.
-- `GET /api/settings/plugins` → `{ items: { id; label; enabled: boolean }[] }` · `PATCH /api/settings/plugins/:id` `{ enabled }`
+- `GET /api/settings/plugins?agent=<id>` → `PluginsResponse` `{ items: { id; label; enabled: boolean; locked: boolean;
+  description: string | null }[] }` (one profile's `hermes plugins list`, bundled included) · **H**
+  `PATCH /api/settings/plugins/:id?agent=<id>` `{ enabled }` → the verified item. `locked` = the Score bridge, which Score
+  never disables (`409`); `409` too when Hermes didn't apply the change; `404` for an unknown agent or plugin. Enabling a
+  non-bundled plugin that declares capabilities leaves them ungranted (Hermes fails closed without a terminal).
 - `GET /api/settings/config?q=` → `{ items: { key: string; value: unknown; file: string; description: string | null }[] }`
   (name and comment search, ≤ 50). Secret-bearing and env-backed keys (credential-shaped names, env/header maps,
   provider and MCP server containers) are never listed or writable; only keys known to the tested Hermes version are.
@@ -409,7 +438,16 @@ incarnation-aware reuse confirmation contract is agreed.
 - **H** `POST /api/settings/config/apply` `{ changes; expectedDiffHash: string }` → `{ ok: true; restartRequired: boolean }`;
   `409 conflict` when the recomputed hash differs (config changed since the preview; preview again), `502` when Hermes
   refuses or doesn't keep a value.
-- `GET /api/settings/ui` · `PATCH /api/settings/ui` `{ theme?: 'light' | 'dark' }`
+- **H** `POST /api/settings/hermes/check` → `HermesCheck` = `{ hash: string; build: { version: string | null; codeSha: string | null;
+  fingerprint: string }; parts: { name: string; status: 'same' | 'added' | 'changed' | 'removed'; detail: string }[];
+  compatible: boolean }`. Read-only: compares the running build (version, code sha, CLI string, capabilities, kanban and
+  state schema hashes, the bridge's hook names, the private approval functions, pattern keys) with the tested and accepted
+  builds. `compatible` = capabilities, schemas, hooks and private functions unchanged (new pattern keys are allowed).
+  `hash` = sha256 over `build` and `parts`.
+- **H** `POST /api/settings/hermes/accept` `{ hash }` → `{ ok: true }`: records this build in Score's own accepted-builds
+  store (`$SCORE_HOME`, never the repo registry) so the compatibility gate re-enables `gateway-approvals`. `409 conflict`
+  when the build changed since the check (hash differs), `409 not_compatible` when the check is not compatible.
+- Theme (light, dark, system) is a per-browser setting in `localStorage` (`score.theme`); there is no settings/ui endpoint.
 
 ## 11. Internal: bridge plugin ↔ server (not for the front end)
 

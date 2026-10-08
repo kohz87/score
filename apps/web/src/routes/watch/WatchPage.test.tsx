@@ -52,7 +52,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function setup(agentId = 'builder') {
+function setup(agentId = 'builder', search = '') {
   const queryClient = createQueryClient()
   const client = createStreamClient({ EventSourceImpl: Source })
   const queries = createStreamQueryRegistry(queryClient, client, immediateFrameScheduler)
@@ -62,7 +62,7 @@ function setup(agentId = 'builder') {
     queryClient.clear()
   })
   const router = createMemoryRouter([{ path: '/now/watch/:agentId', element: <WatchPage /> }], {
-    initialEntries: [`/now/watch/${agentId}`],
+    initialEntries: [`/now/watch/${agentId}${search}`],
   })
   render(
     <QueryClientProvider client={queryClient}>
@@ -118,6 +118,14 @@ test('scrubbing back replays that moment and Live snaps back', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Back to live' }))
   expect(screen.getByText("You're watching. builder is in control.")).toBeTruthy()
   expect(screen.getByRole('group', { name: 'Approval needed' })).toBeTruthy()
+})
+
+test("?from= (History's Replay in Watch) opens the replay at that moment", async () => {
+  const first = Math.min(...watchFixture.markers.map((marker) => marker.seq))
+  setup('builder', `?from=${first}`)
+  await screen.findByRole('heading', { name: 'Watching builder' })
+  expect(screen.getByRole('button', { name: 'Back to live' })).toBeTruthy()
+  expect(screen.getByRole('status', { name: '' }).textContent).toMatch(/^Replaying \d\d:\d\d$/)
 })
 
 test('playing a replay steps forward and lands back on live', async () => {

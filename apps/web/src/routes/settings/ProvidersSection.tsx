@@ -1,8 +1,10 @@
-import { useState, type FormEvent } from 'react'
-import type { AgentSummary, ProviderItem } from '@score/contract'
+import { useCallback, useState, type FormEvent } from 'react'
+import type { AgentSummary, ConnectResult, ProviderItem } from '@score/contract'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { ApiKeyPanel } from './ApiKeyPanel.tsx'
+import { SignInPanel } from './SignInPanel.tsx'
 import { failure, TerminalCommand } from './TerminalCommand.tsx'
-import { useProviders, useSettingsActions } from './settings-queries.ts'
+import { useProviders, useRecheckSettings, useSettingsActions } from './settings-queries.ts'
 
 const statusText = {
   connected: 'Connected',
@@ -28,22 +30,50 @@ function UsedBy({ ids, agents }: { ids: string[]; agents: AgentSummary[] }) {
 }
 
 export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
-  const providers = useProviders()
+  const [showAll, setShowAll] = useState(false)
   const { connectProvider, addLocal } = useSettingsActions()
   const [command, setCommand] = useState<{ id: string; text: string } | null>(null)
+  // Which provider shows a browser sign-in panel: a device-code sign-in or a key form (ARCHITECTURE D2.7).
+  const [panel, setPanel] = useState<
+    { id: string; kind: 'key' } | { id: string; kind: 'device'; start: ConnectResult } | null
+  >(null)
+  const providers = useProviders(command !== null)
+  const recheck = useRecheckSettings()
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState({ label: '', baseUrl: '', model: '' })
   const [notice, setNotice] = useState('')
 
   function connect(item: ProviderItem) {
+    setNotice('')
+    setCommand(null)
+    setPanel(null)
+    if (item.signIn === 'api_key') {
+      setPanel({ id: item.id, kind: 'key' })
+      return
+    }
     connectProvider.mutate(item.id, {
       onSuccess: (result) => {
-        if (result.next === 'run_in_terminal' && result.command)
-          setCommand({ id: item.id, text: result.command })
+        if (result.next === 'device_code' && result.signInId)
+          setPanel({ id: item.id, kind: 'device', start: result })
+        else if (result.command) setCommand({ id: item.id, text: result.command })
         else setNotice(`${item.label} is connected.`)
       },
     })
   }
+  // The terminal command is the fallback for every panel; the server hands it back with the connect result.
+  function openTerminal(item: ProviderItem, from?: ConnectResult) {
+    setPanel(null)
+    if (from?.command) {
+      setCommand({ id: item.id, text: from.command })
+      return
+    }
+    connectProvider.mutate(item.id, {
+      onSuccess: (result) => {
+        if (result.command) setCommand({ id: item.id, text: result.command })
+      },
+    })
+  }
+  const signedIn = useCallback(() => recheck(), [recheck])
   function submit(event: FormEvent) {
     event.preventDefault()
     addLocal.mutate(
@@ -62,6 +92,14 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
     )
   }
 
+  // Hermes supports dozens of providers: the ones in use come first, the rest behind "Show all".
+  const all = [...(providers.data ?? [])].sort(
+    (a, b) =>
+      Number(a.status === 'missing') - Number(b.status === 'missing') ||
+      a.label.localeCompare(b.label),
+  )
+  const inUse = all.filter((item) => item.status !== 'missing').length
+  const visible = showAll ? all : all.slice(0, Math.max(inUse + 4, 6))
   return (
     <section id="models" className="settings-card" aria-labelledby="settings-models">
       <div>
@@ -75,7 +113,7 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
         <p role="alert">Could not load providers. Check that the Score server is running.</p>
       )}
       <ul className="settings-rows">
-        {providers.data?.map((item) => (
+        {visible.map((item) => (
           <li key={item.id} className="settings-row">
             <span className="settings-row-name" data-missing={item.status === 'missing'}>
               {item.label}
@@ -97,8 +135,37 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
             >
               {item.status === 'connected' ? 'Edit' : 'Connect'}
             </button>
+            {panel?.id === item.id && panel.kind === 'key' && (
+              <ApiKeyPanel
+                providerId={item.id}
+                label={item.label}
+                onSaved={() => {
+                  setPanel(null)
+                  setNotice(`${item.label} is connected.`)
+                  recheck()
+                }}
+                onClose={() => setPanel(null)}
+                onTerminal={() => openTerminal(item)}
+              />
+            )}
+            {panel?.id === item.id && panel.kind === 'device' && (
+              <SignInPanel
+                label={item.label}
+                start={panel.start}
+                onConnected={signedIn}
+                onClose={() => setPanel(null)}
+                onRetry={() => connect(item)}
+                onTerminal={() => openTerminal(item, panel.start)}
+              />
+            )}
             {command?.id === item.id && (
-              <TerminalCommand command={command.text} onClose={() => setCommand(null)} />
+              <TerminalCommand
+                command={command.text}
+                onClose={() => {
+                  setCommand(null)
+                  recheck()
+                }}
+              />
             )}
           </li>
         ))}
@@ -117,6 +184,11 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
           </button>
         </li>
       </ul>
+      {all.length > visible.length && (
+        <button type="button" className="settings-link" onClick={() => setShowAll(true)}>
+          Show all {all.length} providers
+        </button>
+      )}
       {adding && (
         <form className="settings-form" onSubmit={submit} aria-label="Add a local model">
           <label>

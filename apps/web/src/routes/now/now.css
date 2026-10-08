@@ -177,7 +177,7 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: #e8eaee;
+  background: var(--track);
 }
 .now-connectors {
   position: absolute;
@@ -199,7 +199,7 @@
   stroke: #e0a000;
 }
 .now-connector--sent_back {
-  stroke: #9a9ea7;
+  stroke: var(--line-strong);
   stroke-width: 1.5;
   stroke-dasharray: 4 4;
 }
@@ -250,12 +250,12 @@
   text-overflow: ellipsis;
 }
 .now-block--done {
-  background: color-mix(in srgb, var(--c) 15%, #fff);
+  background: color-mix(in srgb, var(--c) 15%, var(--card));
   color: color-mix(in srgb, var(--c) 40%, var(--ink));
 }
 .now-block--working {
   background: var(--c);
-  color: color-mix(in srgb, var(--c) 10%, #000);
+  color: color-mix(in srgb, var(--c) 10%, var(--ink));
 }
 .now-block-dot {
   width: 7px;
@@ -267,7 +267,7 @@
 .now-block--planned {
   /* Planned work sits under anything happening now (the waiting pill overlaps it in the design). */
   z-index: 0;
-  border: 1.5px dashed color-mix(in srgb, var(--c) 70%, #fff);
+  border: 1.5px dashed color-mix(in srgb, var(--c) 70%, var(--card));
   background: transparent;
   color: color-mix(in srgb, var(--c) 40%, var(--ink));
 }
@@ -324,13 +324,13 @@
   border-radius: 999px;
 }
 .now-legend-swatch--done {
-  background: #dde0e6;
+  background: var(--track-2);
 }
 .now-legend-swatch--working {
   background: var(--ink);
 }
 .now-legend-swatch--planned {
-  border: 1.5px dashed #9a9ea7;
+  border: 1.5px dashed var(--line-strong);
 }
 
 /* Cards */

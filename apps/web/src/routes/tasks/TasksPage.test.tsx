@@ -397,3 +397,29 @@ test('a stream reset refetch buffers task changes after the snapshot watermark',
   const filters: TaskFilters = { agent: '', room: '', needsYou: false }
   expect(queries.register(tasksQuery(filters)).getSnapshot().asOfSeq).toBe(12)
 })
+
+test('New task opens the dialog, creates a task, and the live card appears', async () => {
+  setup()
+  await screen.findByText('No tasks yet.')
+  fireEvent.click(screen.getByRole('button', { name: 'New task' }))
+  const dialog = await screen.findByRole('dialog', { name: 'New task' })
+  const created = {
+    ...task('9', { title: 'Brand new' }),
+    body: '',
+    createdBy: 'you',
+    steps: [],
+    activity: [],
+    pendingApproval: null,
+    dependsOn: [],
+    blocks: [],
+    runIds: [],
+  }
+  fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify(created)))
+  fireEvent.change(within(dialog).getByLabelText('Title'), { target: { value: 'Brand new' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Create task' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(fetchMock.mock.calls.at(-1)![0]).toBe('/api/tasks')
+  act(() => source.upsert(created, 11))
+  expect(await screen.findByText('Brand new')).toBeDefined()
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'New task' }))
+})

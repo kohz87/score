@@ -1,4 +1,4 @@
-import { AgentDetailSchema, type AgentDetail } from '@score/contract'
+import { AgentDetailSchema, type AgentDetail, type PluginItem } from '@score/contract'
 import {
   attachRunMessage,
   appendRunMessage,
@@ -29,7 +29,11 @@ import type {
   Approval,
   ConnectResult,
   ConnectionsResponse,
+  AgentChannelsResponse,
+  HermesCheck,
   LocalProviderRequest,
+  SignIn,
+  ModelOption,
   ToolServerRequest,
   RoutineSummary,
   RunSummary,
@@ -57,6 +61,7 @@ import {
 import type { HubSkill, MemoryItem, SkillItem } from '@score/contract'
 import { z } from 'zod'
 import { permissionsOf, updateApprovalConfig, type ApprovalConfig } from '../approvals.ts'
+import { filterModels } from '../model-options.ts'
 import { HttpError } from '../../errors.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import type { ProfileInventory, ProfileStepContext } from '../profile-management.ts'
@@ -424,6 +429,7 @@ export class FakePort implements HermesPort {
   private readonly skills = new Map<string, SkillItem[]>()
   private readonly memory = new Map<string, MemoryItem[]>()
   private readonly tools = new Map<string, AgentTool[]>()
+  private readonly plugins = new Map<string, PluginItem[]>()
   private readonly approvalConfigs = new Map<string, ApprovalConfig>()
   private readonly profileIdentities = new Map<string, string>()
   private readonly profileSteps = new Map<string, Set<ProfileStepName>>()
@@ -474,6 +480,7 @@ export class FakePort implements HermesPort {
     this.skills.clear()
     this.memory.clear()
     this.tools.clear()
+    this.plugins.clear()
     const at = new Date(this.scheduler.now()).toISOString()
     for (const agent of this.agents.values()) {
       this.skills.set(agent.id, [
@@ -667,7 +674,10 @@ export class FakePort implements HermesPort {
       current = `fake:${context.operationId}`
       this.profileIdentities.set(name, current)
     } else if (step === 'model') {
-      await this.setAgentModel(name, { model: input!.model })
+      await this.setAgentModel(name, {
+        model: input!.model,
+        ...(input!.provider ? { provider: input!.provider } : {}),
+      })
     } else if (step === 'permissions') {
       await this.updateApprovals(name, () => ({
         mode: context.baseline.mode,
@@ -850,6 +860,16 @@ export class FakePort implements HermesPort {
     if (!q) return []
     return fakeHub.filter((skill) => `${skill.name} ${skill.description}`.toLowerCase().includes(q))
   }
+  async listAgentChannels(agentId: string): Promise<AgentChannelsResponse> {
+    this.agentOrThrow(agentId)
+    const { messaging } = await this.listConnections()
+    return {
+      items: messaging.map((row) => ({
+        ...row,
+        connectCommand: `hermes -p ${agentId} gateway setup`,
+      })),
+    }
+  }
   async listMemory(agentId: string, query: Parameters<HermesPort['listMemory']>[1]) {
     this.agentOrThrow(agentId)
     return pageMemory(this.memory.get(agentId) ?? [], MemoryQuerySchema.parse(query))
@@ -887,6 +907,43 @@ export class FakePort implements HermesPort {
       throw new HttpError(501, 'not_implemented', 'MCP servers are shown read-only')
     tool.enabled = enabled
     return structuredClone(tool)
+  }
+
+  async listPlugins(agentId: string): Promise<PluginItem[]> {
+    return structuredClone(this.pluginsOf(agentId))
+  }
+  private pluginsOf(agentId: string): PluginItem[] {
+    this.agentOrThrow(agentId)
+    let plugins = this.plugins.get(agentId)
+    if (!plugins) {
+      const demo = (id: string, enabled: boolean, description: string | null, locked = false) => ({
+        id,
+        label: id,
+        enabled,
+        locked,
+        description,
+      })
+      plugins = [
+        demo('score-bridge', true, 'Lets Score see what this agent does.', true),
+        demo('memory-notes', true, 'Keeps short notes between sessions.'),
+        demo('browser-helper', false, 'Adds a cloud browser tool.'),
+        demo('image-tools', false, null),
+      ]
+      this.plugins.set(agentId, plugins)
+    }
+    return plugins
+  }
+  async setPluginEnabled(agentId: string, id: string, enabled: boolean): Promise<PluginItem> {
+    const plugin = this.pluginsOf(agentId).find((candidate) => candidate.id === id)
+    if (!plugin) throw new HttpError(404, 'not_found', 'Plugin not found')
+    if (plugin.locked)
+      throw new HttpError(
+        409,
+        'conflict',
+        'The Score bridge stays on: Score needs it to see Hermes',
+      )
+    plugin.enabled = enabled
+    return structuredClone(plugin)
   }
 
   private routinesOf(agentId: string): RoutineSummary[] {
@@ -945,24 +1002,151 @@ export class FakePort implements HermesPort {
     // Real Hermes runs on its next tick; the fake records the run immediately.
     this.routine(id).lastRunAt = this.now()
   }
+  // One provider of each sign-in kind: nous (device code), openrouter (pasted key), anthropic (terminal only).
   private readonly fakeProviders: ProviderBase[] = [
-    { id: 'demo', label: 'Demo', status: 'connected', detail: 'Built-in demo models' },
-    { id: 'openrouter', label: 'OpenRouter', status: 'missing', detail: 'Not connected' },
-    { id: 'anthropic', label: 'Anthropic', status: 'needs_signin', detail: 'Session expired' },
+    {
+      id: 'demo',
+      label: 'Demo',
+      status: 'connected',
+      detail: 'Built-in demo models',
+      signIn: 'terminal',
+    },
+    {
+      id: 'openrouter',
+      label: 'OpenRouter',
+      status: 'missing',
+      detail: 'Not connected',
+      signIn: 'api_key',
+    },
+    {
+      id: 'anthropic',
+      label: 'Anthropic',
+      status: 'needs_signin',
+      detail: 'Session expired',
+      signIn: 'terminal',
+    },
     {
       id: 'openai-codex',
       label: 'ChatGPT (Codex)',
       status: 'connected',
       detail: 'Your ChatGPT plan',
+      signIn: 'device_code',
+    },
+    {
+      id: 'nous',
+      label: 'Nous Portal',
+      status: 'missing',
+      detail: 'Not connected',
+      signIn: 'device_code',
     },
   ]
+  // Fake sign-ins finish on the third status read (the mount read plus two 2 s polls), so e2e is deterministic.
+  private readonly fakeSignIns = new Map<string, { signIn: SignIn; reads: number }>()
+  private readonly fakeModels: ModelOption[] = [
+    ...['gpt-6.1-sol', 'gpt-6-luna'].map((model) => ({
+      provider: 'openai-codex',
+      providerLabel: 'ChatGPT (Codex)',
+      model,
+      available: true,
+      reason: null,
+      free: false,
+      price: { input: '$2.00', output: '$10.00' },
+    })),
+    {
+      provider: 'nous',
+      providerLabel: 'Nous Portal',
+      model: 'openai/gpt-6.1-sol',
+      available: false,
+      reason: 'Not on your plan',
+      free: false,
+      price: { input: '$2.50', output: '$12.00' },
+    },
+    {
+      provider: 'nous',
+      providerLabel: 'Nous Portal',
+      model: 'upstage/solar-mini4:free',
+      available: true,
+      reason: null,
+      free: true,
+      price: null,
+    },
+    {
+      provider: 'local',
+      providerLabel: 'Local server',
+      model: 'local-gpt-mini',
+      available: true,
+      reason: null,
+      free: true,
+      price: null,
+    },
+  ]
+  async listModels(q?: string): Promise<ModelOption[]> {
+    return structuredClone(filterModels(this.fakeModels, q))
+  }
   async listProviders(): Promise<ProviderBase[]> {
     return structuredClone(this.fakeProviders)
   }
   async connectProvider(id: string): Promise<ConnectResult> {
-    if (!this.fakeProviders.some((provider) => provider.id === id))
-      throw new HttpError(404, 'not_found', 'Unknown provider')
-    return { next: 'run_in_terminal', command: `hermes auth add ${id}` }
+    const provider = this.fakeProviders.find((candidate) => candidate.id === id)
+    if (!provider) throw new HttpError(404, 'not_found', 'Unknown provider')
+    const command = `hermes auth add ${id}`
+    if (provider.signIn !== 'device_code') return { next: 'run_in_terminal', command }
+    let entry = [...this.fakeSignIns.values()].find(
+      (candidate) => candidate.signIn.providerId === id && candidate.signIn.state === 'waiting',
+    )
+    if (!entry) {
+      entry = {
+        reads: 0,
+        signIn: {
+          id: `fake-${this.fakeSignIns.size + 1}`,
+          providerId: id,
+          state: 'waiting',
+          url: 'https://example.com/device',
+          code: 'WXYZ-1234',
+          expiresAt: new Date(this.scheduler.now() + 15 * 60_000).toISOString(),
+          message: null,
+        },
+      }
+      this.fakeSignIns.set(entry.signIn.id, entry)
+    }
+    const { signIn } = entry
+    return {
+      next: 'device_code',
+      command,
+      url: signIn.url!,
+      code: signIn.code!,
+      signInId: signIn.id,
+      expiresAt: signIn.expiresAt,
+    }
+  }
+  private fakeSignIn(id: string) {
+    const entry = this.fakeSignIns.get(id)
+    if (!entry) throw new HttpError(404, 'not_found', 'Unknown sign-in')
+    return entry
+  }
+  async getSignIn(id: string): Promise<SignIn> {
+    const entry = this.fakeSignIn(id)
+    if (entry.signIn.state === 'waiting' && ++entry.reads >= 3) {
+      entry.signIn = { ...entry.signIn, state: 'connected', url: null, code: null }
+      const provider = this.fakeProviders.find((p) => p.id === entry.signIn.providerId)
+      if (provider) Object.assign(provider, { status: 'connected', detail: 'Signed in' })
+    }
+    return structuredClone(entry.signIn)
+  }
+  async cancelSignIn(id: string): Promise<SignIn> {
+    const entry = this.fakeSignIn(id)
+    if (entry.signIn.state === 'waiting')
+      entry.signIn = { ...entry.signIn, state: 'cancelled', url: null, code: null }
+    return structuredClone(entry.signIn)
+  }
+  async addProviderKey(id: string): Promise<ProviderBase> {
+    const provider = this.fakeProviders.find((candidate) => candidate.id === id)
+    if (!provider) throw new HttpError(404, 'not_found', 'Unknown provider')
+    if (provider.signIn !== 'api_key')
+      throw new HttpError(409, 'not_supported', 'This provider does not take a pasted key')
+    // The fake keeps no key, just like the live adapter.
+    Object.assign(provider, { status: 'connected', detail: 'API key (1)' })
+    return structuredClone(provider)
   }
   async addLocalProvider(req: LocalProviderRequest): Promise<ProviderBase> {
     const id = req.label
@@ -1003,6 +1187,16 @@ export class FakePort implements HermesPort {
       throw new HttpError(404, 'not_found', 'Unknown platform')
     return { next: 'run_in_terminal', command: 'hermes gateway setup' }
   }
+  // The fake Hermes is always the tested build: a check is clean and accepting changes nothing.
+  async checkHermes(): Promise<HermesCheck> {
+    return {
+      hash: '0'.repeat(64),
+      build: { version: null, codeSha: null, fingerprint: 'fake' },
+      parts: [{ name: 'Capabilities', status: 'same', detail: 'Fake adapter' }],
+      compatible: true,
+    }
+  }
+  async acceptHermes(): Promise<void> {}
   private readonly config = createFakeConfigService()
   async searchConfig(query: string) {
     return this.config.search(query)

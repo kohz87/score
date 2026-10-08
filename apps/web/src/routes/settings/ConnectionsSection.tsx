@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from 'react'
 import type { AgentSummary } from '@score/contract'
 import { failure, TerminalCommand } from './TerminalCommand.tsx'
-import { useConnections, useSettingsActions } from './settings-queries.ts'
+import { useConnections, useRecheckSettings, useSettingsActions } from './settings-queries.ts'
 
 export function ConnectionsSection({ agents }: { agents: AgentSummary[] }) {
-  const connections = useConnections()
-  const { addToolServer, connectMessaging } = useSettingsActions()
   const [command, setCommand] = useState<{ id: string; text: string } | null>(null)
+  const connections = useConnections(command !== null)
+  const recheck = useRecheckSettings()
+  const { addToolServer, connectMessaging } = useSettingsActions()
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState({ name: '', target: '' })
   const names = new Map(agents.map((agent) => [agent.id, agent.name]))
@@ -117,7 +118,13 @@ export function ConnectionsSection({ agents }: { agents: AgentSummary[] }) {
               </form>
             )}
             {command?.id === 'tool-server' && (
-              <TerminalCommand command={command.text} onClose={() => setCommand(null)} />
+              <TerminalCommand
+                command={command.text}
+                onClose={() => {
+                  setCommand(null)
+                  recheck()
+                }}
+              />
             )}
           </div>
           <div className="settings-column">
@@ -146,7 +153,13 @@ export function ConnectionsSection({ agents }: { agents: AgentSummary[] }) {
                     </button>
                   )}
                   {command?.id === `messaging:${row.platform}` && (
-                    <TerminalCommand command={command.text} onClose={() => setCommand(null)} />
+                    <TerminalCommand
+                      command={command.text}
+                      onClose={() => {
+                        setCommand(null)
+                        recheck()
+                      }}
+                    />
                   )}
                 </li>
               ))}

@@ -4,6 +4,7 @@ import type { Config } from './config.ts'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
 import { registerAgentRoutes } from './http/agents.ts'
 import { registerProfileRoutes } from './http/profiles.ts'
+import { registerAgentHistoryRoutes } from './http/agent-history.ts'
 import { registerAgentTabRoutes } from './http/agent-tabs.ts'
 import { registerReportRoutes } from './http/reports.ts'
 import { registerTaskRoutes } from './http/tasks.ts'
@@ -88,6 +89,8 @@ export function buildApp({
   const app = Fastify({
     ...(https ? { https } : {}),
     trustProxy: false,
+    // Live streams (SSE) never go idle, so the default ('idle') left `score stop` waiting on open browsers.
+    forceCloseConnections: true,
     logger:
       logging === false
         ? false
@@ -172,7 +175,7 @@ export function buildApp({
     registerProfileRoutes(app, { db, ingest, port, config, ...(clock ? { clock } : {}) })
   registerAgentTabRoutes(app, port, ingest, db, clock)
   registerRoutineRoutes(app, port, db, clock)
-  registerSettingsRoutes(app, port, db, clock)
+  registerSettingsRoutes(app, port, db, clock, config)
   registerRulesRoutes(app, port, ingest, db, clock)
   if (db && ingest) {
     const dispatch = registerRoomRoutes(app, port, db, ingest, clock, mediaStore)
@@ -180,6 +183,7 @@ export function buildApp({
     registerBriefRoutes(app, { port, db, ingest, control, ...(clock ? { clock } : {}) })
     registerTeamPauseRoutes(app, { db, ingest, control, dispatch, ...(clock ? { clock } : {}) })
     registerWatchRoutes(app, { port, db, ingest })
+    registerAgentHistoryRoutes(app, { port, db })
     registerAgentPauseRoutes(app, { db, ingest, port, dispatch, ...(clock ? { clock } : {}) })
     registerNowRoutes(app, {
       port,
@@ -216,7 +220,7 @@ export function buildBridgeApp(
   outbox?: ApprovalOutbox,
   logger: FastifyServerOptions['logger'] = false,
 ): FastifyInstance {
-  const app = Fastify({ logger, trustProxy: false })
+  const app = Fastify({ logger, trustProxy: false, forceCloseConnections: true })
   registerErrorHandlers(app)
   app.addHook('onRequest', async (request, reply) => {
     if (request.ip !== '127.0.0.1' && request.ip !== '::1')
