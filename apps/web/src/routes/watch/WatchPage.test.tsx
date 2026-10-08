@@ -9,7 +9,7 @@ import {
   watchOverviewFixture,
 } from '../../../../../e2e/watch-fixture.ts'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
-import { createStreamQueryRegistry } from '../../data/resync.ts'
+import { createStreamQueryRegistry, immediateFrameScheduler } from '../../data/resync.ts'
 import { createStreamClient } from '../../data/stream.ts'
 import { WatchPage } from './WatchPage.tsx'
 
@@ -55,7 +55,7 @@ afterEach(() => {
 function setup(agentId = 'builder') {
   const queryClient = createQueryClient()
   const client = createStreamClient({ EventSourceImpl: Source })
-  const queries = createStreamQueryRegistry(queryClient, client)
+  const queries = createStreamQueryRegistry(queryClient, client, immediateFrameScheduler)
   dispose.push(() => {
     queries.dispose()
     client.close()

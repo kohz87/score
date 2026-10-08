@@ -10,6 +10,11 @@ import {
 } from '@score/contract'
 import { apiFetch } from '../../../data/api.ts'
 import { useStream } from '../../../data/query-client.ts'
+import { throttle } from '../../../data/throttle.ts'
+
+// A burst of events refetches the derived graph at most this often (first one immediately, the rest
+// collapse into one trailing refetch), so the canvas is not rebuilt for every event.
+const REFRESH_MS = 250
 
 export const briefListKey = (status: 'active' | 'recent') => ['flow', 'briefs', status] as const
 export const briefFlowKey = (briefId: string) => ['flow', 'brief', briefId] as const
@@ -18,7 +23,10 @@ export function useBriefLists() {
   const stream = useStream()
   const queryClient = useQueryClient()
   useEffect(() => {
-    const refresh = () => void queryClient.invalidateQueries({ queryKey: ['flow', 'briefs'] })
+    const refresh = throttle(
+      () => void queryClient.invalidateQueries({ queryKey: ['flow', 'briefs'] }),
+      REFRESH_MS,
+    )
     const offEvent = stream.subscribe((event) => {
       if (event.type === 'brief.upserted') refresh()
     })
@@ -28,6 +36,7 @@ export function useBriefLists() {
     return () => {
       offEvent()
       offControl()
+      refresh.cancel()
     }
   }, [stream, queryClient])
   const list = (status: 'active' | 'recent') => ({
@@ -44,10 +53,13 @@ export function useBriefFlow(briefId: string | undefined) {
   const queryClient = useQueryClient()
   useEffect(() => {
     if (!briefId) return
-    const refresh = () =>
-      void queryClient
-        .cancelQueries({ queryKey: briefFlowKey(briefId) })
-        .then(() => queryClient.invalidateQueries({ queryKey: briefFlowKey(briefId) }))
+    const refresh = throttle(
+      () =>
+        void queryClient
+          .cancelQueries({ queryKey: briefFlowKey(briefId) })
+          .then(() => queryClient.invalidateQueries({ queryKey: briefFlowKey(briefId) })),
+      REFRESH_MS,
+    )
     const offEvent = stream.subscribe((event) => {
       if (
         (event.type === 'brief.upserted' && event.data.id === briefId) ||
@@ -73,6 +85,7 @@ export function useBriefFlow(briefId: string | undefined) {
     return () => {
       offEvent()
       offControl()
+      refresh.cancel()
     }
   }, [stream, queryClient, briefId])
   return useQuery({

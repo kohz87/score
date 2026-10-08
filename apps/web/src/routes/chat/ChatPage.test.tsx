@@ -14,7 +14,7 @@ import {
 } from '@score/contract'
 import { App, appRoutes } from '../../App.tsx'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
-import { createStreamQueryRegistry } from '../../data/resync.ts'
+import { createStreamQueryRegistry, immediateFrameScheduler } from '../../data/resync.ts'
 import { createStreamClient } from '../../data/stream.ts'
 import { messagesQuery, reduceMessages } from './queries.ts'
 
@@ -94,7 +94,7 @@ function response(payload: unknown, status = 200) {
 function setup(path = '/chat/general') {
   const queryClient = createQueryClient()
   const client = createStreamClient({ EventSourceImpl: Source })
-  const queries = createStreamQueryRegistry(queryClient, client)
+  const queries = createStreamQueryRegistry(queryClient, client, immediateFrameScheduler)
   const router = createMemoryRouter(appRoutes, { initialEntries: [path] })
   disposers.push(() => {
     router.dispose()

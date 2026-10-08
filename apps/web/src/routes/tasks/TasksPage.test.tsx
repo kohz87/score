@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { AgentSummary, Room, TaskSummary } from '@score/contract'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamClient } from '../../data/stream.ts'
-import { createStreamQueryRegistry } from '../../data/resync.ts'
+import { createStreamQueryRegistry, immediateFrameScheduler } from '../../data/resync.ts'
 import { TasksPage } from './TasksPage.tsx'
 import { taskColumns, tasksQuery, type TaskFilters } from './task-queries.ts'
 
@@ -95,7 +95,7 @@ function setup(path = '/tasks') {
   const client = createStreamClient({ EventSourceImpl: MockEventSource })
   source = MockEventSource.instances.at(-1)!
   const queryClient = createQueryClient()
-  const queries = createStreamQueryRegistry(queryClient, client)
+  const queries = createStreamQueryRegistry(queryClient, client, immediateFrameScheduler)
   const router = createMemoryRouter(
     [
       {
