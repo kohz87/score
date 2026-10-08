@@ -47,11 +47,14 @@ high). Only Codex CLI agents, no other model subagents. Pre-assign migration num
 6. **Dependencies** Codex asks for: you check the license, add them yourself (`pnpm add <pkg>@<exact>`), and
    commit the lockfile with the task.
 
-## If Codex runs out of quota (owner's rule, 2026-10-07)
-`codex-task.sh` exits 75 with `CODEX QUOTA EXHAUSTED`. Then **pause everything**, including your own reviews,
-merges and coding. Write `docs/PAUSED.md` (in-flight tasks, worktrees and branches, Codex session IDs, what's merged
-and what's reviewed but unmerged), commit it on `main`, tell the owner, and wait for their explicit go. On resume,
-vet each interrupted worktree's integrity first (diff, `pnpm check`, half-written files) before continuing.
+## If Codex stops or runs out of quota (owner's rule, revised 2026-10-08)
+`codex-task.sh` exits 75 with `CODEX QUOTA EXHAUSTED` (or Codex stops otherwise). **Don't pause**: continue the
+affected and remaining tasks with **Sonnet 5.5** subagents (Agent tool, `model: sonnet`; reasoning effort can't be
+set there, so it runs at its default). Same briefs, worktrees, review, tests and live checks as Codex work; at most
+four in parallel. Adversarial reviews and phase gates are not done on Sonnet: they wait for Codex (`max`) or the lead
+does them. **Check hourly** whether Codex is available again (a tiny `codex exec` call, quota check on its output;
+schedule a ~60-minute wake-up). When it is, new tasks go back to Codex; a task already started on Sonnet finishes on
+Sonnet. Record the switch and each hourly result in `docs/TASKLOG.md`. (This replaces the 2026-10-07 pause rule.)
 
 ## Phase gates
 Before merging a phase: Codex code review at `max` against `main` (fresh session, so it isn't reviewing with
