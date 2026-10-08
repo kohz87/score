@@ -1,4 +1,10 @@
-import { AgentDetailSchema, AgentSummarySchema } from '@score/contract'
+import {
+  AgentDetailSchema,
+  AgentSummarySchema,
+  MemoryPageSchema,
+  SkillHubResponseSchema,
+  SkillsResponseSchema,
+} from '@score/contract'
 import { randomUUID } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
@@ -69,14 +75,14 @@ export function registerAgentTabRoutes(
 
   app.get('/api/agents/:agentId/skills', async (request) => {
     const { agentId } = AgentParams.parse(request.params)
-    return { items: await port.listSkills(agentId) }
+    return SkillsResponseSchema.parse({ items: await port.listSkills(agentId) })
   })
   app.post('/api/agents/:agentId/skills', mutation, async (request) => {
     const { agentId } = AgentParams.parse(request.params)
     const { name } = InstallSkillSchema.parse(request.body)
     const items = await port.installSkill(agentId, name)
     await announce(agentId)
-    return { items }
+    return SkillsResponseSchema.parse({ items })
   })
   app.patch('/api/agents/:agentId/skills/:name', mutation, async (request) => {
     const { agentId, name } = AgentParams.extend({ name: SkillNameSchema }).parse(request.params)
@@ -87,12 +93,14 @@ export function registerAgentTabRoutes(
   })
   app.get('/api/skills/hub', async (request) => {
     const { q } = z.object({ q: HubQuerySchema.default('') }).parse(request.query)
-    return { items: await port.searchSkillHub(q) }
+    return SkillHubResponseSchema.parse({ items: await port.searchSkillHub(q) })
   })
 
   app.get('/api/agents/:agentId/memory', async (request) => {
     const { agentId } = AgentParams.parse(request.params)
-    return port.listMemory(agentId, MemoryQuerySchema.parse(request.query))
+    return MemoryPageSchema.parse(
+      await port.listMemory(agentId, MemoryQuerySchema.parse(request.query)),
+    )
   })
   app.post('/api/agents/:agentId/memory', mutation, async (request) => {
     const { agentId } = AgentParams.parse(request.params)

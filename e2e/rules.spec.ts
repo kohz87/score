@@ -45,6 +45,11 @@ test('Settings rules: staged edit with a reviewed diff, then a stricter-only age
 
   // A single agent: only stricter choices exist; the server says no to anything else.
   await page.route('**/api/agents/builder/permissions/*', async (route) => {
+    if (route.request().method() === 'DELETE') {
+      sent.push({ url: route.request().url(), body: null })
+      await route.fulfill({ json: { items: [] } })
+      return
+    }
     const level = (route.request().postDataJSON() as { level: string }).level
     if (level !== 'never') {
       await route.fulfill({
@@ -58,6 +63,20 @@ test('Settings rules: staged edit with a reviewed diff, then a stricter-only age
       json: { id: 'never:git push*', label: 'git push*', level: 'never', inherited: false },
     })
   })
+  // builder already carries its own Never, so the Use team rule control has a row to sit on.
+  await page.route('**/api/agents/builder', async (route) => {
+    const response = await route.fetch()
+    const detail = (await response.json()) as { permissions: object[] }
+    await route.fulfill({
+      json: {
+        ...detail,
+        permissions: [
+          ...detail.permissions,
+          { id: 'never:rm -rf /tmp/*', label: 'rm -rf /tmp/*', level: 'never', inherited: false },
+        ],
+      },
+    })
+  })
   await page.goto('/team/builder')
   await page.getByRole('tab', { name: 'Permissions' }).click()
   const panel = page.getByRole('tabpanel')
@@ -68,4 +87,9 @@ test('Settings rules: staged edit with a reviewed diff, then a stricter-only age
   await expect
     .poll(() => decodeURIComponent(sent.at(-1)!.url))
     .toContain('permissions/never:git push*')
+  await panel.getByRole('button', { name: 'Use team rule instead of: rm -rf /tmp/*' }).click()
+  await expect
+    .poll(() => decodeURIComponent(sent.at(-1)!.url))
+    .toContain('permissions/never:rm -rf /tmp/*')
+  expect(sent.at(-1)!.body).toBeNull()
 })

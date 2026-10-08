@@ -50,10 +50,8 @@ import {
   SetModelSchema,
   pageMemory,
   type AgentTool,
-  type HubSkill,
-  type MemoryItem,
-  type SkillItem,
 } from '../agent-tabs.ts'
+import type { HubSkill, MemoryItem, SkillItem } from '@score/contract'
 import { z } from 'zod'
 import { permissionsOf, updateApprovalConfig, type ApprovalConfig } from '../approvals.ts'
 import { HttpError } from '../../errors.ts'

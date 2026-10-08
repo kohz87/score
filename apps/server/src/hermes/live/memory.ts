@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { redactBounded } from '../../redact.ts'
-import type { MemoryItem } from '../agent-tabs.ts'
+import type { MemoryItem } from '@score/contract'
 
 // Built-in memory is two plain files in <profile>/memories/; entries are separated by a "§" line. They are
 // opened read-only through a descriptor (no symlinks, size-capped). Hermes offers no CLI verb or gateway call to

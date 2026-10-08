@@ -58,6 +58,8 @@ export {
   SetModelSchema,
   SkillNameSchema,
   ToolIdSchema,
+} from './agent-tabs.ts'
+export {
   HubSkillSchema,
   MemoryItemSchema,
   MemoryPageSchema,
@@ -66,7 +68,7 @@ export {
   type MemoryItem,
   type MemoryPage,
   type SkillItem,
-} from './agent-tabs.ts'
+} from '@score/contract'
 export {
   NEVER_PREFIX,
   drifted,

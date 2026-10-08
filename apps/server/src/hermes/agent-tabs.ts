@@ -1,8 +1,7 @@
 import { z } from 'zod'
-import type { AgentDetail } from '@score/contract'
+import type { AgentDetail, MemoryItem, MemoryPage } from '@score/contract'
 
-// Response shapes for the Team tabs. The contract (§8) names the routes but not these bodies, so they
-// live here until the lead promotes them to packages/contract.
+// Request shapes for the Team tabs; the response bodies live in packages/contract (§8).
 const NoNul = (value: string) => !value.includes('\0')
 const Token = z
   .string()
@@ -36,28 +35,6 @@ export const MemoryQuerySchema = z.object({
     .optional(),
 })
 
-export const SkillItemSchema = z.object({ name: z.string().min(1), enabled: z.boolean() })
-export const HubSkillSchema = z.object({
-  name: z.string(),
-  identifier: z.string().min(1),
-  source: z.string(),
-  trust: z.string(),
-  description: z.string(),
-})
-export const MemoryItemSchema = z.object({
-  id: z.string().min(1),
-  text: z.string(),
-  source: z.string(),
-  at: z.iso.datetime(),
-})
-export const MemoryPageSchema = z.object({
-  items: z.array(MemoryItemSchema),
-  nextCursor: z.string().nullable(),
-})
-export type SkillItem = z.infer<typeof SkillItemSchema>
-export type HubSkill = z.infer<typeof HubSkillSchema>
-export type MemoryItem = z.infer<typeof MemoryItemSchema>
-export type MemoryPage = z.infer<typeof MemoryPageSchema>
 export type AgentTool = AgentDetail['tools'][number]
 
 export const MEMORY_PAGE_SIZE = 20
