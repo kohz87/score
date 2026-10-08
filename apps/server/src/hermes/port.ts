@@ -33,14 +33,17 @@ export const TaskActionRequestSchema = z
   })
   .refine((req) => req.action !== 'comment' || Boolean(req.text?.trim()))
 
+export type CompatibilityEvaluation = SystemStatus['compatibility'] & {
+  matchedHermes?: { version: string; codeSha: string }
+}
+
 export interface HermesPort {
   readonly mode: 'live' | 'fake'
   start(sink: ObservationSink): Promise<void>
   stop(): Promise<void>
-  status(): Pick<
-    SystemStatus,
-    'hermes' | 'bridge' | 'compatibility' | 'agentIsolation' | 'degraded'
-  >
+  status(): Pick<SystemStatus, 'hermes' | 'bridge' | 'agentIsolation' | 'degraded'> & {
+    compatibility: CompatibilityEvaluation
+  }
   listAgents(): Promise<AgentSummary[]>
   startRun(req: {
     agentId: string

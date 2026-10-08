@@ -383,3 +383,28 @@ test('migration 0002 preserves existing 0001 keys with NULL position metadata', 
     status: 'duplicate',
   })
 })
+
+test('gate #13 internal random-identity sources retire after 24 hours while replayable sources retain dedupe', async () => {
+  const { INTERNAL_OBSERVATION_SOURCES } = await import('../../src/hub/retire.ts')
+  for (const source of [...INTERNAL_OBSERVATION_SOURCES, 'bridge:durable']) {
+    await ingest.submit({ source, identity: 'old', apply: () => [] })
+    await ingest.submit({ source, identity: 'recent', apply: () => [] })
+  }
+  const now = Date.now()
+  db.sqlite
+    .prepare("UPDATE ingest_keys SET created_at = ? WHERE identity = 'old'")
+    .run(new Date(now - 24 * 60 * 60 * 1000).toISOString())
+  db.sqlite
+    .prepare(
+      "INSERT INTO request_receipts (key, route, body_sha256, status, response, created_at) VALUES ('expired', '/route', 'hash', 200, '{}', ?)",
+    )
+    .run(new Date(now - 24 * 60 * 60 * 1000).toISOString())
+  expect(retireIngestKeys(db, { now }).retired).toBe(INTERNAL_OBSERVATION_SOURCES.length)
+  expect(db.sqlite.prepare("SELECT source FROM ingest_keys WHERE identity = 'old'").all()).toEqual([
+    { source: 'bridge:durable' },
+  ])
+  expect(
+    db.sqlite.prepare("SELECT count(*) AS n FROM ingest_keys WHERE identity = 'recent'").get()?.n,
+  ).toBe(INTERNAL_OBSERVATION_SOURCES.length + 1)
+  expect(db.sqlite.prepare('SELECT * FROM request_receipts').all()).toEqual([])
+})

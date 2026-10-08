@@ -85,7 +85,7 @@ test('human guard, CSRF header and origin are enforced', async () => {
   expect(action).not.toHaveBeenCalled()
 })
 
-test('a successful unblock closes the task denial cards; a comment does not', async () => {
+test('task actions without open cards submit no closure observation', async () => {
   const submit = vi.fn(async () => ({ status: 'applied' as const }))
   const withIngest = buildApp({
     config: loadConfig({}),
@@ -109,9 +109,7 @@ test('a successful unblock closes the task denial cards; a comment does not', as
     expect((await post({ action: 'comment', text: 'no' })).statusCode).toBe(200)
     expect(submit).not.toHaveBeenCalled()
     expect((await post({ action: 'unblock' })).statusCode).toBe(200)
-    expect(submit).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ source: 'task-actions' }),
-    )
+    expect(submit).not.toHaveBeenCalled()
   } finally {
     await withIngest.close()
   }

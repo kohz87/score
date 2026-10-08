@@ -222,7 +222,7 @@ def test_05_credential_fields_and_assignments_with_unavailable_hermes(failure, m
     monkeypatch.setattr(private.importlib, "import_module", fake_import)
     names = ["apiKey", "AWS_SECRET_ACCESS_KEY", "clientSecret", "AWS_ACCESS_KEY_ID", "X-API-Key",
              "password", "passwd", "secret", "token", "accessKey", "private key", "Authorization",
-             "Cookie", "credential", "sessionId", "prefix_client-secret_suffix"]
+             "Cookie", "credential", "prefix_client-secret_suffix"]
     payload = {name: {"nested": ["opaque-credential"]} for name in names}
     assert set(scrub(payload, private.redact).values()) == {"[redacted]"}
     for name in names:

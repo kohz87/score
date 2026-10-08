@@ -24,7 +24,7 @@ import {
 import { GatewayClient, HermesHttpError } from './gateway.ts'
 import { RunIntents } from './intents.ts'
 import { ProfileNameSchema, resolveHermesHome } from './paths.ts'
-import { followRun, type FollowOptions } from './runs.ts'
+import { followRun, waitForRun, type FollowOptions } from './runs.ts'
 import { taskAction, taskReader } from './task-actions.ts'
 import type { HermesRunner } from './cli.ts'
 import { readRun, RunRowSchema, runLifecycle, type RunMetrics } from './translate.ts'
@@ -266,26 +266,36 @@ export class LivePort implements HermesPort {
     const { db, gateway, sink, signal } = this.requireStarted()
     const row = readRun(db.sqlite, runId)
     if (runLifecycle.isTerminal(row.status) || row.credential_generation === null) return
-    const pending = followRun({
-      db,
-      gateway,
-      sink,
-      signal,
-      context: {
-        profile: row.profile,
-        runId,
-        credentialGeneration: row.credential_generation,
-        getDisabled: () => this.current.compatibility.disabled,
-      },
-      metrics: this.metrics,
-      ...this.options.following,
-    })
-      .catch((error: unknown) => {
-        if (error instanceof CredentialsUnavailable)
-          this.current.degraded.push(`${row.profile}: credentials unavailable`)
-        this.options.onError?.(error)
-      })
-      .finally(() => this.followers.delete(runId))
+    const pending = (async () => {
+      let attempts = 0
+      while (!signal.aborted && !runLifecycle.isTerminal(readRun(db.sqlite, runId).status)) {
+        try {
+          await followRun({
+            db,
+            gateway,
+            sink,
+            signal,
+            context: {
+              profile: row.profile,
+              runId,
+              credentialGeneration: row.credential_generation!,
+              getDisabled: () => this.current.compatibility.disabled,
+            },
+            metrics: this.metrics,
+            ...this.options.following,
+          })
+        } catch (error) {
+          if (error instanceof CredentialsUnavailable)
+            this.current.degraded.push(`${row.profile}: credentials unavailable`)
+          this.options.onError?.(error)
+        }
+        if (signal.aborted || runLifecycle.isTerminal(readRun(db.sqlite, runId).status)) break
+        await (this.options.following?.wait ?? waitForRun)(
+          [60_000, 300_000, 900_000][Math.min(attempts++, 2)]!,
+          signal,
+        )
+      }
+    })().finally(() => this.followers.delete(runId))
     this.followers.set(runId, pending)
   }
   async startRun(req: {

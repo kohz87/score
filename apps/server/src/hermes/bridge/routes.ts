@@ -3,30 +3,32 @@ import {
   BridgeEventsResponseSchema,
   BridgeHelloRequestSchema,
   BridgeHelloResponseSchema,
-  type SystemStatus,
 } from '@score/contract'
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { ApprovalOutbox } from '../../domain/approval-outbox.ts'
 import { registerBridgeDecisionRoutes } from './decisions.ts'
+import type { CompatibilityEvaluation } from '../port.ts'
 import type { ScoreDb } from '../../db/index.ts'
 import { HttpError } from '../../errors.ts'
 import type { Ingest } from '../../hub/ingest.ts'
 import { redact } from '../../redact.ts'
 import { hashBridgeToken } from './bootstrap.ts'
-import { acknowledge, ProducerSchema } from './registry.ts'
+import { acknowledge, ProducerSchema, retainedBridgePosition } from './registry.ts'
 import { translateBridgeEvent, type BridgeMetrics } from './translate.ts'
 
 export interface BridgeDeps {
   db: ScoreDb
   ingest: Pick<Ingest, 'submit' | 'clearHolds'>
   bootstrapHash: Buffer
-  getCompatibility: () => SystemStatus['compatibility']
+  getCompatibility: () => CompatibilityEvaluation
   clock?: () => number
   metrics?: BridgeMetrics
   outbox?: ApprovalOutbox
 }
+
+export const SHIPPED_PLUGIN_VERSION = '0.1.0'
 
 const BearerSchema = z.string().regex(/^Bearer [A-Za-z0-9_-]{43}$/i)
 const BatchSchema = BridgeEventsRequestSchema.refine(
@@ -85,13 +87,18 @@ export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): vo
       const now = clock()
       const at = new Date(now).toISOString()
       const expires = now + 60 * 60 * 1000
+      const compatibility = getCompatibility()
       const gatewayApprovals =
+        hello.pluginVersion === SHIPPED_PLUGIN_VERSION &&
+        // Hermes reports `<version>+<build>`; the code SHA is the exact identity.
+        hello.hermes.version.split('+', 1)[0] === compatibility.matchedHermes?.version &&
+        hello.hermes.codeSha === compatibility.matchedHermes?.codeSha &&
         hello.isolation === 'in_process' &&
-        ['list_gateway_approvals', 'resolve_gateway_approval'].every(
+        ['list_gateway_approvals', 'resolve_gateway_approval', '_lock', '_gateway_queues'].every(
           (name) =>
             (hello.privateApis[`tools.approval.${name}`] ?? hello.privateApis[name]) === true,
         ) &&
-        !getCompatibility().disabled.includes('gateway-approvals')
+        !compatibility.disabled.includes('gateway-approvals')
       db.tx((sqlite) => {
         const row = sqlite
           .prepare('SELECT * FROM producers WHERE incarnation = ?')
@@ -112,8 +119,8 @@ export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): vo
         sqlite
           .prepare(
             `INSERT INTO producers (id, profile, incarnation, pid, kanban_task_id, isolation, plugin_version,
-        hermes_version, hermes_code_sha, private_apis, token_hash, token_expires_at, created_at, last_seen_at, gateway_approvals)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        hermes_version, hermes_code_sha, private_apis, token_hash, token_expires_at, created_at, last_seen_at, gateway_approvals, acked_through)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (incarnation) DO UPDATE SET isolation = excluded.isolation, plugin_version = excluded.plugin_version,
         hermes_version = excluded.hermes_version, hermes_code_sha = excluded.hermes_code_sha,
         private_apis = excluded.private_apis, token_hash = excluded.token_hash,
@@ -135,6 +142,7 @@ export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): vo
             at,
             at,
             gatewayApprovals ? 1 : 0,
+            retainedBridgePosition(sqlite, hello.incarnation),
           )
       })
       return BridgeHelloResponseSchema.parse({

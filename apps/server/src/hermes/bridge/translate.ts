@@ -17,6 +17,7 @@ export interface BridgeMetrics {
 }
 
 const ToolPayloadSchema = z.object({
+  gateIds: z.array(BridgeIdentifierSchema).max(16).optional(),
   tool_name: z.string().optional(),
   args: z.unknown().optional(),
   result: z.unknown().optional(),
@@ -117,8 +118,11 @@ const payloadIdentifierNames = [
 ]
 
 function redactPayload(payload: Record<string, unknown>): Record<string, unknown> {
-  const identifiers: Record<string, string | null> = {}
+  const identifiers: Record<string, unknown> = {}
+  if (Object.hasOwn(payload, 'gateIds'))
+    identifiers.gateIds = z.array(BridgeIdentifierSchema).max(16).parse(payload.gateIds)
   const content = { ...payload }
+  delete content.gateIds
   for (const name of payloadIdentifierNames) {
     if (!Object.hasOwn(content, name)) continue
     identifiers[name] = BridgeIdentifierSchema.nullable().parse(content[name])
@@ -324,12 +328,12 @@ export function translateBridgeEvent(
         }
         return [
           ...denialDrafts,
-          ...(post && event.toolCallId
+          ...(post && tool.gateIds?.length
             ? completeApprovalTool(
                 sqlite,
                 producer,
                 {
-                  toolCallId: event.toolCallId,
+                  gateIds: tool.gateIds!,
                   counter: event.counter,
                   sessionKey: event.sessionKey,
                 },

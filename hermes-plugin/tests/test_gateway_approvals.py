@@ -17,7 +17,6 @@ RAW = {"surface": "gateway", "session_key": "session-1", "command": "echo token=
 
 @pytest.fixture(autouse=True)
 def clean_claims(monkeypatch):
-    monkeypatch.setattr(hermes_private, "approval_lock_free", lambda timeout: True)
     reset()
     yield
     reset()
@@ -166,12 +165,12 @@ def poller(tmp_path, monkeypatch):
 def test_poll_outcomes_and_lease(poller, monkeypatch, resolved, outcome, error):
     worker, transport = poller
     calls = []
-    def resolve(session, choice, request_id):
+    def resolve(session, choice, request_id, deadline, cancelled=None):
         calls.append((session, choice, request_id))
         if resolved is None:
             raise RuntimeError("secret exception")
         return resolved
-    monkeypatch.setattr(hermes_private, "resolve_exact", resolve)
+    monkeypatch.setattr(hermes_private, "resolve_exact_bounded", resolve)
     worker.process_once()
     expected = {"leaseId": "lease-1", "outcome": outcome, "resolved": 1 if outcome == "applied" else 0}
     if error:
@@ -185,7 +184,7 @@ def test_poll_outcomes_and_lease(poller, monkeypatch, resolved, outcome, error):
 def test_unreported_never_resolved(poller, monkeypatch, change):
     worker, transport = poller
     transport.items = [item(**change)]
-    monkeypatch.setattr(hermes_private, "resolve_exact", lambda *args: pytest.fail("unreported target"))
+    monkeypatch.setattr(hermes_private, "resolve_exact_bounded", lambda *args, **kwargs: pytest.fail("unreported target"))
     worker.process_once()
     assert transport.acks == [{"leaseId": "lease-1", "outcome": "failed", "resolved": 0, "error": "not_reported"}]
 
@@ -193,7 +192,7 @@ def test_unreported_never_resolved(poller, monkeypatch, change):
 def test_other_producer_never_resolves(poller, monkeypatch):
     worker, transport = poller
     worker.client.profile = "reviewer"
-    monkeypatch.setattr(hermes_private, "resolve_exact", lambda *args: pytest.fail("other producer"))
+    monkeypatch.setattr(hermes_private, "resolve_exact_bounded", lambda *args, **kwargs: pytest.fail("other producer"))
     worker.process_once()
     assert transport.acks[0]["error"] == "not_reported"
 
@@ -202,10 +201,10 @@ def test_other_producer_never_resolves(poller, monkeypatch):
 def test_401_renews_for_poll_and_ack(poller, on_ack, monkeypatch):
     worker, transport = poller
     transport.unauthorized = not on_ack
-    def resolve(*args):
+    def resolve(*args, **kwargs):
         transport.unauthorized = on_ack
         return 1
-    monkeypatch.setattr(hermes_private, "resolve_exact", resolve)
+    monkeypatch.setattr(hermes_private, "resolve_exact_bounded", resolve)
     worker.process_once()
     assert len([call for call in transport.calls if call[0].endswith("/hello")]) == 2
     assert transport.acks[-1]["outcome"] == "applied"
@@ -215,7 +214,7 @@ def test_ack_retry_does_not_resolve_again(poller, monkeypatch):
     worker, transport = poller
     transport.fail_ack = 2
     calls = []
-    monkeypatch.setattr(hermes_private, "resolve_exact", lambda *args: calls.append(args) or 1)
+    monkeypatch.setattr(hermes_private, "resolve_exact_bounded", lambda *args, **kwargs: calls.append(args) or 1)
     worker.process_once()
     assert len(calls) == 1
     assert len(transport.acks) == 3
@@ -227,7 +226,7 @@ def test_ack_retry_does_not_resolve_again(poller, monkeypatch):
 def test_invalid_batch_never_resolves(poller, monkeypatch, bad):
     worker, transport = poller
     transport.items = [item(), bad]
-    monkeypatch.setattr(hermes_private, "resolve_exact", lambda *args: pytest.fail("invalid batch"))
+    monkeypatch.setattr(hermes_private, "resolve_exact_bounded", lambda *args, **kwargs: pytest.fail("invalid batch"))
     with pytest.raises(ProtocolError):
         worker.process_once()
     assert not transport.acks
@@ -236,7 +235,7 @@ def test_invalid_batch_never_resolves(poller, monkeypatch, bad):
 def test_expired_lease_and_revoked_capability(poller, monkeypatch):
     worker, transport = poller
     transport.items = [item(leaseUntil="2020-01-01T00:00:00Z")]
-    monkeypatch.setattr(hermes_private, "resolve_exact", lambda *args: pytest.fail("expired lease"))
+    monkeypatch.setattr(hermes_private, "resolve_exact_bounded", lambda *args, **kwargs: pytest.fail("expired lease"))
     worker.process_once()
     assert not transport.acks
     transport.unauthorized = True
@@ -329,13 +328,12 @@ def test_after_fork_takes_no_locks_and_closes_only_a_detached_descriptor():
     right.close()
 
 
-@pytest.mark.parametrize("lock_free, lease_seconds", [(False, 30), (True, 1)])
-def test_resolution_is_not_attempted_when_contended_or_too_close_to_lease(monkeypatch, lock_free, lease_seconds):
+@pytest.mark.parametrize("lease_seconds", [30, 1])
+def test_bounded_resolution_not_attempted_is_acknowledged(monkeypatch, lease_seconds):
     from datetime import datetime, timezone
     exact(monkeypatch)
     calls, acks = [], []
-    monkeypatch.setattr(hermes_private, "approval_lock_free", lambda timeout: lock_free)
-    monkeypatch.setattr(hermes_private, "resolve_exact", lambda *args: calls.append(args) or 1)
+    monkeypatch.setattr(hermes_private, "resolve_exact_bounded", lambda *args, **kwargs: calls.append(args) or None)
     now = time.time()
     lease = datetime.fromtimestamp(now + lease_seconds, timezone.utc).isoformat().replace("+00:00", "Z")
     item = {"deliveryId": "d1", "leaseId": "lease-1", "leaseUntil": lease, "sessionKey": "session-1",
@@ -353,5 +351,5 @@ def test_resolution_is_not_attempted_when_contended_or_too_close_to_lease(monkey
             acks.append(body)
             return {}
     DecisionPoller(Client()).process_once()
-    assert calls == []
+    assert len(calls) == 1
     assert acks == [{"leaseId": "lease-1", "outcome": "failed", "resolved": 0, "error": "not_attempted"}]

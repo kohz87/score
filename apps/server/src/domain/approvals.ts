@@ -356,7 +356,6 @@ function applySignal(sqlite: DatabaseSync, signal: Signal, at: string): boolean 
         ...(p.expiresAt ? { expires_at: p.expiresAt } : {}),
       })
       row = readApprovalRow(sqlite, id)!
-      if (row.stage === 'human') claimCompletion(sqlite, signal, row.id, at)
     } else if (!signal.matched_approval_id) {
       // Gate attachment requires an exact request key. Never infer it from tool ids or command text.
       if (row.gate_id && row.gate_id !== signal.gate_id) return false
@@ -383,6 +382,7 @@ function applySignal(sqlite: DatabaseSync, signal: Signal, at: string): boolean 
       )
       row = readApprovalRow(sqlite, row.id)!
     }
+    if (row.stage === 'human') claimCompletion(sqlite, signal, row.id, at)
     linkSignal(sqlite, signal, row, at)
   } else {
     if (!row && !signal.gate_id) {
@@ -592,50 +592,50 @@ export function closeRunApprovals(
 export function completeApprovalTool(
   sqlite: DatabaseSync,
   producer: { id: string; incarnation: string; profile: string },
-  completion: { toolCallId: string; counter: number; sessionKey: string | null },
+  completion: { gateIds: string[]; counter: number; sessionKey: string | null },
   outcome: 'ok' | 'blocked' | 'error',
   at: string,
   options: ApprovalReadOptions = {},
 ): DomainEventDraft[] {
+  if (!completion.gateIds.length) return []
   return mutate(sqlite, at, options, () => {
-    const value = sqlite
-      .prepare(
-        `SELECT id FROM approvals WHERE producer_id = ? AND tool_call_id = ? AND stage = 'human' ORDER BY created_at DESC, rowid DESC LIMIT 1`,
-      )
-      .get(producer.id, completion.toolCallId)
-    if (value) {
-      patchApproval(sqlite, IdSchema.parse(value).id, { tool_outcome: outcome }, at)
-      return
+    for (const gateId of completion.gateIds) {
+      const value = sqlite
+        .prepare(
+          `SELECT id FROM approvals WHERE producer_incarnation = ? AND gate_id = ? AND stage = 'human'`,
+        )
+        .get(producer.incarnation, gateId)
+      if (value) {
+        patchApproval(sqlite, IdSchema.parse(value).id, { tool_outcome: outcome }, at)
+        continue
+      }
+      sqlite
+        .prepare(
+          `INSERT INTO approval_signals (producer_id, profile, hook, session_key, request_id, payload, at, producer_incarnation, counter, gate_id)
+         VALUES (?, ?, 'post_tool_call', ?, NULL, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          producer.id,
+          producer.profile,
+          completion.sessionKey,
+          JSON.stringify({ completion: outcome }),
+          at,
+          producer.incarnation,
+          completion.counter,
+          gateId,
+        )
     }
-    // The gate may not be ingested yet (a held or redelivered batch). Keep the evidence; payload has no `kind`, so
-    // gate replay never selects it. A later gate claims it in producer counter order.
-    sqlite
-      .prepare(
-        `INSERT INTO approval_signals (producer_id, profile, hook, session_key, request_id, payload, at, producer_incarnation, counter)
-         VALUES (?, ?, 'post_tool_call', ?, NULL, ?, ?, ?, ?)`,
-      )
-      .run(
-        producer.id,
-        producer.profile,
-        completion.sessionKey,
-        JSON.stringify({ completion: outcome, toolCallId: completion.toolCallId }),
-        at,
-        producer.incarnation,
-        completion.counter,
-      )
   })
 }
 function claimCompletion(sqlite: DatabaseSync, signal: Signal, rowId: string, at: string): void {
-  const toolCallId = signal.payload.toolCallId
-  if (!toolCallId || !signal.producer_incarnation || signal.counter === null) return
+  if (!signal.gate_id || !signal.producer_incarnation) return
   const value = sqlite
     .prepare(
       `SELECT id, json_extract(payload, '$.completion') AS outcome FROM approval_signals
-       WHERE producer_incarnation = ? AND hook = 'post_tool_call' AND matched_approval_id IS NULL
-         AND json_extract(payload, '$.toolCallId') = ? AND counter > ?
-       ORDER BY counter LIMIT 1`,
+     WHERE producer_incarnation = ? AND gate_id = ? AND hook = 'post_tool_call'
+       AND matched_approval_id IS NULL ORDER BY counter LIMIT 1`,
     )
-    .get(signal.producer_incarnation, toolCallId, signal.counter)
+    .get(signal.producer_incarnation, signal.gate_id)
   if (!value) return
   const completion = z
     .object({ id: z.int(), outcome: z.enum(['ok', 'blocked', 'error']) })

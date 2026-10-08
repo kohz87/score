@@ -19,28 +19,24 @@ queue = [
 ]
 lock = threading.Lock()
 resolved = []
-
-
-def resolve(session, choice, **kwargs):
-    assert session == "gateway-session" and choice == "once"
-    assert set(kwargs) == {"request_id"} and kwargs["request_id"] == "exact-target"
-    with lock:
-        for index, entry in enumerate(queue):
-            if entry.data["request_id"] == kwargs["request_id"]:
-                resolved.append(queue.pop(index).data["request_id"])
-                return 1
-    return 0
+class ResolvedEvent:
+    def set(self):
+        resolved.append("exact-target")
+queue[0].result = queue[1].result = None
+queue[0].event = threading.Event()
+queue[1].event = ResolvedEvent()
 
 
 attrs = {"tools.approval._lock": lock, "tools.approval._gateway_queues": {"gateway-session": queue}}
 hermes_private._lookup_attr = attrs.get
 apis = {
     "tools.approval.list_gateway_approvals": lambda session: [],
-    "tools.approval.resolve_gateway_approval": resolve,
+    "tools.approval.resolve_gateway_approval": lambda *args: None,
     "hermes_cli.plugin_isolation.isolation_mode": lambda: "in_process",
     "hermes_cli.profiles.current_profile_name": lambda: "builder",
 }
 hermes_private._lookup = apis.get
+hermes_private.version_info = lambda: {"version": "0.21.0", "codeSha": "fixture"}
 DecisionPoller.start = lambda self: None
 
 

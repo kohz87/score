@@ -2,8 +2,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance, FastifyServerOptions } from 'fastify'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
-import { expireApprovals } from './domain/approvals.ts'
-import { randomUUID } from 'node:crypto'
+import { sweepExpiredApprovals } from './domain/approval-expiry.ts'
 import { buildApp } from './app.ts'
 import { SqliteSessionStore } from './auth/sqlite-session-store.ts'
 import type { Config } from './config.ts'
@@ -143,13 +142,10 @@ export async function startServer(config: Config, { logger, listen }: StartServe
         }
         try {
           pruneBridge(database)
-          void ingest
-            ?.submit({
-              source: 'approval-expiry',
-              identity: randomUUID(),
-              apply: ({ sqlite, now }) => expireApprovals(sqlite, now),
-            })
-            .catch((error: unknown) => app?.log.error({ err: error }, 'Approval expiry failed'))
+          if (ingest)
+            void sweepExpiredApprovals(database, ingest).catch((error: unknown) =>
+              app?.log.error({ err: error }, 'Approval expiry failed'),
+            )
         } catch (error) {
           app?.log.error({ err: error }, 'Bridge retention prune failed')
         }

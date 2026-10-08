@@ -101,9 +101,22 @@ export class HermesHttpError extends Error {
 
 export function redactRunPayload(value: unknown, secrets: string[] = []): Record<string, unknown> {
   const content = { ...z.record(z.string(), z.unknown()).parse(value) }
-  const identifiers: Record<string, string> = {}
-  for (const name of ['run_id', 'request_id']) {
+  const identifiers: Record<string, string | null> = {}
+  for (const name of [
+    'run_id',
+    'request_id',
+    'session_id',
+    'session_key',
+    'tool_call_id',
+    'turn_id',
+    'gate_id',
+  ]) {
     if (!Object.hasOwn(content, name)) continue
+    if (content[name] === null && name !== 'run_id' && name !== 'request_id') {
+      identifiers[name] = null
+      delete content[name]
+      continue
+    }
     const id = z
       .string()
       .regex(/^[\x21-\x7e]{1,256}$/)
@@ -219,7 +232,7 @@ export class GatewayClient {
         }
         throw new HermesHttpError(status, code)
       }
-      return schema.parse(redactValue(JSON.parse(text), key ? [key] : []))
+      return schema.parse(redactRunPayload(JSON.parse(text), key ? [key] : []))
     } catch (error) {
       if (error instanceof HermesHttpError) throw error
       const cause = z

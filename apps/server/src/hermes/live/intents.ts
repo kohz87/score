@@ -14,6 +14,7 @@ const IntentRowSchema = z.object({
   payload: z.string(),
   state: z.enum(['pending', 'sent', 'accepted', 'failed', 'unknown']),
   result: z.string().nullable(),
+  first_sent_at: z.iso.datetime().nullable(),
 })
 interface IntentDeps {
   db: ScoreDb
@@ -58,12 +59,24 @@ async function dispatch(
   let runId = row.result
   if (row.state !== 'accepted') {
     if (row.state === 'failed') throw new Error('Run admission previously failed')
+    if (
+      ['sent', 'unknown'].includes(row.state) &&
+      (row.first_sent_at === null ||
+        Date.now() - Date.parse(row.first_sent_at) >= 23 * 60 * 60 * 1000)
+    ) {
+      db.sqlite
+        .prepare(
+          "UPDATE command_intents SET state = 'unknown', last_error = 'replay_window_passed', updated_at = ? WHERE id = ?",
+        )
+        .run(new Date().toISOString(), row.id)
+      throw new HermesHttpError(0, 'replay_window_passed')
+    }
     db.tx((sqlite) => {
       sqlite
         .prepare(
-          `UPDATE command_intents SET state = 'sent', attempts = attempts + 1, updated_at = ? WHERE id = ?`,
+          `UPDATE command_intents SET state = 'sent', attempts = attempts + 1, first_sent_at = COALESCE(first_sent_at, ?), updated_at = ? WHERE id = ?`,
         )
-        .run(new Date().toISOString(), row.id)
+        .run(new Date().toISOString(), new Date().toISOString(), row.id)
     })
     try {
       const result = await gateway.startRun(

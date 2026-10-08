@@ -172,13 +172,13 @@ test('supported hooks bound depth and nodes, including decoded result JSON, and 
     { omitted: 'payload too complex', kind: 'pre' },
     { omitted: 'payload too complex', kind: 'post' },
   ])
-  // The ungated tool completion is kept as evidence for a gate that may arrive later.
+  // A tool completion without gate IDs is not approval evidence.
   expect(
     server.db.sqlite
       .prepare(`SELECT payload FROM approval_signals WHERE hook = 'post_tool_call'`)
       .all()
       .map((row) => JSON.parse(String(row.payload))),
-  ).toEqual([{ completion: 'ok', toolCallId: 'tool-1' }])
+  ).toEqual([])
   expect(server.db.sqlite.prepare('SELECT count(*) AS n FROM events').get()).toEqual({ n: 5 })
   expect(server.metrics.unknownHooks).toBe(0)
 })
@@ -310,3 +310,32 @@ test('producer authentication and approval expiry have indexed query plans', () 
     ),
   ).toContain('approval_signals_at')
 })
+
+test.each(['checkpoint', 'floor', 'both'] as const)(
+  'gate #9 prune/re-hello restores progress from %s',
+  async (retained) => {
+    const token = await server.token()
+    await server.send(token, [event(1), event(2), event(3)])
+    retireIngestKeys(server.db, { keepPositions: 0 })
+    const source = `bridge:${hello.incarnation}`
+    if (retained === 'checkpoint')
+      server.db.sqlite.prepare('DELETE FROM ingest_floors WHERE source = ?').run(source)
+    if (retained === 'floor')
+      server.db.sqlite.prepare('DELETE FROM ingest_checkpoints WHERE source = ?').run(source)
+    if (retained === 'both')
+      server.db.sqlite
+        .prepare("UPDATE ingest_checkpoints SET cursor = '2' WHERE source = ? AND scope = 'events'")
+        .run(source)
+    const now = initialTime + 31 * 24 * 60 * 60 * 1000
+    expect(pruneBridge(server.db, { now }).producers).toBe(1)
+    server.setNow(now)
+    const renewed = await server.token()
+    expect(server.db.sqlite.prepare('SELECT acked_through FROM producers').get()).toEqual({
+      acked_through: 3,
+    })
+    expect((await server.send(renewed, [event(1), event(2), event(3)])).json()).toEqual({
+      ackedThrough: 3,
+    })
+    expect((await server.send(renewed, [event(4)])).json()).toEqual({ ackedThrough: 4 })
+  },
+)

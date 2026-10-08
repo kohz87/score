@@ -408,18 +408,56 @@ test('stream unknown durable envelopes advance the resume cursor without notifyi
   expect(listener).not.toHaveBeenCalled()
 })
 
-test('stream reset keeps the durable cursor; changing epochs invalidates it until a new durable event', () => {
+test('hello establishes a reconnect cursor before the first durable event', () => {
   vi.useFakeTimers()
   const { source } = setup()
-  hello(source)
-  delta(source, 7)
-  source.frame({ type: 'stream.reset', data: { reason: 'pruned' } }, 'stream.reset')
+  source.frame(
+    { type: 'stream.hello', data: { epoch: 'e', headSeq: 42, mode: 'fake', system } },
+    'stream.hello',
+  )
   source.error()
   vi.advanceTimersByTime(500)
-  const second = MockEventSource.instances.at(-1)!
-  expect(second.url).toBe('/api/stream?since=7&epoch=epoch-one')
-  hello(second, 'epoch-two')
-  second.error()
-  vi.advanceTimersByTime(500)
-  expect(MockEventSource.instances.at(-1)!.url).toBe('/api/stream')
+  expect(MockEventSource.instances.at(-1)!.url).toBe('/api/stream?since=42&epoch=e')
 })
+
+test.each([7, 500])(
+  'reset rebases stale/future cursor %s to the connection head; valid replay keeps its cursor',
+  (cursor) => {
+    vi.useFakeTimers()
+    const { source } = setup()
+    hello(source)
+    delta(source, cursor)
+    source.error()
+    vi.advanceTimersByTime(500)
+    const replay = MockEventSource.instances.at(-1)!
+    replay.frame(
+      { type: 'stream.hello', data: { epoch: 'epoch-one', headSeq: 50, mode: 'fake', system } },
+      'stream.hello',
+    )
+    replay.error()
+    vi.advanceTimersByTime(500)
+    expect(MockEventSource.instances.at(-1)!.url).toBe(
+      `/api/stream?since=${cursor}&epoch=epoch-one`,
+    )
+    const reset = MockEventSource.instances.at(-1)!
+    reset.frame(
+      { type: 'stream.hello', data: { epoch: 'epoch-one', headSeq: 60, mode: 'fake', system } },
+      'stream.hello',
+    )
+    reset.frame(
+      { type: 'stream.reset', data: { reason: cursor > 60 ? 'future_cursor' : 'pruned' } },
+      'stream.reset',
+    )
+    reset.error()
+    vi.advanceTimersByTime(500)
+    const next = MockEventSource.instances.at(-1)!
+    expect(next.url).toBe('/api/stream?since=60&epoch=epoch-one')
+    next.frame(
+      { type: 'stream.hello', data: { epoch: 'epoch-two', headSeq: 2, mode: 'fake', system } },
+      'stream.hello',
+    )
+    next.error()
+    vi.advanceTimersByTime(500)
+    expect(MockEventSource.instances.at(-1)!.url).toBe('/api/stream?since=2&epoch=epoch-two')
+  },
+)

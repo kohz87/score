@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import time
 from functools import lru_cache
 
 from .redact import local_redact
@@ -27,7 +28,9 @@ def _lookup(path: str):
 
 
 def available() -> dict[str, bool]:
-    return {path: _lookup(path) is not None for path in _APIS}
+    return {**{path: _lookup(path) is not None for path in _APIS},
+            "tools.approval._lock": callable(getattr(_lookup_attr("tools.approval._lock"), "acquire", None)),
+            "tools.approval._gateway_queues": isinstance(_lookup_attr("tools.approval._gateway_queues"), dict)}
 
 
 @lru_cache(maxsize=None)
@@ -60,22 +63,41 @@ def snapshot_gateway_approvals(session_key: str, limit: int = 64, timeout: float
         lock.release()
 
 
-def approval_lock_free(timeout: float) -> bool:
-    """True when Hermes's approval lock can be taken within ``timeout`` (it is then released at once)."""
-    lock = _lookup_attr("tools.approval._lock")
-    if lock is None or not hasattr(lock, "acquire") or not lock.acquire(timeout=max(0.0, timeout)):
-        return False
-    lock.release()
-    return True
-
-
-def resolve_exact(session_key: str, choice: str, request_id: str) -> int:
+# Adapted from NousResearch/hermes-agent tools/approval.py (e97923c3), Copyright (c) 2025 Nous Research.
+def resolve_exact_bounded(session_key: str, choice: str, request_id: str, deadline: float,
+                          cancelled=None) -> int | None:
+    """Mirror resolve_gateway_approval's request-id branch under a bounded, atomic lock."""
     if type(request_id) is not str or not request_id:
         return 0
-    fn = _lookup("tools.approval.resolve_gateway_approval")
-    if fn is None:
-        raise RuntimeError("approval API unavailable")
-    return fn(session_key, choice, request_id=request_id)
+    lock = _lookup_attr("tools.approval._lock")
+    queues = _lookup_attr("tools.approval._gateway_queues")
+    if lock is None or not isinstance(queues, dict):
+        return None
+    # Short acquisition slices so shutdown (``cancelled``) is observed while waiting on Hermes's lock.
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or (cancelled is not None and cancelled.is_set()):
+            return None
+        if lock.acquire(timeout=min(remaining, 0.1)):
+            break
+    try:
+        if time.monotonic() >= deadline or (cancelled is not None and cancelled.is_set()):
+            return None
+        queue = queues.get(session_key)
+        if not queue:
+            return 0
+        targets = [entry for entry in queue if entry.data.get("request_id") == request_id]
+        if len(targets) != 1:
+            return 0
+        queue[:] = [entry for entry in queue if entry not in targets]
+        if not queue:
+            queues.pop(session_key, None)
+        entry = targets[0]
+        entry.result = choice
+        entry.event.set()
+        return 1
+    finally:
+        lock.release()
 
 
 def redact(text: str) -> str:

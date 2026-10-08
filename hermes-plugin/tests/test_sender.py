@@ -51,7 +51,7 @@ def test_score_down_then_ordered_reconnect(setup):
     sender.process_once()
     assert [e["counter"] for e in transport.acked] == list(range(1, 446))
     assert transport.acked[0]["sessionKey"] == "s"
-    assert transport.acked[0]["sessionId"] == "[redacted]" and transport.acked[0]["toolCallId"] == "tool"
+    assert transport.acked[0]["sessionId"] == "id" and transport.acked[0]["toolCallId"] == "tool"
     assert not sender.spool.path.exists()
 
 
@@ -281,3 +281,65 @@ def test_byte_budget_counts_encoder_unicode_escaping(setup):
     assert len(transport.event_calls) > 1
     assert all(len(json.dumps({"events": events}, allow_nan=False).encode("utf-8")) <= 1.5 * 1024 * 1024
                for events in transport.event_calls)
+
+
+def test_gate_05_evicted_prefix_does_not_block_retained_batches_or_gap(setup):
+    from score_bridge.spool import encode, gap_event
+    sender, _ = setup
+    def event(counter):
+        return {"counter": counter, "hook": "on_session_start", "at": "2026-10-07T00:00:00Z",
+                "sessionKey": None, "sessionId": None, "toolCallId": None, "payload": {}}
+    sender.spool.directory.mkdir(mode=0o700, exist_ok=True)
+    sender.spool.path.write_bytes(encode([event(2)]) + encode([event(3)]) +
+        encode([gap_event(1, 1, "2026-10-07T00:00:00Z")], pending_gap=True))
+    received, ack = set(), 0
+    batches = []
+    class Client:
+        profile = sender.client.profile
+        def send(self, events):
+            nonlocal ack
+            batches.append([e["counter"] for e in events])
+            for e in events:
+                received.add(e["counter"])
+                if e["hook"] == "bridge.gap":
+                    received.update(range(e["payload"]["from_counter"], e["payload"]["to_counter"] + 1))
+            while ack + 1 in received:
+                ack += 1
+            if ack == 0:
+                assert sender.spool.peek()[0]["counter"] == 2
+            return ack
+    assert sender._drain(sender.spool, Client())
+    assert batches == [[2], [3], [4]] and ack == 4
+    assert sender.spool.peek() == []
+
+
+def test_gate_05_drain_caps_a_cycle_at_twenty_batches_and_retains_unacked(setup):
+    from score_bridge.spool import encode
+    sender, transport = setup
+    records = [{"counter": i, "hook": "on_session_start", "at": "2026-10-07T00:00:00Z",
+                "sessionKey": None, "sessionId": None, "toolCallId": None, "payload": {}} for i in range(1, 26)]
+    sender.spool.directory.mkdir(mode=0o700, exist_ok=True)
+    sender.spool.path.write_bytes(b"".join(encode([e]) for e in records))
+    transport.ack_limit = 0
+    assert sender._drain()
+    assert len(transport.event_calls) == 20
+    assert sender.spool.peek()[0]["counter"] == 1
+    assert sender._drain()
+    assert [batch[0]["counter"] for batch in transport.event_calls] == list(range(1, 26))
+    assert sender.spool.peek()[0]["counter"] == 1
+
+
+def test_gate_07_envelope_and_gate_identifiers_are_lifted_before_scrub(setup, monkeypatch):
+    from score_bridge import hermes_private
+    sender, transport = setup
+    monkeypatch.setattr(hermes_private, "redact", lambda text: "[redacted]")
+    sender.enqueue("on_session_start", (), {"session_key": "sk-structural123456", "session_id": "session-a",
+        "tool_call_id": "tool", "turn_id": "turn", "gateId": "gate", "requestId": "request", "cookie": "secret"})
+    sender.enqueue("on_session_start", (), {"session_id": "session-b"})
+    sender.process_once()
+    first, second = transport.acked
+    assert first["sessionKey"] == "sk-structural123456" and first["sessionId"] == "session-a"
+    assert second["sessionId"] == "session-b"
+    assert first["payload"]["gateId"] == "gate" and first["payload"]["requestId"] == "request"
+    assert first["payload"]["turn_id"] == "turn" and first["toolCallId"] == "tool"
+    assert "secret" not in json.dumps(first)

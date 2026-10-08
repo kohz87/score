@@ -15,6 +15,21 @@ export const ProducerSchema = z.object({
 })
 export type Producer = z.infer<typeof ProducerSchema>
 
+export function retainedBridgePosition(sqlite: DatabaseSync, incarnation: string): number {
+  const source = `bridge:${incarnation}`
+  return z.object({ position: z.int().nonnegative() }).parse(
+    sqlite
+      .prepare(
+        `SELECT MAX(position) AS position FROM (
+      SELECT 0 AS position UNION ALL
+      SELECT CAST(cursor AS INTEGER) FROM ingest_checkpoints WHERE source = ? AND scope = 'events'
+      UNION ALL SELECT floor FROM ingest_floors WHERE source = ? AND scope = 'events'
+    )`,
+      )
+      .get(source, source),
+  ).position
+}
+
 const PositionSchema = z.object({ first: z.int().positive(), last: z.int().positive() })
 
 export function acknowledge(sqlite: DatabaseSync, producer: Producer, at: string): number {

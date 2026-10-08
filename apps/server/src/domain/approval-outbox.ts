@@ -155,26 +155,33 @@ export class ApprovalOutbox {
     })
   }
   async start(): Promise<void> {
-    await this.change((sqlite, at) => {
-      const rows = z
-        .array(DeliveryRowSchema)
-        .parse(
+    if (
+      this.deps.db.sqlite
+        .prepare(
+          "SELECT 1 FROM approval_deliveries WHERE route = 'port' AND state = 'delivering' LIMIT 1",
+        )
+        .get()
+    )
+      await this.change((sqlite, at) => {
+        const rows = z
+          .array(DeliveryRowSchema)
+          .parse(
+            sqlite
+              .prepare(
+                `SELECT * FROM approval_deliveries WHERE route = 'port' AND state = 'delivering'`,
+              )
+              .all(),
+          )
+        return rows.flatMap((row) => {
           sqlite
             .prepare(
-              `SELECT * FROM approval_deliveries WHERE route = 'port' AND state = 'delivering'`,
+              `UPDATE approval_deliveries SET maybe_applied = 1, state = 'intent', next_attempt_at = NULL, updated_at = ? WHERE id = ?`,
             )
-            .all(),
-        )
-      return rows.flatMap((row) => {
-        sqlite
-          .prepare(
-            `UPDATE approval_deliveries SET maybe_applied = 1, state = 'intent', next_attempt_at = NULL, updated_at = ? WHERE id = ?`,
-          )
-          .run(at, row.id)
-        refreshApproval(sqlite, row.approval_id, at)
-        return approvalDraft(sqlite, row.approval_id, { now: Date.parse(at) })
+            .run(at, row.id)
+          refreshApproval(sqlite, row.approval_id, at)
+          return approvalDraft(sqlite, row.approval_id, { now: Date.parse(at) })
+        })
       })
-    })
     this.started = true
     this.timer = setInterval(() => this.wake(), 1000)
     this.timer.unref()
@@ -279,6 +286,13 @@ export class ApprovalOutbox {
     await this.change((sqlite, at) => {
       const now = Date.parse(at)
       sqlite.prepare('UPDATE producers SET last_seen_at = ? WHERE id = ?').run(at, producerId)
+      // Only a producer qualified at its latest hello may receive decisions (gate review #2).
+      if (
+        !sqlite
+          .prepare('SELECT 1 FROM producers WHERE id = ? AND gateway_approvals = 1')
+          .get(producerId)
+      )
+        return []
       const rows = z
         .array(DeliveryRowSchema)
         .parse(
@@ -362,6 +376,29 @@ export class ApprovalOutbox {
     this.notifier.wake(producerId)
   }
   async sweep(): Promise<void> {
+    const now = this.clock()
+    const candidates = z
+      .array(DeliveryRowSchema)
+      .parse(
+        this.deps.db.sqlite
+          .prepare("SELECT * FROM approval_deliveries WHERE state IN ('intent','delivering')")
+          .all(),
+      )
+    if (
+      !candidates.some((delivery) => {
+        const row = readApprovalRow(this.deps.db.sqlite, delivery.approval_id)!
+        if (delivery.state === 'intent') return !deliverable(row, delivery, now)
+        if (delivery.route !== 'bridge' || (delivery.lease_until ?? Infinity) > now) return false
+        const value = this.deps.db.sqlite
+          .prepare('SELECT last_seen_at FROM producers WHERE id = ?')
+          .get(delivery.producer_id ?? '')
+        const seen = value
+          ? Date.parse(z.object({ last_seen_at: z.iso.datetime() }).parse(value).last_seen_at)
+          : -Infinity
+        return seen < now - 120_000 || !deliverable(row, delivery, now)
+      })
+    )
+      return
     await this.change((sqlite, at) => {
       const now = Date.parse(at)
       const rows = z
