@@ -266,6 +266,18 @@ agent and the agent's Model tab; picking sets model and provider. Done when typi
 connected provider with availability and price, and a created agent has both set (fake + tests + e2e).
 **5.12 Attachments to agents** · Image attachments in Chat reach the addressed agents' runs as image parts (Hermes
 `/v1/runs` list input; ≤ 6 MB raw per message, a note for what didn't fit). Done when tests and a fake e2e show it.
+**5.13 Pause covers new tasks** · Children linked to a paused brief, tasks assigned to a paused agent, and tasks created
+while the team is paused are held too (parked on arrival, released with the pause). Done when each path has a test.
+**5.14 Plan start survives a restart** · Plan start is a durable operation (steps recorded before the CLI calls); startup
+finishes or reports it. Done when a crash between steps is recovered in a test.
+**5.15 Spend per day** · Score snapshots each Hermes session's cumulative cost so Reports can split a session's spend
+across days (cost deltas per window); history before the first snapshot stays unknown. Done when a session crossing
+midnight is split correctly in tests.
+**5.16 Recover expired runs' results** · When Hermes no longer knows a run, Score reads the session's final answer from
+Hermes's own records (read-only) and completes the reply, else marks it interrupted. Done when both paths are tested.
+**5.17 Kanban attempts as runs** · Kanban worker attempts become runs in Flow, Now and Reports, with their session, model
+and tools, and Stop goes through Hermes. Design + adversarial review first (event and DB model). Done when a live-fixture
+attempt shows in all three and Stop works in fake mode.
 
 ---
 
