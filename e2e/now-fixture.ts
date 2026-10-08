@@ -45,48 +45,50 @@ const hop = (
 export function nowFixture(roomId: string) {
   return {
     asOfSeq: 1,
+    paused: false,
     now: fixtureNow,
     headline: {
       working: 2,
       needsYou: 1,
       text: 'Two agents are working. One thing needs you.',
     },
+    // Times mirror docs/design/now-score.png (now 21:31, view 20:30–22:00).
     lanes: [
       {
         agent: agent('lead', 'Leads the team', '#6B4EFF', 'circle-dot'),
         blocks: [
-          block('plan', 'Plan and assign', 'done', -110, -88, 'task-plan'),
-          block('report', 'Report', 'planned', 45, 62),
+          block('plan', 'Plan and assign', 'done', -60, -39, 'task-plan'),
+          block('report', 'Report', 'planned', 22, 29),
         ],
       },
       {
         agent: agent('builder', 'Builds features', '#19C39A', 'triangle', 'working'),
         blocks: [
-          block('read', 'Read layer for task events', 'done', -86, -50, 'task-read'),
-          block('fix', 'Fix cursor', 'done', -34, -24),
-          block('stream', 'Stream', 'working', -22, null),
+          block('read', 'Read layer for task events', 'done', -39, -21, 'task-read'),
+          block('fix', 'Fix cursor', 'done', -16, -9),
+          block('stream', 'Stream', 'working', -9, null),
           block('ask', 'Waiting on you', 'waiting', -1, null),
-          block('stream-next', 'Stream', 'planned', 34, 52),
+          block('stream-next', 'Stream', 'planned', 2, 15),
         ],
       },
       {
         agent: agent('reviewer', 'Reviews changes', '#FFB61E', 'diamond', 'working'),
         blocks: [
-          block('review', 'Review', 'done', -48, -37),
-          block('rereview', 'Re-review', 'working', -22, null),
-          block('signoff', 'Sign off', 'planned', 48, 60),
+          block('review', 'Review', 'done', -21, -16),
+          block('rereview', 'Re-review', 'working', -9, null),
+          block('signoff', 'Sign off', 'planned', 15, 20),
         ],
       },
       {
         agent: agent('designer', 'Designs, up next', '#FF6B8A', 'square'),
-        blocks: [block('states', 'Empty and error states', 'planned', 25, 55)],
+        blocks: [block('states', 'Empty and error states', 'planned', 1, 15)],
       },
     ],
     handoffs: [
-      hop('h1', ['lead', 'plan'], ['builder', 'read'], 'handoff', -88),
-      hop('h2', ['builder', 'read'], ['reviewer', 'review'], 'review', -50),
-      hop('h3', ['reviewer', 'review'], ['builder', 'fix'], 'sent_back', -37),
-      hop('h4', ['builder', 'fix'], ['reviewer', 'rereview'], 'handoff', -24),
+      hop('h1', ['lead', 'plan'], ['builder', 'read'], 'handoff', -39),
+      hop('h2', ['builder', 'read'], ['reviewer', 'review'], 'review', -21),
+      hop('h3', ['reviewer', 'review'], ['builder', 'fix'], 'sent_back', -16),
+      hop('h4', ['builder', 'fix'], ['reviewer', 'rereview'], 'handoff', -9),
     ],
     focusApproval: {
       id: 'fixture-approval',

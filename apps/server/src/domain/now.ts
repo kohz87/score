@@ -215,6 +215,7 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
 
   return {
     now: nowIso,
+    paused: teamPausedAt(sqlite) !== null,
     headline: {
       working,
       needsYou,

@@ -1,9 +1,9 @@
 import type { Handoff, LaneBlock, NowSnapshot } from '@score/contract'
 
 export const HOUR = 3_600_000
-/** Same window the server uses when a client sends no `from`/`to`: two hours back, one ahead. */
-export const WINDOW_BEFORE = 2 * HOUR
-export const WINDOW_AFTER = HOUR
+/** The design's view (now-score.png): an hour back, half an hour ahead. The server sends a wider window; blocks are clipped. */
+export const WINDOW_BEFORE = HOUR
+export const WINDOW_AFTER = HOUR / 2
 export const LANE_HEIGHT = 76
 export const BLOCK_TOP = 18
 export const BLOCK_HEIGHT = 40
@@ -26,11 +26,11 @@ export function clockLabel(time: number): string {
   return new Date(time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 }
 
-/** Half-hour marks inside the window, labelled in local time. */
+/** Quarter-hour marks inside the window, labelled in local time. */
 export function axisTicks(window: TimeWindow): { left: number; label: string }[] {
-  const step = HOUR / 2
+  const step = HOUR / 4
   const ticks: { left: number; label: string }[] = []
-  // Local time zones with a 30/45 minute offset still land on :00/:30 local marks.
+  // Local time zones with a 30/45 minute offset still land on quarter-hour local marks.
   const offset = new Date(window.from).getTimezoneOffset() * 60_000
   for (let t = Math.ceil((window.from - offset) / step) * step + offset; t <= window.to; t += step)
     ticks.push({ left: percent(window, t), label: clockLabel(t) })

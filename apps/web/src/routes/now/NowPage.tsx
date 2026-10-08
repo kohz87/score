@@ -1,19 +1,10 @@
 import { NavLink, useLocation } from 'react-router'
-import { PAUSED_PREFIX, useNow, useTeamPause } from './now-queries.ts'
+import { useNow, useTeamPause } from './now-queries.ts'
 import { AskingCard, MadeTodayCard, NowComposer, ThreadCard } from './NowCards.tsx'
+import { FlowView } from './flow/FlowView.tsx'
 import { RoutinesView } from './RoutinesView.tsx'
 import { ScoreTimeline } from './ScoreTimeline.tsx'
 import './now.css'
-
-// The real Flow view is built in routes/now/flow and wired in at merge time.
-function FlowPlaceholder() {
-  return (
-    <section className="now-card now-placeholder" aria-label="Flow">
-      <h2>Flow</h2>
-      <p className="now-empty">The flow view is on its way.</p>
-    </section>
-  )
-}
 
 const views = [
   { to: '/now', label: 'Score', end: true },
@@ -26,7 +17,7 @@ export function NowPage() {
   const now = useNow()
   const pause = useTeamPause()
   const snapshot = now.data
-  const paused = snapshot?.headline.text.startsWith(PAUSED_PREFIX) ?? false
+  const paused = snapshot?.paused ?? false
   const view = pathname.startsWith('/now/flow')
     ? 'flow'
     : pathname.startsWith('/now/routines')
@@ -76,7 +67,7 @@ export function NowPage() {
           Could not {paused ? 'resume' : 'pause'} the team. Please try again.
         </p>
       )}
-      {view === 'flow' && <FlowPlaceholder />}
+      {view === 'flow' && <FlowView />}
       {view === 'routines' && <RoutinesView agents={snapshot?.lanes.map((lane) => lane.agent)} />}
       {view === 'score' &&
         (snapshot ? (

@@ -207,6 +207,17 @@ resolves integration conflicts. Migrations from Phase 1 end at `0007`; numbers b
 **3.9 Stacked bar chart** · Codex: `TasksByDayChart` (SVG, per-agent color + pattern for accessibility). Done when component tests pass.
 **3.10 Time-split bars + tables + approvals card** · Lead. Done when it matches `reports.png`.
 **3.11 CSV export** · Codex. Done when the CSV columns match the on-screen table.
+**3.12 Profile management** · Codex · *adversarial review* (owner request, 2026-10-08): create (blank or cloned) / rename /
+describe / delete agents from Team via `hermes profile …`; a new agent is ready for Score (per-profile API key, bridge
+plugin, gateway); delete needs the typed name and keeps an export first. Done when create → drive → delete works on test
+profiles and every Hermes write is an exact, tested CLI call.
+**3.13 Remote access mode** · Codex · *adversarial review* (owner request, 2026-10-08: "allow private network and plain LAN
+address"): opt-in listen address (Tailscale/WireGuard interface or LAN), pairing required for every request and the stream,
+Host/Origin allowlist (DNS rebinding), optional TLS with the owner's certificate, a clear warning when serving plain HTTP
+beyond loopback. Done when an unpaired LAN client gets nothing but the pairing page and loopback behaviour is unchanged.
+**3.14 Visual QA pass** · Lead audit → Codex fixes (owner: "button and arrow alignment are off"): every screen against
+its design HTML at 1440, 1024 and 390 px; fix alignment of buttons, arrows, icons and baselines. Done when the audit list is
+empty and screenshot e2e covers each destination.
 **Phase 3 gate** · Gemini + `/codex:review --base main`
 
 ## Phase 4: Watch

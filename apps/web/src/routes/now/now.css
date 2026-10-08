@@ -218,7 +218,9 @@
   position: absolute;
   top: 18px;
   height: 40px;
-  min-width: 44px;
+  /* A short block grows to show its label, as in now-score.png, rather than truncating to "Fi…". */
+  min-width: fit-content;
+  z-index: 1;
   border-radius: var(--radius-pill);
   border: 0;
   padding: 0 14px;
@@ -256,11 +258,14 @@
   background: currentColor;
 }
 .now-block--planned {
+  /* Planned work sits under anything happening now (the waiting pill overlaps it in the design). */
+  z-index: 0;
   border: 1.5px dashed color-mix(in srgb, var(--c) 70%, #fff);
   background: transparent;
   color: color-mix(in srgb, var(--c) 40%, var(--ink));
 }
 .now-block--waiting {
+  z-index: 2;
   top: 20px;
   height: 36px;
   min-width: 0;

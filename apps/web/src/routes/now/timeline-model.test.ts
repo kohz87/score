@@ -5,7 +5,7 @@ const now = '2026-10-08T12:00:00.000Z'
 const window = windowOf(now)
 const at = (minutes: number) => new Date(Date.parse(now) + minutes * 60_000).toISOString()
 
-test('the window runs two hours back and one ahead, so the now line sits at two thirds', () => {
+test('the window runs an hour back and half an hour ahead (as in the design), so the now line sits at two thirds', () => {
   expect(percent(window, window.now)).toBeCloseTo(66.67, 1)
   expect(percent(window, window.from - 1000)).toBe(0)
   expect(percent(window, window.to + 1000)).toBe(100)
@@ -13,7 +13,7 @@ test('the window runs two hours back and one ahead, so the now line sits at two 
 
 test('blocks: done and working use their times, planned gets a default length, waiting sits at the now line', () => {
   const base = { id: 'b', label: 'x', taskId: null, runId: null }
-  const done = layoutBlock(window, { ...base, state: 'done', start: at(-90), end: at(-60) })
+  const done = layoutBlock(window, { ...base, state: 'done', start: at(-50), end: at(-35) })
   expect(done.width).toBeCloseTo(100 / 6, 1)
   const working = layoutBlock(window, { ...base, state: 'working', start: at(-30), end: null })
   expect(working.left + (working.width ?? 0)).toBeCloseTo(66.67, 1)
@@ -24,10 +24,10 @@ test('blocks: done and working use their times, planned gets a default length, w
   expect(waiting.left).toBeCloseTo(66.67, 1)
 })
 
-test('axis ticks are half hours inside the window and skip the one under the now label', () => {
+test('axis ticks are quarter hours inside the window and skip the one under the now label', () => {
   const ticks = axisTicks(window)
   expect(ticks.length).toBeGreaterThanOrEqual(5)
-  expect(ticks.every((tick) => /^\d\d:(00|30)$/.test(tick.label))).toBe(true)
+  expect(ticks.every((tick) => /^\d\d:(00|15|30|45)$/.test(tick.label))).toBe(true)
   expect(ticks.some((tick) => Math.abs(tick.left - 66.67) <= 4)).toBe(false)
 })
 

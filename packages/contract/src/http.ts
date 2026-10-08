@@ -106,6 +106,8 @@ export const RoutineRunSchema = z.object({ id: z.string().min(1), queued: z.lite
 export const NowSnapshotSchema = z.object({
   asOfSeq: AsOfSeqSchema,
   now: z.iso.datetime(),
+  /** Pause everyone is on (POST /api/team/pause). */
+  paused: z.boolean(),
   headline: z.object({
     working: z.int().nonnegative(),
     needsYou: z.int().nonnegative(),

@@ -11,9 +11,6 @@ const THROTTLE_MS = 400
 const REFRESH_ON =
   /^(run|approval|message|brief)\.|^(task\.upserted|lane\.upserted|handoff\.created)$/
 
-/** Matches the headline the server writes while the team is paused (domain/team-pause.ts). */
-export const PAUSED_PREFIX = 'Everyone is paused.'
-
 export function useNow() {
   const queryClient = useQueryClient()
   const stream = useStream()

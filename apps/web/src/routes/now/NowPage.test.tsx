@@ -64,6 +64,7 @@ function snapshot(overrides: Partial<NowSnapshot> = {}): NowSnapshot {
   return {
     asOfSeq: 5,
     now,
+    paused: false,
     headline: { working: 1, needsYou: 1, text: 'One agent is working. One thing needs you.' },
     lanes: [
       {
@@ -179,6 +180,7 @@ beforeEach(() => {
           paused
             ? {
                 ...current,
+                paused: true,
                 headline: { ...current.headline, text: 'Everyone is paused. One thing needs you.' },
               }
             : current,
@@ -373,7 +375,9 @@ test('the view switch links to Score, Flow and Routines; Routines lists every ag
   ).toEqual(['/team/lead', '/team/builder', '/team/reviewer'])
 })
 
-test('Flow shows a placeholder until the flow view is wired in', async () => {
+test('Flow renders the flow view inside the Now shell', async () => {
   renderNow('/now/flow')
-  expect(await screen.findByRole('region', { name: 'Flow' })).toBeTruthy()
+  // The shell keeps the headline and the view switch; the flow view brings its own heading.
+  expect(await screen.findByRole('heading', { level: 2, name: 'Flow' })).toBeTruthy()
+  expect(screen.getByRole('link', { name: 'Flow' }).getAttribute('aria-current')).toBe('page')
 })

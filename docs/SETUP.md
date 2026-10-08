@@ -128,9 +128,13 @@ hermes -p $P config set API_SERVER_KEY "$(cat ~/.score/hermes-keys/$P)"
 Check that each profile's `model.default` is a model your provider actually serves
 (`curl -s -H "Authorization: Bearer $(cat ~/.score/hermes-keys/default)" http://127.0.0.1:8642/api/model/options`).
 
-The Score bridge plugin (Python, managed with `uv`) gets its install steps here when Phase 1 task 1.13 lands.
+Install the Score bridge plugin (Python, no runtime dependencies) into every profile Score should observe: follow
+`hermes-plugin/README.md` (link or copy `hermes-plugin/score_bridge` into `<profile home>/plugins/score-bridge`, then
+restart that profile's gateway). Then start Score with `SCORE_MODE=live pnpm dev`. From another machine, reach it through
+an SSH tunnel (`ssh -N -L 5173:127.0.0.1:5173 <user>@<host>`); Score itself only listens on 127.0.0.1.
 
 ## Changelog of this file
+- 2026-10-08: bridge plugin install pointer, live start and SSH tunnel.
 - 2026-10-06: initial (Phase 0).
 - 2026-10-06: live-mode steps verified (per-profile API keys).
 - 2026-10-07: uv 0.12.23 (user-local, checksum-verified) for hermes-plugin/.

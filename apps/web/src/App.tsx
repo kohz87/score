@@ -54,7 +54,7 @@ export const appRoutes: RouteObject[] = [
           children: [
             { index: true, element: page },
             ...(path === '/now'
-              ? ['flow', 'routines', 'watch/:agentId']
+              ? ['routines', 'flow', 'flow/:briefId', 'watch/:agentId']
               : path === '/chat'
                 ? [':roomId']
                 : []

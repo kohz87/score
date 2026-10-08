@@ -164,7 +164,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 ### Score view
 - **S** `GET /api/now?from=<iso>&to=<iso>` →
   ```ts
-  { asOfSeq: number; now: string
+  { asOfSeq: number; now: string; paused: boolean /* Pause everyone is on */
     headline: { working: number; needsYou: number; text: string /* "Two agents are working. One thing needs you." */ }
     lanes: { agent: AgentSummary; blocks: LaneBlock[] }[]; handoffs: Handoff[]
     focusApproval: Approval | null              // the dark "X is asking" card
