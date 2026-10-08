@@ -8,6 +8,7 @@ import { AppShell } from './shell/AppShell.tsx'
 import { destinations } from './shell/destinations.ts'
 import { SettingsPage } from './routes/settings/SettingsPage.tsx'
 import { ChatPage } from './routes/chat/ChatPage.tsx'
+import { FlowView } from './routes/now/flow/FlowView.tsx'
 
 function StubPage({ title }: { title: string }) {
   return <h1>{title}</h1>
@@ -46,11 +47,17 @@ export const appRoutes: RouteObject[] = [
           children: [
             { index: true, element: page },
             ...(path === '/now'
-              ? ['flow', 'routines', 'watch/:agentId']
+              ? ['routines', 'watch/:agentId']
               : path === '/chat'
                 ? [':roomId']
                 : []
             ).map((child) => ({ path: child, element: page })),
+            ...(path === '/now'
+              ? [
+                  { path: 'flow', element: <FlowView /> },
+                  { path: 'flow/:briefId', element: <FlowView /> },
+                ]
+              : []),
           ],
         }
       }),

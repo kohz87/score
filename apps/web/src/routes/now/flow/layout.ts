@@ -19,7 +19,10 @@ export interface FlowLayoutInput {
 export interface FlowLayoutOptions {
   columnGap?: number
   rowGap?: number
+  /** Sets both margins; marginX/marginY override it. */
   margin?: number
+  marginX?: number
+  marginY?: number
   backLaneGap?: number
   sweeps?: number
 }
@@ -34,14 +37,20 @@ export interface FlowLayoutResult {
   height: number
 }
 
-// Gaps follow the card spacing in docs/design/html/now-flow.html (200px cards).
-const DEFAULTS = { columnGap: 72, rowGap: 24, margin: 40, backLaneGap: 18, sweeps: 4 }
+// Measured from docs/design/html/now-flow.html: 200x84 cards at x = 16, 280, 544, 808 (column gap 64) and
+// y = 40, 180, 320 (row gap 56); the canvas keeps 16px at the sides and 40px above and below.
+const DEFAULTS = { columnGap: 64, rowGap: 56, marginX: 16, marginY: 40, backLaneGap: 18, sweeps: 4 }
 
 export function layoutFlow(
   input: FlowLayoutInput,
   options: FlowLayoutOptions = {},
 ): FlowLayoutResult {
-  const o = { ...DEFAULTS, ...options }
+  const o = {
+    ...DEFAULTS,
+    ...options,
+    marginX: options.marginX ?? options.margin ?? DEFAULTS.marginX,
+    marginY: options.marginY ?? options.margin ?? DEFAULTS.marginY,
+  }
   const index = new Map<string, number>()
   input.nodes.forEach((n, i) => index.set(n.id, i))
   const n = input.nodes.length
@@ -131,9 +140,9 @@ export function layoutFlow(
   const contentH = colHeight.length ? Math.max(...colHeight) : 0
   const px = new Array<number>(n).fill(0)
   const py = new Array<number>(n).fill(0)
-  let x = o.margin
+  let x = o.marginX
   layers.forEach((l, i) => {
-    let y = o.margin + (contentH - colHeight[i]!) / 2
+    let y = o.marginY + (contentH - colHeight[i]!) / 2
     let colW = 0
     for (const v of l) {
       const node = input.nodes[v]!
@@ -144,8 +153,8 @@ export function layoutFlow(
     }
     x += colW + o.columnGap
   })
-  const contentRight = layerCount ? x - o.columnGap : o.margin
-  const contentBottom = o.margin + contentH
+  const contentRight = layerCount ? x - o.columnGap : o.marginX
+  const contentBottom = o.marginY + contentH
 
   // 5. Edge routing.
   const mid = (v: number, side: 'l' | 'r' | 'b'): Point => {
@@ -176,11 +185,11 @@ export function layoutFlow(
     }
   })
 
-  const height = contentBottom + (lane ? o.backLaneGap * (lane + 1) : 0) + o.margin
+  const height = contentBottom + (lane ? o.backLaneGap * (lane + 1) : 0) + o.marginY
   return {
     nodes: input.nodes.map((node, v) => ({ id: node.id, x: px[v]!, y: py[v]! })),
     edges: routed,
-    width: contentRight + o.margin,
+    width: contentRight + o.marginX,
     height,
   }
 }

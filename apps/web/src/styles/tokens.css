@@ -36,6 +36,12 @@
   --rules-go: #5ee3bf;
   --rules-ask: #ffc94d;
   --rules-never: #ff97ae;
+  --flow-canvas: #f7f8fa;
+  --flow-canvas-dot: #d9dce2;
+  --flow-edge: #9a9ea7;
+  --flow-edge-planned: #b9bdc6;
+  --flow-edge-sent-back: #e0a000;
+  --flow-done-border: #c9cdd5;
   --radius-pill: 999px;
   --radius-card: 28px;
   --radius-20: 20px;
