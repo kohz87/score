@@ -10,17 +10,18 @@ function HermesCheckDot() {
   ) : null
 }
 
+function NeedsYouDot() {
+  return useNeedsYou() ? <span className="needs-you-dot" role="img" aria-label="Needs you" /> : null
+}
+
 export function MainNav() {
   const { pathname } = useLocation()
-  const needsYou = useNeedsYou()
   return (
     <nav className="main-nav" aria-label="Main">
       {destinations.map(({ path, title }) => (
         <NavLink key={path} to={path} className="main-nav-link">
           {title}
-          {path === '/now' && needsYou && (
-            <span className="needs-you-dot" role="img" aria-label="Needs you" />
-          )}
+          {path === '/now' && pathname !== '/pair' && <NeedsYouDot />}
           {path === '/settings' && pathname !== '/pair' && <HermesCheckDot />}
         </NavLink>
       ))}
