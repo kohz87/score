@@ -6,6 +6,7 @@ import {
   ConfigSearchResponseSchema,
   ConnectResultSchema,
   ConnectionsResponseSchema,
+  HermesCheckSchema,
   ProvidersResponseSchema,
   ProviderItemSchema,
 } from '@score/contract'
@@ -190,4 +191,11 @@ test('credential-shaped, env-backed and unknown keys are 400 on preview and appl
     ],
   ])
     expect((await post('/api/settings/config/preview', { changes: bad })).statusCode).toBe(400)
+})
+
+test('the fake adapter answers the Hermes version check cleanly', async () => {
+  const check = HermesCheckSchema.parse((await post('/api/settings/hermes/check')).json())
+  expect(check.compatible).toBe(true)
+  const accepted = await post('/api/settings/hermes/accept', { hash: check.hash })
+  expect(accepted.json()).toEqual({ ok: true })
 })

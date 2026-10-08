@@ -1,8 +1,17 @@
-import { NavLink } from 'react-router'
+import { NavLink, useLocation } from 'react-router'
 import { destinations } from './destinations.ts'
+import { needsHermesCheck, useSystemStatus } from '../routes/settings/settings-queries.ts'
 import { useNeedsYou } from './use-needs-you.ts'
 
+// Only mounted where the query client exists (the pairing page renders outside it).
+function HermesCheckDot() {
+  return needsHermesCheck(useSystemStatus().data) ? (
+    <span className="needs-you-dot" role="img" aria-label="Hermes version needs a check" />
+  ) : null
+}
+
 export function MainNav() {
+  const { pathname } = useLocation()
   const needsYou = useNeedsYou()
   return (
     <nav className="main-nav" aria-label="Main">
@@ -12,6 +21,7 @@ export function MainNav() {
           {path === '/now' && needsYou && (
             <span className="needs-you-dot" role="img" aria-label="Needs you" />
           )}
+          {path === '/settings' && pathname !== '/pair' && <HermesCheckDot />}
         </NavLink>
       ))}
     </nav>

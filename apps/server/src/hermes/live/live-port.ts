@@ -1,4 +1,4 @@
-import { type AgentSummary } from '@score/contract'
+import { type AgentSummary, type HermesCheck } from '@score/contract'
 import { ProfilesReader, agentSummary } from './profiles.ts'
 import { ProfileFiles } from './profile-files.ts'
 import type { AgentFile, AgentFileName } from '../agent-files.ts'
@@ -33,6 +33,10 @@ import {
   type FingerprintInputs,
   type TestedFingerprint,
 } from './fingerprint.ts'
+import { AcceptedBuilds } from './accepted-builds.ts'
+import { buildHermesCheck, type HermesCheckResult } from './hermes-check.ts'
+import { hermesSourceDir, readSourceFacts, type SourceFacts } from './source-facts.ts'
+import { KNOWN_PATTERN_KEYS } from '../pattern-keys.ts'
 import { GatewayClient, HermesHttpError } from './gateway.ts'
 import { RunIntents } from './intents.ts'
 import { ProfileNameSchema, resolveHermesHome } from './paths.ts'
@@ -65,6 +69,8 @@ export interface LivePortOptions extends HermesPortDeps {
   fetch?: typeof globalThis.fetch
   readCliVersion?: FingerprintInputs['readCliVersion']
   testedFingerprints?: readonly TestedFingerprint[]
+  /** Reads what Score relies on from the Hermes sources; tests inject fixtures. */
+  readSourceFacts?: (sourceDir: string) => Promise<SourceFacts | null>
   following?: Pick<FollowOptions, 'backoff' | 'pollIntervalMs' | 'pollLimitMs' | 'now' | 'wait'>
 }
 export class LivePort implements HermesPort {
@@ -81,6 +87,7 @@ export class LivePort implements HermesPort {
   private refresh: Promise<void> | undefined
   private fingerprint: Fingerprint | undefined
   private fingerprintAt = -Infinity
+  private readonly accepted: AcceptedBuilds
   private readonly followers = new Map<string, Promise<void>>()
   private current: ReturnType<HermesPort['status']> = {
     hermes: {
@@ -107,6 +114,7 @@ export class LivePort implements HermesPort {
   private readonly profileFiles = new ProfileFiles()
   private readonly profileManagement: LiveProfileManagement
   constructor(private readonly options: LivePortOptions) {
+    this.accepted = new AcceptedBuilds(options.scoreHome)
     this.profiles = new ProfilesReader(resolveHermesHome(options.hermesHome), options.runner)
     this.routines = new LiveRoutines(options.hermesHome, options.runner)
     this.tabs = new LiveAgentTabs(
@@ -115,7 +123,10 @@ export class LivePort implements HermesPort {
       (profile) => this.profiles.invalidate(profile),
       options.runner,
     )
-    this.settings = new LiveSettings(options.hermesHome, options.runner)
+    this.settings = new LiveSettings(options.hermesHome, options.runner, async () => {
+      const options = await this.gateway?.modelOptions()
+      return options?.providers ?? null
+    })
     this.config = createLiveConfigService(options.hermesHome, options.runner)
     this.profileManagement = new LiveProfileManagement({
       ...options,
@@ -247,10 +258,7 @@ export class LivePort implements HermesPort {
       })
       this.fingerprintAt = Date.now()
     }
-    const compatibility = evaluateCompatibility(
-      this.fingerprint,
-      this.options.testedFingerprints ?? testedFingerprints,
-    )
+    const compatibility = evaluateCompatibility(this.fingerprint, this.testedBuilds())
     if (!compatibility.tested) {
       const { codeVersion, codeSha } = this.fingerprint.parts
       degraded.push(
@@ -416,6 +424,50 @@ export class LivePort implements HermesPort {
   }
   async connectMessaging(platform: string) {
     return this.settings.connectMessaging(platform)
+  }
+  private testedBuilds(): TestedFingerprint[] {
+    return [...(this.options.testedFingerprints ?? testedFingerprints), ...this.accepted.tested()]
+  }
+  private async runHermesCheck(): Promise<HermesCheckResult & { fingerprint: Fingerprint }> {
+    const home = resolveHermesHome(this.options.hermesHome)
+    const fingerprint = await computeFingerprint({
+      hermesHome: home,
+      ...(this.gateway ? { gateway: this.gateway } : {}),
+      ...(this.options.readCliVersion ? { readCliVersion: this.options.readCliVersion } : {}),
+    })
+    const facts = await (this.options.readSourceFacts ?? readSourceFacts)(hermesSourceDir(home))
+    const result = buildHermesCheck({
+      fingerprint,
+      facts,
+      tested: this.testedBuilds(),
+      knownPatternKeys: [...KNOWN_PATTERN_KEYS, ...this.accepted.patternKeys()],
+    })
+    return { ...result, fingerprint }
+  }
+  async checkHermes(): Promise<HermesCheck> {
+    return (await this.runHermesCheck()).check
+  }
+  async acceptHermes(hash: string): Promise<void> {
+    const { check, fingerprint, addedPatternKeys } = await this.runHermesCheck()
+    if (check.hash !== hash)
+      throw new HttpError(409, 'conflict', 'Hermes changed since it was checked. Check it again.')
+    if (!check.compatible)
+      throw new HttpError(
+        409,
+        'not_compatible',
+        'This Hermes build changed in ways Score cannot accept.',
+      )
+    this.accepted.add({
+      id: fingerprint.id,
+      parts: fingerprint.parts,
+      testedAt: new Date().toISOString(),
+      notes: 'Accepted in Settings after the Hermes version check.',
+      addedPatternKeys,
+    })
+    this.fingerprint = fingerprint
+    this.fingerprintAt = Date.now()
+    await this.refresh
+    await this.refreshStatus()
   }
   async searchConfig(query: string) {
     return this.config.search(query)

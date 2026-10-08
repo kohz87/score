@@ -256,6 +256,14 @@ both tabs match team.png's tab style with fake data and live adapters read only.
 **5.9 Plugins and look + New task** · Settings › Plugins and look: Hermes plugins per profile (list, enable/disable via the
 CLI) and Score's theme (light, dark, system); Tasks › New task dialog on the existing create path. Done when each works in
 fake mode with tests and e2e.
+**5.10 Sign in from the browser** · Settings › Models and keys: device-code providers sign in with a link and code shown in
+Score (status followed until connected), key-based providers take a pasted API key (stdin to `hermes auth add`; never stored,
+logged or echoed; plain-HTTP remote needs an explicit acknowledgement). The terminal command stays as the fallback
+(ARCHITECTURE D2.7). Done when both work in fake mode with tests and e2e, and live on `scoretesta` (a device sign-in started
+and cancelled; a dummy key added and removed).
+**5.11 Model picker** · `GET /api/models` from Hermes's model options (connected providers only); a searchable picker in Add
+agent and the agent's Model tab; picking sets model and provider. Done when typing "gpt" lists matching models from each
+connected provider with availability and price, and a created agent has both set (fake + tests + e2e).
 
 ---
 

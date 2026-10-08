@@ -15,6 +15,11 @@ export const AgentCreateInputSchema = z
     role: Text,
     style: AgentStyleSchema,
     model: Text.max(256),
+    /** Provider id serving the model (GET /api/models); set together with it. */
+    provider: z
+      .string()
+      .regex(/^[a-z0-9][a-z0-9._-]{0,63}$/)
+      .optional(),
     cloneFrom: ProfileNameSchema.optional(),
   })
   .strict()

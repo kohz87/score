@@ -4,6 +4,7 @@ import {
   ConfigApplyRequestSchema,
   ConfigPreviewRequestSchema,
   ConfigSearchQuerySchema,
+  HermesAcceptRequestSchema,
   LocalProviderRequestSchema,
   PlatformParamSchema,
   ToolServerRequestSchema,
@@ -28,8 +29,11 @@ export function registerSettingsRoutes(
     onSend: receipts.onSend,
   }
   // An agent uses a provider when its model's `via` names it (id or label).
-  async function withUsage(items: ProviderBase[]): Promise<ProviderItem[]> {
-    const agents = await port.listAgentDetails()
+  // Both reads spawn Hermes processes; run them side by side (they were serial: 7-13 s per refresh).
+  async function withUsage(
+    pending: Promise<ProviderBase[]> | ProviderBase[],
+  ): Promise<ProviderItem[]> {
+    const [items, agents] = await Promise.all([pending, port.listAgentDetails()])
     return items.map((item) => ({
       ...item,
       usedBy: agents
@@ -41,7 +45,7 @@ export function registerSettingsRoutes(
     }))
   }
   app.get('/api/settings/providers', async () => ({
-    items: await withUsage(await port.listProviders()),
+    items: await withUsage(port.listProviders()),
   }))
   app.post('/api/settings/providers/local', mutation, async (request) => {
     const req = LocalProviderRequestSchema.parse(request.body)
@@ -62,6 +66,14 @@ export function registerSettingsRoutes(
   app.get('/api/settings/config', async (request) => ({
     items: await port.searchConfig(ConfigSearchQuerySchema.parse(request.query).q),
   }))
+  // A check only reads (the CLI version, the gateway, Hermes's sources); it is still a person's action.
+  app.post('/api/settings/hermes/check', { preHandler: [humanGuard(app.pairing)] }, async () =>
+    port.checkHermes(),
+  )
+  app.post('/api/settings/hermes/accept', mutation, async (request) => {
+    await port.acceptHermes(HermesAcceptRequestSchema.parse(request.body).hash)
+    return { ok: true }
+  })
   // Preview changes nothing; it still goes through the CSRF hook like every POST.
   app.post('/api/settings/config/preview', async (request) =>
     port.previewConfig(ConfigPreviewRequestSchema.parse(request.body).changes),

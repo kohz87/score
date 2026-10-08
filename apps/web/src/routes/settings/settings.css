@@ -565,3 +565,42 @@
   flex-direction: column;
   gap: 8px;
 }
+
+.settings-banner {
+  background: var(--agent-saffron-tint);
+  border-color: var(--agent-saffron);
+}
+.settings-check-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background: var(--card);
+  border-radius: var(--radius-16);
+}
+.settings-check-table caption {
+  text-align: left;
+  padding-bottom: 8px;
+}
+.settings-check-table th,
+.settings-check-table td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ground);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.settings-check-table td[data-status='changed'],
+.settings-check-table td[data-status='removed'] {
+  font-weight: 700;
+  color: var(--agent-saffron-text);
+}
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.settings-command-text {
+  /* One click selects the whole command, so Ctrl+C works even where the copy button can't. */
+  user-select: all;
+  cursor: text;
+}

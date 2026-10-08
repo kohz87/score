@@ -322,6 +322,47 @@ const cases = [
     { next: 'now' },
   ],
   [
+    'SignInSchema',
+    {
+      id: 'si-1',
+      providerId: 'openai-codex',
+      state: 'waiting',
+      url: 'https://auth.openai.com/codex/device',
+      code: 'ABCD-1234',
+      expiresAt: '2026-10-08T13:00:00.000Z',
+      message: null,
+    },
+    {
+      id: 'si-1',
+      providerId: 'openai-codex',
+      state: 'waiting',
+      url: 'http://evil.example/device',
+      code: 'ABCD-1234',
+      expiresAt: '2026-10-08T13:00:00.000Z',
+      message: null,
+    },
+  ],
+  [
+    'ProviderKeyRequestSchema',
+    { apiKey: 'sk-test-0123456789', label: 'Work key', acknowledgeInsecure: true },
+    { apiKey: 'sk-test 0123456789\nsecond-answer' },
+  ],
+  [
+    'ModelOptionSchema',
+    {
+      provider: 'openai-codex',
+      providerLabel: 'ChatGPT (Codex)',
+      model: 'gpt-6.1-sol',
+      available: true,
+      reason: null,
+      free: false,
+      price: null,
+    },
+    { provider: 'openai-codex', model: '' },
+  ],
+  ['ModelsQuerySchema', { q: 'gpt' }, { q: 'x'.repeat(101) }],
+  ['ModelsResponseSchema', { items: [] }, { items: [{}] }],
+  [
     'LocalProviderRequestSchema',
     { label: 'Lab', baseUrl: 'http://127.0.0.1:8080/v1', model: 'm' },
     { label: 'Lab', baseUrl: 'ftp://x', model: '--m' },
@@ -488,6 +529,23 @@ const cases = [
     { ok: true, restartRequired: false },
     { ok: false, restartRequired: false },
   ],
+  [
+    'HermesCheckPartSchema',
+    { name: 'Capabilities', status: 'same', detail: 'ok' },
+    { name: 'Capabilities', status: 'weird', detail: 'ok' },
+  ],
+  [
+    'HermesCheckSchema',
+    {
+      hash: 'a'.repeat(64),
+      build: { version: '1', codeSha: null, fingerprint: 'f' },
+      parts: [],
+      compatible: true,
+    },
+    { hash: 'short', build: {}, parts: [], compatible: true },
+  ],
+  ['HermesAcceptRequestSchema', { hash: 'a'.repeat(64) }, { hash: 'x' }],
+  ['HermesAcceptResponseSchema', { ok: true }, { ok: false }],
   [
     'PairedBrowserSchema',
     {

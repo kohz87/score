@@ -30,6 +30,7 @@ import type {
   ConnectResult,
   ConnectionsResponse,
   AgentChannelsResponse,
+  HermesCheck,
   LocalProviderRequest,
   ToolServerRequest,
   RoutineSummary,
@@ -1014,6 +1015,16 @@ export class FakePort implements HermesPort {
       throw new HttpError(404, 'not_found', 'Unknown platform')
     return { next: 'run_in_terminal', command: 'hermes gateway setup' }
   }
+  // The fake Hermes is always the tested build: a check is clean and accepting changes nothing.
+  async checkHermes(): Promise<HermesCheck> {
+    return {
+      hash: '0'.repeat(64),
+      build: { version: null, codeSha: null, fingerprint: 'fake' },
+      parts: [{ name: 'Capabilities', status: 'same', detail: 'Fake adapter' }],
+      compatible: true,
+    }
+  }
+  async acceptHermes(): Promise<void> {}
   private readonly config = createFakeConfigService()
   async searchConfig(query: string) {
     return this.config.search(query)

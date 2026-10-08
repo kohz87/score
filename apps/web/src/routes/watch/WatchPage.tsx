@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { ApiError } from '../../data/api.ts'
+import { copyText } from '../../data/clipboard.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { approvalsQuery } from '../chat/queries.ts'
 import { ScrubTimeline } from './ScrubTimeline.tsx'
@@ -130,12 +131,7 @@ function WatchView({ agentId }: { agentId: string }) {
   }
   async function openInTerminal() {
     const command = resumeCommand(agent.id, data?.sessionId ?? null)
-    try {
-      await navigator.clipboard.writeText(command)
-      setTerminal({ command, copied: true })
-    } catch {
-      setTerminal({ command, copied: false })
-    }
+    setTerminal({ command, copied: await copyText(command) })
   }
 
   return (
@@ -186,7 +182,7 @@ function WatchView({ agentId }: { agentId: string }) {
         <p className="watch-state watch-state--command" role="status">
           {terminal.copied
             ? 'Copied. Paste this in a terminal:'
-            : 'Could not copy. Run this in a terminal:'}{' '}
+            : 'Select the command and press Ctrl+C, then run it in a terminal:'}{' '}
           <code>{terminal.command}</code>
         </p>
       )}
