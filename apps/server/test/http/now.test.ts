@@ -8,6 +8,7 @@ import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { createHermesPort, type HermesPort } from '../../src/hermes/index.ts'
+import { projectTask, readProjectedTask } from '../../src/domain/tasks.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { scenarioDuration } from '../../src/hermes/fake/scenario.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
@@ -102,6 +103,25 @@ test('finished fake scenario lists the task under made today with its review run
   })
   const reviewer = now.lanes.find((lane) => lane.agent.id === 'reviewer')!
   expect(reviewer.blocks.length).toBeGreaterThan(0)
+})
+
+test('made today uses the completion time, not later activity such as comments', async () => {
+  await port.start(ingest)
+  await scheduler.advance(scenarioDuration)
+  const task = readProjectedTask(db.sqlite, 'task-pagination-0')!
+  const yesterday = new Date(scheduler.now() - 30 * 3_600_000).toISOString()
+  db.tx((sqlite) => {
+    projectTask(
+      sqlite,
+      { ...task, completedAt: yesterday, updatedAt: new Date(scheduler.now()).toISOString() },
+      1_000_000,
+    )
+  })
+  const now = NowSnapshotSchema.parse((await get()).json())
+  expect(now.madeToday.map((item) => item.ref)).not.toContainEqual({
+    kind: 'task',
+    taskId: 'task-pagination-0',
+  })
 })
 
 test('a narrow window returns only what overlaps it', async () => {

@@ -324,6 +324,25 @@ test('plan first: addendum, parsed plan part, no hand-offs, nothing created unti
   ).toBe(401)
   expect(create).not.toHaveBeenCalled()
 
+  await post(`/api/briefs/${id}/pause`, {}, 'pause-before-start')
+  expect(
+    (await post(`/api/rooms/${roomId}/messages/${reply.id}/plan/start`, {}, 'start-paused'))
+      .statusCode,
+  ).toBe(409)
+  expect(create).not.toHaveBeenCalled()
+  await post(`/api/briefs/${id}/resume`, {}, 'resume-before-start')
+
+  // The second step fails: the first task is already linked to the brief, and a retry reuses it.
+  const realCreate = Object.getPrototypeOf(port).createTask.bind(port)
+  create.mockImplementationOnce(realCreate)
+  create.mockRejectedValueOnce(new Error('boom'))
+  expect(
+    (await post(`/api/rooms/${roomId}/messages/${reply.id}/plan/start`, {}, 'start-fails'))
+      .statusCode,
+  ).toBe(500)
+  expect(rows('SELECT task_id FROM brief_tasks WHERE brief_id = ?', id)).toHaveLength(1)
+  create.mockClear()
+
   const started = await post(`/api/rooms/${roomId}/messages/${reply.id}/plan/start`, {}, 'start')
   expect(started.statusCode).toBe(200)
   const { briefId, taskIds } = PlanStartResponseSchema.parse(started.json())

@@ -9,7 +9,7 @@ import {
   taskWithApproval,
 } from '../../domain/tasks.ts'
 import type { ObservationSink } from '../port.ts'
-import { readTaskEvents, tailTaskEvents, type TaskEvent } from './kanban.ts'
+import { readReviewEvents, tailTaskEvents, type TaskEvent } from './kanban.ts'
 import { eventActivity, readTaskDetails } from './task-model.ts'
 import {
   projectReviewTransitions,
@@ -44,7 +44,7 @@ export class LiveTasks {
           // history of newly linked tasks once (by id), never the whole board.
           for (const taskId of this.linkedTaskIds()) {
             if (this.backfilled.has(taskId)) continue
-            const history = readTaskEvents(sqlite, taskId)
+            const history = readReviewEvents(sqlite, taskId)
             if (history.malformed) continue
             reviews.push(...reviewTransitionsFrom(history.rows))
             this.backfilled.add(taskId)

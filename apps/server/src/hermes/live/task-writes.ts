@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { parseSteps, writeSteps } from '../../domain/steps.ts'
 import { redact } from '../../redact.ts'
 import { HttpError } from '../../errors.ts'
+import { withKeyedLock } from '../../keyed-lock.ts'
 import type { ScoreDb } from '../../db/index.ts'
 import { CreateTaskSchema, PatchTaskSchema } from '../port.ts'
 import { runHermes, type HermesRunner } from './cli.ts'
@@ -30,7 +31,16 @@ async function execute(args: string[], deps: WriteDeps) {
   return result
 }
 
-export async function createTask(
+export function createTask(
+  input: z.infer<typeof CreateTaskSchema>,
+  key: string,
+  deps: WriteDeps & { db: ScoreDb },
+): Promise<TaskDetail> {
+  // Hermes checks the key before its write transaction, so concurrent callers must not both reach the CLI.
+  return withKeyedLock(`task-create:${key}`, () => createTaskUnlocked(input, key, deps))
+}
+
+async function createTaskUnlocked(
   input: z.infer<typeof CreateTaskSchema>,
   key: string,
   deps: WriteDeps & { db: ScoreDb },

@@ -114,6 +114,7 @@ type TaskDetail = TaskSummary & {
   dependsOn: string[]
   blocks: string[]
   runIds: string[]
+  completedAt?: string | null /* kanban completed_at; "Made today" uses it, not updatedAt */
 }
 
 type Room = {

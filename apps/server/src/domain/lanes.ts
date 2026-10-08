@@ -21,6 +21,8 @@ export interface LaneHopInput {
   id: string
   runId: string | null
   fromAgentId: string | null
+  // The run that wrote the message this hop answers: the exact source. Undefined = unknown (older callers).
+  parentRunId?: string | null
   agentId: string
   at: string
 }
@@ -202,9 +204,12 @@ function buildHandoffs(
     if (hop.runId === null || hop.fromAgentId === null) continue
     const to = drafts.find((draft) => draft.runIds.includes(hop.runId!))
     if (!to) continue
-    const from = drafts
-      .filter((draft) => draft.agentId === hop.fromAgentId && draft.start <= to.start)
-      .sort((a, b) => b.start - a.start)[0]
+    const from =
+      hop.parentRunId === undefined
+        ? drafts
+            .filter((draft) => draft.agentId === hop.fromAgentId && draft.start <= to.start)
+            .sort((a, b) => b.start - a.start)[0]
+        : drafts.find((draft) => draft.runIds.includes(hop.parentRunId ?? ''))
     if (from) add(from, to, Date.parse(hop.at))
   }
   return [...found.values()]

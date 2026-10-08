@@ -216,6 +216,15 @@ test('today only counts the local day', () => {
   expect(report.summary).toBe('2 tasks finished today, typically in 1.8 hours.')
 })
 
+test('archiving a finished task does not remove it from the reports', () => {
+  const archived = input.facts.tasks.map((task) =>
+    task.status === 'done' ? { ...task, status: 'archived' } : task,
+  )
+  const report = computeReports({ ...input, facts: { ...input.facts, tasks: archived } })
+  expect(report.totals.tasksFinished).toBe(computeReports(input).totals.tasksFinished)
+  expect(report.totals.tasksFinished).toBeGreaterThan(0)
+})
+
 test('empty data is null-safe', () => {
   const report = computeReports({
     range: '30d',

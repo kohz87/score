@@ -173,3 +173,27 @@ test('unknown agents get no lane and a task in review without a reviewer run pla
   expect(out.lanes.map((lane) => lane.agentId)).toEqual(agentIds)
   expect(out.lanes[2]!.blocks.map((b) => [b.id, b.state])).toEqual([['task:t:review', 'planned']])
 })
+
+test("a hand-off connects the exact source run, not the source agent's latest block", () => {
+  const out = buildLanes({
+    ...designInput(),
+    tasks: [],
+    runs: [
+      run('a', 'lead', 'completed', '20:31', '20:35', null),
+      run('b', 'lead', 'completed', '20:40', '20:45', null),
+      run('c', 'builder', 'completed', '20:50', '20:55', null),
+    ],
+    hops: [
+      {
+        id: 'm',
+        runId: 'c',
+        fromAgentId: 'lead',
+        parentRunId: 'a',
+        agentId: 'builder',
+        at: at('20:35'),
+      },
+    ],
+  })
+  expect(out.handoffs.map((h) => h.from.blockId)).toEqual([expect.stringContaining('a')])
+  expect(out.handoffs).toHaveLength(1)
+})

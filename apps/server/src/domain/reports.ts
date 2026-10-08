@@ -209,7 +209,8 @@ export function computeReports(input: ReportInput): Reports {
   // Finish time and duration are kanban's own: completed_at, and created_at to completed_at.
   const finished = input.facts.tasks.filter(
     (task) =>
-      task.status === 'done' &&
+      // Archiving keeps completed_at; the work was still finished in that window.
+      (task.status === 'done' || task.status === 'archived') &&
       task.completedAt !== null &&
       task.completedAt >= from &&
       task.completedAt <= to,
