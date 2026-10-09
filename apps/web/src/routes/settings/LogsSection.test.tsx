@@ -27,7 +27,7 @@ function mount(fetch: (url: string) => Promise<Response>) {
 }
 
 test('shows parsed lines and sends the level and keyword filters to the server', async () => {
-  const fetch = vi.fn((_url: string) =>
+  const fetch = vi.fn<(url: string) => Promise<Response>>(() =>
     Promise.resolve(Response.json({ available: true, items: [entry] })),
   )
   mount(fetch)

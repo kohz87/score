@@ -187,26 +187,24 @@ export function RemoteSection() {
   })
   // The link (and its QR code) is shown only while it can still work: until it expires or a device has used it.
   const [pairedAtMint, setPairedAtMint] = useState(0)
-  const [expired, setExpired] = useState(false)
+  const [expiredLink, setExpiredLink] = useState<string | null>(null)
   const expiresAt = invite.data?.expiresAt
   useEffect(() => {
-    setExpired(false)
     if (!expiresAt) return
-    const wait = Date.parse(expiresAt) - Date.now()
-    if (wait <= 0) {
-      setExpired(true)
-      return
-    }
-    const timer = setTimeout(() => setExpired(true), Math.min(wait, 2 ** 31 - 1))
+    // Also fires (next tick) for a link that is already past its time.
+    const wait = Math.max(0, Date.parse(expiresAt) - Date.now())
+    const timer = setTimeout(() => setExpiredLink(expiresAt), Math.min(wait, 2 ** 31 - 1))
     return () => clearTimeout(timer)
-  }, [expiresAt, invite.data])
+  }, [expiresAt])
+  const expired = expiredLink !== null && expiredLink === expiresAt
   const linkShown = invite.data !== undefined && !expired
   // While a link is on screen, watch for the device that uses it.
+  const refetchBrowsers = browsers.refetch
   useEffect(() => {
     if (!linkShown) return
-    const timer = setInterval(() => void browsers.refetch(), 5000)
+    const timer = setInterval(() => void refetchBrowsers(), 5000)
     return () => clearInterval(timer)
-  }, [linkShown, browsers.refetch])
+  }, [linkShown, refetchBrowsers])
   const used = linkShown && (browsers.data?.length ?? 0) > pairedAtMint
   if (!remote) return null
   const passwordSet = security.data?.passwordSet === true
