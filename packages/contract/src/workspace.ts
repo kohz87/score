@@ -33,7 +33,10 @@ export const WorkspaceCreateRequestSchema = z.object({
   path: z.string().min(1),
   kind: z.enum(['file', 'dir']),
 })
-export const WorkspaceMoveRequestSchema = z.object({ from: z.string().min(1), to: z.string().min(1) })
+export const WorkspaceMoveRequestSchema = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+})
 export const WorkspaceRootRequestSchema = z.object({ path: z.string().min(1).max(4096) })
 export const WorkspaceUploadResponseSchema = z.object({ path: z.string(), size: z.number().int() })
 /** 412 `precondition_failed`: `details.etag` is the file's current etag (null when it was removed). */
