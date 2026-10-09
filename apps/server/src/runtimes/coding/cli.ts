@@ -11,6 +11,8 @@ export interface CliLocatorOptions {
   /** How long a version reading is reused. */
   cacheMs?: number
   clock?: () => number
+  /** Fake mode without a fake CLI: no CLI is ever started; every one reports this reason. */
+  disabled?: string
 }
 
 export interface DetectedCli {
@@ -32,6 +34,7 @@ export class CliLocator {
 
   /** The executable and leading arguments for a driver. */
   command(driver: CodingDriver): { file: string; args: string[] } {
+    if (this.options.disabled) throw new Error(this.options.disabled)
     return this.options.fakeCli
       ? { file: process.execPath, args: [this.options.fakeCli, driver.runtime] }
       : { file: driver.executable, args: [] }
@@ -55,11 +58,23 @@ export class CliLocator {
   }
 
   private read(driver: CodingDriver): Promise<DetectedCli> {
+    if (this.options.disabled)
+      return Promise.resolve({
+        state: 'not_installed',
+        version: null,
+        message: this.options.disabled,
+      })
     if (!driver.supported)
       return Promise.resolve({
         state: 'not_supported',
         version: null,
         message: `${driver.label} is not supported by this version of Score yet.`,
+      })
+    if (this.options.disabled)
+      return Promise.resolve({
+        state: 'not_installed',
+        version: null,
+        message: this.options.disabled,
       })
     const { file, args } = this.command(driver)
     return new Promise((resolve) => {
@@ -111,4 +126,19 @@ export class CliLocator {
       }),
     )
   }
+}
+
+/**
+ * The locator for a server mode. Fake mode never executes a real CLI, whatever the environment says: it uses the
+ * fake script when `SCORE_CODING_FAKE_CLI` names one, and otherwise coding agents are unavailable. Under test the
+ * override is honoured in any mode; a live server ignores it.
+ */
+export function locatorForMode(mode: 'live' | 'fake', env: NodeJS.ProcessEnv): CliLocator {
+  const fakeCli = env.SCORE_CODING_FAKE_CLI
+  if (fakeCli && (mode === 'fake' || env.NODE_ENV === 'test')) return new CliLocator({ fakeCli })
+  if (mode === 'fake')
+    return new CliLocator({
+      disabled: 'Coding agents need a real CLI, which fake mode never starts.',
+    })
+  return new CliLocator()
 }

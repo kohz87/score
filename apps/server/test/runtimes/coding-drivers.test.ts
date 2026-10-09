@@ -251,3 +251,24 @@ test('deny rules are filesystem-rooted: .env variants anywhere, credentials, and
   // No rule left relative (a relative pattern excludes parent directories and other projects).
   expect(rules.filter((rule) => /\((?!\/\/)/.test(rule))).toEqual([])
 })
+
+test('fake mode never starts a real CLI, whatever the environment says (review: high 3)', async () => {
+  const { locatorForMode } = await import('../../src/runtimes/coding/cli.ts')
+  const { codexDriver: codex } = await import('../../src/runtimes/coding/codex.ts')
+  const fakeMode = locatorForMode('fake', { PATH: process.env.PATH ?? '' })
+  expect((await fakeMode.info()).map((item) => item.state)).toEqual([
+    'not_installed',
+    'not_installed',
+    'not_supported',
+  ])
+  expect(() => fakeMode.command(codex)).toThrow(/fake mode/)
+  // With the fake script it is the script that runs, never the binary.
+  const scripted = locatorForMode('fake', { SCORE_CODING_FAKE_CLI: '/x/fake.mjs' })
+  expect(scripted.command(codex)).toEqual({
+    file: process.execPath,
+    args: ['/x/fake.mjs', 'codex'],
+  })
+  // A live server ignores the override (outside tests).
+  const live = locatorForMode('live', { SCORE_CODING_FAKE_CLI: '/x/fake.mjs' })
+  expect(live.command(codex)).toEqual({ file: 'codex', args: [] })
+})
