@@ -1050,7 +1050,7 @@ async function finishReply(roomId: string, parentId: string, agentId = 'builder'
   return run.message_id
 }
 
-test('edit and resend stores the correction as a new turn, marks the original and emits message.updated', async () => {
+test('an edit replaces the original: it and its replies leave Score, the correction is a new turn (owner 2026-10-09)', async () => {
   const room = await create()
   const original = await ownMessage(room.id, 'first draft')
   const replyId = await finishReply(room.id, original.id)
@@ -1065,14 +1065,13 @@ test('edit and resend stores the correction as a new turn, marks the original an
   expect(body.routedTo).toEqual(['builder'])
   expect(body.message.edits).toBe(original.id)
   const page = PageSchema.parse((await get(`/api/rooms/${room.id}/messages`)).json())
-  const stored = page.items.find((item) => item.id === original.id)!
-  expect(stored.editedBy).toBe(body.message.id)
-  expect(page.items.find((item) => item.id === replyId)).toBeDefined()
+  expect(page.items.find((item) => item.id === original.id)).toBeUndefined()
+  expect(page.items.find((item) => item.id === replyId)).toBeUndefined()
   expect(page.items.find((item) => item.id === body.message.id)?.edits).toBe(original.id)
-  const updated = events().filter((event) => event.type === 'message.updated')
-  expect(updated.map((event) => event.data)).toEqual([
-    { roomId: room.id, messageId: original.id, editedBy: body.message.id },
-  ])
+  const deleted = events().filter((event) => event.type === 'message.deleted')
+  expect(deleted.map((event) => (event.data as { messageId: string }).messageId).sort()).toEqual(
+    [original.id, replyId].sort(),
+  )
   // The correction is an ordinary turn.
   expect(
     db.sqlite
@@ -1116,7 +1115,8 @@ test('edit validation: own, finished, undeleted, same-room, not edited twice', a
   expect((await del(`/api/rooms/${room.id}/messages/${gone.id}`)).statusCode).toBe(204)
   expect((await edit(gone.id)).statusCode).toBe(404)
   expect((await edit(original.id)).statusCode).toBe(200)
-  expect((await edit(original.id)).statusCode).toBe(409)
+  // The first edit removed the original, so a second edit finds nothing to correct.
+  expect((await edit(original.id)).statusCode).toBe(404)
   expect(events().filter((event) => event.type === 'message.updated')).toHaveLength(1)
 })
 

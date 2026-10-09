@@ -256,10 +256,22 @@ export function editableMessage(sqlite: DatabaseSync, roomId: string, messageId:
       'Only your own finished message in this room can be edited',
     )
   if (row.edited_by) throw new HttpError(409, 'conflict', 'This message was already edited')
+  // The edit replaces the original and the replies it got: one still being written can't be removed yet.
+  const answering = sqlite
+    .prepare(
+      `SELECT 1 FROM message_runs r JOIN messages m ON m.id = r.message_id
+       WHERE (r.parent_message_id = ? OR r.chain_id = ?) AND m.deleted_at IS NULL AND m.streaming = 1`,
+    )
+    .get(messageId, messageId)
+  if (answering)
+    throw new HttpError(409, 'conflict', 'An agent is still answering this message; stop it first')
   return messageFromRow(value)
 }
 
-/** Marks the original as corrected; the new message is stored by the caller. */
+/**
+ * Replaces the original (owner 2026-10-09): it is marked corrected and removed from Score together with every reply in
+ * its chain, exactly like Delete; the new message is stored by the caller. Agents' Hermes histories keep the old turn.
+ */
 export function markEdited(
   sqlite: DatabaseSync,
   roomId: string,
@@ -272,7 +284,19 @@ export function markEdited(
       'UPDATE messages SET edited_by = ?, updated_at = ?, version = version + 1 WHERE id = ?',
     )
     .run(editedBy, now, originalId)
-  return [{ type: 'message.updated', data: { roomId, messageId: originalId, editedBy } }]
+  const replies = z.array(z.object({ message_id: z.string() })).parse(
+    sqlite
+      .prepare(
+        `SELECT DISTINCT r.message_id FROM message_runs r JOIN messages m ON m.id = r.message_id
+           WHERE (r.parent_message_id = ? OR r.chain_id = ?) AND m.deleted_at IS NULL AND m.room_id = ?`,
+      )
+      .all(originalId, originalId, roomId),
+  )
+  return [
+    { type: 'message.updated', data: { roomId, messageId: originalId, editedBy } },
+    ...deleteMessage(sqlite, roomId, originalId, now),
+    ...replies.flatMap((reply) => deleteMessage(sqlite, roomId, reply.message_id, now)),
+  ]
 }
 
 const MAX_COMPLETION_PARTS_CHARS = 256 * 1024

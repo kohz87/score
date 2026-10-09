@@ -443,9 +443,12 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   ```
 
   `edits` (PLAN 5.24) must name a finished, undeleted message of the person in the same room that has not been edited
-  yet: `404` unknown message, `400` not the person's own, streaming or in another room, `409` already edited. The new
-  message is an ordinary turn (it carries `edits`); the original stays, keeps its replies and gets `editedBy` (event
-  `message.updated`). The web composer pre-fills text, recipients and attachments from the original.
+  yet: `404` unknown (or already replaced) message, `400` not the person's own, streaming or in another room, `409`
+  already edited or an agent is still answering it. The new message is an ordinary turn (it carries `edits`); the
+  original **is replaced** (owner 2026-10-09): it gets `editedBy` (`message.updated`) and is removed from Score together
+  with every reply in its chain (`message.deleted` for each, as Delete). Agents' Hermes histories keep the old turn
+  unless the session is rewound (planned 5.33). The web composer pre-fills text, recipients and attachments from the
+  original.
 
   Text starting with a slash command is parsed server-side:
 

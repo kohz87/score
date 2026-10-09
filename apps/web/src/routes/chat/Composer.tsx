@@ -509,6 +509,7 @@ export function Composer({
       {editing && (
         <div className="chat-editing" role="status">
           <span>Editing your message</span>
+          <span className="chat-edit-note">Sending replaces it and the replies it got.</span>
           <button type="button" className="chat-editing-cancel" onClick={leaveEdit}>
             Cancel
           </button>

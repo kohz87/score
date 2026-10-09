@@ -1285,3 +1285,7 @@
   min-width: 0;
   max-width: 100%;
 }
+.chat-edit-note {
+  color: var(--muted);
+  font-size: 12px;
+}
