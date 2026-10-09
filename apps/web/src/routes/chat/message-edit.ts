@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { Message } from '@score/contract'
+import { attachmentsOf, type Attachment } from './attachments.ts'
 
 // Edit and resend (PLAN 5.24): "Edit" hands one of the person's messages to the composer; sending posts it as a new
 // message with `edits`. The state lives here (not in the composer) because the action sits in the message list.
@@ -8,7 +9,7 @@ export interface Editing {
   messageId: string
   text: string
   to: string[]
-  mediaIds: string[]
+  attachments: Attachment[]
 }
 
 let editing: Editing | null = null
@@ -24,7 +25,7 @@ export function startEdit(message: Message): void {
     messageId: message.id,
     text: message.parts.flatMap((part) => (part.kind === 'text' ? [part.text] : [])).join('\n\n'),
     to: message.to,
-    mediaIds: message.parts.flatMap((part) => (part.kind === 'image' ? [part.mediaId] : [])),
+    attachments: attachmentsOf(message),
   })
 }
 export function stopEdit(): void {

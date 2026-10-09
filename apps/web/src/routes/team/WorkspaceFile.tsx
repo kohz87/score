@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { CsvTable } from '../chat/DocumentPreview.tsx'
 import { Markdown } from '../chat/Markdown.tsx'
 import '../chat/chat.css'
 import {
@@ -18,6 +19,7 @@ const CodeEditor = lazy(async () => ({
   default: (await import('../../components/CodeEditor.tsx')).CodeEditor,
 }))
 const isMarkdownPath = (path: string) => /\.(md|markdown|mdx)$/i.test(path)
+const isCsvPath = (path: string) => /\.csv$/i.test(path)
 
 function size(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
@@ -211,7 +213,7 @@ function Editor({
           )}
         </div>
       )}
-      {isMarkdownPath(path) && (
+      {(isMarkdownPath(path) || isCsvPath(path)) && (
         <div className="ws-actions" role="group" aria-label="View">
           <button type="button" aria-pressed={!preview} onClick={() => setPreview(false)}>
             Edit
@@ -223,7 +225,11 @@ function Editor({
       )}
       {preview ? (
         <div className="ws-md-preview" aria-label={`Preview of ${path}`}>
-          <Markdown text={draft} workspace={{ agentId, agentIds: [] }} />
+          {isCsvPath(path) ? (
+            <CsvTable text={draft} />
+          ) : (
+            <Markdown text={draft} workspace={{ agentId, agentIds: [] }} />
+          )}
         </div>
       ) : (
         <div className="ws-code">

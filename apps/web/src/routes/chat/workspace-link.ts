@@ -37,3 +37,7 @@ export function parseWorkspaceLink(
     to: `/team/${encodeURIComponent(agentId)}/workspace?path=${encodeURIComponent(rest)}`,
   }
 }
+
+/** The address of a file in an agent's Workspace tab. */
+export const workspaceFileLink = (agentId: string, path: string): string =>
+  `/team/${encodeURIComponent(agentId)}/workspace?path=${encodeURIComponent(path)}`

@@ -33,18 +33,24 @@ import { useVoiceInput } from './voice.ts'
 import { newId } from '../../data/ids.ts'
 import { stopEdit, useEditing } from './message-edit.ts'
 import { RewindDialog } from './RewindDialog.tsx'
+import {
+  ACCEPT,
+  attachmentKey,
+  attachmentName,
+  isImage,
+  MAX_ATTACHMENTS,
+  parseUpload,
+  toPart,
+  toRequest,
+  uploadProblem,
+  type Attachment,
+} from './attachments.ts'
+import { WorkspacePicker } from './WorkspacePicker.tsx'
 
 type Notice =
   | { kind: 'error'; text: string }
   | { kind: 'info'; text: string }
   | { kind: 'result'; command: CommandResult | null }
-type Attachment = { mediaId: string; name: string }
-function parseUpload(value: unknown): Attachment {
-  const record =
-    typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
-  if (typeof record.mediaId !== 'string' || !record.mediaId) throw new Error('Bad upload response')
-  return { mediaId: record.mediaId, name: typeof record.name === 'string' ? record.name : 'image' }
-}
 type Snapshot = { asOfSeq: number; data: MessagePageData }
 
 function errorText(error: unknown): string {
@@ -100,6 +106,9 @@ export function Composer({
   const [notice, setNotice] = useState<Notice | null>(null)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [uploading, setUploading] = useState(0)
+  const [attachMenu, setAttachMenu] = useState(false)
+  const [pickingWorkspace, setPickingWorkspace] = useState(false)
+  const [dragging, setDragging] = useState(false)
   // Latest values for the send callback, which resolves long after the closure was created.
   const live = useRef({ text, attachments })
   useEffect(() => {
@@ -133,7 +142,7 @@ export function Composer({
       setText(editing.text)
       setCaret(editing.text.length)
       setTo(editing.to)
-      setAttachments(editing.mediaIds.map((mediaId) => ({ mediaId, name: 'image' })))
+      setAttachments(editing.attachments)
       setPlanFirst(false)
       setNotice(null)
     }
@@ -288,32 +297,63 @@ export function Composer({
     }
   }
 
-  async function upload(files: FileList | null) {
-    const picked = [...(files ?? [])]
+  // Buttons, drag and drop and paste all end here. Every file is checked by the server from its bytes.
+  async function upload(picked: File[]) {
     if (fileInput.current) fileInput.current.value = ''
     for (const file of picked) {
+      const problem = uploadProblem(file)
+      if (problem) {
+        setNotice({ kind: 'error', text: problem })
+        continue
+      }
+      if (live.current.attachments.length + uploadsInFlight.current >= MAX_ATTACHMENTS) {
+        setNotice({
+          kind: 'error',
+          text: `A message can carry up to ${MAX_ATTACHMENTS} attachments.`,
+        })
+        break
+      }
+      uploadsInFlight.current += 1
       setUploading((count) => count + 1)
       try {
         const form = new FormData()
-        form.append('file', file, file.name)
+        form.append('file', file, file.name || 'pasted-file')
         const stored = parseUpload(await apiFetch('media', { method: 'POST', body: form }))
-        setAttachments((current) =>
-          current.length >= 8
+        changeAttachments((current) =>
+          current.length >= MAX_ATTACHMENTS ||
+          current.some((item) => attachmentKey(item) === stored.mediaId)
             ? current
-            : [...current, { mediaId: stored.mediaId, name: stored.name }],
+            : [...current, stored],
         )
       } catch (error) {
         const reason =
           error instanceof ApiError && error.status === 413
-            ? 'is larger than 8 MB'
+            ? 'is too large (images up to 8 MB, other files up to 25 MB)'
             : error instanceof ApiError && error.status === 415
-              ? 'is not a PNG, JPEG, WebP or GIF image'
+              ? 'is not a type that can be attached (images, PDF, DOCX, XLSX, TXT, Markdown, CSV, JSON, HTML)'
               : 'could not be uploaded'
         setNotice({ kind: 'error', text: `${file.name} ${reason}.` })
       } finally {
+        uploadsInFlight.current -= 1
         setUploading((count) => count - 1)
       }
     }
+  }
+  const uploadsInFlight = useRef(0)
+  // The ref moves first, so a loop of uploads counts what the previous one added before React re-renders.
+  function changeAttachments(change: (current: Attachment[]) => Attachment[]) {
+    const next = change(live.current.attachments)
+    live.current = { ...live.current, attachments: next }
+    setAttachments(next)
+  }
+  function addWorkspaceFile(agentId: string, path: string) {
+    changeAttachments((current) => {
+      const item: Attachment = { kind: 'workspace', agentId, path }
+      return current.length >= MAX_ATTACHMENTS ||
+        current.some((existing) => attachmentKey(existing) === attachmentKey(item))
+        ? current
+        : [...current, item]
+    })
   }
 
   // /compress, /usage and /model <name> are answered here (PLAN 5.25); other commands go to the server as before.
@@ -368,7 +408,7 @@ export function Composer({
     const sent = attachments
     const payload = {
       text: body,
-      ...(sent.length ? { attachments: sent.map(({ mediaId }) => ({ mediaId })) } : {}),
+      ...(sent.length ? { attachments: sent.map(toRequest) } : {}),
       // An edit that omits `to` reuses the original recipients, so removing every chip must say so explicitly.
       ...(to.length || editing ? { to } : {}),
       ...(planFirst ? { planFirst: true } : {}),
@@ -394,10 +434,7 @@ export function Composer({
         author: { kind: 'you' },
         to,
         ...(editing ? { edits: editing.messageId } : {}),
-        parts: [
-          { kind: 'text', text: body },
-          ...sent.map(({ mediaId }) => ({ kind: 'image' as const, mediaId })),
-        ],
+        parts: [{ kind: 'text', text: body }, ...sent.map(toPart)],
         createdAt: new Date().toISOString(),
         streaming: false,
         refs: [],
@@ -428,7 +465,11 @@ export function Composer({
             setStash(null)
           }
         }
-        setNotice({ kind: 'result', command: result.command })
+        setNotice(
+          result.notices?.length
+            ? { kind: 'info', text: result.notices.join(' ') }
+            : { kind: 'result', command: result.command },
+        )
         return
       }
       // Keep whatever was typed or attached while the request was in flight.
@@ -437,9 +478,13 @@ export function Composer({
         setCaret(0)
       }
       setAttachments((current) =>
-        current.filter(({ mediaId }) => !sent.some((item) => item.mediaId === mediaId)),
+        current.filter((item) => !sent.some((done) => attachmentKey(done) === attachmentKey(item))),
       )
-      setNotice({ kind: 'result', command: result.command })
+      setNotice(
+        result.notices?.length
+          ? { kind: 'info', text: result.notices.join(' ') }
+          : { kind: 'result', command: result.command },
+      )
     } catch (error) {
       update((data) => withoutMessage(data, temporary))
       setNotice({ kind: 'error', text: errorText(error) })
@@ -478,6 +523,10 @@ export function Composer({
   }
 
   const available = agents.filter((agent) => !to.includes(agent.id))
+  // "From workspace…" browses the workspace of whoever the message goes to: the To chips, else the room lead.
+  const pickerAgents = agents.filter((agent) =>
+    to.length ? to.includes(agent.id) : agent.id === (leadAgentId ?? agents[0]?.id),
+  )
   const lines = Math.min(Math.max(text.split('\n').length, 1), 8)
   return (
     <div className="chat-composer">
@@ -559,8 +608,29 @@ export function Composer({
           </button>
         </div>
       )}
+      {pickingWorkspace && (
+        <WorkspacePicker
+          agents={pickerAgents}
+          onPick={addWorkspaceFile}
+          onClose={() => setPickingWorkspace(false)}
+        />
+      )}
       <form
-        className="chat-composer-box"
+        className={`chat-composer-box${dragging ? ' chat-dropzone' : ''}`}
+        onDragOver={(event) => {
+          if (!event.dataTransfer.types.includes('Files')) return
+          event.preventDefault()
+          setDragging(true)
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false)
+        }}
+        onDrop={(event) => {
+          setDragging(false)
+          if (!event.dataTransfer.files.length) return
+          event.preventDefault()
+          void upload([...event.dataTransfer.files])
+        }}
         onSubmit={(event) => {
           event.preventDefault()
           void send()
@@ -583,18 +653,44 @@ export function Composer({
           onChange={(event) => edit(event.target.value, event.target.selectionStart)}
           onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
           onKeyDown={onKeyDown}
+          onPaste={(event) => {
+            // Pasted files (a screenshot, a copied document) attach; pasted text is left alone.
+            const files = [...event.clipboardData.files]
+            if (!files.length) return
+            event.preventDefault()
+            void upload(files)
+          }}
         />
         {(attachments.length > 0 || uploading > 0) && (
           <ul className="chat-attachments" aria-label="Attachments">
             {attachments.map((item) => (
-              <li key={item.mediaId} className="chat-attachment">
-                <img src={`/api/media/${encodeURIComponent(item.mediaId)}`} alt="" />
-                <span>{item.name}</span>
+              <li key={attachmentKey(item)} className="chat-attachment">
+                {item.kind === 'upload' && isImage(item.contentType) ? (
+                  <img src={`/api/media/${encodeURIComponent(item.mediaId)}`} alt="" />
+                ) : (
+                  <span className="chat-attachment-icon" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path
+                        d="M4 1.8 H9.4 L12.6 5 V13.4 A0.8 0.8 0 0 1 11.8 14.2 H4 A0.8 0.8 0 0 1 3.2 13.4 V2.6 A0.8 0.8 0 0 1 4 1.8 Z M9.2 1.9 V5.2 H12.5"
+                        stroke="currentColor"
+                        strokeWidth="1.4"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                )}
+                <span
+                  title={item.kind === 'workspace' ? `${item.agentId}: ${item.path}` : undefined}
+                >
+                  {item.kind === 'workspace' ? item.path : attachmentName(item)}
+                </span>
                 <button
                   type="button"
-                  aria-label={`Remove ${item.name}`}
+                  aria-label={`Remove ${attachmentName(item)}`}
                   onClick={() =>
-                    setAttachments(attachments.filter(({ mediaId }) => mediaId !== item.mediaId))
+                    setAttachments(
+                      attachments.filter((other) => attachmentKey(other) !== attachmentKey(item)),
+                    )
                   }
                 >
                   ×
@@ -692,28 +788,66 @@ export function Composer({
             className="chat-sr-only"
             tabIndex={-1}
             aria-hidden="true"
-            accept="image/png,image/jpeg,image/webp,image/gif"
+            accept={ACCEPT}
             multiple
             data-testid="attach-input"
-            onChange={(event) => void upload(event.target.files)}
+            onChange={(event) => void upload([...(event.target.files ?? [])])}
           />
-          <button
-            type="button"
-            className="chat-attach"
-            aria-label="Attach files"
-            title="Attach images (PNG, JPEG, WebP, GIF; up to 8 MB)"
-            disabled={pending || attachments.length >= 8}
-            onClick={() => fileInput.current?.click()}
+          <span
+            className="chat-attach-menu"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && attachMenu) {
+                event.stopPropagation()
+                setAttachMenu(false)
+              }
+            }}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d="M10.5 5 L5.8 9.7 A1.6 1.6 0 0 0 8.1 12 L13 7.1 A3 3 0 0 0 8.8 2.9 L3.9 7.8 A4.4 4.4 0 0 0 10.1 14"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
+            <button
+              type="button"
+              className="chat-attach"
+              aria-label="Attach files"
+              aria-haspopup="true"
+              aria-expanded={attachMenu}
+              title="Attach images and documents (up to 10; 25 MB each)"
+              disabled={pending || attachments.length + uploading >= MAX_ATTACHMENTS}
+              onClick={() => setAttachMenu(!attachMenu)}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path
+                  d="M10.5 5 L5.8 9.7 A1.6 1.6 0 0 0 8.1 12 L13 7.1 A3 3 0 0 0 8.8 2.9 L3.9 7.8 A4.4 4.4 0 0 0 10.1 14"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+            {attachMenu && (
+              <ul className="chat-attach-list" aria-label="Attach">
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAttachMenu(false)
+                      fileInput.current?.click()
+                    }}
+                  >
+                    Upload files…
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAttachMenu(false)
+                      setPickingWorkspace(true)
+                    }}
+                  >
+                    From workspace…
+                  </button>
+                </li>
+              </ul>
+            )}
+          </span>
           {voice.supported && (
             <button
               type="button"
