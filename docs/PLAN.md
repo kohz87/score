@@ -305,6 +305,9 @@ answers for unrelated keys; Advanced search never shows non-matching settings wh
 button (`POST /api/session/security/check`) and a confirmation when set. Done by the lead. HTTP/2 deferred (stream code
 uses HTTP/1 response internals).
 
+**5.24 Chat message actions** · Actions under each message (no overlap with the timestamp): own messages Edit (edit and
+resend; original marked edited), Copy, Delete; agent replies Copy, Retry, Delete (docs/briefs/5.24.md).
+
 ---
 
 ## First five tasks
