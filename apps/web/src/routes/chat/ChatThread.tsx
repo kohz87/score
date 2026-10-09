@@ -16,6 +16,7 @@ import { Composer } from './Composer.tsx'
 import { DeleteToast } from './DeleteToast.tsx'
 import { usePendingDeletes } from './message-deletion.ts'
 import { MessageItem } from './MessageItem.tsx'
+import { ImportedBanner } from './ImportedBanner.tsx'
 import { messagesQuery, roomQuery } from './queries.ts'
 import { roomLabel } from './room-label.ts'
 
@@ -36,6 +37,7 @@ function MessagePage({
   agents,
   excluded = [],
   seek = null,
+  importedLabel,
   onChange,
   onPrepend,
 }: {
@@ -45,6 +47,8 @@ function MessagePage({
   excluded?: string[]
   /** A message to scroll to (search hit): older pages load until it is found. */
   seek?: string | null
+  /** Set in an imported room: its copied messages say where they came from. */
+  importedLabel?: string | undefined
   onChange: () => void
   onPrepend: () => void
 }) {
@@ -89,6 +93,7 @@ function MessagePage({
           agents={agents}
           excluded={[...excluded, ...items.map((item) => item.id)]}
           seek={seek}
+          importedLabel={importedLabel}
           onChange={onChange}
           onPrepend={onPrepend}
         />
@@ -116,7 +121,12 @@ function MessagePage({
       {[...items]
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
         .map((message) => (
-          <MessageItem key={message.id} message={message} agents={agents} />
+          <MessageItem
+            key={message.id}
+            message={message}
+            agents={agents}
+            importedLabel={importedLabel}
+          />
         ))}
       {before === null && (
         <div className="chat-typing" role="status" aria-live="polite">
@@ -207,6 +217,7 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
           retry={() => void context.queries.register(definition).refetch()}
         />
       )}
+      {room?.importedFrom && <ImportedBanner room={room} agents={agents} />}
       {room && (
         <div
           className="chat-scroll"
@@ -226,6 +237,7 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
               roomId={roomId}
               agents={agents}
               seek={seek}
+              importedLabel={room.importedFrom?.label}
               onChange={onChange}
               onPrepend={onPrepend}
             />

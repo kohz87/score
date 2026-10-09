@@ -7,6 +7,7 @@ import { RoomPanels } from './RoomPanels.tsx'
 import { agentsQuery, roomsQuery } from './queries.ts'
 import { ConversationSearch } from './ConversationSearch.tsx'
 import { ShareDialog } from './ShareDialog.tsx'
+import { OutsideSessions } from './OutsideSessions.tsx'
 import { RoomLink } from './RoomLink.tsx'
 import { RoomList } from './RoomList.tsx'
 import './chat.css'
@@ -59,6 +60,7 @@ export function ChatPage() {
               <p className="chat-list-empty">No direct conversations yet.</p>
             )}
           </div>
+          <OutsideSessions agents={agents.data ?? []} />
         </nav>
       </aside>
       {roomId ? (

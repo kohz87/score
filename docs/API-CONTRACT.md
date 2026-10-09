@@ -525,6 +525,29 @@ create dialog says so). Nothing live is exposed.
 - `GET /s/:token/media/:n` → the n-th image (0-based) of that share's own list, only when the share was made with
   `includeImages`; anything else is the same `404` page. Same headers and rate limit.
 
+### Outside sessions (PLAN 5.26)
+
+Hermes sessions that Score did not start (Telegram, CLI, Discord, …), read through the adapter from each profile's `state.db`
+(opened read-only; Score never writes Hermes SQLite). Conversations only: cron, kanban, subagent and delegate sessions,
+Score's own runs (`score-<room>-<agent>`), compression children and empty sessions are left out.
+
+- `GET /api/outside-sessions` → `{ items: OutsideSession[]; unavailable: AgentId[] }` (`{ id; agentId; source; sourceLabel;
+  title; startedAt; messageCount; busy; roomId }`, newest first, at most 200 per agent). `title` = the session title, else
+  the first user message (redacted, cut to 120 characters). `busy` = not ended and active within the last 5 minutes.
+  `roomId` = the Score room made from it, if imported. `unavailable` = profiles whose database is missing or has a changed
+  schema.
+- **H** `POST /api/outside-sessions/import` `{ agentId; sessionId }` → `{ roomId; imported }`: a new room (name
+  `#<source>-<title> #imported #<source>`, lead and only member the agent, `importedFrom` set) holding read-only copies of
+  the session's user and assistant text (redacted, original times, at most the first 1000 messages, ids start with
+  `import:`; no stream events, nothing unread). Importing the same session again returns the same room with `imported: 0`.
+  `404` for an unknown agent or session.
+- **H** `POST /api/rooms/:roomId/continue-session` → `{ mode: 'same_session' | 'new_session' }`. `409 session_busy` while the
+  session is `busy`; `409 conflict` for a room that was not imported; `404` when the session is gone. `same_session`: the
+  gateway's run API takes the Hermes `session_id` (and loads its history), so the agent's new turns from this room run in the
+  imported session. `new_session` (a gateway without the run API): turns use the room's own session and the first one carries
+  a short recap of the imported conversation. `Room.importedFrom.continued` shows the outcome (event `room.upserted`).
+  Calling it again re-checks and updates the mode.
+
 ## 6. Approvals
 
 - **S** `GET /api/approvals?status=pending|all&agent=&cursor=` → `{ asOfSeq; items: Approval[]; nextCursor }`

@@ -1706,3 +1706,58 @@
   font: inherit;
   cursor: pointer;
 }
+
+/* From elsewhere and imported rooms (PLAN 5.26). */
+.chat-outside-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.chat-outside-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: var(--radius-16);
+  background: var(--card);
+  border: 1px solid var(--hairline);
+}
+.chat-outside-title {
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.chat-outside-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+.chat-outside-row .chat-small-button {
+  margin-top: 6px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.chat-imported {
+  margin: 0;
+  padding: 12px 28px;
+  background: var(--subtle);
+  border-bottom: 1px solid var(--ground);
+  font-size: 14px;
+}
+.chat-imported p {
+  margin: 0 0 6px;
+}
+.chat-imported p:last-child {
+  margin-bottom: 0;
+}
+.chat-imported-chip {
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  padding: 0 8px;
+}

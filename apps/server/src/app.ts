@@ -21,6 +21,7 @@ import { registerRoutineRoutes } from './http/routines.ts'
 import { registerRulesRoutes } from './http/rules.ts'
 import { registerSettingsRoutes } from './http/settings.ts'
 import { registerRoomRoutes } from './http/rooms.ts'
+import { registerOutsideSessionRoutes } from './http/outside-sessions.ts'
 import { registerShareRoutes } from './http/shares.ts'
 import { registerConversationRoutes } from './http/conversations.ts'
 import { registerBriefRoutes } from './http/briefs.ts'
@@ -219,6 +220,7 @@ export function buildApp({
   if (db && ingest) {
     const dispatch = registerRoomRoutes(app, port, db, ingest, clock, mediaStore)
     registerConversationRoutes(app, { db, ingest, port, ...(clock ? { clock } : {}) })
+    registerOutsideSessionRoutes(app, { db, ingest, port })
     const holds = createTaskHolds({ port, db, ingest })
     const control = createBriefControl({ port, db, ingest, holds, dispatch })
     // A crash between "pause recorded" and "task parked" (or "resumed" and "unparked") leaves holds behind. The

@@ -183,7 +183,15 @@ function Action({
 }
 
 /** Actions under a finished message (PLAN 5.24): Edit/Copy/Delete on yours, Copy/Retry/Delete on an agent reply. */
-function MessageActions({ message, name }: { message: Message; name: string }) {
+function MessageActions({
+  message,
+  name,
+  imported,
+}: {
+  message: Message
+  name: string
+  imported: boolean
+}) {
   const you = message.author.kind === 'you'
   const [copied, setCopied] = useState(false)
   const [retry, setRetry] = useState<'idle' | 'busy' | 'queued'>('idle')
@@ -226,7 +234,7 @@ function MessageActions({ message, name }: { message: Message; name: string }) {
       role="group"
       aria-label={`Actions for message from ${name}`}
     >
-      {you && !message.editedBy && (
+      {you && !imported && !message.editedBy && (
         <Action
           label="Edit"
           name={`Edit message from ${name}`}
@@ -243,7 +251,7 @@ function MessageActions({ message, name }: { message: Message; name: string }) {
           onClick={() => void copy()}
         />
       )}
-      {!you && (
+      {!you && !imported && (
         <Action
           label={retry === 'queued' ? 'Retrying' : 'Retry'}
           name={`Retry reply from ${name}`}
@@ -308,7 +316,17 @@ function StopReply({ message, name }: { message: Message; name: string }) {
   )
 }
 
-export function MessageItem({ message, agents }: { message: Message; agents: AgentSummary[] }) {
+export function MessageItem({
+  message,
+  agents,
+  importedLabel,
+}: {
+  message: Message
+  agents: AgentSummary[]
+  /** Where an imported copy came from ("Telegram"); such messages cannot be edited or retried. */
+  importedLabel?: string | undefined
+}) {
+  const imported = message.id.startsWith('import:')
   const author = message.author
   const agent =
     author.kind === 'agent' ? agents.find((item) => item.id === author.agentId) : undefined
@@ -335,6 +353,9 @@ export function MessageItem({ message, agents }: { message: Message; agents: Age
           </time>
           {message.streaming && <span className="chat-streaming">Writing…</span>}
           {message.editedBy && <span className="chat-edited">edited</span>}
+          {imported && importedLabel && (
+            <span className="chat-imported-chip">from {importedLabel}</span>
+          )}
         </div>
         <div
           className="chat-message-parts"
@@ -376,7 +397,7 @@ export function MessageItem({ message, agents }: { message: Message; agents: Age
           </button>
         )}
         {!message.streaming && !message.id.startsWith('pending-') && (
-          <MessageActions message={message} name={name} />
+          <MessageActions message={message} name={name} imported={imported} />
         )}
       </div>
     </article>

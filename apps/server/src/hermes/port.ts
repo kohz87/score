@@ -47,6 +47,7 @@ import type { IngestResult, Observation } from '../hub/ingest.ts'
 import type { SessionCost } from '../domain/spend.ts'
 import type { ReportApproval, ReportFacts, ReportRun } from '../domain/reports.ts'
 import type { ProfileManagementPort } from './profile-management.ts'
+import type { OutsideSessionFact, OutsideSessionHistory } from './outside-sessions.ts'
 
 export interface ObservationSink {
   submit(obs: Observation): Promise<IngestResult>
@@ -174,6 +175,17 @@ export interface HermesPort extends ProfileManagementPort {
     now: number,
     agentIds: string[],
   ): Promise<{ runs: ReportRun[]; approvals: ReportApproval[] }>
+  /** Read-only: each agent's Hermes sessions that Score did not start (PLAN 5.26). Profiles that can't be read are listed. */
+  listOutsideSessions(
+    agentIds: string[],
+  ): Promise<{ items: OutsideSessionFact[]; unavailable: string[] }>
+  /** One such session's text (user and assistant messages, redacted). Null when it doesn't exist. */
+  readOutsideSession(agentId: string, sessionId: string): Promise<OutsideSessionHistory | null>
+  /**
+   * Whether a run can be started inside an existing Hermes session: 'same_session' when the gateway's run API takes
+   * that session id (Hermes loads its history), else 'new_session' (the room starts a fresh session with a summary).
+   */
+  sessionContinuation(): 'same_session' | 'new_session'
   listAgentDetails(): Promise<AgentDetail[]>
   listRoutines(agentId: string): Promise<RoutineSummary[]>
   createRoutine(

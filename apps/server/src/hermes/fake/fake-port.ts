@@ -23,6 +23,7 @@ import {
 } from '../../domain/kanban-denials.ts'
 import { requestRunApproval, respondRunApproval } from '../../domain/approvals.ts'
 import { recordFrame } from '../../domain/watch-frames.ts'
+import { fakeOutsideSession, fakeOutsideSessions } from './outside-sessions.ts'
 import { insertRoom, roomChanged, storeMessage, updateMessage } from '../../domain/rooms.ts'
 import { approvalDraft, patchApproval, readApprovalRow } from '../../domain/approval-store.ts'
 import type {
@@ -749,6 +750,16 @@ export class FakePort implements HermesPort {
         )
     }
     return { identity: current ?? context.targetIdentity }
+  }
+
+  async listOutsideSessions(agentIds: string[]) {
+    return fakeOutsideSessions(agentIds, this.scheduler.now(), new Set(this.agents.keys()))
+  }
+  async readOutsideSession(agentId: string, sessionId: string) {
+    return fakeOutsideSession(agentId, sessionId, this.scheduler.now())
+  }
+  sessionContinuation(): 'same_session' | 'new_session' {
+    return 'same_session'
   }
 
   async reportFacts(req: Parameters<HermesPort['reportFacts']>[0]) {
