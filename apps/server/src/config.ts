@@ -81,6 +81,8 @@ const ConfigSchema = z.object({
     .transform((value) => new URL(value).origin)
     .default('http://127.0.0.1:5173'),
   mode: z.enum(['fake', 'live']).default('fake'),
+  // The knowledge vault (SCORE_VAULT); default ~/score-vault, or a temporary folder in fake mode (start-server).
+  vault: z.string().min(1).optional(),
   // Media store quota in MiB (default 512, applied by the store).
   mediaQuotaMb: z.coerce.number().int().min(1).optional(),
   fakeSpeed: z.coerce.number().positive().default(1),
@@ -117,6 +119,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
       env.SCORE_WEB_ORIGIN ??
       (env.SCORE_WEB_PORT ? `http://127.0.0.1:${env.SCORE_WEB_PORT}` : undefined),
     mode: env.SCORE_MODE,
+    vault: env.SCORE_VAULT,
     mediaQuotaMb: env.SCORE_MEDIA_QUOTA_MB,
     fakeSpeed: env.SCORE_FAKE_SPEED,
     fakeLoop: env.SCORE_FAKE_LOOP,

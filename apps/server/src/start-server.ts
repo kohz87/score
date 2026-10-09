@@ -37,6 +37,10 @@ import { rotateLog } from './log-rotation.ts'
 import { snapshotSessionCosts } from './domain/spend.ts'
 import { pruneEvents } from './hub/retention.ts'
 import { MediaStore } from './media/store.ts'
+import { KnowledgeVault } from './knowledge/vault.ts'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import { retireIngestKeys, retireMedia } from './hub/retire.ts'
 
 const INSECURE_FLAG_REMOVED =
@@ -99,6 +103,8 @@ export async function startServer(
   let holdRecovery: { stop(): void } | undefined
   let spendSnapshots: NodeJS.Timeout | undefined
   let port: HermesPort | undefined
+  let knowledge: KnowledgeVault | undefined
+  let fakeVaultDir: string | undefined
   let closing: Promise<void> | undefined
   let dualServer: Awaited<ReturnType<typeof listenDual>> | undefined
   let guideApp: FastifyInstance | undefined
@@ -110,6 +116,12 @@ export async function startServer(
     holdRecovery?.stop()
     clearInterval(spendSnapshots)
     clearInterval(deliverySweep)
+    try {
+      await knowledge?.close()
+      if (fakeVaultDir) rmSync(fakeVaultDir, { recursive: true, force: true })
+    } catch {
+      // best effort: the vault's files are the owner's and are never removed (only the fake mode's temp copy)
+    }
     try {
       try {
         await outbox?.stop()
@@ -203,9 +215,27 @@ export async function startServer(
             importScreenshot: createScreenshotImporter(config, media),
           }
         : undefined
+    // Fake mode (tests, e2e, demos) gets a throwaway seeded vault unless SCORE_VAULT names one.
+    if (config.mode === 'fake' && !config.vault)
+      fakeVaultDir = mkdtempSync(join(tmpdir(), 'score-fake-vault-'))
+    const knowledgeIngest = ingest
+    knowledge = new KnowledgeVault({
+      vault: config.vault ?? fakeVaultDir ?? join(homedir(), 'score-vault'),
+      db: database,
+      emit: (change) =>
+        knowledgeIngest.submit({
+          source: 'knowledge',
+          identity: randomUUID(),
+          apply: () => [{ type: 'knowledge.changed', data: change }],
+        }),
+      log: { warn: (object, message) => app?.log.warn(object, message) },
+      seed: fakeVaultDir !== undefined,
+    })
+    await knowledge.start()
     app = buildApp({
       config,
       port,
+      knowledge,
       outbox,
       media,
       ...(logger === undefined ? {} : { logger }),
