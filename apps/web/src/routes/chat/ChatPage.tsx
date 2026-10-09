@@ -1,10 +1,12 @@
-import { useContext } from 'react'
+import type { Room } from '@score/contract'
+import { useContext, useState } from 'react'
 import { useParams } from 'react-router'
 import { StreamContext, useStreamQuery } from '../../data/query-client.ts'
 import { ChatThread, QueryError } from './ChatThread.tsx'
 import { RoomPanels } from './RoomPanels.tsx'
 import { agentsQuery, roomsQuery } from './queries.ts'
 import { ConversationSearch } from './ConversationSearch.tsx'
+import { ShareDialog } from './ShareDialog.tsx'
 import { RoomLink } from './RoomLink.tsx'
 import { RoomList } from './RoomList.tsx'
 import './chat.css'
@@ -14,6 +16,7 @@ export function ChatPage() {
   const rooms = useStreamQuery(roomsQuery)
   const agents = useStreamQuery(agentsQuery)
   const context = useContext(StreamContext)!
+  const [sharing, setSharing] = useState<Room | null>(null)
   return (
     <div className="chat-layout">
       <aside className="chat-conversations" aria-label="Conversations">
@@ -44,6 +47,7 @@ export function ChatPage() {
               projects={rooms.data.projects}
               selected={roomId}
               agents={agents.data ?? []}
+              onShare={setSharing}
             />
           )}
           <div className="chat-room-group">
@@ -66,6 +70,7 @@ export function ChatPage() {
         </section>
       )}
       {roomId && <RoomPanels key={`panels:${roomId}`} roomId={roomId} agents={agents.data ?? []} />}
+      {sharing && <ShareDialog room={sharing} close={() => setSharing(null)} />}
     </div>
   )
 }

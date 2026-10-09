@@ -495,6 +495,36 @@ contentType: string }`. Types come from the bytes (png, jpeg, gif, webp); `400` 
   exported at) and the room's finished, undeleted messages with author, time, text (redacted), `file` parts as
   path and counts, `image` parts as media ids (no bytes). Tool, thinking, plan, review and approval parts are left out.
 
+### Share links (PLAN 5.26; security design by the lead, 2026-10-09)
+
+A share is a **frozen snapshot** of one room, readable by anyone who has the link and can reach Score (LAN or Tailscale; the
+create dialog says so). Nothing live is exposed.
+
+- **H** `POST /api/rooms/:roomId/shares` `{ password; expiresInDays?: 1..30 (default 7); includeImages?: false }` →
+  `{ id; url; expiresAt }`. `password` is the security password, with the same check, limits and errors as pairing
+  management (`409 password_not_set`, `403 wrong_password`, `429 too_many_attempts`). `url` = `<public origin>/s/<token>`.
+  No `Idempotency-Key` receipt (the body holds the password; a replay would mint a second token).
+- Snapshot content: the room's finished, undeleted messages as author name, time and the **text parts only** (Markdown
+  source), each through `redact()`; with `includeImages` the media ids of `image` parts are copied into the share's own list.
+  No tool, thinking, file-path, plan, review or approval parts, no room settings, member ids, workspace paths or profile
+  data. The room's later edits and deletions do not change it. At most the latest 2000 messages.
+- Token: 32 random bytes (base64url, 43 chars). Only its SHA-256 is stored (`room_shares.token_hash`); the token is shown once.
+- `GET /api/shares` → `{ items: ShareSummary[] }` (`{ id; roomId; roomName; createdAt; expiresAt; views; includeImages;
+  status: 'active' | 'expired' }`, newest first; revoked shares are gone) · `GET /api/rooms/:roomId/shares` → the same, active
+  ones of that room (Chat › room menu › Share…, Settings › Shares lists all).
+- **H** `DELETE /api/shares/:id` → `204` (no password needed; idempotent; `404` unknown id). Revoking withdraws the link at once
+  and drops the stored snapshot.
+- **`GET /s/:token`, the only unauthenticated route this task adds** (it is public in remote mode too, GET only):
+  hash lookup (constant-time compare), then a static HTML page rendered on the server: text escaped, Markdown rendered
+  without raw HTML (links only to http(s)/mailto, images shown as their alt text), no JavaScript. Headers:
+  `Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline'`, `X-Robots-Tag: noindex`,
+  `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`.
+  An unknown, malformed, expired or revoked token gets the **same** `404` HTML page. Rate limit: 30 requests per minute per
+  IP address (every `/s/` request counts, known token or not), then `429` (static page). Each successful page view adds to
+  `views`. Plain-HTTP requests get the HTTPS guide like everything else (5.18).
+- `GET /s/:token/media/:n` → the n-th image (0-based) of that share's own list, only when the share was made with
+  `includeImages`; anything else is the same `404` page. Same headers and rate limit.
+
 ## 6. Approvals
 
 - **S** `GET /api/approvals?status=pending|all&agent=&cursor=` → `{ asOfSeq; items: Approval[]; nextCursor }`

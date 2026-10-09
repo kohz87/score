@@ -21,6 +21,7 @@ import { registerRoutineRoutes } from './http/routines.ts'
 import { registerRulesRoutes } from './http/rules.ts'
 import { registerSettingsRoutes } from './http/settings.ts'
 import { registerRoomRoutes } from './http/rooms.ts'
+import { registerShareRoutes } from './http/shares.ts'
 import { registerConversationRoutes } from './http/conversations.ts'
 import { registerBriefRoutes } from './http/briefs.ts'
 import { createBriefControl } from './http/brief-control.ts'
@@ -317,6 +318,15 @@ export function buildApp({
     pairingOrigin,
     securityPassword,
   )
+  if (db)
+    registerShareRoutes(app, {
+      db,
+      port,
+      security: securityPassword,
+      media: mediaStore,
+      origin: serverOrigin(config),
+      ...(clock ? { clock } : {}),
+    })
   registerSystemRoutes(app, getSystemStatus)
   if (db && ingest && getEpoch) {
     registerStreamRoute(app, {

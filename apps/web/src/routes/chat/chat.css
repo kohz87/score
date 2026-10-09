@@ -1595,3 +1595,114 @@
     outline: 2px solid var(--agent-saffron);
   }
 }
+
+/* Share dialog (PLAN 5.26). */
+.share-dialog {
+  width: min(560px, calc(100vw - 32px));
+  border: 0;
+  border-radius: var(--radius-card);
+  padding: 24px 28px;
+  color: var(--ink);
+  background: var(--card);
+}
+.share-dialog::backdrop {
+  background: rgb(18 19 26 / 45%);
+}
+.share-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.share-heading h2 {
+  font-size: 22px;
+  margin: 0;
+}
+.share-dialog p {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.share-dialog h3 {
+  font-size: 15px;
+  margin: 18px 0 6px;
+}
+.share-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.share-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.share-form input:not([type='checkbox']),
+.share-form select {
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--card);
+}
+.share-form .share-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+}
+.share-primary {
+  height: 48px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--card);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+.share-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.share-result {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: var(--radius-16);
+  background: var(--subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.share-result code {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  cursor: text;
+}
+.share-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.share-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+.share-list button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  font: inherit;
+  cursor: pointer;
+}
