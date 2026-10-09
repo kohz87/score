@@ -20,7 +20,7 @@ export const ProvidersResponseSchema = z.object({ items: z.array(ProviderItemSch
 export type ProvidersResponse = z.infer<typeof ProvidersResponseSchema>
 
 export const ConnectResultSchema = z.object({
-  next: z.enum(['done', 'device_code', 'run_in_terminal']),
+  next: z.enum(['done', 'device_code', 'run_in_terminal', 'form']),
   command: z.string().optional(),
   url: z.string().optional(),
   code: z.string().optional(),
@@ -113,6 +113,38 @@ export const ToolServerRequestSchema = z
   .refine((value) => (value.command === undefined) !== (value.url === undefined))
 export type ToolServerRequest = z.infer<typeof ToolServerRequestSchema>
 export const PlatformParamSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/)
+
+// Browser setup of a messaging platform (contract §10): field metadata comes from the server; values travel only in the
+// PUT body and are never stored, logged or echoed.
+export const MessagingFieldSchema = z.object({
+  key: z.string().regex(/^[A-Z][A-Z0-9_]{1,63}$/),
+  label: z.string().min(1),
+  help: z.string().nullable(),
+  url: z.string().nullable(),
+  secret: z.boolean(),
+  required: z.boolean(),
+})
+export type MessagingField = z.infer<typeof MessagingFieldSchema>
+export const MessagingFieldsResponseSchema = z.object({
+  fields: z.array(MessagingFieldSchema),
+  /** false = needs an interactive pairing in a terminal (QR codes and the like). */
+  browserSetup: z.boolean(),
+})
+export type MessagingFieldsResponse = z.infer<typeof MessagingFieldsResponseSchema>
+export const MessagingSetupRequestSchema = z
+  .object({
+    values: z.record(
+      z.string().regex(/^[A-Z][A-Z0-9_]{1,63}$/),
+      // One line, no leading dash (the value is a CLI argument).
+      z
+        .string()
+        .max(2000)
+        .refine((value) => !/[\0\r\n]/.test(value) && !value.trimStart().startsWith('-')),
+    ),
+    agentId: AgentIdSchema.optional(),
+  })
+  .strict()
+export type MessagingSetupRequest = z.infer<typeof MessagingSetupRequestSchema>
 
 // Contract §10 (Settings: advanced config). Secret-bearing and env-backed keys never appear here: the server
 // leaves them out of search and refuses to write them.

@@ -129,6 +129,7 @@ export const lane = {
   end: later,
   taskId: 'task-1',
   runId: 'run-1',
+  kind: 'task',
 } satisfies Contract.LaneBlock
 
 export const parts = [
@@ -216,6 +217,10 @@ export const completed = {
   messageId: 'message-1',
   roomId: 'room-1',
 } satisfies Contract.MessageCompleted
+export const deleted = {
+  messageId: 'message-1',
+  roomId: 'room-1',
+} satisfies Contract.MessageDeleted
 export const typing = {
   roomId: 'room-1',
   agentId: 'lead',

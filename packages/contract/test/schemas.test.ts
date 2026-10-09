@@ -393,6 +393,25 @@ const cases = [
     { name: 'docs', url: 'https://mcp.example.com/sse', command: ['x'] },
   ],
   ['PlatformParamSchema', 'telegram', 'Bad Name'],
+  ['MessageDeletedSchema', f.deleted, { roomId: 'room-1' }],
+  [
+    'MessagingFieldSchema',
+    {
+      key: 'SLACK_BOT_TOKEN',
+      label: 'Bot token',
+      help: null,
+      url: null,
+      secret: true,
+      required: true,
+    },
+    { key: 'slack', label: 'Bot token', help: null, url: null, secret: true, required: true },
+  ],
+  ['MessagingFieldsResponseSchema', { fields: [], browserSetup: false }, { fields: [] }],
+  [
+    'MessagingSetupRequestSchema',
+    { values: { SLACK_BOT_TOKEN: 'xoxb-1' }, agentId: 'builder' },
+    { values: { SLACK_BOT_TOKEN: '-x' } },
+  ],
   ['ApprovalModeSchema', 'manual', 'yolo'],
   ['RuleSchema', rule, { ...rule, id: '' }],
   ['RulesResponseSchema', rules, { ...rules, drift: [{ agentId: 'builder' }] }],
@@ -630,4 +649,27 @@ test('HTTP snapshots accept asOfSeq 0 (fresh server) and reject negatives', () =
   expect(
     contract.ErrorEnvelopeSchema.parse({ error: { code: 'not_found', message: 'Unknown room' } }),
   ).toMatchObject({ error: { code: 'not_found' } })
+})
+
+test('messaging setup requests accept one-line values for env keys only', () => {
+  const ok = contract.MessagingSetupRequestSchema.safeParse({
+    values: { SLACK_BOT_TOKEN: 'xoxb-1' },
+  })
+  expect(ok.success).toBe(true)
+  for (const values of [{ lower: 'x' }, { SLACK_BOT_TOKEN: 'a\nb' }, { SLACK_BOT_TOKEN: '-x' }])
+    expect(contract.MessagingSetupRequestSchema.safeParse({ values }).success).toBe(false)
+  expect(contract.MessagingSetupRequestSchema.safeParse({ values: {}, extra: 1 }).success).toBe(
+    false,
+  )
+})
+
+test('a stored lane block without a kind reads as a task; chat bands carry a count', () => {
+  const stored: Record<string, unknown> = { ...f.lane }
+  delete stored.kind
+  expect(contract.LaneBlockSchema.parse(stored).kind).toBe('task')
+  expect(contract.LaneBlockSchema.parse({ ...f.lane, kind: 'chat', count: 3 }).count).toBe(3)
+  expect(contract.LaneBlockSchema.safeParse({ ...f.lane, kind: 'chat', count: 0 }).success).toBe(
+    false,
+  )
+  expect(contract.LaneBlockSchema.safeParse({ ...f.lane, kind: 'other' }).success).toBe(false)
 })

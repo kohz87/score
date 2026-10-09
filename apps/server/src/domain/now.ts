@@ -40,6 +40,8 @@ const HopRowSchema = z.object({
   parent_run_id: z.string().nullable(),
   agent_id: z.string(),
   created_at: z.iso.datetime(),
+  // The brief behind the turn has tasks or a plan, so its runs are brief work rather than plain chat.
+  brief_work: z.union([z.literal(0), z.literal(1)]),
 })
 const ToolRowSchema = z.object({ tool: z.string(), preview: z.string().nullable() })
 
@@ -94,7 +96,10 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
       .prepare(
         // Only hops into runs in the window can be drawn; this keeps the read bounded as history grows.
         `SELECT message_id, run_id, from_agent_id, agent_id, created_at,
-                (SELECT p.run_id FROM message_runs p WHERE p.message_id = message_runs.parent_message_id) AS parent_run_id
+                (SELECT p.run_id FROM message_runs p WHERE p.message_id = message_runs.parent_message_id) AS parent_run_id,
+                (plan_first = 1
+                  OR EXISTS (SELECT 1 FROM brief_tasks b WHERE b.brief_id = message_runs.chain_id)
+                  OR EXISTS (SELECT 1 FROM brief_plan_starts s WHERE s.brief_id = message_runs.chain_id)) AS brief_work
            FROM message_runs
           WHERE run_id IN (SELECT id FROM runs WHERE started_at <= ? AND (ended_at IS NULL OR ended_at >= ?))
           ORDER BY created_at, message_id`,
@@ -120,6 +125,12 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
     reviewer: task.reviewer,
     column: task.column,
   }))
+  // A run answering a chat message is a brief's work when the brief has tasks or a plan, else a plain chat reply.
+  const chatRuns = new Map(
+    hops.flatMap((hop) =>
+      hop.run_id === null ? [] : [[hop.run_id, hop.brief_work === 1 ? 'brief' : 'chat'] as const],
+    ),
+  )
   const built = buildLanes({
     agentIds: agents.map((agent) => agent.id),
     runs: runs.map((run) => ({
@@ -129,6 +140,7 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
       startedAt: run.started_at,
       endedAt: run.ended_at,
       taskId: runTask.get(run.id) ?? null,
+      kind: chatRuns.get(run.id) ?? 'task',
     })),
     tasks: laneTasks,
     hops: hops.map((hop) => ({
@@ -149,14 +161,16 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
   ).length
 
   const latest = sqlite
-    .prepare('SELECT room_id FROM messages ORDER BY created_at DESC, id DESC LIMIT 1')
+    .prepare(
+      'SELECT room_id FROM messages WHERE deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1',
+    )
     .get()
   const thread = latest
     ? (() => {
         const roomId = z.object({ room_id: z.string() }).parse(latest).room_id
         const messages: Message[] = sqlite
           .prepare(
-            'SELECT * FROM messages WHERE room_id = ? ORDER BY created_at DESC, id DESC LIMIT 3',
+            'SELECT * FROM messages WHERE room_id = ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 3',
           )
           .all(roomId)
           .map(messageFromRow)

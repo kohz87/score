@@ -156,6 +156,12 @@ type LaneBlock = {
   end: string | null /* null = open-ended */
   taskId: string | null
   runId: string | null
+  /* task = a task or any other exact run; brief = a run answering a chat message whose brief has tasks or a plan;
+     chat = plain chat replies of one agent, merged into ONE block when less than 5 minutes apart (`id` `chat:<first run>`,
+     `runId` null once it covers more than one reply). Task and brief blocks are never merged. Absent in old stored plan
+     blocks = task. */
+  kind: 'task' | 'brief' | 'chat'
+  count?: number /* chat bands: replies covered */
 }
 type RunSummary = {
   id: string
@@ -218,6 +224,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `message.created`    | `Message`                                                                                     | Chat, Now thread                                         |
 | `message.delta`      | `{ messageId, roomId, append: string }`                                                       | Chat (streaming text)                                    |
 | `message.completed`  | `{ messageId, roomId, parts?: MessagePart[] }` (final parts replace the cached message's)     | Chat                                                     |
+| `message.deleted`    | `{ roomId, messageId }` (remove it from the cached messages; Score-side only)                  | Chat, Now thread                                         |
 | `typing`             | `{ roomId, agentId, text /* "is re-reading the read layer" */ \| null }`                      | Chat, Now thread                                         |
 | `approval.requested` | `Approval`                                                                                    | Now card, Chat, Flow, Watch, Tasks, header dot           |
 | `approval.updated`   | `Approval` (phase / decision / delivery changes)                                              | same                                                     |
@@ -405,6 +412,11 @@ surface: 'terminal' | 'editor' | 'browser' | null /* last frame, for a miniature
 - **S** `GET /api/rooms/:roomId` → `{ asOfSeq; room: Room; filesInPlay: string[]
 learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 - **S** `GET /api/rooms/:roomId/messages?before=<cursor>&limit=50` → `{ asOfSeq; items: Message[]; nextCursor }`
+- **H** `DELETE /api/rooms/:roomId/messages/:messageId` → `204`. Removes the message from Score for everyone (soft delete:
+  `messages.deleted_at`); it is left out of room reads, unread counts, the Now thread, the context handed to agents and
+  exports. Runs, Reports and the agents' Hermes session history are untouched, so an agent may still remember it. `409
+  conflict` while the message is still streaming; `404` for an unknown room or message; idempotent (deleting a deleted
+  message is `204`). Emits `message.deleted`.
 - `POST /api/rooms/:roomId/messages`
 
   ```ts
@@ -657,7 +669,20 @@ available: boolean; reason: string | null /* "Not on your plan" */; free: boolea
 - `POST /api/settings/providers/local` `{ label; baseUrl; model }` → provider item
 - `GET /api/settings/connections` → `{ toolServers: { id; label; status: 'ok'|'needs_signin'|'error'; usedBy: AgentId[] | 'everyone' }[]
 messaging: { platform; label; status: 'connected'|'disconnected'; detail: string | null }[] }`
-- `POST /api/settings/tool-servers` `{ name; command?: string[]; url?: string }` · `POST /api/settings/messaging/:platform/connect`
+- `POST /api/settings/tool-servers` `{ name; command?: string[]; url?: string }`
+- `POST /api/settings/messaging/:platform/connect` → `ConnectResult`: `next: 'form'` for platforms that can be set up in
+  the browser (token based), else `run_in_terminal` with the command (WhatsApp QR and other interactive pairings).
+- `GET /api/settings/messaging/:platform/fields` → `{ fields: { key; label; help: string | null; url: string | null;
+  secret: boolean; required: boolean }[]; browserSetup: boolean }`. Field metadata is an adapter-side table (Hermes has no
+  read-only CLI that lists env-var metadata) mirroring `hermes_cli/config_defaults.py`. `browserSetup: false` = no fields,
+  use the terminal command from `connect`.
+- **H** `PUT /api/settings/messaging/:platform` `{ values: Record<ENV_KEY, string>; agentId?: AgentId }` → the connection row
+  `{ platform; label; status; detail }`. Keys must be in the platform's field list (`400` otherwise), every `required`
+  field must be present and non-empty, empty optional values are skipped. Each value is written with `hermes [-p <profile>]
+  config set KEY value` (argv array, profile of `agentId`, default profile when absent). The route uses the HMAC receipt
+  (`secretBody`): values are never logged, stored, echoed or put in a receipt, and error messages are redacted. The gateway
+  reads its tokens at start, so the row stays as it was until the gateway restarts (Score has no gateway restart action;
+  the UI says so).
 - `GET /api/settings/rules` → `{ mode: 'manual' | 'smart' | 'off'; goAhead: Rule[]; askMe: Rule[]; never: Rule[];
 drift: { agentId; differs: boolean }[] }` with `type Rule = { id; label; pattern: string | null; readOnly: boolean }`.
   Hermes mapping (docs/reviews/2026-10-08-2.18-design-lead.md): Go ahead = pattern keys in `command_allowlist`, Ask me

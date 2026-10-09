@@ -99,6 +99,7 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
     end: null,
     taskId,
     runId: run.id,
+    kind: 'task' as const,
   }
   const reviewRun = {
     ...exampleRun('reviewer', id('scenario-review'), time(6650)),

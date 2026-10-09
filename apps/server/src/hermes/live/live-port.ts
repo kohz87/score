@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
+import type { MessagingSetupRequest } from '@score/contract'
 import { HttpError } from '../../errors.ts'
 import {
   projectedTasks,
@@ -53,6 +54,8 @@ import { MemoryIdSchema } from '../agent-tabs.ts'
 import { ProfileLocks } from './profile-locks.ts'
 import { createLiveConfigService } from './config.ts'
 import { LiveSettings } from './settings.ts'
+import { saveMessagingValues } from './messaging.ts'
+import { messagingFields, messagingWrites } from '../messaging-fields.ts'
 import { readApprovalConfig, updateProfileApprovals } from './approvals.ts'
 import type { ApprovalConfig } from '../approvals.ts'
 import { cachingRunner } from './config-cache.ts'
@@ -486,6 +489,28 @@ export class LivePort implements HermesPort {
   }
   async connectMessaging(platform: string) {
     return this.settings.connectMessaging(platform)
+  }
+  async messagingFields(platform: string) {
+    return messagingFields(platform)
+  }
+  async saveMessaging(platform: string, req: MessagingSetupRequest) {
+    const writes = messagingWrites(platform, req.values)
+    let profile = this.options.settingsProfile
+    if (req.agentId !== undefined) {
+      const parsed = ProfileNameSchema.safeParse(req.agentId)
+      if (!parsed.success || !this.profiles.profileHome(parsed.data))
+        throw new HttpError(404, 'not_found', 'Agent not found')
+      profile = parsed.data
+    }
+    return saveMessagingValues({
+      hermesHome: resolveHermesHome(this.options.hermesHome),
+      profile,
+      platform,
+      writes,
+      runner: this.options.runner,
+      locks: this.locks,
+      invalidate: () => profile && this.profiles.invalidate(profile),
+    })
   }
   private testedBuilds(): TestedFingerprint[] {
     return [...(this.options.testedFingerprints ?? testedFingerprints), ...this.accepted.tested()]

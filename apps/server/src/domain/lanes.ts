@@ -8,6 +8,8 @@ export interface LaneRunInput {
   startedAt: string
   endedAt: string | null
   taskId: string | null
+  // What the run is: a plain chat reply merges into a band; default task (an exact block).
+  kind?: LaneBlock['kind']
 }
 export interface LaneTaskInput {
   id: string
@@ -52,7 +54,12 @@ interface Draft {
   runId: string | null
   agentId: string
   runIds: string[]
+  kind: LaneBlock['kind']
+  count?: number
 }
+
+// Chat replies of one agent closer together than this are one band.
+export const CHAT_MERGE_GAP_MS = 5 * 60 * 1000
 
 const FINISHED = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
 const iso = (ms: number) => new Date(ms).toISOString()
@@ -95,10 +102,49 @@ function runDrafts(input: LaneInput, tasks: Map<string, LaneTaskInput>): Draft[]
       runId: run.id,
       agentId: run.agentId,
       runIds: [run.id],
+      kind: run.taskId === null ? (run.kind ?? 'task') : 'task',
     }
     drafts.push(draft)
   }
-  return drafts
+  return mergeChat(drafts)
+}
+
+/**
+ * Plain chat replies stay out of the task rows: one band per stretch of an agent's chatting. Only chat drafts merge;
+ * task and brief blocks stay exact (an ended run stays finite, retries stay distinct).
+ */
+function mergeChat(drafts: Draft[]): Draft[] {
+  const result: Draft[] = []
+  const open = new Map<string, Draft>()
+  for (const draft of drafts) {
+    if (draft.kind !== 'chat') {
+      result.push(draft)
+      continue
+    }
+    const band = open.get(draft.agentId)
+    const bandEnd = band === undefined ? 0 : band.end === null ? Infinity : band.end
+    if (band !== undefined && draft.start - bandEnd < CHAT_MERGE_GAP_MS) {
+      band.runIds.push(...draft.runIds)
+      band.count = (band.count ?? 1) + 1
+      band.end = band.end === null || draft.end === null ? null : Math.max(band.end, draft.end)
+      band.state = bandState(band, draft)
+      continue
+    }
+    const fresh: Draft = { ...draft, id: `chat:${draft.runIds[0]}`, count: 1 }
+    open.set(draft.agentId, fresh)
+    result.push(fresh)
+  }
+  for (const band of result)
+    if (band.kind === 'chat') band.label = chatLabel(band.count ?? 1, band.state)
+  return result
+}
+function bandState(band: Draft, next: Draft): LaneBlock['state'] {
+  if (band.state === 'waiting' || next.state === 'waiting') return 'waiting'
+  return band.end === null || next.end === null ? 'working' : 'done'
+}
+function chatLabel(count: number, state: LaneBlock['state']): string {
+  if (state === 'waiting') return 'Waiting on you'
+  return count === 1 ? 'Chat reply' : `Chat · ${count} replies`
 }
 
 function plannedDrafts(input: LaneInput, drafts: Draft[]): Draft[] {
@@ -116,6 +162,7 @@ function plannedDrafts(input: LaneInput, drafts: Draft[]): Draft[] {
         runId: null,
         agentId: task.assignee,
         runIds: [],
+        kind: 'task',
       })
     } else if (task.column === 'in_review' && task.reviewer) {
       const reviewer = task.reviewer
@@ -133,6 +180,7 @@ function plannedDrafts(input: LaneInput, drafts: Draft[]): Draft[] {
           runId: null,
           agentId: reviewer,
           runIds: [],
+          kind: 'task',
         })
     }
   }
@@ -216,7 +264,9 @@ export function buildLanes(input: LaneInput): LaneOutput {
       start: iso(Math.max(draft.start, from)),
       end: draft.end === null ? null : iso(Math.min(draft.end, to)),
       taskId: draft.taskId,
-      runId: draft.runId,
+      runId: draft.kind === 'chat' && (draft.count ?? 1) > 1 ? null : draft.runId,
+      kind: draft.kind,
+      ...(draft.count === undefined ? {} : { count: draft.count }),
     })
   }
   const byStart = (a: LaneBlock, b: LaneBlock) =>

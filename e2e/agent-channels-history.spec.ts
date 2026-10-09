@@ -1,15 +1,21 @@
 import { expect, test } from '@playwright/test'
+import { pair } from './pair.ts'
 
 test('Channels shows the connect command and History lists runs with a Watch replay', async ({
   page,
 }) => {
+  await pair(page)
   await page.goto('/team/builder')
   await page.getByRole('tab', { name: 'Channels' }).click()
   const panel = page.getByRole('tabpanel')
   await expect(panel.getByRole('heading', { name: 'Channels', level: 2 })).toBeVisible()
   await expect(panel.getByText('Connected', { exact: true })).toBeVisible()
   await panel.getByRole('button', { name: 'Connect Discord' }).click()
-  await expect(panel.getByText('hermes -p builder gateway setup')).toBeVisible()
+  // Token-based platforms are set up in the browser (fake mode writes nothing).
+  const form = panel.getByRole('form', { name: 'Connect Discord' })
+  await form.getByLabel('Bot token', { exact: true }).fill('fake-discord-token')
+  await form.getByRole('button', { name: 'Save' }).click()
+  await expect(panel.getByText(/Saved\. The gateway picks up/)).toBeVisible()
 
   await page.getByRole('tab', { name: 'History' }).click()
   await expect(panel.getByRole('heading', { name: 'History', level: 2 })).toBeVisible()

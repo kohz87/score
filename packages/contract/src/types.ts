@@ -224,6 +224,13 @@ export const LaneBlockSchema = z.object({
   end: z.iso.datetime().nullable(),
   taskId: z.string().min(1).nullable(),
   runId: z.string().min(1).nullable(),
+  /**
+   * task = a Kanban task or other exact run; brief = work of a brief with tasks or a plan; chat = plain chat replies of
+   * one agent, merged into one band when less than 5 minutes apart. Older stored plan blocks have none: a task.
+   */
+  kind: z.enum(['task', 'brief', 'chat']).default('task'),
+  /** Chat bands only: how many replies the band covers. */
+  count: z.int().min(1).optional(),
 })
 export type LaneBlock = z.infer<typeof LaneBlockSchema>
 

@@ -12,6 +12,7 @@ import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import {
   decodeMessageCursor,
+  deleteMessage,
   insertRoom,
   markRoomRead,
   messagePage,
@@ -265,6 +266,23 @@ export function registerRoomRoutes(
       })
     return { asOfSeq: page.asOfSeq, ...page.data }
   })
+
+  // Naturally idempotent, and a 204 has no JSON body for a receipt, so no Idempotency-Key handling here.
+  app.delete(
+    '/api/rooms/:roomId/messages/:messageId',
+    { preHandler: [humanGuard(app.pairing)] },
+    async (request, reply) => {
+      const { roomId, messageId } = z
+        .object({ roomId: ParamsSchema.shape.roomId, messageId: z.string().min(1).max(200) })
+        .parse(request.params)
+      await ingest.submit({
+        source: 'rooms',
+        identity: randomUUID(),
+        apply: ({ sqlite, now }) => deleteMessage(sqlite, roomId, messageId, now),
+      })
+      return reply.code(204).send()
+    },
+  )
 
   app.post('/api/rooms/:roomId/messages', mutation, async (request) => {
     const { roomId } = ParamsSchema.parse(request.params)

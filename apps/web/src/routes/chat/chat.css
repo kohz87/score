@@ -904,3 +904,65 @@
   border-radius: 16px;
   border: 1px solid var(--hairline);
 }
+
+.chat-message-body {
+  position: relative;
+}
+.chat-message-delete {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  opacity: 0;
+}
+.chat-message:hover .chat-message-delete,
+.chat-message:focus-within .chat-message-delete,
+.chat-message-delete:focus-visible {
+  opacity: 1;
+}
+.chat-message-delete:hover {
+  color: var(--ink);
+  background: var(--hairline);
+}
+@media (hover: none) {
+  .chat-message-delete {
+    opacity: 1;
+  }
+}
+.chat-toasts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 28px 8px;
+}
+.chat-toast {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: baseline;
+  align-self: flex-start;
+  padding: 10px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--card);
+}
+.chat-toast small {
+  opacity: 0.75;
+}
+.chat-toast-undo {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

@@ -979,26 +979,28 @@ test('the Permissions tab offers Use team rule on this agent’s own choices', a
 test('the Channels tab shows platform state and the exact connect command without running it', async () => {
   const base = respond
   respond = (path, init) =>
-    path === '/api/agents/builder/channels'
-      ? json({
-          items: [
-            {
-              platform: 'telegram',
-              label: 'Telegram',
-              status: 'connected',
-              detail: null,
-              connectCommand: 'hermes -p builder gateway setup',
-            },
-            {
-              platform: 'slack',
-              label: 'Slack',
-              status: 'disconnected',
-              detail: 'auth_failed',
-              connectCommand: 'hermes -p builder gateway setup',
-            },
-          ],
-        })
-      : base(path, init)
+    path === '/api/settings/messaging/slack/fields'
+      ? json({ fields: [], browserSetup: false })
+      : path === '/api/agents/builder/channels'
+        ? json({
+            items: [
+              {
+                platform: 'telegram',
+                label: 'Telegram',
+                status: 'connected',
+                detail: null,
+                connectCommand: 'hermes -p builder gateway setup',
+              },
+              {
+                platform: 'slack',
+                label: 'Slack',
+                status: 'disconnected',
+                detail: 'auth_failed',
+                connectCommand: 'hermes -p builder gateway setup',
+              },
+            ],
+          })
+        : base(path, init)
   renderTeam('/team/builder')
   fireEvent.click(await screen.findByRole('tab', { name: 'Channels' }))
   const panel = within(screen.getByRole('tabpanel'))
@@ -1006,6 +1008,7 @@ test('the Channels tab shows platform state and the exact connect command withou
   expect(panel.getByText('auth failed')).toBeDefined()
   expect(panel.queryByRole('button', { name: 'Connect Telegram' })).toBeNull()
   fireEvent.click(panel.getByRole('button', { name: 'Connect Slack' }))
+  expect(await panel.findByText(/This one needs the terminal/)).toBeDefined()
   expect(panel.getByText('hermes -p builder gateway setup')).toBeDefined()
   expect(
     vi.mocked(fetch).mock.calls.every(([, init]) => !init?.method || init.method === 'GET'),

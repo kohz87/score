@@ -6,6 +6,9 @@ import { ConnectionsResponseSchema, ProviderItemSchema } from '@score/contract'
 import { HttpError } from '../../../src/errors.ts'
 import { runHermes, type CliOptions, type HermesRunner } from '../../../src/hermes/live/cli.ts'
 import { LiveSettings } from '../../../src/hermes/live/settings.ts'
+import { saveMessagingValues } from '../../../src/hermes/live/messaging.ts'
+import { ProfileLocks } from '../../../src/hermes/live/profile-locks.ts'
+import { messagingWrites } from '../../../src/hermes/messaging-fields.ts'
 
 const SECRET = 'sk-or-v1-planted-secret-value-1234567890'
 const AUTH_LIST = `openrouter (1 credentials):
@@ -158,7 +161,8 @@ test('connect results are terminal commands; nothing interactive is spawned', as
   })
   await expect(settings.connectProvider('nope')).rejects.toMatchObject({ status: 404 })
   await expect(settings.connectProvider('../x')).rejects.toBeInstanceOf(HttpError)
-  expect(settings.connectMessaging('telegram')).toEqual({
+  expect(settings.connectMessaging('telegram')).toEqual({ next: 'form' })
+  expect(settings.connectMessaging('whatsapp')).toEqual({
     next: 'run_in_terminal',
     command: 'hermes gateway setup',
   })
@@ -275,4 +279,50 @@ test('a failed auth list keeps the last known statuses instead of showing every 
   runner.mockImplementation(async () => ({ exitCode: 1 }))
   const again = await settings.listProviders()
   expect(again.some((item) => item.status === 'connected')).toBe(true)
+})
+test('messaging values are written with `hermes -p <profile> config set`, argv only, value marked sensitive', async () => {
+  const token = '123456:planted-bot-token'
+  const row = await saveMessagingValues({
+    hermesHome: home,
+    profile: 'lead',
+    platform: 'telegram',
+    writes: [['TELEGRAM_BOT_TOKEN', token]],
+    runner,
+    locks: new ProfileLocks(),
+  })
+  expect(row).toMatchObject({ platform: 'telegram' })
+  const [args, options] = runner.mock.calls.find(([argv]) => argv.includes('TELEGRAM_BOT_TOKEN'))!
+  expect(args).toEqual(['-p', 'lead', 'config', 'set', 'TELEGRAM_BOT_TOKEN', token])
+  expect(options.sensitiveArgIndices).toEqual([5])
+  // Without a profile: Hermes's default, no -p.
+  await saveMessagingValues({
+    hermesHome: home,
+    profile: undefined,
+    platform: 'telegram',
+    writes: [['TELEGRAM_ALLOWED_USERS', '1']],
+    runner,
+    locks: new ProfileLocks(),
+  })
+  expect(runner.mock.calls.at(-1)![0]).toEqual(['config', 'set', 'TELEGRAM_ALLOWED_USERS', '1'])
+  runner.mockImplementation(async () => ({ exitCode: 1 }))
+  const failed = await saveMessagingValues({
+    hermesHome: home,
+    profile: undefined,
+    platform: 'telegram',
+    writes: [['TELEGRAM_BOT_TOKEN', token]],
+    runner,
+    locks: new ProfileLocks(),
+  }).catch((error: HttpError) => error)
+  expect(failed).toMatchObject({ status: 409 })
+  expect(JSON.stringify((failed as Error).message)).not.toContain(token)
+})
+test('messaging writes are checked against the platform table', () => {
+  expect(
+    messagingWrites('telegram', { TELEGRAM_BOT_TOKEN: ' tok ', TELEGRAM_ALLOWED_USERS: '' }),
+  ).toEqual([['TELEGRAM_BOT_TOKEN', 'tok']])
+  expect(() => messagingWrites('telegram', { PATH: 'x', TELEGRAM_BOT_TOKEN: 't' })).toThrow(
+    HttpError,
+  )
+  expect(() => messagingWrites('telegram', {})).toThrow(HttpError)
+  expect(() => messagingWrites('whatsapp', {})).toThrow(HttpError)
 })

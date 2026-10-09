@@ -16,6 +16,7 @@ import { App, appRoutes } from '../../App.tsx'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry, immediateFrameScheduler } from '../../data/resync.ts'
 import { createStreamClient } from '../../data/stream.ts'
+import { resetMessageDeletion } from './message-deletion.ts'
 import { messagesQuery, reduceMessages } from './queries.ts'
 
 const agent: AgentSummary = {
@@ -146,6 +147,8 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock)
 })
 afterEach(() => {
+  vi.useRealTimers()
+  resetMessageDeletion()
   cleanup()
   disposers.splice(0).forEach((dispose) => dispose())
   vi.unstubAllGlobals()
@@ -402,6 +405,7 @@ test('lane.upserted updates the plan block of its brief live', () => {
     end: null,
     taskId: null,
     runId: null,
+    kind: 'task',
   }
   const data = {
     items: [
@@ -592,4 +596,61 @@ test('side panels show an error with retry when the room details fail', async ()
   const aside = within(await panel())
   expect(await aside.findByText('Could not load room details.')).toBeDefined()
   expect(aside.getByRole('button', { name: 'Try again' })).toBeDefined()
+})
+
+const sent = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE')
+test('Delete hides the message at once, Undo brings it back and nothing is sent', async () => {
+  items = [{ ...message, streaming: false }]
+  setup()
+  await screen.findByText('Hello team')
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  fireEvent.click(screen.getByRole('button', { name: 'Delete message from Lead' }))
+  expect(screen.queryByText('Hello team')).toBeNull()
+  const toast = screen.getByText(/Message deleted/)
+  expect(toast).toBeDefined()
+  expect(screen.getByText('Removes it from Score. Agents may still remember it.')).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+  expect(screen.getByText('Hello team')).toBeDefined()
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(7000)
+  })
+  expect(sent()).toHaveLength(0)
+})
+test('the DELETE is sent when the undo window ends; a failure brings the message back', async () => {
+  items = [{ ...message, streaming: false }]
+  setup()
+  await screen.findByText('Hello team')
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  fireEvent.click(screen.getByRole('button', { name: 'Delete message from Lead' }))
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5900)
+  })
+  expect(sent()).toHaveLength(0)
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(200)
+  })
+  expect(sent()).toHaveLength(1)
+  expect(String(sent()[0]![0])).toBe('/api/rooms/general/messages/message-one')
+  expect(screen.queryByText('Hello team')).toBeNull()
+  // Server confirms through the stream.
+  emit('message.deleted', { roomId: 'general', messageId: 'message-one' }, 5)
+  expect(screen.queryByText('Hello team')).toBeNull()
+})
+test('a streaming message has no Delete action, and message.deleted removes a cached message', () => {
+  const data = { items: [message, { ...message, id: 'other' }], nextCursor: null, typing: {} }
+  const event = {
+    type: 'message.deleted',
+    seq: 2,
+    ts: message.createdAt,
+    data: { roomId: 'general', messageId: 'other' },
+  } as const
+  expect(reduceMessages(data, event, 'general', true).items.map((item) => item.id)).toEqual([
+    'message-one',
+  ])
+  expect(reduceMessages(data, event, 'another', true)).toBe(data)
+})
+test('a streaming message offers no Delete', async () => {
+  setup()
+  await screen.findByText('Hello team')
+  expect(screen.queryByRole('button', { name: /Delete message/ })).toBeNull()
 })

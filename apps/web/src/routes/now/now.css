@@ -245,6 +245,85 @@
 .now-block[aria-disabled='true'] {
   cursor: default;
 }
+.now-group {
+  position: absolute;
+  top: 0;
+  height: 76px;
+  min-width: 96px;
+}
+.now-group > .now-block {
+  position: absolute;
+  left: 0;
+  right: 0;
+  width: 100%;
+}
+.now-block--group {
+  justify-content: center;
+}
+.now-group-list {
+  position: absolute;
+  top: 62px;
+  left: 0;
+  z-index: 5;
+  min-width: 260px;
+  max-width: 340px;
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(18, 19, 26, 0.14);
+}
+.now-group-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: none;
+  border-radius: 12px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.now-group-item:hover:not(:disabled),
+.now-group-item:focus-visible {
+  background: var(--track);
+}
+.now-group-item:disabled {
+  cursor: default;
+}
+.now-group-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.now-group-meta {
+  flex: none;
+  color: var(--ink-muted);
+}
+.now-chat-band {
+  --c: var(--agent, var(--ink));
+  position: absolute;
+  top: 63px;
+  height: 8px;
+  min-width: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c) 45%, var(--card));
+  z-index: 1;
+}
+.now-legend-swatch--chat {
+  height: 6px;
+  background: color-mix(in srgb, var(--ink-muted) 45%, var(--card));
+}
 .now-block-label {
   overflow: hidden;
   text-overflow: ellipsis;

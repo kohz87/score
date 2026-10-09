@@ -8,6 +8,8 @@ import {
   PluginsResponseSchema,
   HermesAcceptResponseSchema,
   HermesCheckSchema,
+  MessagingFieldsResponseSchema,
+  MessagingPlatformSchema,
   ProviderItemSchema,
   ProvidersResponseSchema,
   SignInSchema,
@@ -16,6 +18,7 @@ import {
   type ConfigChange,
   type ProviderItem,
   type LocalProviderRequest,
+  type MessagingSetupRequest,
   type ProviderKeyRequest,
   type SignIn,
   type SystemStatus,
@@ -146,6 +149,29 @@ export async function cancelSignIn(id: string): Promise<SignIn> {
 export async function sendProviderKey(id: string, req: ProviderKeyRequest): Promise<ProviderItem> {
   return ProviderItemSchema.parse(
     await post(`settings/providers/${encodeURIComponent(id)}/key`, req),
+  )
+}
+
+/** Form fields for a platform's browser setup. */
+export function useMessagingFields(platform: string) {
+  return useQuery({
+    queryKey: ['settings', 'messaging-fields', platform] as const,
+    queryFn: async ({ signal }) =>
+      MessagingFieldsResponseSchema.parse(
+        await apiFetch(`settings/messaging/${encodeURIComponent(platform)}/fields`, { signal }),
+      ),
+    retry: false,
+    staleTime: Infinity,
+  })
+}
+/** Sends tokens. Not a query-client mutation, for the same reason as sendProviderKey: no cached variables. */
+export async function sendMessagingValues(platform: string, req: MessagingSetupRequest) {
+  return MessagingPlatformSchema.parse(
+    await apiFetch(`settings/messaging/${encodeURIComponent(platform)}`, {
+      method: 'PUT',
+      headers: { 'Idempotency-Key': newId() },
+      body: JSON.stringify(req),
+    }),
   )
 }
 

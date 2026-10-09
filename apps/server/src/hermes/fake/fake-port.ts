@@ -28,6 +28,9 @@ import type {
   AgentSummary,
   Approval,
   ConnectResult,
+  MessagingFieldsResponse,
+  MessagingPlatform,
+  MessagingSetupRequest,
   ConnectionsResponse,
   AgentChannelsResponse,
   HermesCheck,
@@ -62,6 +65,7 @@ import type { HubSkill, MemoryItem, SkillItem } from '@score/contract'
 import { z } from 'zod'
 import { permissionsOf, updateApprovalConfig, type ApprovalConfig } from '../approvals.ts'
 import { filterModels } from '../model-options.ts'
+import { messagingFields, messagingWrites } from '../messaging-fields.ts'
 import { HttpError } from '../../errors.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import type { ProfileInventory, ProfileStepContext } from '../profile-management.ts'
@@ -1176,6 +1180,7 @@ export class FakePort implements HermesPort {
     this.fakeProviders.push(provider)
     return structuredClone(provider)
   }
+  private readonly fakeMessaging = new Set<string>()
   async listConnections(): Promise<ConnectionsResponse> {
     return {
       toolServers: [
@@ -1183,11 +1188,17 @@ export class FakePort implements HermesPort {
         { id: 'web-search', label: 'web-search', status: 'needs_signin', usedBy: 'everyone' },
         { id: 'issue-tracker', label: 'issue-tracker', status: 'error', usedBy: 'everyone' },
       ],
-      messaging: [
-        { platform: 'telegram', label: 'Telegram', status: 'connected', detail: null },
-        { platform: 'discord', label: 'Discord', status: 'disconnected', detail: null },
-        { platform: 'slack', label: 'Slack', status: 'disconnected', detail: 'auth_failed' },
-      ],
+      messaging: (
+        [
+          { platform: 'telegram', label: 'Telegram', status: 'connected', detail: null },
+          { platform: 'discord', label: 'Discord', status: 'disconnected', detail: null },
+          { platform: 'slack', label: 'Slack', status: 'disconnected', detail: 'auth_failed' },
+        ] as MessagingPlatform[]
+      ).map((row) =>
+        this.fakeMessaging.has(row.platform)
+          ? { ...row, status: 'connected' as const, detail: null }
+          : row,
+      ),
     }
   }
   async addToolServer(req: ToolServerRequest): Promise<ConnectResult> {
@@ -1196,7 +1207,20 @@ export class FakePort implements HermesPort {
   async connectMessaging(platform: string): Promise<ConnectResult> {
     if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(platform))
       throw new HttpError(404, 'not_found', 'Unknown platform')
+    if (messagingFields(platform).browserSetup) return { next: 'form' }
     return { next: 'run_in_terminal', command: 'hermes gateway setup' }
+  }
+  async messagingFields(platform: string): Promise<MessagingFieldsResponse> {
+    if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(platform))
+      throw new HttpError(404, 'not_found', 'Unknown platform')
+    return messagingFields(platform)
+  }
+  // Nothing is written in fake mode; the platform reads as connected afterwards so the UI path can be exercised.
+  async saveMessaging(platform: string, req: MessagingSetupRequest): Promise<MessagingPlatform> {
+    messagingWrites(platform, req.values)
+    this.fakeMessaging.add(platform)
+    const row = (await this.listConnections()).messaging.find((item) => item.platform === platform)
+    return row ?? { platform, label: platform, status: 'connected', detail: null }
   }
   // The fake Hermes is always the tested build: a check is clean and accepting changes nothing.
   async checkHermes(): Promise<HermesCheck> {
