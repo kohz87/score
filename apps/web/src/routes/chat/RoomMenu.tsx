@@ -1,9 +1,9 @@
 import type { Room, RoomProject } from '@score/contract'
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
-import { parseTagInput, patchRoom } from './conversation-api.ts'
+import { parseTagInput, patchRoom, regenerateSummary } from './conversation-api.ts'
 import { baseName } from './room-groups.ts'
 
-type Panel = 'main' | 'project' | 'tags'
+type Panel = 'main' | 'project' | 'tags' | 'summary'
 
 /**
  * The "⋯" menu of a room in the list (PLAN 5.26): pin, archive, project, tags, export and share. A menu button
@@ -26,6 +26,7 @@ export function RoomMenu({
   const button = useRef<HTMLButtonElement>(null)
   const menuId = useId()
   const label = baseName(room.name)
+  const summary = room.autoSummary ?? { enabled: false, thresholdTokens: 12000 }
 
   useEffect(() => {
     if (!open) return
@@ -112,6 +113,9 @@ export function RoomMenu({
               <button type="button" role="menuitem" onClick={() => setPanel('tags')}>
                 Edit tags…
               </button>
+              <button type="button" role="menuitem" onClick={() => setPanel('summary')}>
+                Summaries…
+              </button>
               <a
                 role="menuitem"
                 href={`/api/rooms/${encodeURIComponent(room.id)}/export.md`}
@@ -181,6 +185,56 @@ export function RoomMenu({
                 </button>
               </div>
             </form>
+          )}
+          {panel === 'summary' && (
+            <div className="chat-menu-field">
+              <label className="chat-menu-check">
+                <input
+                  type="checkbox"
+                  checked={summary.enabled}
+                  onChange={(event) =>
+                    void run({ autoSummary: { ...summary, enabled: event.target.checked } })
+                  }
+                />
+                Summarise long conversations
+              </label>
+              <label>
+                After about (estimated tokens)
+                <input
+                  type="number"
+                  min={2000}
+                  max={200000}
+                  step={1000}
+                  defaultValue={summary.thresholdTokens}
+                  onBlur={(event) => {
+                    const value = Math.round(Number(event.target.value))
+                    if (value >= 2000 && value <= 200000 && value !== summary.thresholdTokens)
+                      void run({ autoSummary: { ...summary, thresholdTokens: value } })
+                  }}
+                />
+              </label>
+              <p>
+                The lead agent writes it as a normal run, which costs model tokens. Tokens are
+                estimated as characters divided by 4. You can edit or delete the summary in the
+                thread.
+              </p>
+              <div className="chat-menu-actions">
+                <button
+                  type="button"
+                  onClick={() =>
+                    void regenerateSummary(room.id).then(
+                      () => close(),
+                      (failure: unknown) =>
+                        setError(
+                          failure instanceof Error ? failure.message : 'Could not start it.',
+                        ),
+                    )
+                  }
+                >
+                  Summarise now
+                </button>
+              </div>
+            </div>
           )}
           {error && <p role="alert">{error}</p>}
         </div>

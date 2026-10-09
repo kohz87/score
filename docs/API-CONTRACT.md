@@ -141,6 +141,7 @@ type MessagePart =
   | { kind: 'workspace'; agentId: AgentId; path: string } // a reference to a workspace file, not a copy (5.30)
   | { kind: 'approval'; approvalId: string }
   | { kind: 'review'; verdict: 'approved' | 'changes_requested'; taskId: string | null }
+  | { kind: 'summary'; coversUntil: MessageId; text: string; stale?: boolean; edited?: boolean } // room summary (7.4a)
 type Message = {
   id: string
   roomId: string
@@ -268,7 +269,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `message.delta`      | `{ messageId, roomId, append: string }`                                                       | Chat (streaming text)                                    |
 | `message.completed`  | `{ messageId, roomId, parts?: MessagePart[] }` (final parts replace the cached message's)     | Chat                                                     |
 | `message.deleted`    | `{ roomId, messageId }` (remove it from the cached messages; Score-side only)                  | Chat, Now thread                                         |
-| `message.updated`    | `{ roomId, messageId, editedBy: MessageId \| null }` (the original of an edit; set its `editedBy`)  | Chat                                                     |
+| `message.updated`    | `{ roomId, messageId, editedBy?: MessageId \| null, parts?: MessagePart[] }` (`editedBy`: the original of an edit; `parts`: a summary edited or marked stale, replace the cached parts) | Chat                                                     |
 | `message.progressed` | `{ roomId, messageId, at }` (a streaming reply's run made a non-text move: tool call, reasoning, approval; set its `progressAt`. Text moves it via `message.delta`) | Chat |
 | `room.version.created` | `RoomVersion` (a rewind hid the anchor and everything after it; the `message.deleted` events for those messages precede it) | Chat |
 | `knowledge.changed`  | `{ path; kind: 'written'\|'moved'\|'deleted'\|'restored'; to; by: 'you'\|'outside'\|{agentId} }` | Knowledge                                                |
@@ -505,7 +506,7 @@ surface: 'terminal' | 'editor' | 'browser' | null /* last frame, for a miniature
 
 - **S** `GET /api/rooms` → `{ asOfSeq; rooms: Room[]; directs: Room[] }`
 - `POST /api/rooms` `{ name: string; leadAgentId?: AgentId; members?: AgentId[] }` → `Room`
-- `PATCH /api/rooms/:roomId` `{ name?, leadAgentId?, members? }` → `Room`
+- `PATCH /api/rooms/:roomId` `{ name?, leadAgentId?, members? }` → `Room` (more fields below: organising, `autoSummary`)
 - **S** `GET /api/rooms/:roomId` → `{ asOfSeq; room: Room; filesInPlay: string[]
 learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 - **S** `GET /api/rooms/:roomId/messages?before=<cursor>&limit=50` → `{ asOfSeq; items: Message[]; nextCursor }`
@@ -628,6 +629,34 @@ contentType: string }`. Types come from the bytes: png, jpeg, gif, webp, PDF, DO
 - `GET /api/rooms/:roomId/export.md` and `.json` → a download (`Content-Disposition: attachment`): header (room, members,
   exported at) and the room's finished, undeleted messages with author, time, text (redacted), `file` parts as
   path and counts, `image` parts as media ids (no bytes). Tool, thinking, plan, review and approval parts are left out.
+
+### Room summaries (PLAN 7.4a; schemas in `packages/contract/src/conversations.ts`)
+
+- `Room.autoSummary: { enabled: boolean; thresholdTokens: number }` (default `{ enabled: false, thresholdTokens: 12000 }`,
+  threshold 2,000-200,000), set with `PATCH /api/rooms/:roomId { autoSummary }`. Opt-in per room, because a summary costs
+  model tokens. Tokens are an **estimate** (characters / 4) of the room's visible text that no usable summary covers; the
+  threshold is about what Score would send, not Hermes's own session (Score never edits Hermes sessions for this).
+- `MessagePart { kind: 'summary'; coversUntil; text; stale?; edited? }`: `coversUntil` is the newest message covered; the
+  message's author is the agent that wrote it (the room's lead); the part is the **only** part of that message (no tool
+  cards, hand-offs or plan), and `text` is plain text/Markdown with HTML tags and comments removed. Exports, search and
+  share links include `text` parts only, so a summary is left out of them.
+- The summary run is a normal run of the lead agent (shows in Flow/Reports), queued like any turn: not started while the team
+  or the lead is paused or the room is being rewound, and one at a time per room. Its input is the fixed instruction plus the
+  earlier summary (if still usable) and the newer finished messages. A new summary replaces (soft-deletes) the older one.
+  Auto trigger: after a message completes in an opted-in room whose uncovered estimate exceeds the threshold; after a failed
+  summary it waits for the next message from the person.
+- Context: with a usable summary the "Room context" of a turn is the summary (labelled with its author) plus the messages
+  after `coversUntil` (up to 40, 16 KiB); without one, the last 10 messages as before.
+- **Stale**: when a message the summary covers is deleted, edited or rewound after the summary was written, the part gets
+  `stale: true` (`message.updated` with `parts`) and the summary is **no longer used as context** until it is regenerated or
+  edited by the person. Rewinding to a covered message hides the summary message itself with the rest of that version.
+- **H** `POST /api/rooms/:roomId/summary` `{}` → `202 { messageId }`: (re)generate now. `409 conflict` when the room has no
+  lead, the team/lead is paused, the room is being rewound, a summary is already being written, or there is nothing new to
+  summarise.
+- **H** `PATCH /api/rooms/:roomId/summary` `{ text }` (1-16,384 chars) → `{ messageId, parts }`: the person's own wording; sets
+  `edited: true` and clears `stale`. `404` when the room has no summary. Emits `message.updated`.
+- **H** `DELETE /api/rooms/:roomId/summary` → `204` (soft delete of the current summary message; `404` when none). Turns then
+  use the plain recent window again.
 
 ### Share links (PLAN 5.26; security design by the lead, 2026-10-09)
 

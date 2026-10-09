@@ -125,7 +125,13 @@ export function reduceMessages(
     return {
       ...data,
       items: data.items.map((item) =>
-        item.id === event.data.messageId ? { ...item, editedBy: event.data.editedBy } : item,
+        item.id === event.data.messageId
+          ? {
+              ...item,
+              ...(event.data.editedBy !== undefined ? { editedBy: event.data.editedBy } : {}),
+              ...(event.data.parts ? { parts: event.data.parts } : {}),
+            }
+          : item,
       ),
     }
   if (event.type === 'message.created') {
