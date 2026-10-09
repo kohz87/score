@@ -20,6 +20,7 @@ import {
   pruneBridge,
   pruneKanbanAttempts,
   kanbanAttemptsEnabled,
+  resolveHermesHome,
   RewindBroker,
   seedFakeAttempts,
   sweepKanbanDenials,
@@ -50,6 +51,9 @@ import { homedir, tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { retireIngestKeys, retireMedia } from './hub/retire.ts'
 import { restoreRoomHolds } from './domain/room-rewinding.ts'
+import { CliLocator } from './runtimes/coding/cli.ts'
+import { CodingRuntime } from './runtimes/coding/service.ts'
+import { defaultRootPolicy } from './workspace/policy.ts'
 
 const INSECURE_FLAG_REMOVED =
   'SCORE_REMOTE_INSECURE_HTTP was removed and is ignored: Score serves its app over HTTPS only (see /setup/https)'
@@ -111,6 +115,7 @@ export async function startServer(
   let holdRecovery: { stop(): void } | undefined
   let spendSnapshots: NodeJS.Timeout | undefined
   let port: HermesPort | undefined
+  let coding: CodingRuntime | undefined
   let knowledge: KnowledgeVault | undefined
   let fakeVaultDir: string | undefined
   let closing: Promise<void> | undefined
@@ -132,6 +137,7 @@ export async function startServer(
     }
     try {
       try {
+        await coding?.close()
         await outbox?.stop()
       } finally {
         await denialSweep
@@ -218,6 +224,26 @@ export async function startServer(
       onError: (error) => app?.log.error({ err: error }, 'Hermes observation failed'),
     })
     const adapter = port
+    // Coding agents (PLAN 7.2). The fake CLI stand-in is honoured only in fake mode and under test.
+    const fakeCli =
+      (config.mode === 'fake' || process.env.NODE_ENV === 'test') &&
+      process.env.SCORE_CODING_FAKE_CLI
+        ? process.env.SCORE_CODING_FAKE_CLI
+        : undefined
+    coding = new CodingRuntime({
+      db: database,
+      ingest,
+      locator: new CliLocator(fakeCli ? { fakeCli } : {}),
+      home: config.home,
+      policy: defaultRootPolicy([
+        config.home,
+        resolveHermesHome(config.hermesHome),
+        resolveHermesHome(),
+      ]),
+      onError: (error) => app?.log.error({ err: error }, 'Coding agent run failed'),
+    })
+    // A CLI child dies with Score: turns still marked running are interrupted before anything else runs.
+    await coding.recover()
     outbox = new ApprovalOutbox({
       db: database,
       ingest,
@@ -267,6 +293,7 @@ export async function startServer(
     app = buildApp({
       config,
       port,
+      coding,
       ...(knowledge ? { knowledge } : {}),
       outbox,
       media,

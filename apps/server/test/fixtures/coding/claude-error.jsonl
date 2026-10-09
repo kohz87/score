@@ -1,0 +1,4 @@
+{"_fixture":"hand-made, not recorded: shaped after the CLI's documented stream format"}
+{"type":"system","subtype":"init","session_id":"44444444-4444-4444-8444-444444444444","model":"claude-sonnet-fixture"}
+{"type":"result","subtype":"error_during_execution","is_error":true,"result":"The model request failed","session_id":"44444444-4444-4444-8444-444444444444","usage":{"input_tokens":3,"output_tokens":0}}
+{"_exit":1}

@@ -1,0 +1,491 @@
+import { randomUUID } from 'node:crypto'
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import type { AgentDetail, CodingAgent } from '@score/contract'
+import { z } from 'zod'
+import type { ScoreDb } from '../../db/index.ts'
+import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
+import { attachRunMessage, isCancelledTurn } from '../../domain/message-runs.ts'
+import { HttpError } from '../../errors.ts'
+import { runDraft } from '../../hermes/live/translate.ts'
+import type { Ingest } from '../../hub/ingest.ts'
+import { redact, redactBounded } from '../../redact.ts'
+import { checkRoot, type RootPolicy } from '../../workspace/policy.ts'
+import { CliLocator } from './cli.ts'
+import { driverFor } from './drivers.ts'
+import { spawnCli, type CliRun, type StopReason } from './process.ts'
+import {
+  cliSessionFor,
+  forgetCliSession,
+  getCodingAgent,
+  listCodingAgents,
+  type StoredCodingAgent,
+} from './store.ts'
+import {
+  eventObservation,
+  newTranslation,
+  runningObservation,
+  terminalObservation,
+  type RunTranslation,
+  type TerminalInfo,
+} from './translate.ts'
+import type { CodingEvent } from './types.ts'
+
+export interface CodingRuntimeDeps {
+  db: ScoreDb
+  ingest: Pick<Ingest, 'submit'>
+  locator: CliLocator
+  /** Score's home: per-agent settings files live under `<home>/coding/<agent>/`. */
+  home: string
+  /** The same folder rules as the Workspace tab (6.1). */
+  policy: RootPolicy
+  onError?: (error: unknown) => void
+  maxTurnMs?: number
+  graceMs?: number
+}
+
+interface ActiveRun {
+  agentId: string
+  runId: string
+  turnId: string
+  /** Set once the process exists. */
+  process?: CliRun
+  /** Stop asked while the turn was still waiting for the agent's previous turn. */
+  stopBeforeStart?: StopReason
+}
+
+const IntentRow = z.object({
+  id: z.string(),
+  state: z.enum(['pending', 'sent', 'accepted', 'failed', 'unknown']),
+  result: z.string().nullable(),
+  payload: z.string(),
+})
+const IntentPayload = z.object({
+  agentId: z.string(),
+  input: z.string(),
+  sessionId: z.string().nullable(),
+  model: z.string().nullable(),
+})
+const KIND = 'start_coding_run'
+const TERMINAL_NOTE = {
+  interrupted:
+    'Score restarted while this ran. The conversation is kept, so the next message resumes it.',
+} as const
+
+function oneLine(text: string, max: number): string {
+  return redactBounded(text.replace(/\s+/g, ' ').trim(), max)
+}
+
+export class CodingRuntime {
+  private readonly active = new Map<string, ActiveRun>()
+  private readonly queues = new Map<string, Promise<void>>()
+  private closed = false
+
+  constructor(private readonly deps: CodingRuntimeDeps) {}
+
+  get locator(): CliLocator {
+    return this.deps.locator
+  }
+  get policy(): RootPolicy {
+    return this.deps.policy
+  }
+
+  isCodingAgent(id: string): boolean {
+    return getCodingAgent(this.deps.db.sqlite, id) !== null
+  }
+  agents(): StoredCodingAgent[] {
+    return listCodingAgents(this.deps.db.sqlite)
+  }
+
+  /** The agent as the front end sees it, with the CLI's state. */
+  async view(agent: StoredCodingAgent): Promise<CodingAgent> {
+    const driver = driverFor(agent.runtime)
+    const cli = await this.deps.locator.detect(driver)
+    return {
+      id: agent.id,
+      name: agent.name,
+      role: agent.role,
+      runtime: agent.runtime,
+      workspace: agent.workspace,
+      permission: agent.permission,
+      model: agent.model,
+      style: agent.style,
+      quota: driver.quota,
+      cli: {
+        state: cli.state,
+        version: cli.version,
+        testedSeries: [...driver.testedSeries],
+        confirmed: cli.version !== null && agent.confirmedVersion === cli.version,
+      },
+      createdAt: agent.createdAt,
+    }
+  }
+
+  /** Coding agents as `AgentDetail`, so Team, Now, Flow and rooms treat them like any agent. */
+  async details(): Promise<AgentDetail[]> {
+    const rows = this.agents()
+    const busy = new Set(
+      z
+        .array(z.object({ profile: z.string() }))
+        .parse(
+          this.deps.db.sqlite
+            .prepare(
+              "SELECT DISTINCT profile FROM runs WHERE runtime != 'hermes' AND status IN ('queued','running')",
+            )
+            .all(),
+        )
+        .map((row) => row.profile),
+    )
+    return Promise.all(
+      rows.map(async (agent): Promise<AgentDetail> => {
+        const view = await this.view(agent)
+        const driver = driverFor(agent.runtime)
+        const usable = view.cli.state === 'ready' || view.cli.state === 'untested_version'
+        const working = busy.has(agent.id)
+        return {
+          id: agent.id,
+          name: agent.name,
+          role: agent.role || `${driver.label} coding agent`,
+          style: agent.style,
+          status: !usable ? 'offline' : working ? 'working' : 'idle',
+          activity: working ? 'Running a turn' : null,
+          model: {
+            id: agent.model ?? 'default',
+            label: agent.model ?? `${driver.label} default`,
+            via: driver.label,
+            fallback: null,
+          },
+          served: usable,
+          runtime: agent.runtime,
+          runtimeNote: `${driver.label} · ${driver.quota}`,
+          tagline: agent.role,
+          personality: { excerpt: '', source: 'SOUL.md' },
+          reportsTo: null,
+          worksIn: null,
+          rulesFile: null,
+          skills: [],
+          memory: [],
+          tools: [],
+          helpersMax: null,
+          routines: [],
+          channels: [],
+          permissions: [
+            {
+              id: 'sandbox',
+              label: `Sandbox: ${agent.permission}`,
+              level: agent.permission === 'full' ? 'allowed' : 'asks',
+              inherited: false,
+            },
+          ],
+        }
+      }),
+    )
+  }
+
+  private roomOf(turnId: string): string | null {
+    const row = this.deps.db.sqlite
+      .prepare('SELECT room_id FROM message_runs WHERE turn_id = ?')
+      .get(turnId) as { room_id: string } | undefined
+    return row?.room_id ?? null
+  }
+
+  /**
+   * Admits a room turn for a coding agent. Mirrors the Hermes path: a durable intent first, then the run row and the
+   * room's streaming reply, then the process. Only after the run is admitted does anything spawn.
+   */
+  async startRun(req: {
+    agentId: string
+    input: string
+    turnId: string
+    sessionId?: string
+    model?: string
+  }): Promise<{ runId: string }> {
+    const { db, ingest } = this.deps
+    const agent = getCodingAgent(db.sqlite, req.agentId)
+    if (!agent) throw new HttpError(404, 'not_found', 'Unknown coding agent')
+    assertAgentAdmits(db.sqlite, agent.id)
+    const driver = driverFor(agent.runtime)
+    const existing = db.sqlite
+      .prepare('SELECT * FROM command_intents WHERE idempotency_key = ?')
+      .get(req.turnId)
+    if (existing !== undefined) {
+      const intent = IntentRow.parse(existing)
+      if (intent.state === 'accepted' && intent.result) return { runId: intent.result }
+    }
+    // Refuse before anything is stored: a missing or untested CLI is the person's to fix, not a retry loop.
+    const cli = await this.deps.locator.detect(driver)
+    if (cli.state === 'not_supported' || cli.state === 'not_installed')
+      throw new HttpError(422, 'cli_not_installed', cli.message ?? 'The CLI is not available', {
+        notice: `${driver.label} can't run: ${cli.message ?? 'not available'}`,
+      })
+    if (cli.state === 'untested_version' && agent.confirmedVersion !== cli.version)
+      throw new HttpError(422, 'untested_cli_version', cli.message ?? 'Untested CLI version', {
+        notice: `${driver.label} ${cli.version ?? ''} is an untested version. Open this agent in Team and confirm it to run.`,
+      })
+    const checked = await checkRoot(agent.workspace, this.deps.policy)
+    if (!checked.ok)
+      throw new HttpError(422, 'workspace_unavailable', checked.reason, {
+        notice: `The workspace is unavailable: ${checked.reason}`,
+      })
+
+    // 1. Durable intent (idempotent per turn).
+    const payload = IntentPayload.parse({
+      agentId: agent.id,
+      input: req.input,
+      sessionId: req.sessionId ?? null,
+      model: req.model ?? agent.model,
+    })
+    let intentId: string
+    if (existing !== undefined) {
+      const intent = IntentRow.parse(existing)
+      if (intent.state === 'failed')
+        throw new HttpError(422, 'admission_refused', 'This turn was refused earlier')
+      intentId = intent.id
+    } else {
+      intentId = randomUUID()
+      const now = new Date().toISOString()
+      db.sqlite
+        .prepare(
+          `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', ?, ?)`,
+        )
+        .run(intentId, KIND, req.turnId, JSON.stringify(payload), now, now)
+    }
+    // 2. Admission: the run row and the room's streaming reply, in one observation.
+    const known = db.sqlite
+      .prepare('SELECT id FROM runs WHERE score_turn_id = ?')
+      .get(req.turnId) as { id: string } | undefined
+    const runId = known?.id ?? `cr_${randomUUID()}`
+    const room = this.roomOf(req.turnId)
+    const resumed = room ? cliSessionFor(db.sqlite, room, agent.id) : null
+    await ingest.submit({
+      source: `coding:${agent.id}`,
+      identity: `admitted:${intentId}`,
+      apply({ sqlite, now }) {
+        const inserted = sqlite
+          .prepare(
+            `INSERT INTO runs (id, profile, origin, score_turn_id, session_id, status, model, started_at, updated_at, runtime)
+             VALUES (?, ?, 'score', ?, ?, 'queued', ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`,
+          )
+          .run(runId, agent.id, req.turnId, resumed, payload.model, now, now, agent.runtime)
+        return [
+          ...(inserted.changes ? [runDraft(sqlite, runId)] : []),
+          ...attachRunMessage(sqlite, req.turnId, runId, now),
+        ]
+      },
+    })
+    db.sqlite
+      .prepare(
+        "UPDATE command_intents SET state = 'accepted', result = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(runId, new Date().toISOString(), intentId)
+    // The reply was cancelled while it was being admitted: nothing to run.
+    if (isCancelledTurn(db.sqlite, req.turnId)) {
+      await this.finish(newTranslation(runId, agent.id, room), {
+        status: 'cancelled',
+        costKind: driver.runtime === 'claude-code' ? 'estimated' : 'unknown',
+      })
+      return { runId }
+    }
+    const entry: ActiveRun = { agentId: agent.id, runId, turnId: req.turnId }
+    this.active.set(runId, entry)
+    // One turn per coding agent at a time: later turns wait their turn (the run shows as queued).
+    const previous = this.queues.get(agent.id) ?? Promise.resolve()
+    const mine = previous.then(() => this.execute(entry, agent, payload.input, room))
+    const tail = mine.catch((error: unknown) => this.deps.onError?.(error))
+    this.queues.set(agent.id, tail)
+    void tail.finally(() => {
+      this.active.delete(runId)
+      if (this.queues.get(agent.id) === tail) this.queues.delete(agent.id)
+    })
+    return { runId }
+  }
+
+  async stopRun(req: { agentId: string; runId: string }): Promise<void> {
+    const entry = this.active.get(req.runId)
+    if (!entry || entry.agentId !== req.agentId) return
+    this.requestStop(entry, 'user')
+  }
+
+  private requestStop(entry: ActiveRun, reason: StopReason): void {
+    if (entry.process) entry.process.stop(reason)
+    else entry.stopBeforeStart ??= reason
+  }
+
+  private finish(translation: RunTranslation, info: TerminalInfo): Promise<unknown> {
+    return this.deps.ingest
+      .submit(terminalObservation(translation, info))
+      .catch((error: unknown) => this.deps.onError?.(error))
+  }
+
+  private async execute(
+    entry: ActiveRun,
+    agent: StoredCodingAgent,
+    input: string,
+    room: string | null,
+  ): Promise<void> {
+    const { db, ingest, locator } = this.deps
+    const driver = driverFor(agent.runtime)
+    const translation = newTranslation(entry.runId, agent.id, room)
+    const costKind = agent.runtime === 'claude-code' ? 'estimated' : 'unknown'
+    const stopped = (reason: StopReason): TerminalInfo => ({
+      status: reason === 'shutdown' ? 'interrupted' : reason === 'user' ? 'cancelled' : 'failed',
+      error:
+        reason === 'shutdown'
+          ? TERMINAL_NOTE.interrupted
+          : reason === 'timeout'
+            ? `Stopped after ${Math.round((this.deps.maxTurnMs ?? 30 * 60_000) / 60_000)} minutes`
+            : reason === 'output_limit'
+              ? 'Stopped: the output was too large'
+              : null,
+      costKind,
+    })
+    if (entry.stopBeforeStart)
+      return void (await this.finish(translation, stopped(entry.stopBeforeStart)))
+    // The folder may have changed since admission.
+    const checked = await checkRoot(agent.workspace, this.deps.policy)
+    if (!checked.ok)
+      return void (await this.finish(translation, {
+        status: 'failed',
+        error: `The workspace is unavailable: ${checked.reason}`,
+        costKind,
+      }))
+    let settingsPath: string | null = null
+    const settings = driver.settingsFile?.(this.deps.home)
+    if (settings) {
+      const dir = join(this.deps.home, 'coding', agent.id)
+      mkdirSync(dir, { recursive: true, mode: 0o700 })
+      settingsPath = join(dir, settings.name)
+      writeFileSync(settingsPath, settings.content, { mode: 0o600 })
+      chmodSync(settingsPath, 0o600)
+    }
+    let resume = room ? cliSessionFor(db.sqlite, room, agent.id) : null
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let index = 0
+      let result: Extract<CodingEvent, { kind: 'result' }> | undefined
+      let text = ''
+      let worked = false
+      const parser = driver.createParser({ cwd: checked.real })
+      const { file, args } = locator.command(driver)
+      await ingest
+        .submit(runningObservation(translation))
+        .catch((error: unknown) => this.deps.onError?.(error))
+      const run = spawnCli({
+        file,
+        args: [
+          ...args,
+          ...driver.buildArgs({
+            workspace: checked.real,
+            permission: agent.permission,
+            model: agent.model,
+            sessionId: resume,
+            settingsPath,
+          }),
+        ],
+        cwd: checked.real,
+        env: locator.childEnv(),
+        stdin: input,
+        parser,
+        maxMs: this.deps.maxTurnMs ?? 30 * 60_000,
+        graceMs: this.deps.graceMs ?? 5_000,
+        onEvent: async (event) => {
+          if (event.kind === 'result') result = event
+          if (event.kind === 'text') text += event.text
+          if (event.kind === 'text' || event.kind === 'tool_start') worked = true
+          await ingest
+            .submit(eventObservation(translation, event, index++))
+            .catch((error: unknown) => this.deps.onError?.(error))
+        },
+      })
+      entry.process = run
+      if (entry.stopBeforeStart) run.stop(entry.stopBeforeStart)
+      const outcome = await run.done
+      entry.process = undefined
+      const stderr = oneLine(outcome.stderr, 400)
+      // A resumed session the CLI no longer has: start fresh once, and forget the dead id.
+      if (
+        attempt === 0 &&
+        resume &&
+        !worked &&
+        !outcome.stopped &&
+        (outcome.exitCode !== 0 || result?.ok === false) &&
+        /no (?:conversation|session|rollout)|not found|could not (?:resume|find)|unknown session/i.test(
+          `${stderr} ${result?.error ?? ''}`,
+        )
+      ) {
+        if (room) forgetCliSession(db.sqlite, room, agent.id)
+        resume = null
+        continue
+      }
+      let info: TerminalInfo
+      if (outcome.stopped) info = stopped(outcome.stopped)
+      else if (outcome.spawnError)
+        info = {
+          status: 'failed',
+          error: `Could not start ${driver.label} (${outcome.spawnError}).`,
+          costKind,
+        }
+      else if (result)
+        info = result.ok
+          ? { status: 'completed', output: result.text ?? text, costKind }
+          : {
+              status: 'failed',
+              output: text || null,
+              error: result.error ?? 'The run failed',
+              costKind,
+            }
+      else if (outcome.exitCode === 0 && text)
+        info = { status: 'completed', output: text, costKind }
+      else
+        info = {
+          status: 'failed',
+          output: text || null,
+          error: `${driver.label} ended without a result${
+            outcome.exitCode === null ? '' : ` (exit ${outcome.exitCode})`
+          }${stderr ? `: ${stderr}` : ''}`,
+          costKind,
+        }
+      if (info.error) info.error = redact(info.error)
+      await this.finish(translation, info)
+      return
+    }
+  }
+
+  /**
+   * On start (review 2026-10-09, 7.2 #3): a CLI child dies with Score, so a turn still marked running or queued is
+   * interrupted with a note. The CLI session id stays, so the next message resumes it.
+   */
+  async recover(): Promise<number> {
+    const { db, ingest } = this.deps
+    const rows = z
+      .array(z.object({ id: z.string(), profile: z.string() }))
+      .parse(
+        db.sqlite
+          .prepare(
+            "SELECT id, profile FROM runs WHERE runtime != 'hermes' AND status IN ('queued','running','waiting_for_approval')",
+          )
+          .all(),
+      )
+    for (const row of rows) {
+      const turn = db.sqlite
+        .prepare('SELECT room_id FROM message_runs WHERE run_id = ?')
+        .get(row.id) as { room_id: string } | undefined
+      await this.finish(newTranslation(row.id, row.profile, turn?.room_id ?? null), {
+        status: 'interrupted',
+        error: TERMINAL_NOTE.interrupted,
+        costKind: 'unknown',
+      })
+    }
+    return rows.length
+  }
+
+  /** Server shutdown: stop the children and record the turns as interrupted. */
+  async close(): Promise<void> {
+    this.closed = true
+    const entries = [...this.active.values()]
+    for (const entry of entries) this.requestStop(entry, 'shutdown')
+    await Promise.allSettled([...this.queues.values()])
+  }
+  get isClosed(): boolean {
+    return this.closed
+  }
+}

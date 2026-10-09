@@ -1,0 +1,7 @@
+{"_fixture":"hand-made, not recorded: shaped after the CLI's documented stream format"}
+this line is not json
+{"type":"system","subtype":"init","session_id":"55555555-5555-4555-8555-555555555555"}
+{"type":"stream_event","event":{"type":"content_block_delta"}}
+{"type":"rate_limit_event","info":{"note":"unknown shape"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Fine."},{"type":"image_block","data":"x"}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"Fine."}

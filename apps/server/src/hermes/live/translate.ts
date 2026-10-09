@@ -1,4 +1,9 @@
-import { ApprovalChoiceSchema, RunSummarySchema, type RunSummary } from '@score/contract'
+import {
+  ApprovalChoiceSchema,
+  RunSummarySchema,
+  RuntimeSchema,
+  type RunSummary,
+} from '@score/contract'
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { z } from 'zod'
 import {
@@ -40,6 +45,9 @@ export const RunRowSchema = z.object({
   output_tokens: z.int().nonnegative().nullable(),
   cost_usd: z.number().finite().nonnegative().nullable(),
   last_seq: z.int().nonnegative().nullable(),
+  // PLAN 7.2: coding-agent runs share this table; every other run is a Hermes run.
+  runtime: RuntimeSchema.default('hermes'),
+  cost_kind: z.enum(['estimated', 'unknown']).nullable().default(null),
   tools_used: z.string().transform((value) => z.array(z.string()).parse(JSON.parse(value))),
   output: z.string().nullable(),
   error: z.string().nullable(),
@@ -71,6 +79,9 @@ export function runSummary(sqlite: DatabaseSync, runId: string): RunSummary {
         ? null
         : { input: row.input_tokens, output: row.output_tokens },
     costUsd: row.cost_usd,
+    ...(row.runtime === 'hermes'
+      ? {}
+      : { runtime: row.runtime, costKind: row.cost_kind ?? ('unknown' as const) }),
     refs: [],
     gaps,
   })

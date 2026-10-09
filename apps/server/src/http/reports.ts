@@ -13,6 +13,7 @@ import {
 } from '../domain/reports.ts'
 import { computeTrend, trendWindow } from '../domain/reports-trend.ts'
 import { reportsToCsv } from '../domain/reports-csv.ts'
+import { codingSpendInWindow } from '../domain/coding-spend.ts'
 import { profileSpendInWindow, recordSessionCosts } from '../domain/spend.ts'
 import { readAgentNames } from '../domain/agents.ts'
 import { HttpError } from '../errors.ts'
@@ -82,6 +83,12 @@ export function registerReportRoutes(
         })
       }
     }
+    // Coding agents (PLAN 7.2): spend from their own runs, marked estimated or unknown. An unknown one is left out
+    // of the total (never counted as zero) and listed in `spendExcluded`.
+    const coding = db
+      ? db.read((sqlite) => codingSpendInWindow(sqlite, window.from, window.to))
+      : []
+    for (const item of coding) facts.spendUsd[item.agentId] = item.costUsd ?? 0
     const own: ReturnType<typeof readReportRows> = db
       ? db.read((sqlite) => readReportRows(sqlite, window.from, window.to))
       : { runs: [], approvals: [] }
@@ -125,16 +132,30 @@ export function registerReportRoutes(
           runs: trendSeeded.runs,
           ...(trendSeeded.trendSpendUsd ? { demoSpendUsd: trendSeeded.trendSpendUsd } : {}),
         })
+    const computed = computeReports({
+      range,
+      ...(custom ? { custom } : {}),
+      now,
+      ...(tz ? { tz } : {}),
+      agentIds,
+      facts,
+      ...rows,
+      ...(own.attempts ? { attempts: own.attempts } : {}),
+    })
+    const codingById = new Map(coding.map((item) => [item.agentId, item]))
+    const excluded = coding.filter((item) => item.costUsd === null).map((item) => item.agentId)
     const report = ReportsSchema.parse({
-      ...computeReports({
-        range,
-        ...(custom ? { custom } : {}),
-        now,
-        ...(tz ? { tz } : {}),
-        agentIds,
-        facts,
-        ...rows,
-        ...(own.attempts ? { attempts: own.attempts } : {}),
+      ...computed,
+      totals: {
+        ...computed.totals,
+        ...(coding.some((item) => item.costUsd !== null) ? { spendEstimated: true } : {}),
+        ...(excluded.length ? { spendExcluded: excluded } : {}),
+      },
+      byAgent: computed.byAgent.map((row) => {
+        const item = codingById.get(row.agentId)
+        return item
+          ? { ...row, spendUsd: item.costUsd, spendBasis: item.basis, runtime: item.runtime }
+          : row
       }),
       trend: trendRows,
     })
