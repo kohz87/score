@@ -729,7 +729,20 @@ incarnation-aware reuse confirmation contract is agreed.
 - `POST /api/agents/:agentId/files/:file/preview` `{ content }` → `{ diff: string }`
 - **H** `PUT /api/agents/:agentId/files/:file` `{ content; etag }` → `{ etag }` (409 `conflict` on etag mismatch, with
   `details: { etag /* current */; diff /* current → submitted */ }`)
-- `PUT /api/agents/:agentId/model` `{ model: string; provider?: string }` → `AgentDetail`
+- `PUT /api/agents/:agentId/model` `{ model: string; provider?: string }` → `AgentDetail`. A `model` without `provider` that
+  names one of the agent's aliases (case-insensitive) is replaced by the alias's model and provider.
+- `AgentDetail.model.fallback` is the agent's `fallback_providers` chain as text (`"model-a, then model-b"`), `null` when none.
+- **H** `GET|PUT /api/agents/:agentId/model-settings` (5.31, `packages/contract/src/model-settings.ts`) →
+  `ModelSettings` `{ fallbacks: { provider; model }[] /* ordered chain, Hermes `fallback_providers`, any length */;
+  fallbacksEditable: boolean /* false: an entry has a custom endpoint or key; shown, never rewritten (409) */;
+  aliases: { name; model; provider: string | null; editable }[] /* Hermes `model_aliases`, per profile */;
+  speech: { stt: { provider; model }; tts: { provider; model; voice } } }`. The PUT body is `ModelSettingsUpdate`
+  `{ fallbacks?; aliases? /* the full list of editable aliases wanted */; speech?: { stt?: { provider?; model? };
+  tts?: { provider?; model?; voice? } } }`, strict. Only keys whose value differs from what Hermes holds are written
+  (`hermes -p <profile> config set …`, `config unset model_aliases.<name>` for a removed alias), and the answer is built from
+  what was written, with no re-read. Speech provider ids and which of model/voice each has are `STT_PROVIDERS` /
+  `TTS_PROVIDERS` in the contract package. `409 conflict` for a non-editable chain/alias, a model or voice the chosen
+  provider doesn't have, or a Hermes refusal; `502 hermes_unavailable` when the settings can't be read.
 - `GET /api/agents/:agentId/skills` → `SkillsResponse` `{ items: AgentDetail['skills'] }` · `POST …/skills` `{ name }`
   (install) → `SkillsResponse` · `PATCH …/skills/:name` `{ enabled }` → `AgentDetail['skills'][number]` ·
   `GET /api/skills/hub?q=` → `SkillHubResponse` `{ items: { name; identifier; source; trust; description }[] }`
@@ -911,10 +924,14 @@ code?: string; signInId?: string; expiresAt?: string }`. For a `device_code` pro
   doesn't take a key → `409 not_supported`;
   a key already being added for that provider → `409 conflict`. The key never appears in any response, log or receipt
   (the receipt's body hash is an HMAC under a per-process secret, so a retry after a restart is `409`, not a replay).
-- `GET /api/models?q=` → `{ items: ModelOption[] }`, `ModelOption = { provider: string; providerLabel: string; model: string;
-available: boolean; reason: string | null /* "Not on your plan" */; free: boolean; contextLength?: number | null /* tokens, when Hermes says */; price: { input: string; output: string } | null }`.
+- `GET /api/models?q=&agentId=&all=` → `{ items: ModelOption[]; hiddenCount?: number }`, `ModelOption = { provider: string; providerLabel: string; model: string;
+available: boolean; reason: string | null /* "Not on your plan" */; free: boolean; contextLength?: number | null /* tokens, when Hermes says */; price: { input: string; output: string } | null; alias?: string }`.
   Models of connected providers only (Hermes model options); `q` matches model or provider label, case-insensitive;
-  at most 200 items, available first.
+  at most 200 items, available first. When the chosen-models list (below) is not empty, only those models are listed and
+  `hiddenCount` says how many matching models were left out; `all=1` ignores the list ("Show all"). With `agentId` and a `q`
+  that is part of one of that agent's alias names, the alias's model comes first with `alias` set.
+- `GET|PUT /api/settings/model-visibility` (5.31) `{ items: { provider; model }[] }`: the models the pickers show by default
+  (Score's own table; empty = every model). PUT replaces the list (human only).
 - `POST /api/settings/providers/local` `{ label; baseUrl; model }` → provider item
 - `GET /api/settings/connections` → `{ toolServers: { id; label; status: 'ok'|'needs_signin'|'error'; usedBy: AgentId[] | 'everyone' }[]
 messaging: { platform; label; status: 'connected'|'disconnected'; detail: string | null }[] }`

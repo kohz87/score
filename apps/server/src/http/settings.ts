@@ -10,6 +10,8 @@ import {
   MessagingSetupRequestSchema,
   ModelsQuerySchema,
   ModelsResponseSchema,
+  ModelVisibilitySchema,
+  type ModelOption,
   PatchPluginRequestSchema,
   PlatformParamSchema,
   ProviderKeyRequestSchema,
@@ -21,8 +23,10 @@ import {
 import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { HermesPort, ProviderBase } from '../hermes/index.ts'
+import { readChosenModels, replaceChosenModels } from '../domain/model-visibility.ts'
 import { requestIdempotency } from './idempotency.ts'
 
+const sameRow = (a: ModelOption, b: ModelOption) => a.provider === b.provider && a.model === b.model
 const SignInParamsSchema = z.object({ signInId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/) })
 const ProviderParamsSchema = z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/) })
 
@@ -59,8 +63,60 @@ export function registerSettingsRoutes(
     items: await withUsage(port.listProviders()),
   }))
   app.get('/api/models', async (request) => {
-    const { q } = ModelsQuerySchema.parse(request.query)
-    return ModelsResponseSchema.parse({ items: await port.listModels(q) })
+    const { q, agentId, all } = ModelsQuerySchema.parse(request.query)
+    // The chosen-models list narrows the pickers; `all=1` is the picker's "Show all".
+    const chosen = db && all !== '1' ? readChosenModels(db) : []
+    const items = await port.listModels(q, chosen)
+    const hiddenCount = chosen.length
+      ? Math.max(0, (await port.listModels(q)).length - items.length)
+      : 0
+    const rows = [...(await aliasRows(agentId, q)), ...items]
+    return ModelsResponseSchema.parse({
+      items: rows.filter((row, at) => rows.findIndex((r) => sameRow(r, row)) === at).slice(0, 200),
+      ...(hiddenCount ? { hiddenCount } : {}),
+    })
+  })
+  // An agent's aliases that match the search come first, so typing `fast` finds the model it stands for.
+  async function aliasRows(
+    agentId: string | undefined,
+    q: string | undefined,
+  ): Promise<ModelOption[]> {
+    const needle = q?.trim().toLowerCase()
+    if (!agentId || !needle) return []
+    try {
+      const matches = (await port.readModelSettings(agentId)).aliases.filter((alias) =>
+        alias.name.includes(needle),
+      )
+      if (!matches.length) return []
+      const known = await port.listModels(undefined)
+      return matches.map((alias) => {
+        const target = known.find(
+          (option) =>
+            option.model === alias.model && (!alias.provider || option.provider === alias.provider),
+        )
+        return {
+          provider: target?.provider ?? alias.provider ?? 'custom',
+          providerLabel: target?.providerLabel ?? alias.provider ?? 'custom',
+          model: alias.model,
+          available: target?.available ?? true,
+          reason: target?.reason ?? null,
+          free: target?.free ?? false,
+          price: target?.price ?? null,
+          ...(target?.contextLength === undefined ? {} : { contextLength: target.contextLength }),
+          alias: alias.name,
+        }
+      })
+    } catch {
+      return []
+    }
+  }
+  app.get('/api/settings/model-visibility', async () =>
+    ModelVisibilitySchema.parse({ items: db ? readChosenModels(db) : [] }),
+  )
+  app.put('/api/settings/model-visibility', mutation, async (request) => {
+    const { items } = ModelVisibilitySchema.parse(request.body)
+    if (db) replaceChosenModels(db, items)
+    return ModelVisibilitySchema.parse({ items: db ? readChosenModels(db) : [] })
   })
   app.post('/api/settings/providers/local', mutation, async (request) => {
     const req = LocalProviderRequestSchema.parse(request.body)

@@ -91,6 +91,16 @@ async function advance(ms: number) {
   await ingest.drain()
 }
 
+test('/model <alias> runs on the model the alias of that agent stands for', async () => {
+  await port.updateModelSettings('builder', {
+    aliases: [{ name: 'quick', model: 'local-gpt-mini', provider: 'local' }],
+  })
+  const run = vi.spyOn(port, 'startRun')
+  const sent = await send({ text: '/model Quick @builder Check this' }, 'alias')
+  expect(sent.statusCode).toBe(200)
+  expect(run.mock.calls[0]![0]).toMatchObject({ agentId: 'builder', model: 'local-gpt-mini' })
+})
+
 test.each([
   [{ text: 'hello' }, ['lead']],
   [{ text: '@builder then @reviewer' }, ['builder', 'reviewer']],

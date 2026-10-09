@@ -148,3 +148,26 @@ test('says so when the models could not be loaded and still takes free text', as
   fireEvent.change(input, { target: { value: 'x' } })
   expect(latest.model).toBe('x')
 })
+
+test('Show all lifts the chosen-models list, and an alias row says where it leads', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((path: string) => {
+      urls.push(path)
+      const params = new URL(path, 'http://x').searchParams
+      if (params.get('all') === '1') return Promise.resolve(Response.json({ items: all }))
+      return Promise.resolve(
+        Response.json({ items: [{ ...all[0]!, alias: 'fast' }], hiddenCount: 2 }),
+      )
+    }),
+  )
+  const input = mount()
+  fireEvent.focus(input)
+  const list = await screen.findByRole('listbox', { name: 'Model suggestions' })
+  await waitFor(() => expect(within(list).getAllByRole('option')).toHaveLength(1))
+  expect(within(list).getByText('fast → gpt-6.1-sol')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Show all (2 more)' }))
+  await waitFor(() => expect(within(list).getAllByRole('option')).toHaveLength(3))
+  expect(urls.at(-1)).toContain('all=1')
+  expect(screen.getByRole('button', { name: 'Show chosen models only' })).toBeTruthy()
+})
