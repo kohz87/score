@@ -156,11 +156,19 @@ export function JourneyChart({ journey, agents }: { journey: Journey; agents: Ag
           <div className="journey__row journey__row--axis">
             <span />
             <svg className="journey__svg" viewBox={`0 0 ${WIDTH} ${AXIS}`} aria-hidden="true">
-              {ticks.map((tick) => (
-                <text key={tick} className="journey__tick" x={x(tick)} y={19} textAnchor="middle">
-                  {shortDate(tick)}
-                </text>
-              ))}
+              {ticks.map((tick, index) =>
+                tick >= end ? null : (
+                  <text
+                    key={tick}
+                    className="journey__tick"
+                    x={x(tick)}
+                    y={19}
+                    textAnchor={index === 0 ? 'start' : 'middle'}
+                  >
+                    {shortDate(tick)}
+                  </text>
+                ),
+              )}
             </svg>
           </div>
         </div>

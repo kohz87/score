@@ -125,7 +125,8 @@ test('an unknown agent is a plain message, not a crash', async () => {
 
 test('the window is named per agent so a second click focuses it', () => {
   const focus = vi.fn()
-  const open = vi.fn(() => ({ focus }))
+  const open = vi.fn() as ReturnType<typeof vi.fn<(...args: unknown[]) => { focus: () => void }>>
+  open.mockReturnValue({ focus })
   vi.stubGlobal('open', open)
   openPopOut('builder')
   openPopOut('builder')
