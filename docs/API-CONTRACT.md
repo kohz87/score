@@ -668,6 +668,27 @@ Score's own runs (`score-<room>-<agent>`), compression children and empty sessio
   Score marks it done and continues. Score still checks what it can see (a created profile must exist, a deleted one
   must be gone) and never confirms a recorded failure. `step` must be the interrupted step; otherwise `409`.
 
+- **H** `POST /api/agents/imports` (body: the archive, `Content-Type: application/octet-stream`, ≤ 200 MiB) → `201
+  ImportInspection`. Score stores the upload privately (`$SCORE_HOME/profile-imports/<uploadId>.tar.gz`, directory 0700,
+  file 0600) and inspects it by streaming, never extracting it: one top-level directory; only regular files and
+  directories (links, devices and special files are refused, as Hermes does); no absolute, drive-letter or `..`
+  paths; at most 50,000 entries, 2 GiB unpacked and a 200x expansion ratio. A refused archive is `400 bad_request` with the
+  reason and is not kept. `ImportInspection` = `{ uploadId; sizeBytes; archiveRoot; suggestedId: string|null; description;
+  model; configVersion; skills: string[]; plugins: string[]; memoryBytes; fileCount; totalBytes; credentialFiles: string[];
+  hasBridge; warnings: string[] }`: names and counts only, never file contents (credential files are listed by path and
+  never read). Uploads nobody imports are dropped after 24 hours.
+- **H** `DELETE /api/agents/imports/:uploadId` → `204`: discards the upload (the preview was cancelled).
+- **H** `POST /api/agents/import` `{ uploadId; id; name; role; style; confirmCredentials? }` → `202 AgentOperation`
+  (`kind: 'import'`). The archive is inspected again; credential files need `confirmCredentials: true` (else `400`).
+  Hermes never overwrites a profile, so an existing id (or `default`, or a retired name) is `409`: there is no replace;
+  delete the agent first (which keeps a private export). Steps: `import_profile` (`hermes profile import <archive> --name
+  <id>`, argv only; Hermes extracts to its own staging directory, refuses unsafe members and drops the exporting
+  profile's runtime directories and role), `describe_profile` (the role), `preserve_key`, `configure_key`, `permissions`,
+  `install_bridge` (pinned, `--force` over a bridge that came in the archive), `enable_bridge`, `verify_ready`. The model
+  is the archive's own and is not changed. `import_profile` is neither retried nor adopted; if it fails nothing is
+  installed by Score and the upload is removed; once it succeeds the upload is removed. Hermes also writes a launcher script
+  for the new profile into `~/.local/bin` (no option to skip it).
+
 Lifecycle schemas live in `packages/contract/src/profiles.ts`. Preview accepts `{ kind: 'create', id, name, role,
 style, model, cloneFrom? }` or `{ kind: 'delete', agentId }`. Canonical names are lowercase ASCII letters/digits,
 underscore or hyphen, 1–64 characters with an alphanumeric first character; `default` and retired names are reserved.
@@ -678,7 +699,7 @@ Inheritance lists contain names only, never credential values or memory contents
 Create/delete recompute the preview; a stale hash is `409 conflict`. Cloning requires `confirmInheritance: true`.
 All mutations accept Idempotency-Key receipts. Operations are durable and lock their target through completion or
 needs-attention; no automatic adoption, rollback, credential rotation, destructive retry, or gateway restart.
-`AgentOperation` is `{ id; kind: 'create'|'delete'; targetName; incarnationId; requestHash;
+`AgentOperation` is `{ id; kind: 'create'|'delete'|'import'; targetName; incarnationId; requestHash;
 state: 'running'|'needs_attention'|'completed'; steps: { name; state: 'pending'|'running'|'completed' }[];
 createdAt; updatedAt; nextStep: string|null; error: string|null; exportPath: string|null }`.
 Managed summaries have optional `lifecycle: { state: 'setting_up'|'ready'|'deleting'|'needs_attention'|'removed';

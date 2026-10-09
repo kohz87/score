@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { statSync } from 'node:fs'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import {
@@ -8,6 +9,10 @@ import {
   AgentPatchRequestSchema,
   AgentPreviewRequestSchema,
   AgentDetailSchema,
+  AgentImportRequestSchema,
+  ImportInspectionSchema,
+  PROFILE_IMPORT_MAX_BYTES,
+  ProfileImportUploadIdSchema,
   AgentSummarySchema,
   ProfileNameSchema,
 } from '@score/contract'
@@ -18,6 +23,8 @@ import type { Ingest } from '../hub/ingest.ts'
 import { humanGuard } from '../auth/human.ts'
 import { HttpError } from '../errors.ts'
 import { ProfileOperations } from '../domain/profiles.ts'
+import { ProfileImportStore } from '../domain/profile-imports.ts'
+import { inspectProfileArchive } from '../hermes/index.ts'
 import { readAgent, reconcileAgents, storeAgent } from '../domain/agents.ts'
 import { assertAgentAdmits, applyLifecycle } from '../domain/agent-lifecycle.ts'
 import { redact } from '../redact.ts'
@@ -28,7 +35,8 @@ export function registerProfileRoutes(
   deps: { db: ScoreDb; ingest: Ingest; port: HermesPort; config: Config; clock?: () => number },
 ) {
   const { db, ingest, port, config } = deps
-  const operations = new ProfileOperations(db, ingest, port, deps.clock)
+  const imports = new ProfileImportStore(config.home, deps.clock)
+  const operations = new ProfileOperations(db, ingest, port, deps.clock, imports)
   const receipts = requestIdempotency(db, deps.clock)
   // Creating agents writes API keys and deleting them removes data, so the transport must be private: loopback, or
   // remote mode over TLS (the only remote mode since 5.18; this stays as a second line of defence).
@@ -47,6 +55,7 @@ export function registerProfileRoutes(
   const Params = z.object({ agentId: ProfileNameSchema })
   app.addHook('onReady', async () => {
     await operations.recover()
+    operations.sweepImports()
   })
   app.addHook('preClose', async () => {
     await operations.close()
@@ -57,6 +66,78 @@ export function registerProfileRoutes(
     const input = AgentPreviewRequestSchema.parse(request.body)
     if (input.kind === 'delete') await port.listTasks()
     return operations.preview(input)
+  })
+  const inspect = async (uploadId: string) => {
+    const facts = await inspectProfileArchive(imports.pathFor(uploadId), PROFILE_IMPORT_MAX_BYTES)
+    const suggested = ProfileNameSchema.safeParse(facts.root.toLowerCase())
+    return {
+      facts,
+      view: ImportInspectionSchema.parse({
+        uploadId,
+        sizeBytes: statSync(imports.pathFor(uploadId)).size,
+        archiveRoot: redact(facts.root).slice(0, 100),
+        suggestedId: suggested.success && suggested.data !== 'default' ? suggested.data : null,
+        description: facts.description,
+        model: facts.model,
+        configVersion: facts.configVersion,
+        skills: facts.skills,
+        plugins: facts.plugins,
+        memoryBytes: facts.memoryBytes,
+        fileCount: facts.fileCount,
+        totalBytes: facts.totalBytes,
+        credentialFiles: facts.credentialFiles,
+        hasBridge: facts.hasBridge,
+        warnings: facts.warnings,
+      }),
+    }
+  }
+  // The raw-body parser lives in its own scope so no other route accepts that content type.
+  void app.register(async (scope) => {
+    scope.addContentTypeParser(
+      'application/octet-stream',
+      { parseAs: 'buffer', bodyLimit: PROFILE_IMPORT_MAX_BYTES },
+      (_request, body, done) => done(null, body),
+    )
+    // Before any body is read: an unpaired or remote-plain-HTTP caller can't make the server buffer 200 MiB.
+    const gate = async (request: { headers: { cookie?: string | undefined } }) => {
+      if (!app.pairing.isPaired(request.headers.cookie))
+        throw new HttpError(401, 'not_paired', 'Pair this browser to make human decisions')
+      await localOnly()
+    }
+    scope.post(
+      '/api/agents/imports',
+      { bodyLimit: PROFILE_IMPORT_MAX_BYTES, onRequest: gate },
+      async (request, reply) => {
+        if (!Buffer.isBuffer(request.body))
+          throw new HttpError(400, 'bad_request', 'Send the archive as application/octet-stream')
+        operations.sweepImports()
+        const uploadId = imports.save(request.body)
+        try {
+          return reply.code(201).send((await inspect(uploadId)).view)
+        } catch (error) {
+          imports.remove(uploadId)
+          throw error
+        }
+      },
+    )
+  })
+  app.delete('/api/agents/imports/:uploadId', mutation, async (request, reply) => {
+    const { uploadId } = z.object({ uploadId: ProfileImportUploadIdSchema }).parse(request.params)
+    imports.remove(uploadId)
+    return reply.code(204).send()
+  })
+  app.post('/api/agents/import', mutation, async (request, reply) => {
+    const body = AgentImportRequestSchema.parse(request.body)
+    if (!imports.exists(body.uploadId))
+      throw new HttpError(404, 'not_found', 'The uploaded archive is gone. Upload it again.')
+    // Inspect again: the stored file, not the earlier answer, decides the credential warning and the model.
+    const { facts } = await inspect(body.uploadId)
+    return reply.code(202).send(
+      await operations.beginImport(body, {
+        model: facts.model,
+        hasCredentials: facts.credentialFiles.length > 0,
+      }),
+    )
   })
   app.post('/api/agents', mutation, async (request, reply) => {
     const { previewHash, confirmInheritance, ...input } = AgentCreateRequestSchema.parse(

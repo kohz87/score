@@ -5,6 +5,7 @@ import { StreamContext, useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery, statusLabels } from './team-queries.ts'
 import './team.css'
 import { AddAgent } from './AddAgent.tsx'
+import { ImportAgent } from './ImportAgent.tsx'
 
 export function TeamLayout() {
   const agents = useStreamQuery(agentsQuery)
@@ -23,6 +24,7 @@ export function TeamLayout() {
             </NavLink>
           ))}
         <AddAgent agents={agents.data ?? []} />
+        <ImportAgent agents={agents.data ?? []} />
       </nav>
       <div className="team-content">
         <Outlet />
