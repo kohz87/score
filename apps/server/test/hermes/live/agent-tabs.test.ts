@@ -363,3 +363,22 @@ test('channels for a profile come from the multiplexer host file, scoped to that
   expect(connected('builder')).toEqual(['discord'])
   expect(connected('default')).toEqual(['telegram'])
 })
+
+test('a failed provider write restores the previous model and provider', async () => {
+  runner.mockClear()
+  const base = runner.getMockImplementation()!
+  runner.mockImplementation(async (args, options) =>
+    args.includes('model.provider') && args.at(-1) === 'acme'
+      ? { exitCode: 1 }
+      : base(args, options),
+  )
+  await expect(
+    tabs.setModel('builder', { model: 'next-model', provider: 'acme' }),
+  ).rejects.toMatchObject({ status: 409 })
+  expect(writes()).toEqual([
+    ['-p', 'builder', 'config', 'set', 'model.default', 'next-model'],
+    ['-p', 'builder', 'config', 'set', 'model.provider', 'acme'],
+    ['-p', 'builder', 'config', 'set', 'model.default', 'fixture-model'],
+    ['-p', 'builder', 'config', 'set', 'model.provider', 'p'],
+  ])
+})

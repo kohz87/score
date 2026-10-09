@@ -25,6 +25,7 @@ import {
   HubRowsSchema,
   isBridgePlugin,
   readDisabledSkills,
+  readModelPair,
   readPlugins,
   readTools,
   RUN_TOOL_PLATFORM,
@@ -77,9 +78,25 @@ export class LiveAgentTabs {
     const req = SetModelSchema.parse(input)
     const { profile } = this.profile(agentId)
     await this.serial(profile, async () => {
-      await this.mutate(profile, ['config', 'set', 'model.default', req.model])
-      if (req.provider)
-        await this.mutate(profile, ['config', 'set', 'model.provider', req.provider])
+      const prior = await readModelPair(this.runner, this.hermesHome, profile)
+      try {
+        await this.mutate(profile, ['config', 'set', 'model.default', req.model])
+        if (req.provider)
+          await this.mutate(profile, ['config', 'set', 'model.provider', req.provider])
+      } catch (error) {
+        // Two CLI writes are not atomic: put the old pair back so a failure never leaves a model paired with
+        // the previous provider. Best effort; the request still reports the original failure.
+        if (prior?.model) {
+          await this.mutate(profile, ['config', 'set', 'model.default', prior.model]).catch(
+            () => undefined,
+          )
+          if (req.provider && prior.provider)
+            await this.mutate(profile, ['config', 'set', 'model.provider', prior.provider]).catch(
+              () => undefined,
+            )
+        }
+        throw error
+      }
     })
   }
 
