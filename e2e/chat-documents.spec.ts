@@ -62,4 +62,13 @@ test('a PDF and a CSV attach, preview, and reach the agent; a workspace file att
   await expect(reply).toContainText(/attachments\/\d{4}-\d{2}-\d{2}\/report\.pdf/)
   await expect(reply).toContainText('data.csv')
   await expect(reply).toContainText('README.md')
+
+  // The demo workspace is shared by every spec in the run: leave it as it was (the Workspace screenshot shows it).
+  const removed = await page.request.delete(
+    '/api/agents/lead/workspace/entries?path=attachments&recursive=1',
+    {
+      headers: { 'X-Score-Client': 'web' },
+    },
+  )
+  expect(removed.ok()).toBe(true)
 })
