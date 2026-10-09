@@ -5,10 +5,18 @@ import { csvCell, reportCsvColumns, reportsToCsv } from '../../src/domain/report
 const base: Reports = {
   range: '7d',
   summary: '',
-  totals: { tasksFinished: 0, runs: 0, firstPassRate: null, medianTaskSec: null, spendUsd: null },
+  totals: {
+    tasksFinished: 0,
+    runs: 0,
+    firstPassRate: null,
+    medianTaskSec: null,
+    spendUsd: null,
+    cacheHitRate: null,
+  },
   byDay: [],
   timeSplit: [],
   byAgent: [],
+  trend: [],
   approvals: { asked: 0, approved: 0, denied: 0, medianWaitSec: null, insight: null },
 }
 
@@ -40,6 +48,7 @@ test('reportsToCsv matches the By agent table columns', () => {
           medianSec: 1860,
           firstPassRate: 0.65,
           spendUsd: 2.4,
+          cacheHitRate: null,
         },
         {
           agentId: 'reviewer',
@@ -48,8 +57,17 @@ test('reportsToCsv matches the By agent table columns', () => {
           medianSec: null,
           firstPassRate: null,
           spendUsd: null,
+          cacheHitRate: null,
         },
-        { agentId: 'x', finished: 1, runs: 1, medianSec: 60, firstPassRate: 1, spendUsd: 0 },
+        {
+          agentId: 'x',
+          finished: 1,
+          runs: 1,
+          medianSec: 60,
+          firstPassRate: 1,
+          spendUsd: 0,
+          cacheHitRate: null,
+        },
       ],
     },
     { builder: 'Builder, Inc', reviewer: 'Reviewer', x: '=HYPERLINK("x")' },

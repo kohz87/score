@@ -91,6 +91,8 @@ const ConfigSchema = z.object({
     .transform((value) => value === 'true')
     .default(true),
   // Serve the built web app from this server (production); Vite does it in development.
+  // The launcher's log file (SCORE_LOG_FILE), for the log viewer; absent in dev and tests.
+  logFile: z.string().min(1).optional(),
   serveWeb: z.boolean().default(false),
   // SCORE_REMOTE_INSECURE_HTTP was removed (5.18): it is ignored, and the server says so at startup.
   ignoredInsecureHttp: z.boolean().default(false),
@@ -119,6 +121,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
       env.SCORE_WEB_ORIGIN ??
       (env.SCORE_WEB_PORT ? `http://127.0.0.1:${env.SCORE_WEB_PORT}` : undefined),
     mode: env.SCORE_MODE,
+    logFile: env.SCORE_LOG_FILE || undefined,
     vault: env.SCORE_VAULT,
     mediaQuotaMb: env.SCORE_MEDIA_QUOTA_MB,
     fakeSpeed: env.SCORE_FAKE_SPEED,

@@ -142,3 +142,35 @@ test('session costs list recently active sessions with cumulative cost in epoch 
     default: [{ sessionId: 'new', startedAt: 5_000_000, costUsd: 0.25, estimated: true }],
   })
 })
+
+test('cache tokens: read share of prompt tokens, unknown when none were recorded or the profile is unreadable', () => {
+  mkdirSync(`${fixture.home}/profiles/builder`, { recursive: true })
+  mkdirSync(`${fixture.home}/profiles/designer`, { recursive: true })
+  const builder = fixture.build('state', 'profiles/builder/state.db')
+  const designer = fixture.build('state', 'profiles/designer/state.db')
+  const tokens = (
+    db: typeof builder.db,
+    id: string,
+    at: number,
+    input: number,
+    read: number,
+    write: number,
+  ) => {
+    addSession(db, id, at, null, 0.1)
+    db.prepare(
+      'UPDATE sessions SET input_tokens = ?, cache_read_tokens = ?, cache_write_tokens = ? WHERE id = ?',
+    ).run(input, read, write, id)
+  }
+  tokens(builder.db, 's1', 1200, 100, 600, 100)
+  tokens(builder.db, 's2', 1300, 100, 0, 100)
+  tokens(designer.db, 'd1', 1200, 500, 0, 0) // a provider with no cache tokens is not a 0% hit rate
+  const facts = readReportFacts(
+    { from: 1_000_000, to: 2_000_000, agentIds: ['builder', 'designer', 'ghost'] },
+    fixture.home,
+  )
+  expect(facts.cache).toEqual({
+    builder: { read: 600, total: 1000 },
+    designer: null,
+    ghost: null,
+  })
+})

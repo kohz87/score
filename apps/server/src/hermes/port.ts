@@ -174,7 +174,12 @@ export interface HermesPort extends ProfileManagementPort {
   reportHistoryRows?(
     now: number,
     agentIds: string[],
-  ): Promise<{ runs: ReportRun[]; approvals: ReportApproval[] }>
+  ): Promise<{
+    runs: ReportRun[]
+    approvals: ReportApproval[]
+    /** Demo only: dollars for each of the last 30 days, oldest first (stands in for cost snapshots). */
+    trendSpendUsd?: number[]
+  }>
   listAgentDetails(): Promise<AgentDetail[]>
   listRoutines(agentId: string): Promise<RoutineSummary[]>
   createRoutine(

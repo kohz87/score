@@ -68,7 +68,57 @@ const formatted = {
   streaming: false,
   refs: [],
 }
+// 5.29: a month of runs and spend, and a cache hit rate, so the Reports extras are in the pictures.
+const recordedReport = recorded['/api/reports?range=7d'] as {
+  totals: object
+  byAgent: object[]
+}
+const extras = {
+  totals: { ...recordedReport.totals, cacheHitRate: 0.64 },
+  byAgent: recordedReport.byAgent.map((row, index) => ({
+    ...row,
+    cacheHitRate: index % 2 === 0 ? 0.71 - index * 0.05 : null,
+  })),
+  trend: Array.from({ length: 30 }, (_, day) => ({
+    date: new Date(Date.parse(fixtureNow) - (29 - day) * 86_400_000).toISOString().slice(0, 10),
+    runs: 2 + ((day * 7) % 9),
+    spendUsd: day < 6 ? null : Math.round((1.4 + ((day * 5) % 7) * 0.6) * 100) / 100,
+  })),
+}
 export const visualFixtures: Record<string, unknown> = {
+  '/api/settings/currency': { code: 'USD', rate: 1 },
+  '/api/system/logs?limit=200': {
+    available: true,
+    items: [
+      {
+        time: minutesAgo(1),
+        level: 'info',
+        message: 'request completed',
+        method: 'GET',
+        url: '/api/now',
+        status: 200,
+        durationMs: 4.2,
+      },
+      {
+        time: minutesAgo(3),
+        level: 'warn',
+        message: 'Slow response from the Hermes gateway',
+        method: null,
+        url: null,
+        status: null,
+        durationMs: null,
+      },
+      {
+        time: minutesAgo(9),
+        level: 'info',
+        message: 'Score started',
+        method: null,
+        url: null,
+        status: null,
+        durationMs: null,
+      },
+    ],
+  },
   '/api/system': system,
   '/api/now': NowSnapshotSchema.parse(nowFixture('room-activity-feed')),
   '/api/commands': CommandsResponseSchema.parse({ items: [] }),
@@ -102,14 +152,16 @@ export const visualFixtures: Record<string, unknown> = {
   '/api/approvals?status=all': ApprovalsPageSchema.parse(recorded['/api/approvals?status=all']),
   '/api/tasks': TasksSnapshotSchema.parse(recorded['/api/tasks']),
   '/api/tasks?room=room-activity-feed': TasksSnapshotSchema.parse(recorded['/api/tasks']),
-  '/api/reports?range=7d': ReportsSchema.parse(recorded['/api/reports?range=7d']),
+  '/api/reports?range=7d': ReportsSchema.parse({ ...recordedReport, ...extras }),
   // Reports warms the other presets once the first one loads; the picture only needs them to exist.
   '/api/reports?range=today': ReportsSchema.parse({
-    ...recorded['/api/reports?range=7d'],
+    ...recordedReport,
+    ...extras,
     range: 'today',
   }),
   '/api/reports?range=30d': ReportsSchema.parse({
-    ...recorded['/api/reports?range=7d'],
+    ...recordedReport,
+    ...extras,
     range: '30d',
   }),
   '/api/settings/providers': ProvidersResponseSchema.parse(recorded['/api/settings/providers']),

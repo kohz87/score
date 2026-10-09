@@ -6,7 +6,9 @@ import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery } from '../team/team-queries.ts'
 import { TasksByDayChart } from './TasksByDayChart.tsx'
-import { formatDuration, formatPercent, formatUsd } from './reports-format.ts'
+import { formatDuration, formatPercent } from './reports-format.ts'
+import { formatMoney, useDisplayCurrency, USD } from '../../data/currency.ts'
+import { TrendChart } from './TrendChart.tsx'
 import {
   customRangeError,
   reportCsvHref,
@@ -32,13 +34,16 @@ function agentFor(agents: AgentSummary[], id: string): AgentSummary {
   )
 }
 
-function Totals({ totals }: { totals: Reports['totals'] }) {
+type Money = (usd: number | null) => string
+
+function Totals({ totals, money }: { totals: Reports['totals']; money: Money }) {
   const items: [string, string][] = [
     [totals.tasksFinished.toString(), 'tasks finished'],
     [totals.runs.toString(), 'agent runs'],
     [formatPercent(totals.firstPassRate), 'passed review first time'],
     [formatDuration(totals.medianTaskSec), 'median time per task'],
-    [formatUsd(totals.spendUsd), 'model spend'],
+    [money(totals.spendUsd), 'model spend'],
+    [formatPercent(totals.cacheHitRate), 'prompt cache hit rate'],
   ]
   return (
     <section className="reports-card reports-totals" aria-label="In numbers">
@@ -101,7 +106,15 @@ function TimeSplit({ report, agents }: { report: Reports; agents: AgentSummary[]
   )
 }
 
-function ByAgent({ report, agents }: { report: Reports; agents: AgentSummary[] }) {
+function ByAgent({
+  report,
+  agents,
+  money,
+}: {
+  report: Reports
+  agents: AgentSummary[]
+  money: Money
+}) {
   return (
     <section className="reports-card reports-table-card" aria-labelledby="reports-agents-title">
       <h2 id="reports-agents-title">By agent</h2>
@@ -119,6 +132,7 @@ function ByAgent({ report, agents }: { report: Reports; agents: AgentSummary[] }
               <th scope="col">Runs</th>
               <th scope="col">Median time</th>
               <th scope="col">First-time pass</th>
+              <th scope="col">Cache hits</th>
               <th scope="col" className="reports-table__right">
                 Spend
               </th>
@@ -149,8 +163,15 @@ function ByAgent({ report, agents }: { report: Reports; agents: AgentSummary[] }
                       <span aria-label="No reviewed tasks in this range">—</span>
                     )}
                   </td>
+                  <td>
+                    {row.cacheHitRate === null ? (
+                      <span aria-label="Hermes gave no cache figures">—</span>
+                    ) : (
+                      formatPercent(row.cacheHitRate)
+                    )}
+                  </td>
                   <td className="reports-table__right reports-table__spend">
-                    {formatUsd(row.spendUsd)}
+                    {money(row.spendUsd)}
                   </td>
                 </tr>
               )
@@ -323,6 +344,26 @@ export function ReportsPage() {
   const report = reports.data
   // Fetching with nothing newer to show; the numbers on screen may belong to the previous range.
   const stale = reports.isPlaceholderData
+  // USD, or the currency set in Settings › Look when the person picks it here (remembered per browser).
+  const configured = useDisplayCurrency().data ?? USD
+  const [useOther, setUseOther] = useState(() => {
+    try {
+      return localStorage.getItem('score.reports.currency') === 'other'
+    } catch {
+      return false
+    }
+  })
+  const showOther = configured.code !== 'USD' && useOther
+  const shown = showOther ? configured : USD
+  const money: Money = (usd) => formatMoney(usd, shown)
+  function pickCurrency(other: boolean) {
+    setUseOther(other)
+    try {
+      localStorage.setItem('score.reports.currency', other ? 'other' : 'usd')
+    } catch {
+      // A private window: the choice just isn't remembered.
+    }
+  }
 
   function setSpec(next: ReportSpec) {
     setParams((current) => {
@@ -369,6 +410,16 @@ export function ReportsPage() {
               onApply={(from, to) => setSpec({ range: 'custom', from, to })}
             />
           </div>
+          {configured.code !== 'USD' && (
+            <div className="reports-tabs" role="group" aria-label="Currency">
+              <button type="button" aria-pressed={!showOther} onClick={() => pickCurrency(false)}>
+                USD
+              </button>
+              <button type="button" aria-pressed={showOther} onClick={() => pickCurrency(true)}>
+                {configured.code}
+              </button>
+            </div>
+          )}
           <a className="reports-export" href={reportCsvHref(spec)} download>
             Export CSV
           </a>
@@ -387,7 +438,7 @@ export function ReportsPage() {
           className={`reports-body${stale ? ' reports-body--stale' : ''}`}
           aria-busy={reports.isFetching}
         >
-          <Totals totals={report.totals} />
+          <Totals totals={report.totals} money={money} />
           <div className="reports-row">
             <section className="reports-card reports-chart" aria-labelledby="reports-chart-title">
               <h2 id="reports-chart-title">Tasks finished, by day</h2>
@@ -396,9 +447,13 @@ export function ReportsPage() {
             <TimeSplit report={report} agents={agents} />
           </div>
           <div className="reports-row">
-            <ByAgent report={report} agents={agents} />
+            <ByAgent report={report} agents={agents} money={money} />
             <Approvals approvals={report.approvals} />
           </div>
+          <section className="reports-card reports-trend" aria-labelledby="reports-trend-title">
+            <h2 id="reports-trend-title">Last 30 days: spend and runs</h2>
+            <TrendChart trend={report.trend} money={money} />
+          </section>
         </div>
       )}
     </div>

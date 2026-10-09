@@ -208,6 +208,7 @@ test('7d report has known numbers', () => {
     medianTaskSec: 2700,
     // designer's spend is unknown, so the total is unknown rather than a partial 1.75.
     spendUsd: null,
+    cacheHitRate: null,
   })
   expect(
     computeReports({
@@ -237,6 +238,7 @@ test('7d report has known numbers', () => {
       medianSec: 3600,
       firstPassRate: 0.5,
       spendUsd: 1.5,
+      cacheHitRate: null,
     },
     {
       agentId: 'designer',
@@ -245,6 +247,7 @@ test('7d report has known numbers', () => {
       medianSec: 1200,
       firstPassRate: 1,
       spendUsd: null,
+      cacheHitRate: null,
     },
     {
       agentId: 'reviewer',
@@ -253,6 +256,7 @@ test('7d report has known numbers', () => {
       medianSec: null,
       firstPassRate: null,
       spendUsd: 0.25,
+      cacheHitRate: null,
     },
   ])
   expect(report.timeSplit).toEqual([
@@ -302,6 +306,7 @@ test('empty data is null-safe', () => {
     firstPassRate: null,
     medianTaskSec: null,
     spendUsd: null,
+    cacheHitRate: null,
   })
   expect(report.summary).toBe('No tasks finished in the last 30 days.')
   expect(report.byDay).toHaveLength(30)
@@ -390,4 +395,21 @@ test('a review wait belongs to the implementer, ordered by event id, not the cur
   // closed by an earlier-id event at the same second.
   expect(split.builder!.waitingOnAgentPct).toBeGreaterThan(0)
   expect(split.reviewer!.waitingOnAgentPct).toBe(0)
+})
+
+test('cache hit rate per agent and in total; unknown stays null', () => {
+  const report = computeReports({
+    ...input,
+    facts: {
+      ...input.facts,
+      cache: {
+        builder: { read: 750, total: 1000 },
+        designer: null,
+        reviewer: { read: 0, total: 1000 },
+      },
+    },
+  })
+  expect(report.byAgent.map((row) => row.cacheHitRate)).toEqual([0.75, null, 0])
+  // Over the agents that report: (750 + 0) / (1000 + 1000).
+  expect(report.totals.cacheHitRate).toBe(0.375)
 })

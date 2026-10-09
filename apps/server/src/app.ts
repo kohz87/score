@@ -42,6 +42,8 @@ import { registerHttpsGuide } from './http/https-guide.ts'
 import { registerWebAssets, type WebAssets } from './http/web-assets.ts'
 import { PairingService } from './auth/pairing.ts'
 import type { SessionStore } from './auth/session-store.ts'
+import { registerCurrencyRoutes } from './http/currency.ts'
+import { registerLogRoutes } from './http/logs.ts'
 import { registerSessionRoutes } from './http/session.ts'
 import { registerSystemRoutes } from './http/system.ts'
 import { registerStreamRoute, type StreamRouteOptions } from './http/stream.ts'
@@ -213,6 +215,7 @@ export function buildApp({
   }
   registerRoutineRoutes(app, port, db, clock)
   registerSettingsRoutes(app, port, db, clock)
+  registerCurrencyRoutes(app, db)
   registerRulesRoutes(app, port, ingest, db, clock)
   if (db && ingest) {
     const dispatch = registerRoomRoutes(app, port, db, ingest, clock, mediaStore)
@@ -313,8 +316,10 @@ export function buildApp({
     Boolean(config.remote?.tlsCert),
     pairingOrigin,
     security ?? (db ? new SecurityPassword(config.home, clock) : undefined),
+    config.remote ? config.remote.origins : [pairingOrigin],
   )
   registerSystemRoutes(app, getSystemStatus)
+  registerLogRoutes(app, config.logFile)
   if (db && ingest && getEpoch) {
     registerStreamRoute(app, {
       db,

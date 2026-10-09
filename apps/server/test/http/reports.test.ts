@@ -47,6 +47,9 @@ test('GET /api/reports returns a contract-valid report for each range', async ()
     expect(report.range).toBe(range)
     expect(report.byDay).toHaveLength(days)
     expect(report.totals.spendUsd).toBeGreaterThan(0)
+    // The trend is always the last 30 local days, whatever the range.
+    expect(report.trend).toHaveLength(30)
+    expect(report.trend.at(-1)!.date).toBe(report.byDay.at(-1)!.date)
   }
 })
 
@@ -103,6 +106,7 @@ test('the seeded demo history fills every part of the report', async () => {
       expect(report.totals.firstPassRate).toBeGreaterThan(0.5)
       expect(report.totals.firstPassRate).toBeLessThan(0.95)
       expect(report.approvals.asked).toBeGreaterThan(3)
+      expect(report.trend.some((day) => day.runs > 0 && (day.spendUsd ?? 0) > 0)).toBe(true)
       expect(report.approvals.denied).toBeGreaterThanOrEqual(0)
       for (const id of ['lead', 'builder', 'designer']) {
         const split = report.timeSplit.find((row) => row.agentId === id)!

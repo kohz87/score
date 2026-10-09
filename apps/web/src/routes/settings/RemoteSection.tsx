@@ -9,10 +9,20 @@ import {
 } from '@score/contract'
 import { apiFetch } from '../../data/api.ts'
 import { copyText, selectText } from '../../data/clipboard.ts'
+import { QrCode } from '../../components/QrCode.tsx'
 import { announceLogout, remoteTransport } from '../../data/session.ts'
 
 const browsersKey = ['session', 'browsers'] as const
 const securityKey = ['session', 'security'] as const
+
+/** "LAN" for a local address, "ts.net" for a Tailscale name, else the host itself. */
+export function originLabel(origin: string): string {
+  const host = new URL(origin).hostname
+  if (host.endsWith('.ts.net')) return 'ts.net'
+  if (/^(?:\d+\.){3}\d+$/.test(host) || host.endsWith('.local') || host === 'localhost')
+    return 'LAN'
+  return host
+}
 
 function failure(error: unknown, action: string): string {
   const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : null
@@ -130,6 +140,8 @@ export function RemoteSection() {
     enabled: remote,
     queryFn: async () => SecurityStatusSchema.parse(await apiFetch('session/security')),
   })
+  const [origin, setOrigin] = useState('')
+  const origins = security.data?.origins ?? []
   const withPassword = () => ({ method: 'POST', body: JSON.stringify({ password }) })
   const refresh = () => queryClient.invalidateQueries({ queryKey: browsersKey })
   const revoke = useMutation({
@@ -162,9 +174,38 @@ export function RemoteSection() {
   // A one-time link for a new device; it replaces any earlier unused link (including the console's).
   const invite = useMutation({
     mutationFn: async () =>
-      PairingLinkSchema.parse(await apiFetch('session/pairing-links', withPassword())),
-    onSuccess: () => setCopied('idle'),
+      PairingLinkSchema.parse(
+        await apiFetch('session/pairing-links', {
+          method: 'POST',
+          body: JSON.stringify({ password, ...(origin ? { origin } : {}) }),
+        }),
+      ),
+    onSuccess: () => {
+      setCopied('idle')
+      setPairedAtMint(browsers.data?.length ?? 0)
+    },
   })
+  // The link (and its QR code) is shown only while it can still work: until it expires or a device has used it.
+  const [pairedAtMint, setPairedAtMint] = useState(0)
+  const [expiredLink, setExpiredLink] = useState<string | null>(null)
+  const expiresAt = invite.data?.expiresAt
+  useEffect(() => {
+    if (!expiresAt) return
+    // Also fires (next tick) for a link that is already past its time.
+    const wait = Math.max(0, Date.parse(expiresAt) - Date.now())
+    const timer = setTimeout(() => setExpiredLink(expiresAt), Math.min(wait, 2 ** 31 - 1))
+    return () => clearTimeout(timer)
+  }, [expiresAt])
+  const expired = expiredLink !== null && expiredLink === expiresAt
+  const linkShown = invite.data !== undefined && !expired
+  // While a link is on screen, watch for the device that uses it.
+  const refetchBrowsers = browsers.refetch
+  useEffect(() => {
+    if (!linkShown) return
+    const timer = setInterval(() => void refetchBrowsers(), 5000)
+    return () => clearInterval(timer)
+  }, [linkShown, refetchBrowsers])
+  const used = linkShown && (browsers.data?.length ?? 0) > pairedAtMint
   if (!remote) return null
   const passwordSet = security.data?.passwordSet === true
   const ready = passwordSet && password.length >= 8
@@ -263,7 +304,29 @@ export function RemoteSection() {
       >
         {invite.data ? 'Get a new link' : 'Pair another device'}
       </button>
-      {invite.data && (
+      {origins.length > 1 && (
+        <fieldset className="settings-origins">
+          <legend>Show the link for:</legend>
+          {origins.map((candidate) => (
+            <label key={candidate}>
+              <input
+                type="radio"
+                name="pairing-origin"
+                checked={(origin || origins[0]) === candidate}
+                onChange={() => setOrigin(candidate)}
+              />{' '}
+              {originLabel(candidate)}
+            </label>
+          ))}
+        </fieldset>
+      )}
+      {invite.data && (expired || used) && (
+        <p role="status">
+          {used ? 'That link was used.' : 'That link expired.'} Get a new one to pair another
+          device.
+        </p>
+      )}
+      {invite.data && linkShown && !used && (
         <div className="settings-command" role="group" aria-label="Pairing link">
           <p>
             Open this on the new device before{' '}
@@ -273,6 +336,7 @@ export function RemoteSection() {
             })}
             . Anyone with this link can pair, so send it only to yourself.
           </p>
+          <QrCode text={invite.data.url} label="QR code for the pairing link" />
           <code
             ref={link}
             className="settings-command-text"

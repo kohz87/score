@@ -46,6 +46,7 @@ const report = (range: Reports['range'], overrides: Partial<Reports> = {}): Repo
     firstPassRate: 0.71,
     medianTaskSec: 1440,
     spendUsd: 41.2,
+    cacheHitRate: null,
   },
   byDay: [{ date: '2026-03-10', perAgent: { builder: 3, reviewer: 1 } }],
   timeSplit: [
@@ -60,6 +61,7 @@ const report = (range: Reports['range'], overrides: Partial<Reports> = {}): Repo
       medianSec: 1860,
       firstPassRate: 0.65,
       spendUsd: 22.4,
+      cacheHitRate: null,
     },
     {
       agentId: 'reviewer',
@@ -68,8 +70,10 @@ const report = (range: Reports['range'], overrides: Partial<Reports> = {}): Repo
       medianSec: 540,
       firstPassRate: null,
       spendUsd: 9.3,
+      cacheHitRate: null,
     },
   ],
+  trend: [],
   approvals: { asked: 24, approved: 21, denied: 3, medianWaitSec: 240, insight: 'Allow installs.' },
   ...overrides,
 })
@@ -162,6 +166,7 @@ test('shows a dash for unknown values', async () => {
               firstPassRate: null,
               medianTaskSec: null,
               spendUsd: null,
+              cacheHitRate: null,
             },
             byAgent: [
               {
@@ -171,6 +176,7 @@ test('shows a dash for unknown values', async () => {
                 medianSec: null,
                 firstPassRate: null,
                 spendUsd: null,
+                cacheHitRate: null,
               },
             ],
             approvals: { asked: 0, approved: 0, denied: 0, medianWaitSec: null, insight: null },
@@ -178,11 +184,11 @@ test('shows a dash for unknown values', async () => {
         )
   mount()
   const totals = await screen.findByRole('region', { name: 'In numbers' })
-  expect(within(totals).getAllByText('—')).toHaveLength(3)
+  expect(within(totals).getAllByText('—')).toHaveLength(4)
   const approvals = screen.getByRole('region', { name: 'Your approvals' })
   expect(within(approvals).getByText('—')).toBeDefined()
   const row = within(screen.getByRole('table', { name: 'By agent' })).getAllByRole('row')[1]!
-  expect(within(row).getAllByText('—')).toHaveLength(3)
+  expect(within(row).getAllByText('—')).toHaveLength(4)
   expect(within(row).getByLabelText('No reviewed tasks in this range')).toBeDefined()
   expect(within(row).queryByText('n/a, reviews')).toBeNull()
 })
@@ -319,4 +325,45 @@ test('a custom range in the URL survives a reload, and a bad one falls back to 7
   stream.close()
   mount('/reports?range=custom&from=2025-02-03&to=2025-01-09')
   expect(await screen.findByText('Summary for 7d.')).toBeDefined()
+})
+
+test('cache hit rate, the 30-day trend and the display currency toggle', async () => {
+  localStorage.removeItem('score.reports.currency')
+  respond = (path) => {
+    if (path === '/api/agents') return json({ asOfSeq: 0, items: agents })
+    if (path === '/api/settings/currency') return json({ code: 'EUR', rate: 0.5 })
+    const base = report('7d')
+    return json({
+      ...base,
+      totals: { ...base.totals, cacheHitRate: 0.64 },
+      byAgent: base.byAgent.map((row, index) => ({
+        ...row,
+        cacheHitRate: index === 0 ? 0.8 : null,
+      })),
+      trend: [
+        { date: '2026-03-09', runs: 3, spendUsd: 2 },
+        { date: '2026-03-10', runs: 5, spendUsd: null },
+      ],
+    })
+  }
+  mount()
+  const totals = await screen.findByRole('region', { name: 'In numbers' })
+  expect(within(totals).getByText('64%')).toBeDefined()
+  const rows = within(screen.getByRole('table', { name: 'By agent' })).getAllByRole('row')
+  expect(within(rows[1]!).getByText('80%')).toBeDefined()
+  expect(within(rows[2]!).getByLabelText('Hermes gave no cache figures')).toBeDefined()
+
+  const trend = screen.getByRole('table', { name: /Runs and spend per day/ })
+  expect(within(trend).getByText('2026-03-10')).toBeDefined()
+  expect(within(trend).getByText('$2.00')).toBeDefined()
+  expect(screen.getByRole('img', { name: /Last 2 days: 8 runs, \$2\.00 spend/ })).toBeDefined()
+
+  // USD until the person switches; the typed rate then converts every money value.
+  expect(within(totals).getByText('$41.20')).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'EUR' }))
+  expect(within(totals).getByText('€20.60')).toBeDefined()
+  expect(within(trend).getByText('€1.00')).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'USD' }))
+  expect(within(totals).getByText('$41.20')).toBeDefined()
+  localStorage.removeItem('score.reports.currency')
 })

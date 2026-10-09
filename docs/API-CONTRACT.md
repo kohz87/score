@@ -298,18 +298,29 @@ expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a mana
     devices, keep itself alive or terminate the owner's pairings. Body `{ password }`; `409 password_not_set`,
     `403 wrong_password`, `429 too_many_attempts` (5 wrong in 15 minutes per paired browser, 20 overall; a new
     password clears the count).
-    - `GET /api/session/security` → `{ passwordSet: boolean }` · `PUT /api/session/security/password`
+    - `GET /api/session/security` → `{ passwordSet: boolean; origins: string[] }` (`origins` = `SCORE_PUBLIC_ORIGINS`, the
+      choices for a pairing link; the first is the default) · `PUT /api/session/security/password`
       `{ password; current? }` → `204` (first time without `current`; afterwards `current` is required; a forgotten
       password is reset on the host with `scripts/score password`). Stored as a salted scrypt hash, 0600.
     - `POST /api/session/security/check` `{ password }` → `204` when it is the security password (5.23: lets the owner
       confirm it before using it); same errors and the same attempt limits as every password-guarded action.
-    - `POST /api/session/pairing-links` `{ password }` → `{ url; expiresAt }`: the same one-time, 15-minute token the
-      console prints (minting replaces any unused one).
+    - `POST /api/session/pairing-links` `{ password; origin? }` → `{ url; expiresAt }`: the same one-time, 15-minute token the
+      console prints (minting replaces any unused one). `origin` (5.29) must be one of `origins` from the security status
+      (`400 bad_request` otherwise); the link uses it instead of the default, e.g. for the Tailscale address. The web page
+      draws the link as a QR code (inline SVG) while it is unexpired and unused.
     - `POST /api/session/browsers/:id/renew` `{ password }` → the browser with a fresh 30-day limit and 7-day idle
       window (renewing counts as activity); that browser's cookie is re-sent on its next request.
     - `POST /api/session/browsers/:id/revoke` `{ password }` → `204` (idempotent) · `POST /api/session/browsers/revoke-others`
       `{ password }` → `{ revoked: number }` (keeps only the caller).
   - Paired browsers' cookies are re-sent at most hourly with Max-Age = the session's remaining lifetime.
+- **Log viewer (5.29).** `GET /api/system/logs?level=info|warn|error&q=&limit=` (paired browsers only, in every mode; `limit`
+  1 to 2000, default 500) → `{ available: boolean; items: { time: iso | null; level: 'info' | 'warn' | 'error'; message: string;
+  method: string | null; url: string | null; status: number | null; durationMs: number | null }[] }` (`LogsResponseSchema`).
+  Reads Score's own log file (`SCORE_LOG_FILE`, set by `scripts/score`; the rotated `<file>.1` follows the live file), newest
+  first, from the last 4 MB of each. Lines are pino JSON (time, level, msg, req, res, responseTime) or plain launcher output
+  (time null). `level` is a minimum (`warn` = warn and error); `q` is a case-insensitive substring of message, method or URL.
+  **Every text field passes through `redact()` on the server**, so no secret leaves in a log line. `available: false` when
+  `SCORE_LOG_FILE` is not set. No Hermes log files.
 - `GET /api/search?q=` → `{ items: { kind: 'agent'|'task'|'room'|'message'|'command'|'setting'; id: string;
 label: string; hint: string | null; ref: Ref | { kind: 'route'; path: string } }[] }` (⌘K palette)
 
@@ -671,6 +682,7 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
       firstPassRate: number | null
       medianTaskSec: number | null
       spendUsd: number | null
+      cacheHitRate: number | null /* 5.29: over the agents that report cache tokens */
     }
     byDay: {
       date: string
@@ -691,8 +703,10 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
       medianSec: number | null
       firstPassRate: number | null /* null = n/a, reviews */
       spendUsd: number | null
+      cacheHitRate: number | null /* 5.29 */
     }
     ;[]
+    trend: { date: string; runs: number; spendUsd: number | null }[] /* 5.29: last 30 local days, any range */
     approvals: {
       asked: number
       approved: number
@@ -712,6 +726,19 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
   request, not the task's current assignee, minus time already working or waiting on you. An hour of active run with a human
   approval open the whole hour counts as working only. Spend = Hermes session costs (actual, else estimated);
   null when unknown. `totals.spendUsd` is null when any agent's spend is unknown (never a partial sum).
+- **Cache hit rate and trend (5.29).** `cacheHitRate` = cache-read tokens / (uncached input + cache-read + cache-write) of the
+  Hermes sessions that *started* in the range (a session's counters are cumulative), read-only from each profile's
+  `state.db` through the report-facts adapter. `null` ("—") when no such session exists, a counter is missing, or Hermes
+  never recorded a cache token (a provider without caching is not a 0% hit rate). The total is over the agents that report;
+  null when none does. `trend` is always the last 30 local days (oldest first) whatever `range` is: `runs` = runs started
+  that day; `spendUsd` = that day's share of Hermes session costs from Score's cost snapshots (the same method as the
+  range spend), `null` when any agent's reading is missing for the day (e.g. before Score started sampling), never zero.
+  The Reports page draws it with an accessible table fallback.
+- **Display currency (5.29).** Reports and the API stay in USD. `GET /api/settings/currency` → `{ code: string /* ISO-4217
+  shape, ^[A-Z]{3}$ */; rate: number /* units of `code` per 1 USD, typed by the person; no network fetch */ }` (default
+  `{ code: 'USD', rate: 1 }`); **H** `PUT /api/settings/currency` `{ code; rate }` → the stored value (`400` for a bad code or a
+  rate that is not > 0; USD is always stored with rate 1). Stored in Score's `meta` table (key `display_currency`). The page
+  multiplies and rounds once to the displayed cent; Reports offers a USD / `code` toggle (remembered per browser).
 - `GET /api/reports/export.csv?range=&from=&to=&tz=` → `text/csv` (same query as the report)
 - Both take an optional `tz` (IANA zone, e.g. `Europe/London`): days and "today" are the viewer's, not the server's
   (often UTC). An unknown zone is `400`. Without it, the server's zone is used.

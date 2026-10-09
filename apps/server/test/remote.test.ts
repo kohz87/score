@@ -55,8 +55,8 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
-function makeApp(clock?: () => number) {
-  const config = loadConfig(env)
+function makeApp(clock?: () => number, extraEnv: Record<string, string> = {}) {
+  const config = loadConfig({ ...env, ...extraEnv })
   const securityHome = mkdtempSync(join(tmpdir(), 'score-security-'))
   cleanup.push(() => rmSync(securityHome, { recursive: true, force: true }))
   const app = buildApp({
@@ -722,6 +722,32 @@ test('a paired browser can mint a one-time link that pairs a second device exact
   ).toBe(401)
 })
 
+test('a pairing link can name another configured origin, and only a configured one', async () => {
+  const tailscale = 'https://score.tail1234.ts.net'
+  const app = makeApp(undefined, { SCORE_PUBLIC_ORIGINS: `${origin},${tailscale}` })
+  const cookie = await pair(app)
+  await setPassword(app, cookie)
+  const mint = (payload: object) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/session/pairing-links',
+      headers: { ...headers, cookie },
+      payload,
+    })
+  const security = await app.inject({
+    url: '/api/session/security',
+    headers: { ...headers, cookie },
+  })
+  expect(security.json().origins).toEqual([origin, tailscale])
+  expect((await mint({ password: PASSWORD })).json().url.startsWith(`${origin}/pair#`)).toBe(true)
+  expect(
+    (await mint({ password: PASSWORD, origin: tailscale }))
+      .json()
+      .url.startsWith(`${tailscale}/pair#`),
+  ).toBe(true)
+  expect((await mint({ password: PASSWORD, origin: 'https://evil.example' })).statusCode).toBe(400)
+})
+
 test('Renew gives a browser a fresh 30 days and its next request re-sends the cookie', async () => {
   let now = Date.parse('2026-10-08T00:00:00Z')
   const app = makeApp(() => now)
@@ -780,10 +806,10 @@ test('the security password: set once, change needs the current one, wrong guess
     })
   const status = async () =>
     (await app.inject({ url: '/api/session/security', headers: { ...headers, cookie } })).json()
-  expect(await status()).toEqual({ passwordSet: false })
+  expect(await status()).toMatchObject({ passwordSet: false })
   expect((await put({ password: 'short' })).statusCode).toBe(400)
   await setPassword(app, cookie)
-  expect(await status()).toEqual({ passwordSet: true })
+  expect(await status()).toMatchObject({ passwordSet: true })
   // Changing it needs the current password, so a compromised browser can't take it over.
   expect((await put({ password: 'another password' })).statusCode).toBe(403)
   expect((await put({ password: 'another password', current: PASSWORD })).statusCode).toBe(204)

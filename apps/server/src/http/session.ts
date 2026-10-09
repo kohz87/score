@@ -18,6 +18,8 @@ export function registerSessionRoutes(
   origin?: string,
   /** Guards pairing management; without it (tests) those routes are unavailable. */
   security?: SecurityPassword,
+  /** Every origin a device may be sent to (SCORE_PUBLIC_ORIGINS); the first is the default. */
+  origins: readonly string[] = origin ? [origin] : [],
 ): void {
   const guarded = { preHandler: humanGuard(pairing) }
   const PasswordBody = z.object({ password: z.unknown() }).loose()
@@ -59,6 +61,7 @@ export function registerSessionRoutes(
 
   app.get('/api/session/security', guarded, async () => ({
     passwordSet: security?.isSet() ?? false,
+    origins: [...origins],
   }))
   // First time from any paired browser; changing it needs the current password; a forgotten one is reset on the host.
   app.put('/api/session/security/password', guarded, async (request, reply) => {
@@ -82,9 +85,16 @@ export function registerSessionRoutes(
   app.post('/api/session/pairing-links', guarded, async (request) => {
     await checkPassword(request.body, request.headers.cookie)
     if (!origin) throw new HttpError(501, 'unsupported', 'Pairing links are not available here')
+    // Only a configured public origin may be put into a link; anything else is refused before a token is minted.
+    const chosen = z
+      .object({ origin: z.string().max(256).optional() })
+      .loose()
+      .parse(request.body ?? {}).origin
+    if (chosen !== undefined && !origins.includes(chosen))
+      throw new HttpError(400, 'bad_request', 'That is not one of the configured origins')
     const token = pairing.createToken()
     return PairingLinkSchema.parse({
-      url: `${origin}/pair#${token}`,
+      url: `${chosen ?? origin}/pair#${token}`,
       expiresAt: new Date(pairing.tokenExpiresAt()).toISOString(),
     })
   })
