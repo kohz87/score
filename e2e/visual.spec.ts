@@ -8,9 +8,10 @@ const destinations = [
   { name: 'tasks', path: '/tasks', ready: '.task-card' },
   { name: 'team', path: '/team', ready: '.team-agent-card' },
   { name: 'agent', path: '/team/builder', ready: '.team-tabs' },
-  { name: 'knowledge', path: '/knowledge/projects/launch-plan.md', ready: '.cm-editor' },
   { name: 'reports', path: '/reports', ready: '.reports-table tbody tr' },
   { name: 'settings', path: '/settings', ready: '.rules-columns' },
+  // Last: other tests in this file address destinations by index.
+  { name: 'knowledge', path: '/knowledge/projects/launch-plan.md', ready: '.cm-editor' },
 ]
 
 test.use({ timezoneId: 'UTC', locale: 'en-GB' })
