@@ -294,6 +294,34 @@ const cases = [
   ['RoutineDeletedSchema', { id: 'builder:j1' }, { id: '' }],
   ['RoutineRunSchema', { id: 'builder:j1', queued: true }, { id: 'builder:j1', queued: false }],
   ['ReportRangeSchema', '7d', 'year'],
+  ['JourneyKindSchema', 'memory_changed', 'memory_text'],
+  [
+    'JourneyEventSchema',
+    { at: '2026-10-09T10:00:00.000Z', kind: 'task_done', label: 'Fix it', ref: 't1' },
+    { at: 'yesterday', kind: 'task_done', label: 'Fix it', ref: null },
+  ],
+  [
+    'JourneySchema',
+    {
+      from: '2026-10-03',
+      to: '2026-10-09',
+      truncated: false,
+      agents: [
+        {
+          id: 'builder',
+          events: [
+            {
+              at: '2026-10-09T10:00:00.000Z',
+              kind: 'memory_changed',
+              label: 'Memory file changed',
+              ref: null,
+            },
+          ],
+        },
+      ],
+    },
+    { from: '3 Oct', to: '2026-10-09', truncated: false, agents: [] },
+  ],
   [
     'ReportsSchema',
     {

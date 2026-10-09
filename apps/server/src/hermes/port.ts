@@ -53,6 +53,7 @@ import type { AgentTool } from './agent-tabs.ts'
 import type { ApprovalConfig } from './approvals.ts'
 import type { IngestResult, Observation } from '../hub/ingest.ts'
 import type { SessionCost } from '../domain/spend.ts'
+import type { JourneyFacts } from '../domain/journey.ts'
 import type { ReportApproval, ReportFacts, ReportRun } from '../domain/reports.ts'
 import type { ProfileManagementPort } from './profile-management.ts'
 import type { OutsideSessionFact, OutsideSessionHistory } from './outside-sessions.ts'
@@ -173,6 +174,11 @@ export interface HermesPort extends ProfileManagementPort {
   patchTask(id: string, req: z.infer<typeof PatchTaskSchema>): Promise<TaskDetail>
   /** Report inputs only Hermes has: reviewer send-backs and per-agent spend in [from, to] (epoch ms). */
   reportFacts(req: { from: number; to: number; agentIds: string[] }): Promise<ReportFacts>
+  /**
+   * Journey marks Hermes owns (7.4c): completed tasks, skill files and memory files changed in [from, to] (epoch ms).
+   * Names and times only; memory contents are never read.
+   */
+  journeyFacts(req: { from: number; to: number; agentIds: string[] }): Promise<JourneyFacts>
   /** Live only: sessions active since `sinceMs` with cumulative cost, per readable profile, for Score's spend snapshots. */
   sessionCosts?(req: {
     sinceMs: number
