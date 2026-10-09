@@ -28,7 +28,10 @@ BEGIN
   INSERT INTO kanban_attempt_observations (attempt_id, seq, started_at, ended_at)
   VALUES (NEW.id, 0, strftime('%Y-%m-%dT%H:%M:%fZ', NEW.started_at, 'unixepoch'),
           CASE WHEN NEW.ended_at IS NOT NULL
-               THEN strftime('%Y-%m-%dT%H:%M:%fZ', NEW.ended_at, 'unixepoch') END);
+               THEN strftime('%Y-%m-%dT%H:%M:%fZ', NEW.ended_at, 'unixepoch')
+               -- A row first written as no longer observed: its one interval already ends at the boundary.
+               WHEN NEW.observing = 0
+               THEN COALESCE(NEW.observation_ended_at, NEW.last_observed_at) END);
 END;
 
 -- Observation stopped: at the end when the attempt closed while observed, else at the recorded boundary.
