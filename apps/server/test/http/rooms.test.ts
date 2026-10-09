@@ -1266,3 +1266,37 @@ test('deleting a message fails its pending replies and refuses while one is stre
     db.sqlite.prepare('SELECT deleted_at FROM messages WHERE id = ?').get(second.id)?.deleted_at,
   ).toBeNull()
 })
+
+// audit4-c 6: imported copies are read-only on the server too, not just in the web app.
+test('imported messages cannot be edited or rewound', async () => {
+  const room = await create()
+  await ingest.submit({
+    source: 'test',
+    identity: 'imported-own',
+    apply: ({ sqlite, now }) =>
+      storeMessage(
+        sqlite,
+        {
+          id: `import:${room.id}:0`,
+          roomId: room.id,
+          author: { kind: 'you' },
+          to: [],
+          parts: [{ kind: 'text', text: 'from telegram' }],
+          refs: [],
+          createdAt: now,
+          streaming: false,
+        },
+        now,
+      ),
+  })
+  const edit = await post(`/api/rooms/${room.id}/messages`, {
+    text: 'fix',
+    to: ['builder'],
+    edits: `import:${room.id}:0`,
+  })
+  expect(edit.statusCode).toBe(400)
+  const plan = await get(
+    `/api/rooms/${room.id}/messages/${encodeURIComponent(`import:${room.id}:0`)}/rewind-plan`,
+  )
+  expect(plan.statusCode).toBe(400)
+})

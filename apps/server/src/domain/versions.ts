@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
+import { IMPORTED_ID_PREFIX } from './outside-sessions.ts'
 import { MessageRowSchema, messageFromRow, readRoom, roomChanged, roomRow } from './rooms.ts'
 
 const VersionRowSchema = z.object({
@@ -116,11 +117,18 @@ export function rewindableMessage(
     .prepare('SELECT * FROM messages WHERE id = ? AND room_id = ? AND deleted_at IS NULL')
     .get(messageId, roomId)
   if (!value) throw new HttpError(404, 'not_found', 'Unknown message')
+  assertNotImported(messageId)
   const message = messageFromRow(value)
   if (message.author.kind !== 'you' || message.streaming)
     throw new HttpError(400, 'bad_request', 'Only your own finished message can be rewound')
   if (message.editedBy) throw new HttpError(409, 'conflict', 'This message was already edited')
   return message
+}
+
+/** Copies of messages from outside sessions are a record of what happened elsewhere: never corrected or rewound here. */
+function assertNotImported(messageId: string): void {
+  if (messageId.startsWith(IMPORTED_ID_PREFIX))
+    throw new HttpError(400, 'bad_request', 'An imported message cannot be edited or rewound')
 }
 
 export interface RewindTurns {
@@ -315,6 +323,7 @@ export function editableMessage(sqlite: DatabaseSync, roomId: string, messageId:
   const value = sqlite.prepare('SELECT * FROM messages WHERE id = ?').get(messageId)
   if (!value) throw new HttpError(404, 'not_found', 'Unknown message')
   const row = MessageRowSchema.parse(value)
+  assertNotImported(messageId)
   const rewound = row.room_id === roomId && openEditVersion(sqlite, roomId, messageId) !== null
   if (row.deleted_at && !rewound) throw new HttpError(404, 'not_found', 'Unknown message')
   if (row.room_id !== roomId || row.author_kind !== 'you' || row.streaming === 1)
