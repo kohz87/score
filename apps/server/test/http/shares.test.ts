@@ -430,6 +430,27 @@ test('the public page is rate limited per IP', async () => {
   expect((await page(token, '10.0.0.1')).statusCode).toBe(200)
 })
 
+// audit4-c 2: a page with many images must still load after the page budget is spent.
+test('share images have their own, larger rate budget than the page', async () => {
+  await setPassword()
+  const r = await room()
+  const stored = app.media!.store(png(80, 1), 'image/png')
+  await say(r.id, [{ kind: 'image', mediaId: stored.mediaId }], true)
+  const token = tokenOf((await create(r.id, { includeImages: true })).json().url)
+  const ip = '10.0.0.7'
+  for (let i = 0; i < 30; i++) expect((await page(token, ip)).statusCode).toBe(200)
+  expect((await page(token, ip)).statusCode).toBe(429)
+  for (let i = 0; i < 60; i++)
+    expect((await app.inject({ url: `/s/${token}/media/0`, remoteAddress: ip })).statusCode).toBe(
+      200,
+    )
+  // Page hits do not eat the image budget either, and the image budget is finite.
+  scheduler.advance(61_000)
+  for (let i = 0; i < 600; i++) await app.inject({ url: `/s/${token}/media/0`, remoteAddress: ip })
+  expect((await app.inject({ url: `/s/${token}/media/0`, remoteAddress: ip })).statusCode).toBe(429)
+  expect((await page(token, ip)).statusCode).toBe(200)
+})
+
 test('the token never appears in logs or the listing', async () => {
   await setPassword()
   const r = await room()
