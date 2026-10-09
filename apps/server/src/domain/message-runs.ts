@@ -312,6 +312,34 @@ function flushHeld(sqlite: DatabaseSync, mapping: MessageRun, now: string): Doma
   return held ? updateMessage(sqlite, mapping.room_id, mapping.message_id, redact(held), now) : []
 }
 
+/**
+ * A run showed life (reasoning, a tool call, an approval, text): restart its reply's stall clock. Text is announced by
+ * `message.delta` already, so only the other moves get a `message.progressed` event.
+ */
+export function noteRunProgress(
+  sqlite: DatabaseSync,
+  runId: string,
+  at: string,
+  { announce }: { announce: boolean },
+): DomainEventDraft[] {
+  const row = sqlite
+    .prepare(
+      `SELECT m.id, m.room_id FROM message_runs r JOIN messages m ON m.id = r.message_id
+       WHERE r.run_id = ? AND m.streaming = 1`,
+    )
+    .get(runId) as { id: string; room_id: string } | undefined
+  if (!row) return []
+  // Only forwards: replayed or out-of-order events never move the clock back.
+  const changed = sqlite
+    .prepare(
+      'UPDATE messages SET progress_at = ? WHERE id = ? AND (progress_at IS NULL OR progress_at < ?)',
+    )
+    .run(at, row.id, at).changes
+  return announce && changed
+    ? [{ type: 'message.progressed', data: { roomId: row.room_id, messageId: row.id, at } }]
+    : []
+}
+
 // Surfaces a Score-run approval in the room that started the run. Messages are append-only, so the
 // card is its own agent message; the fixed id makes this idempotent per approval.
 export function approvalMessage(

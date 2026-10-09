@@ -16,7 +16,7 @@ import {
   redactRunPayload,
   type GatewayRun,
 } from './gateway.ts'
-import { appendRunMessage, completeRunMessage } from '../../domain/message-runs.ts'
+import { appendRunMessage, completeRunMessage, noteRunProgress } from '../../domain/message-runs.ts'
 import { ProfileNameSchema } from './paths.ts'
 
 export const terminalStatuses = ['completed', 'failed', 'cancelled', 'interrupted'] as const
@@ -206,7 +206,7 @@ export function translateRunEvent(
       position: seq,
       incarnation: `${context.profile}:g${context.credentialGeneration}`,
     },
-    apply({ sqlite }) {
+    apply({ sqlite, now }) {
       const row = readRun(sqlite, context.runId)
       if (
         row.profile !== context.profile ||
@@ -248,6 +248,13 @@ export function translateRunEvent(
             at,
           ),
         )
+      // Any event of a live run is a sign of life for its streaming reply (the stall notice, contract §6). Stamped with
+      // Score's own clock: it is what the browser compares against, and Hermes's may differ.
+      const progress =
+        !runLifecycle.isTerminal(row.status) && !terminal && event !== 'approval.responded'
+          ? noteRunProgress(sqlite, row.id, now, { announce: !delta && !interim })
+          : []
+      drafts.push(...progress)
       // Approval evidence may refine a closed row even when run lifecycle observations are stale.
       if (runLifecycle.isTerminal(row.status) || seq <= (row.last_seq ?? -1)) return drafts
       if (delta || interim || ignored || !known) {
@@ -261,11 +268,14 @@ export function translateRunEvent(
               'INSERT INTO run_thinking (run_id, seq, text) VALUES (?, ?, ?) ON CONFLICT DO NOTHING',
             )
             .run(row.id, seq, redactBounded(reasoning.text, MAX_THINKING_CHARS))
-        return delta
-          ? appendRunMessage(sqlite, row.id, delta.delta, at)
-          : interim && !interim.already_streamed
-            ? appendRunMessage(sqlite, row.id, interim.text, at)
-            : []
+        return [
+          ...progress,
+          ...(delta
+            ? appendRunMessage(sqlite, row.id, delta.delta, at)
+            : interim && !interim.already_streamed
+              ? appendRunMessage(sqlite, row.id, interim.text, at)
+              : []),
+        ]
       }
       const values: Record<string, SQLInputValue> = { last_seq: seq }
       if (!ignored && known) values.status = 'running'
