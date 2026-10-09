@@ -72,6 +72,12 @@ vi.mock('../src/hermes/index.ts', () => ({
 }))
 vi.mock('../src/hub/retention.ts', () => ({ pruneEvents: mocks.pruneEvents }))
 vi.mock('../src/hub/retire.ts', () => ({ retireIngestKeys: mocks.retireIngestKeys }))
+vi.mock('../src/knowledge/vault.ts', () => ({
+  KnowledgeVault: class {
+    start = async () => undefined
+    close = async () => undefined
+  },
+}))
 vi.mock('../src/app.ts', () => ({ buildApp: mocks.buildApp }))
 vi.mock('../src/auth/sqlite-session-store.ts', () => ({
   SqliteSessionStore: class {
@@ -93,6 +99,7 @@ beforeEach(() => {
   previousExitCode = process.exitCode
   process.exitCode = undefined
   vi.stubEnv('SCORE_HOME', '/tmp/score-test-startup')
+  vi.stubEnv('SCORE_VAULT', '/tmp/score-test-startup/vault') // the vault is mocked here; no temp folder
   vi.stubEnv('SCORE_PORT', '8740')
   vi.stubEnv('SCORE_HOST', '127.0.0.1')
   vi.stubEnv('SCORE_WEB_ORIGIN', 'http://127.0.0.1:5173')
@@ -131,6 +138,7 @@ test('startup opens and migrates the configured database before building and lis
   expect(mocks.buildApp).toHaveBeenCalledWith({
     config: expect.objectContaining({ home: '/tmp/score-test-startup' }),
     port: mocks.port,
+    knowledge: expect.any(Object),
     outbox: mocks.outbox,
     media: expect.any(Object),
     sessionStore: expect.any(Object),

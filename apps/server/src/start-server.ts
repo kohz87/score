@@ -231,11 +231,18 @@ export async function startServer(
       log: { warn: (object, message) => app?.log.warn(object, message) },
       seed: fakeVaultDir !== undefined,
     })
-    await knowledge.start()
+    try {
+      await knowledge.start()
+    } catch (error) {
+      // A vault that cannot be created (permissions, read-only disk) must not stop the rest of Score.
+      process.stderr.write(`Knowledge is unavailable: ${String(error)}\n`)
+      await knowledge.close()
+      knowledge = undefined
+    }
     app = buildApp({
       config,
       port,
-      knowledge,
+      ...(knowledge ? { knowledge } : {}),
       outbox,
       media,
       ...(logger === undefined ? {} : { logger }),
