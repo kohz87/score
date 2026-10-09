@@ -84,13 +84,14 @@ test('refuses non-gzip input, corrupt headers and truncated archives', async () 
   await expect(inspect(gzipSync(good.subarray(0, 700)))).rejects.toMatchObject({ status: 400 })
 })
 
+// Builds a 50,001-entry archive: ~2 s on an idle machine, so a loaded run needs more than the default 5 s.
 test('refuses too many entries and a decompression bomb', async () => {
   const many: TarEntry[] = [{ name: 'scout/' }]
   for (let i = 0; i < 50_001; i++) many.push({ name: `scout/f${i}`, body: '' })
   await refused(many)
   // 40 MiB of zeros in one file gzips to ~40 KiB: far past the ratio bound.
   await refused([{ name: 'scout/' }, { name: 'scout/zeros', body: Buffer.alloc(40 * 1024 * 1024) }])
-})
+}, 30_000)
 
 test('refuses a file over the size limit', async () => {
   const path = join(dir, 'big.tar.gz')
