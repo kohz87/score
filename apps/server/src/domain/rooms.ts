@@ -290,7 +290,21 @@ export function deleteMessage(
   if (row.deleted_at !== null) return []
   if (row.streaming === 1)
     throw new HttpError(409, 'conflict', 'This message is still being written')
+  // Same rule as an edit: a reply that is being written blocks the delete, replies still queued are cancelled.
+  const answering = sqlite
+    .prepare(
+      `SELECT 1 FROM message_runs r JOIN messages m ON m.id = r.message_id
+       WHERE (r.parent_message_id = ? OR r.chain_id = ?) AND m.deleted_at IS NULL AND m.streaming = 1`,
+    )
+    .get(messageId, messageId)
+  if (answering)
+    throw new HttpError(409, 'conflict', 'An agent is still answering this message; stop it first')
   const before = readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at)
+  sqlite
+    .prepare(
+      "UPDATE message_runs SET state = 'failed' WHERE state = 'pending' AND (parent_message_id = ? OR chain_id = ?)",
+    )
+    .run(messageId, messageId)
   sqlite
     .prepare(
       'UPDATE messages SET deleted_at = ?, updated_at = ?, version = version + 1 WHERE id = ?',
