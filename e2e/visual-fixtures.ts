@@ -17,6 +17,7 @@ import {
   StreamHelloSchema,
   SystemStatusSchema,
   KnowledgeAgentUsageSchema,
+  RoomVersionsSchema,
   KnowledgeInfoSchema,
   KnowledgeNoteSchema,
   KnowledgeTreeSchema,
@@ -129,6 +130,7 @@ export const visualFixtures: Record<string, unknown> = {
   '/api/rooms': RoomsSnapshotSchema.parse(recorded['/api/rooms']),
   '/api/shares': { items: [] },
   '/api/knowledge/agent-usage': { items: [] },
+  '/api/rooms/room-activity-feed/versions': RoomVersionsSchema.parse({ asOfSeq: 0, items: [] }),
   '/api/rooms/room-activity-feed': RoomDetailSnapshotSchema.parse(
     recorded['/api/rooms/room-activity-feed'],
   ),
