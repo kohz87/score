@@ -1,0 +1,107 @@
+.ms-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: var(--radius-20);
+  background: var(--subtle);
+}
+.ms-block h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.ms-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ms-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  background: var(--card);
+}
+.ms-row-name {
+  flex: 1 1 160px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.ms-row-detail {
+  font-size: 13px;
+  color: var(--muted);
+}
+.ms-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ms-button {
+  padding: 6px 12px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ms-button[data-primary] {
+  background: var(--ink);
+  color: var(--card);
+}
+.ms-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.ms-button:focus-visible,
+.ms-field input:focus-visible,
+.ms-field select:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.ms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.ms-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.ms-field input,
+.ms-field select {
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+}
+.ms-chooser {
+  max-height: 320px;
+  overflow-y: auto;
+}
+.ms-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+}

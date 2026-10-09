@@ -1,6 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import type { AgentDetail } from '@score/contract'
 import { ModelPicker, type ModelChoice } from '../../components/ModelPicker.tsx'
+import { AliasEditor } from '../../components/model-settings/AliasEditor.tsx'
+import { FallbackChain } from '../../components/model-settings/FallbackChain.tsx'
+import { SpeechModels } from '../../components/model-settings/SpeechModels.tsx'
+import { useModelSettings } from './model-settings-queries.ts'
 import { useModelAction } from './agent-tab-queries.ts'
 import { tabFailure } from './tab-errors.ts'
 
@@ -8,6 +12,7 @@ const HERMES_DEFAULT_VIA = 'Hermes configuration'
 
 export function ModelTab({ agent }: { agent: AgentDetail }) {
   const change = useModelAction(agent.id)
+  const settings = useModelSettings(agent.id)
   // The picker starts on what the agent uses now; once the person edits it, their draft wins until a save lands.
   const current: ModelChoice = {
     model: agent.model?.id ?? '',
@@ -47,7 +52,14 @@ export function ModelTab({ agent }: { agent: AgentDetail }) {
         </p>
       )}
       <form className="team-routine-form" aria-label="Change model" onSubmit={submit}>
-        <ModelPicker label="Model" required value={choice} onChange={setDraft} maxLength={200} />
+        <ModelPicker
+          label="Model"
+          required
+          value={choice}
+          onChange={setDraft}
+          maxLength={200}
+          agentId={agent.id}
+        />
         {current.model && (
           <p className="team-muted">
             Current: {current.model}
@@ -74,6 +86,27 @@ export function ModelTab({ agent }: { agent: AgentDetail }) {
       <p className="team-muted" role="status">
         {saved ? `Saved: ${saved}` : ''}
       </p>
+      {settings.isPending && <p role="status">Loading fallbacks, aliases and speech models…</p>}
+      {settings.isError && (
+        <p role="alert">
+          Could not read this agent&apos;s fallback, alias and speech settings from Hermes.
+        </p>
+      )}
+      {settings.data && (
+        <>
+          <FallbackChain
+            key={JSON.stringify(settings.data.fallbacks)}
+            agentId={agent.id}
+            settings={settings.data}
+          />
+          <AliasEditor agentId={agent.id} />
+          <SpeechModels
+            key={JSON.stringify(settings.data.speech)}
+            agentId={agent.id}
+            settings={settings.data}
+          />
+        </>
+      )}
     </section>
   )
 }
