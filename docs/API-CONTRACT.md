@@ -14,7 +14,7 @@ Conventions
   HttpOnly, SameSite=Strict, see §3). Without it they return `401 not_paired`. (ARCHITECTURE D7.1)
 - Errors: HTTP 4xx/5xx with `{ "error": { "code": string, "message": string, "details"?: unknown } }`.
   Common codes: `bad_request`, `not_found`, `conflict`, `not_paired`, `hermes_unavailable`, `hermes_unsupported`,
-  `feature_disabled` (compatibility gate), `forbidden`.
+  `feature_disabled` (compatibility gate), `forbidden`, `https_required` (426, plain HTTP in remote mode).
 - Snapshot endpoints (marked **S**) return `asOfSeq: number`, read in the same transaction as the data. Each
   cached query keeps its own `asOfSeq` and applies only stream events with `seq > asOfSeq` (resync rules in §2).
 - Lists are cursor-paginated: `?limit=50&cursor=<opaque>` → `{ items: T[], nextCursor: string | null }`.
@@ -268,6 +268,19 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   Mutations also need an allowed `Origin` (missing or `null` is refused). Private responses carry `Cache-Control: no-store`.
   Sessions expire after 7 days idle or 30 days absolute (stream heartbeats do not renew). Revocation and expiry close that
   session's open `/api/stream` connections. Bridge routes (`/bridge/v1/*`) are served only on a separate loopback listener.
+  - **HTTPS only (5.18).** Remote mode serves the app only over TLS. The browser port accepts TLS and plain HTTP together
+    (the first byte of a connection decides: `0x16` is a TLS handshake). Over plain HTTP, and for every request while no
+    certificate is configured (*guide-only mode*: no database, pairing, API, stream or web app is started), the server
+    answers `GET`/`HEAD /setup/https` and `GET /setup/https/score-ca.crt` and nothing else: any path under `/api` gets
+    `426 { error: { code: 'https_required', message } }` and every other path `308` to `/setup/https`.
+    `SCORE_REMOTE_INSECURE_HTTP` no longer exists: it is ignored and the server logs that it was removed.
+  - `GET /setup/https` (public, on both protocols) → static HTML, the HTTPS setup guide: why HTTPS is needed, the
+    recommended `scripts/score tls` flow with per-platform steps to trust Score's certificate authority, and the option to
+    bring your own certificate (`SCORE_TLS_CERT`/`SCORE_TLS_KEY`). It links to `https://<host>/` for the secure address
+    (the host comes from `SCORE_PUBLIC_ORIGINS` or a well-formed `Host` header, never echoed otherwise) and shows no secrets.
+  - `GET /setup/https/score-ca.crt` (public) → `application/x-x509-ca-cert`: the **public** certificate of Score's local
+    CA from `$SCORE_HOME/tls/ca.crt`; `404 not_found` when `scripts/score tls` has not been run. It never serves the CA
+    or server private key.
   - `GET /api/session/browsers` → `{ items: { id: uuid; label: string; address: string; createdAt: iso; lastSeenAt: iso;
 expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a management id, never a credential.
   - **Pairing management needs the security password** (owner, 2026-10-08), so a compromised paired browser can't invite
@@ -625,9 +638,9 @@ code?: string; signInId?: string; expiresAt?: string }`. For a `device_code` pro
 - `GET /api/settings/sign-ins/:signInId` → `SignIn` `{ id; providerId; state: 'waiting' | 'connected' | 'failed' | 'expired' |
 'cancelled'; url: string | null; code: string | null; expiresAt: string; message: string | null }` · **H**
   `DELETE /api/settings/sign-ins/:signInId` → `SignIn` (cancelled). In-memory; unknown ids → 404.
-- **H** `POST /api/settings/providers/:id/key` `{ apiKey: string; label?: string; acknowledgeInsecure?: boolean }` → the
-  provider item, after `hermes auth list` shows the new credential (`409 not_verified` otherwise). Plain-HTTP remote
-  without `acknowledgeInsecure: true` → `400 insecure_transport`; a provider that doesn't take a key → `409 not_supported`;
+- **H** `POST /api/settings/providers/:id/key` `{ apiKey: string; label?: string }` → the
+  provider item, after `hermes auth list` shows the new credential (`409 not_verified` otherwise). A provider that
+  doesn't take a key → `409 not_supported`;
   a key already being added for that provider → `409 conflict`. The key never appears in any response, log or receipt
   (the receipt's body hash is an HMAC under a per-process secret, so a retry after a restart is `409`, not a replay).
 - `GET /api/models?q=` → `{ items: ModelOption[] }`, `ModelOption = { provider: string; providerLabel: string; model: string;

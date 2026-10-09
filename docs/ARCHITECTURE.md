@@ -346,8 +346,10 @@ Reports read `runs`, `tool_calls`, `approvals` and `tasks_proj` history, kept โ
   denies by default with an exact public list (API-CONTRACT ยง3), serves the built web app from Fastify, checks Host
   and Origin against `SCORE_PUBLIC_ORIGINS` (no proxy trust), and uses server-enforced idle/absolute session expiry,
   bounded pairing attempts, a consent step on the pair page, and revocation that closes open streams. Transport is
-  TLS (`SCORE_TLS_CERT`/`SCORE_TLS_KEY`, recommended) or, only with `SCORE_REMOTE_INSECURE_HTTP=accept`, plain HTTP with
-  a permanent in-app banner: plain HTTP lets anyone on the network read and control Score (owner accepted, 2026-10-08).
+  HTTPS only (5.18, owner 2026-10-09): `SCORE_TLS_CERT`/`SCORE_TLS_KEY`, or the certificate `scripts/score tls` makes in
+  `$SCORE_HOME/tls`. The browser port peeks the first byte of each connection and sends plain HTTP to a tiny handler that
+  serves only the HTTPS setup guide (`/setup/https`, `426 https_required` under `/api`, `308` elsewhere). Without a
+  certificate Score starts in guide-only mode and serves nothing else. `SCORE_REMOTE_INSECURE_HTTP` was removed.
   Remote mode never touches Hermes configuration, keys, plugins or gateways.
 - **D7.1 Human decisions** (approval decisions, grants, rule changes, credential actions) additionally require a
   **paired browser session**. On first run the server prints a one-time pairing URL **to its own terminal**. The

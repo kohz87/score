@@ -111,18 +111,34 @@ codex exec --disable apps -m gpt-6.1-sol -s read-only "run: ls" # should list fi
 Default is local only (`127.0.0.1`); a non-loopback `SCORE_HOST` without `SCORE_REMOTE=1` is refused. Build the web app first
 (`pnpm build`); remote mode serves `apps/web/dist` itself.
 
-TLS (recommended; example with a Tailscale certificate):
+Remote access is **HTTPS only**. Plain HTTP is not a secure context (the browser disables features Score needs, and the
+pairing cookie and API keys would cross the network in clear), so over plain HTTP Score shows only an HTTPS setup guide
+(`/setup/https`) and answers `/api` with `426 https_required`. Without a certificate it starts in guide-only mode and
+serves nothing else. `SCORE_REMOTE_INSECURE_HTTP` was removed and is ignored.
+
+Option A (recommended): Score's own certificate authority. Needs `openssl` on the Score machine.
+```bash
+SCORE_HOST=192.168.1.20 SCORE_PUBLIC_ORIGINS=https://192.168.1.20:8741 scripts/score tls
+SCORE_REMOTE=1 SCORE_HOST=192.168.1.20 scripts/score start     # uses $SCORE_HOME/tls/server.{crt,key} automatically
+```
+`scripts/score tls` writes a local CA (`ca.crt`, `ca.key`; 10 years) and a server certificate (825 days, valid for
+`SCORE_HOST`, the hosts in `SCORE_PUBLIC_ORIGINS`, `localhost` and `127.0.0.1`) into `$SCORE_HOME/tls/` (0700, keys 0600).
+Running it again keeps the CA and only re-issues the server certificate, so devices stay trusted; `--new-ca` replaces both.
+Then install **`ca.crt`** (public; download it from `https://<host>:8741/setup/https/score-ca.crt` or copy the file) on every
+device: Windows (Install Certificate, Trusted Root Certification Authorities), macOS (Keychain, System, Always Trust), iOS
+(install the profile, then Settings, General, About, Certificate Trust Settings), Android (Settings, Security, Install a
+certificate, CA certificate), Linux/Chrome (Settings, Manage certificates, Authorities, Import). The setup guide page in
+Score lists the same steps. When `SCORE_PUBLIC_ORIGINS` is unset, `scripts/score start` derives
+`https://$SCORE_HOST:${SCORE_PORT:-8741}`; a `http://` value there is rewritten to `https://` when it uses these files.
+
+Option B: your own certificate (reverse proxy, Tailscale, a CA you run), e.g. with Tailscale:
 ```bash
 tailscale cert myhost.tailnet.ts.net        # writes myhost.tailnet.ts.net.crt / .key (run by you, not by Score)
 SCORE_REMOTE=1 SCORE_HOST=100.x.y.z SCORE_PORT=8741 \
 SCORE_TLS_CERT=$PWD/myhost.tailnet.ts.net.crt SCORE_TLS_KEY=$PWD/myhost.tailnet.ts.net.key \
 SCORE_PUBLIC_ORIGINS=https://myhost.tailnet.ts.net:8741 pnpm --filter @score/server start
 ```
-Plain HTTP on a trusted LAN (anyone on the network can read and control Score; the app shows a permanent banner):
-```bash
-SCORE_REMOTE=1 SCORE_REMOTE_INSECURE_HTTP=accept SCORE_HOST=192.168.1.20 \
-SCORE_PUBLIC_ORIGINS=http://192.168.1.20:8741 pnpm --filter @score/server start
-```
+Browsers then use the `https://` address; the same port answers plain HTTP with the guide.
 Wildcard binds (`0.0.0.0`, `::`) additionally need `SCORE_REMOTE_ANY=1`. `SCORE_PUBLIC_ORIGINS` is a comma-separated list
 of exact origins (scheme, host, port) browsers use. The bridge plugin keeps using loopback (`SCORE_BRIDGE_PORT`, default
 8740). Type `pair` in the server terminal to mint another pairing link; manage and revoke browsers in Settings.
@@ -166,7 +182,7 @@ export SCORE_BRIDGE_INSTALL_REF=<full 40-character commit hash>   # e.g. $(git -
 If Score runs with a custom `SCORE_HOME`, start Hermes with the same `SCORE_HOME`: the plugin reads its token and writes its spool there (default `~/.score`).
 
 Without them, Add agent stops with "Configure a pinned bridge installation URL first." Agent management works on
-this machine or over remote access with TLS; plain-HTTP remote access refuses it. Deleting an agent keeps a private
+this machine or over remote access (always HTTPS). Deleting an agent keeps a private
 export in `$SCORE_HOME/profile-backups/` (it omits credentials and is not a full undo).
 
 ## 9. Run Score every day (built app, one port)

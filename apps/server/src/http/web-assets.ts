@@ -64,7 +64,7 @@ function withSecurityHeaders(reply: FastifyReply): FastifyReply {
 export function registerWebAssets(
   app: FastifyInstance,
   assets: WebAssets,
-  transport?: 'http' | 'tls',
+  transport?: 'tls',
 ): void {
   const source = assets.get('/index.html')!
   // Presentation metadata keeps the public session endpoint boolean-only.
