@@ -9,6 +9,7 @@ import { destinations } from './shell/destinations.ts'
 import { SettingsPage } from './routes/settings/SettingsPage.tsx'
 import { ChatPage } from './routes/chat/ChatPage.tsx'
 import { NowPage } from './routes/now/NowPage.tsx'
+import { KnowledgePage } from './routes/knowledge/KnowledgePage.tsx'
 import { ReportsPage } from './routes/reports/ReportsPage.tsx'
 
 function StubPage({ title }: { title: string }) {
@@ -29,6 +30,14 @@ export const appRoutes: RouteObject[] = [
             children: [
               { index: true, element: <></> },
               { path: ':taskId', element: <></> },
+            ],
+          }
+        if (path === '/knowledge')
+          return {
+            path,
+            children: [
+              { index: true, Component: KnowledgePage },
+              { path: '*', Component: KnowledgePage },
             ],
           }
         if (path === '/reports') return { path, Component: ReportsPage }
