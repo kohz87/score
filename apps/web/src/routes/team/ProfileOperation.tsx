@@ -5,6 +5,8 @@ import { newId } from '../../data/ids.ts'
 
 const stepLabels: Record<string, string> = {
   create_profile: 'Create profile',
+  import_profile: 'Import profile',
+  describe_profile: 'Set description',
   preserve_key: 'Preserve private key',
   configure_key: 'Connect profile',
   model: 'Set model',
@@ -64,12 +66,14 @@ export function ProfileOperation({ operation }: { operation: AgentOperation }) {
         {operation.state === 'needs_attention'
           ? 'Needs attention'
           : operation.state === 'completed'
-            ? operation.kind === 'create'
-              ? 'Ready'
-              : 'Agent removed'
-            : operation.kind === 'create'
-              ? 'Setting up'
-              : 'Deleting agent'}
+            ? operation.kind === 'delete'
+              ? 'Agent removed'
+              : 'Ready'
+            : operation.kind === 'delete'
+              ? 'Deleting agent'
+              : operation.kind === 'import'
+                ? 'Importing agent'
+                : 'Setting up'}
       </h2>
       <ol className="team-operation-steps">
         {operation.steps.map((step) => (
@@ -104,7 +108,7 @@ export function ProfileOperation({ operation }: { operation: AgentOperation }) {
           <p>
             Score lost track of “{stepName}” (it restarted while the step ran). Check on the Hermes
             machine whether it finished
-            {operation.nextStep === 'create_profile'
+            {operation.nextStep === 'create_profile' || operation.nextStep === 'import_profile'
               ? ` (the profile ${operation.targetName} exists)`
               : operation.nextStep === 'delete_profile'
                 ? ` (the profile ${operation.targetName} is gone)`

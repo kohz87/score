@@ -1,4 +1,12 @@
-import { mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { gzipSync } from 'node:zlib'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
@@ -122,6 +130,7 @@ beforeEach(() => {
         `description: ${args[args.indexOf('--description') + 1]}`,
       )
     }
+    if (verb === 'profile import') mkdirSync(home)
     if (verb === 'profile describe')
       writeFileSync(join(home, 'profile.yaml'), `description: ${args.at(-1)}`)
     if (verb === 'config set') {
@@ -281,6 +290,35 @@ test('clone uses only --clone-from, and an existing directory is never adopted',
   const before = calls.length
   await expect(step('create_profile')).rejects.toThrow(/will not adopt/)
   expect(calls).toHaveLength(before)
+})
+test("import hands Hermes only Score's private upload with argv, never adopts, and reinstalls the pinned bridge", async () => {
+  const dir = join(env.home, 'profile-imports')
+  mkdirSync(dir, { mode: 0o700 })
+  const file = join(dir, '20000000-0000-4000-8000-000000000002.tar.gz')
+  writeFileSync(file, archive('helper'), { mode: 0o600 })
+  // Outside the upload directory, or readable by others: refused before any process runs.
+  context.importArchive = join(env.home, 'elsewhere.tar.gz')
+  await expect(step('import_profile')).rejects.toThrow(/not in Score storage/)
+  context.importArchive = file
+  chmodSync(file, 0o644)
+  await expect(step('import_profile')).rejects.toThrow(/private regular file/)
+  chmodSync(file, 0o600)
+  expect(calls).toEqual([])
+  await step('import_profile')
+  expect(calls).toEqual([['-p', 'default', 'profile', 'import', file, '--name', 'helper']])
+  await expect(step('import_profile')).rejects.toThrow(/will not adopt/)
+  await step('install_bridge')
+  expect(calls.at(-1)).toEqual([
+    '-p',
+    'helper',
+    'plugins',
+    'install',
+    source,
+    '--ref',
+    pin,
+    '--no-enable',
+    '--force',
+  ])
 })
 test('description pins default and uses nonempty --text with readback', async () => {
   await step('create_profile')

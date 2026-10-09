@@ -9,6 +9,7 @@ import { ApprovalCard } from './ApprovalCard.tsx'
 import { requestDelete } from './message-deletion.ts'
 import { startEdit } from './message-edit.ts'
 import { Markdown } from './Markdown.tsx'
+import { DocumentChip, WorkspaceChip } from './DocumentChips.tsx'
 import { PlanCard } from './PlanCard.tsx'
 import { RewindDialog } from './RewindDialog.tsx'
 
@@ -115,6 +116,10 @@ function Part({
           loading="lazy"
         />
       )
+    case 'document':
+      return <DocumentChip part={part} />
+    case 'workspace':
+      return <WorkspaceChip part={part} />
     case 'review':
       return (
         <div className={`chat-compact chat-review chat-review--${part.verdict}`}>

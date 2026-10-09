@@ -22,6 +22,7 @@ export {
   EtagSchema,
   assertFileContent,
 } from './agent-files.ts'
+export { inspectProfileArchive, type ArchiveFacts } from './archive-inspect.ts'
 export { assertFeature } from './live/fingerprint.ts'
 export { resolveHermesHome } from './live/paths.ts'
 export { loadBridgeBootstrap } from './bridge/bootstrap.ts'

@@ -26,6 +26,24 @@ test.each(f.parts)('round-trips the $kind message part', (part) => {
 })
 
 test.each([
+  { kind: 'document', mediaId: 'm1', name: 'a.pdf', contentType: 'application/pdf', size: 3 },
+  {
+    kind: 'document',
+    mediaId: 'm1',
+    name: 'a.pdf',
+    contentType: 'application/pdf',
+    size: 3,
+    saved: [{ agentId: 'lead', path: 'attachments/2026-10-09/a.pdf' }],
+  },
+  { kind: 'workspace', agentId: 'lead', path: 'src/main.ts' },
+])('round-trips the $kind attachment part', (part) => {
+  expect(MessagePartSchema.parse(JSON.parse(JSON.stringify(part)))).toEqual(part)
+})
+
+test.each([
+  { kind: 'document', mediaId: 'm1', name: '', contentType: 'application/pdf', size: 3 },
+  { kind: 'document', mediaId: 'm1', name: 'a.pdf', contentType: 'application/pdf', size: 0 },
+  { kind: 'workspace', agentId: 'lead', path: '' },
   { kind: 'plan', lanes: [{ agentId: '', blocks: [] }], briefId: 'brief-1' },
   { kind: 'tools', summary: 'Ran tests', runId: '' },
   { kind: 'file', path: 'src/types.ts', added: '1', removed: 0 },

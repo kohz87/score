@@ -685,6 +685,7 @@ export class FakePort implements HermesPort {
       this.profileIdentities.get(name) ?? (this.agents.has(name) ? `fake-existing:${name}` : null)
     if (
       step !== 'create_profile' &&
+      step !== 'import_profile' &&
       !['purge_identity', 'retire'].includes(step) &&
       current !== context.targetIdentity
     )
@@ -712,6 +713,24 @@ export class FakePort implements HermesPort {
       }
       current = `fake:${context.operationId}`
       this.profileIdentities.set(name, current)
+    } else if (step === 'import_profile') {
+      if (this.agents.has(name) || !input || !context.importArchive)
+        throw new HttpError(409, 'conflict', 'Profile already exists')
+      await new Promise<void>((resolve) => setTimeout(resolve, 150))
+      this.agents.set(name, {
+        ...exampleAgents()[0]!,
+        id: name,
+        name: input.name,
+        role: input.role,
+        style: input.style,
+        status: 'idle',
+        activity: null,
+        served: true,
+      })
+      current = `fake:${context.operationId}`
+      this.profileIdentities.set(name, current)
+    } else if (step === 'describe_profile') {
+      this.agentOrThrow(name).role = input!.role
     } else if (step === 'model') {
       await this.setAgentModel(name, {
         model: input!.model,
@@ -734,7 +753,7 @@ export class FakePort implements HermesPort {
         ![
           'preserve_key',
           'configure_key',
-          'model',
+          ...(steps?.has('import_profile') ? [] : ['model']),
           'permissions',
           'install_bridge',
           'enable_bridge',
@@ -1592,9 +1611,18 @@ export class FakePort implements HermesPort {
       const run = { ...exampleRun(req.agentId, runId, this.now()), model: req.model ?? null }
       const base = demoReply(req.input, this.reply(req))
       const seen = req.images?.length ?? 0
-      const response = seen
+      // Attachment notes (PLAN 5.30) are visible in the reply so end-to-end tests can see what an agent received.
+      const received = [
+        ...req.input.matchAll(/^(?:Attached|Workspace file[^:\n]*|Attached file): (.+)$/gm),
+      ]
+        .map((match) => match[1]!.split(' (')[0]!)
+        .join(', ')
+      const withImages = seen
         ? { ...base, text: `${base.text} I can see ${seen} image${seen === 1 ? '' : 's'}.` }
         : base
+      const response = received
+        ? { ...withImages, text: `${withImages.text} I received: ${received}.` }
+        : withImages
       await this.requireSink().submit({
         source: 'fake',
         identity: `${this.sessionId}:admitted:${req.turnId}`,

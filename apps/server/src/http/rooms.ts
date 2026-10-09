@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import {
   AgentIdSchema,
   AgentSummarySchema,
+  MessageAttachmentSchema,
   RewindRequestSchema,
   RoomTagSchema,
   type CommandResult,
@@ -52,7 +53,10 @@ import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { snapshot } from '../hub/snapshot.ts'
-import type { MediaStore } from '../media/store.ts'
+import { MAX_ATTACHMENTS, type MediaStore } from '../media/store.ts'
+import { attachmentNote } from '../domain/attachment-input.ts'
+import { resolveAttachments } from './message-attachments.ts'
+import type { AgentWorkspaces } from '../workspace/agent-workspace.ts'
 import { requestIdempotency } from './idempotency.ts'
 
 // "#launch" or "launch", optionally followed by #tag words ("#launch #q4"): tags are parsed from the name (PLAN 5.26).
@@ -88,10 +92,7 @@ const MessageBodySchema = z
     to: z.array(AgentIdSchema).optional(),
     planFirst: z.boolean().optional(),
     model: z.string().min(1).max(256).optional(),
-    attachments: z
-      .array(z.object({ mediaId: z.string().min(1) }).strict())
-      .max(8)
-      .optional(),
+    attachments: z.array(MessageAttachmentSchema).max(MAX_ATTACHMENTS).optional(),
     edits: z.string().min(1).max(200).optional(),
   })
   .strict()
@@ -110,6 +111,7 @@ export function registerRoomRoutes(
   ingest: Ingest,
   clock = Date.now,
   media?: MediaStore,
+  workspaces?: AgentWorkspaces,
 ): () => Promise<void> {
   // JSON escaping can expand a valid 16 KB text beyond the default receipt limit.
   const receipts = requestIdempotency(db, clock, (app.initialConfig.bodyLimit ?? 1048576) + 65536)
@@ -530,12 +532,11 @@ export function registerRoomRoutes(
       ? db.read((sqlite) => editableMessage(sqlite, roomId, body.edits!))
       : undefined
     const to = [...new Set(body.to ?? original?.to ?? [])]
-    const mediaIds = [...new Set((body.attachments ?? []).map((item) => item.mediaId))]
-    if (mediaIds.length && (!media || !mediaIds.every((item) => media.has(item))))
-      throw new HttpError(400, 'bad_request', 'Unknown attachment')
     const known = (await agents()).map((agent) => agent.id)
     if (to.some((id) => !known.includes(id)))
       throw new HttpError(400, 'bad_request', 'Unknown agent')
+    const attached = await resolveAttachments(body.attachments ?? [], media, workspaces, known)
+    const mediaIds = attached.mediaIds
     const room = db.read((sqlite) => readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at))
     const route = routeMessage(body.text, to, room, known)
     let command: CommandResult | null = modelCommand(route.model)
@@ -581,6 +582,31 @@ export function registerRoomRoutes(
           ? room.leadAgentId
           : route.routedTo[0]
         : undefined
+    // What each addressed agent is told about the attachments (and, for documents, saving them into its workspace).
+    const notes = new Map<string, string>()
+    const notices: string[] = []
+    const day = new Date(clock()).toISOString().slice(0, 10)
+    if (attached.documents.length || attached.references.length)
+      for (const agentId of planner ? [planner] : route.routedTo) {
+        const made = await attachmentNote({
+          agentId,
+          documents: attached.documents,
+          references: attached.references,
+          day,
+          workspace: () => {
+            if (!workspaces) throw new Error('workspaces are not available')
+            return workspaces.open(agentId, (event) =>
+              request.log.info({ agentId, workspace: event }, 'workspace write'),
+            )
+          },
+        })
+        notes.set(agentId, made.note)
+        notices.push(...made.notices)
+        for (const { mediaId, path } of made.saved) {
+          const part = attached.parts.find((p) => p.kind === 'document' && p.mediaId === mediaId)
+          if (part?.kind === 'document') part.saved = [...(part.saved ?? []), { agentId, path }]
+        }
+      }
     await ingest.submit({
       source: 'rooms',
       identity: randomUUID(),
@@ -590,10 +616,7 @@ export function registerRoomRoutes(
           roomId,
           author: { kind: 'you' },
           to,
-          parts: [
-            { kind: 'text', text: body.text },
-            ...mediaIds.map((mediaId) => ({ kind: 'image' as const, mediaId })),
-          ],
+          parts: [{ kind: 'text', text: body.text }, ...attached.parts],
           createdAt: now,
           streaming: false,
           refs: [],
@@ -619,7 +642,9 @@ export function registerRoomRoutes(
               chainId: id,
               hop: 0,
               input:
-                agentId === planner ? route.input + teamNote + PLAN_FIRST_ADDENDUM : route.input,
+                agentId === planner
+                  ? route.input + (notes.get(agentId) ?? '') + teamNote + PLAN_FIRST_ADDENDUM
+                  : route.input + (notes.get(agentId) ?? ''),
               agents: known,
               ...(agentId === planner ? { planFirst: true } : {}),
               ...(modelOf.has(agentId) ? { model: modelOf.get(agentId) } : {}),
@@ -646,7 +671,7 @@ export function registerRoomRoutes(
       },
     })
     await routing.dispatch()
-    return { message, routedTo: route.routedTo, command }
+    return { message, routedTo: route.routedTo, command, ...(notices.length ? { notices } : {}) }
   })
   return () => routing.dispatch()
 }

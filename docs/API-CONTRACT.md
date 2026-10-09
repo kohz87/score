@@ -137,6 +137,8 @@ type MessagePart =
   | { kind: 'thinking'; text: string } // reasoning text, collapsed in the UI (5.25)
   | { kind: 'file'; path: string; added: number; removed: number }
   | { kind: 'image'; mediaId: string } // an uploaded image, served by GET /api/media/:mediaId
+  | { kind: 'document'; mediaId: string; name: string; contentType: string; size: number; saved?: { agentId: AgentId; path: string }[] } // an uploaded PDF/DOCX/XLSX/text file (5.30; `file` is taken by changed files)
+  | { kind: 'workspace'; agentId: AgentId; path: string } // a reference to a workspace file, not a copy (5.30)
   | { kind: 'approval'; approvalId: string }
   | { kind: 'review'; verdict: 'approved' | 'changes_requested'; taskId: string | null }
 type Message = {
@@ -498,9 +500,9 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 
   ```ts
   req: { text: string; to?: AgentId[] /* explicit "To" chips; @mentions in text are merged */
-         planFirst?: boolean; model?: string /* one-shot /model */; attachments?: { mediaId: string }[]
+         planFirst?: boolean; model?: string /* one-shot /model */; attachments?: ({ mediaId: string; name?: string } | { workspace: { agentId: AgentId; path: string } })[] /* ≤ 10 */
          edits?: MessageId /* edit and resend: the sender's own earlier message in this room */ }
-  res: { message: Message; routedTo: AgentId[]; command: CommandResult | null }
+  res: { message: Message; routedTo: AgentId[]; command: CommandResult | null; notices?: string[] }
   ```
 
   `edits` (PLAN 5.24) must name a finished, undeleted message of the person in the same room that has not been edited
@@ -533,9 +535,19 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 - `GET /api/commands` → `{ items: { name: string; usage: string; description: string }[] }` (slash menu: only the
   supported commands)
 - **H** `POST /api/media` (multipart, one part named `file`) → `201 { mediaId: string; name: string; size: number;
-contentType: string }`. Types come from the bytes (png, jpeg, gif, webp); `400` empty or malformed, `413` over 8 MB,
-  `415` unsupported or contradicting type, `507 media_quota_exceeded`. Messages reference uploads with an `image`
-  part (at most 8 per message). Images on a person's message are sent to each addressed agent's run (the person's
+contentType: string }`. Types come from the bytes: png, jpeg, gif, webp, PDF, DOCX and XLSX (told apart by their ZIP
+  entries), and plain UTF-8 text, where the file name's extension (or the declared type) picks `text/plain`,
+  `text/markdown`, `text/csv`, `application/json` or `text/html`. `400` empty or malformed, `413` over 8 MB for an image
+  or 25 MiB for anything else, `415` unsupported or contradicting type, `507 media_quota_exceeded`. `GET /api/media/:mediaId`
+  serves by kind: images and text (HTML as `text/plain`, never rendered) inline under `default-src 'none'; sandbox`; PDF
+  inline with `nosniff` and no CSP (the browser's viewer needs it); DOCX/XLSX, and any file with `?download=1[&name=]`,
+  as `attachment`. Messages reference uploads with an `image` part, or a `document` part for everything else, plus
+  `workspace` parts for workspace files (`{ workspace: { agentId, path } }`, checked against that agent's workspace, no
+  copy); at most 10 attachments per message. What each addressed agent receives (5.30): text files (TXT, MD, CSV, JSON,
+  HTML) inline in the run input, fenced, redacted, up to 64 KB each and 200 KB per message (truncated with a note); PDF,
+  DOCX and XLSX saved into that agent's workspace as `attachments/<yyyy-mm-dd>/<safe name>` (never overwriting; if the
+  workspace is unavailable only the name is sent and `notices` says why) with the path named in the run input;
+  workspace references are named by path. Images as below. Images on a person's message are sent to each addressed agent's run (the person's
   own message only, never hand-offs between agents): total raw size up to 6 MB per message; images that do not fit
   or are no longer stored are skipped and the run's text gets a short note saying so.
 
@@ -656,6 +668,27 @@ Score's own runs (`score-<room>-<agent>`), compression children and empty sessio
   Score marks it done and continues. Score still checks what it can see (a created profile must exist, a deleted one
   must be gone) and never confirms a recorded failure. `step` must be the interrupted step; otherwise `409`.
 
+- **H** `POST /api/agents/imports` (body: the archive, `Content-Type: application/octet-stream`, ≤ 200 MiB) → `201
+  ImportInspection`. Score stores the upload privately (`$SCORE_HOME/profile-imports/<uploadId>.tar.gz`, directory 0700,
+  file 0600) and inspects it by streaming, never extracting it: one top-level directory; only regular files and
+  directories (links, devices and special files are refused, as Hermes does); no absolute, drive-letter or `..`
+  paths; at most 50,000 entries, 2 GiB unpacked and a 200x expansion ratio. A refused archive is `400 bad_request` with the
+  reason and is not kept. `ImportInspection` = `{ uploadId; sizeBytes; archiveRoot; suggestedId: string|null; description;
+  model; configVersion; skills: string[]; plugins: string[]; memoryBytes; fileCount; totalBytes; credentialFiles: string[];
+  hasBridge; warnings: string[] }`: names and counts only, never file contents (credential files are listed by path and
+  never read). Uploads nobody imports are dropped after 24 hours.
+- **H** `DELETE /api/agents/imports/:uploadId` → `204`: discards the upload (the preview was cancelled).
+- **H** `POST /api/agents/import` `{ uploadId; id; name; role; style; confirmCredentials? }` → `202 AgentOperation`
+  (`kind: 'import'`). The archive is inspected again; credential files need `confirmCredentials: true` (else `400`).
+  Hermes never overwrites a profile, so an existing id (or `default`, or a retired name) is `409`: there is no replace;
+  delete the agent first (which keeps a private export). Steps: `import_profile` (`hermes profile import <archive> --name
+  <id>`, argv only; Hermes extracts to its own staging directory, refuses unsafe members and drops the exporting
+  profile's runtime directories and role), `describe_profile` (the role), `preserve_key`, `configure_key`, `permissions`,
+  `install_bridge` (pinned, `--force` over a bridge that came in the archive), `enable_bridge`, `verify_ready`. The model
+  is the archive's own and is not changed. `import_profile` is neither retried nor adopted; if it fails nothing is
+  installed by Score and the upload is removed; once it succeeds the upload is removed. Hermes also writes a launcher script
+  for the new profile into `~/.local/bin` (no option to skip it).
+
 Lifecycle schemas live in `packages/contract/src/profiles.ts`. Preview accepts `{ kind: 'create', id, name, role,
 style, model, cloneFrom? }` or `{ kind: 'delete', agentId }`. Canonical names are lowercase ASCII letters/digits,
 underscore or hyphen, 1–64 characters with an alphanumeric first character; `default` and retired names are reserved.
@@ -666,7 +699,7 @@ Inheritance lists contain names only, never credential values or memory contents
 Create/delete recompute the preview; a stale hash is `409 conflict`. Cloning requires `confirmInheritance: true`.
 All mutations accept Idempotency-Key receipts. Operations are durable and lock their target through completion or
 needs-attention; no automatic adoption, rollback, credential rotation, destructive retry, or gateway restart.
-`AgentOperation` is `{ id; kind: 'create'|'delete'; targetName; incarnationId; requestHash;
+`AgentOperation` is `{ id; kind: 'create'|'delete'|'import'; targetName; incarnationId; requestHash;
 state: 'running'|'needs_attention'|'completed'; steps: { name; state: 'pending'|'running'|'completed' }[];
 createdAt; updatedAt; nextStep: string|null; error: string|null; exportPath: string|null }`.
 Managed summaries have optional `lifecycle: { state: 'setting_up'|'ready'|'deleting'|'needs_attention'|'removed';

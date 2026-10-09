@@ -245,6 +245,26 @@ test(
   },
 )
 
+test(
+  'a CSV file has a table Preview (at most 1000 rows); HTML stays source',
+  { timeout: 20_000 },
+  async () => {
+    files.set('data.csv', 'name,qty\nbolt,4\n')
+    files.set('page.html', '<h1>x</h1>')
+    dirs.get('')!.push({ name: 'data.csv', kind: 'file' }, { name: 'page.html', kind: 'file' })
+    mount()
+    fireEvent.click(await screen.findByRole('treeitem', { name: /data\.csv/ }))
+    await screen.findByLabelText('Contents of data.csv', {}, { timeout: 10_000 })
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    const preview = screen.getByLabelText('Preview of data.csv')
+    expect(within(preview).getByRole('cell', { name: 'bolt' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('treeitem', { name: /page\.html/ }))
+    await screen.findByLabelText('Contents of page.html')
+    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull()
+    expect(document.querySelector('.ws h1')).toBeNull()
+  },
+)
+
 test('the header shows the git branch and changed count only inside a repository', async () => {
   mount()
   await screen.findByRole('tree', { name: 'Files' })

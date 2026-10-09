@@ -302,7 +302,7 @@ test('attached images upload as multipart and are sent as attachments', async ()
   type('see this')
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
   await waitFor(() => expect(posts()).toHaveLength(2))
-  expect(body(1)).toEqual({ text: 'see this', attachments: [{ mediaId: 'm1' }] })
+  expect(body(1)).toEqual({ text: 'see this', attachments: [{ mediaId: 'm1', name: 'dot.png' }] })
   await waitFor(() => expect(screen.queryByText('dot.png')).toBeNull())
 })
 

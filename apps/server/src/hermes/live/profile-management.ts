@@ -294,6 +294,7 @@ export class LiveProfileManagement implements ProfileManagementPort {
     const absentStep = ['purge_identity', 'retire'].includes(step)
     if (
       step !== 'create_profile' &&
+      step !== 'import_profile' &&
       !absentStep &&
       (!context.targetIdentity || actual !== context.targetIdentity)
     )
@@ -325,7 +326,27 @@ export class LiveProfileManagement implements ProfileManagementPort {
       if (!created) throw failure('Profile creation was not verified.')
       return { identity: created }
     }
-    if (step === 'preserve_key') {
+    if (step === 'import_profile') {
+      const archive = context.importArchive
+      if (stat(home) || !archive || !input)
+        throw failure('The target path exists. Score will not adopt it.')
+      const directory = join(resolve(this.options.scoreHome), 'profile-imports')
+      // Only Score's own private upload directory; the path never comes from a request.
+      if (dirname(resolve(archive)) !== directory)
+        throw failure('The import archive is not in Score storage.')
+      const file = lstatSync(archive)
+      if (!file.isFile() || (file.mode & 0o077) !== 0)
+        throw failure('The import archive is not a private regular file.')
+      // Hermes extracts into a staging directory, refuses links and unsafe paths, and never overwrites a profile.
+      await this.cli(['-p', 'default', 'profile', 'import', archive, '--name', name])
+      const created = identity(home)
+      if (!created) throw failure('Profile import was not verified.')
+      return { identity: created }
+    }
+    if (step === 'describe_profile') {
+      if (!input) throw failure('Import input is missing.')
+      await this.describeProfile(name, input.role)
+    } else if (step === 'preserve_key') {
       ensurePrivateDirectory(resolve(this.options.scoreHome))
       const directory = join(resolve(this.options.scoreHome), 'hermes-keys')
       ensurePrivateDirectory(directory)
@@ -406,6 +427,8 @@ export class LiveProfileManagement implements ProfileManagementPort {
           .parse(this.options.bridgeInstallRef),
         // Hermes otherwise asks whether to enable it; nobody answers a prompt here. Enabling is the next step.
         '--no-enable',
+        // An imported Score agent already carries the bridge directory; Hermes reinstalls it from the pin.
+        ...(context.importArchive ? ['--force'] : []),
       ])
       if (
         !['score-bridge', 'score_bridge'].some((dir) =>
@@ -444,7 +467,8 @@ export class LiveProfileManagement implements ProfileManagementPort {
         status: 'idle',
         activity: null,
       })
-      if (detail.model?.id !== input?.model) throw failure('Model changed during setup.')
+      if (!context.importArchive && detail.model?.id !== input?.model)
+        throw failure('Model changed during setup.')
       const config = await this.options.port.readApprovals(name)
       if (
         drifted(
