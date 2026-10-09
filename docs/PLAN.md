@@ -326,11 +326,11 @@ phone-friendly Enter (newline on touch) and a send-key setting.
 **5.29 Small wins** (owner 2026-10-09, ideas from the owner's description of ekko-studio; no code or docs read) · QR code
 for "Pair another device"; a log viewer (Score's log, filter by level and keyword, redacted); Reports: cache hit rate,
 currency toggle, 30-day trend chart.
-**5.30 Documents** · Attach and preview documents (drag, drop or paste PDF, DOCX, XLSX, CSV, HTML, text, images), inline
+**5.30 Documents** (docs/briefs/5.30.md) · Attach and preview documents (drag, drop or paste PDF, DOCX, XLSX, CSV, HTML, text, images), inline
 previews in chat and workspace, attach workspace files to a message.
-**5.31 Model settings** · Fallback chains, aliases, hide unused models, speech-to-text and text-to-speech model settings
+**5.31 Model settings** (docs/briefs/5.31.md) · Fallback chains, aliases, hide unused models, speech-to-text and text-to-speech model settings
 (per agent, through Hermes).
-**5.32 Profile import** · Restore an agent from an exported bundle (export exists), with a preview of what it contains.
+**5.32 Profile import** (docs/briefs/5.32.md) · Restore an agent from an exported bundle (export exists), with a preview of what it contains.
 
 **5.33 Rewind a conversation** · Owner 2026-10-09: editing or deleting your message hides it and everything after it as a
 previous version (switcher to view), and rewinds each agent's Hermes session to before it through the bridge plugin
