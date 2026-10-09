@@ -48,4 +48,10 @@ test('import an exported agent: inspect, refuse an existing id, then run the dur
   await expect(dialog.getByRole('heading', { name: 'Ready', exact: true })).toBeVisible()
   await dialog.getByRole('link', { name: 'View agent' }).click()
   await expect(page.getByRole('heading', { name: 'imported-scout', exact: true })).toBeVisible()
+
+  // The demo team is shared by every spec in the run: delete the imported agent again (Team counts and screenshots).
+  await page.getByRole('button', { name: 'Delete agent', exact: true }).click()
+  await page.getByLabel('Type imported-scout to confirm').fill('imported-scout')
+  await page.getByRole('button', { name: 'Confirm deletion' }).click()
+  await expect(page.getByRole('heading', { name: 'Agent removed' })).toBeVisible()
 })
