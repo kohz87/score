@@ -79,10 +79,14 @@ async function play(): Promise<void> {
 test('the whole fake scenario passes real ingest validation and covers every scripted durable event', async () => {
   await play()
   const stored = events()
-  // message.deleted and message.updated only follow a person's Delete or edit, never a scripted step.
+  // message.deleted and message.updated only follow a person's Delete or edit, never a scripted step; knowledge.changed
+  // comes from the vault (6.2), not from the Hermes scenario.
   const expectedTypes = StreamEventSchema.options
     .map((schema) => schema.shape.type.value)
-    .filter((type) => type !== 'message.deleted' && type !== 'message.updated')
+    .filter(
+      (type) =>
+        type !== 'message.deleted' && type !== 'message.updated' && type !== 'knowledge.changed',
+    )
   expect([...new Set(stored.map((event) => event.type))].sort()).toEqual(expectedTypes.sort())
   expect(stored).toHaveLength(createScenario(schedulerStart).length + 4)
   expect(
