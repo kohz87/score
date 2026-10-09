@@ -308,6 +308,21 @@ uses HTTP/1 response internals).
 **5.24 Chat message actions** · Actions under each message (no overlap with the timestamp): own messages Edit (edit and
 resend; original marked edited), Copy, Delete; agent replies Copy, Retry, Delete (docs/briefs/5.24.md).
 
+**5.25 Chat (learned from hermes-webui, owner 2026-10-09)** · Agent replies render as Markdown (react-markdown + GFM,
+sanitised; code blocks with syntax highlighting and a Copy button; Mermaid diagrams); a Stop button in the composer for a
+reply in progress; tool-call cards (name, arguments, result snippet, expand/collapse all) and collapsible thinking cards;
+a context meter (tokens, cost, fill) with `/compress`, `/model`, `/usage`; Hermes `clarify` questions answered with
+inline buttons; voice input (Web Speech API). After 5.24 (same files).
+**5.26 Conversations** · Rooms: pin, archive, projects (named, coloured groups), `#tags`, search message content;
+export a room as Markdown or JSON; read-only share link (sanitised snapshot, revocable, owner-confirmed); bring in
+sessions started outside Score (CLI, Telegram…) and continue them in a room.
+**5.27 Workspace and agents** · Workspace: rendered Markdown preview, syntax highlighting (CodeMirror), git branch and
+changed-files badge, `workspace://` links in chat that open the file, resizable panel; a live todo panel from the
+agent's todo tool.
+**5.28 Phone** · Installable app (PWA: manifest, service worker, offline shell), notifications for approvals, finished
+routines and agent errors (Notification API over HTTPS); passkeys (WebAuthn) as an alternative to pairing links;
+phone-friendly Enter (newline on touch) and a send-key setting.
+
 ---
 
 ## First five tasks
