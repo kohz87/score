@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { z } from 'zod'
+import { registerKnownSecret } from '../redact.ts'
 import { HttpError } from '../errors.ts'
 import { readCookie, SESSION_COOKIE, SESSION_MAX_AGE } from './cookies.ts'
 import { InMemorySessionStore, type SessionStore } from './session-store.ts'
@@ -33,6 +34,7 @@ export class PairingService {
 
   createToken(): string {
     const token = randomBytes(32).toString('base64url')
+    registerKnownSecret(token)
     this.#tokenHash = hashSecret(token)
     this.#tokenExpiresAt = this.clock() + PAIRING_TTL_MS
     return token

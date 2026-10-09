@@ -1,5 +1,13 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -84,4 +92,33 @@ test('score tls with an unknown option fails and writes nothing', () => {
   homes.push(home)
   expect(() => tls(home, ['--bogus'])).toThrow()
   expect(existsSync(join(home, 'tls', 'server.crt'))).toBe(false)
+})
+
+test('named certificates are enabled even when every name is already a listed origin', () => {
+  const home = mkdtempSync(join(tmpdir(), 'score-tls-'))
+  homes.push(home)
+  const dir = join(home, 'tls', 'tailscale')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'box.tail1234.ts.net.crt'), 'x')
+  writeFileSync(join(dir, 'box.tail1234.ts.net.key'), 'x')
+  // The launcher without its command dispatch, so use_named_tls can run on its own.
+  const body = readFileSync(launcher, 'utf8').split('\ncase "${1:-}" in')[0]!
+  const harness = join(home, 'harness.sh')
+  writeFileSync(
+    harness,
+    `${body}\nuse_named_tls\nprintf '%s|%s' "\${SCORE_TLS_NAMES_DIR:-UNSET}" "$SCORE_PUBLIC_ORIGINS"`,
+  )
+  const out = execFileSync('bash', [harness], {
+    env: {
+      PATH: process.env.PATH!,
+      HOME: home,
+      SCORE_HOME: home,
+      SCORE_REMOTE: '1',
+      SCORE_TLS_CERT: '/x',
+      SCORE_PORT: '8741',
+      SCORE_PUBLIC_ORIGINS: 'https://192.168.1.2:8741,https://box.tail1234.ts.net:8741',
+    },
+    encoding: 'utf8',
+  })
+  expect(out).toBe(`${dir}|https://192.168.1.2:8741,https://box.tail1234.ts.net:8741`)
 })
