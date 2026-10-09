@@ -5,7 +5,9 @@ import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import { CreateRoutineSchema, PatchRoutineSchema, type HermesPort } from '../hermes/index.ts'
 import { requestIdempotency } from './idempotency.ts'
-import { assertAgentAdmits } from '../domain/agent-lifecycle.ts'
+import { agentPausedAt, assertAgentAdmits } from '../domain/agent-lifecycle.ts'
+import { teamPausedAt } from '../domain/team-pause.ts'
+import { HttpError } from '../errors.ts'
 
 const AgentParamsSchema = z.object({ agentId: z.string().min(1).max(256) })
 const RoutineParamsSchema = z.object({ routineId: z.string().min(1).max(256) })
@@ -44,7 +46,17 @@ export function registerRoutineRoutes(
   })
   app.post('/api/routines/:routineId/run', mutation, async (request) => {
     const { routineId } = RoutineParamsSchema.parse(request.params)
-    if (db) assertAgentAdmits(db.sqlite, routineId.split(':', 1)[0]!)
+    if (db) {
+      const agentId = routineId.split(':', 1)[0]!
+      assertAgentAdmits(db.sqlite, agentId)
+      // A routine started by hand is work like any other: the holds apply.
+      if (teamPausedAt(db.sqlite) !== null || agentPausedAt(db.sqlite, agentId) !== null)
+        throw new HttpError(
+          409,
+          'paused',
+          'Work is paused. Resume the team or the agent before running a routine.',
+        )
+    }
     await port.runRoutine(routineId)
     return { id: routineId, queued: true }
   })

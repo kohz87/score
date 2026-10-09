@@ -460,9 +460,18 @@ export function Composer({
         if (editSession.current === submittedSession) {
           if (live.current.text.trim() === body) latest.current.leaveEdit()
           else {
+            // The person kept typing: that stays, and the draft stashed before the edit comes back before it.
             stopEdit()
             setLoadedEdit(null)
-            setStash(null)
+            if (stash) {
+              const typed = live.current.text
+              const restored = stash.text.trim() ? `${stash.text}\n\n${typed}` : typed
+              setText(restored)
+              setCaret(restored.length)
+              setTo(stash.to)
+              setAttachments((current) => [...stash.attachments, ...current])
+              setStash(null)
+            }
           }
         }
         setNotice(

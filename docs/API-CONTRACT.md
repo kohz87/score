@@ -587,7 +587,8 @@ create dialog says so). Nothing live is exposed.
   data. The room's later edits and deletions do not change it. At most the latest 2000 messages.
 - Token: 32 random bytes (base64url, 43 chars). Only its SHA-256 is stored (`room_shares.token_hash`); the token is shown once.
 - `GET /api/shares` → `{ items: ShareSummary[] }` (`{ id; roomId; roomName; createdAt; expiresAt; views; includeImages;
-  status: 'active' | 'expired' }`, newest first; revoked shares are gone) · `GET /api/rooms/:roomId/shares` → the same, active
+  status: 'active' | 'expired'; roomChanged }`, newest first; `roomChanged` = a message of the room was deleted or rewound after the
+  snapshot (the link still shows the old text); revoked shares are gone) · `GET /api/rooms/:roomId/shares` → the same, active
   ones of that room (Chat › room menu › Share…, Settings › Shares lists all).
 - **H** `DELETE /api/shares/:id` → `204` (no password needed; idempotent; `404` unknown id). Revoking withdraws the link at once
   and drops the stored snapshot.
@@ -756,7 +757,7 @@ incarnation-aware reuse confirmation contract is agreed.
 - `PATCH /api/agents/:agentId/tools/:toolId` `{ enabled }` → `AgentDetail['tools'][number]`
 - `GET /api/agents/:agentId/routines` → `{ items: RoutineSummary[] }` · `POST …/routines` `{ title; schedule; prompt }` →
   `RoutineSummary` · `PATCH /api/routines/:id` `{ enabled?; schedule?; prompt? }` → `RoutineSummary` ·
-  `DELETE /api/routines/:id` → `{ id }` · `POST /api/routines/:id/run` → `{ id; queued: true }` (runs on the scheduler's next
+  `DELETE /api/routines/:id` → `{ id }` · `POST /api/routines/:id/run` → `{ id; queued: true }` (`409 paused` while the team or that agent is paused; runs on the scheduler's next
   tick). Routine ids are `<profile>:<jobId>`. Hermes rejecting a schedule or prompt → `409 conflict` (CLI output stays
   private).
 - **H** `PATCH /api/agents/:agentId/permissions/:permId` `{ level }` → the permission row. Stricter only: take back a
@@ -1088,7 +1089,10 @@ sessionKey; requestId; choice: ApprovalChoice; reason: string | null }[] }`. Onl
 **Commands** (PLAN 5.33, server → plugin). A sibling long poll next to the decisions one, served only to a producer
 whose `isolation` is not `unknown`; the plugin polls only while it runs inside a gateway (it needs Hermes's session store).
 
-- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: { commandId; kind: 'rewind'; sessionId; turns }[] }`. A
+- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: { commandId; kind: 'rewind'; sessionId; turns; since? }[] }` (`since` = epoch seconds of the rewound message; the plugin then
+  computes the number of turns itself, as every user turn of Hermes's alternation-repaired projection from the first one at or after
+  `since`, uses `turns` only as Score's own count, refuses (`failed`) when the message shares a turn with an earlier unanswered
+  one or no turn starts at/after `since`, and checks afterwards that no active user row from `since` remains, else `failed`). A
   command is handed to one polling producer of the profile once and is not redelivered.
 - `POST /bridge/v1/commands/:commandId/result` `{ outcome: 'done' | 'nothing' | 'failed'; turnsUndone?; rewoundCount?;
   error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what

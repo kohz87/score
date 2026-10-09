@@ -160,3 +160,105 @@ def test_the_poller_waits_outside_a_gateway(monkeypatch):
     command_poller.stop_event.set()
     command_poller._run()
     assert transport.calls == []
+
+
+class RowsDb:
+    """Rows of one session; the repaired projection merges consecutive user rows into one turn (like Hermes)."""
+
+    def __init__(self, rows):
+        self.rows = rows  # [role, timestamp, active] or [role, timestamp, active, display_kind]
+
+    def get_messages_as_conversation(self, session_id, repair_alternation=False, include_row_ids=False, **_):
+        out = []
+        for role, stamp, active, *kind in self.rows:
+            if not active:
+                continue
+            if repair_alternation and role == "user" and out and out[-1]["role"] == "user":
+                continue
+            out.append({"role": role, "timestamp": stamp, **({"display_kind": kind[0]} if kind else {})})
+        return out
+
+
+class RowsStore:
+    def __init__(self, db, broken=False):
+        self.db, self.broken, self.calls = db, broken, []
+
+    def _db_for_session_id(self, session_id):
+        return self.db
+
+    def rewind_session(self, session_id, n=1, **_):
+        self.calls.append(n)
+        if self.broken:
+            return {"rewound_count": 1, "turns_undone": n}
+        users = [i for i, row in enumerate(self.db.rows) if row[0] == "user" and row[2]]
+        # Mirror the repaired count: consecutive user rows are one turn.
+        groups = []
+        for i in users:
+            if groups and all(self.db.rows[j][0] == "user" or not self.db.rows[j][2] for j in range(groups[-1][-1], i)):
+                groups[-1].append(i)
+            else:
+                groups.append([i])
+        for group in groups[-n:]:
+            for i in range(group[0], len(self.db.rows)):
+                self.db.rows[i][2] = False
+        return {"rewound_count": 2, "turns_undone": min(n, len(groups))}
+
+
+def install(monkeypatch, store):
+    runner = types.SimpleNamespace(session_store=store)
+    module = types.ModuleType("gateway.run")
+    module._gateway_runner_ref = lambda: runner
+    monkeypatch.setitem(sys.modules, "gateway.run", module)
+    # Hermes's own user-turn rule (agent.context_compressor.user_originated_turn_view): a typed /steer row counts,
+    # other display kinds are synthetic.
+    compressor = types.ModuleType("agent.context_compressor")
+    compressor.user_originated_turn_view = lambda m: (
+        m if m.get("role") == "user" and m.get("display_kind") in (None, "steer") else None)
+    monkeypatch.setitem(sys.modules, "agent", types.ModuleType("agent"))
+    monkeypatch.setitem(sys.modules, "agent.context_compressor", compressor)
+
+
+def test_rewind_target_is_absolute_when_a_turn_had_no_reply(monkeypatch, hermes_private):
+    # u1 a1 | u2 a2 | u3 (no reply) | u4 a4 | u5 a5: Score has runs for u2, u4 and u5 only; the person's message is u4.
+    db = RowsDb([["user", 100, True], ["assistant", 101, True], ["user", 200, True], ["assistant", 201, True],
+                 ["user", 300, True], ["user", 400, True], ["assistant", 401, True],
+                 ["user", 500, True], ["assistant", 501, True]])
+    store = RowsStore(db)
+    install(monkeypatch, store)
+    # Hermes counts u3+u4 as one repaired turn, so the message u4 (400) shares a turn with the unanswered u3: refused.
+    with pytest.raises(ValueError):
+        hermes_private.rewind_session("s", 2, 400)
+    assert store.calls == []
+    # Anchored on u5 the turns from `since` are exactly one, whatever Score counted.
+    result = hermes_private.rewind_session("s", 3, 500)
+    assert store.calls == [1] and result == {"turns_undone": 1, "rewound_count": 2}
+    assert [row[2] for row in db.rows] == [True] * 7 + [False, False]
+
+
+def test_rewind_refuses_when_no_turn_since_or_still_active(monkeypatch, hermes_private):
+    db = RowsDb([["user", 100, True], ["assistant", 101, True]])
+    install(monkeypatch, RowsStore(db))
+    with pytest.raises(ValueError):
+        hermes_private.rewind_session("s", 1, 500)
+    db = RowsDb([["user", 100, True], ["assistant", 101, True], ["user", 600, True], ["assistant", 601, True]])
+    install(monkeypatch, RowsStore(db, broken=True))
+    with pytest.raises(RuntimeError):
+        hermes_private.rewind_session("s", 1, 500)
+
+
+def test_since_is_validated():
+    base = command()
+    validate_command({**base, "since": 1_790_000_000.5})
+    for bad in (0, -1, "x", True, 1e13):
+        with pytest.raises(ProtocolError):
+            validate_command({**base, "since": bad})
+
+
+def test_a_steer_row_after_the_message_counts_as_a_turn_like_hermes(monkeypatch, hermes_private):
+    # u1 a1 | u2 a2 | steer a3: anchored on u2, Hermes undoes two turns (u2 and the steer), so the plugin must ask for two.
+    db = RowsDb([["user", 100, True], ["assistant", 101, True], ["user", 200, True], ["assistant", 201, True],
+                 ["user", 300, True, "steer"], ["assistant", 301, True]])
+    store = RowsStore(db)
+    install(monkeypatch, store)
+    hermes_private.rewind_session("s", 1, 200)
+    assert store.calls == [2]

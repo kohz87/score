@@ -26,6 +26,7 @@ const share = {
   views: 3,
   includeImages: false,
   status: 'active',
+  roomChanged: false,
 }
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>
 let active: (typeof share)[]
@@ -116,4 +117,11 @@ test('Settings › Shares lists every link with room, dates and views, and revok
   expect(list.textContent).toContain('3 views')
   fireEvent.click(screen.getByRole('button', { name: /Revoke the link to #launch/ }))
   await waitFor(() => expect(screen.queryByRole('list', { name: 'Share links' })).toBeNull())
+})
+
+test('Settings › Shares marks a link whose room changed after the snapshot', async () => {
+  active = [{ ...share, roomChanged: true }]
+  wrap(<SharesSection />)
+  const list = await screen.findByRole('list', { name: 'Share links' })
+  expect(list.textContent).toContain('room changed since')
 })

@@ -35,7 +35,8 @@ export function importedRooms(sqlite: DatabaseSync): Map<string, string> {
 
 function roomName(sqlite: DatabaseSync, history: OutsideSessionHistory): string {
   const { session } = history
-  const slug = (session.title || session.id)
+  // The title is free text from another platform: redact before it becomes part of a name.
+  const slug = redact(session.title || session.id)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')

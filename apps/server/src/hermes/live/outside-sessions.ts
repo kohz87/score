@@ -133,14 +133,25 @@ export function readOutsideSession(
       [sessionId],
     ).rows[0]
     if (!row) return null
-    const rows = readBatch(
-      db,
-      'messages',
-      MessageRowSchema,
-      `WHERE session_id = ? AND role IN ('user', 'assistant') AND content IS NOT NULL AND TRIM(content) != ''
-       ORDER BY id LIMIT ${MAX_IMPORT_MESSAGES}`,
-      [sessionId],
-    ).rows
+    // The newest messages (a long session keeps its recent end), without rows Hermes soft-deleted by an undo/rewind
+    // (`active = 0`) or wrote for display only. An older Hermes without those columns shows every row.
+    const read = (extra: string) =>
+      readBatch(
+        db,
+        'messages',
+        MessageRowSchema,
+        `WHERE session_id = ? AND role IN ('user', 'assistant') AND content IS NOT NULL AND TRIM(content) != ''${extra}
+         ORDER BY id DESC LIMIT ${MAX_IMPORT_MESSAGES}`,
+        [sessionId],
+      ).rows
+    let newest
+    try {
+      newest = read(' AND active = 1 AND display_kind IS NULL')
+    } catch (error) {
+      if (!(error instanceof HermesSchemaDrift)) throw error
+      newest = read('')
+    }
+    const rows = newest.reverse()
     const messages = rows.map((message) => ({
       role: message.role === 'user' ? ('user' as const) : ('assistant' as const),
       text: redactBounded(message.content ?? '', MAX_IMPORT_TEXT_BYTES),

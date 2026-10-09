@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { ApiError } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
+import { useRevokeShare, useRoomShares } from '../../data/shares.ts'
 import { fetchRewindPlan, postRewind, REASON_TEXT } from './rewind.ts'
 
 type Failure = { agentId: string; reason: RewindSkipReason }[]
@@ -38,6 +39,10 @@ export function RewindDialog({
     staleTime: 0,
     retry: false,
   })
+  // Hiding a message does not touch a share link: its frozen copy keeps showing it until the link is revoked.
+  const roomShares = useRoomShares(roomId)
+  const revoke = useRevokeShare()
+  const liveShares = roomShares.data?.filter((share) => share.status === 'active') ?? []
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [failed, setFailed] = useState<Failure | null>(null)
@@ -115,6 +120,19 @@ export function RewindDialog({
             )}
             {rewinds.length === 0 && !cannot?.length && (
               <li>No agent has a turn to rewind from here.</li>
+            )}
+            {liveShares.length > 0 && (
+              <li>
+                {plural(liveShares.length, 'share link', 'share links')} of this room will still
+                show this message.{' '}
+                <button
+                  type="button"
+                  disabled={revoke.isPending || busy}
+                  onClick={() => liveShares.forEach((share) => revoke.mutate(share.id))}
+                >
+                  Revoke {liveShares.length === 1 ? 'it' : 'them'}
+                </button>
+              </li>
             )}
             <li>Long-term memory (MEMORY.md, skills, Knowledge notes) is not rewound.</li>
           </ul>
