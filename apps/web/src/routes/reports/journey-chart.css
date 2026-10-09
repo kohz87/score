@@ -1,0 +1,100 @@
+.journey {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+.journey__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--ink);
+}
+.journey__legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.journey__legend .journey__mark {
+  fill: var(--ink);
+}
+.journey__note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.journey__scroll {
+  min-width: 0;
+  overflow-x: auto;
+  padding: 4px;
+  margin: -4px;
+}
+.journey__grid-rows {
+  min-width: 760px;
+  display: flex;
+  flex-direction: column;
+}
+.journey__row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+.journey__name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.journey__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  font-family: var(--font-body);
+}
+.journey__grid {
+  stroke: var(--hairline);
+  stroke-width: 1;
+}
+.journey__lane {
+  stroke: var(--hairline);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.journey__mark {
+  stroke: var(--card);
+  stroke-width: 1.5;
+  opacity: 0.92;
+}
+.journey__tick {
+  font-size: 13px;
+  fill: var(--ink-muted);
+}
+.journey__table-scroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+.journey__list summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+}
+.journey__list h3 {
+  margin: 14px 0 4px;
+  font-size: 15px;
+}
+.journey__list ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--ink);
+}

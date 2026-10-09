@@ -10,15 +10,18 @@ import { TasksByDayChart } from './TasksByDayChart.tsx'
 import { formatDuration, formatPercent } from './reports-format.ts'
 import { formatMoney, useDisplayCurrency, USD } from '../../data/currency.ts'
 import { TrendChart } from './TrendChart.tsx'
+import { JourneyChart } from './JourneyChart.tsx'
 import {
   customRangeError,
   reportCsvHref,
   reportRanges,
+  useJourney,
   useReports,
   viewerToday,
   type ReportSpec,
 } from './reports-queries.ts'
 import './reports.css'
+import './journey-chart.css'
 
 function agentFor(agents: AgentSummary[], id: string): AgentSummary {
   return (
@@ -366,6 +369,8 @@ export function ReportsPage() {
       : { range: '7d' }
   }, [urlRange, urlFrom, urlTo])
   const reports = useReports(spec)
+  const journeyOn = params.get('tab') === 'journey'
+  const journey = useJourney(spec, journeyOn)
   const agents = useStreamQuery(agentsQuery).data ?? []
   const report = reports.data
   // Fetching with nothing newer to show; the numbers on screen may belong to the previous range.
@@ -389,6 +394,15 @@ export function ReportsPage() {
     } catch {
       // A private window: the choice just isn't remembered.
     }
+  }
+
+  function setTab(tab: 'overview' | 'journey') {
+    setParams((current) => {
+      const copy = new URLSearchParams(current)
+      if (tab === 'journey') copy.set('tab', 'journey')
+      else copy.delete('tab')
+      return copy
+    })
   }
 
   function setSpec(next: ReportSpec) {
@@ -416,6 +430,14 @@ export function ReportsPage() {
           </p>
         </div>
         <div className="reports-hero__actions">
+          <div className="reports-tabs" role="group" aria-label="View">
+            <button type="button" aria-pressed={!journeyOn} onClick={() => setTab('overview')}>
+              Overview
+            </button>
+            <button type="button" aria-pressed={journeyOn} onClick={() => setTab('journey')}>
+              Journey
+            </button>
+          </div>
           <div className="reports-tabs" role="group" aria-label="Range">
             {reportRanges.map(({ id, label }) => (
               <button
@@ -446,9 +468,11 @@ export function ReportsPage() {
               </button>
             </div>
           )}
-          <a className="reports-export" href={reportCsvHref(spec)} download>
-            Export CSV
-          </a>
+          {!journeyOn && (
+            <a className="reports-export" href={reportCsvHref(spec)} download>
+              Export CSV
+            </a>
+          )}
         </div>
       </section>
       {reports.isError && (
@@ -459,7 +483,30 @@ export function ReportsPage() {
           </button>
         </p>
       )}
-      {report && (
+      {journeyOn && (
+        <section
+          className={`reports-card reports-journey${journey.isPlaceholderData ? ' reports-body--stale' : ''}`}
+          aria-labelledby="reports-journey-title"
+          aria-busy={journey.isFetching}
+        >
+          <h2 id="reports-journey-title">Journey: tasks, notes, skills and memory over time</h2>
+          {journey.data ? (
+            <JourneyChart journey={journey.data} agents={agents} />
+          ) : journey.isError ? (
+            <p role="alert" className="reports-error">
+              The journey could not be loaded.{' '}
+              <button type="button" onClick={() => void journey.refetch()}>
+                Try again
+              </button>
+            </p>
+          ) : (
+            <p role="status" className="reports-empty">
+              Loading the journey…
+            </p>
+          )}
+        </section>
+      )}
+      {report && !journeyOn && (
         <div
           className={`reports-body${stale ? ' reports-body--stale' : ''}`}
           aria-busy={reports.isFetching}
