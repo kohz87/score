@@ -76,7 +76,7 @@
   --font-code: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-/* Dark theme: Settings › Plugins and look. "System" leaves data-theme unset and follows the OS. */
+/* Dark theme: Settings › Look. "System" leaves data-theme unset and follows the OS. */
 :root[data-theme='dark'] {
   color-scheme: dark;
   --profile-dashed: #4d5260;

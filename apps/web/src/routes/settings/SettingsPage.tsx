@@ -3,7 +3,7 @@ import { agentsQuery } from '../team/team-queries.ts'
 import { AdvancedSection } from './AdvancedSection.tsx'
 import { ConnectionsSection } from './ConnectionsSection.tsx'
 import { RulesSection } from './RulesSection.tsx'
-import { PluginsSection } from './PluginsSection.tsx'
+import { LookSection } from './LookSection.tsx'
 import { ProvidersSection } from './ProvidersSection.tsx'
 import { HermesVersionBanner } from './HermesVersionBanner.tsx'
 import { RemoteSection } from './RemoteSection.tsx'
@@ -14,7 +14,7 @@ const sections = [
   { id: 'models', label: 'Models and keys', built: true },
   { id: 'connections', label: 'Connections', built: true },
   { id: 'rules', label: 'Rules and approvals', built: true },
-  { id: 'plugins', label: 'Plugins and look', built: true },
+  { id: 'look', label: 'Look', built: true },
   { id: 'advanced', label: 'Advanced', built: true },
 ] as const
 
@@ -37,7 +37,7 @@ export function SettingsPage() {
         <ProvidersSection agents={agents} />
         <ConnectionsSection agents={agents} />
         <RulesSection agents={agents} />
-        <PluginsSection agents={agents} />
+        <LookSection />
         <AdvancedSection />
         <RemoteSection />
       </div>

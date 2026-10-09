@@ -174,7 +174,7 @@ test('profile shows the header band, tabs and overview cards from the detail', a
   expect(await screen.findByRole('heading', { name: 'Builder', level: 1 })).toBeDefined()
   expect(screen.getByText('Builds what Lead plans.')).toBeDefined()
   expect(screen.getByRole('tablist', { name: "Builder's settings" })).toBeDefined()
-  expect(screen.getAllByRole('tab')).toHaveLength(10)
+  expect(screen.getAllByRole('tab')).toHaveLength(11)
   expect(screen.getByText('Calm and precise.')).toBeDefined()
   expect(
     within(screen.getByRole('main').querySelector('.team-facts')! as HTMLElement)
@@ -1072,4 +1072,67 @@ test('the History tab lists runs with links, filters by outcome, searches and pa
   })
   fireEvent.click(panel.getByRole('button', { name: 'Search' }))
   await waitFor(() => expect(urls.some((url) => url.includes('q=stream'))).toBe(true))
+})
+
+const pluginRows = [
+  { id: 'score-bridge', label: 'score-bridge', enabled: true, locked: true, description: null },
+  { id: 'memory-notes', label: 'memory-notes', enabled: true, locked: false, description: 'Notes' },
+  { id: 'image-tools', label: 'image-tools', enabled: false, locked: false, description: null },
+]
+function pluginServer(failToggle = false) {
+  let rows = pluginRows
+  return tabsApi((call) => {
+    if (call.path.startsWith('/api/settings/plugins/') && call.method === 'PATCH') {
+      if (failToggle)
+        return json(
+          { error: { code: 'conflict', message: 'Hermes did not apply the change' } },
+          409,
+        )
+      const id = decodeURIComponent(call.path.split('?')[0]!.split('/').pop()!)
+      rows = rows.map((row) =>
+        row.id === id ? { ...row, enabled: Boolean(call.body.enabled) } : row,
+      )
+      return json(rows.find((row) => row.id === id))
+    }
+    if (call.path.startsWith('/api/settings/plugins')) return json({ items: rows })
+    return undefined
+  })
+}
+
+test("the Plugins tab lists this agent's plugins; toggling patches and re-reads", async () => {
+  renderTeam('/team/builder')
+  const calls = pluginServer()
+  fireEvent.click(await screen.findByRole('tab', { name: 'Plugins' }))
+  const panel = screen.getByRole('tabpanel')
+  const memory = await within(panel).findByRole('switch', { name: 'memory-notes for Builder' })
+  expect(memory.getAttribute('aria-checked')).toBe('true')
+  expect(within(panel).getByText(/takes effect on its next session/)).toBeTruthy()
+  fireEvent.click(memory)
+  await waitFor(() =>
+    expect(
+      within(panel)
+        .getByRole('switch', { name: 'memory-notes for Builder' })
+        .getAttribute('aria-checked'),
+    ).toBe('false'),
+  )
+  const patch = calls.find((call) => call.method === 'PATCH')!
+  expect(patch.path).toBe('/api/settings/plugins/memory-notes?agent=builder')
+  expect(patch.body).toEqual({ enabled: false })
+})
+
+test('the Plugins tab locks the Score bridge and shows a refused change', async () => {
+  renderTeam('/team/builder')
+  const calls = pluginServer(true)
+  fireEvent.click(await screen.findByRole('tab', { name: 'Plugins' }))
+  const bridge = (await screen.findByRole('switch', {
+    name: 'score-bridge for Builder',
+  })) as HTMLButtonElement
+  expect(bridge.disabled).toBe(true)
+  expect(screen.getByText(/can't be turned off here/)).toBeDefined()
+  fireEvent.click(bridge)
+  expect(calls.some((call) => call.method === 'PATCH')).toBe(false)
+  fireEvent.click(screen.getByRole('switch', { name: 'image-tools for Builder' }))
+  expect((await screen.findByText('Hermes did not apply the change')).getAttribute('role')).toBe(
+    'alert',
+  )
 })

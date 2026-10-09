@@ -65,7 +65,7 @@ export function captureReadShape(argv: string[]): boolean {
     argv[5] === 'api_server'
   )
     return true
-  // Plugin list for one profile (Settings › Plugins and look).
+  // Plugin list for one profile (Team › agent › Plugins).
   if (
     argv.length === 5 &&
     argv[0] === '-p' &&
