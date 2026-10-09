@@ -1,6 +1,12 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import type { HistoryOutcome } from '@score/contract'
+import {
+  attemptEndText,
+  attemptPath,
+  attemptStatusLabel,
+  evidenceLabel,
+} from '../attempts/attempt-format.ts'
 import { formatDuration, formatUsd } from '../reports/reports-format.ts'
 import { useHistory } from './agent-tab-queries.ts'
 
@@ -71,7 +77,9 @@ export function HistoryTab({ agentId, agentName }: { agentId: string; agentName:
               <p>
                 <strong>{run.title}</strong>{' '}
                 <span className="team-channel-state" data-outcome={run.outcome}>
-                  {outcomeLabels[run.outcome]}
+                  {run.attempt
+                    ? attemptStatusLabel[run.attempt.status]
+                    : outcomeLabels[run.outcome]}
                 </span>
               </p>
               <p className="team-muted">
@@ -79,8 +87,22 @@ export function HistoryTab({ agentId, agentName }: { agentId: string; agentName:
                 {run.costUsd !== null && ` · ${formatUsd(run.costUsd)}`}
                 {run.model && ` · ${run.model}`}
               </p>
+              {run.attempt && (
+                <p className="team-muted">
+                  Kanban attempt ·{' '}
+                  {attemptEndText(run.attempt, (iso) => new Date(iso).toLocaleString())}
+                  {run.attempt.evidence === 'partial' && ` · ${evidenceLabel.partial}`} · tools and
+                  model not observed
+                </p>
+              )}
               <p className="team-muted">
-                {run.task && (
+                {run.attempt && !run.attempt.task.current && (
+                  <Link to={attemptPath(run.attempt)}>
+                    Open the attempt (earlier copy of the board)
+                  </Link>
+                )}
+                {run.attempt && !run.attempt.task.current && run.task && ' · '}
+                {run.task && (!run.attempt || run.attempt.task.current) && (
                   <Link to={`/tasks/${encodeURIComponent(run.task.id)}`}>
                     Task: {run.task.title}
                   </Link>

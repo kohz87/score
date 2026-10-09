@@ -10,6 +10,7 @@ import { destinations } from './shell/destinations.ts'
 import { SettingsPage } from './routes/settings/SettingsPage.tsx'
 import { ChatPage } from './routes/chat/ChatPage.tsx'
 import { NowPage } from './routes/now/NowPage.tsx'
+import { AttemptPage } from './routes/attempts/AttemptPage.tsx'
 import { ReportsPage } from './routes/reports/ReportsPage.tsx'
 
 // Knowledge brings CodeMirror and the Markdown renderer: loaded on first visit, not with the shell.
@@ -87,6 +88,7 @@ export const appRoutes: RouteObject[] = [
           ],
         }
       }),
+      { path: '/attempts/:attemptId', Component: AttemptPage },
       { path: '/pair', loader: pairBrowser, Component: PairPage },
       { path: '*', element: <StubPage title="Page not found" /> },
     ],

@@ -2,6 +2,7 @@ import type { AgentSummary, LaneBlock, NowSnapshot } from '@score/contract'
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { UnattributedGlyph } from '../../components/UnattributedGlyph.tsx'
 import {
   axisTicks,
   clockLabel,
@@ -10,6 +11,7 @@ import {
   laneItems,
   LANE_HEIGHT,
   percent,
+  UNATTRIBUTED_NAME,
   windowOf,
 } from './timeline-model.ts'
 
@@ -50,9 +52,27 @@ function usePlotWidth() {
   return [ref, width] as const
 }
 
+/** Where a click on a block goes: its task when it is on the current board, an attempt of an earlier board its own page. */
+function blockPath(block: LaneBlock): string | null {
+  if (block.taskId !== null) return `/tasks/${encodeURIComponent(block.taskId)}`
+  if (block.attemptId) return `/attempts/${encodeURIComponent(block.attemptId)}`
+  return null
+}
+
+/** What the person is told beyond the label: attempt facts that a color or an outline cannot carry. */
+function blockNotes(block: LaneBlock): string[] {
+  const notes: string[] = []
+  if (block.observationEndedAt)
+    notes.push(`no longer observed since ${clockLabel(Date.parse(block.observationEndedAt))}`)
+  if (block.provenance === 'partial') notes.push('provenance unknown')
+  return notes
+}
+
+type LaneOwner = { key: string; name: string; role: string | null; agent: AgentSummary | null }
+
 /** A group of crowded task blocks: one counted block that opens a small list (Escape or a click elsewhere closes it). */
 function BlockGroup({
-  agent,
+  owner,
   blocks,
   state,
   style,
@@ -60,7 +80,7 @@ function BlockGroup({
   onToggle,
   onClose,
 }: {
-  agent: AgentSummary
+  owner: LaneOwner
   blocks: LaneBlock[]
   state: LaneBlock['state']
   style: CSSProperties
@@ -97,29 +117,39 @@ function BlockGroup({
         className={`now-block now-block--${state} now-block--group`}
         aria-expanded={open}
         aria-haspopup="true"
-        aria-label={`${agent.name}: ${label}, ${stateText[state]}. Show the list`}
+        aria-label={`${owner.name}: ${label}, ${stateText[state]}. Show the list`}
         title={label}
         onClick={onToggle}
       >
         <span className="now-block-label">{label}</span>
       </button>
       {open && (
-        <ul className="now-group-list" aria-label={`${agent.name}: ${label}`}>
+        <ul className="now-group-list" aria-label={`${owner.name}: ${label}`}>
           {blocks.map((block) => (
             <li key={block.id}>
               <button
                 type="button"
                 className="now-group-item"
-                disabled={block.taskId === null}
+                disabled={blockPath(block) === null}
                 onClick={() => {
-                  if (block.taskId !== null)
-                    void navigate(`/tasks/${encodeURIComponent(block.taskId)}`)
+                  const path = blockPath(block)
+                  if (path !== null) void navigate(path)
                 }}
               >
-                <AgentGlyph agent={agent} size="xs" bare decorative />
+                {owner.agent ? (
+                  <AgentGlyph agent={owner.agent} size="xs" bare decorative />
+                ) : (
+                  <UnattributedGlyph size="xs" decorative />
+                )}
                 <span className="now-group-title">{block.label}</span>
                 <span className="now-group-meta">
-                  {stateText[block.state]}, {clockLabel(Date.parse(block.start))}
+                  {[
+                    block.observationEndedAt ? null : stateText[block.state],
+                    clockLabel(Date.parse(block.start)),
+                    ...blockNotes(block),
+                  ]
+                    .filter(Boolean)
+                    .join(', ')}
                 </span>
               </button>
             </li>
@@ -136,8 +166,21 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
   const [plotRef, plotWidth] = usePlotWidth()
   const [openGroup, setOpenGroup] = useState<string | null>(null)
   const links = connectors(snapshot, window, plotWidth)
-  const hasChat = snapshot.lanes.some((lane) => lane.blocks.some((block) => block.kind === 'chat'))
-  const height = Math.max(snapshot.lanes.length, 1) * LANE_HEIGHT
+  const owners: (LaneOwner & { blocks: LaneBlock[] })[] = snapshot.lanes.map(
+    ({ agent, blocks }) => ({ key: agent.id, name: agent.name, role: agent.role, agent, blocks }),
+  )
+  // Attempts with no known agent: a lane of their own under the agents, never an agent's.
+  if (snapshot.unattributed)
+    owners.push({
+      key: ' unattributed',
+      name: UNATTRIBUTED_NAME,
+      role: 'No known agent',
+      agent: null,
+      blocks: snapshot.unattributed.blocks,
+    })
+  const hasChat = owners.some((lane) => lane.blocks.some((block) => block.kind === 'chat'))
+  const hasUnobserved = owners.some((lane) => lane.blocks.some((block) => block.observationEndedAt))
+  const height = Math.max(owners.length, 1) * LANE_HEIGHT
   const nowLeft = percent(window, window.now)
   const planner = snapshot.lanes[0]?.agent
   return (
@@ -146,18 +189,23 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
         <div className="now-score-grid">
           <div className="now-lane-labels">
             <div className="now-axis-spacer" />
-            {snapshot.lanes.map(({ agent }) => (
-              <div key={agent.id} className="now-lane-label">
-                <AgentGlyph agent={agent} size="lg" />
+            {owners.map(({ key, agent, name, role }) => (
+              <div key={key} className="now-lane-label">
+                {agent ? <AgentGlyph agent={agent} size="lg" /> : <UnattributedGlyph />}
                 <div className="now-lane-name">
                   <span className="now-lane-title">
-                    <Link
-                      to={`/now/watch/${encodeURIComponent(agent.id)}`}
-                      className="now-lane-link"
-                    >
-                      {agent.name}
-                    </Link>
-                    {agent.status === 'working' && (
+                    {agent ? (
+                      <Link
+                        to={`/now/watch/${encodeURIComponent(agent.id)}`}
+                        className="now-lane-link"
+                      >
+                        {agent.name}
+                      </Link>
+                    ) : (
+                      // Nothing was observed of these attempts' runs, so there is no Watch page to link to.
+                      <span>{name}</span>
+                    )}
+                    {agent?.status === 'working' && (
                       <span
                         className="now-lane-dot"
                         style={{ background: agent.style.color }}
@@ -166,7 +214,7 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
                       />
                     )}
                   </span>
-                  <span className="now-lane-role">{agent.role}</span>
+                  <span className="now-lane-role">{role}</span>
                 </div>
               </div>
             ))}
@@ -185,7 +233,7 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
             </div>
             <div className="now-plot" data-testid="score-plot" ref={plotRef} style={{ height }}>
               <div className="now-future" style={{ left: `${nowLeft}%` }} />
-              {snapshot.lanes.map((_, index) => (
+              {owners.map((_, index) => (
                 <div
                   key={index}
                   className="now-lane-line"
@@ -218,69 +266,86 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
                   {connectorLabel[link.kind]}
                 </span>
               ))}
-              {snapshot.lanes.map(({ agent, blocks }, index) => (
-                <div
-                  key={agent.id}
-                  className="now-lane"
-                  role="group"
-                  aria-label={`${agent.name}, ${agent.role}`}
-                  style={
-                    { top: index * LANE_HEIGHT, '--agent': agent.style.color } as CSSProperties
-                  }
-                >
-                  {laneItems(window, blocks, plotWidth).map((item) => {
-                    const layout = item.layout
-                    const block = layout.block
-                    const style: CSSProperties = { left: `${layout.left}%` }
-                    if (layout.width !== null) style.width = `${layout.width}%`
-                    if (item.kind === 'chat')
+              {owners.map((owner, index) => {
+                const { agent, blocks } = owner
+                return (
+                  <div
+                    key={owner.key}
+                    className={`now-lane${agent ? '' : ' now-lane--unattributed'}`}
+                    role="group"
+                    aria-label={`${owner.name}, ${owner.role}`}
+                    style={
+                      {
+                        top: index * LANE_HEIGHT,
+                        '--agent': agent ? agent.style.color : 'var(--ink-muted)',
+                      } as CSSProperties
+                    }
+                  >
+                    {laneItems(window, blocks, plotWidth).map((item) => {
+                      const layout = item.layout
+                      const block = layout.block
+                      const style: CSSProperties = { left: `${layout.left}%` }
+                      if (layout.width !== null) style.width = `${layout.width}%`
+                      if (item.kind === 'chat')
+                        return (
+                          <span
+                            key={block.id}
+                            className="now-chat-band"
+                            style={style}
+                            role="img"
+                            aria-label={`${owner.name}: ${block.label}, ${clockLabel(Date.parse(block.start))}`}
+                            title={block.label}
+                          />
+                        )
+                      if (item.kind === 'group')
+                        return (
+                          <BlockGroup
+                            key={block.id}
+                            owner={owner}
+                            blocks={item.blocks}
+                            state={block.state}
+                            style={style}
+                            open={openGroup === block.id}
+                            onToggle={() => setOpenGroup(openGroup === block.id ? null : block.id)}
+                            onClose={() => setOpenGroup(null)}
+                          />
+                        )
+                      const path = blockPath(block)
+                      const unobserved = Boolean(block.observationEndedAt)
+                      const notes = blockNotes(block)
+                      // Observation that stopped is not work in progress and not a finish: no state word for it.
+                      const spoken = [
+                        `${owner.name}: ${block.label}`,
+                        ...(unobserved ? [] : [stateText[block.state]]),
+                        clockLabel(Date.parse(block.start)),
+                        ...notes,
+                      ].join(', ')
                       return (
-                        <span
+                        <button
                           key={block.id}
-                          className="now-chat-band"
+                          type="button"
+                          className={`now-block now-block--${unobserved ? 'done' : block.state}${unobserved ? ' now-block--unobserved' : ''}`}
                           style={style}
-                          role="img"
-                          aria-label={`${agent.name}: ${block.label}, ${clockLabel(Date.parse(block.start))}`}
-                          title={block.label}
-                        />
+                          aria-label={spoken}
+                          aria-disabled={path === null ? true : undefined}
+                          title={
+                            notes.length > 0 ? `${block.label} (${notes.join(', ')})` : block.label
+                          }
+                          onClick={() => {
+                            if (path !== null) void navigate(path)
+                          }}
+                        >
+                          {block.state === 'working' && !unobserved && (
+                            <span className="now-block-dot" aria-hidden="true" />
+                          )}
+                          {block.state === 'waiting' && <Shield />}
+                          <span className="now-block-label">{block.label}</span>
+                        </button>
                       )
-                    if (item.kind === 'group')
-                      return (
-                        <BlockGroup
-                          key={block.id}
-                          agent={agent}
-                          blocks={item.blocks}
-                          state={block.state}
-                          style={style}
-                          open={openGroup === block.id}
-                          onToggle={() => setOpenGroup(openGroup === block.id ? null : block.id)}
-                          onClose={() => setOpenGroup(null)}
-                        />
-                      )
-                    const taskId = block.taskId
-                    return (
-                      <button
-                        key={block.id}
-                        type="button"
-                        className={`now-block now-block--${block.state}`}
-                        style={style}
-                        aria-label={`${agent.name}: ${block.label}, ${stateText[block.state]}, ${clockLabel(Date.parse(block.start))}`}
-                        aria-disabled={taskId === null ? true : undefined}
-                        title={block.label}
-                        onClick={() => {
-                          if (taskId !== null) void navigate(`/tasks/${encodeURIComponent(taskId)}`)
-                        }}
-                      >
-                        {block.state === 'working' && (
-                          <span className="now-block-dot" aria-hidden="true" />
-                        )}
-                        {block.state === 'waiting' && <Shield />}
-                        <span className="now-block-label">{block.label}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              ))}
+                    })}
+                  </div>
+                )
+              })}
               <div className="now-line" style={{ left: `${nowLeft}%` }} aria-hidden="true" />
               <div className="now-line-label" style={{ left: `${nowLeft}%` }}>
                 Now, {clockLabel(window.now)}
@@ -316,6 +381,12 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
           <span>
             <span className="now-legend-swatch now-legend-swatch--chat" />
             Chatting
+          </span>
+        )}
+        {hasUnobserved && (
+          <span>
+            <span className="now-legend-swatch now-legend-swatch--unobserved" />
+            No longer observed
           </span>
         )}
         <span>

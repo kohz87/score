@@ -55,12 +55,13 @@ test('a PDF is a download link, with no dialog', () => {
 
 test('CSV shows as a table, header first, and stops at 1000 rows', () => {
   const rows = Array.from({ length: 1200 }, (_, i) => `${i},v${i}`)
-  render(<CsvTable text={['id,value', ...rows].join('\n')} />)
+  const { container } = render(<CsvTable text={['id,value', ...rows].join('\n')} />)
   expect(screen.getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
     'id',
     'value',
   ])
-  expect(screen.getAllByRole('row')).toHaveLength(1000)
+  // Counted by element: a role query over a thousand rows is slow enough to time out on a loaded machine.
+  expect(container.querySelectorAll('tr')).toHaveLength(1000)
   expect(screen.getByText(/Showing the first 1000 rows/)).toBeTruthy()
 })
 

@@ -236,6 +236,26 @@ test('shows a loading state, then the populated drawer', async () => {
   )
 })
 
+test('legacy run links no attempt could be proven for read as one earlier-attempt line each', async () => {
+  current = detail({
+    unresolvedRunLinks: [
+      { legacyId: '12', reason: 'unproven' },
+      { legacyId: '13', reason: 'not_yet_resolved' },
+    ],
+  })
+  setup()
+  const panel = await drawer()
+  await within(panel).findByRole('heading', { name: 'Event stream for the feed' })
+  expect(within(panel).getAllByText('An earlier attempt (details not kept)')).toHaveLength(2)
+})
+
+test('without attempts the drawer has no earlier-attempts section', async () => {
+  setup()
+  const panel = await drawer()
+  await within(panel).findByRole('heading', { name: 'Event stream for the feed' })
+  expect(within(panel).queryByText('Earlier attempts')).toBeNull()
+})
+
 test('a task that belongs to no run offers no Flow link', async () => {
   current = detail({ briefId: null })
   setup()

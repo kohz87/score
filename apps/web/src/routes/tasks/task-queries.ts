@@ -151,6 +151,7 @@ export function useTaskDetail(taskId: string) {
       if (
         (event.type === 'task.upserted' && event.data.id === taskId) ||
         (event.type === 'task.activity' && event.data.taskId === taskId) ||
+        (event.type === 'attempt.updated' && event.data.taskId === taskId) ||
         ((event.type === 'approval.requested' || event.type === 'approval.updated') &&
           (event.data.refs.some((ref) => ref.kind === 'task' && ref.taskId === taskId) ||
             queryClient.getQueryData<TaskDetail>(taskDetailKey(taskId))?.pendingApproval?.id ===
