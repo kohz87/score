@@ -48,6 +48,7 @@ const ReadConfigKeys = [
   'terminal.backend',
   // Team › agent › Model: fallback chain, aliases and speech models (5.31). Read into memory, never logged.
   'fallback_providers',
+  'fallback_model', // the legacy key Hermes still appends to the chain
   'model_aliases',
   'tts',
   'stt',

@@ -16,9 +16,11 @@ import type { HermesRunner } from './cli.ts'
 // Per-profile model settings that Hermes keeps in config.yaml (hermes_cli/config_defaults.py, fallback_config.py,
 // model_switch.py). Score never opens the file: it asks `config get --json` for four sections, keeps the few fields
 // it shows, and writes single keys with `config set` / `config unset`.
-const KEYS = ['fallback_providers', 'model_aliases', 'tts', 'stt'] as const
+const KEYS = ['fallback_providers', 'fallback_model', 'model_aliases', 'tts', 'stt'] as const
 export interface RawSettings {
   fallback_providers: unknown
+  /** Legacy key: Hermes's `get_fallback_chain()` appends its entries after `fallback_providers`. */
+  fallback_model: unknown
   model_aliases: unknown
   tts: unknown
   stt: unknown
@@ -101,8 +103,18 @@ function providerOf(section: Record<string, unknown>, ids: readonly { id: string
   return ids.find((item) => item.id === section.provider)?.id ?? null
 }
 
+/** The effective chain Hermes runs: `fallback_providers`, then the legacy `fallback_model` entries not already in it. */
+function effectiveChain(raw: RawSettings): { entries: ModelRef[]; editable: boolean } {
+  const current = chainOf(raw.fallback_providers)
+  const legacy = chainOf(raw.fallback_model)
+  const entries = [...current.entries]
+  for (const entry of legacy.entries)
+    if (!entries.some((item) => sameRef(item, entry))) entries.push(entry)
+  return { entries, editable: current.editable && legacy.editable }
+}
+
 export function deriveSettings(raw: RawSettings): ModelSettings {
-  const chain = chainOf(raw.fallback_providers)
+  const chain = effectiveChain(raw)
   const tts = isRecord(raw.tts) ? raw.tts : {}
   const stt = isRecord(raw.stt) ? raw.stt : {}
   const ttsProvider = providerOf(tts, TTS_PROVIDERS)
@@ -147,6 +159,9 @@ export function planWrites(raw: RawSettings, update: ModelSettingsUpdate): Op[] 
       if (!prior.fallbacksEditable)
         throw conflict('This fallback chain has custom endpoints; change it in Hermes directly')
       ops.push({ kind: 'set', key: 'fallback_providers', value: JSON.stringify(update.fallbacks) })
+      // The legacy key would otherwise keep running after the person cleared or replaced the chain.
+      if (raw.fallback_model !== undefined && raw.fallback_model !== null)
+        ops.push({ kind: 'unset', key: 'fallback_model' })
     }
   }
   if (update.aliases) ops.push(...aliasWrites(prior.aliases, update.aliases))
