@@ -67,15 +67,16 @@ export function WorkspaceFile({ agentId, path }: { agentId: string; path: string
       </div>
     )
   if (file.isPending) return <p role="status">Loading file…</p>
-  if (file.isError)
-    return (
-      <p role="alert">
-        {workspaceFailure(file.error, 'open this file')}{' '}
-        <button type="button" onClick={() => void file.refetch()}>
-          Try again
-        </button>
-      </p>
-    )
+  // A failed refresh must not take the editor (and the unsaved text in it) away: the error shows beside it.
+  const failure = file.isError ? (
+    <p role="alert">
+      {workspaceFailure(file.error, file.data ? 'refresh this file' : 'open this file')}{' '}
+      <button type="button" onClick={() => void file.refetch()}>
+        Try again
+      </button>
+    </p>
+  ) : null
+  if (!file.data) return failure
   if (file.data.kind === 'binary')
     return (
       <div className="ws-preview">
@@ -89,7 +90,12 @@ export function WorkspaceFile({ agentId, path }: { agentId: string; path: string
         </a>
       </div>
     )
-  return <Editor key={path} agentId={agentId} path={path} latest={file.data} />
+  return (
+    <>
+      {failure}
+      <Editor key={path} agentId={agentId} path={path} latest={file.data} />
+    </>
+  )
 }
 
 function Editor({

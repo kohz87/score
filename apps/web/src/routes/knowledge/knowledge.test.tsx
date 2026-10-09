@@ -9,8 +9,9 @@ import type { AgentSummary, KnowledgeChanged, StreamEvent } from '@score/contrac
 import { App, appRoutes } from '../../App.tsx'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry } from '../../data/resync.ts'
-import type { StreamClient } from '../../data/stream.ts'
+import type { StreamClient, StreamControl } from '../../data/stream.ts'
 import { wikilinkCompletion } from './MarkdownEditor.tsx'
+import { orphanDrafts } from './knowledge-queries.ts'
 
 vi.mock('../../shell/use-needs-you.ts', () => ({ useNeedsYou: vi.fn(() => false) }))
 
@@ -26,6 +27,9 @@ let listeners: Set<(event: StreamEvent) => void>
 let router: ReturnType<typeof createMemoryRouter>
 let registry: ReturnType<typeof createStreamQueryRegistry>
 let nextEtag: number
+let holdPut: Promise<void> | null
+let failNoteReads: boolean
+let controls: Set<(control: StreamControl) => void>
 
 const builder: AgentSummary = {
   id: 'builder',
@@ -132,8 +136,12 @@ function respond(input: string, init: RequestInit = {}): Response {
 }
 
 beforeEach(() => {
+  orphanDrafts.clear()
   calls = []
   nextEtag = 0
+  holdPut = null
+  failNoteReads = false
+  controls = new Set()
   putStatus = 200
   listeners = new Set()
   info = { vault: '/vault', notes: 3, gitAvailable: true, agentAccess: true }
@@ -152,6 +160,14 @@ beforeEach(() => {
     'fetch',
     vi.fn(async (input: string, init?: RequestInit) => {
       if (input === '/api/agents') return json({ asOfSeq: 0, items: [builder] })
+      const isNote =
+        input.startsWith('/api/knowledge/notes/') && !/\/(history|restore|versions)/.test(input)
+      if (isNote && init?.method === 'PUT' && holdPut) {
+        calls.push({ method: 'PUT-started', url: input, body: JSON.parse(String(init.body)) })
+        await holdPut
+      }
+      if (isNote && (init?.method ?? 'GET') === 'GET' && failNoteReads)
+        return json({ error: { code: 'internal', message: 'down' } }, 500)
       return respond(input, init)
     }),
   )
@@ -171,7 +187,10 @@ function mount(url = '/knowledge') {
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
-    onControl: () => () => undefined,
+    onControl: (listener: (control: StreamControl) => void) => {
+      controls.add(listener)
+      return () => controls.delete(listener)
+    },
   }
   registry = createStreamQueryRegistry(queryClient, stream)
   router = createMemoryRouter(appRoutes, { initialEntries: [url] })
@@ -502,4 +521,148 @@ test('Settings › Knowledge shows the vault, git status and the agent switch', 
   await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(false))
   const put = calls.find((c) => c.url === '/api/knowledge/settings')!
   expect(put).toMatchObject({ method: 'PUT', body: { agentAccess: false } })
+})
+
+// Audit wave 4 (batch B): the draft is never replaced by anything the person did not ask for.
+test('Preview then Edit shows the current text, saved or not, and typing keeps it', async () => {
+  const view = await openEditor()
+  type(view, ' one')
+  await waitFor(() => expect(puts()).toHaveLength(1), { timeout: 3000 })
+  await screen.findByText('Saved')
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+  expect(editorView().state.doc.toString()).toBe('# Plan\n\nGoals\n one')
+  type(editorView(), ' two')
+  expect(editorView().state.doc.toString()).toBe('# Plan\n\nGoals\n one two')
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+  expect(editorView().state.doc.toString()).toBe('# Plan\n\nGoals\n one two')
+  await waitFor(() => expect(puts()).toHaveLength(2), { timeout: 3000 })
+  expect(puts()[1]!.body).toMatchObject({ body: '# Plan\n\nGoals\n one two' })
+})
+
+test('leaving the note during a save still saves what was typed meanwhile', async () => {
+  let release: () => void = () => undefined
+  holdPut = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const view = await openEditor()
+  type(view, ' first')
+  await waitFor(() => expect(calls.some((c) => c.method === 'PUT-started')).toBe(true), {
+    timeout: 3000,
+  })
+  type(view, ' second')
+  act(() => {
+    void router.navigate('/knowledge/Home.md')
+  })
+  await screen.findByLabelText('Contents of Home.md')
+  holdPut = null
+  release()
+  await waitFor(() => expect(puts()).toHaveLength(2), { timeout: 3000 })
+  expect(puts()[1]!.body).toMatchObject({ body: '# Plan\n\nGoals\n first second', etag: 'e1' })
+})
+
+test('renaming a note with unsaved text saves the text first', async () => {
+  const view = await openEditor()
+  type(view, ' draft')
+  fireEvent.click(screen.getByRole('button', { name: 'Rename or move' }))
+  const dialog = screen.getByRole('dialog', { name: /Rename or move/ })
+  fireEvent.change(within(dialog).getByLabelText('New path'), { target: { value: 'archive/Plan' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Move' }))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/knowledge/archive/Plan.md'))
+  const order = calls
+    .filter((c) => c.method === 'PUT' || c.url.endsWith('/move'))
+    .map((c) => c.method)
+  expect(order.slice(0, 2)).toEqual(['PUT', 'POST'])
+  expect(puts()[0]!.body).toMatchObject({ body: '# Plan\n\nGoals\n draft' })
+  expect(notes.get('archive/Plan.md')!.body).toBe('# Plan\n\nGoals\n draft')
+})
+
+test('a failed background read keeps the editor and the unsaved text', async () => {
+  const view = await openEditor()
+  putStatus = 412
+  type(view, ' mine')
+  await screen.findByTestId('conflict', {}, { timeout: 3000 })
+  failNoteReads = true
+  emit({ path: 'projects/Plan.md', kind: 'written', to: null, by: { agentId: 'builder' } })
+  await waitFor(() => expect(screen.getAllByRole('alert').length).toBeGreaterThan(1))
+  expect(screen.queryByText('Could not open this note')).toBeNull()
+  expect(editorView().state.doc.toString()).toBe('# Plan\n\nGoals\n mine')
+})
+
+test('malformed percent-encoding in a #wiki: link does not crash Preview', async () => {
+  notes.get('Home.md')!.body = 'Bad [broken](#wiki:%E0%A4%A) link'
+  mount('/knowledge/Home.md')
+  await screen.findByLabelText('Contents of Home.md')
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+  const preview = screen.getByLabelText('Preview')
+  expect(within(preview).getByText('broken')).toBeDefined()
+  expect(within(preview).queryByRole('link', { name: 'broken' })).toBeNull()
+})
+
+test('a save from another browser (author you) offers Reload; our own save does not', async () => {
+  const view = await openEditor()
+  type(view, ' mine')
+  await waitFor(() => expect(puts()).toHaveLength(1), { timeout: 3000 })
+  await screen.findByText('Saved')
+  emit({ path: 'projects/Plan.md', kind: 'written', to: null, by: 'you' })
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(screen.queryByTestId('changed-elsewhere')).toBeNull()
+  notes.get('projects/Plan.md')!.body = '# Plan\n\nFrom my phone\n'
+  notes.get('projects/Plan.md')!.etag = 'phone'
+  emit({ path: 'projects/Plan.md', kind: 'written', to: null, by: 'you' })
+  const banner = await screen.findByTestId('changed-elsewhere')
+  expect(editorView().state.doc.toString()).toBe('# Plan\n\nGoals\n mine')
+  fireEvent.click(within(banner).getByRole('button', { name: 'Reload' }))
+  await waitFor(() => expect(editorView().state.doc.toString()).toBe('# Plan\n\nFrom my phone\n'))
+  expect(screen.queryByTestId('changed-elsewhere')).toBeNull()
+})
+
+test('after a stream resync the open note offers Reload when it changed meanwhile', async () => {
+  await openEditor()
+  notes.get('projects/Plan.md')!.body = '# Plan\n\nMissed change\n'
+  notes.get('projects/Plan.md')!.etag = 'missed'
+  act(() => controls.forEach((listener) => listener({ resync: true } as StreamControl)))
+  await screen.findByTestId('changed-elsewhere')
+  expect(editorView().state.doc.toString()).toBe('# Plan\n\nGoals\n')
+})
+
+test('Preview links follow notes created or removed elsewhere', async () => {
+  mount('/knowledge/Home.md')
+  await screen.findByLabelText('Contents of Home.md')
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+  expect(
+    within(screen.getByLabelText('Preview')).getByTitle('This note does not exist yet'),
+  ).toBeDefined()
+  notes.set('Ghost.md', {
+    body: '# Ghost\n',
+    etag: 'g1',
+    lastAuthor: 'you',
+    mtime: '2026-01-01T00:00:00Z',
+  })
+  emit({ path: 'Ghost.md', kind: 'written', to: null, by: { agentId: 'builder' } })
+  await waitFor(() =>
+    expect(
+      within(screen.getByLabelText('Preview'))
+        .getByRole('link', { name: 'Ghost' })
+        .getAttribute('href'),
+    ).toBe('/knowledge/Ghost.md'),
+  )
+})
+
+test('text that could not be saved before leaving comes back when the note is opened again', async () => {
+  const view = await openEditor()
+  putStatus = 412
+  type(view, ' unsaved')
+  await screen.findByTestId('conflict', {}, { timeout: 3000 })
+  act(() => {
+    void router.navigate('/knowledge/Home.md')
+  })
+  await screen.findByLabelText('Contents of Home.md')
+  act(() => {
+    void router.navigate('/knowledge/projects/Plan.md')
+  })
+  await screen.findByLabelText('Contents of projects/Plan.md')
+  expect(editorView().state.doc.toString()).toBe('# Plan\n\nGoals\n unsaved')
+  expect(await screen.findByTestId('conflict')).toBeDefined()
 })

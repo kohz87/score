@@ -22,7 +22,9 @@ export function NotePreview({ body, links, notes, onCreate }: Props) {
         components={{
           a({ href, children }) {
             if (href?.startsWith(WIKI_HREF)) {
-              const target = decodeURIComponent(href.slice(WIKI_HREF.length))
+              const target = decodeTarget(href.slice(WIKI_HREF.length))
+              // Ordinary Markdown can use the internal prefix too; a broken payload is just text.
+              if (target === null) return <span>{children}</span>
               const path = resolveTarget(target, links, notes)
               if (path)
                 return (
@@ -56,4 +58,12 @@ export function NotePreview({ body, links, notes, onCreate }: Props) {
 
 function defaultUrl(url: string): string {
   return /^(https?:|mailto:|#|\/|\.)/i.test(url) || !/^[a-z][a-z\d+.-]*:/i.test(url) ? url : ''
+}
+
+function decodeTarget(encoded: string): string | null {
+  try {
+    return decodeURIComponent(encoded)
+  } catch {
+    return null
+  }
 }
