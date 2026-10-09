@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { defineConfig, devices } from '@playwright/test'
@@ -10,14 +10,23 @@ const baseURL = `http://127.0.0.1:${webPort}`
 const attemptsPort = String(Number(webPort) + 1)
 const attemptsURL = `http://127.0.0.1:${attemptsPort}`
 const attemptsSpec = /attempts\.spec\.ts$/
-// E2E never touches the developer's real Score home (~/.score): each run gets a throwaway one.
-const scoreHome = process.env.SCORE_E2E_HOME ?? mkdtempSync(join(tmpdir(), 'score-e2e-'))
+// E2E never touches the developer's real Score home (~/.score): each run gets a throwaway one. Everything a run creates
+// (server homes, logs, and the temp folders specs and servers make) lives under one folder in /tmp that globalTeardown
+// removes, so a run leaves nothing behind. The name is fixed per web port because Playwright evaluates this config in
+// several processes; the first server command clears the previous run's state if a crash left it behind.
+const runDir = process.env.SCORE_E2E_HOME ?? join(tmpdir(), `score-e2e-${webPort}`)
+const scoreHome = join(runDir, 'home')
+const attemptsHome = join(runDir, 'attempts-home')
+const scratch = join(runDir, 'tmp')
+for (const dir of [runDir, scratch]) mkdirSync(dir, { recursive: true })
 
 // Workers inherit this, so specs that need a paired browser can read the pairing link the server logs.
-process.env.SCORE_E2E_HOME = scoreHome
+process.env.SCORE_E2E_HOME = runDir
+process.env.TMPDIR = scratch
 
 export default defineConfig({
   testDir: './e2e',
+  globalTeardown: './e2e/global-teardown.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   reporter: [['list']],
@@ -40,10 +49,11 @@ export default defineConfig({
   webServer: process.env.SCORE_E2E_DEV
     ? [
         {
-          command: `pnpm dev 2>&1 | tee ${join(scoreHome, 'dev.log')}`,
+          command: `rm -rf ${scoreHome} ${join(runDir, 'paired.lock')} ${join(runDir, 'paired-session.json')}; pnpm dev 2>&1 | tee ${join(runDir, 'dev.log')}`,
           // The server only accepts mutations from its own web origin, so it must follow SCORE_WEB_PORT.
           env: {
             SCORE_HOME: scoreHome,
+            TMPDIR: scratch,
             SCORE_MODE: 'fake',
             SCORE_FAKE_REWIND_SKIP: 'reviewer:compressed',
             SCORE_WEB_ORIGIN: baseURL,
@@ -57,9 +67,10 @@ export default defineConfig({
       ]
     : [
         {
-          command: `pnpm build >/dev/null && node scripts/start.mjs 2>&1 | tee ${join(scoreHome, 'dev.log')}`,
+          command: `rm -rf ${scoreHome} ${join(runDir, 'paired.lock')} ${join(runDir, 'paired-session.json')}; pnpm build >/dev/null && node scripts/start.mjs 2>&1 | tee ${join(runDir, 'dev.log')}`,
           env: {
             SCORE_HOME: scoreHome,
+            TMPDIR: scratch,
             SCORE_MODE: 'fake',
             // The fake adapter cannot rewind this agent (PLAN 5.33: "Hide in Score only").
             SCORE_FAKE_REWIND_SKIP: 'reviewer:compressed',
@@ -74,9 +85,10 @@ export default defineConfig({
         },
         {
           // Build once (the first server builds); this one only serves.
-          command: `node scripts/start.mjs 2>&1 | tee ${join(scoreHome, 'attempts.log')}`,
+          command: `rm -rf ${attemptsHome}; node scripts/start.mjs 2>&1 | tee ${join(runDir, 'attempts.log')}`,
           env: {
-            SCORE_HOME: mkdtempSync(join(tmpdir(), 'score-e2e-attempts-')),
+            SCORE_HOME: attemptsHome,
+            TMPDIR: scratch,
             SCORE_MODE: 'fake',
             SCORE_KANBAN_ATTEMPTS: '1',
             SCORE_E2E_SEED_ATTEMPTS: '1',
