@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import sys
 import time
 from functools import lru_cache
 
@@ -15,6 +16,8 @@ _APIS = (
     "tools.approval_detection.detect_dangerous_command",
     "hermes_cli.plugin_isolation.isolation_mode",
 )
+# Reported with the others, but looked up without importing (see ``gateway_session_store``).
+_GATEWAY_RUNNER = "gateway.run._gateway_runner_ref"
 
 
 @lru_cache(maxsize=None)
@@ -29,6 +32,7 @@ def _lookup(path: str):
 
 def available() -> dict[str, bool]:
     return {**{path: _lookup(path) is not None for path in _APIS},
+            _GATEWAY_RUNNER: gateway_session_store() is not None,
             "tools.approval._lock": callable(getattr(_lookup_attr("tools.approval._lock"), "acquire", None)),
             "tools.approval._gateway_queues": isinstance(_lookup_attr("tools.approval._gateway_queues"), dict)}
 
@@ -158,3 +162,39 @@ def detect_dangerous(command: str) -> str | None:
     except Exception:
         pass
     return None
+
+
+def gateway_session_store():
+    """The running gateway's session store, or None outside a gateway (CLI, Kanban workers) or when it lacks a rewind.
+
+    Looks only at an already imported ``gateway.run`` so a non-gateway process never imports the gateway.
+    """
+    module = sys.modules.get("gateway.run")
+    ref = getattr(module, "_gateway_runner_ref", None)
+    try:
+        runner = ref() if callable(ref) else None
+        store = getattr(runner, "session_store", None)
+        return store if callable(getattr(store, "rewind_session", None)) else None
+    except Exception:
+        return None
+
+
+def rewind_session(session_id: str, turns: int) -> dict | None:
+    """Back a session up by ``turns`` user turns with Hermes's own rewind (what ``/undo N`` uses).
+
+    ``gateway.session_transcript.SessionTranscriptMixin.rewind_session`` soft-deletes the rows (``active = 0``); the
+    next turn rebuilds its history from the active rows. Returns ``{"turns_undone", "rewound_count"}``, or None when
+    Hermes had nothing to rewind or refused. Raises when no gateway is running here.
+    """
+    store = gateway_session_store()
+    if store is None:
+        raise RuntimeError("no gateway session store")
+    if type(session_id) is not str or not session_id or type(turns) is not int or turns < 1:
+        raise ValueError("invalid rewind")
+    result = store.rewind_session(session_id, turns)
+    if not isinstance(result, dict):
+        return None
+    undone, count = result.get("turns_undone"), result.get("rewound_count")
+    if type(undone) is not int or type(count) is not int:
+        return None
+    return {"turns_undone": undone, "rewound_count": count}

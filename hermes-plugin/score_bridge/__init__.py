@@ -49,9 +49,10 @@ def _reset_after_fork():
     old = _sender
     if old is not None:
         for client, _ in old._producers.values():
-            reset_transport = getattr(client.decision_transport, "after_fork", None)
-            if callable(reset_transport):
-                reset_transport()
+            for transport in (client.decision_transport, client.command_transport):
+                reset_transport = getattr(transport, "after_fork", None)
+                if callable(reset_transport):
+                    reset_transport()
     if old is None or old._closed:
         _sender = None
         return

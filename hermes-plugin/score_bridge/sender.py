@@ -474,3 +474,5 @@ class Sender:
         for client in clients:
             if client._poller is not None:
                 client._poller.join(deadline)
+            if client._command_poller is not None:
+                client._command_poller.join(deadline)

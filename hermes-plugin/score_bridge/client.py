@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
 import time
 import uuid
@@ -54,7 +55,10 @@ class ScoreClient:
         self.base_url = (base_url or os.environ.get("SCORE_URL", "http://127.0.0.1:8740")).rstrip("/")
         self.token_path = Path(token_path) if token_path else score_home() / "bridge.token"
         self.transport = transport or urllib_transport
-        self.decision_transport = DecisionTransport() if transport is None or transport is urllib_transport else transport
+        real = transport is None or transport is urllib_transport
+        self.decision_transport = DecisionTransport() if real else transport
+        # A second connection: the commands long poll runs beside the decisions one.
+        self.command_transport = DecisionTransport() if real else transport
         self.clock = clock
         self.incarnation = uuid.uuid4().hex
         self.producer_token: str | None = None
@@ -65,6 +69,7 @@ class ScoreClient:
         self.profile = profile
         self._hello_lock = threading.RLock()
         self._poller = None
+        self._command_poller = None
         self._closed = False
         self._allow_decisions = True
 
@@ -119,9 +124,22 @@ class ScoreClient:
             from .decisions import DecisionPoller
             self._poller = DecisionPoller(self)
             self._poller.start()
+        # Session rewinds (PLAN 5.33) are served only by a process that hosts a gateway.
+        if (self._allow_decisions and not self._closed and self._command_poller is None
+                and "gateway.run" in sys.modules):
+            from .commands import CommandPoller
+            self._command_poller = CommandPoller(self)
+            self._command_poller.start()
         return response
 
     def decision_request(self, path, body, timeout):
+        return self._authed_request(self.decision_transport, path, body, timeout,
+                                    lambda: self.enabled.get("gatewayApprovals", False))
+
+    def command_request(self, path, body, timeout):
+        return self._authed_request(self.command_transport, path, body, timeout, lambda: True)
+
+    def _authed_request(self, transport, path, body, timeout, allowed):
         # Shutdown must not wait behind the sender's renewal: take the lock with a bound and re-check closure after.
         if not self._hello_lock.acquire(timeout=1.0):
             return None
@@ -130,13 +148,13 @@ class ScoreClient:
                 return None
             if self.producer_token is None or self.expires_at <= self.clock() + 60:
                 self._hello()
-            if self._closed or not self.enabled.get("gatewayApprovals", False):
+            if self._closed or not allowed():
                 return None
             token = self.producer_token
         finally:
             self._hello_lock.release()
         try:
-            return self.decision_transport(self.base_url + path, token, body, timeout)
+            return transport(self.base_url + path, token, body, timeout)
         except HTTPError as exc:
             if exc.code != 401:
                 raise
@@ -147,17 +165,19 @@ class ScoreClient:
                     return None
                 if self.producer_token == token:
                     self._hello()
-                if self._closed or not self.enabled.get("gatewayApprovals", False):
+                if self._closed or not allowed():
                     return None
                 token = self.producer_token
             finally:
                 self._hello_lock.release()
-            return self.decision_transport(self.base_url + path, token, body, timeout)
+            return transport(self.base_url + path, token, body, timeout)
 
     def stop_decisions(self):
         self._closed = True
         if self._poller is not None:
             self._poller.stop()
+        if self._command_poller is not None:
+            self._command_poller.stop()
 
     def send(self, events: list[dict]) -> int:
         with self._hello_lock:

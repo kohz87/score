@@ -30,3 +30,8 @@ private.snapshot_gateway_approvals = lambda session_key, limit=64, timeout=0.005
 private.resolve_exact_bounded = lambda session_key, choice, request_id, deadline, cancelled=None: 0
 
 private.detect_dangerous = lambda command: None
+
+private.gateway_session_store = lambda: None
+def _no_gateway(session_id, turns):
+    raise RuntimeError("no gateway session store")
+private.rewind_session = _no_gateway
