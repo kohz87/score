@@ -1,6 +1,7 @@
 """PLAN 5.33: the rewind command, run through a fake gateway session store (no Hermes needed)."""
 import importlib.util
 import sys
+import threading
 import types
 from pathlib import Path
 
@@ -29,6 +30,9 @@ class FakeStore:
     def __init__(self, turns_by_session):
         self.turns = dict(turns_by_session)
         self.calls = []
+
+    def _owner_key_for_session_id(self, session_id):
+        return "agent:main:" + session_id  # a session the gateway's routing index knows
 
     def rewind_session(self, session_id, n=1, **kwargs):
         self.calls.append((session_id, n))
@@ -178,30 +182,43 @@ class RowsDb:
             out.append({"role": role, "timestamp": stamp, **({"display_kind": kind[0]} if kind else {})})
         return out
 
+    def rewind_user_turn(self, session_id, ordinal, **_):
+        n = -ordinal
+        users = [i for i, row in enumerate(self.rows) if row[0] == "user" and row[2]]
+        # Mirror the repaired count: consecutive user rows are one turn.
+        groups = []
+        for i in users:
+            if groups and all(self.rows[j][0] == "user" or not self.rows[j][2] for j in range(groups[-1][-1], i)):
+                groups[-1].append(i)
+            else:
+                groups.append([i])
+        for group in groups[-n:]:
+            for i in range(group[0], len(self.rows)):
+                self.rows[i][2] = False
+        return types.SimpleNamespace(rewound_count=2, turns_undone=min(n, len(groups)))
+
 
 class RowsStore:
-    def __init__(self, db, broken=False):
-        self.db, self.broken, self.calls = db, broken, []
+    """A gateway session store; ``indexed=False`` is a session its routing index doesn't know (an API session)."""
+
+    def __init__(self, db, broken=False, indexed=True):
+        self.db, self.broken, self.indexed, self.calls = db, broken, indexed, []
+
+    def _owner_key_for_session_id(self, session_id):
+        return "agent:main:s" if self.indexed else None
 
     def _db_for_session_id(self, session_id):
         return self.db
+
+    def _get_transcript_drain_lock(self):
+        return threading.Lock()
 
     def rewind_session(self, session_id, n=1, **_):
         self.calls.append(n)
         if self.broken:
             return {"rewound_count": 1, "turns_undone": n}
-        users = [i for i, row in enumerate(self.db.rows) if row[0] == "user" and row[2]]
-        # Mirror the repaired count: consecutive user rows are one turn.
-        groups = []
-        for i in users:
-            if groups and all(self.db.rows[j][0] == "user" or not self.db.rows[j][2] for j in range(groups[-1][-1], i)):
-                groups[-1].append(i)
-            else:
-                groups.append([i])
-        for group in groups[-n:]:
-            for i in range(group[0], len(self.db.rows)):
-                self.db.rows[i][2] = False
-        return {"rewound_count": 2, "turns_undone": min(n, len(groups))}
+        outcome = self.db.rewind_user_turn(session_id, -n)
+        return {"rewound_count": outcome.rewound_count, "turns_undone": outcome.turns_undone}
 
 
 def install(monkeypatch, store):
@@ -262,3 +279,25 @@ def test_a_steer_row_after_the_message_counts_as_a_turn_like_hermes(monkeypatch,
     install(monkeypatch, store)
     hermes_private.rewind_session("s", 1, 200)
     assert store.calls == [2]
+
+
+def test_an_api_session_of_a_named_profile_is_rewound_in_that_profiles_own_store(monkeypatch, hermes_private):
+    # A multiplexed gateway's store doesn't index API-server sessions and would fall back to the root store: the
+    # plugin rewinds in the profile's own store from Hermes's registry instead, and releases the handle.
+    db = RowsDb([["user", 100, True], ["assistant", 101, True], ["user", 200, True], ["assistant", 201, True]])
+    store = RowsStore(RowsDb([]), indexed=False)
+    install(monkeypatch, store)
+    acquired, released = [], []
+    profiles = types.ModuleType("hermes_cli.profiles")
+    profiles.get_profile_dir = lambda name: Path("/hermes/profiles") / name
+    registry = types.ModuleType("hermes_state_registry")
+    registry.acquire = lambda path: acquired.append(path) or db
+    registry.release_or_close = lambda handle: released.append(handle)
+    rewind = types.ModuleType("hermes_state_rewind")
+    rewind.RewindTargetUnavailableError = type("RewindTargetUnavailableError", (Exception,), {})
+    for name, module in (("hermes_cli.profiles", profiles), ("hermes_state_registry", registry),
+                         ("hermes_state_rewind", rewind)):
+        monkeypatch.setitem(sys.modules, name, module)
+    assert hermes_private.rewind_session("s", 1, 200, "scoretesta") == {"turns_undone": 1, "rewound_count": 2}
+    assert acquired == [Path("/hermes/profiles/scoretesta/state.db")] and released == [db]
+    assert store.calls == [] and [row[2] for row in db.rows] == [True, True, False, False]

@@ -343,3 +343,25 @@ def test_gate_07_envelope_and_gate_identifiers_are_lifted_before_scrub(setup, mo
     assert first["payload"]["gateId"] == "gate" and first["payload"]["requestId"] == "request"
     assert first["payload"]["turn_id"] == "turn" and first["toolCallId"] == "tool"
     assert "secret" not in json.dumps(first)
+
+
+def test_in_a_gateway_the_sender_says_hello_once_without_waiting_for_a_hook(setup, monkeypatch):
+    # The hello starts the command poller, so a rewind works right after a plugin (re)load (PLAN 5.33 live check).
+    import sys
+    import types
+    sender, transport = setup
+    monkeypatch.setitem(sys.modules, "gateway.run", types.ModuleType("gateway.run"))
+    monkeypatch.setattr(sender.client, "_allow_decisions", False)  # no pollers in this test
+    for _ in range(3):
+        sender._greet()
+        sender._next_greeting = 0.0
+    hellos = [call for call in transport.calls if call[0].endswith("/hello")]
+    assert len(hellos) == 1 and sender._greeted
+
+
+def test_outside_a_gateway_the_sender_waits_for_a_hook_before_hello(setup, monkeypatch):
+    import sys
+    sender, transport = setup
+    monkeypatch.delitem(sys.modules, "gateway.run", raising=False)
+    sender._greet()
+    assert not [call for call in transport.calls if call[0].endswith("/hello")]
