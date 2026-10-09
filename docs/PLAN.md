@@ -281,6 +281,10 @@ A→B→A revisions, pruned claims, short gaps, unknown states, host isolation a
 **5.17b Kanban Stop** · Needs an upstream Hermes operation (docs/proposals/hermes-attempt-fenced-stop.md, to be extended
 with durable intent and fenced launch registration). Until then Score says Stop is unavailable for Kanban attempts.
 
+**5.18 HTTPS-only remote access** · Owner 2026-10-09: remote mode serves the app only over HTTPS; plain HTTP gets an
+HTTPS setup guide (`/setup/https`), the API answers 426. `scripts/score tls` makes a local CA + server cert. Done when the
+brief's tests pass (docs/briefs/5.18.md) and the live LAN deployment runs on HTTPS.
+
 ---
 
 ## First five tasks
