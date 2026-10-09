@@ -9,7 +9,7 @@ import {
 } from '../../../src/domain/kanban-attempts.ts'
 import { buildLanes } from '../../../src/domain/lanes.ts'
 import { computeReports } from '../../../src/domain/reports.ts'
-import { projectTask } from '../../../src/domain/tasks.ts'
+import { projectTask, readProjectedTask } from '../../../src/domain/tasks.ts'
 import type { HermesPort } from '../../../src/hermes/index.ts'
 import { LiveTasks } from '../../../src/hermes/live/tasks.ts'
 import { createBriefControl } from '../../../src/http/brief-control.ts'
@@ -18,6 +18,18 @@ import { createHarness, type Harness } from '../../fixtures/kanban/harness.ts'
 import { seedAttempt, seedHistory, withFlag } from '../../helpers/kanban-attempts-seed.ts'
 
 // Audit wave 5, fix batch F.
+const kanbanReads = vi.hoisted(() => ({ runs: 0 }))
+vi.mock('../../../src/hermes/live/kanban.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/hermes/live/kanban.ts')>()
+  return {
+    ...actual,
+    readTaskRuns: (...args: Parameters<typeof actual.readTaskRuns>) => {
+      kanbanReads.runs++
+      return actual.readTaskRuns(...args)
+    },
+  }
+})
+
 let h: Harness
 beforeEach(() => {
   withFlag(true)
@@ -318,7 +330,10 @@ describe('copied attempts', () => {
     )
     h.board.event('t_a', 'created', { by: 'lead' })
     await h.poll(coordinator, 4)
-    const rows = h.attempts()
+    const order = h.histories().map((history) => history.id)
+    const rows = h
+      .attempts()
+      .sort((a, b) => order.indexOf(a.history_id) - order.indexOf(b.history_id))
     expect(rows).toHaveLength(2)
     expect(rows[1]!.copied_from).toBe(rows[0]!.id)
     const current = currentAttemptsOfTask(h.score.sqlite, 't_a', h.clock.ms)
@@ -335,3 +350,29 @@ describe('copied attempts', () => {
 })
 
 void seedAttempt
+
+describe('polling reads no unbounded attempt history', () => {
+  async function runIdsAfterPolling(kanbanAttempts: boolean) {
+    h.board.task('t_a')
+    for (let index = 0; index < 3; index++) {
+      h.board.claim('t_a', { lock: `host:${index}` })
+      h.board.tick(5)
+      h.board.end('t_a', { outcome: 'completed' })
+    }
+    kanbanReads.runs = 0
+    const tasks = new LiveTasks(h.score, h.ingest, h.home, { kanbanAttempts })
+    for (let index = 0; index < 4; index++) await tasks.poll()
+    await tasks.close()
+    return readProjectedTask(h.score.sqlite, 't_a')?.runIds
+  }
+
+  test('with attempts on the task poll never reads task_runs; the ids come from the projection', async () => {
+    expect(await runIdsAfterPolling(true)).toEqual(['1', '2', '3'])
+    expect(kanbanReads.runs).toBe(0)
+  })
+
+  test('with attempts off the task poll reads task_runs as before', async () => {
+    expect(await runIdsAfterPolling(false)).toEqual(['1', '2', '3'])
+    expect(kanbanReads.runs).toBeGreaterThan(0)
+  })
+})

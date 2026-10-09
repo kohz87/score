@@ -60,16 +60,24 @@ export function eventActivity(event: TaskEvent): TaskActivity {
   }
 }
 
-export function readTaskDetails(db: DatabaseSync, now = Date.now()): TaskDetail[] {
+/**
+ * `runIdsOf` replaces the per-task read of Hermes's whole attempt history (task_runs); the attempts projection supplies
+ * the ids from Score's own bounded tables instead (5.17a-1).
+ */
+export function readTaskDetails(
+  db: DatabaseSync,
+  now = Date.now(),
+  runIdsOf?: (taskId: string) => string[],
+): TaskDetail[] {
   const tasks = readTaskBoard(db)
   if (tasks.malformed) throw new HttpError(502, 'hermes_unavailable', 'Task data unavailable')
   return tasks.rows.map((task) => {
     const input = { taskIds: [task.id] }
     const links = readTaskLinks(db, input)
-    const runs = readTaskRuns(db, input)
+    const runs = runIdsOf ? undefined : readTaskRuns(db, input)
     const comments = readTaskComments(db, input)
     const events = readTaskEvents(db, task.id)
-    if ([links, runs, comments, events].some((batch) => batch.malformed))
+    if ([links, runs, comments, events].some((batch) => batch?.malformed))
       throw new HttpError(502, 'hermes_unavailable', 'Task detail unavailable')
     const body = redact(task.body ?? '')
     const steps = parseSteps(task.body ?? '').map((step) => ({ ...step, text: redact(step.text) }))
@@ -157,7 +165,7 @@ export function readTaskDetails(db: DatabaseSync, now = Date.now()): TaskDetail[
         blocks: links.rows
           .filter((link) => link.parent_id === task.id)
           .map((link) => link.child_id),
-        runIds: runs.rows.map((run) => String(run.id)),
+        runIds: runIdsOf ? runIdsOf(task.id) : runs!.rows.map((run) => String(run.id)),
         completedAt:
           task.completed_at === null ? null : new Date(task.completed_at * 1000).toISOString(),
       }),

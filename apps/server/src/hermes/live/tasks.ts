@@ -48,7 +48,13 @@ export class LiveTasks {
         sqlite.exec('BEGIN')
         try {
           const batch = tailTaskEvents(sqlite, { afterId, limit })
-          const tasks = this.withRooms(readTaskDetails(sqlite))
+          const tasks = this.withRooms(
+            readTaskDetails(
+              sqlite,
+              Date.now(),
+              this.attempts ? (id) => this.attemptRunIds(id) : undefined,
+            ),
+          )
           const reviews = reviewTransitionsFrom(batch.rows)
           // A task linked to a brief after its review events went past the tailer still needs its edges: read the
           // history of newly linked tasks once (by id), never the whole board.
@@ -80,6 +86,21 @@ export class LiveTasks {
         .map((row) => [row.task_id, row.room_id]),
     )
     return tasks.map((task) => ({ ...task, roomId: rooms.get(task.id) ?? null }))
+  }
+  /** Numeric attempt ids of a task in the followed lineage, from Score's own projection (never Hermes's history). */
+  private attemptRunIds(taskId: string): string[] {
+    const live = liveHistory(this.db.sqlite)
+    if (!live) return []
+    return z
+      .array(z.object({ attempt_id: z.int() }))
+      .parse(
+        this.db.sqlite
+          .prepare(
+            'SELECT attempt_id FROM kanban_attempts WHERE history_id = ? AND task_id = ? ORDER BY attempt_id',
+          )
+          .all(live.id, taskId),
+      )
+      .map((row) => String(row.attempt_id))
   }
   private latest: TaskDetail[] = []
   private reviews: ReviewTransition[] = []
