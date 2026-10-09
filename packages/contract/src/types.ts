@@ -262,7 +262,8 @@ export const LaneBlockSchema = z.object({
 export type LaneBlock = z.infer<typeof LaneBlockSchema>
 
 export const MessagePartSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('text'), text: z.string() }),
+  // `via: 'mcp'` marks a message an agent posted through Score's MCP server (PLAN 7.4d); the UI shows a "via MCP" tag.
+  z.object({ kind: z.literal('text'), text: z.string(), via: z.literal('mcp').optional() }),
   z.object({
     kind: z.literal('plan'),
     lanes: z.array(z.object({ agentId: AgentIdSchema, blocks: z.array(LaneBlockSchema) })),

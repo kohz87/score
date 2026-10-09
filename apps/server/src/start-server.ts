@@ -44,6 +44,7 @@ import { pruneEvents } from './hub/retention.ts'
 import { pruneAuxiliary } from './hub/retention-aux.ts'
 import { MediaStore } from './media/store.ts'
 import { KnowledgeAgentApi } from './knowledge/agent-api.ts'
+import { McpAccessStore } from './mcp/access.ts'
 import { KnowledgeVault } from './knowledge/vault.ts'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
@@ -281,7 +282,19 @@ export async function startServer(
     })
     const token = app.pairing.createToken()
     if (config.remote) {
-      bridgeApp = buildBridgeApp(bridge, outbox, logger ?? false)
+      bridgeApp = buildBridgeApp(
+        bridge,
+        outbox,
+        logger ?? false,
+        // The MCP server for agents (7.4d) is served on this loopback listener only.
+        {
+          db: database,
+          access: new McpAccessStore(database),
+          ingest,
+          port,
+          ...(knowledge ? { knowledge: new KnowledgeAgentApi(knowledge, database) } : {}),
+        },
+      )
       try {
         if (listenBridge) await listenBridge(bridgeApp)
         else await bridgeApp.listen({ host: '127.0.0.1', port: config.remote.bridgePort })
