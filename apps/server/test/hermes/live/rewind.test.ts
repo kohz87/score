@@ -11,7 +11,11 @@ beforeEach(() => {
 afterEach(() => hermes.close())
 
 const SESSION = 'score-chat-builder'
-type Row = [role: string, at: number, extra?: { active?: number; displayKind?: string; compacted?: number }]
+type Row = [
+  role: string,
+  at: number,
+  extra?: { active?: number; displayKind?: string; compacted?: number },
+]
 
 function write(rows: Row[], child?: { id: string; startedAt: number; rows: Row[] }) {
   mkdirSync(`${hermes.home}/profiles/builder`, { recursive: true })

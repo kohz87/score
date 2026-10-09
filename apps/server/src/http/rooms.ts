@@ -544,8 +544,7 @@ export function registerRoomRoutes(
     const typedModel = route.model ?? body.model
     const modelOf = new Map<string, { model: string; provider?: string }>()
     if (typedModel)
-      for (const agentId of route.routedTo)
-      {
+      for (const agentId of route.routedTo) {
         const alias = await resolveAlias(port, agentId, typedModel)
         modelOf.set(
           agentId,
