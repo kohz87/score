@@ -8,7 +8,6 @@ import { sweepExpiredApprovals } from './domain/approval-expiry.ts'
 import { buildApp, buildBridgeApp } from './app.ts'
 import { listenDual } from './dual-listener.ts'
 import { buildGuideApp } from './http/https-guide.ts'
-import type { Server as NetServer } from 'node:net'
 import { loadWebAssets, type WebAssets } from './http/web-assets.ts'
 import { SqliteSessionStore } from './auth/sqlite-session-store.ts'
 import type { Config } from './config.ts'
@@ -97,7 +96,7 @@ export async function startServer(
   let spendSnapshots: NodeJS.Timeout | undefined
   let port: HermesPort | undefined
   let closing: Promise<void> | undefined
-  let dualServer: NetServer | undefined
+  let dualServer: Awaited<ReturnType<typeof listenDual>> | undefined
   let guideApp: FastifyInstance | undefined
 
   async function closeResources(): Promise<void> {
@@ -118,12 +117,21 @@ export async function startServer(
         try {
           await bridgeApp?.close()
         } finally {
-          // Stop accepting first; the apps then drop the connections they were handed.
-          if (dualServer?.listening) await new Promise((resolve) => dualServer?.close(resolve))
+          // Stop accepting first, but wait for the sockets only after the apps dropped the connections they were
+          // handed (open streams would otherwise hold the close forever).
+          const listener = dualServer
+          const stopped = listener?.server.listening
+            ? new Promise<void>((resolve) => listener.server.close(() => resolve()))
+            : undefined
           try {
             await app?.close()
           } finally {
-            await guideApp?.close()
+            try {
+              await guideApp?.close()
+            } finally {
+              listener?.destroyConnections()
+              await stopped
+            }
           }
         }
       } finally {

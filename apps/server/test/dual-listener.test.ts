@@ -1,7 +1,9 @@
 import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
+import { once } from 'node:events'
 import { createServer, connect, type Server } from 'node:net'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { connect as tlsConnect } from 'node:tls'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, test } from 'vitest'
@@ -74,9 +76,14 @@ test('one port: TLS reaches the app, plain HTTP gets the guide and 426 under /ap
     https: { cert: Buffer.from(testCert), key: Buffer.from(testKey) },
   })
   const guide = buildGuideApp(config)
-  const server = await listenDual(app, guide, { host: '127.0.0.1', port })
+  const { server, destroyConnections } = await listenDual(app, guide, {
+    host: '127.0.0.1',
+    port,
+  })
   cleanup.push(async () => {
-    await new Promise((resolve) => server.close(resolve))
+    const stopped = new Promise((resolve) => server.close(resolve))
+    destroyConnections()
+    await stopped
     await app.close()
     await guide.close()
   })
@@ -111,9 +118,14 @@ test('a connection that sends nothing is dropped, and garbage gets no app', asyn
     https: { cert: Buffer.from(testCert), key: Buffer.from(testKey) },
   })
   const guide = buildGuideApp(config)
-  const server = await listenDual(app, guide, { host: '127.0.0.1', port })
+  const { server, destroyConnections } = await listenDual(app, guide, {
+    host: '127.0.0.1',
+    port,
+  })
   cleanup.push(async () => {
-    await new Promise((resolve) => server.close(resolve))
+    const stopped = new Promise((resolve) => server.close(resolve))
+    destroyConnections()
+    await stopped
     await app.close()
     await guide.close()
   })
@@ -153,4 +165,32 @@ test('startServer in remote TLS mode listens on one port for both protocols', as
   expect((await get('http', port, '/api/health')).status).toBe(426)
   expect((await get('http', port, '/setup/https')).status).toBe(200)
   expect((await get('http', port, '/')).status).toBe(308)
+})
+
+test('closing the server does not wait for idle keep-alive connections (TLS or plain)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'score-dual-'))
+  cleanup.push(() => rmSync(dir, { recursive: true, force: true }))
+  writeFileSync(join(dir, 'cert.pem'), testCert)
+  writeFileSync(join(dir, 'key.pem'), testKey)
+  mkdirSync(join(dir, 'web'))
+  writeFileSync(join(dir, 'web', 'index.html'), '<html><div id="root"></div></html>')
+  const port = await freePort()
+  const config = dualConfig(port, {
+    SCORE_HOME: join(dir, 'home'),
+    SCORE_BRIDGE_PORT: String(await freePort()),
+    SCORE_TLS_CERT: join(dir, 'cert.pem'),
+    SCORE_TLS_KEY: join(dir, 'key.pem'),
+    SCORE_MODE: 'fake',
+  })
+  const server = await startServer(config, { logger: false, webDirectory: join(dir, 'web') })
+  const idle = [
+    tlsConnect({ host: '127.0.0.1', port, rejectUnauthorized: false }),
+    connect(port, '127.0.0.1'),
+  ]
+  await Promise.all(idle.map((socket) => once(socket, 'connect')))
+  idle[0]!.write('GET /api/health HTTP/1.1\r\nHost: localhost\r\n\r\n')
+  idle[1]!.write('GET /setup/https HTTP/1.1\r\nHost: localhost\r\n\r\n')
+  await Promise.all(idle.map((socket) => once(socket, 'data')))
+  await server.close()
+  await Promise.all(idle.map((socket) => (socket.destroyed ? undefined : once(socket, 'close'))))
 })

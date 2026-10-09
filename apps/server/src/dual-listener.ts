@@ -11,9 +11,13 @@ export async function listenDual(
   tlsApp: FastifyInstance,
   plainApp: FastifyInstance,
   { host, port }: { host: string; port: number },
-): Promise<Server> {
+): Promise<{ server: Server; destroyConnections: () => void }> {
   await Promise.all([tlsApp.ready(), plainApp.ready()])
+  // Fastify only closes connections of servers it listens on itself, so the raw sockets are tracked here.
+  const sockets = new Set<Socket>()
   const server = createServer({ pauseOnConnect: true }, (socket: Socket) => {
+    sockets.add(socket)
+    socket.once('close', () => sockets.delete(socket))
     // A client that connects and says nothing must not hold the socket forever.
     socket.setTimeout(PEEK_TIMEOUT_MS, () => socket.destroy())
     socket.on('error', () => socket.destroy())
@@ -33,5 +37,5 @@ export async function listenDual(
       resolve()
     })
   })
-  return server
+  return { server, destroyConnections: () => sockets.forEach((socket) => socket.destroy()) }
 }
