@@ -36,6 +36,8 @@ export { getBridgeStatus } from './bridge/registry.ts'
 export { sweepKanbanDenials } from './live/kanban-denials.ts'
 export { createScreenshotImporter, type ScreenshotImporter } from './bridge/screenshots.ts'
 export { pruneBridge } from './bridge/retention.ts'
+export { pruneKanbanAttempts } from './live/kanban-attempts/retention.ts'
+export { kanbanAttemptsEnabled } from './live/kanban-attempts/types.ts'
 
 export function createHermesPort(
   config: Pick<

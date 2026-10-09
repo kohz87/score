@@ -19,17 +19,26 @@ import {
 import { createTailer } from './tailer.ts'
 import { hermesPaths, resolveHermesHome } from './paths.ts'
 import { incarnationOf, HermesDbMissing } from './sqlite.ts'
+import { KanbanAttemptsCoordinator } from './kanban-attempts/coordinator.ts'
+import { kanbanAttemptsEnabled } from './kanban-attempts/types.ts'
 
 export class LiveTasks {
   private readonly tailer
   private flight: Promise<void> | undefined
   private readonly path: string
+  /** Kanban attempts projection (5.17a-1), next to the task projection; off unless SCORE_KANBAN_ATTEMPTS=1. */
+  readonly attempts: KanbanAttemptsCoordinator | undefined
   constructor(
     private readonly db: ScoreDb,
     private readonly sink: ObservationSink,
     hermesHome?: string,
+    options: { kanbanAttempts?: boolean } = {},
   ) {
     this.path = hermesPaths(resolveHermesHome(hermesHome)).kanbanDb
+    this.attempts =
+      (options.kanbanAttempts ?? kanbanAttemptsEnabled())
+        ? new KanbanAttemptsCoordinator({ db, sink, path: this.path })
+        : undefined
     this.tailer = createTailer<TaskEvent>({
       path: this.path,
       scope: 'tasks',
@@ -82,10 +91,18 @@ export class LiveTasks {
   }
 
   poll(): Promise<void> {
-    this.flight ??= this.pollOnce().finally(() => {
+    this.flight ??= this.pollAll().finally(() => {
       this.flight = undefined
     })
     return this.flight
+  }
+  private async pollAll(): Promise<void> {
+    try {
+      await this.pollOnce()
+    } finally {
+      // The projections are independent: a failure in one never starves the other.
+      await this.attempts?.poll()
+    }
   }
   private async pollOnce(): Promise<void> {
     let incarnation: string
@@ -207,6 +224,7 @@ export class LiveTasks {
   }
   async close(): Promise<void> {
     await this.flight
+    await this.attempts?.close()
     this.tailer.close()
   }
 }

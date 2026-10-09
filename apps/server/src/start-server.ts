@@ -18,6 +18,8 @@ import {
   createScreenshotImporter,
   loadBridgeBootstrap,
   pruneBridge,
+  pruneKanbanAttempts,
+  kanbanAttemptsEnabled,
   RewindBroker,
   sweepKanbanDenials,
   type HermesPort,
@@ -331,6 +333,11 @@ export async function startServer(
           pruneAuxiliary(database)
         } catch (error) {
           app?.log.error({ err: error }, 'Auxiliary retention prune failed')
+        }
+        try {
+          if (kanbanAttemptsEnabled()) pruneKanbanAttempts(database)
+        } catch (error) {
+          app?.log.error({ err: error }, 'Kanban attempts retention failed')
         }
         try {
           retireIngestKeys(database)
