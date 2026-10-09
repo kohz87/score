@@ -23,7 +23,7 @@
       "name": "caniuse-lite",
       "version": "1.0.30001814",
       "license": "CC-BY-4.0",
-      "scope": "dev (eslint-plugin-react-hooks → babel → browserslist)",
+      "scope": "dev (eslint-plugin-react-hooks \u2192 babel \u2192 browserslist)",
       "approvedBy": "owner",
       "date": "2026-10-06",
       "reason": "Lint-time data only, not shipped."
@@ -50,10 +50,46 @@
       "name": "mdn-data",
       "version": "2.27.1",
       "license": "CC0-1.0",
-      "scope": "dev (jsdom → css-tree)",
+      "scope": "dev (jsdom \u2192 css-tree)",
       "approvedBy": "owner",
       "date": "2026-10-06",
       "reason": "Public-domain data; test tooling only."
+    },
+    {
+      "name": "lru-cache",
+      "version": "11.5.3",
+      "license": "BlueOak-1.0.0",
+      "scope": "dev (jsdom via vitest)",
+      "approvedBy": "owner",
+      "date": "2026-10-09",
+      "reason": "Permissive; test environment only, not shipped. Found when the check was made recursive."
+    },
+    {
+      "name": "minimatch",
+      "version": "10.2.6",
+      "license": "BlueOak-1.0.0",
+      "scope": "dev (lint/build tooling)",
+      "approvedBy": "owner",
+      "date": "2026-10-09",
+      "reason": "Permissive; tooling only, not shipped. Found when the check was made recursive."
+    },
+    {
+      "name": "caniuse-lite",
+      "version": "1.0.30001814",
+      "license": "CC-BY-4.0",
+      "scope": "dev (browserslist via eslint-plugin-react-hooks)",
+      "approvedBy": "owner",
+      "date": "2026-10-09",
+      "reason": "Browser-support data; tooling only, not shipped. Found when the check was made recursive."
+    },
+    {
+      "name": "mdn-data",
+      "version": "2.27.1",
+      "license": "CC0-1.0",
+      "scope": "dev (css-tree via jsdom)",
+      "approvedBy": "owner",
+      "date": "2026-10-09",
+      "reason": "Public-domain data; test environment only, not shipped. Found when the check was made recursive."
     }
   ]
 }

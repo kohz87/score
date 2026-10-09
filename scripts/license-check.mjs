@@ -14,7 +14,9 @@ const exceptions = JSON.parse(
 )
 const approved = new Map(exceptions.approved.map((e) => [`${e.name}@${e.version}`, e]))
 
-const raw = execFileSync('pnpm', ['licenses', 'list', '--json'], {
+// -r: every workspace package (apps/web, apps/server, packages/*), not just the root importer, which alone missed half
+// the tree until 2026-10-09.
+const raw = execFileSync('pnpm', ['-r', 'licenses', 'list', '--json'], {
   encoding: 'utf8',
   maxBuffer: 64 * 1024 * 1024,
 })
