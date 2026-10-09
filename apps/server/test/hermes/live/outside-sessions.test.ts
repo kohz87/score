@@ -172,3 +172,22 @@ test('a state.db without the expected columns marks the profile unavailable', ()
   db.exec('CREATE TABLE sessions (id TEXT PRIMARY KEY)')
   expect(listOutsideSessions(['default'], fixture.home, NOW).unavailable).toEqual(['default'])
 })
+
+test('a compressed conversation imports its continuation and is busy while the child is active', () => {
+  session('root', { endedAt: sec - 600, last: sec - 600, count: 2 })
+  db.prepare("UPDATE sessions SET end_reason = 'compression' WHERE id = 'root'").run()
+  say('root', 'user', 'first question', sec - 1000)
+  say('root', 'assistant', 'first answer', sec - 990)
+  session('child', { parent: 'root', endedAt: null, last: sec - 10, count: 3 })
+  say('child', 'user', 'first question', sec - 500) // carried over by compression
+  say('child', 'assistant', 'later answer', sec - 20)
+  const listed = listOutsideSessions(['default'], fixture.home, NOW).items
+  expect(listed.map((item) => [item.id, item.busy])).toEqual([['root', true]])
+  const history = readOutsideSession('default', 'root', fixture.home, NOW)!
+  expect(history.session.busy).toBe(true)
+  expect(history.messages.map((m) => m.text)).toEqual([
+    'first question',
+    'first answer',
+    'later answer',
+  ])
+})

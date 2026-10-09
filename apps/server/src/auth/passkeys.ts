@@ -309,16 +309,27 @@ export class PasskeyService {
     }
     if (!verified.verified) return fail()
     const next = verified.authenticationInfo.newCounter
-    // Counters that are always zero (many synced passkeys) are fine; once a counter is in use it must grow.
-    if ((row.counter > 0 || next > 0) && next <= row.counter) {
-      this.db.sqlite
-        .prepare('UPDATE passkeys SET flagged_at = ? WHERE id = ?')
-        .run(this.clock(), row.id)
-      return fail()
-    }
-    this.db.sqlite
-      .prepare('UPDATE passkeys SET counter = ?, last_used_at = ? WHERE id = ?')
-      .run(next, this.clock(), row.id)
+    // Signature checking was asynchronous: decide on the row as it is now (removed, flagged or advanced by a parallel
+    // assertion in the meantime), in one synchronous transaction with the update.
+    const outcome = this.db.tx((sqlite) => {
+      const current = this.row(row.id)
+      if (
+        !current ||
+        current.flagged_at !== null ||
+        !Buffer.from(current.public_key).equals(row.public_key)
+      )
+        return 'refused' as const
+      // Counters that are always zero (many synced passkeys) are fine; once a counter is in use it must grow.
+      if ((current.counter > 0 || next > 0) && next <= current.counter) {
+        sqlite.prepare('UPDATE passkeys SET flagged_at = ? WHERE id = ?').run(this.clock(), row.id)
+        return 'refused' as const
+      }
+      sqlite
+        .prepare('UPDATE passkeys SET counter = ?, last_used_at = ? WHERE id = ?')
+        .run(next, this.clock(), row.id)
+      return 'ok' as const
+    })
+    if (outcome === 'refused') return fail()
     return {
       id: row.id,
       label: row.label,

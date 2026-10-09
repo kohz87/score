@@ -197,8 +197,9 @@ export interface HermesPort extends ProfileManagementPort {
   /**
    * Whether a run can be started inside an existing Hermes session: 'same_session' when the gateway's run API takes
    * that session id (Hermes loads its history), else 'new_session' (the room starts a fresh session with a summary).
+   * 'unknown' while the gateway's capabilities aren't known (startup, outage): callers must retry, never persist a fallback.
    */
-  sessionContinuation(): 'same_session' | 'new_session'
+  sessionContinuation(): 'same_session' | 'new_session' | 'unknown'
   listAgentDetails(): Promise<AgentDetail[]>
   listRoutines(agentId: string): Promise<RoutineSummary[]>
   createRoutine(

@@ -23,7 +23,8 @@ export function parseSingleFile(
     position += 2
     const headerEnd = body.indexOf('\r\n\r\n', position)
     if (headerEnd < 0) throw bad()
-    const headers = body.subarray(position, headerEnd).toString('latin1')
+    // Browsers send filenames as raw UTF-8 bytes.
+    const headers = body.subarray(position, headerEnd).toString('utf8')
     const dataStart = headerEnd + 4
     const next = body.indexOf(separator, dataStart)
     if (next < 0) throw bad()

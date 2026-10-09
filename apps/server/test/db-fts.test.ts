@@ -54,3 +54,15 @@ test('startup rebuilds message_fts when it no longer matches the messages', () =
   expect(hits('apple')).toEqual([])
   expect(ensureMessageFts(db.sqlite)).toBe(false)
 })
+
+test('startup rebuilds message_fts when two messages swapped rowids', () => {
+  say('a', 'alpha apple')
+  say('b', 'bravo banana')
+  db.sqlite.exec('DROP TRIGGER IF EXISTS message_fts_update')
+  db.sqlite.exec("UPDATE messages SET rowid = 100 WHERE id = 'a'")
+  db.sqlite.exec("UPDATE messages SET rowid = 1 WHERE id = 'b'")
+  db.sqlite.exec("UPDATE messages SET rowid = 2 WHERE id = 'a'")
+  expect(ensureMessageFts(db.sqlite)).toBe(true)
+  expect(hits('apple')).toEqual(['a'])
+  expect(hits('banana')).toEqual(['b'])
+})
