@@ -11,7 +11,7 @@ beforeEach(() => {
 afterEach(() => hermes.close())
 
 const SESSION = 'score-chat-builder'
-type Row = [role: string, at: number, extra?: { active?: number; displayKind?: string }]
+type Row = [role: string, at: number, extra?: { active?: number; displayKind?: string; compacted?: number }]
 
 function write(rows: Row[], child?: { id: string; startedAt: number; rows: Row[] }) {
   mkdirSync(`${hermes.home}/profiles/builder`, { recursive: true })
@@ -20,16 +20,24 @@ function write(rows: Row[], child?: { id: string; startedAt: number; rows: Row[]
     `INSERT INTO sessions (id, source, profile_name, model, started_at) VALUES (?, 'api_server', 'builder', 'm', 1)`,
   ).run(SESSION)
   const insert = db.prepare(
-    'INSERT INTO messages (session_id, role, content, timestamp, active, display_kind) VALUES (?, ?, ?, ?, ?, ?)',
+    'INSERT INTO messages (session_id, role, content, timestamp, active, display_kind, compacted) VALUES (?, ?, ?, ?, ?, ?, ?)',
   )
   for (const [role, at, extra] of rows)
-    insert.run(SESSION, role, 'x', at, extra?.active ?? 1, extra?.displayKind ?? null)
+    insert.run(
+      SESSION,
+      role,
+      'x',
+      at,
+      extra?.active ?? 1,
+      extra?.displayKind ?? null,
+      extra?.compacted ?? 0,
+    )
   if (child) {
     db.prepare("UPDATE sessions SET end_reason = 'compression' WHERE id = ?").run(SESSION)
     db.prepare(
       `INSERT INTO sessions (id, source, profile_name, model, started_at, parent_session_id) VALUES (?, 'api_server', 'builder', 'm', ?, ?)`,
     ).run(child.id, child.startedAt, SESSION)
-    for (const [role, at] of child.rows) insert.run(child.id, role, 'x', at, 1, null)
+    for (const [role, at] of child.rows) insert.run(child.id, role, 'x', at, 1, null, 0)
   }
 }
 const inspect = (sinceSeconds: number, sessionId = SESSION) =>
@@ -131,4 +139,14 @@ test('a session already rewound since the message counts as rewound, not as a mi
     status: 'skipped',
     reason: 'turn_count_mismatch',
   })
+})
+
+test('rows archived by an in-place compaction are not counted as undone turns', () => {
+  write([
+    ['user', 10, { active: 0, compacted: 1 }],
+    ['assistant', 11],
+    ['user', 20, { active: 0 }],
+  ])
+  // Only the row an undo or rewind deactivated counts; the compacted one is still part of the context summary.
+  expect(inspect(5)).toEqual({ ok: true, sessionId: SESSION, turns: 0, undone: 1 })
 })
