@@ -8,6 +8,7 @@ import {
   useWorkspace,
   useWorkspaceActions,
   workspaceFailure,
+  WorkspaceRootContext,
 } from './workspace-queries.ts'
 import './workspace.css'
 
@@ -95,19 +96,21 @@ export function WorkspaceTab({
       </section>
     )
   return (
-    <Browser
-      key={info.data.root}
-      agentId={agentId}
-      agentName={agentName}
-      initialPath={initialPath}
-      root={info.data.root}
-      settingFolder={settingFolder}
-      onSetFolder={() => {
-        setFolder(info.data.root ?? '')
-        setSettingFolder(true)
-      }}
-      folderForm={folderForm}
-    />
+    <WorkspaceRootContext.Provider value={info.data.root}>
+      <Browser
+        key={info.data.root}
+        agentId={agentId}
+        agentName={agentName}
+        initialPath={initialPath}
+        root={info.data.root}
+        settingFolder={settingFolder}
+        onSetFolder={() => {
+          setFolder(info.data.root ?? '')
+          setSettingFolder(true)
+        }}
+        folderForm={folderForm}
+      />
+    </WorkspaceRootContext.Provider>
   )
 }
 

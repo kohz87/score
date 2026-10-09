@@ -707,7 +707,13 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
 - **H** `GET /api/agents/:agentId/workspace` → `WorkspaceInfo` `{ root: string | null; available: boolean; reason: string | null }`.
   Unavailable (with the reason) when the terminal backend is not `local`, `terminal.cwd` is unset, `.` or relative, or the
   folder fails the root checks: `/`, the home folder or a parent of it, `~/.hermes`, `~/.score`, `~/.ssh` (or Score's/Hermes's
-  configured homes) or inside them, missing, not a directory, or owned by another user.
+  configured homes, and the default `~/.hermes` even when another Hermes home is configured) or inside them, inside `.git` or
+  a protected-name folder, missing, not a directory, or owned by another user.
+- **Root identity.** Every file route below (`tree`, `file` GET/PUT, `entries`, `move`, `upload`, `git`) accepts `?root=<the
+  WorkspaceInfo.root the browser is showing>`; when present and not the agent's current root the request is refused
+  `409 workspace_changed` (`details.root` = the current root) and nothing is touched. The web always sends it and includes
+  it in its query keys. `PUT …/file` re-checks the file right before replacing it (`412 precondition_failed` if an outside
+  writer changed it meanwhile).
 - **H** `PUT /api/agents/:agentId/workspace/root` `{ path }` → `WorkspaceInfo`. Same checks plus the folder must exist (never
   created); writes `terminal.cwd` through `hermes -p <profile> config set`. Refusal → `409 workspace_unavailable` with the reason;
   `~/…` is expanded. The stored value is the resolved real path. Logged.

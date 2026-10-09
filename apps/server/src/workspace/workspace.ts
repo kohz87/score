@@ -329,7 +329,24 @@ export class Workspace {
         } finally {
           await fh.close()
         }
-        if (existing) await fs.rename(temp, target)
+        if (existing) {
+          // The agent (or anything else) may have written the file while the replacement was being prepared: look
+          // again right before replacing. A rename cannot be made atomic against an outside writer; this narrows the
+          // window from the whole fsync to the instant between this check and the rename.
+          const now = await fs.lstat(target).catch(() => null)
+          const unchanged =
+            now !== null &&
+            now.isFile() &&
+            now.ino === existing.ino &&
+            now.size === existing.size &&
+            now.mtimeMs === existing.mtimeMs &&
+            etagOf(await readBytes(target, MAX_TEXT_BYTES)) === etag
+          if (!unchanged)
+            throw new WorkspaceError(412, 'precondition_failed', 'The file changed on disk', {
+              etag: now?.isFile() ? etagOf(await readBytes(target, MAX_TEXT_BYTES)) : null,
+            })
+          await fs.rename(temp, target)
+        }
         else {
           // link fails if the name appeared meanwhile; rename would silently replace it.
           await fs.link(temp, target)

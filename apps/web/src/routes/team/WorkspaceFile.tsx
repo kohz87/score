@@ -1,10 +1,11 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useContext, useEffect, useRef, useState } from 'react'
 import { Markdown } from '../chat/Markdown.tsx'
 import '../chat/chat.css'
 import {
   conflictOf,
   fetchFile,
   fileUrl,
+  WorkspaceRootContext,
   isImagePath,
   isPdfPath,
   useFile,
@@ -31,8 +32,9 @@ type Disk = { etag: string | null; content: string | null }
 export function WorkspaceFile({ agentId, path }: { agentId: string; path: string }) {
   const image = isImagePath(path)
   const pdf = isPdfPath(path)
+  const root = useContext(WorkspaceRootContext)
   const file = useFile(agentId, path, !image && !pdf)
-  const download = fileUrl(agentId, path, true)
+  const download = fileUrl(agentId, path, true, root)
   const [imageFailed, setImageFailed] = useState(false)
   if (image)
     return (
@@ -40,7 +42,11 @@ export function WorkspaceFile({ agentId, path }: { agentId: string; path: string
         {imageFailed ? (
           <p className="ws-note">This is not a picture Score can show.</p>
         ) : (
-          <img src={fileUrl(agentId, path)} alt={path} onError={() => setImageFailed(true)} />
+          <img
+            src={fileUrl(agentId, path, false, root)}
+            alt={path}
+            onError={() => setImageFailed(true)}
+          />
         )}
         <a className="team-pill-button" href={download}>
           Download
@@ -54,7 +60,7 @@ export function WorkspaceFile({ agentId, path }: { agentId: string; path: string
         <div className="ws-actions">
           <a
             className="team-pill-button"
-            href={fileUrl(agentId, path)}
+            href={fileUrl(agentId, path, false, root)}
             target="_blank"
             rel="noreferrer"
           >
@@ -102,6 +108,7 @@ function Editor({
   latest: Extract<LoadedFile, { kind: 'text' }>
 }) {
   const { save } = useWorkspaceActions(agentId)
+  const root = useContext(WorkspaceRootContext)
   const [base, setBase] = useState({ content: latest.content, etag: latest.etag })
   const [draft, setDraft] = useState(latest.content)
   const [disk, setDisk] = useState<Disk | null>(null)
@@ -147,7 +154,7 @@ function Editor({
           const conflict = conflictOf(error)
           if (!conflict) return
           // Fetch what is on disk now so "Compare" has something to show.
-          const current = await fetchFile(agentId, path).catch(() => null)
+          const current = await fetchFile(agentId, path, undefined, root).catch(() => null)
           setDisk({
             etag: conflict.etag,
             content: current?.kind === 'text' ? current.content : null,
