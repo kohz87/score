@@ -432,10 +432,15 @@ export class LiveSettings {
     const slug = slugify(req.label)
     if (!ProviderIdSchema.safeParse(slug).success)
       throw new HttpError(400, 'bad_request', 'Invalid request')
-    if (slug in CATALOG || (await this.listProviders()).some((item) => item.id === slug))
-      throw new HttpError(409, 'conflict', 'A provider with that name already exists')
+    const exists = async () =>
+      slug in CATALOG || (await this.listProviders()).some((item) => item.id === slug)
+    const taken = () => new HttpError(409, 'conflict', 'A provider with that name already exists')
+    if (await exists()) throw taken()
     const base = `providers.${slug}`
     await this.locks.run(this.profile ?? 'default', async () => {
+      // Checked again under the lock: two requests can both pass the early check and the second would
+      // overwrite the first's provider.
+      if (await exists()) throw taken()
       for (const [key, value] of [
         ['name', req.label],
         ['base_url', req.baseUrl],
@@ -448,6 +453,8 @@ export class LiveSettings {
         if (result.exitCode !== 0)
           throw new HttpError(502, 'hermes_write_failed', 'Hermes did not accept the provider')
       }
+      const kept = (await this.localProviders()).some((item) => item.id === slug)
+      if (!kept) throw new HttpError(502, 'hermes_write_failed', 'Hermes did not keep the provider')
     })
     return {
       id: slug,
