@@ -1204,3 +1204,30 @@ test('migration 0029 adds nullable edited_by and edits to messages', () => {
   expect(columns).toContainEqual({ name: 'edited_by', required: 0 })
   expect(columns).toContainEqual({ name: 'edits', required: 0 })
 })
+
+test('editing a message whose turn is still queued cancels that turn (audit wave 4)', async () => {
+  const room = await create()
+  const original = await ownMessage(room.id, 'obsolete instruction')
+  // The mocked startRun never attaches a reply, so the turn is still queued when the edit arrives.
+  expect(
+    db.sqlite.prepare('SELECT state FROM message_runs WHERE parent_message_id = ?').get(original.id)
+      ?.state,
+  ).toBe('pending')
+  const edited = await post(`/api/rooms/${room.id}/messages`, {
+    text: 'new instruction',
+    edits: original.id,
+  })
+  expect(edited.statusCode).toBe(200)
+  expect(
+    db.sqlite.prepare('SELECT state FROM message_runs WHERE parent_message_id = ?').get(original.id)
+      ?.state,
+  ).toBe('failed')
+  // No reply message is ever created for the hidden original.
+  expect(
+    db.sqlite
+      .prepare(
+        "SELECT COUNT(*) AS n FROM messages WHERE id LIKE 'reply:%' AND room_id = ? AND deleted_at IS NULL",
+      )
+      .get(room.id)?.n,
+  ).toBe(0)
+})
