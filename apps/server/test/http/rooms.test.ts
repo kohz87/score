@@ -1231,3 +1231,21 @@ test('editing a message whose turn is still queued cancels that turn (audit wave
       .get(room.id)?.n,
   ).toBe(0)
 })
+
+test('retry sends the original admitted input again, not the room as it is now (audit wave 4)', async () => {
+  const room = await create()
+  const original = await ownMessage(room.id, 'do the thing')
+  const replyId = await finishReply(room.id, original.id)
+  await ownMessage(room.id, 'only say CANCELLED')
+  const first = (await post(`/api/rooms/${room.id}/messages/${replyId}/retry`, {}, 'k')).json() as {
+    messageId: string
+  }
+  const rows = db.sqlite
+    .prepare(
+      'SELECT message_id, admission_input FROM message_runs WHERE parent_message_id = ? ORDER BY rowid',
+    )
+    .all(original.id) as Array<{ message_id: string; admission_input: string }>
+  const retried = rows.find((row) => row.message_id === first.messageId)!
+  expect(retried.admission_input).toBe(rows[0]!.admission_input)
+  expect(retried.admission_input).not.toContain('CANCELLED')
+})
