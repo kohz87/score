@@ -53,7 +53,8 @@ export const ProviderKeyRequestSchema = z
 export type ProviderKeyRequest = z.infer<typeof ProviderKeyRequestSchema>
 
 export const ModelOptionSchema = z.object({
-  provider: z.string().min(1),
+  /** Empty only for an alias row whose provider is not confirmed (the server resolves the alias itself). */
+  provider: z.string(),
   providerLabel: z.string().min(1),
   model: z.string().min(1).max(256),
   available: z.boolean(),
