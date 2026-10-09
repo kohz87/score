@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { ReportsSchema } from '@score/contract'
+import { reconcileAgents } from '../../src/domain/agents.ts'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
@@ -15,6 +16,8 @@ beforeEach(async () => {
   env = setup()
   port = new FakePort(1, { db: env.db }, false)
   await port.start(env.ingest)
+  // Reports read Score's agent projection (the app fills it when the agent list is requested).
+  await reconcileAgents(env.ingest, await port.listAgentDetails())
   app = buildApp({
     config: loadConfig({ SCORE_MODE: 'fake' }),
     logger: false,
@@ -84,6 +87,7 @@ test('GET /api/reports/export.csv returns the By agent table as a download', asy
 test('the seeded demo history fills every part of the report', async () => {
   const seeded = new FakePort(1, { db: env.db }, false, undefined, true)
   await seeded.start(env.ingest)
+  await reconcileAgents(env.ingest, await seeded.listAgentDetails())
   const demo = buildApp({
     config: loadConfig({ SCORE_MODE: 'fake' }),
     logger: false,
@@ -127,4 +131,43 @@ test('days follow the viewer time zone the browser sends, and a bogus zone is re
   expect((await app.inject('/api/reports?range=today&tz=Not%2FAZone')).statusCode).toBe(400)
   const csv = await app.inject('/api/reports/export.csv?range=today&tz=Pacific%2FKiritimati')
   expect(csv.headers['content-disposition']).toContain('2026-03-11')
+})
+
+test('reports never wait on Hermes listing agents', async () => {
+  port.listAgents = () => new Promise(() => {})
+  const response = await app.inject('/api/reports?range=7d')
+  expect(response.statusCode).toBe(200)
+  expect(ReportsSchema.parse(response.json()).byAgent.length).toBeGreaterThan(0)
+  expect((await app.inject('/api/reports/export.csv?range=7d')).statusCode).toBe(200)
+})
+
+test('a custom range answers per day and its CSV follows it', async () => {
+  const url = '?range=custom&from=2026-03-01&to=2026-03-10&tz=UTC'
+  const response = await app.inject(`/api/reports${url}`)
+  expect(response.statusCode).toBe(200)
+  const report = ReportsSchema.parse(response.json())
+  expect(report.range).toBe('custom')
+  expect(report.byDay.map((day) => day.date)[0]).toBe('2026-03-01')
+  expect(report.byDay).toHaveLength(10)
+  const csv = await app.inject(`/api/reports/export.csv${url}`)
+  expect(csv.statusCode).toBe(200)
+  expect(csv.headers['content-disposition']).toBe(
+    'attachment; filename="score-report-2026-03-01_2026-03-10.csv"',
+  )
+})
+
+test.each([
+  ['?range=custom', /needs from and to/],
+  ['?range=custom&from=2026-03-01', /needs from and to/],
+  ['?range=custom&from=2026-03-05&to=2026-03-01', /after to/],
+  ['?range=custom&from=2026-03-01&to=2026-03-12&tz=UTC', /after today/],
+  ['?range=custom&from=2024-01-01&to=2026-03-01', /at most 366/],
+  ['?range=custom&from=2026-02-31&to=2026-03-01', /real dates/],
+  ['?range=7d&from=2026-03-01&to=2026-03-02', /only go with range=custom/],
+])('an unusable custom range %s is a clear 400', async (query, message) => {
+  for (const path of ['/api/reports', '/api/reports/export.csv']) {
+    const response = await app.inject(`${path}${query}`)
+    expect(response.statusCode).toBe(400)
+    expect(response.json().error.message).toMatch(message)
+  }
 })

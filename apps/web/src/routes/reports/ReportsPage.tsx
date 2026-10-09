@@ -1,12 +1,20 @@
-import type { AgentSummary, ReportRange, Reports } from '@score/contract'
+import type { AgentSummary, Reports } from '@score/contract'
 import { ReportRangeSchema } from '@score/contract'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery } from '../team/team-queries.ts'
 import { TasksByDayChart } from './TasksByDayChart.tsx'
 import { formatDuration, formatPercent, formatUsd } from './reports-format.ts'
-import { reportCsvHref, reportRanges, useReports } from './reports-queries.ts'
+import {
+  customRangeError,
+  reportCsvHref,
+  reportRanges,
+  useReports,
+  viewerToday,
+  type ReportSpec,
+} from './reports-queries.ts'
 import './reports.css'
 
 function agentFor(agents: AgentSummary[], id: string): AgentSummary {
@@ -184,18 +192,149 @@ function Approvals({ approvals }: { approvals: Reports['approvals'] }) {
   )
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+function shortDay(day: string, withYear: boolean): string {
+  const [y, m, d] = day.split('-').map(Number)
+  return `${d} ${MONTHS[m! - 1]}${withYear ? ` ${y}` : ''}`
+}
+/** "3 Oct – 9 Oct", with the year when the range is not in the current one. */
+export function customLabel(from: string, to: string): string {
+  const year = viewerToday().slice(0, 4)
+  const withYear = from.slice(0, 4) !== year || to.slice(0, 4) !== year
+  return `${shortDay(from, withYear)} – ${shortDay(to, withYear)}`
+}
+
+function CustomRange({
+  spec,
+  busy,
+  onApply,
+}: {
+  spec: ReportSpec
+  busy: boolean
+  onApply: (from: string, to: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const today = viewerToday()
+  const active = spec.range === 'custom'
+  const [from, setFrom] = useState(active ? spec.from : today)
+  const [to, setTo] = useState(active ? spec.to : today)
+  const id = useId()
+  const wrapper = useRef<HTMLSpanElement>(null)
+  const problem = customRangeError(from, to, today)
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    const onPointer = (event: PointerEvent) => {
+      if (wrapper.current && !wrapper.current.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('pointerdown', onPointer)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('pointerdown', onPointer)
+    }
+  }, [open])
+
+  function toggle() {
+    if (!open && active) {
+      setFrom(spec.from)
+      setTo(spec.to)
+    }
+    setOpen(!open)
+  }
+
+  return (
+    <span className="reports-custom" ref={wrapper}>
+      <button
+        type="button"
+        aria-pressed={active}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-controls={open ? `${id}-popover` : undefined}
+        onClick={toggle}
+      >
+        {active ? customLabel(spec.from, spec.to) : 'Custom'}
+        {active && busy && <span className="reports-spinner" aria-hidden="true" />}
+      </button>
+      {open && (
+        <form
+          id={`${id}-popover`}
+          className="reports-popover"
+          role="dialog"
+          aria-label="Custom range"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (problem) return
+            onApply(from, to)
+            setOpen(false)
+          }}
+        >
+          <label>
+            From
+            <input
+              type="date"
+              value={from}
+              max={to && to < today ? to : today}
+              onChange={(event) => setFrom(event.target.value)}
+            />
+          </label>
+          <label>
+            To
+            <input
+              type="date"
+              value={to}
+              min={from || undefined}
+              max={today}
+              onChange={(event) => setTo(event.target.value)}
+            />
+          </label>
+          {problem && (
+            <p className="reports-popover__problem" role="status">
+              {problem}
+            </p>
+          )}
+          <button type="submit" className="reports-popover__apply" disabled={problem !== null}>
+            Apply
+          </button>
+        </form>
+      )}
+    </span>
+  )
+}
+
 export function ReportsPage() {
   const [params, setParams] = useSearchParams()
   const parsed = ReportRangeSchema.safeParse(params.get('range'))
-  const range: ReportRange = parsed.success ? parsed.data : '7d'
-  const reports = useReports(range)
+  const urlRange = parsed.success ? parsed.data : '7d'
+  const urlFrom = params.get('from') ?? ''
+  const urlTo = params.get('to') ?? ''
+  const spec = useMemo<ReportSpec>(() => {
+    if (urlRange !== 'custom') return { range: urlRange }
+    // A shared link with a bad custom range falls back to the default instead of erroring.
+    return customRangeError(urlFrom, urlTo) === null
+      ? { range: 'custom', from: urlFrom, to: urlTo }
+      : { range: '7d' }
+  }, [urlRange, urlFrom, urlTo])
+  const reports = useReports(spec)
   const agents = useStreamQuery(agentsQuery).data ?? []
   const report = reports.data
+  // Fetching with nothing newer to show; the numbers on screen may belong to the previous range.
+  const stale = reports.isPlaceholderData
 
-  function setRange(next: ReportRange) {
+  function setSpec(next: ReportSpec) {
     setParams((current) => {
       const copy = new URLSearchParams(current)
-      copy.set('range', next)
+      copy.set('range', next.range)
+      if (next.range === 'custom') {
+        copy.set('from', next.from)
+        copy.set('to', next.to)
+      } else {
+        copy.delete('from')
+        copy.delete('to')
+      }
       return copy
     })
   }
@@ -215,14 +354,22 @@ export function ReportsPage() {
               <button
                 key={id}
                 type="button"
-                aria-pressed={range === id}
-                onClick={() => setRange(id)}
+                aria-pressed={spec.range === id}
+                onClick={() => setSpec({ range: id })}
               >
                 {label}
+                {spec.range === id && reports.isFetching && (
+                  <span className="reports-spinner" aria-hidden="true" />
+                )}
               </button>
             ))}
+            <CustomRange
+              spec={spec}
+              busy={reports.isFetching}
+              onApply={(from, to) => setSpec({ range: 'custom', from, to })}
+            />
           </div>
-          <a className="reports-export" href={reportCsvHref(range)} download>
+          <a className="reports-export" href={reportCsvHref(spec)} download>
             Export CSV
           </a>
         </div>
@@ -236,7 +383,10 @@ export function ReportsPage() {
         </p>
       )}
       {report && (
-        <>
+        <div
+          className={`reports-body${stale ? ' reports-body--stale' : ''}`}
+          aria-busy={reports.isFetching}
+        >
           <Totals totals={report.totals} />
           <div className="reports-row">
             <section className="reports-card reports-chart" aria-labelledby="reports-chart-title">
@@ -249,7 +399,7 @@ export function ReportsPage() {
             <ByAgent report={report} agents={agents} />
             <Approvals approvals={report.approvals} />
           </div>
-        </>
+        </div>
       )}
     </div>
   )

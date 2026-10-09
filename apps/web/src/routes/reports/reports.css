@@ -55,6 +55,92 @@
   color: var(--card);
   font-weight: 600;
 }
+.reports-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  transition: opacity 0.15s;
+}
+.reports-body--stale {
+  opacity: 0.55;
+}
+.reports-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.reports-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: reports-spin 0.7s linear infinite;
+}
+@keyframes reports-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reports-spinner {
+    animation-duration: 2.4s;
+  }
+}
+.reports-custom {
+  position: relative;
+  display: inline-flex;
+}
+.reports-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 260px;
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-16);
+  box-shadow: 0 12px 32px rgb(18 19 26 / 14%);
+}
+.reports-popover label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.reports-popover input {
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--card);
+}
+.reports-popover__problem {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+.reports-popover .reports-popover__apply {
+  height: 40px;
+  border-radius: var(--radius-pill);
+  border: 0;
+  background: var(--ink);
+  color: var(--card);
+  font-weight: 600;
+  cursor: pointer;
+}
+.reports-popover .reports-popover__apply:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .reports-export {
   display: inline-flex;
   align-items: center;
@@ -310,4 +396,12 @@
 }
 .reports-approvals :focus-visible {
   outline-color: #fff;
+}
+.reports-tabs button {
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .reports-tabs button {
+    padding: 0 12px;
+  }
 }

@@ -43,3 +43,28 @@ test('reports show the numbers, switch range and export the table as CSV', async
   const names = await table.locator('tbody th').allTextContents()
   expect(csv.slice(1).map((line) => line.split(',')[0])).toEqual(names.map((n) => n.trim()))
 })
+
+test('a custom range is chosen, kept in the URL and followed by the CSV', async ({ page }) => {
+  await page.goto('/reports')
+  await page.getByRole('button', { name: 'Custom' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Custom range' })
+  const today = await dialog.getByLabel('To').getAttribute('max')
+  const [y, m, d] = today!.split('-').map(Number)
+  const from = new Date(Date.UTC(y!, m! - 1, d! - 44)).toISOString().slice(0, 10) // 45 days
+  await dialog.getByLabel('From').fill(from)
+  await dialog.getByLabel('To').fill(today!)
+  await dialog.getByRole('button', { name: 'Apply' }).click()
+  await expect(page).toHaveURL(new RegExp(`range=custom&from=${from}&to=${today}`))
+  const chip = page.getByRole('button', { pressed: true })
+  await expect(chip).toContainText('–')
+  const table = page.getByRole('table', { name: 'By agent', exact: true })
+  await expect(table.getByRole('row')).toHaveCount(5)
+  await expect(page.locator('g[data-day]')).toHaveCount(45)
+
+  await page.reload()
+  await expect(page.getByRole('button', { pressed: true })).toContainText('–')
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('link', { name: 'Export CSV' }).click()
+  expect((await downloadPromise).suggestedFilename()).toBe(`score-report-${from}_${today}.csv`)
+})

@@ -135,7 +135,7 @@ export const NowSnapshotSchema = z.object({
 export type NowSnapshot = z.infer<typeof NowSnapshotSchema>
 
 // §9 Reports (not on the stream; refetch)
-export const ReportRangeSchema = z.enum(['today', '7d', '30d'])
+export const ReportRangeSchema = z.enum(['today', '7d', '30d', 'custom'])
 export type ReportRange = z.infer<typeof ReportRangeSchema>
 export const ReportsSchema = z.object({
   range: ReportRangeSchema,
