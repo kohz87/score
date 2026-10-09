@@ -2,6 +2,7 @@ import { createHash, generateKeyPairSync, randomBytes, sign, type KeyObject } fr
 import { isoBase64URL, isoCBOR } from '@simplewebauthn/server/helpers'
 
 // A software authenticator for tests: ES256, no attestation, user verification and counter under test control.
+const b64 = (data: Uint8Array) => isoBase64URL.fromBuffer(new Uint8Array(data))
 const sha256 = (data: Uint8Array) => createHash('sha256').update(data).digest()
 
 export class SoftAuthenticator {
@@ -58,8 +59,8 @@ export class SoftAuthenticator {
       rawId: this.id,
       type: 'public-key',
       response: {
-        clientDataJSON: isoBase64URL.fromBuffer(Buffer.from(clientData)),
-        attestationObject: isoBase64URL.fromBuffer(attestationObject),
+        clientDataJSON: b64(Buffer.from(clientData)),
+        attestationObject: b64(attestationObject),
         transports: ['internal'],
       },
       clientExtensionResults: {},
@@ -91,9 +92,9 @@ export class SoftAuthenticator {
       rawId: this.id,
       type: 'public-key',
       response: {
-        clientDataJSON: isoBase64URL.fromBuffer(clientData),
-        authenticatorData: isoBase64URL.fromBuffer(authData),
-        signature: isoBase64URL.fromBuffer(signature),
+        clientDataJSON: b64(clientData),
+        authenticatorData: b64(authData),
+        signature: b64(signature),
       },
       clientExtensionResults: {},
     }
