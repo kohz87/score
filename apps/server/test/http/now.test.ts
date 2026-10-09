@@ -144,3 +144,37 @@ test.each([
   expect(response.statusCode).toBe(400)
   expect(response.json().error.code).toBe('bad_request')
 })
+
+test('a completed reviewer run that was followed by more work is not a passed review', async () => {
+  await port.start(ingest)
+  await scheduler.advance(scenarioDuration)
+  const task = readProjectedTask(db.sqlite, 'task-pagination-0')!
+  const at = (minutes: number) => new Date(scheduler.now() - minutes * 60_000).toISOString()
+  const insert = db.sqlite.prepare(
+    `INSERT INTO runs (id, profile, origin, status, started_at, ended_at, updated_at)
+     VALUES (?, ?, 'kanban', 'completed', ?, ?, ?)`,
+  )
+  const rows: [string, string, number][] = [
+    ['chk-r1', 'reviewer', 30],
+    ['chk-b2', 'builder', 20],
+    ['chk-r2', 'reviewer', 10],
+  ]
+  for (const [id, profile, ago] of rows) insert.run(id, profile, at(ago), at(ago - 5), at(ago - 5))
+  db.tx((sqlite) => {
+    projectTask(
+      sqlite,
+      {
+        ...task,
+        reviewer: 'reviewer',
+        runIds: ['chk-r1', 'chk-b2', 'chk-r2'],
+        completedAt: at(1),
+      },
+      1_000_001,
+    )
+  })
+  const now = NowSnapshotSchema.parse((await get()).json())
+  const item = now.madeToday.find(
+    (entry) => entry.ref.kind === 'task' && entry.ref.taskId === task.id,
+  )!
+  expect(item.checks.map((check) => check.ok)).toEqual([false, true])
+})

@@ -13,7 +13,24 @@ const TaskRowSchema = z.object({
   completed_at: z.number().nullable(),
 })
 const LinkRowSchema = z.object({ child_id: z.string() })
-const EventRowSchema = z.object({ task_id: z.string(), kind: z.string(), created_at: z.number() })
+const EventRowSchema = z.object({
+  id: z.int().positive(),
+  task_id: z.string(),
+  kind: z.string(),
+  created_at: z.number(),
+  payload: z.string().nullable(),
+})
+const ImplementerSchema = z.object({ implementer: z.string().trim().min(1) })
+// The implementer named on a review event is the profile that waits for (or receives) the review.
+function actorOf(payload: string | null): string | null {
+  if (payload === null) return null
+  try {
+    const parsed = ImplementerSchema.safeParse(JSON.parse(payload))
+    return parsed.success ? parsed.data.implementer : null
+  } catch {
+    return null
+  }
+}
 const EVENT_KINDS = [
   'review_requested',
   'changes_requested',
@@ -56,7 +73,7 @@ export function readReportFacts(
           db,
           'task_events',
           EventRowSchema,
-          `WHERE kind IN (${EVENT_KINDS.map(() => '?').join(', ')}) ORDER BY created_at, id`,
+          `WHERE kind IN (${EVENT_KINDS.map(() => '?').join(', ')}) ORDER BY id`,
           EVENT_KINDS,
         ).rows,
         (row) => row.task_id,
@@ -69,8 +86,10 @@ export function readReportFacts(
         completedAt: row.completed_at === null ? null : row.completed_at * 1000,
         hasParents: children.has(row.id),
         events: (events.get(row.id) ?? []).map((event) => ({
+          id: event.id,
           kind: event.kind,
           at: event.created_at * 1000,
+          actor: actorOf(event.payload),
         })),
       }))
     } finally {

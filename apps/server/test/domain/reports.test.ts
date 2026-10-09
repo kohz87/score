@@ -25,7 +25,13 @@ const kanban = (
   completedAt: null,
   hasParents: false,
   ...over,
-  events: (over.events ?? []).map(([kind, at]) => ({ kind, at: t(at) })),
+  events: (over.events ?? []).map(([kind, at], index) => ({
+    id: index + 1,
+    kind,
+    at: t(at),
+    // The implementer (the task's assignee in these fixtures) waits on a review.
+    actor: kind === 'review_requested' ? (over.assignee ?? 'builder') : null,
+  })),
 })
 const tasks: KanbanTaskFact[] = [
   kanban('k1', {
@@ -152,8 +158,15 @@ test('7d report has known numbers', () => {
     runs: 3,
     firstPassRate: 2 / 3,
     medianTaskSec: 2700,
-    spendUsd: 1.75,
+    // designer's spend is unknown, so the total is unknown rather than a partial 1.75.
+    spendUsd: null,
   })
+  expect(
+    computeReports({
+      ...input,
+      facts: { ...input.facts, spendUsd: { builder: 1.5, designer: 0, reviewer: 0.25 } },
+    }).totals.spendUsd,
+  ).toBe(1.75)
   expect(report.summary).toBe('4 tasks finished in the last 7 days, typically in 45 minutes.')
   expect(report.byDay.map((day) => day.date)).toEqual([
     '2026-03-04',
@@ -299,4 +312,34 @@ test('time categories are disjoint: an hour working with the same hour waiting o
   })
   // you: 08:00-09:00 (60m); agent: 09:00-10:00 (60m, still in review) - never 120m of agent time.
   expect(both.timeSplit[0]).toMatchObject({ waitingOnYouPct: 50, waitingOnAgentPct: 50 })
+})
+
+test('a review wait belongs to the implementer, ordered by event id, not the current assignee', () => {
+  // Hermes reassigned the task to the reviewer; the closure shares the request's second but has the higher id.
+  const reviewTask: KanbanTaskFact = {
+    id: 'k-own',
+    assignee: 'reviewer',
+    status: 'done',
+    createdAt: t('03-10T07:00:00'),
+    completedAt: t('03-10T08:00:00'),
+    hasParents: false,
+    events: [
+      { id: 7, kind: 'changes_requested', at: t('03-10T07:30:00'), actor: 'builder' },
+      { id: 5, kind: 'review_requested', at: t('03-10T07:30:00'), actor: 'builder' },
+      { id: 9, kind: 'review_requested', at: t('03-10T07:45:00'), actor: 'builder' },
+      { id: 11, kind: 'completed', at: t('03-10T08:00:00'), actor: null },
+    ],
+  }
+  const report = computeReports({
+    ...input,
+    runs: [],
+    approvals: [],
+    range: 'today',
+    facts: { tasks: [reviewTask], spendUsd: {} },
+  })
+  const split = Object.fromEntries(report.timeSplit.map((row) => [row.agentId, row]))
+  // builder waited 07:30-07:30 (zero) then 07:45-08:00: not the reviewer, and the first request is not
+  // closed by an earlier-id event at the same second.
+  expect(split.builder!.waitingOnAgentPct).toBeGreaterThan(0)
+  expect(split.reviewer!.waitingOnAgentPct).toBe(0)
 })

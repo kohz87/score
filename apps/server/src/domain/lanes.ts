@@ -55,9 +55,6 @@ interface Draft {
 }
 
 const FINISHED = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
-// Hermes retries a failed attempt within seconds; a longer pause is a separate piece of work and the gap
-// must stay visible. Two minutes covers dispatcher latency without hiding a real break.
-export const MERGE_GAP_MS = 2 * 60_000
 const iso = (ms: number) => new Date(ms).toISOString()
 
 function runDrafts(input: LaneInput, tasks: Map<string, LaneTaskInput>): Draft[] {
@@ -66,16 +63,15 @@ function runDrafts(input: LaneInput, tasks: Map<string, LaneTaskInput>): Draft[]
     (a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt) || a.id.localeCompare(b.id),
   )
   const drafts: Draft[] = []
-  const lastForTask = new Map<string, Draft>()
   for (const run of runs) {
     const start = Date.parse(run.startedAt)
-    const finished = FINISHED.has(run.status) && !waiting.has(run.id)
-    const state: LaneBlock['state'] =
-      waiting.has(run.id) || run.status === 'waiting_for_approval'
+    // An ended run stays finite: a late approval is shown as separate evidence, never by reopening the block.
+    const finished = FINISHED.has(run.status) || run.endedAt !== null
+    const state: LaneBlock['state'] = finished
+      ? 'done'
+      : waiting.has(run.id) || run.status === 'waiting_for_approval'
         ? 'waiting'
-        : finished
-          ? 'done'
-          : 'working'
+        : 'working'
     const ended = run.endedAt === null ? null : Date.parse(run.endedAt)
     const end = state === 'done' ? (ended ?? start) : null
     const task = run.taskId === null ? undefined : tasks.get(run.taskId)
@@ -89,21 +85,6 @@ function runDrafts(input: LaneInput, tasks: Map<string, LaneTaskInput>): Draft[]
           : reviewing
             ? `Review: ${task.title}`
             : task.title
-    const previous = run.taskId === null ? undefined : lastForTask.get(run.taskId)
-    // Consecutive runs for one task merge, unless another agent worked on it in between or someone waits.
-    if (
-      previous &&
-      previous.agentId === run.agentId &&
-      previous.state !== 'waiting' &&
-      state !== 'waiting' &&
-      (previous.end === null || start - previous.end <= MERGE_GAP_MS)
-    ) {
-      previous.state = state
-      previous.end = end
-      previous.runId = run.id
-      previous.runIds.push(run.id)
-      continue
-    }
     const draft: Draft = {
       id: `run:${run.id}`,
       label,
@@ -116,7 +97,6 @@ function runDrafts(input: LaneInput, tasks: Map<string, LaneTaskInput>): Draft[]
       runIds: [run.id],
     }
     drafts.push(draft)
-    if (run.taskId !== null) lastForTask.set(run.taskId, draft)
   }
   return drafts
 }

@@ -72,8 +72,8 @@ test('kanban tasks carry completion time, parent flag and the review/block event
       completedAt: 5_000_000,
       hasParents: false,
       events: [
-        { kind: 'review_requested', at: 3_000_000 },
-        { kind: 'changes_requested', at: 3_500_000 },
+        { id: 1, kind: 'review_requested', at: 3_000_000, actor: null },
+        { id: 2, kind: 'changes_requested', at: 3_500_000, actor: null },
       ],
     },
     {
@@ -83,9 +83,35 @@ test('kanban tasks carry completion time, parent flag and the review/block event
       createdAt: 2_000_000,
       completedAt: null,
       hasParents: true,
-      events: [{ kind: 'promoted', at: 5_001_000 }],
+      events: [{ id: 4, kind: 'promoted', at: 5_001_000, actor: null }],
     },
   ])
+})
+
+test('events keep their ids in id order and name the implementer of a review', () => {
+  const kanban = fixture.build('kanban')
+  insertTask(kanban.db, 't_a')
+  const event = kanban.db.prepare(
+    'INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, ?, ?, ?)',
+  )
+  // Same second, inserted in id order: ids, not timestamps, decide which closure follows which request.
+  event.run(
+    't_a',
+    'review_requested',
+    JSON.stringify({ implementer: 'builder', reviewer: 'reviewer' }),
+    3000,
+  )
+  event.run('t_a', 'changes_requested', JSON.stringify({ implementer: 'builder' }), 3000)
+  event.run('t_a', 'review_requested', '{not json', 3000)
+  const { tasks } = readReportFacts({ from: 0, to: 1, agentIds: [] }, fixture.home)
+  expect(tasks[0]!.events.map((e) => [e.kind, e.actor])).toEqual([
+    ['review_requested', 'builder'],
+    ['changes_requested', 'builder'],
+    ['review_requested', null],
+  ])
+  expect(tasks[0]!.events.map((e) => e.id)).toEqual(
+    [...tasks[0]!.events.map((e) => e.id)].sort((a, b) => a - b),
+  )
 })
 
 test('unknown session cost and sessions carried over from before the window make spend unknown', () => {

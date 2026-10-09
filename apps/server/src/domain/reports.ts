@@ -10,8 +10,12 @@ export interface KanbanTaskFact {
   createdAt: number
   completedAt: number | null
   hasParents: boolean
-  /** review_requested, changes_requested, completed, promoted, blocked, unblocked; oldest first. */
-  events: { kind: string; at: number }[]
+  /**
+   * review_requested, changes_requested, completed, promoted, blocked, unblocked. `id` is Hermes' event id: order
+   * is by id, never by `at` alone (several events share a second). `actor` is the profile that owned the wait the
+   * event opens (the implementer on review_requested), null when Hermes did not record one.
+   */
+  events: { id: number; kind: string; at: number; actor: string | null }[]
 }
 
 /** What Hermes knows that Score's own tables do not (read-only, through the adapter). */
@@ -152,16 +156,19 @@ const measure = (intervals: Interval[]): number =>
   intervals.reduce((total, [s, e]) => total + (e - s), 0)
 
 /** Intervals of waiting on another agent for one task: waiting for parents, and out for review. */
-function agentWaits(task: KanbanTaskFact, now: number): Interval[] {
+function agentWaits(task: KanbanTaskFact, agentId: string, now: number): Interval[] {
   const waits: Interval[] = []
-  const at = (kind: string) => task.events.find((event) => event.kind === kind)?.at
-  if (task.hasParents)
+  const events = [...task.events].sort((a, b) => a.id - b.id)
+  const at = (kind: string) => events.find((event) => event.kind === kind)?.at
+  if (task.hasParents && task.assignee === agentId)
     waits.push([task.createdAt, at('promoted') ?? (task.status === 'todo' ? now : task.createdAt)])
-  for (const request of task.events.filter((event) => event.kind === 'review_requested')) {
-    const end = task.events.find(
+  // The implementer waits for the review, whoever the task is assigned to now (Hermes hands it to the reviewer).
+  for (const request of events.filter(
+    (event) => event.kind === 'review_requested' && event.actor === agentId,
+  )) {
+    const end = events.find(
       (event) =>
-        event.at >= request.at &&
-        (event.kind === 'completed' || event.kind === 'changes_requested'),
+        event.id > request.id && (event.kind === 'completed' || event.kind === 'changes_requested'),
     )
     waits.push([request.at, end?.at ?? (task.status === 'review' ? now : request.at)])
   }
@@ -173,7 +180,7 @@ function blockedWaits(task: KanbanTaskFact, now: number): Interval[] {
   return task.events
     .filter((event) => event.kind === 'blocked')
     .map((block): Interval => {
-      const end = task.events.find((event) => event.kind === 'unblocked' && event.at >= block.at)
+      const end = task.events.find((event) => event.kind === 'unblocked' && event.id > block.id)
       return [block.at, end?.at ?? (task.status === 'blocked' ? now : block.at)]
     })
 }
@@ -295,7 +302,7 @@ export function computeReports(input: ReportInput): Reports {
     )
     const agentSet = subtract(
       merge(
-        mine.flatMap((task) => agentWaits(task, input.now)),
+        input.facts.tasks.flatMap((task) => agentWaits(task, agentId, input.now)),
         from,
         to,
       ),
@@ -353,7 +360,10 @@ export function computeReports(input: ReportInput): Reports {
     runs: runs.length,
     firstPassRate: rate(doneReviewed.filter(passedFirst).length, doneReviewed.length),
     medianTaskSec: median(finished.map(seconds)),
-    spendUsd: money(sum(agentIds.map((agentId) => input.facts.spendUsd[agentId] ?? null))),
+    // One unknown component makes the total unknown: a sum of the known ones would pass as complete.
+    spendUsd: agentIds.some((agentId) => (input.facts.spendUsd[agentId] ?? null) === null)
+      ? null
+      : money(sum(agentIds.map((agentId) => input.facts.spendUsd[agentId] ?? null))),
   }
   const when = RANGE_WORDS[input.range]
   const summary = finished.length

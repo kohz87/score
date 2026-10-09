@@ -87,9 +87,9 @@ test('every agent gets a lane, even when empty', () => {
   expect(out.handoffs).toEqual([])
 })
 
-test('consecutive runs for one task merge; another agent in between splits them', () => {
+test('every run is its own block, even consecutive same-agent runs for one task', () => {
   const tasks = [task('t', 'Ship it', 'builder', 'reviewer')]
-  const merged = buildLanes({
+  const out = buildLanes({
     ...base,
     tasks,
     hops: [],
@@ -99,16 +99,9 @@ test('consecutive runs for one task merge; another agent in between splits them'
       run('b', 'builder', 'running', '21:06', null, 't'),
     ],
   })
-  expect(merged.lanes[1]!.blocks).toEqual([
-    {
-      id: 'run:a',
-      label: 'Ship it',
-      state: 'working',
-      start: at('21:00'),
-      end: null,
-      taskId: 't',
-      runId: 'b',
-    },
+  expect(out.lanes[1]!.blocks.map((b) => [b.id, b.state, b.start, b.end, b.runId])).toEqual([
+    ['run:a', 'done', at('21:00'), at('21:05'), 'a'],
+    ['run:b', 'working', at('21:06'), null, 'b'],
   ])
   const split = buildLanes({
     ...base,
@@ -125,7 +118,7 @@ test('consecutive runs for one task merge; another agent in between splits them'
   expect(split.handoffs.map((h) => h.kind)).toEqual(['review', 'sent_back'])
 })
 
-test('same-agent runs for one task separated by a real gap stay separate blocks', () => {
+test('same-agent attempts are never merged across a gap, short or long', () => {
   const out = buildLanes({
     ...base,
     tasks: [task('t', 'Ship it', 'builder', 'reviewer')],
@@ -137,11 +130,22 @@ test('same-agent runs for one task separated by a real gap stay separate blocks'
       run('c', 'builder', 'completed', '21:11', '21:20', 't'),
     ],
   })
-  // a and b are 10 minutes apart; b and c are retried one minute apart and merge.
   expect(out.lanes[1]!.blocks.map((b) => [b.id, b.start, b.end])).toEqual([
     ['run:a', at('20:40'), at('20:50')],
-    ['run:b', at('21:00'), at('21:20')],
+    ['run:b', at('21:00'), at('21:10')],
+    ['run:c', at('21:11'), at('21:20')],
   ])
+})
+
+test('an ended run stays finite when an approval is still pending for it', () => {
+  const out = buildLanes({
+    ...base,
+    tasks: [],
+    hops: [],
+    runs: [run('a', 'builder', 'completed', '21:00', '21:10', null)],
+    waitingRunIds: ['a'],
+  })
+  expect(out.lanes[1]!.blocks[0]).toMatchObject({ state: 'done', end: at('21:10') })
 })
 
 test('a pending approval turns its run into a waiting block', () => {

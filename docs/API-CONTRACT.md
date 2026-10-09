@@ -548,10 +548,11 @@ incarnation-aware reuse confirmation contract is agreed.
   Read-only gateway state for this agent's profile (secret-free); `connectCommand` is e.g. `hermes -p builder gateway setup`,
   shown for the person to run in their own terminal.
 - `GET /api/agents/:agentId/history?q=&outcome=&cursor=` → `AgentHistoryPage` `{ items: { runId; title; origin; outcome:
-'completed' | 'failed' | 'stopped' | 'waiting' | 'running'; startedAt; durationSec: number | null; model: string | null;
+'completed' | 'failed' | 'stopped' | 'interrupted' | 'waiting' | 'running' | 'unknown'; startedAt; durationSec: number | null; model: string | null;
 costUsd: number | null; task: { id; title } | null; brief: { id; title } | null; replaySeq: number | null }[]; nextCursor }`.
   Score's own runs for the agent (all origins), newest first, 50 per page; the cursor is an offset. `outcome` filters,
-  `q` matches task/brief title and model. Replay opens `/now/watch/:agentId?from=<replaySeq>`.
+  `q` matches task/brief title and model. `stopped` is a cancelled run; `interrupted` is a reclaimed attempt (not proof the
+  worker stopped); `unknown` is any status Score does not recognise (never shown as running). Replay opens `/now/watch/:agentId?from=<replaySeq>`.
 
 ## 9. Reports
 
@@ -603,9 +604,10 @@ costUsd: number | null; task: { id; title } | null; brief: { id; title } | null;
   the three categories are disjoint, with precedence working > waiting on you > waiting on another agent: working =
   a run is active (guardian approval time included); waiting on you = open human approvals and `blocked` intervals,
   minus time already working; waiting on another agent = waiting for dependencies (created → `promoted`) and in review
-  (`review_requested` → outcome), minus time already working or waiting on you. An hour of active run with a human
+  (`review_requested` → the next `completed`/`changes_requested` by event id), attributed to the implementer named on the
+  request, not the task's current assignee, minus time already working or waiting on you. An hour of active run with a human
   approval open the whole hour counts as working only. Spend = Hermes session costs (actual, else estimated);
-  null when unknown.
+  null when unknown. `totals.spendUsd` is null when any agent's spend is unknown (never a partial sum).
 - `GET /api/reports/export.csv?range=&tz=` → `text/csv`
 - Both take an optional `tz` (IANA zone, e.g. `Europe/London`): days and "today" are the viewer's, not the server's
   (often UTC). An unknown zone is `400`. Without it, the server's zone is used.

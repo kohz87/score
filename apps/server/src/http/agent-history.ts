@@ -24,17 +24,21 @@ const QuerySchema = z.object({
     .optional(),
 })
 
-const statusesByOutcome: Record<HistoryOutcome, string[]> = {
+// 'interrupted' (a reclaimed attempt) does not prove the worker stopped, and an unrecognised status is not
+// "running": both get their own honest outcome. `unknown` is every status not listed here.
+const statusesByOutcome: Record<Exclude<HistoryOutcome, 'unknown'>, string[]> = {
   completed: ['completed'],
   failed: ['failed'],
-  stopped: ['cancelled', 'interrupted'],
+  stopped: ['cancelled'],
+  interrupted: ['interrupted'],
   waiting: ['waiting_for_approval'],
   running: ['queued', 'running'],
 }
+const knownStatuses = Object.values(statusesByOutcome).flat()
 function outcomeOf(status: string): HistoryOutcome {
   for (const [outcome, statuses] of Object.entries(statusesByOutcome))
     if (statuses.includes(status)) return outcome as HistoryOutcome
-  return 'running'
+  return 'unknown'
 }
 
 const RowSchema = z.object({
@@ -82,8 +86,11 @@ export function registerAgentHistoryRoutes(
     const filters: string[] = []
     const args: (string | number)[] = [agentId]
     if (query.outcome) {
-      const statuses = statusesByOutcome[query.outcome]
-      filters.push(`status IN (${statuses.map(() => '?').join(', ')})`)
+      const statuses =
+        query.outcome === 'unknown' ? knownStatuses : statusesByOutcome[query.outcome]
+      filters.push(
+        `status ${query.outcome === 'unknown' ? 'NOT IN' : 'IN'} (${statuses.map(() => '?').join(', ')})`,
+      )
       args.push(...statuses)
     }
     const needle = query.q?.trim()

@@ -8,8 +8,10 @@ const outcomeLabels: Record<HistoryOutcome, string> = {
   completed: 'Completed',
   failed: 'Failed',
   stopped: 'Stopped',
+  interrupted: 'Interrupted',
   waiting: 'Waiting',
   running: 'Running',
+  unknown: 'Ended (unknown)',
 }
 
 export function HistoryTab({ agentId, agentName }: { agentId: string; agentName: string }) {
