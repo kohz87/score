@@ -482,3 +482,28 @@ test('a continued outside session is the one that gets rewound', async () => {
     ['builder', 'ext-telegram-1', 1],
   ])
 })
+
+// audit4-c 2: nothing new starts in a room whose sessions are being rewound.
+test('a message or retry posted while the room is being rewound is refused', async () => {
+  const room = await createRoom()
+  const first = await ask(room.id, 'first', ['builder'])
+  const reply = await answer(room.id, first.id, 'builder')
+  let release!: () => void
+  vi.spyOn(fake(), 'rewindSession').mockImplementation(async (req) => {
+    if (req.dryRun) return { status: 'ready' }
+    await new Promise<void>((resolve) => (release = resolve))
+    return { status: 'rewound', turnsUndone: 1, rewoundCount: 2 }
+  })
+  const running = rewind(room.id, first.id)
+  await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+  const posted = await post(`/api/rooms/${room.id}/messages`, { text: 'too soon', to: ['builder'] })
+  expect(posted.statusCode).toBe(409)
+  const retried = await post(`/api/rooms/${room.id}/messages/${reply}/retry`, {})
+  expect(retried.statusCode).toBe(409)
+  release()
+  expect((await running).statusCode).toBe(200)
+  // Once it is done the room takes messages again.
+  expect(
+    (await post(`/api/rooms/${room.id}/messages`, { text: 'later', to: ['builder'] })).statusCode,
+  ).toBe(200)
+})

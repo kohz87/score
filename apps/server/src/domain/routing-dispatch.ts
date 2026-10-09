@@ -3,6 +3,7 @@ import type { ScoreDb } from '../db/index.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { HttpError } from '../errors.ts'
+import { rewindingRooms } from './room-rewinding.ts'
 import { continuationFor, markSummarySent } from './outside-sessions.ts'
 import { failMessageRun, MessageRunSchema, roomRunInput } from './message-runs.ts'
 
@@ -73,7 +74,9 @@ export class RoutingDispatcher {
             .all(),
         ),
       )
-      const job = pending.find((row) => !attempted.has(row.turn_id))
+      const job = pending.find(
+        (row) => !attempted.has(row.turn_id) && !rewindingRooms.has(row.room_id),
+      )
       if (!job) break
       attempted.add(job.turn_id)
       try {
