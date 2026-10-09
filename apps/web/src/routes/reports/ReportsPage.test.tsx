@@ -367,3 +367,9 @@ test('cache hit rate, the 30-day trend and the display currency toggle', async (
   expect(within(totals).getByText('$41.20')).toBeDefined()
   localStorage.removeItem('score.reports.currency')
 })
+
+test('a malformed custom date is a message, never an exception', async () => {
+  const { customRangeError } = await import('./reports-queries.ts')
+  expect(customRangeError('2026-13-01', '2026-13-02', '2026-10-09')).toBe('Pick both days.')
+  expect(customRangeError('2026-02-30', '2026-03-01', '2026-10-09')).toBe('Pick both days.')
+})

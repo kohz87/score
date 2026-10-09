@@ -127,3 +127,23 @@ test('without SCORE_LOG_FILE the endpoint says so', async () => {
   expect(body).toEqual({ available: false, items: [] })
   await app.close()
 })
+
+test('pairing links never show in the log viewer, and the token alone is scrubbed too', async () => {
+  const app = setup([])
+  const token = app.pairing.createToken()
+  const dir = dirs[dirs.length - 1]!
+  writeFileSync(
+    join(dir, 'score.log'),
+    [
+      `Pair this browser: https://192.168.1.5:8741/pair#${token}`,
+      line({ msg: `link http://other.host:1/pair#${token} and bare ${token}` }),
+    ].join('\n') + '\n',
+  )
+  const cookie = await paired(app)
+  const text = (
+    await app.inject({ url: '/api/system/logs?limit=10', headers: { ...headers, cookie } })
+  ).body
+  expect(text).not.toContain(token)
+  expect(text).toContain('/pair#[redacted]')
+  await app.close()
+})

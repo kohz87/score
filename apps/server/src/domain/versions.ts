@@ -377,5 +377,12 @@ export function markEdited(
       ).drafts,
     )
   }
+  // A turn still queued for the original (or a hand-off in its chain) has no reply yet: cancel it, or the agent would
+  // still execute the instruction that was just replaced (audit wave 4).
+  sqlite
+    .prepare(
+      "UPDATE message_runs SET state = 'failed' WHERE state = 'pending' AND room_id = ? AND (parent_message_id = ? OR chain_id = ?)",
+    )
+    .run(roomId, original.id, original.id)
   return [...drafts, ...linkCorrection(sqlite, roomId, original.id, editedBy, now)]
 }

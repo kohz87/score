@@ -24,7 +24,10 @@ import { gitStatus } from '../workspace/git.ts'
 import { MAX_TEXT_BYTES, MAX_UPLOAD_BYTES, Workspace } from '../workspace/workspace.ts'
 
 const AgentParams = z.object({ agentId: z.string().min(1).max(256) })
-const PathQuery = z.object({ path: z.string().max(4096).default('') })
+// The root the browser is showing (WorkspaceInfo.root). Optional so older callers keep working; when present and not
+// the agent's current root the request is refused instead of landing in another workspace.
+const RootQuery = z.object({ root: z.string().max(4096).optional() })
+const PathQuery = RootQuery.extend({ path: z.string().max(4096).default('') })
 const FileQuery = PathQuery.extend({ download: z.enum(['1']).optional() })
 const DeleteQuery = PathQuery.extend({ recursive: z.enum(['1']).optional() })
 
@@ -35,15 +38,34 @@ export function registerWorkspaceRoutes(
   app: FastifyInstance,
   port: HermesPort,
   { home, hermesHome }: Pick<Config, 'home' | 'hermesHome'>,
-  policy: RootPolicy = defaultRootPolicy([home, resolveHermesHome(hermesHome)]),
+  policy: RootPolicy = defaultRootPolicy([
+    home,
+    resolveHermesHome(hermesHome),
+    resolveHermesHome(),
+  ]),
   workspaces?: AgentWorkspaces,
 ): void {
   const { info, open: openWorkspace } =
     workspaces ?? createAgentWorkspaces(port, { home, hermesHome }, policy)
+
+  function assertRoot(request: FastifyRequest, current: string): void {
+    const { root } = RootQuery.parse(request.query ?? {})
+    if (root !== undefined && root !== current)
+      throw new HttpError(
+        409,
+        'workspace_changed',
+        "This agent's workspace changed since it was shown: reload it",
+        { root: current },
+      )
+  }
+
   const open = (request: FastifyRequest, agentId: string): Promise<Workspace> =>
-    openWorkspace(agentId, (event) =>
-      // Path, size and operation only; never content.
-      request.log.info({ agentId, workspace: event }, 'workspace write'),
+    openWorkspace(
+      agentId,
+      (event) =>
+        // Path, size and operation only; never content.
+        request.log.info({ agentId, workspace: event }, 'workspace write'),
+      (root) => assertRoot(request, root),
     )
 
   // Domain errors keep their status and code; anything else is the usual 500.
@@ -107,6 +129,7 @@ export function registerWorkspaceRoutes(
       wrap(async (request, reply) => {
         const { agentId } = AgentParams.parse(request.params)
         const { root, available } = await info(agentId)
+        if (available && root !== null) assertRoot(request, root)
         void reply.header('Cache-Control', 'no-store')
         const status = available && root !== null ? await gitStatus(root) : null
         if (status === null) return reply.type('application/json; charset=utf-8').send('null')

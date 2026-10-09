@@ -82,6 +82,8 @@ export function profileSpendInWindow(
 ): number | null {
   let total = 0
   for (const session of sessions) {
+    // Started after the window closed: no part of it can fall inside, and it has no snapshot to measure from.
+    if (session.startedAt > to) continue
     if (session.costUsd === null) return null
     const spend = sessionSpendInWindow(sqlite, profile, session, from, to)
     if (spend === null) return null

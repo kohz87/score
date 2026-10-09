@@ -7,8 +7,15 @@ import { Workspace, type WriteEvent } from './workspace.ts'
 
 export interface AgentWorkspaces {
   info(agentId: string): Promise<WorkspaceInfo & { cwd: string | null }>
-  /** Opens the agent's workspace; throws 409 `workspace_unavailable` with the reason when it has none. */
-  open(agentId: string, onWrite?: (event: WriteEvent) => void): Promise<Workspace>
+  /**
+   * Opens the agent's workspace; throws 409 `workspace_unavailable` with the reason when it has none. `checkRoot` sees
+   * the resolved root first (the Workspace routes refuse a root that changed since the page showed it).
+   */
+  open(
+    agentId: string,
+    onWrite?: (event: WriteEvent) => void,
+    checkRoot?: (root: string) => void,
+  ): Promise<Workspace>
 }
 
 // The agent's working folder comes from the adapter; every path rule lives in ./workspace.ts. Shared by the
@@ -16,7 +23,11 @@ export interface AgentWorkspaces {
 export function createAgentWorkspaces(
   port: HermesPort,
   { home, hermesHome }: Pick<Config, 'home' | 'hermesHome'>,
-  policy: RootPolicy = defaultRootPolicy([home, resolveHermesHome(hermesHome)]),
+  policy: RootPolicy = defaultRootPolicy([
+    home,
+    resolveHermesHome(hermesHome),
+    resolveHermesHome(),
+  ]),
 ): AgentWorkspaces {
   async function info(agentId: string): Promise<WorkspaceInfo & { cwd: string | null }> {
     const { cwd, backend } = await port.readWorkspaceConfig(agentId)
@@ -39,7 +50,11 @@ export function createAgentWorkspaces(
     return { root: checked.real, available: true, reason: null, cwd }
   }
 
-  async function open(agentId: string, onWrite?: (event: WriteEvent) => void): Promise<Workspace> {
+  async function open(
+    agentId: string,
+    onWrite?: (event: WriteEvent) => void,
+    checkResolved?: (root: string) => void,
+  ): Promise<Workspace> {
     const state = await info(agentId)
     if (!state.available || state.root === null)
       throw new HttpError(
@@ -47,6 +62,7 @@ export function createAgentWorkspaces(
         'workspace_unavailable',
         state.reason ?? 'The workspace is unavailable',
       )
+    checkResolved?.(state.root)
     return Workspace.open(state.root, policy, onWrite)
   }
   return { info, open }

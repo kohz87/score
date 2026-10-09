@@ -23,18 +23,34 @@ export function createAgentDirectory(
   let refreshedAt = 0
   let known: string[] | null = null
   let flight: Promise<AgentDetail[]> | undefined
+  // Counts agent-affecting writes (bumped when each finishes). A read is trusted only if no write finished while it
+  // ran, and a read that must see a write never joins one that started before it.
+  let writes = 0
+  let flightWrites = 0
+
+  function noteWrite(): void {
+    writes++
+  }
 
   function refresh(): Promise<AgentDetail[]> {
-    flight ??= (async () => {
+    if (flight && flightWrites === writes) return flight
+    const started = writes
+    flightWrites = started
+    const mine = (async () => {
       const details = z.array(AgentDetailSchema).parse(await port.listAgentDetails())
-      await reconcileAgents(ingest, details)
-      known = details.map((agent) => agent.id)
-      refreshedAt = clock()
+      // A save finished while Hermes was being read: this answer may predate it, so it must not overwrite the
+      // projection (the save's own record, or the read that follows it, is newer).
+      if (started === writes) {
+        await reconcileAgents(ingest, details)
+        known = details.map((agent) => agent.id)
+        refreshedAt = clock()
+      }
       return details
     })().finally(() => {
-      flight = undefined
+      if (flight === mine) flight = undefined
     })
-    return flight
+    flight = mine
+    return mine
   }
 
   /** The projected agents in Hermes's last known order (or Score's, before the first read). */
@@ -77,6 +93,7 @@ export function createAgentDirectory(
 
   return {
     recordModel,
+    noteWrite,
     async details({ fresh = false }: { fresh?: boolean } = {}): Promise<AgentDetail[]> {
       if (fresh) return refresh()
       const cached = projected()
@@ -134,6 +151,7 @@ export function withAgentDirectory(port: HermesPort, directory: AgentDirectory):
       if (property === 'setAgentModel')
         return async (agentId: string, req: { model: string; provider?: string }) => {
           await method.apply(target, [agentId, req])
+          directory.noteWrite()
           await directory.recordModel(agentId, req.model, req.provider)
         }
       if (typeof property === 'string' && AGENT_WRITES.has(property))
@@ -141,11 +159,14 @@ export function withAgentDirectory(port: HermesPort, directory: AgentDirectory):
           // Before and after: a read that runs while the write is in flight must not count as the fresh one.
           dirty = true
           const result = method.apply(target, args)
-          return result instanceof Promise
-            ? result.finally(() => {
-                dirty = true
-              })
-            : result
+          if (!(result instanceof Promise)) {
+            directory.noteWrite()
+            return result
+          }
+          return result.finally(() => {
+            dirty = true
+            directory.noteWrite()
+          })
         }
       return method.bind(target)
     },

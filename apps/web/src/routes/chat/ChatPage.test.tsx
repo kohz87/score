@@ -1063,3 +1063,25 @@ test('project events keep the rooms list and its projects current', () => {
   })
   expect(deleted.projects).toEqual([])
 })
+
+test('your own message arriving on the stream replaces its "sending" copy, so it never shows twice', () => {
+  const sending: Message = {
+    ...message,
+    id: 'pending-abc',
+    author: { kind: 'you' },
+    parts: [{ kind: 'text', text: 'Second wording' }],
+  }
+  const stored: Message = { ...sending, id: 'm-stored' }
+  const other: Message = { ...sending, id: 'pending-def', parts: [{ kind: 'text', text: 'Other' }] }
+  const data = { items: [sending, other], nextCursor: null, typing: {} }
+  const created = {
+    type: 'message.created',
+    seq: 3,
+    ts: message.createdAt,
+    data: stored,
+  } as StreamEvent
+  expect(reduceMessages(data, created, 'general', true).items.map((item) => item.id)).toEqual([
+    'm-stored',
+    'pending-def',
+  ])
+})
