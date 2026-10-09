@@ -12,6 +12,7 @@ import { Markdown } from './Markdown.tsx'
 import { DocumentChip, WorkspaceChip } from './DocumentChips.tsx'
 import { PlanCard } from './PlanCard.tsx'
 import { RewindDialog } from './RewindDialog.tsx'
+import { SummaryCard } from './SummaryCard.tsx'
 
 /** Expand all / Collapse all (PLAN 5.25): a counter, so pressing the same button twice still reaches cards opened by hand. */
 type Expansion = { open: boolean; version: number }
@@ -75,13 +76,21 @@ function Part({
   agents,
   message,
   expansion,
+  authorName,
+  readOnly,
 }: {
   part: MessagePart
   agents: AgentSummary[]
   message: Message
   expansion: Expansion
+  authorName: string
+  readOnly: boolean
 }) {
   switch (part.kind) {
+    case 'summary':
+      return (
+        <SummaryCard part={part} message={message} authorName={authorName} readOnly={readOnly} />
+      )
     case 'text':
       return (
         <Markdown
@@ -414,7 +423,15 @@ export function MessageItem({
             </button>
           )}
           {message.parts.map((part, index) => (
-            <Part key={index} part={part} agents={agents} message={message} expansion={expansion} />
+            <Part
+              key={index}
+              part={part}
+              agents={agents}
+              message={message}
+              expansion={expansion}
+              authorName={name}
+              readOnly={readOnly}
+            />
           ))}
         </div>
         {!readOnly && message.streaming && !you && !message.id.startsWith('pending-') && (
@@ -433,9 +450,12 @@ export function MessageItem({
             see the new version
           </button>
         )}
-        {!readOnly && !message.streaming && !message.id.startsWith('pending-') && (
-          <MessageActions message={message} name={name} agents={agents} imported={imported} />
-        )}
+        {!readOnly &&
+          !message.streaming &&
+          !message.id.startsWith('pending-') &&
+          !message.parts.some((part) => part.kind === 'summary') && (
+            <MessageActions message={message} name={name} agents={agents} imported={imported} />
+          )}
       </div>
     </article>
   )
