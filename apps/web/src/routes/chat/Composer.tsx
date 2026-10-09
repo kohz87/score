@@ -1,5 +1,5 @@
 import type { AgentSummary } from '@score/contract'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Link } from 'react-router'
 import { AgentGlyph, agentTint } from '../../components/AgentGlyph.tsx'
@@ -18,11 +18,24 @@ import {
   type CommandResult,
   type SlashCommand,
 } from './composer-model.ts'
+import {
+  agentContextKey,
+  fetchAgentContext,
+  LOCAL_COMMAND_MENU,
+  meterFraction,
+  meterText,
+  parseLocalCommand,
+  usageSummary,
+} from './context-meter.ts'
 import { messagesQuery, type MessagePageData } from './queries.ts'
+import { useVoiceInput } from './voice.ts'
 import { newId } from '../../data/ids.ts'
 import { stopEdit, useEditing } from './message-edit.ts'
 
-type Notice = { kind: 'error'; text: string } | { kind: 'result'; command: CommandResult | null }
+type Notice =
+  | { kind: 'error'; text: string }
+  | { kind: 'info'; text: string }
+  | { kind: 'result'; command: CommandResult | null }
 type Attachment = { mediaId: string; name: string }
 function parseUpload(value: unknown): Attachment {
   const record =
@@ -63,10 +76,12 @@ export function Composer({
   roomId,
   roomName,
   agents,
+  leadAgentId = null,
 }: {
   roomId: string
   roomName: string
   agents: AgentSummary[]
+  leadAgentId?: string | null
 }) {
   const queryClient = useQueryClient()
   const textarea = useRef<HTMLTextAreaElement>(null)
@@ -141,6 +156,72 @@ export function Composer({
     staleTime: Infinity,
   })
 
+  // The room's messages are kept live by the stream; a reply being written turns Send into Stop (PLAN 5.25).
+  const thread = useQuery<{ asOfSeq: number; data: MessagePageData } | undefined>({
+    queryKey: messagesQuery(roomId).key,
+    queryFn: skipToken,
+  })
+  const items = thread.data?.data.items
+  const writing = useMemo(
+    () => (items ?? []).filter((item) => item.streaming && item.author.kind === 'agent'),
+    [items],
+  )
+  const [stopping, setStopping] = useState(false)
+  const stopTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(stopTimer.current), [])
+  async function stopReplies() {
+    setStopping(true)
+    try {
+      await Promise.all(
+        writing.map((item) =>
+          apiFetch(
+            `rooms/${encodeURIComponent(roomId)}/messages/${encodeURIComponent(item.id)}/stop`,
+            { method: 'POST', headers: { 'Idempotency-Key': newId() }, body: '{}' },
+          ),
+        ),
+      )
+    } catch {
+      setNotice({ kind: 'error', text: 'Could not stop the reply. It may have just finished.' })
+    } finally {
+      // The reply's own completion event ends the Stop state; this only guards a response that never comes.
+      stopTimer.current = setTimeout(() => setStopping(false), 3000)
+    }
+  }
+
+  // The agent the meter and /usage speak about: the first "To" chip, else whoever answered last, else the lead.
+  const lastReplier = (items ?? []).find((item) => item.author.kind === 'agent')?.author
+  const subject =
+    to[0] ??
+    (lastReplier?.kind === 'agent' ? lastReplier.agentId : null) ??
+    (leadAgentId && agents.some((agent) => agent.id === leadAgentId) ? leadAgentId : null)
+  const subjectAgent = agents.find((agent) => agent.id === subject)
+  const finishedReplies = (items ?? []).filter((item) => !item.streaming).length
+  const meter = useQuery({
+    queryKey: [...agentContextKey(subject ?? ''), finishedReplies],
+    queryFn: subject ? () => fetchAgentContext(subject) : skipToken,
+    staleTime: 15_000,
+    retry: false,
+  })
+
+  // Voice input: interim words replace each other in the draft until the utterance settles.
+  const voiceBase = useRef('')
+  const voice = useVoiceInput({
+    onText: (heard) => {
+      const base = voiceBase.current
+      const next = heard ? `${base}${base && !/\s$/.test(base) ? ' ' : ''}${heard}` : base
+      setText(next)
+      setCaret(next.length)
+    },
+    onFinal: () => textarea.current?.focus(),
+  })
+  function toggleVoice() {
+    if (voice.listening) voice.stop()
+    else {
+      voiceBase.current = text
+      voice.start()
+    }
+  }
+
   useEffect(() => {
     if (!editId) saveDraft(roomId, text)
   }, [roomId, text, editId])
@@ -149,7 +230,14 @@ export function Composer({
   const mention = slash === null ? mentionAt(text, caret) : null
   const slashItems: SlashCommand[] = useMemo(
     () =>
-      slash === null ? [] : (commands.data ?? []).filter((item) => item.name.startsWith(slash)),
+      slash === null
+        ? []
+        : [
+            ...(commands.data ?? []),
+            ...LOCAL_COMMAND_MENU.filter(
+              (local) => !commands.data?.some((item) => item.name === local.name),
+            ),
+          ].filter((item) => item.name.startsWith(slash)),
     [slash, commands.data],
   )
   const mentionItems = useMemo(() => {
@@ -216,9 +304,50 @@ export function Composer({
     }
   }
 
+  // /compress, /usage and /model <name> are answered here (PLAN 5.25); other commands go to the server as before.
+  async function runLocalCommand(command: NonNullable<ReturnType<typeof parseLocalCommand>>) {
+    const name = subjectAgent?.name ?? subject
+    setNotice(null)
+    if (!subject || !name) {
+      setNotice({ kind: 'error', text: 'Choose who this is for first: add someone to “To”.' })
+      return
+    }
+    setText('')
+    setCaret(0)
+    try {
+      if (command.kind === 'compress') {
+        // Hermes only compacts a session from its own CLI or a messaging chat; its API has no call for it.
+        setNotice({
+          kind: 'info',
+          text: `Hermes can’t compact ${name}’s session through its API yet, so /compress isn’t available here. Run /compress in the Hermes CLI for this profile.`,
+        })
+      } else if (command.kind === 'usage') {
+        setNotice({ kind: 'info', text: usageSummary(name, await fetchAgentContext(subject)) })
+      } else {
+        await apiFetch(`agents/${encodeURIComponent(subject)}/model`, {
+          method: 'PUT',
+          body: JSON.stringify({ model: command.model }),
+        })
+        void queryClient.invalidateQueries({ queryKey: ['chat', 'context'] })
+        setNotice({ kind: 'info', text: `${name} now uses ${command.model}.` })
+      }
+    } catch (error) {
+      setText(`/${command.kind}${command.kind === 'model' ? ` ${command.model}` : ''}`)
+      setNotice({
+        kind: 'error',
+        text:
+          error instanceof ApiError && error.status === 400
+            ? `${command.kind === 'model' ? command.model : 'That'} isn’t available for ${name}.`
+            : 'That command failed. Please try again.',
+      })
+    }
+  }
+
   async function send() {
     const body = text.trim()
     if (!body || pending || uploading) return
+    const local = editing ? null : parseLocalCommand(body)
+    if (local) return runLocalCommand(local)
     const sent = attachments
     const payload = {
       text: body,
@@ -329,7 +458,11 @@ export function Composer({
           className={`chat-composer-notice${notice.kind === 'error' ? ' chat-composer-notice--error' : ''}`}
           role={notice.kind === 'error' ? 'alert' : 'status'}
         >
-          {notice.kind === 'error' ? notice.text : <CommandNotice command={notice.command} />}
+          {notice.kind === 'result' ? (
+            <CommandNotice command={notice.command} />
+          ) : (
+            <span className="chat-usage-card">{notice.text}</span>
+          )}
         </div>
       )}
       {menu && count > 0 && (
@@ -536,15 +669,71 @@ export function Composer({
               />
             </svg>
           </button>
-          <button
-            type="submit"
-            className="chat-send"
-            disabled={!text.trim() || pending || uploading > 0}
-          >
-            {editing ? 'Send correction' : 'Send'}
-          </button>
+          {voice.supported && (
+            <button
+              type="button"
+              className="chat-voice"
+              aria-label="Voice input"
+              aria-pressed={voice.listening}
+              title={voice.listening ? 'Stop listening' : 'Dictate a message'}
+              onClick={toggleVoice}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect
+                  x="5.5"
+                  y="1.5"
+                  width="5"
+                  height="8"
+                  rx="2.5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                />
+                <path
+                  d="M3 7.5 A5 5 0 0 0 13 7.5 M8 12.5 V14.5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          )}
+          {writing.length > 0 && !text.trim() && !editing ? (
+            <button
+              type="button"
+              className="chat-send chat-send--stop"
+              disabled={stopping}
+              onClick={() => void stopReplies()}
+            >
+              {stopping ? 'Stopping…' : 'Stop'}
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className="chat-send"
+              disabled={!text.trim() || pending || uploading > 0}
+            >
+              {editing ? 'Send correction' : 'Send'}
+            </button>
+          )}
         </div>
+        {voice.error && (
+          <p className="chat-composer-notice chat-composer-notice--error" role="alert">
+            {voice.error}
+          </p>
+        )}
       </form>
+      {subject && meter.data && meterText(meter.data) && (
+        <div className="chat-meter" aria-label={`${subjectAgent?.name ?? subject} context use`}>
+          {meterFraction(meter.data) !== null && (
+            <span className="chat-meter-bar" aria-hidden="true">
+              <span style={{ width: `${Math.round(meterFraction(meter.data)! * 100)}%` }} />
+            </span>
+          )}
+          <span>
+            {subjectAgent?.name ?? subject}: {meterText(meter.data)}
+          </span>
+        </div>
+      )}
     </div>
   )
 }

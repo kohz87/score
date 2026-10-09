@@ -133,6 +133,8 @@ type MessagePart =
   | { kind: 'text'; text: string }
   | { kind: 'plan'; lanes: { agentId: AgentId; blocks: LaneBlock[] }[]; briefId: string }
   | { kind: 'tools'; summary: string /* "Ran 6 commands and edited 2 files" */; runId: string }
+  | { kind: 'tool'; tool: string; args: string; result: string | null; status: 'running' | 'ok' | 'error' } // one tool call (5.25)
+  | { kind: 'thinking'; text: string } // reasoning text, collapsed in the UI (5.25)
   | { kind: 'file'; path: string; added: number; removed: number }
   | { kind: 'image'; mediaId: string } // an uploaded image, served by GET /api/media/:mediaId
   | { kind: 'approval'; approvalId: string }
@@ -425,6 +427,12 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   original reply stays. `404` unknown; `409 conflict` when the message is not a retryable reply (no parent turn, parent
   deleted or not from the person), when that agent is still answering that message, or while the team, the agent or the
   brief is paused. Idempotent per `Idempotency-Key`.
+- **H** `POST /api/rooms/:roomId/messages/:messageId/stop` → `{ ok: true }` (PLAN 5.25): stops the Score-started run that is
+  writing that streaming agent reply; the reply ends with "This run was stopped." `404` unknown; `409 conflict` when the
+  message is not a reply being written by a running run (finished, or still queued).
+- **S** `GET /api/agents/:agentId/context` → `AgentContext` `{ model: string | null; tokens: { input; output } | null;
+  costUsd: number | null; contextLength: number | null }` (PLAN 5.25): usage of the agent's latest finished or running run
+  with usage and the model's context window when Hermes's model options carry one (else `null`). `404` unknown agent.
 - `POST /api/rooms/:roomId/messages`
 
   ```ts
@@ -451,6 +459,11 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 
   `/remember` and `/skill` are parsed but not implemented yet: they answer `501 not_implemented` and are left out of
   the slash menu. Use the agent's Memory and Skills tabs instead.
+
+  The web composer also handles three commands itself and never posts them (PLAN 5.25): `/usage` (shows
+  `GET /api/agents/:agentId/context` as a local card), `/model <model>` with no message (calls
+  `PUT /api/agents/:agentId/model`) and `/compress` (Hermes has no API to compact a session, so it explains that). They
+  act on the first "To" chip, else the agent that answered last, else the room lead.
 
 - `GET /api/commands` → `{ items: { name: string; usage: string; description: string }[] }` (slash menu: only the
   supported commands)
@@ -712,7 +725,7 @@ code?: string; signInId?: string; expiresAt?: string }`. For a `device_code` pro
   a key already being added for that provider → `409 conflict`. The key never appears in any response, log or receipt
   (the receipt's body hash is an HMAC under a per-process secret, so a retry after a restart is `409`, not a replay).
 - `GET /api/models?q=` → `{ items: ModelOption[] }`, `ModelOption = { provider: string; providerLabel: string; model: string;
-available: boolean; reason: string | null /* "Not on your plan" */; free: boolean; price: { input: string; output: string } | null }`.
+available: boolean; reason: string | null /* "Not on your plan" */; free: boolean; contextLength?: number | null /* tokens, when Hermes says */; price: { input: string; output: string } | null }`.
   Models of connected providers only (Hermes model options); `q` matches model or provider label, case-insensitive;
   at most 200 items, available first.
 - `POST /api/settings/providers/local` `{ label; baseUrl; model }` → provider item

@@ -397,6 +397,11 @@ const cases = [
   ['MessageUpdatedSchema', f.updated, { roomId: 'room-1', messageId: 'm', editedBy: 3 }],
   ['RetryReplyResponseSchema', { messageId: 'reply-2' }, {}],
   [
+    'AgentContextSchema',
+    { model: 'm', tokens: { input: 10, output: 2 }, costUsd: null, contextLength: 128000 },
+    { contextLength: 0 },
+  ],
+  [
     'MessagingFieldSchema',
     {
       key: 'SLACK_BOT_TOKEN',

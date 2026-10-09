@@ -33,8 +33,8 @@ test('the composer sends a message that gets a streamed reply, and an /assign th
   // Slash menu and @autocomplete are keyboard driven.
   await composer.fill('/')
   const commands = page.getByRole('listbox', { name: 'Commands' })
-  // /remember and /skill are not offered: Hermes has no mechanism for them yet (they answer 501).
-  await expect(commands.getByRole('option')).toHaveCount(3)
+  // /remember and /skill are not offered (501); /compress and /usage are the composer's own (PLAN 5.25).
+  await expect(commands.getByRole('option')).toHaveCount(5)
   await composer.press('Enter')
   await expect(composer).toHaveValue('/assign ')
   await composer.pressSequentially('@bu')

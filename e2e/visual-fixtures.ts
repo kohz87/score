@@ -33,6 +33,40 @@ const recorded = JSON.parse(
   readFileSync(new URL('./fixtures/visual.json', import.meta.url), 'utf8'),
 ) as Record<string, unknown>
 const system = SystemStatusSchema.parse(recorded['/api/system'])
+// A formatted reply (PLAN 5.25): Markdown, a code block, a thinking card and tool cards, newest in the room.
+const roomMessages = MessagePageSchema.parse(
+  recorded['/api/rooms/room-activity-feed/messages?limit=50'],
+)
+const formatted = {
+  id: 'visual-formatted',
+  roomId: 'room-activity-feed',
+  author: { kind: 'agent' as const, agentId: 'builder' },
+  to: [],
+  parts: [
+    { kind: 'thinking' as const, text: 'Page size first, then the cursor.' },
+    {
+      kind: 'tool' as const,
+      tool: 'terminal',
+      args: 'pnpm test',
+      result: '3 checks passed',
+      status: 'ok' as const,
+    },
+    {
+      kind: 'tool' as const,
+      tool: 'edit_file',
+      args: '{"path":"src/activity-feed.ts"}',
+      result: null,
+      status: 'error' as const,
+    },
+    {
+      kind: 'text' as const,
+      text: '## Pagination\n\nI added a **page size** and kept the newest items first:\n\n```ts\nconst pageSize = 25 // items per page\n```\n\n- the cursor is opaque\n- see [the notes](https://example.com)',
+    },
+  ],
+  createdAt: '2099-01-01T00:00:00.000Z',
+  streaming: false,
+  refs: [],
+}
 export const visualFixtures: Record<string, unknown> = {
   '/api/system': system,
   '/api/now': NowSnapshotSchema.parse(nowFixture('room-activity-feed')),
@@ -45,8 +79,20 @@ export const visualFixtures: Record<string, unknown> = {
   '/api/rooms/room-activity-feed': RoomDetailSnapshotSchema.parse(
     recorded['/api/rooms/room-activity-feed'],
   ),
-  '/api/rooms/room-activity-feed/messages?limit=50': MessagePageSchema.parse(
-    recorded['/api/rooms/room-activity-feed/messages?limit=50'],
+  '/api/rooms/room-activity-feed/messages?limit=50': MessagePageSchema.parse({
+    ...roomMessages,
+    items: [formatted, ...roomMessages.items],
+  }),
+  ...Object.fromEntries(
+    ['lead', 'builder', 'reviewer', 'designer'].map((id) => [
+      `/api/agents/${id}/context`,
+      {
+        model: 'demo-model',
+        tokens: { input: 48_000, output: 6_000 },
+        costUsd: 0.0312,
+        contextLength: 128_000,
+      },
+    ]),
   ),
   '/api/approvals?status=all': ApprovalsPageSchema.parse(recorded['/api/approvals?status=all']),
   '/api/tasks': TasksSnapshotSchema.parse(recorded['/api/tasks']),

@@ -94,11 +94,9 @@ test('a room turn streams text into the messages API and completes', async ({ pl
       .map((part) => part.text)
       .join('')
     expect(text.length).toBeGreaterThan(initialText.length)
-    expect(completed.parts).toContainEqual({
-      kind: 'tools',
-      summary: 'Ran 3 commands and edited 2 files',
-      runId: completed.refs.find((ref) => ref.kind === 'run')!.runId,
-    })
+    // Tool calls arrive as cards (PLAN 5.25); the compact summary is only for older messages.
+    expect(completed.parts.filter((part) => part.kind === 'tool')).toHaveLength(5)
+    expect(completed.parts.some((part) => part.kind === 'thinking')).toBe(true)
     await expect
       .poll(
         () =>

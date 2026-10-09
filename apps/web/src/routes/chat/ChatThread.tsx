@@ -201,7 +201,14 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
         </div>
       )}
       <DeleteToast />
-      {room && <Composer roomId={roomId} roomName={room.name} agents={agents} />}
+      {room && (
+        <Composer
+          roomId={roomId}
+          roomName={room.name}
+          agents={agents}
+          leadAgentId={room.leadAgentId}
+        />
+      )}
     </section>
   )
 }

@@ -226,10 +226,20 @@ test('deltas append to one reply, finish with tools and concurrent receipts star
   const complete = MessageSchema.parse(messages().find((message) => message.id === reply.id))
   expect(complete).toMatchObject({
     streaming: false,
-    parts: [
-      { kind: 'text', text: 'The streamed reply is ready.' },
-      { kind: 'tools', summary: 'Ran 3 commands and edited 2 files' },
-    ],
+  })
+  // Tool calls and reasoning come first as cards (PLAN 5.25), the text after; the compact summary is for old messages.
+  expect(complete.parts.map((part) => part.kind)).toEqual([
+    'thinking',
+    ...Array.from({ length: 5 }, () => 'tool'),
+    'text',
+  ])
+  expect(complete.parts.at(-1)).toEqual({ kind: 'text', text: 'The streamed reply is ready.' })
+  expect(complete.parts[1]).toEqual({
+    kind: 'tool',
+    tool: 'terminal',
+    args: 'pnpm test',
+    result: '3 checks passed',
+    status: 'ok',
   })
   expect(
     events().filter((event) => event.type === 'message.delta' && event.data.messageId === reply.id),
@@ -361,4 +371,40 @@ test('a permanent start refusal fails the turn once, posts a notice and frees th
   expect((await send({ text: 'second' })).statusCode).toBe(200)
   expect(run).toHaveBeenCalledTimes(2)
   expect(run.mock.calls[1]![0].input).toMatch(/second/)
+})
+
+test('Stop ends the run writing a streaming reply and the reply says it was stopped (PLAN 5.25)', async () => {
+  replies.lead = 'Working through the details. '.repeat(40)
+  await send({ text: 'long reply please' })
+  await advance(600)
+  const writing = messages().find((message) => message.author.kind === 'agent')!
+  expect(writing.streaming).toBe(true)
+  const stopped = await post(`/api/rooms/${roomId}/messages/${writing.id}/stop`, {})
+  expect(stopped.statusCode).toBe(200)
+  expect(stopped.json()).toEqual({ ok: true })
+  await advance(1000)
+  const done = MessageSchema.parse(messages().find((message) => message.id === writing.id))
+  expect(done.streaming).toBe(false)
+  expect(done.parts.some((part) => part.kind === 'text' && part.text.includes('was stopped'))).toBe(
+    true,
+  )
+  // Finished replies and unknown messages are refused.
+  expect((await post(`/api/rooms/${roomId}/messages/${writing.id}/stop`, {})).statusCode).toBe(409)
+  expect((await post(`/api/rooms/${roomId}/messages/nope/stop`, {})).statusCode).toBe(404)
+})
+
+test('the agent context reports the latest usage with the model window, null when unknown (PLAN 5.25)', async () => {
+  const empty = await app.inject({ url: '/api/agents/lead/context' })
+  expect(empty.statusCode).toBe(200)
+  expect(empty.json()).toMatchObject({ tokens: null, costUsd: null })
+  expect((await app.inject({ url: '/api/agents/nobody/context' })).statusCode).toBe(404)
+  await send({ text: 'hello' })
+  await advance(4000)
+  const used = (await app.inject({ url: '/api/agents/lead/context' })).json()
+  expect(used).toEqual({
+    model: 'fake-model',
+    tokens: { input: 1200, output: 240 },
+    costUsd: 0.0042,
+    contextLength: 128000,
+  })
 })

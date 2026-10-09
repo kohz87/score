@@ -97,6 +97,8 @@ const ToolCompletedSchema = ToolStartedSchema.extend({
   duration: z.number().finite().nonnegative(),
   error: z.boolean(),
 })
+const ReasoningSchema = z.object({ text: z.string() })
+export const MAX_THINKING_CHARS = 4096
 const DeltaSchema = z.object({ delta: z.string() })
 const InterimSchema = z.object({ text: z.string(), already_streamed: z.boolean().optional() })
 const TerminalSchema = z.object({
@@ -185,6 +187,7 @@ export function translateRunEvent(
   const delta = event === 'message.delta' ? DeltaSchema.parse(value) : undefined
   const interim = event === 'message.interim' ? InterimSchema.parse(value) : undefined
   const ignored = event === 'reasoning.available'
+  const reasoning = ignored ? ReasoningSchema.safeParse(safe).data : undefined
   const known = Boolean(
     started ||
     completed ||
@@ -251,6 +254,13 @@ export function translateRunEvent(
         sqlite
           .prepare('UPDATE runs SET last_seq = ?, updated_at = ? WHERE id = ?')
           .run(seq, at, row.id)
+        // Kept for the collapsed thinking part (PLAN 5.25); `safe` is already redacted, and the text is bounded.
+        if (reasoning?.text.trim())
+          sqlite
+            .prepare(
+              'INSERT INTO run_thinking (run_id, seq, text) VALUES (?, ?, ?) ON CONFLICT DO NOTHING',
+            )
+            .run(row.id, seq, redactBounded(reasoning.text, MAX_THINKING_CHARS))
         return delta
           ? appendRunMessage(sqlite, row.id, delta.delta, at)
           : interim && !interim.already_streamed

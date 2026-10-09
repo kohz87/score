@@ -8,20 +8,84 @@ import { agentTextColor } from './agent-text-color.ts'
 import { ApprovalCard } from './ApprovalCard.tsx'
 import { requestDelete } from './message-deletion.ts'
 import { startEdit } from './message-edit.ts'
+import { Markdown } from './Markdown.tsx'
 import { PlanCard } from './PlanCard.tsx'
+
+/** Expand all / Collapse all (PLAN 5.25): a counter, so pressing the same button twice still reaches cards opened by hand. */
+type Expansion = { open: boolean; version: number }
+
+const STATUS_LABEL = { running: 'Running', ok: 'Done', error: 'Failed' } as const
+
+function ToolCard({
+  part,
+  expansion,
+  live,
+}: {
+  part: Extract<MessagePart, { kind: 'tool' }>
+  expansion: Expansion
+  live: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [seen, setSeen] = useState(expansion.version)
+  if (seen !== expansion.version) {
+    // Adjusting state while rendering: Expand all / Collapse all overrides what was opened by hand.
+    setSeen(expansion.version)
+    setOpen(expansion.open)
+  }
+  // A tool that never reported back in a finished reply is not "running" any more.
+  const status = part.status === 'running' && !live ? 'ok' : part.status
+  return (
+    <details
+      className={`chat-card chat-tool chat-tool--${status}`}
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary>
+        <code className="chat-tool-name">{part.tool}</code>
+        <span className="chat-tool-args">{part.args}</span>
+        <span className="chat-tool-status">{STATUS_LABEL[status]}</span>
+      </summary>
+      {part.args && (
+        <pre className="chat-tool-body" aria-label="Arguments">
+          {part.args}
+        </pre>
+      )}
+      {part.result && (
+        <pre className="chat-tool-body" aria-label="Result">
+          {part.result}
+        </pre>
+      )}
+    </details>
+  )
+}
+
+function Thinking({ text, streaming }: { text: string; streaming: boolean }) {
+  return (
+    <details className="chat-card chat-thinking">
+      <summary>{streaming ? 'Thinking…' : 'Thought process'}</summary>
+      <p>{text}</p>
+    </details>
+  )
+}
 
 function Part({
   part,
   agents,
   message,
+  expansion,
 }: {
   part: MessagePart
   agents: AgentSummary[]
   message: Message
+  expansion: Expansion
 }) {
   switch (part.kind) {
     case 'text':
-      return <p className="chat-text">{part.text}</p>
+      return <Markdown text={part.text} streaming={message.streaming} />
+    case 'tool':
+      return <ToolCard part={part} expansion={expansion} live={message.streaming} />
+    case 'thinking':
+      return <Thinking text={part.text} streaming={message.streaming} />
     case 'tools':
       return <div className="chat-compact chat-tools">{part.summary}</div>
     case 'file':
@@ -210,12 +274,48 @@ function MessageActions({ message, name }: { message: Message; name: string }) {
   )
 }
 
+function StopReply({ message, name }: { message: Message; name: string }) {
+  const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle')
+  async function stop() {
+    setState('busy')
+    try {
+      await apiFetch(
+        `rooms/${encodeURIComponent(message.roomId)}/messages/${encodeURIComponent(message.id)}/stop`,
+        { method: 'POST', headers: { 'Idempotency-Key': newId() }, body: '{}' },
+      )
+      setState('idle')
+    } catch {
+      setState('failed')
+    }
+  }
+  return (
+    <div className="chat-stop-row">
+      <button
+        type="button"
+        className="chat-stop-reply"
+        aria-label={`Stop reply from ${name}`}
+        disabled={state === 'busy'}
+        onClick={() => void stop()}
+      >
+        {state === 'busy' ? 'Stopping…' : 'Stop'}
+      </button>
+      {state === 'failed' && (
+        <span className="chat-action-error" role="alert">
+          Could not stop it. It may have just finished.
+        </span>
+      )}
+    </div>
+  )
+}
+
 export function MessageItem({ message, agents }: { message: Message; agents: AgentSummary[] }) {
   const author = message.author
   const agent =
     author.kind === 'agent' ? agents.find((item) => item.id === author.agentId) : undefined
   const you = author.kind === 'you'
   const name = you ? 'You' : (agent?.name ?? (author.kind === 'agent' ? author.agentId : 'Agent'))
+  const [expansion, setExpansion] = useState<Expansion>({ open: false, version: 0 })
+  const cards = message.parts.filter((part) => part.kind === 'tool').length
   return (
     <article
       id={`message-${message.id}`}
@@ -240,10 +340,27 @@ export function MessageItem({ message, agents }: { message: Message; agents: Age
           aria-live={message.streaming ? 'polite' : 'off'}
           aria-atomic="false"
         >
+          {cards >= 3 && (
+            <button
+              type="button"
+              className="chat-expand-all"
+              onClick={() =>
+                setExpansion((current) => ({
+                  open: current.version === 0 ? true : !current.open,
+                  version: current.version + 1,
+                }))
+              }
+            >
+              {expansion.version > 0 && expansion.open ? 'Collapse all' : 'Expand all'}
+            </button>
+          )}
           {message.parts.map((part, index) => (
-            <Part key={index} part={part} agents={agents} message={message} />
+            <Part key={index} part={part} agents={agents} message={message} expansion={expansion} />
           ))}
         </div>
+        {message.streaming && !you && !message.id.startsWith('pending-') && (
+          <StopReply message={message} name={name} />
+        )}
         {message.editedBy && (
           <button
             type="button"
