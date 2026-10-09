@@ -35,7 +35,18 @@ let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>
 let queryClient: ReturnType<typeof createQueryClient>
 let finishPost: (() => void) | null
 const box = () => screen.getByRole('combobox', { name: 'Message general' }) as HTMLTextAreaElement
-const posts = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')
+const posts = () =>
+  fetchMock.mock.calls.filter(
+    ([input, init]) => init?.method === 'POST' && String(input).endsWith('/messages'),
+  )
+// Since 5.33 a correction first confirms the rewind; the send under test happens after that.
+async function sendCorrection() {
+  fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
+  const confirm = await screen.findByRole('button', { name: 'Rewind and edit' })
+  // Enabled once the rewind plan has loaded.
+  await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false))
+  fireEvent.click(confirm)
+}
 
 beforeEach(() => {
   localStorage.clear()
@@ -48,6 +59,31 @@ beforeEach(() => {
   })
   fetchMock = vi.fn(async (input, init) => {
     if (String(input) === '/api/commands') return json({ items: [] })
+    if (String(input).endsWith('/rewind-plan'))
+      return json({
+        hiddenCount: 1,
+        blocked: null,
+        agents: [{ agentId: 'lead', turns: 1, cannot: null }],
+      })
+    if (String(input).endsWith('/rewind'))
+      return json({
+        version: {
+          id: 'v1',
+          roomId: 'general',
+          anchorId: 'a',
+          anchorCreatedAt: '2026-10-09T10:00:00.000Z',
+          mode: 'edit',
+          replacedBy: null,
+          number: 1,
+          count: 2,
+          hiddenCount: 1,
+          rewound: [{ agentId: 'lead', turnsUndone: 1 }],
+          skipped: [],
+          createdAt: '2026-10-09T10:00:01.000Z',
+        },
+        rewound: [{ agentId: 'lead', turnsUndone: 1 }],
+        skipped: [],
+      })
     if (init?.method === 'POST') {
       // The response is held back until the test releases it.
       await new Promise<void>((resolve) => {
@@ -76,7 +112,7 @@ afterEach(() => {
 test('a correction that finishes after Cancel does not overwrite the draft typed since', async () => {
   fireEvent.change(box(), { target: { value: 'half typed' } })
   act(() => startEdit(mine('a', 'text A')))
-  fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
+  await sendCorrection()
   await waitFor(() => expect(posts()).toHaveLength(1))
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
   fireEvent.change(box(), { target: { value: 'brand new draft' } })
@@ -87,7 +123,7 @@ test('a correction that finishes after Cancel does not overwrite the draft typed
 
 test('a correction that finishes while another message is being edited leaves that edit alone', async () => {
   act(() => startEdit(mine('a', 'text A')))
-  fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
+  await sendCorrection()
   await waitFor(() => expect(posts()).toHaveLength(1))
   act(() => startEdit(mine('b', 'text B')))
   expect(box().value).toBe('text B')
@@ -100,7 +136,7 @@ test('a correction that finishes while another message is being edited leaves th
 test('removing the last recipient while editing sends an explicit empty list', async () => {
   act(() => startEdit(mine('a', 'now @builder', ['lead'])))
   fireEvent.click(screen.getByRole('button', { name: 'Remove Lead' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
+  await sendCorrection()
   await waitFor(() => expect(posts()).toHaveLength(1))
   expect(JSON.parse(String(posts()[0]![1]!.body))).toEqual({
     text: 'now @builder',
