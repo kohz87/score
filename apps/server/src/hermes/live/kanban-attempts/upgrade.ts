@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { ScoreDb } from '../../../db/index.ts'
+import { rewriteReceipts } from '../../../domain/legacy-links.ts'
 import type { ObservationSink } from '../../port.ts'
 
 // Legacy numeric run links (task_projections.detail.runIds) from before attempts had their own identity. The inputs
@@ -134,6 +135,8 @@ export async function resolveUpgradeLinks(
             link.legacy_id,
           )
       }
+      // Receipts that still show the old ids are rewritten in the same transaction (never deleted).
+      rewriteReceipts(sqlite, [...new Set(pending.map((link) => link.task_id))])
       return []
     },
   })

@@ -5,6 +5,7 @@ import type { DomainEventDraft } from '../hub/ingest.ts'
 import { redactBounded } from '../redact.ts'
 import { insertApproval } from './approvals.ts'
 import { approvalDraft, patchApproval } from './approval-store.ts'
+import { stampHistoryId } from './ownership.ts'
 
 export const KanbanDenialSchema = z.object({
   patternKey: z.string().min(1).max(256),
@@ -20,12 +21,14 @@ export function recordKanbanDenial(
   at: string,
   id?: string,
 ): DomainEventDraft[] {
+  const historyId = stampHistoryId(sqlite)
   if (
     sqlite
       .prepare(
-        `SELECT id FROM approvals WHERE origin = 'kanban' AND kanban_task_id = ? AND kanban_run_id IS ? AND command_digest = ?`,
+        `SELECT id FROM approvals WHERE origin = 'kanban' AND kanban_task_id = ? AND kanban_run_id IS ? AND command_digest = ?
+          AND COALESCE(kanban_history_id, '') = ?`,
       )
-      .get(denial.taskId, denial.runId, denial.commandDigest)
+      .get(denial.taskId, denial.runId, denial.commandDigest, historyId ?? '')
   )
     return []
   const approvalId = insertApproval(sqlite, {
@@ -40,6 +43,7 @@ export function recordKanbanDenial(
     producer_incarnation: producer.incarnation,
     kanban_task_id: denial.taskId,
     kanban_run_id: denial.runId,
+    kanban_history_id: historyId,
     command,
     command_digest: denial.commandDigest,
     pattern_keys: [redactBounded(denial.patternKey, 256)],

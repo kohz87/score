@@ -180,6 +180,70 @@ export const run = {
   gaps: [{ from: at, to: later, reason: 'Producer disconnected' }],
 } satisfies Contract.RunSummary
 
+export const taskRef = {
+  taskId: 'task-1',
+  historyId: 'kh_1',
+  current: true,
+} satisfies Contract.TaskRef
+export const attempt = {
+  id: 'kr_0f8a4c2e-6a35-4b8b-9a3c-1d2e3f4a5b6c',
+  kind: 'kanban',
+  agentId: 'builder',
+  role: 'implementer',
+  status: 'completed',
+  closureReason: 'completed',
+  startedAt: at,
+  endedAt: later,
+  observationEndedAt: null,
+  evidence: 'proven',
+  taskId: 'task-1',
+  task: taskRef,
+  order: [at, 41],
+  refusedUpdates: 0,
+  tools: null,
+  session: null,
+  model: null,
+} satisfies Contract.AttemptSummary
+/** An attempt whose claiming profile Score cannot know, from an earlier copy of the board, still unfinished. */
+export const unattributedAttempt = {
+  ...attempt,
+  id: 'kr_9b1d0e7a-1c52-4e7e-8d0f-5a6b7c8d9e0f',
+  agentId: null,
+  role: null,
+  status: 'running',
+  closureReason: null,
+  endedAt: null,
+  observationEndedAt: later,
+  evidence: 'partial',
+  task: { ...taskRef, historyId: 'kh_0', current: false },
+  order: [at, 42],
+} satisfies Contract.AttemptSummary
+export const attemptDetail = {
+  ...attempt,
+  taskSnapshot: { title: 'Build the contract', status: 'done', assignee: 'builder' },
+} satisfies Contract.AttemptDetail
+export const attemptLane = {
+  id: `attempt:${attempt.id}`,
+  label: 'Build the contract',
+  state: 'done',
+  start: at,
+  end: later,
+  taskId: 'task-1',
+  runId: null,
+  kind: 'task',
+  attemptId: attempt.id,
+  observationEndedAt: null,
+  provenance: 'proven',
+  order: [at, 41],
+} satisfies Contract.LaneBlock
+export const unattributedHandoff = {
+  id: 'handoff-2',
+  from: { agentId: null, blockId: `attempt:${unattributedAttempt.id}` },
+  to: { agentId: 'reviewer', blockId: 'block-2' },
+  kind: 'handoff',
+  at,
+} satisfies Contract.Handoff
+
 export const handoff = {
   id: 'handoff-1',
   from: { agentId: 'builder', blockId: 'block-1' },
@@ -270,6 +334,7 @@ export const laneUpserted = {
   agentId: 'builder',
   block: lane,
 } satisfies Contract.LaneUpserted
+export const attemptUpdated = attempt satisfies Contract.AttemptSummary
 export const handoffCreated = {
   briefId: 'brief-1',
   handoff,

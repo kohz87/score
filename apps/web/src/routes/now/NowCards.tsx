@@ -292,26 +292,42 @@ export function MadeTodayCard({
                     )}
                   </div>
                 ))}
-                {item.checks.map((check) => (
-                  <div key={`${check.agentId}-${check.label}`} className="now-made-row">
-                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                      <path
-                        d={check.ok ? 'M3 8.5 L6.5 12 L13 4.5' : 'M4 4 L12 12 M12 4 L4 12'}
-                        stroke={check.ok ? '#00785A' : '#B01E43'}
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    <span className="now-made-check">
-                      {check.label}
-                      <span className="now-sr-only">{check.ok ? ' passed' : ' failed'}</span>
-                    </span>
-                    <span className="now-made-agent">
-                      {agents.find((agent) => agent.id === check.agentId)?.name ?? check.agentId}
-                    </span>
-                  </div>
-                ))}
+                {item.checks.map((check) => {
+                  // Stage 2b renders "unknown" neutrally; until then only a passed review shows a tick.
+                  const ok = check.verdict === 'passed'
+                  return (
+                    <div key={`${check.agentId}-${check.label}`} className="now-made-row">
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d={ok ? 'M3 8.5 L6.5 12 L13 4.5' : 'M4 4 L12 12 M12 4 L4 12'}
+                          stroke={ok ? '#00785A' : '#B01E43'}
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      <span className="now-made-check">
+                        {check.label}
+                        <span className="now-sr-only">
+                          {check.verdict === 'passed'
+                            ? ' passed'
+                            : check.verdict === 'unknown'
+                              ? ' not verified'
+                              : ' changes requested'}
+                        </span>
+                      </span>
+                      <span className="now-made-agent">
+                        {agents.find((agent) => agent.id === check.agentId)?.name ?? check.agentId}
+                      </span>
+                    </div>
+                  )
+                })}
               </li>
             )
           })}

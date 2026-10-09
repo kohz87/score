@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AgentDetailSchema, RunSummarySchema } from './types.ts'
+import { AgentDetailSchema, AttemptSummarySchema, RunSummarySchema } from './types.ts'
 
 // Contract §8: response bodies of the Team tabs (skills, skills hub, memory).
 export const SkillItemSchema = AgentDetailSchema.shape.skills.element
@@ -58,6 +58,8 @@ export const AgentHistoryItemSchema = z.object({
   brief: z.object({ id: z.string().min(1), title: z.string() }).nullable(),
   /** First Watch frame of this run, for "Replay in Watch"; null when no frames were recorded. */
   replaySeq: z.int().positive().nullable(),
+  /** A Kanban attempt row (5.17a-1; `runId` is then its `kr_` id and there is no replay). Absent for runs. */
+  attempt: AttemptSummarySchema.optional(),
 })
 export const AgentHistoryPageSchema = z.object({
   items: z.array(AgentHistoryItemSchema),

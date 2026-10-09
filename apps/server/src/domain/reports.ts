@@ -1,6 +1,7 @@
 import type { Reports, ReportRange } from '@score/contract'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
+import { kanbanAttemptsEnabled, listAttempts } from './kanban-attempts.ts'
 
 /** One kanban task as Hermes recorded it (times in epoch ms). */
 export interface KanbanTaskFact {
@@ -42,6 +43,15 @@ export interface ReportRun {
   agentId: string
   startedAt: string
   endedAt: string | null
+  /** False for a Kanban attempt whose claim could not be proven: counted as a run, never as working time. */
+  work?: boolean
+}
+/** A Kanban attempt for reports (5.17a-1). `endedAt` is where it ended or where observation stopped; null = running. */
+export interface ReportAttempt {
+  agentId: string | null
+  startedAt: string
+  endedAt: string | null
+  evidence: 'proven' | 'partial'
 }
 export interface ReportApproval {
   agentId: string
@@ -74,6 +84,8 @@ export interface ReportInput {
   tz?: string
   agentIds: string[]
   runs: ReportRun[]
+  /** Present only with Kanban attempts enabled; absent leaves the report exactly as before. */
+  attempts?: ReportAttempt[]
   approvals: ReportApproval[]
   facts: ReportFacts
 }
@@ -303,7 +315,21 @@ export function computeReports(input: ReportInput): Reports {
 
   const agents = new Set(input.agentIds)
   for (const task of finished) if (task.assignee) agents.add(task.assignee)
-  const runs = input.runs.filter((run) => {
+  // Attempts of a known agent count as that agent's runs; their working time is the proven ones (5.17a-1).
+  const known = (input.attempts ?? []).flatMap((attempt): ReportRun[] =>
+    attempt.agentId === null
+      ? []
+      : [
+          {
+            agentId: attempt.agentId,
+            startedAt: attempt.startedAt,
+            endedAt: attempt.endedAt,
+            work: attempt.evidence === 'proven',
+          },
+        ],
+  )
+  const allRuns = [...input.runs, ...known]
+  const runs = allRuns.filter((run) => {
     const startedAt = Date.parse(run.startedAt)
     return startedAt >= from && startedAt <= to
   })
@@ -334,8 +360,8 @@ export function computeReports(input: ReportInput): Reports {
   }
   const timeSplit = agentIds.map((agentId) => {
     const working = merge(
-      input.runs
-        .filter((run) => run.agentId === agentId)
+      allRuns
+        .filter((run) => run.agentId === agentId && run.work !== false)
         .map((run): Interval => [
           Date.parse(run.startedAt),
           run.endedAt ? Date.parse(run.endedAt) : input.now,
@@ -430,6 +456,26 @@ export function computeReports(input: ReportInput): Reports {
       total: knownCache.reduce((total, tokens) => total + tokens.total, 0),
     }),
   }
+  const unattributed = input.attempts
+    ? (() => {
+        const mine = input.attempts.filter((attempt) => attempt.agentId === null)
+        const started = mine.filter((attempt) => {
+          const at = Date.parse(attempt.startedAt)
+          return at >= from && at <= to
+        })
+        const working = merge(
+          mine
+            .filter((attempt) => attempt.evidence === 'proven')
+            .map((attempt): Interval => [
+              Date.parse(attempt.startedAt),
+              attempt.endedAt ? Date.parse(attempt.endedAt) : input.now,
+            ]),
+          from,
+          to,
+        )
+        return { runs: started.length, workingSec: Math.round(measure(working) / 1000) }
+      })()
+    : undefined
   const when =
     input.range === 'custom'
       ? input.custom!.from === input.custom!.to
@@ -457,6 +503,7 @@ export function computeReports(input: ReportInput): Reports {
       medianWaitSec: median(waits),
       insight,
     },
+    ...(unattributed ? { unattributed } : {}),
   }
 }
 
@@ -481,7 +528,8 @@ export function readReportRows(
   sqlite: DatabaseSync,
   from: number,
   to: number,
-): { runs: ReportRun[]; approvals: ReportApproval[] } {
+  withAttempts = kanbanAttemptsEnabled(),
+): { runs: ReportRun[]; approvals: ReportApproval[]; attempts?: ReportAttempt[] } {
   const fromIso = new Date(from).toISOString()
   const toIso = new Date(to).toISOString()
   const runs = sqlite
@@ -509,5 +557,14 @@ export function readReportRows(
       decidedAt: row.decided_at,
       closedAt: row.closed_at,
     }))
-  return { runs, approvals }
+  if (!withAttempts) return { runs, approvals }
+  const attempts = listAttempts(sqlite, { since: fromIso, until: toIso, excludeCopies: true }).map(
+    (attempt): ReportAttempt => ({
+      agentId: attempt.agentId,
+      startedAt: attempt.startedAt,
+      endedAt: attempt.endedAt ?? attempt.observationEndedAt,
+      evidence: attempt.evidence,
+    }),
+  )
+  return { runs, approvals, attempts }
 }

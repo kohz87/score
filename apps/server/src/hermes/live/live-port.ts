@@ -66,6 +66,7 @@ import { runHermes, type HermesRunner, type HermesSpawner } from './cli.ts'
 import { readRun, RunRowSchema, runLifecycle, type RunMetrics } from './translate.ts'
 import { LiveProfileManagement } from './profile-management.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
+import { assertNotKanbanAttempt } from '../../domain/brief-flow.ts'
 
 const StateSchema = z.object({ served_profiles: z.array(ProfileNameSchema) })
 export interface LivePortOptions extends HermesPortDeps {
@@ -715,6 +716,8 @@ export class LivePort implements HermesPort {
     return result
   }
   async stopRun(req: { agentId: string; runId: string }): Promise<void> {
+    // Kanban attempts are not runs and cannot be stopped from Score: refused before any profile or run lookup.
+    assertNotKanbanAttempt(req.runId)
     const { db, gateway } = this.requireStarted()
     const row = readRun(db.sqlite, req.runId)
     if (row.profile !== req.agentId) throw new HttpError(404, 'not_found', 'Unknown run')

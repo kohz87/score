@@ -246,7 +246,8 @@ const cases = [
       paused: false,
       headline: { working: 1, needsYou: 1, text: 'One agent is working. One thing needs you.' },
       lanes: [{ agent: f.agent, blocks: [f.lane] }],
-      handoffs: [f.handoff],
+      handoffs: [f.handoff, f.unattributedHandoff],
+      unattributed: { blocks: [f.attemptLane] },
       focusApproval: f.approval,
       thread: { roomId: 'room-1', messages: [f.message] },
       madeToday: [
@@ -254,7 +255,11 @@ const cases = [
           title: 'Feed',
           ref: { kind: 'task', taskId: 'task-1' },
           files: [{ path: 'a.ts', added: 0, removed: 0 }],
-          checks: [{ label: 'Tests pass', agentId: 'builder', ok: true }],
+          checks: [
+            { label: 'Tests pass', agentId: 'builder', verdict: 'passed' },
+            { label: 'Review', agentId: 'reviewer', verdict: 'changes_requested' },
+            { label: 'Second look', agentId: 'reviewer', verdict: 'unknown' },
+          ],
         },
       ],
     },
@@ -319,6 +324,7 @@ const cases = [
       ],
       trend: [{ date: '2026-03-10', runs: 2, spendUsd: null }],
       approvals: { asked: 0, approved: 0, denied: 0, medianWaitSec: null, insight: null },
+      unattributed: { runs: 2, workingSec: 90 },
     },
     { range: 'today' },
   ],
@@ -341,7 +347,7 @@ const cases = [
       brief: f.brief,
       nodes: [flowNode],
       edges: [flowEdge],
-      stats: { runningSec: 1, steps: 1, handoffs: 0, spendUsd: null, eta: null },
+      stats: { runningSec: 1, steps: 1, handoffs: 0, spendUsd: null, eta: null, attempts: 2 },
       notice: null,
     },
     { asOfSeq: 1, brief: f.brief, nodes: [flowNode], edges: [flowEdge] },
@@ -371,6 +377,11 @@ const cases = [
   ['MessagePartSchema', f.parts[0], { kind: 'approval', approvalId: '' }],
   ['MessageSchema', f.message, { ...f.message, author: { kind: 'agent' } }],
   ['RunSummarySchema', f.run, { ...f.run, status: 'done' }],
+  ['TaskRefSchema', f.taskRef, { ...f.taskRef, current: 'yes' }],
+  ['AttemptSummarySchema', f.attempt, { ...f.attempt, tools: [] }],
+  ['AttemptDetailSchema', f.attemptDetail, { ...f.attemptDetail, taskSnapshot: {} }],
+  ['AttemptStatusSchema', 'ended_unknown', 'cancelled'],
+  ['WorkItemSchema', { kind: 'attempt', attempt: f.attempt }, { kind: 'attempt', run: f.run }],
   ['HandoffSchema', f.handoff, { ...f.handoff, to: { agentId: 'reviewer', blockId: '' } }],
   ['SystemStatusSchema', f.system, { ...f.system, agentIsolation: 'host' }],
   ['LogLineSchema', f.log, { ...f.log, kind: 'debug' }],
@@ -1023,4 +1034,84 @@ test('a stored lane block without a kind reads as a task; chat bands carry a cou
     false,
   )
   expect(contract.LaneBlockSchema.safeParse({ ...f.lane, kind: 'other' }).success).toBe(false)
+})
+
+describe('Kanban attempts (5.17a-1) additions', () => {
+  test('an unattributed, partial attempt from an earlier board parses; tools stay null', () => {
+    const parsed = contract.AttemptSummarySchema.parse(f.unattributedAttempt)
+    expect(parsed.agentId).toBeNull()
+    expect(parsed.task.current).toBe(false)
+    expect(
+      contract.AttemptSummarySchema.safeParse({ ...f.unattributedAttempt, id: 'run-1' }).success,
+    ).toBe(false)
+    expect(contract.AttemptSummarySchema.safeParse({ ...f.attempt, model: 'x' }).success).toBe(
+      false,
+    )
+  })
+  test('WorkItem is a tagged union of runs and attempts', () => {
+    expect(contract.WorkItemSchema.safeParse({ kind: 'run', run: f.run }).success).toBe(true)
+    expect(contract.WorkItemSchema.safeParse({ kind: 'run', attempt: f.attempt }).success).toBe(
+      false,
+    )
+  })
+  test('attempt lane blocks carry provenance, order and the observation boundary', () => {
+    expect(contract.LaneBlockSchema.parse(f.attemptLane).order).toEqual([f.at, 41])
+    expect(
+      contract.LaneBlockSchema.safeParse({ ...f.attemptLane, provenance: 'guess' }).success,
+    ).toBe(false)
+    // Blocks of runs carry none of them: today's responses are unchanged.
+    expect(contract.LaneBlockSchema.parse(f.lane).provenance).toBeUndefined()
+  })
+  test('a hand-off may start or end in the Unattributed lane', () => {
+    expect(contract.HandoffSchema.parse(f.unattributedHandoff).from.agentId).toBeNull()
+    expect(
+      contract.HandoffSchema.safeParse({ ...f.unattributedHandoff, from: { blockId: 'x' } })
+        .success,
+    ).toBe(false)
+  })
+  test('Flow tools: null = not observed, [] = observed none; attempts list rides along', () => {
+    const base = {
+      node: flowNode,
+      description: '',
+      steps: [],
+      approval: null,
+      run: null,
+      model: null,
+      watch: null,
+    }
+    expect(
+      contract.FlowNodeDetailSchema.parse({ ...base, tools: null, attempts: [f.attempt] }).tools,
+    ).toBeNull()
+    expect(contract.FlowNodeDetailSchema.safeParse({ ...base, tools: [1] }).success).toBe(false)
+  })
+  test('history rows, task details and reports accept the attempt fields', () => {
+    const item = {
+      runId: f.attempt.id,
+      title: 'T',
+      origin: 'kanban',
+      outcome: 'completed',
+      startedAt: f.at,
+      durationSec: 1,
+      model: null,
+      costUsd: null,
+      task: null,
+      brief: null,
+      replaySeq: null,
+      attempt: f.attempt,
+    }
+    expect(contract.AgentHistoryItemSchema.parse(item).attempt?.kind).toBe('kanban')
+    expect(
+      contract.AgentHistoryItemSchema.safeParse({ ...item, attempt: { ...f.attempt, kind: 'run' } })
+        .success,
+    ).toBe(false)
+    const detail = {
+      ...f.detail,
+      unresolvedRunLinks: [{ legacyId: '12', reason: 'no_affirmative_evidence' }],
+    }
+    expect(contract.TaskDetailSchema.parse(detail).unresolvedRunLinks).toHaveLength(1)
+    expect(
+      contract.TaskDetailSchema.safeParse({ ...f.detail, unresolvedRunLinks: [{ legacyId: '' }] })
+        .success,
+    ).toBe(false)
+  })
 })

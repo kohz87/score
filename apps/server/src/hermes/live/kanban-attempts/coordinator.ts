@@ -3,9 +3,11 @@ import { realpathSync } from 'node:fs'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import type { ScoreDb } from '../../../db/index.ts'
+import { attemptUpdates } from '../../../domain/kanban-attempts.ts'
 import type { ObservationSink } from '../../port.ts'
 import { closeReadOnly, HermesDbMissing, incarnationOf, openReadOnly } from '../sqlite.ts'
 import { associationPass } from './association.ts'
+import { qualifyOwnership } from './ownership.ts'
 import { resolveUpgradeLinks, snapshotUpgradeLinks } from './upgrade.ts'
 import { effectiveMark } from './history-policy.ts'
 import { readCapture, readMarks, type ReaderHooks } from './reader.ts'
@@ -182,10 +184,8 @@ export class KanbanAttemptsCoordinator {
       await this.options.sink.submit({
         source: `kanban-attempts:${this.sourceId}`,
         identity: `kanban:pause:${randomUUID()}`,
-        apply: ({ sqlite, now }) => {
-          pauseHistory(sqlite, history.id, reason, now)
-          return []
-        },
+        apply: ({ sqlite, now }) =>
+          attemptUpdates(sqlite, pauseHistory(sqlite, history.id, reason, now) ?? []),
       })
     }
   }
@@ -246,6 +246,10 @@ export class KanbanAttemptsCoordinator {
     if (!history || history.state !== 'active' || !history.baseline_done) return
     const source = `kanban-attempts:${this.sourceId}`
     await resolveUpgradeLinks(this.options.db, this.options.sink, source, history.id)
+    await qualifyOwnership(this.options.db, this.options.sink, conn.db, {
+      id: history.id,
+      sourceId: this.sourceId,
+    })
     await associationPass(
       this.options.db,
       this.options.sink,
@@ -365,7 +369,7 @@ export class KanbanAttemptsCoordinator {
           : {}),
         apply: ({ sqlite, now }) => {
           result = applyCapture(sqlite, capture, now, this.options.faults)
-          return []
+          return attemptUpdates(sqlite, result.touched)
         },
       })
     } finally {

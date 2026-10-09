@@ -9,6 +9,7 @@ import { registerAgentRoutes } from './http/agents.ts'
 import { registerProfileRoutes } from './http/profiles.ts'
 import { registerAgentContextRoutes } from './http/agent-context.ts'
 import { registerAgentHistoryRoutes } from './http/agent-history.ts'
+import { registerAttemptRoutes } from './http/attempts.ts'
 import { registerAgentTabRoutes } from './http/agent-tabs.ts'
 import { registerWorkspaceRoutes } from './http/workspace.ts'
 import { createAgentWorkspaces } from './workspace/agent-workspace.ts'
@@ -227,7 +228,16 @@ export function buildApp({
     const dispatch = registerRoomRoutes(app, port, db, ingest, clock, mediaStore, workspaces)
     registerConversationRoutes(app, { db, ingest, port, ...(clock ? { clock } : {}) })
     registerOutsideSessionRoutes(app, { db, ingest, port })
-    const holds = createTaskHolds({ port, db, ingest })
+    const holds = createTaskHolds({
+      port,
+      db,
+      ingest,
+      onInert: (owner, taskIds) =>
+        app.log.warn(
+          { owner, taskIds },
+          'Pause release skipped holds that belong to another Kanban board lineage',
+        ),
+    })
     const control = createBriefControl({ port, db, ingest, holds, dispatch })
     // A crash between "pause recorded" and "task parked" (or "resumed" and "unparked") leaves holds behind. The
     // server runs this once the adapter has started, and again until nothing is left (Hermes may be unreachable).
@@ -298,6 +308,7 @@ export function buildApp({
     })
     registerWatchRoutes(app, { port, db, ingest })
     registerAgentHistoryRoutes(app, { port, db })
+    registerAttemptRoutes(app, { db })
     registerAgentContextRoutes(app, { port, db })
     registerAgentPauseRoutes(app, {
       db,

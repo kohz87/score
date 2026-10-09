@@ -6,6 +6,7 @@ import { RoomVersionSchema } from './versions.ts'
 import {
   AgentIdSchema,
   AgentSummarySchema,
+  AttemptSummarySchema,
   ApprovalSchema,
   HandoffSchema,
   LaneBlockSchema,
@@ -138,6 +139,7 @@ export const StreamEventSchema = z.discriminatedUnion('type', [
   StreamEnvelopeSchema.extend({ type: z.literal('handoff.created'), data: HandoffCreatedSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('brief.upserted'), data: BriefSummarySchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('run.updated'), data: RunSummarySchema }),
+  StreamEnvelopeSchema.extend({ type: z.literal('attempt.updated'), data: AttemptSummarySchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('gap.recorded'), data: GapRecordedSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('log.line'), data: LogLineSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('watch.frame'), data: WatchFrameSchema }),

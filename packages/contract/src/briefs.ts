@@ -2,6 +2,7 @@ import { z } from 'zod'
 import {
   AgentIdSchema,
   ApprovalSchema,
+  AttemptSummarySchema,
   LogLineSchema,
   RunSummarySchema,
   TaskStepSchema,
@@ -56,6 +57,8 @@ export const BriefFlowSchema = z.object({
     handoffs: z.int().nonnegative(),
     spendUsd: z.number().nonnegative().nullable(),
     eta: z.string().nullable(),
+    /** Kanban attempts counted in `runningSec`; their cost is unknown, so `spendUsd` is null while any exist. */
+    attempts: z.int().nonnegative().optional(),
   }),
   /** Set when the brief's agents also worked on tasks not linked to it (links are exact, never guessed). */
   notice: z.string().nullable(),
@@ -69,7 +72,10 @@ export const FlowNodeDetailSchema = z.object({
   approval: ApprovalSchema.nullable(),
   run: RunSummarySchema.nullable(),
   model: z.string().nullable(),
-  tools: z.array(z.string()),
+  /** null = not observed (a Kanban attempt records no tool use); an empty array = observed, none used. */
+  tools: z.array(z.string()).nullable(),
+  /** Kanban attempts of this step, ordered by `order` (present only with attempts enabled). */
+  attempts: z.array(AttemptSummarySchema).optional(),
   watch: z
     .object({
       agentId: AgentIdSchema,

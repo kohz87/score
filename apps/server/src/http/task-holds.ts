@@ -7,6 +7,8 @@ import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { taskStatus } from '../domain/briefs.ts'
 import { HOLD_KINDS, otherHold, PARKABLE, TABLES, type HoldOwner } from '../domain/holds.ts'
+import { currentOnly, ownershipOf } from '../domain/ownership.ts'
+import { kanbanAttemptsEnabled } from '../domain/kanban-attempts.ts'
 
 const PAUSE_REASON = 'Paused from Score'
 const RESUME_REASON = 'Resumed from Score'
@@ -39,8 +41,10 @@ export function createTaskHolds(deps: {
   port: HermesPort
   db: ScoreDb
   ingest: Ingest
+  /** Holds Score will not release (5.17a-1): they belong to another board lineage or an unverified one. */
+  onInert?: (owner: HoldOwner, taskIds: string[]) => void
 }): TaskHolds {
-  const { port, db, ingest } = deps
+  const { port, db, ingest, onInert } = deps
   const tails = new Map<string, Promise<unknown>>()
 
   function locked<T>(taskId: string, work: () => Promise<T>): Promise<T> {
@@ -167,20 +171,40 @@ export function createTaskHolds(deps: {
     return true
   }
 
+  // Only holds owned by the followed board lineage are parked or released; the rest are inert (5.17a-1).
   const taskIdsOf = (owner: HoldOwner, pendingOnly: boolean) =>
     db.read((sqlite) => {
       const { table, column } = TABLES[owner.kind]
+      const owned = currentOnly(sqlite, 'history_id')
       return z
         .array(TaskRow)
         .parse(
           sqlite
             .prepare(
-              `SELECT task_id FROM ${table} WHERE ${column} = ? ${pendingOnly ? "AND state = 'pending'" : ''} ORDER BY rowid`,
+              `SELECT task_id FROM ${table} WHERE ${column} = ? ${pendingOnly ? "AND state = 'pending'" : ''}${owned.sql} ORDER BY rowid`,
             )
-            .all(owner.id),
+            .all(owner.id, ...owned.params),
         )
         .map((row) => row.task_id)
     })
+
+  const inertTaskIds = (owner: HoldOwner): string[] =>
+    !kanbanAttemptsEnabled()
+      ? []
+      : db.read((sqlite) => {
+          const { table, column } = TABLES[owner.kind]
+          return z
+            .array(z.object({ task_id: z.string(), history_id: z.string().nullable() }))
+            .parse(
+              sqlite
+                .prepare(
+                  `SELECT task_id, history_id FROM ${table} WHERE ${column} = ? ORDER BY rowid`,
+                )
+                .all(owner.id),
+            )
+            .filter((row) => ownershipOf(sqlite, row.history_id) === 'inert')
+            .map((row) => row.task_id)
+        })
 
   async function each(
     taskIds: string[],
@@ -217,11 +241,16 @@ export function createTaskHolds(deps: {
   const holds: TaskHolds = {
     apply: (owner, stillPaused) =>
       each(taskIdsOf(owner, true), (taskId) => applyOne(owner, taskId, stillPaused)),
-    release: (owner) =>
-      each(taskIdsOf(owner, false), async (taskId) => {
+    release: async (owner) => {
+      const failed = await each(taskIdsOf(owner, false), async (taskId) => {
         await releaseOne(owner, taskId)
         return true
-      }),
+      })
+      // Inert holds are skipped, not dropped and not failures: Resume must not unpark another lineage's task.
+      const inert = inertTaskIds(owner)
+      if (inert.length) onInert?.(owner, inert)
+      return failed
+    },
     async recover(isPaused) {
       let unresolved = 0
       for (const owner of owners(false)) {

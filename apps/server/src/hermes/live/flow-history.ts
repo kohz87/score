@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import { emitBriefChange, recordEdge } from '../../domain/briefs.ts'
 import { taskHandoffKind } from '../../domain/lanes.ts'
+import { currentOnly, stampHistoryId } from '../../domain/ownership.ts'
 import type { ObservationSink } from '../port.ts'
 import type { TaskEvent } from './kanban.ts'
 
@@ -41,10 +42,14 @@ export async function projectReviewTransitions(
   transitions: ReviewTransition[],
 ): Promise<void> {
   for (const transition of transitions) {
+    // Only briefs linked in the lineage Score follows get new edges (inert links are displayed, never routed).
+    const owned = currentOnly(sqlite, 'history_id')
     const links = z
       .array(z.object({ brief_id: z.string() }))
       .parse(
-        sqlite.prepare('SELECT brief_id FROM brief_tasks WHERE task_id = ?').all(transition.taskId),
+        sqlite
+          .prepare(`SELECT brief_id FROM brief_tasks WHERE task_id = ?${owned.sql}`)
+          .all(transition.taskId, ...owned.params),
       )
     for (const { brief_id: briefId } of links) {
       const id = `${source}:review-event:${transition.eventId}`
@@ -64,6 +69,7 @@ export async function projectReviewTransitions(
             { id, kind: transition.kind, at: transition.at },
             transition.kind === 'review' ? task : review,
             transition.kind === 'review' ? review : task,
+            stampHistoryId(writer),
           )
           return emitBriefChange(writer, briefId, true)
         },

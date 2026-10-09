@@ -1,4 +1,5 @@
 import type { TaskDetail } from '@score/contract'
+import { stampHistoryId } from '../../domain/ownership.ts'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { parseSteps, writeSteps } from '../../domain/steps.ts'
@@ -140,9 +141,9 @@ async function createTaskUnlocked(
       if (req.roomId !== undefined)
         sqlite
           .prepare(
-            'INSERT OR REPLACE INTO task_rooms (task_id, room_id, created_at) VALUES (?, ?, ?)',
+            'INSERT OR REPLACE INTO task_rooms (task_id, room_id, created_at, history_id) VALUES (?, ?, ?, ?)',
           )
-          .run(id, req.roomId, at)
+          .run(id, req.roomId, at, stampHistoryId(sqlite))
     })
     return await deps.getTask(id)
   } catch (error) {

@@ -10,6 +10,7 @@ import {
   taskWithApproval,
   taskSummary,
 } from '../domain/tasks.ts'
+import { withRunLinks } from '../domain/legacy-links.ts'
 import { snapshot } from '../hub/snapshot.ts'
 import type { ScoreDb } from '../db/index.ts'
 import { requestIdempotency } from './idempotency.ts'
@@ -97,7 +98,8 @@ export function registerTaskRoutes(
               'SELECT brief_id FROM brief_tasks WHERE task_id = ? ORDER BY linked_at DESC, rowid DESC LIMIT 1',
             )
             .get(taskId) as { brief_id: string } | undefined
-          return brief ? { ...detail, briefId: brief.brief_id } : detail
+          const linked = withRunLinks(sqlite, detail)
+          return brief ? { ...linked, briefId: brief.brief_id } : linked
         })
       : task
   })
@@ -115,14 +117,16 @@ export function registerTaskRoutes(
         .string()
         .regex(/^[\x21-\x7e]{1,256}$/)
         .parse(request.headers['idempotency-key'] ?? randomUUID())
-      return port.createTask(req, key)
+      const created = await port.createTask(req, key)
+      return db ? db.read((sqlite) => withRunLinks(sqlite, created)) : created
     },
   )
   app.patch('/api/tasks/:taskId', mutation, async (request) => {
     const { taskId } = ParamsSchema.parse(request.params)
     const req = PatchTaskSchema.parse(request.body)
     if (db) for (const id of [req.assignee, req.reviewer]) if (id) assertAgentAdmits(db.sqlite, id)
-    return port.patchTask(taskId, req)
+    const patched = await port.patchTask(taskId, req)
+    return db ? db.read((sqlite) => withRunLinks(sqlite, patched)) : patched
   })
   app.post('/api/tasks/:taskId/actions', mutation, async (request) => {
     const { taskId } = ParamsSchema.parse(request.params)

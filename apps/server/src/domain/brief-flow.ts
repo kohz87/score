@@ -30,6 +30,12 @@ import {
 } from './briefs.ts'
 import { messageFromRow } from './rooms.ts'
 import { taskWithApproval } from './tasks.ts'
+import {
+  attemptSummary,
+  currentAttemptsOfTask,
+  kanbanAttemptsEnabled,
+  type KanbanAttempt,
+} from './kanban-attempts.ts'
 
 export const MAX_FLOW_NODES = 200
 
@@ -175,6 +181,13 @@ export function buildBriefGraph(sqlite: DatabaseSync, briefId: string): BriefGra
       ? latestRunId(runsForAgent(sqlite, detail.runIds, detail.reviewer), sqlite)
       : undefined
     const run = reviewRunId ? runSummary(sqlite, reviewRunId) : null
+    // A reviewer attempt that is still observed running counts as the review being worked on (5.17a-1).
+    const reviewing =
+      !run &&
+      kanbanAttemptsEnabled() &&
+      currentAttemptsOfTask(sqlite, taskId, Date.now())
+        .filter((attempt) => attempt.role === 'reviewer')
+        .some((attempt) => attempt.status === 'running' && attempt.observationEndedAt === null)
     push({
       id,
       kind: 'step',
@@ -188,9 +201,11 @@ export function buildBriefGraph(sqlite: DatabaseSync, briefId: string): BriefGra
             : FAILED_RUN.includes(run.status)
               ? 'failed'
               : 'done'
-        : history.at(-1)?.kind === 'sent_back' || detail?.column === 'done'
-          ? 'done'
-          : 'planned',
+        : reviewing
+          ? 'working'
+          : history.at(-1)?.kind === 'sent_back' || detail?.column === 'done'
+            ? 'done'
+            : 'planned',
       subtitle: detail?.reviewer ?? 'Review',
       taskId,
       layout: { col: 0, row: 0 },
@@ -354,17 +369,23 @@ export function readBriefFlow(
       .get(id)
     return row === undefined ? [] : [RunRowSchema.parse(row)]
   })
+  // Kanban attempts of the brief's tasks (5.17a-1): they have no cost, so any attempt makes the total unknown.
+  const attempts: KanbanAttempt[] = kanbanAttemptsEnabled()
+    ? graph.tasks.flatMap(({ taskId }) => currentAttemptsOfTask(sqlite, taskId, nowMs))
+    : []
   // A total with an unknown component is unknown, never a partial sum shown as the total.
   const costs = runs.flatMap((run) => (run.cost_usd === null ? [] : [run.cost_usd]))
-  const costKnown = runs.length > 0 && costs.length === runs.length
+  const costKnown = runs.length > 0 && costs.length === runs.length && attempts.length === 0
   const firstStart = graph.turns[0]?.created_at ?? graph.row.started_at
   const active =
     graph.summary.status === 'running' ||
-    runs.some((run) => ACTIVE_RUN_STATUSES.includes(run.status))
-  const lastEnd = runs.reduce(
-    (latest, run) => (run.ended_at && run.ended_at > latest ? run.ended_at : latest),
-    firstStart,
-  )
+    runs.some((run) => ACTIVE_RUN_STATUSES.includes(run.status)) ||
+    attempts.some((attempt) => attempt.status === 'running' && attempt.observationEndedAt === null)
+  // An attempt ends where it ended or where observation stopped; nothing after that counts.
+  const lastEnd = [
+    ...runs.map((run) => run.ended_at),
+    ...attempts.map((attempt) => attempt.endedAt ?? attempt.observationEndedAt),
+  ].reduce<string>((latest, end) => (end && end > latest ? end : latest), firstStart)
   const endMs = active ? nowMs : Date.parse(lastEnd)
   const stats = {
     runningSec: Math.max(0, Math.round((endMs - Date.parse(firstStart)) / 1000)),
@@ -372,6 +393,7 @@ export function readBriefFlow(
     handoffs: graph.edges.filter((edge) => edge.kind === 'handoff').length,
     spendUsd: costKnown ? Number(costs.reduce((sum, cost) => sum + cost, 0).toFixed(6)) : null,
     eta: null,
+    ...(kanbanAttemptsEnabled() ? { attempts: attempts.length } : {}),
   }
   let nodes = all
   let edges = graph.edges
@@ -581,9 +603,14 @@ export function readFlowNode(sqlite: DatabaseSync, nodeId: string, nowMs: number
       ? latestRunId(runsForAgent(sqlite, detail.runIds, node.agentId), sqlite)
       : undefined
     const run = runId ? runSummary(sqlite, runId) : null
+    // Kanban attempts of this step (5.17a-1): a step's tools are "not observed" (null) when only attempts did the work.
+    const attempts = kanbanAttemptsEnabled()
+      ? currentAttemptsOfTask(sqlite, node.taskId, nowMs).map(attemptSummary)
+      : undefined
     return FlowNodeDetailSchema.parse({
       node,
       ...empty,
+      ...(attempts ? { attempts } : {}),
       description: detail?.body ?? '',
       steps: detail?.steps ?? [],
       approval:
@@ -594,7 +621,7 @@ export function readFlowNode(sqlite: DatabaseSync, nodeId: string, nowMs: number
             : null,
       run,
       model: run?.model ?? null,
-      tools: run?.toolsUsed ?? [],
+      tools: run ? run.toolsUsed : attempts?.length ? null : [],
       watch: watchOf(sqlite, node.agentId),
     })
   }
@@ -618,10 +645,28 @@ export interface StoppableRun {
 }
 
 /** The active run behind a step, or a 409 when nothing is running. */
+export const KANBAN_ATTEMPT_STOP_MESSAGE =
+  'Stop is not available for Kanban attempts: Hermes has no stop that targets one attempt. Stop it in Hermes.'
+
+/** A run id that names a Kanban attempt (`kr_...`): never stoppable, answered before any profile lookup. */
+export function assertNotKanbanAttempt(runId: string): void {
+  if (runId.startsWith('kr_')) throw new HttpError(501, 'unsupported', KANBAN_ATTEMPT_STOP_MESSAGE)
+}
+
 export function activeRunOfNode(sqlite: DatabaseSync, nodeId: string): StoppableRun {
   const briefId = briefOfNode(sqlite, nodeId)
   if (nodeId.startsWith('brief:') || nodeId.startsWith('plan:'))
     throw new HttpError(400, 'bad_request', 'Stop a step, not the whole brief')
+  // A step whose task has an attempt Score still observes running cannot be stopped from Score (5.17a-1).
+  if (kanbanAttemptsEnabled() && (nodeId.startsWith('task:') || nodeId.startsWith('review:'))) {
+    const taskId = nodeId.slice(nodeId.indexOf(':') + 1)
+    if (
+      currentAttemptsOfTask(sqlite, taskId, Date.now()).some(
+        (attempt) => attempt.status === 'running' && attempt.observationEndedAt === null,
+      )
+    )
+      throw new HttpError(501, 'unsupported', KANBAN_ATTEMPT_STOP_MESSAGE)
+  }
   const candidates: string[] = nodeId.startsWith('turn:')
     ? briefTurns(sqlite, briefId)
         .filter((turn) => `turn:${turn.message_id}` === nodeId && turn.run_id)

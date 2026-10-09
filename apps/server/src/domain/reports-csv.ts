@@ -28,6 +28,9 @@ export function reportsToCsv(report: Reports, names: Record<string, string>): st
     row.firstPassRate === null ? 'n/a' : Math.round(row.firstPassRate * 100),
     row.spendUsd === null ? null : row.spendUsd.toFixed(2),
   ])
+  // Kanban attempts without a known agent (5.17a-1): counted, never assigned to anybody.
+  if (report.unattributed)
+    rows.push(['Unattributed', null, report.unattributed.runs, null, null, null])
   return (
     [reportCsvColumns, ...rows]
       .map((row) => row.map((cell) => csvCell(cell)).join(','))

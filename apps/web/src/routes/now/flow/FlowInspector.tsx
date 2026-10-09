@@ -120,7 +120,7 @@ function StepDetail({
         </div>
         <div>
           <dt>Tools used</dt>
-          <dd>{detail.tools.join(', ') || '—'}</dd>
+          <dd>{detail.tools?.join(', ') || '—'}</dd>
         </div>
       </dl>
       <div className="flow-inspector__actions">

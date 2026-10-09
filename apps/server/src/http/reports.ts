@@ -82,7 +82,7 @@ export function registerReportRoutes(
         })
       }
     }
-    const own = db
+    const own: ReturnType<typeof readReportRows> = db
       ? db.read((sqlite) => readReportRows(sqlite, window.from, window.to))
       : { runs: [], approvals: [] }
     const seeded = (await port.reportHistoryRows?.(now, agentIds)) ?? { runs: [], approvals: [] }
@@ -93,9 +93,15 @@ export function registerReportRoutes(
     // The 30-day trend is independent of the range: its own window of runs and its own cost readings.
     const trendTz = tz ?? localTimeZone()
     const trend = trendWindow(now, trendTz)
-    const trendOwn = db
+    const trendOwn: Pick<ReturnType<typeof readReportRows>, 'runs' | 'attempts'> = db
       ? db.read((sqlite) => readReportRows(sqlite, trend.from, trend.to))
       : { runs: [] }
+    // Attempts of a known agent are runs in the trend; unattributed ones are counted in the report's own bucket.
+    const trendAttempts: ReportRun[] = (trendOwn.attempts ?? []).flatMap((attempt) =>
+      attempt.agentId === null
+        ? []
+        : [{ agentId: attempt.agentId, startedAt: attempt.startedAt, endedAt: attempt.endedAt }],
+    )
     const trendSeeded: { runs: ReportRun[]; trendSpendUsd?: number[] } =
       (await port.reportHistoryRows?.(now, agentIds)) ?? { runs: [] }
     let trendCosts: Awaited<ReturnType<NonNullable<typeof port.sessionCosts>>> | undefined
@@ -108,7 +114,7 @@ export function registerReportRoutes(
           return computeTrend({
             now,
             tz: trendTz,
-            runs: [...trendOwn.runs, ...trendSeeded.runs],
+            runs: [...trendOwn.runs, ...trendAttempts, ...trendSeeded.runs],
             ...(trendSeeded.trendSpendUsd ? { demoSpendUsd: trendSeeded.trendSpendUsd } : {}),
             ...(trendCosts ? { costs: trendCosts, agentIds, sqlite } : {}),
           })
@@ -128,6 +134,7 @@ export function registerReportRoutes(
         agentIds,
         facts,
         ...rows,
+        ...(own.attempts ? { attempts: own.attempts } : {}),
       }),
       trend: trendRows,
     })

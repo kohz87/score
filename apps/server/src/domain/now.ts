@@ -2,7 +2,13 @@ import type { DatabaseSync } from 'node:sqlite'
 import { AgentIdSchema, type AgentSummary, type Message, type NowSnapshot } from '@score/contract'
 import { z } from 'zod'
 import { ApprovalRowSchema, approvalView } from './approval-store.ts'
-import { buildLanes, type LaneTaskInput } from './lanes.ts'
+import {
+  attemptSummary,
+  kanbanAttemptsEnabled,
+  listAttempts,
+  type KanbanAttempt,
+} from './kanban-attempts.ts'
+import { buildLanes, type LaneAttemptInput, type LaneTaskInput } from './lanes.ts'
 import { pathFromPreview } from './room-panels.ts'
 import { messageFromRow } from './rooms.ts'
 import { projectedTasks } from './tasks.ts'
@@ -74,10 +80,13 @@ export interface NowOptions {
   agents: AgentSummary[]
   disabled: readonly string[]
   root?: string
+  /** Read Kanban attempts (5.17a-1); defaults to SCORE_KANBAN_ATTEMPTS. Off leaves every field as before. */
+  attempts?: boolean
 }
 
 export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnapshot, 'asOfSeq'> {
   const { from, to, now, agents, disabled, root = process.cwd() } = options
+  const withAttempts = options.attempts ?? kanbanAttemptsEnabled()
   const nowIso = new Date(now).toISOString()
   const tasks = projectedTasks(sqlite, now)
   const runTask = new Map<string, string>()
@@ -131,8 +140,28 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
       hop.run_id === null ? [] : [[hop.run_id, hop.brief_work === 1 ? 'brief' : 'chat'] as const],
     ),
   )
+  const titles = new Map(tasks.map((task) => [task.id, task.title]))
+  const attempts: LaneAttemptInput[] | undefined = withAttempts
+    ? listAttempts(sqlite, { since: from, until: to, excludeCopies: true }).map((attempt) => {
+        const summary = attemptSummary(attempt)
+        return {
+          id: attempt.id,
+          agentId: attempt.agentId,
+          role: attempt.role,
+          startedAt: attempt.startedAt,
+          endedAt: attempt.endedAt,
+          observationEndedAt: attempt.observationEndedAt,
+          evidence: attempt.evidence,
+          attemptNumber: attempt.attemptId,
+          // A task from an earlier copy of the board is not linked: Now cannot open it or act on it.
+          taskId: summary.task.current ? attempt.taskId : null,
+          taskTitle: titles.get(attempt.taskId) ?? attempt.taskSnapshot?.title ?? null,
+        }
+      })
+    : undefined
   const built = buildLanes({
     agentIds: agents.map((agent) => agent.id),
+    ...(attempts ? { attempts } : {}),
     runs: runs.map((run) => ({
       id: run.id,
       agentId: run.profile,
@@ -215,7 +244,7 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
         const run = runById.get(runId)
         return run ? [run] : []
       })
-      const checks = task.reviewer
+      const runChecks = task.reviewer
         ? taskRuns.flatMap((run) => {
             const agentId = AgentIdSchema.safeParse(run.profile)
             if (!agentId.success || run.profile !== task.reviewer || !isFinished(run.status))
@@ -229,11 +258,19 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
               {
                 label: `Review of ${task.title}`,
                 agentId: agentId.data,
-                ok: run.status === 'completed' && isDone(task) && !sentBack,
+                // Without attempts a review is "passed" or "not known to have passed": a normal completion is not
+                // evidence of approval, so the old false is `unknown`, never a rejection.
+                verdict: (run.status === 'completed' && isDone(task) && !sentBack
+                  ? 'passed'
+                  : 'unknown') as 'passed' | 'unknown',
               },
             ]
           })
         : []
+      const checks = [
+        ...runChecks,
+        ...(withAttempts ? attemptChecks(sqlite, task, nowIso, isDone(task)) : []),
+      ]
       return {
         title: task.title,
         ref: { kind: 'task' as const, taskId: task.id },
@@ -256,6 +293,7 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
       blocks: lane.blocks,
     })),
     handoffs: built.handoffs,
+    ...(built.unattributed ? { unattributed: { blocks: built.unattributed } } : {}),
     focusApproval: focus,
     thread,
     madeToday,
@@ -269,4 +307,34 @@ function isDone({ column, hermesStatus }: { column: string; hermesStatus: string
 
 function isFinished(status: string): boolean {
   return ['completed', 'failed', 'cancelled', 'interrupted'].includes(status)
+}
+
+/**
+ * Review checks from exact attempt evidence (5.17a-1, design v5 §H). The reviewer role is the stored claim role, never
+ * the task's current reviewer. A rejection is an attempt that ended as `changes_requested`. A completed reviewer
+ * attempt is `passed` only when the task is done and no attempt started after it; any other end is `unknown`.
+ */
+function attemptChecks(
+  sqlite: DatabaseSync,
+  task: { id: string; title: string },
+  nowIso: string,
+  done: boolean,
+): { label: string; agentId: string; verdict: 'passed' | 'changes_requested' | 'unknown' }[] {
+  const attempts: KanbanAttempt[] = listAttempts(sqlite, {
+    since: new Date(0).toISOString(),
+    until: nowIso,
+    taskId: task.id,
+    excludeCopies: true,
+  }).filter((attempt) => attemptSummary(attempt).task.current)
+  return attempts.flatMap((attempt, index) => {
+    if (attempt.role !== 'reviewer' || attempt.agentId === null || attempt.endedAt === null)
+      return []
+    const verdict =
+      attempt.status === 'changes_requested'
+        ? ('changes_requested' as const)
+        : attempt.status === 'completed' && done && index === attempts.length - 1
+          ? ('passed' as const)
+          : ('unknown' as const)
+    return [{ label: `Review of ${task.title}`, agentId: attempt.agentId, verdict }]
+  })
 }

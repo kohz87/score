@@ -25,12 +25,13 @@ export async function associationPass(
     db.sqlite
       .prepare(
         `SELECT bt.brief_id, bt.task_id FROM brief_tasks bt
-          WHERE NOT EXISTS (
+          WHERE bt.history_id = ?
+            AND NOT EXISTS (
             SELECT 1 FROM kanban_associations a
              WHERE a.history_id = ? AND a.brief_id = bt.brief_id AND a.task_id = bt.task_id AND a.event_id = 0)
           ORDER BY bt.linked_at LIMIT ?`,
       )
-      .all(history.id, TASKS_PER_PASS),
+      .all(history.id, history.id, TASKS_PER_PASS),
   )
   const source = `kanban:${history.fileIdentity}`
   let edges = 0
@@ -69,6 +70,7 @@ export async function associationPass(
             },
             transition.kind === 'review' ? task : review,
             transition.kind === 'review' ? review : task,
+            history.id,
           )
           return emitBriefChange(sqlite, link.brief_id, true)
         },

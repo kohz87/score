@@ -166,6 +166,11 @@ type LaneBlock = {
      blocks = task. */
   kind: 'task' | 'brief' | 'chat'
   count?: number /* chat bands: replies covered */
+  /* Kanban attempt blocks only (5.17a-1, SCORE_KANBAN_ATTEMPTS=1): `id` is `attempt:<kr id>`, `runId` is null. */
+  attemptId?: string
+  observationEndedAt?: string | null /* observation stopped here; the block ends here, nothing after counts */
+  provenance?: 'proven' | 'partial' /* partial = the claim could not be proven */
+  order?: [startedAt: string, upstreamAttemptId: number] /* clients sort by this, never by `id` */
 }
 type RunSummary = {
   id: string
@@ -190,11 +195,44 @@ type RunSummary = {
 }
 type Handoff = {
   id: string
-  from: { agentId: AgentId; blockId: string }
-  to: { agentId: AgentId; blockId: string }
+  from: { agentId: AgentId | null; blockId: string } /* null = the Unattributed lane (5.17a-1) */
+  to: { agentId: AgentId | null; blockId: string }
   kind: 'handoff' | 'review' | 'sent_back'
   at: string
 }
+
+/* Kanban attempts (PLAN 5.17a-1; everything below exists only with SCORE_KANBAN_ATTEMPTS=1, default off). An attempt
+   is Score's own record of one claim-to-close stretch of a Kanban task. It is not a RunSummary: tools, session and model
+   are not observed (null, never []). Unknown is explicit everywhere: a null agent is the Unattributed lane, never the
+   task's current assignee. */
+type TaskRef = {
+  taskId: string
+  historyId: string /* the board lineage ("history") the task id belongs to */
+  current: boolean /* only `current` refs may navigate to /tasks/:id or allow actions */
+}
+type AttemptSummary = {
+  id: string /* opaque `kr_<uuid>`: never parsed, never sorted by */
+  kind: 'kanban'
+  agentId: AgentId | null /* the frozen claim profile */
+  role: 'implementer' | 'reviewer' | null /* from the claim event, never the current assignee */
+  status: 'running' | 'completed' | 'failed' | 'blocked' | 'review_handoff' | 'changes_requested' | 'ended_unknown'
+  closureReason: string | null
+  startedAt: string
+  endedAt: string | null
+  observationEndedAt: string | null /* observation stopped before the attempt ended: a boundary, never an end time */
+  evidence: 'proven' | 'partial'
+  taskId: string /* = task.taskId */
+  task: TaskRef
+  order: [startedAt: string, upstreamAttemptId: number] /* the only valid sort key */
+  refusedUpdates: number /* contradicting observations Score refused */
+  tools: null
+  session: null
+  model: null
+}
+type AttemptDetail = AttemptSummary & {
+  taskSnapshot: { title: string /* <= 300 */; status: string; assignee: string | null } | null /* as last observed */
+}
+type WorkItem = { kind: 'run'; run: RunSummary } | { kind: 'attempt'; attempt: AttemptSummary }
 ```
 
 ## 2. Stream
@@ -241,6 +279,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `handoff.created`    | `{ briefId \| null, handoff: Handoff }`                                                       | Score connectors, Flow edges, live log                   |
 | `brief.upserted`     | `BriefSummary`                                                                                | Flow brief picker and header; refetch that brief's graph |
 | `run.updated`        | `RunSummary`                                                                                  | Flow inspector, Watch header                             |
+| `attempt.updated`    | `AttemptSummary` (5.17a-1, only with attempts on; created, closed, bounded or resumed)         | Now, Flow, Reports, Team history; notifications open the task (current) or the attempt, never a Watch URL |
 | `gap.recorded`       | `{ source: string; runId: string \| null; from: string; to: string \| null; reason: string }` | Watch, Flow log                                          |
 | `log.line`           | `LogLine`                                                                                     | Flow live log, Watch "What she's doing"                  |
 | `watch.frame`        | `WatchFrame`                                                                                  | Watch                                                    |
@@ -358,11 +397,23 @@ label: string; hint: string | null; ref: Ref | { kind: 'route'; path: string } }
   { asOfSeq: number; now: string; paused: boolean /* Pause everyone is on */
     headline: { working: number; needsYou: number; text: string /* "Two agents are working. One thing needs you." */ }
     lanes: { agent: AgentSummary; blocks: LaneBlock[] }[]; handoffs: Handoff[]
+    unattributed?: { blocks: LaneBlock[] }      // 5.17a-1, attempts on only: attempts with no known agent
     focusApproval: Approval | null              // the dark "X is asking" card
     thread: { roomId: string; messages: Message[] } | null   // "Latest from the room"
     madeToday: { title: string; ref: Ref; files: { path: string; added: number; removed: number }[]
-                 checks: { label: string; agentId: AgentId; ok: boolean }[] }[] }
+                 checks: { label: string; agentId: AgentId; verdict: 'passed' | 'changes_requested' | 'unknown' }[] }[] }
   ```
+  `verdict` replaced `ok` (5.17a-1): `unknown` = no exact evidence either way, drawn neutrally, never as passed. Without
+  attempts a review is `passed` or `unknown` (a normal reviewer completion is not evidence of approval, so it never
+  reads as a rejection). With attempts, checks also come from exact attempt evidence: a reviewer-role attempt
+  (the claim event's `source_status = 'review'`) that ended `changes_requested` is `changes_requested`; one that
+  completed is `passed` only when the task is done and no attempt started after it; any other end is `unknown`.
+  **Attempts in Now (5.17a-1, attempts on).** Each attempt of the window is one finite block (`attempt:<kr id>`) in its
+  agent's lane, sorted by `order`; copies from an earlier history of the same source are not drawn twice. A finished
+  attempt ends at `endedAt`; one that stopped being observed ends at `observationEndedAt` (dashed "no longer observed"
+  tail on the client, nothing counted after it). Attempts without a known agent are in `unattributed.blocks`, and
+  hand-offs from or to them have `agentId: null`. An attempt of an earlier copy of the board has `taskId: null` (it
+  opens its attempt detail instead). An unattributed attempt never makes an agent "working" in the headline.
 - `POST /api/team/pause` / `POST /api/team/resume` → `{ paused: boolean; affectedRuns: number }`
 - Composer: same as `POST /api/rooms/:roomId/messages`, with `roomId` = the current room.
 
@@ -403,18 +454,22 @@ label: string; hint: string | null; ref: Ref | { kind: 'route'; path: string } }
       handoffs: number
       spendUsd: number | null
       eta: string | null
+      attempts?: number /* 5.17a-1, attempts on: Kanban attempts counted in runningSec; their cost is unknown */
     }
     notice: string |
       null /* the brief's agents also worked on tasks not linked to it; links stay exact */
   }
   ```
 - **S** `GET /api/flow/nodes/:nodeId` → `{ node; description: string; steps: TaskStep[]; approval: Approval | null
-run: RunSummary | null; model: string | null; tools: string[]; watch: { agentId; thumbnail: string | null; front: string } | null }`
+run: RunSummary | null; model: string | null; tools: string[] | null; attempts?: AttemptSummary[]; watch: { agentId; thumbnail: string | null; front: string } | null }`
+  `tools: null` = not observed (a step that only Kanban attempts worked on); `[]` = observed, none used. `attempts` (5.17a-1,
+  attempts on) lists the step's attempts of the board lineage Score follows, by `order`. With any attempt in the brief
+  `stats.spendUsd` is `null`: an attempt's cost is unknown, so the total would be partial.
 - **S** `GET /api/briefs/:briefId/log?agent=&kind=tool|all&cursor=` → `{ items: LogLine[]; nextCursor }`
   `type LogLine = { id; at; agentId; kind: 'tool' | 'message' | 'handoff' | 'approval' | 'system'; text }`
 - **H** `POST /api/briefs/:briefId/pause` / `/resume` → `BriefSummary`. Pause holds Score's queue for the brief and blocks
   its not-started tasks (`hermes kanban block`); running steps finish. Resume unblocks only what Score blocked.
-- **H** `POST /api/flow/nodes/:nodeId/stop` → `{ ok: true }`: stops that node's active run (409 when nothing is running; 501 `unsupported` with a message when the active run was not started by Score, e.g. a Kanban or gateway run).
+- **H** `POST /api/flow/nodes/:nodeId/stop` → `{ ok: true }`: stops that node's active run (409 when nothing is running; 501 `unsupported` with a message when the active run was not started by Score, e.g. a Kanban or gateway run). A Kanban attempt is never stoppable from Score (Hermes has no stop that targets one attempt): a step whose task has an attempt that is still observed running, or a run id `kr_…`, answers the same 501 before any profile or run lookup.
 - **H** `POST /api/rooms/:roomId/messages/:messageId/plan/start` → `{ briefId; taskIds: string[] }`: creates one Kanban task
   per plan step of that `plan` message (idempotent per message).
 - A brief is a human room message plus what it causes (`briefId` = that message id; turns, hand-offs, and tasks Score
@@ -640,7 +695,16 @@ Score's own runs (`score-<room>-<agent>`), compression children and empty sessio
 ## 7. Tasks
 
 - **S** `GET /api/tasks?room=&agent=&needsYou=true&column=` → `{ asOfSeq; columns: Record<TaskColumn, TaskSummary[]> }`
-- **S** `GET /api/tasks/:taskId` → `TaskDetail`
+- **S** `GET /api/tasks/:taskId` → `TaskDetail`. With attempts on (5.17a-1) `TaskDetail.runIds` holds no numeric Kanban ids any more: a legacy
+  numeric link maps to its attempt's `kr_` id only with affirmative proof (a saved "claimed" activity item with the attempt's frozen start
+  second and claim profile); every other legacy link is reported in `unresolvedRunLinks: { legacyId; reason }[]` ("an earlier attempt,
+  details not kept"; `not_yet_resolved` while the upgrade has not run). Responses of `POST /api/tasks` and `PATCH /api/tasks/:taskId` and
+  stored idempotency receipts of task routes are rewritten the same way; a receipt is never deleted, so a replay still cannot run the
+  mutation again. Associations of a task (brief link, room link, pause holds, review edges, Kanban denials) are qualified by the board
+  lineage (`history_id`); rows Score cannot tie to the lineage it follows are inert: shown, never routed, parked or released, and a pause
+  release skips and reports them. An unqualified denial never authorizes task actions.
+- **S** `GET /api/attempts/:attemptId` → `AttemptDetail` (5.17a-1; `404 not_found` when attempts are off or the id is unknown). Also for
+  an attempt of an earlier copy of the board (read-only, "from an earlier copy of the board").
 - `POST /api/tasks` `{ title; body?; assignee?: AgentId; reviewer?: AgentId; roomId?; dependsOn?: string[]; steps?: string[] }` → `TaskDetail`
   `reviewer` on create and on `PATCH` answers 501 `not_implemented` (Hermes names a reviewer only when review is requested); `roomId` is kept by Score, must name an existing room (else 400) and is shown on `TaskDetail.roomId`.
 - `PATCH /api/tasks/:taskId` `{ title?; body?; assignee?; reviewer?; steps?: TaskStep[] }` → `TaskDetail`
@@ -793,10 +857,13 @@ incarnation-aware reuse confirmation contract is agreed.
   shown for the person to run in their own terminal.
 - `GET /api/agents/:agentId/history?q=&outcome=&cursor=` → `AgentHistoryPage` `{ items: { runId; title; origin; outcome:
 'completed' | 'failed' | 'stopped' | 'interrupted' | 'waiting' | 'running' | 'unknown'; startedAt; durationSec: number | null; model: string | null;
-costUsd: number | null; task: { id; title } | null; brief: { id; title } | null; replaySeq: number | null }[]; nextCursor }`.
+costUsd: number | null; task: { id; title } | null; brief: { id; title } | null; replaySeq: number | null; attempt?: AttemptSummary }[]; nextCursor }`.
   Score's own runs for the agent (all origins), newest first, 50 per page; the cursor is an offset. `outcome` filters,
   `q` matches task/brief title and model. `stopped` is a cancelled run; `interrupted` is a reclaimed attempt (not proof the
   worker stopped); `unknown` is any status Score does not recognise (never shown as running). Replay opens `/now/watch/:agentId?from=<replaySeq>`.
+  With attempts on (5.17a-1) the agent's Kanban attempts are merged in (`runId` = the `kr_` id, `origin: 'kanban'`, `attempt` set, `replaySeq: null`):
+  a normal finish (completed, review handoff, changes requested) is `completed`, a failure `failed`, a blocked, unknown or no-longer-observed end
+  `unknown`. `task`/`brief` are null for an attempt of an earlier copy of the board.
 
 ### Workspace (Team › agent › Workspace)
 The agent's Hermes working folder (`terminal.cwd`), browsed and edited from Score. **Every** workspace endpoint is **H**
@@ -894,8 +961,15 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
       medianWaitSec: number | null
       insight: string | null
     }
+    unattributed?: { runs: number; workingSec: number } /* 5.17a-1, attempts on only */
   }
   ```
+  **Kanban attempts in Reports (5.17a-1, attempts on).** An attempt of a known agent counts as one of that agent's runs (`byAgent.runs`,
+  `totals.runs`, `trend.runs`); its interval is working time only when its evidence is `proven`, and an open attempt that stopped being
+  observed ends at its observation boundary. Attempts without a known agent are counted only in `unattributed` (`runs` started in the range,
+  `workingSec` = merged proven intervals), never in `totals`, `byAgent`, `trend` or spend. Copies from an earlier history of the same source
+  are counted once. Session spend is unchanged and stays per session. The CSV has the same per-agent `Runs` and, when `unattributed`
+  exists, a last row `Unattributed` with its run count.
   Definitions (from Hermes Kanban history, read-only): a task is finished when `completed_at` falls in the range (day
   buckets in the server's time zone); task time = created → completed; reviewed = had `review_requested`, first pass =
   reviewed and never `changes_requested` (null when nothing was reviewed). Time split per agent (integer %, sum 100):

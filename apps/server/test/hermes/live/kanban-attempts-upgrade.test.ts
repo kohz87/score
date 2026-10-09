@@ -152,9 +152,11 @@ describe('late relationship backfill', () => {
       .run(briefId)
     h.score.sqlite
       .prepare(
-        "INSERT INTO brief_tasks (brief_id, task_id, origin, linked_at) VALUES (?, ?, 'child', '2026-10-09T10:00:01.000Z')",
+        // A link made while the followed lineage is live carries its history id (5.17a-1 stage 2a).
+        "INSERT INTO brief_tasks (brief_id, task_id, origin, linked_at, history_id) VALUES (?, ?, 'child', ?, (SELECT id FROM kanban_histories WHERE state != 'closed'))",
       )
-      .run(briefId, taskId)
+      // After the board's task existed (the fixture board runs in 2027), so no link predates its task.
+      .run(briefId, taskId, new Date((h.board.clock + 1) * 1000).toISOString())
   }
   const edges = () =>
     z
