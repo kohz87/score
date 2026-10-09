@@ -23,8 +23,8 @@ export function pruneKanbanAttempts(db: ScoreDb, now = Date.now()): KanbanRetent
             AND NOT EXISTS (
               SELECT 1 FROM kanban_histories h
                WHERE h.id = kanban_pages.history_id AND h.state != 'closed'
-                 AND kanban_pages.captured_at = (
-                   SELECT MAX(p.captured_at) FROM kanban_pages p
+                 AND kanban_pages.rowid = (
+                   SELECT MAX(p.rowid) FROM kanban_pages p
                     WHERE p.history_id = kanban_pages.history_id AND p.kind = kanban_pages.kind)
             )`,
       )

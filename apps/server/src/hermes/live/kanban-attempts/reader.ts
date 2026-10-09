@@ -60,6 +60,11 @@ function chunks<T>(values: readonly T[], size: number): T[][] {
   return out
 }
 
+// Separate sub-selects: one statement with both MIN and MAX walks the whole index, each alone is a b-tree edge seek.
+function probeSql(table: 'task_events' | 'task_runs'): string {
+  return `SELECT (SELECT MIN(id) FROM ${table}) AS lo, (SELECT MAX(id) FROM ${table}) AS hi`
+}
+
 export function readMarks(db: DatabaseSync): Marks | null {
   try {
     const rows = z
@@ -70,12 +75,8 @@ export function readMarks(db: DatabaseSync): Marks | null {
           .all(),
       )
     const seq = new Map(rows.map((row) => [row.name, row.seq]))
-    const probe = (table: 'task_events' | 'task_runs') => {
-      const row = z
-        .object({ lo: z.int().nullable(), hi: z.int().nullable() })
-        .parse(db.prepare(`SELECT MIN(id) AS lo, MAX(id) AS hi FROM ${table}`).get())
-      return row
-    }
+    const probe = (table: 'task_events' | 'task_runs') =>
+      z.object({ lo: z.int().nullable(), hi: z.int().nullable() }).parse(db.prepare(probeSql(table)).get())
     const events = probe('task_events')
     const runs = probe('task_runs')
     return {
@@ -296,7 +297,7 @@ export function plannedQueries(): { name: string; sql: string; params: SQLInputV
       sql: 'SELECT id, title, status, assignee, started_at FROM tasks WHERE id IN (?, ?)',
       params: ['a', 'b'],
     },
-    { name: 'event probes', sql: 'SELECT MIN(id) AS lo, MAX(id) AS hi FROM task_events', params: [] },
-    { name: 'run probes', sql: 'SELECT MIN(id) AS lo, MAX(id) AS hi FROM task_runs', params: [] },
+    { name: 'event probes', sql: probeSql('task_events'), params: [] },
+    { name: 'run probes', sql: probeSql('task_runs'), params: [] },
   ]
 }
