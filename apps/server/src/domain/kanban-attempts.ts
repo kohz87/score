@@ -48,6 +48,7 @@ export const AttemptRowSchema = z.object({
   observation_gaps: z.int(),
   deleted_upstream_at: z.string().nullable(),
   refused_updates: z.int(),
+  refused_hash: z.string().nullable(),
 })
 export type AttemptRow = z.infer<typeof AttemptRowSchema>
 

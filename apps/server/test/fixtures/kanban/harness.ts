@@ -35,8 +35,9 @@ export function createHarness(): Harness {
   const board = new FakeBoard(join(fixture.home, 'kanban.db'))
   const score = openDatabase(join(fixture.home, 'score.db'))
   migrate(score, MIGRATIONS)
-  const ingest = createIngest(score)
-  const clock = { ms: Date.UTC(2026, 9, 9, 12, 0, 0) }
+  // Score's clock follows the board's: observation times are comparable with the epoch seconds Hermes wrote.
+  const clock = { ms: (board.clock + 1) * 1000 }
+  const ingest = createIngest(score, { clock: () => clock.ms })
   const coordinators: KanbanAttemptsCoordinator[] = []
   const harness: Harness = {
     home: fixture.home,

@@ -214,8 +214,8 @@ export class FakeBoard {
   }
 
   setSequence(name: string, seq: number | null): void {
-    if (seq === null) this.db.prepare('DELETE FROM sqlite_sequence WHERE name = ?').run(name)
-    else this.db.prepare('UPDATE sqlite_sequence SET seq = ? WHERE name = ?').run(seq, name)
+    this.db.prepare('DELETE FROM sqlite_sequence WHERE name = ?').run(name)
+    if (seq !== null) this.db.prepare('INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)').run(name, seq)
   }
 
   /** The same logical database copied onto a new inode (a backup restore to a new file). */

@@ -68,6 +68,7 @@ CREATE TABLE kanban_attempts (
   observation_gaps INTEGER NOT NULL DEFAULT 0,
   deleted_upstream_at TEXT,
   refused_updates INTEGER NOT NULL DEFAULT 0,
+  refused_hash TEXT,                   -- hash of the last refused (conflicting terminal) observation
   UNIQUE (source_id, history_id, attempt_id)
 ) STRICT;
 CREATE INDEX kanban_attempts_task ON kanban_attempts(task_id, started_at);

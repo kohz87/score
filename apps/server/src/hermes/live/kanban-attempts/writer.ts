@@ -326,6 +326,7 @@ function observeAttempt(
     endedAt: row.ended_at,
   }
   let refused = 0
+  let refusedHash = existing.refused_hash
   const wasTerminal = isTerminal(existing.status)
   if (wasTerminal) {
     // Newer content of the same terminal, or ended_unknown refined to a known terminal, is accepted. A different
@@ -333,6 +334,10 @@ function observeAttempt(
     const accepted =
       isTerminal(status) && (status === existing.status || existing.status === 'ended_unknown')
     if (!accepted) {
+      const incoming = hashContent({ status, closureReason, endedAt: row.ended_at, summary: row.summary, error: row.error })
+      // The same conflicting content seen again is not a new refusal.
+      if (incoming === existing.refused_hash) return
+      refusedHash = incoming
       refused = 1
       next = {
         status: existing.status,
@@ -385,7 +390,7 @@ function observeAttempt(
          profile = ?, role = ?, status = ?, closure_reason = ?, ended_at = ?, evidence = ?, classification_basis = ?,
          claim_lock = ?, claim_event_id = ?, claim_source_status = ?, worker_pid = ?, worker_started_at = ?,
          summary = ?, error = ?, task_snapshot = COALESCE(?, task_snapshot), revision = ?, content_hash = ?,
-         last_observed_at = ?, deleted_upstream_at = NULL, refused_updates = refused_updates + ?,
+         last_observed_at = ?, deleted_upstream_at = NULL, refused_updates = refused_updates + ?, refused_hash = ?,
          observing = ?, observation_resumed_at = CASE WHEN ? = 1 THEN ? ELSE observation_resumed_at END
        WHERE id = ?`,
     )
@@ -409,6 +414,7 @@ function observeAttempt(
       hash,
       now,
       refused,
+      refusedHash,
       closing ? 0 : 1,
       needsObservation ? 1 : 0,
       now,

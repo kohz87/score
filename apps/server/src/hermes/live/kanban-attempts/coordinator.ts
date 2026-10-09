@@ -140,6 +140,8 @@ export class KanbanAttemptsCoordinator {
 
   private async pollOnce(): Promise<void> {
     if (this.closed) return
+    // Before anything can rewrite the task projections, keep what the legacy links were proven by.
+    await snapshotUpgradeLinks(this.options.db, this.options.sink, `kanban-attempts:${this.sourceId}`)
     let conn: { db: DatabaseSync; identity: string }
     try {
       conn = this.connect()
@@ -231,7 +233,6 @@ export class KanbanAttemptsCoordinator {
     const history = this.history()
     if (!history || history.state !== 'active' || !history.baseline_done) return
     const source = `kanban-attempts:${this.sourceId}`
-    await snapshotUpgradeLinks(this.options.db, this.options.sink, source)
     await resolveUpgradeLinks(this.options.db, this.options.sink, source, history.id)
     await associationPass(
       this.options.db,
