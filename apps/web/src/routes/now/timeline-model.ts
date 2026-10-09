@@ -77,6 +77,19 @@ export type LaneItem =
   | { kind: 'chat'; layout: BlockLayout }
   | { kind: 'group'; layout: BlockLayout; blocks: LaneBlock[] }
 
+/** True for a block whose whole interval lies outside the view: layout would clamp it to a zero-width sliver. */
+function outsideWindow(window: TimeWindow, block: LaneBlock): boolean {
+  if (block.state === 'waiting') return false
+  const start = Date.parse(block.start)
+  const end =
+    block.end !== null
+      ? Date.parse(block.end)
+      : block.state === 'planned'
+        ? start + PLANNED_DEFAULT
+        : window.now
+  return Math.max(end, start) < window.from || start > window.to
+}
+
 const URGENCY: LaneBlock['state'][] = ['waiting', 'working', 'planned', 'done']
 
 /**
@@ -88,6 +101,7 @@ export function laneItems(window: TimeWindow, blocks: LaneBlock[], plotPx: numbe
   const items: LaneItem[] = []
   const candidates: BlockLayout[] = []
   for (const block of blocks) {
+    if (outsideWindow(window, block)) continue
     const layout = layoutBlock(window, block)
     if (block.kind === 'chat' && block.state !== 'waiting') items.push({ kind: 'chat', layout })
     else if (block.state === 'waiting') items.push({ kind: 'block', layout })

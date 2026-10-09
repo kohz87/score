@@ -167,3 +167,20 @@ test('connectors attach to a group and to the chat band', () => {
   expect(result).toHaveLength(1)
   expect(result[0]!.fromLabel).toBe('b')
 })
+
+test('blocks that ended before the window (the server sends two hours, the view shows one) are not drawn or grouped', () => {
+  const base = { label: 'x', taskId: null, runId: null, kind: 'task' as const }
+  const old: LaneBlock[] = [
+    { ...base, id: 'o1', state: 'done', start: at(-100), end: at(-95) },
+    { ...base, id: 'o2', state: 'done', start: at(-90), end: at(-85) },
+  ]
+  expect(laneItems(window, old, 1000)).toEqual([])
+  const visible: LaneBlock = { ...base, id: 'v', state: 'done', start: at(-50), end: at(-40) }
+  expect(laneItems(window, [...old, visible], 1000).map((item) => item.layout.block.id)).toEqual([
+    'v',
+  ])
+  // Partly inside stays; a planned block far ahead is outside.
+  const partly: LaneBlock = { ...base, id: 'p', state: 'done', start: at(-70), end: at(-50) }
+  const far: LaneBlock = { ...base, id: 'f', state: 'planned', start: at(120), end: null }
+  expect(laneItems(window, [partly, far], 1000).map((item) => item.layout.block.id)).toEqual(['p'])
+})
