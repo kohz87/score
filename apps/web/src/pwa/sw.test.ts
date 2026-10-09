@@ -38,7 +38,7 @@ const respond = (
 
 let handlers: Record<string, Handler>
 let stores: Map<string, Map<string, FakeResponse>>
-let network: ReturnType<typeof vi.fn>
+let network: ReturnType<typeof vi.fn<(input: unknown) => Promise<FakeResponse>>>
 let clients: {
   matchAll: ReturnType<typeof vi.fn>
   openWindow: ReturnType<typeof vi.fn>
@@ -52,7 +52,7 @@ const keyOf = (input: unknown) =>
 beforeEach(() => {
   handlers = {}
   stores = new Map()
-  network = vi.fn(async (input: unknown) =>
+  network = vi.fn<(input: unknown) => Promise<FakeResponse>>(async (input) =>
     respond(`net:${keyOf(input)}`, { html: keyOf(input) === '/index.html' }),
   )
   clients = { matchAll: vi.fn(async () => []), openWindow: vi.fn(), claim: vi.fn() }
