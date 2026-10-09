@@ -14,7 +14,6 @@ const OriginSchema = z
 const RemoteSchema = z.object({
   origins: z.array(OriginSchema).min(1).max(16),
   bridgePort: z.coerce.number().int().min(1).max(65535).default(8740),
-  insecureHttp: z.boolean(),
   tlsCert: z.string().min(1).optional(),
   tlsKey: z.string().min(1).optional(),
 })
@@ -89,6 +88,8 @@ const ConfigSchema = z.object({
     .default(true),
   // Serve the built web app from this server (production); Vite does it in development.
   serveWeb: z.boolean().default(false),
+  // SCORE_REMOTE_INSECURE_HTTP was removed (5.18): it is ignored, and the server says so at startup.
+  ignoredInsecureHttp: z.boolean().default(false),
   remote: RemoteSchema.optional(),
 })
 
@@ -101,8 +102,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
       'Remote mode needs SCORE_PUBLIC_ORIGINS: the address browsers use, e.g. https://score.example.ts.net:8741',
     )
   const any = z.enum(['0', '1']).optional().parse(env.SCORE_REMOTE_ANY) === '1'
-  const insecureHttp =
-    z.literal('accept').optional().parse(env.SCORE_REMOTE_INSECURE_HTTP) === 'accept'
   const config = ConfigSchema.parse({
     bridgeInstallUrl: env.SCORE_BRIDGE_INSTALL_URL,
     bridgeInstallRef: env.SCORE_BRIDGE_INSTALL_REF,
@@ -119,6 +118,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     mediaQuotaMb: env.SCORE_MEDIA_QUOTA_MB,
     fakeSpeed: env.SCORE_FAKE_SPEED,
     fakeLoop: env.SCORE_FAKE_LOOP,
+    ignoredInsecureHttp: env.SCORE_REMOTE_INSECURE_HTTP !== undefined,
     serveWeb:
       z.enum(['0', '1']).optional().parse(env.SCORE_SERVE_WEB) === '1' ||
       env.NODE_ENV === 'production',
@@ -127,7 +127,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
           remote: {
             origins: env.SCORE_PUBLIC_ORIGINS?.split(',').map((origin) => origin.trim()) ?? [],
             bridgePort: env.SCORE_BRIDGE_PORT,
-            insecureHttp,
             tlsCert: env.SCORE_TLS_CERT,
             tlsKey: env.SCORE_TLS_KEY,
           },
@@ -144,7 +143,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   if (
     !remote &&
     (any ||
-      insecureHttp ||
       env.SCORE_TLS_CERT !== undefined ||
       env.SCORE_TLS_KEY !== undefined ||
       env.SCORE_PUBLIC_ORIGINS !== undefined ||
@@ -155,18 +153,18 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     const options = config.remote
     if (Boolean(options.tlsCert) !== Boolean(options.tlsKey))
       fail('SCORE_TLS_CERT and SCORE_TLS_KEY must be set together')
-    const tls = Boolean(options.tlsCert)
-    if (!tls && !insecureHttp)
-      fail(
-        'Remote HTTP requires SCORE_REMOTE_INSECURE_HTTP=accept; use SCORE_TLS_CERT and SCORE_TLS_KEY for TLS',
-      )
-    if (tls && insecureHttp) fail('Do not combine TLS with SCORE_REMOTE_INSECURE_HTTP')
-    if (options.origins.some((origin) => new URL(origin).protocol !== (tls ? 'https:' : 'http:')))
-      fail('SCORE_PUBLIC_ORIGINS must match the listener transport')
+    // Without a certificate Score runs in guide-only mode (see guideOnly): the origins are never used to serve the app.
+    if (options.tlsCert && options.origins.some((origin) => new URL(origin).protocol !== 'https:'))
+      fail('SCORE_PUBLIC_ORIGINS must be https:// addresses')
     if (config.port === options.bridgePort)
       fail('Browser SCORE_PORT and SCORE_BRIDGE_PORT must differ')
   }
   return config
+}
+
+/** Remote mode without a certificate: the server only shows the HTTPS setup guide (nothing else is served). */
+export function guideOnly(config: Pick<Config, 'remote'>): boolean {
+  return config.remote !== undefined && !config.remote.tlsCert
 }
 
 export function serverOrigin(config: Config): string {

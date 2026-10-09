@@ -2,7 +2,6 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { crossesNetworkUnencrypted } from './ApiKeyPanel.tsx'
 import type { AgentSummary, ConnectionsResponse, PluginItem, ProviderItem } from '@score/contract'
 import { App, appRoutes } from '../../App.tsx'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
@@ -668,12 +667,7 @@ test('a rejected key shows a generic message and clears the field', async () => 
   respondWith(() => undefined)
 })
 
-test('over plain HTTP on a network address the key form warns and needs an acknowledgement', async () => {
-  expect(crossesNetworkUnencrypted({ protocol: 'http:', hostname: '192.168.1.5' })).toBe(true)
-  expect(crossesNetworkUnencrypted({ protocol: 'http:', hostname: 'localhost' })).toBe(false)
-  expect(crossesNetworkUnencrypted({ protocol: 'http:', hostname: '127.0.0.1' })).toBe(false)
-  expect(crossesNetworkUnencrypted({ protocol: 'https:', hostname: 'score.lan' })).toBe(false)
-  vi.stubGlobal('location', { ...window.location, protocol: 'http:', hostname: '192.168.1.5' })
+test('the key form sends only the key and label (no insecure-transport acknowledgement)', async () => {
   respondWith((path, init) =>
     path === '/api/settings/providers/openrouter/key' && init?.method === 'POST'
       ? json({ ...providers[0] })
@@ -682,14 +676,10 @@ test('over plain HTTP on a network address the key form warns and needs an ackno
   mount()
   fireEvent.click(await screen.findByRole('button', { name: 'Edit OpenRouter' }))
   const form = await screen.findByRole('form', { name: 'Add a key for OpenRouter' })
-  expect(within(form).getByRole('alert').textContent).toContain('not encrypted')
+  expect(within(form).queryByRole('checkbox')).toBeNull()
   fireEvent.change(within(form).getByLabelText('API key'), { target: { value: KEY } })
-  const save = within(form).getByRole('button', { name: 'Save key' }) as HTMLButtonElement
-  expect(save.disabled).toBe(true)
-  fireEvent.click(within(form).getByRole('checkbox', { name: /crosses my network unencrypted/ }))
-  expect(save.disabled).toBe(false)
-  fireEvent.click(save)
+  fireEvent.click(within(form).getByRole('button', { name: 'Save key' }))
   await screen.findByText('OpenRouter is connected.')
   const post = calls.find((call) => call.path.endsWith('/key'))!
-  expect(JSON.parse(post.init!.body as string)).toMatchObject({ acknowledgeInsecure: true })
+  expect(JSON.parse(post.init!.body as string)).toEqual({ apiKey: KEY })
 })

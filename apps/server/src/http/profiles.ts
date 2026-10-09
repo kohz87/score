@@ -31,7 +31,7 @@ export function registerProfileRoutes(
   const operations = new ProfileOperations(db, ingest, port, deps.clock)
   const receipts = requestIdempotency(db, deps.clock)
   // Creating agents writes API keys and deleting them removes data, so the transport must be private: loopback, or
-  // remote mode over TLS. Plain-HTTP remote mode (owner-accepted for everyday use) refuses these actions.
+  // remote mode over TLS (the only remote mode since 5.18; this stays as a second line of defence).
   const localOnly = async () => {
     if (!profileManagementAllowed(config))
       throw new HttpError(

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Score launcher: score start|stop|status|logs|pair. State lives in $SCORE_HOME (default ~/.score).
+# Score launcher: score start|stop|status|logs|pair|password|tls. State lives in $SCORE_HOME (default ~/.score).
 set -euo pipefail
 
 script="$(readlink -f "${BASH_SOURCE[0]}")"
@@ -17,7 +17,7 @@ port="${SCORE_PORT:-8740}"
 host="${SCORE_HOST:-127.0.0.1}"
 
 usage() {
-  echo "Usage: score start|stop|status|logs [-f]|pair|password" >&2
+  echo "Usage: score start|stop|status|logs [-f]|pair|password|tls [--new-ca]" >&2
   exit 2
 }
 
@@ -38,6 +38,24 @@ lock_launcher() {
   flock 9
 }
 
+# Remote mode is HTTPS-only. Without SCORE_TLS_CERT/KEY, use the certificate `score tls` made, if there is one, and
+# make the public origins https:// (derived from SCORE_HOST and the port when SCORE_PUBLIC_ORIGINS is unset).
+use_local_tls() {
+  [[ "${SCORE_REMOTE:-}" == "1" ]] || return 0
+  [[ -z "${SCORE_TLS_CERT:-}" && -z "${SCORE_TLS_KEY:-}" ]] || return 0
+  [[ -r "$home/tls/server.crt" && -r "$home/tls/server.key" ]] || return 0
+  export SCORE_TLS_CERT="$home/tls/server.crt" SCORE_TLS_KEY="$home/tls/server.key"
+  if [[ -n "${SCORE_PUBLIC_ORIGINS:-}" ]]; then
+    export SCORE_PUBLIC_ORIGINS="${SCORE_PUBLIC_ORIGINS//http:\/\//https://}"
+  elif [[ -n "${SCORE_HOST:-}" && "$SCORE_HOST" != "0.0.0.0" && "$SCORE_HOST" != "::" ]]; then
+    if [[ "$SCORE_HOST" == *:* ]]; then
+      export SCORE_PUBLIC_ORIGINS="https://[$SCORE_HOST]:${SCORE_PORT:-8741}"
+    else
+      export SCORE_PUBLIC_ORIGINS="https://$SCORE_HOST:${SCORE_PORT:-8741}"
+    fi
+  fi
+}
+
 cmd_start() {
   local pid offset i child
   lock_launcher
@@ -50,6 +68,7 @@ cmd_start() {
     return 1
   fi
   mkdir -p "$home"
+  use_local_tls
   # Keep the log bounded: past 10 MB the previous log becomes score.log.1 (one generation; the server only appends).
   if [[ -f "$log_file" && "$(wc -c <"$log_file")" -gt 10485760 ]]; then
     mv -f "$log_file" "$log_file.1"
@@ -72,12 +91,12 @@ cmd_start() {
       [[ "$(cat "$pid_file" 2>/dev/null)" == "$child" ]] && rm -f "$pid_file"
       return 1
     fi
-    if tail -c +"$((offset + 1))" "$log_file" | grep -q 'Pair this browser'; then
+    if tail -c +"$((offset + 1))" "$log_file" | grep -Eq 'Pair this browser|Setup guide:'; then
       # Before any output: a caller reading only the first line (| head -1) would stop us mid-way.
-      tail -c +"$((offset + 1))" "$log_file" | grep -m1 'Pair this browser' |
-        sed -E 's#^Pair this browser: (https?://[^/]+)/.*#\1#' >"$url_file" || true
+      tail -c +"$((offset + 1))" "$log_file" | grep -Em1 'Pair this browser|Setup guide:' |
+        sed -E 's#^.*(Pair this browser|Setup guide): (https?://[^/]+)/.*#\2#' >"$url_file" || true
       echo "Score started (pid $(running_pid)). Log: $log_file"
-      tail -c +"$((offset + 1))" "$log_file" | grep 'Pair this browser' | head -n 1
+      tail -c +"$((offset + 1))" "$log_file" | grep -E 'Pair this browser|Setup guide:|Run scripts/score tls' | head -n 2
       return 0
     fi
     sleep 0.2
@@ -147,6 +166,91 @@ cmd_pair() {
   return 1
 }
 
+# Local certificate authority and server certificate for remote (HTTPS-only) mode, kept in $SCORE_HOME/tls.
+cmd_tls() {
+  local new_ca=0 tls_dir="$home/tls" host_name safe_name san="" entry item ext_file csr
+  local -a names=() sans=()
+  case "${1:-}" in
+    "") ;;
+    --new-ca) new_ca=1 ;;
+    *) usage ;;
+  esac
+  command -v openssl >/dev/null || { echo "openssl is required (install the openssl package)." >&2; return 1; }
+  umask 077
+  mkdir -p "$tls_dir"
+  chmod 700 "$tls_dir"
+  host_name="$(hostname 2>/dev/null || echo score)"
+  safe_name="$(printf '%s' "$host_name" | tr -c 'A-Za-z0-9.-' '-')"
+
+  # Subject alternative names: SCORE_HOST, the hosts of SCORE_PUBLIC_ORIGINS, localhost and 127.0.0.1. Only characters
+  # that can occur in a host name or an IP address are accepted; anything else is skipped with a note.
+  add_san() {
+    local value="$1" kind
+    value="${value#[}"
+    value="${value%]}"
+    [[ -n "$value" && "$value" != "0.0.0.0" && "$value" != "::" ]] || return 0
+    if [[ ! "$value" =~ ^[A-Za-z0-9.:-]+$ ]]; then
+      echo "Skipping unusable host name: $value" >&2
+      return 0
+    fi
+    if [[ "$value" =~ ^[0-9.]+$ || "$value" == *:* ]]; then kind="IP"; else kind="DNS"; fi
+    for item in "${sans[@]:-}"; do [[ "$item" == "$kind:$value" ]] && return 0; done
+    sans+=("$kind:$value")
+  }
+  add_san "${SCORE_HOST:-}"
+  IFS=',' read -r -a names <<<"${SCORE_PUBLIC_ORIGINS:-}"
+  for entry in "${names[@]:-}"; do
+    entry="${entry//[[:space:]]/}"
+    entry="${entry#*://}"
+    entry="${entry%%/*}"
+    if [[ "$entry" == \[* ]]; then entry="${entry%%]*}"; else entry="${entry%%:*}"; fi
+    add_san "$entry"
+  done
+  add_san localhost
+  add_san 127.0.0.1
+  for item in "${sans[@]}"; do san+="${san:+,}$item"; done
+
+  if [[ "$new_ca" == 1 || ! -f "$tls_dir/ca.key" || ! -f "$tls_dir/ca.crt" ]]; then
+    rm -f "$tls_dir/ca.key" "$tls_dir/ca.crt" "$tls_dir/ca.srl"
+    openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -sha256 -days 3650 \
+      -keyout "$tls_dir/ca.key" -out "$tls_dir/ca.crt" \
+      -subj "/CN=Score local CA ($safe_name)" \
+      -addext "basicConstraints=critical,CA:TRUE" \
+      -addext "keyUsage=critical,keyCertSign,cRLSign" \
+      -addext "subjectKeyIdentifier=hash" 2>/dev/null
+    echo "Created a new certificate authority."
+  else
+    echo "Keeping the existing certificate authority (use --new-ca to replace it)."
+  fi
+  chmod 600 "$tls_dir/ca.key"
+
+  ext_file="$(mktemp "$tls_dir/ext.XXXXXX")"
+  csr="$(mktemp "$tls_dir/csr.XXXXXX")"
+  printf '%s\n' "basicConstraints=critical,CA:FALSE" "keyUsage=critical,digitalSignature" \
+    "extendedKeyUsage=serverAuth" "subjectAltName=$san" "subjectKeyIdentifier=hash" \
+    "authorityKeyIdentifier=keyid" >"$ext_file"
+  openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -sha256 \
+    -keyout "$tls_dir/server.key" -out "$csr" -subj "/CN=$safe_name" 2>/dev/null
+  openssl x509 -req -in "$csr" -CA "$tls_dir/ca.crt" -CAkey "$tls_dir/ca.key" -CAcreateserial \
+    -days 825 -sha256 -extfile "$ext_file" -out "$tls_dir/server.crt" 2>/dev/null
+  rm -f "$ext_file" "$csr"
+  chmod 600 "$tls_dir/server.key"
+  chmod 644 "$tls_dir/server.crt" "$tls_dir/ca.crt"
+
+  cat <<EOT
+Certificate files in $tls_dir:
+  ca.crt       the certificate authority to install on each device (public)
+  ca.key       its private key: keep it on this machine only
+  server.crt   Score's certificate for: $san
+  server.key   its private key
+
+Next steps:
+  1. Install ca.crt on every device that opens Score (the setup guide at /setup/https has the steps per platform).
+  2. Start Score with SCORE_REMOTE=1 SCORE_HOST=<this machine's address> scripts/score start (restart it if it is
+     running). It uses these files automatically and serves https://<address>:8741/.
+EOT
+}
+
 case "${1:-}" in
   start) cmd_start ;;
   stop) cmd_stop ;;
@@ -154,6 +258,7 @@ case "${1:-}" in
   logs) shift; cmd_logs "${1:-}" ;;
   pair) cmd_pair ;;
   # Sets or resets the security password that guards pairing management (a forgotten one is reset only here).
+  tls) shift; cmd_tls "${1:-}" ;;
   password) SCORE_HOME="$home" exec node "$root/scripts/set-password.mjs" ;;
   *) usage ;;
 esac

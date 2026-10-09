@@ -20,11 +20,12 @@ import { readStream } from './hub/sse-helpers.ts'
 import { testCert, testKey } from './fixtures/tls.ts'
 import { SecurityPassword } from '../src/auth/security-password.ts'
 
-const origin = 'http://score.lan:8741'
+const origin = 'https://score.lan:8741'
 const headers = { host: 'score.lan:8741', origin, 'x-score-client': 'web' }
 const env = {
   SCORE_REMOTE: '1',
-  SCORE_REMOTE_INSECURE_HTTP: 'accept',
+  SCORE_TLS_CERT: '/tmp/cert',
+  SCORE_TLS_KEY: '/tmp/key',
   SCORE_PUBLIC_ORIGINS: origin,
 }
 
@@ -54,18 +55,8 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
-function makeApp(clock?: () => number, tls = false) {
-  const config = loadConfig(
-    tls
-      ? {
-          ...env,
-          SCORE_REMOTE_INSECURE_HTTP: undefined,
-          SCORE_TLS_CERT: '/tmp/cert',
-          SCORE_TLS_KEY: '/tmp/key',
-          SCORE_PUBLIC_ORIGINS: 'https://score.lan:8741',
-        }
-      : env,
-  )
+function makeApp(clock?: () => number) {
+  const config = loadConfig(env)
   const securityHome = mkdtempSync(join(tmpdir(), 'score-security-'))
   cleanup.push(() => rmSync(securityHome, { recursive: true, force: true }))
   const app = buildApp({
@@ -76,6 +67,17 @@ function makeApp(clock?: () => number, tls = false) {
   })
   cleanup.push(() => app.close())
   return app
+}
+// Env for tests that really start the server: it reads the certificate files.
+function tlsEnv(dir: string) {
+  writeFileSync(join(dir, 'cert.pem'), testCert)
+  writeFileSync(join(dir, 'key.pem'), testKey)
+  return {
+    ...env,
+    SCORE_HOME: join(dir, 'home'),
+    SCORE_TLS_CERT: join(dir, 'cert.pem'),
+    SCORE_TLS_KEY: join(dir, 'key.pem'),
+  }
 }
 const PASSWORD = 'correct horse battery'
 async function setPassword(app: FastifyInstance, cookie: string) {
@@ -171,8 +173,8 @@ test.each([
   undefined,
   'null',
   'http://attacker.example',
-  'https://score.lan:8741',
-  'http://score.lan:8741/',
+  'http://score.lan:8741',
+  'https://score.lan:8741/',
 ])('remote mutations refuse Origin %s', async (origin) => {
   const app = makeApp()
   const token = app.pairing.createToken()
@@ -214,11 +216,11 @@ test('forwarded headers cannot change peer, host or origin authority', async () 
   ).toBe(403)
 })
 test('remote cookies are secure only for TLS, and management IDs never grant access', async () => {
-  const app = makeApp(undefined, true)
+  const app = makeApp()
   const response = await app.inject({
     method: 'POST',
     url: '/api/session/pair',
-    headers: { ...headers, origin: 'https://score.lan:8741' },
+    headers: { ...headers, origin },
     payload: { token: app.pairing.createToken() },
   })
   expect(response.headers['set-cookie']).toContain('; HttpOnly; SameSite=Strict;')
@@ -472,7 +474,7 @@ test.each(['bridge', 'browser'] as const)(
     const web = join(dir, 'web')
     mkdirSync(web)
     writeFileSync(join(web, 'index.html'), '<div id="root"></div>')
-    const config = loadConfig({ ...env, SCORE_HOME: join(dir, 'home') })
+    const config = loadConfig(tlsEnv(dir))
     let bridge: FastifyInstance | undefined
     const close = vi.fn()
     await expect(
@@ -515,7 +517,7 @@ test('every start gets a new epoch, so a restored database cannot pass for the o
   const web = join(dir, 'web')
   mkdirSync(web)
   writeFileSync(join(web, 'index.html'), '<div id="root"></div>')
-  const config = loadConfig({ ...env, SCORE_HOME: join(dir, 'home') })
+  const config = loadConfig(tlsEnv(dir))
   const options = {
     logger: false as const,
     webDirectory: web,
@@ -569,7 +571,6 @@ test('TLS startup builds an HTTPS browser listener and an HTTP loopback listener
     ...env,
     SCORE_HOME: join(dir, 'home'),
     SCORE_PUBLIC_ORIGINS: 'https://score.lan:8741',
-    SCORE_REMOTE_INSECURE_HTTP: undefined,
     SCORE_TLS_CERT: join(dir, 'cert.pem'),
     SCORE_TLS_KEY: join(dir, 'key.pem'),
   })
@@ -591,7 +592,7 @@ test('TLS startup builds an HTTPS browser listener and an HTTP loopback listener
   const result = await server.app.inject({
     method: 'POST',
     url: '/api/session/pair',
-    headers: { ...headers, origin: 'https://score.lan:8741' },
+    headers: { ...headers, origin },
     payload: { token: server.pairingToken },
   })
   expect(result.statusCode).toBe(204)
@@ -607,7 +608,6 @@ test('invalid TLS and missing web builds fail before opening Score state or star
     ...env,
     SCORE_HOME: home,
     SCORE_PUBLIC_ORIGINS: 'https://score.lan:8741',
-    SCORE_REMOTE_INSECURE_HTTP: undefined,
     SCORE_TLS_CERT: join(dir, 'cert.pem'),
     SCORE_TLS_KEY: join(dir, 'key.pem'),
   })
@@ -616,7 +616,7 @@ test('invalid TLS and missing web builds fail before opening Score state or star
   ).rejects.toThrow()
   expect(existsSync(home)).toBe(false)
   await expect(
-    startServer(loadConfig({ ...env, SCORE_HOME: home }), {
+    startServer(loadConfig({ ...tlsEnv(dir), SCORE_HOME: home }), {
       logger: false,
       webDirectory: join(dir, 'web'),
     }),

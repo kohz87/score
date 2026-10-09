@@ -3,16 +3,10 @@ import { sendProviderKey } from './settings-queries.ts'
 
 // A key travels from this field to the server and on to `hermes auth add` on stdin (ARCHITECTURE D2.7). It is held only
 // in this component's state, cleared on success, failure and unmount, and never put in a query cache.
-const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
-export function crossesNetworkUnencrypted(location: Pick<Location, 'protocol' | 'hostname'>) {
-  return location.protocol === 'http:' && !LOOPBACK.has(location.hostname)
-}
-
 function message(error: unknown): string {
   const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : null
   if (code === 'not_paired')
     return 'Pair this browser using the link in the server terminal to save a key.'
-  if (code === 'insecure_transport') return 'Confirm that you understand the risk, then try again.'
   if (code === 'not_verified') return 'Hermes did not accept that key. Check it and try again.'
   if (code === 'bad_request')
     return 'That does not look like an API key (8 to 512 characters, no spaces).'
@@ -34,10 +28,8 @@ export function ApiKeyPanel({
 }) {
   const [apiKey, setApiKey] = useState('')
   const [keyLabel, setKeyLabel] = useState('')
-  const [acknowledged, setAcknowledged] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const insecure = crossesNetworkUnencrypted(window.location)
   // Leaving the page drops the key from state.
   useEffect(() => () => setApiKey(''), [])
 
@@ -49,7 +41,6 @@ export function ApiKeyPanel({
       await sendProviderKey(providerId, {
         apiKey,
         ...(keyLabel.trim() ? { label: keyLabel.trim() } : {}),
-        ...(insecure ? { acknowledgeInsecure: true } : {}),
       })
       setApiKey('')
       setBusy(false)
@@ -67,12 +58,6 @@ export function ApiKeyPanel({
       aria-label={`Add a key for ${label}`}
       onSubmit={(event) => void submit(event)}
     >
-      {insecure && (
-        <p role="alert" className="settings-warning">
-          This page is not encrypted (plain HTTP over your network). A key you paste here can be
-          read by anyone on the network.
-        </p>
-      )}
       <label>
         API key
         <input
@@ -100,24 +85,9 @@ export function ApiKeyPanel({
           onChange={(event) => setKeyLabel(event.target.value)}
         />
       </label>
-      {insecure && (
-        <label className="settings-check">
-          <input
-            type="checkbox"
-            required
-            checked={acknowledged}
-            onChange={(event) => setAcknowledged(event.target.checked)}
-          />
-          I understand the key crosses my network unencrypted
-        </label>
-      )}
       {error && <p role="alert">{error}</p>}
       <div className="settings-command-actions">
-        <button
-          type="submit"
-          className="settings-primary"
-          disabled={busy || apiKey.length === 0 || (insecure && !acknowledged)}
-        >
+        <button type="submit" className="settings-primary" disabled={busy || apiKey.length === 0}>
           {busy ? 'Saving…' : 'Save key'}
         </button>
         <button type="button" className="settings-link" onClick={onClose}>
