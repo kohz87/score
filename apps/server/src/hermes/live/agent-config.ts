@@ -72,6 +72,19 @@ export async function readModelPair(
     : null
 }
 
+/** Ids of the local (`providers:`) entries one profile defines; null when unreadable. Only the names are kept. */
+export async function readLocalProviderIds(
+  runner: HermesRunner,
+  hermesHome: string,
+  profile: string,
+): Promise<Set<string> | null> {
+  const read = await configJson(runner, hermesHome, profile, 'providers')
+  if (read.state === 'unset') return new Set()
+  if (read.state !== 'ok') return null
+  const parsed = z.record(z.string(), z.unknown()).safeParse(read.value)
+  return parsed.success ? new Set(Object.keys(parsed.data)) : null
+}
+
 /** Disabled skill names; null when unreadable (callers that write must stop). A never-set key is an empty list. */
 export async function readDisabledSkills(
   runner: HermesRunner,

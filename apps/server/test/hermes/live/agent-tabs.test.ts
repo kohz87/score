@@ -382,3 +382,27 @@ test('a failed provider write restores the previous model and provider', async (
     ['-p', 'builder', 'config', 'set', 'model.provider', 'p'],
   ])
 })
+
+test('a local provider only the default profile defines is refused for another agent', async () => {
+  const base = runner.getMockImplementation()!
+  const providers: Record<string, unknown> = {
+    default: { lab: { base_url: 'http://127.0.0.1:1/v1' } },
+    builder: {},
+  }
+  runner.mockImplementation(async (args, options) =>
+    args.join(' ').endsWith('config get --json providers')
+      ? { exitCode: 0, stdout: JSON.stringify(providers[args[1]!]) }
+      : base(args, options),
+  )
+  await expect(tabs.setModel('builder', { model: 'm', provider: 'lab' })).rejects.toMatchObject({
+    status: 409,
+  })
+  expect(writes()).toEqual([])
+  providers.builder = { lab: { base_url: 'http://127.0.0.1:1/v1' } }
+  await tabs.setModel('builder', { model: 'm', provider: 'lab' })
+  expect(writes()).toHaveLength(2)
+  // built-in providers are not local entries and stay selectable
+  runner.mockClear()
+  await tabs.setModel('builder', { model: 'm', provider: 'openai' })
+  expect(writes()).toHaveLength(2)
+})
