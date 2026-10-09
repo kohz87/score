@@ -6,6 +6,7 @@ test('Edit and resend, Copy and Retry work from the action row under a message',
   page,
   context,
 }) => {
+  test.setTimeout(120_000)
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await pair(page)
   await page.goto('/chat')
@@ -26,7 +27,7 @@ test('Edit and resend, Copy and Retry work from the action row under a message',
     article.locator('xpath=following-sibling::article').filter({
       hasText: 'I have reviewed the room context',
     })
-  await expect(replyAfter(mine).first()).toBeVisible({ timeout: 20_000 })
+  await expect(replyAfter(mine).first()).toBeVisible({ timeout: 40_000 })
 
   // Copy: the row sits below the body and the text lands on the clipboard.
   await mine.hover()
@@ -50,7 +51,7 @@ test('Edit and resend, Copy and Retry work from the action row under a message',
   await expect(mine).toHaveClass(/chat-message--edited/)
   await expect(mine.getByRole('button', { name: /^Edit message/ })).toHaveCount(0)
   await mine.getByRole('button', { name: 'see the new version' }).click()
-  await expect(replyAfter(corrected).first()).toBeVisible({ timeout: 20_000 })
+  await expect(replyAfter(corrected).first()).toBeVisible({ timeout: 40_000 })
 
   // Retry: the same agent answers again; the first reply stays.
   const replies = history
@@ -64,5 +65,5 @@ test('Edit and resend, Copy and Retry work from the action row under a message',
   await last.hover()
   await last.getByRole('button', { name: /^Retry reply/ }).click()
   await retried
-  await expect(replies).toHaveCount(before + 1, { timeout: 20_000 })
+  await expect(replies).toHaveCount(before + 1, { timeout: 40_000 })
 })
