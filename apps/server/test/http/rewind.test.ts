@@ -535,3 +535,30 @@ test('an unanswered rewind command keeps the room held until it has expired, als
   expect(rewindingRooms.has(room.id)).toBe(false)
   expect(db.sqlite.prepare('SELECT COUNT(*) AS n FROM rewind_holds').get()).toEqual({ n: 0 })
 })
+
+test('a message request that was already preparing when a rewind started does not queue a turn (audit5-e)', async () => {
+  const room = await createRoom()
+  const first = await ask(room.id, 'first', ['builder'])
+  await answer(room.id, first.id, 'builder')
+  let openGate!: () => void
+  const gate = new Promise<void>((resolve) => (openGate = resolve))
+  const real = port.listAgents.bind(port)
+  vi.spyOn(port, 'listAgents').mockImplementationOnce(async () => {
+    await gate
+    return real()
+  })
+  const sending = post(`/api/rooms/${room.id}/messages`, { text: 'slow', to: ['builder'] })
+  await vi.waitFor(() => expect(port.listAgents).toHaveBeenCalled())
+  let release!: () => void
+  vi.spyOn(fake(), 'rewindSession').mockImplementation(async (req) => {
+    if (req.dryRun) return { status: 'ready' }
+    await new Promise<void>((resolve) => (release = resolve))
+    return { status: 'rewound', turnsUndone: 1, rewoundCount: 2 }
+  })
+  const rewinding = rewind(room.id, first.id)
+  await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+  openGate()
+  expect((await sending).statusCode).toBe(409)
+  release()
+  expect((await rewinding).statusCode).toBe(200)
+})

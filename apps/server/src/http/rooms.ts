@@ -575,6 +575,9 @@ export function registerRoomRoutes(
             : { model: typedModel },
         )
       }
+    // A rewind may have started while agents and attachments were being prepared (awaits above): checked again before
+    // any external side effect and, below, inside the transaction.
+    assertNotRewinding(roomId)
     const id = randomUUID()
     if (route.parsed.command?.kind === 'assign') {
       const assigned = route.parsed.command
@@ -640,6 +643,7 @@ export function registerRoomRoutes(
       source: 'rooms',
       identity: randomUUID(),
       apply({ sqlite, now }) {
+        assertNotRewinding(roomId)
         message = {
           id,
           roomId,
