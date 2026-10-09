@@ -581,6 +581,41 @@ costUsd: number | null; task: { id; title } | null; brief: { id; title } | null;
   `q` matches task/brief title and model. `stopped` is a cancelled run; `interrupted` is a reclaimed attempt (not proof the
   worker stopped); `unknown` is any status Score does not recognise (never shown as running). Replay opens `/now/watch/:agentId?from=<replaySeq>`.
 
+### Workspace (Team › agent › Workspace)
+The agent's Hermes working folder (`terminal.cwd`), browsed and edited from Score. **Every** workspace endpoint is **H**
+(paired browser), reads included, because the files can hold secrets. `path` is POSIX and relative to the root; the root
+itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
+- **H** `GET /api/agents/:agentId/workspace` → `WorkspaceInfo` `{ root: string | null; available: boolean; reason: string | null }`.
+  Unavailable (with the reason) when the terminal backend is not `local`, `terminal.cwd` is unset, `.` or relative, or the
+  folder fails the root checks: `/`, the home folder or a parent of it, `~/.hermes`, `~/.score`, `~/.ssh` (or Score's/Hermes's
+  configured homes) or inside them, missing, not a directory, or owned by another user.
+- **H** `PUT /api/agents/:agentId/workspace/root` `{ path }` → `WorkspaceInfo`. Same checks plus the folder must exist (never
+  created); writes `terminal.cwd` through `hermes -p <profile> config set`. Refusal → `409 workspace_unavailable` with the reason;
+  `~/…` is expanded. The stored value is the resolved real path. Logged.
+- **H** `GET …/workspace/tree?path=` → `WorkspaceTree` `{ entries: { name; kind: 'file'|'dir'|'symlink'; size; mtime; hidden }[] }`
+  (one level; folders first; blocked names are never listed; `.git` is listed but not its inside).
+- **H** `GET …/workspace/file?path=[&download=1]`
+  - text (UTF-8, no NUL, ≤ 1 MiB): `200 text/plain; charset=utf-8`, header `ETag` (quoted), `X-Content-Type-Options: nosniff`;
+  - png/jpeg/gif/webp/pdf (extension + magic bytes, ≤ 25 MiB): the raw bytes, `Content-Disposition: inline`, nosniff, CSP `default-src 'none'; sandbox`;
+  - anything else: `200 application/json` `{ binary: true; size; reason: 'binary' | 'too_large' }`;
+  - `download=1`: any file ≤ 25 MiB as `application/octet-stream`, `Content-Disposition: attachment`, nosniff.
+  Symlinks are followed for reading only when they resolve inside the root and the resolved path is allowed.
+- **H** `PUT …/workspace/file?path=` `{ content; etag: string | null }` → `{ etag }`. Atomic (temp file in the same directory,
+  fsync, rename). `etag: null` creates and refuses an existing file (`409 exists`); a stale etag → `412 precondition_failed`
+  with `details: { etag }` (current etag, or null when the file was removed). Content ≤ 1 MiB, no NUL.
+- **H** `POST …/workspace/entries` `{ path; kind: 'file'|'dir' }` → `201 {}` (`409 exists`) · `POST …/workspace/move` `{ from; to }` → `{}`
+  (never overwrites: `409 exists`) · `DELETE …/workspace/entries?path=[&recursive=1]` → `{}` (a non-empty folder without
+  `recursive` → `409 not_empty`; a folder holding protected files or `.git` → `409 protected_inside`, never deleted from
+  here; the UI asks for a typed confirmation first).
+- **H** `POST …/workspace/upload?path=` raw body, `Content-Type: application/octet-stream`, ≤ 25 MiB, `path` = the new file's
+  path → `201 { path, size }` (`409 exists`).
+- Path rules (all endpoints): `..`, NUL, absolute paths → `400 bad_path`; any component matching the blocked list (`.env*`,
+  `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `id_ecdsa*`, `id_dsa*`, `auth.json`, `.netrc`, case-insensitive) or
+  anything inside `.git/` → `403 blocked`; leaving the root or reaching Hermes/Score/SSH data → `403 outside_workspace`/`blocked`;
+  symlink component or target in a mutation → `403 symlink`; a folder swapped during the request → `409 changed`; too large →
+  `413 payload_too_large`; missing → `404 not_found`. Every write is logged (operation, path, size; never content).
+  Not a guarantee for arbitrarily named secret files.
+
 ## 9. Reports
 
 - `GET /api/reports?range=today|7d|30d&tz=` or `GET /api/reports?range=custom&from=YYYY-MM-DD&to=YYYY-MM-DD&tz=` →

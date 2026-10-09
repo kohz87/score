@@ -56,6 +56,24 @@ async function configJson(
   }
 }
 
+/**
+ * `terminal.cwd` and `terminal.backend` as strings; null for a key never set. Throws when Hermes can't answer, so a
+ * caller never mistakes "unreadable" for "unset".
+ */
+export async function readTerminalConfig(
+  runner: HermesRunner,
+  hermesHome: string,
+  profile: string,
+): Promise<{ cwd: string | null; backend: string | null }> {
+  const one = async (key: string): Promise<string | null> => {
+    const read = await configJson(runner, hermesHome, profile, key)
+    if (read.state === 'unset') return null
+    if (read.state === 'unavailable') throw new Error('Hermes could not answer')
+    return typeof read.value === 'string' ? read.value : null
+  }
+  return { cwd: await one('terminal.cwd'), backend: await one('terminal.backend') }
+}
+
 /** The profile's model.default / model.provider as strings; null when unreadable. */
 export async function readModelPair(
   runner: HermesRunner,

@@ -13,6 +13,7 @@ import {
   type AgentFileName,
 } from '../agent-files.ts'
 import { fakeReportHistory } from './report-history.ts'
+import { FakeWorkspaces } from './fake-workspace.ts'
 import { updateProjectedAgent } from '../../domain/agents.ts'
 import { createBrief, linkTask, readBriefRow } from '../../domain/briefs.ts'
 import {
@@ -467,6 +468,7 @@ export class FakePort implements HermesPort {
   }
 
   private resetState(): void {
+    this.workspaces.dispose()
     this.agents = new Map(exampleAgents().map((agent) => [agent.id, agent]))
     this.files.clear()
     for (const agent of this.agents.values()) {
@@ -913,6 +915,19 @@ export class FakePort implements HermesPort {
       agentId,
       items.filter((item) => item.id !== id),
     )
+  }
+  private readonly workspaces = new FakeWorkspaces()
+  /** Removes the temp-dir workspaces (tests; the process-exit hook does it otherwise). */
+  workspaceDispose(): void {
+    this.workspaces.dispose()
+  }
+  async readWorkspaceConfig(agentId: string) {
+    this.agentOrThrow(agentId)
+    return { cwd: this.workspaces.cwdOf(agentId), backend: this.workspaces.backendOf(agentId) }
+  }
+  async setWorkspaceCwd(agentId: string, cwd: string): Promise<void> {
+    this.agentOrThrow(agentId)
+    this.workspaces.set(agentId, cwd)
   }
   async setToolEnabled(agentId: string, toolId: string, enabled: boolean): Promise<AgentTool> {
     this.agentOrThrow(agentId)

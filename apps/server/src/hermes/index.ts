@@ -18,6 +18,7 @@ export {
   assertFileContent,
 } from './agent-files.ts'
 export { assertFeature } from './live/fingerprint.ts'
+export { resolveHermesHome } from './live/paths.ts'
 export { loadBridgeBootstrap } from './bridge/bootstrap.ts'
 export {
   registerBridgeRoutes,

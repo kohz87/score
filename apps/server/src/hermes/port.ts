@@ -207,6 +207,10 @@ export interface HermesPort extends ProfileManagementPort {
   addMemory(agentId: string, text: string): Promise<MemoryItem>
   deleteMemory(agentId: string, id: string): Promise<void>
   setToolEnabled(agentId: string, toolId: string, enabled: boolean): Promise<AgentTool>
+  /** The agent's terminal folder (`terminal.cwd`) and backend (`terminal.backend`); null = not set. */
+  readWorkspaceConfig(agentId: string): Promise<{ cwd: string | null; backend: string | null }>
+  /** Writes `terminal.cwd`. The caller has already run the folder checks. */
+  setWorkspaceCwd(agentId: string, cwd: string): Promise<void>
   /** Hermes plugins of one profile (`plugins list`). */
   listPlugins(agentId: string): Promise<PluginItem[]>
   /** Enable or disable via the CLI and verify by re-reading. Never the Score bridge (409). */

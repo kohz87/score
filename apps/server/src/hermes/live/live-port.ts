@@ -420,6 +420,13 @@ export class LivePort implements HermesPort {
     MemoryIdSchema.parse(id)
     return this.tabs.unsupportedMemoryWrite(agentId)
   }
+  async readWorkspaceConfig(agentId: string) {
+    return this.tabs.readWorkspaceConfig(agentId)
+  }
+  async setWorkspaceCwd(agentId: string, cwd: string) {
+    this.requireStarted()
+    return this.tabs.setWorkspaceCwd(agentId, cwd)
+  }
   async setToolEnabled(agentId: string, toolId: string, enabled: boolean) {
     this.requireStarted()
     return this.tabs.setToolEnabled(agentId, toolId, enabled)

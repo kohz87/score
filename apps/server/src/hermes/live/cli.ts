@@ -41,6 +41,9 @@ const ReadConfigKeys = [
   'command_allowlist',
   'approvals',
   'plugins.enabled',
+  // Team › agent › Workspace: where the agent's terminal works, and whether that is this machine.
+  'terminal.cwd',
+  'terminal.backend',
 ]
 /** Exact argv shapes whose stdout Score may read. Everything else keeps its output private. */
 export function captureReadShape(argv: string[]): boolean {

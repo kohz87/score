@@ -15,6 +15,7 @@ import { ToolsTab } from './ToolsTab.tsx'
 import { PluginsTab } from './PluginsTab.tsx'
 import { ChannelsTab } from './ChannelsTab.tsx'
 import { HistoryTab } from './HistoryTab.tsx'
+import { WorkspaceTab } from './WorkspaceTab.tsx'
 import type { AgentFileName } from './file-queries.ts'
 
 // Dark text on light agent colors, white on dark ones (the design's jade band uses #08241C).
@@ -31,6 +32,7 @@ const tabs = [
   'Memory',
   'Tools',
   'Plugins',
+  'Workspace',
   'Routines',
   'Channels',
   'Permissions',
@@ -185,6 +187,8 @@ function AgentProfile({ agentId }: { agentId: string }) {
           <PluginsTab agent={agent} />
         ) : tab === 'Permissions' ? (
           <PermissionsTab agent={agent} />
+        ) : tab === 'Workspace' ? (
+          <WorkspaceTab agentId={agent.id} agentName={agent.name} />
         ) : tab === 'Channels' ? (
           <ChannelsTab agentId={agent.id} agentName={agent.name} />
         ) : (

@@ -9,6 +9,7 @@ import { registerAgentRoutes } from './http/agents.ts'
 import { registerProfileRoutes } from './http/profiles.ts'
 import { registerAgentHistoryRoutes } from './http/agent-history.ts'
 import { registerAgentTabRoutes } from './http/agent-tabs.ts'
+import { registerWorkspaceRoutes } from './http/workspace.ts'
 import { registerReportRoutes } from './http/reports.ts'
 import { registerTaskRoutes } from './http/tasks.ts'
 import { registerRoutineRoutes } from './http/routines.ts'
@@ -197,6 +198,7 @@ export function buildApp({
   if (db && ingest)
     registerProfileRoutes(app, { db, ingest, port, config, ...(clock ? { clock } : {}) })
   registerAgentTabRoutes(app, port, ingest, db, clock)
+  registerWorkspaceRoutes(app, port, config)
   registerRoutineRoutes(app, port, db, clock)
   registerSettingsRoutes(app, port, db, clock)
   registerRulesRoutes(app, port, ingest, db, clock)
