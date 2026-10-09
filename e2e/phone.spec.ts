@@ -4,7 +4,7 @@ import { once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { devices, expect, test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import { pair } from './pair.ts'
 
 const PASSWORD = 'correct horse battery'
@@ -56,18 +56,18 @@ test('when Score cannot be reached the app shows the offline page and recovers o
     .toBe(true)
   await context.setOffline(true)
   await page.goto('/now').catch(() => {})
-  await expect(page.getByRole('heading', { name: "Score can't be reached" })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /Score can.t be reached/ })).toBeVisible()
   await context.setOffline(false)
   await page.getByRole('button', { name: 'Try again' }).click()
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-  await expect(page.getByRole('heading', { name: "Score can't be reached" })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: /Score can.t be reached/ })).toHaveCount(0)
 })
 
 test('notifications ask for permission only on a click and then deliver through the worker', async ({
   page,
   context,
 }) => {
-  await context.grantPermissions(['notifications'])
+  await context.grantPermissions(['notifications'], { origin: page.url() === 'about:blank' ? 'http://127.0.0.1:' + (process.env.SCORE_WEB_PORT ?? '5173') : page.url() })
   await page.addInitScript(() => {
     const original = Notification.requestPermission.bind(Notification)
     ;(window as unknown as { asked: number }).asked = 0
@@ -110,7 +110,7 @@ test('notifications ask for permission only on a click and then deliver through 
 })
 
 test.describe('on a phone', () => {
-  test.use({ ...devices['Pixel 7'] })
+  test.use({ viewport: { width: 412, height: 915 }, hasTouch: true, isMobile: true })
 
   test('Enter adds a new line and the Send button sends', async ({ page }) => {
     await pair(page)
