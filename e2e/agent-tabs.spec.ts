@@ -97,7 +97,7 @@ test('Model, Skills, Memory and Tools tabs read and edit', async ({ page }) => {
   const modelForm = page.getByRole('form', { name: 'Change model' })
   await modelForm.getByLabel('Model', { exact: true }).fill('demo/next-model')
   await modelForm.getByRole('button', { name: 'Change model' }).click()
-  await expect(page.getByText('Model changed to demo/next-model.')).toBeVisible()
+  await expect(page.getByText('Saved: demo/next-model')).toBeVisible()
 
   // Skills: toggle one, then find and install one from the (fake) hub
   await page.getByRole('tab', { name: 'Skills' }).click()

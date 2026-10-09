@@ -19,7 +19,8 @@ test('a device-code sign-in shows the link and code and ends connected', async (
   await expect(panel.getByText('Nous Portal is connected.')).toBeVisible({ timeout: 15_000 })
   await panel.getByRole('button', { name: 'Done' }).click()
   await expect(panel).toBeHidden()
-  await expect(models.getByRole('button', { name: 'Edit Nous Portal' })).toBeVisible()
+  // Connected through the browser: nothing left to edit, so no button is offered.
+  await expect(models.getByRole('button', { name: /Nous Portal/ })).toHaveCount(0)
 })
 
 test('a pasted key connects a key provider and is never shown again', async ({ page }) => {
