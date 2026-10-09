@@ -728,8 +728,10 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
   here; the UI asks for a typed confirmation first).
 - **H** `GET …/workspace/git` → `{ branch: string; changed: number; ahead: number; behind: number } | null` (`WorkspaceGit`).
   The repository around the root (the root or a parent), from one read-only `git status --porcelain=v1 -b` (no index lock,
-  fsmonitor and hooks off, 5 s timeout); `changed` counts every non-clean path including untracked files; `null` when
-  there is no repository, git is missing or the call fails. Never runs a writing git command.
+  fsmonitor and hooks off, system/user git config and inherited `GIT_*` variables ignored, 5 s timeout); `changed` counts
+  every non-clean path, each untracked file individually (`--untracked-files=all`); `null` when there is no repository, git
+  is missing, the call fails or the repository's own config defines filters, fsmonitor, a hooks path, textconv or includes
+  (git would run them; the UI then shows no badge). Never runs a writing git command.
 - **H** `POST …/workspace/upload?path=` raw body, `Content-Type: application/octet-stream`, ≤ 25 MiB, `path` = the new file's
   path → `201 { path, size }` (`409 exists`).
 - **Links (web only, no endpoint).** In chat Markdown `workspace://<path>` and `workspace://<agentId>/<path>` open that file

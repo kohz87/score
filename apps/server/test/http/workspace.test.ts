@@ -311,3 +311,40 @@ describe('parseGitStatus', () => {
     expect(parseGitStatus('')).toBeNull()
   })
 })
+
+describe('git badge safety', () => {
+  const git = (...args: string[]) =>
+    execFileSync(
+      'git',
+      ['-C', root, '-c', 'user.email=t@example.com', '-c', 'user.name=T', ...args],
+      { stdio: 'pipe' },
+    )
+
+  test('a repository that configures a clean filter is not run and nothing executes', async () => {
+    const marker = path.join(root, '..', `filter-ran-${path.basename(root)}`)
+    const script = path.join(root, '..', `filter-${path.basename(root)}.sh`)
+    fs.writeFileSync(script, `#!/bin/sh\ntouch '${marker}'\ncat\n`, { mode: 0o755 })
+    git('init', '-q', '-b', 'trunk')
+    fs.writeFileSync(path.join(root, '.gitattributes'), '*.txt filter=probe\n')
+    fs.writeFileSync(path.join(root, 'tracked.txt'), 'one\n')
+    git('add', '.gitattributes', 'tracked.txt')
+    git('commit', '-q', '-m', 'first')
+    git('config', 'filter.probe.clean', script)
+    fs.rmSync(marker, { force: true })
+    // Same size, new mtime: git must re-read the file to decide, which runs the clean filter.
+    fs.writeFileSync(path.join(root, 'tracked.txt'), 'two\n')
+    const res = await call('GET', `${W}/git`)
+    expect(res.json()).toBeNull()
+    expect(fs.existsSync(marker)).toBe(false)
+    fs.rmSync(script, { force: true })
+  })
+
+  test('counts untracked files one by one, not as one folder', async () => {
+    git('init', '-q', '-b', 'trunk')
+    fs.mkdirSync(path.join(root, 'many'))
+    for (const n of [1, 2, 3, 4]) fs.writeFileSync(path.join(root, 'many', `f${n}.txt`), 'x')
+    const res = await call('GET', `${W}/git`)
+    // README.md and .env from the fixture plus four files in the new folder.
+    expect(res.json()).toMatchObject({ changed: 6 })
+  })
+})
