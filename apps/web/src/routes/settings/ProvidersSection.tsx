@@ -12,6 +12,18 @@ const statusText = {
   missing: 'Not connected',
 } as const
 
+/**
+ * What the button on a provider row does. A connected provider has a working edit flow only when it takes a
+ * pasted key (adds another one). Browser sign-ins and terminal-only providers are connected already, and
+ * "Edit" would restart the sign-in or show a `hermes auth add` command for a provider that works, so nothing
+ * is offered; local endpoints live in the Hermes configuration (Advanced).
+ */
+export function providerAction(item: ProviderItem): string | null {
+  if (item.status === 'missing') return 'Connect'
+  if (item.status === 'needs_signin') return 'Reconnect'
+  return item.signIn === 'api_key' ? 'Add key' : null
+}
+
 function UsedBy({ ids, agents }: { ids: string[]; agents: AgentSummary[] }) {
   return (
     <span className="settings-glyphs">
@@ -129,15 +141,17 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
             <span className="settings-status" data-status={item.status}>
               {statusText[item.status]}
             </span>
-            <button
-              type="button"
-              className="settings-link"
-              aria-label={`${item.status === 'connected' ? 'Edit' : 'Connect'} ${item.label}`}
-              disabled={connectProvider.isPending}
-              onClick={() => connect(item)}
-            >
-              {item.status === 'connected' ? 'Edit' : 'Connect'}
-            </button>
+            {providerAction(item) && (
+              <button
+                type="button"
+                className="settings-link"
+                aria-label={`${providerAction(item)} ${item.label}`}
+                disabled={connectProvider.isPending}
+                onClick={() => connect(item)}
+              >
+                {providerAction(item)}
+              </button>
+            )}
             {panel?.id === item.id && panel.kind === 'key' && (
               <ApiKeyPanel
                 providerId={item.id}

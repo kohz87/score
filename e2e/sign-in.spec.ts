@@ -44,6 +44,6 @@ test('a terminal-only provider still shows the command, and a panel can fall bac
   await pair(page)
   await page.goto('/settings')
   const models = page.getByRole('region', { name: 'Models and keys' })
-  await models.getByRole('button', { name: 'Connect Anthropic' }).click()
+  await models.getByRole('button', { name: 'Reconnect Anthropic' }).click()
   await expect(models.getByText('hermes auth add anthropic')).toBeVisible()
 })

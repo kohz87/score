@@ -1,3 +1,4 @@
+import { providerAction } from './ProvidersSection.tsx'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
@@ -620,6 +621,28 @@ test('a failed device sign-in offers to try again', async () => {
   expect(screen.getByRole('button', { name: 'Try again' })).toBeDefined()
 })
 
+test('a connected row offers only an edit flow that works', async () => {
+  const row = (over: Partial<ProviderItem>): ProviderItem => ({
+    id: 'x',
+    label: 'X',
+    status: 'connected',
+    detail: 'ok',
+    usedBy: [],
+    ...over,
+  })
+  expect(providerAction(row({ signIn: 'api_key' }))).toBe('Add key')
+  expect(providerAction(row({ signIn: 'device_code' }))).toBeNull()
+  expect(providerAction(row({ signIn: 'terminal' }))).toBeNull()
+  expect(providerAction(row({}))).toBeNull()
+  expect(providerAction(row({ status: 'needs_signin', signIn: 'terminal' }))).toBe('Reconnect')
+  expect(providerAction(row({ status: 'missing' }))).toBe('Connect')
+  respondWith(() => undefined)
+  mount()
+  await screen.findByText('OpenRouter')
+  expect(screen.queryByRole('button', { name: /^Edit / })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Reconnect Anthropic' })).toBeDefined()
+})
+
 const KEY = 'sk-or-v1-typed-by-the-person-0001'
 test('a pasted key is sent once in the request body, never shown, and cleared afterwards', async () => {
   respondWith((path, init) =>
@@ -628,7 +651,7 @@ test('a pasted key is sent once in the request body, never shown, and cleared af
       : undefined,
   )
   mount()
-  fireEvent.click(await screen.findByRole('button', { name: 'Edit OpenRouter' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Add key OpenRouter' }))
   const form = await screen.findByRole('form', { name: 'Add a key for OpenRouter' })
   const input = within(form).getByLabelText('API key') as HTMLInputElement
   expect(input.type).toBe('password')
@@ -656,7 +679,7 @@ test('a rejected key shows a generic message and clears the field', async () => 
       : undefined,
   )
   mount()
-  fireEvent.click(await screen.findByRole('button', { name: 'Edit OpenRouter' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Add key OpenRouter' }))
   const form = await screen.findByRole('form', { name: 'Add a key for OpenRouter' })
   const input = within(form).getByLabelText('API key') as HTMLInputElement
   fireEvent.change(input, { target: { value: KEY } })
@@ -680,7 +703,7 @@ test('over plain HTTP on a network address the key form warns and needs an ackno
       : undefined,
   )
   mount()
-  fireEvent.click(await screen.findByRole('button', { name: 'Edit OpenRouter' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Add key OpenRouter' }))
   const form = await screen.findByRole('form', { name: 'Add a key for OpenRouter' })
   expect(within(form).getByRole('alert').textContent).toContain('not encrypted')
   fireEvent.change(within(form).getByLabelText('API key'), { target: { value: KEY } })
