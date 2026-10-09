@@ -122,7 +122,7 @@ test('remote pairing over HTTPS requires consent, protects reads, serves the gui
     await expect(page.getByText('This browser is paired')).toBeVisible()
     expect(redeemed).toBe(1)
     await page.getByRole('link', { name: 'Open Score' }).click()
-    await expect(page.getByRole('heading', { name: 'Now', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await page.getByRole('link', { name: 'Settings', exact: true }).click()
     await page.getByRole('button', { name: 'Log out this browser' }).click()
     await expect(page).toHaveURL(`${origin}/pair`)

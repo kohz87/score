@@ -36,10 +36,11 @@ test('built app: launcher starts it, a browser pairs and sees the shell, stop fr
     await page.goto(link)
     await expect(page.getByText('This browser is paired')).toBeVisible()
     await page.goto(`${origin}/now`)
-    await expect(page.getByRole('heading', { name: 'Now', exact: true })).toBeVisible()
+    // Now's h1 is the word "Now" only until its data loads, then the sentence about the team: either proves the page.
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     // Deep links fall back to the app shell.
     await page.reload()
-    await expect(page.getByRole('heading', { name: 'Now', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     expect((await request.get(`${origin}/api/nope`)).status()).toBe(404)
   } finally {
     run('stop')

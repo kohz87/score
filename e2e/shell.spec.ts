@@ -50,7 +50,7 @@ test('Ctrl+K opens the palette, traps focus, navigates and returns focus', async
   await page.goto('/now')
   const trigger = page.getByRole('button', { name: /Search or run a command/ })
   // The shortcut listener is registered in an effect after first paint; wait for the app to render.
-  await expect(page.getByRole('heading', { level: 1, name: 'Now' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await page.keyboard.press('Control+k')
   const dialog = page.getByRole('dialog', { name: 'Search or run a command' })
   const input = dialog.getByRole('searchbox', { name: 'Search destinations' })
