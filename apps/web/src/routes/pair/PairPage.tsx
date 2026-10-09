@@ -3,6 +3,7 @@ import { useLoaderData } from 'react-router'
 import { useState } from 'react'
 import { ApiError, apiFetch } from '../../data/api.ts'
 import { remoteTransport } from '../../data/session.ts'
+import { passkeysSupportedHere, signInWithPasskey } from '../../data/passkeys.ts'
 
 export async function pairBrowser() {
   const token = window.location.hash.slice(1)
@@ -31,6 +32,34 @@ async function redeem(token: string) {
           : ('failed' as const),
     }
   }
+}
+
+function PasskeySignIn() {
+  const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle')
+  if (!remoteTransport() || !passkeysSupportedHere()) return null
+  return (
+    <>
+      <button
+        type="button"
+        disabled={state === 'busy'}
+        onClick={async () => {
+          setState('busy')
+          try {
+            await signInWithPasskey()
+            // A full load starts the app with the new session cookie.
+            window.location.assign('/now')
+          } catch {
+            setState('failed')
+          }
+        }}
+      >
+        {state === 'busy' ? 'Waiting for your device…' : 'Sign in with a passkey'}
+      </button>
+      {state === 'failed' && (
+        <p role="alert">Passkey sign-in failed. Try again or use a pairing link.</p>
+      )}
+    </>
+  )
 }
 
 export function PairPage() {
@@ -68,6 +97,7 @@ export function PairPage() {
             {remoteTransport() && <a href="/now">Open Score</a>}
           </>
         )}
+        {status !== 'paired' && <PasskeySignIn />}
         {status === 'expired' && (
           <p>
             This pairing link is invalid or expired.{' '}

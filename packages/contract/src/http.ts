@@ -239,6 +239,27 @@ export const SecurityStatusSchema = z.object({
 export const RevokeOthersResponseSchema = z.object({ revoked: z.int().nonnegative() })
 export type PairedBrowser = z.infer<typeof PairedBrowserSchema>
 
+// §3 Passkeys (5.28): WebAuthn credentials that sign a browser in without a pairing link.
+export const PasskeySchema = z.object({
+  /** The credential id (base64url): a management handle, not a secret. */
+  id: z.string().min(1).max(1400),
+  label: z.string(),
+  createdAt: z.iso.datetime(),
+  lastUsedAt: z.iso.datetime().nullable(),
+  /** A sign-count regression was seen (possible cloned authenticator): the credential no longer signs in. */
+  flagged: z.boolean(),
+})
+export const PasskeysSchema = z.object({
+  /** Whether this origin can use passkeys at all: they need a domain name (or localhost), never an IP address. */
+  available: z.boolean(),
+  rpId: z.string().nullable(),
+  items: z.array(PasskeySchema),
+})
+/** Options and responses are the WebAuthn JSON forms; the server validates them with @simplewebauthn/server. */
+export const PasskeyCeremonySchema = z.record(z.string(), z.unknown())
+export type Passkey = z.infer<typeof PasskeySchema>
+export type Passkeys = z.infer<typeof PasskeysSchema>
+
 // §3 Score's own log (5.29): newest first, every field redacted before it leaves the server.
 export const LogLevelSchema = z.enum(['info', 'warn', 'error'])
 export const LogEntrySchema = z.object({

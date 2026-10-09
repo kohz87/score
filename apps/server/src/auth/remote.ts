@@ -6,6 +6,9 @@ import { readCookie, SESSION_COOKIE, sessionCookie } from './cookies.ts'
 const publicRoutes = new Set([
   'POST /api/session/pair',
   'GET /api/session',
+  // Passkey sign-in (5.28): options, then the assertion; both are rate limited and single-use.
+  'POST /api/session/passkey/authentication-options',
+  'POST /api/session/passkey/authentication',
   'GET /api/health',
   // The HTTPS setup guide and the public CA certificate (never the key).
   'GET /setup/https',

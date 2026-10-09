@@ -14,10 +14,15 @@ function originAliases(origin: string): string[] {
   })
 }
 
-export function registerCsrfGuard(app: FastifyInstance, config: Config): void {
-  const allowedOrigins = new Set(
+/** The browser origins that may make changes (also the only ones passkey ceremonies may run on). */
+export function allowedOriginsFor(config: Config): Set<string> {
+  return new Set(
     config.remote?.origins ?? [config.webOrigin, serverOrigin(config)].flatMap(originAliases),
   )
+}
+
+export function registerCsrfGuard(app: FastifyInstance, config: Config): void {
+  const allowedOrigins = allowedOriginsFor(config)
   app.addHook('onRequest', async (request) => {
     // Fastify decodes route paths, so a raw URL prefix alone can miss encoded /api requests.
     const path = (request.routeOptions.url ?? request.url).split('?', 1)[0] ?? ''

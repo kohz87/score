@@ -45,6 +45,19 @@ export class PairingService {
       throw new HttpError(401, 'pairing_failed', 'Pairing token is invalid or expired')
     }
     this.#tokenHash = undefined
+    return this.createSession(peer, label)
+  }
+
+  /** Counts one sign-in attempt against the pairing rate limits (remote mode only, like `pair`). */
+  limitSignIn(peer: string): void {
+    if (this.remote) this.limitAttempts(peer)
+  }
+
+  /**
+   * A new paired-browser session with the same cookie id, limits and expiry as a pairing link. Callers have already
+   * proven who is asking (a pairing token, a passkey assertion).
+   */
+  createSession(peer = '', label = 'Browser'): string {
     const id = randomBytes(32).toString('base64url')
     const hash = hashSecret(id).toString('hex')
     if (this.remote) {
