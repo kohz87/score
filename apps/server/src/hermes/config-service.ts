@@ -112,7 +112,10 @@ export class ConfigService {
         sections.set(top!, section)
       }
       const read = navigate(await section, path)
-      return read.found ? { found: true, value: scrubConfigValue(read.value) } : { found: false }
+      if (!read.found) return { found: false, lossy: false }
+      const value = scrubConfigValue(read.value)
+      // `lossy`: scrubbing dropped or changed members, so this view is not a safe base for a replacement.
+      return { found: true, value, lossy: canonical(value) !== canonical(read.value) }
     }
   }
 
@@ -169,6 +172,15 @@ export class ConfigService {
     const sorted = [...changes].sort((a, b) => (a.key < b.key ? -1 : 1))
     const read = this.reader()
     const current = await Promise.all(sorted.map((change) => read(change.key)))
+    sorted.forEach((change, index) => {
+      // Replacing a container whose secret-named members are hidden would silently delete them.
+      if (current[index]!.lossy && typeof current[index]!.value === 'object')
+        throw new HttpError(
+          400,
+          'bad_request',
+          `${change.key} has hidden members and cannot be replaced here; edit its individual keys instead`,
+        )
+    })
     const before = sorted
       .map(
         (change, index) =>

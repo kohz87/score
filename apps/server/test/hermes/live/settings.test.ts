@@ -33,6 +33,7 @@ const LOCAL = {
   'my-proxy': { name: 'My proxy', base_url: 'http://127.0.0.1:4000/v1', api_key: '***' },
 }
 let home: string
+let local: Record<string, Record<string, string>>
 const runner = vi.fn<HermesRunner>()
 beforeEach(() => {
   home = fs.mkdtempSync(join(tmpdir(), 'score-settings-'))
@@ -52,11 +53,17 @@ beforeEach(() => {
       },
     }),
   )
+  local = structuredClone(LOCAL)
   runner.mockReset().mockImplementation(async (args) => {
     const key = args.join(' ')
     if (key === 'auth list') return { exitCode: 0, stdout: AUTH_LIST }
     if (key === 'config get --json mcp_servers') return { exitCode: 0, stdout: JSON.stringify(MCP) }
-    if (key === 'config get --json providers') return { exitCode: 0, stdout: JSON.stringify(LOCAL) }
+    if (key === 'config get --json providers') return { exitCode: 0, stdout: JSON.stringify(local) }
+    const set = /^config set providers\.([^.]+)\.(\w+) (.*)$/.exec(key)
+    if (set) {
+      local[set[1]!] = { ...local[set[1]!], [set[2]!]: set[3]! }
+      return { exitCode: 0 }
+    }
     return { exitCode: 0 }
   })
 })
@@ -195,6 +202,26 @@ test('local provider writes through `hermes config set` with exact argv', async 
   runner.mockImplementation(async (args) => ({ exitCode: args[1] === 'set' ? 1 : 0 }))
   await expect(
     settings.addLocalProvider({ label: 'Other', baseUrl: 'http://x.test/v1', model: 'm' }),
+  ).rejects.toMatchObject({ status: 502 })
+})
+test('two simultaneous additions of one name cannot overwrite each other', async () => {
+  const settings = new LiveSettings(home, runner)
+  const add = (baseUrl: string) => settings.addLocalProvider({ label: 'Lab', baseUrl, model: 'm' })
+  const results = await Promise.allSettled([add('http://a.test/v1'), add('http://b.test/v1')])
+  expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected'])
+  expect(local.lab?.base_url).toBe('http://a.test/v1')
+})
+test('a local provider Hermes did not keep is reported as a failure', async () => {
+  const base = runner.getMockImplementation()!
+  runner.mockImplementation(async (args, options) =>
+    args[1] === 'set' && args[2]!.endsWith('.base_url') ? { exitCode: 0 } : base(args, options),
+  )
+  await expect(
+    new LiveSettings(home, runner).addLocalProvider({
+      label: 'Lost',
+      baseUrl: 'http://x.test/v1',
+      model: 'm',
+    }),
   ).rejects.toMatchObject({ status: 502 })
 })
 test('the CLI runner only captures the allowlisted settings reads and caps them', async () => {

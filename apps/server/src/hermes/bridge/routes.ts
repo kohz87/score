@@ -195,19 +195,24 @@ export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): vo
       const producer = ProducerSchema.parse(row)
       if (producer.token_expires_at <= clock()) throw unauthorized()
       const { events } = BatchSchema.parse(request.body)
-      // Validate the whole batch before accepting any part of it.
-      const observations = events.map((event) =>
-        translateBridgeEvent(
-          producer,
-          event,
-          metrics,
-          getCompatibility().disabled,
-          deps.importScreenshot,
-        ),
-      )
+      // Validate the whole batch before accepting any part of it, without side effects (no screenshot import).
+      const scratch = { unknownHooks: 0, mismatchedKanbanTasks: 0 }
+      for (const event of events)
+        translateBridgeEvent(producer, event, scratch, getCompatibility().disabled)
       let ackedThrough: number
       try {
-        for (const observation of observations) await ingest.submit(observation)
+        // Import each screenshot right before its frame commits and retains it: a batch-wide import would let
+        // a later import evict an earlier, still unreferenced one near the quota.
+        for (const event of events)
+          await ingest.submit(
+            translateBridgeEvent(
+              producer,
+              event,
+              metrics,
+              getCompatibility().disabled,
+              deps.importScreenshot,
+            ),
+          )
       } finally {
         ackedThrough = db.tx((sqlite) =>
           acknowledge(sqlite, producer, new Date(clock()).toISOString()),

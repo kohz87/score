@@ -35,6 +35,7 @@ export type HermesRunner = (
 
 const ReadConfigKeys = [
   'model',
+  'providers',
   'skills.disabled',
   'delegation.max_concurrent_children',
   'command_allowlist',
