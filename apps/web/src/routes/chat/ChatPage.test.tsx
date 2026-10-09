@@ -16,7 +16,9 @@ import { App, appRoutes } from '../../App.tsx'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry, immediateFrameScheduler } from '../../data/resync.ts'
 import { createStreamClient } from '../../data/stream.ts'
+import { readFileSync } from 'node:fs'
 import { resetMessageDeletion } from './message-deletion.ts'
+import { stopEdit } from './message-edit.ts'
 import { messagesQuery, reduceMessages } from './queries.ts'
 
 const agent: AgentSummary = {
@@ -149,6 +151,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   resetMessageDeletion()
+  stopEdit()
   cleanup()
   disposers.splice(0).forEach((dispose) => dispose())
   vi.unstubAllGlobals()
@@ -653,4 +656,166 @@ test('a streaming message offers no Delete', async () => {
   setup()
   await screen.findByText('Hello team')
   expect(screen.queryByRole('button', { name: /Delete message/ })).toBeNull()
+})
+
+// PLAN 5.24: actions under each message.
+const mine: Message = {
+  ...message,
+  id: 'mine',
+  author: { kind: 'you' },
+  to: ['lead'],
+  parts: [{ kind: 'text', text: 'Ship it' }],
+  streaming: false,
+  createdAt: '2026-10-08T10:00:01.000Z',
+}
+const reply: Message = {
+  ...message,
+  id: 'reply',
+  parts: [{ kind: 'text', text: 'Shipped **now**' }],
+  streaming: false,
+  createdAt: '2026-10-08T10:00:02.000Z',
+}
+const buttons = (article: HTMLElement) =>
+  within(article)
+    .getAllByRole('button')
+    .map((button) => button.textContent)
+test('finished messages get an action row below the body, per author; streaming ones none', async () => {
+  items = [mine, reply, { ...message, id: 'writing', createdAt: '2026-10-08T10:00:03.000Z' }]
+  setup()
+  await screen.findByText('Ship it')
+  const articles = screen.getAllByRole('article')
+  expect(buttons(articles[0]!)).toEqual(['Edit', 'Copy', 'Delete'])
+  expect(buttons(articles[1]!)).toEqual(['Copy', 'Retry', 'Delete'])
+  expect(within(articles[2]!).queryByRole('button')).toBeNull()
+  // Below the body, never inside the header that holds the timestamp.
+  const meta = articles[0]!.querySelector('.chat-message-meta')!
+  expect(meta.querySelector('button')).toBeNull()
+  expect(
+    articles[0]!
+      .querySelector('.chat-message-parts')!
+      .compareDocumentPosition(articles[0]!.querySelector('.chat-message-actions')!) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy()
+})
+test('actions show on hover or focus and always on touch devices', () => {
+  const css = readFileSync('src/routes/chat/chat.css', 'utf8')
+  expect(css).toMatch(/\.chat-message:hover \.chat-message-actions[^{]*\{\s*opacity: 1/)
+  expect(css).toMatch(/\.chat-message:focus-within \.chat-message-actions/)
+  expect(css).toMatch(/@media \(hover: none\) \{\s*\.chat-message-actions \{\s*opacity: 1/)
+})
+test('Copy puts the Markdown source on the clipboard and says Copied for two seconds', async () => {
+  items = [reply]
+  const writeText = vi.fn(async () => {})
+  vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
+  setup()
+  await screen.findByText('Shipped **now**')
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Copy message from Lead' }))
+  })
+  expect(writeText).toHaveBeenCalledWith('Shipped **now**')
+  expect(screen.getByRole('button', { name: 'Copy message from Lead' }).textContent).toBe('Copied')
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2100)
+  })
+  expect(screen.getByRole('button', { name: 'Copy message from Lead' }).textContent).toBe('Copy')
+})
+test('Retry posts to the retry endpoint with an idempotency key; a 409 explains itself', async () => {
+  items = [reply]
+  setup()
+  await screen.findByText('Shipped **now**')
+  const retries = () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/retry'))
+  const original = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation(async (input, init) =>
+    String(input).endsWith('/retry')
+      ? response({ messageId: 'reply-2' }, 202)
+      : original(input, init),
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Retry reply from Lead' }))
+  await waitFor(() => expect(retries()).toHaveLength(1))
+  const [url, init] = retries()[0]!
+  expect(String(url)).toBe('/api/rooms/general/messages/reply/retry')
+  expect(init?.method).toBe('POST')
+  expect(new Headers(init?.headers).get('Idempotency-Key')).toBeTruthy()
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: /Retry reply/ }).textContent).toBe('Retrying'),
+  )
+  await waitFor(
+    () => expect(screen.getByRole('button', { name: /Retry reply/ }).textContent).toBe('Retry'),
+    { timeout: 3000 },
+  )
+  fetchMock.mockImplementation(async (input, init) =>
+    String(input).endsWith('/retry')
+      ? response({ error: { code: 'conflict', message: 'busy' } }, 409)
+      : original(input, init),
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Retry reply from Lead' }))
+  expect((await screen.findByRole('alert')).textContent).toMatch(/Can’t retry right now/)
+})
+test('Edit loads text and recipients into the composer; Cancel restores the draft', async () => {
+  items = [mine]
+  setup()
+  await screen.findByText('Ship it')
+  const box = screen.getByRole('combobox') as HTMLTextAreaElement
+  fireEvent.change(box, { target: { value: 'half typed' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Edit message from You' }))
+  expect(screen.getByText('Editing your message')).toBeDefined()
+  expect((screen.getByRole('combobox') as HTMLTextAreaElement).value).toBe('Ship it')
+  expect(screen.getByRole('button', { name: 'Remove Lead' })).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(screen.queryByText('Editing your message')).toBeNull()
+  expect((screen.getByRole('combobox') as HTMLTextAreaElement).value).toBe('half typed')
+  expect(screen.queryByRole('button', { name: 'Remove Lead' })).toBeNull()
+})
+test('sending an edit posts `edits`; the original greys with a link to the new version', async () => {
+  items = [mine]
+  setup()
+  await screen.findByText('Ship it')
+  const original = fetchMock.getMockImplementation()!
+  const created: Message = {
+    ...mine,
+    id: 'mine-2',
+    edits: 'mine',
+    parts: [{ kind: 'text', text: 'Ship it today' }],
+  }
+  fetchMock.mockImplementation(async (input, init) =>
+    String(input) === '/api/rooms/general/messages' && init?.method === 'POST'
+      ? response({ message: created, routedTo: ['lead'], command: null })
+      : original(input, init),
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Edit message from You' }))
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Ship it today' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
+  await waitFor(() =>
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true),
+  )
+  const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')!
+  expect(JSON.parse(String(post[1]!.body))).toEqual({
+    text: 'Ship it today',
+    to: ['lead'],
+    edits: 'mine',
+  })
+  await waitFor(() => expect(screen.queryByText('Editing your message')).toBeNull())
+  emit('message.updated', { roomId: 'general', messageId: 'mine', editedBy: 'mine-2' }, 9)
+  const first = screen.getAllByRole('article')[0]!
+  expect(within(first).getByText('edited')).toBeDefined()
+  expect(first.className).toContain('chat-message--edited')
+  expect(within(first).queryByRole('button', { name: /^Edit message/ })).toBeNull()
+  const scroll = vi.fn()
+  const target = document.getElementById('message-mine-2')!
+  target.scrollIntoView = scroll
+  fireEvent.click(within(first).getByRole('button', { name: 'see the new version' }))
+  expect(scroll).toHaveBeenCalled()
+})
+test('message.updated sets editedBy on the cached original only', () => {
+  const data = { items: [mine, reply], nextCursor: null, typing: {} }
+  const event = {
+    type: 'message.updated',
+    seq: 2,
+    ts: mine.createdAt,
+    data: { roomId: 'general', messageId: 'mine', editedBy: 'n' },
+  } as const
+  const next = reduceMessages(data, event, 'general', true)
+  expect(next.items[0]!.editedBy).toBe('n')
+  expect(next.items[1]).toBe(reply)
 })
