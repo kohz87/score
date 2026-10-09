@@ -292,6 +292,9 @@ shows the current model; Settings model edit fixed; plugins move to each agent's
 **5.20 Owner feedback round 2** · Messaging setup from the browser (tokens via `hermes config set`), delete messages
 (Score-side, with Undo), a task-first Now (chat replies as a band, close blocks grouped) (docs/briefs/5.20.md).
 
+**5.21 Reports: instant ranges and a custom range** · Reports stops waiting on Hermes CLI reads (agent ids from Score's DB),
+loading state + prefetch, `range=custom&from&to` (docs/briefs/5.21.md).
+
 ---
 
 ## First five tasks
