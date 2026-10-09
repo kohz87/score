@@ -8,7 +8,7 @@ import {
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { humanGuard } from '../auth/human.ts'
-import { mcpAddCommand } from '../hermes/mcp-command.ts'
+import { mcpAddCommand } from '../hermes/index.ts'
 import { MCP_PATH } from '../mcp/routes.ts'
 import type { McpAccessStore } from '../mcp/access.ts'
 

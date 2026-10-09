@@ -2,7 +2,6 @@ import { MCP_CALLS_PER_MINUTE } from '@score/contract'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { FastifyInstance } from 'fastify'
 import { HttpError } from '../errors.ts'
-import type { McpAccessStore } from './access.ts'
 import { createMcpServer, type McpToolDeps } from './tools.ts'
 
 export const MCP_PATH = '/bridge/mcp'

@@ -875,3 +875,36 @@ a.team-pill-button {
   cursor: pointer;
   vertical-align: middle;
 }
+
+/* MCP access */
+.team-mcp-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+}
+.team-mcp-box p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.team-mcp-box code {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 12px;
+  user-select: all;
+}
+.team-mcp-box button {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  font-weight: 600;
+  cursor: pointer;
+}

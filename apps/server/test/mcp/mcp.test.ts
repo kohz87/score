@@ -16,7 +16,7 @@ import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { KnowledgeAgentApi } from '../../src/knowledge/agent-api.ts'
 import { KnowledgeVault } from '../../src/knowledge/vault.ts'
 import { McpAccessStore } from '../../src/mcp/access.ts'
-import { mcpAddCommand } from '../../src/hermes/mcp-command.ts'
+import { mcpAddCommand } from '../../src/hermes/index.ts'
 import type { HermesPort } from '../../src/hermes/index.ts'
 
 let dir: string
