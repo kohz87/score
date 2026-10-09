@@ -465,3 +465,20 @@ test('turns that never reached Hermes are not counted in the rewind plan', async
   )
   expect(after.agents).toEqual([])
 })
+
+// audit4-c 6: a room that continues an outside session rewinds that session.
+test('a continued outside session is the one that gets rewound', async () => {
+  const room = await createRoom()
+  db.sqlite
+    .prepare(
+      `INSERT INTO room_sessions (room_id, agent_id, session_id, mode) VALUES (?, 'builder', 'ext-telegram-1', 'same_session')`,
+    )
+    .run(room.id)
+  const first = await ask(room.id, 'first', ['builder'])
+  await answer(room.id, first.id, 'builder')
+  const response = await rewind(room.id, first.id)
+  expect(response.statusCode).toBe(200)
+  expect(fake().rewinds.map((item) => [item.agentId, item.sessionId, item.turns])).toEqual([
+    ['builder', 'ext-telegram-1', 1],
+  ])
+})

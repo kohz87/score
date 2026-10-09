@@ -12,7 +12,7 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
-import { IMPORTED_ID_PREFIX } from './outside-sessions.ts'
+import { continuationFor, IMPORTED_ID_PREFIX } from './outside-sessions.ts'
 import { MessageRowSchema, messageFromRow, readRoom, roomChanged, roomRow } from './rooms.ts'
 
 const VersionRowSchema = z.object({
@@ -189,7 +189,10 @@ export function rewindScope(sqlite: DatabaseSync, roomId: string, anchor: Messag
     agents: rows.map((row) => ({
       agentId: row.agent_id,
       turns: row.turns,
-      sessionId: `score-${roomId}-${row.agent_id}`,
+      // A room that continues an outside session runs in that Hermes session, not in its own.
+      sessionId:
+        continuationFor(sqlite, roomId, row.agent_id).sessionId ??
+        `score-${roomId}-${row.agent_id}`,
     })),
   }
 }
