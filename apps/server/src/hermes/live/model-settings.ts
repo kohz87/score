@@ -168,9 +168,12 @@ export function planWrites(raw: RawSettings, update: ModelSettingsUpdate): Op[] 
   const speech = update.speech
   if (speech?.stt) {
     const { provider, model } = speech.stt
-    const next = provider ?? prior.speech.stt.provider
+    const next = provider === undefined ? prior.speech.stt.provider : provider
     if (provider && provider !== prior.speech.stt.provider)
       ops.push({ kind: 'set', key: 'stt.provider', value: provider })
+    // Automatic: Hermes picks the provider itself again.
+    else if (provider === null && prior.speech.stt.provider !== null)
+      ops.push({ kind: 'unset', key: 'stt.provider' })
     if (model !== undefined && model !== leaf(stt, next, sttModelKey(next ?? ''))) {
       if (!next || !STT_PROVIDERS.find((item) => item.id === next)?.model)
         throw conflict('Choose a speech-to-text provider with a model setting first')

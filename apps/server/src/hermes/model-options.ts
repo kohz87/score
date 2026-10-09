@@ -7,6 +7,7 @@ export function filterModels(
   items: ModelOption[],
   q?: string,
   only?: readonly ModelRef[],
+  limit = MAX_MODEL_OPTIONS,
 ): ModelOption[] {
   const chosen = only?.length
     ? new Set(only.map((ref) => `${ref.provider}\0${ref.model}`))
@@ -24,5 +25,5 @@ export function filterModels(
         a.providerLabel.localeCompare(b.providerLabel) ||
         a.model.localeCompare(b.model),
     )
-    .slice(0, MAX_MODEL_OPTIONS)
+    .slice(0, limit)
 }

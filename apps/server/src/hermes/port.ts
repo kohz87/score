@@ -263,7 +263,7 @@ export interface HermesPort extends ProfileManagementPort {
    * to run in a terminal.
    */
   /** Models of connected providers matching `q` (at most 200, available first); [] when Hermes can't say. */
-  listModels(q?: string, only?: readonly ModelRef[]): Promise<ModelOption[]>
+  listModels(q?: string, only?: readonly ModelRef[], limit?: number): Promise<ModelOption[]>
   /** Interactive sign-ins are never run by Score: the result carries the command to run in a terminal. */
   connectProvider(id: string): Promise<ConnectResult>
   /** In-memory sign-ins; unknown ids are 404. */

@@ -62,7 +62,7 @@ export type SpeechSettings = z.infer<typeof SpeechSettingsSchema>
 
 export const ModelSettingsSchema = z.object({
   /** Ordered chain Hermes tries when the model is unavailable (`fallback_providers`; any length). */
-  fallbacks: z.array(ModelRefSchema).max(10),
+  fallbacks: z.array(ModelRefSchema),
   /** false when an entry has settings beyond provider and model (custom endpoint, key): shown, not rewritten. */
   fallbacksEditable: z.boolean(),
   aliases: z.array(ModelAliasSchema).max(200),
@@ -73,11 +73,12 @@ export type ModelSettings = z.infer<typeof ModelSettingsSchema>
 /** Only what changed is sent; a key left out is left alone. `aliases` is the full list of editable aliases wanted. */
 export const ModelSettingsUpdateSchema = z
   .object({
-    fallbacks: z.array(ModelRefSchema).max(10).optional(),
+    fallbacks: z.array(ModelRefSchema).optional(),
     aliases: z.array(AliasInputSchema).max(200).optional(),
     speech: z
       .object({
-        stt: z.object({ provider: SttProviderId, model: Name }).partial().strict(),
+        /** `provider: null` goes back to Automatic (`config unset stt.provider`). */
+        stt: z.object({ provider: SttProviderId.nullable(), model: Name }).partial().strict(),
         tts: z
           .object({
             provider: TtsProviderId,

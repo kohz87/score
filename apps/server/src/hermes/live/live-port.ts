@@ -499,8 +499,8 @@ export class LivePort implements HermesPort {
   async listProviders() {
     return this.settings.listProviders()
   }
-  async listModels(q?: string, only?: readonly ModelRef[]) {
-    return this.models.list(q, only)
+  async listModels(q?: string, only?: readonly ModelRef[], limit?: number) {
+    return this.models.list(q, only, limit)
   }
   async connectProvider(id: string) {
     return this.settings.connectProvider(id)

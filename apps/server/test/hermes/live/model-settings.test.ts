@@ -211,3 +211,18 @@ test('a legacy fallback_model with a custom endpoint is shown and protected (aud
     status: 409,
   })
 })
+
+test('speech-to-text goes back to Automatic by unsetting the provider (audit5-e)', async () => {
+  config.stt = { provider: 'groq', groq: { model: 'whisper-large-v3-turbo' } }
+  const saved = await tabs.updateModelSettings('builder', { speech: { stt: { provider: null } } })
+  expect(writes()).toEqual([['-p', 'builder', 'config', 'unset', 'stt.provider']])
+  expect(saved.speech.stt).toEqual({ provider: null, model: null })
+})
+
+test('eleven fallbacks load and save (audit5-e)', async () => {
+  const chain = Array.from({ length: 11 }, (_, n) => ({ provider: 'openrouter', model: `m/${n}` }))
+  config.fallback_providers = chain
+  expect((await tabs.getModelSettings('builder')).fallbacks).toHaveLength(11)
+  const saved = await tabs.updateModelSettings('builder', { fallbacks: chain.slice().reverse() })
+  expect(saved.fallbacks).toHaveLength(11)
+})

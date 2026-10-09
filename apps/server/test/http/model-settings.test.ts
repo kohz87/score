@@ -8,6 +8,7 @@ import {
 } from '@score/contract'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
+import { filterModels } from '../../src/hermes/model-options.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { setup } from '../hermes/live/gateway/helpers.ts'
 
@@ -174,4 +175,24 @@ test('a providerless alias stays providerless in the picker even when the model 
   )
   const found = await models('?q=hand&agentId=builder')
   expect(found.items[0]).toMatchObject({ alias: 'hand', provider: '' })
+})
+
+test('the picker still offers Show all when the chosen list is capped at 200 and more models match (audit5-e)', async () => {
+  const rows = Array.from({ length: 240 }, (_, n) => ({
+    provider: 'acme',
+    providerLabel: 'Acme',
+    model: `model-${String(n).padStart(3, '0')}`,
+    available: true,
+    reason: null,
+    free: false,
+    price: null,
+  }))
+  vi.spyOn(port, 'listModels').mockImplementation(async (q, only, limit) =>
+    filterModels(rows, q, only, limit),
+  )
+  const chosen = rows.slice(0, 200).map(({ provider, model }) => ({ provider, model }))
+  await put('/api/settings/model-visibility', { items: chosen })
+  const shown = await models()
+  expect(shown.items).toHaveLength(200)
+  expect(shown.hiddenCount).toBe(40)
 })

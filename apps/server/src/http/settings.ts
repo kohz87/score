@@ -69,7 +69,7 @@ export function registerSettingsRoutes(
     const chosen = db && all !== '1' ? readChosenModels(db) : []
     const items = await port.listModels(q, chosen)
     const hiddenCount = chosen.length
-      ? Math.max(0, (await port.listModels(q)).length - items.length)
+      ? Math.max(0, (await port.listModels(q, undefined, Infinity)).length - items.length)
       : 0
     const rows = [...(await aliasRows(agentId, q)), ...items]
     return ModelsResponseSchema.parse({

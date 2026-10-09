@@ -950,12 +950,12 @@ const cases = [
   ['RoomVersionDetailSchema', { version: f.roomVersion, items: [] }, { version: f.roomVersion }],
   [
     'BridgeCommandSchema',
-    { commandId: 'c1', kind: 'rewind', sessionId: 's', turns: 1 },
-    { commandId: 'c1', kind: 'rewind', sessionId: 's', turns: 0 },
+    { commandId: 'c1', kind: 'rewind', sessionId: 's', turns: 1, expiresAt: 1790000060 },
+    { commandId: 'c1', kind: 'rewind', sessionId: 's', turns: 0, expiresAt: 1790000060 },
   ],
   [
     'BridgeCommandsResponseSchema',
-    { items: [{ commandId: 'c1', kind: 'rewind', sessionId: 's', turns: 1 }] },
+    { items: [{ commandId: 'c1', kind: 'rewind', sessionId: 's', turns: 1, expiresAt: 1790000060 }] },
     { items: [{}] },
   ],
   ['BridgeCommandResultSchema', { outcome: 'nothing' }, { outcome: 'maybe' }],
@@ -1113,5 +1113,25 @@ describe('Kanban attempts (5.17a-1) additions', () => {
       contract.TaskDetailSchema.safeParse({ ...f.detail, unresolvedRunLinks: [{ legacyId: '' }] })
         .success,
     ).toBe(false)
+  })
+})
+
+describe('model settings (audit5-e)', () => {
+  const ref = (n: number) => ({ provider: 'openrouter', model: `m/${n}` })
+  const chain = Array.from({ length: 11 }, (_, n) => ref(n))
+  test('a fallback chain of any length reads and saves', () => {
+    expect(contract.ModelSettingsUpdateSchema.safeParse({ fallbacks: chain }).success).toBe(true)
+    const settings = {
+      fallbacks: chain,
+      fallbacksEditable: true,
+      aliases: [],
+      speech: { stt: { provider: null, model: null }, tts: { provider: null, model: null, voice: null } },
+    }
+    expect(contract.ModelSettingsSchema.safeParse(settings).success).toBe(true)
+  })
+  test('speech-to-text can be set back to Automatic', () => {
+    expect(
+      contract.ModelSettingsUpdateSchema.safeParse({ speech: { stt: { provider: null } } }).success,
+    ).toBe(true)
   })
 })
