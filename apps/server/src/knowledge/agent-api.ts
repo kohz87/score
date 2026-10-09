@@ -1,6 +1,4 @@
-import type {
-  KnowledgeSearchHit,
-} from '@score/contract'
+import type { KnowledgeSearchHit } from '@score/contract'
 import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
 import { HttpError } from '../errors.ts'
@@ -77,7 +75,9 @@ export class KnowledgeAgentApi {
         .object({ count: z.number() })
         .parse(
           sqlite
-            .prepare('SELECT COUNT(*) AS count FROM knowledge_agent_writes WHERE agent_id = ? AND at > ?')
+            .prepare(
+              'SELECT COUNT(*) AS count FROM knowledge_agent_writes WHERE agent_id = ? AND at > ?',
+            )
             .get(agentId, now - HOUR),
         ).count
       if (count >= AGENT_WRITES_PER_HOUR) {
@@ -85,7 +85,9 @@ export class KnowledgeAgentApi {
           .object({ at: z.number() })
           .parse(
             sqlite
-              .prepare('SELECT MIN(at) AS at FROM knowledge_agent_writes WHERE agent_id = ? AND at > ?')
+              .prepare(
+                'SELECT MIN(at) AS at FROM knowledge_agent_writes WHERE agent_id = ? AND at > ?',
+              )
               .get(agentId, now - HOUR),
           ).at
         return { retryAfterSeconds: Math.max(1, Math.ceil((oldest + HOUR - now) / 1000)) }
@@ -142,7 +144,8 @@ export class KnowledgeAgentApi {
     if (prefix.split('/').some((part) => part === '..' || part === '.git'))
       throw new HttpError(400, 'bad_path', 'That folder is not in the vault')
     const tree = await this.vault.tree()
-    const inside = (path: string) => prefix === '' || path === prefix || path.startsWith(`${prefix}/`)
+    const inside = (path: string) =>
+      prefix === '' || path === prefix || path.startsWith(`${prefix}/`)
     const folders = tree.folders.filter((path) => inside(path) && path !== prefix)
     const notes = tree.notes.filter((note) => inside(note.path))
     const total = folders.length + notes.length

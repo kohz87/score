@@ -124,7 +124,10 @@ export const BridgeKnowledgeWriteRequestSchema = z.object({
 })
 export const BridgeKnowledgeAppendRequestSchema = z.object({
   path: KnowledgeToolPathSchema,
-  text: z.string().min(1).max(AGENT_NOTE_BYTES * 4),
+  text: z
+    .string()
+    .min(1)
+    .max(AGENT_NOTE_BYTES * 4),
 })
 export const BridgeKnowledgeSearchResponseSchema = z.object({
   items: z.array(KnowledgeSearchHitSchema).max(200),

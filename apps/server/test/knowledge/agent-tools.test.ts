@@ -49,7 +49,12 @@ beforeEach(async () => {
     db: h.db,
     ingest: { submit: async () => undefined, clearHolds: () => undefined } as never,
     bootstrapHash,
-    getCompatibility: () => ({ fingerprint: 'f', tested: true, disabled: [], matchedHermes: null }),
+    getCompatibility: () => ({
+      fingerprint: 'f',
+      tested: true,
+      disabled: [],
+      matchedHermes: { version: '0.21.0', codeSha: 'fixture' },
+    }),
     clock: () => now,
     knowledge: new KnowledgeAgentApi(h.vault, h.db, () => now),
   })
@@ -62,7 +67,8 @@ afterEach(async () => {
 test('requires a valid producer token', async () => {
   expect((await call('x'.repeat(43), 'search', { query: 'a' })).statusCode).toBe(401)
   expect(
-    (await app.inject({ method: 'POST', url: '/bridge/v1/knowledge/list', payload: {} })).statusCode,
+    (await app.inject({ method: 'POST', url: '/bridge/v1/knowledge/list', payload: {} }))
+      .statusCode,
   ).toBe(401)
 })
 
@@ -81,7 +87,9 @@ test('write, read, list, search and append work; the author is the producer prof
 
   const read = (await call(tok, 'read', { path: 'notes/plan.md' })).json()
   expect(read).toMatchObject({ title: 'Plan', etag, truncated: false })
-  const list = (await call(tok, 'list', { folder: 'notes' })).json() as { notes: { path: string }[] }
+  const list = (await call(tok, 'list', { folder: 'notes' })).json() as {
+    notes: { path: string }[]
+  }
   expect(list.notes.map((n) => n.path)).toEqual(['notes/plan.md'])
   const found = (await call(tok, 'search', { query: 'launchpad' })).json() as { items: unknown[] }
   expect(found.items).toHaveLength(1)
@@ -167,7 +175,9 @@ test('size limit (256 KiB) and rate limit (60 writes per hour per agent)', async
 test('failed writes do not use rate budget; agent text is redacted before it is stored', async () => {
   const tok = await token('builder')
   for (let i = 0; i < 65; i++)
-    expect((await call(tok, 'write', { path: 'seed.md', body: 'x', expectedEtag: null })).statusCode).toBe(409)
+    expect(
+      (await call(tok, 'write', { path: 'seed.md', body: 'x', expectedEtag: null })).statusCode,
+    ).toBe(409)
   const secret = 'sk-' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4'
   await call(tok, 'write', { path: 's.md', body: `key ${secret} end`, expectedEtag: null })
   const stored = (await call(tok, 'read', { path: 's.md' })).json() as { body: string }
@@ -191,6 +201,9 @@ test('read is bounded, list is bounded, bad paths are refused', async () => {
   expect(list.notes).toHaveLength(200)
   expect(list.truncated).toBe(true)
   expect((await call(tok, 'read', { path: '../etc/passwd' })).statusCode).toBe(400)
-  expect((await call(tok, 'write', { path: '.git/config.md', body: 'x', expectedEtag: null })).statusCode).toBe(400)
+  expect(
+    (await call(tok, 'write', { path: '.git/config.md', body: 'x', expectedEtag: null }))
+      .statusCode,
+  ).toBe(400)
   expect((await call(tok, 'list', { folder: '../' })).statusCode).toBe(400)
 }, 120_000)

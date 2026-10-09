@@ -1,5 +1,6 @@
 import type { AgentDetail } from '@score/contract'
 import { useToolAction } from './agent-tab-queries.ts'
+import { KnowledgeToolsRow } from './KnowledgeToolsRow.tsx'
 import { tabFailure } from './tab-errors.ts'
 
 export function ToolsTab({ agent }: { agent: AgentDetail }) {
@@ -32,6 +33,7 @@ export function ToolsTab({ agent }: { agent: AgentDetail }) {
             )}
           </li>
         ))}
+        <KnowledgeToolsRow agent={agent} />
         <li>
           <span>Helpers they can spawn</span>
           <strong>{agent.helpersMax === null ? 'Not set' : `Up to ${agent.helpersMax}`}</strong>
