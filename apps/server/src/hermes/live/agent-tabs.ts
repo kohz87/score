@@ -3,6 +3,9 @@ import { HttpError } from '../../errors.ts'
 import { redact, redactBounded } from '../../redact.ts'
 import {
   HubSkillSchema,
+  ModelSettingsUpdateSchema,
+  type ModelSettings,
+  type ModelSettingsUpdate,
   type AgentChannelsResponse,
   type HubSkill,
   type MemoryItem,
@@ -39,6 +42,7 @@ import { messagingRows, readProfilePlatforms } from './settings.ts'
 import { ProfileLocks } from './profile-locks.ts'
 import { ProfileNameSchema } from './paths.ts'
 import { skillNames } from './profiles.ts'
+import { applyOps, deriveSettings, opArgs, planWrites, readRawSettings } from './model-settings.ts'
 
 const HUB_LIMIT = 20
 
@@ -143,6 +147,23 @@ export class LiveAgentTabs {
         }
         throw error
       }
+    })
+  }
+
+  async getModelSettings(agentId: string): Promise<ModelSettings> {
+    const { profile } = this.profile(agentId)
+    return deriveSettings(await readRawSettings(this.runner, this.hermesHome, profile))
+  }
+
+  /** Writes only the keys that differ from what Hermes holds and answers from what was written (no re-read). */
+  async updateModelSettings(agentId: string, input: ModelSettingsUpdate): Promise<ModelSettings> {
+    const update = ModelSettingsUpdateSchema.parse(input)
+    const { profile } = this.profile(agentId)
+    return this.serial(profile, async () => {
+      const raw = await readRawSettings(this.runner, this.hermesHome, profile)
+      const ops = planWrites(raw, update)
+      for (const op of ops) await this.mutate(profile, opArgs(op))
+      return deriveSettings(applyOps(raw, ops))
     })
   }
 

@@ -227,6 +227,23 @@ export class ProfilesReader {
     })
     return value
   }
+  /** "model-a, then model-b" from Hermes's `fallback_providers`; null when none is set or it can't be read. */
+  private async fallbackText(profile: string): Promise<string | null> {
+    try {
+      const result = await this.runner(
+        ['-p', profile, 'config', 'get', '--json', 'fallback_providers'],
+        { timeoutMs: 5000, hermesHome: this.hermesHome, captureRead: true },
+      )
+      if (result.exitCode !== 0 || !result.stdout) return null
+      const parsed = z
+        .array(z.object({ model: z.string().min(1) }).loose())
+        .safeParse(JSON.parse(result.stdout))
+      if (!parsed.success || parsed.data.length === 0) return null
+      return redact(parsed.data.map((entry) => entry.model).join(', then '))
+    } catch {
+      return null
+    }
+  }
   private async model(profile: string, home: string | null): Promise<AgentDetail['model']> {
     // The contract's detail model is null when it can't be read (§8).
     const unavailable = null
@@ -245,14 +262,15 @@ export class ProfilesReader {
       if (result.exitCode !== 0 || !result.stdout || Buffer.byteLength(result.stdout) > 16 * 1024)
         return unavailable
       const model = ModelSchema.parse(JSON.parse(result.stdout))
+      const fallback = await this.fallbackText(profile)
       const value =
         typeof model === 'string'
-          ? { id: redact(model), label: redact(model), via: 'Hermes configuration', fallback: null }
+          ? { id: redact(model), label: redact(model), via: 'Hermes configuration', fallback }
           : {
               id: redact(model.default),
               label: redact(model.default),
               via: redact(model.provider ?? 'Hermes configuration'),
-              fallback: model.fallback ? redact(model.fallback) : null,
+              fallback: fallback ?? (model.fallback ? redact(model.fallback) : null),
             }
       this.models.set(profile, { signature, value })
       return value
