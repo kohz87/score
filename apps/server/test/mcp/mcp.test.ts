@@ -489,7 +489,12 @@ test('a session that outlives its agent is refused on the next tool call', async
     ['rooms.list', {}],
     ['tasks.list', {}],
   ] as const)
-    expect((await call(client, name, args)).error).toBe(true)
+    expect(
+      await call(client, name, args).then(
+        (r) => r.error,
+        () => true,
+      ),
+    ).toBe(true)
 })
 
 test('tokens are redacted in room posts, task comments and knowledge notes, bare or embedded', async () => {
@@ -554,10 +559,36 @@ test('batches are refused and concurrent calls are bounded', async () => {
     ),
   })
   expect(batch.status).toBe(400)
-  const many = await Promise.all(Array.from({ length: 12 }, () => post(token)))
-  const statuses = many.map((response) => response.status)
-  expect(statuses.filter((status) => status === 429).length).toBeGreaterThan(0)
-  expect(statuses.every((status) => status === 200 || status === 429)).toBe(true)
+  // Hold four posts inside the queue: the fifth request is refused until one finishes.
+  access.patch('builder', { writesEnabled: true })
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  const real = ingest.submit.bind(ingest)
+  vi.spyOn(ingest, 'submit').mockImplementation(async (observation) => {
+    await gate
+    return real(observation)
+  })
+  const call1 = (id: number) =>
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id,
+        method: 'tools/call',
+        params: { name: 'rooms.post', arguments: { roomId: 'r1', text: `p${id}` } },
+      }),
+    })
+  const held = [1, 2, 3, 4].map(call1)
+  await vi.waitFor(() => expect(ingest.submit).toHaveBeenCalledTimes(4))
+  expect((await post(token)).status).toBe(429)
+  release()
+  expect((await Promise.all(held)).map((response) => response.status)).toEqual([200, 200, 200, 200])
+  expect((await post(token)).status).toBe(200)
 })
 
 test('post limits are bytes, not characters', async () => {
