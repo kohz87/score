@@ -1,12 +1,20 @@
 import { RoomVersionDetailSchema, type AgentSummary, type RoomVersion } from '@score/contract'
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { apiFetch } from '../../data/api.ts'
 import { MessageItem } from './MessageItem.tsx'
 import { startEdit } from './message-edit.ts'
 
 /** A hidden version's messages, read-only (PLAN 5.33). */
-function PreviousVersion({ version, agents }: { version: RoomVersion; agents: AgentSummary[] }) {
+function PreviousVersion({
+  version,
+  versions,
+  agents,
+}: {
+  version: RoomVersion
+  versions: RoomVersion[]
+  agents: AgentSummary[]
+}) {
   const detail = useQuery({
     queryKey: ['chat', 'version', version.roomId, version.anchorId],
     queryFn: async () =>
@@ -26,9 +34,18 @@ function PreviousVersion({ version, agents }: { version: RoomVersion; agents: Ag
       </p>
       {detail.isPending && <p role="status">Loading…</p>}
       {detail.isError && <p role="alert">Could not load that version.</p>}
-      {detail.data?.items.map((message) => (
-        <MessageItem key={message.id} message={message} agents={agents} readOnly />
-      ))}
+      {detail.data?.items.map((message) => {
+        // An edit whose correction was hidden by this rewind keeps its own switcher, so the original stays reachable.
+        const linked = versions.find(
+          (item) => item.mode === 'edit' && item.replacedBy === message.id && item.id !== version.id,
+        )
+        return (
+          <Fragment key={message.id}>
+            {linked && <VersionSwitcher version={linked} versions={versions} agents={agents} />}
+            <MessageItem message={message} agents={agents} readOnly />
+          </Fragment>
+        )
+      })}
     </div>
   )
 }
@@ -123,7 +140,7 @@ export function VersionSwitcher({
           </>
         )}
       </div>
-      {viewing && <PreviousVersion version={viewing} agents={agents} />}
+      {viewing && <PreviousVersion version={viewing} versions={versions} agents={agents} />}
     </div>
   )
 }
