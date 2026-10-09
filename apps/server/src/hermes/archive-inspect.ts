@@ -71,6 +71,73 @@ function isCredentialName(name: string): boolean {
   )
 }
 
+// Hermes's own credential stores (hermes_cli/profiles.py PROFILE_CREDENTIAL_PATHS and store-copy patterns), as paths
+// relative to the profile root; an entry at or below one of them is a credential.
+const HERMES_CREDENTIAL_PATHS = [
+  'auth.json',
+  '.env',
+  'auth/google_oauth.json',
+  '.op.env',
+  'npmrc',
+  '.anthropic_oauth.json',
+  'google_token.json',
+  'google_oauth_pending.json',
+  'google_client_secret.json',
+  'google_chat_user_tokens',
+  'google_chat_user_client_secret.json',
+  'google_chat_user_oauth_pending.json',
+  'google_chat_user_token.json',
+  'google_chat_user_oauth_pending',
+  'slack_tokens.json',
+  'honcho.json',
+  'mem0.json',
+  'webhook_subscriptions.json',
+  'teams_pipeline_store.json',
+  'mcp-tokens',
+  'vault',
+  'browser-profile',
+  'browser_auth',
+  'bot-desktop',
+  'browser-profiles',
+  'browser_profiles',
+  'pairing',
+  'platforms/pairing',
+  'feishu_comment_pairing.json',
+  'whatsapp/session',
+  'platforms/whatsapp/session',
+  'matrix/store',
+  'platforms/matrix/store',
+  'cache/bws_cache.json',
+  'cache/bws_cache.enc.json',
+  'workspace/meetings/node_token.json',
+  'weixin/accounts',
+  '.copilot_jwt.json',
+  'runtime/photon-sidecar.json',
+  'proxy',
+  'chrome-debug',
+  'home',
+  'backups',
+  'state-snapshots',
+  '.ssh',
+  '.aws',
+  '.gnupg',
+  '.kube',
+  '.docker',
+  '.azure',
+  '.config/gh',
+  '.config/gcloud',
+  '.envrc',
+].map((path) => path.split('/'))
+const STORE_COPY =
+  /^(?:auth\.json\..+|\.env\.bak.*|config\.yaml\.(?:bak-\d{8}t\d{6}z(?:\.\d+)?|bak\.\d+|corrupt\..*|bak-pre-migrate-.*))$/
+function isHermesCredentialPath(rel: string[]): boolean {
+  const lower = rel.map((part) => part.toLowerCase())
+  if (lower.length === 1 && STORE_COPY.test(lower[0]!)) return true
+  return HERMES_CREDENTIAL_PATHS.some(
+    (path) => path.length <= lower.length && path.every((part, i) => part === lower[i]),
+  )
+}
+
 function clean(value: string, max = 200): string {
   // eslint-disable-next-line no-control-regex
   return redact(value.replace(/[\u0000-\u001f\u007f]/g, '').trim()).slice(0, max)
@@ -200,7 +267,13 @@ class TarScanner {
       this.setBody()
       return
     }
-    if (type === 'g' || type === 'K') {
+    // Global PAX headers rename or resize every later entry, and sparse entries unpack far larger than their stored
+    // size; the inspector can't mirror either exactly, so such archives are refused rather than misreported.
+    if (type === 'g' || type === 'S')
+      throw refuse(
+        'The archive uses tar features (global headers or sparse files) Score will not import.',
+      )
+    if (type === 'K') {
       if (size > MAX_META_BYTES) throw refuse('The archive is corrupt.')
       this.setBody()
       return
@@ -244,6 +317,8 @@ class TarScanner {
     if (key && this.seen.has(key)) return
     if (key) this.seen.add(key)
     if (!entry.dir) this.files++
+    if (isHermesCredentialPath(rel) && this.credentials.size < LIST_LIMIT)
+      this.credentials.add(clean(key, 300))
     for (const part of rel)
       if (isCredentialName(part)) {
         if (this.credentials.size < LIST_LIMIT) this.credentials.add(clean(key, 300))
@@ -276,10 +351,22 @@ class TarScanner {
     const text = bytes.toString('utf8')
     if (kind === 'long') this.longName = text.split('\0')[0]
     else if (kind === 'pax') {
-      // "<len> path=<name>\n" records; only the path matters for the checks.
-      for (const record of text.split('\n')) {
-        const match = /^\d+ path=(.*)$/.exec(record)
-        if (match) this.paxPath = match[1]
+      // "<len> key=value\n" records, framed by the byte length like Python's tarfile does.
+      let at = 0
+      while (at < bytes.length) {
+        const space = bytes.indexOf(0x20, at)
+        const length = space < 0 ? Number.NaN : Number(bytes.subarray(at, space).toString('latin1'))
+        if (!Number.isSafeInteger(length) || length <= space - at + 1 || at + length > bytes.length)
+          throw refuse('The archive is corrupt.')
+        const record = bytes.subarray(space + 1, at + length - 1).toString('utf8')
+        at += length
+        const eq = record.indexOf('=')
+        const key = eq < 0 ? record : record.slice(0, eq)
+        if (key.startsWith('GNU.sparse.') || key === 'size')
+          throw refuse(
+            'The archive uses tar features (global headers or sparse files) Score will not import.',
+          )
+        if (key === 'path') this.paxPath = record.slice(eq + 1)
       }
     } else if (kind === 'config') this.config = text
     else this.profile = text
