@@ -5,6 +5,11 @@ import { defineConfig, devices } from '@playwright/test'
 
 const webPort = process.env.SCORE_WEB_PORT ?? '5173'
 const baseURL = `http://127.0.0.1:${webPort}`
+// Kanban attempts (5.17a-1) are behind SCORE_KANBAN_ATTEMPTS, so their spec gets its own server with the flag on and
+// seeded attempts; every other spec keeps the flag off, exactly as the app ships.
+const attemptsPort = String(Number(webPort) + 1)
+const attemptsURL = `http://127.0.0.1:${attemptsPort}`
+const attemptsSpec = /attempts\.spec\.ts$/
 // E2E never touches the developer's real Score home (~/.score): each run gets a throwaway one.
 const scoreHome = process.env.SCORE_E2E_HOME ?? mkdtempSync(join(tmpdir(), 'score-e2e-'))
 
@@ -17,40 +22,72 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   reporter: [['list']],
   use: { baseURL, trace: 'on-first-retry' },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', testIgnore: attemptsSpec, use: { ...devices['Desktop Chrome'] } },
+    ...(process.env.SCORE_E2E_DEV
+      ? []
+      : [
+          {
+            name: 'attempts',
+            testMatch: attemptsSpec,
+            use: { ...devices['Desktop Chrome'], baseURL: attemptsURL },
+          },
+        ]),
+  ],
   // E2E runs the production build (what the owner runs): one Score process serving the built web app on the web port.
   // The unbundled dev server loads ~130 modules per page, and on full page loads headless Chromium dropped some with
   // ERR_INSUFFICIENT_RESOURCES (2026-10-08), so the page never started. SCORE_E2E_DEV=1 keeps the Vite dev server.
   webServer: process.env.SCORE_E2E_DEV
-    ? {
-        command: `pnpm dev 2>&1 | tee ${join(scoreHome, 'dev.log')}`,
-        // The server only accepts mutations from its own web origin, so it must follow SCORE_WEB_PORT.
-        env: {
-          SCORE_HOME: scoreHome,
-          SCORE_MODE: 'fake',
-          SCORE_FAKE_REWIND_SKIP: 'reviewer:compressed',
-          SCORE_WEB_ORIGIN: baseURL,
-          // The specs read the pairing link from dev.log: a non-terminal stdout only gets it on request.
-          SCORE_PRINT_PAIR_LINK: '1',
+    ? [
+        {
+          command: `pnpm dev 2>&1 | tee ${join(scoreHome, 'dev.log')}`,
+          // The server only accepts mutations from its own web origin, so it must follow SCORE_WEB_PORT.
+          env: {
+            SCORE_HOME: scoreHome,
+            SCORE_MODE: 'fake',
+            SCORE_FAKE_REWIND_SKIP: 'reviewer:compressed',
+            SCORE_WEB_ORIGIN: baseURL,
+            // The specs read the pairing link from dev.log: a non-terminal stdout only gets it on request.
+            SCORE_PRINT_PAIR_LINK: '1',
+          },
+          url: baseURL,
+          reuseExistingServer: !process.env.CI,
+          timeout: 60_000,
         },
-        url: baseURL,
-        reuseExistingServer: !process.env.CI,
-        timeout: 60_000,
-      }
-    : {
-        command: `pnpm build >/dev/null && node scripts/start.mjs 2>&1 | tee ${join(scoreHome, 'dev.log')}`,
-        env: {
-          SCORE_HOME: scoreHome,
-          SCORE_MODE: 'fake',
-          // The fake adapter cannot rewind this agent (PLAN 5.33: "Hide in Score only").
-          SCORE_FAKE_REWIND_SKIP: 'reviewer:compressed',
-          SCORE_SERVE_WEB: '1',
-          SCORE_PORT: webPort,
-          SCORE_WEB_ORIGIN: baseURL,
-          SCORE_PRINT_PAIR_LINK: '1',
+      ]
+    : [
+        {
+          command: `pnpm build >/dev/null && node scripts/start.mjs 2>&1 | tee ${join(scoreHome, 'dev.log')}`,
+          env: {
+            SCORE_HOME: scoreHome,
+            SCORE_MODE: 'fake',
+            // The fake adapter cannot rewind this agent (PLAN 5.33: "Hide in Score only").
+            SCORE_FAKE_REWIND_SKIP: 'reviewer:compressed',
+            SCORE_SERVE_WEB: '1',
+            SCORE_PORT: webPort,
+            SCORE_WEB_ORIGIN: baseURL,
+            SCORE_PRINT_PAIR_LINK: '1',
+          },
+          url: baseURL,
+          reuseExistingServer: !process.env.CI,
+          timeout: 300_000,
         },
-        url: baseURL,
-        reuseExistingServer: !process.env.CI,
-        timeout: 300_000,
-      },
+        {
+          // Build once (the first server builds); this one only serves.
+          command: `node scripts/start.mjs 2>&1 | tee ${join(scoreHome, 'attempts.log')}`,
+          env: {
+            SCORE_HOME: mkdtempSync(join(tmpdir(), 'score-e2e-attempts-')),
+            SCORE_MODE: 'fake',
+            SCORE_KANBAN_ATTEMPTS: '1',
+            SCORE_E2E_SEED_ATTEMPTS: '1',
+            SCORE_SERVE_WEB: '1',
+            SCORE_PORT: attemptsPort,
+            SCORE_WEB_ORIGIN: attemptsURL,
+            SCORE_PRINT_PAIR_LINK: '1',
+          },
+          url: attemptsURL,
+          reuseExistingServer: !process.env.CI,
+          timeout: 300_000,
+        },
+      ],
 })

@@ -1,3 +1,4 @@
+import { UnattributedGlyph } from '../../components/UnattributedGlyph.tsx'
 import type { AgentSummary, Reports } from '@score/contract'
 import { ReportRangeSchema } from '@score/contract'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
@@ -176,9 +177,34 @@ function ByAgent({
                 </tr>
               )
             })}
+            {report.unattributed && (
+              <tr>
+                <th scope="row">
+                  <span className="reports-table__agent">
+                    <span className="reports-glyph reports-glyph--26">
+                      <UnattributedGlyph size="sm" decorative />
+                    </span>
+                    Unattributed
+                  </span>
+                </th>
+                <td>—</td>
+                <td>{report.unattributed.runs}</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td className="reports-table__right reports-table__spend">—</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
+      {report.unattributed && (
+        <p className="reports-note">
+          Unattributed: Kanban attempts with no known agent, so no spend or reviews are counted for
+          them. Working time {formatDuration(report.unattributed.workingSec)} counts attempts with
+          proven evidence only.
+        </p>
+      )}
     </section>
   )
 }
