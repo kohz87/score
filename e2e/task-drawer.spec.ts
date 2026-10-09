@@ -38,12 +38,22 @@ test('approves a pending approval from the task drawer', async ({ page }) => {
   })
   await page.goto('/tasks')
   const board = page.getByRole('region', { name: 'Tasks board' })
-  const card = board.getByRole('link', { name: /T-102: Publish the pagination notes/ })
-  await expect(card).toBeVisible({ timeout: 20_000 })
-  await card.focus()
-  await card.press('Enter')
+  // The demo scenario repeats during a long run, so older copies of this task (approval already handled) can be on
+  // the board too: open the copies in turn and keep the one whose drawer still asks.
+  const cards = board.getByRole('link', { name: /T-102: Publish the pagination notes/ })
+  await expect(cards.first()).toBeVisible({ timeout: 20_000 })
   const drawer = page.getByRole('complementary', { name: 'Task details' })
-  await expect(drawer.getByRole('heading', { name: 'Publish the pagination notes' })).toBeVisible()
+  const approve = drawer.getByRole('button', { name: 'Approve: install the docs generator' })
+  let card = cards.first()
+  for (let at = (await cards.count()) - 1; at >= 0; at--) {
+    card = cards.nth(at)
+    await card.focus()
+    await card.press('Enter')
+    await expect(
+      drawer.getByRole('heading', { name: 'Publish the pagination notes' }),
+    ).toBeVisible()
+    if (await approve.isVisible()) break
+  }
   await expect(drawer.getByText('Needs you', { exact: true })).toBeVisible()
   await expect(drawer.getByRole('link', { name: '#activity-feed' })).toHaveAttribute(
     'href',

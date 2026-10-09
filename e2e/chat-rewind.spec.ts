@@ -80,7 +80,18 @@ test('Edit rewinds, then the correction shows "Version 2 of 2" with the original
     .filter({ hasText: fixed })
   await expect(corrected).toBeVisible()
   await expect(mine).toHaveCount(0)
-  const switcher = page.getByTestId('version-switcher').filter({ hasText: /Version \d of 2/ })
+  // Earlier edits in the shared demo room have switchers of their own: pin the one just before this correction.
+  const switchers = page.getByTestId('version-switcher')
+  const target = await corrected.elementHandle()
+  const index = await switchers.evaluateAll((elements, message) => {
+    let closest = -1
+    elements.forEach((element, at) => {
+      if (element.compareDocumentPosition(message as Node) & Node.DOCUMENT_POSITION_FOLLOWING)
+        closest = at
+    })
+    return closest
+  }, target)
+  const switcher = switchers.nth(index)
   await expect(switcher).toContainText('Version 2 of 2')
   await switcher.getByRole('button', { name: 'Previous version' }).click()
   await expect(switcher.getByText('Version 1 of 2')).toBeVisible()
