@@ -7,7 +7,6 @@ import {
   WorkspaceRootRequestSchema,
   WorkspaceTreeSchema,
   WorkspaceWriteRequestSchema,
-  type WorkspaceInfo,
 } from '@score/contract'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
@@ -20,6 +19,7 @@ import {
   type RootPolicy,
   WorkspaceError,
 } from '../workspace/policy.ts'
+import { createAgentWorkspaces, type AgentWorkspaces } from '../workspace/agent-workspace.ts'
 import { gitStatus } from '../workspace/git.ts'
 import { MAX_TEXT_BYTES, MAX_UPLOAD_BYTES, Workspace } from '../workspace/workspace.ts'
 
@@ -36,41 +36,15 @@ export function registerWorkspaceRoutes(
   port: HermesPort,
   { home, hermesHome }: Pick<Config, 'home' | 'hermesHome'>,
   policy: RootPolicy = defaultRootPolicy([home, resolveHermesHome(hermesHome)]),
+  workspaces?: AgentWorkspaces,
 ): void {
-  async function info(agentId: string): Promise<WorkspaceInfo & { cwd: string | null }> {
-    const { cwd, backend } = await port.readWorkspaceConfig(agentId)
-    if (backend !== null && backend.trim() !== '' && backend.trim().toLowerCase() !== 'local')
-      return {
-        root: null,
-        available: false,
-        reason: `This agent works on a remote terminal (${backend.replace(/[^\w.-]/g, '').slice(0, 40)}), so its files are not on this machine`,
-        cwd,
-      }
-    if (cwd === null || cwd.trim() === '' || cwd.trim() === '.')
-      return {
-        root: null,
-        available: false,
-        reason: 'No working folder is set for this agent',
-        cwd,
-      }
-    const checked = await checkRoot(cwd, policy)
-    if (!checked.ok) return { root: null, available: false, reason: checked.reason, cwd }
-    return { root: checked.real, available: true, reason: null, cwd }
-  }
-
-  async function open(request: FastifyRequest, agentId: string): Promise<Workspace> {
-    const state = await info(agentId)
-    if (!state.available || state.root === null)
-      throw new HttpError(
-        409,
-        'workspace_unavailable',
-        state.reason ?? 'The workspace is unavailable',
-      )
-    return Workspace.open(state.root, policy, (event) =>
+  const { info, open: openWorkspace } =
+    workspaces ?? createAgentWorkspaces(port, { home, hermesHome }, policy)
+  const open = (request: FastifyRequest, agentId: string): Promise<Workspace> =>
+    openWorkspace(agentId, (event) =>
       // Path, size and operation only; never content.
       request.log.info({ agentId, workspace: event }, 'workspace write'),
     )
-  }
 
   // Domain errors keep their status and code; anything else is the usual 500.
   function wrap(work: (request: FastifyRequest, reply: FastifyReply) => Promise<unknown>) {

@@ -137,6 +137,8 @@ type MessagePart =
   | { kind: 'thinking'; text: string } // reasoning text, collapsed in the UI (5.25)
   | { kind: 'file'; path: string; added: number; removed: number }
   | { kind: 'image'; mediaId: string } // an uploaded image, served by GET /api/media/:mediaId
+  | { kind: 'document'; mediaId: string; name: string; contentType: string; size: number; saved?: { agentId: AgentId; path: string }[] } // an uploaded PDF/DOCX/XLSX/text file (5.30; `file` is taken by changed files)
+  | { kind: 'workspace'; agentId: AgentId; path: string } // a reference to a workspace file, not a copy (5.30)
   | { kind: 'approval'; approvalId: string }
   | { kind: 'review'; verdict: 'approved' | 'changes_requested'; taskId: string | null }
 type Message = {
@@ -498,9 +500,9 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 
   ```ts
   req: { text: string; to?: AgentId[] /* explicit "To" chips; @mentions in text are merged */
-         planFirst?: boolean; model?: string /* one-shot /model */; attachments?: { mediaId: string }[]
+         planFirst?: boolean; model?: string /* one-shot /model */; attachments?: ({ mediaId: string; name?: string } | { workspace: { agentId: AgentId; path: string } })[] /* ≤ 10 */
          edits?: MessageId /* edit and resend: the sender's own earlier message in this room */ }
-  res: { message: Message; routedTo: AgentId[]; command: CommandResult | null }
+  res: { message: Message; routedTo: AgentId[]; command: CommandResult | null; notices?: string[] }
   ```
 
   `edits` (PLAN 5.24) must name a finished, undeleted message of the person in the same room that has not been edited
@@ -533,9 +535,19 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 - `GET /api/commands` → `{ items: { name: string; usage: string; description: string }[] }` (slash menu: only the
   supported commands)
 - **H** `POST /api/media` (multipart, one part named `file`) → `201 { mediaId: string; name: string; size: number;
-contentType: string }`. Types come from the bytes (png, jpeg, gif, webp); `400` empty or malformed, `413` over 8 MB,
-  `415` unsupported or contradicting type, `507 media_quota_exceeded`. Messages reference uploads with an `image`
-  part (at most 8 per message). Images on a person's message are sent to each addressed agent's run (the person's
+contentType: string }`. Types come from the bytes: png, jpeg, gif, webp, PDF, DOCX and XLSX (told apart by their ZIP
+  entries), and plain UTF-8 text, where the file name's extension (or the declared type) picks `text/plain`,
+  `text/markdown`, `text/csv`, `application/json` or `text/html`. `400` empty or malformed, `413` over 8 MB for an image
+  or 25 MiB for anything else, `415` unsupported or contradicting type, `507 media_quota_exceeded`. `GET /api/media/:mediaId`
+  serves by kind: images and text (HTML as `text/plain`, never rendered) inline under `default-src 'none'; sandbox`; PDF
+  inline with `nosniff` and no CSP (the browser's viewer needs it); DOCX/XLSX, and any file with `?download=1[&name=]`,
+  as `attachment`. Messages reference uploads with an `image` part, or a `document` part for everything else, plus
+  `workspace` parts for workspace files (`{ workspace: { agentId, path } }`, checked against that agent's workspace, no
+  copy); at most 10 attachments per message. What each addressed agent receives (5.30): text files (TXT, MD, CSV, JSON,
+  HTML) inline in the run input, fenced, redacted, up to 64 KB each and 200 KB per message (truncated with a note); PDF,
+  DOCX and XLSX saved into that agent's workspace as `attachments/<yyyy-mm-dd>/<safe name>` (never overwriting; if the
+  workspace is unavailable only the name is sent and `notices` says why) with the path named in the run input;
+  workspace references are named by path. Images as below. Images on a person's message are sent to each addressed agent's run (the person's
   own message only, never hand-offs between agents): total raw size up to 6 MB per message; images that do not fit
   or are no longer stored are skipped and the run's text gets a short note saying so.
 

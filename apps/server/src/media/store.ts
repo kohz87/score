@@ -170,6 +170,15 @@ export class MediaStore {
     return { bytes, contentType: row.content_type, sha256: row.sha256 }
   }
 
+  // Type and size without reading the bytes; null for unknown ids.
+  info(id: string): { contentType: MediaType; size: number } | null {
+    if (!/^[0-9a-f-]{36}$/.test(id)) return null
+    const found = this.db.sqlite.prepare('SELECT * FROM media WHERE id = ?').get(id)
+    if (!found) return null
+    const row = RowSchema.parse(found)
+    return { contentType: row.content_type, size: row.size }
+  }
+
   has(id: string): boolean {
     return this.db.sqlite.prepare('SELECT 1 FROM media WHERE id = ?').get(id) !== undefined
   }

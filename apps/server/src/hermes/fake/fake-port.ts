@@ -1544,9 +1544,18 @@ export class FakePort implements HermesPort {
       const run = { ...exampleRun(req.agentId, runId, this.now()), model: req.model ?? null }
       const base = demoReply(req.input, this.reply(req))
       const seen = req.images?.length ?? 0
-      const response = seen
+      // Attachment notes (PLAN 5.30) are visible in the reply so end-to-end tests can see what an agent received.
+      const received = [
+        ...req.input.matchAll(/^(?:Attached|Workspace file[^:\n]*|Attached file): (.+)$/gm),
+      ]
+        .map((match) => match[1]!.split(' (')[0]!)
+        .join(', ')
+      const withImages = seen
         ? { ...base, text: `${base.text} I can see ${seen} image${seen === 1 ? '' : 's'}.` }
         : base
+      const response = received
+        ? { ...withImages, text: `${withImages.text} I received: ${received}.` }
+        : withImages
       await this.requireSink().submit({
         source: 'fake',
         identity: `${this.sessionId}:admitted:${req.turnId}`,

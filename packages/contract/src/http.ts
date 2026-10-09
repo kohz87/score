@@ -79,10 +79,22 @@ export const CommandResultSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('model'), model: z.string().min(1) }),
 ])
 export type CommandResult = z.infer<typeof CommandResultSchema>
+/** One attachment of `POST /api/rooms/:roomId/messages`: an upload (`/api/media`) or a workspace file, at most 10 in all. */
+export const MessageAttachmentSchema = z.union([
+  z.object({ mediaId: z.string().min(1), name: z.string().min(1).max(200).optional() }).strict(),
+  z
+    .object({
+      workspace: z.object({ agentId: AgentIdSchema, path: z.string().min(1).max(4096) }).strict(),
+    })
+    .strict(),
+])
+export type MessageAttachment = z.infer<typeof MessageAttachmentSchema>
 export const PostMessageResponseSchema = z.object({
   message: MessageSchema,
   routedTo: z.array(AgentIdSchema),
   command: CommandResultSchema.nullable(),
+  /** Attachment problems the person should know about (a document that could not be saved to an agent's workspace). */
+  notices: z.array(z.string()).optional(),
 })
 /** `GET /api/agents/:agentId/context` (PLAN 5.25): the agent's latest run usage and its model's context window. */
 export const AgentContextSchema = z.object({
