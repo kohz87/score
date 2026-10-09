@@ -12,6 +12,8 @@ test('reports show the numbers, switch range and export the table as CSV', async
   await expect(page.getByRole('region', { name: 'Tasks finished, by day' })).toBeVisible()
   await expect(page.getByRole('heading', { name: "Where each agent's time goes" })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Your approvals' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Last 30 days: spend and runs' })).toBeVisible()
+  await expect(page.getByRole('table', { name: /Runs and spend per day/ })).toHaveCount(1)
 
   const table = page.getByRole('table', { name: 'By agent', exact: true })
   await expect(table.locator('thead th')).toHaveText([
@@ -20,6 +22,7 @@ test('reports show the numbers, switch range and export the table as CSV', async
     'Runs',
     'Median time',
     'First-time pass',
+    'Cache hits',
     'Spend',
   ])
   await expect(table.getByRole('row')).toHaveCount(5)
