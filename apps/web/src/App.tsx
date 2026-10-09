@@ -11,6 +11,7 @@ import { SettingsPage } from './routes/settings/SettingsPage.tsx'
 import { ChatPage } from './routes/chat/ChatPage.tsx'
 import { NowPage } from './routes/now/NowPage.tsx'
 import { AttemptPage } from './routes/attempts/AttemptPage.tsx'
+import { PopOutPage } from './routes/pop/PopOutPage.tsx'
 import { ReportsPage } from './routes/reports/ReportsPage.tsx'
 
 // Knowledge brings CodeMirror and the Markdown renderer: loaded on first visit, not with the shell.
@@ -30,6 +31,8 @@ function StubPage({ title }: { title: string }) {
 }
 
 export const appRoutes: RouteObject[] = [
+  // 7.4b: one agent's compact view for its own browser window; no shell around it.
+  { path: '/agents/:agentId/pop', Component: PopOutPage },
   {
     Component: AppShell,
     HydrateFallback: AppShell,
