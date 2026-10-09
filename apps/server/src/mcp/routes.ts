@@ -6,6 +6,7 @@ import { createMcpServer, type McpToolDeps } from './tools.ts'
 
 export const MCP_PATH = '/bridge/mcp'
 const MINUTE = 60_000
+const MAX_IN_FLIGHT = 4
 
 export type McpRouteDeps = McpToolDeps
 
@@ -17,6 +18,7 @@ const unauthorized = () => new HttpError(401, 'unauthorized', 'Invalid MCP token
 export function registerMcpRoutes(app: FastifyInstance, deps: McpRouteDeps): void {
   const { access } = deps
   const calls = new Map<string, number[]>()
+  const inFlight = new Map<string, number>()
   // The Host names the loopback address; a rebinding page reaches this port under its own name.
   const loopbackHost = /^(127\.0\.0\.1|localhost|\[::1\])(:\d{1,5})?$/i
 
@@ -54,7 +56,28 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpRouteDeps): voi
     if (!identity) throw unauthorized()
     if (!access.get(identity.agentId).enabled)
       throw new HttpError(403, 'mcp_off', 'MCP access is turned off for this agent in Score')
+    // A JSON-RPC batch would buy up to 100 tool calls with one request-rate slot.
+    if (Array.isArray(request.body))
+      throw new HttpError(400, 'bad_request', 'Batched MCP requests are not supported')
     takeCall(identity.agentId)
+    // Bounded concurrency also bounds the memory of in-flight (up to 256 KiB) knowledge reads.
+    const running = inFlight.get(identity.agentId) ?? 0
+    if (running >= MAX_IN_FLIGHT)
+      throw new HttpError(
+        429,
+        'rate_limited',
+        'Too many MCP requests at once; wait for one to finish',
+        {
+          retryAfterSeconds: 1,
+        },
+      )
+    inFlight.set(identity.agentId, running + 1)
+    let released = false
+    const release = () => {
+      if (released) return
+      released = true
+      inFlight.set(identity.agentId, (inFlight.get(identity.agentId) ?? 1) - 1)
+    }
 
     const server = createMcpServer(identity.agentId, deps)
     const transport = new StreamableHTTPServerTransport({
@@ -64,6 +87,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpRouteDeps): voi
     })
     reply.hijack()
     reply.raw.on('close', () => {
+      release()
       void transport.close()
       void server.close()
     })

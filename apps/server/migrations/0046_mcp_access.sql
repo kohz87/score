@@ -4,6 +4,8 @@ CREATE TABLE mcp_access (
   agent_id TEXT PRIMARY KEY,
   enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
   writes_enabled INTEGER NOT NULL DEFAULT 0 CHECK (writes_enabled IN (0, 1)),
+  -- The agent_lifecycle incarnation the switches and token were issued for; a different one never inherits them.
+  incarnation_id TEXT,
   token_hash TEXT UNIQUE,
   token_created_at INTEGER
 ) STRICT;

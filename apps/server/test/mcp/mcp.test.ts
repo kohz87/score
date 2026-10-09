@@ -11,11 +11,12 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { buildApp, buildBridgeApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
+import { rewindingRooms } from '../../src/domain/room-rewinding.ts'
 import { insertRoom } from '../../src/domain/rooms.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { KnowledgeAgentApi } from '../../src/knowledge/agent-api.ts'
 import { KnowledgeVault } from '../../src/knowledge/vault.ts'
-import { McpAccessStore } from '../../src/mcp/access.ts'
+import { McpAccessStore, hashMcpToken } from '../../src/mcp/access.ts'
 import { mcpAddCommand } from '../../src/hermes/index.ts'
 import type { HermesPort } from '../../src/hermes/index.ts'
 
@@ -29,7 +30,8 @@ let browser: FastifyInstance
 let url: URL
 let now: number
 const clock = () => now
-const comments: { taskId: string; text?: string | undefined }[] = []
+const comments: { taskId: string; text?: string | undefined; author?: string | undefined }[] = []
+let failTaskAction = false
 const closers: (() => Promise<unknown>)[] = []
 const AT = '2026-10-09T10:00:00.000Z'
 
@@ -60,6 +62,7 @@ const task = (id: string, assignee: string | null, reviewer: string | null = nul
 beforeEach(async () => {
   now = Date.parse(AT)
   comments.length = 0
+  failTaskAction = false
   dir = mkdtempSync(join(tmpdir(), 'score-mcp-'))
   db = openDatabase(join(dir, 'score.db'))
   migrate(db, fileURLToPath(new URL('../../migrations/', import.meta.url)))
@@ -90,7 +93,8 @@ beforeEach(async () => {
         .run(t.id, JSON.stringify(t))
   })
   const port = {
-    taskAction: vi.fn(async (req: { taskId: string; text?: string }) => {
+    taskAction: vi.fn(async (req: { taskId: string; text?: string; author?: string }) => {
+      if (failTaskAction) throw new Error('hermes down')
       comments.push(req)
       return { hermesStatus: 'running' }
     }),
@@ -226,16 +230,14 @@ test('writes with the switch on: posts are agent-authored and marked via MCP, sc
   expect(JSON.parse(row.to!)).toEqual([])
   expect(JSON.parse(row.parts!)).toEqual([expect.objectContaining({ kind: 'text', via: 'mcp' })])
   // Nobody was woken: no run was reserved.
-  expect(
-    db.sqlite.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name = 'message_runs'").get(),
-  ).toBeDefined()
+  expect(db.sqlite.prepare('SELECT COUNT(*) AS n FROM message_runs').get()).toEqual({ n: 0 })
   expect((await call(client, 'rooms.post', { roomId: 'r2', text: 'x' })).error).toBe(true)
   expect((await call(client, 'tasks.comment', { taskId: 't2', text: 'x' })).error).toBe(true)
   expect((await call(client, 'tasks.comment', { taskId: 't1', text: 'looks good' })).error).toBe(
     false,
   )
   expect(comments).toEqual([
-    { taskId: 't1', action: 'comment', text: '[via MCP: builder] looks good' },
+    { taskId: 't1', action: 'comment', text: '[via MCP] looks good', author: 'builder' },
   ])
   const written = await call(client, 'knowledge.write', {
     path: 'notes/a.md',
@@ -265,10 +267,18 @@ test('posting is rate limited per agent per hour, and the window slides', async 
   expect((await call(client, 'rooms.post', { roomId: 'r1', text: 'later' })).error).toBe(false)
 })
 
-test('a failed post gives its slot back', async () => {
+test('a post that fails after its slot was reserved gives the slot back', async () => {
   const client = await connect(enable('builder', true))
-  await call(client, 'rooms.post', { roomId: 'nope', text: 'x' })
+  const submit = vi.spyOn(ingest, 'submit').mockRejectedValueOnce(new Error('disk full'))
+  expect((await call(client, 'rooms.post', { roomId: 'r1', text: 'x' })).error).toBe(true)
+  expect(submit).toHaveBeenCalledTimes(1)
   expect(access.postsLastHour('builder')).toBe(0)
+  failTaskAction = true
+  expect((await call(client, 'tasks.comment', { taskId: 't1', text: 'x' })).error).toBe(true)
+  expect(access.postsLastHour('builder')).toBe(0)
+  failTaskAction = false
+  expect((await call(client, 'rooms.post', { roomId: 'r1', text: 'ok' })).error).toBe(false)
+  expect(access.postsLastHour('builder')).toBe(1)
 })
 
 test('auth: no token, a malformed one, a bridge-style one, a rotated one and a revoked one all get 401', async () => {
@@ -281,14 +291,15 @@ test('auth: no token, a malformed one, a bridge-style one, a rotated one and a r
   const rotated = access.issueToken('builder')
   expect((await post(token)).status).toBe(401)
   expect((await post(rotated)).status).toBe(200)
-  access.revokeToken('builder')
-  expect((await post(rotated)).status).toBe(401)
-  // Only the hash is stored.
+  // Only the hash of the active token is stored.
   const stored = db.sqlite.prepare('SELECT token_hash FROM mcp_access').get() as {
     token_hash: string | null
   }
+  expect(stored.token_hash).toBe(hashMcpToken(rotated))
   expect(JSON.stringify(db.sqlite.prepare('SELECT * FROM mcp_access').all())).not.toContain(rotated)
-  expect(stored.token_hash).toBeNull()
+  access.revokeToken('builder')
+  expect((await post(rotated)).status).toBe(401)
+  expect(db.sqlite.prepare('SELECT token_hash FROM mcp_access').get()).toEqual({ token_hash: null })
 })
 
 test('browser-style requests are refused: foreign Host, any Origin, other methods', async () => {
@@ -425,4 +436,157 @@ test('the add command is shown as text with no token in it, and refuses unsafe p
   )
   for (const bad of ['a b', 'x;rm -rf', '$(id)', '-p', '', 'A'.repeat(65)])
     expect(mcpAddCommand(bad, 'http://127.0.0.1:8740/bridge/mcp')).toBeNull()
+})
+
+const TOKEN_IN_TEXT = () => `scm_${'Z'.repeat(43)}`
+
+test('a lifecycle change revokes access: removed agents and replaced incarnations never keep a token', async () => {
+  const life = (state: string, incarnation: string) =>
+    db.sqlite
+      .prepare(
+        `INSERT INTO agent_lifecycle (agent_id, incarnation_id, state, operation_id, display_name) VALUES ('builder', ?, ?, NULL, NULL)
+         ON CONFLICT(agent_id) DO UPDATE SET incarnation_id = excluded.incarnation_id, state = excluded.state`,
+      )
+      .run(incarnation, state)
+  const first = randomUUID()
+  life('ready', first)
+  const token = enable('builder', true)
+  const client = await connect(token)
+  expect((await call(client, 'knowledge.search', { query: 'x' })).error).toBe(false)
+  life('deleting', first)
+  expect((await post(token)).status).toBe(401)
+  life('removed', first)
+  expect((await post(token)).status).toBe(401)
+  expect(access.get('builder')).toMatchObject({
+    enabled: false,
+    writesEnabled: false,
+    hasToken: false,
+  })
+  // Same name, new incarnation: the old token and switches are not inherited.
+  life('ready', randomUUID())
+  expect((await post(token)).status).toBe(401)
+  expect(access.get('builder')).toMatchObject({ enabled: false, writesEnabled: false })
+  access.patch('builder', { enabled: true })
+  expect(access.get('builder')).toMatchObject({
+    enabled: true,
+    writesEnabled: false,
+    hasToken: false,
+  })
+  expect((await post(token)).status).toBe(401)
+})
+
+test('a session that outlives its agent is refused on the next tool call', async () => {
+  const id = randomUUID()
+  db.sqlite
+    .prepare(
+      "INSERT INTO agent_lifecycle (agent_id, incarnation_id, state, operation_id, display_name) VALUES ('builder', ?, 'ready', NULL, NULL)",
+    )
+    .run(id)
+  const client = await connect(enable('builder', true))
+  db.sqlite.prepare("UPDATE agent_lifecycle SET state = 'removed'").run()
+  for (const [name, args] of [
+    ['knowledge.read', { path: 'a.md' }],
+    ['rooms.list', {}],
+    ['tasks.list', {}],
+  ] as const)
+    expect((await call(client, name, args)).error).toBe(true)
+})
+
+test('tokens are redacted in room posts, task comments and knowledge notes, bare or embedded', async () => {
+  const client = await connect(enable('builder', true))
+  const token = TOKEN_IN_TEXT()
+  await call(client, 'rooms.post', { roomId: 'r1', text: token })
+  await call(client, 'rooms.post', { roomId: 'r1', text: `the token is ${token}, use it` })
+  await call(client, 'tasks.comment', { taskId: 't1', text: `try ${token}` })
+  await call(client, 'knowledge.write', { path: 'n.md', body: `key ${token}`, expectedEtag: null })
+  expect(JSON.stringify(db.sqlite.prepare('SELECT parts FROM messages').all())).not.toContain(
+    'scm_',
+  )
+  expect(JSON.stringify(comments)).not.toContain('scm_')
+  expect((await call(client, 'knowledge.read', { path: 'n.md' })).text).not.toContain('scm_')
+  expect(comments[0]?.text).toContain('[redacted]')
+})
+
+test('rooms.list previews only visible messages: deleted, edited-away and rewound text never appears', async () => {
+  const client = await connect(enable('builder'))
+  const add = (id: string, text: string, at: string, extra = '') =>
+    db.sqlite
+      .prepare(
+        `INSERT INTO messages (id, room_id, author_kind, author_agent_id, "to", parts, refs, streaming, created_at, updated_at${extra ? ', deleted_at, version_id' : ''})
+         VALUES (?, 'r1', 'agent', 'lead', '[]', ?, '[]', 0, ?, ?${extra ? ", ?, 'v1'" : ''})`,
+      )
+      .run(id, JSON.stringify([{ kind: 'text', text }]), at, at, ...(extra ? [at] : []))
+  const preview = async () =>
+    (await call(client, 'rooms.list')).json.rooms[0].lastMessage.preview as string
+  add('m1', 'visible old', '2026-10-09T09:00:00.000Z')
+  expect(await preview()).toBe('visible old')
+  // Deleted newest message.
+  db.sqlite
+    .prepare("UPDATE messages SET deleted_at = '2026-10-09T09:30:00.000Z' WHERE id = 'm2'")
+    .run()
+  add('m2', 'withdrawn secret instruction', '2026-10-09T09:10:00.000Z', 'hidden')
+  expect(await preview()).toBe('visible old')
+  // An edit-and-resend / rewind hides the original and what followed (deleted_at + version_id) while the replacement shows.
+  add('m3', 'rewound answer', '2026-10-09T09:20:00.000Z', 'hidden')
+  expect(await preview()).toBe('visible old')
+  add('m4', 'the replacement', '2026-10-09T09:40:00.000Z')
+  expect(await preview()).toBe('the replacement')
+  const seen = JSON.stringify((await call(client, 'rooms.list')).json)
+  for (const hidden of ['withdrawn', 'rewound answer']) expect(seen).not.toContain(hidden)
+})
+
+test('batches are refused and concurrent calls are bounded', async () => {
+  const token = enable('builder')
+  const batch = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(
+      Array.from({ length: 100 }, (_, id) => ({
+        jsonrpc: '2.0',
+        id,
+        method: 'tools/call',
+        params: { name: 'knowledge.read', arguments: { path: 'a.md' } },
+      })),
+    ),
+  })
+  expect(batch.status).toBe(400)
+  const many = await Promise.all(Array.from({ length: 12 }, () => post(token)))
+  const statuses = many.map((response) => response.status)
+  expect(statuses.filter((status) => status === 429).length).toBeGreaterThan(0)
+  expect(statuses.every((status) => status === 200 || status === 429)).toBe(true)
+})
+
+test('post limits are bytes, not characters', async () => {
+  const client = await connect(enable('builder', true))
+  // 3 bytes each: 2,730 of them fit under 8 KiB, 2,731 do not, though both are under 8,192 characters.
+  const fits = await call(client, 'rooms.post', { roomId: 'r1', text: '€'.repeat(2730) })
+  expect(fits.error).toBe(false)
+  const over = await call(client, 'rooms.post', { roomId: 'r1', text: '€'.repeat(2731) })
+  expect(over.error).toBe(true)
+  expect(over.text).toContain('payload_too_large')
+  const comment = await call(client, 'tasks.comment', { taskId: 't1', text: '€'.repeat(501) })
+  expect(comment.error).toBe(true)
+  expect(access.postsLastHour('builder')).toBe(1)
+})
+
+test('a rewind that starts while a post waits in the queue stops the post', async () => {
+  const client = await connect(enable('builder', true))
+  const real = ingest.submit.bind(ingest)
+  vi.spyOn(ingest, 'submit').mockImplementationOnce((observation) => {
+    rewindingRooms.add('r1')
+    return real(observation)
+  })
+  try {
+    const result = await call(client, 'rooms.post', { roomId: 'r1', text: 'late' })
+    expect(result.error).toBe(true)
+    expect(result.text).toContain('rewound')
+    expect(db.sqlite.prepare('SELECT COUNT(*) AS n FROM messages').get()).toEqual({ n: 0 })
+    expect(access.postsLastHour('builder')).toBe(0)
+  } finally {
+    rewindingRooms.delete('r1')
+  }
 })

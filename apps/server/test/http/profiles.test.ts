@@ -7,6 +7,7 @@ import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { requestRunApproval } from '../../src/domain/approvals.ts'
 import { ProfileOperations } from '../../src/domain/profiles.ts'
 import { writeBaseline } from '../../src/domain/team-rules.ts'
+import { McpAccessStore } from '../../src/mcp/access.ts'
 import { setup } from '../hermes/live/gateway/helpers.ts'
 
 let env: ReturnType<typeof setup>
@@ -188,6 +189,10 @@ test('delete requires typed name and a current preview, exports first, retires m
     await mutate('/api/agents/preview', { kind: 'delete', agentId: 'helper' })
   ).json()
   expect(preview.exportPath).toMatch(/\/profile-backups\/helper-/)
+  // MCP access (7.4d) is revoked and reset with the agent.
+  const mcp = new McpAccessStore(env.db)
+  mcp.patch('helper', { enabled: true, writesEnabled: true })
+  const mcpToken = mcp.issueToken('helper')
   expect(preview.effects.join(' ')).toMatch(/omits credentials.*not a full undo/)
   expect(
     (
@@ -209,6 +214,16 @@ test('delete requires typed name and a current preview, exports first, retires m
     lifecycle: { state: 'removed' },
     activity: 'Removed',
   })
+  expect(mcp.agentForToken(mcpToken)).toBeUndefined()
+  expect(mcp.get('helper')).toEqual({
+    enabled: false,
+    writesEnabled: false,
+    hasToken: false,
+    tokenCreatedAt: null,
+  })
+  expect(
+    env.db.sqlite.prepare('SELECT COUNT(*) AS n FROM mcp_access WHERE agent_id = ?').get('helper'),
+  ).toEqual({ n: 0 })
   // Retained History and Watch stay reachable once the agent has left the Hermes roster.
   expect((await app.inject('/api/agents/helper/history')).statusCode).toBe(200)
   expect((await app.inject('/api/agents/helper/watch')).statusCode).toBe(200)

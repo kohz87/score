@@ -99,3 +99,15 @@ test('without a bridge listener it says so and offers no token or command', asyn
   )
   expect(screen.queryByText(/hermes --profile/)).toBeNull()
 })
+
+test('first-time setup and rotation are told apart', async () => {
+  mount()
+  await screen.findByRole('button', { name: 'Create token' })
+  expect(screen.queryByTestId('mcp-rotate-note')).toBeNull()
+  expect(screen.getByText(/First-time setup/)).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'Create token' }))
+  const note = await screen.findByTestId('mcp-rotate-note')
+  expect(note.textContent).toContain('MCP_SCORE_API_KEY')
+  expect(note.textContent).toContain('will not ask for it again')
+  expect(note.textContent).not.toContain(TOKEN)
+})

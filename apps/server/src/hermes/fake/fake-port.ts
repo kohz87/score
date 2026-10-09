@@ -1966,7 +1966,10 @@ export class FakePort implements HermesPort {
         await this.emit({
           at: 0,
           kind: 'task.activity',
-          data: { taskId: task.id, item: { at: this.now(), agentId: 'you', text: req.text ?? '' } },
+          data: {
+            taskId: task.id,
+            item: { at: this.now(), agentId: req.author ?? 'you', text: req.text ?? '' },
+          },
         })
       if (oldIds.length)
         await this.requireSink().submit({

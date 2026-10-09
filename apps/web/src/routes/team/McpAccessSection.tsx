@@ -112,12 +112,22 @@ export function McpAccessSection({ agent }: { agent: AgentDetail }) {
           </button>
         </div>
       )}
+      {data.hasToken && (
+        <div className="team-mcp-box" data-testid="mcp-rotate-note">
+          <p>
+            Already added this entry to the profile? Hermes keeps the token in the profile&apos;s{' '}
+            <code>.env</code> file as <code>MCP_SCORE_API_KEY</code> and will not ask for it again.
+            After creating a new token, replace that value yourself (Score never reads or writes
+            that file), then run <code>/reload-mcp</code> or start a new session. The old token
+            stops working as soon as you rotate.
+          </p>
+        </div>
+      )}
       {data.command && (
         <div className="team-mcp-box">
           <p>
-            To give this profile the entry, run this yourself in a terminal. Score does not run it,
-            because it changes the profile&apos;s Hermes configuration. It asks for the token; paste
-            it there.
+            First-time setup: run this yourself in a terminal. Score does not run it, because it
+            changes the profile&apos;s Hermes configuration. It asks for the token; paste it there.
           </p>
           <code>{data.command}</code>
           <button type="button" onClick={() => copy('command', data.command ?? '')}>

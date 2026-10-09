@@ -26,7 +26,15 @@ export interface McpToolDeps {
 
 const MAX_LIST = 50
 const POST_BYTES = 8 * 1024
-const COMMENT_PREFIX_ROOM = 'via MCP'
+const COMMENT_BYTES = 1500
+const VIA = '[via MCP]'
+
+// Zod's max() counts UTF-16 units; the documented limits are bytes.
+function checkText(value: string, bytes: number): void {
+  if (value.includes('\0')) throw new HttpError(400, 'bad_request', 'Text may not contain NUL')
+  if (Buffer.byteLength(value, 'utf8') > bytes)
+    throw new HttpError(413, 'payload_too_large', `Text may be at most ${bytes} bytes`)
+}
 
 const text = (value: unknown): CallToolResult => ({
   content: [{ type: 'text', text: JSON.stringify(value) }],
@@ -87,7 +95,7 @@ export function createMcpServer(agentId: string, deps: McpToolDeps): McpServer {
           .map((room) => {
             const last = sqlite
               .prepare(
-                'SELECT author_kind, author_agent_id, parts FROM messages WHERE room_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1',
+                'SELECT author_kind, author_agent_id, parts FROM messages WHERE room_id = ? AND deleted_at IS NULL ORDER BY created_at DESC, rowid DESC LIMIT 1',
               )
               .get(room.id) as
               { author_kind: string; author_agent_id: string | null; parts: string } | undefined
@@ -123,7 +131,7 @@ export function createMcpServer(agentId: string, deps: McpToolDeps): McpServer {
       },
     },
     guarded(true, async ({ roomId, text: body }: { roomId: string; text: string }) => {
-      if (body.includes('\0')) throw new HttpError(400, 'bad_request', 'Text may not contain NUL')
+      checkText(body, POST_BYTES)
       db.read((sqlite) => {
         memberRoom(sqlite, roomId)
         assertAgentAdmits(sqlite, agentId)
@@ -137,8 +145,16 @@ export function createMcpServer(agentId: string, deps: McpToolDeps): McpServer {
           source: 'mcp',
           identity: randomUUID(),
           apply({ sqlite, now }) {
-            // Checked again in the writing transaction: membership may have changed meanwhile.
+            // Checked again in the writing transaction: membership, a rewind or the agent's lifecycle may have
+            // changed while this waited in the queue.
             memberRoom(sqlite, roomId)
+            assertAgentAdmits(sqlite, agentId)
+            if (rewindingRooms.has(roomId))
+              throw new HttpError(
+                409,
+                'conflict',
+                'This room is being rewound; try again in a moment',
+              )
             const message: Message = {
               id,
               roomId,
@@ -187,7 +203,7 @@ export function createMcpServer(agentId: string, deps: McpToolDeps): McpServer {
       },
     },
     guarded(true, async ({ taskId, text: body }: { taskId: string; text: string }) => {
-      if (body.includes('\0')) throw new HttpError(400, 'bad_request', 'Text may not contain NUL')
+      checkText(body, COMMENT_BYTES)
       const mine = db.read((sqlite) => {
         assertAgentAdmits(sqlite, agentId)
         return projectedTasks(sqlite, clock()).some(
@@ -201,7 +217,8 @@ export function createMcpServer(agentId: string, deps: McpToolDeps): McpServer {
         await port.taskAction({
           taskId,
           action: 'comment',
-          text: `[${COMMENT_PREFIX_ROOM}: ${agentId}] ${redact(body)}`,
+          text: `${VIA} ${redact(body)}`,
+          author: agentId,
         })
       } catch (error) {
         release()

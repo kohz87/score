@@ -142,3 +142,21 @@ test.each(['running', 'blocked', 'triage'])(
     expect(runner).not.toHaveBeenCalled()
   },
 )
+
+test('a comment carries its MCP author to Hermes; other actions refuse an author', async () => {
+  const { runner, deps } = setup()
+  await taskAction(
+    { taskId: 't_test', action: 'comment', text: '[via MCP] hi', author: 'builder' },
+    deps,
+  )
+  expect(runner).toHaveBeenCalledExactlyOnceWith(
+    ['kanban', 'comment', '--author', 'builder', '--', 't_test', '[via MCP] hi'],
+    expect.anything(),
+  )
+  await expect(
+    taskAction({ taskId: 't_test', action: 'block', author: 'builder' }, deps),
+  ).rejects.toThrow()
+  await expect(
+    taskAction({ taskId: 't_test', action: 'comment', text: 'x', author: 'score' }, deps),
+  ).rejects.toThrow()
+})

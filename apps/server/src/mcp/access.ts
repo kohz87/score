@@ -1,7 +1,9 @@
 import { MCP_POSTS_PER_HOUR, MCP_TOKEN_PATTERN } from '@score/contract'
 import { createHash, randomBytes } from 'node:crypto'
 import { z } from 'zod'
+import type { DatabaseSync } from 'node:sqlite'
 import type { ScoreDb } from '../db/index.ts'
+import { lifecycleOf } from '../domain/agent-lifecycle.ts'
 import { HttpError } from '../errors.ts'
 
 const HOUR = 60 * 60 * 1000
@@ -10,6 +12,7 @@ const RowSchema = z.object({
   agent_id: z.string(),
   enabled: z.number(),
   writes_enabled: z.number(),
+  incarnation_id: z.string().nullable(),
   token_hash: z.string().nullable(),
   token_created_at: z.number().nullable(),
 })
@@ -39,6 +42,9 @@ export class McpAccessStore {
     if (row === undefined)
       return { enabled: false, writesEnabled: false, hasToken: false, tokenCreatedAt: null }
     const parsed = RowSchema.parse(row)
+    // A removed, half-deleted or replaced agent has no access, whatever the row says.
+    if (!this.current(parsed.agent_id, parsed.incarnation_id))
+      return { enabled: false, writesEnabled: false, hasToken: false, tokenCreatedAt: null }
     return {
       enabled: parsed.enabled === 1,
       writesEnabled: parsed.writes_enabled === 1,
@@ -47,9 +53,35 @@ export class McpAccessStore {
     }
   }
 
+  /** True while the agent exists in the incarnation the row was made for and is ready. */
+  private current(agentId: string, stored: string | null): boolean {
+    const life = this.db.read((sqlite) => lifecycleOf(sqlite, agentId))
+    if (!life) return stored === null
+    if (life.state !== 'ready') return false
+    return stored === null || stored === life.incarnation_id
+  }
+
+  /** Makes the agent's row (dropping one left by another incarnation) and returns nothing; call inside a transaction. */
+  private ensure(sqlite: DatabaseSync, agentId: string): void {
+    const existing = sqlite
+      .prepare('SELECT incarnation_id FROM mcp_access WHERE agent_id = ?')
+      .get(agentId) as { incarnation_id: string | null } | undefined
+    const incarnation = lifecycleOf(sqlite, agentId)?.incarnation_id ?? null
+    if (existing?.incarnation_id != null && existing.incarnation_id !== incarnation)
+      sqlite.prepare('DELETE FROM mcp_access WHERE agent_id = ?').run(agentId)
+    else if (existing && existing.incarnation_id === null && incarnation !== null)
+      // A profile Score began tracking after the switches were set: they belong to it.
+      sqlite
+        .prepare('UPDATE mcp_access SET incarnation_id = ? WHERE agent_id = ?')
+        .run(incarnation, agentId)
+    sqlite
+      .prepare('INSERT OR IGNORE INTO mcp_access (agent_id, incarnation_id) VALUES (?, ?)')
+      .run(agentId, incarnation)
+  }
+
   patch(agentId: string, change: { enabled?: boolean; writesEnabled?: boolean }): void {
     this.db.tx((sqlite) => {
-      sqlite.prepare('INSERT OR IGNORE INTO mcp_access (agent_id) VALUES (?)').run(agentId)
+      this.ensure(sqlite, agentId)
       if (change.enabled !== undefined)
         sqlite
           .prepare('UPDATE mcp_access SET enabled = ? WHERE agent_id = ?')
@@ -65,7 +97,7 @@ export class McpAccessStore {
   issueToken(agentId: string): string {
     const token = `scm_${randomBytes(32).toString('base64url')}`
     this.db.tx((sqlite) => {
-      sqlite.prepare('INSERT OR IGNORE INTO mcp_access (agent_id) VALUES (?)').run(agentId)
+      this.ensure(sqlite, agentId)
       sqlite
         .prepare('UPDATE mcp_access SET token_hash = ?, token_created_at = ? WHERE agent_id = ?')
         .run(hashMcpToken(token), this.clock(), agentId)
@@ -87,13 +119,13 @@ export class McpAccessStore {
   agentForToken(token: string): { agentId: string } | undefined {
     if (!MCP_TOKEN_PATTERN.test(token)) return undefined
     const row = this.db.read((sqlite) =>
-      sqlite
-        .prepare('SELECT agent_id FROM mcp_access WHERE token_hash = ?')
-        .get(hashMcpToken(token)),
+      sqlite.prepare('SELECT * FROM mcp_access WHERE token_hash = ?').get(hashMcpToken(token)),
     )
-    return row === undefined
-      ? undefined
-      : { agentId: z.object({ agent_id: z.string() }).parse(row).agent_id }
+    if (row === undefined) return undefined
+    const parsed = RowSchema.parse(row)
+    return this.current(parsed.agent_id, parsed.incarnation_id)
+      ? { agentId: parsed.agent_id }
+      : undefined
   }
 
   postsLastHour(agentId: string): number {
