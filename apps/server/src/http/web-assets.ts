@@ -89,7 +89,12 @@ export function registerWebAssets(
     )
   app.get('/*', async (request, reply) => {
     const path = request.url.split('?', 1)[0]!
-    if (path.startsWith('/api/') || path.startsWith('/bridge/') || extname(path))
+    // Notes are deep-linked as /knowledge/<path>.md: those are app routes, not files.
+    if (
+      path.startsWith('/api/') ||
+      path.startsWith('/bridge/') ||
+      (extname(path) && !path.startsWith('/knowledge/'))
+    )
       return reply.code(404).send({ error: { code: 'not_found', message: 'Not found' } })
     return withSecurityHeaders(reply).type(index.type).send(index.body)
   })

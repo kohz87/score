@@ -444,6 +444,10 @@ test('only built assets and the app shell are public; data, maps and odd paths s
   const shell = await app.inject({ url: '/tasks', headers })
   expect(shell.statusCode).toBe(200)
   expect(shell.body).toContain('<div id="root"></div>')
+  // A note deep link (…/Plan%20B.md) is an app route even though it looks like a file.
+  const noteLink = await app.inject({ url: '/knowledge/ideas/Plan%20B.md', headers })
+  expect(noteLink.statusCode).toBe(200)
+  expect(noteLink.body).toContain('<div id="root"></div>')
   for (const url of [
     '/assets/private.json',
     '/assets/app.js.map',
