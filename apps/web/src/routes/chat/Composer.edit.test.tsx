@@ -145,3 +145,15 @@ test('removing the last recipient while editing sends an explicit empty list', a
   })
   await act(async () => finishPost?.())
 })
+
+// audit4-c 9: a finished edit must not throw away the draft stashed before it when the person kept typing.
+test('a correction that finishes while the person kept typing brings the stashed draft back', async () => {
+  fireEvent.change(box(), { target: { value: 'half typed' } })
+  act(() => startEdit(mine('a', 'text A')))
+  await sendCorrection()
+  await waitFor(() => expect(posts()).toHaveLength(1))
+  fireEvent.change(box(), { target: { value: 'next thought' } })
+  await act(async () => finishPost?.())
+  await waitFor(() => expect(box().value).toBe('half typed\n\nnext thought'))
+  expect(screen.queryByText('Editing your message')).toBeNull()
+})

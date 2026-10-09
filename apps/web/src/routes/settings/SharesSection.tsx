@@ -25,6 +25,7 @@ export function SharesSection() {
                 {new Date(share.expiresAt).toLocaleString()}, {share.views}{' '}
                 {share.views === 1 ? 'view' : 'views'}
                 {share.includeImages ? ', with images' : ''}
+                {share.roomChanged ? ', room changed since (the link shows the old version)' : ''}
               </span>
               <button
                 type="button"

@@ -190,3 +190,29 @@ test.each(['fake', 'live'] as const)(
     if (mode === 'live') expect(runner).not.toHaveBeenCalled()
   },
 )
+
+// audit4-c 5: "Run now" must respect the team and agent pause.
+test('run now is refused with 409 paused while the team or the agent is paused', async () => {
+  await boot('fake')
+  const created = await call('POST', '/api/agents/builder/routines', {
+    title: 'Build check',
+    schedule: 'every 2h',
+    prompt: 'Check the build.',
+  })
+  const url = `/api/routines/${RoutineSummarySchema.parse(created.json()).id}/run`
+  env.db.sqlite
+    .prepare('UPDATE team_state SET paused_at = ? WHERE id = 1')
+    .run(new Date().toISOString())
+  const teamHeld = await call('POST', url)
+  expect(teamHeld.statusCode).toBe(409)
+  expect(teamHeld.json().error.code).toBe('paused')
+  env.db.sqlite.prepare('UPDATE team_state SET paused_at = NULL WHERE id = 1').run()
+  env.db.sqlite
+    .prepare('INSERT INTO agent_pauses (agent_id, paused_at) VALUES (?, ?)')
+    .run('builder', new Date().toISOString())
+  const agentHeld = await call('POST', url)
+  expect(agentHeld.statusCode).toBe(409)
+  expect(agentHeld.json().error.code).toBe('paused')
+  env.db.sqlite.prepare('DELETE FROM agent_pauses').run()
+  expect((await call('POST', url)).statusCode).toBe(200)
+})

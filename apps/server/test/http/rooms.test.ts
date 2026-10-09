@@ -1253,3 +1253,91 @@ test('retry sends the original admitted input again, not the room as it is now (
   expect(retried.admission_input).toBe(rows[0]!.admission_input)
   expect(retried.admission_input).not.toContain('CANCELLED')
 })
+
+// audit4-c 1: deleting a message must not leave its replies alive.
+test('deleting a message fails its pending replies and refuses while one is streaming', async () => {
+  const room = await create()
+  const own = await ownMessage(room.id, 'do the thing')
+  const run = db.sqlite
+    .prepare('SELECT message_id FROM message_runs WHERE parent_message_id = ?')
+    .get(own.id) as { message_id: string }
+  // The mocked startRun leaves the turn active; put it back in the queue.
+  db.sqlite
+    .prepare("UPDATE message_runs SET state = 'pending' WHERE message_id = ?")
+    .run(run.message_id)
+  expect((await del(`/api/rooms/${room.id}/messages/${own.id}`)).statusCode).toBe(204)
+  expect(
+    db.sqlite.prepare('SELECT state FROM message_runs WHERE message_id = ?').get(run.message_id)
+      ?.state,
+  ).toBe('failed')
+  // Never started: no reply message appears.
+  expect(
+    db.sqlite.prepare('SELECT 1 FROM messages WHERE id = ?').get(run.message_id),
+  ).toBeUndefined()
+
+  const second = await ownMessage(room.id, 'again')
+  const reply = db.sqlite
+    .prepare('SELECT message_id FROM message_runs WHERE parent_message_id = ?')
+    .get(second.id) as { message_id: string }
+  await ingest.submit({
+    source: 'test',
+    identity: 'stream-reply',
+    apply: ({ sqlite, now }) => {
+      sqlite
+        .prepare("UPDATE message_runs SET state = 'active' WHERE message_id = ?")
+        .run(reply.message_id)
+      return storeMessage(
+        sqlite,
+        {
+          id: reply.message_id,
+          roomId: room.id,
+          author: { kind: 'agent', agentId: 'builder' },
+          to: [],
+          parts: [],
+          refs: [],
+          createdAt: now,
+          streaming: true,
+        },
+        now,
+      )
+    },
+  })
+  expect((await del(`/api/rooms/${room.id}/messages/${second.id}`)).statusCode).toBe(409)
+  expect(
+    db.sqlite.prepare('SELECT deleted_at FROM messages WHERE id = ?').get(second.id)?.deleted_at,
+  ).toBeNull()
+})
+
+// audit4-c 6: imported copies are read-only on the server too, not just in the web app.
+test('imported messages cannot be edited or rewound', async () => {
+  const room = await create()
+  await ingest.submit({
+    source: 'test',
+    identity: 'imported-own',
+    apply: ({ sqlite, now }) =>
+      storeMessage(
+        sqlite,
+        {
+          id: `import:${room.id}:0`,
+          roomId: room.id,
+          author: { kind: 'you' },
+          to: [],
+          parts: [{ kind: 'text', text: 'from telegram' }],
+          refs: [],
+          createdAt: now,
+          streaming: false,
+        },
+        now,
+      ),
+  })
+  const edit = await post(`/api/rooms/${room.id}/messages`, {
+    text: 'fix',
+    to: ['builder'],
+    edits: `import:${room.id}:0`,
+  })
+  expect(edit.statusCode).toBe(400)
+  const plan = await get(
+    `/api/rooms/${room.id}/messages/${encodeURIComponent(`import:${room.id}:0`)}/rewind-plan`,
+  )
+  expect(plan.statusCode).toBe(400)
+})

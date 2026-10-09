@@ -557,6 +557,7 @@ export function failMessageRun(
   turnId: string,
   code: string,
   now: string,
+  notice?: string,
 ): DomainEventDraft[] {
   const value = sqlite.prepare('SELECT * FROM message_runs WHERE turn_id = ?').get(turnId)
   if (!value) return []
@@ -571,7 +572,7 @@ export function failMessageRun(
       roomId: mapping.room_id,
       author: { kind: 'agent', agentId: mapping.agent_id },
       to: [],
-      parts: [{ kind: 'text', text: `Couldn't start this agent (${code}).` }],
+      parts: [{ kind: 'text', text: notice ?? `Couldn't start this agent (${code}).` }],
       createdAt: now,
       streaming: false,
       refs: [],

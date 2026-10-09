@@ -53,6 +53,7 @@ const shareSummary = {
   views: 0,
   includeImages: false,
   status: 'active',
+  roomChanged: false,
 }
 const outsideSession = {
   id: 's1',

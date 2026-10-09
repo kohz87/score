@@ -41,6 +41,7 @@ import {
 import { assertProject, listProjects } from '../domain/room-projects.ts'
 import { roomFilesInPlay, roomLearned } from '../domain/room-panels.ts'
 import { createBrief } from '../domain/briefs.ts'
+import { rewindingRooms } from '../domain/room-rewinding.ts'
 import { reserveMessageRun, retryReply } from '../domain/message-runs.ts'
 import { PLAN_FIRST_ADDENDUM } from '../domain/plan.ts'
 import { COMMANDS } from '../domain/parse.ts'
@@ -332,7 +333,11 @@ export function registerRoomRoutes(
     roomId: ParamsSchema.shape.roomId,
     messageId: z.string().min(1).max(200),
   })
-  const rewinding = new Set<string>()
+  const rewinding = rewindingRooms
+  function assertNotRewinding(roomId: string) {
+    if (rewinding.has(roomId))
+      throw new HttpError(409, 'conflict', 'This room is being rewound; try again in a moment')
+  }
   async function rewindPlan(roomId: string, messageId: string) {
     const found = db.read((sqlite) => {
       const anchor = rewindableMessage(sqlite, roomId, messageId)
@@ -470,6 +475,7 @@ export function registerRoomRoutes(
   })
 
   app.post('/api/rooms/:roomId/messages/:messageId/retry', mutation, async (request, reply) => {
+    assertNotRewinding(ParamsSchema.parse(request.params).roomId)
     const { roomId, messageId } = z
       .object({ roomId: ParamsSchema.shape.roomId, messageId: z.string().min(1).max(200) })
       .parse(request.params)
@@ -517,6 +523,7 @@ export function registerRoomRoutes(
 
   app.post('/api/rooms/:roomId/messages', mutation, async (request) => {
     const { roomId } = ParamsSchema.parse(request.params)
+    assertNotRewinding(roomId)
     const body = MessageBodySchema.parse(request.body)
     // Edit and resend: checked before any side effect (a /assign task) and again inside the transaction below.
     const original = body.edits

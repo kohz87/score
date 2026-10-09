@@ -53,6 +53,8 @@ export function registerShareRoutes(
   const clock = deps.clock ?? Date.now
   const guard = { preHandler: [humanGuard(app.pairing)] }
   const limiter = new RateLimiter(30, 60_000, clock)
+  // A page can show many images; they must not spend the page's budget (the token check still bounds guessing).
+  const mediaLimiter = new RateLimiter(600, 60_000, clock)
 
   // No Idempotency-Key receipt here: the body carries the password and a replay would hand out a second token.
   app.post('/api/rooms/:roomId/shares', guard, async (request) => {
@@ -109,7 +111,7 @@ export function registerShareRoutes(
   })
 
   app.get('/s/:token/media/:n', async (request, reply) => {
-    if (!limiter.allow(request.ip)) return sharePage(reply, 429, TOO_MANY_PAGE)
+    if (!mediaLimiter.allow(request.ip)) return sharePage(reply, 429, TOO_MANY_PAGE)
     const { token, n } = request.params as { token: string; n: string }
     const share = db.read((sqlite) => findLiveShare(sqlite, token, now()))
     const index = /^\d{1,4}$/.test(n) ? Number(n) : -1
