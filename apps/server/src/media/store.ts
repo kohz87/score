@@ -1,14 +1,17 @@
 import { createHash, randomUUID } from 'node:crypto'
 import {
   chmodSync,
+  closeSync,
   existsSync,
+  fsyncSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   renameSync,
   statSync,
   unlinkSync,
-  writeFileSync,
+  writeSync,
 } from 'node:fs'
 import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
@@ -76,11 +79,30 @@ export class MediaStore {
     this.ensureDir()
     const temp = join(this.dir, `.tmp-${randomUUID()}`)
     try {
-      writeFileSync(temp, bytes, { mode: 0o600, flag: 'wx' })
+      // Sync the file before the rename and the directory after it, so the index row committed next never
+      // outlives the bytes it points at.
+      const fd = openSync(temp, 'wx', 0o600)
+      try {
+        let offset = 0
+        while (offset < bytes.length) offset += writeSync(fd, bytes, offset)
+        fsyncSync(fd)
+      } finally {
+        closeSync(fd)
+      }
       renameSync(temp, this.path(sha256))
+      syncDir(this.dir)
     } catch (error) {
       removeFile(temp)
       throw error
+    }
+  }
+
+  // The stored blob must still be the exact bytes the row describes (a crash can leave it short or empty).
+  private intact(sha256: string, size: number): boolean {
+    try {
+      return statSync(this.path(sha256)).size === size
+    } catch {
+      return false
     }
   }
 
@@ -101,7 +123,9 @@ export class MediaStore {
       if (found) {
         const row = RowSchema.parse(found)
         sqlite.prepare('UPDATE media SET last_used_at = ? WHERE id = ?').run(now, row.id)
-        if (!existsSync(this.path(sha256))) this.writeFile(sha256, bytes)
+        // Re-uploading the original bytes repairs a missing or damaged blob.
+        if (!this.intact(sha256, row.size) || !sameBytes(this.path(sha256), bytes))
+          this.writeFile(sha256, bytes)
         return { mediaId: row.id, contentType: row.content_type, size: row.size }
       }
       evicted = evictFor(sqlite, this.quotaBytes, bytes.length)
@@ -130,6 +154,7 @@ export class MediaStore {
     } catch {
       return null
     }
+    if (bytes.length !== row.size) return null
     this.db.sqlite
       .prepare('UPDATE media SET last_used_at = ? WHERE id = ?')
       .run(new Date(this.clock()).toISOString(), id)
@@ -164,9 +189,12 @@ export class MediaStore {
     this.db.tx((sqlite) => {
       for (const raw of sqlite.prepare('SELECT * FROM media').all()) {
         const row = RowSchema.parse(raw)
-        if (!existsSync(this.path(row.sha256))) {
-          sqlite.prepare('DELETE FROM media WHERE id = ?').run(row.id)
-          missing += 1
+        if (!this.intact(row.sha256, row.size)) {
+          // A referenced row keeps its id (a message still points at it; a re-upload repairs the blob).
+          if (row.refs === 0) {
+            sqlite.prepare('DELETE FROM media WHERE id = ?').run(row.id)
+            missing += 1
+          }
         } else if (row.refs === 0 && row.last_used_at <= cutoff) {
           sqlite.prepare('DELETE FROM media WHERE id = ?').run(row.id)
           removed.push(row.sha256)
@@ -230,6 +258,23 @@ function evictFor(sqlite: DatabaseSync, quota: number, incoming: number, strict 
   if (strict && total + incoming > quota)
     throw new HttpError(507, 'media_quota_exceeded', 'Media storage is full')
   return victims
+}
+
+function sameBytes(path: string, bytes: Uint8Array): boolean {
+  try {
+    return Buffer.from(bytes).equals(readFileSync(path))
+  } catch {
+    return false
+  }
+}
+
+function syncDir(dir: string): void {
+  const fd = openSync(dir, 'r')
+  try {
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
 }
 
 function removeFile(path: string): void {

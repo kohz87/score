@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import {
   existsSync,
   mkdtempSync,
@@ -18,6 +19,7 @@ import { MediaStore } from '../src/media/store.ts'
 import { sniffImage } from '../src/media/sniff.ts'
 import { gif, jpeg, png, webp } from './media-fixtures.ts'
 
+const sha = (b: Uint8Array) => createHash('sha256').update(b).digest('hex')
 let dir: string
 let db: ScoreDb
 let now: number
@@ -186,4 +188,25 @@ test('sweep expires unused items, enforces a lowered quota, and removes orphans 
   tiny.sweep()
   expect(tiny.has(extra.mediaId)).toBe(false)
   expect(tiny.has(kept.mediaId)).toBe(true)
+})
+
+test('re-uploading the original bytes repairs a damaged blob, and sweep keeps referenced ids', () => {
+  const bytes = png(100)
+  const first = store.store(bytes)
+  const blob = join(dir, 'media', sha(bytes))
+  writeFileSync(blob, '')
+  expect(store.read(first.mediaId)).toBeNull()
+  const again = store.store(bytes)
+  expect(again.mediaId).toBe(first.mediaId)
+  expect(store.read(first.mediaId)?.bytes.equals(bytes)).toBe(true)
+  // a referenced row whose blob vanished survives the sweep; an unreferenced one does not
+  db.tx((sqlite) => store.retain(sqlite, [first.mediaId], new Date(now).toISOString()))
+  const other = store.store(png(120))
+  unlinkSync(blob)
+  unlinkSync(join(dir, 'media', sha(png(120))))
+  expect(store.sweep().missing).toBe(1)
+  expect(store.has(first.mediaId)).toBe(true)
+  expect(store.has(other.mediaId)).toBe(false)
+  expect(store.store(bytes).mediaId).toBe(first.mediaId)
+  expect(store.read(first.mediaId)?.bytes.equals(bytes)).toBe(true)
 })
