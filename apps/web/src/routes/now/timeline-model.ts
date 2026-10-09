@@ -66,6 +66,75 @@ export function layoutBlock(window: TimeWindow, block: LaneBlock): BlockLayout {
   }
 }
 
+/** Chat replies are a thin band under the lane's task blocks. */
+export const CHAT_BAND_TOP = 63
+export const CHAT_BAND_HEIGHT = 8
+/** Task blocks narrower than this, or overlapping each other, are grouped into one block that opens a list. */
+export const MIN_BLOCK_PX = 28
+
+export type LaneItem =
+  | { kind: 'block'; layout: BlockLayout }
+  | { kind: 'chat'; layout: BlockLayout }
+  | { kind: 'group'; layout: BlockLayout; blocks: LaneBlock[] }
+
+const URGENCY: LaneBlock['state'][] = ['waiting', 'working', 'planned', 'done']
+
+/**
+ * What one lane draws. Chat bands sit apart from the task row. Task and brief blocks that would overlap, or that sit
+ * closer than `MIN_BLOCK_PX` once short ones are widened to it, form a cluster of two or more and become one counted
+ * group; a lone short block stays itself. A block waiting on the person is never grouped: it must stay findable.
+ */
+export function laneItems(window: TimeWindow, blocks: LaneBlock[], plotPx: number): LaneItem[] {
+  const items: LaneItem[] = []
+  const candidates: BlockLayout[] = []
+  for (const block of blocks) {
+    const layout = layoutBlock(window, block)
+    if (block.kind === 'chat' && block.state !== 'waiting') items.push({ kind: 'chat', layout })
+    else if (block.state === 'waiting') items.push({ kind: 'block', layout })
+    else candidates.push(layout)
+  }
+  const px = (percentValue: number) => (percentValue / 100) * plotPx
+  candidates.sort((a, b) => a.left - b.left || a.block.id.localeCompare(b.block.id))
+  let cluster: BlockLayout[] = []
+  let clusterEnd = -Infinity
+  const flush = () => {
+    if (cluster.length === 1) items.push({ kind: 'block', layout: cluster[0]! })
+    else if (cluster.length > 1) items.push(groupOf(cluster))
+    cluster = []
+  }
+  for (const layout of candidates) {
+    const start = px(layout.left)
+    // A hair of tolerance: back-to-back runs meet at the same instant and must not read as overlapping.
+    if (cluster.length > 0 && start >= clusterEnd - 0.5) flush()
+    if (cluster.length === 0) clusterEnd = -Infinity
+    cluster.push(layout)
+    clusterEnd = Math.max(clusterEnd, start + Math.max(px(layout.width ?? 0), MIN_BLOCK_PX))
+  }
+  flush()
+  return items.sort((a, b) => a.layout.left - b.layout.left)
+}
+
+function groupOf(cluster: BlockLayout[]): LaneItem {
+  const blocks = cluster.map((layout) => layout.block)
+  const left = Math.min(...cluster.map((layout) => layout.left))
+  const right = Math.max(...cluster.map((layout) => layout.left + (layout.width ?? 0)))
+  const state = URGENCY.find((candidate) => blocks.some((block) => block.state === candidate))!
+  const first = blocks.toSorted(
+    (a, b) => a.start.localeCompare(b.start) || a.id.localeCompare(b.id),
+  )[0]!
+  const block: LaneBlock = {
+    id: `group:${first.id}`,
+    label: `${blocks.length} tasks`,
+    state,
+    start: first.start,
+    end: null,
+    taskId: null,
+    runId: null,
+    kind: 'task',
+  }
+  return { kind: 'group', blocks, layout: { block, left, width: right - left, atNow: false } }
+}
+
 export type Connector = {
   id: string
   kind: Handoff['kind']
@@ -82,13 +151,29 @@ export type Connector = {
 export function connectors(
   snapshot: Pick<NowSnapshot, 'lanes' | 'handoffs'>,
   window: TimeWindow,
+  plotPx = VIEWBOX_WIDTH,
 ): Connector[] {
-  const found = new Map<string, { lane: number; layout: BlockLayout; agent: string }>()
+  const found = new Map<
+    string,
+    { lane: number; layout: BlockLayout; agent: string; chat: boolean; label: string }
+  >()
   snapshot.lanes.forEach((lane, index) => {
-    for (const block of lane.blocks)
-      found.set(block.id, { lane: index, layout: layoutBlock(window, block), agent: lane.agent.id })
+    for (const item of laneItems(window, lane.blocks, plotPx)) {
+      // A grouped block's hand-offs attach to the group.
+      const members = item.kind === 'group' ? item.blocks : [item.layout.block]
+      for (const block of members)
+        found.set(block.id, {
+          lane: index,
+          layout: item.layout,
+          agent: lane.agent.id,
+          chat: item.kind === 'chat',
+          label: block.label,
+        })
+    }
   })
-  const centerY = (lane: number) => lane * LANE_HEIGHT + BLOCK_TOP + BLOCK_HEIGHT / 2
+  const centerY = (lane: number, chat: boolean) =>
+    lane * LANE_HEIGHT +
+    (chat ? CHAT_BAND_TOP + CHAT_BAND_HEIGHT / 2 : BLOCK_TOP + BLOCK_HEIGHT / 2)
   const result: Connector[] = []
   for (const handoff of snapshot.handoffs) {
     const from = found.get(handoff.from.blockId)
@@ -96,8 +181,8 @@ export function connectors(
     if (!from || !to) continue
     const x1 = (from.layout.left + (from.layout.width ?? 0)) * (VIEWBOX_WIDTH / 100)
     const x2 = to.layout.left * (VIEWBOX_WIDTH / 100)
-    const y1 = centerY(from.lane)
-    const y2 = centerY(to.lane)
+    const y1 = centerY(from.lane, from.chat)
+    const y2 = centerY(to.lane, to.chat)
     // Horizontal tangents at both ends, like the design's short S-curves.
     const dx = Math.max(8, Math.abs(x2 - x1) / 2)
     result.push({
@@ -108,8 +193,8 @@ export function connectors(
       labelTop: (y1 + y2) / 2,
       fromAgentId: from.agent,
       toAgentId: to.agent,
-      fromLabel: from.layout.block.label,
-      toLabel: to.layout.block.label,
+      fromLabel: from.label,
+      toLabel: to.label,
     })
   }
   return result

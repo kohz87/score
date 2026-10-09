@@ -309,6 +309,7 @@ const plan: Extract<MessagePart, { kind: 'plan' }> = {
         end: state === 'working' ? null : t(index * 20 + 10),
         taskId: null,
         runId: null,
+        kind: 'task' as const,
       })),
     },
     { agentId: 'ghost', blocks: [] },

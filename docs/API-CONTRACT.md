@@ -156,6 +156,12 @@ type LaneBlock = {
   end: string | null /* null = open-ended */
   taskId: string | null
   runId: string | null
+  /* task = a task or any other exact run; brief = a run answering a chat message whose brief has tasks or a plan;
+     chat = plain chat replies of one agent, merged into ONE block when less than 5 minutes apart (`id` `chat:<first run>`,
+     `runId` null once it covers more than one reply). Task and brief blocks are never merged. Absent in old stored plan
+     blocks = task. */
+  kind: 'task' | 'brief' | 'chat'
+  count?: number /* chat bands: replies covered */
 }
 type RunSummary = {
   id: string

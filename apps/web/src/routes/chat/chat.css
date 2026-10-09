@@ -905,8 +905,13 @@
   border: 1px solid var(--hairline);
 }
 
+.chat-message-body {
+  position: relative;
+}
 .chat-message-delete {
-  margin-left: auto;
+  position: absolute;
+  top: -4px;
+  right: 0;
   border: 0;
   background: none;
   color: var(--ink-muted);

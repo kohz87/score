@@ -66,6 +66,7 @@ export function planPart(
       end: null,
       taskId: null,
       runId: null,
+      kind: 'task',
     })
     lanes.set(step.agentId, blocks)
   })

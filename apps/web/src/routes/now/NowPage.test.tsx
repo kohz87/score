@@ -78,6 +78,7 @@ function snapshot(overrides: Partial<NowSnapshot> = {}): NowSnapshot {
             end: at(-45),
             taskId: 't-plan',
             runId: null,
+            kind: 'task',
           },
         ],
       },
@@ -92,6 +93,7 @@ function snapshot(overrides: Partial<NowSnapshot> = {}): NowSnapshot {
             end: null,
             taskId: null,
             runId: 'r1',
+            kind: 'task',
           },
           {
             id: 'x',
@@ -101,6 +103,7 @@ function snapshot(overrides: Partial<NowSnapshot> = {}): NowSnapshot {
             end: null,
             taskId: null,
             runId: 'r1',
+            kind: 'task',
           },
         ],
       },
@@ -115,6 +118,7 @@ function snapshot(overrides: Partial<NowSnapshot> = {}): NowSnapshot {
             end: null,
             taskId: null,
             runId: null,
+            kind: 'task',
           },
         ],
       },
@@ -393,4 +397,63 @@ test('Flow renders the flow view inside the Now shell', async () => {
   // The shell keeps the headline and the view switch; the flow view brings its own heading.
   expect(await screen.findByRole('heading', { level: 2, name: 'Flow' })).toBeTruthy()
   expect(screen.getByRole('link', { name: 'Flow' }).getAttribute('aria-current')).toBe('page')
+})
+
+const crowdedLane = (agentId: string) => ({
+  agent: agents.find((item) => item.id === agentId)!,
+  blocks: [
+    ...[0, 1, 2].map((index) => ({
+      id: `g${index}`,
+      label: `Crowded task ${index}`,
+      state: 'done' as const,
+      start: at(-40 + index),
+      end: at(-30 + index),
+      taskId: `t-g${index}`,
+      runId: null,
+      kind: 'task' as const,
+    })),
+    {
+      id: 'chat:c1',
+      label: 'Chat · 4 replies',
+      state: 'done' as const,
+      start: at(-50),
+      end: at(-35),
+      taskId: null,
+      runId: null,
+      kind: 'chat' as const,
+      count: 4,
+    },
+  ],
+})
+
+test('crowded task blocks become one "N tasks" group with an accessible list; chat is a band', async () => {
+  const base = snapshot()
+  current = { ...base, lanes: [crowdedLane('lead'), ...base.lanes.slice(1)], handoffs: [] }
+  renderNow()
+  const timeline = await screen.findByRole('region', { name: /^Score:/ })
+  expect(within(timeline).queryByRole('button', { name: /Crowded task 0/ })).toBeNull()
+  expect(within(timeline).getByRole('img', { name: /lead: Chat · 4 replies/ })).toBeTruthy()
+  expect(within(timeline).getByText('Chatting')).toBeTruthy()
+  const group = within(timeline).getByRole('button', { name: /lead: 3 tasks, done/ })
+  expect(group.getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(group)
+  expect(group.getAttribute('aria-expanded')).toBe('true')
+  const list = within(timeline).getByRole('list', { name: 'lead: 3 tasks' })
+  expect(within(list).getAllByRole('button')).toHaveLength(3)
+  fireEvent.click(within(list).getByRole('button', { name: /Crowded task 1/ }))
+  await waitFor(() => expect(screen.getByLabelText('location').textContent).toBe('/tasks/t-g1'))
+})
+
+test('Escape closes the group list and returns focus to the group', async () => {
+  const base = snapshot()
+  current = { ...base, lanes: [crowdedLane('lead'), ...base.lanes.slice(1)], handoffs: [] }
+  renderNow()
+  const timeline = await screen.findByRole('region', { name: /^Score:/ })
+  const group = within(timeline).getByRole('button', { name: /lead: 3 tasks/ })
+  fireEvent.click(group)
+  const first = within(timeline).getAllByRole('button', { name: /Crowded task/ })[0]!
+  first.focus()
+  fireEvent.keyDown(first, { key: 'Escape' })
+  expect(within(timeline).queryByRole('list', { name: 'lead: 3 tasks' })).toBeNull()
+  expect(document.activeElement).toBe(group)
 })

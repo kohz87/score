@@ -129,6 +129,7 @@ export const lane = {
   end: later,
   taskId: 'task-1',
   runId: 'run-1',
+  kind: 'task',
 } satisfies Contract.LaneBlock
 
 export const parts = [

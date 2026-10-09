@@ -1,5 +1,5 @@
-import type { NowSnapshot } from '@score/contract'
-import type { CSSProperties } from 'react'
+import type { AgentSummary, LaneBlock, NowSnapshot } from '@score/contract'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import {
@@ -7,7 +7,7 @@ import {
   clockLabel,
   connectorLabel,
   connectors,
-  layoutBlock,
+  laneItems,
   LANE_HEIGHT,
   percent,
   windowOf,
@@ -33,10 +33,110 @@ function Shield() {
   )
 }
 
+/** The plot's width in pixels, for grouping blocks that would be too narrow to read. */
+function usePlotWidth() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(1000)
+  useLayoutEffect(() => {
+    const element = ref.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => {
+      const next = element.getBoundingClientRect().width
+      if (next > 0) setWidth(Math.round(next))
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  return [ref, width] as const
+}
+
+/** A group of crowded task blocks: one counted block that opens a small list (Escape or a click elsewhere closes it). */
+function BlockGroup({
+  agent,
+  blocks,
+  state,
+  style,
+  open,
+  onToggle,
+  onClose,
+}: {
+  agent: AgentSummary
+  blocks: LaneBlock[]
+  state: LaneBlock['state']
+  style: CSSProperties
+  open: boolean
+  onToggle: () => void
+  onClose: () => void
+}) {
+  const navigate = useNavigate()
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const away = (event: MouseEvent) => {
+      if (!root.current?.contains(event.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', away)
+    return () => document.removeEventListener('mousedown', away)
+  }, [open, onClose])
+  const label = `${blocks.length} tasks`
+  return (
+    <div
+      ref={root}
+      className="now-group"
+      style={style}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && open) {
+          event.stopPropagation()
+          onClose()
+          root.current?.querySelector('button')?.focus()
+        }
+      }}
+    >
+      <button
+        type="button"
+        className={`now-block now-block--${state} now-block--group`}
+        aria-expanded={open}
+        aria-haspopup="true"
+        aria-label={`${agent.name}: ${label}, ${stateText[state]}. Show the list`}
+        title={label}
+        onClick={onToggle}
+      >
+        <span className="now-block-label">{label}</span>
+      </button>
+      {open && (
+        <ul className="now-group-list" aria-label={`${agent.name}: ${label}`}>
+          {blocks.map((block) => (
+            <li key={block.id}>
+              <button
+                type="button"
+                className="now-group-item"
+                disabled={block.taskId === null}
+                onClick={() => {
+                  if (block.taskId !== null)
+                    void navigate(`/tasks/${encodeURIComponent(block.taskId)}`)
+                }}
+              >
+                <AgentGlyph agent={agent} size="xs" bare decorative />
+                <span className="now-group-title">{block.label}</span>
+                <span className="now-group-meta">
+                  {stateText[block.state]}, {clockLabel(Date.parse(block.start))}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
   const navigate = useNavigate()
   const window = windowOf(snapshot.now)
-  const links = connectors(snapshot, window)
+  const [plotRef, plotWidth] = usePlotWidth()
+  const [openGroup, setOpenGroup] = useState<string | null>(null)
+  const links = connectors(snapshot, window, plotWidth)
+  const hasChat = snapshot.lanes.some((lane) => lane.blocks.some((block) => block.kind === 'chat'))
   const height = Math.max(snapshot.lanes.length, 1) * LANE_HEIGHT
   const nowLeft = percent(window, window.now)
   const planner = snapshot.lanes[0]?.agent
@@ -83,7 +183,7 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
                 </span>
               ))}
             </div>
-            <div className="now-plot" data-testid="score-plot" style={{ height }}>
+            <div className="now-plot" data-testid="score-plot" ref={plotRef} style={{ height }}>
               <div className="now-future" style={{ left: `${nowLeft}%` }} />
               {snapshot.lanes.map((_, index) => (
                 <div
@@ -128,10 +228,35 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
                     { top: index * LANE_HEIGHT, '--agent': agent.style.color } as CSSProperties
                   }
                 >
-                  {blocks.map((block) => {
-                    const layout = layoutBlock(window, block)
+                  {laneItems(window, blocks, plotWidth).map((item) => {
+                    const layout = item.layout
+                    const block = layout.block
                     const style: CSSProperties = { left: `${layout.left}%` }
                     if (layout.width !== null) style.width = `${layout.width}%`
+                    if (item.kind === 'chat')
+                      return (
+                        <span
+                          key={block.id}
+                          className="now-chat-band"
+                          style={style}
+                          role="img"
+                          aria-label={`${agent.name}: ${block.label}, ${clockLabel(Date.parse(block.start))}`}
+                          title={block.label}
+                        />
+                      )
+                    if (item.kind === 'group')
+                      return (
+                        <BlockGroup
+                          key={block.id}
+                          agent={agent}
+                          blocks={item.blocks}
+                          state={block.state}
+                          style={style}
+                          open={openGroup === block.id}
+                          onToggle={() => setOpenGroup(openGroup === block.id ? null : block.id)}
+                          onClose={() => setOpenGroup(null)}
+                        />
+                      )
                     const taskId = block.taskId
                     return (
                       <button
@@ -187,6 +312,12 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
           <span className="now-legend-swatch now-legend-swatch--planned" />
           Planned{planner ? ` by ${planner.name}` : ''}
         </span>
+        {hasChat && (
+          <span>
+            <span className="now-legend-swatch now-legend-swatch--chat" />
+            Chatting
+          </span>
+        )}
         <span>
           <svg width="22" height="10" viewBox="0 0 22 10" fill="none" aria-hidden="true">
             <path d="M1 2 C 9 2, 13 8, 21 8" stroke="currentColor" strokeWidth="1.5" />

@@ -405,6 +405,7 @@ test('lane.upserted updates the plan block of its brief live', () => {
     end: null,
     taskId: null,
     runId: null,
+    kind: 'task',
   }
   const data = {
     items: [

@@ -220,3 +220,121 @@ test("a hand-off connects the exact source run, not the source agent's latest bl
   expect(out.handoffs.map((h) => h.from.blockId)).toEqual([expect.stringContaining('a')])
   expect(out.handoffs).toHaveLength(1)
 })
+
+const chatRun = (
+  id: string,
+  agentId: string,
+  start: string,
+  end: string | null,
+  status = 'completed',
+) => ({
+  ...run(id, agentId, end ? status : 'running', start, end, null),
+  kind: 'chat' as const,
+})
+const chatInput = (runs: LaneInput['runs'], hops: LaneInput['hops'] = []): LaneInput => ({
+  ...base,
+  tasks: [],
+  runs,
+  hops,
+  waitingRunIds: [],
+})
+
+test('every block carries its kind; task runs stay exact and default to task', () => {
+  const out = buildLanes(designInput())
+  const blocks = out.lanes.flatMap((lane) => lane.blocks)
+  expect(blocks.every((block) => block.kind === 'task' && block.count === undefined)).toBe(true)
+  const brief = buildLanes(
+    chatInput([{ ...run('b1', 'lead', 'completed', '21:00', '21:10', null), kind: 'brief' }]),
+  )
+  expect(brief.lanes[0]!.blocks[0]).toMatchObject({ kind: 'brief', id: 'run:b1', runId: 'b1' })
+})
+
+test('chat replies less than 5 minutes apart merge into one counted band per agent', () => {
+  const out = buildLanes(
+    chatInput([
+      chatRun('c1', 'lead', '21:00', '21:02'),
+      chatRun('c2', 'lead', '21:06', '21:08'), // 4 min after c1 ended: merges
+      chatRun('c3', 'lead', '21:20', '21:21'), // 12 min later: a new band
+      chatRun('c4', 'builder', '21:01', '21:03'), // another agent: own band
+    ]),
+  )
+  const lead = out.lanes.find((lane) => lane.agentId === 'lead')!.blocks
+  expect(lead).toHaveLength(2)
+  expect(lead[0]).toMatchObject({
+    id: 'chat:c1',
+    kind: 'chat',
+    count: 2,
+    state: 'done',
+    start: at('21:00'),
+    end: at('21:08'),
+    runId: null,
+    label: 'Chat · 2 replies',
+  })
+  expect(lead[1]).toMatchObject({ id: 'chat:c3', kind: 'chat', count: 1, runId: 'c3' })
+  expect(out.lanes.find((lane) => lane.agentId === 'builder')!.blocks).toHaveLength(1)
+})
+
+test('exactly 5 minutes apart is a new band; an open chat run keeps absorbing', () => {
+  const split = buildLanes(
+    chatInput([chatRun('c1', 'lead', '21:00', '21:01'), chatRun('c2', 'lead', '21:06', '21:07')]),
+  )
+  expect(split.lanes[0]!.blocks.map((block) => block.id)).toEqual(['chat:c1', 'chat:c2'])
+  const open = buildLanes(
+    chatInput([chatRun('c1', 'lead', '21:00', null), chatRun('c2', 'lead', '21:30', '21:31')]),
+  )
+  const band = open.lanes[0]!.blocks
+  expect(band).toHaveLength(1)
+  expect(band[0]).toMatchObject({ kind: 'chat', count: 2, state: 'working', end: null })
+})
+
+test('task and brief blocks never merge and never absorb chat; retries stay distinct', () => {
+  const out = buildLanes({
+    ...chatInput([
+      chatRun('c1', 'builder', '21:00', '21:01'),
+      run('t1', 'builder', 'failed', '21:01', '21:02', 'x'),
+      run('t2', 'builder', 'completed', '21:03', '21:04', 'x'),
+      { ...run('b1', 'builder', 'completed', '21:04', '21:05', null), kind: 'brief' as const },
+      chatRun('c2', 'builder', '21:06', '21:07'),
+    ]),
+    tasks: [task('x', 'Same task', 'builder', null, 'done')],
+  })
+  const blocks = out.lanes.find((lane) => lane.agentId === 'builder')!.blocks
+  expect(blocks.map((block) => [block.id, block.kind])).toEqual([
+    ['chat:c1', 'chat'],
+    ['run:t1', 'task'],
+    ['run:t2', 'task'],
+    ['run:b1', 'brief'],
+    ['chat:c2', 'chat'],
+  ])
+})
+
+test('a chat band waiting on a person says so, and hand-offs point at the band', () => {
+  const out = buildLanes({
+    ...chatInput(
+      [
+        chatRun('c1', 'lead', '21:00', '21:01'),
+        chatRun('c2', 'lead', '21:02', null),
+        chatRun('c3', 'builder', '21:03', '21:04'),
+      ],
+      [
+        {
+          id: 'm1',
+          runId: 'c3',
+          fromAgentId: 'lead',
+          parentRunId: 'c2',
+          agentId: 'builder',
+          at: at('21:03'),
+        },
+      ],
+    ),
+    waitingRunIds: ['c2'],
+  })
+  const lead = out.lanes.find((lane) => lane.agentId === 'lead')!.blocks
+  expect(lead).toHaveLength(1)
+  expect(lead[0]).toMatchObject({ state: 'waiting', label: 'Waiting on you', count: 2 })
+  expect(out.handoffs).toHaveLength(1)
+  expect(out.handoffs[0]).toMatchObject({
+    from: { blockId: 'chat:c1' },
+    to: { blockId: 'chat:c3' },
+  })
+})

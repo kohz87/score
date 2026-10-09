@@ -662,3 +662,14 @@ test('messaging setup requests accept one-line values for env keys only', () => 
     false,
   )
 })
+
+test('a stored lane block without a kind reads as a task; chat bands carry a count', () => {
+  const stored: Record<string, unknown> = { ...f.lane }
+  delete stored.kind
+  expect(contract.LaneBlockSchema.parse(stored).kind).toBe('task')
+  expect(contract.LaneBlockSchema.parse({ ...f.lane, kind: 'chat', count: 3 }).count).toBe(3)
+  expect(contract.LaneBlockSchema.safeParse({ ...f.lane, kind: 'chat', count: 0 }).success).toBe(
+    false,
+  )
+  expect(contract.LaneBlockSchema.safeParse({ ...f.lane, kind: 'other' }).success).toBe(false)
+})

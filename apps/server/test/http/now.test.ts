@@ -9,6 +9,7 @@ import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { createHermesPort, type HermesPort } from '../../src/hermes/index.ts'
 import { projectTask, readProjectedTask } from '../../src/domain/tasks.ts'
+import { insertRoom, storeMessage } from '../../src/domain/rooms.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { scenarioDuration } from '../../src/hermes/fake/scenario.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
@@ -177,4 +178,55 @@ test('a completed reviewer run that was followed by more work is not a passed re
     (entry) => entry.ref.kind === 'task' && entry.ref.taskId === task.id,
   )!
   expect(item.checks.map((check) => check.ok)).toEqual([false, true])
+})
+
+test('lanes tell plain chat replies from brief work and tasks; chat replies merge into a band', async () => {
+  await port.start(ingest)
+  const agents = await port.listAgents()
+  const id = agents[0]!.id
+  const nowMs = scheduler.now()
+  const at = (minutes: number) => new Date(nowMs - minutes * 60_000).toISOString()
+  db.tx((sqlite) => {
+    insertRoom(
+      sqlite,
+      { id: 'r', name: '#kind-test', kind: 'room', leadAgentId: id, members: [id] },
+      at(60),
+    )
+    for (const key of ['m1', 'm2', 'm3'])
+      storeMessage(
+        sqlite,
+        {
+          id: key,
+          roomId: 'r',
+          author: { kind: 'you' },
+          to: [],
+          parts: [{ kind: 'text', text: key }],
+          createdAt: at(50),
+          streaming: false,
+          refs: [],
+        },
+        at(50),
+      )
+    const run = sqlite.prepare(
+      `INSERT INTO runs (id, profile, origin, status, started_at, ended_at, updated_at)
+       VALUES (?, ?, 'score', 'completed', ?, ?, ?)`,
+    )
+    const turn = sqlite.prepare(
+      `INSERT INTO message_runs (message_id, run_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, state, created_at, plan_first)
+       VALUES (?, ?, 'r', ?, ?, 0, ?, ?, 'x', '[]', 'completed', ?, ?)`,
+    )
+    // Two chat replies 3 minutes apart (one band) and one brief that planned first.
+    run.run('chat-1', id, at(30), at(28), at(28))
+    run.run('chat-2', id, at(25), at(24), at(24))
+    run.run('plan-1', id, at(15), at(12), at(12))
+    turn.run('a1', 'chat-1', id, 'm1', 't1', 'm1', at(30), 0)
+    turn.run('a2', 'chat-2', id, 'm2', 't2', 'm2', at(25), 0)
+    turn.run('a3', 'plan-1', id, 'm3', 't3', 'm3', at(15), 1)
+  })
+  const now = NowSnapshotSchema.parse((await get()).json())
+  const blocks = now.lanes.find((lane) => lane.agent.id === id)!.blocks
+  expect(blocks.map((block) => [block.id, block.kind, block.count])).toEqual([
+    ['chat:chat-1', 'chat', 2],
+    ['run:plan-1', 'brief', undefined],
+  ])
 })
