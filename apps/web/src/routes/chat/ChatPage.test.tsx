@@ -68,6 +68,7 @@ class Source extends EventTarget {
   }
 }
 const disposers: (() => void)[] = []
+let shares: object[] = []
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>
 const pendingApproval: Approval = {
   id: 'approval',
@@ -138,6 +139,7 @@ beforeEach(() => {
   rewindResponse = () => response({})
   searchHits = []
   rooms = [room]
+  shares = []
   filesInPlay = []
   learned = []
   fetchMock = vi.fn(async (input) => {
@@ -149,6 +151,7 @@ beforeEach(() => {
     if (url === '/api/rooms') return response({ asOfSeq: 1, rooms, directs: [direct] })
     if (url.endsWith('/versions')) return response({ asOfSeq: 1, items: versions })
     if (url.includes('/versions/')) return response({ version: versions[0], items: versionItems })
+    if (url.endsWith('/shares')) return response({ items: shares })
     if (url.endsWith('/rewind-plan')) return response(plan)
     if (url.endsWith('/rewind')) return rewindResponse()
     if (url.includes('/messages'))
@@ -863,6 +866,35 @@ test('sending an edit posts `edits`; the original greys with a link to the new v
   fireEvent.click(within(first).getByRole('button', { name: 'see the new version' }))
   expect(scroll).toHaveBeenCalled()
 })
+test('the delete dialog says live share links still show the message and revokes them in one click', async () => {
+  items = [mine]
+  shares = [
+    {
+      id: 'sh1',
+      roomId: 'general',
+      roomName: '#general',
+      createdAt: '2026-10-09T10:00:00.000Z',
+      expiresAt: '2026-10-16T10:00:00.000Z',
+      views: 0,
+      includeImages: false,
+      status: 'active',
+      roomChanged: false,
+    },
+  ]
+  setup()
+  await screen.findByText('Ship it')
+  fireEvent.click(screen.getByRole('button', { name: 'Delete message from You' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Delete this message?' })
+  await within(dialog).findByText(/1 share link of this room will still show this message/)
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Revoke it' }))
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) => String(url) === '/api/shares/sh1' && init?.method === 'DELETE',
+      ),
+    ).toBe(true),
+  )
+})
 test('an agent that cannot be rewound blocks Rewind and offers Hide in Score only', async () => {
   items = [mine]
   plan = {
@@ -969,6 +1001,18 @@ test('a delete leaves a Previous version marker where the message was', async ()
   expect(await within(switcher).findByText('Ship it')).toBeDefined()
   fireEvent.click(within(switcher).getByRole('button', { name: 'Hide' }))
   expect(within(switcher).queryByText('Ship it')).toBeNull()
+})
+// audit4-c 3: an edit whose rewind is done but whose correction was never sent still leaves a marker.
+test('an open edit shows where the original was, with View and Continue editing', async () => {
+  versions = [{ ...editVersion, count: 2, anchorCreatedAt: '2026-10-08T09:59:00.000Z' }]
+  versionItems = [mine]
+  setup()
+  await screen.findByText('Hello team')
+  const switcher = await screen.findByTestId('version-switcher')
+  expect(within(switcher).getByText(/Edit not sent yet/)).toBeDefined()
+  fireEvent.click(within(switcher).getByRole('button', { name: 'Continue editing' }))
+  expect(await screen.findByText('Editing your message')).toBeDefined()
+  expect((screen.getByRole('combobox') as HTMLTextAreaElement).value).toBe('Ship it')
 })
 test('room.version.created adds the marker live', async () => {
   setup()

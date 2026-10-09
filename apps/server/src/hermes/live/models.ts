@@ -1,4 +1,4 @@
-import type { ModelOption } from '@score/contract'
+import type { ModelOption, ModelRef } from '@score/contract'
 import { filterModels } from '../model-options.ts'
 import type { GatewayClient } from './gateway.ts'
 import { providerLabel } from './settings.ts'
@@ -16,7 +16,7 @@ export class LiveModels {
     private readonly now: () => number = Date.now,
   ) {}
 
-  async list(q?: string): Promise<ModelOption[]> {
+  async list(q?: string, only?: readonly ModelRef[]): Promise<ModelOption[]> {
     if (!this.cached || this.now() - this.cached.at > CACHE_MS) {
       try {
         const providers = await this.providers()
@@ -27,7 +27,7 @@ export class LiveModels {
         return []
       }
     }
-    return filterModels(this.cached.items, q)
+    return filterModels(this.cached.items, q, only)
   }
 }
 

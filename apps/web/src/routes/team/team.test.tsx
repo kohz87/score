@@ -70,6 +70,21 @@ const builderDetail: AgentDetail = {
 
 type Responder = (path: string, init?: RequestInit) => Response | Promise<Response>
 let respond: Responder
+const modelSettings = {
+  fallbacks: [
+    { provider: 'acme', model: 'alpha-model' },
+    { provider: 'acme', model: 'beta-model' },
+  ],
+  fallbacksEditable: true,
+  aliases: [
+    { name: 'fast', model: 'm-fast', provider: 'acme', editable: true },
+    { name: 'gated', model: 'm-gated', provider: 'custom', editable: false },
+  ],
+  speech: {
+    stt: { provider: null, model: null },
+    tts: { provider: 'openai', model: 'gpt-4o-mini-tts', voice: 'alloy' },
+  },
+}
 let router: ReturnType<typeof createMemoryRouter>
 let stream: ReturnType<typeof createStreamClient>
 let registry: ReturnType<typeof createStreamQueryRegistry>
@@ -114,6 +129,8 @@ beforeEach(() => {
   respond = (path) => {
     if (path === '/api/agents') return json({ asOfSeq: 0, items: [lead, builder] })
     if (path === '/api/agents/builder') return json(builderDetail)
+    if (path === '/api/agents/builder/model-settings') return json(structuredClone(modelSettings))
+    if (path.startsWith('/api/models')) return json({ items: [] })
     return json({ error: { code: 'not_found', message: 'No such agent' } }, 404)
   }
   vi.stubGlobal(
@@ -1194,4 +1211,87 @@ test('/team/:agent/workspace?path= opens the Workspace tab on that file', async 
     (await screen.findByRole('tab', { name: 'Workspace' })).getAttribute('aria-selected'),
   ).toBe('true')
   expect(await screen.findByLabelText('Contents of a.txt', {}, { timeout: 10_000 })).toBeDefined()
+})
+
+test('the Model tab reorders and saves the fallback chain, sending only the chain', async () => {
+  renderTeam('/team/builder')
+  const calls = tabsApi((call) =>
+    call.method === 'PUT' && call.path.endsWith('/model-settings')
+      ? json({ ...modelSettings, fallbacks: call.body.fallbacks })
+      : undefined,
+  )
+  fireEvent.click(await screen.findByRole('tab', { name: 'Model' }))
+  const chain = await screen.findByRole('group', { name: 'Fallback models' })
+  const save = within(chain).getByRole('button', { name: 'Save fallbacks' }) as HTMLButtonElement
+  expect(save.disabled).toBe(true)
+  fireEvent.click(within(chain).getByRole('button', { name: 'Move beta-model up' }))
+  fireEvent.click(within(chain).getByRole('button', { name: 'Remove alpha-model' }))
+  expect(save.disabled).toBe(false)
+  fireEvent.click(save)
+  await waitFor(() => expect(calls.some((call) => call.method === 'PUT')).toBe(true))
+  const put = calls.find((call) => call.method === 'PUT')!
+  expect(put.path).toBe('/api/agents/builder/model-settings')
+  expect(put.body).toEqual({ fallbacks: [{ provider: 'acme', model: 'beta-model' }] })
+})
+
+test('the Model tab adds and removes aliases; an alias with its own endpoint is read-only', async () => {
+  renderTeam('/team/builder')
+  const calls = tabsApi((call) =>
+    call.method === 'PUT' && call.path.endsWith('/model-settings')
+      ? json({
+          ...modelSettings,
+          aliases: (call.body.aliases as { name: string }[]).map((alias: { name: string }) => ({
+            ...alias,
+            editable: true,
+          })),
+        })
+      : undefined,
+  )
+  fireEvent.click(await screen.findByRole('tab', { name: 'Model' }))
+  const aliases = await screen.findByRole('group', { name: 'Aliases' })
+  expect(within(aliases).getByText(/Has its own endpoint/)).toBeDefined()
+  expect(within(aliases).queryByRole('button', { name: 'Remove alias gated' })).toBeNull()
+  const form = within(aliases).getByRole('form', { name: 'Add alias' })
+  fireEvent.change(within(form).getByLabelText('Alias name'), { target: { value: 'Quick' } })
+  fireEvent.change(within(form).getByLabelText('Model it stands for'), {
+    target: { value: 'typed-model' },
+  })
+  fireEvent.click(within(form).getByRole('button', { name: 'Add alias' }))
+  await waitFor(() => expect(calls.some((call) => call.method === 'PUT')).toBe(true))
+  expect(calls.find((call) => call.method === 'PUT')!.body).toEqual({
+    aliases: [
+      { name: 'fast', model: 'm-fast', provider: 'acme' },
+      { name: 'quick', model: 'typed-model', provider: null },
+    ],
+  })
+  fireEvent.click(within(aliases).getByRole('button', { name: 'Remove alias fast' }))
+  await waitFor(() => expect(calls.filter((call) => call.method === 'PUT')).toHaveLength(2))
+  expect(calls.filter((call) => call.method === 'PUT')[1]!.body).toEqual({
+    aliases: [{ name: 'quick', model: 'typed-model', provider: null }],
+  })
+})
+
+test('the Model tab saves only the speech fields that changed', async () => {
+  renderTeam('/team/builder')
+  const calls = tabsApi((call) =>
+    call.method === 'PUT' && call.path.endsWith('/model-settings')
+      ? json({
+          ...modelSettings,
+          speech: {
+            ...modelSettings.speech,
+            tts: { provider: 'openai', model: 'gpt-4o-mini-tts', voice: 'nova' },
+          },
+        })
+      : undefined,
+  )
+  fireEvent.click(await screen.findByRole('tab', { name: 'Model' }))
+  const form = await screen.findByRole('form', { name: 'Speech models' })
+  const save = within(form).getByRole('button', { name: 'Save speech models' }) as HTMLButtonElement
+  expect(save.disabled).toBe(true)
+  fireEvent.change(within(form).getByLabelText('Voice'), { target: { value: 'nova' } })
+  fireEvent.click(save)
+  await waitFor(() => expect(calls.some((call) => call.method === 'PUT')).toBe(true))
+  expect(calls.find((call) => call.method === 'PUT')!.body).toEqual({
+    speech: { tts: { voice: 'nova' } },
+  })
 })

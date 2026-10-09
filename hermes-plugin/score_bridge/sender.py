@@ -6,6 +6,7 @@ import json
 import queue
 import re
 import threading
+import sys
 import time
 from collections import deque
 from datetime import datetime, timezone
@@ -165,6 +166,8 @@ class Sender:
         self._wake, self._stop = threading.Event(), threading.Event()
         self._thread = None
         self._lazy_start = False
+        self._greeted = False
+        self._next_greeting = 0.0
         self._start_lock = threading.Lock()
         self._cycle_lock = threading.Lock()
         self._persist_lock = threading.Lock()
@@ -435,10 +438,24 @@ class Sender:
         finally:
             self._start_lock.release()
 
+    def _greet(self):
+        """In a gateway, say hello once without waiting for a hook: the hello starts the command poller, so a rewind
+        works right after a (re)load, before this profile's agent has done anything. Retried every 5 s until it
+        succeeds; outside a gateway there is nothing to poll for."""
+        if self._greeted or "gateway.run" not in sys.modules or time.monotonic() < self._next_greeting:
+            return
+        self._next_greeting = time.monotonic() + 5.0
+        try:
+            self.client.hello()
+            self._greeted = True
+        except Exception:
+            pass
+
     def _run(self):
         while not self._stop.is_set():
             self._wake.wait(0.25)
             self._wake.clear()
+            self._greet()
             try:
                 self.process_once()
             except (KeyboardInterrupt, SystemExit):

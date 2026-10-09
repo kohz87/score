@@ -53,6 +53,7 @@ const shareSummary = {
   views: 0,
   includeImages: false,
   status: 'active',
+  roomChanged: false,
 }
 const outsideSession = {
   id: 's1',
@@ -717,6 +718,49 @@ const cases = [
     'KnowledgeAgentUsageSchema',
     { items: [{ agentId: 'builder', writesToday: 2 }] },
     { items: [{ agentId: 'builder', writesToday: -1 }] },
+  ],
+  ['ModelRefSchema', { provider: 'openrouter', model: 'gpt-x' }, { provider: '-x', model: 'm' }],
+  ['AliasNameSchema', 'fast', 'Fast.one'],
+  [
+    'ModelAliasSchema',
+    { name: 'fast', model: 'gpt-x', provider: null, editable: true },
+    { name: 'fast', model: 'gpt-x', provider: null },
+  ],
+  [
+    'AliasInputSchema',
+    { name: 'fast', model: 'gpt-x' },
+    { name: 'fast', model: 'gpt-x', key: 'k' },
+  ],
+  [
+    'SpeechSettingsSchema',
+    {
+      stt: { provider: null, model: null },
+      tts: { provider: 'edge', model: null, voice: 'en-US-x' },
+    },
+    { stt: { provider: 'nope', model: null }, tts: { provider: null, model: null, voice: null } },
+  ],
+  [
+    'ModelSettingsSchema',
+    {
+      fallbacks: [{ provider: 'openrouter', model: 'gpt-x' }],
+      fallbacksEditable: true,
+      aliases: [],
+      speech: {
+        stt: { provider: null, model: null },
+        tts: { provider: null, model: null, voice: null },
+      },
+    },
+    { fallbacks: [], aliases: [] },
+  ],
+  [
+    'ModelSettingsUpdateSchema',
+    { fallbacks: [], speech: { tts: { voice: 'en-US-x' } } },
+    { speech: { tts: { api_key: 'k' } } },
+  ],
+  [
+    'ModelVisibilitySchema',
+    { items: [{ provider: 'openrouter', model: 'gpt-x' }] },
+    { items: [{ provider: 'openrouter' }] },
   ],
   ['HistoryOutcomeSchema', 'stopped', 'cancelled'],
   [

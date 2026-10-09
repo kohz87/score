@@ -575,7 +575,8 @@ create dialog says so). Nothing live is exposed.
   data. The room's later edits and deletions do not change it. At most the latest 2000 messages.
 - Token: 32 random bytes (base64url, 43 chars). Only its SHA-256 is stored (`room_shares.token_hash`); the token is shown once.
 - `GET /api/shares` → `{ items: ShareSummary[] }` (`{ id; roomId; roomName; createdAt; expiresAt; views; includeImages;
-  status: 'active' | 'expired' }`, newest first; revoked shares are gone) · `GET /api/rooms/:roomId/shares` → the same, active
+  status: 'active' | 'expired'; roomChanged }`, newest first; `roomChanged` = a message of the room was deleted or rewound after the
+  snapshot (the link still shows the old text); revoked shares are gone) · `GET /api/rooms/:roomId/shares` → the same, active
   ones of that room (Chat › room menu › Share…, Settings › Shares lists all).
 - **H** `DELETE /api/shares/:id` → `204` (no password needed; idempotent; `404` unknown id). Revoking withdraws the link at once
   and drops the stored snapshot.
@@ -717,7 +718,20 @@ incarnation-aware reuse confirmation contract is agreed.
 - `POST /api/agents/:agentId/files/:file/preview` `{ content }` → `{ diff: string }`
 - **H** `PUT /api/agents/:agentId/files/:file` `{ content; etag }` → `{ etag }` (409 `conflict` on etag mismatch, with
   `details: { etag /* current */; diff /* current → submitted */ }`)
-- `PUT /api/agents/:agentId/model` `{ model: string; provider?: string }` → `AgentDetail`
+- `PUT /api/agents/:agentId/model` `{ model: string; provider?: string }` → `AgentDetail`. A `model` without `provider` that
+  names one of the agent's aliases (case-insensitive) is replaced by the alias's model and provider.
+- `AgentDetail.model.fallback` is the agent's `fallback_providers` chain as text (`"model-a, then model-b"`), `null` when none.
+- **H** `GET|PUT /api/agents/:agentId/model-settings` (5.31, `packages/contract/src/model-settings.ts`) →
+  `ModelSettings` `{ fallbacks: { provider; model }[] /* ordered chain, Hermes `fallback_providers`, any length */;
+  fallbacksEditable: boolean /* false: an entry has a custom endpoint or key; shown, never rewritten (409) */;
+  aliases: { name; model; provider: string | null; editable }[] /* Hermes `model_aliases`, per profile */;
+  speech: { stt: { provider; model }; tts: { provider; model; voice } } }`. The PUT body is `ModelSettingsUpdate`
+  `{ fallbacks?; aliases? /* the full list of editable aliases wanted */; speech?: { stt?: { provider?; model? };
+  tts?: { provider?; model?; voice? } } }`, strict. Only keys whose value differs from what Hermes holds are written
+  (`hermes -p <profile> config set …`, `config unset model_aliases.<name>` for a removed alias), and the answer is built from
+  what was written, with no re-read. Speech provider ids and which of model/voice each has are `STT_PROVIDERS` /
+  `TTS_PROVIDERS` in the contract package. `409 conflict` for a non-editable chain/alias, a model or voice the chosen
+  provider doesn't have, or a Hermes refusal; `502 hermes_unavailable` when the settings can't be read.
 - `GET /api/agents/:agentId/skills` → `SkillsResponse` `{ items: AgentDetail['skills'] }` · `POST …/skills` `{ name }`
   (install) → `SkillsResponse` · `PATCH …/skills/:name` `{ enabled }` → `AgentDetail['skills'][number]` ·
   `GET /api/skills/hub?q=` → `SkillHubResponse` `{ items: { name; identifier; source; trust; description }[] }`
@@ -731,7 +745,7 @@ incarnation-aware reuse confirmation contract is agreed.
 - `PATCH /api/agents/:agentId/tools/:toolId` `{ enabled }` → `AgentDetail['tools'][number]`
 - `GET /api/agents/:agentId/routines` → `{ items: RoutineSummary[] }` · `POST …/routines` `{ title; schedule; prompt }` →
   `RoutineSummary` · `PATCH /api/routines/:id` `{ enabled?; schedule?; prompt? }` → `RoutineSummary` ·
-  `DELETE /api/routines/:id` → `{ id }` · `POST /api/routines/:id/run` → `{ id; queued: true }` (runs on the scheduler's next
+  `DELETE /api/routines/:id` → `{ id }` · `POST /api/routines/:id/run` → `{ id; queued: true }` (`409 paused` while the team or that agent is paused; runs on the scheduler's next
   tick). Routine ids are `<profile>:<jobId>`. Hermes rejecting a schedule or prompt → `409 conflict` (CLI output stays
   private).
 - **H** `PATCH /api/agents/:agentId/permissions/:permId` `{ level }` → the permission row. Stricter only: take back a
@@ -899,10 +913,14 @@ code?: string; signInId?: string; expiresAt?: string }`. For a `device_code` pro
   doesn't take a key → `409 not_supported`;
   a key already being added for that provider → `409 conflict`. The key never appears in any response, log or receipt
   (the receipt's body hash is an HMAC under a per-process secret, so a retry after a restart is `409`, not a replay).
-- `GET /api/models?q=` → `{ items: ModelOption[] }`, `ModelOption = { provider: string; providerLabel: string; model: string;
-available: boolean; reason: string | null /* "Not on your plan" */; free: boolean; contextLength?: number | null /* tokens, when Hermes says */; price: { input: string; output: string } | null }`.
+- `GET /api/models?q=&agentId=&all=` → `{ items: ModelOption[]; hiddenCount?: number }`, `ModelOption = { provider: string; providerLabel: string; model: string;
+available: boolean; reason: string | null /* "Not on your plan" */; free: boolean; contextLength?: number | null /* tokens, when Hermes says */; price: { input: string; output: string } | null; alias?: string }`.
   Models of connected providers only (Hermes model options); `q` matches model or provider label, case-insensitive;
-  at most 200 items, available first.
+  at most 200 items, available first. When the chosen-models list (below) is not empty, only those models are listed and
+  `hiddenCount` says how many matching models were left out; `all=1` ignores the list ("Show all"). With `agentId` and a `q`
+  that is part of one of that agent's alias names, the alias's model comes first with `alias` set.
+- `GET|PUT /api/settings/model-visibility` (5.31) `{ items: { provider; model }[] }`: the models the pickers show by default
+  (Score's own table; empty = every model). PUT replaces the list (human only).
 - `POST /api/settings/providers/local` `{ label; baseUrl; model }` → provider item
 - `GET /api/settings/connections` → `{ toolServers: { id; label; status: 'ok'|'needs_signin'|'error'; usedBy: AgentId[] | 'everyone' }[]
 messaging: { platform; label; status: 'connected'|'disconnected'; detail: string | null }[] }`
@@ -1059,7 +1077,10 @@ sessionKey; requestId; choice: ApprovalChoice; reason: string | null }[] }`. Onl
 **Commands** (PLAN 5.33, server → plugin). A sibling long poll next to the decisions one, served only to a producer
 whose `isolation` is not `unknown`; the plugin polls only while it runs inside a gateway (it needs Hermes's session store).
 
-- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: { commandId; kind: 'rewind'; sessionId; turns }[] }`. A
+- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: { commandId; kind: 'rewind'; sessionId; turns; since? }[] }` (`since` = epoch seconds of the rewound message; the plugin then
+  computes the number of turns itself, as every user turn of Hermes's alternation-repaired projection from the first one at or after
+  `since`, uses `turns` only as Score's own count, refuses (`failed`) when the message shares a turn with an earlier unanswered
+  one or no turn starts at/after `since`, and checks afterwards that no active user row from `since` remains, else `failed`). A
   command is handed to one polling producer of the profile once and is not redelivered.
 - `POST /bridge/v1/commands/:commandId/result` `{ outcome: 'done' | 'nothing' | 'failed'; turnsUndone?; rewoundCount?;
   error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what

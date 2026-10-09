@@ -107,3 +107,22 @@
 .model-picker-panel[data-note-only] {
   pointer-events: none;
 }
+
+.model-picker-all {
+  padding: 4px 8px 8px;
+}
+.model-picker-all button {
+  padding: 6px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.model-picker-all button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}

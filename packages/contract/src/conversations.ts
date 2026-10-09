@@ -71,6 +71,8 @@ export const ShareSummarySchema = z.object({
   views: z.int().nonnegative(),
   includeImages: z.boolean(),
   status: z.enum(['active', 'expired']),
+  /** A message of the room was deleted, edited or rewound after the snapshot was taken (the link still shows it). */
+  roomChanged: z.boolean(),
 })
 export type ShareSummary = z.infer<typeof ShareSummarySchema>
 export const SharesResponseSchema = z.object({ items: z.array(ShareSummarySchema) })

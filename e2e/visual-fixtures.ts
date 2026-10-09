@@ -88,6 +88,31 @@ const extras = {
 }
 export const visualFixtures: Record<string, unknown> = {
   '/api/settings/currency': { code: 'USD', rate: 1 },
+  '/api/settings/model-visibility': { items: [] },
+  '/api/agents/lead/model-settings': {
+    fallbacks: [],
+    fallbacksEditable: true,
+    aliases: [],
+    speech: {
+      stt: { provider: null, model: null },
+      tts: { provider: 'edge', model: null, voice: 'en-US-AriaNeural' },
+    },
+  },
+  '/api/models?all=1': {
+    items: [
+      ['openai-codex', 'ChatGPT (Codex)', 'gpt-6.1-sol'],
+      ['nous', 'Nous Portal', 'upstage/solar-mini4:free'],
+      ['local', 'Local server', 'local-gpt-mini'],
+    ].map(([provider, providerLabel, model]) => ({
+      provider,
+      providerLabel,
+      model,
+      available: true,
+      reason: null,
+      free: false,
+      price: null,
+    })),
+  },
   '/api/system/logs?limit=200': {
     available: true,
     items: [

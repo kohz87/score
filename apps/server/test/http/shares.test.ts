@@ -404,6 +404,7 @@ test('lists shares with room, dates and views; the room list shows active ones o
     views: 2,
     includeImages: false,
     status: 'active',
+    roomChanged: false,
   })
   expect(list.find((item: { id: string }) => item.id === b.id)).toMatchObject({ views: 0 })
   scheduler.advance(2 * DAY)
@@ -428,6 +429,50 @@ test('the public page is rate limited per IP', async () => {
   expect((await page(token, '10.0.0.2')).statusCode).toBe(200)
   scheduler.advance(61_000)
   expect((await page(token, '10.0.0.1')).statusCode).toBe(200)
+})
+
+// audit4-c 2: a page with many images must still load after the page budget is spent.
+test('share images have their own, larger rate budget than the page', async () => {
+  await setPassword()
+  const r = await room()
+  const stored = app.media!.store(png(80, 1), 'image/png')
+  await say(r.id, [{ kind: 'image', mediaId: stored.mediaId }], true)
+  const token = tokenOf((await create(r.id, { includeImages: true })).json().url)
+  const ip = '10.0.0.7'
+  for (let i = 0; i < 30; i++) expect((await page(token, ip)).statusCode).toBe(200)
+  expect((await page(token, ip)).statusCode).toBe(429)
+  for (let i = 0; i < 60; i++)
+    expect((await app.inject({ url: `/s/${token}/media/0`, remoteAddress: ip })).statusCode).toBe(
+      200,
+    )
+  // Page hits do not eat the image budget either, and the image budget is finite.
+  scheduler.advance(61_000)
+  for (let i = 0; i < 600; i++) await app.inject({ url: `/s/${token}/media/0`, remoteAddress: ip })
+  expect((await app.inject({ url: `/s/${token}/media/0`, remoteAddress: ip })).statusCode).toBe(429)
+  expect((await page(token, ip)).statusCode).toBe(200)
+})
+
+// audit4-c 4: a share says when its room changed after the snapshot.
+test('a share is marked when a message of its room was deleted after the snapshot', async () => {
+  await setPassword()
+  const r = await room()
+  const made = await say(r.id, [{ kind: 'text', text: 'secret plan' }], true)
+  const share = (await create(r.id)).json()
+  const flag = async () =>
+    (await app.inject({ url: '/api/shares', headers })).json().items[0].roomChanged
+  expect(await flag()).toBe(false)
+  scheduler.advance(1000)
+  expect(
+    (
+      await app.inject({
+        method: 'DELETE',
+        url: `/api/rooms/${r.id}/messages/${made.id}`,
+        headers,
+      })
+    ).statusCode,
+  ).toBe(204)
+  expect(await flag()).toBe(true)
+  expect(share.id).toBeTruthy()
 })
 
 test('the token never appears in logs or the listing', async () => {

@@ -144,11 +144,19 @@ export function listShares(
   activeOnly = false,
 ): ShareSummary[] {
   return z
-    .array(ShareRowSchema.extend({ room_name: z.string() }))
+    .array(
+      ShareRowSchema.extend({
+        room_name: z.string(),
+        room_changed: z.union([z.literal(0), z.literal(1)]),
+      }),
+    )
     .parse(
       sqlite
         .prepare(
-          `SELECT s.*, r.name AS room_name FROM room_shares s JOIN rooms r ON r.id = s.room_id
+          `SELECT s.*, r.name AS room_name,
+             (EXISTS (SELECT 1 FROM messages m WHERE m.room_id = s.room_id AND m.deleted_at > s.created_at)
+              OR EXISTS (SELECT 1 FROM room_versions v WHERE v.room_id = s.room_id AND v.created_at > s.created_at)) AS room_changed
+           FROM room_shares s JOIN rooms r ON r.id = s.room_id
            WHERE s.revoked_at IS NULL AND (? IS NULL OR s.room_id = ?) AND (? = 0 OR s.expires_at > ?)
            ORDER BY s.created_at DESC, s.id`,
         )
@@ -164,6 +172,7 @@ export function listShares(
         views: row.views,
         includeImages: row.include_images === 1,
         status: row.expires_at > nowIso ? 'active' : 'expired',
+        roomChanged: row.room_changed === 1,
       }),
     )
 }

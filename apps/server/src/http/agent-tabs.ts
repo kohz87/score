@@ -4,6 +4,8 @@ import {
   AgentDetailSchema,
   AgentSummarySchema,
   MemoryPageSchema,
+  ModelSettingsSchema,
+  ModelSettingsUpdateSchema,
   SkillHubResponseSchema,
   SkillsResponseSchema,
 } from '@score/contract'
@@ -13,6 +15,7 @@ import { z } from 'zod'
 import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import { readAgentStyle, storeAgent } from '../domain/agents.ts'
+import { resolveAlias } from '../domain/model-aliases.ts'
 import { HttpError } from '../errors.ts'
 import {
   AddMemorySchema,
@@ -71,8 +74,24 @@ export function registerAgentTabRoutes(
 
   app.put('/api/agents/:agentId/model', mutation, async (request) => {
     const { agentId } = AgentParams.parse(request.params)
-    await port.setAgentModel(agentId, SetModelSchema.parse(request.body))
+    const req = SetModelSchema.parse(request.body)
+    // A short name that is one of this agent's aliases means the model (and provider) it stands for.
+    const alias = req.provider ? null : await resolveAlias(port, agentId, req.model)
+    await port.setAgentModel(
+      agentId,
+      alias ? { model: alias.model, ...(alias.provider ? { provider: alias.provider } : {}) } : req,
+    )
     return announce(agentId)
+  })
+  app.get('/api/agents/:agentId/model-settings', async (request) => {
+    const { agentId } = AgentParams.parse(request.params)
+    return ModelSettingsSchema.parse(await port.readModelSettings(agentId))
+  })
+  // Answers with the settings as written; the agent card's fallback text is updated by the agent directory.
+  app.put('/api/agents/:agentId/model-settings', mutation, async (request) => {
+    const { agentId } = AgentParams.parse(request.params)
+    const update = ModelSettingsUpdateSchema.parse(request.body)
+    return ModelSettingsSchema.parse(await port.updateModelSettings(agentId, update))
   })
 
   app.get('/api/agents/:agentId/skills', async (request) => {

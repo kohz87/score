@@ -131,7 +131,7 @@ function MessagePage({
         // A delete leaves a marker where the message was; an edit's switcher sits above its correction.
         const markers = versions.filter(
           (version) =>
-            version.mode === 'delete' &&
+            (version.mode === 'delete' || version.replacedBy === null) &&
             ((before === null && (!newest || version.anchorCreatedAt > newest)) ||
               (oldest !== undefined &&
                 newest !== undefined &&
