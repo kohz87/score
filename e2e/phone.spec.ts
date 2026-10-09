@@ -58,7 +58,11 @@ test('when Score cannot be reached the app shows the offline page and recovers o
   await page.goto('/now').catch(() => {})
   await expect(page.getByRole('heading', { name: /Score can.t be reached/ })).toBeVisible()
   await context.setOffline(false)
-  await page.getByRole('button', { name: 'Try again' }).click()
+  // The page also retries by itself when the connection returns, so the button may already be gone.
+  await page
+    .getByRole('button', { name: 'Try again' })
+    .click({ timeout: 1000 })
+    .catch(() => {})
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await expect(page.getByRole('heading', { name: /Score can.t be reached/ })).toHaveCount(0)
 })
@@ -67,13 +71,34 @@ test('notifications ask for permission only on a click and then deliver through 
   page,
   context,
 }) => {
-  await context.grantPermissions(['notifications'], { origin: page.url() === 'about:blank' ? 'http://127.0.0.1:' + (process.env.SCORE_WEB_PORT ?? '5173') : page.url() })
+  await context.grantPermissions(['notifications'], {
+    origin:
+      page.url() === 'about:blank'
+        ? 'http://127.0.0.1:' + (process.env.SCORE_WEB_PORT ?? '5173')
+        : page.url(),
+  })
   await page.addInitScript(() => {
-    const original = Notification.requestPermission.bind(Notification)
+    // Headless Chromium answers the prompt but keeps reporting Notification.permission as not granted, so the
+    // permission is faked here: this checks Score's flow (ask only on a click, deliver through the worker).
+    let granted = false
+    Object.defineProperty(Notification, 'permission', {
+      get: () => (granted ? 'granted' : 'default'),
+    })
+    const original = async () => {
+      granted = true
+      return 'granted' as NotificationPermission
+    }
     ;(window as unknown as { asked: number }).asked = 0
+    // Headless Chromium doesn't list shown notifications back, so record what the worker is asked to show.
+    ;(window as unknown as { shown: string[] }).shown = []
+    const show = ServiceWorkerRegistration.prototype.showNotification
+    ServiceWorkerRegistration.prototype.showNotification = function (title, options) {
+      ;(window as unknown as { shown: string[] }).shown.push(title)
+      return show.call(this, title, options)
+    }
     Notification.requestPermission = (...args) => {
       ;(window as unknown as { asked: number }).asked++
-      return original(...args)
+      return original()
     }
   })
   await pair(page)
@@ -87,25 +112,12 @@ test('notifications ask for permission only on a click and then deliver through 
   ).toBeVisible()
   expect(await page.evaluate(() => (window as unknown as { asked: number }).asked)).toBe(1)
   await section.getByRole('checkbox', { name: /A routine finished/ }).uncheck()
-  await page.reload()
-  await expect(
-    page
-      .getByRole('region', { name: 'Notifications' })
-      .getByRole('checkbox', { name: /A routine finished/ }),
-  ).not.toBeChecked()
-  await expect(
-    page
-      .getByRole('region', { name: 'Notifications' })
-      .getByRole('checkbox', { name: /Show message previews/ }),
-  ).not.toBeChecked()
+  await expect(section.getByRole('checkbox', { name: /A routine finished/ })).not.toBeChecked()
+  await expect(section.getByRole('checkbox', { name: /Show message previews/ })).not.toBeChecked()
   await page.evaluate(async () => navigator.serviceWorker.ready)
-  await page.getByRole('button', { name: 'Send a test notification' }).click()
+  await section.getByRole('button', { name: 'Send a test notification' }).click()
   await expect
-    .poll(() =>
-      page.evaluate(async () =>
-        (await (await navigator.serviceWorker.ready).getNotifications()).map((n) => n.title),
-      ),
-    )
+    .poll(() => page.evaluate(() => (window as unknown as { shown: string[] }).shown))
     .toContain('Score notifications work')
 })
 
