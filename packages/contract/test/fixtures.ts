@@ -221,6 +221,11 @@ export const deleted = {
   messageId: 'message-1',
   roomId: 'room-1',
 } satisfies Contract.MessageDeleted
+export const updated = {
+  messageId: 'message-1',
+  roomId: 'room-1',
+  editedBy: 'message-2',
+} satisfies Contract.MessageUpdated
 export const typing = {
   roomId: 'room-1',
   agentId: 'lead',

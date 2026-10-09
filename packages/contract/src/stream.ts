@@ -40,6 +40,14 @@ export const MessageDeletedSchema = z.object({
 })
 export type MessageDeleted = z.infer<typeof MessageDeletedSchema>
 
+/** A message changed in place; today only the original of an edit gets its `editedBy`. */
+export const MessageUpdatedSchema = z.object({
+  roomId: z.string().min(1),
+  messageId: z.string().min(1),
+  editedBy: z.string().min(1).nullable(),
+})
+export type MessageUpdated = z.infer<typeof MessageUpdatedSchema>
+
 export const TypingSchema = z.object({
   roomId: z.string().min(1),
   agentId: AgentIdSchema,
@@ -101,6 +109,7 @@ export const StreamEventSchema = z.discriminatedUnion('type', [
     data: MessageCompletedSchema,
   }),
   StreamEnvelopeSchema.extend({ type: z.literal('message.deleted'), data: MessageDeletedSchema }),
+  StreamEnvelopeSchema.extend({ type: z.literal('message.updated'), data: MessageUpdatedSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('typing'), data: TypingSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('approval.requested'), data: ApprovalSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('approval.updated'), data: ApprovalSchema }),

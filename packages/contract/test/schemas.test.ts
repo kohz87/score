@@ -394,6 +394,8 @@ const cases = [
   ],
   ['PlatformParamSchema', 'telegram', 'Bad Name'],
   ['MessageDeletedSchema', f.deleted, { roomId: 'room-1' }],
+  ['MessageUpdatedSchema', f.updated, { roomId: 'room-1', messageId: 'm', editedBy: 3 }],
+  ['RetryReplyResponseSchema', { messageId: 'reply-2' }, {}],
   [
     'MessagingFieldSchema',
     {
