@@ -132,7 +132,7 @@ function Editor({
   const { save } = useWorkspaceActions(agentId)
   const root = useContext(WorkspaceRootContext)
   const key = draftKey(agentId, root, path)
-  const kept = useRef(drafts.get(key)).current
+  const [kept] = useState(() => drafts.get(key))
   const [base, setBase] = useState<{ content: string; etag: string | null }>(
     kept ? kept.base : { content: latest.content, etag: latest.etag },
   )
@@ -146,7 +146,8 @@ function Editor({
   const dirtyRef = useRef(false)
   const baseRef = useRef(base)
   // Restored edits are compared with what is on disk now, like any change that lands while editing.
-  const seen = useRef<string | null>(kept ? null : latest.etag)
+  const [seenInitial] = useState<string | null>(() => (kept ? null : latest.etag))
+  const seen = useRef<string | null>(seenInitial)
   useEffect(() => {
     draftRef.current = draft
     baseRef.current = base

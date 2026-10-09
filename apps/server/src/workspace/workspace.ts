@@ -346,8 +346,7 @@ export class Workspace {
               etag: now?.isFile() ? etagOf(await readBytes(target, MAX_TEXT_BYTES)) : null,
             })
           await fs.rename(temp, target)
-        }
-        else {
+        } else {
           // link fails if the name appeared meanwhile; rename would silently replace it.
           await fs.link(temp, target)
           await fs.unlink(temp)

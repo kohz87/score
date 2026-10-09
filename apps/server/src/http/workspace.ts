@@ -38,7 +38,11 @@ export function registerWorkspaceRoutes(
   app: FastifyInstance,
   port: HermesPort,
   { home, hermesHome }: Pick<Config, 'home' | 'hermesHome'>,
-  policy: RootPolicy = defaultRootPolicy([home, resolveHermesHome(hermesHome), resolveHermesHome()]),
+  policy: RootPolicy = defaultRootPolicy([
+    home,
+    resolveHermesHome(hermesHome),
+    resolveHermesHome(),
+  ]),
 ): void {
   async function info(agentId: string): Promise<WorkspaceInfo & { cwd: string | null }> {
     const { cwd, backend } = await port.readWorkspaceConfig(agentId)

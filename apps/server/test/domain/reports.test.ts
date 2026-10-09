@@ -438,10 +438,7 @@ test('a 366-day custom report with many tasks computes quickly (no per-task form
   expect(performance.now() - started).toBeLessThan(2000)
   expect(result.byDay).toHaveLength(366)
   expect(
-    result.byDay.reduce(
-      (n, d) => n + Object.values(d.perAgent).reduce((a, b) => a + b, 0),
-      0,
-    ),
+    result.byDay.reduce((n, d) => n + Object.values(d.perAgent).reduce((a, b) => a + b, 0), 0),
   ).toBe(300)
 })
 
