@@ -7,8 +7,11 @@ import {
   customRangeProblem,
   readReportRows,
   reportWindow,
+  localTimeZone,
+  type ReportRun,
   type CustomDays,
 } from '../domain/reports.ts'
+import { computeTrend, trendWindow } from '../domain/reports-trend.ts'
 import { reportsToCsv } from '../domain/reports-csv.ts'
 import { profileSpendInWindow, recordSessionCosts } from '../domain/spend.ts'
 import { readAgentNames } from '../domain/agents.ts'
@@ -87,8 +90,37 @@ export function registerReportRoutes(
       runs: [...own.runs, ...seeded.runs],
       approvals: [...own.approvals, ...seeded.approvals],
     }
-    const report = ReportsSchema.parse(
-      computeReports({
+    // The 30-day trend is independent of the range: its own window of runs and its own cost readings.
+    const trendTz = tz ?? localTimeZone()
+    const trend = trendWindow(now, trendTz)
+    const trendOwn = db
+      ? db.read((sqlite) => readReportRows(sqlite, trend.from, trend.to))
+      : { runs: [] }
+    const trendSeeded: { runs: ReportRun[]; trendSpendUsd?: number[] } =
+      (await port.reportHistoryRows?.(now, agentIds)) ?? { runs: [] }
+    let trendCosts: Awaited<ReturnType<NonNullable<typeof port.sessionCosts>>> | undefined
+    if (db && port.sessionCosts)
+      trendCosts = await port.sessionCosts({ sinceMs: trend.from, agentIds })
+    const trendRows = db
+      ? db.tx((sqlite) => {
+          for (const [profile, sessions] of Object.entries(trendCosts ?? {}))
+            recordSessionCosts(sqlite, profile, sessions, now)
+          return computeTrend({
+            now,
+            tz: trendTz,
+            runs: [...trendOwn.runs, ...trendSeeded.runs],
+            ...(trendSeeded.trendSpendUsd ? { demoSpendUsd: trendSeeded.trendSpendUsd } : {}),
+            ...(trendCosts ? { costs: trendCosts, sqlite } : {}),
+          })
+        })
+      : computeTrend({
+          now,
+          tz: trendTz,
+          runs: trendSeeded.runs,
+          ...(trendSeeded.trendSpendUsd ? { demoSpendUsd: trendSeeded.trendSpendUsd } : {}),
+        })
+    const report = ReportsSchema.parse({
+      ...computeReports({
         range,
         ...(custom ? { custom } : {}),
         now,
@@ -97,7 +129,8 @@ export function registerReportRoutes(
         facts,
         ...rows,
       }),
-    )
+      trend: trendRows,
+    })
     return { report, agents, today: window.days.at(-1) ?? new Date(now).toISOString().slice(0, 10) }
   }
 

@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import type { KanbanTaskFact, ReportFacts } from '../../domain/reports.ts'
+import type { CacheTokens, KanbanTaskFact, ReportFacts } from '../../domain/reports.ts'
 import { hermesPaths, ProfileNameSchema, resolveHermesHome } from './paths.ts'
 import { HermesDbMissing, HermesSchemaDrift, openReadOnly, readBatch } from './sqlite.ts'
 import type { SessionCost } from '../../domain/spend.ts'
-import { readSessionCosts, sessionSpend } from './sessions.ts'
+import { readSessionCosts, sessionCacheTokens, sessionSpend } from './sessions.ts'
 
 const TaskRowSchema = z.object({
   id: z.string(),
@@ -47,13 +47,16 @@ export function readReportFacts(
 ): ReportFacts {
   const paths = hermesPaths(resolveHermesHome(hermesHome))
   const spendUsd: Record<string, number | null> = {}
+  const cache: Record<string, CacheTokens | null> = {}
   for (const agentId of req.agentIds) {
     spendUsd[agentId] = null
+    cache[agentId] = null
     if (!ProfileNameSchema.safeParse(agentId).success) continue
     try {
       const db = openReadOnly(paths.stateDb(agentId))
       try {
         spendUsd[agentId] = sessionSpend(db, req.from / 1000, req.to / 1000)
+        cache[agentId] = sessionCacheTokens(db, req.from / 1000, req.to / 1000)
       } finally {
         db.close()
       }
@@ -98,7 +101,7 @@ export function readReportFacts(
   } catch (error) {
     if (!(error instanceof HermesDbMissing || error instanceof HermesSchemaDrift)) throw error
   }
-  return { tasks, spendUsd }
+  return { tasks, spendUsd, cache }
 }
 
 /** Read-only: per profile, the sessions active since `sinceMs` with their cumulative cost. Unreadable profiles are omitted. */

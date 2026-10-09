@@ -199,7 +199,7 @@ export function RemoteSection() {
     }
     const timer = setTimeout(() => setExpired(true), Math.min(wait, 2 ** 31 - 1))
     return () => clearTimeout(timer)
-  }, [expiresAt, invite.dataUpdatedAt])
+  }, [expiresAt, invite.data])
   const linkShown = invite.data !== undefined && !expired
   // While a link is on screen, watch for the device that uses it.
   useEffect(() => {

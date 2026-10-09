@@ -40,6 +40,7 @@ import { registerHttpsGuide } from './http/https-guide.ts'
 import { registerWebAssets, type WebAssets } from './http/web-assets.ts'
 import { PairingService } from './auth/pairing.ts'
 import type { SessionStore } from './auth/session-store.ts'
+import { registerCurrencyRoutes } from './http/currency.ts'
 import { registerLogRoutes } from './http/logs.ts'
 import { registerSessionRoutes } from './http/session.ts'
 import { registerSystemRoutes } from './http/system.ts'
@@ -209,6 +210,7 @@ export function buildApp({
   if (knowledge) registerKnowledgeRoutes(app, knowledge)
   registerRoutineRoutes(app, port, db, clock)
   registerSettingsRoutes(app, port, db, clock)
+  registerCurrencyRoutes(app, db)
   registerRulesRoutes(app, port, ingest, db, clock)
   if (db && ingest) {
     const dispatch = registerRoomRoutes(app, port, db, ingest, clock, mediaStore)

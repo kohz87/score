@@ -11,7 +11,8 @@ afterEach(() => {
 })
 
 const headers = { 'x-score-client': 'web' }
-const line = (extra: Record<string, unknown>) => JSON.stringify({ level: 30, time: 1_760_000_000_000, ...extra })
+const line = (extra: Record<string, unknown>) =>
+  JSON.stringify({ level: 30, time: 1_760_000_000_000, ...extra })
 
 function setup(lines: string[], rotated: string[] = []) {
   const dir = mkdtempSync(join(tmpdir(), 'score-logs-'))
@@ -82,7 +83,8 @@ test('filters by level (and above) and keyword, and honours the limit', async ()
   ])
   const cookie = await paired(app)
   const get = async (qs: string) =>
-    (await app.inject({ url: `/api/system/logs?${qs}`, headers: { ...headers, cookie } })).json()
+    (await app.inject({ url: `/api/system/logs?${qs}`, headers: { ...headers, cookie } }))
+      .json()
       .items.map((item: { message: string }) => item.message)
   expect(await get('level=warn')).toEqual([
     'plain launcher output: ERROR something',
@@ -92,13 +94,19 @@ test('filters by level (and above) and keyword, and honours the limit', async ()
   expect(await get('level=error')).toHaveLength(2)
   expect(await get('q=disk')).toEqual(['careful about Disk'])
   expect(await get('limit=1')).toHaveLength(1)
-  expect((await app.inject({ url: '/api/system/logs?limit=5000', headers: { ...headers, cookie } })).statusCode).toBe(400)
+  expect(
+    (await app.inject({ url: '/api/system/logs?limit=5000', headers: { ...headers, cookie } }))
+      .statusCode,
+  ).toBe(400)
   await app.close()
 })
 
 test('every line is redacted before it leaves the server', async () => {
   const app = setup([
-    line({ msg: 'login with Authorization: Bearer abcdefghijklmnop1234', req: { method: 'GET', url: '/x?token=supersecretvalue&a=1' } }),
+    line({
+      msg: 'login with Authorization: Bearer abcdefghijklmnop1234',
+      req: { method: 'GET', url: '/x?token=supersecretvalue&a=1' },
+    }),
     'raw line api_key=sk-abcdefghijklmnop1234',
     line({ level: 50, msg: 'failed', err: { message: 'password=hunter2hunter2' } }),
   ])
@@ -113,7 +121,9 @@ test('every line is redacted before it leaves the server', async () => {
 test('without SCORE_LOG_FILE the endpoint says so', async () => {
   const app = buildApp({ config: loadConfig({}), logger: false })
   const cookie = await paired(app as never)
-  const body = (await app.inject({ url: '/api/system/logs', headers: { ...headers, cookie } })).json()
+  const body = (
+    await app.inject({ url: '/api/system/logs', headers: { ...headers, cookie } })
+  ).json()
   expect(body).toEqual({ available: false, items: [] })
   await app.close()
 })

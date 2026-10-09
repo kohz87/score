@@ -49,7 +49,11 @@ export function parseLogLine(line: string): LogEntry {
   if (data === null || typeof data !== 'object' || Array.isArray(data)) {
     return {
       time: null,
-      level: /\b(?:error|fatal)\b/i.test(line) ? 'error' : /\bwarn(?:ing)?\b/i.test(line) ? 'warn' : 'info',
+      level: /\b(?:error|fatal)\b/i.test(line)
+        ? 'error'
+        : /\bwarn(?:ing)?\b/i.test(line)
+          ? 'warn'
+          : 'info',
       message: redact(line.slice(0, 2000)),
       method: null,
       url: null,

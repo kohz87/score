@@ -46,6 +46,7 @@ const report = (range: Reports['range'], overrides: Partial<Reports> = {}): Repo
     firstPassRate: 0.71,
     medianTaskSec: 1440,
     spendUsd: 41.2,
+    cacheHitRate: null,
   },
   byDay: [{ date: '2026-03-10', perAgent: { builder: 3, reviewer: 1 } }],
   timeSplit: [
@@ -60,6 +61,7 @@ const report = (range: Reports['range'], overrides: Partial<Reports> = {}): Repo
       medianSec: 1860,
       firstPassRate: 0.65,
       spendUsd: 22.4,
+      cacheHitRate: null,
     },
     {
       agentId: 'reviewer',
@@ -68,8 +70,10 @@ const report = (range: Reports['range'], overrides: Partial<Reports> = {}): Repo
       medianSec: 540,
       firstPassRate: null,
       spendUsd: 9.3,
+      cacheHitRate: null,
     },
   ],
+  trend: [],
   approvals: { asked: 24, approved: 21, denied: 3, medianWaitSec: 240, insight: 'Allow installs.' },
   ...overrides,
 })
@@ -162,6 +166,7 @@ test('shows a dash for unknown values', async () => {
               firstPassRate: null,
               medianTaskSec: null,
               spendUsd: null,
+              cacheHitRate: null,
             },
             byAgent: [
               {
@@ -171,6 +176,7 @@ test('shows a dash for unknown values', async () => {
                 medianSec: null,
                 firstPassRate: null,
                 spendUsd: null,
+                cacheHitRate: null,
               },
             ],
             approvals: { asked: 0, approved: 0, denied: 0, medianWaitSec: null, insight: null },

@@ -23,6 +23,19 @@ export interface ReportFacts {
   tasks: KanbanTaskFact[]
   /** Spend per agent in the window; null when that agent's cost data is unavailable. */
   spendUsd: Record<string, number | null>
+  /** Prompt-token counts per agent in the window; null/absent = Hermes gives no cache tokens (shown as "—"). */
+  cache?: Record<string, CacheTokens | null>
+}
+
+/** `read` = tokens served from the prompt cache; `total` = read + written + uncached input. */
+export interface CacheTokens {
+  read: number
+  total: number
+}
+
+/** Cache hit rate: read / total, null when unknown or nothing was sent. */
+export function cacheHitRate(tokens: CacheTokens | null | undefined): number | null {
+  return tokens && tokens.total > 0 ? Math.min(1, tokens.read / tokens.total) : null
 }
 
 export interface ReportRun {
@@ -106,13 +119,13 @@ function offsetMs(ms: number, tz: string): number {
   return asUtc - Math.floor(ms / 1000) * 1000
 }
 
-function startOfDay(key: string, tz: string): number {
+export function startOfDay(key: string, tz: string): number {
   const guess = Date.parse(`${key}T00:00:00Z`)
   const first = guess - offsetMs(guess, tz)
   return guess - offsetMs(first, tz)
 }
 
-function addDays(key: string, days: number): string {
+export function addDays(key: string, days: number): string {
   return new Date(Date.parse(`${key}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
 }
 
@@ -378,8 +391,10 @@ export function computeReports(input: ReportInput): Reports {
       medianSec: median(mine.map(seconds)),
       firstPassRate: rate(mineReviewed.filter(passedFirst).length, mineReviewed.length),
       spendUsd: money(input.facts.spendUsd[agentId] ?? null),
+      cacheHitRate: cacheHitRate(input.facts.cache?.[agentId]),
     }
   })
+  const knownCache = agentIds.flatMap((agentId) => input.facts.cache?.[agentId] ?? [])
 
   const asked = input.approvals.filter((approval) => {
     const at = Date.parse(approval.createdAt)
@@ -409,6 +424,10 @@ export function computeReports(input: ReportInput): Reports {
     spendUsd: agentIds.some((agentId) => (input.facts.spendUsd[agentId] ?? null) === null)
       ? null
       : money(sum(agentIds.map((agentId) => input.facts.spendUsd[agentId] ?? null))),
+    cacheHitRate: cacheHitRate({
+      read: knownCache.reduce((total, tokens) => total + tokens.read, 0),
+      total: knownCache.reduce((total, tokens) => total + tokens.total, 0),
+    }),
   }
   const when =
     input.range === 'custom'
@@ -428,6 +447,8 @@ export function computeReports(input: ReportInput): Reports {
     byDay,
     timeSplit,
     byAgent,
+    // Filled in by the route (it needs 30 days of runs and cost readings whatever the range is).
+    trend: [],
     approvals: {
       asked: asked.length,
       approved,

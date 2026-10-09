@@ -806,8 +806,15 @@ export class FakePort implements HermesPort {
   }
 
   async reportHistoryRows(now: number, agentIds: string[]) {
-    const { runs, approvals } = fakeReportHistory(now, agentIds)
-    return this.seedReportHistory ? { runs, approvals } : { runs: [], approvals: [] }
+    const { runs, approvals, spendPerDay } = fakeReportHistory(now, agentIds)
+    if (!this.seedReportHistory) return { runs: [], approvals: [] }
+    const base = Object.values(spendPerDay).reduce((total, value) => total + value, 0)
+    // A deterministic wobble so the demo trend is not a flat line.
+    const trendSpendUsd = Array.from(
+      { length: 30 },
+      (_, day) => Math.round(base * (0.75 + 0.5 * Math.abs(Math.sin(day * 1.7))) * 100) / 100,
+    )
+    return { runs, approvals, trendSpendUsd }
   }
 
   async listAgentDetails(): Promise<AgentDetail[]> {

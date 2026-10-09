@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
+import type { CacheTokens } from '../../domain/reports.ts'
 import type { SessionCost } from '../../domain/spend.ts'
 import { parseJson, readBatch, readByIds, TailInputSchema, type JsonValue } from './sqlite.ts'
 
@@ -123,4 +124,46 @@ export function readSessionCosts(db: DatabaseSync, sinceSec: number): SessionCos
     costUsd: row.actual_cost_usd ?? row.estimated_cost_usd,
     estimated: row.actual_cost_usd === null,
   }))
+}
+
+const SessionTokensSchema = z.object({
+  input_tokens: z.int().nullable(),
+  cache_read_tokens: z.int().nullable(),
+  cache_write_tokens: z.int().nullable(),
+})
+
+/**
+ * Prompt tokens of the sessions started in [fromSec, toSec] (a session's counters are cumulative, so only sessions
+ * that began inside the window are counted whole). Null (shown as "—") when there are no such sessions, a counter is
+ * missing, or no cache token was ever recorded: a provider that reports none is not a 0% hit rate.
+ */
+export function sessionCacheTokens(
+  db: DatabaseSync,
+  fromSec: number,
+  toSec: number,
+): CacheTokens | null {
+  const batch = readBatch(
+    db,
+    'sessions',
+    SessionTokensSchema,
+    'WHERE started_at >= ? AND started_at <= ?',
+    [fromSec, toSec],
+  )
+  if (batch.malformed || batch.rows.length === 0) return null
+  let read = 0
+  let written = 0
+  let input = 0
+  for (const row of batch.rows) {
+    if (
+      row.input_tokens === null ||
+      row.cache_read_tokens === null ||
+      row.cache_write_tokens === null
+    )
+      return null
+    input += row.input_tokens
+    read += row.cache_read_tokens
+    written += row.cache_write_tokens
+  }
+  if (read + written === 0) return null
+  return { read, total: input + read + written }
 }

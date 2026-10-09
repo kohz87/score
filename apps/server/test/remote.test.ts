@@ -734,11 +734,16 @@ test('a pairing link can name another configured origin, and only a configured o
       headers: { ...headers, cookie },
       payload,
     })
-  const security = await app.inject({ url: '/api/session/security', headers: { ...headers, cookie } })
+  const security = await app.inject({
+    url: '/api/session/security',
+    headers: { ...headers, cookie },
+  })
   expect(security.json().origins).toEqual([origin, tailscale])
   expect((await mint({ password: PASSWORD })).json().url.startsWith(`${origin}/pair#`)).toBe(true)
   expect(
-    (await mint({ password: PASSWORD, origin: tailscale })).json().url.startsWith(`${tailscale}/pair#`),
+    (await mint({ password: PASSWORD, origin: tailscale }))
+      .json()
+      .url.startsWith(`${tailscale}/pair#`),
   ).toBe(true)
   expect((await mint({ password: PASSWORD, origin: 'https://evil.example' })).statusCode).toBe(400)
 })

@@ -157,6 +157,8 @@ export const ReportsSchema = z.object({
     firstPassRate: z.number().min(0).max(1).nullable(),
     medianTaskSec: z.number().nonnegative().nullable(),
     spendUsd: z.number().nonnegative().nullable(),
+    /** Cached share of prompt tokens over the agents that report cache tokens; null when none does. */
+    cacheHitRate: z.number().min(0).max(1).nullable().default(null),
   }),
   byDay: z.array(
     z.object({
@@ -180,8 +182,20 @@ export const ReportsSchema = z.object({
       medianSec: z.number().nonnegative().nullable(),
       firstPassRate: z.number().min(0).max(1).nullable(),
       spendUsd: z.number().nonnegative().nullable(),
+      cacheHitRate: z.number().min(0).max(1).nullable().default(null),
     }),
   ),
+  /** The last 30 local days, oldest first, whatever the range is (5.29). */
+  trend: z
+    .array(
+      z.object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        runs: z.int().nonnegative(),
+        /** null = unknown (Score had no cost readings for that day, or Hermes has no cost). */
+        spendUsd: z.number().nonnegative().nullable(),
+      }),
+    )
+    .default([]),
   approvals: z.object({
     asked: z.int().nonnegative(),
     approved: z.int().nonnegative(),
@@ -191,6 +205,13 @@ export const ReportsSchema = z.object({
   }),
 })
 export type Reports = z.infer<typeof ReportsSchema>
+
+// §10 Display currency (5.29): the person's own manual rate, rate = units of `code` per 1 USD.
+export const DisplayCurrencySchema = z.object({
+  code: z.string().regex(/^[A-Z]{3}$/),
+  rate: z.number().positive().max(1e9),
+})
+export type DisplayCurrency = z.infer<typeof DisplayCurrencySchema>
 
 // §3 Remote access: paired browsers (management ids never authenticate anything)
 export const PairedBrowserSchema = z.object({

@@ -17,7 +17,7 @@ const entry = {
   status: 200,
   durationMs: 1234.6,
 }
-function mount(fetch: ReturnType<typeof vi.fn>) {
+function mount(fetch: (url: string) => Promise<Response>) {
   vi.stubGlobal('fetch', fetch)
   render(
     <QueryClientProvider client={new QueryClient()}>
@@ -27,7 +27,9 @@ function mount(fetch: ReturnType<typeof vi.fn>) {
 }
 
 test('shows parsed lines and sends the level and keyword filters to the server', async () => {
-  const fetch = vi.fn(() => Promise.resolve(Response.json({ available: true, items: [entry] })))
+  const fetch = vi.fn((_url: string) =>
+    Promise.resolve(Response.json({ available: true, items: [entry] })),
+  )
   mount(fetch)
   await screen.findByText('slow request')
   expect(screen.getByText('GET /api/agents 200 1235 ms')).toBeTruthy()
