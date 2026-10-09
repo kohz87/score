@@ -1,4 +1,9 @@
-import { AgentDetailSchema, AgentSummarySchema, type AgentDetail } from '@score/contract'
+import {
+  AgentDetailSchema,
+  AgentSummarySchema,
+  type AgentDetail,
+  type ModelSettings,
+} from '@score/contract'
 import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
 import { readAgent, readAgentNames, reconcileAgents, storeAgent } from '../domain/agents.ts'
@@ -75,8 +80,24 @@ export function createAgentDirectory(
     void refresh().catch(onError)
   }
 
+  /** Records the fallback chain Score just wrote, as the agent card's "falls back to" text. */
+  async function recordFallback(agentId: string, fallback: string | null) {
+    await ingest.submit({
+      source: 'agent-fallback',
+      identity: `agent-fallback:${agentId}:${clock()}`,
+      apply({ sqlite }) {
+        const previous = readAgent(sqlite, agentId)
+        if (!previous?.model || previous.model.fallback === fallback) return []
+        const agent = AgentDetailSchema.parse({ ...previous, model: { ...previous.model, fallback } })
+        storeAgent(sqlite, agent)
+        return [{ type: 'agent.updated' as const, data: AgentSummarySchema.parse(agent) }]
+      },
+    })
+  }
+
   return {
     recordModel,
+    recordFallback,
     async details({ fresh = false }: { fresh?: boolean } = {}): Promise<AgentDetail[]> {
       if (fresh) return refresh()
       const cached = projected()
@@ -135,6 +156,14 @@ export function withAgentDirectory(port: HermesPort, directory: AgentDirectory):
         return async (agentId: string, req: { model: string; provider?: string }) => {
           await method.apply(target, [agentId, req])
           await directory.recordModel(agentId, req.model, req.provider)
+        }
+      if (property === 'updateModelSettings')
+        return async (agentId: string, req: unknown) => {
+          const settings = (await method.apply(target, [agentId, req])) as ModelSettings
+          // Not a dirty write: the response is the fresh state, so no Hermes re-read is needed for the card.
+          const text = settings.fallbacks.map((ref) => ref.model).join(', then ')
+          await directory.recordFallback(agentId, text || null)
+          return settings
         }
       if (typeof property === 'string' && AGENT_WRITES.has(property))
         return (...args: unknown[]) => {

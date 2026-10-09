@@ -26,13 +26,14 @@ import type {
   HermesCheck,
   LocalProviderRequest,
   ModelOption,
+  ModelRef,
   PluginItem,
   ProviderItem,
   ProviderKeyRequest,
   SignIn,
   ToolServerRequest,
 } from '@score/contract'
-import type { AgentTodos, RewindSkipReason } from '@score/contract'
+import type { AgentTodos, ModelSettings, ModelSettingsUpdate, RewindSkipReason } from '@score/contract'
 import type { RewindBroker } from './bridge/rewind-broker.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { AgentFile, AgentFileName } from './agent-files.ts'
@@ -215,6 +216,10 @@ export interface HermesPort extends ProfileManagementPort {
   ): Promise<{ etag: string }>
   /** Sets the profile's default model (and provider when given). */
   setAgentModel(agentId: string, req: { model: string; provider?: string }): Promise<void>
+  /** Fallback chain, aliases and speech models of one profile (5.31). */
+  readModelSettings(agentId: string): Promise<ModelSettings>
+  /** Writes only the changed keys; answers with the settings as written. */
+  updateModelSettings(agentId: string, req: ModelSettingsUpdate): Promise<ModelSettings>
   listSkills(agentId: string): Promise<SkillItem[]>
   /** Installs a skill from the hub by identifier; resolves with the skills list afterwards. */
   installSkill(agentId: string, identifier: string): Promise<SkillItem[]>
@@ -253,7 +258,7 @@ export interface HermesPort extends ProfileManagementPort {
    * to run in a terminal.
    */
   /** Models of connected providers matching `q` (at most 200, available first); [] when Hermes can't say. */
-  listModels(q?: string): Promise<ModelOption[]>
+  listModels(q?: string, only?: readonly ModelRef[]): Promise<ModelOption[]>
   /** Interactive sign-ins are never run by Score: the result carries the command to run in a terminal. */
   connectProvider(id: string): Promise<ConnectResult>
   /** In-memory sign-ins; unknown ids are 404. */

@@ -34,7 +34,7 @@ async function capture(
   const result = await captureResult(runner, hermesHome, args)
   return result.state === 'ok' ? result.text : null
 }
-async function configJson(
+export async function configJson(
   runner: HermesRunner,
   hermesHome: string,
   profile: string,

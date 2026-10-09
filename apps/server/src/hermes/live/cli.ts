@@ -44,6 +44,11 @@ const ReadConfigKeys = [
   // Team › agent › Workspace: where the agent's terminal works, and whether that is this machine.
   'terminal.cwd',
   'terminal.backend',
+  // Team › agent › Model: fallback chain, aliases and speech models (5.31). Read into memory, never logged.
+  'fallback_providers',
+  'model_aliases',
+  'tts',
+  'stt',
 ]
 /** Exact argv shapes whose stdout Score may read. Everything else keeps its output private. */
 export function captureReadShape(argv: string[]): boolean {

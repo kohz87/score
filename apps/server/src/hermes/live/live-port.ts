@@ -1,4 +1,4 @@
-import { type AgentSummary, type HermesCheck } from '@score/contract'
+import { type AgentSummary, type HermesCheck, type ModelRef } from '@score/contract'
 import { ProfilesReader, agentSummary } from './profiles.ts'
 import { ProfileFiles } from './profile-files.ts'
 import type { AgentFile, AgentFileName } from '../agent-files.ts'
@@ -396,6 +396,14 @@ export class LivePort implements HermesPort {
     this.requireStarted()
     await this.tabs.setModel(agentId, req)
   }
+  async readModelSettings(agentId: string) {
+    this.requireStarted()
+    return this.tabs.getModelSettings(agentId)
+  }
+  async updateModelSettings(agentId: string, req: Parameters<HermesPort['updateModelSettings']>[1]) {
+    this.requireStarted()
+    return this.tabs.updateModelSettings(agentId, req)
+  }
   async listSkills(agentId: string) {
     return this.tabs.listSkills(agentId)
   }
@@ -476,8 +484,8 @@ export class LivePort implements HermesPort {
   async listProviders() {
     return this.settings.listProviders()
   }
-  async listModels(q?: string) {
-    return this.models.list(q)
+  async listModels(q?: string, only?: readonly ModelRef[]) {
+    return this.models.list(q, only)
   }
   async connectProvider(id: string) {
     return this.settings.connectProvider(id)
