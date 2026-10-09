@@ -14,7 +14,7 @@ const PAUSE_REASON = 'Paused from Score'
 const RESUME_REASON = 'Resumed from Score'
 
 const StateRow = z.object({ state: z.enum(['pending', 'held']) })
-const TaskRow = z.object({ task_id: z.string() })
+const TaskRow = z.object({ task_id: z.string(), history_id: z.string().nullable() })
 const OwnerRow = z.object({ owner: z.string() })
 
 export interface TaskHolds {
@@ -76,20 +76,41 @@ export function createTaskHolds(deps: {
       },
     })
 
-  const drop = (owner: HoldOwner, taskId: string) =>
-    write((sqlite) => {
+  // With attempts on, a hold is acted on only while the lineage it was selected under is still the actionable one;
+  // the write is qualified by that lineage too, so a hold of another lineage is never confirmed or deleted.
+  const owned = (owner: HoldOwner, taskId: string, historyId: string | null) =>
+    !kanbanAttemptsEnabled() ||
+    db.read((sqlite) => {
+      if (historyId === null || ownershipOf(sqlite, historyId) !== 'current') return false
       const { table, column } = TABLES[owner.kind]
-      sqlite
-        .prepare(`DELETE FROM ${table} WHERE ${column} = ? AND task_id = ?`)
-        .run(owner.id, taskId)
+      return (
+        sqlite
+          .prepare(`SELECT 1 FROM ${table} WHERE ${column} = ? AND task_id = ? AND history_id = ?`)
+          .get(owner.id, taskId, historyId) !== undefined
+      )
     })
 
-  const confirm = (owner: HoldOwner, taskId: string) =>
+  const qualified = (historyId: string | null) =>
+    kanbanAttemptsEnabled()
+      ? { sql: ' AND history_id IS ?', params: [historyId] }
+      : { sql: '', params: [] }
+
+  const drop = (owner: HoldOwner, taskId: string, historyId: string | null) =>
     write((sqlite) => {
       const { table, column } = TABLES[owner.kind]
+      const q = qualified(historyId)
       sqlite
-        .prepare(`UPDATE ${table} SET state = 'held' WHERE ${column} = ? AND task_id = ?`)
-        .run(owner.id, taskId)
+        .prepare(`DELETE FROM ${table} WHERE ${column} = ? AND task_id = ?${q.sql}`)
+        .run(owner.id, taskId, ...q.params)
+    })
+
+  const confirm = (owner: HoldOwner, taskId: string, historyId: string | null) =>
+    write((sqlite) => {
+      const { table, column } = TABLES[owner.kind]
+      const q = qualified(historyId)
+      sqlite
+        .prepare(`UPDATE ${table} SET state = 'held' WHERE ${column} = ? AND task_id = ?${q.sql}`)
+        .run(owner.id, taskId, ...q.params)
     })
 
   const legacyOf = (owner: HoldOwner, taskId: string) =>
@@ -110,9 +131,15 @@ export function createTaskHolds(deps: {
       throw error
     })
 
-  async function releaseOne(owner: HoldOwner, taskId: string): Promise<void> {
+  async function releaseOne(
+    owner: HoldOwner,
+    taskId: string,
+    historyId: string | null,
+  ): Promise<void> {
     if (stateOf(owner, taskId) === undefined) return
     const task = await taskOf(taskId)
+    // The read may have refreshed the projection and found the lineage changed: then this hold is inert now.
+    if (!owned(owner, taskId, historyId)) return
     const last = !db.read((sqlite) => otherHold(sqlite, taskId, owner))
     // Only what Score parked, and only if it is still parked (the person may have moved it since). Holds from before
     // tasks were parked as `scheduled` (legacy) parked them as `blocked`.
@@ -123,34 +150,39 @@ export function createTaskHolds(deps: {
       (parked === 'scheduled' || (parked === 'blocked' && legacyOf(owner, taskId)))
     )
       await port.taskAction({ taskId, action: 'unblock', text: RESUME_REASON })
-    await drop(owner, taskId)
+    await drop(owner, taskId, historyId)
   }
 
   async function applyOne(
     owner: HoldOwner,
     taskId: string,
+    historyId: string | null,
     stillPaused: () => boolean,
   ): Promise<boolean> {
     if (stateOf(owner, taskId) !== 'pending') return true
     // A Resume that ran first has already cleared the owner: nothing may stay parked for it.
     if (!stillPaused()) {
-      await releaseOne(owner, taskId)
+      await releaseOne(owner, taskId, historyId)
       return true
     }
     const task = await taskOf(taskId)
+    // Inert now: leave it for the lineage that owns it (not a failure).
+    if (!owned(owner, taskId, historyId)) return true
     if (!task) {
-      await drop(owner, taskId)
+      await drop(owner, taskId, historyId)
       return true
     }
     // A fresh read, not the projection: a task that has started since the pause began is left to finish.
     if (taskStatus(task) === 'scheduled') {
-      await confirm(owner, taskId)
+      await confirm(owner, taskId, historyId)
       return true
     }
     if (!PARKABLE.includes(taskStatus(task))) {
-      await drop(owner, taskId)
+      await drop(owner, taskId, historyId)
       return true
     }
+    // Checked synchronously right before the action: the reads above are the last await.
+    if (!owned(owner, taskId, historyId)) return true
     try {
       const { hermesStatus } = await port.taskAction({
         taskId,
@@ -164,10 +196,10 @@ export function createTaskHolds(deps: {
       const now = await taskOf(taskId)
       if (now && (PARKABLE.includes(taskStatus(now)) || taskStatus(now) === 'scheduled'))
         return false
-      await drop(owner, taskId)
+      await drop(owner, taskId, historyId)
       return true
     }
-    await confirm(owner, taskId)
+    await confirm(owner, taskId, historyId)
     return true
   }
 
@@ -181,11 +213,10 @@ export function createTaskHolds(deps: {
         .parse(
           sqlite
             .prepare(
-              `SELECT task_id FROM ${table} WHERE ${column} = ? ${pendingOnly ? "AND state = 'pending'" : ''}${owned.sql} ORDER BY rowid`,
+              `SELECT task_id, history_id FROM ${table} WHERE ${column} = ? ${pendingOnly ? "AND state = 'pending'" : ''}${owned.sql} ORDER BY rowid`,
             )
             .all(owner.id, ...owned.params),
         )
-        .map((row) => row.task_id)
     })
 
   const inertTaskIds = (owner: HoldOwner): string[] =>
@@ -207,13 +238,13 @@ export function createTaskHolds(deps: {
         })
 
   async function each(
-    taskIds: string[],
-    one: (taskId: string) => Promise<boolean>,
+    rows: { task_id: string; history_id: string | null }[],
+    one: (taskId: string, historyId: string | null) => Promise<boolean>,
   ): Promise<string[]> {
     const failed: string[] = []
-    for (const taskId of taskIds) {
+    for (const { task_id: taskId, history_id: historyId } of rows) {
       try {
-        if (!(await locked(taskId, () => one(taskId)))) failed.push(taskId)
+        if (!(await locked(taskId, () => one(taskId, historyId)))) failed.push(taskId)
       } catch {
         failed.push(taskId)
       }
@@ -240,10 +271,12 @@ export function createTaskHolds(deps: {
 
   const holds: TaskHolds = {
     apply: (owner, stillPaused) =>
-      each(taskIdsOf(owner, true), (taskId) => applyOne(owner, taskId, stillPaused)),
+      each(taskIdsOf(owner, true), (taskId, historyId) =>
+        applyOne(owner, taskId, historyId, stillPaused),
+      ),
     release: async (owner) => {
-      const failed = await each(taskIdsOf(owner, false), async (taskId) => {
-        await releaseOne(owner, taskId)
+      const failed = await each(taskIdsOf(owner, false), async (taskId, historyId) => {
+        await releaseOne(owner, taskId, historyId)
         return true
       })
       // Inert holds are skipped, not dropped and not failures: Resume must not unpark another lineage's task.

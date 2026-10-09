@@ -6,7 +6,7 @@ import type { HermesPort } from '../../../src/hermes/index.ts'
 import { createBriefControl } from '../../../src/http/brief-control.ts'
 import { createTaskHolds } from '../../../src/http/task-holds.ts'
 import { createHarness, type Harness } from '../../fixtures/kanban/harness.ts'
-import { seedAttempt, seedHistory, withFlag } from '../../helpers/kanban-attempts-seed.ts'
+import { seedHistory, withFlag } from '../../helpers/kanban-attempts-seed.ts'
 
 // Audit wave 5, fix batch F.
 let h: Harness
@@ -104,4 +104,41 @@ describe('pausing a brief', () => {
   })
 })
 
-void seedAttempt
+describe('hold actions revalidate ownership after reads', () => {
+  const pauseSource = () =>
+    h.score.sqlite.exec("UPDATE kanban_histories SET state = 'paused' WHERE state = 'active'")
+  function world(state: string) {
+    seedHistory(h.score.sqlite, { history: 'kh_new', state: 'active' })
+    h.score.sqlite
+      .prepare(
+        `INSERT INTO brief_paused_tasks (brief_id, task_id, blocked_at, state, history_id)
+         VALUES ('b1', 't_a', ?, ?, 'kh_new')`,
+      )
+      .run(NOW, state)
+    const taskAction = vi.fn(async () => ({ hermesStatus: 'scheduled' }))
+    const port = {
+      getTask: async (id: string) => {
+        pauseSource()
+        return taskDetail(id, { hermesStatus: state === 'held' ? 'scheduled' : 'ready' })
+      },
+      taskAction,
+    } as unknown as HermesPort
+    return { taskAction, holds: createTaskHolds({ port, db: h.score, ingest: h.ingest }) }
+  }
+
+  test('Resume does not unblock or delete a hold whose history went inert during the read', async () => {
+    const { holds, taskAction } = world('held')
+    expect(await holds.release({ kind: 'brief', id: 'b1' })).toEqual([])
+    expect(taskAction).not.toHaveBeenCalled()
+    expect(holdRows()).toEqual(['t_a'])
+  })
+
+  test('Pause does not park or confirm a hold whose history went inert during the read', async () => {
+    const { holds, taskAction } = world('pending')
+    expect(await holds.apply({ kind: 'brief', id: 'b1' }, () => true)).toEqual([])
+    expect(taskAction).not.toHaveBeenCalled()
+    expect(h.score.sqlite.prepare('SELECT state FROM brief_paused_tasks').get()).toEqual({
+      state: 'pending',
+    })
+  })
+})
