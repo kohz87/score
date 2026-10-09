@@ -423,7 +423,10 @@ export function recordToolFrames(
   },
   input: Omit<ToolFrameInput, 'lastBrowser'>,
 ): WatchFrame[] {
-  const lastBrowser = lastBrowserFrame(sqlite, context.agentId)
+  // Only browser tools read it; terminal and editor hooks must not pay for the lookup.
+  const lastBrowser = input.tool.startsWith('browser_')
+    ? lastBrowserFrame(sqlite, context.agentId)
+    : null
   const drafts = framesForTool({ ...input, lastBrowser })
   for (const draft of drafts) retainFrameImage(sqlite, draft, context, input.screenshotMediaId)
   const runId = runIdForSession(sqlite, context.agentId, context.sessionId)
