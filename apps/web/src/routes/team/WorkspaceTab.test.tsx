@@ -374,3 +374,40 @@ test('every file request names the root the browser is showing', async () => {
   expect(fileCalls.length).toBeGreaterThan(2)
   for (const call of fileCalls) expect(call.url, call.url).toContain('root=%2Fwork%2Fproject')
 }, 20_000)
+
+test('selecting several files uploads all of them even though the picker is cleared at once', async () => {
+  mount()
+  await screen.findByRole('treeitem', { name: /README\.md/ })
+  const input = screen.getByLabelText('Upload files') as HTMLInputElement
+  const a = new File([new Uint8Array([1])], 'a.txt')
+  const b = new File([new Uint8Array([2])], 'b.txt')
+  // A live FileList: clearing the input empties it.
+  const list: File[] = [a, b]
+  Object.defineProperty(input, 'files', { get: () => list, configurable: true })
+  Object.defineProperty(input, 'value', {
+    get: () => '',
+    set: () => {
+      list.length = 0
+    },
+    configurable: true,
+  })
+  fireEvent.change(input)
+  await screen.findByText('Uploaded b.txt.')
+  const uploaded = calls.filter((c) => c.url.includes('/upload')).map((c) => c.url)
+  expect(uploaded).toHaveLength(2)
+})
+
+test('unsaved edits survive switching to another file and back, and are not mistaken for saved', async () => {
+  mount()
+  fireEvent.click(await screen.findByRole('treeitem', { name: /README\.md/ }))
+  await screen.findByLabelText('Contents of README.md', {}, { timeout: 10_000 })
+  setText('half-written')
+  fireEvent.click(screen.getByRole('treeitem', { name: /src/ }))
+  fireEvent.click(await screen.findByRole('treeitem', { name: /main\.ts/ }))
+  await screen.findByLabelText('Contents of src/main.ts', {}, { timeout: 10_000 })
+  fireEvent.click(screen.getByRole('treeitem', { name: /README\.md/ }))
+  await screen.findByLabelText('Contents of README.md', {}, { timeout: 10_000 })
+  expect(view().state.doc.toString()).toBe('half-written')
+  expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(false)
+  expect(calls.filter((c) => c.method === 'PUT' && c.url.includes('/file'))).toHaveLength(0)
+}, 30_000)

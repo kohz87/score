@@ -1,7 +1,7 @@
 import { useRef, useState, type CSSProperties, type DragEvent, type FormEvent } from 'react'
 import { ApiError } from '../../data/api.ts'
 import { useTreeWidth, MAX_TREE, MIN_TREE } from './workspace-split.ts'
-import { WorkspaceFile } from './WorkspaceFile.tsx'
+import { discardDraftsUnder, WorkspaceFile } from './WorkspaceFile.tsx'
 import { join, parentOf, TreeLevel, type Selection } from './WorkspaceTree.tsx'
 import {
   useGitStatus,
@@ -190,6 +190,7 @@ function Browser({
         { from: selected.path, to },
         {
           onSuccess: () => {
+            discardDraftsUnder(root, agentId, selected.path)
             setSelected({ path: to, kind: selected.kind })
             setPanel(null)
             setNotice('Renamed.')
@@ -219,6 +220,7 @@ function Browser({
       { path: selected.path, recursive },
       {
         onSuccess: () => {
+          discardDraftsUnder(root, agentId, selected.path)
           setSelected(null)
           setPanel(null)
           setScreen('tree')
@@ -230,7 +232,7 @@ function Browser({
       },
     )
   }
-  async function upload(files: FileList | File[]) {
+  async function upload(files: File[]) {
     setNotice('')
     for (const file of files) {
       try {
@@ -245,7 +247,8 @@ function Browser({
   function drop(event: DragEvent) {
     event.preventDefault()
     setDragging(false)
-    if (event.dataTransfer.files.length) void upload(event.dataTransfer.files)
+    const dropped = Array.from(event.dataTransfer.files)
+    if (dropped.length) void upload(dropped)
   }
   const failure =
     (actions.create.isError && workspaceFailure(actions.create.error, 'create it')) ||
@@ -312,8 +315,10 @@ function Browser({
               hidden
               aria-label="Upload files"
               onChange={(event) => {
-                if (event.target.files?.length) void upload(event.target.files)
+                // Copy first: clearing the input empties the live list before the first upload finishes.
+                const picked = Array.from(event.target.files ?? [])
                 event.target.value = ''
+                if (picked.length) void upload(picked)
               }}
             />
             <button type="button" disabled={!selected} onClick={() => openPanel('rename')}>
