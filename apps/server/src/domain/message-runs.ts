@@ -329,12 +329,14 @@ export function noteRunProgress(
     )
     .get(runId) as { id: string; room_id: string } | undefined
   if (!row) return []
-  // Only forwards: replayed or out-of-order events never move the clock back.
+  // Only forwards: replayed or out-of-order events never move the clock back. At most one write per 5 s: the browser
+  // follows live progress from the stream; the stored value only matters when a page loads.
+  const throttle = new Date(Date.parse(at) - 5_000).toISOString()
   const changed = sqlite
     .prepare(
       'UPDATE messages SET progress_at = ? WHERE id = ? AND (progress_at IS NULL OR progress_at < ?)',
     )
-    .run(at, row.id, at).changes
+    .run(at, row.id, throttle).changes
   return announce && changed
     ? [{ type: 'message.progressed', data: { roomId: row.room_id, messageId: row.id, at } }]
     : []
