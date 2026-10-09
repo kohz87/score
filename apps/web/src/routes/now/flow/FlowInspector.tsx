@@ -37,12 +37,14 @@ function StepDetail({
   roomId,
   agents,
   now,
+  showStop,
 }: {
   detail: FlowNodeDetail
   briefId: string
   roomId: string
   agents: AgentSummary[]
   now: number
+  showStop: boolean
 }) {
   const { node, run, approval } = detail
   const agent = agents.find((item) => item.id === node.agentId)
@@ -180,13 +182,15 @@ function StepDetail({
       )}
       <div className="flow-inspector__actions">
         <Link to={`/chat/${encodeURIComponent(roomId)}`}>Open in Chat</Link>
-        <button
-          type="button"
-          disabled={!stoppable || stop.isPending || stop.isSuccess}
-          onClick={() => stop.mutate()}
-        >
-          {stop.isPending ? 'Stopping…' : stop.isSuccess ? 'Stopped' : 'Stop this step'}
-        </button>
+        {showStop && (
+          <button
+            type="button"
+            disabled={!stoppable || stop.isPending || stop.isSuccess}
+            onClick={() => stop.mutate()}
+          >
+            {stop.isPending ? 'Stopping…' : stop.isSuccess ? 'Stopped' : 'Stop this step'}
+          </button>
+        )}
       </div>
       {stop.isError && (
         <p role="alert">
@@ -205,12 +209,15 @@ export function FlowInspector({
   roomId,
   agents,
   now,
+  showStop = true,
 }: {
   briefId: string
   nodeId: string | null
   roomId: string
   agents: AgentSummary[]
   now: number
+  /** The pop-out window has its own Stop in its header. */
+  showStop?: boolean
 }) {
   const detail = useFlowNode(briefId, nodeId)
   return (
@@ -234,6 +241,7 @@ export function FlowInspector({
           roomId={roomId}
           agents={agents}
           now={now}
+          showStop={showStop}
         />
       )}
     </aside>

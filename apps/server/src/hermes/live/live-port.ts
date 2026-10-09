@@ -47,6 +47,7 @@ import { rewindSession } from './rewind.ts'
 import { followRun, waitForRun, type FollowOptions } from './runs.ts'
 import { taskAction, taskReader } from './task-actions.ts'
 import { LiveTasks } from './tasks.ts'
+import { readJourneyFacts } from './journey-facts.ts'
 import { readProfileSessionCosts, readReportFacts } from './report-facts.ts'
 import { listOutsideSessions, readOutsideSession } from './outside-sessions.ts'
 import { createTask, patchTask } from './task-writes.ts'
@@ -751,6 +752,13 @@ export class LivePort implements HermesPort {
   }
   async reportFacts(req: Parameters<HermesPort['reportFacts']>[0]) {
     return readReportFacts(req, this.options.hermesHome)
+  }
+  async journeyFacts(req: Parameters<HermesPort['journeyFacts']>[0]) {
+    return readJourneyFacts(
+      req,
+      (profile) => this.profiles.profileHome(profile),
+      this.options.hermesHome,
+    )
   }
   async listOutsideSessions(agentIds: string[]) {
     return listOutsideSessions(agentIds, this.options.hermesHome)

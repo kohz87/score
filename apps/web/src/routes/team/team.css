@@ -886,3 +886,20 @@ a.team-pill-button {
 .team-routine-form .team-coding-permission input {
   width: auto;
 }
+
+.team-popout-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 30px;
+  height: 30px;
+  margin-left: 10px;
+  padding: 0;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  vertical-align: middle;
+}

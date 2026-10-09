@@ -119,7 +119,11 @@ function declaredSkillName(skillFile: string, fallback: string): string {
   }
 }
 export function skillNames(home: string): string[] {
-  const names: string[] = []
+  return [...new Set(skillFiles(home).map((skill) => skill.name))].sort().map(redact)
+}
+/** Each skill's name and SKILL.md path (names only; the file is read for its declared name, never returned). */
+export function skillFiles(home: string): { name: string; file: string }[] {
+  const found: { name: string; file: string }[] = []
   const walk = (path: string, depth: number) => {
     if (depth > 8 || !directory(path)) return
     let entries: fs.Dirent[]
@@ -129,7 +133,10 @@ export function skillNames(home: string): string[] {
       return
     }
     if (entries.some((entry) => entry.name === 'SKILL.md' && entry.isFile())) {
-      names.push(declaredSkillName(join(path, 'SKILL.md'), basename(path)))
+      found.push({
+        name: declaredSkillName(join(path, 'SKILL.md'), basename(path)),
+        file: join(path, 'SKILL.md'),
+      })
       return
     }
     for (const entry of entries) {
@@ -143,7 +150,7 @@ export function skillNames(home: string): string[] {
     }
   }
   walk(join(home, 'skills'), 0)
-  return [...new Set(names)].sort().map(redact)
+  return found
 }
 
 const FAILED_READ_RETRY_MS = 15_000

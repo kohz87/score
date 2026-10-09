@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { HttpError } from '../errors.ts'
+import { requestSummary, shouldAutoSummarise } from './room-summaries.ts'
 import { rewindingRooms } from './room-rewinding.ts'
 import { continuationFor, markSummarySent } from './outside-sessions.ts'
 import { failMessageRun, MessageRunSchema, roomRunInput } from './message-runs.ts'
@@ -32,13 +34,34 @@ export class RoutingDispatcher {
     private readonly onError: (error: unknown) => void,
   ) {
     this.unsubscribe = ingest.onCommitted((events) => {
-      if (events.some((event) => event.type === 'message.completed'))
-        return this.dispatch().catch(onError)
+      const completed = events.flatMap((event) =>
+        event.type === 'message.completed' ? [event.data.roomId] : [],
+      )
+      if (completed.length)
+        return this.summarise(new Set(completed))
+          .then(() => this.dispatch())
+          .catch(onError)
     })
     this.timer = setInterval(() => {
       void this.dispatch().catch(onError)
     }, 10000)
     this.timer.unref()
+  }
+
+  /** Opt-in room summaries (PLAN 7.4a): a room past its threshold gets a summary run through its lead agent. */
+  private async summarise(roomIds: Set<string>): Promise<void> {
+    for (const roomId of roomIds) {
+      if (this.closed || !this.db.read((sqlite) => shouldAutoSummarise(sqlite, roomId))) continue
+      await this.ingest.submit({
+        source: 'routing',
+        identity: randomUUID(),
+        apply: ({ sqlite, now }) => {
+          // Re-checked inside the transaction; a refusal (paused, nothing to cover) just means "not now".
+          if (shouldAutoSummarise(sqlite, roomId)) requestSummary(sqlite, roomId, now)
+          return []
+        },
+      })
+    }
   }
 
   dispatch(): Promise<void> {

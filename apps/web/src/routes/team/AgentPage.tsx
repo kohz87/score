@@ -16,6 +16,7 @@ import { PluginsTab } from './PluginsTab.tsx'
 import { ChannelsTab } from './ChannelsTab.tsx'
 import { HistoryTab } from './HistoryTab.tsx'
 import { WorkspaceTab } from './WorkspaceTab.tsx'
+import { PopOutButton } from '../pop/PopOutButton.tsx'
 import type { AgentFileName } from './file-queries.ts'
 import { CodingOverview } from './CodingAgent.tsx'
 
@@ -128,6 +129,9 @@ function AgentProfile({ agentId }: { agentId: string }) {
             <Link className="team-watch-link" to={`/now/watch/${encodeURIComponent(agent.id)}`}>
               Watch {agent.name} work
             </Link>
+          )}
+          {agent.lifecycle?.state !== 'removed' && agent.served && (
+            <PopOutButton agentId={agent.id} agentName={agent.name} className="team-popout-link" />
           )}
         </div>
       </header>

@@ -1,4 +1,4 @@
-import { RoomProjectSchema, type RoomProject } from '@score/contract'
+import { RoomProjectSchema, type AutoSummary, type RoomProject } from '@score/contract'
 import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
 
@@ -8,6 +8,7 @@ export type RoomOrganise = {
   archived?: boolean
   projectId?: string | null
   tags?: string[] | null
+  autoSummary?: AutoSummary
 }
 
 // The room's new state arrives on the stream as `room.upserted`.
@@ -55,4 +56,24 @@ export function parseTagInput(text: string): string[] {
     .map((word) => word.replace(/^#/, '').toLowerCase())
     .filter((word) => /^[a-z0-9][a-z0-9-]{0,31}$/.test(word))
   return [...new Set(tags)]
+}
+
+// Room summary (PLAN 7.4a). The new message arrives on the stream (`message.created`, `message.updated`).
+const summaryUrl = (roomId: string) => `rooms/${encodeURIComponent(roomId)}/summary`
+export function regenerateSummary(roomId: string): Promise<unknown> {
+  return apiFetch(summaryUrl(roomId), {
+    method: 'POST',
+    headers: { 'Idempotency-Key': newId() },
+    body: '{}',
+  })
+}
+export function editSummary(roomId: string, text: string): Promise<unknown> {
+  return apiFetch(summaryUrl(roomId), {
+    method: 'PATCH',
+    headers: { 'Idempotency-Key': newId() },
+    body: JSON.stringify({ text }),
+  })
+}
+export function deleteSummary(roomId: string): Promise<unknown> {
+  return apiFetch(summaryUrl(roomId), { method: 'DELETE' })
 }

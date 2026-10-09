@@ -316,7 +316,10 @@ test('nav links navigate between all destinations', async () => {
       fireEvent.click(screen.getByRole('link', { name: title }))
     })
     expect(router.state.location.pathname).toBe(path)
-    expect(screen.getByRole('heading', { level: 1, name: title })).toBeDefined()
+    // Lazy pages (Knowledge, Settings, …) render a moment after navigation.
+    expect(
+      await screen.findByRole('heading', { level: 1, name: title }, { timeout: 5000 }),
+    ).toBeDefined()
   }
 })
 

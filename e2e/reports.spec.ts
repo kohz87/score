@@ -58,14 +58,14 @@ test('a custom range is chosen, kept in the URL and followed by the CSV', async 
   await dialog.getByLabel('To').fill(today!)
   await dialog.getByRole('button', { name: 'Apply' }).click()
   await expect(page).toHaveURL(new RegExp(`range=custom&from=${from}&to=${today}`))
-  const chip = page.getByRole('button', { pressed: true })
+  const chip = page.getByRole('group', { name: 'Range' }).getByRole('button', { pressed: true })
   await expect(chip).toContainText('–')
   const table = page.getByRole('table', { name: 'By agent', exact: true })
   await expect(table.getByRole('row')).toHaveCount(5)
   await expect(page.locator('g[data-day]')).toHaveCount(45)
 
   await page.reload()
-  await expect(page.getByRole('button', { pressed: true })).toContainText('–')
+  await expect(chip).toContainText('–')
 
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('link', { name: 'Export CSV' }).click()

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { ReportRangeSchema, ReportsSchema } from '@score/contract'
+import { JourneySchema, ReportRangeSchema, ReportsSchema } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
 import {
   computeReports,
@@ -12,6 +12,7 @@ import {
   type CustomDays,
 } from '../domain/reports.ts'
 import { computeTrend, trendWindow } from '../domain/reports-trend.ts'
+import { computeJourney, readAgentNotes, readTaskTitles } from '../domain/journey.ts'
 import { reportsToCsv } from '../domain/reports-csv.ts'
 import { codingSpendInWindow } from '../domain/coding-spend.ts'
 import { profileSpendInWindow, recordSessionCosts } from '../domain/spend.ts'
@@ -189,5 +190,37 @@ export function registerReportRoutes(
       .header('content-type', 'text/csv; charset=utf-8')
       .header('content-disposition', `attachment; filename="score-report-${label}.csv"`)
       .send(reportsToCsv(report, names))
+  })
+
+  // 7.4c: read-only marks per agent; days are the viewer's (same rules as range=custom).
+  const journeyQuery = z
+    .object({
+      from: z.string().max(10),
+      to: z.string().max(10),
+      tz: ZoneSchema.optional(),
+    })
+    .strict()
+  app.get('/api/reports/journey', async (request) => {
+    const q = journeyQuery.parse(request.query)
+    const tz = q.tz ?? serverTz
+    const now = clock()
+    const problem = customRangeProblem({ from: q.from, to: q.to }, now, tz)
+    if (problem) throw new HttpError(400, 'bad_request', problem)
+    const window = reportWindow('custom', now, tz, { from: q.from, to: q.to })
+    const agentIds = db ? db.read((sqlite) => readAgentNames(sqlite)).map((agent) => agent.id) : []
+    const facts = await port.journeyFacts({ from: window.from, to: window.to, agentIds })
+    const done = facts.tasks.filter((task) => task.at >= window.from && task.at <= window.to)
+    const { titles, notes } = db
+      ? db.read((sqlite) => ({
+          titles: readTaskTitles(
+            sqlite,
+            done.filter((task) => task.title === undefined).map((task) => task.id),
+          ),
+          notes: readAgentNotes(sqlite, window.from, window.to),
+        }))
+      : { titles: new Map<string, string>(), notes: [] }
+    return JourneySchema.parse(
+      computeJourney({ from: q.from, to: q.to, window, agentIds, facts, titles, notes }),
+    )
   })
 }

@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto'
 import {
   AgentIdSchema,
   AgentSummarySchema,
+  AutoSummarySchema,
+  SummaryEditBodySchema,
+  MessagePartSchema,
   MessageAttachmentSchema,
   RewindRequestSchema,
   RoomTagSchema,
@@ -49,6 +52,8 @@ import {
   rewindingRooms,
 } from '../domain/room-rewinding.ts'
 import { reserveMessageRun, retryReply } from '../domain/message-runs.ts'
+import { requestSummary, sanitizeSummaryText } from '../domain/room-summaries.ts'
+import { visibleSummaries } from '../domain/summary-stale.ts'
 import { PLAN_FIRST_ADDENDUM } from '../domain/plan.ts'
 import { COMMANDS } from '../domain/parse.ts'
 import { routeMessage, modelCommand } from '../domain/routing.ts'
@@ -84,6 +89,7 @@ const PatchSchema = z
     projectId: z.string().min(1).max(200).nullable().optional(),
     /** null = follow the `#tags` in the name again. */
     tags: z.array(RoomTagSchema).max(12).nullable().optional(),
+    autoSummary: AutoSummarySchema.optional(),
   })
   .strict()
   .refine((body) => Object.keys(body).length > 0)
@@ -260,7 +266,7 @@ export function registerRoomRoutes(
         if (body.projectId) assertProject(sqlite, body.projectId)
         sqlite
           .prepare(
-            `UPDATE rooms SET name = ?, lead_agent_id = ?, members = ?, pinned = ?, archived = ?, project_id = ?, tags = ?
+            `UPDATE rooms SET name = ?, lead_agent_id = ?, members = ?, pinned = ?, archived = ?, project_id = ?, tags = ?, auto_summary = ?
              WHERE id = ?`,
           )
           .run(
@@ -275,6 +281,7 @@ export function registerRoomRoutes(
               : body.tags === null
                 ? null
                 : JSON.stringify([...new Set(body.tags)]),
+            body.autoSummary === undefined ? row.auto_summary : JSON.stringify(body.autoSummary),
             roomId,
           )
         room = readRoom(sqlite, roomId, now)
@@ -480,6 +487,75 @@ export function registerRoomRoutes(
       }
     }
   })
+
+  // Room summary (PLAN 7.4a). POST (re)generates it through the room's lead agent as a normal run; PATCH replaces
+  // its text with the person's own; DELETE removes it (the plain recent window is used again).
+  app.post('/api/rooms/:roomId/summary', mutation, async (request, reply) => {
+    const { roomId } = ParamsSchema.parse(request.params)
+    z.object({})
+      .strict()
+      .parse(request.body ?? {})
+    assertNotRewinding(roomId)
+    let messageId = ''
+    await ingest.submit({
+      source: 'rooms',
+      identity: randomUUID(),
+      apply: ({ sqlite, now }) => {
+        messageId = requestSummary(sqlite, roomId, now)
+        return []
+      },
+    })
+    await routing.dispatch()
+    return reply.code(202).send({ messageId })
+  })
+
+  app.patch('/api/rooms/:roomId/summary', mutation, async (request) => {
+    const { roomId } = ParamsSchema.parse(request.params)
+    const body = SummaryEditBodySchema.parse(request.body)
+    assertNotRewinding(roomId)
+    let parts: z.infer<typeof MessagePartSchema>[] = []
+    let messageId = ''
+    await ingest.submit({
+      source: 'rooms',
+      identity: randomUUID(),
+      apply: ({ sqlite, now }) => {
+        roomRow(sqlite, roomId)
+        const current = visibleSummaries(sqlite, roomId)[0]
+        if (!current) throw new HttpError(404, 'not_found', 'This room has no summary')
+        const text = sanitizeSummaryText(body.text)
+        if (!text) throw new HttpError(400, 'bad_request', 'The summary cannot be empty')
+        // The person has read it and vouches for it: it is no longer stale.
+        parts = [{ kind: 'summary', coversUntil: current.part.coversUntil, text, edited: true }]
+        messageId = current.id
+        sqlite
+          .prepare(
+            'UPDATE messages SET parts = ?, updated_at = ?, version = version + 1 WHERE id = ?',
+          )
+          .run(JSON.stringify(parts), now, current.id)
+        return [{ type: 'message.updated', data: { roomId, messageId, parts } }]
+      },
+    })
+    return { messageId, parts }
+  })
+
+  app.delete(
+    '/api/rooms/:roomId/summary',
+    { preHandler: [humanGuard(app.pairing)] },
+    async (request, reply) => {
+      const { roomId } = ParamsSchema.parse(request.params)
+      await ingest.submit({
+        source: 'rooms',
+        identity: randomUUID(),
+        apply: ({ sqlite, now }) => {
+          roomRow(sqlite, roomId)
+          const current = visibleSummaries(sqlite, roomId)[0]
+          if (!current) throw new HttpError(404, 'not_found', 'This room has no summary')
+          return deleteMessage(sqlite, roomId, current.id, now)
+        },
+      })
+      return reply.code(204).send()
+    },
+  )
 
   app.get('/api/rooms/:roomId/versions', async (request) => {
     const { roomId } = ParamsSchema.parse(request.params)

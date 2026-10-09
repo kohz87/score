@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { flowFixture } from './flow-fixture.ts'
 import {
   AgentDetailSchema,
   AgentsSnapshotSchema,
@@ -86,7 +87,61 @@ const extras = {
     spendUsd: day < 6 ? null : Math.round((1.4 + ((day * 5) % 7) * 0.6) * 100) / 100,
   })),
 }
+const popFlow = flowFixture('room-activity-feed')
+// 7.4c: a week of marks (the page asks for the 7 days up to the fixed "today").
+const journeyDay = (back: number, hour: number) =>
+  new Date(Date.parse(fixtureNow) - back * 86_400_000 - (21 - hour) * 3_600_000).toISOString()
+const journeyFixture = {
+  from: new Date(Date.parse(fixtureNow) - 6 * 86_400_000).toISOString().slice(0, 10),
+  to: fixtureNow.slice(0, 10),
+  truncated: false,
+  agents: [
+    {
+      id: 'lead',
+      events: [
+        { at: journeyDay(0, 10), kind: 'task_done', label: 'Plan the activity feed', ref: 't1' },
+        { at: journeyDay(2, 15), kind: 'memory_changed', label: 'Memory file changed', ref: null },
+        {
+          at: journeyDay(5, 11),
+          kind: 'note_written',
+          label: 'Launch plan',
+          ref: 'launch-plan.md',
+        },
+      ],
+    },
+    {
+      id: 'builder',
+      events: [
+        { at: journeyDay(0, 17), kind: 'task_done', label: 'Add pagination', ref: 't2' },
+        { at: journeyDay(1, 12), kind: 'task_done', label: 'Fix the empty state', ref: 't3' },
+        { at: journeyDay(1, 16), kind: 'skill_changed', label: 'code-review', ref: null },
+        { at: journeyDay(3, 14), kind: 'task_done', label: 'Speed up search', ref: 't4' },
+        { at: journeyDay(4, 10), kind: 'note_written', label: 'Release retro', ref: 'retro.md' },
+        { at: journeyDay(6, 13), kind: 'memory_changed', label: 'Memory file changed', ref: null },
+      ],
+    },
+    {
+      id: 'reviewer',
+      events: [
+        { at: journeyDay(2, 11), kind: 'task_done', label: 'Review the feed', ref: 't5' },
+        { at: journeyDay(4, 15), kind: 'skill_changed', label: 'triage', ref: null },
+      ],
+    },
+    {
+      id: 'designer',
+      events: [
+        { at: journeyDay(3, 12), kind: 'note_written', label: 'Design tokens', ref: 'tokens.md' },
+      ],
+    },
+  ],
+}
 export const visualFixtures: Record<string, unknown> = {
+  [`/api/reports/journey?from=${journeyFixture.from}&to=${journeyFixture.to}`]: journeyFixture,
+  '/api/briefs?status=active': { items: [popFlow.flow.brief] },
+  '/api/briefs?status=recent': { items: [] },
+  [`/api/briefs/${popFlow.flow.brief.id}/flow`]: popFlow.flow,
+  '/api/flow/nodes/task%3Astream': popFlow.detail,
+  '/api/approvals/fixture-approval': popFlow.detail.approval,
   '/api/settings/currency': { code: 'USD', rate: 1 },
   '/api/settings/model-visibility': { items: [] },
   '/api/agents/lead/model-settings': {

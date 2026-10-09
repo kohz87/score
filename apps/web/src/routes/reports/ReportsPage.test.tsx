@@ -394,3 +394,80 @@ test('without attempts there is no Unattributed row', async () => {
   const table = await screen.findByRole('table', { name: 'By agent' })
   expect(within(table).queryByText('Unattributed')).toBeNull()
 })
+
+const journey = {
+  from: '2026-03-04',
+  to: '2026-03-10',
+  truncated: false,
+  agents: [
+    {
+      id: 'builder',
+      events: [
+        { at: '2026-03-09T10:00:00.000Z', kind: 'task_done', label: 'Fix the feed', ref: 't1' },
+        {
+          at: '2026-03-08T10:00:00.000Z',
+          kind: 'memory_changed',
+          label: 'Memory file changed',
+          ref: null,
+        },
+        { at: '2026-03-07T10:00:00.000Z', kind: 'skill_changed', label: 'code-review', ref: null },
+      ],
+    },
+    {
+      id: 'reviewer',
+      events: [
+        {
+          at: '2026-03-06T10:00:00.000Z',
+          kind: 'note_written',
+          label: 'Release retro',
+          ref: 'retro.md',
+        },
+      ],
+    },
+  ],
+}
+
+test('the Journey tab draws one row per agent with a legend and a text alternative', async () => {
+  respond = (path) =>
+    path === '/api/agents'
+      ? json({ asOfSeq: 0, items: agents })
+      : path.startsWith('/api/reports/journey')
+        ? json(journey)
+        : json(report('7d'))
+  mount()
+  await screen.findByText('Summary for 7d.')
+  fireEvent.click(screen.getByRole('button', { name: 'Journey' }))
+  expect(router.state.location.search).toContain('tab=journey')
+  const chart = await screen.findByRole('img', {
+    name: /Journey from 2026-03-04 to 2026-03-10: 4 marks/,
+  })
+  expect(chart).toBeDefined()
+  expect(screen.queryByRole('table', { name: 'By agent' })).toBeNull()
+  const legend = screen.getByRole('list', { name: 'Legend' })
+  for (const label of [
+    'Task completed',
+    'Knowledge note written',
+    'Skill changed',
+    'Memory file changed',
+  ])
+    expect(within(legend).getByText(label)).toBeDefined()
+  const counts = screen.getByRole('table', { name: 'Journey counts per agent' })
+  const rows = within(counts).getAllByRole('row')
+  expect(
+    within(rows[1]!)
+      .getAllByRole('cell')
+      .map((cell) => cell.textContent),
+  ).toEqual(['1', '0', '1', '1'])
+  expect(
+    within(rows[2]!)
+      .getAllByRole('cell')
+      .map((cell) => cell.textContent),
+  ).toEqual(['0', '1', '0', '0'])
+  // Memory is a mark with no content, and the list says so.
+  const list = screen.getByText('All marks as a list').closest('details')!
+  expect(list.textContent).toContain('Skill changed, code-review')
+  expect(list.textContent).not.toContain('Memory file changed, ')
+  expect(calls.some((c) => c.startsWith('/api/reports/journey?from=') && c.includes('&to='))).toBe(
+    true,
+  )
+})
