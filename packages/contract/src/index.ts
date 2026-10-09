@@ -12,3 +12,4 @@ export const CONTRACT_VERSION = 1
 export * from './watch.ts'
 export * from './workspace.ts'
 export * from './knowledge.ts'
+export * from './conversations.ts'

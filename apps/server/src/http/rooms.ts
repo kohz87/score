@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import {
   AgentIdSchema,
   AgentSummarySchema,
+  RoomTagSchema,
   type CommandResult,
   type Message,
   type Room,
@@ -25,6 +26,7 @@ import {
   roomRow,
   storeMessage,
 } from '../domain/rooms.ts'
+import { assertProject, listProjects } from '../domain/room-projects.ts'
 import { roomFilesInPlay, roomLearned } from '../domain/room-panels.ts'
 import { createBrief } from '../domain/briefs.ts'
 import { reserveMessageRun, retryReply } from '../domain/message-runs.ts'
@@ -39,9 +41,10 @@ import { snapshot } from '../hub/snapshot.ts'
 import type { MediaStore } from '../media/store.ts'
 import { requestIdempotency } from './idempotency.ts'
 
+// "#launch" or "launch", optionally followed by #tag words ("#launch #q4"): tags are parsed from the name (PLAN 5.26).
 const NameSchema = z
   .string()
-  .regex(/^#?[a-z0-9][a-z0-9-]{0,63}$/)
+  .regex(/^#?[a-z0-9][a-z0-9-]{0,63}( #[a-z0-9][a-z0-9-]{0,31}){0,8}$/)
   .transform((name) => (name.startsWith('#') ? name : `#${name}`))
 const CreateSchema = z
   .object({
@@ -50,7 +53,17 @@ const CreateSchema = z
     members: z.array(AgentIdSchema).optional(),
   })
   .strict()
-const PatchSchema = CreateSchema.partial().refine((body) => Object.keys(body).length > 0)
+const PatchSchema = z
+  .object({
+    ...CreateSchema.partial().shape,
+    pinned: z.boolean().optional(),
+    archived: z.boolean().optional(),
+    projectId: z.string().min(1).max(200).nullable().optional(),
+    /** null = follow the `#tags` in the name again. */
+    tags: z.array(RoomTagSchema).max(12).nullable().optional(),
+  })
+  .strict()
+  .refine((body) => Object.keys(body).length > 0)
 const MessageBodySchema = z
   .object({
     text: z
@@ -165,6 +178,7 @@ export function registerRoomRoutes(
       const all = roomIds(sqlite).map((id) => readRoom(sqlite, id, roomRow(sqlite, id).updated_at))
       const known = new Set(listed.map((agent) => agent.id))
       return {
+        projects: listProjects(sqlite),
         rooms: all.filter((room) => room.kind === 'room'),
         directs: all.filter(
           (room) =>
@@ -222,12 +236,24 @@ export function registerRoomRoutes(
         const name = body.name ?? row.name
         if (sqlite.prepare('SELECT id FROM rooms WHERE name = ? AND id != ?').get(name, roomId))
           throw new HttpError(409, 'conflict', 'Room name already exists')
+        if (body.projectId) assertProject(sqlite, body.projectId)
         sqlite
-          .prepare('UPDATE rooms SET name = ?, lead_agent_id = ?, members = ? WHERE id = ?')
+          .prepare(
+            `UPDATE rooms SET name = ?, lead_agent_id = ?, members = ?, pinned = ?, archived = ?, project_id = ?, tags = ?
+             WHERE id = ?`,
+          )
           .run(
             name,
             body.leadAgentId ?? row.lead_agent_id,
             body.members ? JSON.stringify([...new Set(body.members)]) : row.members,
+            body.pinned === undefined ? row.pinned : Number(body.pinned),
+            body.archived === undefined ? row.archived : Number(body.archived),
+            body.projectId === undefined ? row.project_id : body.projectId,
+            body.tags === undefined
+              ? row.tags
+              : body.tags === null
+                ? null
+                : JSON.stringify([...new Set(body.tags)]),
             roomId,
           )
         room = readRoom(sqlite, roomId, now)

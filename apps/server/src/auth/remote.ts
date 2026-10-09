@@ -12,6 +12,10 @@ const publicRoutes = new Set([
   'GET /setup/https/score-ca.crt',
 ])
 
+// Share links (PLAN 5.26): the one public, token-guarded page and its images. GET only; the route answers every
+// failure with the same static page.
+const SHARE_PATH = /^\/s\/[A-Za-z0-9_-]{1,64}(?:\/media\/\d{1,4})?$/
+
 export function registerRemoteGuard(
   app: FastifyInstance,
   config: Config,
@@ -32,6 +36,7 @@ export function registerRemoteGuard(
     // Match raw paths exactly: encoded aliases and Fastify's automatic HEAD routes are private.
     if (
       publicRoutes.has(`${request.method} ${path}`) ||
+      (request.method === 'GET' && SHARE_PATH.test(path)) ||
       (request.method === 'GET' && (assets.has(path) || isAppPath(path)))
     )
       return

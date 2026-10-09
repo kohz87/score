@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { RoomProjectSchema } from './conversations.ts'
 import {
   AgentIdSchema,
   AgentSummarySchema,
@@ -31,6 +32,7 @@ export const RoomsSnapshotSchema = z.object({
   asOfSeq: AsOfSeqSchema,
   rooms: z.array(RoomSchema),
   directs: z.array(RoomSchema),
+  projects: z.array(RoomProjectSchema).default([]),
 })
 export const RoomDetailSnapshotSchema = z.object({
   asOfSeq: AsOfSeqSchema,

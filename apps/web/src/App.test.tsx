@@ -329,3 +329,37 @@ test('/now/watch/:agentId renders inside the shell with Now active', async () =>
   const nav = within(screen.getByRole('navigation', { name: 'Main' }))
   expect(nav.getByRole('link', { name: 'Now' }).getAttribute('aria-current')).toBe('page')
 })
+
+test('the palette lists matching messages in a Messages section that opens the hit', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) =>
+      String(input).startsWith('/api/search/messages')
+        ? new Response(
+            JSON.stringify({
+              items: [
+                {
+                  messageId: 'm1',
+                  roomId: 'room-1',
+                  roomName: '#launch',
+                  author: { kind: 'you' },
+                  createdAt: '2026-10-08T10:00:00.000Z',
+                  snippet: 'the [[needle]] is here',
+                },
+              ],
+            }),
+          )
+        : new Response(JSON.stringify({ asOfSeq: 0, items: [], rooms: [], directs: [] })),
+    ),
+  )
+  const router = renderRoute('/now')
+  fireEvent.click(commandButton())
+  fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'needle' } })
+  const section = await screen.findByRole('region', { name: 'Messages' })
+  expect(within(section).getByText('needle').tagName).toBe('MARK')
+  expect(within(section).getByText('#launch')).toBeDefined()
+  fireEvent.click(within(section).getByRole('link'))
+  expect(router.state.location.pathname).toBe('/chat/room-1')
+  expect(router.state.location.search).toBe('?message=m1')
+  expect(screen.queryByRole('dialog')).toBeNull()
+})

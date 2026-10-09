@@ -11,6 +11,11 @@ export type {
   ProviderBase,
   Scheduler,
 } from './port.ts'
+export type {
+  OutsideSessionFact,
+  OutsideSessionHistory,
+  OutsideSessionMessage,
+} from './outside-sessions.ts'
 export {
   AgentFileConflictError,
   AgentFileNameSchema,

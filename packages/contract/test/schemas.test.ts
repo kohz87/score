@@ -35,6 +35,36 @@ const watchOverviewItem = {
   live: true,
   surface: 'terminal',
 }
+const searchHit = {
+  messageId: 'm1',
+  roomId: 'room-1',
+  roomName: '#contract',
+  author: { kind: 'you' },
+  createdAt: f.at,
+  snippet: 'a [[hit]] here',
+}
+const shareCreated = { id: 'share-1', url: 'https://score.test/s/abc', expiresAt: f.later }
+const shareSummary = {
+  id: 'share-1',
+  roomId: 'room-1',
+  roomName: '#contract',
+  createdAt: f.at,
+  expiresAt: f.later,
+  views: 0,
+  includeImages: false,
+  status: 'active',
+}
+const outsideSession = {
+  id: 's1',
+  agentId: 'lead',
+  source: 'telegram',
+  sourceLabel: 'Telegram',
+  title: 'Plan the launch',
+  startedAt: f.at,
+  messageCount: 4,
+  busy: false,
+  roomId: null,
+}
 const uuid = '00000000-0000-4000-8000-000000000001'
 const hash = 'a'.repeat(64)
 const createInput = {
@@ -113,7 +143,44 @@ const cases = [
     { error: { code: 'not_found', message: 'Missing' } },
     { error: { code: '' } },
   ],
-  ['RoomsSnapshotSchema', { asOfSeq: 0, rooms: [f.room], directs: [] }, { asOfSeq: 0, rooms: [] }],
+  [
+    'RoomsSnapshotSchema',
+    { asOfSeq: 0, rooms: [f.room], directs: [], projects: [f.roomProject] },
+    { asOfSeq: 0, rooms: [] },
+  ],
+  ['RoomProjectSchema', f.roomProject, { ...f.roomProject, color: 'purple' }],
+  ['RoomProjectBodySchema', { name: 'Launch', color: '#4A2FD9' }, { name: '', color: '#4A2FD9' }],
+  ['RoomProjectEventSchema', { id: 'project-1' }, { id: '' }],
+  ['RoomTagSchema', 'q4', 'Q 4'],
+  ['ProjectColorSchema', '#4A2FD9', 'purple'],
+  [
+    'RoomImportSchema',
+    { agentId: 'lead', sessionId: 's1', source: 'telegram', label: 'Telegram', continued: null },
+    { agentId: 'lead', sessionId: 's1', source: 'telegram', label: 'Telegram', continued: 'x' },
+  ],
+  ['MessageSearchHitSchema', searchHit, { ...searchHit, createdAt: 'yesterday' }],
+  ['MessageSearchResponseSchema', { items: [searchHit] }, { items: [{}] }],
+  [
+    'ShareCreateRequestSchema',
+    { password: 'x', expiresInDays: 7, includeImages: false },
+    { password: 'x', expiresInDays: 31, includeImages: false },
+  ],
+  ['ShareCreatedSchema', shareCreated, { ...shareCreated, id: '' }],
+  ['ShareSummarySchema', shareSummary, { ...shareSummary, status: 'revoked' }],
+  ['SharesResponseSchema', { items: [shareSummary] }, { items: [{}] }],
+  ['OutsideSessionSchema', outsideSession, { ...outsideSession, messageCount: -1 }],
+  [
+    'OutsideSessionsResponseSchema',
+    { items: [outsideSession], unavailable: ['builder'] },
+    { items: [outsideSession] },
+  ],
+  [
+    'ImportSessionRequestSchema',
+    { agentId: 'lead', sessionId: 's1' },
+    { agentId: 'lead', sessionId: '' },
+  ],
+  ['ImportSessionResponseSchema', { roomId: 'room-1', imported: 3 }, { roomId: '', imported: 3 }],
+  ['ContinueSessionResponseSchema', { mode: 'same_session' }, { mode: 'both' }],
   [
     'RoomDetailSnapshotSchema',
     { asOfSeq: 3, room: f.room, filesInPlay: [], learned: [] },
