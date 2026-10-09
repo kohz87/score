@@ -667,6 +667,7 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
       firstPassRate: number | null
       medianTaskSec: number | null
       spendUsd: number | null
+      cacheHitRate: number | null /* 5.29: over the agents that report cache tokens */
     }
     byDay: {
       date: string
@@ -687,8 +688,10 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
       medianSec: number | null
       firstPassRate: number | null /* null = n/a, reviews */
       spendUsd: number | null
+      cacheHitRate: number | null /* 5.29 */
     }
     ;[]
+    trend: { date: string; runs: number; spendUsd: number | null }[] /* 5.29: last 30 local days, any range */
     approvals: {
       asked: number
       approved: number
@@ -708,6 +711,19 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
   request, not the task's current assignee, minus time already working or waiting on you. An hour of active run with a human
   approval open the whole hour counts as working only. Spend = Hermes session costs (actual, else estimated);
   null when unknown. `totals.spendUsd` is null when any agent's spend is unknown (never a partial sum).
+- **Cache hit rate and trend (5.29).** `cacheHitRate` = cache-read tokens / (uncached input + cache-read + cache-write) of the
+  Hermes sessions that *started* in the range (a session's counters are cumulative), read-only from each profile's
+  `state.db` through the report-facts adapter. `null` ("—") when no such session exists, a counter is missing, or Hermes
+  never recorded a cache token (a provider without caching is not a 0% hit rate). The total is over the agents that report;
+  null when none does. `trend` is always the last 30 local days (oldest first) whatever `range` is: `runs` = runs started
+  that day; `spendUsd` = that day's share of Hermes session costs from Score's cost snapshots (the same method as the
+  range spend), `null` when any agent's reading is missing for the day (e.g. before Score started sampling), never zero.
+  The Reports page draws it with an accessible table fallback.
+- **Display currency (5.29).** Reports and the API stay in USD. `GET /api/settings/currency` → `{ code: string /* ISO-4217
+  shape, ^[A-Z]{3}$ */; rate: number /* units of `code` per 1 USD, typed by the person; no network fetch */ }` (default
+  `{ code: 'USD', rate: 1 }`); **H** `PUT /api/settings/currency` `{ code; rate }` → the stored value (`400` for a bad code or a
+  rate that is not > 0; USD is always stored with rate 1). Stored in Score's `meta` table (key `display_currency`). The page
+  multiplies and rounds once to the displayed cent; Reports offers a USD / `code` toggle (remembered per browser).
 - `GET /api/reports/export.csv?range=&from=&to=&tz=` → `text/csv` (same query as the report)
 - Both take an optional `tz` (IANA zone, e.g. `Europe/London`): days and "today" are the viewer's, not the server's
   (often UTC). An unknown zone is `400`. Without it, the server's zone is used.
