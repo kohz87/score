@@ -39,12 +39,26 @@ test('a version, a rewind response and a plan round-trip', () => {
 })
 
 test('bridge commands are bounded', () => {
-  const command = { commandId: 'c1', kind: 'rewind', sessionId: 'score-room-builder', turns: 2 }
+  const command = {
+    commandId: 'c1',
+    kind: 'rewind',
+    sessionId: 'score-room-builder',
+    turns: 2,
+    expiresAt: 1790000060,
+  }
   expect(BridgeCommandSchema.parse(command)).toEqual(command)
-  for (const bad of [{ turns: 0 }, { turns: 1001 }, { kind: 'other' }, { sessionId: '' }])
+  for (const bad of [
+    { turns: 0 },
+    { turns: 1001 },
+    { kind: 'other' },
+    { sessionId: '' },
+    { expiresAt: undefined },
+    { expiresAt: 0 },
+  ])
     expect(BridgeCommandSchema.safeParse({ ...command, ...bad }).success).toBe(false)
   expect(
     BridgeCommandResultSchema.parse({ outcome: 'done', turnsUndone: 2, rewoundCount: 5 }),
   ).toBeTruthy()
+  expect(BridgeCommandResultSchema.parse({ outcome: 'expired' })).toBeTruthy()
   expect(BridgeCommandResultSchema.safeParse({ outcome: 'maybe' }).success).toBe(false)
 })

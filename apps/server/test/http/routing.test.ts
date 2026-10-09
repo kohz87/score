@@ -106,6 +106,22 @@ test('/model <alias> runs on the model the alias of that agent stands for', asyn
   })
 })
 
+test('/model <alias> with a custom endpoint is refused before anything is queued (audit5-e)', async () => {
+  const real = port.readModelSettings.bind(port)
+  vi.spyOn(port, 'readModelSettings').mockImplementation(async (agentId) => ({
+    ...(await real(agentId)),
+    aliases: [{ name: 'private', model: 'gpt-x', provider: 'openrouter', editable: false }],
+  }))
+  const run = vi.spyOn(port, 'startRun')
+  const sent = await send({ text: '/model private @builder Check this' }, 'custom-alias')
+  expect(sent.statusCode).toBe(409)
+  expect(sent.json()).toMatchObject({
+    error: { message: expect.stringContaining('custom endpoint') },
+  })
+  await advance(100)
+  expect(run).not.toHaveBeenCalled()
+})
+
 test.each([
   [{ text: 'hello' }, ['lead']],
   [{ text: '@builder then @reviewer' }, ['builder', 'reviewer']],

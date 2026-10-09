@@ -218,7 +218,18 @@ def _release(db) -> None:
         release(db)
 
 
-def rewind_session(session_id: str, turns: int, since: float | None = None, profile: str | None = None) -> dict | None:
+class CommandExpired(Exception):
+    """The command's ``expiresAt`` passed before Hermes was touched: Score has already given up on it."""
+
+
+def _check_fresh(expires_at: float | None) -> None:
+    """Called immediately before a mutation: a command Score abandoned must not act on work done since."""
+    if expires_at is not None and time.time() >= expires_at:
+        raise CommandExpired()
+
+
+def rewind_session(session_id: str, turns: int, since: float | None = None, profile: str | None = None,
+                   expires_at: float | None = None) -> dict | None:
     """Back a session up with Hermes's own rewind (what ``/undo N`` uses).
 
     ``hermes_state_rewind.rewind_user_turn`` soft-deletes the rows (``active = 0``); the next turn rebuilds its history
@@ -249,50 +260,82 @@ def rewind_session(session_id: str, turns: int, since: float | None = None, prof
     else:
         db = _profile_session_db(profile)
     try:
-        return _rewind_in(store, db, indexed, session_id, turns, since)
+        return _rewind_in(store, db, indexed, session_id, turns, since, expires_at)
     finally:
         if not indexed:
             _release(db)
 
 
-def _rewind_in(store, db, indexed: bool, session_id: str, turns: int, since: float | None) -> dict | None:
-    if since is not None:
-        if db is None:
-            raise RuntimeError("no session store for this session")
-        stamps = _user_turns(db, session_id)
-        first = next((index for index, stamp in enumerate(stamps) if stamp is not None and stamp >= since), None)
-        if first is None:
-            raise ValueError("no turn since the message")
-        turns = len(stamps) - first
-        # A turn that began before the message without a reply merges with it in the projection: rewinding it would
-        # take that older turn along, and rewinding less would leave the message. Refuse rather than guess.
-        raw = db.get_messages_as_conversation(session_id, include_row_ids=True)
-        for index, message in enumerate(raw):
-            stamp = message.get("timestamp") if isinstance(message, dict) else None
-            if _is_user_turn(message) and type(stamp) in (int, float) and stamp >= since:
-                before = raw[index - 1] if index else None
-                if _is_user_turn(before):
-                    raise ValueError("the message shares a turn with an earlier unanswered one")
-                break
-    if indexed:
-        result = store.rewind_session(session_id, turns)
-        if not isinstance(result, dict):
+def _anchored_target(db, session_id: str, since: float) -> tuple[int, object]:
+    """The turn a rewind from ``since`` starts at, on the repaired projection Hermes counts: ``(turns from it to the
+    end, its row id)``. Refuses a message that shares a turn with an earlier unanswered one: rewinding that turn would
+    take the older one along, and rewinding less would leave the message."""
+    stamps = _user_turns(db, session_id)
+    first = next((index for index, stamp in enumerate(stamps) if stamp is not None and stamp >= since), None)
+    if first is None:
+        raise ValueError("no turn since the message")
+    raw = db.get_messages_as_conversation(session_id, include_row_ids=True)
+    row_id = None
+    for index, message in enumerate(raw):
+        stamp = message.get("timestamp") if isinstance(message, dict) else None
+        if _is_user_turn(message) and type(stamp) in (int, float) and stamp >= since:
+            before = raw[index - 1] if index else None
+            if _is_user_turn(before):
+                raise ValueError("the message shares a turn with an earlier unanswered one")
+            row_id = message.get("_row_id")
+            break
+    return len(stamps) - first, row_id
+
+
+def _rewind_in(store, db, indexed: bool, session_id: str, turns: int, since: float | None,
+               expires_at: float | None = None) -> dict | None:
+    if since is None:
+        if indexed:
+            _check_fresh(expires_at)
+            result = store.rewind_session(session_id, turns)
+            if not isinstance(result, dict):
+                return None
+            undone, count = result.get("turns_undone"), result.get("rewound_count")
+        else:
+            undone, count = _rewind_direct(store, db, False, session_id, turns, expires_at)
+            if undone is None:
+                return None
+        if type(undone) is not int or type(count) is not int:
             return None
-        undone, count = result.get("turns_undone"), result.get("rewound_count")
-    else:
-        unavailable = _lookup_attr("hermes_state_rewind.RewindTargetUnavailableError")
-        with store._get_transcript_drain_lock():
-            try:
-                outcome = db.rewind_user_turn(session_id, -max(turns, 1))
-            except Exception as error:
-                if isinstance(unavailable, type) and isinstance(error, unavailable):
-                    return None
-                raise
-        undone, count = getattr(outcome, "turns_undone", None), getattr(outcome, "rewound_count", None)
-    if type(undone) is not int or type(count) is not int:
-        return None
-    if since is not None and any(
-            _is_user_turn(m) and type(m.get("timestamp")) in (int, float) and m["timestamp"] >= since
-            for m in db.get_messages_as_conversation(session_id)):
-        raise RuntimeError("turns since the message are still active")
+        return {"turns_undone": undone, "rewound_count": count}
+    if db is None:
+        raise RuntimeError("no session store for this session")
+    # Count, rewind and verify under one hold of Hermes's transcript lock (re-entrant), so a concurrent /undo or
+    # a new turn can't move the target between counting and mutating: the ordinal Hermes resolves is the one counted.
+    with store._get_transcript_drain_lock():
+        turns, row_id = _anchored_target(db, session_id, since)
+        if _anchored_target(db, session_id, since) != (turns, row_id):
+            raise RuntimeError("the transcript changed while rewinding")
+        undone, count = _rewind_direct(store, db, indexed, session_id, turns, expires_at)
+        if undone is None:
+            return None
+        if type(undone) is not int or type(count) is not int:
+            return None
+        if undone != turns or any(
+                _is_user_turn(m) and type(m.get("timestamp")) in (int, float) and m["timestamp"] >= since
+                for m in db.get_messages_as_conversation(session_id)):
+            raise RuntimeError("turns since the message are still active")
     return {"turns_undone": undone, "rewound_count": count}
+
+
+def _rewind_direct(store, db, indexed: bool, session_id: str, turns: int, expires_at: float | None = None):
+    """``db.rewind_user_turn`` under the transcript lock, as ``SessionTranscriptMixin.rewind_session`` does it
+    (without its own ordinal resolution): ``(turns_undone, rewound_count)``, or ``(None, None)`` when Hermes had no
+    target."""
+    unavailable = _lookup_attr("hermes_state_rewind.RewindTargetUnavailableError")
+    with store._get_transcript_drain_lock():
+        _check_fresh(expires_at)
+        try:
+            outcome = db.rewind_user_turn(session_id, -max(turns, 1))
+        except Exception as error:
+            if isinstance(unavailable, type) and isinstance(error, unavailable):
+                return None, None
+            raise
+        if indexed:
+            store._clear_dirty_transcript(session_id)
+    return getattr(outcome, "turns_undone", None), getattr(outcome, "rewound_count", None)

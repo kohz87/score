@@ -42,7 +42,12 @@ import {
 import { assertProject, listProjects } from '../domain/room-projects.ts'
 import { roomFilesInPlay, roomLearned } from '../domain/room-panels.ts'
 import { createBrief } from '../domain/briefs.ts'
-import { rewindingRooms } from '../domain/room-rewinding.ts'
+import {
+  clearRoomHold,
+  holdRoomUntil,
+  persistRoomHold,
+  rewindingRooms,
+} from '../domain/room-rewinding.ts'
 import { reserveMessageRun, retryReply } from '../domain/message-runs.ts'
 import { PLAN_FIRST_ADDENDUM } from '../domain/plan.ts'
 import { COMMANDS } from '../domain/parse.ts'
@@ -389,6 +394,8 @@ export function registerRoomRoutes(
     if (rewinding.has(roomId))
       throw new HttpError(409, 'conflict', 'This room is already being rewound')
     rewinding.add(roomId)
+    // A command nobody answered may still be claimed by the plugin: the room stays held until it has expired.
+    let uncertainUntil: number | null = null
     try {
       const { anchor, scope, checks } = await rewindPlan(roomId, messageId)
       if (scope.blocked) throw new HttpError(409, 'conflict', scope.blocked)
@@ -405,12 +412,23 @@ export function registerRoomRoutes(
       const rewound: { agentId: string; turnsUndone: number }[] = []
       if (!body.scoreOnly) {
         for (const agent of scope.agents) {
+          // Persisted before the command exists, so a restart can't release the room while it is still alive.
+          let until = 0
+          await ingest.submit({
+            source: 'rooms',
+            identity: randomUUID(),
+            apply: ({ sqlite }) => {
+              until = persistRoomHold(sqlite, roomId, Date.now())
+              return []
+            },
+          })
           const result = await port.rewindSession({
             agentId: agent.agentId,
             sessionId: agent.sessionId,
             turns: agent.turns,
             sinceMs: Date.parse(anchor.createdAt),
           })
+          if (result.status === 'skipped' && result.reason === 'no_answer') uncertainUntil = until
           if (result.status !== 'rewound') {
             const reason = result.status === 'skipped' ? result.reason : 'rewind_failed'
             throw new HttpError(409, 'rewind_incomplete', 'Some agents could not be rewound', {
@@ -455,7 +473,11 @@ export function registerRoomRoutes(
       })
       return { version: created!.version, rewound, skipped }
     } finally {
-      rewinding.delete(roomId)
+      if (uncertainUntil !== null) holdRoomUntil(db.sqlite, roomId, uncertainUntil)
+      else {
+        rewinding.delete(roomId)
+        clearRoomHold(db.sqlite, roomId)
+      }
     }
   })
 
@@ -553,6 +575,9 @@ export function registerRoomRoutes(
             : { model: typedModel },
         )
       }
+    // A rewind may have started while agents and attachments were being prepared (awaits above): checked again before
+    // any external side effect and, below, inside the transaction.
+    assertNotRewinding(roomId)
     const id = randomUUID()
     if (route.parsed.command?.kind === 'assign') {
       const assigned = route.parsed.command
@@ -618,6 +643,7 @@ export function registerRoomRoutes(
       source: 'rooms',
       identity: randomUUID(),
       apply({ sqlite, now }) {
+        assertNotRewinding(roomId)
         message = {
           id,
           roomId,

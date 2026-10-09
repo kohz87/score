@@ -1,3 +1,4 @@
+import { REWIND_COMMAND_TTL_MS } from '@score/contract'
 import { z } from 'zod'
 import type { RewindBroker } from '../bridge/rewind-broker.ts'
 import type { RewindSessionResult } from '../port.ts'
@@ -5,7 +6,7 @@ import { hermesPaths, ProfileNameSchema, resolveHermesHome } from './paths.ts'
 import { compressionLineage } from './recover.ts'
 import { HermesDbMissing, HermesSchemaDrift, openReadOnly } from './sqlite.ts'
 
-const BRIDGE_ANSWER_MS = 60_000
+const BRIDGE_ANSWER_MS = REWIND_COMMAND_TTL_MS
 
 type Inspection =
   | { ok: true; sessionId: string; turns: number; undone: number }
@@ -113,6 +114,7 @@ export async function rewindSession(
       }
     case 'unavailable':
       return { status: 'skipped', reason: 'bridge_unavailable' }
+    case 'expired':
     case 'no_answer':
       return { status: 'skipped', reason: 'no_answer' }
     default:

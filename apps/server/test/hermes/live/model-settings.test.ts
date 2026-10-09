@@ -75,7 +75,7 @@ test('reads the fallback chain, aliases and the speech settings of the chosen pr
     tts: { provider: 'edge', model: null, voice: 'en-US-AriaNeural' },
   })
   // Nothing outside the four sections is read.
-  expect(reads()).toBe(4)
+  expect(reads()).toBe(5)
 })
 
 test('a chain with a custom endpoint is shown but never rewritten', async () => {
@@ -110,7 +110,7 @@ test('only changed keys are written, and the answer comes from what was written'
     ['-p', 'builder', 'config', 'set', 'tts.provider', 'openai'],
     ['-p', 'builder', 'config', 'set', 'tts.openai.voice', 'nova'],
   ])
-  expect(reads()).toBe(4)
+  expect(reads()).toBe(5)
   expect(saved.speech.tts).toEqual({ provider: 'openai', model: 'gpt-4o-mini-tts', voice: 'nova' })
   expect(saved.speech.stt).toEqual({ provider: 'groq', model: 'whisper-large-v3-turbo' })
   expect(saved.fallbacks).toEqual([{ provider: 'openrouter', model: 'a/b' }])
@@ -184,4 +184,63 @@ test('an unreadable Hermes is a 502, a failed write a 409', async () => {
   await expect(
     tabs.updateModelSettings('builder', { fallbacks: [{ provider: 'a', model: 'b' }] }),
   ).rejects.toMatchObject({ status: 409 })
+})
+
+test('a legacy fallback_model is part of the chain and is cleared with it (audit5-e)', async () => {
+  config.fallback_model = { provider: 'openrouter', model: 'legacy/model' }
+  config.fallback_providers = []
+  const shown = await tabs.getModelSettings('builder')
+  expect(shown.fallbacks).toEqual([{ provider: 'openrouter', model: 'legacy/model' }])
+  expect(shown.fallbacksEditable).toBe(true)
+  runner.mockClear()
+  const saved = await tabs.updateModelSettings('builder', { fallbacks: [] })
+  expect(writes()).toEqual([
+    ['-p', 'builder', 'config', 'set', 'fallback_providers', '[]'],
+    ['-p', 'builder', 'config', 'unset', 'fallback_model'],
+  ])
+  expect(config.fallback_model).toBeUndefined()
+  expect(saved.fallbacks).toEqual([])
+})
+
+test('a legacy fallback_model with a custom endpoint is shown and protected (audit5-e)', async () => {
+  config.fallback_model = { provider: 'acme', model: 'c', base_url: 'http://x' }
+  const shown = await tabs.getModelSettings('builder')
+  expect(shown.fallbacks).toEqual([{ provider: 'acme', model: 'c' }])
+  expect(shown.fallbacksEditable).toBe(false)
+  await expect(tabs.updateModelSettings('builder', { fallbacks: [] })).rejects.toMatchObject({
+    status: 409,
+  })
+})
+
+test('speech-to-text goes back to Automatic by unsetting the provider (audit5-e)', async () => {
+  config.stt = { provider: 'groq', groq: { model: 'whisper-large-v3-turbo' } }
+  const saved = await tabs.updateModelSettings('builder', { speech: { stt: { provider: null } } })
+  expect(writes()).toEqual([['-p', 'builder', 'config', 'unset', 'stt.provider']])
+  expect(saved.speech.stt).toEqual({ provider: null, model: null })
+})
+
+test('eleven fallbacks load and save (audit5-e)', async () => {
+  const chain = Array.from({ length: 11 }, (_, n) => ({ provider: 'openrouter', model: `m/${n}` }))
+  config.fallback_providers = chain
+  expect((await tabs.getModelSettings('builder')).fallbacks).toHaveLength(11)
+  const saved = await tabs.updateModelSettings('builder', { fallbacks: chain.slice().reverse() })
+  expect(saved.fallbacks).toHaveLength(11)
+})
+
+test('a save that fails midway puts back what it already wrote (audit5-e)', async () => {
+  config.model_aliases = { old: { model: 'm-old', provider: 'openrouter' } }
+  config.stt = { provider: 'groq', groq: { model: 'whisper-large-v3-turbo' } }
+  runner.mockImplementation(async (args) => {
+    if (args.includes('unset') && args.includes('model_aliases.old')) return { exitCode: 1 }
+    return answer(args)
+  })
+  await expect(
+    tabs.updateModelSettings('builder', {
+      aliases: [{ name: 'new', model: 'm-new', provider: 'openrouter' }],
+      speech: { stt: { provider: 'openai' } },
+    }),
+  ).rejects.toBeDefined()
+  // Rolled back: no new alias, the old one and the speech provider are as they were.
+  expect(config.model_aliases).toEqual({ old: { model: 'm-old', provider: 'openrouter' } })
+  expect((config.stt as Record<string, unknown>).provider).toBe('groq')
 })

@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import { afterEach, beforeEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import {
   AgentDetailSchema,
   ModelSettingsSchema,
@@ -8,6 +8,7 @@ import {
 } from '@score/contract'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
+import { filterModels } from '../../src/hermes/model-options.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { setup } from '../hermes/live/gateway/helpers.ts'
 
@@ -134,4 +135,66 @@ test('an alias row without a confirmed provider never invents one', async () => 
   expect(found.items[0]).toMatchObject({ model: 'qwen3:8b-not-listed', alias: 'hand' })
   expect(found.items[0]!.provider).not.toBe('custom')
   expect(found.items[0]!.provider).toBe('')
+})
+
+test('an alias with a custom endpoint is shown read-only in the picker and refused by PUT model (audit5-e)', async () => {
+  const real = port.readModelSettings.bind(port)
+  vi.spyOn(port, 'readModelSettings').mockImplementation(async (agentId) => ({
+    ...(await real(agentId)),
+    aliases: [{ name: 'private', model: 'gpt-x', provider: 'openrouter', editable: false }],
+  }))
+  const set = vi.spyOn(port, 'setAgentModel')
+  const found = await models('?q=private&agentId=builder')
+  expect(found.items[0]).toMatchObject({
+    alias: 'private',
+    available: false,
+    reason: expect.stringContaining('custom endpoint'),
+  })
+  const refused = await put('/api/agents/builder/model', { model: 'private' })
+  expect(refused.statusCode).toBe(409)
+  expect(refused.json()).toMatchObject({
+    error: { message: expect.stringContaining('custom endpoint') },
+  })
+  expect(set).not.toHaveBeenCalled()
+})
+
+test('a providerless alias stays providerless in the picker even when the model has providers (audit5-e)', async () => {
+  await put('/api/agents/builder/model-settings', {
+    aliases: [{ name: 'hand', model: 'shared-model', provider: null }],
+  })
+  const real = port.listModels.bind(port)
+  const row = (provider: string) => ({
+    provider,
+    providerLabel: provider,
+    model: 'shared-model',
+    available: true,
+    reason: null,
+    free: false,
+    price: null,
+  })
+  vi.spyOn(port, 'listModels').mockImplementation(async (q, chosen) =>
+    q === undefined ? [row('provider-a'), row('provider-b')] : real(q, chosen),
+  )
+  const found = await models('?q=hand&agentId=builder')
+  expect(found.items[0]).toMatchObject({ alias: 'hand', provider: '' })
+})
+
+test('the picker still offers Show all when the chosen list is capped at 200 and more models match (audit5-e)', async () => {
+  const rows = Array.from({ length: 240 }, (_, n) => ({
+    provider: 'acme',
+    providerLabel: 'Acme',
+    model: `model-${String(n).padStart(3, '0')}`,
+    available: true,
+    reason: null,
+    free: false,
+    price: null,
+  }))
+  vi.spyOn(port, 'listModels').mockImplementation(async (q, only, limit) =>
+    filterModels(rows, q, only, limit),
+  )
+  const chosen = rows.slice(0, 200).map(({ provider, model }) => ({ provider, model }))
+  await put('/api/settings/model-visibility', { items: chosen })
+  const shown = await models()
+  expect(shown.items).toHaveLength(200)
+  expect(shown.hiddenCount).toBe(40)
 })

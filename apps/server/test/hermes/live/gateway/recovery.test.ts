@@ -386,3 +386,34 @@ test('gate #1 gateway run SSE redacts assignments, headers and temporary AWS key
   )
   expect(readRun(env.db.sqlite, runContext.runId).output).toContain('[redacted]')
 })
+
+// audit5-e: a reply cancelled while Hermes admitted its run must be stopped, however many tries that takes.
+function cancelTurn(turnId: string) {
+  env.db.sqlite.exec('PRAGMA foreign_keys = OFF')
+  env.db.sqlite
+    .prepare(
+      `INSERT INTO message_runs (message_id, run_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, state, created_at)
+       VALUES ('m1', NULL, 'room', 'builder', 'm0', 0, ?, 'm0', 'hi', '[]', 'failed', '2026-10-09T10:00:00.000Z')`,
+    )
+    .run(turnId)
+}
+const stops = () => env.fake.calls.filter((call) => call.path.endsWith('/stop')).length
+
+test('a stop for a cancelled reply that failed is retried by recovery and by an explicit retry, until it succeeds', async () => {
+  cancelTurn('cancel-turn')
+  env.fake.stopFails = 1
+  const request = { profile: 'builder', input: 'fixture' }
+  await env.intents.startRunIntent(request, 'cancel-turn')
+  expect(stops()).toBe(1)
+  // Restart recovery: the accepted intent has its run row, but the stop is still owed.
+  env.fake.stopFails = 1
+  await env.intents.recoverIntents()
+  expect(stops()).toBe(2)
+  // An explicit admission retry (the ingest key is already used) still notices the cancellation.
+  await env.intents.startRunIntent(request, 'cancel-turn')
+  expect(stops()).toBe(3)
+  // Confirmed: nothing more is sent.
+  await env.intents.recoverIntents()
+  await env.intents.startRunIntent(request, 'cancel-turn')
+  expect(stops()).toBe(3)
+})

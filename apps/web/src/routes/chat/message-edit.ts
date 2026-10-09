@@ -10,6 +10,8 @@ export interface Editing {
   text: string
   to: string[]
   attachments: Attachment[]
+  /** The rewind for this edit already happened (an interrupted edit resumed): sending posts the correction at once. */
+  rewound?: boolean
 }
 
 let editing: Editing | null = null
@@ -19,13 +21,14 @@ function publish(next: Editing | null) {
   for (const listener of listeners) listener()
 }
 
-export function startEdit(message: Message): void {
+export function startEdit(message: Message, options: { rewound?: boolean } = {}): void {
   publish({
     roomId: message.roomId,
     messageId: message.id,
     text: message.parts.flatMap((part) => (part.kind === 'text' ? [part.text] : [])).join('\n\n'),
     to: message.to,
     attachments: attachmentsOf(message),
+    ...(options.rewound ? { rewound: true } : {}),
   })
 }
 export function stopEdit(): void {

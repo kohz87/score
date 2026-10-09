@@ -49,6 +49,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { retireIngestKeys, retireMedia } from './hub/retire.ts'
+import { restoreRoomHolds } from './domain/room-rewinding.ts'
 
 const INSECURE_FLAG_REMOVED =
   'SCORE_REMOTE_INSECURE_HTTP was removed and is ignored: Score serves its app over HTTPS only (see /setup/https)'
@@ -185,6 +186,7 @@ export async function startServer(
     homeLock = acquireHomeLock(config.home)
     db = openDatabase(join(config.home, 'score.db'))
     migrate(db, fileURLToPath(new URL('../migrations/', import.meta.url)))
+    restoreRoomHolds(db.sqlite, Date.now())
     ensureMessageFts(db.sqlite)
     // Test-only: attempts for e2e against the fake adapter (it has no Kanban board to project from).
     if (
