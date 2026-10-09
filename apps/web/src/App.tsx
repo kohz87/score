@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { redirect, RouterProvider } from 'react-router'
 import type { DataRouter, RouteObject } from 'react-router'
 import { PairPage, pairBrowser } from './routes/pair/PairPage.tsx'
@@ -9,8 +10,19 @@ import { destinations } from './shell/destinations.ts'
 import { SettingsPage } from './routes/settings/SettingsPage.tsx'
 import { ChatPage } from './routes/chat/ChatPage.tsx'
 import { NowPage } from './routes/now/NowPage.tsx'
-import { KnowledgePage } from './routes/knowledge/KnowledgePage.tsx'
 import { ReportsPage } from './routes/reports/ReportsPage.tsx'
+
+// Knowledge brings CodeMirror and the Markdown renderer: loaded on first visit, not with the shell.
+const LazyKnowledgePage = lazy(async () => ({
+  default: (await import('./routes/knowledge/KnowledgePage.tsx')).KnowledgePage,
+}))
+function KnowledgeRoute() {
+  return (
+    <Suspense fallback={<p role="status">Opening Knowledge…</p>}>
+      <LazyKnowledgePage />
+    </Suspense>
+  )
+}
 
 function StubPage({ title }: { title: string }) {
   return <h1>{title}</h1>
@@ -36,8 +48,8 @@ export const appRoutes: RouteObject[] = [
           return {
             path,
             children: [
-              { index: true, Component: KnowledgePage },
-              { path: '*', Component: KnowledgePage },
+              { index: true, Component: KnowledgeRoute },
+              { path: '*', Component: KnowledgeRoute },
             ],
           }
         if (path === '/reports') return { path, Component: ReportsPage }

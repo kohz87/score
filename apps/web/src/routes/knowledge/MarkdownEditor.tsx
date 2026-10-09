@@ -1,7 +1,7 @@
 import { autocompletion, type CompletionContext } from '@codemirror/autocomplete'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
-import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
+import { defaultHighlightStyle, HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap, placeholder } from '@codemirror/view'
 import { useEffect, useRef } from 'react'
@@ -47,6 +47,15 @@ const scoreTheme = EditorView.theme({
   '.cm-completionDetail': { fontStyle: 'normal', opacity: '0.7', marginLeft: '8px' },
   '.cm-placeholder': { color: 'var(--muted)' },
 })
+
+// The default style's tags with every colour swapped for a themed token (it has light and dark values), so the editor
+// follows Settings › Look. Reusing its specs avoids a direct dependency on @lezer/highlight just for the tag list.
+const scoreHighlight = HighlightStyle.define(
+  defaultHighlightStyle.specs.map((spec) => ({
+    ...spec,
+    ...('color' in spec ? { color: 'var(--agent-violet-text)' } : {}),
+  })),
+)
 
 // Wikilink autocomplete after `[[` (adapted from the behaviour of the owner's Artemis editor; code written for Score).
 export function wikilinkCompletion(notes: () => KnowledgeNoteSummary[]) {
@@ -94,7 +103,7 @@ export function MarkdownEditor({ initial, label, notes, onChange }: Props) {
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           markdown(),
-          syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+          syntaxHighlighting(scoreHighlight),
           EditorView.lineWrapping,
           placeholder('Write in Markdown. Type [[ to link another note.'),
           autocompletion({
