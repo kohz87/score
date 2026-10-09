@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test'
 
+// Anchored: an unanchored 'Now' also matches 'Knowledge' (k-now-ledge), and Now's link may read 'Now Needs you'.
+const navName = (title: string) => new RegExp(`^${title}\\b`)
+
 const destinations = [
   ['/now', 'Now'],
   ['/chat', 'Chat'],
@@ -23,7 +26,7 @@ for (const [path, title] of destinations) {
       page.getByRole('heading', title === 'Now' ? { level: 1 } : { name: title, level: 1 }),
     ).toBeVisible()
     await expect(
-      page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: title }),
+      page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: navName(title) }),
     ).toHaveAttribute('aria-current', 'page')
     await page.evaluate(() => document.fonts.ready)
     expect(fonts.length).toBeGreaterThan(0)
@@ -36,13 +39,16 @@ test('each main nav link navigates and the root redirects to Now', async ({ page
   await expect(page).toHaveURL('/now')
   const nav = page.getByRole('navigation', { name: 'Main' })
   for (const [path, title] of destinations) {
-    await nav.getByRole('link', { name: title }).click()
+    await nav.getByRole('link', { name: navName(title) }).click()
     await expect(page).toHaveURL(path)
     // Now's headline is the sentence about the team, not the word "Now".
     await expect(
       page.getByRole('heading', title === 'Now' ? { level: 1 } : { name: title, level: 1 }),
     ).toBeVisible()
-    await expect(nav.getByRole('link', { name: title })).toHaveAttribute('aria-current', 'page')
+    await expect(nav.getByRole('link', { name: navName(title) })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
   }
 })
 
