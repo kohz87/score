@@ -30,6 +30,7 @@ export {
   registerBridgeCredentialGuard,
   type BridgeDeps,
 } from './bridge/routes.ts'
+export { RewindBroker } from './bridge/rewind-broker.ts'
 export { getBridgeStatus } from './bridge/registry.ts'
 export { sweepKanbanDenials } from './live/kanban-denials.ts'
 export { createScreenshotImporter, type ScreenshotImporter } from './bridge/screenshots.ts'

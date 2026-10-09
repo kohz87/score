@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { pair } from './pair.ts'
 
 test('Delete hides a message with an Undo window, then removes it for real', async ({ page }) => {
+  test.setTimeout(120_000)
   await pair(page)
   await page.goto('/chat')
   await page
@@ -14,13 +15,17 @@ test('Delete hides a message with an Undo window, then removes it for real', asy
   const text = `Delete me ${Date.now()}`
   await composer.fill(text)
   await composer.press('Enter')
-  // Only the message you sent: an agent reply that quotes the text may arrive at any point and must not shift counts.
-  const all = history.getByRole('article', { name: /Message from You/ }).filter({ hasText: text })
-  await expect(all).toHaveCount(1)
-  const before = 1
-  const mine = all.first()
+  // An agent reply: deleting it stays Score-only with an Undo window (your own messages rewind, chat-rewind.spec.ts).
+  const replies = history.getByRole('article', { name: /^Message from (?!You)/ }).filter({
+    hasText: 'I have reviewed the room context',
+  })
+  await expect(replies.first()).toBeVisible({ timeout: 40_000 })
+  const before = await replies.count()
+  const mine = replies.first()
+  const all = replies
 
-  await mine.getByRole('button', { name: 'Delete message from You' }).click()
+  await mine.hover()
+  await mine.getByRole('button', { name: /^Delete message from (?!You)/ }).click()
   await expect(all).toHaveCount(before - 1)
   const toast = page.getByRole('status').filter({ hasText: 'Message deleted' })
   await expect(
@@ -32,7 +37,8 @@ test('Delete hides a message with an Undo window, then removes it for real', asy
   const deleted = page.waitForResponse(
     (response) => response.request().method() === 'DELETE' && response.status() === 204,
   )
-  await mine.getByRole('button', { name: 'Delete message from You' }).click()
+  await mine.hover()
+  await mine.getByRole('button', { name: /^Delete message from (?!You)/ }).click()
   await deleted
   await page.reload()
   await expect(history.getByRole('article').first()).toBeVisible({ timeout: 15_000 })

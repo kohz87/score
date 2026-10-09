@@ -69,6 +69,7 @@ vi.mock('../src/hermes/index.ts', () => ({
   pruneBridge: mocks.pruneBridge,
   createScreenshotImporter: mocks.createScreenshotImporter,
   sweepKanbanDenials: mocks.sweepKanbanDenials,
+  RewindBroker: class {},
 }))
 vi.mock('../src/hub/retention.ts', () => ({ pruneEvents: mocks.pruneEvents }))
 vi.mock('../src/hub/retire.ts', () => ({ retireIngestKeys: mocks.retireIngestKeys }))

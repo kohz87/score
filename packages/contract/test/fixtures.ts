@@ -236,6 +236,20 @@ export const knowledgeChanged = {
   to: null,
   by: { agentId: 'builder' },
 }
+export const roomVersion = {
+  id: 'version-1',
+  roomId: 'room-1',
+  anchorId: 'message-1',
+  anchorCreatedAt: at,
+  mode: 'edit' as const,
+  replacedBy: null,
+  number: 1,
+  count: 2,
+  hiddenCount: 3,
+  rewound: [{ agentId: 'builder', turnsUndone: 2 }],
+  skipped: [{ agentId: 'reviewer', reason: 'compressed' as const }],
+  createdAt: at,
+} satisfies Contract.RoomVersion
 export const deleted = {
   messageId: 'message-1',
   roomId: 'room-1',

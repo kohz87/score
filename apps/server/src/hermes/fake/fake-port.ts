@@ -1,4 +1,10 @@
-import { AgentDetailSchema, type AgentDetail, type PluginItem } from '@score/contract'
+import {
+  AgentDetailSchema,
+  RewindSkipReasonSchema,
+  type AgentDetail,
+  type PluginItem,
+  type RewindSkipReason,
+} from '@score/contract'
 import {
   attachRunMessage,
   appendRunMessage,
@@ -89,6 +95,7 @@ import {
   type HermesPortDeps,
   type ProviderBase,
   type ObservationSink,
+  type RewindSessionResult,
   type Scheduler,
 } from '../port.ts'
 import {
@@ -1738,6 +1745,31 @@ export class FakePort implements HermesPort {
       this.requireSink()
       if (this.runs.get(req.runId)?.agentId !== req.agentId) return
       await this.transitionRun(req.runId, 'cancelled')
+    })
+  }
+
+  /**
+   * Simulated rewind (PLAN 5.33): succeeds, undoing exactly the requested turns, unless the agent is listed in
+   * `rewindSkips` (tests) or in SCORE_FAKE_REWIND_SKIP as `agent:reason,…` (e2e).
+   */
+  readonly rewindSkips = new Map<string, RewindSkipReason>(
+    (process.env.SCORE_FAKE_REWIND_SKIP ?? '').split(',').flatMap((item) => {
+      const [agent, reason] = item.split(':')
+      const parsed = RewindSkipReasonSchema.safeParse(reason)
+      return agent && parsed.success ? [[agent, parsed.data] as const] : []
+    }),
+  )
+  readonly rewinds: { agentId: string; sessionId: string; turns: number }[] = []
+
+  rewindSession(req: Parameters<HermesPort['rewindSession']>[0]): Promise<RewindSessionResult> {
+    const reason = this.rewindSkips.get(req.agentId)
+    if (reason) return Promise.resolve({ status: 'skipped', reason })
+    if (req.dryRun) return Promise.resolve({ status: 'ready' })
+    this.rewinds.push({ agentId: req.agentId, sessionId: req.sessionId, turns: req.turns })
+    return Promise.resolve({
+      status: 'rewound',
+      turnsUndone: req.turns,
+      rewoundCount: req.turns * 2,
     })
   }
 

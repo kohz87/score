@@ -10,6 +10,7 @@ import { requestDelete } from './message-deletion.ts'
 import { startEdit } from './message-edit.ts'
 import { Markdown } from './Markdown.tsx'
 import { PlanCard } from './PlanCard.tsx'
+import { RewindDialog } from './RewindDialog.tsx'
 
 /** Expand all / Collapse all (PLAN 5.25): a counter, so pressing the same button twice still reaches cards opened by hand. */
 type Expansion = { open: boolean; version: number }
@@ -195,16 +196,19 @@ function Action({
 function MessageActions({
   message,
   name,
+  agents,
   imported,
 }: {
   message: Message
   name: string
+  agents: AgentSummary[]
   imported: boolean
 }) {
   const you = message.author.kind === 'you'
   const [copied, setCopied] = useState(false)
   const [retry, setRetry] = useState<'idle' | 'busy' | 'queued'>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
   useEffect(() => {
     const pending = timers.current
@@ -274,9 +278,25 @@ function MessageActions({
         label="Delete"
         name={`Delete message from ${name}`}
         icon="delete"
-        title="Removes it from Score. Agents may still remember it."
-        onClick={() => requestDelete(message.roomId, message.id)}
+        title={
+          you && !imported
+            ? 'Hides it and everything after it, and rewinds the agents'
+            : 'Removes it from Score. Agents may still remember it.'
+        }
+        onClick={() =>
+          you && !imported ? setConfirming(true) : requestDelete(message.roomId, message.id)
+        }
       />
+      {confirming && (
+        <RewindDialog
+          roomId={message.roomId}
+          messageId={message.id}
+          mode="delete"
+          agents={agents}
+          onDone={() => setConfirming(false)}
+          onClose={() => setConfirming(false)}
+        />
+      )}
       {copied && (
         <span className="chat-sr-only" role="status">
           Copied
@@ -328,10 +348,13 @@ function StopReply({ message, name }: { message: Message; name: string }) {
 export function MessageItem({
   message,
   agents,
+  readOnly = false,
   importedLabel,
 }: {
   message: Message
   agents: AgentSummary[]
+  /** A message of a previous version (PLAN 5.33): greyed, no actions. */
+  readOnly?: boolean
   /** Where an imported copy came from ("Telegram"); such messages cannot be edited or retried. */
   importedLabel?: string | undefined
 }) {
@@ -346,7 +369,7 @@ export function MessageItem({
   return (
     <article
       id={`message-${message.id}`}
-      className={`chat-message${you ? ' chat-message--you' : ''}${message.editedBy ? ' chat-message--edited' : ''}`}
+      className={`chat-message${you ? ' chat-message--you' : ''}${message.editedBy ? ' chat-message--edited' : ''}${readOnly ? ' chat-message--previous' : ''}`}
       aria-label={`Message from ${name}`}
       tabIndex={-1}
     >
@@ -389,10 +412,10 @@ export function MessageItem({
             <Part key={index} part={part} agents={agents} message={message} expansion={expansion} />
           ))}
         </div>
-        {message.streaming && !you && !message.id.startsWith('pending-') && (
+        {!readOnly && message.streaming && !you && !message.id.startsWith('pending-') && (
           <StopReply message={message} name={name} />
         )}
-        {message.editedBy && (
+        {!readOnly && message.editedBy && (
           <button
             type="button"
             className="chat-edited-link"
@@ -405,8 +428,8 @@ export function MessageItem({
             see the new version
           </button>
         )}
-        {!message.streaming && !message.id.startsWith('pending-') && (
-          <MessageActions message={message} name={name} imported={imported} />
+        {!readOnly && !message.streaming && !message.id.startsWith('pending-') && (
+          <MessageActions message={message} name={name} agents={agents} imported={imported} />
         )}
       </div>
     </article>

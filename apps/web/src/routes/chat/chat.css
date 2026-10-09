@@ -1770,3 +1770,123 @@
   border-radius: var(--radius-pill);
   padding: 0 8px;
 }
+
+/* Rewind confirmation and previous versions (PLAN 5.33) */
+.chat-rewind-dialog {
+  width: min(520px, calc(100vw - 40px));
+  padding: 24px 28px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--ink);
+}
+.chat-rewind-dialog::backdrop {
+  background: rgb(18 19 26 / 40%);
+}
+.chat-rewind-dialog h2 {
+  margin: 0 0 12px;
+  font-weight: 600;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+.chat-rewind-list {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--chat-text);
+}
+.chat-rewind-warning {
+  margin: 8px 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-14);
+  background: var(--agent-saffron-tint);
+  color: var(--agent-saffron-text);
+}
+.chat-rewind-warning p,
+.chat-rewind-warning ul {
+  margin: 4px 0;
+}
+.chat-rewind-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+.chat-rewind-actions button {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+.chat-rewind-actions .chat-rewind-primary {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--card);
+}
+.chat-rewind-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.chat-rewind-dialog :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.chat-version {
+  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 100%;
+}
+.chat-version-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--subtle);
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.chat-version-step,
+.chat-version-toggle {
+  border: 0;
+  background: none;
+  padding: 2px 6px;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+}
+.chat-version-toggle {
+  text-decoration: underline;
+}
+.chat-version-step:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.chat-previous {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--hairline);
+  opacity: 0.7;
+}
+.chat-previous-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.chat-message--previous {
+  filter: grayscale(1);
+}

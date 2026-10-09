@@ -9,7 +9,9 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { ApprovalOutbox } from '../../domain/approval-outbox.ts'
 import { registerBridgeDecisionRoutes } from './decisions.ts'
+import { registerBridgeCommandRoutes } from './commands.ts'
 import { registerBridgeKnowledgeRoutes } from './knowledge.ts'
+import type { RewindBroker } from './rewind-broker.ts'
 import type { KnowledgeAgentApi } from '../../knowledge/agent-api.ts'
 import type { CompatibilityEvaluation } from '../port.ts'
 import type { ScoreDb } from '../../db/index.ts'
@@ -31,6 +33,8 @@ export interface BridgeDeps {
   outbox?: ApprovalOutbox
   /** Stores a browser_vision screenshot named by a tool result; live mode only. */
   importScreenshot?: ScreenshotImporter
+  /** Server → plugin commands (session rewinds, 5.33); without it the /bridge/v1/commands routes are not served. */
+  rewind?: RewindBroker
   /** Agent knowledge tools (6.4); without it the /bridge/v1/knowledge routes are not served. */
   knowledge?: KnowledgeAgentApi
 }
@@ -176,6 +180,7 @@ export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): vo
     return producer
   }
   if (deps.outbox) registerBridgeDecisionRoutes(app, { outbox: deps.outbox, clock, authenticate })
+  if (deps.rewind) registerBridgeCommandRoutes(app, { broker: deps.rewind, authenticate })
   if (deps.knowledge) registerBridgeKnowledgeRoutes(app, { api: deps.knowledge, authenticate })
 
   app.post(
