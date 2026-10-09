@@ -219,3 +219,23 @@ test('a run row rebuilt from an accepted admission keeps the original send time'
   )
   expect(readRun(env.db.sqlite, context.runId).started_at).toBe(sentAt)
 })
+
+test("a later turn is not recovered when Hermes never stored this run's user message (gate 2026-10-09)", async () => {
+  const context = await admittedMessage()
+  const startedSec = Date.parse(readRun(env.db.sqlite, context.runId).started_at) / 1000
+  // Hermes admitted the run and shut down before persisting "fixture"; the owner later resumed the session by hand.
+  writeHistory([
+    ['user', 'a question typed in Hermes later', startedSec + 30],
+    ['assistant', 'Here you go. @reviewer please check.', startedSec + 31],
+  ])
+  await follow(context)
+  const run = readRun(env.db.sqlite, context.runId)
+  expect(run.status).toBe('interrupted')
+  expect(run.output ?? '').not.toContain('Here you go')
+  expect(JSON.stringify(reply().parts)).not.toContain('Here you go')
+  expect(
+    env.db.sqlite
+      .prepare("SELECT COUNT(*) AS n FROM message_runs WHERE agent_id = 'reviewer'")
+      .get(),
+  ).toEqual({ n: 0 })
+})

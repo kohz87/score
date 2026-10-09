@@ -33,6 +33,7 @@ export interface FollowOptions {
     profile: string
     sessionId: string
     startedAt: number
+    input: string | null
   }) => string | null
   wait?: (ms: number, signal?: AbortSignal) => Promise<void>
 }
@@ -92,6 +93,21 @@ async function runGone(options: FollowOptions): Promise<void> {
   const sessionId =
     row.session_id ??
     (parsed.success ? `score-${parsed.data.room_id}-${parsed.data.agent_id}` : null)
+  const intent = z
+    .object({ payload: z.string() })
+    .safeParse(
+      db.sqlite
+        .prepare("SELECT payload FROM command_intents WHERE kind = 'start_run' AND result = ?")
+        .get(context.runId),
+    )
+  let input: string | null = null
+  if (intent.success)
+    try {
+      const sent = z.object({ input: z.string() }).safeParse(JSON.parse(intent.data.payload))
+      input = sent.success ? sent.data.input : null
+    } catch {
+      input = null
+    }
   let output: string | null = null
   if (options.recoverOutput && sessionId) {
     try {
@@ -99,6 +115,7 @@ async function runGone(options: FollowOptions): Promise<void> {
         profile: context.profile,
         sessionId,
         startedAt: Date.parse(row.started_at) / 1000,
+        input,
       })
     } catch {
       // Unreadable history is the same as no history: the run ends interrupted.

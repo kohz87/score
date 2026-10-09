@@ -16,6 +16,26 @@ export interface RecoverRequest {
   sessionId: string
   /** Run start, epoch seconds: only what Hermes wrote after it can belong to this run. */
   startedAt: number
+  /** The exact input Score sent: the turn's user message must be it, or nothing is recovered. */
+  input: string | null
+}
+
+// Hermes stores a string input verbatim as the user message; an input with images arrives as a list of parts.
+function isTurnInput(content: string | null, input: string): boolean {
+  if (content === null) return false
+  if (content.trim() === input.trim()) return true
+  try {
+    const parts: unknown = JSON.parse(content)
+    return (
+      Array.isArray(parts) &&
+      parts.some(
+        (part) =>
+          typeof part === 'object' && part !== null && (part as { text?: unknown }).text === input,
+      )
+    )
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -47,7 +67,7 @@ function compressionLineage(db: DatabaseSync, sessionId: string): string[] {
  * is still working (ends in a tool step) or left nothing gives null, so the caller marks the run interrupted.
  */
 export function recoverRunOutput(request: RecoverRequest, hermesHome?: string): string | null {
-  if (!ProfileNameSchema.safeParse(request.profile).success) return null
+  if (!ProfileNameSchema.safeParse(request.profile).success || !request.input) return null
   const path = hermesPaths(resolveHermesHome(hermesHome)).stateDb(request.profile)
   try {
     const db = openReadOnly(path)
@@ -61,7 +81,9 @@ export function recoverRunOutput(request: RecoverRequest, hermesHome?: string): 
         [...sessions, request.startedAt],
       )
       const start = all.findIndex((row) => row.role === 'user')
-      if (start === -1) return null
+      // Hermes can admit a run and stop before it stores the user message; the first later user message is then
+      // another turn (the owner resumed the session) and its answer must not complete this run or route hand-offs.
+      if (start === -1 || !isTurnInput(all[start]!.content, request.input)) return null
       // Only this turn: a later user message is another turn (the owner may have resumed the session in Hermes).
       const next = all.findIndex((row, index) => index > start && row.role === 'user')
       const rows = all.slice(start, next === -1 ? undefined : next)
