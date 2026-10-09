@@ -512,6 +512,21 @@ const cases = [
   ['WorkspaceRootRequestSchema', { path: '/x' }, { path: '' }],
   ['WorkspaceUploadResponseSchema', { path: 'a', size: 1 }, { path: 'a' }],
   ['WorkspaceConflictSchema', { etag: null }, { etag: 1 }],
+  [
+    'WorkspaceGitSchema',
+    { branch: 'main', changed: 2, ahead: 0, behind: 1 },
+    { branch: 'main', changed: -1, ahead: 0, behind: 0 },
+  ],
+  [
+    'AgentTodoSchema',
+    { id: 'a', content: 'Write tests', status: 'in_progress', parent: 'b' },
+    { id: 'a', content: 'Write tests', status: 'blocked' },
+  ],
+  [
+    'AgentTodosSchema',
+    { todos: [], revision: 1, updatedAt: '2026-01-01T00:00:00.000Z' },
+    { todos: [], revision: -1, updatedAt: 'x' },
+  ],
   ['KnowledgeAuthorSchema', { agentId: 'builder' }, 'someone'],
   [
     'KnowledgeInfoSchema',
