@@ -285,6 +285,10 @@ with durable intent and fenced launch registration). Until then Score says Stop 
 HTTPS setup guide (`/setup/https`), the API answers 426. `scripts/score tls` makes a local CA + server cert. Done when the
 brief's tests pass (docs/briefs/5.18.md) and the live LAN deployment runs on HTTPS.
 
+**5.19 Owner feedback round 1** · Model saves fast with clear feedback; config reads cached by file signature; Model tab
+shows the current model; Settings model edit fixed; plugins move to each agent's page; Advanced collapsible
+(docs/briefs/5.19.md).
+
 ---
 
 ## First five tasks
