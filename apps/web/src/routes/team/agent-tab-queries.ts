@@ -42,6 +42,7 @@ function useRefresh(agentId: string) {
 
 export function useModelAction(agentId: string) {
   const refresh = useRefresh(agentId)
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (req: { model: string; provider?: string }) =>
       AgentDetailSchema.parse(
@@ -51,7 +52,11 @@ export function useModelAction(agentId: string) {
           body: JSON.stringify(req),
         }),
       ),
-    onSuccess: () => refresh(),
+    onSuccess: async (detail) => {
+      // The response is the fresh detail: show it at once, then let the refetch confirm it.
+      queryClient.setQueryData(detailKey(agentId), detail)
+      await refresh()
+    },
   })
 }
 

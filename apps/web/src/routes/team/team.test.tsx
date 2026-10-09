@@ -663,9 +663,12 @@ test('the Model tab changes the model (a typed name has no provider) and shows t
   const panel = screen.getByRole('tabpanel')
   expect(within(panel).getByText('Model Two')).toBeDefined()
   const form = within(panel).getByRole('form', { name: 'Change model' })
+  // The picker opens on the agent's current model, which the model list need not contain.
+  expect((within(form).getByLabelText('Model') as HTMLInputElement).value).toBe('m-2')
+  expect(within(form).getByText(/Current: m-2/)).toBeDefined()
   fireEvent.change(within(form).getByLabelText('Model'), { target: { value: 'next/model' } })
   fireEvent.click(within(form).getByRole('button', { name: 'Change model' }))
-  expect(await screen.findByText('Model changed to next/model.')).toBeDefined()
+  expect(await screen.findByText('Saved: next/model')).toBeDefined()
   const put = calls.find((call) => call.method === 'PUT')!
   expect(put.path).toBe('/api/agents/builder/model')
   expect(put.body).toEqual({ model: 'next/model' })
@@ -686,6 +689,7 @@ test('a rejected model change explains itself and keeps the form', async () => {
   fireEvent.click(within(form).getByRole('button', { name: 'Change model' }))
   expect((await screen.findByRole('alert')).textContent).toMatch(/Hermes rejected the change/)
   expect((within(form).getByLabelText('Model') as HTMLInputElement).value).toBe('bad')
+  expect(within(screen.getByRole('alert')).getByRole('button', { name: 'Retry' })).toBeDefined()
 })
 
 test('the Skills tab toggles a skill and searches and installs from the hub', async () => {
