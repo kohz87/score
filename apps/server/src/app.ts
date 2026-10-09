@@ -11,6 +11,7 @@ import { registerAgentContextRoutes } from './http/agent-context.ts'
 import { registerAgentHistoryRoutes } from './http/agent-history.ts'
 import { registerAgentTabRoutes } from './http/agent-tabs.ts'
 import { registerWorkspaceRoutes } from './http/workspace.ts'
+import { createAgentWorkspaces } from './workspace/agent-workspace.ts'
 import { registerKnowledgeRoutes } from './http/knowledge.ts'
 import { registerKnowledgeAgentRoutes } from './http/knowledge-agents.ts'
 import { KnowledgeAgentApi } from './knowledge/agent-api.ts'
@@ -206,13 +207,14 @@ export function buildApp({
     app.decorate('media', mediaStore)
     registerMediaRoutes(app, mediaStore)
   }
+  const workspaces = createAgentWorkspaces(port, config)
   registerTaskRoutes(app, port, ingest, db, clock)
   registerReportRoutes(app, port, db, clock)
   registerAgentRoutes(app, port, ingest, db, clock)
   if (db && ingest)
     registerProfileRoutes(app, { db, ingest, port, config, ...(clock ? { clock } : {}) })
   registerAgentTabRoutes(app, port, ingest, db, clock)
-  registerWorkspaceRoutes(app, port, config)
+  registerWorkspaceRoutes(app, port, config, undefined, workspaces)
   if (knowledge) {
     registerKnowledgeRoutes(app, knowledge)
     if (db) registerKnowledgeAgentRoutes(app, new KnowledgeAgentApi(knowledge, db, clock))
@@ -222,7 +224,7 @@ export function buildApp({
   registerCurrencyRoutes(app, db)
   registerRulesRoutes(app, port, ingest, db, clock)
   if (db && ingest) {
-    const dispatch = registerRoomRoutes(app, port, db, ingest, clock, mediaStore)
+    const dispatch = registerRoomRoutes(app, port, db, ingest, clock, mediaStore, workspaces)
     registerConversationRoutes(app, { db, ingest, port, ...(clock ? { clock } : {}) })
     registerOutsideSessionRoutes(app, { db, ingest, port })
     const holds = createTaskHolds({ port, db, ingest })

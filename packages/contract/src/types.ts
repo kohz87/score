@@ -269,6 +269,22 @@ export const MessagePartSchema = z.discriminatedUnion('kind', [
   }),
   // An uploaded image (`/api/media/:mediaId`) attached to a human message.
   z.object({ kind: z.literal('image'), mediaId: z.string().min(1) }),
+  // An uploaded document (PLAN 5.30; `kind: 'file'` already means a changed file): PDF, DOCX, XLSX or text.
+  z.object({
+    kind: z.literal('document'),
+    mediaId: z.string().min(1),
+    name: z.string().min(1).max(200),
+    contentType: z.string().min(1).max(128),
+    size: z.int().positive(),
+    /** Where a PDF/DOCX/XLSX was saved in each addressed agent's workspace. */
+    saved: z.array(z.object({ agentId: AgentIdSchema, path: z.string().min(1) })).optional(),
+  }),
+  // A reference to a file in an agent's workspace (`workspace://<path>`); the bytes are not copied.
+  z.object({
+    kind: z.literal('workspace'),
+    agentId: AgentIdSchema,
+    path: z.string().min(1).max(4096),
+  }),
   z.object({ kind: z.literal('approval'), approvalId: z.string().min(1) }),
   z.object({
     kind: z.literal('review'),

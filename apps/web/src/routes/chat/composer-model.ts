@@ -7,7 +7,12 @@ import {
 
 export type { CommandResult }
 export type SlashCommand = { name: string; usage: string; description: string }
-export type SendResult = { message: Message; routedTo: string[]; command: CommandResult | null }
+export type SendResult = {
+  message: Message
+  routedTo: string[]
+  command: CommandResult | null
+  notices?: string[] | undefined
+}
 
 export function parseCommands(payload: unknown): SlashCommand[] {
   return CommandsResponseSchema.parse(payload).items

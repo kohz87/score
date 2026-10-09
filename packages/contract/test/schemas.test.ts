@@ -243,6 +243,11 @@ const cases = [
     { message: f.message, routedTo: ['lead'], command: null },
     { message: f.message, routedTo: ['lead'] },
   ],
+  [
+    'MessageAttachmentSchema',
+    { workspace: { agentId: 'lead', path: 'src/main.ts' } },
+    { workspace: { agentId: 'lead', path: '' } },
+  ],
   ['AgentFileSchema', { content: '', etag: 'a'.repeat(64) }, { content: '', etag: 'x' }],
   ['AgentFilePreviewSchema', { diff: '' }, {}],
   ['AgentFileWriteSchema', { etag: 'b'.repeat(64) }, { etag: '' }],
