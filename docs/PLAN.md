@@ -305,3 +305,11 @@ loading state + prefetch, `range=custom&from&to` (docs/briefs/5.21.md).
 5. **1.4b** `/api/stream` with subscription fence
 
 None of them need the live Hermes install.
+
+## Phase 6: Workspace and Knowledge (owner request 2026-10-09; design docs/briefs/6.0-workspace-knowledge.md)
+**6.1 Workspace** · Team › agent › Workspace: browse, preview, edit the agent's `terminal.cwd`; set the folder. Path safety
+and blocked list per the design. Done when the design's tests pass on the fake adapter and a live check on a test profile.
+**6.2 Knowledge server** · `~/score-vault` (git), index + FTS5 (migration), notes/search/backlinks/history API, stream event.
+**6.3 Knowledge web** · Knowledge destination: editor, preview, wikilinks, backlinks, history, search.
+**6.4 Agent knowledge tools** · score_bridge tools (search/read/list/write/append) over the bridge, attributed, limited.
+
