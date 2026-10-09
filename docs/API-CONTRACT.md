@@ -312,6 +312,10 @@ expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a mana
       window (renewing counts as activity); that browser's cookie is re-sent on its next request.
     - `POST /api/session/browsers/:id/revoke` `{ password }` → `204` (idempotent) · `POST /api/session/browsers/revoke-others`
       `{ password }` → `{ revoked: number }` (keeps only the caller).
+  - **Installable app (5.28).** `manifest.webmanifest` (`application/manifest+json`), the icons, `offline.html` and `sw.js` are
+    ordinary public static assets. `sw.js` is served with `Service-Worker-Allowed: /`. The worker caches the app shell only
+    (`/index.html`, `/assets/*`, the manifest and icons) and never touches `/api/*`, `/s/*`, `/bridge/*`, `/setup/*` or `/pair`
+    (pairing tokens never pass through it); page loads are network-first and show `offline.html` when Score can't be reached.
   - **Passkeys (5.28).** WebAuthn credentials that sign a browser in; the session they create is a normal paired-browser
     session (same cookie, 30-day limit, 7-day idle window, revoke, renew, rate limits). Table `passkeys` (migration 0037):
     credential id, RP ID, public key, sign count, transports, label, created/last used, flagged. They need a **domain name**:

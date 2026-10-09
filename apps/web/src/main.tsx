@@ -21,8 +21,10 @@ import { createStreamClient } from './data/stream.ts'
 import { createStreamQueryRegistry } from './data/resync.ts'
 import { clearBrowserSession } from './data/session.ts'
 import { applyTheme, readTheme } from './data/theme.ts'
+import { registerServiceWorker } from './pwa/service-worker.ts'
 
 applyTheme(readTheme())
+registerServiceWorker()
 
 const queryClient = createQueryClient()
 const stream = createStreamClient()

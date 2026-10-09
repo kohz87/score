@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Outlet } from 'react-router'
 import { CommandPalette } from './CommandPalette.tsx'
+import { UpdateBanner } from '../pwa/UpdateBanner.tsx'
 import { TopBar } from './TopBar.tsx'
 
 export function AppShell() {
@@ -37,6 +38,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <UpdateBanner />
       {commandOpen && <CommandPalette onClose={closeCommand} />}
     </div>
   )
