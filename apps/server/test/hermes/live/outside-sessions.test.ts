@@ -125,6 +125,26 @@ test('reads user and assistant text only, in order, redacted, never modifying th
   expect(fingerprint(`${fixture.home}/state.db`)).toBe(first)
 })
 
+// audit4-c 5: undone and display-only rows stay out, and a long session keeps its newest end.
+test('an import skips undone and display-only rows and keeps the newest messages of a long session', () => {
+  session('long', { title: 'Long', count: 1100 })
+  say('long', 'user', 'undone question', sec - 5000)
+  db.prepare("UPDATE messages SET active = 0 WHERE content = 'undone question'").run()
+  say('long', 'assistant', 'display only note', sec - 4990)
+  db.prepare("UPDATE messages SET display_kind = 'note' WHERE content = 'display only note'").run()
+  db.exec('BEGIN')
+  for (let i = 0; i < 1005; i++)
+    say('long', i % 2 === 0 ? 'user' : 'assistant', `line ${i}`, sec - 4000 + i)
+  db.exec('COMMIT')
+  const history = readOutsideSession('default', 'long', fixture.home, NOW)!
+  const texts = history.messages.map((message) => message.text)
+  expect(texts).toHaveLength(1000)
+  expect(texts[0]).toBe('line 5')
+  expect(texts.at(-1)).toBe('line 1004')
+  expect(texts).not.toContain('undone question')
+  expect(texts).not.toContain('display only note')
+})
+
 test('unknown, automation and Score-made sessions are not readable', () => {
   session('cron-job', { source: 'cron' })
   session('score-x-y', { source: 'api_server' })
