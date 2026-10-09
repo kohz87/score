@@ -1240,7 +1240,7 @@ test('the Model tab adds and removes aliases; an alias with its own endpoint is 
     call.method === 'PUT' && call.path.endsWith('/model-settings')
       ? json({
           ...modelSettings,
-          aliases: call.body.aliases.map((alias: { name: string }) => ({
+          aliases: (call.body.aliases as { name: string }[]).map((alias: { name: string }) => ({
             ...alias,
             editable: true,
           })),
