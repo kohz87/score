@@ -1252,6 +1252,7 @@ test('retry sends the original admitted input again, not the room as it is now (
   const retried = rows.find((row) => row.message_id === first.messageId)!
   expect(retried.admission_input).toBe(rows[0]!.admission_input)
   expect(retried.admission_input).not.toContain('CANCELLED')
+})
 
 // audit4-c 1: deleting a message must not leave its replies alive.
 test('deleting a message fails its pending replies and refuses while one is streaming', async () => {
