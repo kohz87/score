@@ -270,3 +270,11 @@ test('the pairing link comes with a QR code that goes away when the link expires
   await screen.findByText(/That link expired/)
   expect(screen.queryByRole('img', { name: 'QR code for the pairing link' })).toBeNull()
 })
+
+test('the pairing page offers a passkey sign-in only on a domain name in a browser that supports it', async () => {
+  vi.stubGlobal('PublicKeyCredential', function PublicKeyCredential() {})
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
+  // jsdom's host is "localhost", which counts as a domain for passkeys.
+  pairPage()
+  expect(await screen.findByRole('button', { name: 'Sign in with a passkey' })).toBeDefined()
+})

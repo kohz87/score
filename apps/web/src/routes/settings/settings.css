@@ -828,3 +828,10 @@
   display: grid;
   gap: 12px;
 }
+.plugins-sendkey {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.plugins-sendkey p {
+  margin: 0;
+}

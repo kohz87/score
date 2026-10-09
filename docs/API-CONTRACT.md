@@ -274,7 +274,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 - `POST /api/session/pair` `{ token: string }` → `204` + `Set-Cookie: score_session=…` (one-time token printed by
   the server on its terminal). `GET /api/session` → `{ paired: boolean }`. `DELETE /api/session` → `204`.
 - **Remote access mode** (`SCORE_REMOTE=1`, ARCHITECTURE D7.2; absent in local mode). The server denies every request that
-  lacks a paired session except this exact public list: `POST /api/session/pair`, `GET /api/session` (boolean only),
+  lacks a paired session except this exact public list: `POST /api/session/pair`, the two passkey sign-in routes (5.28), `GET /api/session` (boolean only),
   `GET /api/health` (`{ ok, contract }` only) and the built static web assets (`GET` only). HEAD, encoded aliases, previews,
   `/api/stream`, media and all other routes return `401 not_paired`; a Host not in `SCORE_PUBLIC_ORIGINS` returns `403`.
   Mutations also need an allowed `Origin` (missing or `null` is refused). Private responses carry `Cache-Control: no-store`.
@@ -313,6 +313,28 @@ expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a mana
       window (renewing counts as activity); that browser's cookie is re-sent on its next request.
     - `POST /api/session/browsers/:id/revoke` `{ password }` → `204` (idempotent) · `POST /api/session/browsers/revoke-others`
       `{ password }` → `{ revoked: number }` (keeps only the caller).
+  - **Installable app (5.28).** `manifest.webmanifest` (`application/manifest+json`), the icons, `offline.html` and `sw.js` are
+    ordinary public static assets. `sw.js` is served with `Service-Worker-Allowed: /`. The worker caches the app shell only
+    (`/index.html`, `/assets/*`, the manifest and icons) and never touches `/api/*`, `/s/*`, `/bridge/*`, `/setup/*` or `/pair`
+    (pairing tokens never pass through it); page loads are network-first and show `offline.html` when Score can't be reached.
+  - **Passkeys (5.28).** WebAuthn credentials that sign a browser in; the session they create is a normal paired-browser
+    session (same cookie, 30-day limit, 7-day idle window, revoke, renew, rate limits). Table `passkeys` (migration 0035):
+    credential id, RP ID, public key, sign count, transports, label, created/last used, flagged. They need a **domain name**:
+    the RP ID is the host of the browser's `Origin`, which must be one of the allowed origins; an IP address (the LAN
+    address) is refused with `409 passkeys_unavailable`, and `localhost` works. Ceremonies always require user verification
+    (`residentKey: 'preferred'`, ES256 and RS256, no attestation). Challenges are single-use, expire after 5 minutes, and a
+    registration challenge is bound to the paired session that asked (an authentication challenge to the caller's address);
+    every verification failure is `401 passkey_failed`.
+    - `GET /api/session/passkeys` (paired) → `{ available: boolean; rpId: string | null; items: { id; label; createdAt: iso;
+      lastUsedAt: iso | null; flagged: boolean }[] }` (`PasskeysSchema`; `available` is false on an IP address).
+    - `POST /api/session/passkeys/registration-options` `{ password; label? }` (paired + security password) → WebAuthn
+      creation options (JSON). `POST /api/session/passkeys` `{ response }` (paired) → `201` the new item.
+    - `POST /api/session/passkeys/:id/remove` `{ password }` → `204`. Removing every passkey leaves pairing links working;
+      "Terminate all other pairings" does not remove passkeys.
+    - Public (remote guard) and rate limited like pairing: `POST /api/session/passkey/authentication-options` → WebAuthn request
+      options (no credential list; discoverable credentials) and `POST /api/session/passkey/authentication` `{ response }` →
+      `204` + `Set-Cookie: score_session=…`. A sign-count regression (once a counter is in use it must grow) refuses the
+      assertion and flags the credential, which then no longer signs in until it is removed.
   - Paired browsers' cookies are re-sent at most hourly with Max-Age = the session's remaining lifetime.
 - **Log viewer (5.29).** `GET /api/system/logs?level=info|warn|error&q=&limit=` (paired browsers only, in every mode; `limit`
   1 to 2000, default 500) → `{ available: boolean; items: { time: iso | null; level: 'info' | 'warn' | 'error'; message: string;

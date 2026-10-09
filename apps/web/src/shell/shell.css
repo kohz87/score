@@ -279,3 +279,29 @@
     display: none;
   }
 }
+
+.update-banner {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 18px;
+  border-radius: 999px;
+  background: var(--rules-panel);
+  color: #fff;
+  box-shadow: 0 8px 24px rgb(18 19 26 / 25%);
+}
+.update-banner button {
+  font: inherit;
+  font-weight: 600;
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 16px;
+  background: #fff;
+  color: #12131a;
+  cursor: pointer;
+}

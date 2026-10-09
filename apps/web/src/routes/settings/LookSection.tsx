@@ -4,6 +4,7 @@ import { DisplayCurrencySchema } from '@score/contract'
 import { apiFetch } from '../../data/api.ts'
 import { currencyKey, useDisplayCurrency } from '../../data/currency.ts'
 import '../../components/plugin-cards.css'
+import { isTouchDevice, readSendKey, saveSendKey, type SendKey } from '../../data/send-key.ts'
 import { saveTheme, readTheme, themeChoices, type ThemeChoice } from '../../data/theme.ts'
 
 const themeLabels: Record<ThemeChoice, string> = { light: 'Light', dark: 'Dark', system: 'System' }
@@ -11,7 +12,7 @@ const themeLabels: Record<ThemeChoice, string> = { light: 'Light', dark: 'Dark',
 function ThemeCard() {
   const [theme, setTheme] = useState<ThemeChoice>(readTheme)
   return (
-    <div className="plugins-card plugins-theme">
+    <div className="plugins-card plugins-theme plugins-sendkey">
       <span className="plugins-card-name" id="plugins-theme-label">
         Theme
       </span>
@@ -40,6 +41,50 @@ function ThemeCard() {
       </div>
     </div>
   )
+}
+
+const sendKeyLabels: Record<SendKey, string> = { enter: 'Enter', 'ctrl-enter': 'Ctrl+Enter' }
+
+function SendKeyCard() {
+  const [choice, setChoice] = useState<SendKey>(readSendKey)
+  return (
+    <div className="plugins-card plugins-theme plugins-sendkey">
+      <span className="plugins-card-name" id="plugins-sendkey-label">
+        Send messages with
+      </span>
+      <div
+        role="radiogroup"
+        aria-labelledby="plugins-sendkey-label"
+        className="plugins-theme-choices"
+      >
+        {(Object.keys(sendKeyLabels) as SendKey[]).map((option) => (
+          <button
+            key={option}
+            type="button"
+            role="radio"
+            aria-checked={choice === option}
+            className="plugins-theme-choice"
+            onClick={() => {
+              setChoice(option)
+              saveSendKey(option)
+            }}
+          >
+            {sendKeyLabels[option]}
+          </button>
+        ))}
+      </div>
+      <p className="settings-muted">
+        {sendKeyNote(choice)}
+        {isTouchDevice() && ' On this touch screen Enter always adds a new line: tap Send.'}
+      </p>
+    </div>
+  )
+}
+
+function sendKeyNote(choice: SendKey): string {
+  return choice === 'enter'
+    ? 'Enter sends; Shift+Enter adds a new line.'
+    : 'Ctrl+Enter (or Cmd+Enter) sends; Enter adds a new line.'
 }
 
 function CurrencyCard() {
@@ -115,6 +160,7 @@ export function LookSection() {
       </div>
       <div className="look-stack">
         <ThemeCard />
+        <SendKeyCard />
         <CurrencyCard />
       </div>
     </section>

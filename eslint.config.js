@@ -12,6 +12,11 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.node } },
   },
   {
+    // The service worker and offline page are plain scripts served from public/.
+    files: ['apps/web/public/*.js'],
+    languageOptions: { globals: { ...globals.serviceworker, ...globals.browser } },
+  },
+  {
     files: ['apps/web/**/*.{ts,tsx}'],
     languageOptions: { globals: { ...globals.browser } },
     plugins: { 'react-hooks': reactHooks },

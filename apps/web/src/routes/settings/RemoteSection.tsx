@@ -11,6 +11,7 @@ import { apiFetch } from '../../data/api.ts'
 import { copyText, selectText } from '../../data/clipboard.ts'
 import { QrCode } from '../../components/QrCode.tsx'
 import { announceLogout, remoteTransport } from '../../data/session.ts'
+import { PasskeysPanel } from './PasskeysPanel.tsx'
 
 const browsersKey = ['session', 'browsers'] as const
 const securityKey = ['session', 'security'] as const
@@ -415,6 +416,8 @@ export function RemoteSection() {
       {actionError && <p role="alert">{actionError}</p>}
       {notice && !actionError && <p role="status">{notice}</p>}
       {browsers.isError && <p role="alert">Could not load paired browsers.</p>}
+
+      {passwordSet && <PasskeysPanel password={password} origins={origins} />}
 
       <button
         className="settings-pill settings-start"

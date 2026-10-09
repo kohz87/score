@@ -39,11 +39,12 @@ import { registerAgentPauseRoutes } from './http/agent-pause.ts'
 import { registerWatchRoutes } from './http/watch.ts'
 import { registerApprovalRoutes } from './http/approvals.ts'
 import { registerErrorHandlers } from './errors.ts'
-import { registerCsrfGuard } from './auth/csrf.ts'
+import { allowedOriginsFor, registerCsrfGuard } from './auth/csrf.ts'
 import { registerRemoteGuard } from './auth/remote.ts'
 import { registerHttpsGuide } from './http/https-guide.ts'
 import { registerWebAssets, type WebAssets } from './http/web-assets.ts'
 import { PairingService } from './auth/pairing.ts'
+import { PasskeyService } from './auth/passkeys.ts'
 import type { SessionStore } from './auth/session-store.ts'
 import { registerCurrencyRoutes } from './http/currency.ts'
 import { registerLogRoutes } from './http/logs.ts'
@@ -323,6 +324,7 @@ export function buildApp({
     pairingOrigin,
     securityPassword,
     config.remote ? config.remote.origins : [pairingOrigin],
+    db ? new PasskeyService(db, clock, allowedOriginsFor(config)) : undefined,
   )
   if (db)
     registerShareRoutes(app, {

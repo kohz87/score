@@ -9,6 +9,7 @@ const contentTypes: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
+  '.webmanifest': 'application/manifest+json',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
 }
@@ -81,7 +82,10 @@ export function registerWebAssets(
   for (const [path, asset] of assets)
     app.get(path, async (_request, reply) => {
       const result = path === '/index.html' ? index : asset
-      return withSecurityHeaders(reply).type(result.type).send(result.body)
+      const response = withSecurityHeaders(reply)
+      // The worker controls the whole app, so it must be allowed to take the root scope.
+      if (path === '/sw.js') response.header('service-worker-allowed', '/')
+      return response.type(result.type).send(result.body)
     })
   for (const path of ['/', '/pair'])
     app.get(path, async (_request, reply) =>

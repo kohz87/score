@@ -4,6 +4,7 @@ import { AdvancedSection } from './AdvancedSection.tsx'
 import { ConnectionsSection } from './ConnectionsSection.tsx'
 import { RulesSection } from './RulesSection.tsx'
 import { LookSection } from './LookSection.tsx'
+import { NotificationsSection } from './NotificationsSection.tsx'
 import { ProvidersSection } from './ProvidersSection.tsx'
 import { HermesVersionBanner } from './HermesVersionBanner.tsx'
 import { KnowledgeSection } from '../knowledge/KnowledgeSection.tsx'
@@ -18,6 +19,7 @@ const sections = [
   { id: 'connections', label: 'Connections', built: true },
   { id: 'rules', label: 'Rules and approvals', built: true },
   { id: 'look', label: 'Look', built: true },
+  { id: 'notifications', label: 'Notifications', built: true },
   { id: 'knowledge', label: 'Knowledge', built: true },
   { id: 'shares', label: 'Shares', built: true },
   { id: 'advanced', label: 'Advanced', built: true },
@@ -44,6 +46,7 @@ export function SettingsPage() {
         <ConnectionsSection agents={agents} />
         <RulesSection agents={agents} />
         <LookSection />
+        <NotificationsSection />
         <KnowledgeSection />
         <SharesSection />
         <AdvancedSection />
