@@ -676,3 +676,30 @@
   color: var(--ink-muted);
   font-size: 13px;
 }
+
+/* Kanban attempts of a step (5.17a-1). */
+.flow-attempts h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.flow-attempts ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+.flow-attempts a {
+  color: var(--ink);
+  font-weight: 600;
+}
+.flow-attempts__who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.flow-attempts__meta {
+  display: block;
+  color: var(--ink-muted);
+}

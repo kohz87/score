@@ -306,3 +306,61 @@ test('?node= selects that step when the flow opens', async () => {
   )
   expect(requests.some((request) => request.url === '/api/flow/nodes/task%3Astream')).toBe(false)
 })
+
+test('a step worked on by attempts lists them, reads tools as not observed and spend as partial', async () => {
+  const attempt = (id: string, over: object = {}) => ({
+    id,
+    kind: 'kanban' as const,
+    agentId: 'builder',
+    role: 'implementer' as const,
+    status: 'completed' as const,
+    closureReason: null,
+    startedAt: '2026-10-08T21:00:00.000Z',
+    endedAt: '2026-10-08T21:10:00.000Z',
+    observationEndedAt: null,
+    evidence: 'proven' as const,
+    taskId: 't1',
+    task: { taskId: 't1', historyId: 'h', current: true },
+    order: ['2026-10-08T21:00:00.000Z', 1] as [string, number],
+    refusedUpdates: 0,
+    tools: null,
+    session: null,
+    model: null,
+    ...over,
+  })
+  fixture.detail = {
+    ...fixture.detail,
+    model: null,
+    tools: null,
+    attempts: [
+      attempt('kr_1'),
+      attempt('kr_2', {
+        agentId: null,
+        status: 'ended_unknown',
+        endedAt: null,
+        observationEndedAt: '2026-10-08T21:20:00.000Z',
+        evidence: 'partial',
+        task: { taskId: 't0', historyId: 'old', current: false },
+      }),
+    ],
+  }
+  fixture.flow.stats = { ...fixture.flow.stats, spendUsd: null, attempts: 2 }
+  setup()
+  const inspector = await screen.findByRole('complementary', { name: 'Selected step' })
+  const attempts = await within(inspector).findByRole('region', { name: 'Attempts' })
+  const rows = within(attempts).getAllByRole('listitem')
+  expect(rows).toHaveLength(2)
+  expect(rows[0]!.textContent).toContain('builder')
+  expect(rows[1]!.textContent).toContain('Unattributed')
+  expect(rows[1]!.textContent).toContain('no longer observed since')
+  expect(rows[1]!.textContent).toContain('Provenance unknown')
+  expect(within(rows[0]!).getByRole('link', { name: 'Completed' }).getAttribute('href')).toBe(
+    '/tasks/t1',
+  )
+  expect(within(rows[1]!).getByRole('link', { name: 'Ended (unknown)' }).getAttribute('href')).toBe(
+    '/attempts/kr_2',
+  )
+  expect(within(inspector).getAllByText('Not observed')).toHaveLength(2)
+  const stats = screen.getByRole('region', { name: 'This run so far' })
+  expect(within(stats).getByText('partial')).toBeTruthy()
+})
