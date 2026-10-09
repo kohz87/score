@@ -437,6 +437,14 @@ function demoReply(
   input: string,
   base: { text: string; tools: string[] },
 ): { text: string; tools: string[] } {
+  // The room summary run (PLAN 7.4a) starts with a fixed instruction.
+  if (input.startsWith('Summarise the earlier messages of this room')) {
+    const earlier = input.split('\n').filter((row) => /^(you|[a-z][\w-]*): /.test(row)).length
+    return {
+      text: `Summary of ${earlier} earlier messages: the team agreed on the plan, split the work and left the release date open.`,
+      tools: [],
+    }
+  }
   const message = input.split('\n\nRoom context:')[0] ?? ''
   if (/markdown demo/i.test(message))
     return {

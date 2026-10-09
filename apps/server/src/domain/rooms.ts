@@ -12,6 +12,8 @@ import {
 import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
+import { markStaleSummaries } from './summary-stale.ts'
+import { autoSummaryOf } from './room-summaries.ts'
 
 export const RoomRowSchema = z.object({
   id: z.string(),
@@ -27,6 +29,7 @@ export const RoomRowSchema = z.object({
   project_id: z.string().nullable(),
   tags: z.string().nullable(),
   imported_from: z.string().nullable(),
+  auto_summary: z.string().nullable(),
 })
 export const MessageRowSchema = z.object({
   id: z.string(),
@@ -123,6 +126,7 @@ export function readRoom(sqlite: DatabaseSync, id: string, now: string): Room {
     projectId: row.project_id,
     tags: row.tags === null ? nameTags(row.name) : z.array(z.string()).parse(JSON.parse(row.tags)),
     importedFrom: importedFrom(sqlite, row),
+    autoSummary: autoSummaryOf(row.auto_summary),
   })
 }
 
@@ -314,6 +318,7 @@ export function deleteMessage(
   releaseMessageMedia(sqlite, [messageId])
   return [
     { type: 'message.deleted', data: { roomId, messageId } },
+    ...markStaleSummaries(sqlite, roomId, now),
     ...roomChanged(sqlite, roomId, now, before),
   ]
 }
