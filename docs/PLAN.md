@@ -332,6 +332,10 @@ previews in chat and workspace, attach workspace files to a message.
 (per agent, through Hermes).
 **5.32 Profile import** · Restore an agent from an exported bundle (export exists), with a preview of what it contains.
 
+**5.33 Rewind a conversation** · Owner 2026-10-09: editing or deleting your message hides it and everything after it as a
+previous version (switcher to view), and rewinds each agent's Hermes session to before it through the bridge plugin
+(Hermes's own session rewind, as /undo). Refuses while agents are answering; memory is not rewound (docs/briefs/5.33.md).
+
 ---
 
 ## First five tasks
