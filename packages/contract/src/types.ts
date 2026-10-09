@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { RoomImportSchema } from './conversations.ts'
 
 export const AgentIdSchema = z.string().min(1)
 export type AgentId = z.infer<typeof AgentIdSchema>
@@ -213,6 +214,14 @@ export const RoomSchema = z.object({
   unread: z.int().nonnegative(),
   activeAgents: z.array(AgentIdSchema),
   channels: z.array(z.object({ platform: z.string(), label: z.string() })),
+  /** Organising (PLAN 5.26), Score-side only; the server always sends them, older fixtures and events may omit them. Pinned rooms list first; archived ones sit behind "Show archived". */
+  pinned: z.boolean().optional(),
+  archived: z.boolean().optional(),
+  projectId: z.string().min(1).nullable().optional(),
+  /** Explicit tags, else the `#tag` words after the first word of the name. */
+  tags: z.array(z.string()).optional(),
+  /** Set on a room made from a Hermes session that Score did not start. */
+  importedFrom: RoomImportSchema.nullable().optional(),
 })
 export type Room = z.infer<typeof RoomSchema>
 

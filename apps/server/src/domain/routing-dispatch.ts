@@ -3,6 +3,7 @@ import type { ScoreDb } from '../db/index.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { HttpError } from '../errors.ts'
+import { continuationFor, markSummarySent } from './outside-sessions.ts'
 import { failMessageRun, MessageRunSchema, roomRunInput } from './message-runs.ts'
 
 /** Durable queue; only one active turn per (room, agent). */
@@ -77,11 +78,18 @@ export class RoutingDispatcher {
           identity: `input:${job.turn_id}`,
           apply: ({ sqlite }) => {
             if (job.admission_input !== null) return []
+            let input = roomRunInput(sqlite, job.room_id, job.input, job.parent_message_id)
+            // An imported room whose Hermes session could not be continued: the first turn carries a recap (PLAN 5.26).
+            const continuation = continuationFor(sqlite, job.room_id, job.agent_id)
+            if (continuation.summaryTurn && continuation.summary) {
+              input = `${input}\n\n${continuation.summary}`
+              markSummarySent(sqlite, job.room_id, job.agent_id)
+            }
             sqlite
               .prepare(
                 'UPDATE message_runs SET admission_input = ? WHERE turn_id = ? AND admission_input IS NULL',
               )
-              .run(roomRunInput(sqlite, job.room_id, job.input, job.parent_message_id), job.turn_id)
+              .run(input, job.turn_id)
             return []
           },
         })
@@ -95,7 +103,9 @@ export class RoutingDispatcher {
           agentId: job.agent_id,
           input: frozen.admission_input!,
           turnId: job.turn_id,
-          sessionId: `score-${job.room_id}-${job.agent_id}`,
+          sessionId:
+            this.db.read((sqlite) => continuationFor(sqlite, job.room_id, job.agent_id))
+              .sessionId ?? `score-${job.room_id}-${job.agent_id}`,
           ...(job.model ? { model: job.model } : {}),
           ...(images.length ? { images } : {}),
         })

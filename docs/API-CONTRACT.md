@@ -510,6 +510,80 @@ contentType: string }`. Types come from the bytes (png, jpeg, gif, webp); `400` 
   own message only, never hand-offs between agents): total raw size up to 6 MB per message; images that do not fit
   or are no longer stored are skipped and the run's text gets a short note saying so.
 
+### Conversations: organise, search, export (PLAN 5.26; schemas in `packages/contract/src/conversations.ts`)
+
+- `Room` also carries `pinned`, `archived` (booleans), `projectId: string | null`, `tags: string[]` (explicit tags, else the
+  `#tag` words after the first word of the name) and `importedFrom: RoomImport | null` (§ Outside sessions). Room names may
+  end in tag words: `#launch #q4 #urgent`. Score-side only; `room.upserted` carries them.
+- `GET /api/rooms` also returns `projects: RoomProject[]` (`{ id; name; color: '#RRGGBB' }`, by name).
+- `PATCH /api/rooms/:roomId` also takes `pinned?`, `archived?`, `projectId?: string | null` (`404` for an unknown project),
+  `tags?: string[] | null` (`null` = follow the name's tags again; at most 12, `^[a-z0-9][a-z0-9-]{0,31}$`).
+- **H** `POST /api/room-projects` `{ name; color }` → `RoomProject` (`409 conflict` on a name already used, case-insensitive) ·
+  **H** `PATCH /api/room-projects/:id` `{ name?; color? }` → `RoomProject` · **H** `DELETE /api/room-projects/:id` → `204`
+  (its rooms leave the project). Stream: `room-project.upserted` (the project) and `room-project.deleted` (`{ id }`); a
+  deleted project also emits `room.upserted` for each room that was in it.
+- `GET /api/search/messages?q=&roomId?&limit=` (limit ≤ 50, default 20) → `{ items: { messageId; roomId; roomName;
+  author; createdAt; snippet }[] }`: FTS5 over the text parts of finished, undeleted messages (a streaming reply is
+  indexed once it completes); the query is tokenised into quoted terms (no FTS syntax from the user, the last word is a
+  prefix); `[[`/`]]` in `snippet` mark matches (redacted). Used by the ⌘K palette ("Messages") and the Chat search box;
+  the web opens a hit at `/chat/:roomId?message=:messageId` and scrolls to it.
+- `GET /api/rooms/:roomId/export.md` and `.json` → a download (`Content-Disposition: attachment`): header (room, members,
+  exported at) and the room's finished, undeleted messages with author, time, text (redacted), `file` parts as
+  path and counts, `image` parts as media ids (no bytes). Tool, thinking, plan, review and approval parts are left out.
+
+### Share links (PLAN 5.26; security design by the lead, 2026-10-09)
+
+A share is a **frozen snapshot** of one room, readable by anyone who has the link and can reach Score (LAN or Tailscale; the
+create dialog says so). Nothing live is exposed.
+
+- **H** `POST /api/rooms/:roomId/shares` `{ password; expiresInDays?: 1..30 (default 7); includeImages?: false }` →
+  `{ id; url; expiresAt }`. `password` is the security password, with the same check, limits and errors as pairing
+  management (`409 password_not_set`, `403 wrong_password`, `429 too_many_attempts`). `url` = `<public origin>/s/<token>`.
+  No `Idempotency-Key` receipt (the body holds the password; a replay would mint a second token).
+- Snapshot content: the room's finished, undeleted messages as author name, time and the **text parts only** (Markdown
+  source), each through `redact()`; with `includeImages` the media ids of `image` parts are copied into the share's own list.
+  No tool, thinking, file-path, plan, review or approval parts, no room settings, member ids, workspace paths or profile
+  data. The room's later edits and deletions do not change it. At most the latest 2000 messages.
+- Token: 32 random bytes (base64url, 43 chars). Only its SHA-256 is stored (`room_shares.token_hash`); the token is shown once.
+- `GET /api/shares` → `{ items: ShareSummary[] }` (`{ id; roomId; roomName; createdAt; expiresAt; views; includeImages;
+  status: 'active' | 'expired' }`, newest first; revoked shares are gone) · `GET /api/rooms/:roomId/shares` → the same, active
+  ones of that room (Chat › room menu › Share…, Settings › Shares lists all).
+- **H** `DELETE /api/shares/:id` → `204` (no password needed; idempotent; `404` unknown id). Revoking withdraws the link at once
+  and drops the stored snapshot.
+- **`GET /s/:token`, the only unauthenticated route this task adds** (it is public in remote mode too, GET only):
+  hash lookup (constant-time compare), then a static HTML page rendered on the server: text escaped, Markdown rendered
+  without raw HTML (links only to http(s)/mailto, images shown as their alt text), no JavaScript. Headers:
+  `Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline'`, `X-Robots-Tag: noindex`,
+  `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`.
+  An unknown, malformed, expired or revoked token gets the **same** `404` HTML page. Rate limit: 30 requests per minute per
+  IP address (every `/s/` request counts, known token or not), then `429` (static page). Each successful page view adds to
+  `views`. Plain-HTTP requests get the HTTPS guide like everything else (5.18).
+- `GET /s/:token/media/:n` → the n-th image (0-based) of that share's own list, only when the share was made with
+  `includeImages`; anything else is the same `404` page. Same headers and rate limit.
+
+### Outside sessions (PLAN 5.26)
+
+Hermes sessions that Score did not start (Telegram, CLI, Discord, …), read through the adapter from each profile's `state.db`
+(opened read-only; Score never writes Hermes SQLite). Conversations only: cron, kanban, subagent and delegate sessions,
+Score's own runs (`score-<room>-<agent>`), compression children and empty sessions are left out.
+
+- `GET /api/outside-sessions` → `{ items: OutsideSession[]; unavailable: AgentId[] }` (`{ id; agentId; source; sourceLabel;
+  title; startedAt; messageCount; busy; roomId }`, newest first, at most 200 per agent). `title` = the session title, else
+  the first user message (redacted, cut to 120 characters). `busy` = not ended and active within the last 5 minutes.
+  `roomId` = the Score room made from it, if imported. `unavailable` = profiles whose database is missing or has a changed
+  schema.
+- **H** `POST /api/outside-sessions/import` `{ agentId; sessionId }` → `{ roomId; imported }`: a new room (name
+  `#<source>-<title> #imported #<source>`, lead and only member the agent, `importedFrom` set) holding read-only copies of
+  the session's user and assistant text (redacted, original times, at most the first 1000 messages, ids start with
+  `import:`; no stream events, nothing unread). Importing the same session again returns the same room with `imported: 0`.
+  `404` for an unknown agent or session.
+- **H** `POST /api/rooms/:roomId/continue-session` → `{ mode: 'same_session' | 'new_session' }`. `409 session_busy` while the
+  session is `busy`; `409 conflict` for a room that was not imported; `404` when the session is gone. `same_session`: the
+  gateway's run API takes the Hermes `session_id` (and loads its history), so the agent's new turns from this room run in the
+  imported session. `new_session` (a gateway without the run API): turns use the room's own session and the first one carries
+  a short recap of the imported conversation. `Room.importedFrom.continued` shows the outcome (event `room.upserted`).
+  Calling it again re-checks and updates the mode.
+
 ## 6. Approvals
 
 - **S** `GET /api/approvals?status=pending|all&agent=&cursor=` → `{ asOfSeq; items: Approval[]; nextCursor }`

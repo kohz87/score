@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { SearchSnippet } from '../components/SearchSnippet.tsx'
+import { messageHref, useMessageSearch } from '../data/message-search.ts'
 import { destinations } from './destinations.ts'
 
 export function CommandPalette({ onClose }: { onClose: () => void }) {
@@ -12,6 +14,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const options = destinations.filter(({ title }) =>
     title.toLowerCase().includes(search.trim().toLowerCase()),
   )
+  const messages = useMessageSearch(search, 8)
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
@@ -80,7 +83,28 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             </li>
           ))}
         </ul>
-        {options.length === 0 && <p>No destinations found.</p>}
+        {options.length === 0 && !messages.data?.length && <p>No destinations found.</p>}
+        {messages.data && messages.data.length > 0 && (
+          <section aria-label="Messages">
+            <h3 className="command-section">Messages</h3>
+            <ul className="command-options">
+              {messages.data.map((hit) => (
+                <li key={hit.messageId}>
+                  <Link
+                    to={messageHref(hit.roomId, hit.messageId)}
+                    className="command-hit"
+                    onClick={onClose}
+                  >
+                    <span className="command-hit-where">{hit.roomName}</span>
+                    <span>
+                      <SearchSnippet text={hit.snippet} />
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
     </div>
   )

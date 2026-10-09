@@ -200,6 +200,28 @@
 .command-options a:focus-visible {
   background: var(--subtle);
 }
+.command-section {
+  margin: 16px 0 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.command-section + .command-options {
+  margin-top: 4px;
+}
+.command-options a.command-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+.command-hit-where {
+  font-size: 12px;
+  color: var(--muted);
+}
 .pair-card {
   margin-top: 20px;
   padding: 22px 24px 26px;

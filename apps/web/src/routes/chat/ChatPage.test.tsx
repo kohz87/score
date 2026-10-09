@@ -19,7 +19,7 @@ import { createStreamClient } from '../../data/stream.ts'
 import { readFileSync } from 'node:fs'
 import { resetMessageDeletion } from './message-deletion.ts'
 import { stopEdit } from './message-edit.ts'
-import { messagesQuery, reduceMessages } from './queries.ts'
+import { messagesQuery, reduceMessages, roomsQuery } from './queries.ts'
 
 const agent: AgentSummary = {
   id: 'lead',
@@ -88,6 +88,7 @@ const pendingApproval: Approval = {
   refs: [],
 }
 let items: Message[]
+let searchHits: unknown[] = []
 let rooms: Room[]
 let filesInPlay: string[]
 let learned: { text: string; savedTo: string[]; at: string }[]
@@ -121,6 +122,7 @@ function emit(type: StreamEvent['type'], data: unknown, seq: number) {
 }
 beforeEach(() => {
   items = [message]
+  searchHits = []
   rooms = [room]
   filesInPlay = []
   learned = []
@@ -128,6 +130,7 @@ beforeEach(() => {
     const url = String(input)
     if (url.startsWith('/api/approvals?'))
       return response({ asOfSeq: 1, items: [pendingApproval], nextCursor: null })
+    if (url.startsWith('/api/search/messages')) return response({ items: searchHits })
     if (url === '/api/agents') return response({ asOfSeq: 1, items: [agent] })
     if (url === '/api/rooms') return response({ asOfSeq: 1, rooms, directs: [direct] })
     if (url.includes('/messages'))
@@ -820,4 +823,74 @@ test('message.updated sets editedBy on the cached original only', () => {
   const next = reduceMessages(data, event, 'general', true)
   expect(next.items[0]!.editedBy).toBe('n')
   expect(next.items[1]).toBe(reply)
+})
+
+test('searching messages lists hits that open the room at that message', async () => {
+  searchHits = [
+    {
+      messageId: 'message-one',
+      roomId: 'general',
+      roomName: 'general',
+      author: { kind: 'agent', agentId: 'lead' },
+      createdAt: '2026-10-08T10:00:00.000Z',
+      snippet: 'say [[hello]] to the team',
+    },
+  ]
+  const { router } = setup('/chat')
+  fireEvent.change(await screen.findByRole('searchbox', { name: 'Search messages' }), {
+    target: { value: 'hello' },
+  })
+  const results = await screen.findByRole('list', { name: 'Search results' })
+  expect((await within(results).findByText('hello')).tagName).toBe('MARK')
+  expect(
+    fetchMock.mock.calls.some(([url]) => String(url) === '/api/search/messages?q=hello&limit=20'),
+  ).toBe(true)
+  fireEvent.click(within(results).getByRole('link'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/chat/general'))
+  expect(router.state.location.search).toBe('?message=message-one')
+})
+test('opening a search hit scrolls to that message and highlights it', async () => {
+  const scroll = vi.fn()
+  Element.prototype.scrollIntoView = scroll
+  try {
+    items = [
+      message,
+      { ...message, id: 'target', streaming: false, parts: [{ kind: 'text', text: 'The needle' }] },
+    ]
+    setup('/chat/general?message=target')
+    await screen.findByText('The needle')
+    await waitFor(() => expect(scroll).toHaveBeenCalled())
+    expect(document.getElementById('message-target')!.className).toContain('chat-message--hit')
+    expect(document.getElementById('message-message-one')!.className).not.toContain(
+      'chat-message--hit',
+    )
+  } finally {
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+  }
+})
+test('project events keep the rooms list and its projects current', () => {
+  const data = { rooms: [room], directs: [direct], projects: [] }
+  const project = { id: 'p1', name: 'Launch', color: '#6B4EFF' }
+  const upserted = roomsQuery.reduce(data, {
+    type: 'room-project.upserted',
+    seq: 2,
+    ts: message.createdAt,
+    data: project,
+  })
+  expect(upserted.projects).toEqual([project])
+  const moved = roomsQuery.reduce(upserted, {
+    type: 'room.upserted',
+    seq: 3,
+    ts: message.createdAt,
+    data: { ...room, projectId: 'p1', pinned: true },
+  })
+  expect(moved.rooms[0]).toMatchObject({ projectId: 'p1', pinned: true })
+  expect(moved.projects).toEqual([project])
+  const deleted = roomsQuery.reduce(moved, {
+    type: 'room-project.deleted',
+    seq: 4,
+    ts: message.createdAt,
+    data: { id: 'p1' },
+  })
+  expect(deleted.projects).toEqual([])
 })

@@ -127,6 +127,8 @@ export const visualFixtures: Record<string, unknown> = {
   // The tab keyboard test lands on the History tab, which reads this.
   '/api/agents/builder/history': { items: [], nextCursor: null },
   '/api/rooms': RoomsSnapshotSchema.parse(recorded['/api/rooms']),
+  '/api/shares': { items: [] },
+  '/api/knowledge/agent-usage': { items: [] },
   '/api/rooms/room-activity-feed': RoomDetailSnapshotSchema.parse(
     recorded['/api/rooms/room-activity-feed'],
   ),
