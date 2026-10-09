@@ -228,3 +228,33 @@ test('continue here only works on imported rooms, for paired browsers', async ()
     ).statusCode,
   ).toBe(401)
 })
+
+// audit4-c 3: the busy check is repeated before each turn of a continued session.
+test('a continued session that becomes busy holds the turn, then fails it with session_busy', async () => {
+  const roomId = await importedRoom('lead', 'ext-telegram-1')
+  expect((await post(`/api/rooms/${roomId}/continue-session`)).statusCode).toBe(200)
+  const real = port.readOutsideSession.bind(port)
+  vi.spyOn(port, 'readOutsideSession').mockImplementation(async (agentId, sessionId) => {
+    const history = await real(agentId, sessionId)
+    return history && { ...history, session: { ...history.session, busy: true } }
+  })
+  let clock = Date.now()
+  vi.spyOn(Date, 'now').mockImplementation(() => clock)
+  await say(roomId, 'Anything left?', ['lead'])
+  await vi.waitFor(() => expect(port.readOutsideSession).toHaveBeenCalled())
+  expect(port.startRun).not.toHaveBeenCalled()
+  const state = () =>
+    db.sqlite
+      .prepare('SELECT state FROM message_runs WHERE room_id = ? ORDER BY created_at, rowid')
+      .get(roomId)?.state
+  expect(state()).toBe('pending')
+  clock += 11 * 60_000
+  await say(roomId, 'Still there?', ['lead'])
+  expect(port.startRun).not.toHaveBeenCalled()
+  expect(state()).toBe('failed')
+  const texts = db.sqlite
+    .prepare('SELECT parts FROM messages WHERE room_id = ? AND author_kind = ?')
+    .all(roomId, 'agent')
+    .map((row) => String(row.parts))
+  expect(texts.some((text) => text.includes('session_busy'))).toBe(true)
+})
