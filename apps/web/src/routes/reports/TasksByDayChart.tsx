@@ -78,6 +78,9 @@ function PatternBody({ kind }: { kind: PatternKind }) {
   }
 }
 
+// Past a month the per-bar totals would overlap; the accessible table still lists every day.
+const MAX_TOTAL_LABELS = 31
+
 function dayLabel(date: string, days: number, index: number): string {
   const [y, m, d] = date.slice(0, 10).split('-').map(Number)
   if (!y || !m || !d) return date
@@ -222,13 +225,15 @@ export function TasksByDayChart({ byDay, agents }: TasksByDayChartProps) {
                     </g>
                   )
                 })}
-                <text
-                  className="tasks-by-day__total"
-                  x={x + barWidth / 2}
-                  y={baseline - totals[index]! * unit - 8}
-                >
-                  {totals[index]}
-                </text>
+                {byDay.length <= MAX_TOTAL_LABELS && (
+                  <text
+                    className="tasks-by-day__total"
+                    x={x + barWidth / 2}
+                    y={baseline - totals[index]! * unit - 8}
+                  >
+                    {totals[index]}
+                  </text>
+                )}
                 <text className="tasks-by-day__label" x={x + barWidth / 2} y={baseline + 20}>
                   {dayLabel(day.date, byDay.length, index)}
                 </text>

@@ -225,3 +225,98 @@ test('shows an error with a retry when the report fails', async () => {
   expect(await screen.findByRole('alert')).toBeDefined()
   expect(screen.getByRole('button', { name: 'Try again' })).toBeDefined()
 })
+
+test('prefetches the other presets once the first report is up', async () => {
+  mount()
+  await screen.findByText('Summary for 7d.')
+  await waitFor(() => {
+    expect(calls.some((c) => c.startsWith('/api/reports?range=today'))).toBe(true)
+    expect(calls.some((c) => c.startsWith('/api/reports?range=30d'))).toBe(true)
+  })
+  // The prefetched range answers from cache at once.
+  fireEvent.click(screen.getByRole('button', { name: '30 days' }))
+  expect(await screen.findByText('Summary for 30d.')).toBeDefined()
+})
+
+test('a range switch shows a spinner, dims the old figures and marks the page busy', async () => {
+  let release: () => void = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (path: string) => {
+      calls.push(path)
+      // Only the 30 day request is slow; the prefetch of it is held back too.
+      if (path.startsWith('/api/reports?range=30d')) await gate
+      return respond(path)
+    }),
+  )
+  mount()
+  await screen.findByText('Summary for 7d.')
+  fireEvent.click(screen.getByRole('button', { name: '30 days' }))
+  const chip = screen.getByRole('button', { name: '30 days' })
+  await waitFor(() => expect(chip.querySelector('.reports-spinner')).not.toBeNull())
+  const body = document.querySelector('.reports-body')!
+  expect(body.getAttribute('aria-busy')).toBe('true')
+  // The previous numbers stay up, dimmed.
+  expect(screen.getByText('Summary for 7d.')).toBeDefined()
+  expect(body.classList.contains('reports-body--stale')).toBe(true)
+  release()
+  expect(await screen.findByText('Summary for 30d.')).toBeDefined()
+  await waitFor(() => expect(chip.querySelector('.reports-spinner')).toBeNull())
+  expect(body.getAttribute('aria-busy')).toBe('false')
+})
+
+test('a custom range is chosen in a popover, validated, shown in the chip and kept in the URL', async () => {
+  mount()
+  await screen.findByText('Summary for 7d.')
+  fireEvent.click(screen.getByRole('button', { name: 'Custom' }))
+  const dialog = screen.getByRole('dialog', { name: 'Custom range' })
+  const from = within(dialog).getByLabelText('From') as HTMLInputElement
+  const to = within(dialog).getByLabelText('To') as HTMLInputElement
+  const apply = within(dialog).getByRole('button', { name: 'Apply' }) as HTMLButtonElement
+  const today = to.max
+  expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  expect(from.max).toBe(today)
+
+  fireEvent.change(from, { target: { value: '2020-01-01' } })
+  expect(apply.disabled).toBe(true)
+  expect(within(dialog).getByRole('status').textContent).toMatch(/at most 366/)
+  fireEvent.change(from, { target: { value: '2020-01-10' } })
+  fireEvent.change(to, { target: { value: '2020-01-05' } })
+  expect(apply.disabled).toBe(true)
+  expect(within(dialog).getByRole('status').textContent).toMatch(/must not be after/)
+  fireEvent.change(to, { target: { value: today } })
+  fireEvent.change(from, { target: { value: today } })
+  expect(apply.disabled).toBe(false)
+
+  // Something in the current year, so the chip has no year.
+  const year = today.slice(0, 4)
+  fireEvent.change(from, { target: { value: `${year}-01-03` } })
+  fireEvent.change(to, { target: { value: `${year}-01-09` } })
+  fireEvent.click(apply)
+
+  expect(await screen.findByText('Summary for custom.')).toBeDefined()
+  expect(router.state.location.search).toBe(`?range=custom&from=${year}-01-03&to=${year}-01-09`)
+  expect(screen.getByRole('button', { name: '3 Jan – 9 Jan' }).getAttribute('aria-pressed')).toBe(
+    'true',
+  )
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(screen.getByRole('link', { name: 'Export CSV' }).getAttribute('href')).toContain(
+    `range=custom&from=${year}-01-03&to=${year}-01-09`,
+  )
+  expect(calls.some((c) => c.includes(`range=custom&from=${year}-01-03&to=${year}-01-09`))).toBe(
+    true,
+  )
+})
+
+test('a custom range in the URL survives a reload, and a bad one falls back to 7 days', async () => {
+  mount('/reports?range=custom&from=2025-01-03&to=2025-01-09')
+  expect(await screen.findByText('Summary for custom.')).toBeDefined()
+  expect(screen.getByRole('button', { name: '3 Jan 2025 – 9 Jan 2025' })).toBeDefined()
+  cleanup()
+  router.dispose()
+  registry.dispose()
+  stream.close()
+  mount('/reports?range=custom&from=2025-02-03&to=2025-01-09')
+  expect(await screen.findByText('Summary for 7d.')).toBeDefined()
+})

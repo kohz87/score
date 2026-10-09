@@ -112,3 +112,26 @@ test('30 days render all bars with sparse axis labels', () => {
   )
   expect(labels.length).toBeLessThan(10)
 })
+
+test.each([1, 2, 45, 366])(
+  'draws %i days without overflowing and keeps every day in the table',
+  (count) => {
+    const start = Date.UTC(2025, 0, 1)
+    const byDay = Array.from({ length: count }, (_, i) => ({
+      date: new Date(start + i * 86_400_000).toISOString().slice(0, 10),
+      perAgent: { lead: i % 3, builder: 1 },
+    }))
+    const { container } = render(<TasksByDayChart byDay={byDay} agents={agents} />)
+    expect(container.querySelectorAll('g[data-day]')).toHaveLength(count)
+    for (const rect of container.querySelectorAll('g[data-day] rect')) {
+      expect(Number(rect.getAttribute('width'))).toBeGreaterThan(0)
+    }
+    expect(container.querySelectorAll('.tasks-by-day__sr-only tbody tr')).toHaveLength(count)
+    // Past a month the per-bar totals and most axis labels would collide.
+    expect(container.querySelectorAll('.tasks-by-day__total').length).toBe(count <= 31 ? count : 0)
+    const labels = [...container.querySelectorAll('.tasks-by-day__label')].filter(
+      (t) => t.textContent,
+    )
+    expect(labels.length).toBeLessThanOrEqual(count <= 7 ? count : 8)
+  },
+)
