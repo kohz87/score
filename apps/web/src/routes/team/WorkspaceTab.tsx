@@ -1,5 +1,6 @@
-import { useRef, useState, type DragEvent, type FormEvent } from 'react'
+import { useRef, useState, type CSSProperties, type DragEvent, type FormEvent } from 'react'
 import { ApiError } from '../../data/api.ts'
+import { useTreeWidth, MAX_TREE, MIN_TREE } from './workspace-split.ts'
 import { WorkspaceFile } from './WorkspaceFile.tsx'
 import { join, parentOf, TreeLevel, type Selection } from './WorkspaceTree.tsx'
 import {
@@ -144,6 +145,8 @@ function Browser({
   const [notice, setNotice] = useState('')
   const [dragging, setDragging] = useState(false)
   const picker = useRef<HTMLInputElement>(null)
+  const grid = useRef<HTMLDivElement>(null)
+  const split = useTreeWidth(grid)
 
   const dir = selected ? (selected.kind === 'dir' ? selected.path : parentOf(selected.path)) : ''
   const crumbs = selected ? selected.path.split('/') : []
@@ -275,7 +278,11 @@ function Browser({
         )}
       </p>
       {settingFolder && folderForm}
-      <div className={`ws-grid ws-screen-${screen}`}>
+      <div
+        ref={grid}
+        className={`ws-grid ws-screen-${screen}`}
+        style={{ '--ws-tree-width': `${split.width}px` } as CSSProperties}
+      >
         <div
           className={`ws-tree-pane${dragging ? ' is-dragging' : ''}`}
           onDragOver={(event) => {
@@ -414,6 +421,17 @@ function Browser({
             out of the workspace.
           </p>
         </div>
+        <div
+          className="ws-separator"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize the file list"
+          aria-valuemin={MIN_TREE}
+          aria-valuemax={MAX_TREE}
+          aria-valuenow={split.width}
+          tabIndex={0}
+          {...split.handlers}
+        />
         <div className="ws-file-pane">
           <button
             type="button"

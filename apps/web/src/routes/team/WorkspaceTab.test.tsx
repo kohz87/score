@@ -273,6 +273,30 @@ test(
   },
 )
 
+test('the separator resizes the file list with the keyboard and the width is remembered', async () => {
+  window.localStorage.removeItem('score.workspace.treeWidth')
+  mount()
+  const bar = await screen.findByRole('separator', { name: 'Resize the file list' })
+  expect(bar.getAttribute('aria-valuenow')).toBe('300')
+  fireEvent.keyDown(bar, { key: 'ArrowRight' })
+  expect(bar.getAttribute('aria-valuenow')).toBe('316')
+  fireEvent.keyDown(bar, { key: 'Home' })
+  expect(bar.getAttribute('aria-valuenow')).toBe('200')
+  fireEvent.keyDown(bar, { key: 'ArrowLeft' })
+  expect(bar.getAttribute('aria-valuenow')).toBe('200')
+  fireEvent.keyDown(bar, { key: 'End' })
+  expect(bar.getAttribute('aria-valuenow')).toBe('640')
+  expect(window.localStorage.getItem('score.workspace.treeWidth')).toBe('640')
+  cleanup()
+  mount()
+  expect(
+    (await screen.findByRole('separator', { name: 'Resize the file list' })).getAttribute(
+      'aria-valuenow',
+    ),
+  ).toBe('640')
+  window.localStorage.removeItem('score.workspace.treeWidth')
+})
+
 test('images preview by URL and binaries offer a download', async () => {
   mount()
   fireEvent.click(await screen.findByRole('treeitem', { name: /logo\.png/ }))

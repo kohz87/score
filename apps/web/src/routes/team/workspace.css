@@ -6,9 +6,33 @@
 }
 .ws-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: var(--ws-tree-width, 300px) 16px minmax(0, 1fr);
   align-items: start;
+}
+.ws-separator {
+  align-self: stretch;
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+  border-radius: 8px;
+}
+.ws-separator::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 7px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--hairline);
+}
+.ws-separator:hover::after,
+.ws-separator:focus-visible::after {
+  background: var(--ink);
+}
+.ws-separator:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
 }
 .ws-tree-pane,
 .ws-file-pane {
@@ -263,6 +287,9 @@
 @media (max-width: 640px) {
   .ws-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .ws-separator {
+    display: none;
   }
   .ws-screen-tree .ws-file-pane,
   .ws-screen-file .ws-tree-pane {
