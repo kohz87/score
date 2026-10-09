@@ -96,7 +96,8 @@ test('approving from Now resolves the ledger', async ({ page }) => {
   const asking = page.getByRole('region', { name: 'Needs you' })
   await expect(asking.getByRole('button', { name: 'Approve' })).toBeVisible({ timeout: 20_000 })
   await asking.getByRole('button', { name: 'Approve' }).click()
-  await expect(asking.getByRole('status').filter({ hasText: 'You approved' })).toBeVisible({
+  // The POST only queues the decision; "You approved" waits for the ledger below to confirm it.
+  await expect(asking.getByRole('status').filter({ hasText: 'Decision queued' })).toBeVisible({
     timeout: 15_000,
   })
   await expect
