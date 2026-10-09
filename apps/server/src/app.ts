@@ -101,7 +101,7 @@ interface BuildAppOptions {
   /** Pairing-management password; defaults to one stored in the Score home when there is a database (a real server). */
   security?: SecurityPassword
   /** Test hooks for the web terminal: a stand-in PTY, a launch description, limits (the origins come from config). */
-  terminal?: Pick<TerminalOptions, 'spawn' | 'launch' | 'limits' | 'clock'>
+  terminal?: Pick<TerminalOptions, 'spawn' | 'launch' | 'limits' | 'clock' | 'isSecure'>
 }
 
 export function buildApp({
