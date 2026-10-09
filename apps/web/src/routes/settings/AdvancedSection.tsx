@@ -19,14 +19,33 @@ function parse(text: string, current: unknown): { ok: true; value: unknown } | {
   }
 }
 
+const OPEN_KEY = 'score.settings.advancedOpen'
+function readOpen(): boolean {
+  try {
+    return window.localStorage.getItem(OPEN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+function saveOpen(open: boolean) {
+  try {
+    window.localStorage.setItem(OPEN_KEY, open ? '1' : '0')
+  } catch {
+    // Storage blocked: the list still opens, it just isn't remembered.
+  }
+}
+
 export function AdvancedSection() {
   const [text, setText] = useState('')
+  const [open, setOpen] = useState(readOpen)
   const [q, setQ] = useState('')
   useEffect(() => {
     const timer = setTimeout(() => setQ(text.trim()), 250)
     return () => clearTimeout(timer)
   }, [text])
   const search = useConfigSearch(q)
+  const searching = text.trim() !== ''
+  const expanded = open || searching
   const { preview, apply } = useConfigActions()
   const [editing, setEditing] = useState<{ key: string; draft: string } | null>(null)
   const [invalid, setInvalid] = useState(false)
@@ -128,8 +147,28 @@ export function AdvancedSection() {
         rules live in Rules and approvals.
       </p>
       {search.status === 'error' && <p role="alert">Could not search settings.</p>}
-      {search.data && (
-        <ul className="advanced-results" aria-label="Settings" aria-busy={search.isFetching}>
+      {/* A search with text opens the list on its own; the disclosure matters when the box is empty. */}
+      {!searching && search.data && (
+        <button
+          type="button"
+          className="settings-link advanced-disclosure"
+          aria-expanded={open}
+          aria-controls="advanced-results"
+          onClick={() => {
+            setOpen(!open)
+            saveOpen(!open)
+          }}
+        >
+          {open ? 'Hide settings' : `Show all ${search.data.length} settings`}
+        </button>
+      )}
+      {expanded && search.data && (
+        <ul
+          id="advanced-results"
+          className="advanced-results"
+          aria-label="Settings"
+          aria-busy={search.isFetching}
+        >
           {search.data.length === 0 && <li className="settings-muted">No settings match.</li>}
           {search.data.map((item) => {
             const staged = item.key in pending

@@ -69,6 +69,7 @@ let respond: (path: string, init?: RequestInit) => Response
 let applyGate: Promise<void> | null = null
 
 beforeEach(() => {
+  window.localStorage.removeItem('score.settings.advancedOpen')
   calls = []
   applyGate = null
   respond = (path) => {
@@ -210,6 +211,7 @@ function advancedRespond(apply: () => Response) {
 }
 async function stageTurns() {
   const advanced = await screen.findByRole('region', { name: 'Advanced' })
+  fireEvent.click(await within(advanced).findByRole('button', { name: /^Show all \d+ settings$/ }))
   fireEvent.click(await within(advanced).findByRole('button', { name: 'Edit agent.max_turns' }))
   fireEvent.change(within(advanced).getByLabelText('New value for agent.max_turns'), {
     target: { value: '30' },
@@ -217,6 +219,45 @@ async function stageTurns() {
   fireEvent.click(within(advanced).getByRole('button', { name: 'Stage change' }))
   return advanced
 }
+
+test('advanced: collapsed by default, opens on click or on a search, and remembers the choice', async () => {
+  window.localStorage.clear()
+  advancedRespond(() => json({ ok: true, restartRequired: false }))
+  mount()
+  const advanced = await screen.findByRole('region', { name: 'Advanced' })
+  const toggle = await within(advanced).findByRole('button', { name: 'Show all 2 settings' })
+  expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  expect(within(advanced).getByRole('searchbox', { name: 'Search settings' })).toBeDefined()
+  expect(within(advanced).queryByRole('list', { name: 'Settings' })).toBeNull()
+  fireEvent.click(toggle)
+  expect(within(advanced).getByRole('list', { name: 'Settings' })).toBeDefined()
+  expect(window.localStorage.getItem('score.settings.advancedOpen')).toBe('1')
+  fireEvent.click(within(advanced).getByRole('button', { name: 'Hide settings' }))
+  expect(within(advanced).queryByRole('list', { name: 'Settings' })).toBeNull()
+  fireEvent.change(within(advanced).getByRole('searchbox', { name: 'Search settings' }), {
+    target: { value: 'turn' },
+  })
+  expect(within(advanced).getByRole('list', { name: 'Settings' })).toBeDefined()
+  cleanup()
+  window.localStorage.setItem('score.settings.advancedOpen', '1')
+  mount()
+  expect(await screen.findByRole('list', { name: 'Settings' })).toBeDefined()
+  window.localStorage.clear()
+})
+
+test('advanced: blocked storage still opens the list', async () => {
+  vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    throw new Error('blocked')
+  })
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new Error('blocked')
+  })
+  advancedRespond(() => json({ ok: true, restartRequired: false }))
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Show all 2 settings' }))
+  expect(screen.getByRole('list', { name: 'Settings' })).toBeDefined()
+  vi.restoreAllMocks()
+})
 
 test('advanced: search, stage a change, preview the diff, then apply with the hash', async () => {
   advancedRespond(() => json({ ok: true, restartRequired: true }))

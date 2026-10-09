@@ -9,6 +9,10 @@ test('advanced settings: search by name and comment, preview the diff, apply, an
   const advanced = page.getByRole('region', { name: 'Advanced' })
   const search = advanced.getByRole('searchbox', { name: 'Search settings' })
 
+  // Collapsed until asked for: heading, search and the disclosure only.
+  await expect(advanced.getByRole('button', { name: /^Show all \d+ settings$/ })).toBeVisible()
+  await expect(advanced.getByRole('list', { name: 'Settings' })).toHaveCount(0)
+
   await search.fill('max_turns')
   await expect(advanced.getByText('agent.max_turns')).toBeVisible()
   await search.fill('long-term memory')
