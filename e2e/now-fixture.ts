@@ -150,7 +150,7 @@ export function nowFixture(roomId: string) {
         title: 'Read layer for task events',
         ref: { kind: 'task', taskId: 'task-read' },
         files: [{ path: 'api/events.py', added: 182, removed: 12 }],
-        checks: [{ label: 'Read layer tests pass', agentId: 'builder', ok: true }],
+        checks: [{ label: 'Read layer tests pass', agentId: 'builder', verdict: 'passed' }],
       },
     ],
   }
