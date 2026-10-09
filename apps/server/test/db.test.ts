@@ -116,6 +116,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'remote_sessions',
     'request_receipts',
     'room_reads',
+    'room_versions',
     'rooms',
     'run_thinking',
     'runs',

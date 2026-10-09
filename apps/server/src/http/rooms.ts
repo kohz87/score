@@ -13,9 +13,7 @@ import type { ScoreDb } from '../db/index.ts'
 import {
   decodeMessageCursor,
   deleteMessage,
-  editableMessage,
   insertRoom,
-  markEdited,
   markRoomRead,
   messagePage,
   readRoom,
@@ -25,6 +23,7 @@ import {
   roomRow,
   storeMessage,
 } from '../domain/rooms.ts'
+import { editableMessage, markEdited } from '../domain/versions.ts'
 import { roomFilesInPlay, roomLearned } from '../domain/room-panels.ts'
 import { createBrief } from '../domain/briefs.ts'
 import { reserveMessageRun, retryReply } from '../domain/message-runs.ts'
@@ -408,7 +407,7 @@ export function registerRoomRoutes(
         // Inside the same transaction, so an item deleted since the check above fails the whole message.
         media?.retain(sqlite, mediaIds, now)
         const drafts = storeMessage(sqlite, message, now)
-        if (original) drafts.push(...markEdited(sqlite, roomId, original.id, id, now))
+        if (original) drafts.push(...markEdited(sqlite, roomId, original, id, now))
         // Plan first admits only the planner; the others are named in its prompt and start from the plan.
         const team = route.routedTo.filter((agentId) => agentId !== planner)
         const teamNote = team.length

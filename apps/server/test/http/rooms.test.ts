@@ -1114,6 +1114,13 @@ test('edit validation: own, finished, undeleted, same-room, not edited twice', a
   const gone = await ownMessage(room.id, 'gone')
   expect((await del(`/api/rooms/${room.id}/messages/${gone.id}`)).statusCode).toBe(204)
   expect((await edit(gone.id)).statusCode).toBe(404)
+  // A message still being written after the original blocks the edit (it would be hidden mid-write).
+  expect((await edit(original.id)).statusCode).toBe(409)
+  await ingest.submit({
+    source: 'test',
+    identity: 'finish-own',
+    apply: ({ sqlite, now }) => updateMessage(sqlite, room.id, writing, null, now),
+  })
   expect((await edit(original.id)).statusCode).toBe(200)
   // The first edit removed the original, so a second edit finds nothing to correct.
   expect((await edit(original.id)).statusCode).toBe(404)
