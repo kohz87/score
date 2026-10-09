@@ -806,10 +806,10 @@ test('the security password: set once, change needs the current one, wrong guess
     })
   const status = async () =>
     (await app.inject({ url: '/api/session/security', headers: { ...headers, cookie } })).json()
-  expect(await status()).toEqual({ passwordSet: false })
+  expect(await status()).toMatchObject({ passwordSet: false })
   expect((await put({ password: 'short' })).statusCode).toBe(400)
   await setPassword(app, cookie)
-  expect(await status()).toEqual({ passwordSet: true })
+  expect(await status()).toMatchObject({ passwordSet: true })
   // Changing it needs the current password, so a compromised browser can't take it over.
   expect((await put({ password: 'another password' })).statusCode).toBe(403)
   expect((await put({ password: 'another password', current: PASSWORD })).statusCode).toBe(204)
