@@ -26,8 +26,7 @@ import type { HermesPort, ProviderBase } from '../hermes/index.ts'
 import { readChosenModels, replaceChosenModels } from '../domain/model-visibility.ts'
 import { requestIdempotency } from './idempotency.ts'
 
-const sameRow = (a: ModelOption, b: ModelOption) =>
-  a.provider === b.provider && a.model === b.model
+const sameRow = (a: ModelOption, b: ModelOption) => a.provider === b.provider && a.model === b.model
 const SignInParamsSchema = z.object({ signInId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/) })
 const ProviderParamsSchema = z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/) })
 
@@ -78,7 +77,10 @@ export function registerSettingsRoutes(
     })
   })
   // An agent's aliases that match the search come first, so typing `fast` finds the model it stands for.
-  async function aliasRows(agentId: string | undefined, q: string | undefined): Promise<ModelOption[]> {
+  async function aliasRows(
+    agentId: string | undefined,
+    q: string | undefined,
+  ): Promise<ModelOption[]> {
     const needle = q?.trim().toLowerCase()
     if (!agentId || !needle) return []
     try {
@@ -89,7 +91,8 @@ export function registerSettingsRoutes(
       const known = await port.listModels(undefined)
       return matches.map((alias) => {
         const target = known.find(
-          (option) => option.model === alias.model && (!alias.provider || option.provider === alias.provider),
+          (option) =>
+            option.model === alias.model && (!alias.provider || option.provider === alias.provider),
         )
         return {
           provider: target?.provider ?? alias.provider ?? 'custom',

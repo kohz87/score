@@ -81,7 +81,9 @@ test('model settings need a paired human and a valid body', async () => {
       })
     ).statusCode,
   ).toBe(401)
-  expect((await put('/api/agents/builder/model-settings', { fallbacks: [{ model: 'x' }] })).statusCode).toBe(400)
+  expect(
+    (await put('/api/agents/builder/model-settings', { fallbacks: [{ model: 'x' }] })).statusCode,
+  ).toBe(400)
   expect((await put('/api/agents/nobody/model-settings', {})).statusCode).toBe(404)
 })
 
@@ -110,7 +112,11 @@ test('an agent alias is found by the picker search and resolves in PUT model', a
     aliases: [{ name: 'quick', model: 'local-gpt-mini', provider: 'local' }],
   })
   const found = await models('?q=quick&agentId=builder')
-  expect(found.items[0]).toMatchObject({ model: 'local-gpt-mini', provider: 'local', alias: 'quick' })
+  expect(found.items[0]).toMatchObject({
+    model: 'local-gpt-mini',
+    provider: 'local',
+    alias: 'quick',
+  })
   expect((await models('?q=quick')).items).toEqual([])
   const changed = await put('/api/agents/builder/model', { model: 'Quick' })
   expect(changed.statusCode).toBe(200)

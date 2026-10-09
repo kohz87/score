@@ -13,7 +13,9 @@ export async function resolveAlias(
   const key = name.trim().toLowerCase()
   if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(key)) return null
   try {
-    const found = (await port.readModelSettings(agentId)).aliases.find((alias) => alias.name === key)
+    const found = (await port.readModelSettings(agentId)).aliases.find(
+      (alias) => alias.name === key,
+    )
     return found ? { model: found.model, provider: found.provider } : null
   } catch {
     return null

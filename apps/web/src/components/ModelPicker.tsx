@@ -22,9 +22,11 @@ interface Props {
   onChange: (choice: ModelChoice) => void
   required?: boolean
   maxLength?: number
+  /** Whose aliases a search may match (5.31). */
+  agentId?: string
 }
 
-export function ModelPicker({ label, value, onChange, required, maxLength = 256 }: Props) {
+export function ModelPicker({ label, value, onChange, required, maxLength = 256, agentId }: Props) {
   const id = useId()
   const listId = `${id}-list`
   const [open, setOpen] = useState(false)
@@ -32,6 +34,8 @@ export function ModelPicker({ label, value, onChange, required, maxLength = 256 
   const [query, setQuery] = useState(value.model)
   const [providerLabel, setProviderLabel] = useState<string | null>(null)
   const [typed, setTyped] = useState(false)
+  // The chosen-models list (Settings) narrows the list; "Show all" lifts it for this picker.
+  const [showAll, setShowAll] = useState(false)
 
   // Only what the person typed filters the list; picking a value must not narrow it to that one row.
   useEffect(() => {
@@ -41,16 +45,21 @@ export function ModelPicker({ label, value, onChange, required, maxLength = 256 
   }, [typed, value.model])
 
   const models = useQuery({
-    queryKey: ['models', query.trim()],
-    queryFn: async () =>
-      ModelsResponseSchema.parse(
-        await apiFetch(`models${query.trim() ? `?q=${encodeURIComponent(query.trim())}` : ''}`),
-      ).items,
+    queryKey: ['models', query.trim(), agentId ?? null, showAll],
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (query.trim()) params.set('q', query.trim())
+      if (agentId) params.set('agentId', agentId)
+      if (showAll) params.set('all', '1')
+      const text = params.toString()
+      return ModelsResponseSchema.parse(await apiFetch(`models${text ? `?${text}` : ''}`))
+    },
     enabled: open,
     placeholderData: keepPreviousData,
     staleTime: 15_000,
   })
-  const items = useMemo(() => models.data ?? [], [models.data])
+  const items = useMemo(() => models.data?.items ?? [], [models.data])
+  const hiddenCount = models.data?.hiddenCount ?? 0
   const groups = useMemo(() => {
     const byProvider = new Map<
       string,
@@ -174,7 +183,9 @@ export function ModelPicker({ label, value, onChange, required, maxLength = 256 
                       onClick={() => pick(option)}
                       onMouseMove={() => option.available && setActive(at)}
                     >
-                      <span className="model-picker-model">{option.model}</span>
+                      <span className="model-picker-model">
+                        {option.alias ? `${option.alias} → ${option.model}` : option.model}
+                      </span>
                       <span className="model-picker-meta">
                         {option.available ? formatPrice(option) : (option.reason ?? 'Unavailable')}
                       </span>
@@ -184,6 +195,13 @@ export function ModelPicker({ label, value, onChange, required, maxLength = 256 
               ))}
             </div>
             {note && <p className="model-picker-note">{note}</p>}
+            {(hiddenCount > 0 || showAll) && (
+              <div className="model-picker-all" onMouseDown={(event) => event.preventDefault()}>
+                <button type="button" onClick={() => setShowAll((on) => !on)}>
+                  {showAll ? 'Show chosen models only' : `Show all (${hiddenCount} more)`}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

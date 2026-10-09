@@ -88,7 +88,10 @@ export function createAgentDirectory(
       apply({ sqlite }) {
         const previous = readAgent(sqlite, agentId)
         if (!previous?.model || previous.model.fallback === fallback) return []
-        const agent = AgentDetailSchema.parse({ ...previous, model: { ...previous.model, fallback } })
+        const agent = AgentDetailSchema.parse({
+          ...previous,
+          model: { ...previous.model, fallback },
+        })
         storeAgent(sqlite, agent)
         return [{ type: 'agent.updated' as const, data: AgentSummarySchema.parse(agent) }]
       },

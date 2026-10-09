@@ -42,13 +42,7 @@ import { messagingRows, readProfilePlatforms } from './settings.ts'
 import { ProfileLocks } from './profile-locks.ts'
 import { ProfileNameSchema } from './paths.ts'
 import { skillNames } from './profiles.ts'
-import {
-  applyOps,
-  deriveSettings,
-  opArgs,
-  planWrites,
-  readRawSettings,
-} from './model-settings.ts'
+import { applyOps, deriveSettings, opArgs, planWrites, readRawSettings } from './model-settings.ts'
 
 const HUB_LIMIT = 20
 

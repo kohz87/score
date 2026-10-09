@@ -27,17 +27,28 @@ function answer(args: string[]): { exitCode: number; stdout?: string } {
   return { exitCode: 0 }
 }
 const writes = () =>
-  runner.mock.calls.map(([args]) => args).filter((args) => args[2] === 'config' && args[3] !== 'get')
+  runner.mock.calls
+    .map(([args]) => args)
+    .filter((args) => args[2] === 'config' && args[3] !== 'get')
 const reads = () => runner.mock.calls.filter(([args]) => args[3] === 'get').length
 let tabs: LiveAgentTabs
 beforeEach(() => {
   config = {
-    tts: { provider: 'edge', edge: { voice: 'en-US-AriaNeural' }, openai: { model: 'gpt-4o-mini-tts', voice: 'alloy' } },
+    tts: {
+      provider: 'edge',
+      edge: { voice: 'en-US-AriaNeural' },
+      openai: { model: 'gpt-4o-mini-tts', voice: 'alloy' },
+    },
     stt: { language: 'en', groq: { model: 'whisper-large-v3-turbo' } },
   }
   runner.mockReset()
   runner.mockImplementation(async (args) => answer(args))
-  tabs = new LiveAgentTabs('/tmp/none', () => '/tmp/none', () => undefined, runner)
+  tabs = new LiveAgentTabs(
+    '/tmp/none',
+    () => '/tmp/none',
+    () => undefined,
+    runner,
+  )
 })
 
 test('reads the fallback chain, aliases and the speech settings of the chosen providers', async () => {
@@ -81,10 +92,20 @@ test('a chain with a custom endpoint is shown but never rewritten', async () => 
 test('only changed keys are written, and the answer comes from what was written', async () => {
   const saved = await tabs.updateModelSettings('builder', {
     fallbacks: [{ provider: 'openrouter', model: 'a/b' }],
-    speech: { tts: { provider: 'openai', model: 'gpt-4o-mini-tts', voice: 'nova' }, stt: { provider: 'groq' } },
+    speech: {
+      tts: { provider: 'openai', model: 'gpt-4o-mini-tts', voice: 'nova' },
+      stt: { provider: 'groq' },
+    },
   })
   expect(writes()).toEqual([
-    ['-p', 'builder', 'config', 'set', 'fallback_providers', '[{"provider":"openrouter","model":"a/b"}]'],
+    [
+      '-p',
+      'builder',
+      'config',
+      'set',
+      'fallback_providers',
+      '[{"provider":"openrouter","model":"a/b"}]',
+    ],
     ['-p', 'builder', 'config', 'set', 'stt.provider', 'groq'],
     ['-p', 'builder', 'config', 'set', 'tts.provider', 'openai'],
     ['-p', 'builder', 'config', 'set', 'tts.openai.voice', 'nova'],
@@ -116,7 +137,14 @@ test('aliases: new and changed ones are set one key each, removed editable ones 
     ],
   })
   expect(writes()).toEqual([
-    ['-p', 'builder', 'config', 'set', 'model_aliases.fast', '{"model":"m9","provider":"openrouter"}'],
+    [
+      '-p',
+      'builder',
+      'config',
+      'set',
+      'model_aliases.fast',
+      '{"model":"m9","provider":"openrouter"}',
+    ],
     ['-p', 'builder', 'config', 'set', 'model_aliases.new', '{"model":"n"}'],
     ['-p', 'builder', 'config', 'unset', 'model_aliases.old'],
   ])
@@ -128,9 +156,9 @@ test('an alias with its own endpoint is kept; the speech provider without a fiel
   await expect(
     tabs.updateModelSettings('builder', { aliases: [{ name: 'gate', model: 'other' }] }),
   ).rejects.toMatchObject({ status: 409 })
-  await expect(
-    tabs.updateModelSettings('builder', { aliases: [] }),
-  ).resolves.toMatchObject({ aliases: [{ name: 'gate', editable: false }] })
+  await expect(tabs.updateModelSettings('builder', { aliases: [] })).resolves.toMatchObject({
+    aliases: [{ name: 'gate', editable: false }],
+  })
   await expect(
     tabs.updateModelSettings('builder', { speech: { tts: { model: 'x' } } }),
   ).rejects.toMatchObject({ status: 409 })

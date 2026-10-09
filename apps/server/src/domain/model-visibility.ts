@@ -14,7 +14,9 @@ export function readChosenModels(db: ScoreDb): ModelRef[] {
 export function replaceChosenModels(db: ScoreDb, items: readonly ModelRef[]): void {
   db.tx((sqlite) => {
     sqlite.exec('DELETE FROM model_visibility')
-    const insert = sqlite.prepare('INSERT OR IGNORE INTO model_visibility (provider, model) VALUES (?, ?)')
+    const insert = sqlite.prepare(
+      'INSERT OR IGNORE INTO model_visibility (provider, model) VALUES (?, ?)',
+    )
     for (const item of items) insert.run(item.provider, item.model)
   })
 }

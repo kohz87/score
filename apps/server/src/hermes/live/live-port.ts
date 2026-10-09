@@ -400,7 +400,10 @@ export class LivePort implements HermesPort {
     this.requireStarted()
     return this.tabs.getModelSettings(agentId)
   }
-  async updateModelSettings(agentId: string, req: Parameters<HermesPort['updateModelSettings']>[1]) {
+  async updateModelSettings(
+    agentId: string,
+    req: Parameters<HermesPort['updateModelSettings']>[1],
+  ) {
     this.requireStarted()
     return this.tabs.updateModelSettings(agentId, req)
   }

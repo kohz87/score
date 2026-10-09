@@ -55,7 +55,10 @@ function chainOf(raw: unknown): { entries: ModelRef[]; editable: boolean } {
   for (const item of list) {
     const parsed = isRecord(item) ? ModelRefSchema.safeParse(item) : undefined
     if (parsed?.success) entries.push(parsed.data)
-    else if (isRecord(item) && ModelRefSchema.safeParse({ provider: item.provider, model: item.model }).success) {
+    else if (
+      isRecord(item) &&
+      ModelRefSchema.safeParse({ provider: item.provider, model: item.model }).success
+    ) {
       // Extra settings (endpoint, key) that a rewrite would drop.
       entries.push({ provider: String(item.provider), model: String(item.model) })
       editable = false
@@ -113,12 +116,15 @@ export function deriveSettings(raw: RawSettings): ModelSettings {
     speech: {
       stt: {
         provider: sttProvider as ModelSettings['speech']['stt']['provider'],
-        model: sttInfo?.model && sttProvider ? leaf(stt, sttProvider, sttModelKey(sttProvider)) : null,
+        model:
+          sttInfo?.model && sttProvider ? leaf(stt, sttProvider, sttModelKey(sttProvider)) : null,
       },
       tts: {
         provider: ttsProvider as ModelSettings['speech']['tts']['provider'],
-        model: ttsInfo?.model && ttsProvider ? leaf(tts, ttsProvider, ttsModelKey(ttsProvider)) : null,
-        voice: ttsInfo?.voice && ttsProvider ? leaf(tts, ttsProvider, ttsVoiceKey(ttsProvider)) : null,
+        model:
+          ttsInfo?.model && ttsProvider ? leaf(tts, ttsProvider, ttsModelKey(ttsProvider)) : null,
+        voice:
+          ttsInfo?.voice && ttsProvider ? leaf(tts, ttsProvider, ttsVoiceKey(ttsProvider)) : null,
       },
     },
   }
@@ -181,7 +187,8 @@ function aliasWrites(prior: ModelAlias[], wanted: AliasInput[]): Op[] {
     if (names.has(alias.name)) throw conflict(`Alias ${alias.name} is listed twice`)
     names.add(alias.name)
     const before = prior.find((item) => item.name === alias.name)
-    if (before && !before.editable) throw conflict(`Alias ${alias.name} has custom settings; change it in Hermes directly`)
+    if (before && !before.editable)
+      throw conflict(`Alias ${alias.name} has custom settings; change it in Hermes directly`)
     const provider = alias.provider ?? null
     if (before && before.model === alias.model && before.provider === provider) continue
     ops.push({
@@ -204,7 +211,7 @@ export function applyOps(raw: RawSettings, ops: Op[]): RawSettings {
     let node = next
     for (const part of path.slice(0, -1)) {
       const child = node[part]
-      node = isRecord(child) ? child : (node[part] = {}) as Record<string, unknown>
+      node = isRecord(child) ? child : ((node[part] = {}) as Record<string, unknown>)
     }
     const last = path.at(-1)!
     if (op.kind === 'unset') delete node[last]

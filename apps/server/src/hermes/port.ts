@@ -33,7 +33,12 @@ import type {
   SignIn,
   ToolServerRequest,
 } from '@score/contract'
-import type { AgentTodos, ModelSettings, ModelSettingsUpdate, RewindSkipReason } from '@score/contract'
+import type {
+  AgentTodos,
+  ModelSettings,
+  ModelSettingsUpdate,
+  RewindSkipReason,
+} from '@score/contract'
 import type { RewindBroker } from './bridge/rewind-broker.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { AgentFile, AgentFileName } from './agent-files.ts'
