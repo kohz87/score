@@ -177,7 +177,7 @@ export function rewindScope(sqlite: DatabaseSync, roomId: string, anchor: Messag
       .prepare(
         `SELECT mr.agent_id, count(*) AS turns FROM message_runs mr
            LEFT JOIN messages m ON m.id = mr.message_id
-           WHERE mr.room_id = ? AND mr.rewound_at IS NULL AND mr.state IN ('completed', 'failed')
+           WHERE mr.room_id = ? AND mr.rewound_at IS NULL AND mr.state IN ('completed', 'failed') AND mr.run_id IS NOT NULL
              AND COALESCE(m.created_at, mr.created_at) >= ?
            GROUP BY mr.agent_id ORDER BY mr.agent_id`,
       )
@@ -204,7 +204,7 @@ export function markRunsRewound(
 ): void {
   sqlite
     .prepare(
-      `UPDATE message_runs SET rewound_at = ? WHERE room_id = ? AND agent_id = ? AND rewound_at IS NULL AND state IN ('completed', 'failed')
+      `UPDATE message_runs SET rewound_at = ? WHERE room_id = ? AND agent_id = ? AND rewound_at IS NULL AND state IN ('completed', 'failed') AND run_id IS NOT NULL
          AND COALESCE((SELECT created_at FROM messages WHERE id = message_runs.message_id), created_at) >= ?`,
     )
     .run(now, roomId, agentId, since)

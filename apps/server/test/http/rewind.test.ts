@@ -85,6 +85,14 @@ const post = (url: string, payload: object, key?: string) =>
     headers: { ...headers, ...(key ? { 'idempotency-key': key } : {}) },
     payload,
   })
+// A turn Hermes ran has a run row (message_runs.run_id references it).
+function hermesRun(sqlite: import('node:sqlite').DatabaseSync, id: string, now: string) {
+  sqlite
+    .prepare(
+      `INSERT OR IGNORE INTO runs (id, profile, origin, status, started_at, updated_at) VALUES (?, 'builder', 'score', 'completed', ?, ?)`,
+    )
+    .run(id, now, now)
+}
 async function tick() {
   await scheduler.advance(10)
 }
@@ -123,11 +131,12 @@ async function answer(roomId: string, parentId: string, agentId: string, fromAge
     source: 'test',
     identity: `finish-${run.message_id}`,
     apply: ({ sqlite, now }) => {
+      hermesRun(sqlite, `run-${run.message_id}`, now)
       sqlite
         .prepare(
-          "UPDATE message_runs SET state = 'completed', from_agent_id = ? WHERE message_id = ?",
+          "UPDATE message_runs SET state = 'completed', from_agent_id = ?, run_id = ? WHERE message_id = ?",
         )
-        .run(fromAgent ?? null, run.message_id)
+        .run(fromAgent ?? null, `run-${run.message_id}`, run.message_id)
       return storeMessage(
         sqlite,
         {
@@ -155,12 +164,13 @@ async function extraTurn(roomId: string, parentId: string, agentId: string, hop 
     source: 'test',
     identity: id,
     apply: ({ sqlite, now }) => {
+      hermesRun(sqlite, `run-${id}`, now)
       sqlite
         .prepare(
-          `INSERT INTO message_runs (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, state, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'x', '[]', 'completed', ?)`,
+          `INSERT INTO message_runs (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, state, created_at, run_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'x', '[]', 'completed', ?, ?)`,
         )
-        .run(id, roomId, agentId, parentId, hop, `turn-${id}`, parentId, now)
+        .run(id, roomId, agentId, parentId, hop, `turn-${id}`, parentId, now, `run-${id}`)
       return storeMessage(
         sqlite,
         {
@@ -435,4 +445,23 @@ test('migration 0036 adds versions, the message version link and the run rewind 
   )
   expect(columns('messages')).toContain('version_id')
   expect(columns('message_runs')).toContain('rewound_at')
+})
+
+// audit4-c 4: a turn that never reached Hermes (no run id) is not a turn to rewind.
+test('turns that never reached Hermes are not counted in the rewind plan', async () => {
+  const room = await createRoom()
+  const first = await ask(room.id, 'first', ['builder'])
+  await answer(room.id, first.id, 'builder')
+  const second = await ask(room.id, 'second', ['builder'])
+  const reply = await answer(room.id, second.id, 'builder')
+  const before = RewindPlanSchema.parse(
+    (await get(`/api/rooms/${room.id}/messages/${second.id}/rewind-plan`)).json(),
+  )
+  expect(before.agents.map((a) => [a.agentId, a.turns])).toEqual([['builder', 1]])
+  // The same turn failed before Hermes ever saw it.
+  db.sqlite.prepare('UPDATE message_runs SET run_id = NULL WHERE message_id = ?').run(reply)
+  const after = RewindPlanSchema.parse(
+    (await get(`/api/rooms/${room.id}/messages/${second.id}/rewind-plan`)).json(),
+  )
+  expect(after.agents).toEqual([])
 })
