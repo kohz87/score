@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { pair } from './pair.ts'
 
 // PLAN 5.24: actions under each message (edit and resend, copy, retry, delete).
-test('Edit and resend, Copy and Retry work from the action row under a message', async ({
+test('Edit (replaces), Copy and Retry work from the action row under a message', async ({
   page,
   context,
 }) => {
@@ -47,10 +47,8 @@ test('Edit and resend, Copy and Retry work from the action row under a message',
   await composer.press('Enter')
   const corrected = history.getByRole('article').filter({ hasText: fixed })
   await expect(corrected).toBeVisible()
-  await expect(mine.getByText('edited', { exact: true })).toBeVisible()
-  await expect(mine).toHaveClass(/chat-message--edited/)
-  await expect(mine.getByRole('button', { name: /^Edit message/ })).toHaveCount(0)
-  await mine.getByRole('button', { name: 'see the new version' }).click()
+  // The edit replaces the original and its replies (owner 2026-10-09).
+  await expect(mine).toHaveCount(0)
   await expect(replyAfter(corrected).first()).toBeVisible({ timeout: 40_000 })
 
   // Retry: the same agent answers again; the first reply stays.

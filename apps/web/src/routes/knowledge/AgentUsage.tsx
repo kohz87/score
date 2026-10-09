@@ -12,7 +12,9 @@ export function AgentUsage() {
         {items.map((item) => (
           <li key={item.agentId}>
             <span>{item.agentId}</span>
-            <strong>{item.writesToday}</strong>
+            <span className="settings-muted">
+              {item.writesToday} {item.writesToday === 1 ? 'write' : 'writes'}
+            </span>
           </li>
         ))}
       </ul>

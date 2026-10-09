@@ -16,6 +16,7 @@ import {
   RulesResponseSchema,
   StreamHelloSchema,
   SystemStatusSchema,
+  KnowledgeAgentUsageSchema,
   KnowledgeInfoSchema,
   KnowledgeNoteSchema,
   KnowledgeTreeSchema,
@@ -135,6 +136,12 @@ export const visualFixtures: Record<string, unknown> = {
     notes: 4,
     gitAvailable: true,
     agentAccess: true,
+  }),
+  '/api/knowledge/agent-usage': KnowledgeAgentUsageSchema.parse({
+    items: [
+      { agentId: 'builder', writesToday: 3 },
+      { agentId: 'reviewer', writesToday: 1 },
+    ],
   }),
   '/api/knowledge/tree': KnowledgeTreeSchema.parse({
     folders: ['projects', 'projects/archive'],

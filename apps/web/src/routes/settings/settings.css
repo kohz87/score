@@ -719,3 +719,37 @@
 .settings-field label {
   align-self: stretch;
 }
+
+/* Settings › Knowledge (5.x): here, not in knowledge.css, which loads only with the lazy Knowledge page. */
+.kn-settings {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.kn-settings dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.kn-check {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+}
+.kn-subhead {
+  margin: 8px 0 4px;
+  font-size: 13px;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.kn-usage {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+.kn-usage li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
