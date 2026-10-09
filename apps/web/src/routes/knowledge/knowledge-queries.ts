@@ -45,6 +45,26 @@ export async function fetchNote(path: string, signal?: AbortSignal): Promise<Kno
   return KnowledgeNoteSchema.parse(await apiFetch(apiNote(path), signal ? { signal } : {}))
 }
 
+/** The write behind autosave. A plain function (not a mutation hook) so a save outlives the editor that started it. */
+export async function saveNote(req: { path: string; body: string; etag: string | null }) {
+  return KnowledgeWriteResponseSchema.parse(
+    await apiFetch(apiNote(req.path), {
+      method: 'PUT',
+      body: JSON.stringify({ body: req.body, etag: req.etag }),
+    }),
+  )
+}
+
+/** Text that could not be saved when its editor closed; the next editor for that note starts from it. */
+export const orphanDrafts = new Map<string, { body: string; etag: string | null }>()
+
+/** Thrown when an operation had to save the draft first and that failed. */
+export class UnsavedDraftError extends Error {
+  constructor() {
+    super('The unsaved changes could not be saved')
+  }
+}
+
 export function useNote(path: string | null) {
   return useQuery({
     queryKey: noteKey(path ?? ''),
@@ -100,6 +120,8 @@ export function conflictOf(error: unknown): { etag: string | null } | null {
 }
 
 export function knowledgeFailure(error: unknown, action: string): string {
+  if (error instanceof UnsavedDraftError)
+    return 'Your unsaved changes could not be saved first, so nothing was changed. Fix that and try again.'
   if (error instanceof ApiError) {
     if (error.code === 'not_paired')
       return `Pair this browser using the link in the server terminal to ${action}.`
@@ -174,6 +196,8 @@ export function useKnowledgeLive(onChanged?: (event: KnowledgeChanged) => void) 
       void queryClient.invalidateQueries({ queryKey: treeKey })
       void queryClient.invalidateQueries({ queryKey: infoKey })
       void queryClient.invalidateQueries({ queryKey: [...knowledgeKey, 'search'] })
+      // The open note's links and backlinks depend on the other notes; its editor text is not touched by this.
+      void queryClient.invalidateQueries({ queryKey: [...knowledgeKey, 'note'] })
       handler.current?.(event.data)
     })
     const offControl = stream.onControl(({ resync }) => {

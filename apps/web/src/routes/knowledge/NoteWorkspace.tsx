@@ -17,6 +17,8 @@ import {
   historyKey,
   knowledgeFailure,
   noteKey,
+  orphanDrafts,
+  saveNote,
   useHistory,
   useKnowledgeActions,
   useNote,
@@ -38,6 +40,8 @@ type Props = {
   onCreateLink: (target: string) => void
   onMove: () => void
   onDelete: () => void
+  /** Lets the page save the open draft before it moves the note. */
+  registerFlush: (flush: (() => Promise<boolean>) | null) => void
 }
 
 export function NoteWorkspace(props: Props) {
@@ -46,7 +50,8 @@ export function NoteWorkspace(props: Props) {
   if (note.data && session === null)
     setSession({ body: note.data.body, etag: note.data.etag, version: 0 })
 
-  if (note.isError) {
+  // A failed *refresh* keeps the pane (and the text in it); only a note that never opened gets the error screen.
+  if (note.isError && session === null) {
     const missing = note.error instanceof ApiError && note.error.status === 404
     return (
       <div className="kn-empty" role="alert">
@@ -70,22 +75,29 @@ export function NoteWorkspace(props: Props) {
   }
   if (!note.data || session === null) return <p role="status">Opening note…</p>
   return (
-    <Pane
-      key={session.version}
-      {...props}
-      note={note.data}
-      session={session}
-      reload={async (beforeSwap) => {
-        const fresh = await fetchNote(props.path)
-        beforeSwap()
-        setSession((previous) => ({
-          body: fresh.body,
-          etag: fresh.etag,
-          version: (previous?.version ?? 0) + 1,
-        }))
-        void note.refetch()
-      }}
-    />
+    <>
+      {note.isError && (
+        <p role="alert" className="kn-banner is-warn">
+          {knowledgeFailure(note.error, 'refresh the note')} Your text is still here.
+        </p>
+      )}
+      <Pane
+        key={session.version}
+        {...props}
+        note={note.data}
+        session={session}
+        reload={async (beforeSwap) => {
+          const fresh = await fetchNote(props.path)
+          beforeSwap()
+          setSession((previous) => ({
+            body: fresh.body,
+            etag: fresh.etag,
+            version: (previous?.version ?? 0) + 1,
+          }))
+          void note.refetch()
+        }}
+      />
+    </>
   )
 }
 
@@ -98,6 +110,7 @@ function Pane({
   onCreateLink,
   onMove,
   onDelete,
+  registerFlush,
   note,
   session,
   reload,
@@ -107,20 +120,31 @@ function Pane({
   reload: (beforeSwap: () => void) => Promise<void>
 }) {
   const queryClient = useQueryClient()
-  const actions = useKnowledgeActions()
+  // Text an earlier editor of this note could not save: it comes back instead of the disk text.
+  const [orphan] = useState(() => orphanDrafts.get(path))
+  useEffect(() => {
+    orphanDrafts.delete(path)
+  }, [path])
   const [mode, setMode] = useState<'edit' | 'preview'>('edit')
-  const [draft, setDraft] = useState(session.body)
-  const [status, setStatus] = useState<Status>('saved')
+  const [draft, setDraft] = useState(orphan?.body ?? session.body)
+  const [status, setStatus] = useState<Status>(orphan ? 'dirty' : 'saved')
+  const [changedElsewhere, setChangedElsewhere] = useState(false)
   const [saveError, setSaveError] = useState<unknown>(null)
-  const [conflict, setConflict] = useState<{ etag: string | null } | null>(null)
+  const [conflict, setConflict] = useState<{ etag: string | null } | null>(
+    orphan && orphan.etag !== session.etag ? { etag: session.etag } : null,
+  )
   const [compare, setCompare] = useState<KnowledgeNote | 'loading' | 'removed' | null>(null)
   const [reloadError, setReloadError] = useState(false)
-  const draftRef = useRef(session.body)
+  const draftRef = useRef(orphan?.body ?? session.body)
   const savedRef = useRef(session.body)
   const etagRef = useRef<string | null>(session.etag)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const inFlight = useRef(false)
-  const conflictRef = useRef(false)
+  const saving = useRef<Promise<void> | null>(null)
+  const saves = useRef(0)
+  const failed = useRef(false)
+  const unmounted = useRef(false)
+  const conflictRef = useRef(orphan !== undefined && orphan.etag !== session.etag)
   const notesRef = useRef(notes)
   useEffect(() => {
     notesRef.current = notes
@@ -131,51 +155,62 @@ function Pane({
     void queryClient.invalidateQueries({ queryKey: historyKey(path) })
   }, [queryClient, path])
 
-  const saveRef = useRef<(overrideEtag?: string | null) => void>(() => undefined)
+  const saveRef = useRef<(overrideEtag?: string | null) => Promise<void>>(async () => undefined)
   const save = useCallback(
-    (overrideEtag?: string | null) => {
-      if (inFlight.current) return
-      if (conflictRef.current && overrideEtag === undefined) return
+    (overrideEtag?: string | null): Promise<void> => {
+      if (inFlight.current) return saving.current ?? Promise.resolve()
+      if (conflictRef.current && overrideEtag === undefined) return Promise.resolve()
       const body = draftRef.current
       if (body === savedRef.current && overrideEtag === undefined) {
         setStatus('saved')
-        return
+        return Promise.resolve()
       }
       inFlight.current = true
+      failed.current = false
       setStatus('saving')
-      actions.save.mutate(
-        { path, body, etag: overrideEtag === undefined ? etagRef.current : overrideEtag },
-        {
-          onSuccess: (response) => {
-            inFlight.current = false
-            etagRef.current = response.etag
-            savedRef.current = body
-            conflictRef.current = false
-            setConflict(null)
-            setCompare(null)
-            setSaveError(null)
-            refreshPanels()
-            if (draftRef.current !== body) {
+      // Not a mutation hook: a hook's callbacks stop once the editor is gone, and a save must outlive it.
+      const task = (async () => {
+        try {
+          const response = await saveNote({
+            path,
+            body,
+            etag: overrideEtag === undefined ? etagRef.current : overrideEtag,
+          })
+          inFlight.current = false
+          saves.current += 1
+          etagRef.current = response.etag
+          savedRef.current = body
+          conflictRef.current = false
+          setConflict(null)
+          setCompare(null)
+          setSaveError(null)
+          if (!unmounted.current) refreshPanels()
+          if (draftRef.current !== body) {
+            if (unmounted.current) void saveRef.current()
+            else {
               setStatus('dirty')
               timer.current = setTimeout(() => saveRef.current(), AUTOSAVE_MS)
-            } else setStatus('saved')
-          },
-          onError: (error) => {
-            inFlight.current = false
-            const stale = conflictOf(error)
-            if (stale) {
-              conflictRef.current = true
-              setConflict(stale)
-              setStatus('dirty')
-            } else {
-              setSaveError(error)
-              setStatus('error')
             }
-          },
-        },
-      )
+          } else setStatus('saved')
+        } catch (error) {
+          inFlight.current = false
+          const stale = conflictOf(error)
+          if (stale) {
+            conflictRef.current = true
+            setConflict(stale)
+            setStatus('dirty')
+          } else {
+            failed.current = true
+            setSaveError(error)
+            setStatus('error')
+          }
+          if (unmounted.current)
+            orphanDrafts.set(path, { body: draftRef.current, etag: etagRef.current })
+        }
+      })()
+      saving.current = task
+      return task
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `actions.save.mutate` is stable enough; the rest are refs
     [path, refreshPanels],
   )
   useEffect(() => {
@@ -190,14 +225,67 @@ function Pane({
     timer.current = setTimeout(() => saveRef.current(), AUTOSAVE_MS)
   }, [])
 
-  // Leaving the note (or the page) with unsaved text saves it once more.
-  useEffect(
-    () => () => {
+  // Leaving the note (or the page) with unsaved text saves it once more. A save already running picks up what was
+  // typed after it started once it lands; text that cannot be saved is kept for the next time the note opens.
+  useEffect(() => {
+    unmounted.current = false
+    return () => {
+      unmounted.current = true
       clearTimeout(timer.current)
-      if (draftRef.current !== savedRef.current && !conflictRef.current) saveRef.current()
-    },
-    [],
-  )
+      if (draftRef.current === savedRef.current || inFlight.current) return
+      if (conflictRef.current)
+        orphanDrafts.set(path, { body: draftRef.current, etag: etagRef.current })
+      else void saveRef.current()
+    }
+  }, [path])
+
+  useEffect(() => {
+    if (orphan && !conflictRef.current)
+      timer.current = setTimeout(() => saveRef.current(), AUTOSAVE_MS)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the draft this editor was opened with
+  }, [])
+
+  // The page asks for this before it moves the note: the draft is on disk (true) or it is not (false).
+  useEffect(() => {
+    registerFlush(async () => {
+      clearTimeout(timer.current)
+      for (let round = 0; round < 5; round += 1) {
+        if (inFlight.current) await saving.current
+        if (draftRef.current === savedRef.current) return true
+        if (conflictRef.current) return false
+        failed.current = false
+        await saveRef.current()
+        if (failed.current || conflictRef.current) return false
+      }
+      return draftRef.current === savedRef.current
+    })
+    return () => registerFlush(null)
+  }, [registerFlush])
+
+  // The note on disk moved on without us (another browser, a missed event, a stream resync): say so, never replace.
+  useEffect(() => {
+    if (note.etag === etagRef.current) return
+    let cancelled = false
+    void (async () => {
+      while (inFlight.current) await saving.current
+      const before = saves.current
+      try {
+        const fresh = await fetchNote(path)
+        if (
+          !cancelled &&
+          saves.current === before &&
+          !inFlight.current &&
+          fresh.etag !== etagRef.current
+        )
+          setChangedElsewhere(true)
+      } catch {
+        // The failed refresh already shows its own message.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [note.etag, path])
 
   async function doReload() {
     setReloadError(false)
@@ -206,6 +294,7 @@ function Pane({
         // The pane is replaced by one holding the fresh text: nothing of this one may be saved on the way out.
         clearTimeout(timer.current)
         conflictRef.current = true
+        setChangedElsewhere(false)
       })
     } catch {
       setReloadError(true)
@@ -315,6 +404,14 @@ function Pane({
             </button>
           </p>
         )}
+        {changedElsewhere && !external && (
+          <p className="kn-banner is-warn" role="status" data-testid="changed-elsewhere">
+            This note changed somewhere else. Your text is unchanged ·{' '}
+            <button type="button" onClick={() => void doReload()}>
+              Reload
+            </button>
+          </p>
+        )}
         {external?.kind === 'deleted' && (
           <p className="kn-banner is-warn" role="status">
             Deleted by <AuthorLabel author={external.by} agents={agents} />. Your text stays here
@@ -361,7 +458,7 @@ function Pane({
           {mode === 'edit' ? (
             <MarkdownEditor
               key={`${path}:${session.version}`}
-              initial={session.body}
+              initial={draft}
               label={`Contents of ${path}`}
               notes={() => notesRef.current}
               onChange={onChange}

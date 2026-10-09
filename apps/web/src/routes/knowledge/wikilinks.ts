@@ -12,8 +12,10 @@ export function resolveTarget(
   links: KnowledgeLink[],
   notes: KnowledgeNoteSummary[],
 ): string | null {
+  // The server's answer wins when it has one; a null (unresolved when last read) falls through to the live note list,
+  // so a note created since is found. Removals arrive with the refetched links.
   const known = links.find((link) => link.target === target)
-  if (known) return known.path
+  if (known?.path) return known.path
   const name = target.split('#')[0]!.trim().replace(/\.md$/i, '').toLowerCase()
   if (!name) return null
   const exact = notes.find((note) => note.path.replace(/\.md$/i, '').toLowerCase() === name)

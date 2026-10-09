@@ -1,5 +1,5 @@
 import type { KnowledgeChanged } from '@score/contract'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery } from '../team/team-queries.ts'
@@ -7,6 +7,7 @@ import { DeleteDialog, MoveDialog, NewNoteDialog } from './KnowledgeDialogs.tsx'
 import { KnowledgeTree } from './KnowledgeTree.tsx'
 import { NoteWorkspace } from './NoteWorkspace.tsx'
 import {
+  UnsavedDraftError,
   useKnowledgeActions,
   useKnowledgeInfo,
   useKnowledgeLive,
@@ -37,6 +38,10 @@ export function KnowledgePage() {
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
+  const flushRef = useRef<(() => Promise<boolean>) | null>(null)
+  const registerFlush = useCallback((flush: (() => Promise<boolean>) | null) => {
+    flushRef.current = flush
+  }, [])
   const search = useSearch(debounced)
   const notes = useMemo(() => tree.data?.notes ?? [], [tree.data])
   const recent = useMemo(
@@ -85,6 +90,25 @@ export function KnowledgePage() {
       {
         onSuccess: (response) => {
           setDialog(null)
+          void navigate(noteUrl(response.path))
+        },
+        onError: setDialogError,
+      },
+    )
+  }
+
+  function move(to: string, updateLinks: boolean) {
+    if (!path) return
+    actions.move.mutate(
+      { from: path, to, updateLinks },
+      {
+        onSuccess: (response) => {
+          setDialog(null)
+          setNotice(
+            updateLinks
+              ? `Moved to ${response.path}. Updated links in ${response.updatedNotes} ${response.updatedNotes === 1 ? 'note' : 'notes'}.`
+              : `Moved to ${response.path}. Links in other notes were left as they are.`,
+          )
           void navigate(noteUrl(response.path))
         },
         onError: setDialogError,
@@ -191,6 +215,7 @@ export function KnowledgePage() {
             }
             onMove={() => openDialog({ kind: 'move' })}
             onDelete={() => openDialog({ kind: 'delete' })}
+            registerFlush={registerFlush}
           />
         ) : (
           <div className="kn-empty">
@@ -224,23 +249,16 @@ export function KnowledgePage() {
           busy={actions.move.isPending}
           error={dialogError}
           onClose={() => setDialog(null)}
-          onSubmit={(to, updateLinks) =>
-            actions.move.mutate(
-              { from: path, to, updateLinks },
-              {
-                onSuccess: (response) => {
-                  setDialog(null)
-                  setNotice(
-                    updateLinks
-                      ? `Moved to ${response.path}. Updated links in ${response.updatedNotes} ${response.updatedNotes === 1 ? 'note' : 'notes'}.`
-                      : `Moved to ${response.path}. Links in other notes were left as they are.`,
-                  )
-                  void navigate(noteUrl(response.path))
-                },
-                onError: setDialogError,
-              },
-            )
-          }
+          onSubmit={(to, updateLinks) => {
+            // The file moves as it is on disk, so unsaved text is saved first; if that fails nothing moves.
+            void (flushRef.current?.() ?? Promise.resolve(true)).then((saved) => {
+              if (!saved) {
+                setDialogError(new UnsavedDraftError())
+                return
+              }
+              move(to, updateLinks)
+            })
+          }}
         />
       )}
       {dialog?.kind === 'delete' && path && (
