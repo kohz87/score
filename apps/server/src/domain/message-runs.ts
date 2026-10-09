@@ -405,7 +405,7 @@ export function roomRunInput(
 ): string {
   const messages = sqlite
     .prepare(
-      'SELECT * FROM messages WHERE room_id = ? AND id != ? ORDER BY created_at DESC, id DESC LIMIT 10',
+      'SELECT * FROM messages WHERE room_id = ? AND id != ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 10',
     )
     .all(roomId, parentMessageId)
     .map(messageFromRow)

@@ -218,6 +218,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `message.created`    | `Message`                                                                                     | Chat, Now thread                                         |
 | `message.delta`      | `{ messageId, roomId, append: string }`                                                       | Chat (streaming text)                                    |
 | `message.completed`  | `{ messageId, roomId, parts?: MessagePart[] }` (final parts replace the cached message's)     | Chat                                                     |
+| `message.deleted`    | `{ roomId, messageId }` (remove it from the cached messages; Score-side only)                  | Chat, Now thread                                         |
 | `typing`             | `{ roomId, agentId, text /* "is re-reading the read layer" */ \| null }`                      | Chat, Now thread                                         |
 | `approval.requested` | `Approval`                                                                                    | Now card, Chat, Flow, Watch, Tasks, header dot           |
 | `approval.updated`   | `Approval` (phase / decision / delivery changes)                                              | same                                                     |
@@ -403,6 +404,11 @@ surface: 'terminal' | 'editor' | 'browser' | null /* last frame, for a miniature
 - **S** `GET /api/rooms/:roomId` → `{ asOfSeq; room: Room; filesInPlay: string[]
 learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 - **S** `GET /api/rooms/:roomId/messages?before=<cursor>&limit=50` → `{ asOfSeq; items: Message[]; nextCursor }`
+- **H** `DELETE /api/rooms/:roomId/messages/:messageId` → `204`. Removes the message from Score for everyone (soft delete:
+  `messages.deleted_at`); it is left out of room reads, unread counts, the Now thread, the context handed to agents and
+  exports. Runs, Reports and the agents' Hermes session history are untouched, so an agent may still remember it. `409
+  conflict` while the message is still streaming; `404` for an unknown room or message; idempotent (deleting a deleted
+  message is `204`). Emits `message.deleted`.
 - `POST /api/rooms/:roomId/messages`
 
   ```ts

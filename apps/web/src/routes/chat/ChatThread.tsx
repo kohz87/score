@@ -13,6 +13,8 @@ import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { StreamContext, useStreamQuery } from '../../data/query-client.ts'
 import { ApiError } from '../../data/api.ts'
 import { Composer } from './Composer.tsx'
+import { DeleteToast } from './DeleteToast.tsx'
+import { usePendingDeletes } from './message-deletion.ts'
 import { MessageItem } from './MessageItem.tsx'
 import { messagesQuery, roomQuery } from './queries.ts'
 import { roomLabel } from './room-label.ts'
@@ -64,7 +66,9 @@ function MessagePage({
   useLayoutEffect(() => {
     if (data && status === 'success') onChange()
   }, [data, status, onChange])
-  const items = data?.items.filter((item) => !excluded.includes(item.id)) ?? []
+  const hidden = usePendingDeletes().hidden
+  const items =
+    data?.items.filter((item) => !excluded.includes(item.id) && !hidden.has(item.id)) ?? []
   // A resync can move the latest page boundary; follow its fresh cursor to avoid a gap.
   const olderCursor = older ? data?.nextCursor : null
   return (
@@ -196,6 +200,7 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
           </div>
         </div>
       )}
+      <DeleteToast />
       {room && <Composer roomId={roomId} roomName={room.name} agents={agents} />}
     </section>
   )

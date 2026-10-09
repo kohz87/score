@@ -33,6 +33,13 @@ export const MessageCompletedSchema = z.object({
 })
 export type MessageCompleted = z.infer<typeof MessageCompletedSchema>
 
+/** A message removed from Score (Score-side only: Hermes sessions and runs are untouched). */
+export const MessageDeletedSchema = z.object({
+  roomId: z.string().min(1),
+  messageId: z.string().min(1),
+})
+export type MessageDeleted = z.infer<typeof MessageDeletedSchema>
+
 export const TypingSchema = z.object({
   roomId: z.string().min(1),
   agentId: AgentIdSchema,
@@ -93,6 +100,7 @@ export const StreamEventSchema = z.discriminatedUnion('type', [
     type: z.literal('message.completed'),
     data: MessageCompletedSchema,
   }),
+  StreamEnvelopeSchema.extend({ type: z.literal('message.deleted'), data: MessageDeletedSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('typing'), data: TypingSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('approval.requested'), data: ApprovalSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('approval.updated'), data: ApprovalSchema }),

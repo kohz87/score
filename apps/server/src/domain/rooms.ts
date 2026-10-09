@@ -42,7 +42,7 @@ export function readRoom(sqlite: DatabaseSync, id: string, now: string): Room {
       .prepare(
         `
     SELECT count(*) AS count FROM messages m LEFT JOIN room_reads r ON r.room_id = m.room_id
-    WHERE m.room_id = ? AND m.author_kind = 'agent' AND
+    WHERE m.room_id = ? AND m.author_kind = 'agent' AND m.deleted_at IS NULL AND
       (r.room_id IS NULL OR (m.created_at, m.id) > (r.last_read_message_created_at, r.last_read_message_id))
   `,
       )
@@ -55,7 +55,7 @@ export function readRoom(sqlite: DatabaseSync, id: string, now: string): Room {
       sqlite
         .prepare(
           `SELECT DISTINCT author_agent_id FROM messages
-      WHERE room_id = ? AND author_kind = 'agent' AND created_at > ? ORDER BY author_agent_id`,
+      WHERE room_id = ? AND author_kind = 'agent' AND deleted_at IS NULL AND created_at > ? ORDER BY author_agent_id`,
         )
         .all(id, cutoff),
     )
@@ -200,6 +200,40 @@ export function updateMessage(
     : [{ type: 'message.delta', data: { messageId, roomId, append } }]
 }
 
+/**
+ * Soft delete (PLAN 5.20): the row stays for runs and audit, every read leaves it out. Idempotent; a message that is
+ * still streaming is refused so its run never writes into a hidden message.
+ */
+export function deleteMessage(
+  sqlite: DatabaseSync,
+  roomId: string,
+  messageId: string,
+  now: string,
+): DomainEventDraft[] {
+  const row = z
+    .object({ streaming: z.union([z.literal(0), z.literal(1)]), deleted_at: z.string().nullable() })
+    .nullish()
+    .parse(
+      sqlite
+        .prepare('SELECT streaming, deleted_at FROM messages WHERE id = ? AND room_id = ?')
+        .get(messageId, roomId),
+    )
+  if (!row) throw new HttpError(404, 'not_found', 'Unknown message')
+  if (row.deleted_at !== null) return []
+  if (row.streaming === 1)
+    throw new HttpError(409, 'conflict', 'This message is still being written')
+  const before = readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at)
+  sqlite
+    .prepare(
+      'UPDATE messages SET deleted_at = ?, updated_at = ?, version = version + 1 WHERE id = ?',
+    )
+    .run(now, now, messageId)
+  return [
+    { type: 'message.deleted', data: { roomId, messageId } },
+    ...roomChanged(sqlite, roomId, now, before),
+  ]
+}
+
 const MAX_COMPLETION_PARTS_CHARS = 256 * 1024
 
 const CursorSchema = z
@@ -228,12 +262,12 @@ export function messagePage(
   const rows = before
     ? sqlite
         .prepare(
-          'SELECT * FROM messages WHERE room_id = ? AND (created_at, id) < (?, ?) ORDER BY created_at DESC, id DESC LIMIT ?',
+          'SELECT * FROM messages WHERE room_id = ? AND deleted_at IS NULL AND (created_at, id) < (?, ?) ORDER BY created_at DESC, id DESC LIMIT ?',
         )
         .all(roomId, before.createdAt, before.id, limit + 1)
     : sqlite
         .prepare(
-          'SELECT * FROM messages WHERE room_id = ? ORDER BY created_at DESC, id DESC LIMIT ?',
+          'SELECT * FROM messages WHERE room_id = ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT ?',
         )
         .all(roomId, limit + 1)
   const items = rows.slice(0, limit).map(messageFromRow)

@@ -2,6 +2,7 @@ import type { AgentSummary, Message, MessagePart } from '@score/contract'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { agentTextColor } from './agent-text-color.ts'
 import { ApprovalCard } from './ApprovalCard.tsx'
+import { requestDelete } from './message-deletion.ts'
 import { PlanCard } from './PlanCard.tsx'
 
 function Part({
@@ -70,6 +71,17 @@ export function MessageItem({ message, agents }: { message: Message; agents: Age
             })}
           </time>
           {message.streaming && <span className="chat-streaming">Writing…</span>}
+          {!message.streaming && (
+            <button
+              type="button"
+              className="chat-message-delete"
+              aria-label={`Delete message from ${name}`}
+              title="Removes it from Score. Agents may still remember it."
+              onClick={() => requestDelete(message.roomId, message.id)}
+            >
+              Delete
+            </button>
+          )}
         </div>
         <div
           className="chat-message-parts"

@@ -149,14 +149,16 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
   ).length
 
   const latest = sqlite
-    .prepare('SELECT room_id FROM messages ORDER BY created_at DESC, id DESC LIMIT 1')
+    .prepare(
+      'SELECT room_id FROM messages WHERE deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1',
+    )
     .get()
   const thread = latest
     ? (() => {
         const roomId = z.object({ room_id: z.string() }).parse(latest).room_id
         const messages: Message[] = sqlite
           .prepare(
-            'SELECT * FROM messages WHERE room_id = ? ORDER BY created_at DESC, id DESC LIMIT 3',
+            'SELECT * FROM messages WHERE room_id = ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 3',
           )
           .all(roomId)
           .map(messageFromRow)

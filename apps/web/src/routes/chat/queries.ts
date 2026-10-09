@@ -108,6 +108,8 @@ export function reduceMessages(
     else typing[event.data.agentId] = event.data.text
     return { ...data, typing }
   }
+  if (event.type === 'message.deleted')
+    return { ...data, items: data.items.filter((item) => item.id !== event.data.messageId) }
   if (event.type === 'message.created') {
     if (!latest) return data
     return {
@@ -148,7 +150,14 @@ export function messagesQuery(roomId: string, before: string | null = null) {
       )
       return { asOfSeq, data: { ...page, typing: {} } }
     },
-    types: ['message.created', 'message.delta', 'message.completed', 'typing', 'lane.upserted'],
+    types: [
+      'message.created',
+      'message.delta',
+      'message.completed',
+      'message.deleted',
+      'typing',
+      'lane.upserted',
+    ],
     reduce: (data, event) => reduceMessages(data, event, roomId, before === null),
   })
 }

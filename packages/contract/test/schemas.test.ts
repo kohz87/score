@@ -393,6 +393,7 @@ const cases = [
     { name: 'docs', url: 'https://mcp.example.com/sse', command: ['x'] },
   ],
   ['PlatformParamSchema', 'telegram', 'Bad Name'],
+  ['MessageDeletedSchema', f.deleted, { roomId: 'room-1' }],
   [
     'MessagingFieldSchema',
     {
