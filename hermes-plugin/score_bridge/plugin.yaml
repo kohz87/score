@@ -17,3 +17,9 @@ hooks:
   - on_kanban_worker_spawned
   - on_kanban_worker_exited
   - on_kanban_task_updated
+provides_tools:
+  - knowledge_search
+  - knowledge_read
+  - knowledge_list
+  - knowledge_write
+  - knowledge_append
