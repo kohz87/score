@@ -760,8 +760,11 @@ export class LivePort implements HermesPort {
   }
   // Hermes' /v1/runs takes `session_id` and loads that session's history (api_server_runs.py); Score already passes
   // one on every run. A gateway without the run API cannot start Score runs at all.
-  sessionContinuation(): 'same_session' | 'new_session' {
-    return this.current.hermes.apiServer ? 'same_session' : 'new_session'
+  sessionContinuation(): 'same_session' | 'new_session' | 'unknown' {
+    // An unreachable gateway says nothing about what it supports: never turn an outage into a stored fallback.
+    return this.current.hermes.reachable && this.current.hermes.apiServer
+      ? 'same_session'
+      : 'unknown'
   }
   async sessionCosts(req: { sinceMs: number; agentIds: string[] }) {
     return readProfileSessionCosts(req, this.options.hermesHome)
