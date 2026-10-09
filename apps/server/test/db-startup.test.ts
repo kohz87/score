@@ -110,6 +110,8 @@ beforeEach(() => {
     return process
   })
   vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+  // The pairing link is printed only to a terminal (anything else, like the launcher's log, never gets it).
+  Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true })
   vi.spyOn(process.stderr, 'write').mockReturnValue(true)
 })
 
@@ -118,6 +120,7 @@ afterEach(() => {
     if (result.type === 'return') clearInterval(result.value)
   }
   vi.useRealTimers()
+  Reflect.deleteProperty(process.stdout, 'isTTY')
   process.exitCode = previousExitCode
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
