@@ -84,45 +84,40 @@ export function localTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone
 }
 
-function dayKey(ms: number, tz: string): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(ms)
-}
-
-function offsetMs(ms: number, tz: string): number {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-US', {
+// An Intl formatter costs far more than the calls it serves: build one per zone.
+const dayFormatters = new Map<string, Intl.DateTimeFormat>()
+function formatter(tz: string): Intl.DateTimeFormat {
+  let found = dayFormatters.get(tz)
+  if (!found) {
+    found = new Intl.DateTimeFormat('en-CA', {
       timeZone: tz,
-      hourCycle: 'h23',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
     })
-      .formatToParts(ms)
-      .map((part) => [part.type, part.value]),
-  )
-  const asUtc = Date.UTC(
-    Number(parts.year),
-    Number(parts.month) - 1,
-    Number(parts.day),
-    Number(parts.hour),
-    Number(parts.minute),
-    Number(parts.second),
-  )
-  return asUtc - Math.floor(ms / 1000) * 1000
+    if (dayFormatters.size > 64) dayFormatters.clear()
+    dayFormatters.set(tz, found)
+  }
+  return found
 }
 
+function dayKey(ms: number, tz: string): string {
+  return formatter(tz).format(ms)
+}
+
+/** The first instant of local day `key`: the smallest time whose local date is `key` or later. Handles a midnight that
+ * does not exist (clocks jump over it) or happens twice. Local dates only grow with time, so a bisection finds it. */
 export function startOfDay(key: string, tz: string): number {
   const guess = Date.parse(`${key}T00:00:00Z`)
-  const first = guess - offsetMs(guess, tz)
-  return guess - offsetMs(first, tz)
+  // No zone is more than 14 hours from UTC, so the boundary lies within a day either side of the UTC midnight.
+  let low = guess - 86_400_000 // local date < key here
+  let high = guess + 86_400_000 // local date >= key here
+  while (high - low > 1) {
+    const mid = low + Math.floor((high - low) / 2)
+    if (dayKey(mid, tz) >= key) high = mid
+    else low = mid
+  }
+  return high
 }
 
 export function addDays(key: string, days: number): string {
@@ -142,7 +137,10 @@ export function customRangeProblem(
   now: number,
   tz = localTimeZone(),
 ): string | null {
-  const valid = (key: string) => /^\d{4}-\d{2}-\d{2}$/.test(key) && addDays(key, 0) === key
+  const valid = (key: string) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(key) &&
+    Number.isFinite(Date.parse(`${key}T00:00:00Z`)) &&
+    addDays(key, 0) === key
   if (!valid(custom.from) || !valid(custom.to)) return 'from and to must be real dates (YYYY-MM-DD)'
   if (custom.from > custom.to) return 'from must not be after to'
   if (custom.to > dayKey(now, tz)) return 'to must not be after today'
@@ -315,14 +313,17 @@ export function computeReports(input: ReportInput): Reports {
   const taskAgents = [
     ...new Set(finished.flatMap((task) => (task.assignee ? [task.assignee] : []))),
   ].sort()
+  // One formatted date per task, counted once per (agent, day).
+  const perDay = new Map<string, number>()
+  for (const task of finished) {
+    if (!task.assignee) continue
+    const key = `${task.assignee}\0${dayKey(at(task), tz)}`
+    perDay.set(key, (perDay.get(key) ?? 0) + 1)
+  }
   const byDay = days.map((date) => ({
     date,
     perAgent: Object.fromEntries(
-      taskAgents.map((agentId) => [
-        agentId,
-        finished.filter((task) => task.assignee === agentId && dayKey(at(task), tz) === date)
-          .length,
-      ]),
+      taskAgents.map((agentId) => [agentId, perDay.get(`${agentId}\0${date}`) ?? 0]),
     ),
   }))
 

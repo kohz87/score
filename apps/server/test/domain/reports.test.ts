@@ -413,3 +413,60 @@ test('cache hit rate per agent and in total; unknown stays null', () => {
   // Over the agents that report: (750 + 0) / (1000 + 1000).
   expect(report.totals.cacheHitRate).toBe(0.375)
 })
+
+test('a 366-day custom report with many tasks computes quickly (no per-task formatter construction)', () => {
+  const day = 86_400_000
+  const end = Date.parse('2026-10-09T12:00:00Z')
+  const many = Array.from({ length: 300 }, (_, i) =>
+    kanban(`p${i}`, {
+      assignee: ['builder', 'designer', 'lead'][i % 3]!,
+      createdAt: end - (i + 2) * day,
+      completedAt: end - (i + 1) * day,
+    }),
+  )
+  const started = performance.now()
+  const result = computeReports({
+    range: 'custom',
+    custom: { from: '2025-10-09', to: '2026-10-09' },
+    now: end,
+    tz: 'America/New_York',
+    agentIds: ['builder', 'designer', 'lead'],
+    runs: [],
+    approvals: [],
+    facts: { tasks: many, spendUsd: {} },
+  })
+  expect(performance.now() - started).toBeLessThan(2000)
+  expect(result.byDay).toHaveLength(366)
+  expect(
+    result.byDay.reduce(
+      (n, d) => n + Object.values(d.perAgent).reduce((a, b) => a + b, 0),
+      0,
+    ),
+  ).toBe(300)
+})
+
+test('a local day whose midnight does not exist starts at the first valid instant of that day', () => {
+  // Santiago skips 00:00 on 2026-09-06 (clocks jump 00:00 -> 01:00).
+  const start = reportWindow('custom', Date.parse('2026-09-10T12:00:00Z'), 'America/Santiago', {
+    from: '2026-09-06',
+    to: '2026-09-06',
+  }).from
+  expect(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(start)).toBe(
+    '2026-09-06',
+  )
+  expect(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(start - 1)).toBe(
+    '2026-09-05',
+  )
+})
+
+test('malformed custom dates are a problem, never an exception', () => {
+  expect(customRangeProblem({ from: '2026-13-01', to: '2026-13-02' }, now, tz)).toMatch(
+    /real dates/,
+  )
+  expect(customRangeProblem({ from: '2026-02-30', to: '2026-03-01' }, now, tz)).toMatch(
+    /real dates/,
+  )
+  expect(customRangeProblem({ from: '9999-99-99', to: '2026-03-01' }, now, tz)).toMatch(
+    /real dates/,
+  )
+})
