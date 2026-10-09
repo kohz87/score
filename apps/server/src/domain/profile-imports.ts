@@ -41,7 +41,11 @@ export class ProfileImportStore {
   }
   save(bytes: Buffer): string {
     if (bytes.length === 0 || bytes.length > PROFILE_IMPORT_MAX_BYTES)
-      throw new HttpError(413, 'payload_too_large', 'The archive must be between 1 byte and 200 MiB.')
+      throw new HttpError(
+        413,
+        'payload_too_large',
+        'The archive must be between 1 byte and 200 MiB.',
+      )
     this.ensureDirectory()
     const id = randomUUID()
     const fd = openSync(
@@ -50,7 +54,7 @@ export class ProfileImportStore {
       0o600,
     )
     try {
-      for (let at = 0; at < bytes.length; ) at += writeSync(fd, bytes, at)
+      for (let at = 0; at < bytes.length;) at += writeSync(fd, bytes, at)
       fsyncSync(fd)
     } finally {
       closeSync(fd)

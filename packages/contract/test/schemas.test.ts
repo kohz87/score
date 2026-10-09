@@ -130,6 +130,18 @@ const cases = [
   ['AgentPreviewRequestSchema', { kind: 'delete', agentId: 'helper' }, { kind: 'delete' }],
   ['AgentPreviewSchema', preview, { ...preview, hash: undefined }],
   ['AgentOperationSchema', operation, { ...operation, state: 'bogus' }],
+  [
+    'AgentImportRequestSchema',
+    {
+      uploadId: '30000000-0000-4000-8000-000000000001',
+      id: 'helper',
+      name: 'Helper',
+      role: 'r',
+      style: f.style,
+    },
+    { uploadId: 'not-a-uuid', id: 'helper', name: 'Helper', role: 'r', style: f.style },
+  ],
+  ['ProfileStepNameSchema', 'import_profile', 'import'],
   ['ProfileNameSchema', 'helper', 'Helper'],
   ['ProfileStepNameSchema', 'create_profile', 'other'],
   ['AgentIdSchema', 'lead', ''],

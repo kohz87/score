@@ -341,7 +341,9 @@ export async function inspectProfileArchive(path: string, maxBytes: number): Pro
         'The archive contains credential files. Hermes copies them into the new agent; their contents are not shown.',
       )
     if (facts.plugins.length)
-      facts.warnings.push('Imported plugins run code on this machine. Import only archives you trust.')
+      facts.warnings.push(
+        'Imported plugins run code on this machine. Import only archives you trust.',
+      )
     return facts
   } finally {
     if (!handedOver) closeSync(fd)

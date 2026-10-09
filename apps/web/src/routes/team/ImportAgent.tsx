@@ -68,7 +68,8 @@ function ImportAgentDialog({ agents, close }: { agents: AgentSummary[]; close: (
 
   const upload = useMutation({
     mutationFn: async (file: File) => {
-      if (file.size > PROFILE_IMPORT_MAX_BYTES) throw new Error('The archive is larger than 200 MiB.')
+      if (file.size > PROFILE_IMPORT_MAX_BYTES)
+        throw new Error('The archive is larger than 200 MiB.')
       return ImportInspectionSchema.parse(
         await apiFetch('agents/imports', {
           method: 'POST',
@@ -210,7 +211,8 @@ function ImportAgentDialog({ agents, close }: { agents: AgentSummary[]; close: (
               </p>
             ))}
             <p>
-              Hermes also adds a small launcher script for the new profile in <code>~/.local/bin</code>.
+              Hermes also adds a small launcher script for the new profile in{' '}
+              <code>~/.local/bin</code>.
             </p>
           </section>
           <label>

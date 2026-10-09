@@ -16,7 +16,8 @@ async function inspect(bytes: Buffer) {
   writeFileSync(path, bytes)
   return inspectProfileArchive(path, 200 * 1024 * 1024)
 }
-const refused = (entries: TarEntry[]) => expect(inspect(tarGz(entries))).rejects.toMatchObject({ status: 400 })
+const refused = (entries: TarEntry[]) =>
+  expect(inspect(tarGz(entries))).rejects.toMatchObject({ status: 400 })
 
 test('reads name, model, skills, plugins, memory size and config version without extracting', async () => {
   const facts = await inspect(sampleProfile())

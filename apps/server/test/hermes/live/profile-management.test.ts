@@ -1,4 +1,12 @@
-import { chmodSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { gzipSync } from 'node:zlib'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
@@ -283,7 +291,7 @@ test('clone uses only --clone-from, and an existing directory is never adopted',
   await expect(step('create_profile')).rejects.toThrow(/will not adopt/)
   expect(calls).toHaveLength(before)
 })
-test('import hands Hermes only Score\'s private upload with argv, never adopts, and reinstalls the pinned bridge', async () => {
+test("import hands Hermes only Score's private upload with argv, never adopts, and reinstalls the pinned bridge", async () => {
   const dir = join(env.home, 'profile-imports')
   mkdirSync(dir, { mode: 0o700 })
   const file = join(dir, '20000000-0000-4000-8000-000000000002.tar.gz')

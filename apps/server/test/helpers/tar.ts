@@ -9,12 +9,6 @@ export interface TarEntry {
   link?: string
 }
 
-function field(value: string, length: number): Buffer {
-  const buffer = Buffer.alloc(length)
-  buffer.write(value, 0, 'utf8')
-  return buffer
-}
-
 /** Minimal GNU-style tar writer for tests (long names via an "L" record, like Python's GNU format). */
 export function tarBytes(entries: TarEntry[]): Buffer {
   const blocks: Buffer[] = []
@@ -52,7 +46,10 @@ export function tarGz(entries: TarEntry[]): Buffer {
 export function sampleProfile(root = 'scout', extra: TarEntry[] = []): Buffer {
   return tarGz([
     { name: `${root}/` },
-    { name: `${root}/config.yaml`, body: 'model:\n  default: example/model-1\n  provider: example\n_config_version: 31\n' },
+    {
+      name: `${root}/config.yaml`,
+      body: 'model:\n  default: example/model-1\n  provider: example\n_config_version: 31\n',
+    },
     { name: `${root}/profile.yaml`, body: 'description: Reads and summarizes\n' },
     { name: `${root}/SOUL.md`, body: '# Scout\n' },
     { name: `${root}/skills/` },

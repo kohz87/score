@@ -233,10 +233,12 @@ export class ProfileOperations {
         lifecycleOf(this.db.sqlite, preview.targetName)?.incarnation_id ?? randomUUID(),
       requestHash: expectedHash,
       state: 'running',
-      steps: (imported ? importSteps : request.kind === 'create' ? createSteps : deleteSteps).map((name) => ({
-        name,
-        state: 'pending',
-      })),
+      steps: (imported ? importSteps : request.kind === 'create' ? createSteps : deleteSteps).map(
+        (name) => ({
+          name,
+          state: 'pending',
+        }),
+      ),
       createdAt: now,
       updatedAt: now,
       nextStep: imported
@@ -340,7 +342,10 @@ export class ProfileOperations {
    * Import an uploaded archive as a new agent. Hermes refuses an existing profile, so there is no replace: an
    * existing id is a blocker (delete the agent first, which keeps a private export).
    */
-  async beginImport(request: AgentImportRequest, facts: { model: string | null; hasCredentials: boolean }) {
+  async beginImport(
+    request: AgentImportRequest,
+    facts: { model: string | null; hasCredentials: boolean },
+  ) {
     if (facts.hasCredentials && !request.confirmCredentials)
       throw new HttpError(
         400,

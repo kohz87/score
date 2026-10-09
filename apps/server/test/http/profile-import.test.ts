@@ -102,7 +102,9 @@ test('upload stores a private 0600 file and returns a names-only inspection', as
 
 test('upload needs a paired browser and refuses unsafe archives without keeping them', async () => {
   expect((await upload(sampleProfile(), false)).statusCode).toBe(401)
-  const unsafe = await upload(tarGz([{ name: 'scout/' }, { name: 'scout/l', type: '2', link: '/etc' }]))
+  const unsafe = await upload(
+    tarGz([{ name: 'scout/' }, { name: 'scout/l', type: '2', link: '/etc' }]),
+  )
   expect(unsafe.statusCode).toBe(400)
   expect((await upload(Buffer.from('plain text'))).statusCode).toBe(400)
   expect((await upload(Buffer.alloc(0))).statusCode).toBeGreaterThanOrEqual(400)

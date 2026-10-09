@@ -91,9 +91,9 @@ test('shows what is inside, defaults the id from the archive and starts the impo
 test('an id that already exists is refused in the form', async () => {
   await openPreview()
   fireEvent.change(screen.getByLabelText('New agent id'), { target: { value: 'lead' } })
-  expect(screen.getAllByRole('alert').some((el) => /already exists/.test(el.textContent ?? ''))).toBe(
-    true,
-  )
+  expect(
+    screen.getAllByRole('alert').some((el) => /already exists/.test(el.textContent ?? '')),
+  ).toBe(true)
   expect(importButton().disabled).toBe(true)
 })
 
