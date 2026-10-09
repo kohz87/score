@@ -1,13 +1,21 @@
 import type { TaskDetail } from '@score/contract'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { renameSync } from 'node:fs'
 import { z } from 'zod'
+import {
+  attemptSummary,
+  currentAttemptsOfTask,
+  listAttempts,
+} from '../../../src/domain/kanban-attempts.ts'
+import { buildLanes } from '../../../src/domain/lanes.ts'
+import { computeReports } from '../../../src/domain/reports.ts'
 import { projectTask } from '../../../src/domain/tasks.ts'
 import type { HermesPort } from '../../../src/hermes/index.ts'
 import { LiveTasks } from '../../../src/hermes/live/tasks.ts'
 import { createBriefControl } from '../../../src/http/brief-control.ts'
 import { createTaskHolds } from '../../../src/http/task-holds.ts'
 import { createHarness, type Harness } from '../../fixtures/kanban/harness.ts'
-import { seedHistory, withFlag } from '../../helpers/kanban-attempts-seed.ts'
+import { seedAttempt, seedHistory, withFlag } from '../../helpers/kanban-attempts-seed.ts'
 
 // Audit wave 5, fix batch F.
 let h: Harness
@@ -184,3 +192,146 @@ describe('upgrade snapshot of legacy links', () => {
     expect(links).toEqual([{ task_id: 't_a', legacy_id: '99' }])
   })
 })
+
+describe('resumed observation', () => {
+  test('an attempt observed again is open in listings and summaries, with the unobserved gap kept', async () => {
+    h.board.task('t_a')
+    h.board.claim('t_a', { lock: 'host:1' })
+    const coordinator = h.make({ unreadableAfter: 2 })
+    await h.poll(coordinator, 3)
+    renameSync(h.board.path, `${h.board.path}.away`)
+    await h.poll(coordinator, 3)
+    const boundary = h.attempts()[0]!.observation_ended_at!
+    renameSync(`${h.board.path}.away`, h.board.path)
+    await h.poll(coordinator, 3)
+    const [attempt] = listAttempts(h.score.sqlite, {
+      since: new Date(h.clock.ms + 1000).toISOString(),
+      until: new Date(h.clock.ms + 2000).toISOString(),
+    })
+    expect(attempt).toBeDefined()
+    expect(attemptSummary(attempt!).observationEndedAt).toBeNull()
+    expect(attempt!.observations).toHaveLength(2)
+    expect(attempt!.observations[0]!.endedAt).toBe(boundary)
+    expect(attempt!.observations[1]!.endedAt).toBeNull()
+    // A window wholly inside the unobserved gap does not contain the attempt.
+    const gap = attempt!.observations
+    const inside = new Date(
+      (Date.parse(gap[0]!.endedAt!) + Date.parse(gap[1]!.startedAt)) / 2,
+    ).toISOString()
+    expect(listAttempts(h.score.sqlite, { since: inside, until: inside })).toEqual([])
+  })
+
+  test('lanes draw one block per observed stretch and reports count only observed time', () => {
+    const observed = [
+      { startedAt: '2026-10-09T10:00:00.000Z', endedAt: '2026-10-09T10:01:00.000Z' },
+      { startedAt: '2026-10-09T10:02:00.000Z', endedAt: null },
+    ]
+    const lanes = buildLanes({
+      agentIds: ['builder'],
+      runs: [],
+      tasks: [],
+      attempts: [
+        {
+          id: 'kr_1',
+          agentId: 'builder',
+          role: 'implementer',
+          startedAt: '2026-10-09T10:00:00.000Z',
+          endedAt: null,
+          observationEndedAt: null,
+          observed,
+          evidence: 'proven',
+          attemptNumber: 1,
+          taskId: 't',
+          taskTitle: 'T',
+        },
+      ],
+      hops: [],
+      waitingRunIds: [],
+      from: '2026-10-09T09:00:00.000Z',
+      to: '2026-10-09T11:00:00.000Z',
+      now: '2026-10-09T10:05:00.000Z',
+    })
+    const blocks = lanes.lanes[0]!.blocks
+    expect(blocks.map((block) => [block.state, block.end])).toEqual([
+      ['done', '2026-10-09T10:01:00.000Z'],
+      ['working', null],
+    ])
+    expect(blocks[0]!.observationEndedAt).toBe('2026-10-09T10:01:00.000Z')
+
+    const report = computeReports({
+      range: 'today',
+      now: Date.parse('2026-10-09T10:05:00.000Z'),
+      tz: 'UTC',
+      agentIds: ['builder'],
+      runs: [],
+      approvals: [],
+      facts: { tasks: [], spendUsd: { builder: 0 } },
+      attempts: [
+        {
+          agentId: null,
+          startedAt: '2026-10-09T10:00:00.000Z',
+          endedAt: null,
+          evidence: 'proven',
+          observed,
+        },
+      ],
+    })
+    // 1 minute + 3 minutes observed; the minute in between was not.
+    expect(report.unattributed).toEqual({ runs: 1, workingSec: 240 })
+  })
+})
+
+describe('copied attempts', () => {
+  test('contradicting evidence (lock, profile) is a different attempt, not a copy', async () => {
+    h.board.task('t_a')
+    h.board.claim('t_a', { lock: 'host:1', profile: 'builder' })
+    const coordinator = h.make()
+    await h.poll(coordinator, 3)
+    const startedAt = h.attempts()[0]!.started_at
+    // Restore: another worker holds the same numeric id, task and start second.
+    h.board.db.exec(
+      "DELETE FROM task_events; DELETE FROM sqlite_sequence WHERE name = 'task_events'",
+    )
+    h.board.db.exec("UPDATE task_runs SET claim_lock = 'host:2', profile = 'reviewer'")
+    h.board.event('t_a', 'created', { by: 'lead' })
+    await h.poll(coordinator, 4)
+    const rows = h.attempts()
+    expect(rows).toHaveLength(2)
+    expect(rows.every((row) => row.started_at === startedAt)).toBe(true)
+    expect(rows.map((row) => row.copied_from)).toEqual([null, null])
+    expect(
+      listAttempts(h.score.sqlite, {
+        since: new Date(0).toISOString(),
+        until: new Date(h.clock.ms).toISOString(),
+        excludeCopies: true,
+      }),
+    ).toHaveLength(2)
+  })
+
+  test('a genuine copy stays visible to its task and carries the later observations in aggregates', async () => {
+    h.board.task('t_a')
+    h.board.claim('t_a', { lock: 'host:1' })
+    const coordinator = h.make()
+    await h.poll(coordinator, 3)
+    h.board.db.exec(
+      "DELETE FROM task_events; DELETE FROM sqlite_sequence WHERE name = 'task_events'",
+    )
+    h.board.event('t_a', 'created', { by: 'lead' })
+    await h.poll(coordinator, 4)
+    const rows = h.attempts()
+    expect(rows).toHaveLength(2)
+    expect(rows[1]!.copied_from).toBe(rows[0]!.id)
+    const current = currentAttemptsOfTask(h.score.sqlite, 't_a', h.clock.ms)
+    expect(current.map((attempt) => attempt.id)).toEqual([rows[1]!.id])
+    // Aggregates count it once, through the row that carries the later state.
+    const all = listAttempts(h.score.sqlite, {
+      since: new Date(0).toISOString(),
+      until: new Date(h.clock.ms).toISOString(),
+      excludeCopies: true,
+    })
+    expect(all.map((attempt) => attempt.id)).toEqual([rows[1]!.id])
+    expect(all[0]!.observations.length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+void seedAttempt

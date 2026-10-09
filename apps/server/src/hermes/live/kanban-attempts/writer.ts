@@ -279,13 +279,36 @@ function observeAttempt(
 
   if (!existing) {
     if (classification.evidence === 'synthetic') return
+    // A copy (an attempt that survived a restore) matches on the whole frozen evidence: the same numeric id, task and
+    // start second with a different claim lock, profile or process is a contradicting attempt, not a copy.
+    const differs = (left: unknown, right: unknown) =>
+      left !== null && right !== null && left !== right
     const copied = sqlite
       .prepare(
-        `SELECT id FROM kanban_attempts
+        `SELECT id, copied_from, claim_lock, profile, worker_pid, worker_started_at FROM kanban_attempts
           WHERE source_id = ? AND attempt_id = ? AND task_id = ? AND started_at = ? AND history_id != ?
-          ORDER BY first_seen LIMIT 1`,
+          ORDER BY first_seen`,
       )
-      .get(capture.sourceId, row.id, row.task_id, row.started_at, historyId)
+      .all(capture.sourceId, row.id, row.task_id, row.started_at, historyId)
+      .map((candidate) =>
+        z
+          .object({
+            id: z.string(),
+            copied_from: z.string().nullable(),
+            claim_lock: z.string().nullable(),
+            profile: z.string().nullable(),
+            worker_pid: z.int().nullable(),
+            worker_started_at: z.string().nullable(),
+          })
+          .parse(candidate),
+      )
+      .find(
+        (candidate) =>
+          !differs(candidate.claim_lock, row.claim_lock) &&
+          !differs(candidate.profile, row.profile) &&
+          !differs(candidate.worker_pid, row.worker_pid) &&
+          !differs(candidate.worker_started_at, fingerprintOf(row.worker_started_at)),
+      )
     const role = claim ? (claim.sourceStatus === 'review' ? 'reviewer' : 'implementer') : null
     const content = {
       profile: row.profile,
@@ -339,7 +362,7 @@ function observeAttempt(
         content.error,
         snapshot,
         hashContent(content),
-        copied ? z.object({ id: z.string() }).parse(copied).id : null,
+        copied ? (copied.copied_from ?? copied.id) : null,
         now,
         now,
         open ? 1 : 0,

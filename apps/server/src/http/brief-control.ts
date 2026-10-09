@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import type { ScoreDb } from '../db/index.ts'
-import { actionableBriefTasks, emitBriefChange, requireBrief, taskStatus } from '../domain/briefs.ts'
+import {
+  actionableBriefTasks,
+  emitBriefChange,
+  requireBrief,
+  taskStatus,
+} from '../domain/briefs.ts'
 import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'

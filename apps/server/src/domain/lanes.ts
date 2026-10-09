@@ -23,6 +23,8 @@ export interface LaneAttemptInput {
   evidence: 'proven' | 'partial'
   /** Upstream attempt id, the tie-breaker of `order`. */
   attemptNumber: number
+  /** Observed stretches; a block is drawn per stretch so an unobserved gap is never drawn as work. */
+  observed?: readonly { startedAt: string; endedAt: string | null }[]
   /** Null for an attempt from an earlier copy of the board: its task must not be linked. */
   taskId: string | null
   /** The task of the attempt (whatever the lineage), for the block label. */
@@ -86,26 +88,45 @@ export const CHAT_MERGE_GAP_MS = 5 * 60 * 1000
 const FINISHED = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
 const iso = (ms: number) => new Date(ms).toISOString()
 
-function attemptDraft(attempt: LaneAttemptInput): Draft {
-  const start = Date.parse(attempt.startedAt)
-  // A finished attempt ends at its end; one that stopped being observed ends at the boundary (never later).
-  const end =
-    attempt.endedAt !== null
-      ? Date.parse(attempt.endedAt)
-      : attempt.observationEndedAt !== null
-        ? Date.parse(attempt.observationEndedAt)
-        : null
-  return {
-    id: `attempt:${attempt.id}`,
-    label:
-      attempt.taskTitle === null
-        ? 'Working'
-        : attempt.role === 'reviewer'
-          ? `Review: ${attempt.taskTitle}`
-          : attempt.taskTitle,
-    state: end === null ? 'working' : 'done',
-    start,
-    end: end === null ? null : Math.max(start, end),
+function attemptDrafts(attempt: LaneAttemptInput): Draft[] {
+  const attemptStart = Date.parse(attempt.startedAt)
+  const attemptEnd = attempt.endedAt === null ? null : Date.parse(attempt.endedAt)
+  const label =
+    attempt.taskTitle === null
+      ? 'Working'
+      : attempt.role === 'reviewer'
+        ? `Review: ${attempt.taskTitle}`
+        : attempt.taskTitle
+  // One block per observed stretch: a finished attempt ends at its end, one that stopped being observed ends at the
+  // boundary (never later), and one observed again continues in a new block after the unobserved gap.
+  const stretches = attempt.observed?.length
+    ? attempt.observed.map((interval) => ({
+        start: Math.max(attemptStart, Date.parse(interval.startedAt)),
+        end: interval.endedAt === null ? attemptEnd : Date.parse(interval.endedAt),
+        boundary:
+          interval.endedAt !== null &&
+          (attemptEnd === null || Date.parse(interval.endedAt) < attemptEnd)
+            ? interval.endedAt
+            : null,
+      }))
+    : [
+        {
+          start: attemptStart,
+          end:
+            attemptEnd !== null
+              ? attemptEnd
+              : attempt.observationEndedAt !== null
+                ? Date.parse(attempt.observationEndedAt)
+                : null,
+          boundary: attempt.observationEndedAt,
+        },
+      ]
+  return stretches.map((stretch, index) => ({
+    id: index === 0 ? `attempt:${attempt.id}` : `attempt:${attempt.id}:${index}`,
+    label,
+    state: stretch.end === null ? 'working' : 'done',
+    start: stretch.start,
+    end: stretch.end === null ? null : Math.max(stretch.start, stretch.end),
     taskId: attempt.taskId,
     runId: null,
     agentId: attempt.agentId,
@@ -114,10 +135,10 @@ function attemptDraft(attempt: LaneAttemptInput): Draft {
     attempt: {
       attemptId: attempt.id,
       provenance: attempt.evidence,
-      observationEndedAt: attempt.observationEndedAt,
+      observationEndedAt: stretch.boundary,
       order: [attempt.startedAt, attempt.attemptNumber],
     },
-  }
+  }))
 }
 
 function runDrafts(input: LaneInput, tasks: Map<string, LaneTaskInput>): Draft[] {
@@ -167,11 +188,9 @@ function runDrafts(input: LaneInput, tasks: Map<string, LaneTaskInput>): Draft[]
   // Attempts interleave with runs by start time; same-second ties keep runs first, then upstream attempt order.
   return [
     ...merged.map((draft, index) => ({ draft, rank: 0, tie: index })),
-    ...input.attempts.map((attempt) => ({
-      draft: attemptDraft(attempt),
-      rank: 1,
-      tie: attempt.attemptNumber,
-    })),
+    ...input.attempts.flatMap((attempt) =>
+      attemptDrafts(attempt).map((draft) => ({ draft, rank: 1, tie: attempt.attemptNumber })),
+    ),
   ]
     .sort((a, b) => a.draft.start - b.draft.start || a.rank - b.rank || a.tie - b.tie)
     .map(({ draft }) => draft)

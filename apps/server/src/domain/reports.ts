@@ -45,6 +45,8 @@ export interface ReportRun {
   endedAt: string | null
   /** False for a Kanban attempt whose claim could not be proven: counted as a run, never as working time. */
   work?: boolean
+  /** Observed stretches of a Kanban attempt: the gaps between them are not working time. */
+  observed?: { startedAt: string; endedAt: string | null }[]
 }
 /** A Kanban attempt for reports (5.17a-1). `endedAt` is where it ended or where observation stopped; null = running. */
 export interface ReportAttempt {
@@ -52,6 +54,19 @@ export interface ReportAttempt {
   startedAt: string
   endedAt: string | null
   evidence: 'proven' | 'partial'
+  observed?: { startedAt: string; endedAt: string | null }[]
+}
+/** [start, end] of a run, or of each observed stretch of an attempt (an open one runs to now). */
+function stretchesOf(
+  run: Pick<ReportRun, 'startedAt' | 'endedAt' | 'observed'>,
+  now: number,
+): Interval[] {
+  if (run.observed?.length)
+    return run.observed.map((stretch): Interval => [
+      Math.max(Date.parse(run.startedAt), Date.parse(stretch.startedAt)),
+      stretch.endedAt ? Date.parse(stretch.endedAt) : run.endedAt ? Date.parse(run.endedAt) : now,
+    ])
+  return [[Date.parse(run.startedAt), run.endedAt ? Date.parse(run.endedAt) : now]]
 }
 export interface ReportApproval {
   agentId: string
@@ -325,6 +340,7 @@ export function computeReports(input: ReportInput): Reports {
             startedAt: attempt.startedAt,
             endedAt: attempt.endedAt,
             work: attempt.evidence === 'proven',
+            ...(attempt.observed ? { observed: attempt.observed } : {}),
           },
         ],
   )
@@ -362,10 +378,7 @@ export function computeReports(input: ReportInput): Reports {
     const working = merge(
       allRuns
         .filter((run) => run.agentId === agentId && run.work !== false)
-        .map((run): Interval => [
-          Date.parse(run.startedAt),
-          run.endedAt ? Date.parse(run.endedAt) : input.now,
-        ]),
+        .flatMap((run): Interval[] => stretchesOf(run, input.now)),
       from,
       to,
     )
@@ -466,10 +479,7 @@ export function computeReports(input: ReportInput): Reports {
         const working = merge(
           mine
             .filter((attempt) => attempt.evidence === 'proven')
-            .map((attempt): Interval => [
-              Date.parse(attempt.startedAt),
-              attempt.endedAt ? Date.parse(attempt.endedAt) : input.now,
-            ]),
+            .flatMap((attempt): Interval[] => stretchesOf(attempt, input.now)),
           from,
           to,
         )
@@ -564,6 +574,7 @@ export function readReportRows(
       startedAt: attempt.startedAt,
       endedAt: attempt.endedAt ?? attempt.observationEndedAt,
       evidence: attempt.evidence,
+      observed: attempt.observations,
     }),
   )
   return { runs, approvals, attempts }

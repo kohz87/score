@@ -151,6 +151,7 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
           startedAt: attempt.startedAt,
           endedAt: attempt.endedAt,
           observationEndedAt: attempt.observationEndedAt,
+          observed: attempt.observations,
           evidence: attempt.evidence,
           attemptNumber: attempt.attemptId,
           // A task from an earlier copy of the board is not linked: Now cannot open it or act on it.
@@ -324,7 +325,6 @@ function attemptChecks(
     since: new Date(0).toISOString(),
     until: nowIso,
     taskId: task.id,
-    excludeCopies: true,
   }).filter((attempt) => attemptSummary(attempt).task.current)
   return attempts.flatMap((attempt, index) => {
     if (attempt.role !== 'reviewer' || attempt.agentId === null || attempt.endedAt === null)

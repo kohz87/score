@@ -96,6 +96,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'ingest_floors',
     'ingest_keys',
     'kanban_associations',
+    'kanban_attempt_observations',
     'kanban_attempts',
     'kanban_histories',
     'kanban_pages',
