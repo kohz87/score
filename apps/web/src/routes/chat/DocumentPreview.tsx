@@ -153,7 +153,9 @@ export function DocumentDialog({ part, onClose }: { part: DocumentPart; onClose:
             Score can’t show Word and Excel files. Download it, or open the copy the agent got.
           </p>
         )}
-        {kind === 'pdf' && <p className="chat-doc-note">PDF files are downloaded, not shown here.</p>}
+        {kind === 'pdf' && (
+          <p className="chat-doc-note">PDF files are downloaded, not shown here.</p>
+        )}
         {textual && tooBig && (
           <p className="chat-doc-note">This file is too large to preview. Download it instead.</p>
         )}

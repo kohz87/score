@@ -346,9 +346,14 @@ export function Composer({
     live.current = { ...live.current, attachments: next }
     setAttachments(next)
   }
-  function addWorkspaceFile(agentId: string, path: string) {
+  function addWorkspaceFile(agentId: string, path: string, root?: string) {
     changeAttachments((current) => {
-      const item: Attachment = { kind: 'workspace', agentId, path }
+      const item: Attachment = {
+        kind: 'workspace',
+        agentId,
+        path,
+        ...(root === undefined ? {} : { root }),
+      }
       return current.length >= MAX_ATTACHMENTS ||
         current.some((existing) => attachmentKey(existing) === attachmentKey(item))
         ? current

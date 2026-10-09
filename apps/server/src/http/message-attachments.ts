@@ -73,7 +73,16 @@ export async function resolveAttachments(
       segments = parseRelativePath(item.workspace.path)
       if (segments.length === 0) throw new WorkspaceError(400, 'bad_path', 'That path is a folder')
       assertAllowedSegments(segments, 'read')
-      const workspace = await workspaces.open(agentId)
+      const expectedRoot = item.workspace.root
+      const workspace = await workspaces.open(agentId, undefined, (current) => {
+        if (expectedRoot !== undefined && expectedRoot !== current)
+          throw new WorkspaceError(
+            409,
+            'workspace_changed',
+            "This agent's workspace changed since it was shown: pick the file again",
+            { root: current },
+          )
+      })
       const entry = (await workspace.list(segments.slice(0, -1).join('/'))).find(
         (candidate) => candidate.name === segments[segments.length - 1],
       )

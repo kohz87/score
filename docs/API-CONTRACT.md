@@ -555,7 +555,7 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 
   ```ts
   req: { text: string; to?: AgentId[] /* explicit "To" chips; @mentions in text are merged */
-         planFirst?: boolean; model?: string /* one-shot /model */; attachments?: ({ mediaId: string; name?: string } | { workspace: { agentId: AgentId; path: string } })[] /* ≤ 10 */
+         planFirst?: boolean; model?: string /* one-shot /model */; attachments?: ({ mediaId: string; name?: string } | { workspace: { agentId: AgentId; path: string; root?: string /* root the file was picked from: a changed root is 409 workspace_changed */ } })[] /* ≤ 10 */
          edits?: MessageId /* edit and resend: the sender's own earlier message in this room */ }
   res: { message: Message; routedTo: AgentId[]; command: CommandResult | null; notices?: string[] }
   ```

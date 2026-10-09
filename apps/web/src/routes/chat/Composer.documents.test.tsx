@@ -182,7 +182,7 @@ test('a workspace file attaches by reference, with no upload', async () => {
   await waitFor(() => expect(sends()).toHaveLength(1))
   expect(sentBody(0)).toEqual({
     text: 'look',
-    attachments: [{ workspace: { agentId: 'lead', path: 'report.md' } }],
+    attachments: [{ workspace: { agentId: 'lead', path: 'report.md', root: '/work' } }],
   })
 })
 

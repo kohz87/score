@@ -1,7 +1,7 @@
 import type { AgentSummary } from '@score/contract'
 import { useEffect, useRef, useState } from 'react'
 import { TreeLevel, type Selection } from '../team/WorkspaceTree.tsx'
-import { useWorkspace } from '../team/workspace-queries.ts'
+import { useWorkspace, WorkspaceRootContext } from '../team/workspace-queries.ts'
 import '../team/workspace.css'
 
 /**
@@ -15,7 +15,7 @@ export function WorkspacePicker({
 }: {
   /** The agents the message is for; several get a chooser. */
   agents: AgentSummary[]
-  onPick: (agentId: string, path: string) => void
+  onPick: (agentId: string, path: string, root?: string) => void
   onClose: () => void
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
@@ -26,6 +26,12 @@ export function WorkspacePicker({
     dialog.current?.showModal?.()
   }, [])
   const info = useWorkspace(agentId)
+  const root = info.data?.available ? (info.data.root ?? undefined) : undefined
+  // The folder can change while the dialog is open: a selection made in the old one must not be attached.
+  useEffect(() => {
+    setSelected(null)
+    setExpanded(new Set())
+  }, [root])
   const agent = agents.find((candidate) => candidate.id === agentId)
   return (
     <dialog
@@ -66,22 +72,24 @@ export function WorkspacePicker({
           <p role="status">{info.data.reason ?? 'The workspace is unavailable.'}</p>
         )}
         {info.data?.available && (
-          <TreeLevel
-            key={agentId}
-            agentId={agentId}
-            path=""
-            depth={0}
-            expanded={expanded}
-            selected={selected}
-            onToggle={(path) =>
-              setExpanded((current) => {
-                const next = new Set(current)
-                if (!next.delete(path)) next.add(path)
-                return next
-              })
-            }
-            onSelect={setSelected}
-          />
+          <WorkspaceRootContext.Provider value={info.data.root ?? undefined}>
+            <TreeLevel
+              key={`${agentId}\0${root ?? ''}`}
+              agentId={agentId}
+              path=""
+              depth={0}
+              expanded={expanded}
+              selected={selected}
+              onToggle={(path) =>
+                setExpanded((current) => {
+                  const next = new Set(current)
+                  if (!next.delete(path)) next.add(path)
+                  return next
+                })
+              }
+              onSelect={setSelected}
+            />
+          </WorkspaceRootContext.Provider>
         )}
       </div>
       <div className="chat-doc-actions">
@@ -91,7 +99,7 @@ export function WorkspacePicker({
           disabled={selected?.kind !== 'file'}
           onClick={() => {
             if (selected?.kind !== 'file') return
-            onPick(agentId, selected.path)
+            onPick(agentId, selected.path, root)
             dialog.current?.close()
           }}
         >
