@@ -290,6 +290,8 @@ expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a mana
     - `GET /api/session/security` → `{ passwordSet: boolean }` · `PUT /api/session/security/password`
       `{ password; current? }` → `204` (first time without `current`; afterwards `current` is required; a forgotten
       password is reset on the host with `scripts/score password`). Stored as a salted scrypt hash, 0600.
+    - `POST /api/session/security/check` `{ password }` → `204` when it is the security password (5.23: lets the owner
+      confirm it before using it); same errors and the same attempt limits as every password-guarded action.
     - `POST /api/session/pairing-links` `{ password }` → `{ url; expiresAt }`: the same one-time, 15-minute token the
       console prints (minting replaces any unused one).
     - `POST /api/session/browsers/:id/renew` `{ password }` → the browser with a fresh 30-day limit and 7-day idle

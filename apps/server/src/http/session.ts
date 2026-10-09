@@ -70,6 +70,12 @@ export function registerSessionRoutes(
     return reply.code(204).send()
   })
 
+  // Lets the owner confirm the password before relying on it; a wrong guess counts like any other (5.23).
+  app.post('/api/session/security/check', guarded, async (request, reply) => {
+    await checkPassword(request.body, request.headers.cookie)
+    return reply.code(204).send()
+  })
+
   // Pairing management needs the security password, so a compromised paired browser can't invite another device,
   // keep itself alive or terminate the owner's pairings. The link is the same one-time, 15-minute token the console
   // prints (minting one replaces any earlier unused token).

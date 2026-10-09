@@ -1,0 +1,120 @@
+import { AgentDetailSchema, AgentSummarySchema, type AgentDetail } from '@score/contract'
+import { z } from 'zod'
+import type { ScoreDb } from '../db/index.ts'
+import { readAgent, readAgentNames, reconcileAgents } from '../domain/agents.ts'
+import type { HermesPort } from '../hermes/index.ts'
+import type { Ingest } from '../hub/ingest.ts'
+
+const FRESH_MS = 15_000
+
+/**
+ * Agents for page loads (5.23): reading them from Hermes runs several CLI processes per profile (seconds each), so
+ * pages answer from Score's projection and a background read refreshes it (agent.updated tells browsers what
+ * changed). Only a cold server with an empty projection waits for Hermes. Callers that just changed an agent ask
+ * for `fresh`.
+ */
+export function createAgentDirectory(
+  port: Pick<HermesPort, 'listAgentDetails'>,
+  db: ScoreDb,
+  ingest: Pick<Ingest, 'submit'>,
+  onError: (error: unknown) => void = () => undefined,
+  clock: () => number = Date.now,
+) {
+  let refreshedAt = 0
+  let known: string[] | null = null
+  let flight: Promise<AgentDetail[]> | undefined
+
+  function refresh(): Promise<AgentDetail[]> {
+    flight ??= (async () => {
+      const details = z.array(AgentDetailSchema).parse(await port.listAgentDetails())
+      await reconcileAgents(ingest, details)
+      known = details.map((agent) => agent.id)
+      refreshedAt = clock()
+      return details
+    })().finally(() => {
+      flight = undefined
+    })
+    return flight
+  }
+
+  /** The projected agents in Hermes's last known order (or Score's, before the first read). */
+  function projected(): AgentDetail[] {
+    return db.read((sqlite) => {
+      const ids = known ?? readAgentNames(sqlite).map((agent) => agent.id)
+      return ids.flatMap((id) => {
+        const agent = readAgent(sqlite, id)
+        return agent ? [AgentDetailSchema.parse(agent)] : []
+      })
+    })
+  }
+
+  return {
+    async details({ fresh = false }: { fresh?: boolean } = {}): Promise<AgentDetail[]> {
+      if (fresh) return refresh()
+      const cached = projected()
+      if (cached.length === 0) return refresh()
+      if (clock() - refreshedAt > FRESH_MS) void refresh().catch(onError)
+      return cached
+    },
+    refresh,
+  }
+}
+export type AgentDirectory = ReturnType<typeof createAgentDirectory>
+
+// Port calls that can change what an agent's detail shows: the next agent read after one of them goes to Hermes.
+const AGENT_WRITES = new Set([
+  'setAgentModel',
+  'setPluginEnabled',
+  'setSkillEnabled',
+  'setToolEnabled',
+  'installSkill',
+  'updateApprovals',
+  'writeAgentFile',
+  'describeProfile',
+  'profileStep',
+  'applyConfig',
+  'addLocalProvider',
+  'addProviderKey',
+  'connectProvider',
+])
+
+/**
+ * The port routes see: agent reads come from the directory; the first agent read after an agent-affecting write is
+ * fresh, so a save answers with what Hermes now holds.
+ */
+export function withAgentDirectory(port: HermesPort, directory: AgentDirectory): HermesPort {
+  let dirty = false
+  return new Proxy(port, {
+    get(target, property, receiver) {
+      if (property === 'listAgentDetails')
+        return async () => {
+          const fresh = dirty
+          dirty = false
+          return directory.details({ fresh })
+        }
+      if (property === 'listAgents')
+        return async () => {
+          const fresh = dirty
+          dirty = false
+          return (await directory.details({ fresh })).map((agent) =>
+            AgentSummarySchema.parse(agent),
+          )
+        }
+      const value: unknown = Reflect.get(target, property, receiver)
+      if (typeof value !== 'function') return value
+      const method = value as (...args: unknown[]) => unknown
+      if (typeof property === 'string' && AGENT_WRITES.has(property))
+        return (...args: unknown[]) => {
+          // Before and after: a read that runs while the write is in flight must not count as the fresh one.
+          dirty = true
+          const result = method.apply(target, args)
+          return result instanceof Promise
+            ? result.finally(() => {
+                dirty = true
+              })
+            : result
+        }
+      return method.bind(target)
+    },
+  })
+}

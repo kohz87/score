@@ -299,6 +299,12 @@ loading state + prefetch, `range=custom&from&to` (docs/briefs/5.21.md).
 for the ts.net name, while the LAN address keeps Score's own certificate; Score picks by SNI, renews daily, reloads
 without a restart (`scripts/score tailscale`, `SCORE_TLS_NAMES_DIR`). Done by the lead.
 
+**5.23 Responsiveness and save feedback** · Owner 2026-10-09: pages answer from Score's agent projection with a
+background Hermes refresh (live mode); the first read after an agent-affecting write is fresh; `config set K` keeps cached
+answers for unrelated keys; Advanced search never shows non-matching settings while loading; security password: Check
+button (`POST /api/session/security/check`) and a confirmation when set. Done by the lead. HTTP/2 deferred (stream code
+uses HTTP/1 response internals).
+
 ---
 
 ## First five tasks

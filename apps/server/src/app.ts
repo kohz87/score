@@ -4,6 +4,7 @@ import { CONTRACT_VERSION, type SystemStatus } from '@score/contract'
 import { serverOrigin, type Config } from './config.ts'
 import { SecurityPassword } from './auth/security-password.ts'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
+import { createAgentDirectory, withAgentDirectory } from './http/agent-directory.ts'
 import { registerAgentRoutes } from './http/agents.ts'
 import { registerProfileRoutes } from './http/profiles.ts'
 import { registerAgentHistoryRoutes } from './http/agent-history.ts'
@@ -100,6 +101,14 @@ export function buildApp({
   security,
 }: BuildAppOptions): FastifyInstance {
   const logging = logger ?? process.env.NODE_ENV !== 'test'
+  // Live Hermes reads cost seconds per profile: pages read agents from Score's projection (5.23).
+  if (config.mode === 'live' && db && ingest)
+    port = withAgentDirectory(
+      port,
+      createAgentDirectory(port, db, ingest, (error) =>
+        app.log.warn({ err: error }, 'Background agent refresh failed'),
+      ),
+    )
   const app = Fastify({
     ...(https ? { https } : {}),
     trustProxy: false,

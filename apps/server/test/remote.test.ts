@@ -819,3 +819,20 @@ test('Terminate all other pairings keeps only the caller', async () => {
     (await app.inject({ url: '/api/system', headers: { ...headers, cookie } })).statusCode,
   ).toBe(200)
 })
+
+test('checking the security password answers 204 or 403 and counts wrong guesses (5.23)', async () => {
+  const app = makeApp()
+  const cookie = await pair(app)
+  const check = (password: string) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/session/security/check',
+      headers: { ...headers, cookie },
+      payload: { password },
+    })
+  expect((await check(PASSWORD)).statusCode).toBe(409)
+  await setPassword(app, cookie)
+  expect((await check(PASSWORD)).statusCode).toBe(204)
+  for (let i = 0; i < 5; i++) expect((await check('wrong guess')).statusCode).toBe(403)
+  expect((await check(PASSWORD)).statusCode).toBe(429)
+})

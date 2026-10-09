@@ -25,6 +25,24 @@ function readShape(argv: string[]): { profile: string; rest: string[] } | null {
   if (text === 'tools list --platform' && rest.length === 4) return { profile, rest }
   return null
 }
+/** The key of a `[-p name] config set <key> <value>` call; null for every other command. */
+function configSetKey(argv: string[]): string | null {
+  const rest = argv[0] === '-p' ? argv.slice(2) : argv
+  return rest[0] === 'config' && rest[1] === 'set' && rest.length === 4 && rest[2] ? rest[2] : null
+}
+/** The config key a cached `config get --json <key>` entry answers; null for other reads (plugins, tools). */
+function readKeyOf(cacheKey: string): string | null {
+  const argv = cacheKey.split('\0')[1]?.split('\u0001') ?? []
+  const rest = argv[0] === '-p' ? argv.slice(2) : argv
+  return rest.slice(0, 3).join(' ') === 'config get --json' ? (rest[3] ?? null) : null
+}
+/** Whether a write to `written` can change the answer for `read` (same key, or one contains the other). */
+function relatedKey(read: string | null, written: string): boolean {
+  if (read === null) return true
+  const a = read.toLowerCase()
+  const b = written.toLowerCase()
+  return a === b || a.startsWith(`${b}.`) || b.startsWith(`${a}.`)
+}
 const WRITING = new Set(['config', 'plugins', 'tools', 'skills', 'profile', 'auth', 'mcp', 'model'])
 
 function profileHome(hermesHome: string, profile: string): string {
@@ -46,9 +64,11 @@ export function cachingRunner(inner: HermesRunner, hermesHome: string): HermesRu
   const pending = new Map<string, Promise<Result>>()
   const generation = new Map<string, number>()
   const gen = (home: string) => generation.get(home) ?? 0
-  const drop = (home: string) => {
+  // `clear: false` only fences reads that are still in flight; stored answers are left alone.
+  const drop = (home: string, clear = true) => {
     generation.set(home, gen(home) + 1)
-    for (const key of [...entries.keys()]) if (key.startsWith(`${home}\0`)) entries.delete(key)
+    if (clear)
+      for (const key of [...entries.keys()]) if (key.startsWith(`${home}\0`)) entries.delete(key)
   }
 
   return async (args, options) => {
@@ -58,12 +78,31 @@ export function cachingRunner(inner: HermesRunner, hermesHome: string): HermesRu
       const writes = first !== undefined && WRITING.has(first)
       const home = (profile: string) => profileHome(hermesHome, profile)
       const profile = args[0] === '-p' && args[1] ? args[1] : 'default'
-      if (writes) drop(home(profile))
+      if (!writes) return inner(args, options)
+      const target = home(profile)
+      const setKey = configSetKey(args)
+      // `config set K` rewrites config.yaml but leaves every other key as it was: answers for unrelated keys that were
+      // current just before the write stay current after it (re-signed below) instead of costing a CLI call each.
+      const before = setKey === null ? null : signatureOf(target)
+      const keep =
+        before === null
+          ? []
+          : [...entries].filter(
+              ([key, entry]) =>
+                key.startsWith(`${target}\0`) &&
+                entry.signature === before &&
+                !relatedKey(readKeyOf(key), setKey!),
+            )
+      drop(target)
       try {
-        return await inner(args, options)
+        const result = await inner(args, options)
+        const after = signatureOf(target)
+        if (result.exitCode === 0 && after !== null)
+          for (const [key, entry] of keep) entries.set(key, { ...entry, signature: after })
+        return result
       } finally {
         // Again afterwards: a read that started during the write must not be stored as current.
-        if (writes) drop(home(profile))
+        drop(target, false)
       }
     }
     const home = profileHome(hermesHome, shape.profile)

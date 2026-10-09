@@ -107,6 +107,13 @@ export function RemoteSection() {
   const [password, setPassword] = useState('')
   const [changing, setChanging] = useState(false)
   const [notice, setNotice] = useState('')
+  const check = useMutation({
+    mutationFn: () =>
+      apiFetch('session/security/check', {
+        method: 'POST',
+        body: JSON.stringify({ password }),
+      }),
+  })
   const [copied, setCopied] = useState<'idle' | 'copied' | 'manual'>('idle')
   const link = useRef<HTMLElement>(null)
   const queryClient = useQueryClient()
@@ -191,7 +198,13 @@ export function RemoteSection() {
         the Score machine with <code>scripts/score password</code>.
       </p>
       {security.isSuccess && !passwordSet && (
-        <SetPassword change={false} onDone={() => void security.refetch()} />
+        <SetPassword
+          change={false}
+          onDone={() => {
+            setNotice('Security password set.')
+            void security.refetch()
+          }}
+        />
       )}
       {passwordSet && (
         <>
@@ -201,9 +214,22 @@ export function RemoteSection() {
               type="password"
               autoComplete="current-password"
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              onChange={(event) => {
+                setPassword(event.target.value)
+                check.reset()
+              }}
             />
           </label>
+          <button
+            type="button"
+            className="settings-link settings-start"
+            disabled={password.length < 8 || check.isPending}
+            onClick={() => check.mutate()}
+          >
+            {check.isPending ? 'Checking…' : 'Check password'}
+          </button>
+          {check.isSuccess && <p role="status">That is the security password.</p>}
+          {check.error && <p role="alert">{failure(check.error, 'check the password')}</p>}
           <button
             type="button"
             className="settings-link settings-start"

@@ -226,4 +226,29 @@ test('without a password yet, Settings asks to set one first', async () => {
   await waitFor(() =>
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(true),
   )
+  expect(await screen.findByText('Security password set.')).toBeTruthy()
+})
+
+test('Check password says whether the typed password is right (5.23)', async () => {
+  document.documentElement.setAttribute('data-score-transport', 'tls')
+  const fetch = managementFetch(true)
+  vi.stubGlobal('fetch', fetch)
+  render(withClient(<RemoteSection />))
+  const check = await screen.findByRole('button', { name: 'Check password' })
+  expect(check.hasAttribute('disabled')).toBe(true)
+  fireEvent.change(screen.getByLabelText('Security password'), {
+    target: { value: 'correct horse battery' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Check password' }))
+  expect(await screen.findByText('That is the security password.')).toBeTruthy()
+  const call = fetch.mock.calls.find(([url]) => String(url).endsWith('/security/check'))!
+  expect(JSON.parse(String(call[1]!.body))).toEqual({ password: 'correct horse battery' })
+  cleanup()
+  vi.stubGlobal('fetch', managementFetch(true, true))
+  render(withClient(<RemoteSection />))
+  fireEvent.change(await screen.findByLabelText('Security password'), {
+    target: { value: 'not the password' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Check password' }))
+  expect((await screen.findByRole('alert')).textContent).toBe('That is not the security password.')
 })

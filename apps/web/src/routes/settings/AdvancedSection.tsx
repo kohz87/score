@@ -46,6 +46,18 @@ export function AdvancedSection() {
   const search = useConfigSearch(q)
   const searching = text.trim() !== ''
   const expanded = open || searching
+  // While a new search is on its way the previous answer is all there is: narrow it to what was typed, so the list
+  // never shows settings that don't match (the server's answer replaces it when it arrives).
+  const terms = text.toLowerCase().split(/\s+/).filter(Boolean)
+  const items = (search.data ?? []).filter(
+    (item) =>
+      !(search.isPlaceholderData || q !== text.trim()) ||
+      terms.every(
+        (term) =>
+          item.key.toLowerCase().includes(term) ||
+          (item.description ?? '').toLowerCase().includes(term),
+      ),
+  )
   const { preview, apply } = useConfigActions()
   const [editing, setEditing] = useState<{ key: string; draft: string } | null>(null)
   const [invalid, setInvalid] = useState(false)
@@ -169,8 +181,12 @@ export function AdvancedSection() {
           aria-label="Settings"
           aria-busy={search.isFetching}
         >
-          {search.data.length === 0 && <li className="settings-muted">No settings match.</li>}
-          {search.data.map((item) => {
+          {items.length === 0 && (
+            <li className="settings-muted">
+              {search.isFetching ? 'Searching…' : 'No settings match.'}
+            </li>
+          )}
+          {items.map((item) => {
             const staged = item.key in pending
             return (
               <li key={item.key} className="advanced-item">

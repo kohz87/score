@@ -244,6 +244,25 @@ test('advanced: collapsed by default, opens on click or on a search, and remembe
   window.localStorage.clear()
 })
 
+test('advanced: while a search is on its way only matching settings show, never the whole list (5.23)', async () => {
+  advancedRespond(() => json({ ok: true, restartRequired: false }))
+  const base = respond
+  respond = (path, init) =>
+    path.startsWith('/api/settings/config?q=turn')
+      ? (new Promise<Response>(() => undefined) as unknown as Response)
+      : base(path, init)
+  mount()
+  const advanced = await screen.findByRole('region', { name: 'Advanced' })
+  await within(advanced).findByRole('button', { name: 'Show all 2 settings' })
+  fireEvent.change(within(advanced).getByRole('searchbox', { name: 'Search settings' }), {
+    target: { value: 'turn' },
+  })
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  const list = within(advanced).getByRole('list', { name: 'Settings' })
+  expect(within(list).getByText('agent.max_turns')).toBeDefined()
+  expect(within(list).queryByText('display.language')).toBeNull()
+})
+
 test('advanced: blocked storage still opens the list', async () => {
   vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
     throw new Error('blocked')

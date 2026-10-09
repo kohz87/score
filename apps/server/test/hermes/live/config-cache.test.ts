@@ -85,3 +85,46 @@ test('plugin and tool lists are cached the same way; other commands pass through
   await runner(['kanban', 'list'], { timeoutMs: 1000 })
   expect(inner).toHaveBeenCalledTimes(5)
 })
+
+test('config set K keeps cached answers for unrelated keys and re-reads only K and its relatives', async () => {
+  // The write itself changes config.yaml, as Hermes does.
+  inner.mockImplementation(async (args) => {
+    if (args.includes('set')) touch()
+    return { exitCode: 0, stdout: '{"default":"m"}' }
+  })
+  await get('model')
+  await get('skills.disabled')
+  await get('approvals')
+  await runner(['-p', 'builder', 'config', 'set', 'model.default', 'x'], { timeoutMs: 1000 })
+  await get('skills.disabled')
+  await get('approvals')
+  expect(inner.mock.calls.filter(([a]) => a.includes('get'))).toHaveLength(3)
+  await get('model')
+  expect(inner.mock.calls.filter(([a]) => a.includes('get'))).toHaveLength(4)
+})
+
+test('an outside edit before a Score write is not carried forward', async () => {
+  inner.mockImplementation(async (args) => {
+    if (args.includes('set')) touch()
+    return { exitCode: 0, stdout: '{"default":"m"}' }
+  })
+  await get('approvals')
+  touch()
+  await runner(['-p', 'builder', 'config', 'set', 'model.default', 'x'], { timeoutMs: 1000 })
+  await get('approvals')
+  expect(inner.mock.calls.filter(([a]) => a.includes('get'))).toHaveLength(2)
+})
+
+test('a failed config set carries nothing forward', async () => {
+  inner.mockImplementation(async (args) => {
+    if (args.includes('set')) {
+      touch()
+      return { exitCode: 1 }
+    }
+    return { exitCode: 0, stdout: '{"default":"m"}' }
+  })
+  await get('approvals')
+  await runner(['-p', 'builder', 'config', 'set', 'model.default', 'x'], { timeoutMs: 1000 })
+  await get('approvals')
+  expect(inner.mock.calls.filter(([a]) => a.includes('get'))).toHaveLength(2)
+})
