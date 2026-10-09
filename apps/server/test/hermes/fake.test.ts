@@ -79,7 +79,7 @@ async function play(): Promise<void> {
 test('the whole fake scenario passes real ingest validation and covers every scripted durable event', async () => {
   await play()
   const stored = events()
-  // message.deleted and message.updated only follow a person's Delete or edit, never a scripted step; knowledge.changed
+  // message.deleted and message.updated only follow a person's Delete or edit (message.progressed a live run's tool or reasoning step), never a scripted step; knowledge.changed
   // comes from the vault (6.2), and room-project.* from a person's organising of rooms (5.26), not from the Hermes scenario.
   const expectedTypes = StreamEventSchema.options
     .map((schema) => schema.shape.type.value)
@@ -87,6 +87,7 @@ test('the whole fake scenario passes real ingest validation and covers every scr
       (type) =>
         type !== 'message.deleted' &&
         type !== 'message.updated' &&
+        type !== 'message.progressed' &&
         type !== 'knowledge.changed' &&
         // Kanban attempts come from the attempts projection (5.17a-1), never from the scripted scenario.
         type !== 'attempt.updated' &&

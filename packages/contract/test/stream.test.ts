@@ -21,6 +21,7 @@ const eventData = {
   'message.completed': f.completed,
   'message.deleted': f.deleted,
   'message.updated': f.updated,
+  'message.progressed': f.progressed,
   'room.version.created': f.roomVersion,
   'knowledge.changed': f.knowledgeChanged,
   typing: f.typing,
