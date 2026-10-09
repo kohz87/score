@@ -16,9 +16,16 @@ import {
   RulesResponseSchema,
   StreamHelloSchema,
   SystemStatusSchema,
+  KnowledgeInfoSchema,
+  KnowledgeNoteSchema,
+  KnowledgeTreeSchema,
+  KnowledgeHistorySchema,
   TasksSnapshotSchema,
 } from '../packages/contract/src/index.ts'
-import { nowFixture } from './now-fixture.ts'
+import { fixtureNow, nowFixture } from './now-fixture.ts'
+
+const minutesAgo = (minutes: number) =>
+  new Date(Date.parse(fixtureNow) - minutes * 60_000).toISOString()
 
 // Recorded with Fastify inject(), FakeScheduler at 75 seconds, fake mode and a throwaway DB.
 // Freezing every REST read and the stream isolates screenshots from other parallel e2e mutations.
@@ -75,6 +82,56 @@ export const visualFixtures: Record<string, unknown> = {
         description: 'Keeps short notes between sessions.',
       },
       { id: 'image-tools', label: 'image-tools', enabled: false, locked: false, description: null },
+    ],
+  }),
+  '/api/knowledge': KnowledgeInfoSchema.parse({
+    vault: '/home/you/score-vault',
+    notes: 4,
+    gitAvailable: true,
+    agentAccess: true,
+  }),
+  '/api/knowledge/tree': KnowledgeTreeSchema.parse({
+    folders: ['projects', 'projects/archive'],
+    notes: [
+      { path: 'Home.md', title: 'Home', mtime: minutesAgo(600), lastAuthor: 'you' },
+      {
+        path: 'projects/launch-plan.md',
+        title: 'Launch plan',
+        mtime: minutesAgo(12),
+        lastAuthor: { agentId: 'builder' },
+      },
+      { path: 'projects/ideas.md', title: 'Ideas', mtime: minutesAgo(300), lastAuthor: 'you' },
+      {
+        path: 'projects/archive/old-notes.md',
+        title: 'Old notes',
+        mtime: minutesAgo(5000),
+        lastAuthor: 'you',
+      },
+    ],
+  }),
+  '/api/knowledge/notes/projects/launch-plan.md': KnowledgeNoteSchema.parse({
+    path: 'projects/launch-plan.md',
+    title: 'Launch plan',
+    frontmatter: { status: 'draft', owner: 'lead' },
+    body: '# Launch plan\n\nShip the first version to the team.\n\n## Steps\n\n- Collect feedback in [[ideas]]\n- Write the *announcement*\n- Check `pnpm check` is green\n\n> Keep it small. See [[Roadmap]] too.\n',
+    etag: 'visual-etag',
+    mtime: minutesAgo(12),
+    links: [
+      { target: 'ideas', path: 'projects/ideas.md' },
+      { target: 'Roadmap', path: null },
+    ],
+    backlinks: [{ path: 'Home.md', title: 'Home' }],
+    lastAuthor: { agentId: 'builder' },
+  }),
+  '/api/knowledge/notes/projects/launch-plan.md/history': KnowledgeHistorySchema.parse({
+    items: [
+      {
+        commit: 'abc1234',
+        at: minutesAgo(12),
+        author: { agentId: 'builder' },
+        message: 'builder: update launch-plan.md',
+      },
+      { commit: 'def5678', at: minutesAgo(300), author: 'you', message: 'Update launch-plan.md' },
     ],
   }),
   '/api/settings/rules': RulesResponseSchema.parse(recorded['/api/settings/rules']),

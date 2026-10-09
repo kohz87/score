@@ -52,6 +52,8 @@ export function registerRemoteGuard(
 // In-app paths (/now, /chat/…) get the same public index.html as "/", so an unpaired browser opening a bookmark sees
 // the pairing screen instead of a JSON error. API, bridge and file-like paths stay private.
 function isAppPath(path: string): boolean {
+  // Knowledge deep links end in .md and may hold encoded spaces.
+  if (path.startsWith('/knowledge/')) return !path.includes('..') && !/%2e/i.test(path)
   return (
     !path.startsWith('/api/') &&
     !path.startsWith('/bridge/') &&

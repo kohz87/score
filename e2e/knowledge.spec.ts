@@ -57,6 +57,8 @@ test('Ctrl+K searches the vault and opens a hit', async ({ page }) => {
   const word = `zebrafinch${name.replace(/\W/g, '')}`
   const path = await createNote(page, name, `# ${name}\n\n${word} sings.\n`)
   await page.goto('/knowledge')
+  // The shortcut is registered once the lazily loaded page has mounted: wait for its search box.
+  await expect(page.getByRole('searchbox', { name: 'Search notes' })).toBeVisible()
   await page.keyboard.press('Control+k')
   await expect(page.getByRole('searchbox', { name: 'Search notes' })).toBeFocused()
   await page.keyboard.type(word)
