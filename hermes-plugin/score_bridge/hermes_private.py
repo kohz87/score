@@ -218,7 +218,18 @@ def _release(db) -> None:
         release(db)
 
 
-def rewind_session(session_id: str, turns: int, since: float | None = None, profile: str | None = None) -> dict | None:
+class CommandExpired(Exception):
+    """The command's ``expiresAt`` passed before Hermes was touched: Score has already given up on it."""
+
+
+def _check_fresh(expires_at: float | None) -> None:
+    """Called immediately before a mutation: a command Score abandoned must not act on work done since."""
+    if expires_at is not None and time.time() >= expires_at:
+        raise CommandExpired()
+
+
+def rewind_session(session_id: str, turns: int, since: float | None = None, profile: str | None = None,
+                   expires_at: float | None = None) -> dict | None:
     """Back a session up with Hermes's own rewind (what ``/undo N`` uses).
 
     ``hermes_state_rewind.rewind_user_turn`` soft-deletes the rows (``active = 0``); the next turn rebuilds its history
@@ -249,7 +260,7 @@ def rewind_session(session_id: str, turns: int, since: float | None = None, prof
     else:
         db = _profile_session_db(profile)
     try:
-        return _rewind_in(store, db, indexed, session_id, turns, since)
+        return _rewind_in(store, db, indexed, session_id, turns, since, expires_at)
     finally:
         if not indexed:
             _release(db)
@@ -276,15 +287,17 @@ def _anchored_target(db, session_id: str, since: float) -> tuple[int, object]:
     return len(stamps) - first, row_id
 
 
-def _rewind_in(store, db, indexed: bool, session_id: str, turns: int, since: float | None) -> dict | None:
+def _rewind_in(store, db, indexed: bool, session_id: str, turns: int, since: float | None,
+               expires_at: float | None = None) -> dict | None:
     if since is None:
         if indexed:
+            _check_fresh(expires_at)
             result = store.rewind_session(session_id, turns)
             if not isinstance(result, dict):
                 return None
             undone, count = result.get("turns_undone"), result.get("rewound_count")
         else:
-            undone, count = _rewind_direct(store, db, False, session_id, turns)
+            undone, count = _rewind_direct(store, db, False, session_id, turns, expires_at)
             if undone is None:
                 return None
         if type(undone) is not int or type(count) is not int:
@@ -298,7 +311,7 @@ def _rewind_in(store, db, indexed: bool, session_id: str, turns: int, since: flo
         turns, row_id = _anchored_target(db, session_id, since)
         if _anchored_target(db, session_id, since) != (turns, row_id):
             raise RuntimeError("the transcript changed while rewinding")
-        undone, count = _rewind_direct(store, db, indexed, session_id, turns)
+        undone, count = _rewind_direct(store, db, indexed, session_id, turns, expires_at)
         if undone is None:
             return None
         if type(undone) is not int or type(count) is not int:
@@ -310,12 +323,13 @@ def _rewind_in(store, db, indexed: bool, session_id: str, turns: int, since: flo
     return {"turns_undone": undone, "rewound_count": count}
 
 
-def _rewind_direct(store, db, indexed: bool, session_id: str, turns: int):
+def _rewind_direct(store, db, indexed: bool, session_id: str, turns: int, expires_at: float | None = None):
     """``db.rewind_user_turn`` under the transcript lock, as ``SessionTranscriptMixin.rewind_session`` does it
     (without its own ordinal resolution): ``(turns_undone, rewound_count)``, or ``(None, None)`` when Hermes had no
     target."""
     unavailable = _lookup_attr("hermes_state_rewind.RewindTargetUnavailableError")
     with store._get_transcript_drain_lock():
+        _check_fresh(expires_at)
         try:
             outcome = db.rewind_user_turn(session_id, -max(turns, 1))
         except Exception as error:

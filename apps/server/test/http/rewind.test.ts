@@ -17,6 +17,7 @@ import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { storeMessage } from '../../src/domain/rooms.ts'
+import { rewindingRooms, restoreRoomHolds } from '../../src/domain/room-rewinding.ts'
 import { createHermesPort, type HermesPort } from '../../src/hermes/index.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
@@ -344,6 +345,10 @@ test('a failure after the first agent keeps it rewound and counted once on retry
   expect(await visible(room.id)).toHaveLength(3)
   vi.mocked(fake().rewindSession).mockImplementation(real)
   fake().rewinds.length = 0
+  // The unanswered command is still held against the room until it has expired.
+  expect((await rewind(room.id, message.id)).statusCode).toBe(409)
+  restoreRoomHolds(db.sqlite, Date.now() + 10 * 60_000)
+  rewindingRooms.clear()
   const retried = await rewind(room.id, message.id)
   expect(retried.statusCode).toBe(200)
   // Builder was rewound before and has nothing left to undo.
@@ -506,4 +511,27 @@ test('a message or retry posted while the room is being rewound is refused', asy
   expect(
     (await post(`/api/rooms/${room.id}/messages`, { text: 'later', to: ['builder'] })).statusCode,
   ).toBe(200)
+})
+
+test('an unanswered rewind command keeps the room held until it has expired, also after a restart', async () => {
+  const room = await createRoom()
+  const message = await ask(room.id, 'go', ['builder'])
+  await answer(room.id, message.id, 'builder')
+  vi.spyOn(fake(), 'rewindSession').mockImplementation(async (req) =>
+    req.dryRun ? { status: 'ready' } : { status: 'skipped', reason: 'no_answer' },
+  )
+  const failed = await rewind(room.id, message.id)
+  expect(failed.statusCode).toBe(409)
+  // The plugin may still claim the command: the room can't take new work meanwhile.
+  expect(rewindingRooms.has(room.id)).toBe(true)
+  const held = await post(`/api/rooms/${room.id}/messages`, { text: 'again', to: ['builder'] })
+  expect(held.statusCode).toBe(409)
+  // Persisted: a restart restores the hold, and expired rows are dropped.
+  rewindingRooms.clear()
+  restoreRoomHolds(db.sqlite, Date.now())
+  expect(rewindingRooms.has(room.id)).toBe(true)
+  rewindingRooms.clear()
+  restoreRoomHolds(db.sqlite, Date.now() + 10 * 60_000)
+  expect(rewindingRooms.has(room.id)).toBe(false)
+  expect(db.sqlite.prepare('SELECT COUNT(*) AS n FROM rewind_holds').get()).toEqual({ n: 0 })
 })

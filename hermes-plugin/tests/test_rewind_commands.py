@@ -2,6 +2,7 @@
 import importlib.util
 import sys
 import threading
+import time
 import types
 from pathlib import Path
 
@@ -21,6 +22,7 @@ def hermes_private(monkeypatch):
     spec.loader.exec_module(module)
     monkeypatch.setattr(stub, "gateway_session_store", module.gateway_session_store)
     monkeypatch.setattr(stub, "rewind_session", module.rewind_session)
+    monkeypatch.setattr(stub, "CommandExpired", module.CommandExpired)
     return module
 
 
@@ -55,7 +57,8 @@ def gateway(monkeypatch):
 
 
 def command(**extra):
-    return {"commandId": "c1", "kind": "rewind", "sessionId": "score-room-builder", "turns": 2, **extra}
+    return {"commandId": "c1", "kind": "rewind", "sessionId": "score-room-builder", "turns": 2,
+            "expiresAt": time.time() + 60, **extra}
 
 
 def test_hermes_private_rewinds_through_the_gateway_store(gateway, hermes_private):
@@ -89,7 +92,8 @@ def test_no_gateway_means_no_store(monkeypatch, hermes_private):
 
 @pytest.mark.parametrize("bad", [None, [], {}, command(commandId=""), command(kind="other"), command(turns=0),
                                  command(turns=True), command(turns=1001), command(sessionId=""),
-                                 command(commandId="x" * 129)])
+                                 command(commandId="x" * 129), command(expiresAt=None), command(expiresAt=0),
+                                 command(expiresAt="soon")])
 def test_commands_are_validated(bad):
     with pytest.raises(ProtocolError):
         validate_command(bad)
@@ -143,7 +147,7 @@ def test_nothing_to_rewind_and_failures(gateway, hermes_private, monkeypatch):
     command_poller.process_once()
     assert transport.results[0][1] == {"outcome": "nothing"}
 
-    def boom(*_):
+    def boom(*_, **__):
         raise OSError("db locked: /home/user/.hermes/state.db")
     monkeypatch.setattr(stub, "rewind_session", boom)
     command_poller, transport = poller([command(commandId="c3")])
@@ -351,3 +355,20 @@ def test_a_target_that_moved_between_counting_and_rewinding_is_refused(monkeypat
     with pytest.raises(RuntimeError):
         hermes_private.rewind_session("s", 2, 200)
     assert db.calls == [] and [row[2] for row in db.rows[:4]] == [True] * 4
+
+
+def test_an_expired_command_is_refused_before_it_touches_hermes(monkeypatch, hermes_private):
+    # audit5-e: Score gave up on a command (timeout, room released); a late claim must not rewind newer work.
+    db = RowsDb([["user", 100, True], ["assistant", 101, True], ["user", 200, True], ["assistant", 201, True]])
+    store = RowsStore(db)
+    install(monkeypatch, store)
+    command_poller, transport = poller([command(commandId="late", sessionId="s", turns=1, since=200,
+                                                expiresAt=time.time() - 1)])
+    command_poller.process_once()
+    assert transport.results[0][1] == {"outcome": "expired"}
+    assert db.calls == [] and all(row[2] for row in db.rows)
+    # It expires between claiming and mutating, too: the check sits right before the mutation.
+    db.on_read = lambda: time.sleep(0.05)
+    with pytest.raises(hermes_private.CommandExpired):
+        hermes_private.rewind_session("s", 1, 200, expires_at=time.time() + 0.1)
+    assert db.calls == []

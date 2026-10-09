@@ -1184,16 +1184,20 @@ sessionKey; requestId; choice: ApprovalChoice; reason: string | null }[] }`. Onl
 **Commands** (PLAN 5.33, server → plugin). A sibling long poll next to the decisions one, served only to a producer
 whose `isolation` is not `unknown`; the plugin polls only while it runs inside a gateway (it needs Hermes's session store).
 
-- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: { commandId; kind: 'rewind'; sessionId; turns; since? }[] }` (`since` = epoch seconds of the rewound message; the plugin then
+- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: { commandId; kind: 'rewind'; sessionId; turns; since?; expiresAt }[] }` (`expiresAt` = epoch seconds, issued + the 60 s answer
+  time; the plugin refuses the command (`expired`) when it is past, checked under the transcript lock immediately before it mutates, so a
+  command Score gave up on can't rewind later work; `since` = epoch seconds of the rewound message; the plugin then
   computes the number of turns itself, as every user turn of Hermes's alternation-repaired projection from the first one at or after
   `since`, uses `turns` only as Score's own count, refuses (`failed`) when the message shares a turn with an earlier unanswered
-  one or no turn starts at/after `since`, and checks afterwards that no active user row from `since` remains, else `failed`). A
+  one or no turn starts at/after `since`, counts, rewinds and verifies under one hold of Hermes's transcript lock (a concurrent `/undo`
+  can't move the target; a target that changed is `failed`), and checks afterwards that no active user row from `since` remains, else `failed`). A
   command is handed to one polling producer of the profile once and is not redelivered.
-- `POST /bridge/v1/commands/:commandId/result` `{ outcome: 'done' | 'nothing' | 'failed'; turnsUndone?; rewoundCount?;
+- `POST /bridge/v1/commands/:commandId/result` `{ outcome: 'done' | 'nothing' | 'failed' | 'expired'; turnsUndone?; rewoundCount?;
   error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what
   `/undo` uses; soft-deletes the rows, the next turn rebuilds from the active ones) from `hermes_private.py` and reports
   Hermes's `turns_undone` / `rewound_count`; `nothing` = Hermes had nothing to rewind. A command with no result within
-  60 s is reported to the person as `no_answer`. The plugin remembers results by `commandId`, so a repeated command never
+  60 s is reported to the person as `no_answer`, and Score keeps the room's rewind hold (persisted in `rewind_holds`, restored after a
+  restart) until `expiresAt` + 5 s, when the command can no longer act. The plugin remembers results by `commandId`, so a repeated command never
   rewinds twice.
 
 **Kanban denials** (D4.3, revised 2026-10-07): there are **no** grant endpoints. A Kanban worker's `post_tool_call`
