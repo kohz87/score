@@ -188,8 +188,11 @@ export class ProfilesReader {
     const path = join(parent, ProfileNameSchema.parse(profile))
     return directory(parent) && directory(path) ? path : null
   }
+  /** Bumped by every invalidate: a shared read that started before it may not answer a caller that came after. */
+  invalidations = 0
   /** Drops cached CLI reads for a profile after Score changed its settings. */
   invalidate(profile: string): void {
+    this.invalidations++
     this.models.delete(profile)
     this.settings.delete(profile)
   }

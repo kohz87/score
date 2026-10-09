@@ -1,10 +1,11 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useContext, useEffect, useRef, useState } from 'react'
 import { Markdown } from '../chat/Markdown.tsx'
 import '../chat/chat.css'
 import {
   conflictOf,
   fetchFile,
   fileUrl,
+  WorkspaceRootContext,
   isImagePath,
   isPdfPath,
   useFile,
@@ -25,14 +26,37 @@ function size(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
+// Unsaved edits per agent, folder and file: kept while another file is open or the tab is left, so switching never
+// throws work away. A saved, discarded or deleted file drops its entry; closing the page asks first.
+type Draft = { draft: string; base: { content: string; etag: string | null } }
+const drafts = new Map<string, Draft>()
+const draftKey = (agentId: string, root: string | undefined, path: string) =>
+  `${agentId}\0${root ?? ''}\0${path}`
+const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+  if (drafts.size) event.preventDefault()
+}
+function setDraft(key: string, value: Draft | null): void {
+  if (value) drafts.set(key, value)
+  else drafts.delete(key)
+  window.removeEventListener('beforeunload', warnBeforeUnload)
+  if (drafts.size) window.addEventListener('beforeunload', warnBeforeUnload)
+}
+/** A deleted or renamed file (or folder) has no draft any more. */
+export function discardDraftsUnder(root: string | undefined, agentId: string, path: string): void {
+  const prefix = draftKey(agentId, root, path)
+  for (const key of [...drafts.keys()])
+    if (key === prefix || key.startsWith(`${prefix}/`)) setDraft(key, null)
+}
+
 type Disk = { etag: string | null; content: string | null }
 
 /** Preview for images, PDFs and binaries; a text file opens in the editor. */
 export function WorkspaceFile({ agentId, path }: { agentId: string; path: string }) {
   const image = isImagePath(path)
   const pdf = isPdfPath(path)
+  const root = useContext(WorkspaceRootContext)
   const file = useFile(agentId, path, !image && !pdf)
-  const download = fileUrl(agentId, path, true)
+  const download = fileUrl(agentId, path, true, root)
   const [imageFailed, setImageFailed] = useState(false)
   if (image)
     return (
@@ -40,7 +64,11 @@ export function WorkspaceFile({ agentId, path }: { agentId: string; path: string
         {imageFailed ? (
           <p className="ws-note">This is not a picture Score can show.</p>
         ) : (
-          <img src={fileUrl(agentId, path)} alt={path} onError={() => setImageFailed(true)} />
+          <img
+            src={fileUrl(agentId, path, false, root)}
+            alt={path}
+            onError={() => setImageFailed(true)}
+          />
         )}
         <a className="team-pill-button" href={download}>
           Download
@@ -54,7 +82,7 @@ export function WorkspaceFile({ agentId, path }: { agentId: string; path: string
         <div className="ws-actions">
           <a
             className="team-pill-button"
-            href={fileUrl(agentId, path)}
+            href={fileUrl(agentId, path, false, root)}
             target="_blank"
             rel="noreferrer"
           >
@@ -108,21 +136,29 @@ function Editor({
   latest: Extract<LoadedFile, { kind: 'text' }>
 }) {
   const { save } = useWorkspaceActions(agentId)
-  const [base, setBase] = useState({ content: latest.content, etag: latest.etag })
-  const [draft, setDraft] = useState(latest.content)
+  const root = useContext(WorkspaceRootContext)
+  const key = draftKey(agentId, root, path)
+  const [kept] = useState(() => drafts.get(key))
+  const [base, setBase] = useState<{ content: string; etag: string | null }>(
+    kept ? kept.base : { content: latest.content, etag: latest.etag },
+  )
+  const [draft, setDraftText] = useState(kept ? kept.draft : latest.content)
   const [disk, setDisk] = useState<Disk | null>(null)
   const [comparing, setComparing] = useState(false)
-  const [notice, setNotice] = useState('')
+  const [notice, setNotice] = useState(kept ? 'Restored your unsaved changes.' : '')
   const [preview, setPreview] = useState(false)
   const dirty = draft !== base.content
   const draftRef = useRef(draft)
   const dirtyRef = useRef(false)
   const baseRef = useRef(base)
-  const seen = useRef(latest.etag)
+  // Restored edits are compared with what is on disk now, like any change that lands while editing.
+  const [seenInitial] = useState<string | null>(() => (kept ? null : latest.etag))
+  const seen = useRef<string | null>(seenInitial)
   useEffect(() => {
     draftRef.current = draft
     baseRef.current = base
     dirtyRef.current = dirty
+    setDraft(key, dirty ? { draft, base } : null)
   })
 
   // The agent (or anything else) changed the file: follow it when there is nothing to lose, warn otherwise.
@@ -133,7 +169,7 @@ function Editor({
     if (latest.etag === current.etag) return
     if (draftRef.current === current.content) {
       setBase({ content: latest.content, etag: latest.etag })
-      setDraft(latest.content)
+      setDraftText(latest.content)
       setNotice('Updated: this file changed on disk.')
     } else setDisk({ etag: latest.etag, content: latest.content })
   }, [latest])
@@ -153,7 +189,7 @@ function Editor({
           const conflict = conflictOf(error)
           if (!conflict) return
           // Fetch what is on disk now so "Compare" has something to show.
-          const current = await fetchFile(agentId, path).catch(() => null)
+          const current = await fetchFile(agentId, path, undefined, root).catch(() => null)
           setDisk({
             etag: conflict.etag,
             content: current?.kind === 'text' ? current.content : null,
@@ -165,7 +201,7 @@ function Editor({
   function reload() {
     if (disk?.content != null && disk.etag) {
       setBase({ content: disk.content, etag: disk.etag })
-      setDraft(disk.content)
+      setDraftText(disk.content)
     }
     setDisk(null)
     setComparing(false)
@@ -232,7 +268,7 @@ function Editor({
               value={draft}
               path={path}
               label={`Contents of ${path}`}
-              onChange={setDraft}
+              onChange={setDraftText}
               onSave={() => {
                 if (dirtyRef.current && !save.isPending) submit()
               }}
@@ -250,7 +286,7 @@ function Editor({
           {save.isPending ? 'Saving…' : 'Save'}
         </button>
         {dirty && (
-          <button type="button" onClick={() => setDraft(base.content)}>
+          <button type="button" onClick={() => setDraftText(base.content)}>
             Discard changes
           </button>
         )}

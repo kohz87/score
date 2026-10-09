@@ -10,6 +10,7 @@ import {
   BridgeKnowledgeWriteResponseSchema,
 } from '@score/contract'
 import type { FastifyInstance } from 'fastify'
+import { HttpError } from '../../errors.ts'
 import type { KnowledgeAgentApi } from '../../knowledge/agent-api.ts'
 import type { Producer } from './registry.ts'
 
@@ -25,6 +26,17 @@ export function registerBridgeKnowledgeRoutes(
     onRequest: async (request: { headers: { authorization?: string } }) => {
       authenticate(request.headers.authorization)
     },
+  }
+  // Contract §11: unknown isolation is observe-only, so the producer may read but never change notes.
+  const writer = (request: { headers: { authorization?: string } }) => {
+    const producer = authenticate(request.headers.authorization)
+    if (producer.isolation === 'unknown')
+      throw new HttpError(
+        403,
+        'observe_only',
+        'This agent is observe-only (its isolation is unknown): it cannot change notes',
+      )
+    return producer.profile
   }
   const agent = (request: { headers: { authorization?: string } }) =>
     authenticate(request.headers.authorization).profile
@@ -46,13 +58,13 @@ export function registerBridgeKnowledgeRoutes(
   app.post('/bridge/v1/knowledge/write', options, async (request) => {
     const body = BridgeKnowledgeWriteRequestSchema.parse(request.body)
     return BridgeKnowledgeWriteResponseSchema.parse(
-      await api.write(agent(request), body.path, body.body, body.expectedEtag),
+      await api.write(writer(request), body.path, body.body, body.expectedEtag),
     )
   })
   app.post('/bridge/v1/knowledge/append', options, async (request) => {
     const body = BridgeKnowledgeAppendRequestSchema.parse(request.body)
     return BridgeKnowledgeWriteResponseSchema.parse(
-      await api.append(agent(request), body.path, body.text),
+      await api.append(writer(request), body.path, body.text),
     )
   })
 }

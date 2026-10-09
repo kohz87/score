@@ -207,3 +207,24 @@ test('read is bounded, list is bounded, bad paths are refused', async () => {
   ).toBe(400)
   expect((await call(tok, 'list', { folder: '../' })).statusCode).toBe(400)
 }, 120_000)
+
+test('an observe-only producer (isolation unknown) can read and search but not write or append', async () => {
+  const response = await app.inject({
+    method: 'POST',
+    url: '/bridge/v1/hello',
+    headers: { authorization: `Bearer ${bootstrap}` },
+    payload: { ...base, isolation: 'unknown', profile: 'builder', incarnation: 'inc-obs-123456' },
+  })
+  const tok = (response.json() as { producerToken: string }).producerToken
+  expect((await call(tok, 'read', { path: 'seed.md' })).statusCode).toBe(200)
+  expect((await call(tok, 'search', { query: 'hello' })).statusCode).toBe(200)
+  for (const [op, payload] of [
+    ['write', { path: 'x.md', body: 'x', expectedEtag: null }],
+    ['append', { path: 'seed.md', text: 'more' }],
+  ] as const) {
+    const res = await call(tok, op, payload)
+    expect(res.statusCode, op).toBe(403)
+    expect(res.json().error.code).toBe('observe_only')
+  }
+  expect(readFileSync(join(h.vault.vault, 'seed.md'), 'utf8')).toBe('# Seed\nhello world\n')
+})

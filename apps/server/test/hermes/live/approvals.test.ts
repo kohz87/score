@@ -148,3 +148,39 @@ test('a CLI failure surfaces as an error and never touches files', async () => {
   expect(read).not.toHaveBeenCalled()
   vi.restoreAllMocks()
 })
+
+test('a cached read is never the baseline of a mutation: an outside deny added during a model save survives', async () => {
+  const os = await import('node:os')
+  const path = await import('node:path')
+  const { cachingRunner } = await import('../../../src/hermes/live/config-cache.ts')
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'score-approvals-cache-'))
+  try {
+    const profileDir = path.join(home, 'profiles', 'builder')
+    fs.mkdirSync(profileDir, { recursive: true })
+    const config = path.join(profileDir, 'config.yaml')
+    fs.writeFileSync(config, 'a: 1\n')
+    const { runner: inner, state } = stub({ allowlist: [], approvals: { mode: 'smart', deny: [] } })
+    const wrapped: HermesRunner = async (args, options) => {
+      const result = await inner(args, options)
+      if (args.includes('set') && args.includes('model.default')) {
+        // Another process adds a deny while the model write runs.
+        state.approvals = { mode: 'smart', deny: ['external-block'] }
+        fs.writeFileSync(config, `a: ${Math.random()}\n`)
+      }
+      return result
+    }
+    const runner = cachingRunner(wrapped, home)
+    await readApprovalConfig(runner, home, 'builder') // fills the cache
+    await runner(['-p', 'builder', 'config', 'set', 'model.default', 'x'], {
+      timeoutMs: 1000,
+      hermesHome: home,
+    })
+    const result = await updateProfileApprovals(runner, home, 'builder', (current) => ({
+      ...current,
+      deny: [...current.deny, 'score-block'],
+    }))
+    expect(result.deny.sort()).toEqual(['external-block', 'score-block'])
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})

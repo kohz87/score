@@ -98,6 +98,8 @@ export class RoutingDispatcher {
             sqlite.prepare('SELECT * FROM message_runs WHERE turn_id = ?').get(job.turn_id),
           ),
         )
+        // Cancelled (the message was edited) while its context was being frozen: do not start it.
+        if (frozen.state !== 'pending') continue
         const images = job.hop === 0 ? this.imageIds(job.parent_message_id) : []
         await this.port.startRun({
           agentId: job.agent_id,

@@ -130,9 +130,22 @@ export function reduceMessages(
     }
   if (event.type === 'message.created') {
     if (!latest) return data
+    // Your own message can arrive on the stream before the send's response: it takes the place of its "sending" copy
+    // (same text), so the thread never shows it twice.
+    const text = (message: Message) =>
+      message.parts.map((part) => (part.kind === 'text' ? part.text : '')).join('\n')
+    const sending =
+      event.data.author.kind === 'you'
+        ? data.items.find(
+            (item) => item.id.startsWith('pending-') && text(item) === text(event.data),
+          )
+        : undefined
     return {
       ...data,
-      items: [event.data, ...data.items.filter((item) => item.id !== event.data.id)],
+      items: [
+        event.data,
+        ...data.items.filter((item) => item.id !== event.data.id && item !== sending),
+      ],
     }
   }
   if (event.type !== 'message.delta' && event.type !== 'message.completed') return data

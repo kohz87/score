@@ -74,19 +74,29 @@ export async function readTerminalConfig(
   return { cwd: await one('terminal.cwd'), backend: await one('terminal.backend') }
 }
 
-/** The profile's model.default / model.provider as strings; null when unreadable. */
+/**
+ * The profile's model as strings. `scalar` is a bare `model: name` (no provider); a never-set model is a pair of nulls.
+ * Null when Hermes cannot answer or the value is not a model Score understands, so a writer stops instead of
+ * proceeding without a way back.
+ */
 export async function readModelPair(
   runner: HermesRunner,
   hermesHome: string,
   profile: string,
-): Promise<{ model: string | null; provider: string | null } | null> {
+): Promise<{ model: string | null; provider: string | null; scalar: boolean } | null> {
   const read = await configJson(runner, hermesHome, profile, 'model')
+  if (read.state === 'unset') return { model: null, provider: null, scalar: false }
   if (read.state !== 'ok') return null
+  if (typeof read.value === 'string') return { model: read.value, provider: null, scalar: true }
   const parsed = z
     .object({ default: z.string().nullish(), provider: z.string().nullish() })
     .safeParse(read.value)
   return parsed.success
-    ? { model: parsed.data.default ?? null, provider: parsed.data.provider ?? null }
+    ? {
+        model: parsed.data.default ?? null,
+        provider: parsed.data.provider ?? null,
+        scalar: false,
+      }
     : null
 }
 

@@ -311,3 +311,109 @@ describe('parseGitStatus', () => {
     expect(parseGitStatus('')).toBeNull()
   })
 })
+
+describe('git badge safety', () => {
+  const git = (...args: string[]) =>
+    execFileSync(
+      'git',
+      ['-C', root, '-c', 'user.email=t@example.com', '-c', 'user.name=T', ...args],
+      { stdio: 'pipe' },
+    )
+
+  test('a repository that configures a clean filter is not run and nothing executes', async () => {
+    const marker = path.join(root, '..', `filter-ran-${path.basename(root)}`)
+    const script = path.join(root, '..', `filter-${path.basename(root)}.sh`)
+    fs.writeFileSync(script, `#!/bin/sh\ntouch '${marker}'\ncat\n`, { mode: 0o755 })
+    git('init', '-q', '-b', 'trunk')
+    fs.writeFileSync(path.join(root, '.gitattributes'), '*.txt filter=probe\n')
+    fs.writeFileSync(path.join(root, 'tracked.txt'), 'one\n')
+    git('add', '.gitattributes', 'tracked.txt')
+    git('commit', '-q', '-m', 'first')
+    git('config', 'filter.probe.clean', script)
+    fs.rmSync(marker, { force: true })
+    // Same size, new mtime: git must re-read the file to decide, which runs the clean filter.
+    fs.writeFileSync(path.join(root, 'tracked.txt'), 'two\n')
+    const res = await call('GET', `${W}/git`)
+    expect(res.json()).toBeNull()
+    expect(fs.existsSync(marker)).toBe(false)
+    fs.rmSync(script, { force: true })
+  })
+
+  test('counts untracked files one by one, not as one folder', async () => {
+    git('init', '-q', '-b', 'trunk')
+    fs.mkdirSync(path.join(root, 'many'))
+    for (const n of [1, 2, 3, 4]) fs.writeFileSync(path.join(root, 'many', `f${n}.txt`), 'x')
+    const res = await call('GET', `${W}/git`)
+    // README.md and .env from the fixture plus four files in the new folder.
+    expect(res.json()).toMatchObject({ changed: 6 })
+  })
+})
+
+describe('root identity', () => {
+  test('a request that names a root which is no longer the agent root is refused and touches nothing', async () => {
+    const other = path.join(path.dirname(root), 'other')
+    fs.mkdirSync(other)
+    fs.writeFileSync(path.join(other, 'report.txt'), 'B')
+    fs.writeFileSync(path.join(root, 'report.txt'), 'A')
+    const shown = root
+    await port.setWorkspaceCwd('builder', other)
+    const removed = await call('DELETE', `${W}/entries?path=report.txt&root=${q(shown)}`)
+    expect(removed.statusCode).toBe(409)
+    expect(removed.json().error.code).toBe('workspace_changed')
+    expect(fs.existsSync(path.join(other, 'report.txt'))).toBe(true)
+    for (const [method, url, payload] of [
+      ['GET', `${W}/tree?root=${q(shown)}`, undefined],
+      ['GET', `${W}/file?path=report.txt&root=${q(shown)}`, undefined],
+      ['PUT', `${W}/file?path=report.txt&root=${q(shown)}`, { content: 'x', etag: null }],
+      ['POST', `${W}/entries?root=${q(shown)}`, { path: 'n.txt', kind: 'file' }],
+      ['POST', `${W}/move?root=${q(shown)}`, { from: 'report.txt', to: 'r2.txt' }],
+      ['GET', `${W}/git?root=${q(shown)}`, undefined],
+    ] as const) {
+      const res = await call(method, url, payload)
+      expect(res.statusCode, `${method} ${url}`).toBe(409)
+    }
+    expect(fs.readdirSync(other)).toEqual(['report.txt'])
+    const ok = await call('GET', `${W}/tree?root=${q(other)}`)
+    expect(ok.statusCode).toBe(200)
+  })
+})
+
+describe('default Hermes home stays protected with a custom one', () => {
+  test('~/.hermes cannot become the workspace when SCORE_HERMES_HOME points elsewhere', async () => {
+    const fakeHome = path.join(path.dirname(root), 'fakehome')
+    fs.mkdirSync(path.join(fakeHome, '.hermes'), { recursive: true })
+    const savedHome = process.env.HOME
+    process.env.HOME = fakeHome
+    const custom = buildApp({
+      config: loadConfig({
+        SCORE_MODE: 'fake',
+        SCORE_HOME: path.join(fakeHome, 'sh'),
+        SCORE_HERMES_HOME: path.join(fakeHome, 'elsewhere'),
+      }),
+      logger: false,
+      port,
+    })
+    try {
+      const paired = await custom.inject({
+        method: 'POST',
+        url: '/api/session/pair',
+        headers: { 'x-score-client': 'web' },
+        payload: { token: custom.pairing.createToken() },
+      })
+      const headers = {
+        'x-score-client': 'web',
+        cookie: paired.headers['set-cookie']!.toString().split(';')[0]!,
+      }
+      const res = await custom.inject({
+        method: 'PUT',
+        url: `${W}/root`,
+        headers,
+        payload: { path: path.join(fakeHome, '.hermes') },
+      })
+      expect(res.statusCode).toBe(409)
+    } finally {
+      process.env.HOME = savedHome
+      await custom.close()
+    }
+  })
+})

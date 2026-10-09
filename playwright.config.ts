@@ -30,6 +30,8 @@ export default defineConfig({
           SCORE_MODE: 'fake',
           SCORE_FAKE_REWIND_SKIP: 'reviewer:compressed',
           SCORE_WEB_ORIGIN: baseURL,
+          // The specs read the pairing link from dev.log: a non-terminal stdout only gets it on request.
+          SCORE_PRINT_PAIR_LINK: '1',
         },
         url: baseURL,
         reuseExistingServer: !process.env.CI,
@@ -45,6 +47,7 @@ export default defineConfig({
           SCORE_SERVE_WEB: '1',
           SCORE_PORT: webPort,
           SCORE_WEB_ORIGIN: baseURL,
+          SCORE_PRINT_PAIR_LINK: '1',
         },
         url: baseURL,
         reuseExistingServer: !process.env.CI,

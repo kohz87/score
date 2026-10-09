@@ -12,6 +12,8 @@ export interface CliOptions {
   captureTaskCreate?: boolean
   // Allowlisted read-only commands (see captureReadShape): config values, tool list, hub search.
   captureRead?: boolean
+  /** Bypass the config-read cache (mutation baselines and verification reads must see the file as it is now). */
+  fresh?: boolean
   // Settings status reads (`auth list`, `config get --json mcp_servers|providers`): Hermes prints no secrets for
   // these, and callers parse only the fields they need.
   captureSettings?: boolean

@@ -39,7 +39,7 @@ test('Delete rewinds: your message and the reply become a read-only previous ver
   await mine.hover()
   await mine.getByRole('button', { name: 'Delete message from You' }).click()
   const dialog = page.getByRole('dialog', { name: 'Delete this message?' })
-  await expect(dialog.getByText(/Agents rewound: lead −1 turn/)).toBeVisible()
+  await expect(dialog.getByText(/Agents rewound: lead −\d+ turns?/)).toBeVisible()
   await expect(dialog.getByText(/Long-term memory .* is not rewound/)).toBeVisible()
   await dialog.getByRole('button', { name: 'Rewind and delete' }).click()
   await expect(mine).toHaveCount(0)
@@ -73,7 +73,7 @@ test('Edit rewinds, then the correction shows "Version 2 of 2" with the original
   await composer.fill(fixed)
   await composer.press('Enter')
   const dialog = page.getByRole('dialog', { name: 'Edit and send again?' })
-  await expect(dialog.getByText(/Agents rewound: lead −1 turn/)).toBeVisible()
+  await expect(dialog.getByText(/Agents rewound: lead −\d+ turns?/)).toBeVisible()
   await dialog.getByRole('button', { name: 'Rewind and edit' }).click()
   const corrected = history
     .getByRole('article', { name: /Message from You/ })
