@@ -103,6 +103,7 @@ export function Composer({
   useEffect(() => {
     live.current = { text, attachments }
   })
+  const latest = useRef({ leaveEdit: () => {} })
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true
@@ -135,7 +136,10 @@ export function Composer({
       setNotice(null)
     }
   }
+  // Counts edit sessions, so a response can tell whether the edit it belongs to is still the one on screen.
+  const editSession = useRef(0)
   useEffect(() => {
+    editSession.current += 1
     if (editId) textarea.current?.focus()
   }, [editId])
   function leaveEdit() {
@@ -148,6 +152,9 @@ export function Composer({
     setAttachments(stash.attachments)
     setStash(null)
   }
+  useEffect(() => {
+    latest.current = { leaveEdit }
+  })
   useEffect(() => () => stopEdit(), [])
 
   const commands = useQuery({
@@ -352,10 +359,12 @@ export function Composer({
     const payload = {
       text: body,
       ...(sent.length ? { attachments: sent.map(({ mediaId }) => ({ mediaId })) } : {}),
-      ...(to.length ? { to } : {}),
+      // An edit that omits `to` reuses the original recipients, so removing every chip must say so explicitly.
+      ...(to.length || editing ? { to } : {}),
       ...(planFirst ? { planFirst: true } : {}),
       ...(editing ? { edits: editing.messageId } : {}),
     }
+    const submittedSession = editSession.current
     // A retry of the same payload reuses its key, so a lost response cannot post twice.
     const signature = JSON.stringify(payload)
     if (sendKey.current?.signature !== signature) sendKey.current = { signature, key: newId() }
@@ -400,7 +409,15 @@ export function Composer({
         return
       }
       if (editing) {
-        leaveEdit()
+        // Only the edit that sent this is finished by it; a cancelled or replaced edit left the composer to the person.
+        if (editSession.current === submittedSession) {
+          if (live.current.text.trim() === body) latest.current.leaveEdit()
+          else {
+            stopEdit()
+            setLoadedEdit(null)
+            setStash(null)
+          }
+        }
         setNotice({ kind: 'result', command: result.command })
         return
       }

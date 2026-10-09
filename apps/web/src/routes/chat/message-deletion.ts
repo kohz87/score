@@ -13,22 +13,27 @@ let pending = new Map<string, Pending>()
 // Deleted for real: stays hidden until the stream's message.deleted reaches the cache (and after a reload the
 // server no longer returns it).
 const confirmed = new Set<string>()
+// The undo window has closed and the DELETE is on its way: still hidden, but Undo is gone (it could not stop the request).
+const sending = new Set<string>()
 let failed: string | null = null
 const listeners = new Set<() => void>()
 let snapshot = { ids: new Set<string>(), hidden: new Set<string>(), failed: null as string | null }
 function publish() {
   snapshot = {
     ids: new Set(pending.keys()),
-    hidden: new Set([...pending.keys(), ...confirmed]),
+    hidden: new Set([...pending.keys(), ...sending, ...confirmed]),
     failed,
   }
   for (const listener of listeners) listener()
 }
 
 export function requestDelete(roomId: string, messageId: string): void {
-  if (pending.has(messageId)) return
+  if (pending.has(messageId) || sending.has(messageId)) return
   failed = null
   const timer = setTimeout(() => {
+    pending.delete(messageId)
+    sending.add(messageId)
+    publish()
     void (async () => {
       try {
         await apiFetch(
@@ -40,7 +45,7 @@ export function requestDelete(roomId: string, messageId: string): void {
         // The message comes back; the person is told once.
         failed = 'Could not delete the message. It is back in the conversation.'
       }
-      pending.delete(messageId)
+      sending.delete(messageId)
       publish()
     })()
   }, UNDO_MS)
@@ -65,6 +70,7 @@ export function dismissDeleteFailure(): void {
 export function resetMessageDeletion(): void {
   for (const entry of pending.values()) clearTimeout(entry.timer)
   pending = new Map()
+  sending.clear()
   confirmed.clear()
   failed = null
   publish()
