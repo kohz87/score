@@ -8,7 +8,7 @@ import { HermesDbMissing, HermesSchemaDrift, openReadOnly } from './sqlite.ts'
 const BRIDGE_ANSWER_MS = 60_000
 
 type Inspection =
-  | { ok: true; sessionId: string; turns: number }
+  | { ok: true; sessionId: string; turns: number; undone: number }
   | { ok: false; reason: 'no_session' | 'compressed' }
 
 /**
@@ -39,23 +39,26 @@ export function inspectSession(
       if (started.some((row) => row.started_at === null || row.started_at >= req.sinceSeconds))
         return { ok: false, reason: 'compressed' }
       const tip = lineage.at(-1)!
-      const count = (extra: string) =>
+      const count = (extra: string, active = 1) =>
         z.object({ count: z.int() }).parse(
           db
             .prepare(
-              `SELECT count(*) AS count FROM messages WHERE session_id = ? AND role = 'user' AND active = 1
+              `SELECT count(*) AS count FROM messages WHERE session_id = ? AND role = 'user' AND active = ?
                  AND timestamp >= ?${extra}`,
             )
-            .get(tip, req.sinceSeconds),
+            .get(tip, active, req.sinceSeconds),
         ).count
       let turns: number
+      let undone: number
       try {
         // Rows Hermes writes for display only are not turns the person started.
         turns = count(' AND display_kind IS NULL')
+        undone = count(' AND display_kind IS NULL', 0)
       } catch {
         turns = count('')
+        undone = count('', 0)
       }
-      return { ok: true, sessionId: tip, turns }
+      return { ok: true, sessionId: tip, turns, undone }
     } finally {
       db.close()
     }
@@ -81,13 +84,17 @@ export async function rewindSession(
     deps.hermesHome,
   )
   if (!found.ok) return { status: 'skipped', reason: found.reason }
+  // Hermes already undid these turns (an earlier rewind that Score never got the answer to, or an /undo): nothing
+  // active is left since the message, so the session is where the person wants it.
+  if (found.turns === 0 && found.undone > 0)
+    return req.dryRun ? { status: 'ready' } : { status: 'rewound', turnsUndone: 0, rewoundCount: 0 }
   if (found.turns !== req.turns) return { status: 'skipped', reason: 'turn_count_mismatch' }
   if (!deps.broker?.available(req.agentId))
     return { status: 'skipped', reason: 'bridge_unavailable' }
   if (req.dryRun) return { status: 'ready' }
   const outcome = await deps.broker.request(
     req.agentId,
-    { sessionId: found.sessionId, turns: req.turns },
+    { sessionId: found.sessionId, turns: req.turns, since: req.sinceMs / 1000 },
     BRIDGE_ANSWER_MS,
   )
   switch (outcome.status) {

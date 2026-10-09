@@ -3,13 +3,19 @@ import type { ScoreDb } from '../db/index.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { HttpError } from '../errors.ts'
+import { rewindingRooms } from './room-rewinding.ts'
 import { continuationFor, markSummarySent } from './outside-sessions.ts'
 import { failMessageRun, MessageRunSchema, roomRunInput } from './message-runs.ts'
+
+/** How long a turn waits for an outside session to go quiet before it fails with `session_busy`. */
+export const SESSION_BUSY_WAIT_MS = 10 * 60_000
 
 /** Durable queue; only one active turn per (room, agent). */
 export class RoutingDispatcher {
   private flight: Promise<void> | undefined
   private closed = false
+  /** When each turn first found its continued outside session busy. */
+  private readonly busySince = new Map<string, number>()
   private readonly unsubscribe: () => void
   private readonly timer: NodeJS.Timeout
 
@@ -68,7 +74,9 @@ export class RoutingDispatcher {
             .all(),
         ),
       )
-      const job = pending.find((row) => !attempted.has(row.turn_id))
+      const job = pending.find(
+        (row) => !attempted.has(row.turn_id) && !rewindingRooms.has(row.room_id),
+      )
       if (!job) break
       attempted.add(job.turn_id)
       try {
@@ -100,6 +108,33 @@ export class RoutingDispatcher {
         )
         // Cancelled (the message was edited) while its context was being frozen: do not start it.
         if (frozen.state !== 'pending') continue
+        // A room that continues an outside session shares it with another surface: check again before every turn.
+        const continued = this.db.read((sqlite) =>
+          continuationFor(sqlite, job.room_id, job.agent_id),
+        ).sessionId
+        if (continued) {
+          const outside = await this.port.readOutsideSession(job.agent_id, continued)
+          if (outside?.session.busy) {
+            const since = this.busySince.get(job.turn_id) ?? Date.now()
+            this.busySince.set(job.turn_id, since)
+            if (Date.now() - since < SESSION_BUSY_WAIT_MS) continue
+            this.busySince.delete(job.turn_id)
+            await this.ingest.submit({
+              source: 'routing',
+              identity: `failed:${job.turn_id}`,
+              apply: ({ sqlite, now }) =>
+                failMessageRun(
+                  sqlite,
+                  job.turn_id,
+                  'session_busy',
+                  now,
+                  'The original session stayed active on its other platform, so this turn was not started (session_busy). Send it again when that session has been quiet for a few minutes.',
+                ),
+            })
+            continue
+          }
+          this.busySince.delete(job.turn_id)
+        }
         const images = job.hop === 0 ? this.imageIds(job.parent_message_id) : []
         await this.port.startRun({
           agentId: job.agent_id,

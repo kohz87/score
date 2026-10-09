@@ -139,8 +139,10 @@ export class PasskeyService {
     // A peer asking for options over and over only evicts its own earlier ones; the global cap drops the oldest.
     const mine = [...this.#challenges].filter(([, entry]) => entry.owner === value.owner)
     while (mine.length >= MAX_CHALLENGES_PER_PEER) this.#challenges.delete(mine.shift()![0])
-    while (this.#challenges.size >= MAX_CHALLENGES)
-      this.#challenges.delete(this.#challenges.keys().next().value!)
+    // The global cap drops the oldest of the same kind, so sign-in options spam can't evict a pending registration.
+    const same = [...this.#challenges].filter(([, entry]) => entry.kind === value.kind)
+    while (this.#challenges.size >= MAX_CHALLENGES && same.length)
+      this.#challenges.delete(same.shift()![0])
     this.#challenges.set(challenge, value)
   }
 

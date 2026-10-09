@@ -62,10 +62,22 @@ export const ModelOptionSchema = z.object({
   price: z.object({ input: z.string(), output: z.string() }).nullable(),
   /** Context window in tokens, when Hermes's model options carry it. */
   contextLength: z.int().positive().nullable().optional(),
+  /** Set when the row stands for one of the agent's aliases that matched the search. */
+  alias: z.string().optional(),
 })
 export type ModelOption = z.infer<typeof ModelOptionSchema>
-export const ModelsQuerySchema = z.object({ q: z.string().max(100).optional() })
-export const ModelsResponseSchema = z.object({ items: z.array(ModelOptionSchema).max(200) })
+export const ModelsQuerySchema = z.object({
+  q: z.string().max(100).optional(),
+  /** Whose aliases may match `q` (the agent being edited). */
+  agentId: AgentIdSchema.optional(),
+  /** "1" lists every model, ignoring the chosen-models list. */
+  all: z.enum(['0', '1']).optional(),
+})
+export const ModelsResponseSchema = z.object({
+  items: z.array(ModelOptionSchema).max(200),
+  /** How many models the chosen-models list left out of `items`; absent when nothing was hidden. */
+  hiddenCount: z.int().nonnegative().optional(),
+})
 export type ModelsResponse = z.infer<typeof ModelsResponseSchema>
 
 export const LocalProviderRequestSchema = z

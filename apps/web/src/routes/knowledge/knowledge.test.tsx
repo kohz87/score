@@ -440,21 +440,26 @@ test('rename with update links shows the count; delete asks first', async () => 
     (within(dialog).getByLabelText('Update links in other notes') as HTMLInputElement).checked,
   ).toBe(true)
   fireEvent.click(within(dialog).getByRole('button', { name: 'Move' }))
-  expect(await screen.findByText(/Updated links in 3 notes/)).toBeDefined()
+  // Several async hops (move, navigate, reload, delete); generous waits so a loaded machine doesn't fail it.
+  expect(
+    await screen.findByText(/Updated links in 3 notes/, undefined, { timeout: 5000 }),
+  ).toBeDefined()
   expect(calls.find((c) => c.url === '/api/knowledge/move')!.body).toEqual({
     from: 'projects/Plan.md',
     to: 'archive/Plan.md',
     updateLinks: true,
   })
-  await waitFor(() => expect(router.state.location.pathname).toBe('/knowledge/archive/Plan.md'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/knowledge/archive/Plan.md'), {
+    timeout: 5000,
+  })
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete' }, { timeout: 5000 }))
   const confirm = screen.getByRole('dialog', { name: 'Delete Plan?' })
   expect(calls.some((c) => c.method === 'DELETE')).toBe(false)
   fireEvent.click(within(confirm).getByRole('button', { name: 'Delete note' }))
-  await waitFor(() => expect(router.state.location.pathname).toBe('/knowledge'))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/knowledge'), { timeout: 5000 })
   expect(calls.some((c) => c.method === 'DELETE' && c.url.endsWith('archive/Plan.md'))).toBe(true)
-})
+}, 15_000)
 
 test('a change by an agent to the open note shows a banner instead of overwriting the editor', async () => {
   const view = await openEditor()

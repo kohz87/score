@@ -1,7 +1,10 @@
 import {
   AgentDetailSchema,
   RewindSkipReasonSchema,
+  ModelSettingsUpdateSchema,
   type AgentDetail,
+  type ModelSettings,
+  type ModelSettingsUpdate,
   type PluginItem,
   type RewindSkipReason,
 } from '@score/contract'
@@ -46,6 +49,7 @@ import type {
   LocalProviderRequest,
   SignIn,
   ModelOption,
+  ModelRef,
   ToolServerRequest,
   RoutineSummary,
   RunSummary,
@@ -459,6 +463,7 @@ export class FakePort implements HermesPort {
   private routineCount = 0
   private readonly files = new Map<string, string>()
   private readonly models = new Map<string, { model: AgentSummary['model']; via: string }>()
+  private readonly modelSettings = new Map<string, ModelSettings>()
   private readonly skills = new Map<string, SkillItem[]>()
   private readonly memory = new Map<string, MemoryItem[]>()
   private readonly tools = new Map<string, AgentTool[]>()
@@ -868,7 +873,14 @@ export class FakePort implements HermesPort {
         worksIn: null,
         rulesFile: 'AGENTS.md',
         model: agent.model
-          ? { ...agent.model, via: this.models.get(agent.id)?.via ?? 'Demo', fallback: null }
+          ? {
+              ...agent.model,
+              via: this.models.get(agent.id)?.via ?? 'Demo',
+              fallback:
+                this.modelSettingsOf(agent.id)
+                  .fallbacks.map((ref) => ref.model)
+                  .join(', then ') || null,
+            }
           : null,
         skills: structuredClone(this.skills.get(agent.id) ?? []),
         memory: structuredClone((this.memory.get(agent.id) ?? []).slice(0, MEMORY_DETAIL_ITEMS)),
@@ -916,6 +928,42 @@ export class FakePort implements HermesPort {
       model,
       via: req.provider ?? this.models.get(agentId)?.via ?? 'Demo',
     })
+  }
+  private modelSettingsOf(agentId: string): ModelSettings {
+    let settings = this.modelSettings.get(agentId)
+    if (!settings) {
+      settings = {
+        fallbacks: [],
+        fallbacksEditable: true,
+        aliases: [],
+        speech: {
+          stt: { provider: null, model: null },
+          tts: { provider: 'edge', model: null, voice: 'en-US-AriaNeural' },
+        },
+      }
+      this.modelSettings.set(agentId, settings)
+    }
+    return settings
+  }
+  async readModelSettings(agentId: string): Promise<ModelSettings> {
+    this.agentOrThrow(agentId)
+    return structuredClone(this.modelSettingsOf(agentId))
+  }
+  async updateModelSettings(agentId: string, input: ModelSettingsUpdate): Promise<ModelSettings> {
+    const update = ModelSettingsUpdateSchema.parse(input)
+    this.agentOrThrow(agentId)
+    const settings = this.modelSettingsOf(agentId)
+    if (update.fallbacks) settings.fallbacks = structuredClone(update.fallbacks)
+    if (update.aliases)
+      settings.aliases = update.aliases.map((alias) => ({
+        name: alias.name,
+        model: alias.model,
+        provider: alias.provider ?? null,
+        editable: true,
+      }))
+    Object.assign(settings.speech.stt, update.speech?.stt)
+    Object.assign(settings.speech.tts, update.speech?.tts)
+    return structuredClone(settings)
   }
   async listSkills(agentId: string): Promise<SkillItem[]> {
     this.agentOrThrow(agentId)
@@ -1201,8 +1249,8 @@ export class FakePort implements HermesPort {
       contextLength: 128000,
     },
   ]
-  async listModels(q?: string): Promise<ModelOption[]> {
-    return structuredClone(filterModels(this.fakeModels, q))
+  async listModels(q?: string, only?: readonly ModelRef[]): Promise<ModelOption[]> {
+    return structuredClone(filterModels(this.fakeModels, q, only))
   }
   async listProviders(): Promise<ProviderBase[]> {
     return structuredClone(this.fakeProviders)

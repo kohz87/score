@@ -39,7 +39,7 @@ export class RewindBroker {
 
   async request(
     profile: string,
-    req: { sessionId: string; turns: number },
+    req: { sessionId: string; turns: number; since?: number },
     timeoutMs: number,
   ): Promise<RewindOutcome> {
     if (!this.available(profile)) return { status: 'unavailable' }

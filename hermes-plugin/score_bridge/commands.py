@@ -22,12 +22,15 @@ def validate_command(item):
         raise ProtocolError("invalid command")
     if type(turns) is not int or not 0 < turns <= 1000:
         raise ProtocolError("invalid command")
+    since = item.get("since")
+    if since is not None and (type(since) not in (int, float) or not 0 < since < 1e12):
+        raise ProtocolError("invalid command")
 
 
 def run_rewind(item) -> dict:
     """Ask Hermes to rewind; the result body never carries Hermes text, only counts and a fixed error code."""
     try:
-        result = hermes_private.rewind_session(item["sessionId"], item["turns"])
+        result = hermes_private.rewind_session(item["sessionId"], item["turns"], item.get("since"))
     except Exception:
         return {"outcome": "failed", "error": "rewind_failed"}
     if result is None:

@@ -41,10 +41,12 @@ import {
 import { assertProject, listProjects } from '../domain/room-projects.ts'
 import { roomFilesInPlay, roomLearned } from '../domain/room-panels.ts'
 import { createBrief } from '../domain/briefs.ts'
+import { rewindingRooms } from '../domain/room-rewinding.ts'
 import { reserveMessageRun, retryReply } from '../domain/message-runs.ts'
 import { PLAN_FIRST_ADDENDUM } from '../domain/plan.ts'
 import { COMMANDS } from '../domain/parse.ts'
 import { routeMessage, modelCommand } from '../domain/routing.ts'
+import { resolveAlias } from '../domain/model-aliases.ts'
 import { RoutingDispatcher } from '../domain/routing-dispatch.ts'
 import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
@@ -331,7 +333,11 @@ export function registerRoomRoutes(
     roomId: ParamsSchema.shape.roomId,
     messageId: z.string().min(1).max(200),
   })
-  const rewinding = new Set<string>()
+  const rewinding = rewindingRooms
+  function assertNotRewinding(roomId: string) {
+    if (rewinding.has(roomId))
+      throw new HttpError(409, 'conflict', 'This room is being rewound; try again in a moment')
+  }
   async function rewindPlan(roomId: string, messageId: string) {
     const found = db.read((sqlite) => {
       const anchor = rewindableMessage(sqlite, roomId, messageId)
@@ -469,6 +475,7 @@ export function registerRoomRoutes(
   })
 
   app.post('/api/rooms/:roomId/messages/:messageId/retry', mutation, async (request, reply) => {
+    assertNotRewinding(ParamsSchema.parse(request.params).roomId)
     const { roomId, messageId } = z
       .object({ roomId: ParamsSchema.shape.roomId, messageId: z.string().min(1).max(200) })
       .parse(request.params)
@@ -516,6 +523,7 @@ export function registerRoomRoutes(
 
   app.post('/api/rooms/:roomId/messages', mutation, async (request) => {
     const { roomId } = ParamsSchema.parse(request.params)
+    assertNotRewinding(roomId)
     const body = MessageBodySchema.parse(request.body)
     // Edit and resend: checked before any side effect (a /assign task) and again inside the transaction below.
     const original = body.edits
@@ -531,6 +539,12 @@ export function registerRoomRoutes(
     const room = db.read((sqlite) => readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at))
     const route = routeMessage(body.text, to, room, known)
     let command: CommandResult | null = modelCommand(route.model)
+    // `/model <alias>` names the model the alias stands for on each recipient (aliases belong to a profile).
+    const typedModel = route.model ?? body.model
+    const modelOf = new Map<string, string>()
+    if (typedModel)
+      for (const agentId of route.routedTo)
+        modelOf.set(agentId, (await resolveAlias(port, agentId, typedModel))?.model ?? typedModel)
     const id = randomUUID()
     if (route.parsed.command?.kind === 'assign') {
       const assigned = route.parsed.command
@@ -608,7 +622,7 @@ export function registerRoomRoutes(
                 agentId === planner ? route.input + teamNote + PLAN_FIRST_ADDENDUM : route.input,
               agents: known,
               ...(agentId === planner ? { planFirst: true } : {}),
-              ...((route.model ?? body.model) ? { model: route.model ?? body.model } : {}),
+              ...(modelOf.has(agentId) ? { model: modelOf.get(agentId) } : {}),
             },
             now,
           )

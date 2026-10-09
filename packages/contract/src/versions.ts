@@ -94,6 +94,8 @@ export const BridgeCommandSchema = z.object({
   kind: z.literal('rewind'),
   sessionId: z.string().min(1).max(256),
   turns: z.int().positive().max(1000),
+  /** Epoch seconds of the message being rewound: the plugin rewinds exactly the turns from there (absolute target). */
+  since: z.number().positive().optional(),
 })
 export type BridgeCommand = z.infer<typeof BridgeCommandSchema>
 export const BridgeCommandsResponseSchema = z.object({ items: z.array(BridgeCommandSchema) })
