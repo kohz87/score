@@ -66,8 +66,17 @@ def _reset_after_fork():
     atexit.register(_exit_callback)
 
 
+def _register_knowledge(ctx):
+    try:
+        from .knowledge import register_tools
+        register_tools(ctx)
+    except Exception:
+        pass
+
+
 def register(ctx):
     global _sender, _pid, _exit_callback
+    _register_knowledge(ctx)
     try:
         from .client import ScoreClient
         from .gates import reset

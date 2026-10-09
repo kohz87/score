@@ -37,6 +37,7 @@ import { rotateLog } from './log-rotation.ts'
 import { snapshotSessionCosts } from './domain/spend.ts'
 import { pruneEvents } from './hub/retention.ts'
 import { MediaStore } from './media/store.ts'
+import { KnowledgeAgentApi } from './knowledge/agent-api.ts'
 import { KnowledgeVault } from './knowledge/vault.ts'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
@@ -205,7 +206,7 @@ export async function startServer(
       onError: (error) => app?.log.error({ err: error }, 'Approval delivery failed'),
     })
     const dispatcher = outbox
-    const bridge =
+    const liveBridge =
       config.mode === 'live'
         ? {
             db: database,
@@ -239,6 +240,10 @@ export async function startServer(
       await knowledge.close()
       knowledge = undefined
     }
+    const bridge =
+      liveBridge && knowledge
+        ? { ...liveBridge, knowledge: new KnowledgeAgentApi(knowledge, database) }
+        : liveBridge
     app = buildApp({
       config,
       port,

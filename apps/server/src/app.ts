@@ -12,6 +12,8 @@ import { registerAgentHistoryRoutes } from './http/agent-history.ts'
 import { registerAgentTabRoutes } from './http/agent-tabs.ts'
 import { registerWorkspaceRoutes } from './http/workspace.ts'
 import { registerKnowledgeRoutes } from './http/knowledge.ts'
+import { registerKnowledgeAgentRoutes } from './http/knowledge-agents.ts'
+import { KnowledgeAgentApi } from './knowledge/agent-api.ts'
 import type { KnowledgeVault } from './knowledge/vault.ts'
 import { registerReportRoutes } from './http/reports.ts'
 import { registerTaskRoutes } from './http/tasks.ts'
@@ -205,7 +207,10 @@ export function buildApp({
     registerProfileRoutes(app, { db, ingest, port, config, ...(clock ? { clock } : {}) })
   registerAgentTabRoutes(app, port, ingest, db, clock)
   registerWorkspaceRoutes(app, port, config)
-  if (knowledge) registerKnowledgeRoutes(app, knowledge)
+  if (knowledge) {
+    registerKnowledgeRoutes(app, knowledge)
+    if (db) registerKnowledgeAgentRoutes(app, new KnowledgeAgentApi(knowledge, db, clock))
+  }
   registerRoutineRoutes(app, port, db, clock)
   registerSettingsRoutes(app, port, db, clock)
   registerRulesRoutes(app, port, ingest, db, clock)

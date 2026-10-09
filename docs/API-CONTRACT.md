@@ -803,6 +803,10 @@ tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
   `gitAvailable: false`). `GET /api/knowledge/notes/*path/versions/:commit` → `{ commit; body }`.
 - **H** `POST /api/knowledge/notes/*path/restore` `{ commit }` → `{ etag; path }` (a new commit with that version).
 - **H** `PUT /api/knowledge/settings` `{ agentAccess: boolean }` → `KnowledgeInfo`.
+- `GET /api/agents/:agentId/knowledge` → `{ enabled }`; **H** `PUT` same path `{ enabled }` → `{ enabled }`: the per-agent
+  "Knowledge tools" switch (Team › agent › Tools; default on; the global `agentAccess` is checked first).
+- `GET /api/knowledge/agent-usage` → `{ items: { agentId; writesToday }[] }`: agent writes since local midnight
+  (Settings › Knowledge).
 - Stream `knowledge.changed` after every change (Score's, an agent's, or an outside edit the watcher saw).
 - Errors: path outside the vault, `..`, NUL, absolute, `.git` → `400 bad_path`; not a `.md` note where one is needed →
   `400 not_a_note`; too large (note > 2 MiB) → `413 payload_too_large`; missing → `404 not_found`.
@@ -876,6 +880,19 @@ sessionKey; requestId; choice: ApprovalChoice; reason: string | null }[] }`. Onl
 event may carry `kanbanDenial: { patternKey: string; commandDigest: string; taskId: string; runId: number | null }`
 when the plugin verified the unattended dangerous-command denial; the server shows it as a view-only approval card.
 `enabled.kanbanGrants` in `hello` is reserved and always `false` until Hermes offers a one-shot grant API.
+
+**Knowledge tools** (§12, task 6.4). `POST /bridge/v1/knowledge/{search|read|list|write|append}`, auth `Bearer
+<producerToken>` (JSON body). The agent is the producer's `profile`; nothing in the body names an agent. Requests/responses
+are `Bridge*Knowledge*` in `packages/contract/src/knowledge.ts`:
+`search {query ≤500, limit 1-20}` → `{ items: {path; title; snippet}[] }`; `read {path}` → `{ path; title; body; etag;
+truncated }` (body ≤ 256 KiB); `list {folder?}` → `{ folders; notes: {path; title; mtime}[]; truncated }` (≤ 200 entries);
+`write {path; body; expectedEtag | null}` (null creates) → `{ etag; path }`; `append {path; text}` → `{ etag; path }` (server-side,
+creates a missing note). Errors use the standard envelope: `403 knowledge_off` (global or per-agent switch off; message
+"Knowledge is turned off for agents"), `404 not_found`, `400 bad_path|not_a_note`, `409 conflict` / `409 exists` with
+`details.etag` (the current etag, so the model re-reads), `413 payload_too_large` (> 256 KiB per write),
+`429 rate_limited` (60 writes/hour/agent; `details.retryAfterSeconds`). Agent text passes through `redact()` before it is
+stored; commits are authored `<agentId> (agent)` and `knowledge.changed` carries `by: { agentId }`. There is no delete or
+move for agents.
 
 Hook → domain mapping lives in `apps/server/src/hermes/translate.ts`; payload fixtures in
 `apps/server/test/fixtures/bridge/` (seeded from `docs/spike/`).

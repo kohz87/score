@@ -510,3 +510,21 @@
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
+.kn-subhead {
+  margin: 8px 0 4px;
+  font-size: 13px;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.kn-usage {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+.kn-usage li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}

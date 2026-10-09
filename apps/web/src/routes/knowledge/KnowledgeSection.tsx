@@ -1,3 +1,4 @@
+import { AgentUsage } from './AgentUsage.tsx'
 import { knowledgeFailure, useKnowledgeActions, useKnowledgeInfo } from './knowledge-queries.ts'
 
 export function KnowledgeSection() {
@@ -50,6 +51,7 @@ export function KnowledgeSection() {
             are never served, but Score cannot recognise every secret: do not store secrets in
             notes.
           </p>
+          <AgentUsage />
           {actions.setAgentAccess.isError && (
             <p role="alert">
               {knowledgeFailure(actions.setAgentAccess.error, 'change this setting')}

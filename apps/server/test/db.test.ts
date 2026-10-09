@@ -95,6 +95,8 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'ingest_checkpoints',
     'ingest_floors',
     'ingest_keys',
+    'knowledge_agent_access',
+    'knowledge_agent_writes',
     'knowledge_fts',
     'knowledge_fts_config',
     'knowledge_fts_content',
