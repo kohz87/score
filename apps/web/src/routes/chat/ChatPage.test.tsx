@@ -68,6 +68,7 @@ class Source extends EventTarget {
   }
 }
 const disposers: (() => void)[] = []
+let shares: object[] = []
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>
 const pendingApproval: Approval = {
   id: 'approval',
@@ -138,6 +139,7 @@ beforeEach(() => {
   rewindResponse = () => response({})
   searchHits = []
   rooms = [room]
+  shares = []
   filesInPlay = []
   learned = []
   fetchMock = vi.fn(async (input) => {
@@ -149,6 +151,7 @@ beforeEach(() => {
     if (url === '/api/rooms') return response({ asOfSeq: 1, rooms, directs: [direct] })
     if (url.endsWith('/versions')) return response({ asOfSeq: 1, items: versions })
     if (url.includes('/versions/')) return response({ version: versions[0], items: versionItems })
+    if (url.endsWith('/shares')) return response({ items: shares })
     if (url.endsWith('/rewind-plan')) return response(plan)
     if (url.endsWith('/rewind')) return rewindResponse()
     if (url.includes('/messages'))
@@ -862,6 +865,35 @@ test('sending an edit posts `edits`; the original greys with a link to the new v
   target.scrollIntoView = scroll
   fireEvent.click(within(first).getByRole('button', { name: 'see the new version' }))
   expect(scroll).toHaveBeenCalled()
+})
+test('the delete dialog says live share links still show the message and revokes them in one click', async () => {
+  items = [mine]
+  shares = [
+    {
+      id: 'sh1',
+      roomId: 'general',
+      roomName: '#general',
+      createdAt: '2026-10-09T10:00:00.000Z',
+      expiresAt: '2026-10-16T10:00:00.000Z',
+      views: 0,
+      includeImages: false,
+      status: 'active',
+      roomChanged: false,
+    },
+  ]
+  setup()
+  await screen.findByText('Ship it')
+  fireEvent.click(screen.getByRole('button', { name: 'Delete message from You' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Delete this message?' })
+  await within(dialog).findByText(/1 share link of this room will still show this message/)
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Revoke it' }))
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) => String(url) === '/api/shares/sh1' && init?.method === 'DELETE',
+      ),
+    ).toBe(true),
+  )
 })
 test('an agent that cannot be rewound blocks Rewind and offers Hide in Score only', async () => {
   items = [mine]

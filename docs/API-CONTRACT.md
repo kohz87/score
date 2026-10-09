@@ -575,7 +575,8 @@ create dialog says so). Nothing live is exposed.
   data. The room's later edits and deletions do not change it. At most the latest 2000 messages.
 - Token: 32 random bytes (base64url, 43 chars). Only its SHA-256 is stored (`room_shares.token_hash`); the token is shown once.
 - `GET /api/shares` → `{ items: ShareSummary[] }` (`{ id; roomId; roomName; createdAt; expiresAt; views; includeImages;
-  status: 'active' | 'expired' }`, newest first; revoked shares are gone) · `GET /api/rooms/:roomId/shares` → the same, active
+  status: 'active' | 'expired'; roomChanged }`, newest first; `roomChanged` = a message of the room was deleted or rewound after the
+  snapshot (the link still shows the old text); revoked shares are gone) · `GET /api/rooms/:roomId/shares` → the same, active
   ones of that room (Chat › room menu › Share…, Settings › Shares lists all).
 - **H** `DELETE /api/shares/:id` → `204` (no password needed; idempotent; `404` unknown id). Revoking withdraws the link at once
   and drops the stored snapshot.
