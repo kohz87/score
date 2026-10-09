@@ -222,11 +222,9 @@ export function listAttempts(sqlite: DatabaseSync, input: ListAttemptsInput): Ka
       excludeCopies: z.boolean().optional(),
     })
     .parse(input)
-  const from = Math.floor(Date.parse(since) / 1000)
   const to = Math.floor(Date.parse(until) / 1000)
   const clauses = ['a.started_at <= ?']
   const params: (string | number)[] = [to]
-  // Closed attempts end at ended_at; an open one ends at its observation boundary, else it is still running.
   // An attempt overlaps while one of its observed intervals does (an open interval runs to now).
   clauses.push(
     `EXISTS (SELECT 1 FROM kanban_attempt_observations o
