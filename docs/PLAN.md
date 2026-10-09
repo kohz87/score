@@ -323,6 +323,15 @@ agent's todo tool.
 routines and agent errors (Notification API over HTTPS); passkeys (WebAuthn) as an alternative to pairing links;
 phone-friendly Enter (newline on touch) and a send-key setting.
 
+**5.29 Small wins** (owner 2026-10-09, ideas from the owner's description of ekko-studio; no code or docs read) · QR code
+for "Pair another device"; a log viewer (Score's log, filter by level and keyword, redacted); Reports: cache hit rate,
+currency toggle, 30-day trend chart.
+**5.30 Documents** · Attach and preview documents (drag, drop or paste PDF, DOCX, XLSX, CSV, HTML, text, images), inline
+previews in chat and workspace, attach workspace files to a message.
+**5.31 Model settings** · Fallback chains, aliases, hide unused models, speech-to-text and text-to-speech model settings
+(per agent, through Hermes).
+**5.32 Profile import** · Restore an agent from an exported bundle (export exists), with a preview of what it contains.
+
 ---
 
 ## First five tasks
@@ -340,4 +349,13 @@ and blocked list per the design. Done when the design's tests pass on the fake a
 **6.2 Knowledge server** · `~/score-vault` (git), index + FTS5 (migration), notes/search/backlinks/history API, stream event.
 **6.3 Knowledge web** · Knowledge destination: editor, preview, wikilinks, backlinks, history, search.
 **6.4 Agent knowledge tools** · score_bridge tools (search/read/list/write/append) over the bridge, attributed, limited.
+
+## Phase 7: larger features (owner 2026-10-09; each needs a design + security review before building)
+**7.1 Workflow builder** · Reusable multi-agent pipelines on a canvas extending Flow: nodes per agent/runtime, branches,
+human approval gates, budgets and deadlines, pause/resume/stop, replay, JSON export/import.
+**7.2 Coding agents as team members** · Claude Code, Codex, OpenCode as room participants next to Hermes agents.
+**7.3 Web terminal** · A terminal on the server in the browser (paired, HTTPS only; security design first).
+**7.4 Backlog** · Long rooms auto-summarise at a token threshold; pop-out window per agent; journey graph (tasks,
+memories, skills over time); Score as an MCP tool server for its agents.
+Not planned (owner): full-screen voice stage; multiple user accounts with roles.
 
