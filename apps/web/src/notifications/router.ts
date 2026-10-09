@@ -1,4 +1,5 @@
 import type { Message, StreamEvent } from '@score/contract'
+import { attemptPath } from '../routes/attempts/attempt-format.ts'
 import type { NotificationKind, NotificationPrefs } from './prefs.ts'
 
 export interface NotificationPayload {
@@ -104,6 +105,24 @@ export function createNotificationRouter({ prefs, hidden, nameOf }: RouterOption
                 url: `/now/watch/${encodeURIComponent(run.agentId)}`,
                 tag: `run:${run.id}`,
               }
+        }
+        case 'attempt.updated': {
+          // A failed Kanban attempt reads like a failed run, but it opens the task (or, for an earlier copy of the
+          // board, the attempt page): an attempt has no session, so there is never a Watch URL for it.
+          const attempt = event.data
+          if (attempt.status !== 'failed' || !settings.kinds.errors || finished.has(attempt.id))
+            return null
+          finished.add(attempt.id)
+          if (finished.size > 500) finished.delete(finished.values().next().value!)
+          return {
+            kind: 'errors',
+            title: attempt.agentId
+              ? `${nameOf(attempt.agentId)} hit an error`
+              : 'An attempt failed',
+            body: 'A Kanban attempt failed. Open Score to see what happened.',
+            url: attemptPath(attempt),
+            tag: `attempt:${attempt.id}`,
+          }
         }
         case 'message.created': {
           const message = event.data

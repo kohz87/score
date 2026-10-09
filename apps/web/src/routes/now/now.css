@@ -715,3 +715,38 @@
   font-size: 13px;
   color: var(--muted);
 }
+
+/* Kanban attempts (5.17a-1). An attempt Score stopped observing ends at that boundary with a dashed tail; the
+   words "no longer observed" are in the block's accessible name and its tooltip, the legend names the tail. */
+.now-block--unobserved {
+  overflow: visible;
+}
+.now-block--unobserved > .now-block-label {
+  min-width: 0;
+}
+.now-block--unobserved::after {
+  content: '';
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  width: 28px;
+  border-top: 2px dashed color-mix(in srgb, var(--c) 70%, var(--card));
+  pointer-events: none;
+}
+.now-lane--unattributed .now-block--done {
+  background: color-mix(in srgb, var(--ink-muted) 14%, var(--card));
+  color: var(--ink);
+}
+.now-legend-swatch--unobserved {
+  background: transparent;
+  height: 0;
+  border-top: 2px dashed var(--ink-muted);
+  border-radius: 0;
+}
+.now-made-row--unknown .now-made-check {
+  color: var(--ink-muted);
+}
+.now-made-note {
+  color: var(--ink-muted);
+  font-weight: 500;
+}

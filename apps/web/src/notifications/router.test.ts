@@ -130,3 +130,43 @@ test('each kind can be turned off on its own', () => {
   expect(router.handle(ev('run.updated', run({ id: 'r5', status: 'failed' })))).toBeNull()
   expect(router.handle(ev('message.created', message()))).toBeNull()
 })
+
+const attempt = (over: object = {}) => ({
+  id: 'kr_1',
+  kind: 'kanban',
+  agentId: 'builder',
+  status: 'failed',
+  taskId: 't1',
+  task: { taskId: 't1', historyId: 'h1', current: true },
+  ...over,
+})
+
+test('a failed attempt on the current board opens its task, never Watch', () => {
+  const { router } = setup()
+  const payload = router.handle(ev('attempt.updated', attempt()))!
+  expect(payload).toMatchObject({ kind: 'errors', url: '/tasks/t1', tag: 'attempt:kr_1' })
+  expect(payload.url).not.toContain('/watch/')
+  // Once per attempt.
+  expect(router.handle(ev('attempt.updated', attempt()))).toBeNull()
+})
+
+test('a failed attempt of an earlier copy of the board opens the attempt page', () => {
+  const { router } = setup()
+  const payload = router.handle(
+    ev(
+      'attempt.updated',
+      attempt({
+        id: 'kr_2',
+        agentId: null,
+        task: { taskId: 't9', historyId: 'h0', current: false },
+      }),
+    ),
+  )!
+  expect(payload.url).toBe('/attempts/kr_2')
+  expect(payload.title).toBe('An attempt failed')
+})
+
+test('attempts that did not fail say nothing', () => {
+  const { router } = setup()
+  expect(router.handle(ev('attempt.updated', attempt({ status: 'completed' })))).toBeNull()
+})

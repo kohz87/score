@@ -11,7 +11,7 @@ const REFRESH_MS = 30_000
 const THROTTLE_MS = 1000
 // The Now snapshot is a read model the server recomputes, so these events only say "read it again".
 const REFRESH_ON =
-  /^(run|approval|message|brief)\.|^(task\.upserted|lane\.upserted|handoff\.created)$/
+  /^(run|approval|message|brief|attempt)\.|^(task\.upserted|lane\.upserted|handoff\.created)$/
 
 export function useNow() {
   const queryClient = useQueryClient()

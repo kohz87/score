@@ -103,7 +103,15 @@ export function FlowStats({ stats }: { stats: BriefFlow['stats'] }) {
           [duration(stats.runningSec), 'running'],
           [stats.steps, 'steps taken'],
           [stats.handoffs, 'hand-offs'],
-          [stats.spendUsd === null ? '—' : `$${stats.spendUsd.toFixed(2)}`, 'model spend'],
+          [
+            stats.spendUsd !== null
+              ? `$${stats.spendUsd.toFixed(2)}`
+              : // Kanban attempts record no cost, so the total would understate what was spent.
+                (stats.attempts ?? 0) > 0
+                ? 'partial'
+                : '—',
+            'model spend',
+          ],
         ].map(([value, label]) => (
           <div key={label}>
             <dd>{value}</dd>

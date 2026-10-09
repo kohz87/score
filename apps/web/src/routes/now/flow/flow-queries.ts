@@ -100,6 +100,7 @@ export function useBriefFlow(briefId: string | undefined) {
           (event.data.briefId === briefId || event.data.briefId === null)) ||
         event.type === 'task.upserted' ||
         event.type === 'run.updated' ||
+        event.type === 'attempt.updated' ||
         (event.type === 'message.created' && inRunRoom(event.data.roomId)) ||
         (event.type === 'message.delta' && inRunRoom(event.data.roomId)) ||
         (event.type === 'message.completed' && inRunRoom(event.data.roomId)) ||

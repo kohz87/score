@@ -8,9 +8,11 @@ import {
   SkillsResponseSchema,
   type AgentDetail,
 } from '@score/contract'
+import { useEffect } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../data/api.ts'
 import { newId } from '../../data/ids.ts'
+import { useStream } from '../../data/query-client.ts'
 
 export type Skill = AgentDetail['skills'][number]
 export type MemoryEntry = AgentDetail['memory'][number]
@@ -177,6 +179,17 @@ export function useChannels(agentId: string) {
 }
 
 export function useHistory(agentId: string, q: string, outcome: HistoryOutcome | '') {
+  const stream = useStream()
+  const queryClient = useQueryClient()
+  // A Kanban attempt that starts, ends or stops being observed shows up in this list at once.
+  useEffect(
+    () =>
+      stream.subscribe((event) => {
+        if (event.type === 'attempt.updated')
+          void queryClient.invalidateQueries({ queryKey: ['team', 'history', agentId] })
+      }),
+    [stream, queryClient, agentId],
+  )
   return useInfiniteQuery({
     queryKey: ['team', 'history', agentId, q, outcome] as const,
     initialPageParam: '',
