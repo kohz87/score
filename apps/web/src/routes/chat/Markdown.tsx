@@ -1,8 +1,18 @@
-import { Children, isValidElement, useEffect, useRef, useState, type ReactNode } from 'react'
-import ReactMarkdown, { type Components } from 'react-markdown'
+import {
+  Children,
+  isValidElement,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
+import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
+import { Link, useInRouterContext } from 'react-router'
 import remarkGfm from 'remark-gfm'
 import { copyText } from '../../data/clipboard.ts'
 import { normalizeLanguage, tokenize } from './highlight.ts'
+import { isWorkspaceHref, parseWorkspaceLink } from './workspace-link.ts'
 
 /** Shows `text` at most once per animation frame while it streams, so a fast reply does not re-parse on every chunk. */
 export function useFrameText(text: string, streaming: boolean): string {
@@ -70,12 +80,10 @@ export function CodeBlock({ code, language }: { code: string; language: string |
   )
 }
 
-const components: Components = {
-  a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noopener noreferrer">
-      {children}
-    </a>
-  ),
+/** Where `workspace://` links point: the agent whose files they are (usually the author) and the agents Score knows. */
+export type WorkspaceLinkContext = { agentId: string | null; agentIds: readonly string[] }
+
+const baseComponents: Components = {
   // Remote images would be fetched without the person asking: show the alt text instead.
   img: ({ alt }) => <span className="chat-md-image">{alt || 'image'}</span>,
   pre: ({ children }) => {
@@ -93,11 +101,57 @@ const components: Components = {
  * Chat text as Markdown (PLAN 5.25). react-markdown renders to React elements and drops raw HTML by default; there is no
  * rehype-raw here and there must never be one: a reply is untrusted text.
  */
-export function Markdown({ text, streaming = false }: { text: string; streaming?: boolean }) {
+export function Markdown({
+  text,
+  streaming = false,
+  workspace,
+}: {
+  text: string
+  streaming?: boolean
+  workspace?: WorkspaceLinkContext
+}) {
   const shown = useFrameText(text, streaming)
+  const inRouter = useInRouterContext()
+  const agentId = workspace?.agentId ?? null
+  const agentIds = workspace?.agentIds
+  const components = useMemo<Components>(
+    () => ({
+      ...baseComponents,
+      a: ({ href, children }) => {
+        if (isWorkspaceHref(href)) {
+          const target = parseWorkspaceLink(href, agentId, agentIds ?? [])
+          // No agent to open it in: keep the words, drop the link.
+          if (!target || !inRouter)
+            return target ? (
+              <a href={target.to}>{children}</a>
+            ) : (
+              <span title="This link points into a workspace, but no agent is known for it">
+                {children}
+              </span>
+            )
+          return (
+            <Link className="chat-workspace-link" to={target.to}>
+              {children}
+            </Link>
+          )
+        }
+        return (
+          <a href={href} target="_blank" rel="noopener noreferrer">
+            {children}
+          </a>
+        )
+      },
+    }),
+    [agentId, agentIds, inRouter],
+  )
   return (
     <div className="chat-text chat-md">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={components}
+        // `workspace:` is ours (it only ever becomes an in-app link); every other scheme keeps the default filter.
+        urlTransform={(url) => (isWorkspaceHref(url) ? url : defaultUrlTransform(url))}
+      >
         {shown}
       </ReactMarkdown>
     </div>

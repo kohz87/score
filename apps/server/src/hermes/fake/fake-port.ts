@@ -26,6 +26,7 @@ import { recordFrame } from '../../domain/watch-frames.ts'
 import { insertRoom, roomChanged, storeMessage, updateMessage } from '../../domain/rooms.ts'
 import { approvalDraft, patchApproval, readApprovalRow } from '../../domain/approval-store.ts'
 import type {
+  AgentTodos,
   AgentSummary,
   Approval,
   ConnectResult,
@@ -895,6 +896,21 @@ export class FakePort implements HermesPort {
     const q = HubQuerySchema.parse(query).trim().toLowerCase()
     if (!q) return []
     return fakeHub.filter((skill) => `${skill.name} ${skill.description}`.toLowerCase().includes(q))
+  }
+  async readAgentTodos(agentId: string): Promise<AgentTodos> {
+    this.agentOrThrow(agentId)
+    // One neutral example list so the Todo card can be exercised; the other agents have none.
+    if (agentId !== 'reviewer') return null
+    return {
+      todos: [
+        { id: 'sketch', content: 'Sketch the settings page', status: 'completed' },
+        { id: 'palette', content: 'Pick the accent colours', status: 'in_progress' },
+        { id: 'contrast', content: 'Check contrast', status: 'pending', parent: 'palette' },
+        { id: 'handoff', content: 'Hand the mock-ups to the builder', status: 'pending' },
+      ],
+      revision: 3,
+      updatedAt: new Date(this.scheduler.now()).toISOString(),
+    }
   }
   async listAgentChannels(agentId: string): Promise<AgentChannelsResponse> {
     this.agentOrThrow(agentId)

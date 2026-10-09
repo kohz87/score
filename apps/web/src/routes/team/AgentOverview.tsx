@@ -1,5 +1,7 @@
 import type { AgentDetail, AgentSummary } from '@score/contract'
 import { Link } from 'react-router'
+import { TodoItems, todoProgress, useAgentTodos } from '../../components/TodoList.tsx'
+import '../../components/todo.css'
 
 const permissionLabels = { allowed: 'Allowed', asks: 'Asks you', never: 'Never' } as const
 
@@ -12,6 +14,7 @@ export function AgentOverview({
   agents: AgentSummary[]
   selectTab: (tab: string, file?: 'SOUL.md' | 'AGENTS.md') => void
 }) {
+  const todos = useAgentTodos(agent.id, agent.status === 'working').data
   const manager = agents.find((item) => item.id === agent.reportsTo)
   return (
     <div className="team-grid">
@@ -61,6 +64,15 @@ export function AgentOverview({
         </dl>
       </section>
 
+      {todos && todos.todos.length > 0 && (
+        <section className="team-card" aria-labelledby="team-todo">
+          <div className="team-card-heading">
+            <h2 id="team-todo">Todo</h2>
+            <span className="team-muted">{todoProgress(todos.todos)}</span>
+          </div>
+          <TodoItems todos={todos.todos} />
+        </section>
+      )}
       <section className="team-card" aria-labelledby="team-model">
         <h2 id="team-model">Model</h2>
         <p className="team-model-name">{agent.model?.label ?? 'Model unavailable'}</p>

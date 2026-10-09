@@ -94,6 +94,10 @@ Conversations with your team. The list on the left has **Rooms** (several agents
   **Approve** and **Deny**. **More** offers **Approve for this session** and **Always approve** where Hermes allows
   them. If delivery to Hermes fails, the card says so and you can try again. Some approvals can only be answered
   inside Hermes; the card says that too.
+- **File links.** A reply can link to a file in an agent's workspace with `[main](workspace://src/main.ts)` (the file
+  belongs to the agent who wrote it) or `[main](workspace://builder/src/main.ts)` (a named agent). Clicking it opens
+  the file in that agent's Team › Workspace tab. Tell an agent to write file references this way. A path that is not
+  allowed shows the same error as in the Workspace.
 - **Plans.** A plan card shows who will do what on a small timeline, with **Open in Score**.
 - **Room details** (the "Show room details" panel): **Files in play** (files agents touched here), **Learned here**
   (facts saved to an agent's memory from this room, with **Open memory**) and **Also reachable on** (messaging
@@ -119,11 +123,13 @@ Your agents at a glance, with a card for each. **Add agent** creates a new Herme
 to start blank or copy an existing agent, and an appearance; Score shows a preview of every change and then runs
 it. This needs the bridge install settings described in the README ("Create and manage agents").
 
-Click an agent to open its page. It has an appearance picker (color and shape) and these tabs:
+Click an agent to open its page. It has an appearance picker (color and shape) and these tabs (the Workspace tab also has its own address, `/team/<agent>/workspace?path=<file>`):
 
 - **Overview**: a short summary of personality, who it reports to, where it works, its operating rules, the model
   and skills it uses and its routines, plus **Agent details** (display name, description) and a **Danger zone**
   with **Delete agent** (you type its name to confirm, and a private export is kept first).
+- **Todo** card (Overview, and on Now while the agent works): the agent's own Hermes todo list with each item's state,
+  read-only. It appears once the agent has used its todo tool.
 - **Personality**: edits the agent's `SOUL.md` (who it is) and `AGENTS.md` (standing rules). **Preview changes**
   shows the exact difference before anything is written. If the file changed meanwhile, you see the other version
   and choose **Reload theirs** or **Overwrite with mine**.
@@ -131,6 +137,11 @@ Click an agent to open its page. It has an appearance picker (color and shape) a
 - **Skills**: skills the agent has, and a search of the skills hub to add more.
 - **Memory**: facts the agent remembers; **New memory** adds one, and each entry can be deleted.
 - **Tools**: the tools it can use and how many helper agents it may spawn.
+- **Workspace**: the agent's working folder. Files open in a code editor with colours for Markdown, JavaScript,
+  TypeScript, JSON, CSS and HTML (other files are plain text); Markdown files have a **Preview** switch. When the
+  folder is inside a git repository the header shows the branch and how many files changed (Score only reads git,
+  it never commits). Drag the bar between the file list and the editor, or focus it and use the arrow keys, to
+  change the width; Score remembers it in this browser.
 - **Routines**: scheduled work. **New routine** takes a schedule and a prompt; each routine has **Run now** and a
   confirmed delete.
 - **Permissions**: this agent's rules on top of the team rules (see Settings). An agent can be made stricter than

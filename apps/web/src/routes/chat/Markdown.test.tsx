@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
+import { MemoryRouter } from 'react-router'
 import { tokenize } from './highlight.ts'
 import { Markdown } from './Markdown.tsx'
 
@@ -70,4 +71,28 @@ test('tokenizer: unknown languages are plain and an unclosed quote does not swal
   expect(
     tokenize('SELECT * FROM t', 'sql').filter((token) => token.type === 'keyword'),
   ).toHaveLength(2)
+})
+
+test("workspace:// links open the file in the author agent's Workspace tab, not in a new tab", () => {
+  render(
+    <MemoryRouter>
+      <Markdown
+        text="see [main](workspace://src/main.ts) and [theirs](workspace://reviewer/a.md)"
+        workspace={{ agentId: 'builder', agentIds: ['builder', 'reviewer'] }}
+      />
+    </MemoryRouter>,
+  )
+  const main = screen.getByRole('link', { name: 'main' })
+  expect(main.getAttribute('href')).toBe('/team/builder/workspace?path=src%2Fmain.ts')
+  expect(main.getAttribute('target')).toBeNull()
+  expect(screen.getByRole('link', { name: 'theirs' }).getAttribute('href')).toBe(
+    '/team/reviewer/workspace?path=a.md',
+  )
+})
+
+test('a workspace:// link with no known agent is plain text; other schemes stay blocked', () => {
+  render(<Markdown text="[x](workspace://a.md) [y](javascript:alert(1))" />)
+  expect(screen.queryByRole('link', { name: 'x' })).toBeNull()
+  expect(screen.getByText('x')).toBeTruthy()
+  expect(screen.getByText('y').getAttribute('href')).toBeFalsy()
 })

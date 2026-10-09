@@ -1,5 +1,6 @@
+import { EditorView } from '@codemirror/view'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { createQueryClient } from '../../data/query-client.ts'
 import { WorkspaceTab } from './WorkspaceTab.tsx'
@@ -12,6 +13,7 @@ let dirs: Map<string, { name: string; kind: 'file' | 'dir' }[]>
 let etag: string
 let saveStatus: 200 | 412
 let removeNotEmpty: boolean
+let gitStatus: { branch: string; changed: number; ahead: number; behind: number } | null
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
@@ -28,6 +30,7 @@ function handler(input: string, init: RequestInit = {}): Response {
     info = { root: body.path, available: true, reason: null }
     return json(200, info)
   }
+  if (tail === '/git') return json(200, gitStatus)
   if (tail === '/tree')
     return json(200, {
       entries: (dirs.get(path) ?? []).map((e) => ({
@@ -84,6 +87,7 @@ beforeEach(() => {
   etag = 'etag-1'
   saveStatus = 200
   removeNotEmpty = false
+  gitStatus = null
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string, init?: RequestInit) => handler(input, init)),
@@ -94,12 +98,19 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function mount() {
+function mount(initialPath: string | null = null) {
   return render(
     <QueryClientProvider client={createQueryClient()}>
-      <WorkspaceTab agentId="builder" agentName="Builder" />
+      <WorkspaceTab agentId="builder" agentName="Builder" initialPath={initialPath} />
     </QueryClientProvider>,
   )
+}
+const view = () => EditorView.findFromDOM(document.querySelector<HTMLElement>('.cm-editor')!)!
+function setText(text: string) {
+  const editor = view()
+  act(() => {
+    editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: text } })
+  })
 }
 const treeCalls = () => calls.filter((c) => c.url.includes('/workspace/tree')).map((c) => c.url)
 
@@ -151,54 +162,139 @@ test('the tree loads lazily: a folder is listed only when opened', async () => {
   expect(screen.getByRole('treeitem', { name: /src/ }).getAttribute('aria-expanded')).toBe('true')
 })
 
-test('open, edit and save sends the loaded etag; the button disables when clean', async () => {
+test(
+  'open, edit and save sends the loaded etag; the button disables when clean',
+  { timeout: 20_000 },
+  async () => {
+    mount()
+    fireEvent.click(await screen.findByRole('treeitem', { name: /README\.md/ }))
+    await screen.findByLabelText('Contents of README.md', {}, { timeout: 10_000 })
+    expect(view().state.doc.toString()).toBe('hello')
+    const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+    setText('hello world')
+    expect(save.disabled).toBe(false)
+    fireEvent.click(save)
+    await screen.findByText('Saved.')
+    const put = calls.find((c) => c.method === 'PUT' && c.url.includes('/file'))!
+    expect(put.body).toEqual({ content: 'hello world', etag: 'etag-1' })
+    expect(put.url).toContain('path=README.md')
+  },
+)
+
+test(
+  'a stale etag shows the conflict banner; reload takes the disk version, overwrite retries with its etag',
+  { timeout: 20_000 },
+  async () => {
+    mount()
+    fireEvent.click(await screen.findByRole('treeitem', { name: /README\.md/ }))
+    await screen.findByLabelText('Contents of README.md', {}, { timeout: 10_000 })
+    setText('mine')
+    saveStatus = 412
+    files.set('README.md', 'on disk')
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const banner = await screen.findByText('Changed on disk.')
+    expect(banner).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Compare' }))
+    expect(((await screen.findByLabelText('On disk')) as HTMLTextAreaElement).value).toBe('on disk')
+    expect((screen.getByLabelText('My version') as HTMLTextAreaElement).value).toBe('mine')
+    saveStatus = 200
+    fireEvent.click(screen.getByRole('button', { name: 'Overwrite with my version' }))
+    await screen.findByText('Saved.')
+    const puts = calls.filter((c) => c.method === 'PUT' && c.url.includes('/file'))
+    expect(puts.at(-1)!.body).toEqual({ content: 'mine', etag: 'disk2' })
+
+    // Reload path.
+    setText('again')
+    saveStatus = 412
+    files.set('README.md', 'on disk')
+    etag = 'disk2'
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByText('Changed on disk.')
+    fireEvent.click(screen.getByRole('button', { name: 'Reload from disk' }))
+    await waitFor(() => expect(view().state.doc.toString()).toBe('on disk'))
+  },
+)
+
+test(
+  'a Markdown file has a rendered Preview without raw HTML; code files have none',
+  { timeout: 20_000 },
+  async () => {
+    files.set('README.md', '# Title\n\nsome **bold** <script>alert(1)</script>')
+    mount()
+    fireEvent.click(await screen.findByRole('treeitem', { name: /README\.md/ }))
+    await screen.findByLabelText('Contents of README.md', {}, { timeout: 10_000 })
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    const preview = screen.getByLabelText('Preview of README.md')
+    expect(within(preview).getByRole('heading', { name: 'Title' })).toBeTruthy()
+    expect(preview.querySelector('strong')?.textContent).toBe('bold')
+    expect(preview.querySelector('script')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    await screen.findByLabelText('Contents of README.md')
+    fireEvent.click(screen.getByRole('treeitem', { name: /src/ }))
+    fireEvent.click(await screen.findByRole('treeitem', { name: /main\.ts/ }))
+    await screen.findByLabelText('Contents of src/main.ts')
+    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull()
+  },
+)
+
+test('the header shows the git branch and changed count only inside a repository', async () => {
   mount()
-  fireEvent.click(await screen.findByRole('treeitem', { name: /README\.md/ }))
-  const editor = (await screen.findByLabelText('Contents of README.md')) as HTMLTextAreaElement
-  expect(editor.value).toBe('hello')
-  const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement
-  expect(save.disabled).toBe(true)
-  fireEvent.change(editor, { target: { value: 'hello world' } })
-  expect(save.disabled).toBe(false)
-  fireEvent.click(save)
-  await screen.findByText('Saved.')
-  const put = calls.find((c) => c.method === 'PUT' && c.url.includes('/file'))!
-  expect(put.body).toEqual({ content: 'hello world', etag: 'etag-1' })
-  expect(put.url).toContain('path=README.md')
+  await screen.findByRole('tree', { name: 'Files' })
+  expect(screen.queryByLabelText(/Git branch/)).toBeNull()
+  cleanup()
+  gitStatus = { branch: 'trunk', changed: 3, ahead: 1, behind: 0 }
+  mount()
+  const badge = await screen.findByLabelText('Git branch trunk, 3 changed files')
+  expect(badge.textContent).toContain('trunk')
+  expect(badge.textContent).toContain('3 changed')
+  expect(badge.textContent).toContain('↑1')
 })
 
-test('a stale etag shows the conflict banner; reload takes the disk version, overwrite retries with its etag', async () => {
-  mount()
-  fireEvent.click(await screen.findByRole('treeitem', { name: /README\.md/ }))
-  const editor = (await screen.findByLabelText('Contents of README.md')) as HTMLTextAreaElement
-  fireEvent.change(editor, { target: { value: 'mine' } })
-  saveStatus = 412
-  files.set('README.md', 'on disk')
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-  const banner = await screen.findByText('Changed on disk.')
-  expect(banner).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: 'Compare' }))
-  expect(((await screen.findByLabelText('On disk')) as HTMLTextAreaElement).value).toBe('on disk')
-  expect((screen.getByLabelText('My version') as HTMLTextAreaElement).value).toBe('mine')
-  saveStatus = 200
-  fireEvent.click(screen.getByRole('button', { name: 'Overwrite with my version' }))
-  await screen.findByText('Saved.')
-  const puts = calls.filter((c) => c.method === 'PUT' && c.url.includes('/file'))
-  expect(puts.at(-1)!.body).toEqual({ content: 'mine', etag: 'disk2' })
+test(
+  'a workspace:// deep link opens that file with its folders expanded; a bad path shows the error',
+  { timeout: 20_000 },
+  async () => {
+    mount('src/main.ts')
+    await screen.findByLabelText('Contents of src/main.ts', {}, { timeout: 10_000 })
+    expect(view().state.doc.toString()).toBe('export {}')
+    expect(screen.getByRole('treeitem', { name: /src/ }).getAttribute('aria-expanded')).toBe('true')
+    cleanup()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) =>
+        input.includes('/file?')
+          ? json(403, { error: { code: 'blocked', message: 'That file is not available' } })
+          : handler(input, init),
+      ),
+    )
+    mount('.env')
+    expect((await screen.findAllByRole('alert'))[0]!.textContent).toMatch(/not available|blocked/i)
+  },
+)
 
-  // Reload path.
-  fireEvent.change(editor, { target: { value: 'again' } })
-  saveStatus = 412
-  files.set('README.md', 'on disk')
-  etag = 'disk2'
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-  await screen.findByText('Changed on disk.')
-  fireEvent.click(screen.getByRole('button', { name: 'Reload from disk' }))
-  await waitFor(() =>
-    expect((screen.getByLabelText('Contents of README.md') as HTMLTextAreaElement).value).toBe(
-      'on disk',
+test('the separator resizes the file list with the keyboard and the width is remembered', async () => {
+  window.localStorage.removeItem('score.workspace.treeWidth')
+  mount()
+  const bar = await screen.findByRole('separator', { name: 'Resize the file list' })
+  expect(bar.getAttribute('aria-valuenow')).toBe('300')
+  fireEvent.keyDown(bar, { key: 'ArrowRight' })
+  expect(bar.getAttribute('aria-valuenow')).toBe('316')
+  fireEvent.keyDown(bar, { key: 'Home' })
+  expect(bar.getAttribute('aria-valuenow')).toBe('200')
+  fireEvent.keyDown(bar, { key: 'ArrowLeft' })
+  expect(bar.getAttribute('aria-valuenow')).toBe('200')
+  fireEvent.keyDown(bar, { key: 'End' })
+  expect(bar.getAttribute('aria-valuenow')).toBe('640')
+  expect(window.localStorage.getItem('score.workspace.treeWidth')).toBe('640')
+  cleanup()
+  mount()
+  expect(
+    (await screen.findByRole('separator', { name: 'Resize the file list' })).getAttribute(
+      'aria-valuenow',
     ),
-  )
+  ).toBe('640')
+  window.localStorage.removeItem('score.workspace.treeWidth')
 })
 
 test('images preview by URL and binaries offer a download', async () => {

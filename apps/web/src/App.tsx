@@ -61,6 +61,8 @@ export const appRoutes: RouteObject[] = [
             children: [
               { index: true, Component: TeamPage },
               { path: ':agentId', Component: AgentPage },
+              // Deep link into the Workspace tab: /team/:agentId/workspace?path=<file> (workspace:// links in chat).
+              { path: ':agentId/workspace', Component: AgentPage },
             ],
           }
         // Built destinations render their page; the rest stay stubs until their tasks land.

@@ -1,13 +1,28 @@
-import { useRef, useState, type DragEvent, type FormEvent } from 'react'
+import { useRef, useState, type CSSProperties, type DragEvent, type FormEvent } from 'react'
 import { ApiError } from '../../data/api.ts'
+import { useTreeWidth, MAX_TREE, MIN_TREE } from './workspace-split.ts'
 import { WorkspaceFile } from './WorkspaceFile.tsx'
 import { join, parentOf, TreeLevel, type Selection } from './WorkspaceTree.tsx'
-import { useWorkspace, useWorkspaceActions, workspaceFailure } from './workspace-queries.ts'
+import {
+  useGitStatus,
+  useWorkspace,
+  useWorkspaceActions,
+  workspaceFailure,
+} from './workspace-queries.ts'
 import './workspace.css'
 
 type Panel = 'new-file' | 'new-folder' | 'rename' | 'delete' | null
 
-export function WorkspaceTab({ agentId, agentName }: { agentId: string; agentName: string }) {
+export function WorkspaceTab({
+  agentId,
+  agentName,
+  initialPath = null,
+}: {
+  agentId: string
+  agentName: string
+  /** A file to open straight away (a workspace:// link); a bad path shows the normal error. */
+  initialPath?: string | null
+}) {
   const info = useWorkspace(agentId)
   const actions = useWorkspaceActions(agentId)
   const [settingFolder, setSettingFolder] = useState(false)
@@ -84,6 +99,7 @@ export function WorkspaceTab({ agentId, agentName }: { agentId: string; agentNam
       key={info.data.root}
       agentId={agentId}
       agentName={agentName}
+      initialPath={initialPath}
       root={info.data.root}
       settingFolder={settingFolder}
       onSetFolder={() => {
@@ -98,6 +114,7 @@ export function WorkspaceTab({ agentId, agentName }: { agentId: string; agentNam
 function Browser({
   agentId,
   agentName,
+  initialPath,
   root,
   settingFolder,
   onSetFolder,
@@ -105,15 +122,22 @@ function Browser({
 }: {
   agentId: string
   agentName: string
+  initialPath: string | null
   root: string
   settingFolder: boolean
   onSetFolder: () => void
   folderForm: React.ReactNode
 }) {
   const actions = useWorkspaceActions(agentId)
-  const [selected, setSelected] = useState<Selection | null>(null)
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
-  const [screen, setScreen] = useState<'tree' | 'file'>('tree')
+  const git = useGitStatus(agentId).data
+  const start = initialPath?.replace(/^\/+|\/+$/g, '') || null
+  const [selected, setSelected] = useState<Selection | null>(
+    start ? { path: start, kind: 'file' } : null,
+  )
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(
+    new Set(start ? ancestors(start) : []),
+  )
+  const [screen, setScreen] = useState<'tree' | 'file'>(start ? 'file' : 'tree')
   const [panel, setPanel] = useState<Panel>(null)
   const [name, setName] = useState('')
   const [typed, setTyped] = useState('')
@@ -121,6 +145,8 @@ function Browser({
   const [notice, setNotice] = useState('')
   const [dragging, setDragging] = useState(false)
   const picker = useRef<HTMLInputElement>(null)
+  const grid = useRef<HTMLDivElement>(null)
+  const split = useTreeWidth(grid)
 
   const dir = selected ? (selected.kind === 'dir' ? selected.path : parentOf(selected.path)) : ''
   const crumbs = selected ? selected.path.split('/') : []
@@ -236,9 +262,27 @@ function Browser({
       </div>
       <p className="ws-root">
         <span className="team-muted">{agentName} works in</span> <code>{root}</code>
+        {git && (
+          <span
+            className="ws-git"
+            aria-label={`Git branch ${git.branch}, ${git.changed} changed ${git.changed === 1 ? 'file' : 'files'}`}
+          >
+            <span aria-hidden="true">⎇ </span>
+            {git.branch}
+            <span className="ws-git-count">
+              {git.changed === 0 ? 'clean' : `${git.changed} changed`}
+            </span>
+            {git.ahead > 0 && <span className="ws-git-count">↑{git.ahead}</span>}
+            {git.behind > 0 && <span className="ws-git-count">↓{git.behind}</span>}
+          </span>
+        )}
       </p>
       {settingFolder && folderForm}
-      <div className={`ws-grid ws-screen-${screen}`}>
+      <div
+        ref={grid}
+        className={`ws-grid ws-screen-${screen}`}
+        style={{ '--ws-tree-width': `${split.width}px` } as CSSProperties}
+      >
         <div
           className={`ws-tree-pane${dragging ? ' is-dragging' : ''}`}
           onDragOver={(event) => {
@@ -377,6 +421,17 @@ function Browser({
             out of the workspace.
           </p>
         </div>
+        <div
+          className="ws-separator"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize the file list"
+          aria-valuemin={MIN_TREE}
+          aria-valuemax={MAX_TREE}
+          aria-valuenow={split.width}
+          tabIndex={0}
+          {...split.handlers}
+        />
         <div className="ws-file-pane">
           <button
             type="button"

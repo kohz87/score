@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from 'react-router'
 import { useNow, useTeamPause } from './now-queries.ts'
-import { AskingCard, MadeTodayCard, NowComposer, ThreadCard } from './NowCards.tsx'
+import { AskingCard, MadeTodayCard, NowComposer, ThreadCard, TodoCard } from './NowCards.tsx'
 import { FlowView } from './flow/FlowView.tsx'
 import { RoutinesView } from './RoutinesView.tsx'
 import { ScoreTimeline } from './ScoreTimeline.tsx'
@@ -83,6 +83,12 @@ export function NowPage() {
                 thread={snapshot.thread}
                 agents={snapshot.lanes.map((lane) => lane.agent)}
               />
+              {snapshot.lanes
+                .filter((lane) => lane.agent.status === 'working')
+                .slice(0, 2)
+                .map((lane) => (
+                  <TodoCard key={lane.agent.id} agent={lane.agent} />
+                ))}
               <AskingCard
                 approval={snapshot.focusApproval}
                 agents={snapshot.lanes.map((lane) => lane.agent)}

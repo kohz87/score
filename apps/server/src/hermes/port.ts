@@ -32,6 +32,7 @@ import type {
   SignIn,
   ToolServerRequest,
 } from '@score/contract'
+import type { AgentTodos } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
 import type { AgentFile, AgentFileName } from './agent-files.ts'
 import type {
@@ -211,6 +212,8 @@ export interface HermesPort extends ProfileManagementPort {
   readWorkspaceConfig(agentId: string): Promise<{ cwd: string | null; backend: string | null }>
   /** Writes `terminal.cwd`. The caller has already run the folder checks. */
   setWorkspaceCwd(agentId: string, cwd: string): Promise<void>
+  /** The agent's latest todo list (read-only), or null when it has none. */
+  readAgentTodos(agentId: string): Promise<AgentTodos>
   /** Hermes plugins of one profile (`plugins list`). */
   listPlugins(agentId: string): Promise<PluginItem[]>
   /** Enable or disable via the CLI and verify by re-reading. Never the Score bridge (409). */

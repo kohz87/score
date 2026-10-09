@@ -585,6 +585,10 @@ incarnation-aware reuse confirmation contract is agreed.
 - `GET /api/agents/:agentId/skills` → `SkillsResponse` `{ items: AgentDetail['skills'] }` · `POST …/skills` `{ name }`
   (install) → `SkillsResponse` · `PATCH …/skills/:name` `{ enabled }` → `AgentDetail['skills'][number]` ·
   `GET /api/skills/hub?q=` → `SkillHubResponse` `{ items: { name; identifier; source; trust; description }[] }`
+- `GET /api/agents/:agentId/todos` → `AgentTodos` = `{ todos: { id; content; status: 'pending' | 'in_progress' | 'completed' | 'cancelled'; parent?: string }[]; revision: number; updatedAt: string } | null`.
+  The agent's Hermes todo list (the `todo_list` tool keeps it in memory but every call is also a tool result in `state.db`; the
+  newest `{ todos, revision, summary }` result wins, read-only). `null` when the agent never wrote one or its database is
+  missing; malformed items are dropped. Shown as the Todo card on Team › agent › Overview and on Now for working agents.
 - `GET /api/agents/:agentId/memory?q=&cursor=` → `MemoryPage` `{ items: AgentDetail['memory']; nextCursor: string | null }` ·
   `POST …/memory` `{ text }` · `DELETE …/memory/:id`
   `MemoryPage.writable: false` (live Hermes has no per-entry memory command) means both writes answer 501 and clients hide the controls; absent = writable.
@@ -637,8 +641,16 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
   (never overwrites: `409 exists`) · `DELETE …/workspace/entries?path=[&recursive=1]` → `{}` (a non-empty folder without
   `recursive` → `409 not_empty`; a folder holding protected files or `.git` → `409 protected_inside`, never deleted from
   here; the UI asks for a typed confirmation first).
+- **H** `GET …/workspace/git` → `{ branch: string; changed: number; ahead: number; behind: number } | null` (`WorkspaceGit`).
+  The repository around the root (the root or a parent), from one read-only `git status --porcelain=v1 -b` (no index lock,
+  fsmonitor and hooks off, 5 s timeout); `changed` counts every non-clean path including untracked files; `null` when
+  there is no repository, git is missing or the call fails. Never runs a writing git command.
 - **H** `POST …/workspace/upload?path=` raw body, `Content-Type: application/octet-stream`, ≤ 25 MiB, `path` = the new file's
   path → `201 { path, size }` (`409 exists`).
+- **Links (web only, no endpoint).** In chat Markdown `workspace://<path>` and `workspace://<agentId>/<path>` open that file
+  in the agent's Workspace tab at `/team/:agentId/workspace?path=<path>` (the deep link works on a fresh load too). The first
+  segment is an agent id only when it names a known agent; otherwise the file belongs to the message's author. Paths are
+  checked by the endpoints above, so a blocked or missing file shows the normal error.
 - Path rules (all endpoints): `..`, NUL, absolute paths → `400 bad_path`; any component matching the blocked list (`.env*`,
   `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `id_ecdsa*`, `id_dsa*`, `auth.json`, `.netrc`, case-insensitive) or
   anything inside `.git/` → `403 blocked`; leaving the root or reaching Hermes/Score/SSH data → `403 outside_workspace`/`blocked`;

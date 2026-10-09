@@ -81,7 +81,16 @@ function Part({
 }) {
   switch (part.kind) {
     case 'text':
-      return <Markdown text={part.text} streaming={message.streaming} />
+      return (
+        <Markdown
+          text={part.text}
+          streaming={message.streaming}
+          workspace={{
+            agentId: message.author.kind === 'agent' ? message.author.agentId : null,
+            agentIds: agents.map((agent) => agent.id),
+          }}
+        />
+      )
     case 'tool':
       return <ToolCard part={part} expansion={expansion} live={message.streaming} />
     case 'thinking':

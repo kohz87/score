@@ -1,3 +1,6 @@
+import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
 
@@ -11,6 +14,14 @@ async function openWorkspace(page: Page, agent: string) {
   const panel = page.getByRole('tabpanel')
   await expect(panel.getByRole('tree', { name: 'Files' })).toBeVisible()
   return panel
+}
+
+// The editor is CodeMirror (a contenteditable), so it is typed into rather than filled.
+async function replaceText(page: Page, label: string, text: string) {
+  const editor = page.getByLabel(label)
+  await editor.click()
+  await page.keyboard.press('Control+a')
+  await page.keyboard.insertText(text)
 }
 
 test.beforeEach(async ({ page }) => {
@@ -36,8 +47,8 @@ test('edit and save, then a change made behind the page shows the conflict banne
   const panel = await openWorkspace(page, 'reviewer')
   await panel.getByRole('treeitem', { name: /README\.md/ }).click()
   const editor = panel.getByLabel('Contents of README.md')
-  await expect(editor).toHaveValue(/reviewer workspace/)
-  await editor.fill('# Edited in the e2e\n')
+  await expect(editor).toContainText('reviewer workspace')
+  await replaceText(page, 'Contents of README.md', '# Edited in the e2e\n')
   await panel.getByRole('button', { name: 'Save' }).click()
   await expect(panel.getByText('Saved.')).toBeVisible()
 
@@ -45,7 +56,7 @@ test('edit and save, then a change made behind the page shows the conflict banne
   await page.reload()
   await page.getByRole('tab', { name: 'Workspace' }).click()
   await page.getByRole('treeitem', { name: /README\.md/ }).click()
-  await expect(page.getByLabel('Contents of README.md')).toHaveValue('# Edited in the e2e\n')
+  await expect(page.getByLabel('Contents of README.md')).toContainText('# Edited in the e2e')
 
   // Something else writes the file (the agent, an editor); the page still holds the old etag.
   const url = '/api/agents/reviewer/workspace/file?path=README.md'
@@ -56,13 +67,13 @@ test('edit and save, then a change made behind the page shows the conflict banne
     data: { content: 'written by someone else\n', etag },
   })
   expect(behind.ok()).toBe(true)
-  await page.getByLabel('Contents of README.md').fill('my edit\n')
+  await replaceText(page, 'Contents of README.md', 'my edit\n')
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page.getByText('Changed on disk.')).toBeVisible()
   await page.getByRole('button', { name: 'Compare' }).click()
   await expect(page.getByLabel('On disk')).toHaveValue('written by someone else\n')
   await page.getByRole('button', { name: 'Reload from disk' }).click()
-  await expect(page.getByLabel('Contents of README.md')).toHaveValue('written by someone else\n')
+  await expect(page.getByLabel('Contents of README.md')).toContainText('written by someone else')
 })
 
 test('create a file and a folder, then delete both (a folder with files needs its name typed)', async ({
@@ -79,7 +90,7 @@ test('create a file and a folder, then delete both (a folder with files needs it
   await panel.getByLabel(/New file in scratch/).fill('todo.txt')
   await panel.getByRole('button', { name: 'Create' }).click()
   await expect(panel.getByLabel('Contents of scratch/todo.txt')).toBeVisible()
-  await panel.getByLabel('Contents of scratch/todo.txt').fill('buy milk\n')
+  await replaceText(page, 'Contents of scratch/todo.txt', 'buy milk\n')
   await panel.getByRole('button', { name: 'Save' }).click()
   await expect(panel.getByText('Saved.')).toBeVisible()
 
@@ -117,7 +128,7 @@ test('looks right at desktop and phone width', async ({ page }) => {
     const panel = await openWorkspace(page, 'lead')
     await panel.getByRole('treeitem', { name: /src/ }).click()
     await panel.getByRole('treeitem', { name: /README\.md/ }).click()
-    await expect(panel.getByLabel('Contents of README.md')).toHaveValue(/lead workspace/)
+    await expect(panel.getByLabel('Contents of README.md')).toContainText('lead workspace')
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
     ).toBeLessThanOrEqual(1)
@@ -128,4 +139,104 @@ test('looks right at desktop and phone width', async ({ page }) => {
       maxDiffPixelRatio: 0.02,
     })
   }
+})
+
+test('a Markdown file previews rendered and switches back to the editor', async ({ page }) => {
+  const panel = await openWorkspace(page, 'reviewer')
+  await panel.getByRole('treeitem', { name: /README\.md/ }).click()
+  await expect(panel.getByLabel('Contents of README.md')).toBeVisible()
+  await replaceText(page, 'Contents of README.md', '# Preview heading\n\nsome **bold** text\n')
+  await panel.getByRole('button', { name: 'Preview' }).click()
+  await expect(
+    panel.getByLabel('Preview of README.md').getByRole('heading', { name: 'Preview heading' }),
+  ).toBeVisible()
+  await panel.getByRole('button', { name: 'Edit' }).click()
+  await expect(panel.getByLabel('Contents of README.md')).toBeVisible()
+})
+
+test('the header shows the git branch and the changed-file count for a repository (read-only status)', async ({
+  page,
+}) => {
+  const info = await (await page.request.get('/api/agents/reviewer/workspace')).json()
+  const root = info.root as string
+  const git = (...args: string[]) =>
+    execFileSync(
+      'git',
+      ['-C', root, '-c', 'user.email=e2e@example.com', '-c', 'user.name=E2E', ...args],
+      { stdio: 'pipe' },
+    )
+  git('init', '-q')
+  // The fake workspace already has a stub .git/HEAD, which init keeps; name the branch explicitly.
+  git('symbolic-ref', 'HEAD', 'refs/heads/e2e-branch')
+  git('add', 'README.md')
+  git('commit', '-q', '-m', 'first')
+  fs.writeFileSync(path.join(root, 'untracked.txt'), 'x')
+  const panel = await openWorkspace(page, 'reviewer')
+  const badge = panel.getByLabel(/^Git branch e2e-branch, \d+ changed files?$/)
+  await expect(badge).toBeVisible()
+  await expect(badge).toContainText('e2e-branch')
+  // A folder that is no repository shows no badge.
+  const lead = await openWorkspace(page, 'lead')
+  await expect(lead.getByLabel(/^Git branch/)).toHaveCount(0)
+})
+
+test("a workspace:// link in chat opens the file in the agent's Workspace tab", async ({
+  page,
+}) => {
+  test.setTimeout(90_000)
+  await page.goto('/chat')
+  await page
+    .getByRole('navigation', { name: 'Conversations' })
+    .getByRole('link', { name: /#activity-feed/ })
+    .click({ timeout: 15_000 })
+  const history = page.getByRole('region', { name: 'Message history' })
+  await expect(history.getByRole('article').first()).toBeVisible({ timeout: 15_000 })
+  const box = page.getByRole('combobox', { name: /^Message/ })
+  await box.fill('open [the readme](workspace://reviewer/README.md) please')
+  await box.press('Enter')
+  await history.getByRole('link', { name: 'the readme' }).click()
+  await expect(page).toHaveURL(/\/team\/reviewer\/workspace\?path=README\.md$/)
+  await expect(page.getByRole('tab', { name: 'Workspace' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await expect(page.getByLabel('Contents of README.md')).toBeVisible({ timeout: 15_000 })
+  // A blocked path shows the normal error.
+  await page.goto('/team/reviewer/workspace?path=.env')
+  await expect(page.getByRole('alert').first()).toBeVisible({ timeout: 15_000 })
+})
+
+test('the file list can be resized by keyboard and by dragging, and the width is kept', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await openWorkspace(page, 'reviewer')
+  const bar = page.getByRole('separator', { name: 'Resize the file list' })
+  const tree = page.locator('.ws-tree-pane')
+  const before = (await tree.boundingBox())!.width
+  await bar.focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(bar).toHaveAttribute('aria-valuenow', '316')
+  const box = (await bar.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + 40)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2 + 120, box.y + 40, { steps: 6 })
+  await page.mouse.up()
+  const after = (await tree.boundingBox())!.width
+  expect(after).toBeGreaterThan(before + 80)
+  const value = Number(await bar.getAttribute('aria-valuenow'))
+  await page.reload()
+  await page.getByRole('tab', { name: 'Workspace' }).click()
+  await expect(page.getByRole('separator', { name: 'Resize the file list' })).toHaveAttribute(
+    'aria-valuenow',
+    String(value),
+  )
+})
+
+test("the Overview shows the agent's Todo card", async ({ page }) => {
+  await page.goto('/team/reviewer')
+  const card = page.getByRole('region', { name: 'Todo' })
+  await expect(card).toBeVisible({ timeout: 15_000 })
+  await expect(card.getByText('Pick the accent colours')).toBeVisible()
+  await expect(card.getByText('In progress')).toBeVisible()
 })

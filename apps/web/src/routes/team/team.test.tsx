@@ -1139,3 +1139,59 @@ test('the Plugins tab locks the Score bridge and shows a refused change', async 
     'alert',
   )
 })
+
+test("the Overview shows the agent's Hermes todo list with states in words, and hides the card without one", async () => {
+  const base = respond
+  respond = (path, init) =>
+    path === '/api/agents/builder/todos'
+      ? json({
+          revision: 2,
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          todos: [
+            { id: 'a', content: 'Write tests', status: 'in_progress' },
+            { id: 'b', content: 'Ship it', status: 'completed' },
+            { id: 'c', content: 'Review', status: 'pending', parent: 'a' },
+          ],
+        })
+      : base(path, init)
+  renderTeam('/team/builder')
+  const card = await screen.findByRole('region', { name: 'Todo' })
+  expect(within(card).getByText('1 of 3 done')).toBeDefined()
+  expect(within(card).getByText('In progress')).toBeDefined()
+  expect(within(card).getByText('Done')).toBeDefined()
+  expect(within(card).getAllByRole('listitem')).toHaveLength(3)
+  cleanup()
+  respond = (path, init) => (path === '/api/agents/builder/todos' ? json(null) : base(path, init))
+  renderTeam('/team/builder')
+  await screen.findByRole('heading', { name: 'Builder', level: 1 })
+  expect(screen.queryByRole('region', { name: 'Todo' })).toBeNull()
+})
+
+test('/team/:agent/workspace?path= opens the Workspace tab on that file', async () => {
+  const base = respond
+  respond = (path, init) => {
+    if (path === '/api/agents/builder/workspace')
+      return json({ root: '/srv/app', available: true, reason: null })
+    if (path.startsWith('/api/agents/builder/workspace/tree'))
+      return json({
+        entries: [
+          {
+            name: 'a.txt',
+            kind: 'file',
+            size: 1,
+            mtime: '2026-01-01T00:00:00.000Z',
+            hidden: false,
+          },
+        ],
+      })
+    if (path.startsWith('/api/agents/builder/workspace/file'))
+      return new Response('hello', { headers: { 'content-type': 'text/plain', etag: '"e1"' } })
+    if (path.startsWith('/api/agents/builder/workspace/git')) return json(null)
+    return base(path, init)
+  }
+  renderTeam('/team/builder/workspace?path=a.txt')
+  expect(
+    (await screen.findByRole('tab', { name: 'Workspace' })).getAttribute('aria-selected'),
+  ).toBe('true')
+  expect(await screen.findByLabelText('Contents of a.txt', {}, { timeout: 10_000 })).toBeDefined()
+})

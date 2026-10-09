@@ -6,9 +6,33 @@
 }
 .ws-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: var(--ws-tree-width, 300px) 16px minmax(0, 1fr);
   align-items: start;
+}
+.ws-separator {
+  align-self: stretch;
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+  border-radius: 8px;
+}
+.ws-separator::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 7px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--hairline);
+}
+.ws-separator:hover::after,
+.ws-separator:focus-visible::after {
+  background: var(--ink);
+}
+.ws-separator:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
 }
 .ws-tree-pane,
 .ws-file-pane {
@@ -169,20 +193,28 @@
   text-decoration: underline;
   cursor: pointer;
 }
-.ws-textarea {
-  width: 100%;
-  min-height: 320px;
-  resize: vertical;
-  padding: 12px;
+.ws-code {
   border: 1px solid var(--hairline);
   border-radius: var(--radius-14);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--ink);
+  padding: 8px 12px;
   background: var(--card);
-  box-sizing: border-box;
-  tab-size: 2;
+}
+.ws-code .cm-editor {
+  min-height: 320px;
+  max-height: 70vh;
+}
+.ws-code .cm-scroller {
+  font-family: var(--font-code);
+  font-size: 13px;
+  overflow: auto;
+}
+.ws-md-preview {
+  min-height: 320px;
+  padding: 12px 16px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  background: var(--card);
+  overflow-wrap: anywhere;
 }
 .ws-editor {
   display: flex;
@@ -256,6 +288,9 @@
   .ws-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+  .ws-separator {
+    display: none;
+  }
   .ws-screen-tree .ws-file-pane,
   .ws-screen-file .ws-tree-pane {
     display: none;
@@ -267,4 +302,19 @@
   .ws-compare {
     grid-template-columns: 1fr;
   }
+}
+.ws-git {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  margin-left: 10px;
+  padding: 2px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  font-size: 12px;
+  font-family: var(--font-code);
+  white-space: nowrap;
+}
+.ws-git-count {
+  color: var(--muted);
 }

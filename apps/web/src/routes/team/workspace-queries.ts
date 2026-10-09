@@ -1,6 +1,7 @@
 import {
   WorkspaceBinarySchema,
   WorkspaceConflictSchema,
+  WorkspaceGitSchema,
   WorkspaceInfoSchema,
   WorkspaceTreeSchema,
   WorkspaceWriteResponseSchema,
@@ -31,6 +32,19 @@ export function useWorkspace(agentId: string) {
       WorkspaceInfoSchema.parse(await apiFetch(base(agentId), { signal })),
     // The folder is configured in Hermes and can change outside Score.
     refetchOnWindowFocus: true,
+    retry: false,
+  })
+}
+
+/** Branch and changed-file count of the repository around the root; null when there is none. */
+export function useGitStatus(agentId: string) {
+  return useQuery({
+    queryKey: [...workspaceKey(agentId), 'git'] as const,
+    queryFn: async ({ signal }) =>
+      WorkspaceGitSchema.nullable().parse(await apiFetch(`${base(agentId)}/git`, { signal })),
+    // The agent edits and commits while Score is open.
+    refetchOnWindowFocus: true,
+    refetchInterval: 20_000,
     retry: false,
   })
 }
