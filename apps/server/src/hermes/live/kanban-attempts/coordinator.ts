@@ -141,7 +141,11 @@ export class KanbanAttemptsCoordinator {
   private async pollOnce(): Promise<void> {
     if (this.closed) return
     // Before anything can rewrite the task projections, keep what the legacy links were proven by.
-    await snapshotUpgradeLinks(this.options.db, this.options.sink, `kanban-attempts:${this.sourceId}`)
+    await snapshotUpgradeLinks(
+      this.options.db,
+      this.options.sink,
+      `kanban-attempts:${this.sourceId}`,
+    )
     let conn: { db: DatabaseSync; identity: string }
     try {
       conn = this.connect()
@@ -169,7 +173,11 @@ export class KanbanAttemptsCoordinator {
       this.connection = undefined
     }
     const history = this.history()
-    if (history && history.state === 'active' && this.failures >= (this.options.unreadableAfter ?? UNREADABLE_AFTER)) {
+    if (
+      history &&
+      history.state === 'active' &&
+      this.failures >= (this.options.unreadableAfter ?? UNREADABLE_AFTER)
+    ) {
       const reason = error instanceof HermesDbMissing ? 'database missing' : 'database unreadable'
       await this.options.sink.submit({
         source: `kanban-attempts:${this.sourceId}`,
@@ -198,7 +206,9 @@ export class KanbanAttemptsCoordinator {
     for (let page = 0; page < (this.options.maxBaselinePages ?? 3); page++) {
       const history = this.history()
       if (!history || history.state !== 'active' || history.baseline_done) break
-      await this.submit(this.read(conn, history, { kind: 'baseline', afterAttemptId: history.baseline_cursor }))
+      await this.submit(
+        this.read(conn, history, { kind: 'baseline', afterAttemptId: history.baseline_cursor }),
+      )
       if (page === (this.options.maxBaselinePages ?? 3) - 1) return
     }
     const history = this.history()
@@ -223,7 +233,9 @@ export class KanbanAttemptsCoordinator {
     const latest = this.history()
     if (latest?.state === 'active' && now - this.lastFullpass >= FULLPASS_EVERY_MS) {
       this.lastFullpass = now
-      await this.submit(this.read(conn, latest, { kind: 'fullpass', afterAttemptId: latest.fullpass_cursor }))
+      await this.submit(
+        this.read(conn, latest, { kind: 'fullpass', afterAttemptId: latest.fullpass_cursor }),
+      )
     }
     await this.afterBaseline(conn)
   }
@@ -248,7 +260,9 @@ export class KanbanAttemptsCoordinator {
     history: HistoryRow,
     extra: { kind: Capture['kind']; afterAttemptId?: number; openIds?: number[] },
   ): Capture {
-    return reading(() => readCapture(conn.db, this.request(conn, history, extra), this.options.reader))
+    return reading(() =>
+      readCapture(conn.db, this.request(conn, history, extra), this.options.reader),
+    )
   }
 
   private request(
@@ -260,7 +274,8 @@ export class KanbanAttemptsCoordinator {
       openIds?: number[]
     },
   ) {
-    const identityChanged = history.file_identity !== null && history.file_identity !== conn.identity
+    const identityChanged =
+      history.file_identity !== null && history.file_identity !== conn.identity
     return {
       historyId: history.id,
       sourceId: this.sourceId,
@@ -294,8 +309,18 @@ export class KanbanAttemptsCoordinator {
     if (capture.events.length || capture.attempts.length || capture.malformed) return false
     if (capture.eventScanned !== null) return false
     if (history.file_identity !== capture.fileIdentity) return false
-    const events = effectiveMark('task_events', capture.marks.eventSeq, capture.marks.eventMin, capture.marks.eventMax)
-    const runs = effectiveMark('task_runs', capture.marks.runSeq, capture.marks.runMin, capture.marks.runMax)
+    const events = effectiveMark(
+      'task_events',
+      capture.marks.eventSeq,
+      capture.marks.eventMin,
+      capture.marks.eventMax,
+    )
+    const runs = effectiveMark(
+      'task_runs',
+      capture.marks.runSeq,
+      capture.marks.runMin,
+      capture.marks.runMax,
+    )
     return (
       'mark' in events &&
       'mark' in runs &&

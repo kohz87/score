@@ -89,14 +89,30 @@ export interface JudgeInput {
  */
 export function judgeHistory(input: JudgeInput): Verdict {
   if (input.marks === null) return { verdict: 'insufficient', reason: 'sqlite_sequence unreadable' }
-  const events = effectiveMark('task_events', input.marks.eventSeq, input.marks.eventMin, input.marks.eventMax)
-  const runs = effectiveMark('task_runs', input.marks.runSeq, input.marks.runMin, input.marks.runMax)
+  const events = effectiveMark(
+    'task_events',
+    input.marks.eventSeq,
+    input.marks.eventMin,
+    input.marks.eventMax,
+  )
+  const runs = effectiveMark(
+    'task_runs',
+    input.marks.runSeq,
+    input.marks.runMin,
+    input.marks.runMax,
+  )
   if ('insufficient' in events) return { verdict: 'insufficient', reason: events.insufficient }
   if ('insufficient' in runs) return { verdict: 'insufficient', reason: runs.insufficient }
   if (events.mark < input.saved.eventMark)
-    return { verdict: 'contradiction', reason: 'task_events allocation mark fell below the saved mark' }
+    return {
+      verdict: 'contradiction',
+      reason: 'task_events allocation mark fell below the saved mark',
+    }
   if (runs.mark < input.saved.attemptMark)
-    return { verdict: 'contradiction', reason: 'task_runs allocation mark fell below the saved mark' }
+    return {
+      verdict: 'contradiction',
+      reason: 'task_runs allocation mark fell below the saved mark',
+    }
   for (const row of [...input.rows, ...input.sample]) {
     const known = input.known.get(row.id)
     const reason = known ? tupleContradiction(known, row) : null
@@ -104,7 +120,15 @@ export function judgeHistory(input: JudgeInput): Verdict {
   }
   const identityChanged =
     input.saved.fileIdentity !== null && input.saved.fileIdentity !== input.observedIdentity
-  if (identityChanged && input.knownCount > 0 && input.sampleIds.length > 0 && input.sample.length === 0)
-    return { verdict: 'insufficient', reason: 'database file changed and no known attempt could be checked' }
+  if (
+    identityChanged &&
+    input.knownCount > 0 &&
+    input.sampleIds.length > 0 &&
+    input.sample.length === 0
+  )
+    return {
+      verdict: 'insufficient',
+      reason: 'database file changed and no known attempt could be checked',
+    }
   return { verdict: 'ok', eventMark: events.mark, attemptMark: runs.mark }
 }

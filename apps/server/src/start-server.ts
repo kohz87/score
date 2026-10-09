@@ -18,6 +18,8 @@ import {
   createScreenshotImporter,
   loadBridgeBootstrap,
   pruneBridge,
+  pruneKanbanAttempts,
+  kanbanAttemptsEnabled,
   RewindBroker,
   sweepKanbanDenials,
   type HermesPort,
@@ -37,8 +39,6 @@ import { createIngest, type Ingest } from './hub/ingest.ts'
 import { rotateLog } from './log-rotation.ts'
 import { snapshotSessionCosts } from './domain/spend.ts'
 import { pruneEvents } from './hub/retention.ts'
-import { pruneKanbanAttempts } from './hermes/live/kanban-attempts/retention.ts'
-import { kanbanAttemptsEnabled } from './hermes/live/kanban-attempts/types.ts'
 import { MediaStore } from './media/store.ts'
 import { KnowledgeAgentApi } from './knowledge/agent-api.ts'
 import { KnowledgeVault } from './knowledge/vault.ts'

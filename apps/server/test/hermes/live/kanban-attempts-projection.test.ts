@@ -25,7 +25,11 @@ describe('histories and watermarks', () => {
     h.board.end('t_a', { outcome: 'completed', status: 'done', summary: 'built' })
     const coordinator = await started()
     const before = h.attempt(run)
-    expect(before).toMatchObject({ evidence: 'proven', classification_basis: 'claim_lock', status: 'completed' })
+    expect(before).toMatchObject({
+      evidence: 'proven',
+      classification_basis: 'claim_lock',
+      status: 'completed',
+    })
 
     // Hermes prunes every old event; the retained maxima fall, the allocation marks do not.
     h.board.gcEvents(1_000)
@@ -37,7 +41,11 @@ describe('histories and watermarks', () => {
     expect(h.histories()).toHaveLength(1)
     expect(h.attempts()).toHaveLength(2)
     // Positive evidence was frozen when first seen: pruning the claim event changes nothing.
-    expect(h.attempt(run)).toMatchObject({ revision: before.revision, id: before.id, evidence: 'proven' })
+    expect(h.attempt(run)).toMatchObject({
+      revision: before.revision,
+      id: before.id,
+      evidence: 'proven',
+    })
     expect(h.attempt(second).status).toBe('running')
   })
 
@@ -60,7 +68,9 @@ describe('histories and watermarks', () => {
     const start = new Date(gone.started_at * 1000).toISOString()
     const after = new Date(Date.parse(gone.observation_ended_at!) + 3_600_000).toISOString()
     const later = new Date(Date.parse(after) + 3_600_000).toISOString()
-    expect(listAttempts(h.score.sqlite, { since: start, until: after }).map((a) => a.attemptId)).toEqual([run])
+    expect(
+      listAttempts(h.score.sqlite, { since: start, until: after }).map((a) => a.attemptId),
+    ).toEqual([run])
     expect(listAttempts(h.score.sqlite, { since: after, until: later })).toEqual([])
   })
 
@@ -179,13 +189,21 @@ describe('histories and watermarks', () => {
     expect(h.histories()[0]).toMatchObject({ state: 'active', reason: null })
     const resumed = h.attempt(run)
     // Confirmed evidence returns: the boundary stays recorded, observation continues from the new read.
-    expect(resumed).toMatchObject({ observing: 1, observation_gaps: 1, observation_ended_at: paused.observation_ended_at })
+    expect(resumed).toMatchObject({
+      observing: 1,
+      observation_gaps: 1,
+      observation_ended_at: paused.observation_ended_at,
+    })
     expect(resumed.observation_resumed_at).not.toBeNull()
   })
 
   test('an empty table with no sequence row is valid and later rows are tracked', async () => {
     const coordinator = await started()
-    expect(h.histories()[0]).toMatchObject({ state: 'active', event_alloc_mark: 0, attempt_alloc_mark: 0 })
+    expect(h.histories()[0]).toMatchObject({
+      state: 'active',
+      event_alloc_mark: 0,
+      attempt_alloc_mark: 0,
+    })
     h.board.task('t_a')
     const run = h.board.claim('t_a')
     await h.poll(coordinator, 2)
@@ -222,7 +240,9 @@ describe('histories and watermarks', () => {
     h.board.task('t_b')
     h.board.claim('t_b', { lock: 'host:2' })
     const coordinator = await started()
-    h.board.db.exec('UPDATE task_runs SET id = 3 WHERE id = 1; UPDATE task_runs SET id = 1 WHERE id = 2; UPDATE task_runs SET id = 2 WHERE id = 3;')
+    h.board.db.exec(
+      'UPDATE task_runs SET id = 3 WHERE id = 1; UPDATE task_runs SET id = 1 WHERE id = 2; UPDATE task_runs SET id = 2 WHERE id = 3;',
+    )
     await h.poll(coordinator, 3)
     expect(h.histories()).toHaveLength(2)
     expect(h.histories()[0]!.reason).toMatch(/another task|start time/)
@@ -235,7 +255,9 @@ describe('histories and watermarks', () => {
     const coordinator = await started()
     const oldHistory = h.histories()[0]!.id
     // Recreated: every row is gone, ids start again and overtake the old marks with different content.
-    h.board.db.exec('DELETE FROM task_events; DELETE FROM task_runs; DELETE FROM tasks; UPDATE sqlite_sequence SET seq = 0;')
+    h.board.db.exec(
+      'DELETE FROM task_events; DELETE FROM task_runs; DELETE FROM tasks; UPDATE sqlite_sequence SET seq = 0;',
+    )
     h.board.tick(100)
     for (const id of ['t_x', 't_y', 't_z']) {
       h.board.task(id)
@@ -263,7 +285,13 @@ describe('classification against every Hermes writer', () => {
     h.board.task('t_a')
     const open = h.board.claim('t_a', { lock: 'host:7' })
     const [attempt] = await classified(() => [open])
-    expect(attempt).toMatchObject({ evidence: 'proven', classification_basis: 'claim_lock', role: 'implementer', claim_lock: 'host:7', profile: 'builder' })
+    expect(attempt).toMatchObject({
+      evidence: 'proven',
+      classification_basis: 'claim_lock',
+      role: 'implementer',
+      claim_lock: 'host:7',
+      profile: 'builder',
+    })
     expect(attempt!.claim_event_id).not.toBeNull()
   })
 
@@ -271,7 +299,11 @@ describe('classification against every Hermes writer', () => {
     h.board.task('t_a', { status: 'review' })
     const run = h.board.claim('t_a', { profile: 'reviewer', sourceStatus: 'review' })
     const [attempt] = await classified(() => [run])
-    expect(attempt).toMatchObject({ role: 'reviewer', claim_source_status: 'review', profile: 'reviewer' })
+    expect(attempt).toMatchObject({
+      role: 'reviewer',
+      claim_source_status: 'review',
+      profile: 'reviewer',
+    })
   })
 
   test.each([
@@ -286,14 +318,17 @@ describe('classification against every Hermes writer', () => {
     ['gave_up', 'failed', 'failed', 'gave_up'],
     ['spawn_failed', 'failed', 'failed', 'spawn_failed'],
     ['reclaimed', 'reclaimed', 'ended_unknown', 'reclaimed'],
-  ])('closing with %s maps to %s and keeps the claimed attempt proven', async (outcome, hermesStatus, status, reason) => {
-    h.board.task('t_a')
-    const run = h.board.claim('t_a', { lock: 'host:1' })
-    h.board.tick(3)
-    h.board.end('t_a', { outcome, status: hermesStatus })
-    const [attempt] = await classified(() => [run])
-    expect(attempt).toMatchObject({ status, closure_reason: reason, evidence: 'proven' })
-  })
+  ])(
+    'closing with %s maps to %s and keeps the claimed attempt proven',
+    async (outcome, hermesStatus, status, reason) => {
+      h.board.task('t_a')
+      const run = h.board.claim('t_a', { lock: 'host:1' })
+      h.board.tick(3)
+      h.board.end('t_a', { outcome, status: hermesStatus })
+      const [attempt] = await classified(() => [run])
+      expect(attempt).toMatchObject({ status, closure_reason: reason, evidence: 'proven' })
+    },
+  )
 
   test.each([
     ['blocked transition', 'blocked', 'blocked'],
@@ -301,13 +336,16 @@ describe('classification against every Hermes writer', () => {
     ['request_review', 'review_requested', 'review_requested'],
     ['complete', 'completed', 'completed'],
     ['edit_task synthesis', 'completed', 'edited'],
-  ])('%s on a never-claimed task is synthetic and never an attempt', async (_name, outcome, event) => {
-    h.board.task('t_a')
-    h.board.tick()
-    h.board.synthesize('t_a', { outcome, event })
-    await started()
-    expect(h.attempts()).toEqual([])
-  })
+  ])(
+    '%s on a never-claimed task is synthetic and never an attempt',
+    async (_name, outcome, event) => {
+      h.board.task('t_a')
+      h.board.tick()
+      h.board.synthesize('t_a', { outcome, event })
+      await started()
+      expect(h.attempts()).toEqual([])
+    },
+  )
 
   test('a pruned claim event with a retained lock is proven', async () => {
     h.board.task('t_a')
@@ -323,7 +361,13 @@ describe('classification against every Hermes writer', () => {
     const run = h.board.claim('t_a', { lock: 'host:1' })
     h.board.reclaimDangling(run)
     const [attempt] = await classified(() => [run])
-    expect(attempt).toMatchObject({ status: 'ended_unknown', closure_reason: 'reclaimed', evidence: 'proven', classification_basis: 'claim_event', claim_lock: null })
+    expect(attempt).toMatchObject({
+      status: 'ended_unknown',
+      closure_reason: 'reclaimed',
+      evidence: 'proven',
+      classification_basis: 'claim_event',
+      claim_lock: null,
+    })
   })
 
   test('dangling-run recovery with the claim event pruned and nothing seen is partial', async () => {
@@ -332,7 +376,10 @@ describe('classification against every Hermes writer', () => {
     h.board.reclaimDangling(run)
     h.board.gcEvents(1_000)
     const [attempt] = await classified(() => [run])
-    expect(attempt).toMatchObject({ evidence: 'partial', classification_basis: 'closed_outcome_not_synthesized' })
+    expect(attempt).toMatchObject({
+      evidence: 'partial',
+      classification_basis: 'closed_outcome_not_synthesized',
+    })
   })
 
   test('a worker pid alone is positive evidence', async () => {
@@ -343,7 +390,12 @@ describe('classification against every Hermes writer', () => {
     h.board.end('t_a', { outcome: 'crashed' })
     h.board.gcEvents(1_000)
     const [attempt] = await classified(() => [run])
-    expect(attempt).toMatchObject({ evidence: 'proven', classification_basis: 'worker_pid', worker_pid: 4242, worker_started_at: 'boot|4242' })
+    expect(attempt).toMatchObject({
+      evidence: 'proven',
+      classification_basis: 'worker_pid',
+      worker_pid: 4242,
+      worker_started_at: 'boot|4242',
+    })
   })
 
   test('legacy backfill: copied positive evidence is proven, none is partial', async () => {
@@ -353,7 +405,11 @@ describe('classification against every Hermes writer', () => {
     const without = h.board.legacyBackfill('t_b')
     const [proven, partial] = await classified(() => [withEvidence, without])
     expect(proven).toMatchObject({ evidence: 'proven', classification_basis: 'claim_lock' })
-    expect(partial).toMatchObject({ evidence: 'partial', classification_basis: 'open_without_evidence', first_seen_open: 1 })
+    expect(partial).toMatchObject({
+      evidence: 'partial',
+      classification_basis: 'open_without_evidence',
+      first_seen_open: 1,
+    })
   })
 
   test('legacy backfill closed in the same second is partial, not synthetic', async () => {
@@ -373,7 +429,12 @@ describe('classification against every Hermes writer', () => {
     expect(h.attempt(run)).toMatchObject({ evidence: 'partial', first_seen_open: 1 })
     h.board.end('t_a', { outcome: 'blocked', status: 'blocked' })
     await h.poll(coordinator, 2)
-    expect(h.attempt(run)).toMatchObject({ evidence: 'partial', classification_basis: 'open_without_evidence', status: 'blocked', first_seen_open: 1 })
+    expect(h.attempt(run)).toMatchObject({
+      evidence: 'partial',
+      classification_basis: 'open_without_evidence',
+      status: 'blocked',
+      first_seen_open: 1,
+    })
   })
 
   test('positive evidence appearing later promotes partial to proven, never the reverse', async () => {
@@ -413,7 +474,11 @@ describe('writer transitions and revisions', () => {
     expect(h.attempt(run)).toMatchObject({ status: 'ended_unknown', revision: 1 })
     h.board.setRun(run, { outcome: 'completed', status: 'done' })
     await h.poll(coordinator, 2)
-    expect(h.attempt(run)).toMatchObject({ status: 'completed', closure_reason: 'completed', revision: 2 })
+    expect(h.attempt(run)).toMatchObject({
+      status: 'completed',
+      closure_reason: 'completed',
+      revision: 2,
+    })
     h.board.setRun(run, { outcome: 'crashed', status: 'crashed' })
     await h.poll(coordinator, 2)
     expect(h.histories()).toHaveLength(1)
@@ -463,7 +528,9 @@ describe('writer transitions and revisions', () => {
     const coordinator = await started()
     const run = Number(
       h.board.db
-        .prepare("INSERT INTO task_runs (task_id, profile, status, claim_lock, started_at) VALUES ('t_a', 'builder', 'running', 'host:1', ?)")
+        .prepare(
+          "INSERT INTO task_runs (task_id, profile, status, claim_lock, started_at) VALUES ('t_a', 'builder', 'running', 'host:1', ?)",
+        )
         .run(h.board.clock).lastInsertRowid,
     )
     await h.poll(coordinator, 2)
@@ -477,7 +544,11 @@ describe('writer transitions and revisions', () => {
     const coordinator = await started()
     h.board.db.prepare('DELETE FROM task_runs WHERE id = ?').run(run)
     await h.poll(coordinator, 2)
-    expect(h.attempt(run)).toMatchObject({ status: 'completed', observation_ended_at: null, observation_gaps: 0 })
+    expect(h.attempt(run)).toMatchObject({
+      status: 'completed',
+      observation_ended_at: null,
+      observation_gaps: 0,
+    })
     expect(h.attempt(run).deleted_upstream_at).not.toBeNull()
     expect(h.histories()).toHaveLength(1)
   })
@@ -486,18 +557,36 @@ describe('writer transitions and revisions', () => {
     h.board.task('t_a')
     const implement1 = h.board.claim('t_a', { lock: 'h:1', profile: 'builder' })
     h.board.end('t_a', { outcome: 'review_requested', status: 'review' })
-    h.board.db.prepare("UPDATE tasks SET assignee = 'reviewer', status = 'review' WHERE id = 't_a'").run()
-    const review1 = h.board.claim('t_a', { lock: 'h:2', profile: 'reviewer', sourceStatus: 'review' })
+    h.board.db
+      .prepare("UPDATE tasks SET assignee = 'reviewer', status = 'review' WHERE id = 't_a'")
+      .run()
+    const review1 = h.board.claim('t_a', {
+      lock: 'h:2',
+      profile: 'reviewer',
+      sourceStatus: 'review',
+    })
     h.board.end('t_a', { outcome: 'changes_requested', status: 'ready' })
-    h.board.db.prepare("UPDATE tasks SET assignee = 'builder', status = 'ready' WHERE id = 't_a'").run()
+    h.board.db
+      .prepare("UPDATE tasks SET assignee = 'builder', status = 'ready' WHERE id = 't_a'")
+      .run()
     const implement2 = h.board.claim('t_a', { lock: 'h:3', profile: 'builder' })
     h.board.end('t_a', { outcome: 'review_requested', status: 'review' })
-    const review2 = h.board.claim('t_a', { lock: 'h:4', profile: 'reviewer', sourceStatus: 'review' })
+    const review2 = h.board.claim('t_a', {
+      lock: 'h:4',
+      profile: 'reviewer',
+      sourceStatus: 'review',
+    })
     h.board.end('t_a', { outcome: 'completed', status: 'done' })
     // The third attempt lost its claim event to pruning: its role is unknown, never the current assignee.
-    h.board.db.prepare('DELETE FROM task_events WHERE run_id = ? AND kind = ?').run(implement2, 'claimed')
+    h.board.db
+      .prepare('DELETE FROM task_events WHERE run_id = ? AND kind = ?')
+      .run(implement2, 'claimed')
     await started()
-    const listed = listAttempts(h.score.sqlite, { since: '2020-01-01T00:00:00.000Z', until: '2030-01-01T00:00:00.000Z', taskId: 't_a' })
+    const listed = listAttempts(h.score.sqlite, {
+      since: '2020-01-01T00:00:00.000Z',
+      until: '2030-01-01T00:00:00.000Z',
+      taskId: 't_a',
+    })
     expect(listed.map((a) => [a.attemptId, a.role, a.status])).toEqual([
       [implement1, 'implementer', 'review_handoff'],
       [review1, 'reviewer', 'changes_requested'],
@@ -537,9 +626,16 @@ describe('writer transitions and revisions', () => {
     await started()
     const window = { since: '2020-01-01T00:00:00.000Z', until: '2030-01-01T00:00:00.000Z' }
     expect(listAttempts(h.score.sqlite, window).map((x) => x.attemptId)).toEqual([a, b])
-    expect(listAttempts(h.score.sqlite, { ...window, agentId: 'reviewer' }).map((x) => x.attemptId)).toEqual([b])
-    expect(listAttempts(h.score.sqlite, { ...window, taskId: 't_a' }).map((x) => x.attemptId)).toEqual([a])
+    expect(
+      listAttempts(h.score.sqlite, { ...window, agentId: 'reviewer' }).map((x) => x.attemptId),
+    ).toEqual([b])
+    expect(
+      listAttempts(h.score.sqlite, { ...window, taskId: 't_a' }).map((x) => x.attemptId),
+    ).toEqual([a])
     expect(listAttempts(h.score.sqlite, { ...window, agentId: 'nobody' })).toEqual([])
-    expect(listAttempts(h.score.sqlite, window)[0]).toMatchObject({ historyState: 'active', taskSnapshot: { title: 'Task t_a', assignee: 'builder' } })
+    expect(listAttempts(h.score.sqlite, window)[0]).toMatchObject({
+      historyState: 'active',
+      taskSnapshot: { title: 'Task t_a', assignee: 'builder' },
+    })
   })
 })

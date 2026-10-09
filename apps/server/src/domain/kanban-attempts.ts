@@ -101,8 +101,13 @@ const SnapshotSchema = z.object({
   assignee: z.string().nullable(),
 })
 
-export function attemptView(row: AttemptRow, historyState: KanbanAttempt['historyState']): KanbanAttempt {
-  const snapshot = row.task_snapshot ? SnapshotSchema.safeParse(JSON.parse(row.task_snapshot)) : undefined
+export function attemptView(
+  row: AttemptRow,
+  historyState: KanbanAttempt['historyState'],
+): KanbanAttempt {
+  const snapshot = row.task_snapshot
+    ? SnapshotSchema.safeParse(JSON.parse(row.task_snapshot))
+    : undefined
   return {
     id: row.id,
     sourceId: row.source_id,

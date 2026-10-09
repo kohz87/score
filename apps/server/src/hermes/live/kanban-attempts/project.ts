@@ -41,7 +41,10 @@ const STATUS_FALLBACK: Record<string, AttemptStatus> = {
   failed: 'failed',
 }
 
-export function attemptStatus(row: HermesAttempt): { status: AttemptStatus; closureReason: string | null } {
+export function attemptStatus(row: HermesAttempt): {
+  status: AttemptStatus
+  closureReason: string | null
+} {
   if (row.ended_at === null) return { status: 'running', closureReason: null }
   if (row.outcome !== null) {
     const known = OUTCOME_STATUS[row.outcome]

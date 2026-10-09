@@ -65,9 +65,7 @@ export async function snapshotUpgradeLinks(
           insert.run(row.id, legacyId, JSON.stringify({ claims }), now)
         }
       }
-      sqlite
-        .prepare('INSERT INTO kanban_upgrade_state (id, snapshotted_at) VALUES (1, ?)')
-        .run(now)
+      sqlite.prepare('INSERT INTO kanban_upgrade_state (id, snapshotted_at) VALUES (1, ?)').run(now)
       return []
     },
   })
@@ -83,22 +81,22 @@ export async function resolveUpgradeLinks(
   source: string,
   historyId: string,
 ): Promise<number> {
-  const pending = z
-    .array(LinkRowSchema)
-    .parse(
-      db.sqlite
-        .prepare(
-          `SELECT task_id, legacy_id, saved_evidence FROM kanban_upgrade_links
+  const pending = z.array(LinkRowSchema).parse(
+    db.sqlite
+      .prepare(
+        `SELECT task_id, legacy_id, saved_evidence FROM kanban_upgrade_links
             WHERE status = 'pending' ORDER BY task_id, legacy_id LIMIT ?`,
-        )
-        .all(UPGRADE_BATCH),
-    )
+      )
+      .all(UPGRADE_BATCH),
+  )
   if (!pending.length) return 0
   await sink.submit({
     source,
     identity: `kanban:upgrade:${randomUUID()}`,
     apply: ({ sqlite, now }) => {
-      const history = sqlite.prepare('SELECT state, baseline_done FROM kanban_histories WHERE id = ?').get(historyId)
+      const history = sqlite
+        .prepare('SELECT state, baseline_done FROM kanban_histories WHERE id = ?')
+        .get(historyId)
       const live = z.object({ state: z.string(), baseline_done: z.int() }).safeParse(history)
       // Hermes unreadable or the history unverified: links wait, nothing is decided.
       if (!live.success || live.data.state !== 'active' || live.data.baseline_done !== 1) return []
@@ -122,9 +120,19 @@ export async function resolveUpgradeLinks(
         const proven =
           evidence.success &&
           proof.profile !== null &&
-          evidence.data.claims.some((claim) => claim.at === startedAt && claim.agentId === proof.profile)
+          evidence.data.claims.some(
+            (claim) => claim.at === startedAt && claim.agentId === proof.profile,
+          )
         if (proven) resolve.run('mapped', proof.id, null, now, link.task_id, link.legacy_id)
-        else resolve.run('unresolved', null, 'no_affirmative_evidence', now, link.task_id, link.legacy_id)
+        else
+          resolve.run(
+            'unresolved',
+            null,
+            'no_affirmative_evidence',
+            now,
+            link.task_id,
+            link.legacy_id,
+          )
       }
       return []
     },

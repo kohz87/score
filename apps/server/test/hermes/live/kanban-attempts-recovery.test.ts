@@ -54,13 +54,30 @@ describe('reader', () => {
     for (let index = 0; index < 700; index++) h.board.event('t_1', 'commented')
     const reader = openReadOnly(h.board.path)
     try {
-      const page = readCapture(reader, { kind: 'baseline', historyId: 'h', sourceId: 's', fileIdentity: 'x' })
+      const page = readCapture(reader, {
+        kind: 'baseline',
+        historyId: 'h',
+        sourceId: 's',
+        fileIdentity: 'x',
+      })
       expect(page.attempts).toHaveLength(200)
       expect(page.range).toEqual({ from: 0, to: 200 })
-      const last = readCapture(reader, { kind: 'baseline', historyId: 'h', sourceId: 's', fileIdentity: 'x', afterAttemptId: 400 })
+      const last = readCapture(reader, {
+        kind: 'baseline',
+        historyId: 'h',
+        sourceId: 's',
+        fileIdentity: 'x',
+        afterAttemptId: 400,
+      })
       expect(last.attempts).toHaveLength(50)
       expect(last.range).toEqual({ from: 400, to: null })
-      const tail = readCapture(reader, { kind: 'tail', historyId: 'h', sourceId: 's', fileIdentity: 'x', afterEventId: 0 })
+      const tail = readCapture(reader, {
+        kind: 'tail',
+        historyId: 'h',
+        sourceId: 's',
+        fileIdentity: 'x',
+        afterEventId: 0,
+      })
       expect(tail.events).toHaveLength(500)
       expect(tail.eventScanned).toBe(500)
     } finally {
@@ -96,7 +113,13 @@ describe('reader', () => {
       expect(capture.attempts.map((attempt) => [attempt.id, attempt.summary])).toEqual([[1, null]])
       expect(capture.tasks.map((task) => task.id)).toEqual(['t_a'])
       expect(capture.evidenceEvents.map((event) => event.kind)).toEqual(['created', 'claimed'])
-      const next = readCapture(reader, { kind: 'tail', historyId: 'h', sourceId: 's', fileIdentity: 'x', afterEventId: 2 })
+      const next = readCapture(reader, {
+        kind: 'tail',
+        historyId: 'h',
+        sourceId: 's',
+        fileIdentity: 'x',
+        afterEventId: 2,
+      })
       expect(next.marks).toMatchObject({ eventSeq: 4 })
       expect(next.attempts.map((attempt) => attempt.id)).toEqual([2])
     } finally {
@@ -107,12 +130,19 @@ describe('reader', () => {
   test('malformed rows are counted, skipped and never stall the scan position', () => {
     h.board.task('t_a')
     h.board.claim('t_a', { lock: 'host:1' })
-    h.board.db.exec("INSERT INTO task_runs (task_id, status, started_at) VALUES ('t_a', 'running', 5)")
+    h.board.db.exec(
+      "INSERT INTO task_runs (task_id, status, started_at) VALUES ('t_a', 'running', 5)",
+    )
     h.board.db.exec('DROP INDEX IF EXISTS idx_runs_task')
     h.board.db.exec("UPDATE task_runs SET started_at = 'not a number' WHERE id = 2")
     const reader = openReadOnly(h.board.path)
     try {
-      const capture = readCapture(reader, { kind: 'baseline', historyId: 'h', sourceId: 's', fileIdentity: 'x' })
+      const capture = readCapture(reader, {
+        kind: 'baseline',
+        historyId: 'h',
+        sourceId: 's',
+        fileIdentity: 'x',
+      })
       expect(capture.attempts.map((attempt) => attempt.id)).toEqual([1])
       expect(capture.malformed).toBe(1)
     } finally {
@@ -134,7 +164,9 @@ describe('captures, pages and restarts', () => {
     await h.poll(second, 1)
     expect(h.histories()[0]).toMatchObject({ baseline_cursor: 400, baseline_done: 0 })
     // The source is replaced under the baseline: lower marks.
-    h.board.db.exec('DELETE FROM task_runs WHERE id > 100; UPDATE sqlite_sequence SET seq = 100 WHERE name = \'task_runs\';')
+    h.board.db.exec(
+      "DELETE FROM task_runs WHERE id > 100; UPDATE sqlite_sequence SET seq = 100 WHERE name = 'task_runs';",
+    )
     await h.poll(second, 2)
     const histories = h.histories()
     expect(histories).toHaveLength(2)
@@ -172,8 +204,20 @@ describe('captures, pages and restarts', () => {
     const coordinator = h.make()
     await h.poll(coordinator, 3)
     const keys = z
-      .array(z.object({ identity: z.string(), scope: z.string().nullable(), position: z.int().nullable() }))
-      .parse(h.score.sqlite.prepare("SELECT identity, scope, position FROM ingest_keys WHERE identity LIKE 'kanban:%'").all())
+      .array(
+        z.object({
+          identity: z.string(),
+          scope: z.string().nullable(),
+          position: z.int().nullable(),
+        }),
+      )
+      .parse(
+        h.score.sqlite
+          .prepare(
+            "SELECT identity, scope, position FROM ingest_keys WHERE identity LIKE 'kanban:%'",
+          )
+          .all(),
+      )
     const events = keys.filter((key) => /^kanban:(baseline|sweep|fullpass):/.test(key.identity))
     expect(events.length).toBeGreaterThan(0)
     expect(events.every((key) => key.scope === null && key.position === null)).toBe(true)
@@ -253,16 +297,25 @@ describe('captures, pages and restarts', () => {
     const reader = openReadOnly(h.board.path)
     let capture: Capture
     try {
-      capture = readCapture(reader, { kind: 'baseline', historyId: history.id, sourceId: 'ks', fileIdentity: history.file_identity! })
+      capture = readCapture(reader, {
+        kind: 'baseline',
+        historyId: history.id,
+        sourceId: 'ks',
+        fileIdentity: history.file_identity!,
+      })
     } finally {
       closeReadOnly(reader)
     }
-    h.score.sqlite.prepare("UPDATE kanban_histories SET state = 'closed', closed_at = 'x' WHERE id = ?").run(history.id)
+    h.score.sqlite
+      .prepare("UPDATE kanban_histories SET state = 'closed', closed_at = 'x' WHERE id = ?")
+      .run(history.id)
     const result = h.score.tx((sqlite) => applyCapture(sqlite, capture, '2030-01-01T00:00:00.000Z'))
     expect(result.outcome).toBe('stale')
     expect(h.pages().at(-1)).toMatchObject({ capture_id: capture.captureId, outcome: 'stale' })
     // Applying the same capture id again is a no-op.
-    expect(h.score.tx((sqlite) => applyCapture(sqlite, capture, '2030-01-01T00:00:00.000Z')).outcome).toBe('applied')
+    expect(
+      h.score.tx((sqlite) => applyCapture(sqlite, capture, '2030-01-01T00:00:00.000Z')).outcome,
+    ).toBe('applied')
   })
 
   test('an unreadable source ends observation of open attempts after repeated failures and resumes when readable', async () => {
@@ -283,7 +336,10 @@ describe('captures, pages and restarts', () => {
     renameSync(`${h.board.path}.away`, h.board.path)
     await h.poll(coordinator, 2)
     expect(h.histories()[0]).toMatchObject({ state: 'active', reason: null })
-    expect(h.attempt(run)).toMatchObject({ observing: 1, observation_ended_at: bounded.observation_ended_at })
+    expect(h.attempt(run)).toMatchObject({
+      observing: 1,
+      observation_ended_at: bounded.observation_ended_at,
+    })
   })
 
   test('hourly retention keeps pages 7 days, never the latest page of a live history, and drops closed histories seen events', async () => {
@@ -299,7 +355,9 @@ describe('captures, pages and restarts', () => {
     h.score.sqlite
       .prepare("UPDATE kanban_pages SET captured_at = ? WHERE kind = 'tail'")
       .run(new Date(h.clock.ms - 8 * day).toISOString())
-    h.score.sqlite.prepare("UPDATE kanban_pages SET captured_at = ? WHERE kind = 'sweep'").run(new Date(h.clock.ms - 9 * day).toISOString())
+    h.score.sqlite
+      .prepare("UPDATE kanban_pages SET captured_at = ? WHERE kind = 'sweep'")
+      .run(new Date(h.clock.ms - 9 * day).toISOString())
     const before = h.pages()
     expect(before.some((page) => page.kind === 'tail')).toBe(true)
     const result = pruneKanbanAttempts(h.score, h.clock.ms)
@@ -308,9 +366,15 @@ describe('captures, pages and restarts', () => {
     // Old pages are gone except the newest page of each kind of the live history.
     expect(after.filter((page) => page.kind === 'tail')).toHaveLength(1)
     expect(after.filter((page) => page.kind === 'sweep')).toHaveLength(1)
-    expect(after.filter((page) => page.kind === 'baseline').length).toBe(before.filter((page) => page.kind === 'baseline').length)
-    h.score.sqlite.prepare("UPDATE kanban_histories SET state = 'closed', closed_at = 'x' WHERE id = ?").run(history.id)
+    expect(after.filter((page) => page.kind === 'baseline').length).toBe(
+      before.filter((page) => page.kind === 'baseline').length,
+    )
+    h.score.sqlite
+      .prepare("UPDATE kanban_histories SET state = 'closed', closed_at = 'x' WHERE id = ?")
+      .run(history.id)
     pruneKanbanAttempts(h.score, h.clock.ms)
-    expect(h.score.sqlite.prepare('SELECT COUNT(*) AS n FROM kanban_seen_events').get()).toEqual({ n: 0 })
+    expect(h.score.sqlite.prepare('SELECT COUNT(*) AS n FROM kanban_seen_events').get()).toEqual({
+      n: 0,
+    })
   })
 })

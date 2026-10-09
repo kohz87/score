@@ -25,7 +25,18 @@ export interface Harness {
   poll(coordinator: KanbanAttemptsCoordinator, times?: number): Promise<void>
   attempts(): AttemptRow[]
   attempt(attemptId: number, historyId?: string): AttemptRow
-  histories(): { id: string; state: string; reason: string | null; event_alloc_mark: number; attempt_alloc_mark: number; event_cursor: number; baseline_done: number; baseline_cursor: number; fullpass_cursor: number; file_identity: string | null }[]
+  histories(): {
+    id: string
+    state: string
+    reason: string | null
+    event_alloc_mark: number
+    attempt_alloc_mark: number
+    event_cursor: number
+    baseline_done: number
+    baseline_cursor: number
+    fullpass_cursor: number
+    file_identity: string | null
+  }[]
   pages(): { capture_id: string; kind: string; outcome: string; history_id: string }[]
   close(): Promise<void>
 }
@@ -66,17 +77,28 @@ export function createHarness(): Harness {
     attempts() {
       return z
         .array(AttemptRowSchema)
-        .parse(score.sqlite.prepare('SELECT * FROM kanban_attempts ORDER BY history_id, attempt_id').all())
+        .parse(
+          score.sqlite
+            .prepare('SELECT * FROM kanban_attempts ORDER BY history_id, attempt_id')
+            .all(),
+        )
     },
     attempt(attemptId, historyId) {
       const rows = harness
         .attempts()
-        .filter((row) => row.attempt_id === attemptId && (historyId === undefined || row.history_id === historyId))
-      if (rows.length !== 1) throw new Error(`expected one attempt ${attemptId}, found ${rows.length}`)
+        .filter(
+          (row) =>
+            row.attempt_id === attemptId &&
+            (historyId === undefined || row.history_id === historyId),
+        )
+      if (rows.length !== 1)
+        throw new Error(`expected one attempt ${attemptId}, found ${rows.length}`)
       return rows[0]!
     },
     histories() {
-      return score.sqlite.prepare('SELECT * FROM kanban_histories ORDER BY opened_at, rowid').all() as never
+      return score.sqlite
+        .prepare('SELECT * FROM kanban_histories ORDER BY opened_at, rowid')
+        .all() as never
     },
     pages() {
       return score.sqlite.prepare('SELECT * FROM kanban_pages ORDER BY rowid').all() as never

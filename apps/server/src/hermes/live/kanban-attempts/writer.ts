@@ -3,12 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import { AttemptRowSchema, type AttemptRow } from '../../../domain/kanban-attempts.ts'
 import { classify, type StoredEvidence } from './classify.ts'
-import {
-  effectiveMark,
-  judgeHistory,
-  type KnownAttempt,
-  type Verdict,
-} from './history-policy.ts'
+import { effectiveMark, judgeHistory, type KnownAttempt, type Verdict } from './history-policy.ts'
 import {
   ERROR_BYTES,
   SUMMARY_BYTES,
@@ -71,7 +66,9 @@ export function ensureSource(
 }
 
 /** Marks to save when a history opens: the allocation marks and the end of the events already behind it. */
-function openingMarks(marks: Marks): { event: number; attempt: number; cursor: number } | undefined {
+function openingMarks(
+  marks: Marks,
+): { event: number; attempt: number; cursor: number } | undefined {
   const events = effectiveMark('task_events', marks.eventSeq, marks.eventMin, marks.eventMax)
   const runs = effectiveMark('task_runs', marks.runSeq, marks.runMin, marks.runMax)
   if ('insufficient' in events || 'insufficient' in runs) return undefined
@@ -92,7 +89,15 @@ export function openHistory(
          (id, source_id, opened_at, state, event_alloc_mark, attempt_alloc_mark, event_cursor, file_identity)
        VALUES (?, ?, ?, 'active', ?, ?, ?, ?)`,
     )
-    .run(id, input.sourceId, input.now, opening.event, opening.attempt, opening.cursor, input.fileIdentity)
+    .run(
+      id,
+      input.sourceId,
+      input.now,
+      opening.event,
+      opening.attempt,
+      opening.cursor,
+      input.fileIdentity,
+    )
   return id
 }
 
@@ -308,7 +313,9 @@ function observeAttempt(
   // An existing attempt: frozen evidence only ever fills in, never clears.
   const merged = {
     profile: existing.profile ?? row.profile,
-    role: existing.role ?? (claim ? (claim.sourceStatus === 'review' ? 'reviewer' : 'implementer') : null),
+    role:
+      existing.role ??
+      (claim ? (claim.sourceStatus === 'review' ? 'reviewer' : 'implementer') : null),
     claimLock: existing.claim_lock ?? row.claim_lock,
     claimEventId: existing.claim_event_id ?? claim?.eventId ?? null,
     claimSourceStatus: existing.claim_source_status ?? claim?.sourceStatus ?? null,
@@ -316,15 +323,19 @@ function observeAttempt(
     workerStartedAt: existing.worker_started_at ?? fingerprintOf(row.worker_started_at),
   }
   // A row ever seen open is never reclassified synthetic; evidence only moves partial -> proven.
-  const evidence = existing.evidence === 'proven' || classification.evidence === 'proven' ? 'proven' : 'partial'
+  const evidence =
+    existing.evidence === 'proven' || classification.evidence === 'proven' ? 'proven' : 'partial'
   const basis =
-    existing.evidence === 'partial' && evidence === 'proven' ? classification.basis : existing.classification_basis
+    existing.evidence === 'partial' && evidence === 'proven'
+      ? classification.basis
+      : existing.classification_basis
 
-  let next: { status: AttemptRow['status']; closureReason: string | null; endedAt: number | null } = {
-    status,
-    closureReason,
-    endedAt: row.ended_at,
-  }
+  let next: { status: AttemptRow['status']; closureReason: string | null; endedAt: number | null } =
+    {
+      status,
+      closureReason,
+      endedAt: row.ended_at,
+    }
   let refused = 0
   let refusedHash = existing.refused_hash
   const wasTerminal = isTerminal(existing.status)
@@ -334,7 +345,13 @@ function observeAttempt(
     const accepted =
       isTerminal(status) && (status === existing.status || existing.status === 'ended_unknown')
     if (!accepted) {
-      const incoming = hashContent({ status, closureReason, endedAt: row.ended_at, summary: row.summary, error: row.error })
+      const incoming = hashContent({
+        status,
+        closureReason,
+        endedAt: row.ended_at,
+        summary: row.summary,
+        error: row.error,
+      })
       // The same conflicting content seen again is not a new refusal.
       if (incoming === existing.refused_hash) return
       refusedHash = incoming
@@ -378,7 +395,9 @@ function observeAttempt(
     if (needsObservation) {
       // Observed open again after a boundary: continue with the gap retained.
       sqlite
-        .prepare('UPDATE kanban_attempts SET observing = 1, observation_resumed_at = ? WHERE id = ?')
+        .prepare(
+          'UPDATE kanban_attempts SET observing = 1, observation_resumed_at = ? WHERE id = ?',
+        )
         .run(now, existing.id)
     }
     return
@@ -422,7 +441,12 @@ function observeAttempt(
     )
 }
 
-function markDeleted(sqlite: DatabaseSync, historyId: string, attemptId: number, now: string): void {
+function markDeleted(
+  sqlite: DatabaseSync,
+  historyId: string,
+  attemptId: number,
+  now: string,
+): void {
   const raw = sqlite
     .prepare('SELECT * FROM kanban_attempts WHERE history_id = ? AND attempt_id = ?')
     .get(historyId, attemptId)
@@ -484,7 +508,9 @@ export function applyCapture(
   faults: WriterFaults = {},
 ): ApplyResult {
   if (!sqlite.isTransaction) throw new Error('Kanban pages require a transaction')
-  const already = sqlite.prepare('SELECT 1 FROM kanban_pages WHERE capture_id = ?').get(capture.captureId)
+  const already = sqlite
+    .prepare('SELECT 1 FROM kanban_pages WHERE capture_id = ?')
+    .get(capture.captureId)
   if (already) return { outcome: 'applied' }
   const history = readHistory(sqlite, capture.historyId)
   if (!history || history.state === 'closed') {
@@ -496,12 +522,15 @@ export function applyCapture(
     ...capture.attempts.map((attempt) => attempt.id),
     ...capture.sample.map((attempt) => attempt.id),
   ])
-  const identityChanged = history.file_identity !== null && history.file_identity !== capture.fileIdentity
+  const identityChanged =
+    history.file_identity !== null && history.file_identity !== capture.fileIdentity
   const knownCount = identityChanged
     ? z
         .object({ n: z.int() })
         .parse(
-          sqlite.prepare('SELECT COUNT(*) AS n FROM kanban_attempts WHERE history_id = ?').get(history.id),
+          sqlite
+            .prepare('SELECT COUNT(*) AS n FROM kanban_attempts WHERE history_id = ?')
+            .get(history.id),
         ).n
     : 0
   const verdict = judgeHistory({
@@ -591,4 +620,3 @@ export function applyCapture(
   recordPage(sqlite, capture, history.id, 'applied')
   return { outcome: 'applied', verdict }
 }
-

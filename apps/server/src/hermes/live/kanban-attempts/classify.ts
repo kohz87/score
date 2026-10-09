@@ -37,7 +37,8 @@ export function positiveEvidence(input: ClassifyInput): string | null {
   const { row, stored, events } = input
   if (row.claim_lock !== null || stored?.claimLock) return 'claim_lock'
   if (stored?.claimEventId != null) return 'claim_event'
-  if (events.some((event) => event.kind === 'claimed' && event.run_id === row.id)) return 'claim_event'
+  if (events.some((event) => event.kind === 'claimed' && event.run_id === row.id))
+    return 'claim_event'
   if (row.worker_pid !== null || stored?.workerPid != null) return 'worker_pid'
   if (row.worker_started_at !== null || stored?.workerStartedAt != null) return 'worker_started_at'
   if (
@@ -61,7 +62,8 @@ export function classify(input: ClassifyInput): Classification {
   const proven = positiveEvidence(input)
   if (proven) return { evidence: 'proven', basis: proven }
   const { row, stored, events } = input
-  if (stored) return { evidence: 'partial', basis: stored.firstSeenOpen ? 'seen_open' : 'carried_partial' }
+  if (stored)
+    return { evidence: 'partial', basis: stored.firstSeenOpen ? 'seen_open' : 'carried_partial' }
   if (row.ended_at === null) return { evidence: 'partial', basis: 'open_without_evidence' }
   const partial = (basis: string): Classification => ({ evidence: 'partial', basis })
   if (row.started_at !== row.ended_at) return partial('closed_not_synthetic_shape')
@@ -73,7 +75,9 @@ export function classify(input: ClassifyInput): Classification {
     return partial('task_started_before_row')
   if (!events.some((event) => event.kind === 'created' && event.task_id === row.task_id))
     return partial('history_not_retained')
-  const transition = events.find((event) => event.run_id === row.id && transitions.includes(event.kind))
+  const transition = events.find(
+    (event) => event.run_id === row.id && transitions.includes(event.kind),
+  )
   if (!transition) return partial('transition_event_missing')
   const earlierClaim = events.some(
     (event) =>

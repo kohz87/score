@@ -62,7 +62,11 @@ export async function associationPass(
             sqlite,
             link.brief_id,
             // The same edge id the live review projection uses, so the two paths can never double an edge.
-            { id: `${source}:review-event:${transition.eventId}`, kind: transition.kind, at: transition.at },
+            {
+              id: `${source}:review-event:${transition.eventId}`,
+              kind: transition.kind,
+              at: transition.at,
+            },
             transition.kind === 'review' ? task : review,
             transition.kind === 'review' ? review : task,
           )

@@ -71,12 +71,16 @@ export function readMarks(db: DatabaseSync): Marks | null {
       .array(z.object({ name: z.string(), seq: z.int().nonnegative() }))
       .parse(
         db
-          .prepare("SELECT name, seq FROM sqlite_sequence WHERE name IN ('task_events', 'task_runs')")
+          .prepare(
+            "SELECT name, seq FROM sqlite_sequence WHERE name IN ('task_events', 'task_runs')",
+          )
           .all(),
       )
     const seq = new Map(rows.map((row) => [row.name, row.seq]))
     const probe = (table: 'task_events' | 'task_runs') =>
-      z.object({ lo: z.int().nullable(), hi: z.int().nullable() }).parse(db.prepare(probeSql(table)).get())
+      z
+        .object({ lo: z.int().nullable(), hi: z.int().nullable() })
+        .parse(db.prepare(probeSql(table)).get())
     const events = probe('task_events')
     const runs = probe('task_runs')
     return {
@@ -112,7 +116,10 @@ function attemptsByIds(
   counter: { malformed: number },
 ): HermesAttempt[] {
   const out: HermesAttempt[] = []
-  for (const chunk of chunks([...new Set(ids)].sort((a, b) => a - b), IN_BATCH)) {
+  for (const chunk of chunks(
+    [...new Set(ids)].sort((a, b) => a - b),
+    IN_BATCH,
+  )) {
     const raw = db
       .prepare(
         `SELECT ${COLUMNS} FROM task_runs WHERE id IN (${placeholders(chunk.length)}) ORDER BY id`,
@@ -199,12 +206,16 @@ export function readCapture(
       const rows = parseRows(EventRef, raw, counter)
       events = rows.map((row) => ({ id: row.id, runId: row.run_id }))
       // A malformed row must not stall the tail: the scan position advances past it.
-      eventScanned = z.int().positive().nullable().parse(
-        raw.reduce<number | null>((max, row) => {
-          const id = (row as { id?: unknown }).id
-          return typeof id === 'number' && Number.isInteger(id) ? Math.max(max ?? 0, id) : max
-        }, null),
-      )
+      eventScanned = z
+        .int()
+        .positive()
+        .nullable()
+        .parse(
+          raw.reduce<number | null>((max, row) => {
+            const id = (row as { id?: unknown }).id
+            return typeof id === 'number' && Number.isInteger(id) ? Math.max(max ?? 0, id) : max
+          }, null),
+        )
       eventFrom = rows[0]?.id ?? null
       eventTo = rows.at(-1)?.id ?? null
       // Recently closed attempts: exactly the ids the last tail events touched.
