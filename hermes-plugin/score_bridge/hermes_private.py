@@ -179,22 +179,65 @@ def gateway_session_store():
         return None
 
 
-def rewind_session(session_id: str, turns: int) -> dict | None:
-    """Back a session up by ``turns`` user turns with Hermes's own rewind (what ``/undo N`` uses).
+def _user_turns(db, session_id: str) -> list[float | None]:
+    """Timestamps of the user turns of the session as Hermes replays them: the alternation-repaired projection, where
+    consecutive user rows with no assistant row between them are one turn (what ``rewind_session`` counts)."""
+    messages = db.get_messages_as_conversation(session_id, repair_alternation=True, include_row_ids=True)
+    turns = []
+    for message in messages:
+        if not isinstance(message, dict) or message.get("role") != "user" or message.get("display_kind"):
+            continue
+        stamp = message.get("timestamp")
+        turns.append(float(stamp) if type(stamp) in (int, float) else None)
+    return turns
+
+
+def rewind_session(session_id: str, turns: int, since: float | None = None) -> dict | None:
+    """Back a session up with Hermes's own rewind (what ``/undo N`` uses).
 
     ``gateway.session_transcript.SessionTranscriptMixin.rewind_session`` soft-deletes the rows (``active = 0``); the
-    next turn rebuilds its history from the active rows. Returns ``{"turns_undone", "rewound_count"}``, or None when
-    Hermes had nothing to rewind or refused. Raises when no gateway is running here.
+    next turn rebuilds its history from the active rows. With ``since`` (epoch seconds of the message being rewound)
+    the target is absolute: the number of turns is computed here on the repaired projection Hermes itself counts, as
+    every user turn from the first one at or after ``since``, so a turn without a reply can't make the rewind reach back
+    past the message. ``turns`` (Score's own count) is then only a sanity bound. Returns ``{"turns_undone",
+    "rewound_count"}``, or None when Hermes had nothing to rewind or refused. Raises when no gateway is running here,
+    when no turn starts at or after ``since``, or when turns from ``since`` are still active afterwards.
     """
     store = gateway_session_store()
     if store is None:
         raise RuntimeError("no gateway session store")
     if type(session_id) is not str or not session_id or type(turns) is not int or turns < 1:
         raise ValueError("invalid rewind")
+    db = None
+    if since is not None:
+        if type(since) not in (int, float) or since <= 0:
+            raise ValueError("invalid rewind")
+        db = store._db_for_session_id(session_id)
+        stamps = _user_turns(db, session_id)
+        first = next((index for index, stamp in enumerate(stamps) if stamp is not None and stamp >= since), None)
+        if first is None:
+            raise ValueError("no turn since the message")
+        turns = len(stamps) - first
+        # A turn that began before the message without a reply merges with it in the projection: rewinding it would
+        # take that older turn along, and rewinding less would leave the message. Refuse rather than guess.
+        raw = db.get_messages_as_conversation(session_id, include_row_ids=True)
+        for index, message in enumerate(raw):
+            stamp = message.get("timestamp") if isinstance(message, dict) else None
+            if (isinstance(message, dict) and message.get("role") == "user" and not message.get("display_kind")
+                    and type(stamp) in (int, float) and stamp >= since):
+                before = raw[index - 1] if index else None
+                if isinstance(before, dict) and before.get("role") == "user" and not before.get("display_kind"):
+                    raise ValueError("the message shares a turn with an earlier unanswered one")
+                break
     result = store.rewind_session(session_id, turns)
     if not isinstance(result, dict):
         return None
     undone, count = result.get("turns_undone"), result.get("rewound_count")
     if type(undone) is not int or type(count) is not int:
         return None
+    if db is not None and any(
+            isinstance(m, dict) and m.get("role") == "user" and not m.get("display_kind")
+            and type(m.get("timestamp")) in (int, float) and m["timestamp"] >= since
+            for m in db.get_messages_as_conversation(session_id)):
+        raise RuntimeError("turns since the message are still active")
     return {"turns_undone": undone, "rewound_count": count}

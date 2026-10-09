@@ -87,7 +87,7 @@ export async function rewindSession(
   if (req.dryRun) return { status: 'ready' }
   const outcome = await deps.broker.request(
     req.agentId,
-    { sessionId: found.sessionId, turns: req.turns },
+    { sessionId: found.sessionId, turns: req.turns, since: req.sinceMs / 1000 },
     BRIDGE_ANSWER_MS,
   )
   switch (outcome.status) {

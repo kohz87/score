@@ -101,7 +101,7 @@ test('rewinding checks Hermes first, then asks the bridge and reports its answer
   expect(await rewindSession({ ...req, dryRun: true }, deps)).toEqual({ status: 'ready' })
   const running = rewindSession(req, deps)
   const [command] = await broker.claim('builder', 1000, new AbortController().signal)
-  expect(command).toMatchObject({ sessionId: SESSION, turns: 2 })
+  expect(command).toMatchObject({ sessionId: SESSION, turns: 2, since: 5 })
   broker.complete('builder', command!.commandId, {
     outcome: 'done',
     turnsUndone: 2,

@@ -1047,7 +1047,10 @@ sessionKey; requestId; choice: ApprovalChoice; reason: string | null }[] }`. Onl
 **Commands** (PLAN 5.33, server → plugin). A sibling long poll next to the decisions one, served only to a producer
 whose `isolation` is not `unknown`; the plugin polls only while it runs inside a gateway (it needs Hermes's session store).
 
-- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: { commandId; kind: 'rewind'; sessionId; turns }[] }`. A
+- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: { commandId; kind: 'rewind'; sessionId; turns; since? }[] }` (`since` = epoch seconds of the rewound message; the plugin then
+  computes the number of turns itself, as every user turn of Hermes's alternation-repaired projection from the first one at or after
+  `since`, uses `turns` only as Score's own count, refuses (`failed`) when the message shares a turn with an earlier unanswered
+  one or no turn starts at/after `since`, and checks afterwards that no active user row from `since` remains, else `failed`). A
   command is handed to one polling producer of the profile once and is not redelivered.
 - `POST /bridge/v1/commands/:commandId/result` `{ outcome: 'done' | 'nothing' | 'failed'; turnsUndone?; rewoundCount?;
   error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what
