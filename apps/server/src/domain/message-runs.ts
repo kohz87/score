@@ -46,6 +46,8 @@ export function reserveMessageRun(
     planFirst?: boolean
     /** A retry of an earlier reply (PLAN 5.24): a fresh turn for the same message and agent. */
     retryNonce?: string
+    /** A retry repeats exactly what the first attempt was admitted with (the room has moved on since). */
+    admissionInput?: string
   },
   now: string,
 ): string {
@@ -54,8 +56,8 @@ export function reserveMessageRun(
   sqlite
     .prepare(
       `INSERT INTO message_runs
-    (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, from_agent_id, input, model, agents, created_at, plan_first)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+    (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, from_agent_id, input, model, agents, created_at, plan_first, admission_input)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
     )
     .run(
       `reply:${turnId}`,
@@ -72,6 +74,7 @@ export function reserveMessageRun(
       JSON.stringify(req.agents),
       now,
       req.planFirst ? 1 : 0,
+      req.admissionInput ?? null,
     )
   return `reply:${turnId}`
 }
@@ -132,6 +135,7 @@ export function retryReply(
       ...(parsed.model ? { model: parsed.model } : {}),
       ...(parsed.plan_first ? { planFirst: true } : {}),
       retryNonce: nonce,
+      ...(parsed.admission_input !== null ? { admissionInput: parsed.admission_input } : {}),
     },
     now,
   )

@@ -110,7 +110,7 @@ export function registerReportRoutes(
             tz: trendTz,
             runs: [...trendOwn.runs, ...trendSeeded.runs],
             ...(trendSeeded.trendSpendUsd ? { demoSpendUsd: trendSeeded.trendSpendUsd } : {}),
-            ...(trendCosts ? { costs: trendCosts, sqlite } : {}),
+            ...(trendCosts ? { costs: trendCosts, agentIds, sqlite } : {}),
           })
         })
       : computeTrend({

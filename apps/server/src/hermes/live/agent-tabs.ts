@@ -112,23 +112,34 @@ export class LiveAgentTabs {
         }
       }
       const prior = await readModelPair(this.runner, this.hermesHome, profile)
+      // Without the current pair there is no way back from a half-applied change: stop before writing anything.
+      if (prior === null)
+        throw new HttpError(
+          502,
+          'hermes_unavailable',
+          "The agent's current model could not be read, so it was not changed",
+        )
+      let wroteModel = false
+      let wroteProvider = false
       try {
         // Each write is a Hermes process (seconds): a value that is already set is not written again.
-        if (prior?.model !== req.model)
+        if (prior.model !== req.model) {
+          wroteModel = true
           await this.mutate(profile, ['config', 'set', 'model.default', req.model])
-        if (req.provider && prior?.provider !== req.provider)
+        }
+        if (req.provider && prior.provider !== req.provider) {
+          wroteProvider = true
           await this.mutate(profile, ['config', 'set', 'model.provider', req.provider])
+        }
       } catch (error) {
-        // Two CLI writes are not atomic: put the old pair back so a failure never leaves a model paired with
-        // the previous provider. Best effort; the request still reports the original failure.
-        if (prior?.model) {
-          await this.mutate(profile, ['config', 'set', 'model.default', prior.model]).catch(
-            () => undefined,
-          )
-          if (req.provider && prior.provider)
-            await this.mutate(profile, ['config', 'set', 'model.provider', prior.provider]).catch(
-              () => undefined,
-            )
+        // Two CLI writes are not atomic: put back what was changed, so a failure never leaves a new model paired
+        // with the previous provider. Best effort; the request still reports the original failure.
+        const undo = (args: string[]) => this.mutate(profile, args).catch(() => undefined)
+        if (prior.scalar && prior.model && (wroteModel || wroteProvider))
+          await undo(['config', 'set', 'model', prior.model])
+        else {
+          if (wroteModel && prior.model) await undo(['config', 'set', 'model.default', prior.model])
+          if (wroteProvider) await undo(['config', 'set', 'model.provider', prior.provider ?? ''])
         }
         throw error
       }

@@ -138,7 +138,7 @@ test('older observations and newer delayed tools cannot regress terminal state',
   expect(env.db.sqlite.prepare('SELECT cursor FROM ingest_checkpoints').get()?.cursor).toBe('12')
 })
 
-test('completion selects the latest running tool with the same name', async () => {
+test('parallel calls of one tool complete in call order: a completion closes the oldest running call of that name', async () => {
   const context = await admitted()
   const metrics = { unknownEvents: 0 }
   const base = { run_id: context.runId, timestamp: 1791290587, tool: 'terminal', preview: 'ls' }
@@ -154,8 +154,20 @@ test('completion selects the latest running tool with the same name', async () =
     ),
   )
   expect(env.db.sqlite.prepare('SELECT seq, status FROM tool_calls ORDER BY seq').all()).toEqual([
-    { seq: 0, status: 'running' },
-    { seq: 1, status: 'ok' },
+    { seq: 0, status: 'ok' },
+    { seq: 1, status: 'running' },
+  ])
+  // A succeeded, B failed: each result lands on its own call.
+  await env.ingest.submit(
+    translateRunEvent(
+      context,
+      { ...base, seq: 3, event: 'tool.completed', duration: 0.5, error: true },
+      metrics,
+    ),
+  )
+  expect(env.db.sqlite.prepare('SELECT seq, status FROM tool_calls ORDER BY seq').all()).toEqual([
+    { seq: 0, status: 'ok' },
+    { seq: 1, status: 'error' },
   ])
 })
 

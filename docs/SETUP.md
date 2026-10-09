@@ -245,3 +245,7 @@ VACUUM while Score runs can still leave search wrong until the next start.
 - 2026-10-06: initial (Phase 0).
 - 2026-10-06: live-mode steps verified (per-profile API keys).
 - 2026-10-07: uv 0.12.23 (user-local, checksum-verified) for hermes-plugin/.
+
+`SCORE_PRINT_PAIR_LINK=1` makes the server print its startup pairing link to a non-terminal stdout (dev tooling and the
+e2e specs read it from a log). Without it a terminal gets the link and anything else (the launcher's `score.log`) gets a
+line without it; the launcher shows the link once from a 0600 `pair-link` file and deletes it.

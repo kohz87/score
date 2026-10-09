@@ -84,3 +84,51 @@ test('a model save answers from what was written and confirms it in the backgrou
   expect(answered.model).toMatchObject({ id: 'example/new-model', via: 'example' })
   expect(read).toHaveBeenCalledTimes(1)
 })
+
+test('a refresh that started before a save cannot undo it, and the post-save read starts after the save', async () => {
+  const old = structuredClone(details)
+  const updated = structuredClone(details)
+  updated[0]!.model = {
+    id: 'new-model',
+    label: 'new-model',
+    via: 'Hermes configuration',
+    fallback: null,
+  }
+  let stored = old // what Hermes holds
+  const releases: Array<() => void> = []
+  const port = {
+    // Each read snapshots Hermes when it STARTS and answers later.
+    listAgentDetails: vi.fn(
+      () =>
+        new Promise<AgentDetail[]>((resolve) => {
+          const snapshot = structuredClone(stored)
+          releases.push(() => resolve(snapshot))
+        }),
+    ),
+    setAgentModel: vi.fn(async () => {
+      stored = updated
+    }),
+  }
+  const directory = createAgentDirectory(port as never, env.db, env.ingest, undefined, () => now)
+  const wrapped = withAgentDirectory(port as unknown as HermesPort, directory)
+  // Warm the projection, then let it go stale so a background refresh starts (and hangs).
+  const first = directory.details()
+  releases.shift()!()
+  await first
+  now += 20_000
+  await wrapped.listAgentDetails() // background refresh begins with the OLD snapshot
+  expect(port.listAgentDetails).toHaveBeenCalledTimes(2)
+  await wrapped.setAgentModel(details[0]!.id, { model: 'new-model' })
+  // The save answers from the recorded model at once.
+  const reads = port.listAgentDetails.mock.calls.length
+  releases.shift()!() // the old refresh finishes now
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  const shown = (await directory.details()).find((agent) => agent.id === details[0]!.id)
+  expect(shown?.model?.id).toBe('new-model')
+  // Anything started after the save sees the new snapshot.
+  for (const release of releases.splice(0)) release()
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  const again = (await directory.details()).find((agent) => agent.id === details[0]!.id)
+  expect(again?.model?.id).toBe('new-model')
+  expect(port.listAgentDetails.mock.calls.length).toBeGreaterThanOrEqual(reads)
+})

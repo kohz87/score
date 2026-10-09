@@ -313,6 +313,9 @@ test('live adapter: drift, unknown keys read-only, verified writes with exact ar
 
   // A failing profile is reported, not hidden.
   delete (config as Record<string, unknown>).builder
+  // The outside change rewrote config.yaml too, so Score's read cache cannot answer for it.
+  appendFileSync(builderConfig, '# gone\n')
+  utimesSync(builderConfig, new Date(), new Date(Date.now() + 120_000))
   const again = RulesWriteResponseSchema.parse(
     (await call('PUT', '/api/settings/rules', { mode: 'manual', goAhead: [], never: [] })).json(),
   )

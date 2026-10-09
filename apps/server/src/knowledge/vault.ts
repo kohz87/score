@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { constants as C } from 'node:fs'
 import { watch, type FSWatcher, type Stats } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -247,12 +248,24 @@ export class KnowledgeVault {
       throw new HttpError(400, 'bad_path', 'The folder resolves outside the expected place')
   }
 
-  private async atomicWrite(abs: string, content: string): Promise<void> {
+  /** `expect`: the content hash the target must still have (null = must not exist) right before it is replaced. */
+  private async atomicWrite(
+    abs: string,
+    content: string,
+    expect?: { hash: string | null },
+  ): Promise<void> {
     const parent = path.dirname(abs)
     const temp = path.join(parent, `.score-${randomUUID()}.tmp`)
     try {
       await fs.writeFile(temp, content, { flag: 'wx', mode: 0o644 })
       await this.assertParent(parent)
+      if (expect) {
+        const now = await this.readContained(abs).then(hashContent, () => null)
+        if (now !== expect.hash)
+          throw new HttpError(412, 'precondition_failed', 'The note changed since you opened it', {
+            etag: now === null ? null : etagOf(now),
+          })
+      }
       await fs.rename(temp, abs)
       await this.assertParent(parent)
     } catch (error) {
@@ -261,11 +274,30 @@ export class KnowledgeVault {
     }
   }
 
+  /**
+   * Reads a file that must live at exactly `abs` inside the vault: opened without following a symlink in the last
+   * component, and on Linux the open descriptor's real path must still be `abs`, so a folder swapped for a symlink
+   * after the path was checked cannot make Score read (and index) a file elsewhere.
+   */
+  private async readContained(abs: string): Promise<string> {
+    const handle = await fs.open(abs, C.O_RDONLY | C.O_NOFOLLOW)
+    try {
+      if (process.platform === 'linux') {
+        const actual = await fs.realpath(`/proc/self/fd/${handle.fd}`)
+        if (actual !== abs)
+          throw new HttpError(400, 'bad_path', 'The note moved while it was being read')
+      }
+      return await handle.readFile('utf8')
+    } finally {
+      await handle.close()
+    }
+  }
+
   private async readRaw(abs: string, stat: Stats): Promise<string> {
     if (!stat.isFile()) throw new HttpError(400, 'not_a_note', 'That is not a note')
     if (stat.size > MAX_NOTE_BYTES)
       throw new HttpError(413, 'payload_too_large', 'That note is too large to open')
-    return fs.readFile(abs, 'utf8')
+    return this.readContained(abs)
   }
 
   // ---- index -------------------------------------------------------------------------------------------------
@@ -366,7 +398,9 @@ export class KnowledgeVault {
   private async indexFile(rel: string, author: KnowledgeAuthor): Promise<string> {
     const { abs, stat } = await this.lookup(rel.split('/'))
     if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Unknown note')
-    const raw = await fs.readFile(abs, 'utf8')
+    if (stat.size > MAX_NOTE_BYTES)
+      throw new HttpError(413, 'payload_too_large', 'That note is too large to open')
+    const raw = await this.readContained(abs)
     const hash = hashContent(raw)
     this.options.db.tx((sqlite) => {
       this.upsert(sqlite, rel, { mtimeMs: stat.mtimeMs, size: stat.size, hash }, raw, author)
@@ -434,9 +468,9 @@ export class KnowledgeVault {
       if (row && Math.trunc(stat.mtimeMs) === row.mtime_ms && stat.size === row.size) continue
       let raw: string
       try {
-        raw = await fs.readFile(path.join(this.root, rel), 'utf8')
+        raw = await this.readContained(path.join(this.root, rel))
       } catch {
-        continue
+        continue // vanished, or no longer a plain file inside the vault
       }
       const hash = hashContent(raw)
       touched.push({
@@ -645,7 +679,20 @@ export class KnowledgeVault {
 
   /** Commits whatever changed behind Score's back before Score's own commit. */
   private async commitOutside(): Promise<void> {
-    await this.git.commitOutsideChanges()
+    try {
+      await this.git.commitOutsideChanges()
+    } catch (error) {
+      // Without that snapshot an overwrite or delete could destroy an outside edit that never reached history.
+      this.options.log?.warn(
+        { err: error },
+        'Could not record outside changes in the vault history',
+      )
+      throw new HttpError(
+        503,
+        'git_unavailable',
+        'The vault history is not working (git failed), so notes cannot be changed safely. Fix the vault repository and try again.',
+      )
+    }
   }
 
   private async commit(
@@ -698,7 +745,8 @@ export class KnowledgeVault {
       if (hash === currentHash) return { etag: etagOf(hash), path: rel }
       await this.commitOutside()
       const abs = await this.prepareParent(rel)
-      await this.atomicWrite(abs, content)
+      // An outside edit that landed since the etag check is now in history; the save must not silently replace it.
+      await this.atomicWrite(abs, content, { hash: currentHash })
       await this.commit([rel], `${stat ? 'Update' : 'Create'} ${rel}`, author, rel)
       await this.indexFile(rel, author)
       await this.publish({ path: rel, kind: 'written', to: null, by: author })
@@ -721,6 +769,8 @@ export class KnowledgeVault {
       const target = await this.lookup(to.split('/'))
       if (target.stat) throw new HttpError(409, 'exists', 'A note with that name already exists')
       await this.commitOutside()
+      // Notes or links added outside Score since the last scan must take part in the rewrite.
+      await this.scan(true)
       const paths = this.options.db.read((sqlite) => this.noteRows(sqlite).map((row) => row.path))
       const before = buildNoteIndex(paths)
       const after = buildNoteIndex([...paths.filter((item) => item !== from), to])
@@ -732,23 +782,38 @@ export class KnowledgeVault {
               .map((row) => z.object({ from_path: z.string() }).parse(row).from_path),
           )
         : []
+      // Work out every rewrite first: a result over the size limit must refuse the whole move, not leave a note
+      // that opens with 413 behind.
+      const plan: Array<{ now: string; content: string }> = []
+      for (const old of linking) {
+        const file = await this.lookup(old.split('/'))
+        if (!file.stat?.isFile()) continue
+        const parsed = parseNote(await this.readRaw(file.abs, file.stat))
+        const result = rewriteLinks(parsed.body, old, from, to, before, after)
+        if (result.count === 0) continue
+        const content = parsed.prefix + result.text
+        if (Buffer.byteLength(content) > MAX_NOTE_BYTES)
+          throw new HttpError(
+            413,
+            'payload_too_large',
+            `Updating the links in ${old} would make that note too large; nothing was moved`,
+          )
+        plan.push({ now: old === from ? to : old, content })
+      }
       const abs = await this.prepareParent(to)
       await fs.rename(source.abs, abs)
       await this.assertParent(path.dirname(abs))
+      // The rename gets a commit of its own: with the link edits in the same commit a short note can look like a
+      // delete plus a create to git, and its earlier versions would no longer be found.
+      await this.commit([from, to], `Move ${from} to ${to}`, author)
       const rewritten: string[] = []
-      for (const old of linking) {
-        const now = old === from ? to : old
-        const file = await this.lookup(now.split('/'))
-        if (!file.stat?.isFile()) continue
-        const raw = await this.readRaw(file.abs, file.stat)
-        const parsed = parseNote(raw)
-        const result = rewriteLinks(parsed.body, old, from, to, before, after)
-        if (result.count === 0) continue
-        await this.atomicWrite(file.abs, parsed.prefix + result.text)
-        if (old !== from) rewritten.push(now)
-        else rewritten.push(to)
+      for (const item of plan) {
+        const file = await this.lookup(item.now.split('/'))
+        await this.atomicWrite(file.abs, item.content)
+        rewritten.push(item.now)
       }
-      await this.commit([...new Set([from, to, ...rewritten])], `Move ${from} to ${to}`, author)
+      if (rewritten.length > 0)
+        await this.commit([...new Set(rewritten)], `Update links after moving ${from}`, author)
       this.options.db.tx((sqlite) => this.remove(sqlite, from))
       await this.indexFile(to, author)
       for (const rel of rewritten) if (rel !== to) await this.indexFile(rel, author)
