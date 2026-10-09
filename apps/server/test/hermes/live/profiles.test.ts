@@ -155,7 +155,7 @@ test('reads only allowlisted profile files, never secrets or symlink targets (fs
     await reader.read(name, index, true, { status: 'idle', activity: null })
   expect(open.mock.calls.length).toBeGreaterThan(0)
   for (const [path, flags] of open.mock.calls) {
-    expect(['SOUL.md', 'profile.yaml', 'jobs.json', 'MEMORY.md', 'USER.md']).toContain(
+    expect(['SOUL.md', 'profile.yaml', 'jobs.json', 'MEMORY.md', 'USER.md', 'SKILL.md']).toContain(
       basename(path.toString()),
     )
     expect(path.toString()).not.toMatch(/credentials|linked|designer\/SOUL/)
@@ -197,6 +197,9 @@ test('oversized files are never opened and symlinked config never invokes the CL
   const open = vi.spyOn(fs, 'openSync')
   const detail = await reader.read('default', 0, false, { status: 'offline', activity: null })
   expect(detail.personality.excerpt).toBe('')
-  expect(open.mock.calls.map(([path]) => basename(path.toString()))).toEqual(['profile.yaml'])
+  expect(open.mock.calls.map(([path]) => basename(path.toString()))).toEqual([
+    'profile.yaml',
+    'SKILL.md',
+  ])
   expect(runner).not.toHaveBeenCalled()
 })

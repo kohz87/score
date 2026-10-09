@@ -97,6 +97,27 @@ function metadata(text: string): z.infer<typeof MetadataSchema> {
   }
   return MetadataSchema.parse(values)
 }
+/**
+ * Hermes matches `skills.disabled` against the name a skill declares in its front matter (the directory name
+ * only when it declares none), so that is the identity Score must list and persist.
+ */
+function declaredSkillName(skillFile: string, fallback: string): string {
+  try {
+    const fd = fs.openSync(skillFile, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW)
+    try {
+      const buffer = Buffer.alloc(4000)
+      const text = buffer.subarray(0, fs.readSync(fd, buffer, 0, buffer.length, 0)).toString('utf8')
+      const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1]
+      const raw = front && /^name:[ \t]*(.+?)[ \t]*$/m.exec(front)?.[1]
+      const value = raw ? raw.replace(/^(["'])(.*)\1$/, '$2') : ''
+      return /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value) ? value : fallback
+    } finally {
+      fs.closeSync(fd)
+    }
+  } catch {
+    return fallback
+  }
+}
 export function skillNames(home: string): string[] {
   const names: string[] = []
   const walk = (path: string, depth: number) => {
@@ -108,7 +129,7 @@ export function skillNames(home: string): string[] {
       return
     }
     if (entries.some((entry) => entry.name === 'SKILL.md' && entry.isFile())) {
-      names.push(basename(path))
+      names.push(declaredSkillName(join(path, 'SKILL.md'), basename(path)))
       return
     }
     for (const entry of entries) {

@@ -273,7 +273,7 @@ test('reads and writes touch only allowlisted files, never credentials (fs spy)'
   await tabs.setModel('builder', { model: 'm' })
   expect(open.mock.calls.length).toBeGreaterThan(0)
   for (const [path, flags] of open.mock.calls) {
-    expect(['SOUL.md', 'profile.yaml', 'jobs.json', 'MEMORY.md', 'USER.md']).toContain(
+    expect(['SOUL.md', 'profile.yaml', 'jobs.json', 'MEMORY.md', 'USER.md', 'SKILL.md']).toContain(
       basename(path.toString()),
     )
     expect(Number(flags) & fs.constants.O_NOFOLLOW).toBe(fs.constants.O_NOFOLLOW)
@@ -405,4 +405,21 @@ test('a local provider only the default profile defines is refused for another a
   runner.mockClear()
   await tabs.setModel('builder', { model: 'm', provider: 'openai' })
   expect(writes()).toHaveLength(2)
+})
+
+test('skills are listed and disabled by their declared name, not their directory name', async () => {
+  const dir = join(home, 'profiles', 'builder', 'skills', 'team', 'folder')
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(
+    join(dir, 'SKILL.md'),
+    '---\nname: "release-checklist"\ndescription: x\n---\nBody\n',
+  )
+  const listed = (await tabs.listSkills('builder')).map((skill) => skill.name)
+  expect(listed).toContain('release-checklist')
+  expect(listed).not.toContain('folder')
+  await tabs.setSkillEnabled('builder', 'release-checklist', false)
+  expect(disabled).toEqual(['release-checklist'])
+  await expect(tabs.setSkillEnabled('builder', 'folder', false)).rejects.toMatchObject({
+    status: 404,
+  })
 })
