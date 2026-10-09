@@ -37,6 +37,7 @@ import { createIngest, type Ingest } from './hub/ingest.ts'
 import { rotateLog } from './log-rotation.ts'
 import { snapshotSessionCosts } from './domain/spend.ts'
 import { pruneEvents } from './hub/retention.ts'
+import { pruneAuxiliary } from './hub/retention-aux.ts'
 import { MediaStore } from './media/store.ts'
 import { KnowledgeAgentApi } from './knowledge/agent-api.ts'
 import { KnowledgeVault } from './knowledge/vault.ts'
@@ -323,6 +324,11 @@ export async function startServer(
           pruneEvents(database)
         } catch (error) {
           app?.log.error({ err: error }, 'Event retention prune failed')
+        }
+        try {
+          pruneAuxiliary(database)
+        } catch (error) {
+          app?.log.error({ err: error }, 'Auxiliary retention prune failed')
         }
         try {
           retireIngestKeys(database)
