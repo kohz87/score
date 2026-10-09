@@ -189,6 +189,12 @@ export class CodingRuntime {
     forgetCliSession(this.deps.db.sqlite, sessionKey.slice(6, -suffix.length), agentId)
   }
 
+  /** The CLIs' own login files: an agent has no business reading them. */
+  private denyFiles(): string[] {
+    const home = this.deps.policy.home
+    return [join(home, '.claude', '.credentials*'), join(home, '.codex', 'auth*')]
+  }
+
   /** Folders the policy keeps off limits, in lexical and resolved form. */
   private denyPaths(): string[] {
     return this.deps.policy.forbidden.flatMap((folder) => {
@@ -370,7 +376,7 @@ export class CodingRuntime {
         costKind,
       }))
     let settingsPath: string | null = null
-    const settings = driver.settingsFile?.(this.denyPaths())
+    const settings = driver.settingsFile?.(this.denyPaths(), this.denyFiles())
     if (settings) {
       const dir = join(this.deps.home, 'coding', agent.id)
       mkdirSync(dir, { recursive: true, mode: 0o700 })
@@ -400,6 +406,7 @@ export class CodingRuntime {
             sessionId: resume,
             settingsPath,
             denyPaths: this.denyPaths(),
+            denyFiles: this.denyFiles(),
           }),
         ],
         cwd: checked.real,

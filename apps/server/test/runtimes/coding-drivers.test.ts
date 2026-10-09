@@ -114,7 +114,14 @@ test('codex: a failed turn carries the CLI’s message; stray error events are n
 })
 
 const deny = ['/home/u/.hermes', '/home/u/.score', '/home/u/.ssh']
-const base = { workspace: '/ws', model: null, sessionId: null, settingsPath: null, denyPaths: deny }
+const base = {
+  workspace: '/ws',
+  model: null,
+  sessionId: null,
+  settingsPath: null,
+  denyPaths: deny,
+  denyFiles: [],
+}
 
 test('claude flag mapping per permission level', () => {
   const args = (permission: 'read-only' | 'workspace-write' | 'full', extra = {}) =>
@@ -146,7 +153,7 @@ test('claude flag mapping per permission level', () => {
       'Read(//home/u/.hermes/**)',
       'Read(//home/u/.score/**)',
       'Read(//home/u/.ssh/**)',
-      'Read(**/.env)',
+      'Read(//**/.env*)',
       'Edit(//home/u/.hermes/**)',
     ]),
   )
@@ -231,4 +238,16 @@ test('child environment is an allowlist: no Score variables, no *_API_KEY, no to
   ).toEqual({
     SCORE_CODING_FAKE_LOG: '/tmp/x',
   })
+})
+
+test('deny rules are filesystem-rooted: .env variants anywhere, credentials, and the protected folders (review: high 1)', () => {
+  const rules = claudeDenyRules(deny, ['/home/u/.claude/.credentials*', '/home/u/.codex/auth*'])
+  for (const tool of ['Read', 'Edit']) {
+    expect(rules).toContain(`${tool}(//**/.env*)`)
+    expect(rules).toContain(`${tool}(//home/u/.claude/.credentials*)`)
+    expect(rules).toContain(`${tool}(//home/u/.codex/auth*)`)
+    expect(rules).toContain(`${tool}(//home/u/.ssh/**)`)
+  }
+  // No rule left relative (a relative pattern excludes parent directories and other projects).
+  expect(rules.filter((rule) => /\((?!\/\/)/.test(rule))).toEqual([])
 })

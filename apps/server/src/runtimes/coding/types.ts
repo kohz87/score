@@ -44,6 +44,8 @@ export interface DriverRunOptions {
   settingsPath: string | null
   /** Absolute folders the CLI must never read or write (Score's, the agent runtime's, SSH). */
   denyPaths: readonly string[]
+  /** Absolute file patterns off limits too (the CLIs' own login files). */
+  denyFiles: readonly string[]
 }
 
 export interface CodingDriver {
@@ -61,7 +63,10 @@ export interface CodingDriver {
   buildArgs(options: DriverRunOptions): string[]
   createParser(options: { cwd: string }): LineParser
   /** File names under `<score home>/coding/<agent>/` this driver wants written before a run. */
-  settingsFile?(denyPaths: readonly string[]): { name: string; content: string }
+  settingsFile?(
+    denyPaths: readonly string[],
+    denyFiles: readonly string[],
+  ): { name: string; content: string }
 }
 
 export const CODING_LIMITS = {

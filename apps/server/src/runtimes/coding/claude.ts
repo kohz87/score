@@ -219,17 +219,23 @@ export function createClaudeParser(cwd?: string): LineParser {
 }
 
 /** Secret files nobody wants an agent to read, wherever they are. */
-const DENY_FILE_PATTERNS = ['**/.env', '**/.env.*']
+// `//` roots a pattern at the file system: a relative one would not reach parent folders or other projects.
+// `.env*` covers .env, .env.local, .envrc and other suffixes.
+const DENY_FILE_PATTERNS = ['//**/.env*']
 
 /**
  * What Claude Code may never read or write, whatever the permission level (review 2026-10-09, 7.2 #1b): the folders
  * Score is told are off limits (its own home, the Hermes home, ~/.ssh; `//` is Claude's absolute-path syntax) and
  * `.env` files.
  */
-export function claudeDenyRules(denyPaths: readonly string[]): string[] {
+export function claudeDenyRules(
+  denyPaths: readonly string[],
+  denyFiles: readonly string[] = [],
+): string[] {
   const folders = [...new Set(denyPaths)].map((folder) => `/${folder.replace(/\/+$/, '')}/**`)
+  const files = denyFiles.map((file) => `/${file}`)
   return ['Read', 'Edit'].flatMap((tool) =>
-    [...folders, ...DENY_FILE_PATTERNS].map((pattern) => `${tool}(${pattern})`),
+    [...folders, ...files, ...DENY_FILE_PATTERNS].map((pattern) => `${tool}(${pattern})`),
   )
 }
 
@@ -273,16 +279,20 @@ export const claudeDriver: CodingDriver = {
         break
     }
     if (options.settingsPath) args.push('--settings', options.settingsPath)
-    args.push('--disallowed-tools', claudeDenyRules(options.denyPaths).join(','))
+    args.push('--disallowed-tools', claudeDenyRules(options.denyPaths, options.denyFiles).join(','))
     if (options.model) args.push('--model', options.model)
     if (options.sessionId) args.push('--resume', options.sessionId)
     return args
   },
   createParser: (options) => createClaudeParser(options.cwd),
-  settingsFile(denyPaths) {
+  settingsFile(denyPaths, denyFiles) {
     return {
       name: 'claude-settings.json',
-      content: JSON.stringify({ permissions: { deny: claudeDenyRules(denyPaths) } }, null, 2),
+      content: JSON.stringify(
+        { permissions: { deny: claudeDenyRules(denyPaths, denyFiles) } },
+        null,
+        2,
+      ),
     }
   },
 }
