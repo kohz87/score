@@ -217,3 +217,22 @@ export const SecurityStatusSchema = z.object({
 })
 export const RevokeOthersResponseSchema = z.object({ revoked: z.int().nonnegative() })
 export type PairedBrowser = z.infer<typeof PairedBrowserSchema>
+
+// §3 Score's own log (5.29): newest first, every field redacted before it leaves the server.
+export const LogLevelSchema = z.enum(['info', 'warn', 'error'])
+export const LogEntrySchema = z.object({
+  time: z.iso.datetime().nullable(),
+  level: LogLevelSchema,
+  message: z.string(),
+  method: z.string().nullable(),
+  url: z.string().nullable(),
+  status: z.int().nullable(),
+  durationMs: z.number().nullable(),
+})
+export const LogsResponseSchema = z.object({
+  /** False when `SCORE_LOG_FILE` is not set (dev, tests): the server then has no file to read. */
+  available: z.boolean(),
+  items: z.array(LogEntrySchema),
+})
+export type LogEntry = z.infer<typeof LogEntrySchema>
+export type LogsResponse = z.infer<typeof LogsResponseSchema>

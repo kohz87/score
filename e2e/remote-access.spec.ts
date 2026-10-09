@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { once } from 'node:events'
@@ -79,9 +79,22 @@ test('remote pairing over HTTPS requires consent, protects reads, serves the gui
     env: { PATH: process.env.PATH!, HOME: home, SCORE_HOME: home, SCORE_HOST: '127.0.0.1' },
     stdio: 'ignore',
   })
+  const logFile = join(home, 'score.log')
+  writeFileSync(
+    logFile,
+    [
+      JSON.stringify({ level: 30, time: Date.now() - 2000, msg: 'e2e started cleanly' }),
+      JSON.stringify({
+        level: 50,
+        time: Date.now() - 1000,
+        msg: 'e2e failure Authorization: Bearer topsecrettokenvalue1234',
+      }),
+    ].join('\n') + '\n',
+  )
   const child = spawn(process.execPath, ['--import', loader, entry], {
     env: {
       ...process.env,
+      SCORE_LOG_FILE: logFile,
       SCORE_HOME: home,
       SCORE_MODE: 'fake',
       SCORE_HOST: '127.0.0.1',
@@ -133,6 +146,16 @@ test('remote pairing over HTTPS requires consent, protects reads, serves the gui
     await page.getByRole('button', { name: 'Pair another device' }).click()
     await expect(page.getByRole('img', { name: 'QR code for the pairing link' })).toBeVisible()
     await expect(page.getByRole('group', { name: 'Pairing link' })).toContainText('/pair#')
+    // Settings › Logs: parsed lines, filters, and secrets already removed on the server.
+    const logs = page.getByRole('region', { name: 'Logs' })
+    await expect(logs.getByText('e2e started cleanly')).toBeVisible()
+    await expect(logs.getByText(/e2e failure/)).toBeVisible()
+    await expect(logs).not.toContainText('topsecrettokenvalue1234')
+    await logs.getByLabel('Level').selectOption('error')
+    await expect(logs.getByText('e2e started cleanly')).toHaveCount(0)
+    await logs.getByLabel('Level').selectOption('all')
+    await logs.getByLabel('Search').fill('cleanly')
+    await expect(logs.getByText(/e2e failure/)).toHaveCount(0)
     await page.getByRole('button', { name: 'Log out this browser' }).click()
     await expect(page).toHaveURL(`${origin}/pair`)
     await expect(page.getByText(/Open the pairing link printed/)).toBeVisible()

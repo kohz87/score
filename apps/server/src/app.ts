@@ -40,6 +40,7 @@ import { registerHttpsGuide } from './http/https-guide.ts'
 import { registerWebAssets, type WebAssets } from './http/web-assets.ts'
 import { PairingService } from './auth/pairing.ts'
 import type { SessionStore } from './auth/session-store.ts'
+import { registerLogRoutes } from './http/logs.ts'
 import { registerSessionRoutes } from './http/session.ts'
 import { registerSystemRoutes } from './http/system.ts'
 import { registerStreamRoute, type StreamRouteOptions } from './http/stream.ts'
@@ -311,6 +312,7 @@ export function buildApp({
     config.remote ? config.remote.origins : [pairingOrigin],
   )
   registerSystemRoutes(app, getSystemStatus)
+  registerLogRoutes(app, config.logFile)
   if (db && ingest && getEpoch) {
     registerStreamRoute(app, {
       db,

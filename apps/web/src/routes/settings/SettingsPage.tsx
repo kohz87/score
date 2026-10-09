@@ -7,6 +7,7 @@ import { LookSection } from './LookSection.tsx'
 import { ProvidersSection } from './ProvidersSection.tsx'
 import { HermesVersionBanner } from './HermesVersionBanner.tsx'
 import { KnowledgeSection } from '../knowledge/KnowledgeSection.tsx'
+import { LogsSection } from './LogsSection.tsx'
 import { RemoteSection } from './RemoteSection.tsx'
 import { remoteTransport } from '../../data/session.ts'
 import './settings.css'
@@ -18,6 +19,7 @@ const sections = [
   { id: 'look', label: 'Look', built: true },
   { id: 'knowledge', label: 'Knowledge', built: true },
   { id: 'advanced', label: 'Advanced', built: true },
+  { id: 'logs', label: 'Logs', built: true },
 ] as const
 
 export function SettingsPage() {
@@ -42,6 +44,7 @@ export function SettingsPage() {
         <LookSection />
         <KnowledgeSection />
         <AdvancedSection />
+        <LogsSection />
         <RemoteSection />
       </div>
     </div>
