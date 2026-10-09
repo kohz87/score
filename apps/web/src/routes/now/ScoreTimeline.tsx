@@ -2,6 +2,7 @@ import type { AgentSummary, LaneBlock, NowSnapshot } from '@score/contract'
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { runtimeLabel } from '../../components/runtime-label.ts'
 import { UnattributedGlyph } from '../../components/UnattributedGlyph.tsx'
 import {
   axisTicks,
@@ -215,6 +216,9 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
                     )}
                   </span>
                   <span className="now-lane-role">{role}</span>
+                  {runtimeLabel(agent?.runtime) && (
+                    <span className="now-lane-role">{runtimeLabel(agent?.runtime)}</span>
+                  )}
                 </div>
               </div>
             ))}

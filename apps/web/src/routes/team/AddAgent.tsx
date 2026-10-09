@@ -15,6 +15,7 @@ import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { ProfileOperation, useProfileOperation } from './ProfileOperation.tsx'
 import { newId } from '../../data/ids.ts'
+import { AddCodingAgentForm } from './CodingAgent.tsx'
 
 export function AddAgent({ agents }: { agents: AgentSummary[] }) {
   const [open, setOpen] = useState(false)
@@ -45,6 +46,7 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
     model: '',
     style: { color: '#19C39A', shape: 'triangle' },
   })
+  const [kind, setKind] = useState<'hermes' | 'coding'>('hermes')
   const [preview, setPreview] = useState<AgentPreview | null>(null)
   const [confirmed, setConfirmed] = useState(false)
   const [accepted, setAccepted] = useState<AgentOperation | null>(null)
@@ -110,7 +112,32 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
           Close
         </button>
       </div>
-      {operation ? (
+      {!operation && (
+        <fieldset className="team-add-kind">
+          <legend>Kind of agent</legend>
+          <label>
+            <input
+              type="radio"
+              name="agent-kind"
+              checked={kind === 'hermes'}
+              onChange={() => setKind('hermes')}
+            />{' '}
+            Hermes agent
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="agent-kind"
+              checked={kind === 'coding'}
+              onChange={() => setKind('coding')}
+            />{' '}
+            Coding agent (Claude Code, Codex)
+          </label>
+        </fieldset>
+      )}
+      {kind === 'coding' && !operation ? (
+        <AddCodingAgentForm close={close} />
+      ) : operation ? (
         <>
           <ProfileOperation operation={operation} />
           {status.isError && (

@@ -43,7 +43,10 @@ function Totals({ totals, money }: { totals: Reports['totals']; money: Money }) 
     [totals.runs.toString(), 'agent runs'],
     [formatPercent(totals.firstPassRate), 'passed review first time'],
     [formatDuration(totals.medianTaskSec), 'median time per task'],
-    [money(totals.spendUsd), 'model spend'],
+    [
+      money(totals.spendUsd),
+      totals.spendEstimated ? 'model spend (partly estimated)' : 'model spend',
+    ],
     [formatPercent(totals.cacheHitRate), 'prompt cache hit rate'],
   ]
   return (
@@ -54,6 +57,15 @@ function Totals({ totals, money }: { totals: Reports['totals']; money: Money }) 
           <span className="reports-stat__label">{label}</span>
         </div>
       ))}
+      {totals.spendEstimated && (
+        <p className="reports-empty">
+          Coding agents on a subscription are not billed per token: their figure is what the same
+          work would cost at API prices.
+          {totals.spendExcluded?.length
+            ? ` ${totals.spendExcluded.length === 1 ? 'One coding agent gave' : 'Some coding agents gave'} no cost at all and ${totals.spendExcluded.length === 1 ? 'is' : 'are'} left out.`
+            : ''}
+        </p>
+      )}
     </section>
   )
 }
@@ -172,7 +184,15 @@ function ByAgent({
                     )}
                   </td>
                   <td className="reports-table__right reports-table__spend">
-                    {money(row.spendUsd)}
+                    {row.spendBasis === 'unknown' ? (
+                      <span aria-label="This coding agent's CLI gave no cost">unknown</span>
+                    ) : row.spendBasis === 'estimated' ? (
+                      <>
+                        {money(row.spendUsd)} <span className="reports-estimated">estimated</span>
+                      </>
+                    ) : (
+                      money(row.spendUsd)
+                    )}
                   </td>
                 </tr>
               )

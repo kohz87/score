@@ -85,6 +85,7 @@ export function TeamPage() {
                 </p>
                 <p aria-live="polite">{agent.activity ?? 'No current activity'}</p>
                 <span className="team-muted">{agent.model?.label ?? 'Model unavailable'}</span>
+                {agent.runtimeNote && <span className="team-muted">{agent.runtimeNote}</span>}
               </Link>
             </li>
           ))}

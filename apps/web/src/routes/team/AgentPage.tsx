@@ -17,6 +17,7 @@ import { ChannelsTab } from './ChannelsTab.tsx'
 import { HistoryTab } from './HistoryTab.tsx'
 import { WorkspaceTab } from './WorkspaceTab.tsx'
 import type { AgentFileName } from './file-queries.ts'
+import { CodingOverview } from './CodingAgent.tsx'
 
 // Dark text on light agent colors, white on dark ones (the design's jade band uses #08241C).
 function bandInk(color: string) {
@@ -24,7 +25,7 @@ function bandInk(color: string) {
   return (r * 299 + g * 587 + b * 114) / 1000 > 120 ? '#08241c' : '#ffffff'
 }
 
-const tabs = [
+const hermesTabs = [
   'Overview',
   'Personality',
   'Model',
@@ -38,6 +39,9 @@ const tabs = [
   'Permissions',
   'History',
 ]
+
+// A coding agent (PLAN 7.2) has no Hermes profile behind it: no personality files, skills, memory or routines.
+const codingTabs = ['Overview', 'Workspace', 'History']
 
 export function AgentPage() {
   const { agentId = '' } = useParams()
@@ -77,6 +81,8 @@ function AgentProfile({ agentId }: { agentId: string }) {
         ? summary.model && { ...summary.model, via: '', fallback: null }
         : detail.data.model,
   }
+  const isCoding = Boolean(agent.runtime && agent.runtime !== 'hermes')
+  const tabs = isCoding ? codingTabs : hermesTabs
   function navigateTabs(event: KeyboardEvent, index: number) {
     const next =
       event.key === 'Home'
@@ -155,7 +161,9 @@ function AgentProfile({ agentId }: { agentId: string }) {
         ))}
       </div>
       <div id="team-tab-panel" role="tabpanel" aria-labelledby={`team-tab-${tab}`} tabIndex={0}>
-        {tab === 'Overview' ? (
+        {tab === 'Overview' && isCoding ? (
+          <CodingOverview agent={agent} />
+        ) : tab === 'Overview' ? (
           <>
             <AgentOverview
               agent={agent}

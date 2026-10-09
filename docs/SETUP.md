@@ -249,3 +249,10 @@ VACUUM while Score runs can still leave search wrong until the next start.
 `SCORE_PRINT_PAIR_LINK=1` makes the server print its startup pairing link to a non-terminal stdout (dev tooling and the
 e2e specs read it from a log). Without it a terminal gets the link and anything else (the launcher's `score.log`) gets a
 line without it; the launcher shows the link once from a 0600 `pair-link` file and deletes it.
+
+## Coding agents (PLAN 7.2, optional)
+Team › Add agent › Coding agent runs the CLIs you already have, signed in with their own logins (Score never reads or
+passes credentials): `claude` (Claude Code, tested series 2.1.x) and `codex` (Codex CLI, tested series 0.160.x). Both must be
+on the `PATH` Score starts with. A newer or older version shows "untested version" and runs only after you confirm it for that
+agent. OpenCode is listed but not supported yet. Turns use your Claude / ChatGPT plan quota. Tests and the fake mode never start a
+real CLI: `SCORE_CODING_FAKE_CLI` (honoured only in fake mode and under test) points at a script that prints hand-made fixtures.
