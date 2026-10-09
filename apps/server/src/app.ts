@@ -227,7 +227,16 @@ export function buildApp({
     const dispatch = registerRoomRoutes(app, port, db, ingest, clock, mediaStore, workspaces)
     registerConversationRoutes(app, { db, ingest, port, ...(clock ? { clock } : {}) })
     registerOutsideSessionRoutes(app, { db, ingest, port })
-    const holds = createTaskHolds({ port, db, ingest })
+    const holds = createTaskHolds({
+      port,
+      db,
+      ingest,
+      onInert: (owner, taskIds) =>
+        app.log.warn(
+          { owner, taskIds },
+          'Pause release skipped holds that belong to another Kanban board lineage',
+        ),
+    })
     const control = createBriefControl({ port, db, ingest, holds, dispatch })
     // A crash between "pause recorded" and "task parked" (or "resumed" and "unparked") leaves holds behind. The
     // server runs this once the adapter has started, and again until nothing is left (Hermes may be unreachable).

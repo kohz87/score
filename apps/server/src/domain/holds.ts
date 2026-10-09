@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
+import { currentOnly, stampHistoryId } from './ownership.ts'
 
 /** Statuses Score parks. Triage is not dispatchable, and anything else has started or moved on. */
 export const PARKABLE = ['ready', 'todo']
@@ -18,10 +19,13 @@ export function otherHold(sqlite: DatabaseSync, taskId: string, except: HoldOwne
   return HOLD_KINDS.some((kind) => {
     const { table, column } = TABLES[kind]
     const exclude = kind === except.kind ? `AND ${column} <> ?` : ''
+    // A hold from another board lineage (inert) does not keep this lineage's task parked.
+    const owned = currentOnly(sqlite, 'history_id')
     return (
       sqlite
-        .prepare(`SELECT 1 FROM ${table} WHERE task_id = ? ${exclude}`)
-        .get(...(kind === except.kind ? [taskId, except.id] : [taskId])) !== undefined
+        .prepare(`SELECT 1 FROM ${table} WHERE task_id = ? ${exclude}${owned.sql}`)
+        .get(...(kind === except.kind ? [taskId, except.id] : [taskId]), ...owned.params) !==
+      undefined
     )
   })
 }
@@ -43,10 +47,11 @@ export function recordHolds(
   now: string,
 ): void {
   const { table, column } = TABLES[owner.kind]
+  const historyId = stampHistoryId(sqlite)
   for (const taskId of taskIds)
     sqlite
       .prepare(
-        `INSERT OR IGNORE INTO ${table} (${column}, task_id, blocked_at, state) VALUES (?, ?, ?, 'pending')`,
+        `INSERT OR IGNORE INTO ${table} (${column}, task_id, blocked_at, state, history_id) VALUES (?, ?, ?, 'pending', ?)`,
       )
-      .run(owner.id, taskId, now)
+      .run(owner.id, taskId, now, historyId)
 }

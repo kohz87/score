@@ -19,6 +19,7 @@ import {
 import { createTailer } from './tailer.ts'
 import { hermesPaths, resolveHermesHome } from './paths.ts'
 import { incarnationOf, HermesDbMissing } from './sqlite.ts'
+import { stampHistoryId } from '../../domain/ownership.ts'
 import { KanbanAttemptsCoordinator } from './kanban-attempts/coordinator.ts'
 import { kanbanAttemptsEnabled } from './kanban-attempts/types.ts'
 
@@ -157,6 +158,7 @@ export class LiveTasks {
         },
       })
     }
+    await this.restamp(source, byId)
     const reviews = this.reviews.splice(0)
     await projectReviewTransitions(this.db.sqlite, this.sink, source, reviews)
     // Mutable fields and tasks without events still need a baseline/reconciliation observation.
@@ -219,6 +221,36 @@ export class LiveTasks {
           })
         }
         return drafts
+      },
+    })
+  }
+  /**
+   * Projections written before a lineage was verified, or from one that was replaced, carry no stamp for the lineage
+   * Score follows now. The ones the board still has are restamped (5.17a-1); the others are removed by reconciliation.
+   */
+  private async restamp(source: string, onBoard: Map<string, TaskDetail>): Promise<void> {
+    if (!this.attempts) return
+    const stamp = stampHistoryId(this.db.sqlite)
+    if (stamp === null) return
+    const ids = z
+      .array(z.object({ id: z.string() }))
+      .parse(
+        this.db.sqlite
+          .prepare('SELECT id FROM task_projections WHERE history_id IS NOT ?')
+          .all(stamp),
+      )
+      .map((row) => row.id)
+      .filter((id) => onBoard.has(id))
+    if (!ids.length) return
+    await this.sink.submit({
+      source,
+      identity: `restamp:${randomUUID()}`,
+      apply: ({ sqlite }) => {
+        const update = sqlite.prepare(
+          'UPDATE task_projections SET history_id = ? WHERE id = ? AND history_id IS NOT ?',
+        )
+        for (const id of ids) update.run(stamp, id, stamp)
+        return []
       },
     })
   }

@@ -1,9 +1,6 @@
 import { z } from 'zod'
 
-/** Stage 1 of 5.17a-1 runs only when SCORE_KANBAN_ATTEMPTS=1; everything else about Kanban is unchanged. */
-export function kanbanAttemptsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.SCORE_KANBAN_ATTEMPTS === '1'
-}
+export { kanbanAttemptsEnabled } from '../../../domain/kanban-attempts.ts'
 
 // Bounds from design v5 §I.
 export const ATTEMPT_PAGE = 200

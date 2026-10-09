@@ -2,6 +2,8 @@ import { ApprovalChoiceSchema, ApprovalSchema, type Approval } from '@score/cont
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { z } from 'zod'
 import type { DomainEventDraft } from '../hub/ingest.ts'
+import { actionableHistoryId } from './ownership.ts'
+import { kanbanAttemptsEnabled } from './kanban-attempts.ts'
 
 const jsonStrings = z.string().transform((value) => z.array(z.string()).parse(JSON.parse(value)))
 export const ApprovalRowSchema = z.object({
@@ -26,6 +28,7 @@ export const ApprovalRowSchema = z.object({
   linked_to: z.string().nullable(),
   kanban_task_id: z.string().nullable(),
   kanban_run_id: z.int().nullable(),
+  kanban_history_id: z.string().nullable().default(null),
   command: z.string(),
   command_digest: z.string().nullable(),
   description: z.string(),
@@ -179,6 +182,24 @@ export function deliverable(row: ApprovalRow, delivery: DeliveryRow, now: number
       (delivery.producer_id !== null && delivery.producer_id === row.producer_id))
   )
 }
+/**
+ * The task a Kanban denial points at. With attempts on, a denial resolves to a task only when both are owned by the
+ * lineage Score follows now; an unqualified or historical denial never authorizes task actions.
+ */
+function denialTaskRefs(
+  sqlite: DatabaseSync,
+  row: ApprovalRow,
+): { kind: 'task'; taskId: string }[] {
+  const ref = [{ kind: 'task' as const, taskId: row.kanban_task_id! }]
+  if (!kanbanAttemptsEnabled()) return ref
+  const history = actionableHistoryId(sqlite)
+  if (history === null || row.kanban_history_id !== history) return []
+  const task = sqlite
+    .prepare('SELECT history_id FROM task_projections WHERE id = ?')
+    .get(row.kanban_task_id!) as { history_id: string | null } | undefined
+  return task?.history_id === history ? ref : []
+}
+
 export function approvalView(
   sqlite: DatabaseSync,
   row: ApprovalRow,
@@ -207,7 +228,7 @@ export function approvalView(
     delivery: readDelivery(sqlite, row.id)?.state ?? 'none',
     blocking: row.blocking,
     refs: row.kanban_task_id
-      ? [{ kind: 'task', taskId: row.kanban_task_id }]
+      ? denialTaskRefs(sqlite, row)
       : row.run_id
         ? [{ kind: 'run', runId: row.run_id }]
         : [],

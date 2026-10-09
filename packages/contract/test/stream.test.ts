@@ -32,6 +32,7 @@ const eventData = {
   'handoff.created': f.handoffCreated,
   'brief.upserted': f.brief,
   'run.updated': f.run,
+  'attempt.updated': f.attemptUpdated,
   'gap.recorded': f.gap,
   'log.line': f.log,
   'watch.frame': f.watch,

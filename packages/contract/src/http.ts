@@ -140,6 +140,11 @@ export const NowSnapshotSchema = z.object({
   }),
   lanes: z.array(z.object({ agent: AgentSummarySchema, blocks: z.array(LaneBlockSchema) })),
   handoffs: z.array(HandoffSchema),
+  /**
+   * Kanban attempts whose claiming profile is unknown (5.17a-1; present only with attempts enabled). Handoffs from
+   * or to these blocks carry `agentId: null`.
+   */
+  unattributed: z.object({ blocks: z.array(LaneBlockSchema) }).optional(),
   focusApproval: ApprovalSchema.nullable(),
   thread: z.object({ roomId: z.string().min(1), messages: z.array(MessageSchema) }).nullable(),
   madeToday: z.array(
@@ -153,7 +158,14 @@ export const NowSnapshotSchema = z.object({
           removed: z.int().nonnegative(),
         }),
       ),
-      checks: z.array(z.object({ label: z.string(), agentId: AgentIdSchema, ok: z.boolean() })),
+      checks: z.array(
+        z.object({
+          label: z.string(),
+          agentId: AgentIdSchema,
+          /** `unknown` = Score has no exact evidence either way (never shown as passed). */
+          verdict: z.enum(['passed', 'changes_requested', 'unknown']),
+        }),
+      ),
     }),
   ),
 })
@@ -217,6 +229,13 @@ export const ReportsSchema = z.object({
     medianWaitSec: z.number().nonnegative().nullable(),
     insight: z.string().nullable(),
   }),
+  /**
+   * Kanban attempts without a known agent (5.17a-1; present only with attempts enabled). Counted here, never in
+   * `totals.runs`, `byAgent`, `trend` or session spend. `workingSec` counts proven attempts only.
+   */
+  unattributed: z
+    .object({ runs: z.int().nonnegative(), workingSec: z.int().nonnegative() })
+    .optional(),
 })
 export type Reports = z.infer<typeof ReportsSchema>
 

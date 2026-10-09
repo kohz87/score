@@ -153,7 +153,7 @@ function snapshot(overrides: Partial<NowSnapshot> = {}): NowSnapshot {
         title: 'Read layer',
         ref: { kind: 'task', taskId: 't1' },
         files: [{ path: 'api/events.py', added: 182, removed: 12 }],
-        checks: [{ label: 'Tests pass', agentId: 'builder', ok: true }],
+        checks: [{ label: 'Tests pass', agentId: 'builder', verdict: 'passed' }],
       },
     ],
     ...overrides,

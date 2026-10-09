@@ -11,6 +11,7 @@ import { HttpError } from '../errors.ts'
 import type { DeriveEvents, DomainEventDraft } from '../hub/ingest.ts'
 import { redact } from '../redact.ts'
 import { holdable, recordHolds, type HoldOwner } from './holds.ts'
+import { currentOnly, ownershipOf, stampHistoryId } from './ownership.ts'
 import { teamPausedAt } from './team-pause.ts'
 
 // Briefs (design review 3.4): a human room message plus what it causes. Links to tasks are exact only; nothing
@@ -240,10 +241,10 @@ export function linkTasks(
     Boolean(
       sqlite
         .prepare(
-          `INSERT INTO brief_tasks (brief_id, task_id, origin, linked_at) VALUES (?, ?, ?, ?)
+          `INSERT INTO brief_tasks (brief_id, task_id, origin, linked_at, history_id) VALUES (?, ?, ?, ?, ?)
            ON CONFLICT DO NOTHING`,
         )
-        .run(briefId, taskId, origin, now).changes,
+        .run(briefId, taskId, origin, now, stampHistoryId(sqlite)).changes,
     ),
   )
   for (const { taskId } of fresh) linkDescendants(sqlite, briefId, taskId, now)
@@ -288,13 +289,15 @@ export function recordEdge(
   handoff: { id: string; kind: 'handoff' | 'review' | 'sent_back'; at: string },
   from: string,
   to: string,
+  /** Review edges read from a Kanban board carry the lineage they came from (5.17a-1). */
+  historyId: string | null = null,
 ): void {
   sqlite
     .prepare(
-      `INSERT INTO brief_edges (brief_id, id, kind, from_block, to_block, at) VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO brief_edges (brief_id, id, kind, from_block, to_block, at, history_id) VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT DO NOTHING`,
     )
-    .run(briefId, handoff.id, handoff.kind, from, to, handoff.at)
+    .run(briefId, handoff.id, handoff.kind, from, to, handoff.at, historyId)
 }
 
 function briefIdsFor(sqlite: DatabaseSync, sql: string, value: string): string[] {
@@ -327,15 +330,21 @@ function recordArrivalHolds(sqlite: DatabaseSync, taskIds: Iterable<string>, now
   for (const taskId of taskIds) {
     const detail = projectedDetail(sqlite, taskId)
     if (!detail || !holdable(sqlite, taskId, taskStatus(detail))) continue
+    // A task whose projection is not owned by the followed board lineage is never parked (inert, 5.17a-1).
+    const owner = sqlite
+      .prepare('SELECT history_id FROM task_projections WHERE id = ?')
+      .get(taskId) as { history_id: string | null } | undefined
+    if (ownershipOf(sqlite, owner?.history_id ?? null) === 'inert') continue
+    const links = currentOnly(sqlite, 'b.history_id')
     const owners: HoldOwner[] = z
       .array(z.object({ brief_id: z.string() }))
       .parse(
         sqlite
           .prepare(
             `SELECT b.brief_id FROM brief_tasks b JOIN briefs r ON r.id = b.brief_id
-             WHERE b.task_id = ? AND r.paused_at IS NOT NULL`,
+             WHERE b.task_id = ? AND r.paused_at IS NOT NULL${links.sql}`,
           )
-          .all(taskId),
+          .all(taskId, ...links.params),
       )
       .map((row) => ({ kind: 'brief', id: row.brief_id }))
     if (

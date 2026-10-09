@@ -177,7 +177,7 @@ test('a completed reviewer run that was followed by more work is not a passed re
   const item = now.madeToday.find(
     (entry) => entry.ref.kind === 'task' && entry.ref.taskId === task.id,
   )!
-  expect(item.checks.map((check) => check.ok)).toEqual([false, true])
+  expect(item.checks.map((check) => check.verdict)).toEqual(['unknown', 'passed'])
 })
 
 test('lanes tell plain chat replies from brief work and tasks; chat replies merge into a band', async () => {

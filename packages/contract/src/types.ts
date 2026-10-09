@@ -202,6 +202,13 @@ export const TaskDetailSchema = TaskSummarySchema.extend({
   completedAt: z.iso.datetime().nullable().optional(),
   /** The newest brief Score linked this task to; Flow opens that run. Absent when none (or unknown). */
   briefId: z.string().min(1).nullable().optional(),
+  /**
+   * Legacy numeric run links that Kanban attempts could not map back to an attempt (5.17a-1, only with attempts
+   * enabled): `legacyId` is the old id, `reason` says why it stayed unresolved. Absent when attempts are off.
+   */
+  unresolvedRunLinks: z
+    .array(z.object({ legacyId: z.string().min(1), reason: z.string() }))
+    .optional(),
 })
 export type TaskDetail = z.infer<typeof TaskDetailSchema>
 
@@ -240,6 +247,17 @@ export const LaneBlockSchema = z.object({
   kind: z.enum(['task', 'brief', 'chat']).default('task'),
   /** Chat bands only: how many replies the band covers. */
   count: z.int().min(1).optional(),
+  /** Kanban attempt blocks only (5.17a-1): the attempt behind the block (`runId` is null for them). */
+  attemptId: z.string().regex(/^kr_/).optional(),
+  /**
+   * Kanban attempt blocks only: Score stopped observing the attempt here; the block ends at this time with a
+   * "no longer observed" tail and nothing after it is counted.
+   */
+  observationEndedAt: z.iso.datetime().nullable().optional(),
+  /** Kanban attempt blocks only: `partial` = claim provenance could not be proven. */
+  provenance: z.enum(['proven', 'partial']).optional(),
+  /** Kanban attempt blocks only: sort key `[startedAt, upstream attempt id]`. Clients sort by it, never by `id`. */
+  order: z.tuple([z.iso.datetime(), z.int().nonnegative()]).optional(),
 })
 export type LaneBlock = z.infer<typeof LaneBlockSchema>
 
@@ -341,8 +359,9 @@ export type RunSummary = z.infer<typeof RunSummarySchema>
 
 export const HandoffSchema = z.object({
   id: z.string().min(1),
-  from: z.object({ agentId: AgentIdSchema, blockId: z.string().min(1) }),
-  to: z.object({ agentId: AgentIdSchema, blockId: z.string().min(1) }),
+  /** `agentId: null` = the Unattributed lane (a Kanban attempt whose claiming profile is unknown). */
+  from: z.object({ agentId: AgentIdSchema.nullable(), blockId: z.string().min(1) }),
+  to: z.object({ agentId: AgentIdSchema.nullable(), blockId: z.string().min(1) }),
   kind: z.enum(['handoff', 'review', 'sent_back']),
   at: z.iso.datetime(),
 })
@@ -412,3 +431,69 @@ export const WatchFrameSchema = z
     path: ['surface'],
   })
 export type WatchFrame = z.infer<typeof WatchFrameSchema>
+
+// Kanban attempts (PLAN 5.17a-1, behind SCORE_KANBAN_ATTEMPTS). A worker attempt is Score's own record of one
+// claim-to-close stretch of a Kanban task. It is not a `RunSummary`: tools, session and model are not observed.
+
+/** A task qualified by the lineage of the board it came from. Only `current: true` refs may navigate or act. */
+export const TaskRefSchema = z.object({
+  taskId: z.string().min(1),
+  historyId: z.string().min(1),
+  current: z.boolean(),
+})
+export type TaskRef = z.infer<typeof TaskRefSchema>
+
+export const AttemptStatusSchema = z.enum([
+  'running',
+  'completed',
+  'failed',
+  'blocked',
+  'review_handoff',
+  'changes_requested',
+  'ended_unknown',
+])
+export type AttemptStatus = z.infer<typeof AttemptStatusSchema>
+
+export const AttemptSummarySchema = z.object({
+  /** Opaque (`kr_<uuid>`): never parsed, never sorted by. */
+  id: z.string().regex(/^kr_/),
+  kind: z.literal('kanban'),
+  /** The frozen claim profile; null = unknown (never the task's current assignee). */
+  agentId: AgentIdSchema.nullable(),
+  role: z.enum(['implementer', 'reviewer']).nullable(),
+  status: AttemptStatusSchema,
+  closureReason: z.string().nullable(),
+  startedAt: z.iso.datetime(),
+  endedAt: z.iso.datetime().nullable(),
+  /** Set when observation stopped before the attempt ended; never an end time. */
+  observationEndedAt: z.iso.datetime().nullable(),
+  /** `partial` = the claim could not be proven (provenance unknown). */
+  evidence: z.enum(['proven', 'partial']),
+  /** Same as `task.taskId`. */
+  taskId: z.string().min(1),
+  task: TaskRefSchema,
+  /** `[startedAt, upstream attempt id]`: the only valid sort key. */
+  order: z.tuple([z.iso.datetime(), z.int().nonnegative()]),
+  /** Observations of this attempt that were refused as contradictions (terminal -> open and similar). */
+  refusedUpdates: z.int().nonnegative(),
+  /** Always null: null = not observed (never `[]`). */
+  tools: z.null(),
+  session: z.null(),
+  model: z.null(),
+})
+export type AttemptSummary = z.infer<typeof AttemptSummarySchema>
+
+/** `GET /api/attempts/:id`: the summary plus what the task looked like when Score last observed the attempt. */
+export const AttemptDetailSchema = AttemptSummarySchema.extend({
+  taskSnapshot: z
+    .object({ title: z.string().max(300), status: z.string(), assignee: z.string().nullable() })
+    .nullable(),
+})
+export type AttemptDetail = z.infer<typeof AttemptDetailSchema>
+
+/** What a time-ordered list of work holds: gateway/Score runs and Kanban attempts. */
+export const WorkItemSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('run'), run: RunSummarySchema }),
+  z.object({ kind: z.literal('attempt'), attempt: AttemptSummarySchema }),
+])
+export type WorkItem = z.infer<typeof WorkItemSchema>

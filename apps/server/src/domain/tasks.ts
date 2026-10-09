@@ -8,6 +8,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import { ApprovalRowSchema, approvalView } from './approval-store.ts'
 import type { DeriveEvents, DomainEventDraft } from '../hub/ingest.ts'
+import { stampHistoryId } from './ownership.ts'
 
 const RowSchema = z.object({
   detail: z.string(),
@@ -32,10 +33,11 @@ export function projectTask(
   }
   sqlite
     .prepare(
-      `INSERT INTO task_projections (id, detail, revision, incarnation) VALUES (?, ?, ?, ?)
-    ON CONFLICT (id) DO UPDATE SET detail = excluded.detail, revision = excluded.revision, incarnation = excluded.incarnation`,
+      `INSERT INTO task_projections (id, detail, revision, incarnation, history_id) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT (id) DO UPDATE SET detail = excluded.detail, revision = excluded.revision, incarnation = excluded.incarnation,
+      history_id = COALESCE(excluded.history_id, task_projections.history_id)`,
     )
-    .run(task.id, JSON.stringify(task), revision, incarnation)
+    .run(task.id, JSON.stringify(task), revision, incarnation, stampHistoryId(sqlite))
   return true
 }
 

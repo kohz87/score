@@ -102,7 +102,8 @@ export function openHistory(
 }
 
 /** Observation stops for every open attempt that was under observation: a boundary, never an end time. */
-function endObservation(sqlite: DatabaseSync, historyId: string, now: string): void {
+function endObservation(sqlite: DatabaseSync, historyId: string, now: string): string[] {
+  const ids = openObservedIds(sqlite, historyId)
   sqlite
     .prepare(
       `UPDATE kanban_attempts
@@ -110,31 +111,63 @@ function endObservation(sqlite: DatabaseSync, historyId: string, now: string): v
         WHERE history_id = ? AND ended_at IS NULL AND observing = 1`,
     )
     .run(now, historyId)
+  return ids
 }
 
+function openObservedIds(sqlite: DatabaseSync, historyId: string): string[] {
+  return z
+    .array(z.object({ id: z.string() }))
+    .parse(
+      sqlite
+        .prepare(
+          'SELECT id FROM kanban_attempts WHERE history_id = ? AND ended_at IS NULL AND observing = 1',
+        )
+        .all(historyId),
+    )
+    .map((row) => row.id)
+}
+
+/** Pauses the live history; returns the attempts whose observation just ended (null = nothing to pause). */
 export function pauseHistory(
   sqlite: DatabaseSync,
   historyId: string,
   reason: string,
   now: string,
-): boolean {
+): string[] | null {
   const history = readHistory(sqlite, historyId)
-  if (!history || history.state === 'closed') return false
-  endObservation(sqlite, historyId, now)
+  if (!history || history.state === 'closed') return null
+  const ended = endObservation(sqlite, historyId, now)
   sqlite
     .prepare("UPDATE kanban_histories SET state = 'paused', reason = ? WHERE id = ?")
     .run(reason.slice(0, 300), historyId)
-  return true
+  return ended
 }
 
-function closeHistory(sqlite: DatabaseSync, historyId: string, reason: string, now: string): void {
-  endObservation(sqlite, historyId, now)
+function closeHistory(
+  sqlite: DatabaseSync,
+  historyId: string,
+  reason: string,
+  now: string,
+): string[] {
+  const ended = endObservation(sqlite, historyId, now)
   sqlite
     .prepare("UPDATE kanban_histories SET state = 'closed', closed_at = ?, reason = ? WHERE id = ?")
     .run(now, reason.slice(0, 300), historyId)
+  return ended
 }
 
-function resumeHistory(sqlite: DatabaseSync, historyId: string, now: string): void {
+function resumeHistory(sqlite: DatabaseSync, historyId: string, now: string): string[] {
+  const resumed = z
+    .array(z.object({ id: z.string() }))
+    .parse(
+      sqlite
+        .prepare(
+          `SELECT id FROM kanban_attempts
+            WHERE history_id = ? AND ended_at IS NULL AND observing = 0 AND deleted_upstream_at IS NULL`,
+        )
+        .all(historyId),
+    )
+    .map((row) => row.id)
   sqlite
     .prepare("UPDATE kanban_histories SET state = 'active', reason = NULL WHERE id = ?")
     .run(historyId)
@@ -145,6 +178,7 @@ function resumeHistory(sqlite: DatabaseSync, historyId: string, now: string): vo
         WHERE history_id = ? AND ended_at IS NULL AND observing = 0 AND deleted_upstream_at IS NULL`,
     )
     .run(now, historyId)
+  return resumed
 }
 
 function knownAttempts(
@@ -224,6 +258,7 @@ function observeAttempt(
   historyId: string,
   row: HermesAttempt,
   now: string,
+  touched: Set<string>,
 ): void {
   const existingRaw = sqlite
     .prepare('SELECT * FROM kanban_attempts WHERE history_id = ? AND attempt_id = ?')
@@ -269,6 +304,8 @@ function observeAttempt(
       error: boundedText(row.error, ERROR_BYTES),
     }
     const open = row.ended_at === null
+    const newId = `kr_${randomUUID()}`
+    touched.add(newId)
     sqlite
       .prepare(
         `INSERT INTO kanban_attempts
@@ -279,7 +316,7 @@ function observeAttempt(
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
       )
       .run(
-        `kr_${randomUUID()}`,
+        newId,
         capture.sourceId,
         historyId,
         row.id,
@@ -399,9 +436,11 @@ function observeAttempt(
           'UPDATE kanban_attempts SET observing = 1, observation_resumed_at = ? WHERE id = ?',
         )
         .run(now, existing.id)
+      touched.add(existing.id)
     }
     return
   }
+  touched.add(existing.id)
   const changed = hash !== existing.content_hash
   sqlite
     .prepare(
@@ -446,6 +485,7 @@ function markDeleted(
   historyId: string,
   attemptId: number,
   now: string,
+  touched: Set<string>,
 ): void {
   const raw = sqlite
     .prepare('SELECT * FROM kanban_attempts WHERE history_id = ? AND attempt_id = ?')
@@ -453,6 +493,7 @@ function markDeleted(
   if (raw === undefined) return
   const row = AttemptRowSchema.parse(raw)
   if (row.deleted_upstream_at !== null) return
+  touched.add(row.id)
   // An open attempt that vanished (task deleted or archived upstream) has no end time: only a boundary.
   const boundary = row.ended_at === null && row.observing === 1
   sqlite
@@ -491,6 +532,8 @@ function knownIdsInRange(
 }
 
 export interface ApplyResult {
+  /** Opaque ids of every attempt this page created or changed (the caller turns them into attempt.updated). */
+  touched: string[]
   outcome: PageOutcome
   /** Set when a contradiction opened a new history. */
   newHistoryId?: string
@@ -511,12 +554,12 @@ export function applyCapture(
   const already = sqlite
     .prepare('SELECT 1 FROM kanban_pages WHERE capture_id = ?')
     .get(capture.captureId)
-  if (already) return { outcome: 'applied' }
+  if (already) return { outcome: 'applied', touched: [] }
   const history = readHistory(sqlite, capture.historyId)
   if (!history || history.state === 'closed') {
     // The history was replaced while this page waited: its rows describe a lineage Score no longer follows.
     if (history) recordPage(sqlite, capture, history.id, 'stale')
-    return { outcome: 'stale' }
+    return { outcome: 'stale', touched: [] }
   }
   const known = knownAttempts(sqlite, history.id, [
     ...capture.attempts.map((attempt) => attempt.id),
@@ -547,8 +590,14 @@ export function applyCapture(
     knownCount,
     sampleIds: capture.sampleIds,
   })
+  const touched = new Set<string>()
   if (verdict.verdict === 'contradiction') {
-    closeHistory(sqlite, history.id, verdict.reason, now)
+    for (const id of closeHistory(sqlite, history.id, verdict.reason, now)) touched.add(id)
+    // Projections of tasks stop belonging to a lineage that was replaced; the live task poll restamps the ones the new
+    // board still has. Every other association keeps the old stamp and is inert from here on.
+    sqlite
+      .prepare('UPDATE task_projections SET history_id = NULL WHERE history_id = ?')
+      .run(history.id)
     const newHistoryId = capture.marks
       ? openHistory(sqlite, {
           sourceId: history.source_id,
@@ -558,26 +607,32 @@ export function applyCapture(
         })
       : undefined
     recordPage(sqlite, capture, history.id, 'contradiction')
-    return { outcome: 'contradiction', verdict, ...(newHistoryId ? { newHistoryId } : {}) }
+    return {
+      outcome: 'contradiction',
+      touched: [...touched],
+      verdict,
+      ...(newHistoryId ? { newHistoryId } : {}),
+    }
   }
   if (verdict.verdict === 'insufficient') {
-    pauseHistory(sqlite, history.id, verdict.reason, now)
+    for (const id of pauseHistory(sqlite, history.id, verdict.reason, now) ?? []) touched.add(id)
     recordPage(sqlite, capture, history.id, 'paused')
-    return { outcome: 'paused', verdict }
+    return { outcome: 'paused', touched: [...touched], verdict }
   }
-  if (history.state === 'paused') resumeHistory(sqlite, history.id, now)
+  if (history.state === 'paused')
+    for (const id of resumeHistory(sqlite, history.id, now)) touched.add(id)
 
-  for (const row of capture.attempts) observeAttempt(sqlite, capture, history.id, row, now)
+  for (const row of capture.attempts) observeAttempt(sqlite, capture, history.id, row, now, touched)
 
   const returned = new Set(capture.attempts.map((attempt) => attempt.id))
   // A malformed row hides its id: skip disappearance decisions rather than guess.
   if (capture.malformed === 0) {
     if (capture.kind === 'sweep') {
       for (const id of capture.requestedIds)
-        if (!returned.has(id)) markDeleted(sqlite, history.id, id, now)
+        if (!returned.has(id)) markDeleted(sqlite, history.id, id, now, touched)
     } else if (capture.range) {
       for (const id of knownIdsInRange(sqlite, history.id, capture.range.from, capture.range.to))
-        if (!returned.has(id)) markDeleted(sqlite, history.id, id, now)
+        if (!returned.has(id)) markDeleted(sqlite, history.id, id, now, touched)
     }
   }
 
@@ -618,5 +673,5 @@ export function applyCapture(
     )
   faults.afterRows?.()
   recordPage(sqlite, capture, history.id, 'applied')
-  return { outcome: 'applied', verdict }
+  return { outcome: 'applied', touched: [...touched], verdict }
 }

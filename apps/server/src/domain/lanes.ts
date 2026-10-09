@@ -11,6 +11,23 @@ export interface LaneRunInput {
   // What the run is: a plain chat reply merges into a band; default task (an exact block).
   kind?: LaneBlock['kind']
 }
+/** A Kanban attempt (5.17a-1): one finite block; an unknown claiming profile puts it in the Unattributed lane. */
+export interface LaneAttemptInput {
+  id: string
+  agentId: string | null
+  role: 'implementer' | 'reviewer' | null
+  startedAt: string
+  endedAt: string | null
+  /** Observation stopped here without the attempt ending: the block ends here and nothing after counts. */
+  observationEndedAt: string | null
+  evidence: 'proven' | 'partial'
+  /** Upstream attempt id, the tie-breaker of `order`. */
+  attemptNumber: number
+  /** Null for an attempt from an earlier copy of the board: its task must not be linked. */
+  taskId: string | null
+  /** The task of the attempt (whatever the lineage), for the block label. */
+  taskTitle: string | null
+}
 export interface LaneTaskInput {
   id: string
   title: string
@@ -32,6 +49,8 @@ export interface LaneInput {
   agentIds: readonly string[]
   runs: readonly LaneRunInput[]
   tasks: readonly LaneTaskInput[]
+  /** Present only when Kanban attempts are enabled; absent leaves the output exactly as before. */
+  attempts?: readonly LaneAttemptInput[]
   hops: readonly LaneHopInput[]
   // Runs that currently wait for a pending approval, on top of their own status.
   waitingRunIds: readonly string[]
@@ -41,6 +60,8 @@ export interface LaneInput {
 }
 export interface LaneOutput {
   lanes: { agentId: string; blocks: LaneBlock[] }[]
+  /** Blocks of attempts whose agent is unknown; present only when `attempts` was given. */
+  unattributed?: LaneBlock[]
   handoffs: Handoff[]
 }
 
@@ -52,10 +73,11 @@ interface Draft {
   end: number | null
   taskId: string | null
   runId: string | null
-  agentId: string
+  agentId: string | null
   runIds: string[]
   kind: LaneBlock['kind']
   count?: number
+  attempt?: Pick<LaneBlock, 'attemptId' | 'provenance' | 'observationEndedAt' | 'order'>
 }
 
 // Chat replies of one agent closer together than this are one band.
@@ -63,6 +85,40 @@ export const CHAT_MERGE_GAP_MS = 5 * 60 * 1000
 
 const FINISHED = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
 const iso = (ms: number) => new Date(ms).toISOString()
+
+function attemptDraft(attempt: LaneAttemptInput): Draft {
+  const start = Date.parse(attempt.startedAt)
+  // A finished attempt ends at its end; one that stopped being observed ends at the boundary (never later).
+  const end =
+    attempt.endedAt !== null
+      ? Date.parse(attempt.endedAt)
+      : attempt.observationEndedAt !== null
+        ? Date.parse(attempt.observationEndedAt)
+        : null
+  return {
+    id: `attempt:${attempt.id}`,
+    label:
+      attempt.taskTitle === null
+        ? 'Working'
+        : attempt.role === 'reviewer'
+          ? `Review: ${attempt.taskTitle}`
+          : attempt.taskTitle,
+    state: end === null ? 'working' : 'done',
+    start,
+    end: end === null ? null : Math.max(start, end),
+    taskId: attempt.taskId,
+    runId: null,
+    agentId: attempt.agentId,
+    runIds: [],
+    kind: 'task',
+    attempt: {
+      attemptId: attempt.id,
+      provenance: attempt.evidence,
+      observationEndedAt: attempt.observationEndedAt,
+      order: [attempt.startedAt, attempt.attemptNumber],
+    },
+  }
+}
 
 function runDrafts(input: LaneInput, tasks: Map<string, LaneTaskInput>): Draft[] {
   const waiting = new Set(input.waitingRunIds)
@@ -106,7 +162,19 @@ function runDrafts(input: LaneInput, tasks: Map<string, LaneTaskInput>): Draft[]
     }
     drafts.push(draft)
   }
-  return mergeChat(drafts)
+  const merged = mergeChat(drafts)
+  if (!input.attempts?.length) return merged
+  // Attempts interleave with runs by start time; same-second ties keep runs first, then upstream attempt order.
+  return [
+    ...merged.map((draft, index) => ({ draft, rank: 0, tie: index })),
+    ...input.attempts.map((attempt) => ({
+      draft: attemptDraft(attempt),
+      rank: 1,
+      tie: attempt.attemptNumber,
+    })),
+  ]
+    .sort((a, b) => a.draft.start - b.draft.start || a.rank - b.rank || a.tie - b.tie)
+    .map(({ draft }) => draft)
 }
 
 /**
@@ -121,7 +189,9 @@ function mergeChat(drafts: Draft[]): Draft[] {
       result.push(draft)
       continue
     }
-    const band = open.get(draft.agentId)
+    // Only runs merge into bands, and a run always has an agent.
+    const agentKey = draft.agentId ?? ''
+    const band = open.get(agentKey)
     const bandEnd = band === undefined ? 0 : band.end === null ? Infinity : band.end
     if (band !== undefined && draft.start - bandEnd < CHAT_MERGE_GAP_MS) {
       band.runIds.push(...draft.runIds)
@@ -131,7 +201,7 @@ function mergeChat(drafts: Draft[]): Draft[] {
       continue
     }
     const fresh: Draft = { ...draft, id: `chat:${draft.runIds[0]}`, count: 1 }
-    open.set(draft.agentId, fresh)
+    open.set(agentKey, fresh)
     result.push(fresh)
   }
   for (const band of result)
@@ -216,11 +286,14 @@ function buildHandoffs(
         id: `handoff:${key}`,
         from: { agentId: from.agentId, blockId: from.id },
         to: { agentId: to.agentId, blockId: to.id },
-        kind: taskHandoffKind(
-          from.agentId,
-          to.agentId,
-          tasks.get(to.taskId ?? '') ?? tasks.get(from.taskId ?? ''),
-        ),
+        kind:
+          from.agentId === null || to.agentId === null
+            ? 'handoff'
+            : taskHandoffKind(
+                from.agentId,
+                to.agentId,
+                tasks.get(to.taskId ?? '') ?? tasks.get(from.taskId ?? ''),
+              ),
         at: iso(at),
       },
     })
@@ -252,8 +325,15 @@ export function buildLanes(input: LaneInput): LaneOutput {
   const to = Date.parse(input.to)
   const agents = new Set(input.agentIds)
   const tasks = new Map(input.tasks.map((task) => [task.id, task]))
-  const drafts = runDrafts(input, tasks).filter((draft) => agents.has(draft.agentId))
-  const all = [...drafts, ...plannedDrafts(input, drafts).filter((d) => agents.has(d.agentId))]
+  // An attempt of an unknown agent belongs to the Unattributed lane; a run or attempt of an agent Score does not
+  // list is not drawn (as before).
+  const drafts = runDrafts(input, tasks).filter((draft) =>
+    draft.agentId === null ? draft.attempt !== undefined : agents.has(draft.agentId),
+  )
+  const all = [
+    ...drafts,
+    ...plannedDrafts(input, drafts).filter((d) => d.agentId !== null && agents.has(d.agentId)),
+  ]
   const visible = new Map<string, LaneBlock>()
   for (const draft of all) {
     if (draft.start > to || (draft.end !== null && draft.end < from)) continue
@@ -267,20 +347,29 @@ export function buildLanes(input: LaneInput): LaneOutput {
       runId: draft.kind === 'chat' && (draft.count ?? 1) > 1 ? null : draft.runId,
       kind: draft.kind,
       ...(draft.count === undefined ? {} : { count: draft.count }),
+      ...(draft.attempt ?? {}),
     })
   }
+  // Attempt blocks tie-break by `order` (start, upstream attempt id); everything else by id as before.
   const byStart = (a: LaneBlock, b: LaneBlock) =>
-    Date.parse(a.start) - Date.parse(b.start) || a.id.localeCompare(b.id)
+    Date.parse(a.start) - Date.parse(b.start) ||
+    (a.order && b.order ? a.order[1] - b.order[1] : a.id.localeCompare(b.id))
+  const blocksOf = (belongs: (draft: Draft) => boolean) =>
+    all
+      .filter((draft) => belongs(draft) && visible.has(draft.id))
+      .map((draft) => visible.get(draft.id)!)
+      .sort(byStart)
   const lanes = input.agentIds.map((agentId) => ({
     agentId,
-    blocks: all
-      .filter((draft) => draft.agentId === agentId && visible.has(draft.id))
-      .map((draft) => visible.get(draft.id)!)
-      .sort(byStart),
+    blocks: blocksOf((draft) => draft.agentId === agentId),
   }))
   const handoffs = buildHandoffs(input, drafts, tasks)
     .filter((entry) => visible.has(entry.from) && visible.has(entry.to))
     .map((entry) => entry.handoff)
     .sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.id.localeCompare(b.id))
-  return { lanes, handoffs }
+  return {
+    lanes,
+    handoffs,
+    ...(input.attempts ? { unattributed: blocksOf((draft) => draft.agentId === null) } : {}),
+  }
 }
