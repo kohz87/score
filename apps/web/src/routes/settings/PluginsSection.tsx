@@ -87,6 +87,12 @@ function PluginList({ agent }: { agent: AgentSummary }) {
           </li>
         ))}
       </ul>
+      {plugins.data && plugins.data.length > 0 && (
+        <p className="settings-muted" id="plugins-timing">
+          Saved for {agent.name}. A running gateway keeps the plugins it already loaded, so a change
+          takes effect on its next session or after a gateway restart.
+        </p>
+      )}
     </>
   )
 }

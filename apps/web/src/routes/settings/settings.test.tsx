@@ -278,6 +278,7 @@ test('plugins list for the picked agent; toggling patches the CLI-backed setting
   const memory = await within(region).findByRole('switch', { name: 'memory-notes for Builder' })
   expect(memory.getAttribute('aria-checked')).toBe('true')
   expect(calls.some((call) => call.path === '/api/settings/plugins?agent=builder')).toBe(true)
+  expect(within(region).getByText(/takes effect on its next session/)).toBeTruthy()
   fireEvent.click(memory)
   await waitFor(() =>
     expect(
