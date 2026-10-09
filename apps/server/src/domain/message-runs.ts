@@ -145,6 +145,14 @@ export function retryReply(
   )
 }
 
+/** A turn whose reservation was cancelled (state no longer pending) before Hermes admitted its run. */
+export function isCancelledTurn(sqlite: DatabaseSync, turnId: string): boolean {
+  const row = sqlite
+    .prepare('SELECT run_id, state FROM message_runs WHERE turn_id = ?')
+    .get(turnId) as { run_id: string | null; state: string } | undefined
+  return row !== undefined && row.run_id === null && row.state !== 'pending'
+}
+
 export function attachRunMessage(
   sqlite: DatabaseSync,
   turnId: string,
@@ -155,6 +163,8 @@ export function attachRunMessage(
   if (!value) return []
   const mapping = MessageRunSchema.parse(value)
   if (mapping.run_id !== null) return []
+  // Cancelled while Hermes was admitting it: no reply may stream into the room (the caller stops the run).
+  if (mapping.state !== 'pending') return []
   sqlite
     .prepare("UPDATE message_runs SET run_id = ?, state = 'active' WHERE turn_id = ?")
     .run(runId, turnId)

@@ -13,6 +13,7 @@ import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
 import { messageFromRow, storeMessage } from '../../src/domain/rooms.ts'
 import { RoutingDispatcher } from '../../src/domain/routing-dispatch.ts'
+import { reserveMessageRun } from '../../src/domain/message-runs.ts'
 
 let dir: string
 let db: ScoreDb
@@ -420,5 +421,54 @@ test('the agent context reports the latest usage with the model window, null whe
     tokens: { input: 1200, output: 240 },
     costUsd: 0.0042,
     contextLength: 128000,
+  })
+})
+
+test('a reply cancelled while Hermes admits it does not stream into the room and the run is stopped', async () => {
+  await ingest.submit({
+    source: 'test',
+    identity: 'parent-1',
+    apply({ sqlite, now }) {
+      const message: Message = {
+        id: 'parent-1',
+        roomId,
+        author: { kind: 'you' },
+        to: [],
+        parts: [{ kind: 'text', text: 'hello' }],
+        refs: [],
+        streaming: false,
+        createdAt: now,
+      }
+      return storeMessage(sqlite, message, now)
+    },
+  })
+  const reserved = db.tx((sqlite) =>
+    reserveMessageRun(
+      sqlite,
+      {
+        parentMessageId: 'parent-1',
+        roomId,
+        agentId: 'builder',
+        chainId: 'parent-1',
+        hop: 0,
+        input: 'hello',
+        agents: ['builder'],
+      },
+      new Date(scheduler.now()).toISOString(),
+    ),
+  )
+  const turnId = reserved.replace(/^reply:/, '')
+  // The delete/edit path marks the pending run failed before Hermes answers.
+  db.sqlite.prepare("UPDATE message_runs SET state = 'failed' WHERE turn_id = ?").run(turnId)
+  const { runId } = await port.startRun({ agentId: 'builder', input: 'hello', turnId })
+  await ingest.flushListeners()
+  await ingest.drain()
+  const row = db.sqlite
+    .prepare('SELECT run_id, state FROM message_runs WHERE turn_id = ?')
+    .get(turnId)
+  expect(row).toMatchObject({ run_id: null, state: 'failed' })
+  expect(db.sqlite.prepare('SELECT 1 FROM messages WHERE id = ?').get(reserved)).toBeUndefined()
+  expect(db.sqlite.prepare('SELECT status FROM runs WHERE id = ?').get(runId)).toMatchObject({
+    status: 'cancelled',
   })
 })
