@@ -36,24 +36,33 @@ test('approves a pending approval from the task drawer', async ({ page }) => {
       },
     })
   })
+  test.setTimeout(240_000)
+  // The demo scenario repeats; late in a long run the newest copy's approval may already be handled. Ask which copy of
+  // the docs task has one pending (waiting for the next loop when none has) and open exactly that card.
+  let taskId: string | undefined
+  await expect
+    .poll(
+      async () => {
+        const response = await page.request.get('/api/approvals?status=pending')
+        const { items } = (await response.json()) as {
+          items: { id: string; refs: { kind: string; taskId?: string }[] }[]
+        }
+        taskId = items
+          .find((item) => item.id.startsWith('approval-docs'))
+          ?.refs.find((ref) => ref.kind === 'task')?.taskId
+        return taskId
+      },
+      { timeout: 200_000, intervals: [1_000, 2_000, 5_000] },
+    )
+    .toBeTruthy()
   await page.goto('/tasks')
   const board = page.getByRole('region', { name: 'Tasks board' })
-  // The demo scenario repeats during a long run, so older copies of this task (approval already handled) can be on
-  // the board too: open the copies in turn and keep the one whose drawer still asks.
-  const cards = board.getByRole('link', { name: /T-102: Publish the pagination notes/ })
-  await expect(cards.first()).toBeVisible({ timeout: 20_000 })
+  const card = board.locator(`a[href="/tasks/${taskId}"]`)
+  await expect(card).toBeVisible({ timeout: 20_000 })
+  await card.focus()
+  await card.press('Enter')
   const drawer = page.getByRole('complementary', { name: 'Task details' })
-  const approve = drawer.getByRole('button', { name: 'Approve: install the docs generator' })
-  let card = cards.first()
-  for (let at = (await cards.count()) - 1; at >= 0; at--) {
-    card = cards.nth(at)
-    await card.focus()
-    await card.press('Enter')
-    await expect(
-      drawer.getByRole('heading', { name: 'Publish the pagination notes' }),
-    ).toBeVisible()
-    if (await approve.isVisible()) break
-  }
+  await expect(drawer.getByRole('heading', { name: 'Publish the pagination notes' })).toBeVisible()
   await expect(drawer.getByText('Needs you', { exact: true })).toBeVisible()
   await expect(drawer.getByRole('link', { name: '#activity-feed' })).toHaveAttribute(
     'href',
