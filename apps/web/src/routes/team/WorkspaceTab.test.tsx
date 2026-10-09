@@ -13,6 +13,7 @@ let dirs: Map<string, { name: string; kind: 'file' | 'dir' }[]>
 let etag: string
 let saveStatus: 200 | 412
 let removeNotEmpty: boolean
+let gitStatus: { branch: string; changed: number; ahead: number; behind: number } | null
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
@@ -29,6 +30,7 @@ function handler(input: string, init: RequestInit = {}): Response {
     info = { root: body.path, available: true, reason: null }
     return json(200, info)
   }
+  if (tail === '/git') return json(200, gitStatus)
   if (tail === '/tree')
     return json(200, {
       entries: (dirs.get(path) ?? []).map((e) => ({
@@ -85,6 +87,7 @@ beforeEach(() => {
   etag = 'etag-1'
   saveStatus = 200
   removeNotEmpty = false
+  gitStatus = null
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string, init?: RequestInit) => handler(input, init)),
@@ -234,6 +237,19 @@ test(
     expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull()
   },
 )
+
+test('the header shows the git branch and changed count only inside a repository', async () => {
+  mount()
+  await screen.findByRole('tree', { name: 'Files' })
+  expect(screen.queryByLabelText(/Git branch/)).toBeNull()
+  cleanup()
+  gitStatus = { branch: 'trunk', changed: 3, ahead: 1, behind: 0 }
+  mount()
+  const badge = await screen.findByLabelText('Git branch trunk, 3 changed files')
+  expect(badge.textContent).toContain('trunk')
+  expect(badge.textContent).toContain('3 changed')
+  expect(badge.textContent).toContain('↑1')
+})
 
 test('images preview by URL and binaries offer a download', async () => {
   mount()

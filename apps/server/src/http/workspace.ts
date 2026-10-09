@@ -1,6 +1,7 @@
 import {
   WorkspaceBinarySchema,
   WorkspaceCreateRequestSchema,
+  WorkspaceGitSchema,
   WorkspaceInfoSchema,
   WorkspaceMoveRequestSchema,
   WorkspaceRootRequestSchema,
@@ -19,6 +20,7 @@ import {
   type RootPolicy,
   WorkspaceError,
 } from '../workspace/policy.ts'
+import { gitStatus } from '../workspace/git.ts'
 import { MAX_TEXT_BYTES, MAX_UPLOAD_BYTES, Workspace } from '../workspace/workspace.ts'
 
 const AgentParams = z.object({ agentId: z.string().min(1).max(256) })
@@ -122,6 +124,19 @@ export function registerWorkspaceRoutes(
           'workspace root',
         )
         return WorkspaceInfoSchema.parse({ root: checked.real, available: true, reason: null })
+      }),
+    )
+
+    // Branch and change count for the header badge: read-only `git status`; null when no repository.
+    scope.get(
+      `${base}/git`,
+      wrap(async (request, reply) => {
+        const { agentId } = AgentParams.parse(request.params)
+        const { root, available } = await info(agentId)
+        void reply.header('Cache-Control', 'no-store')
+        const status = available && root !== null ? await gitStatus(root) : null
+        if (status === null) return reply.type('application/json; charset=utf-8').send('null')
+        return WorkspaceGitSchema.parse(status)
       }),
     )
 

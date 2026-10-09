@@ -37,11 +37,19 @@ export const WorkspaceMoveRequestSchema = z.object({
   from: z.string().min(1),
   to: z.string().min(1),
 })
+/** `GET …/workspace/git`: the repository around the root, or `null` when there is none. */
+export const WorkspaceGitSchema = z.object({
+  branch: z.string(),
+  changed: z.number().int().nonnegative(),
+  ahead: z.number().int().nonnegative(),
+  behind: z.number().int().nonnegative(),
+})
 export const WorkspaceRootRequestSchema = z.object({ path: z.string().min(1).max(4096) })
 export const WorkspaceUploadResponseSchema = z.object({ path: z.string(), size: z.number().int() })
 /** 412 `precondition_failed`: `details.etag` is the file's current etag (null when it was removed). */
 export const WorkspaceConflictSchema = z.object({ etag: z.string().nullable() })
 
+export type WorkspaceGit = z.infer<typeof WorkspaceGitSchema>
 export type WorkspaceInfo = z.infer<typeof WorkspaceInfoSchema>
 export type WorkspaceEntry = z.infer<typeof WorkspaceEntrySchema>
 export type WorkspaceTree = z.infer<typeof WorkspaceTreeSchema>

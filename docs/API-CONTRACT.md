@@ -634,6 +634,10 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
   (never overwrites: `409 exists`) · `DELETE …/workspace/entries?path=[&recursive=1]` → `{}` (a non-empty folder without
   `recursive` → `409 not_empty`; a folder holding protected files or `.git` → `409 protected_inside`, never deleted from
   here; the UI asks for a typed confirmation first).
+- **H** `GET …/workspace/git` → `{ branch: string; changed: number; ahead: number; behind: number } | null` (`WorkspaceGit`).
+  The repository around the root (the root or a parent), from one read-only `git status --porcelain=v1 -b` (no index lock,
+  fsmonitor and hooks off, 5 s timeout); `changed` counts every non-clean path including untracked files; `null` when
+  there is no repository, git is missing or the call fails. Never runs a writing git command.
 - **H** `POST …/workspace/upload?path=` raw body, `Content-Type: application/octet-stream`, ≤ 25 MiB, `path` = the new file's
   path → `201 { path, size }` (`409 exists`).
 - Path rules (all endpoints): `..`, NUL, absolute paths → `400 bad_path`; any component matching the blocked list (`.env*`,

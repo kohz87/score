@@ -2,7 +2,12 @@ import { useRef, useState, type DragEvent, type FormEvent } from 'react'
 import { ApiError } from '../../data/api.ts'
 import { WorkspaceFile } from './WorkspaceFile.tsx'
 import { join, parentOf, TreeLevel, type Selection } from './WorkspaceTree.tsx'
-import { useWorkspace, useWorkspaceActions, workspaceFailure } from './workspace-queries.ts'
+import {
+  useGitStatus,
+  useWorkspace,
+  useWorkspaceActions,
+  workspaceFailure,
+} from './workspace-queries.ts'
 import './workspace.css'
 
 type Panel = 'new-file' | 'new-folder' | 'rename' | 'delete' | null
@@ -111,6 +116,7 @@ function Browser({
   folderForm: React.ReactNode
 }) {
   const actions = useWorkspaceActions(agentId)
+  const git = useGitStatus(agentId).data
   const [selected, setSelected] = useState<Selection | null>(null)
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const [screen, setScreen] = useState<'tree' | 'file'>('tree')
@@ -236,6 +242,20 @@ function Browser({
       </div>
       <p className="ws-root">
         <span className="team-muted">{agentName} works in</span> <code>{root}</code>
+        {git && (
+          <span
+            className="ws-git"
+            aria-label={`Git branch ${git.branch}, ${git.changed} changed ${git.changed === 1 ? 'file' : 'files'}`}
+          >
+            <span aria-hidden="true">⎇ </span>
+            {git.branch}
+            <span className="ws-git-count">
+              {git.changed === 0 ? 'clean' : `${git.changed} changed`}
+            </span>
+            {git.ahead > 0 && <span className="ws-git-count">↑{git.ahead}</span>}
+            {git.behind > 0 && <span className="ws-git-count">↓{git.behind}</span>}
+          </span>
+        )}
       </p>
       {settingFolder && folderForm}
       <div className={`ws-grid ws-screen-${screen}`}>

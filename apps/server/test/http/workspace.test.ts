@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -5,6 +6,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
+import { parseGitStatus } from '../../src/workspace/git.ts'
 
 const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'score-ws-http-')))
 afterAll(() => fs.rmSync(base, { recursive: true, force: true }))
@@ -256,5 +258,56 @@ describe('writes', () => {
     })
     expect(big.statusCode).toBe(413)
     expect(fs.existsSync(path.join(root, 'big.bin'))).toBe(false)
+  })
+})
+
+describe('git badge', () => {
+  const git = (...args: string[]) =>
+    execFileSync(
+      'git',
+      ['-C', root, '-c', 'user.email=t@example.com', '-c', 'user.name=T', ...args],
+      { stdio: 'pipe' },
+    )
+
+  test('is null outside a repository', async () => {
+    // The temp tree sits outside any repository, so there is nothing to find in the parents either.
+    const res = await call('GET', `${W}/git`)
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toBeNull()
+  })
+
+  test('reports the branch and the number of changed files, and never writes to the repository', async () => {
+    git('init', '-q', '-b', 'trunk')
+    git('add', 'README.md')
+    git('commit', '-q', '-m', 'first')
+    fs.writeFileSync(path.join(root, 'README.md'), '# changed\n')
+    fs.writeFileSync(path.join(root, 'new.txt'), 'x')
+    const before = fs.statSync(path.join(root, '.git', 'index')).mtimeMs
+    const res = await call('GET', `${W}/git`)
+    expect(res.json()).toEqual({ branch: 'trunk', changed: 3, ahead: 0, behind: 0 })
+    // README.md modified, new.txt and .env untracked.
+    expect(fs.statSync(path.join(root, '.git', 'index')).mtimeMs).toBe(before)
+  })
+
+  test('needs a paired browser', async () => {
+    const res = await call('GET', `${W}/git`, undefined, { 'x-score-client': 'web' })
+    expect(res.statusCode).toBe(401)
+  })
+})
+
+describe('parseGitStatus', () => {
+  test('reads branch, upstream counts, a fresh repository and a detached head', () => {
+    expect(parseGitStatus('## main...origin/main [ahead 2, behind 1]\n M a\n?? b\n')).toEqual({
+      branch: 'main',
+      changed: 2,
+      ahead: 2,
+      behind: 1,
+    })
+    expect(parseGitStatus('## No commits yet on dev\n')).toMatchObject({
+      branch: 'dev',
+      changed: 0,
+    })
+    expect(parseGitStatus('## HEAD (no branch)\n')).toMatchObject({ branch: 'detached HEAD' })
+    expect(parseGitStatus('')).toBeNull()
   })
 })
