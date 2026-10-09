@@ -284,3 +284,15 @@ test('the approval keys Rules and approvals owns are not searchable here', async
   expect(keys).not.toContain('approvals.deny')
   expect(await service().search('command_allowlist')).toEqual([])
 })
+
+test('a container whose secret-named members are hidden is not replaceable (no silent deletion)', async () => {
+  store.lsp = { servers: { pyright: { command: ['pyright'], env: { FOO: 'bar' } } } }
+  const edit = { key: 'lsp.servers', value: { pyright: { command: ['other'] } } }
+  const found = await service().search('lsp.servers')
+  expect(found.some((item) => item.key === 'lsp.servers')).toBe(true)
+  await expect(service().preview([edit])).rejects.toMatchObject({ status: 400 })
+  await expect(
+    service().apply({ changes: [edit], expectedDiffHash: 'x'.repeat(64) }),
+  ).rejects.toMatchObject({ status: 400 })
+  expect(setCalls()).toEqual([])
+})
