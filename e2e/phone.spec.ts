@@ -96,7 +96,7 @@ test('notifications ask for permission only on a click and then deliver through 
       ;(window as unknown as { shown: string[] }).shown.push(title)
       return show.call(this, title, options)
     }
-    Notification.requestPermission = (...args) => {
+    Notification.requestPermission = () => {
       ;(window as unknown as { asked: number }).asked++
       return original()
     }

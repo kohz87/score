@@ -390,6 +390,23 @@ const cases = [
     { url: 'http://10.1.1.199:8741/pair#abc', expiresAt: '2026-10-08T13:00:00.000Z' },
     { url: 'javascript:alert(1)', expiresAt: '2026-10-08T13:00:00.000Z' },
   ],
+  [
+    'PasskeySchema',
+    {
+      id: 'abc',
+      label: 'Phone',
+      createdAt: '2026-10-09T00:00:00.000Z',
+      lastUsedAt: null,
+      flagged: false,
+    },
+    { id: '', label: 'Phone', createdAt: 'x', lastUsedAt: null, flagged: false },
+  ],
+  [
+    'PasskeysSchema',
+    { available: true, rpId: 'a.example.com', items: [] },
+    { available: 'yes', rpId: null, items: [] },
+  ],
+  ['PasskeyCeremonySchema', { challenge: 'abc' }, 'not an object'],
   ['SecurityStatusSchema', { passwordSet: true, origins: [] }, { passwordSet: 'yes' }],
   ['DisplayCurrencySchema', { code: 'EUR', rate: 0.92 }, { code: 'euro', rate: 0.92 }],
   ['LogLevelSchema', 'warn', 'debug'],

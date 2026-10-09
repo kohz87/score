@@ -30,10 +30,11 @@ const browser = await chromium.launch()
 const page = await browser.newPage()
 for (const [name, size, options] of icons) {
   await page.setViewportSize({ width: size, height: size })
-  await page.setContent(
-    `<style>html,body{margin:0;background:transparent}</style>${svg(options)}`,
-  )
+  await page.setContent(`<style>html,body{margin:0;background:transparent}</style>${svg(options)}`)
   writeFileSync(join(out, name), await page.screenshot({ omitBackground: true }))
 }
-writeFileSync(join(out, 'favicon.svg'), svg({ rounded: true, scale: 1 }).replace(' width="100%" height="100%"', ''))
+writeFileSync(
+  join(out, 'favicon.svg'),
+  svg({ rounded: true, scale: 1 }).replace(' width="100%" height="100%"', ''),
+)
 await browser.close()

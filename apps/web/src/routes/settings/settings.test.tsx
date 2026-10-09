@@ -113,7 +113,7 @@ afterEach(() => {
 test('shows the section nav, providers with status and who uses them, and connections', async () => {
   mount()
   const nav = screen.getByRole('navigation', { name: 'Settings sections' })
-  expect(within(nav).getAllByRole('link')).toHaveLength(7)
+  expect(within(nav).getAllByRole('link')).toHaveLength(9)
   const models = await screen.findByRole('region', { name: 'Models and keys' })
   expect(await within(models).findByText('OpenRouter')).toBeDefined()
   expect(within(models).getByText('Connected')).toBeDefined()

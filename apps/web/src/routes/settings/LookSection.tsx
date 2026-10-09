@@ -12,7 +12,7 @@ const themeLabels: Record<ThemeChoice, string> = { light: 'Light', dark: 'Dark',
 function ThemeCard() {
   const [theme, setTheme] = useState<ThemeChoice>(readTheme)
   return (
-    <div className="plugins-card plugins-theme">
+    <div className="plugins-card plugins-theme plugins-sendkey">
       <span className="plugins-card-name" id="plugins-theme-label">
         Theme
       </span>
@@ -48,7 +48,7 @@ const sendKeyLabels: Record<SendKey, string> = { enter: 'Enter', 'ctrl-enter': '
 function SendKeyCard() {
   const [choice, setChoice] = useState<SendKey>(readSendKey)
   return (
-    <div className="plugins-card plugins-theme">
+    <div className="plugins-card plugins-theme plugins-sendkey">
       <span className="plugins-card-name" id="plugins-sendkey-label">
         Send messages with
       </span>
