@@ -1,5 +1,6 @@
 import type { AgentSummary, LaneBlock, NowSnapshot } from '@score/contract'
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { PopOutButton } from '../pop/PopOutButton.tsx'
 import { Link, useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { UnattributedGlyph } from '../../components/UnattributedGlyph.tsx'
@@ -204,6 +205,13 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
                     ) : (
                       // Nothing was observed of these attempts' runs, so there is no Watch page to link to.
                       <span>{name}</span>
+                    )}
+                    {agent && (
+                      <PopOutButton
+                        agentId={agent.id}
+                        agentName={agent.name}
+                        className="now-lane-popout"
+                      />
                     )}
                     {agent?.status === 'working' && (
                       <span

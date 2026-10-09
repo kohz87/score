@@ -12,6 +12,7 @@ import {
   attachRunMessage,
   isCancelledTurn,
   appendRunMessage,
+  noteRunProgress,
   completeRunMessage,
 } from '../../domain/message-runs.ts'
 import {
@@ -22,6 +23,7 @@ import {
   type AgentFile,
   type AgentFileName,
 } from '../agent-files.ts'
+import { fakeJourneyFacts } from './journey-history.ts'
 import { fakeReportHistory } from './report-history.ts'
 import { FakeWorkspaces } from './fake-workspace.ts'
 import { updateProjectedAgent } from '../../domain/agents.ts'
@@ -437,6 +439,14 @@ function demoReply(
   input: string,
   base: { text: string; tools: string[] },
 ): { text: string; tools: string[] } {
+  // The room summary run (PLAN 7.4a) starts with a fixed instruction.
+  if (input.startsWith('Summarise the earlier messages of this room')) {
+    const earlier = input.split('\n').filter((row) => /^(you|[a-z][\w-]*): /.test(row)).length
+    return {
+      text: `Summary of ${earlier} earlier messages: the team agreed on the plan, split the work and left the release date open.`,
+      tools: [],
+    }
+  }
   const message = input.split('\n\nRoom context:')[0] ?? ''
   if (/markdown demo/i.test(message))
     return {
@@ -847,6 +857,27 @@ export class FakePort implements HermesPort {
           Math.round(days * (0.35 + 0.1 * i) * 100) / 100,
         ]),
       ),
+    }
+  }
+
+  async journeyFacts(req: Parameters<HermesPort['journeyFacts']>[0]) {
+    if (this.seedReportHistory)
+      return fakeJourneyFacts(req.to, req.agentIds, fakeReportHistory(req.to, req.agentIds).tasks)
+    return {
+      tasks: [...this.tasks.values()].flatMap((task) =>
+        task.hermesStatus === 'done' && task.assignee
+          ? [
+              {
+                agentId: task.assignee,
+                at: Date.parse(task.updatedAt),
+                id: task.id,
+                title: task.title,
+              },
+            ]
+          : [],
+      ),
+      skills: [],
+      memory: [],
     }
   }
 
@@ -1653,6 +1684,9 @@ export class FakePort implements HermesPort {
       this.schedule(Math.max(0, startedAt + 250 / this.speed - this.scheduler.now()), async () => {
         await this.transitionRun(runId, 'running')
         if (this.runs.get(runId)?.status !== 'running') return
+        // Demo hook: a message that says "go quiet" leaves the run running and silent (a provider stuck retrying)
+        // until it is stopped, so the stalled-reply notice can be seen.
+        if (/go quiet/i.test(req.input.split('\n\nRoom context:')[0] ?? '')) return
         const chunks = response.text.match(/.{1,24}/gs) ?? []
         const stream = (index: number): void => {
           const chunk = chunks[index]
@@ -1666,7 +1700,10 @@ export class FakePort implements HermesPort {
                 await this.requireSink().submit({
                   source: 'fake',
                   identity: `${this.sessionId}:delta:${runId}:${index}`,
-                  apply: ({ sqlite, now }) => appendRunMessage(sqlite, runId, chunk, now),
+                  apply: ({ sqlite, now }) => [
+                    ...noteRunProgress(sqlite, runId, now, { announce: false }),
+                    ...appendRunMessage(sqlite, runId, chunk, now),
+                  ],
                 })
                 stream(index + 1)
               } else {

@@ -125,7 +125,13 @@ export function reduceMessages(
     return {
       ...data,
       items: data.items.map((item) =>
-        item.id === event.data.messageId ? { ...item, editedBy: event.data.editedBy } : item,
+        item.id === event.data.messageId
+          ? {
+              ...item,
+              ...(event.data.editedBy !== undefined ? { editedBy: event.data.editedBy } : {}),
+              ...(event.data.parts ? { parts: event.data.parts } : {}),
+            }
+          : item,
       ),
     }
   if (event.type === 'message.created') {
@@ -148,12 +154,20 @@ export function reduceMessages(
       ],
     }
   }
-  if (event.type !== 'message.delta' && event.type !== 'message.completed') return data
+  if (
+    event.type !== 'message.delta' &&
+    event.type !== 'message.completed' &&
+    event.type !== 'message.progressed'
+  )
+    return data
   const update = event
   return {
     ...data,
     items: data.items.map((message) => {
       if (message.id !== update.data.messageId) return message
+      // The browser's own clock for the stall notice: the server's clock may differ on a LAN.
+      if (update.type === 'message.progressed')
+        return { ...message, progressAt: new Date().toISOString() }
       if (update.type === 'message.completed')
         return {
           ...message,
@@ -166,7 +180,7 @@ export function reduceMessages(
       if (part?.kind === 'text')
         parts[index] = { kind: 'text', text: part.text + update.data.append }
       else parts.push({ kind: 'text', text: update.data.append })
-      return { ...message, parts }
+      return { ...message, parts, progressAt: new Date().toISOString() }
     }),
   }
 }
@@ -187,6 +201,7 @@ export function messagesQuery(roomId: string, before: string | null = null) {
       'message.completed',
       'message.deleted',
       'message.updated',
+      'message.progressed',
       'typing',
       'lane.upserted',
     ],

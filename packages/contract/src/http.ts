@@ -246,6 +246,34 @@ export const ReportsSchema = z.object({
 })
 export type Reports = z.infer<typeof ReportsSchema>
 
+// §9 Journey (7.4c): marks per agent over time. Read-only; no memory contents, skills by name only.
+export const JourneyKindSchema = z.enum([
+  'task_done',
+  'note_written',
+  'skill_changed',
+  'memory_changed',
+])
+export type JourneyKind = z.infer<typeof JourneyKindSchema>
+export const JourneyEventSchema = z.object({
+  at: z.iso.datetime(),
+  kind: JourneyKindSchema,
+  /** Task title, note title, skill name, or "Memory file changed". Never memory contents. */
+  label: z.string().max(200),
+  /** Task id, note path, or null (skills and memory have nothing to open). */
+  ref: z.string().max(512).nullable(),
+})
+export type JourneyEvent = z.infer<typeof JourneyEventSchema>
+export const JOURNEY_MAX_EVENTS = 2000
+export const JOURNEY_MAX_EVENTS_PER_AGENT = 500
+export const JourneySchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  /** True when a bound (500 per agent, 2,000 in all) dropped older events. */
+  truncated: z.boolean(),
+  agents: z.array(z.object({ id: AgentIdSchema, events: z.array(JourneyEventSchema) })),
+})
+export type Journey = z.infer<typeof JourneySchema>
+
 // §10 Display currency (5.29): the person's own manual rate, rate = units of `code` per 1 USD.
 export const DisplayCurrencySchema = z.object({
   code: z.string().regex(/^[A-Z]{3}$/),

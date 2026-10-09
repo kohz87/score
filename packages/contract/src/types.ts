@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { RoomImportSchema } from './conversations.ts'
+import { AutoSummarySchema, RoomImportSchema } from './conversations.ts'
 
 export const AgentIdSchema = z.string().min(1)
 export type AgentId = z.infer<typeof AgentIdSchema>
@@ -229,6 +229,8 @@ export const RoomSchema = z.object({
   tags: z.array(z.string()).optional(),
   /** Set on a room made from a Hermes session that Score did not start. */
   importedFrom: RoomImportSchema.nullable().optional(),
+  /** Opt-in summary of long history (PLAN 7.4a); the server always sends it, absent = off. */
+  autoSummary: AutoSummarySchema.optional(),
 })
 export type Room = z.infer<typeof RoomSchema>
 
@@ -309,6 +311,17 @@ export const MessagePartSchema = z.discriminatedUnion('kind', [
     verdict: z.enum(['approved', 'changes_requested']),
     taskId: z.string().min(1).nullable(),
   }),
+  // A summary of the room's earlier messages (PLAN 7.4a). Text only; the message's author is the agent that wrote it.
+  z.object({
+    kind: z.literal('summary'),
+    /** The newest message the summary covers. */
+    coversUntil: z.string().min(1),
+    text: z.string().max(16384),
+    /** A covered message was rewound, edited or deleted: not used as context until regenerated or edited. */
+    stale: z.boolean().optional(),
+    /** The person rewrote it. */
+    edited: z.boolean().optional(),
+  }),
 ])
 export type MessagePart = z.infer<typeof MessagePartSchema>
 
@@ -324,6 +337,8 @@ export const MessageSchema = z.object({
   createdAt: z.iso.datetime(),
   streaming: z.boolean(),
   refs: z.array(RefSchema),
+  /** Streaming agent replies: when the run last did anything (text, tool, reasoning, approval). Absent = since `createdAt`. */
+  progressAt: z.iso.datetime().nullish(),
   /** Set on the original when a later message of the same sender corrected it (edit and resend). */
   editedBy: z.string().min(1).nullish(),
   /** Set on the corrected message: the id of the message it replaces. */

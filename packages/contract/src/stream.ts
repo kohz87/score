@@ -48,9 +48,20 @@ export type MessageDeleted = z.infer<typeof MessageDeletedSchema>
 export const MessageUpdatedSchema = z.object({
   roomId: z.string().min(1),
   messageId: z.string().min(1),
-  editedBy: z.string().min(1).nullable(),
+  /** Absent when the update does not concern it. */
+  editedBy: z.string().min(1).nullable().optional(),
+  /** The message's new parts (a summary edited or marked stale, PLAN 7.4a); they replace the cached parts. */
+  parts: z.array(MessagePartSchema).optional(),
 })
 export type MessageUpdated = z.infer<typeof MessageUpdatedSchema>
+
+/** A streaming reply did something other than write text (a tool call, reasoning, an approval): its stall clock restarts. */
+export const MessageProgressedSchema = z.object({
+  roomId: z.string().min(1),
+  messageId: z.string().min(1),
+  at: z.iso.datetime(),
+})
+export type MessageProgressed = z.infer<typeof MessageProgressedSchema>
 
 export const TypingSchema = z.object({
   roomId: z.string().min(1),
@@ -122,6 +133,10 @@ export const StreamEventSchema = z.discriminatedUnion('type', [
   }),
   StreamEnvelopeSchema.extend({ type: z.literal('message.deleted'), data: MessageDeletedSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('message.updated'), data: MessageUpdatedSchema }),
+  StreamEnvelopeSchema.extend({
+    type: z.literal('message.progressed'),
+    data: MessageProgressedSchema,
+  }),
   StreamEnvelopeSchema.extend({
     type: z.literal('room.version.created'),
     data: RoomVersionSchema,

@@ -13,6 +13,7 @@ import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
 import { continuationFor, IMPORTED_ID_PREFIX } from './outside-sessions.ts'
+import { markStaleSummaries } from './summary-stale.ts'
 import { MessageRowSchema, messageFromRow, readRoom, roomChanged, roomRow } from './rooms.ts'
 
 const VersionRowSchema = z.object({
@@ -275,6 +276,7 @@ export function createVersion(
         type: 'message.deleted' as const,
         data: { roomId, messageId },
       })),
+      ...markStaleSummaries(sqlite, roomId, now),
       ...roomChanged(sqlite, roomId, now, before),
       { type: 'room.version.created' as const, data: version },
     ],

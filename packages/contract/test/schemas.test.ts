@@ -183,6 +183,12 @@ const cases = [
     { asOfSeq: 0, rooms: [] },
   ],
   ['RoomProjectSchema', f.roomProject, { ...f.roomProject, color: 'purple' }],
+  [
+    'AutoSummarySchema',
+    { enabled: true, thresholdTokens: 12000 },
+    { enabled: true, thresholdTokens: 10 },
+  ],
+  ['SummaryEditBodySchema', { text: 'Edited summary' }, { text: '  ' }],
   ['RoomProjectBodySchema', { name: 'Launch', color: '#4A2FD9' }, { name: '', color: '#4A2FD9' }],
   ['RoomProjectEventSchema', { id: 'project-1' }, { id: '' }],
   ['RoomTagSchema', 'q4', 'Q 4'],
@@ -294,6 +300,34 @@ const cases = [
   ['RoutineDeletedSchema', { id: 'builder:j1' }, { id: '' }],
   ['RoutineRunSchema', { id: 'builder:j1', queued: true }, { id: 'builder:j1', queued: false }],
   ['ReportRangeSchema', '7d', 'year'],
+  ['JourneyKindSchema', 'memory_changed', 'memory_text'],
+  [
+    'JourneyEventSchema',
+    { at: '2026-10-09T10:00:00.000Z', kind: 'task_done', label: 'Fix it', ref: 't1' },
+    { at: 'yesterday', kind: 'task_done', label: 'Fix it', ref: null },
+  ],
+  [
+    'JourneySchema',
+    {
+      from: '2026-10-03',
+      to: '2026-10-09',
+      truncated: false,
+      agents: [
+        {
+          id: 'builder',
+          events: [
+            {
+              at: '2026-10-09T10:00:00.000Z',
+              kind: 'memory_changed',
+              label: 'Memory file changed',
+              ref: null,
+            },
+          ],
+        },
+      ],
+    },
+    { from: '3 Oct', to: '2026-10-09', truncated: false, agents: [] },
+  ],
   [
     'ReportsSchema',
     {
@@ -580,6 +614,7 @@ const cases = [
   ['PlatformParamSchema', 'telegram', 'Bad Name'],
   ['MessageDeletedSchema', f.deleted, { roomId: 'room-1' }],
   ['MessageUpdatedSchema', f.updated, { roomId: 'room-1', messageId: 'm', editedBy: 3 }],
+  ['MessageProgressedSchema', f.progressed, { roomId: 'room-1', messageId: 'm', at: 'soon' }],
   ['RetryReplyResponseSchema', { messageId: 'reply-2' }, {}],
   [
     'AgentContextSchema',
@@ -1171,4 +1206,16 @@ describe('model settings (audit5-e)', () => {
       contract.ModelSettingsUpdateSchema.safeParse({ speech: { stt: { provider: null } } }).success,
     ).toBe(true)
   })
+})
+
+test('a summary message part is text only and a room carries its setting', () => {
+  const part = { kind: 'summary', coversUntil: 'm1', text: 'Plan B', stale: true }
+  expect(contract.MessagePartSchema.parse(part)).toEqual(part)
+  expect(contract.MessagePartSchema.safeParse({ ...part, coversUntil: '' }).success).toBe(false)
+  expect(contract.MessagePartSchema.safeParse({ ...part, text: 'x'.repeat(16385) }).success).toBe(
+    false,
+  )
+  expect(
+    contract.MessageUpdatedSchema.parse({ roomId: 'r', messageId: 'm', parts: [part] }).parts,
+  ).toHaveLength(1)
 })

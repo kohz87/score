@@ -10,6 +10,8 @@ const destinations = [
   { name: 'agent', path: '/team/builder', ready: '.team-tabs' },
   { name: 'reports', path: '/reports', ready: '.reports-table tbody tr' },
   { name: 'settings', path: '/settings', ready: '.rules-columns' },
+  { name: 'journey', path: '/reports?tab=journey', ready: '.journey__row' },
+  { name: 'popout', path: '/agents/builder/pop', ready: '.pop-chat textarea' },
   // Last: other tests in this file address destinations by index.
   { name: 'knowledge', path: '/knowledge/projects/launch-plan.md', ready: '.cm-editor' },
 ]

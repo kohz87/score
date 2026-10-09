@@ -1226,6 +1226,7 @@
 }
 .chat-stop-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-top: 6px;
@@ -2095,4 +2096,106 @@
   border: 1px solid var(--hairline);
   border-radius: var(--radius-14);
   padding: 6px;
+}
+
+/* Room summary (PLAN 7.4a) */
+.chat-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-style: dashed;
+  color: var(--ink);
+}
+.chat-summary-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.chat-summary-by {
+  color: var(--ink-muted);
+}
+.chat-summary-badge {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--agent-jade-tint);
+  color: var(--agent-jade-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.chat-summary-badge--stale {
+  background: var(--agent-saffron-tint);
+  color: var(--agent-saffron-text);
+}
+.chat-summary-note {
+  margin: 0;
+  color: var(--ink-muted);
+}
+.chat-summary-text {
+  max-height: 320px;
+  overflow: auto;
+}
+.chat-summary-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.chat-summary-edit label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 600;
+}
+.chat-summary-edit textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--card);
+  resize: vertical;
+}
+.chat-summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chat-summary-actions button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.chat-summary-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.chat-menu-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+}
+.chat-menu-check input {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+}
+.chat-stalled {
+  font-size: 13px;
+  color: var(--ink-muted, var(--ink));
+  max-width: 52ch;
+}
+.chat-model-failed {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--ground);
+  font-size: 14px;
 }

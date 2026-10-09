@@ -1,0 +1,95 @@
+/* Pop-out window: a compact page, no shell. Same tokens as the rest of the app. */
+.pop {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100vh;
+  padding: 16px;
+  background: var(--ground);
+  box-sizing: border-box;
+}
+.pop-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pop-header__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.pop-header h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.1;
+}
+.pop-header__status {
+  font-size: 14px;
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pop-header__open {
+  font-size: 13px;
+  font-weight: 600;
+  color: inherit;
+  text-underline-offset: 3px;
+}
+.pop-stop {
+  height: 40px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--card);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+.pop-stop:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pop-error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
+}
+.pop-section {
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: 14px;
+  overflow: hidden;
+}
+.pop-section .now-score {
+  margin: 0;
+}
+.pop-section .flow-inspector {
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+  width: auto;
+}
+.pop-empty {
+  margin: 0;
+  color: var(--ink-muted);
+}
+.pop-chat {
+  margin-top: auto;
+}
+/* A narrow window scrolls the lane sideways instead of squeezing the blocks away. */
+.pop .now-score-grid {
+  min-width: 560px;
+  grid-template-columns: 150px minmax(0, 1fr);
+}
+.pop .now-lane-label {
+  gap: 8px;
+}
+.pop .now-lane-role {
+  display: none;
+}

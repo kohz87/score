@@ -108,3 +108,22 @@ export const ImportSessionResponseSchema = z.object({
 export const ContinueSessionResponseSchema = z.object({
   mode: z.enum(['same_session', 'new_session']),
 })
+
+/** Opt-in summaries of long rooms (PLAN 7.4a). Tokens are estimated as characters / 4. */
+export const AUTO_SUMMARY_DEFAULT_TOKENS = 12000
+export const AutoSummarySchema = z.object({
+  enabled: z.boolean(),
+  thresholdTokens: z.int().min(2000).max(200000),
+})
+export type AutoSummary = z.infer<typeof AutoSummarySchema>
+export const DEFAULT_AUTO_SUMMARY: AutoSummary = {
+  enabled: false,
+  thresholdTokens: AUTO_SUMMARY_DEFAULT_TOKENS,
+}
+
+/** `PATCH /api/rooms/:roomId/summary`: the person's own wording replaces the summary text. */
+export const SummaryEditBodySchema = z
+  .object({ text: z.string().trim().min(1).max(16384) })
+  .strict()
+/** The summary text is plain text: Markdown without raw HTML, so no tag can hide anything. */
+export const SUMMARY_MAX_CHARS = 16384

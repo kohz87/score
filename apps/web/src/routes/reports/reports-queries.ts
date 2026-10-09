@@ -1,4 +1,4 @@
-import { ReportsSchema, type ReportRange } from '@score/contract'
+import { JourneySchema, ReportsSchema, type ReportRange } from '@score/contract'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo } from 'react'
 import { apiFetch } from '../../data/api.ts'
@@ -127,4 +127,32 @@ export function useReports(spec: ReportSpec) {
     }
   }, [stream, queryClient, key])
   return query
+}
+
+/** The inclusive local days a spec covers, for the Journey tab (which asks by days, never by preset). */
+export function specDays(spec: ReportSpec, today = viewerToday()): { from: string; to: string } {
+  if (spec.range === 'custom') return { from: spec.from, to: spec.to }
+  const back = spec.range === 'today' ? 0 : spec.range === '7d' ? 6 : 29
+  const [y, m, d] = today.split('-').map(Number)
+  const from = new Date(Date.UTC(y!, m! - 1, d! - back)).toISOString().slice(0, 10)
+  return { from, to: today }
+}
+
+export const journeyKey = (days: { from: string; to: string }) =>
+  ['reports', 'journey', days.from, days.to] as const
+
+/** Journey marks for the range. Not on the stream: it refreshes when the page is focused again. */
+export function useJourney(spec: ReportSpec, enabled: boolean) {
+  const days = useMemo(() => specDays(spec), [spec])
+  return useQuery({
+    queryKey: journeyKey(days),
+    queryFn: async ({ signal }) =>
+      JourneySchema.parse(
+        await apiFetch(`reports/journey?from=${days.from}&to=${days.to}${zoneParam()}`, { signal }),
+      ),
+    enabled,
+    placeholderData: keepPreviousData,
+    retry: false,
+    staleTime: 30_000,
+  })
 }

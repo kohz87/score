@@ -1,5 +1,5 @@
 import { rmSync } from 'node:fs'
-import { afterEach, beforeEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { reserveMessageRun } from '../../../../src/domain/message-runs.ts'
 import { insertRoom, messageFromRow, storeMessage } from '../../../../src/domain/rooms.ts'
 import { messageTurnId } from '../../../../src/domain/routing.ts'
@@ -774,4 +774,50 @@ test('more than 30 tool calls keep the compact summary after the first 30 cards 
   const reply = replyMessage()
   expect(reply.parts.filter((part) => part.kind === 'tool')).toHaveLength(30)
   expect(reply.parts.some((part) => part.kind === 'tools')).toBe(true)
+})
+
+test('a streaming reply’s progress clock moves with tools, reasoning and text, and ends with the reply', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  try {
+    vi.setSystemTime(new Date('2030-10-09T10:00:00.000Z'))
+    // The ingest pipeline took Date.now when it was built, so build a fresh one on the fake clock.
+    await env.ingest.close()
+    env.db.close()
+    rmSync(env.home, { recursive: true, force: true })
+    env = setup()
+    const context = await admittedMessage()
+    const progress = () => replyMessage().progressAt
+    const progressedEvents = () =>
+      Number(
+        env.db.sqlite
+          .prepare("SELECT COUNT(*) AS n FROM events WHERE type = 'message.progressed'")
+          .get()?.n,
+      )
+    const send = (seq: number, minutes: number, body: object) => {
+      vi.setSystemTime(new Date(Date.parse('2030-10-09T10:00:00.000Z') + minutes * 60_000))
+      return env.ingest.submit(
+        translateRunEvent(
+          context,
+          { seq, timestamp: 1791290600 + seq, run_id: context.runId, ...body },
+          { unknownEvents: 0 },
+        ),
+      )
+    }
+    expect(progress()).toBe('2030-10-09T10:00:00.000Z')
+    await send(1, 1, { event: 'tool.started', tool: 'terminal', preview: 'ls' })
+    expect(progress()).toBe('2030-10-09T10:01:00.000Z')
+    expect(progressedEvents()).toBe(1)
+    await send(2, 2, { event: 'reasoning.available', text: 'thinking' })
+    expect(progress()).toBe('2030-10-09T10:02:00.000Z')
+    expect(progressedEvents()).toBe(2)
+    // Text moves the clock but is announced by message.delta, not message.progressed.
+    await send(3, 3, { event: 'message.delta', delta: 'Hello ' })
+    expect(progress()).toBe('2030-10-09T10:03:00.000Z')
+    expect(progressedEvents()).toBe(2)
+    await send(4, 4, { event: 'run.completed', output: 'Hello there' })
+    expect(replyMessage().streaming).toBe(false)
+    expect(replyMessage().progressAt).toBeUndefined()
+  } finally {
+    vi.useRealTimers()
+  }
 })

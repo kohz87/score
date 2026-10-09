@@ -12,6 +12,10 @@ import { Markdown } from './Markdown.tsx'
 import { DocumentChip, WorkspaceChip } from './DocumentChips.tsx'
 import { PlanCard } from './PlanCard.tsx'
 import { RewindDialog } from './RewindDialog.tsx'
+import { SummaryCard } from './SummaryCard.tsx'
+import { approvalsQuery } from './queries.ts'
+import { useStreamQuery } from '../../data/query-client.ts'
+import { MODEL_DIDNT_ANSWER, formatElapsed, isNotProcessedNotice, stalledFor } from './stall.ts'
 
 /** Expand all / Collapse all (PLAN 5.25): a counter, so pressing the same button twice still reaches cards opened by hand. */
 type Expansion = { open: boolean; version: number }
@@ -75,14 +79,28 @@ function Part({
   agents,
   message,
   expansion,
+  authorName,
+  readOnly,
 }: {
   part: MessagePart
   agents: AgentSummary[]
   message: Message
   expansion: Expansion
+  authorName: string
+  readOnly: boolean
 }) {
   switch (part.kind) {
+    case 'summary':
+      return (
+        <SummaryCard part={part} message={message} authorName={authorName} readOnly={readOnly} />
+      )
     case 'text':
+      if (!message.streaming && message.author.kind === 'agent' && isNotProcessedNotice(part.text))
+        return (
+          <p className="chat-model-failed" role="status">
+            {MODEL_DIDNT_ANSWER}
+          </p>
+        )
       return (
         <Markdown
           text={part.text}
@@ -316,7 +334,39 @@ function MessageActions({
   )
 }
 
+/** Shown only while stalled: asks the approvals list, because a reply waiting for the person is not stalled. */
+function StalledLine({ message, elapsed }: { message: Message; elapsed: number }) {
+  const { data } = useStreamQuery(approvalsQuery)
+  const runId = message.refs.find((ref) => ref.kind === 'run')?.runId
+  const waitingForYou = Boolean(
+    runId &&
+    data?.some(
+      (approval) =>
+        approval.status === 'pending' &&
+        approval.refs.some((ref) => ref.kind === 'run' && ref.runId === runId),
+    ),
+  )
+  if (waitingForYou) return null
+  return (
+    <span className="chat-stalled" role="status">
+      Waiting for the model ({formatElapsed(elapsed)}). Hermes may be retrying after a rate limit or
+      a provider error.
+    </span>
+  )
+}
+
+function useNow(every: number) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), every)
+    return () => clearInterval(timer)
+  }, [every])
+  return now
+}
+
 function StopReply({ message, name }: { message: Message; name: string }) {
+  const now = useNow(5_000)
+  const elapsed = stalledFor(message, now)
   const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle')
   async function stop() {
     setState('busy')
@@ -332,6 +382,7 @@ function StopReply({ message, name }: { message: Message; name: string }) {
   }
   return (
     <div className="chat-stop-row">
+      {elapsed !== null && <StalledLine message={message} elapsed={elapsed} />}
       <button
         type="button"
         className="chat-stop-reply"
@@ -414,7 +465,15 @@ export function MessageItem({
             </button>
           )}
           {message.parts.map((part, index) => (
-            <Part key={index} part={part} agents={agents} message={message} expansion={expansion} />
+            <Part
+              key={index}
+              part={part}
+              agents={agents}
+              message={message}
+              expansion={expansion}
+              authorName={name}
+              readOnly={readOnly}
+            />
           ))}
         </div>
         {!readOnly && message.streaming && !you && !message.id.startsWith('pending-') && (
@@ -433,9 +492,12 @@ export function MessageItem({
             see the new version
           </button>
         )}
-        {!readOnly && !message.streaming && !message.id.startsWith('pending-') && (
-          <MessageActions message={message} name={name} agents={agents} imported={imported} />
-        )}
+        {!readOnly &&
+          !message.streaming &&
+          !message.id.startsWith('pending-') &&
+          !message.parts.some((part) => part.kind === 'summary') && (
+            <MessageActions message={message} name={name} agents={agents} imported={imported} />
+          )}
       </div>
     </article>
   )
