@@ -46,9 +46,9 @@ test('counts the active user turns from the message on, ignoring display rows an
     ['assistant', 31],
     ['user', 40, { active: 0 }],
   ])
-  expect(inspect(15)).toEqual({ ok: true, sessionId: SESSION, turns: 2 })
-  expect(inspect(5)).toEqual({ ok: true, sessionId: SESSION, turns: 3 })
-  expect(inspect(100)).toEqual({ ok: true, sessionId: SESSION, turns: 0 })
+  expect(inspect(15)).toEqual({ ok: true, sessionId: SESSION, turns: 2, undone: 1 })
+  expect(inspect(5)).toEqual({ ok: true, sessionId: SESSION, turns: 3, undone: 1 })
+  expect(inspect(100)).toEqual({ ok: true, sessionId: SESSION, turns: 0, undone: 0 })
 })
 
 test('follows a compression that happened before the message and refuses one after it', () => {
@@ -68,7 +68,7 @@ test('follows a compression that happened before the message and refuses one aft
     },
   )
   // The message came after the compression: its turns are in the continuation.
-  expect(inspect(55)).toEqual({ ok: true, sessionId: 'score-chat-builder-2', turns: 2 })
+  expect(inspect(55)).toEqual({ ok: true, sessionId: 'score-chat-builder-2', turns: 2, undone: 0 })
   // The message came before it: its turns are split over two sessions.
   expect(inspect(5)).toEqual({ ok: false, reason: 'compressed' })
 })
@@ -108,4 +108,27 @@ test('rewinding checks Hermes first, then asks the bridge and reports its answer
     rewoundCount: 4,
   })
   expect(await running).toEqual({ status: 'rewound', turnsUndone: 2, rewoundCount: 4 })
+})
+
+// audit4-c 7: Hermes finished a rewind whose answer Score never recorded.
+test('a session already rewound since the message counts as rewound, not as a mismatch', async () => {
+  write([
+    ['user', 10],
+    ['assistant', 11],
+    ['user', 20, { active: 0 }],
+    ['assistant', 21, { active: 0 }],
+  ])
+  const req = { agentId: 'builder', sessionId: SESSION, turns: 1, sinceMs: 15000 }
+  const deps = { broker: undefined, hermesHome: hermes.home }
+  expect(await rewindSession({ ...req, dryRun: true }, deps)).toEqual({ status: 'ready' })
+  expect(await rewindSession(req, deps)).toEqual({
+    status: 'rewound',
+    turnsUndone: 0,
+    rewoundCount: 0,
+  })
+  // A session with no undone rows and a different count is still a mismatch.
+  expect(await rewindSession({ ...req, turns: 3, sinceMs: 5000 }, deps)).toEqual({
+    status: 'skipped',
+    reason: 'turn_count_mismatch',
+  })
 })
