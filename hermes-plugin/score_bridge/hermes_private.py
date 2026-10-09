@@ -179,13 +179,20 @@ def gateway_session_store():
         return None
 
 
+def _is_user_turn(message) -> bool:
+    """A row Hermes counts as a user turn when it rewinds (``hermes_state_rewind._user_indices``): plain user rows,
+    typed ``/steer`` rows and compaction carriers that still wrap a human message; other display kinds are synthetic."""
+    from agent.context_compressor import user_originated_turn_view
+    return isinstance(message, dict) and user_originated_turn_view(message) is not None
+
+
 def _user_turns(db, session_id: str) -> list[float | None]:
     """Timestamps of the user turns of the session as Hermes replays them: the alternation-repaired projection, where
     consecutive user rows with no assistant row between them are one turn (what ``rewind_session`` counts)."""
     messages = db.get_messages_as_conversation(session_id, repair_alternation=True, include_row_ids=True)
     turns = []
     for message in messages:
-        if not isinstance(message, dict) or message.get("role") != "user" or message.get("display_kind"):
+        if not _is_user_turn(message):
             continue
         stamp = message.get("timestamp")
         turns.append(float(stamp) if type(stamp) in (int, float) else None)
@@ -223,10 +230,9 @@ def rewind_session(session_id: str, turns: int, since: float | None = None) -> d
         raw = db.get_messages_as_conversation(session_id, include_row_ids=True)
         for index, message in enumerate(raw):
             stamp = message.get("timestamp") if isinstance(message, dict) else None
-            if (isinstance(message, dict) and message.get("role") == "user" and not message.get("display_kind")
-                    and type(stamp) in (int, float) and stamp >= since):
+            if _is_user_turn(message) and type(stamp) in (int, float) and stamp >= since:
                 before = raw[index - 1] if index else None
-                if isinstance(before, dict) and before.get("role") == "user" and not before.get("display_kind"):
+                if _is_user_turn(before):
                     raise ValueError("the message shares a turn with an earlier unanswered one")
                 break
     result = store.rewind_session(session_id, turns)
@@ -236,8 +242,7 @@ def rewind_session(session_id: str, turns: int, since: float | None = None) -> d
     if type(undone) is not int or type(count) is not int:
         return None
     if db is not None and any(
-            isinstance(m, dict) and m.get("role") == "user" and not m.get("display_kind")
-            and type(m.get("timestamp")) in (int, float) and m["timestamp"] >= since
+            _is_user_turn(m) and type(m.get("timestamp")) in (int, float) and m["timestamp"] >= since
             for m in db.get_messages_as_conversation(session_id)):
         raise RuntimeError("turns since the message are still active")
     return {"turns_undone": undone, "rewound_count": count}

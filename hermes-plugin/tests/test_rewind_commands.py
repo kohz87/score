@@ -166,16 +166,16 @@ class RowsDb:
     """Rows of one session; the repaired projection merges consecutive user rows into one turn (like Hermes)."""
 
     def __init__(self, rows):
-        self.rows = rows  # [role, timestamp, active]
+        self.rows = rows  # [role, timestamp, active] or [role, timestamp, active, display_kind]
 
     def get_messages_as_conversation(self, session_id, repair_alternation=False, include_row_ids=False, **_):
         out = []
-        for role, stamp, active in self.rows:
+        for role, stamp, active, *kind in self.rows:
             if not active:
                 continue
             if repair_alternation and role == "user" and out and out[-1]["role"] == "user":
                 continue
-            out.append({"role": role, "timestamp": stamp})
+            out.append({"role": role, "timestamp": stamp, **({"display_kind": kind[0]} if kind else {})})
         return out
 
 
@@ -209,6 +209,13 @@ def install(monkeypatch, store):
     module = types.ModuleType("gateway.run")
     module._gateway_runner_ref = lambda: runner
     monkeypatch.setitem(sys.modules, "gateway.run", module)
+    # Hermes's own user-turn rule (agent.context_compressor.user_originated_turn_view): a typed /steer row counts,
+    # other display kinds are synthetic.
+    compressor = types.ModuleType("agent.context_compressor")
+    compressor.user_originated_turn_view = lambda m: (
+        m if m.get("role") == "user" and m.get("display_kind") in (None, "steer") else None)
+    monkeypatch.setitem(sys.modules, "agent", types.ModuleType("agent"))
+    monkeypatch.setitem(sys.modules, "agent.context_compressor", compressor)
 
 
 def test_rewind_target_is_absolute_when_a_turn_had_no_reply(monkeypatch, hermes_private):
@@ -245,3 +252,13 @@ def test_since_is_validated():
     for bad in (0, -1, "x", True, 1e13):
         with pytest.raises(ProtocolError):
             validate_command({**base, "since": bad})
+
+
+def test_a_steer_row_after_the_message_counts_as_a_turn_like_hermes(monkeypatch, hermes_private):
+    # u1 a1 | u2 a2 | steer a3: anchored on u2, Hermes undoes two turns (u2 and the steer), so the plugin must ask for two.
+    db = RowsDb([["user", 100, True], ["assistant", 101, True], ["user", 200, True], ["assistant", 201, True],
+                 ["user", 300, True, "steer"], ["assistant", 301, True]])
+    store = RowsStore(db)
+    install(monkeypatch, store)
+    hermes_private.rewind_session("s", 1, 200)
+    assert store.calls == [2]
