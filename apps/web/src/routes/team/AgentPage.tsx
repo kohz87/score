@@ -12,6 +12,7 @@ import { ModelTab } from './ModelTab.tsx'
 import { SkillsTab } from './SkillsTab.tsx'
 import { PermissionsTab } from './PermissionsTab.tsx'
 import { ToolsTab } from './ToolsTab.tsx'
+import { PluginsTab } from './PluginsTab.tsx'
 import { ChannelsTab } from './ChannelsTab.tsx'
 import { HistoryTab } from './HistoryTab.tsx'
 import type { AgentFileName } from './file-queries.ts'
@@ -29,6 +30,7 @@ const tabs = [
   'Skills',
   'Memory',
   'Tools',
+  'Plugins',
   'Routines',
   'Channels',
   'Permissions',
@@ -179,6 +181,8 @@ function AgentProfile({ agentId }: { agentId: string }) {
           <MemoryTab agentId={agent.id} agentName={agent.name} />
         ) : tab === 'Tools' ? (
           <ToolsTab agent={agent} />
+        ) : tab === 'Plugins' ? (
+          <PluginsTab agent={agent} />
         ) : tab === 'Permissions' ? (
           <PermissionsTab agent={agent} />
         ) : tab === 'Channels' ? (

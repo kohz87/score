@@ -5,7 +5,7 @@ import {
   RulesWriteResponseSchema,
   RulesPreviewResponseSchema,
 } from '@score/contract'
-import { cpSync, mkdtempSync, rmSync } from 'node:fs'
+import { appendFileSync, cpSync, mkdtempSync, rmSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -300,6 +300,10 @@ test('live adapter: drift, unknown keys read-only, verified writes with exact ar
 
   // Hermes appends an "always" answer: drift appears, Apply removes it.
   config.builder!.allowlist.push('SQL TRUNCATE')
+  // An outside edit rewrites config.yaml, which is what Score's read cache keys on.
+  const builderConfig = join(extraHome, 'profiles', 'builder', 'config.yaml')
+  appendFileSync(builderConfig, '# edited by Hermes\n')
+  utimesSync(builderConfig, new Date(), new Date(Date.now() + 60_000))
   view = await rules()
   expect(view.drift.find((d) => d.agentId === 'builder')?.differs).toBe(true)
   const applied = await call('POST', '/api/settings/rules/apply/builder')

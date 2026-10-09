@@ -1,8 +1,9 @@
+import { providerAction } from './ProvidersSection.tsx'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import type { AgentSummary, ConnectionsResponse, PluginItem, ProviderItem } from '@score/contract'
+import type { AgentSummary, ConnectionsResponse, ProviderItem } from '@score/contract'
 import { App, appRoutes } from '../../App.tsx'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry } from '../../data/resync.ts'
@@ -67,6 +68,7 @@ let respond: (path: string, init?: RequestInit) => Response
 let applyGate: Promise<void> | null = null
 
 beforeEach(() => {
+  window.localStorage.removeItem('score.settings.advancedOpen')
   calls = []
   applyGate = null
   respond = (path) => {
@@ -208,6 +210,7 @@ function advancedRespond(apply: () => Response) {
 }
 async function stageTurns() {
   const advanced = await screen.findByRole('region', { name: 'Advanced' })
+  fireEvent.click(await within(advanced).findByRole('button', { name: /^Show all \d+ settings$/ }))
   fireEvent.click(await within(advanced).findByRole('button', { name: 'Edit agent.max_turns' }))
   fireEvent.change(within(advanced).getByLabelText('New value for agent.max_turns'), {
     target: { value: '30' },
@@ -215,6 +218,45 @@ async function stageTurns() {
   fireEvent.click(within(advanced).getByRole('button', { name: 'Stage change' }))
   return advanced
 }
+
+test('advanced: collapsed by default, opens on click or on a search, and remembers the choice', async () => {
+  window.localStorage.clear()
+  advancedRespond(() => json({ ok: true, restartRequired: false }))
+  mount()
+  const advanced = await screen.findByRole('region', { name: 'Advanced' })
+  const toggle = await within(advanced).findByRole('button', { name: 'Show all 2 settings' })
+  expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  expect(within(advanced).getByRole('searchbox', { name: 'Search settings' })).toBeDefined()
+  expect(within(advanced).queryByRole('list', { name: 'Settings' })).toBeNull()
+  fireEvent.click(toggle)
+  expect(within(advanced).getByRole('list', { name: 'Settings' })).toBeDefined()
+  expect(window.localStorage.getItem('score.settings.advancedOpen')).toBe('1')
+  fireEvent.click(within(advanced).getByRole('button', { name: 'Hide settings' }))
+  expect(within(advanced).queryByRole('list', { name: 'Settings' })).toBeNull()
+  fireEvent.change(within(advanced).getByRole('searchbox', { name: 'Search settings' }), {
+    target: { value: 'turn' },
+  })
+  expect(within(advanced).getByRole('list', { name: 'Settings' })).toBeDefined()
+  cleanup()
+  window.localStorage.setItem('score.settings.advancedOpen', '1')
+  mount()
+  expect(await screen.findByRole('list', { name: 'Settings' })).toBeDefined()
+  window.localStorage.clear()
+})
+
+test('advanced: blocked storage still opens the list', async () => {
+  vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    throw new Error('blocked')
+  })
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new Error('blocked')
+  })
+  advancedRespond(() => json({ ok: true, restartRequired: false }))
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Show all 2 settings' }))
+  expect(screen.getByRole('list', { name: 'Settings' })).toBeDefined()
+  vi.restoreAllMocks()
+})
 
 test('advanced: search, stage a change, preview the diff, then apply with the hash', async () => {
   advancedRespond(() => json({ ok: true, restartRequired: true }))
@@ -275,81 +317,14 @@ test('advanced: a change staged while an apply is in flight stays pending after 
   expect(within(tray).queryByText(/agent.max_turns/)).toBeNull()
 })
 
-const pluginRows: PluginItem[] = [
-  { id: 'score-bridge', label: 'score-bridge', enabled: true, locked: true, description: null },
-  { id: 'memory-notes', label: 'memory-notes', enabled: true, locked: false, description: 'Notes' },
-  { id: 'image-tools', label: 'image-tools', enabled: false, locked: false, description: null },
-]
-function pluginServer() {
-  let rows = pluginRows
-  respond = (path, init) => {
-    if (path.startsWith('/api/settings/plugins/') && init?.method === 'PATCH') {
-      const id = decodeURIComponent(path.split('?')[0]!.split('/').pop()!)
-      const enabled = (JSON.parse(init.body as string) as { enabled: boolean }).enabled
-      rows = rows.map((row) => (row.id === id ? { ...row, enabled } : row))
-      return json(rows.find((row) => row.id === id))
-    }
-    if (path.startsWith('/api/settings/plugins')) return json({ items: rows })
-    if (path === '/api/agents') return json({ asOfSeq: 0, items: [builder] })
-    if (path === '/api/settings/providers') return json({ items: providers })
-    return json(connections)
-  }
-}
-
-test('plugins list for the picked agent; toggling patches the CLI-backed setting and re-reads', async () => {
-  pluginServer()
-  mount()
-  const region = await screen.findByRole('region', { name: 'Plugins and look' })
-  const memory = await within(region).findByRole('switch', { name: 'memory-notes for Builder' })
-  expect(memory.getAttribute('aria-checked')).toBe('true')
-  expect(calls.some((call) => call.path === '/api/settings/plugins?agent=builder')).toBe(true)
-  expect(within(region).getByText(/takes effect on its next session/)).toBeTruthy()
-  fireEvent.click(memory)
-  await waitFor(() =>
-    expect(
-      within(region)
-        .getByRole('switch', { name: 'memory-notes for Builder' })
-        .getAttribute('aria-checked'),
-    ).toBe('false'),
-  )
-  const patch = calls.find((call) => call.init?.method === 'PATCH')!
-  expect(patch.path).toBe('/api/settings/plugins/memory-notes?agent=builder')
-  expect(JSON.parse(patch.init!.body as string)).toEqual({ enabled: false })
-  expect(new Headers(patch.init!.headers).get('Idempotency-Key')).toBeTruthy()
-})
-
-test('the Score bridge is shown but cannot be switched, and says why', async () => {
-  pluginServer()
-  mount()
-  const region = await screen.findByRole('region', { name: 'Plugins and look' })
-  const bridge = (await within(region).findByRole('switch', {
-    name: 'score-bridge for Builder',
-  })) as HTMLButtonElement
-  expect(bridge.disabled).toBe(true)
-  expect(within(region).getByText(/can't be turned off here/)).toBeDefined()
-  fireEvent.click(bridge)
-  expect(calls.some((call) => call.init?.method === 'PATCH')).toBe(false)
-})
-
-test('a refused plugin change shows the server message', async () => {
-  pluginServer()
-  const ok = respond
-  respond = (path, init) =>
-    init?.method === 'PATCH'
-      ? json({ error: { code: 'conflict', message: 'Hermes did not apply the change' } }, 409)
-      : ok(path, init)
-  mount()
-  fireEvent.click(await screen.findByRole('switch', { name: 'image-tools for Builder' }))
-  expect((await screen.findByText('Hermes did not apply the change')).getAttribute('role')).toBe(
-    'alert',
-  )
-})
-
 test('theme choice applies data-theme, is remembered, and System clears it', async () => {
-  pluginServer()
   window.localStorage.clear()
   mount()
-  const group = await screen.findByRole('radiogroup', { name: 'Theme' })
+  const look = await screen.findByRole('region', { name: 'Look' })
+  // Plugins are per agent and live on the Team page now.
+  expect(screen.queryByText('Hermes plugins')).toBeNull()
+  expect(screen.queryByRole('region', { name: /Plugins/ })).toBeNull()
+  const group = within(look).getByRole('radiogroup', { name: 'Theme' })
   fireEvent.click(within(group).getByRole('radio', { name: 'Dark' }))
   expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
   expect(window.localStorage.getItem('score.theme')).toBe('dark')
@@ -364,7 +339,6 @@ test('theme choice applies data-theme, is remembered, and System clears it', asy
 })
 
 test('theme still switches when storage is blocked', async () => {
-  pluginServer()
   vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
     throw new Error('blocked')
   })
@@ -619,6 +593,28 @@ test('a failed device sign-in offers to try again', async () => {
   expect(screen.getByRole('button', { name: 'Try again' })).toBeDefined()
 })
 
+test('a connected row offers only an edit flow that works', async () => {
+  const row = (over: Partial<ProviderItem>): ProviderItem => ({
+    id: 'x',
+    label: 'X',
+    status: 'connected',
+    detail: 'ok',
+    usedBy: [],
+    ...over,
+  })
+  expect(providerAction(row({ signIn: 'api_key' }))).toBe('Add key')
+  expect(providerAction(row({ signIn: 'device_code' }))).toBeNull()
+  expect(providerAction(row({ signIn: 'terminal' }))).toBeNull()
+  expect(providerAction(row({}))).toBeNull()
+  expect(providerAction(row({ status: 'needs_signin', signIn: 'terminal' }))).toBe('Reconnect')
+  expect(providerAction(row({ status: 'missing' }))).toBe('Connect')
+  respondWith(() => undefined)
+  mount()
+  await screen.findByText('OpenRouter')
+  expect(screen.queryByRole('button', { name: /^Edit / })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Reconnect Anthropic' })).toBeDefined()
+})
+
 const KEY = 'sk-or-v1-typed-by-the-person-0001'
 test('a pasted key is sent once in the request body, never shown, and cleared afterwards', async () => {
   respondWith((path, init) =>
@@ -627,7 +623,7 @@ test('a pasted key is sent once in the request body, never shown, and cleared af
       : undefined,
   )
   mount()
-  fireEvent.click(await screen.findByRole('button', { name: 'Edit OpenRouter' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Add key OpenRouter' }))
   const form = await screen.findByRole('form', { name: 'Add a key for OpenRouter' })
   const input = within(form).getByLabelText('API key') as HTMLInputElement
   expect(input.type).toBe('password')
@@ -655,7 +651,7 @@ test('a rejected key shows a generic message and clears the field', async () => 
       : undefined,
   )
   mount()
-  fireEvent.click(await screen.findByRole('button', { name: 'Edit OpenRouter' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Add key OpenRouter' }))
   const form = await screen.findByRole('form', { name: 'Add a key for OpenRouter' })
   const input = within(form).getByLabelText('API key') as HTMLInputElement
   fireEvent.change(input, { target: { value: KEY } })
@@ -674,7 +670,7 @@ test('the key form sends only the key and label (no insecure-transport acknowled
       : undefined,
   )
   mount()
-  fireEvent.click(await screen.findByRole('button', { name: 'Edit OpenRouter' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Add key OpenRouter' }))
   const form = await screen.findByRole('form', { name: 'Add a key for OpenRouter' })
   expect(within(form).queryByRole('checkbox')).toBeNull()
   fireEvent.change(within(form).getByLabelText('API key'), { target: { value: KEY } })

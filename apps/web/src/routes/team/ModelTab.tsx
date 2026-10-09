@@ -4,25 +4,35 @@ import { ModelPicker, type ModelChoice } from '../../components/ModelPicker.tsx'
 import { useModelAction } from './agent-tab-queries.ts'
 import { tabFailure } from './tab-errors.ts'
 
+const HERMES_DEFAULT_VIA = 'Hermes configuration'
+
 export function ModelTab({ agent }: { agent: AgentDetail }) {
   const change = useModelAction(agent.id)
-  const [choice, setChoice] = useState<ModelChoice>({ model: '', provider: null })
-  const [notice, setNotice] = useState('')
+  // The picker starts on what the agent uses now; once the person edits it, their draft wins until a save lands.
+  const current: ModelChoice = {
+    model: agent.model?.id ?? '',
+    provider: agent.model && agent.model.via !== HERMES_DEFAULT_VIA ? agent.model.via : null,
+  }
+  const [draft, setDraft] = useState<ModelChoice | null>(null)
+  const [saved, setSaved] = useState('')
+  const choice = draft ?? current
 
-  function submit(event: FormEvent) {
-    event.preventDefault()
-    const next = choice.model.trim()
-    const via = choice.provider
-    setNotice('')
+  function save(next: ModelChoice) {
+    const model = next.model.trim()
+    setSaved('')
     change.mutate(
-      { model: next, ...(via ? { provider: via } : {}) },
+      { model, ...(next.provider ? { provider: next.provider } : {}) },
       {
         onSuccess: () => {
-          setNotice(`Model changed to ${next}.`)
-          setChoice({ model: '', provider: null })
+          setSaved(model)
+          setDraft(null)
         },
       },
     )
+  }
+  function submit(event: FormEvent) {
+    event.preventDefault()
+    save(choice)
   }
   return (
     <section className="team-card" aria-labelledby="team-model-heading">
@@ -37,16 +47,32 @@ export function ModelTab({ agent }: { agent: AgentDetail }) {
         </p>
       )}
       <form className="team-routine-form" aria-label="Change model" onSubmit={submit}>
-        <ModelPicker label="Model" required value={choice} onChange={setChoice} maxLength={200} />
-        {change.isError && <p role="alert">{tabFailure(change.error, 'change the model')}</p>}
+        <ModelPicker label="Model" required value={choice} onChange={setDraft} maxLength={200} />
+        {current.model && (
+          <p className="team-muted">
+            Current: {current.model}
+            {current.provider ? ` (through ${current.provider})` : ''}
+          </p>
+        )}
+        {change.isError && (
+          <p role="alert">
+            {tabFailure(change.error, 'change the model')}{' '}
+            <button type="button" className="team-pill-button" onClick={() => save(choice)}>
+              Retry
+            </button>
+          </p>
+        )}
         <div className="team-style-actions">
           <button type="submit" className="team-primary" disabled={change.isPending}>
             {change.isPending ? 'Saving…' : 'Change model'}
           </button>
         </div>
+        {change.isPending && (
+          <p className="team-muted">Saving to Hermes. This can take several seconds.</p>
+        )}
       </form>
       <p className="team-muted" role="status">
-        {notice}
+        {saved ? `Saved: ${saved}` : ''}
       </p>
     </section>
   )

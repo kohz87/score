@@ -168,7 +168,7 @@ A navigation list on the left, one card per section. Settings for a single agent
   changes** shows the difference and **Save for the whole team** applies it. Never rules are guardrails, not a
   security boundary: they match command text and can be bypassed by clever wording, so keep real secrets out of
   reach in other ways.
-- **Plugins and look.** Coming soon.
+- **Look.** Choose the theme (Light, Dark or System). Hermes plugins are per agent: turn them on or off in Team › the agent › **Plugins** (the Score bridge stays on; a change applies on the agent's next session).
 - **Advanced.** Search every Hermes setting. **Stage change** collects edits in a tray (**Pending changes**); you
   preview the difference, apply, and Score says whether the gateway needs a restart for the change to take effect.
   Changes go through the `hermes` command only.

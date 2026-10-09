@@ -19,7 +19,8 @@ test('a device-code sign-in shows the link and code and ends connected', async (
   await expect(panel.getByText('Nous Portal is connected.')).toBeVisible({ timeout: 15_000 })
   await panel.getByRole('button', { name: 'Done' }).click()
   await expect(panel).toBeHidden()
-  await expect(models.getByRole('button', { name: 'Edit Nous Portal' })).toBeVisible()
+  // Connected through the browser: nothing left to edit, so no button is offered.
+  await expect(models.getByRole('button', { name: /Nous Portal/ })).toHaveCount(0)
 })
 
 test('a pasted key connects a key provider and is never shown again', async ({ page }) => {
@@ -44,6 +45,6 @@ test('a terminal-only provider still shows the command, and a panel can fall bac
   await pair(page)
   await page.goto('/settings')
   const models = page.getByRole('region', { name: 'Models and keys' })
-  await models.getByRole('button', { name: 'Connect Anthropic' }).click()
+  await models.getByRole('button', { name: 'Reconnect Anthropic' }).click()
   await expect(models.getByText('hermes auth add anthropic')).toBeVisible()
 })

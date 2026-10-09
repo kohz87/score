@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { HttpError } from '../../../src/errors.ts'
 import { parseToolList } from '../../../src/hermes/live/agent-config.ts'
+import { cachingRunner } from '../../../src/hermes/live/config-cache.ts'
 import { LiveAgentTabs } from '../../../src/hermes/live/agent-tabs.ts'
 import type { HermesRunner } from '../../../src/hermes/live/cli.ts'
 import { ProfilesReader } from '../../../src/hermes/live/profiles.ts'
@@ -142,6 +143,24 @@ test('setModel writes model.default then model.provider with exact argv', async 
   await tabs.setModel('builder', { model: 'plain' })
   expect(writes()).toEqual([['-p', 'builder', 'config', 'set', 'model.default', 'plain']])
 })
+test('setModel costs two writes and, behind the cache, no repeated reads', async () => {
+  const cached = cachingRunner(runner, home)
+  const cachedTabs = new LiveAgentTabs(
+    home,
+    (profile) => reader.profileHome(profile),
+    (profile) => reader.invalidate(profile),
+    cached,
+  )
+  const reads = () => runner.mock.calls.filter(([args]) => args.includes('get')).length
+  await cachedTabs.setModel('builder', { model: 'one', provider: 'acme' })
+  // The shared providers list and the prior pair: two reads, then the two writes.
+  expect(reads()).toBe(2)
+  expect(writes()).toHaveLength(2)
+  await cachedTabs.setModel('builder', { model: 'two', provider: 'acme' })
+  // Only builder's pair is re-read after the write dropped it; the default profile's providers stay cached.
+  expect(reads()).toBe(3)
+})
+
 test.each([
   { model: '--force' },
   { model: 'a b' },

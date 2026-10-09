@@ -55,6 +55,7 @@ import { createLiveConfigService } from './config.ts'
 import { LiveSettings } from './settings.ts'
 import { readApprovalConfig, updateProfileApprovals } from './approvals.ts'
 import type { ApprovalConfig } from '../approvals.ts'
+import { cachingRunner } from './config-cache.ts'
 import { runHermes, type HermesRunner, type HermesSpawner } from './cli.ts'
 import { readRun, RunRowSchema, runLifecycle, type RunMetrics } from './translate.ts'
 import { LiveProfileManagement } from './profile-management.ts'
@@ -123,7 +124,17 @@ export class LivePort implements HermesPort {
   private readonly locks = new ProfileLocks()
   private readonly profileFiles = new ProfileFiles()
   private readonly profileManagement: LiveProfileManagement
-  constructor(private readonly options: LivePortOptions) {
+  private readonly options: LivePortOptions
+  constructor(rawOptions: LivePortOptions) {
+    // One cache in front of every config.yaml-derived read (config-cache.ts).
+    const options: LivePortOptions = {
+      ...rawOptions,
+      runner: cachingRunner(
+        rawOptions.runner ?? runHermes,
+        resolveHermesHome(rawOptions.hermesHome),
+      ),
+    }
+    this.options = options
     registerStoredKeys(options.scoreHome)
     this.accepted = new AcceptedBuilds(options.scoreHome)
     this.profiles = new ProfilesReader(resolveHermesHome(options.hermesHome), options.runner)

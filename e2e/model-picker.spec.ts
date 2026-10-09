@@ -40,7 +40,7 @@ test('pick a model from the connected providers in Add agent and on the Model ta
   await tabPicker.press('Enter')
   await expect(tabPicker).toHaveValue('upstage/solar-mini4:free')
   await panel.getByRole('button', { name: 'Change model' }).click()
-  await expect(panel.getByText('Model changed to upstage/solar-mini4:free.')).toBeVisible()
+  await expect(panel.getByText('Saved: upstage/solar-mini4:free')).toBeVisible()
   await expect(panel.getByText('Through nous.')).toBeVisible()
 
   await page.getByRole('tab', { name: 'Overview' }).click()

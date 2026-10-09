@@ -130,7 +130,7 @@ test('mobile Reports scrolls columns and retains readable chart type', async ({ 
   await noPageOverflow(page)
 })
 
-// Dark theme (Settings › Plugins and look): same pages, same fixtures, theme stored in the browser.
+// Dark theme (Settings › Look): same pages, same fixtures, theme stored in the browser.
 test.describe('dark theme', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => window.localStorage.setItem('score.theme', 'dark'))

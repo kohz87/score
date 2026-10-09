@@ -81,17 +81,18 @@ export class LiveAgentTabs {
     await this.serial(profile, async () => {
       // Local providers live in each profile's own config.yaml and the picker lists the default profile's, so a
       // provider only the default profile defines would save fine and then fail to resolve on this agent's runs.
+      // Only a local provider needs the check; reads are cached, so this costs no CLI call on an unchanged config.
       if (req.provider && profile !== 'default') {
-        const [own, shared] = await Promise.all([
-          readLocalProviderIds(this.runner, this.hermesHome, profile),
-          readLocalProviderIds(this.runner, this.hermesHome, 'default'),
-        ])
-        if (own && shared?.has(req.provider) && !own.has(req.provider))
-          throw new HttpError(
-            409,
-            'conflict',
-            'That local provider is not configured on this agent; add it to the agent profile first',
-          )
+        const shared = await readLocalProviderIds(this.runner, this.hermesHome, 'default')
+        if (shared?.has(req.provider)) {
+          const own = await readLocalProviderIds(this.runner, this.hermesHome, profile)
+          if (own && !own.has(req.provider))
+            throw new HttpError(
+              409,
+              'conflict',
+              'That local provider is not configured on this agent; add it to the agent profile first',
+            )
+        }
       }
       const prior = await readModelPair(this.runner, this.hermesHome, profile)
       try {
