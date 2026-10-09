@@ -335,15 +335,22 @@ export function buildApp({
   }
   app.get('/api/health', async () => ({ ok: true, contract: CONTRACT_VERSION }))
   // The same origin the console prints in its pairing link.
-  const securityPassword = security ?? (db ? new SecurityPassword(config.home, clock) : undefined)
   // The web terminal (PLAN 7.3): not registered at all unless SCORE_TERMINAL=1. A missing native module (node-pty is
   // built at install time) leaves it off and says why, rather than stopping Score.
+  const securityPassword = security ?? (db ? new SecurityPassword(config.home, clock) : undefined)
   let terminalUnavailable: string | null = null
-  if (config.terminal) {
+  if (config.terminal && !https) {
+    // Plain-HTTP listeners (local mode) never get a shell: a terminal needs a TLS connection.
+    terminalUnavailable = 'needs HTTPS (remote mode with a certificate)'
+  } else if (config.terminal) {
     try {
       app.decorate(
         'terminals',
-        registerTerminalRoutes(app, { origins: allowedOriginsFor(config), ...terminal }),
+        registerTerminalRoutes(app, {
+          origins: allowedOriginsFor(config),
+          hostEnrolled: () => securityPassword?.hostIssued() ?? false,
+          ...terminal,
+        }),
       )
     } catch (error) {
       terminalUnavailable = 'node-pty not built'

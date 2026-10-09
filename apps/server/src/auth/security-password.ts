@@ -1,4 +1,4 @@
-import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
 import fs from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -17,6 +17,9 @@ const scrypt = promisify(scryptCallback) as (
 const PARAMS = { N: 2 ** 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }
 const KEY_LENGTH = 32
 const FILE = 'security-password'
+// Who set the current password: `scripts/score password` on the host writes `host <sha256 of the stored line>`, a browser
+// writes `browser`. The terminal trusts only a password the host issued, so a stolen cookie can't enrol its own.
+const ORIGIN_FILE = 'security-password.origin'
 const StoredSchema = z.string().regex(/^scrypt\$15\$8\$1\$[A-Za-z0-9_-]{22}\$[A-Za-z0-9_-]{43}$/)
 export const PasswordSchema = z.string().min(8).max(256)
 
@@ -37,6 +40,10 @@ export function writePasswordFile(home: string, stored: string): void {
   const temp = `${path}.${process.pid}.tmp`
   fs.writeFileSync(temp, `${StoredSchema.parse(stored)}\n`, { mode: 0o600, flag: 'wx' })
   fs.renameSync(temp, path)
+}
+
+export function passwordDigest(stored: string): string {
+  return createHash('sha256').update(stored).digest('hex')
 }
 
 export class SecurityPassword {
@@ -60,6 +67,20 @@ export class SecurityPassword {
 
   isSet(): boolean {
     return this.stored() !== undefined
+  }
+
+  /** True only if the current password was set on the Score machine itself (`scripts/score password`). */
+  hostIssued(): boolean {
+    const stored = this.stored()
+    if (!stored || !this.home) return false
+    try {
+      return (
+        fs.readFileSync(join(this.home, ORIGIN_FILE), 'utf8').trim() ===
+        `host ${passwordDigest(stored)}`
+      )
+    } catch {
+      return false
+    }
   }
 
   /**
@@ -102,5 +123,6 @@ export class SecurityPassword {
       throw new HttpError(400, 'bad_request', 'Use 8 to 256 characters for the security password')
     if (this.isSet()) await this.verify(current, session)
     writePasswordFile(this.home, await hashPassword(next.data))
+    fs.writeFileSync(join(this.home, ORIGIN_FILE), 'browser\n', { mode: 0o600 })
   }
 }

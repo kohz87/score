@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { request as httpsRequest } from 'node:https'
 import { Writable } from 'node:stream'
 import type { FastifyInstance } from 'fastify'
 import type { WebSocket } from '@fastify/websocket'
@@ -10,6 +11,10 @@ import { buildApp } from '../src/app.ts'
 import { SecurityPassword } from '../src/auth/security-password.ts'
 import { loadConfig } from '../src/config.ts'
 import { terminalLaunch } from '../src/terminal/env.ts'
+import { testCert, testKey } from './fixtures/tls.ts'
+import { hostPassword } from './helpers/host-password.ts'
+
+const PASSWORD = 'correct horse battery'
 
 // Real shells (node-pty) with a temporary HOME. Never the owner's home, never a model.
 const origin = 'http://127.0.0.1:5173'
@@ -26,8 +31,13 @@ function tempDir(): string {
   return dir
 }
 
-function makeApp(env: Record<string, string> = {}, clock?: () => number) {
+function makeApp(
+  env: Record<string, string> = {},
+  clock?: () => number,
+  extra: { enrolled?: boolean; secure?: boolean; limits?: Record<string, number> } = {},
+) {
   const home = tempDir()
+  if (extra.enrolled !== false) hostPassword(home, PASSWORD)
   const lines: string[] = []
   const stream = new Writable({
     write(chunk, _encoding, done) {
@@ -41,8 +51,12 @@ function makeApp(env: Record<string, string> = {}, clock?: () => number) {
     logger: { level: 'trace', stream },
     ...(clock ? { clock } : {}),
     security: new SecurityPassword(home, clock),
+    // The TLS app: terminals are not offered on plain HTTP. inject() has no TLS socket, so tests say it is secure.
+    https: { cert: testCert, key: testKey },
     terminal: {
       launch: terminalLaunch({ ...process.env, HOME: home }),
+      ...(extra.secure === false ? {} : { isSecure: () => true }),
+      ...(extra.limits ? { limits: extra.limits } : {}),
       ...(clock ? { clock } : {}),
     },
   })
@@ -202,26 +216,75 @@ test('a ticket needs a fresh password check that is used up by minting', async (
   expect((await mint(app, cookie)).statusCode).toBe(403)
 })
 
-test('the security-password check and a passkey assertion make a session fresh', async () => {
-  const { app, home } = makeApp()
+test('the security-password check makes a session fresh; a wrong one does not', async () => {
+  const { app } = makeApp()
   const cookie = await pair(app)
-  await new SecurityPassword(home).set('correct horse battery', undefined)
-  const wrong = await app.inject({
-    method: 'POST',
-    url: '/api/session/security/check',
-    headers: { ...headers, cookie },
-    payload: { password: 'not the password!' },
-  })
-  expect(wrong.statusCode).toBe(403)
+  const check = (password: string) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/session/security/check',
+      headers: { ...headers, cookie },
+      payload: { password },
+    })
+  expect((await check('not the password!')).statusCode).toBe(403)
   expect((await mint(app, cookie)).statusCode).toBe(403)
-  const right = await app.inject({
-    method: 'POST',
-    url: '/api/session/security/check',
-    headers: { ...headers, cookie },
-    payload: { password: 'correct horse battery' },
-  })
-  expect(right.statusCode).toBe(204)
+  expect((await check(PASSWORD)).statusCode).toBe(204)
   expect((await mint(app, cookie)).statusCode).toBe(200)
+})
+
+test('a stolen cookie cannot enrol its own second factor', async () => {
+  const { app, home } = makeApp({}, undefined, { enrolled: false })
+  const cookie = await pair(app)
+  const send = (method: string, url: string, payload: object) =>
+    app.inject({ method: method as 'POST', url, headers: { ...headers, cookie }, payload })
+  // The attacker sets a password of their own from the browser and proves it.
+  expect(
+    (await send('PUT', '/api/session/security/password', { password: 'attacker password' }))
+      .statusCode,
+  ).toBe(204)
+  expect(
+    (await send('POST', '/api/session/security/check', { password: 'attacker password' }))
+      .statusCode,
+  ).toBe(204)
+  const refused = await mint(app, cookie)
+  expect(refused.statusCode).toBe(403)
+  expect(refused.json().error.code).toBe('second_factor_not_enrolled')
+  // Changing it again from the browser (knowing the current one) is still a browser password.
+  expect(
+    (
+      await send('PUT', '/api/session/security/password', {
+        password: 'another password',
+        current: 'attacker password',
+      })
+    ).statusCode,
+  ).toBe(204)
+  expect(
+    (await send('POST', '/api/session/security/check', { password: 'another password' }))
+      .statusCode,
+  ).toBe(204)
+  expect((await mint(app, cookie)).statusCode).toBe(403)
+  // Replacing the file without the host's mark does not help either.
+  const forged = new SecurityPassword(home)
+  expect(forged.hostIssued()).toBe(false)
+  // Only the owner on the host (scripts/score password) enrols the terminal.
+  hostPassword(home, PASSWORD)
+  expect(
+    (await send('POST', '/api/session/security/check', { password: PASSWORD })).statusCode,
+  ).toBe(204)
+  expect((await mint(app, cookie)).statusCode).toBe(200)
+  // ... and a later browser change takes it away again until the host re-sets it.
+  expect(
+    (
+      await send('PUT', '/api/session/security/password', {
+        password: 'sneaky password',
+        current: PASSWORD,
+      })
+    ).statusCode,
+  ).toBe(204)
+  expect(
+    (await send('POST', '/api/session/security/check', { password: 'sneaky password' })).statusCode,
+  ).toBe(204)
+  expect((await mint(app, cookie)).statusCode).toBe(403)
 })
 
 test('minting needs the page origin and an allowed one', async () => {
@@ -382,18 +445,37 @@ test('at most two terminals at once', async () => {
   await expectGone(app)
 })
 
-test('revoking the session, signing out and stopping Score kill the shell and its jobs', async () => {
-  for (const how of ['revoke', 'sign-out', 'stop'] as const) {
+/** Opens a terminal whose shell has a background job; resolves once both pids are known. */
+async function terminalWithJob(app: FastifyInstance, cookie: string, jobCommand = 'sleep 300 &') {
+  const socket = await connect(app, await ticketFor(app, cookie), cookie)
+  const screen = reader(socket)
+  socket.send(Buffer.from(`${jobCommand} echo "pids=$$:$!:"\r`))
+  const start = Date.now()
+  let pids: RegExpExecArray | null = null
+  while (!pids && Date.now() - start < 30_000) {
+    pids = /pids=(\d+):(\d+):/.exec(screen.output)
+    if (!pids) await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  if (!pids) throw new Error(`No pids in ${JSON.stringify(screen.output.slice(-300))}`)
+  return { socket, screen, shell: Number(pids[1]), job: Number(pids[2]) }
+}
+
+async function exitFrame(screen: ReturnType<typeof reader>, timeoutMs = 30_000) {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    const frame = screen.frames.find((item) => (item as { type?: string }).type === 'exit')
+    if (frame) return frame
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  throw new Error('No exit frame')
+}
+
+test.each(['revoke', 'sign-out', 'stop'] as const)(
+  'on %s the shell and its background jobs are killed',
+  async (how) => {
     const { app } = makeApp()
     const cookie = await pair(app)
-    const socket = await connect(app, await ticketFor(app, cookie), cookie)
-    const screen = reader(socket)
-    socket.send(Buffer.from('sleep 300 & echo "pids=$$:$!:"\r'))
-    await screen.until(':\r\n', 10_000).catch(() => undefined)
-    await screen.until('pids=')
-    const match = /pids=(\d+):(\d+):/.exec(screen.output.replace(/\r/g, ''))
-    for (let i = 0; i < 100 && !match; i++) await new Promise((resolve) => setTimeout(resolve, 50))
-    const [, shell, job] = /pids=(\d+):(\d+):/.exec(screen.output)!.map(Number)
+    const { screen, shell, job } = await terminalWithJob(app, cookie)
     if (how === 'revoke') app.pairing.revoke(cookie)
     if (how === 'sign-out')
       expect(
@@ -406,11 +488,30 @@ test('revoking the session, signing out and stopping Score kill the shell and it
         ).statusCode,
       ).toBe(204)
     if (how === 'stop') await app.close()
-    expect(await gone(shell!), `${how}: shell`).toBe(true)
-    expect(await gone(job!), `${how}: background job`).toBe(true)
-    expect(screen.frames.some((frame) => (frame as { type?: string }).type === 'exit')).toBe(true)
-    if (how !== 'stop') await app.close()
-  }
+    await exitFrame(screen)
+    expect(await gone(shell, 30_000), 'shell').toBe(true)
+    expect(await gone(job, 30_000), 'background job').toBe(true)
+    if (how !== 'stop') await expectGone(app)
+  },
+  90_000,
+)
+
+test('a shell that exits at once leaves its slot taken until a SIGHUP-ignoring job is killed', async () => {
+  const { app } = makeApp({}, undefined, { limits: { killGraceMs: 600 } })
+  const cookie = await pair(app)
+  const { socket, screen, job } = await terminalWithJob(
+    app,
+    cookie,
+    '(trap "" HUP; exec sleep 300) &',
+  )
+  socket.send(Buffer.from('exit\r'))
+  await exitFrame(screen)
+  // The shell is gone; the job ignored SIGHUP, so the terminal still counts and the job is still there.
+  expect(app.terminals!.count).toBe(1)
+  expect(await gone(job, 100)).toBe(false)
+  // SIGKILL after the grace period ends it, and only then the slot is free.
+  expect(await gone(job, 30_000)).toBe(true)
+  await expectGone(app)
 })
 
 test('the owner can list and close an open terminal', async () => {
@@ -479,4 +580,80 @@ test('remote mode: the terminal routes are not public, and Host is checked on th
   expect(id).toBeTruthy()
   app.pairing.revokeBrowser(id)
   await expectGone(app)
+})
+
+test('HTTPS only: a plain-HTTP request gets no ticket and no WebSocket', async () => {
+  // inject() has no TLS socket, exactly like a plain-HTTP connection to a TLS-capable app.
+  const { app } = makeApp({}, undefined, { secure: false })
+  const cookie = await pair(app)
+  app.pairing.markFresh(cookie)
+  const refused = await mint(app, cookie)
+  expect(refused.statusCode).toBe(426)
+  expect(refused.json().error.code).toBe('https_required')
+  // No ticket can be obtained, and the upgrade is refused on its own as well.
+  await rejected(connect(app, 'x'.repeat(43), cookie))
+  expect(app.terminals?.count).toBe(0)
+})
+
+test('local mode (no TLS listener) offers no terminal at all, and says why', async () => {
+  const home = tempDir()
+  hostPassword(home, PASSWORD)
+  const app = buildApp({
+    config: loadConfig({ SCORE_TERMINAL: '1' }),
+    logger: false,
+    security: new SecurityPassword(home),
+  })
+  cleanup.push(() => app.close())
+  const cookie = await pair(app)
+  expect(app.terminals).toBeUndefined()
+  expect((await mint(app, cookie)).statusCode).toBe(404)
+  const status = SecurityStatusSchema.parse(
+    (await app.inject({ url: '/api/session/security', headers: { ...headers, cookie } })).json(),
+  )
+  expect(status).toMatchObject({ terminal: false })
+  expect(status.terminalUnavailable).toMatch(/HTTPS/)
+})
+
+test('over a real TLS connection the ticket is issued', async () => {
+  const { app } = makeApp({}, undefined, { secure: false })
+  await app.listen({ host: '127.0.0.1', port: 0 })
+  const port = (app.server.address() as { port: number }).port
+  const call = (path: string, cookie: string | undefined, body: string | undefined) =>
+    new Promise<{ status: number; headers: Record<string, unknown>; body: string }>(
+      (resolve, reject) => {
+        const request = httpsRequest(
+          {
+            host: '127.0.0.1',
+            port,
+            path,
+            method: 'POST',
+            rejectUnauthorized: false,
+            headers: {
+              ...headers,
+              ...(cookie ? { cookie } : {}),
+              'content-type': 'application/json',
+            },
+          },
+          (response) => {
+            let text = ''
+            response.on('data', (chunk: Buffer) => (text += chunk))
+            response.on('end', () =>
+              resolve({ status: response.statusCode!, headers: response.headers, body: text }),
+            )
+          },
+        )
+        request.on('error', reject)
+        request.end(body)
+      },
+    )
+  const paired = await call(
+    '/api/session/pair',
+    undefined,
+    JSON.stringify({ token: app.pairing.createToken() }),
+  )
+  expect(paired.status).toBe(204)
+  const cookie = String(paired.headers['set-cookie']).split(';')[0]!
+  app.pairing.markFresh(cookie)
+  const minted = await call('/api/terminal/tickets', cookie, '{}')
+  expect(minted.status).toBe(200)
 })

@@ -23,7 +23,14 @@ export interface TerminalOptions {
   launch?: TerminalLaunch
   clock?: () => number
   limits?: Partial<TerminalLimits>
+  /** Has the owner set the security password on the Score machine itself (`scripts/score password`)? */
+  hostEnrolled?: () => boolean
+  /** Is this request on a real TLS connection? (The socket decides, never a header; tests substitute.) */
+  isSecure?: (request: { raw: { socket: unknown } }) => boolean
 }
+
+const tlsSocket = (request: { raw: { socket: unknown } }): boolean =>
+  (request.raw.socket as { encrypted?: boolean } | undefined)?.encrypted === true
 
 const QuerySchema = z.object({ ticket: z.string().min(20).max(128) })
 
@@ -63,6 +70,12 @@ export function registerTerminalRoutes(
     options.limits,
     (session) => app.pairing.isHashPaired(session),
   )
+  const isSecure = options.isSecure ?? tlsSocket
+  const hostEnrolled = options.hostEnrolled ?? (() => false)
+  const requireTls = (request: { raw: { socket: unknown } }) => {
+    if (!isSecure(request))
+      throw new HttpError(426, 'https_required', 'The terminal works only over HTTPS')
+  }
   const guarded = { preHandler: humanGuard(app.pairing) }
   const mintLimit = new RateLimiter(10, 60_000, clock)
   const originOf = (request: { headers: { origin?: string | undefined } }) => {
@@ -82,12 +95,20 @@ export function registerTerminalRoutes(
   })
 
   app.post('/api/terminal/tickets', guarded, async (request) => {
+    requireTls(request)
     const origin = originOf(request)
     const session = sessionOf(request.headers.cookie)
     if (!mintLimit.allow(session))
       throw new HttpError(429, 'too_many_attempts', 'Wait a minute before opening another terminal')
     if (manager.full)
       throw new HttpError(429, 'too_many_terminals', 'Two terminals are already open')
+    // A password set from a browser proves nothing a stolen cookie couldn't also do: it must come from the host.
+    if (!hostEnrolled())
+      throw new HttpError(
+        403,
+        'second_factor_not_enrolled',
+        'Set the security password on the Score machine with scripts/score password first',
+      )
     // Taken (and used up) before anything is minted: one password or passkey check opens one terminal.
     if (!app.pairing.takeFresh(session, FRESH_AUTH_MS))
       throw new HttpError(
@@ -124,6 +145,7 @@ export function registerTerminalRoutes(
       {
         websocket: true,
         preValidation: async (request) => {
+          requireTls(request)
           const origin = originOf(request)
           // Same Host rule as remote mode applies to every request; local mode has no other host check.
           if (request.headers.host !== new URL(origin).host)

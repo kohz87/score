@@ -42,6 +42,10 @@ export interface TerminalLimits {
   /** Drop a terminal whose client has not drained for this long. */
   stallMs: number
   killGraceMs: number
+  /** How often the clean-up loop re-checks the terminal's session for survivors. */
+  reapMs: number
+  /** After SIGKILL has had this long and processes remain, stop waiting (they are unkillable). */
+  giveUpMs: number
   tickMs: number
 }
 export const DEFAULT_LIMITS: TerminalLimits = {
@@ -52,6 +56,8 @@ export const DEFAULT_LIMITS: TerminalLimits = {
   lowWater: 256 * 1024,
   stallMs: 60_000,
   killGraceMs: 3_000,
+  reapMs: 200,
+  giveUpMs: 5_000,
   tickMs: 1_000,
 }
 const MAX_INPUT_FRAME = 64 * 1024
@@ -77,6 +83,10 @@ interface Live {
   pausedSince: number | undefined
   exited: boolean
   closing: CloseReason | undefined
+  exitCode: number | null
+  reapElapsed: number
+  /** Runs the clean-up check now (the shell just exited while a close was already under way). */
+  recheck: (() => void) | undefined
   killTimer: NodeJS.Timeout | undefined
   done: Promise<void>
   finish: () => void
@@ -150,6 +160,9 @@ export class TerminalManager {
       pausedSince: undefined,
       exited: false,
       closing: undefined,
+      exitCode: null,
+      reapElapsed: 0,
+      recheck: undefined,
       killTimer: undefined,
       done,
       finish,
@@ -173,7 +186,14 @@ export class TerminalManager {
     })
     pty.onExit(({ exitCode }) => {
       terminal.exited = true
-      this.finishTerminal(terminal, terminal.closing ?? 'exited', exitCode)
+      terminal.exitCode = exitCode
+      // The shell is gone, but its jobs may not be: the slot stays until the whole session is (see `reap`).
+      if (!terminal.closing) {
+        terminal.closing = 'exited'
+        this.sendFrame(socket, { type: 'exit', reason: 'exited', code: exitCode })
+        if (socket.readyState === OPEN) socket.close(1000, 'exited')
+        this.reap(terminal)
+      } else terminal.recheck?.()
     })
     socket.on('message', (data, isBinary) => {
       if (terminal.closing) return
@@ -203,20 +223,14 @@ export class TerminalManager {
     return terminal.id
   }
 
-  /** Ends one terminal: tells the client, hangs up the process group and force-kills it after the grace period. */
+  /** Ends one terminal: tells the client, hangs up its whole session and force-kills survivors after the grace period. */
   close(id: string, reason: CloseReason): void {
     const terminal = this.#live.get(id)
     if (!terminal || terminal.closing) return
     terminal.closing = reason
     this.sendFrame(terminal.socket, { type: 'exit', reason, code: null })
     if (terminal.socket.readyState === OPEN) terminal.socket.close(1000, reason)
-    if (terminal.exited) return this.finishTerminal(terminal, reason, null)
-    this.signal(terminal, 'SIGHUP')
-    terminal.killTimer = setTimeout(() => {
-      this.signal(terminal, 'SIGKILL')
-      // A process stuck in uninterruptible sleep must not hold a slot forever.
-      terminal.killTimer = setTimeout(() => this.finishTerminal(terminal, reason, null), 1_000)
-    }, this.#limits.killGraceMs)
+    this.reap(terminal)
   }
 
   /** Close every terminal of a session (revoked, signed out, expired). */
@@ -253,11 +267,43 @@ export class TerminalManager {
     }
   }
 
-  private signal(terminal: Live, signal: NodeJS.Signals): void {
+  /**
+   * Clean-up that outlives the shell. SIGHUP the terminal's whole session at once, SIGKILL it after the grace period,
+   * and keep checking until no process of the session is left (jobs that ignore SIGHUP survive the shell). The terminal
+   * keeps its slot meanwhile. Linux enumerates the session through /proc; elsewhere only the shell's own group is known.
+   */
+  private reap(terminal: Live): void {
+    const step = () => {
+      clearTimeout(terminal.killTimer)
+      const members = sessionMembers(terminal.pty.pid)
+      const grace = this.#limits.killGraceMs
+      const settled = members.length === 0 && (terminal.exited || terminal.reapElapsed >= grace)
+      if (settled || terminal.reapElapsed >= grace + this.#limits.giveUpMs) {
+        this.finishTerminal(terminal, terminal.closing ?? 'closed', terminal.exitCode)
+        return
+      }
+      if (terminal.reapElapsed >= grace) this.signal(terminal, 'SIGKILL', members)
+      else if (terminal.reapElapsed === 0) this.signal(terminal, 'SIGHUP', members)
+      terminal.reapElapsed += this.#limits.reapMs
+      terminal.killTimer = setTimeout(step, this.#limits.reapMs)
+    }
+    // The shell exiting mid-close: finish at once if nothing else is left, without advancing the escalation clock.
+    terminal.recheck = () => {
+      if (sessionMembers(terminal.pty.pid).length === 0)
+        this.finishTerminal(terminal, terminal.closing ?? 'closed', terminal.exitCode)
+    }
+    step()
+  }
+
+  private signal(
+    terminal: Live,
+    signal: NodeJS.Signals,
+    members: { pid: number; pgid: number }[],
+  ): void {
     // node-pty starts the shell as a session leader, so its pid is its session and process group id. Jobs run in groups
     // of their own inside that session: signal each of those groups too, not only the shell's.
-    const groups = new Set([terminal.pty.pid])
-    for (const member of sessionMembers(terminal.pty.pid)) groups.add(member.pgid)
+    const groups = new Set(members.map((member) => member.pgid))
+    if (!terminal.exited) groups.add(terminal.pty.pid)
     for (const group of groups) {
       try {
         process.kill(-group, signal)
@@ -265,11 +311,19 @@ export class TerminalManager {
         // Gone already.
       }
     }
-    // A stand-in without a group of its own (tests): the process itself.
-    try {
-      process.kill(terminal.pty.pid, signal)
-    } catch {
-      // Gone already.
+    for (const member of members) {
+      try {
+        process.kill(member.pid, signal)
+      } catch {
+        // Gone already.
+      }
+    }
+    if (!terminal.exited) {
+      try {
+        process.kill(terminal.pty.pid, signal)
+      } catch {
+        // A stand-in without a process (tests).
+      }
     }
   }
 
@@ -277,16 +331,13 @@ export class TerminalManager {
     if (!this.#live.delete(terminal.id)) return
     clearTimeout(terminal.killTimer)
     terminal.closing ??= reason
-    if (terminal.socket.readyState === OPEN) {
-      this.sendFrame(terminal.socket, { type: 'exit', reason, code })
-      terminal.socket.close(1000, reason)
-    }
     this.audit.info(
       {
         event: reason === 'exited' || reason === 'closed' ? 'terminal.close' : 'terminal.kill',
         terminalId: terminal.id,
         session: terminal.session.slice(0, 8),
         reason,
+        exitCode: code,
         durationMs: this.clock() - terminal.openedAt,
       },
       reason === 'exited' || reason === 'closed' ? 'Terminal closed' : 'Terminal killed',

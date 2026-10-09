@@ -1,6 +1,6 @@
 // Sets (or resets) Score's security password from the host terminal: `scripts/score password`.
 // Same format as apps/server/src/auth/security-password.ts (salted scrypt, N=2^15, r=8, p=1, 32-byte key).
-import { randomBytes, scryptSync } from 'node:crypto'
+import { createHash, randomBytes, scryptSync } from 'node:crypto'
 import { renameSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -54,5 +54,12 @@ writeFileSync(temp, `scrypt$15$8$1$${salt.toString('base64url')}$${key.toString(
   mode: 0o600,
   flag: 'wx',
 })
+const line = `scrypt$15$8$1$${salt.toString('base64url')}$${key.toString('base64url')}`
+// Marks the password as host-issued (the web terminal trusts only those); the digest ties the mark to this exact hash.
+writeFileSync(
+  join(home, 'security-password.origin'),
+  `host ${createHash('sha256').update(line).digest('hex')}\n`,
+  { mode: 0o600 },
+)
 renameSync(temp, path)
 console.log(`Security password set (${path}). It applies at once; no restart needed.`)
