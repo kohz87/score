@@ -60,6 +60,8 @@ export const ModelOptionSchema = z.object({
   reason: z.string().nullable(),
   free: z.boolean(),
   price: z.object({ input: z.string(), output: z.string() }).nullable(),
+  /** Context window in tokens, when Hermes's model options carry it. */
+  contextLength: z.int().positive().nullable().optional(),
 })
 export type ModelOption = z.infer<typeof ModelOptionSchema>
 export const ModelsQuerySchema = z.object({ q: z.string().max(100).optional() })

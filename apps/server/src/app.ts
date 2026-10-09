@@ -7,6 +7,7 @@ import { ApprovalOutbox } from './domain/approval-outbox.ts'
 import { createAgentDirectory, withAgentDirectory } from './http/agent-directory.ts'
 import { registerAgentRoutes } from './http/agents.ts'
 import { registerProfileRoutes } from './http/profiles.ts'
+import { registerAgentContextRoutes } from './http/agent-context.ts'
 import { registerAgentHistoryRoutes } from './http/agent-history.ts'
 import { registerAgentTabRoutes } from './http/agent-tabs.ts'
 import { registerWorkspaceRoutes } from './http/workspace.ts'
@@ -275,6 +276,7 @@ export function buildApp({
     })
     registerWatchRoutes(app, { port, db, ingest })
     registerAgentHistoryRoutes(app, { port, db })
+    registerAgentContextRoutes(app, { port, db })
     registerAgentPauseRoutes(app, {
       db,
       ingest,

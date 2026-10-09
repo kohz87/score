@@ -242,6 +242,16 @@ export const MessagePartSchema = z.discriminatedUnion('kind', [
     briefId: z.string().min(1),
   }),
   z.object({ kind: z.literal('tools'), summary: z.string(), runId: z.string().min(1) }),
+  // One tool call of a run (PLAN 5.25). `args` and `result` are redacted previews, bounded by the server.
+  z.object({
+    kind: z.literal('tool'),
+    tool: z.string().min(1).max(200),
+    args: z.string().max(2048),
+    result: z.string().max(2048).nullable(),
+    status: z.enum(['running', 'ok', 'error']),
+  }),
+  // The model's reasoning text, redacted and bounded; shown collapsed.
+  z.object({ kind: z.literal('thinking'), text: z.string().max(8192) }),
   z.object({
     kind: z.literal('file'),
     path: z.string(),

@@ -136,6 +136,8 @@ export const parts = [
   { kind: 'text', text: 'Starting the contract' },
   { kind: 'plan', lanes: [{ agentId: 'builder', blocks: [lane] }], briefId: 'brief-1' },
   { kind: 'tools', summary: 'Ran tests', runId: 'run-1' },
+  { kind: 'tool', tool: 'terminal', args: 'pnpm test', result: '12 passed', status: 'ok' },
+  { kind: 'thinking', text: 'The tests come first.' },
   { kind: 'file', path: 'src/types.ts', added: 20, removed: 1 },
   { kind: 'approval', approvalId: 'approval-1' },
   { kind: 'review', verdict: 'approved', taskId: 'task-1' },

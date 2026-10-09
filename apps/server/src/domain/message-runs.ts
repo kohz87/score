@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
+import type { MessagePart } from '@score/contract'
 import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
@@ -343,6 +344,59 @@ export function toolsSummary(tools: string[]): string | null {
   return parts.join(' and ')
 }
 
+const MAX_TOOL_CARDS = 30
+const MAX_THINKING_PARTS = 8
+const ActivityRowSchema = z.object({
+  seq: z.int(),
+  tool: z.string().min(1).nullable(),
+  text: z.string().nullable(),
+  preview: z.string().nullable(),
+  status: z.enum(['running', 'ok', 'error']).nullable(),
+  result_preview: z.string().nullable(),
+})
+
+/**
+ * The tool calls and reasoning of a run as message parts (PLAN 5.25), in the order Hermes sent them. Stored previews were
+ * redacted when they arrived; they are redacted and bounded again here because the parts become the stored message.
+ */
+export function activityParts(
+  sqlite: DatabaseSync,
+  runId: string,
+): { parts: MessagePart[]; overflow: boolean } {
+  const rows = z.array(ActivityRowSchema).parse(
+    sqlite
+      .prepare(
+        `SELECT seq, tool, NULL AS text, preview, status, result_preview FROM tool_calls WHERE run_id = ?1
+         UNION ALL SELECT seq, NULL, text, NULL, NULL, NULL FROM run_thinking WHERE run_id = ?1 ORDER BY seq`,
+      )
+      .all(runId),
+  )
+  const parts: MessagePart[] = []
+  let tools = 0
+  let thoughts = 0
+  let overflow = false
+  for (const row of rows) {
+    if (row.tool && row.status) {
+      if (tools >= MAX_TOOL_CARDS) {
+        overflow = true
+        continue
+      }
+      tools++
+      parts.push({
+        kind: 'tool',
+        tool: row.tool.slice(0, 200),
+        args: redactBounded(row.preview ?? '', 400),
+        result: row.result_preview === null ? null : redactBounded(row.result_preview, 500),
+        status: row.status,
+      })
+    } else if (row.text && thoughts < MAX_THINKING_PARTS) {
+      thoughts++
+      parts.push({ kind: 'thinking', text: redactBounded(row.text, 4096) })
+    }
+  }
+  return { parts, overflow }
+}
+
 function failureNotice(status: string, error: string | null | undefined): string {
   const detail = error ? `: ${redactBounded(error, 300)}` : ''
   if (status === 'cancelled') return 'This run was stopped.'
@@ -406,8 +460,12 @@ export function completeRunMessage(
   const tools = z
     .array(z.object({ tool: z.string() }))
     .parse(sqlite.prepare('SELECT tool FROM tool_calls WHERE run_id = ? ORDER BY seq').all(runId))
+  const activity = activityParts(sqlite, runId)
+  message.parts = [...activity.parts, ...message.parts]
+  // Past the card limit (or with no card at all) the compact summary stays, as it is for messages from before 5.25.
   const summary = toolsSummary(tools.map(({ tool }) => tool))
-  if (summary) message.parts.push({ kind: 'tools', summary, runId })
+  if (summary && (activity.overflow || !activity.parts.some((part) => part.kind === 'tool')))
+    message.parts.push({ kind: 'tools', summary, runId })
   // A plan-first turn only proposes: the checklist becomes a plan part, and nothing is handed off until the
   // person presses Start plan.
   if (mapping.plan_first) {

@@ -29,6 +29,8 @@ test.each([
   { kind: 'plan', lanes: [{ agentId: '', blocks: [] }], briefId: 'brief-1' },
   { kind: 'tools', summary: 'Ran tests', runId: '' },
   { kind: 'file', path: 'src/types.ts', added: '1', removed: 0 },
+  { kind: 'tool', tool: 'terminal', args: 'x', result: null, status: 'stuck' },
+  { kind: 'thinking' },
   { kind: 'review', verdict: 'pending', taskId: null },
   { kind: 'text' },
 ])('rejects an invalid $kind message part', (part) => {

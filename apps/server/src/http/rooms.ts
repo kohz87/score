@@ -305,6 +305,34 @@ export function registerRoomRoutes(
     return reply.code(202).send({ messageId: replyId })
   })
 
+  // Stop (PLAN 5.25): ends the Score-started run that is writing a streaming reply. The run's cancelled status then
+  // completes the reply with "This run was stopped." through the normal path.
+  app.post('/api/rooms/:roomId/messages/:messageId/stop', mutation, async (request) => {
+    const { roomId, messageId } = z
+      .object({ roomId: ParamsSchema.shape.roomId, messageId: z.string().min(1).max(200) })
+      .parse(request.params)
+    const row = z
+      .object({
+        run_id: z.string().nullable(),
+        agent_id: z.string().min(1),
+        state: z.enum(['pending', 'active', 'completed', 'failed']),
+      })
+      .nullish()
+      .parse(
+        db.sqlite
+          .prepare(
+            `SELECT mr.run_id, mr.agent_id, mr.state FROM message_runs mr JOIN messages m ON m.id = mr.message_id
+             WHERE mr.message_id = ? AND mr.room_id = ? AND m.deleted_at IS NULL`,
+          )
+          .get(messageId, roomId),
+      )
+    if (!row) throw new HttpError(404, 'not_found', 'Unknown message')
+    if (row.state !== 'active' || !row.run_id)
+      throw new HttpError(409, 'conflict', 'This reply is not being written right now')
+    await port.stopRun({ agentId: row.agent_id, runId: row.run_id })
+    return { ok: true }
+  })
+
   app.post('/api/rooms/:roomId/messages', mutation, async (request) => {
     const { roomId } = ParamsSchema.parse(request.params)
     const body = MessageBodySchema.parse(request.body)

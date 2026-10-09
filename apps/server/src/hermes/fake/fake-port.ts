@@ -302,7 +302,10 @@ export function stepToObservation(
         if (['completed', 'failed', 'cancelled', 'interrupted'].includes(run.status))
           return [
             structuredClone(draft) as DomainEventDraft,
-            ...completeRunMessage(sqlite, run.id, now, { handoffs: run.status === 'completed' }),
+            ...completeRunMessage(sqlite, run.id, now, {
+              handoffs: run.status === 'completed',
+              status: run.status,
+            }),
           ]
       }
       if (step.kind === 'watch.frame') {
@@ -412,6 +415,22 @@ export function stepToObservation(
       return [structuredClone(draft)] as ReturnType<Observation['apply']>
     },
   }
+}
+
+/** Demo hooks for the fake adapter: phrases in the message pick a Markdown reply or a long one (Stop). */
+function demoReply(
+  input: string,
+  base: { text: string; tools: string[] },
+): { text: string; tools: string[] } {
+  const message = input.split('\n\nRoom context:')[0] ?? ''
+  if (/markdown demo/i.test(message))
+    return {
+      text: '## Plan\n\nHere is **the change**:\n\n```ts\nconst pageSize = 25\n```\n\n- first\n- second\n',
+      tools: ['terminal'],
+    }
+  if (/long reply/i.test(message))
+    return { text: 'Working through the details. '.repeat(40), tools: [] }
+  return base
 }
 
 export class FakePort implements HermesPort {
@@ -1081,6 +1100,7 @@ export class FakePort implements HermesPort {
       reason: null,
       free: false,
       price: { input: '$2.00', output: '$10.00' },
+      contextLength: 272000,
     })),
     {
       provider: 'nous',
@@ -1108,6 +1128,17 @@ export class FakePort implements HermesPort {
       reason: null,
       free: true,
       price: null,
+    },
+    // The model the demo agents run on (the Chat context meter reads its window).
+    {
+      provider: 'local',
+      providerLabel: 'Local server',
+      model: 'fake-model',
+      available: true,
+      reason: null,
+      free: true,
+      price: null,
+      contextLength: 128000,
     },
   ]
   async listModels(q?: string): Promise<ModelOption[]> {
@@ -1470,7 +1501,7 @@ export class FakePort implements HermesPort {
       const runId = `fake-run:${req.turnId}`
       const startedAt = this.scheduler.now()
       const run = { ...exampleRun(req.agentId, runId, this.now()), model: req.model ?? null }
-      const base = this.reply(req)
+      const base = demoReply(req.input, this.reply(req))
       const seen = req.images?.length ?? 0
       const response = seen
         ? { ...base, text: `${base.text} I can see ${seen} image${seen === 1 ? '' : 's'}.` }
@@ -1522,7 +1553,7 @@ export class FakePort implements HermesPort {
                         sqlite
                           .prepare(
                             `INSERT INTO tool_calls
-                      (run_id, seq, tool, preview, status, started_at, ended_at) VALUES (?, ?, ?, ?, 'ok', ?, ?) ON CONFLICT DO NOTHING`,
+                      (run_id, seq, tool, preview, status, started_at, ended_at, result_preview) VALUES (?, ?, ?, ?, 'ok', ?, ?, ?) ON CONFLICT DO NOTHING`,
                           )
                           .run(
                             runId,
@@ -1533,10 +1564,24 @@ export class FakePort implements HermesPort {
                               ? JSON.stringify({
                                   path: `src/${seq % 2 ? 'feed-card.css' : 'activity-feed.ts'}`,
                                 })
-                              : null,
+                              : tool === 'terminal'
+                                ? ['pnpm test', 'pnpm lint', 'git status'][seq % 3]!
+                                : null,
                             now,
                             now,
+                            tool === 'terminal' ? '3 checks passed' : 'ok',
                           )
+                      sqlite
+                        .prepare(
+                          'UPDATE runs SET input_tokens = 1200, output_tokens = 240, cost_usd = 0.0042 WHERE id = ?',
+                        )
+                        .run(runId)
+                      if (response.tools.length)
+                        sqlite
+                          .prepare(
+                            'INSERT INTO run_thinking (run_id, seq, text) VALUES (?, -1, ?) ON CONFLICT DO NOTHING',
+                          )
+                          .run(runId, 'Check the tests first, then edit the feed.')
                       // Neutral demo frames so Watch has something to replay in fake mode.
                       const frames: DomainEventDraft[] = []
                       for (const [seq, tool] of response.tools.entries()) {

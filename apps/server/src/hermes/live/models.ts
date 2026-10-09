@@ -50,8 +50,17 @@ function flatten(providers: Providers): ModelOption[] {
         reason: available ? null : 'Not on your plan',
         free: pricing?.free === true || model.endsWith(':free'),
         price: input !== null && output !== null ? { input, output } : null,
+        contextLength: contextLengthOf(provider, model),
       })
     }
   }
   return items
+}
+
+/** Hermes's options carry no context window today; read one if a build adds `context_lengths: { model: tokens }`. */
+function contextLengthOf(provider: Providers[number], model: string): number | null {
+  const lengths = (provider as { context_lengths?: unknown }).context_lengths
+  if (typeof lengths !== 'object' || lengths === null) return null
+  const value = (lengths as Record<string, unknown>)[model]
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null
 }

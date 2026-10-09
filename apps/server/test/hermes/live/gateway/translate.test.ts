@@ -313,12 +313,12 @@ test.each(['l2', 'l4a'] as const)(
       .map((event) => event.delta)
       .join('')
     expect(reply).toMatchObject({ id: initial.id, streaming: false })
-    expect(reply.parts[0]).toEqual({ kind: 'text', text })
-    expect(reply.parts.find((part) => part.kind === 'tools')).toMatchObject({
-      kind: 'tools',
-      summary: expect.stringMatching(/^Ran \d+ commands?$/),
-      runId: context.runId,
-    })
+    expect(reply.parts.find((part) => part.kind === 'text')).toEqual({ kind: 'text', text })
+    // Each call became a tool card in Hermes order (PLAN 5.25); the compact summary is only for old messages.
+    const cards = reply.parts.filter((part) => part.kind === 'tool')
+    expect(cards.length).toBeGreaterThan(0)
+    expect(cards.every((part) => part.tool.length > 0 && part.status !== 'running')).toBe(true)
+    expect(reply.parts.some((part) => part.kind === 'tools')).toBe(false)
     // Unsettled text is held back, so some deltas emit nothing until a later one settles them.
     const emitted = Number(
       env.db.sqlite.prepare("SELECT COUNT(*) AS n FROM events WHERE type = 'message.delta'").get()
@@ -680,4 +680,86 @@ test('an unterminated key block past the hold limit publishes none of its body, 
   const final = JSON.stringify(replyMessage()) + eventsText()
   for (const line of body) expect(final).not.toContain(line.slice(0, 40))
   expect(replyMessage().streaming).toBe(false)
+})
+
+test('reasoning and tool calls become redacted, bounded cards on the finished reply (PLAN 5.25)', async () => {
+  const context = await admittedMessage()
+  const secret = 'sk-' + 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5'
+  const base = { run_id: context.runId, timestamp: 1 }
+  const events = [
+    { ...base, event: 'reasoning.available', seq: 1, text: `use the key ${secret} carefully` },
+    {
+      ...base,
+      event: 'tool.started',
+      seq: 2,
+      tool: 'terminal',
+      preview: `curl -H "Authorization: Bearer ${secret}" x`,
+    },
+    {
+      ...base,
+      event: 'tool.completed',
+      seq: 3,
+      tool: 'terminal',
+      preview: 'x'.repeat(900),
+      duration: 0.2,
+      error: true,
+    },
+    { ...base, event: 'message.delta', seq: 4, delta: 'Done.' },
+    {
+      ...base,
+      event: 'run.completed',
+      seq: 5,
+      output: 'Done.',
+      usage: { input_tokens: 5, output_tokens: 2 },
+    },
+  ]
+  for (const event of events)
+    await env.ingest.submit(translateRunEvent(context, event, { unknownEvents: 0 }))
+  const reply = replyMessage()
+  expect(reply.parts.map((part) => part.kind)).toEqual(['thinking', 'tool', 'text'])
+  const [thinking, tool] = reply.parts
+  expect(JSON.stringify(reply.parts)).not.toContain(secret)
+  expect(thinking).toMatchObject({ kind: 'thinking' })
+  expect(tool).toMatchObject({ kind: 'tool', tool: 'terminal', status: 'error' })
+  if (tool?.kind === 'tool') expect(tool.result!.length).toBeLessThanOrEqual(500)
+})
+
+test('more than 30 tool calls keep the compact summary after the first 30 cards (PLAN 5.25)', async () => {
+  const context = await admittedMessage()
+  const base = { run_id: context.runId, timestamp: 1 }
+  let seq = 1
+  for (let call = 0; call < 32; call++) {
+    await env.ingest.submit(
+      translateRunEvent(
+        context,
+        { ...base, event: 'tool.started', seq: seq++, tool: 'terminal', preview: `c${call}` },
+        { unknownEvents: 0 },
+      ),
+    )
+    await env.ingest.submit(
+      translateRunEvent(
+        context,
+        {
+          ...base,
+          event: 'tool.completed',
+          seq: seq++,
+          tool: 'terminal',
+          preview: 'ok',
+          duration: 0.1,
+          error: false,
+        },
+        { unknownEvents: 0 },
+      ),
+    )
+  }
+  await env.ingest.submit(
+    translateRunEvent(
+      context,
+      { ...base, event: 'run.completed', seq: seq, output: 'ok' },
+      { unknownEvents: 0 },
+    ),
+  )
+  const reply = replyMessage()
+  expect(reply.parts.filter((part) => part.kind === 'tool')).toHaveLength(30)
+  expect(reply.parts.some((part) => part.kind === 'tools')).toBe(true)
 })

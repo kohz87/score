@@ -151,13 +151,20 @@ test('slash menu comes from /api/commands and supports arrows, Enter, Escape and
   mount()
   type('/')
   const list = await screen.findByRole('listbox', { name: 'Commands' })
+  await screen.findByText('Create a task.')
   expect(
     within(list)
       .getAllByRole('option')
       .map((o) => o.textContent),
-  ).toEqual(['/assignCreate a task.', '/modelUse a model.', '/rememberSave a fact.'])
+  ).toEqual([
+    '/assignCreate a task.',
+    '/modelUse a model.',
+    '/rememberSave a fact.',
+    '/compressCompact this agent’s session.',
+    '/usageShow tokens and cost for this agent.',
+  ])
   press('ArrowUp')
-  expect(screen.getAllByRole('option')[2]!.getAttribute('aria-selected')).toBe('true')
+  expect(screen.getAllByRole('option')[4]!.getAttribute('aria-selected')).toBe('true')
   press('ArrowDown')
   press('ArrowDown')
   press('Enter')

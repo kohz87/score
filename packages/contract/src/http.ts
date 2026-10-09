@@ -82,6 +82,14 @@ export const PostMessageResponseSchema = z.object({
   routedTo: z.array(AgentIdSchema),
   command: CommandResultSchema.nullable(),
 })
+/** `GET /api/agents/:agentId/context` (PLAN 5.25): the agent's latest run usage and its model's context window. */
+export const AgentContextSchema = z.object({
+  model: z.string().nullable(),
+  tokens: z.object({ input: z.int().nonnegative(), output: z.int().nonnegative() }).nullable(),
+  costUsd: z.number().nonnegative().nullable(),
+  contextLength: z.int().positive().nullable(),
+})
+export type AgentContext = z.infer<typeof AgentContextSchema>
 /** `POST /api/rooms/:roomId/messages/:messageId/retry` (202): the new placeholder reply. */
 export const RetryReplyResponseSchema = z.object({ messageId: z.string().min(1) })
 export type RetryReplyResponse = z.infer<typeof RetryReplyResponseSchema>

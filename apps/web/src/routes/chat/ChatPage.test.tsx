@@ -268,7 +268,8 @@ test('stream appends once, completes messages and clears typing and unread via r
   await screen.findByText('Hello team')
   emit('message.delta', { roomId: 'general', messageId: message.id, append: '!' }, 2)
   emit('message.delta', { roomId: 'general', messageId: message.id, append: '!' }, 2)
-  expect(screen.getByText('Hello team!')).toBeDefined()
+  // Streaming text is shown once per animation frame.
+  expect(await screen.findByText('Hello team!')).toBeDefined()
   expect(queryClient.getQueryData(messagesQuery('general').key)).toMatchObject({
     asOfSeq: 2,
     data: { items: [{ parts: [{ text: 'Hello team!' }] }] },
@@ -346,7 +347,7 @@ test('cursor pagination prepends history, deduplicates overlaps and updates hist
     fetchMock.mock.calls.some(([path]) => String(path).includes('before=cursor+%2B%2F%3D')),
   ).toBe(true)
   emit('message.delta', { messageId: 'history', roomId: 'general', append: ' updated' }, 2)
-  expect(screen.getByText('Earlier message updated')).toBeDefined()
+  expect(await screen.findByText('Earlier message updated')).toBeDefined()
   expect(screen.queryByRole('button', { name: 'Load older messages' })).toBeNull()
 })
 test('renders every message part and shows approval and plan cards', async () => {
@@ -395,9 +396,9 @@ test('renders every message part and shows approval and plan cards', async () =>
     expect(screen.getByText(text)).toBeDefined()
   expect(await screen.findByRole('button', { name: 'Approve' })).toBeDefined()
   expect(screen.getByRole('button', { name: 'Deny' })).toBeDefined()
-  expect(screen.getByText('Ready for review').parentElement?.getAttribute('aria-live')).toBe(
-    'polite',
-  )
+  expect(
+    screen.getByText('Ready for review').closest('.chat-message-parts')?.getAttribute('aria-live'),
+  ).toBe('polite')
 })
 test('lane.upserted updates the plan block of its brief live', () => {
   const block: LaneBlock = {
@@ -686,7 +687,8 @@ test('finished messages get an action row below the body, per author; streaming 
   const articles = screen.getAllByRole('article')
   expect(buttons(articles[0]!)).toEqual(['Edit', 'Copy', 'Delete'])
   expect(buttons(articles[1]!)).toEqual(['Copy', 'Retry', 'Delete'])
-  expect(within(articles[2]!).queryByRole('button')).toBeNull()
+  // A reply being written has Stop, and none of the finished-message actions.
+  expect(buttons(articles[2]!)).toEqual(['Stop'])
   // Below the body, never inside the header that holds the timestamp.
   const meta = articles[0]!.querySelector('.chat-message-meta')!
   expect(meta.querySelector('button')).toBeNull()
@@ -708,7 +710,7 @@ test('Copy puts the Markdown source on the clipboard and says Copied for two sec
   const writeText = vi.fn(async () => {})
   vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
   setup()
-  await screen.findByText('Shipped **now**')
+  await screen.findByText('now')
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy message from Lead' }))
@@ -723,7 +725,7 @@ test('Copy puts the Markdown source on the clipboard and says Copied for two sec
 test('Retry posts to the retry endpoint with an idempotency key; a 409 explains itself', async () => {
   items = [reply]
   setup()
-  await screen.findByText('Shipped **now**')
+  await screen.findByText('now')
   const retries = () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/retry'))
   const original = fetchMock.getMockImplementation()!
   fetchMock.mockImplementation(async (input, init) =>
