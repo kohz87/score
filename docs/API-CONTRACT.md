@@ -556,7 +556,7 @@ costUsd: number | null; task: { id; title } | null; brief: { id; title } | null;
 
 ## 9. Reports
 
-- `GET /api/reports?range=today|7d|30d` →
+- `GET /api/reports?range=today|7d|30d&tz=` or `GET /api/reports?range=custom&from=YYYY-MM-DD&to=YYYY-MM-DD&tz=` →
   ```ts
   {
     range
@@ -608,9 +608,14 @@ costUsd: number | null; task: { id; title } | null; brief: { id; title } | null;
   request, not the task's current assignee, minus time already working or waiting on you. An hour of active run with a human
   approval open the whole hour counts as working only. Spend = Hermes session costs (actual, else estimated);
   null when unknown. `totals.spendUsd` is null when any agent's spend is unknown (never a partial sum).
-- `GET /api/reports/export.csv?range=&tz=` → `text/csv`
+- `GET /api/reports/export.csv?range=&from=&to=&tz=` → `text/csv` (same query as the report)
 - Both take an optional `tz` (IANA zone, e.g. `Europe/London`): days and "today" are the viewer's, not the server's
   (often UTC). An unknown zone is `400`. Without it, the server's zone is used.
+- `range=custom` requires `from` and `to` (and they are rejected for the presets): both are inclusive local days in `tz`,
+  `from <= to`, at most 366 days apart, `to` not after today; otherwise `400 bad_request` with the reason. The response's
+  `range` is `custom` and `byDay` has one entry per local day from `from` to `to`; the window ends at the end of `to` (or
+  now, when `to` is today). Reports read only Score's own database and Hermes' read-only SQLite: agent ids come from Score's
+  agent projection, never from a Hermes CLI call, so the answer does not wait on Hermes.
 
 ## 10. Settings
 

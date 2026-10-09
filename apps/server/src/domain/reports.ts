@@ -48,8 +48,15 @@ export interface ReportWindow {
   days: string[]
 }
 
+/** Inclusive local days (YYYY-MM-DD) of a custom range. */
+export interface CustomDays {
+  from: string
+  to: string
+}
+
 export interface ReportInput {
   range: ReportRange
+  custom?: CustomDays
   now: number
   tz?: string
   agentIds: string[]
@@ -58,7 +65,7 @@ export interface ReportInput {
   facts: ReportFacts
 }
 
-const DAYS: Record<ReportRange, number> = { today: 1, '7d': 7, '30d': 30 }
+const DAYS = { today: 1, '7d': 7, '30d': 30 } as const
 
 export function localTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -109,7 +116,45 @@ function addDays(key: string, days: number): string {
   return new Date(Date.parse(`${key}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
 }
 
-export function reportWindow(range: ReportRange, now: number, tz = localTimeZone()): ReportWindow {
+export const MAX_CUSTOM_DAYS = 366
+
+/** The local day `now` falls on in `tz`. */
+export function todayKey(now: number, tz = localTimeZone()): string {
+  return dayKey(now, tz)
+}
+
+/** A reason a custom range is unusable, or null. Days are compared as calendar keys, so a DST change is no issue. */
+export function customRangeProblem(
+  custom: CustomDays,
+  now: number,
+  tz = localTimeZone(),
+): string | null {
+  const valid = (key: string) => /^\d{4}-\d{2}-\d{2}$/.test(key) && addDays(key, 0) === key
+  if (!valid(custom.from) || !valid(custom.to)) return 'from and to must be real dates (YYYY-MM-DD)'
+  if (custom.from > custom.to) return 'from must not be after to'
+  if (custom.to > dayKey(now, tz)) return 'to must not be after today'
+  const span = (Date.parse(custom.to) - Date.parse(custom.from)) / 86_400_000 + 1
+  if (span > MAX_CUSTOM_DAYS) return `a custom range covers at most ${MAX_CUSTOM_DAYS} days`
+  return null
+}
+
+export function reportWindow(
+  range: ReportRange,
+  now: number,
+  tz = localTimeZone(),
+  custom?: CustomDays,
+): ReportWindow {
+  if (range === 'custom') {
+    if (!custom) throw new Error('A custom range needs from and to')
+    const count = (Date.parse(custom.to) - Date.parse(custom.from)) / 86_400_000 + 1
+    const days = Array.from({ length: count }, (_, i) => addDays(custom.from, i))
+    // The end of the last day, or now when that day is today.
+    return {
+      from: startOfDay(custom.from, tz),
+      to: Math.min(now, startOfDay(addDays(custom.to, 1), tz) - 1),
+      days,
+    }
+  }
   const today = dayKey(now, tz)
   const days = Array.from({ length: DAYS[range] }, (_, i) => addDays(today, i - DAYS[range] + 1))
   return { from: startOfDay(days[0]!, tz), to: now, days }
@@ -213,11 +258,11 @@ const sum = (values: (number | null)[]): number | null => {
 const money = (value: number | null): number | null =>
   value === null ? null : Math.round(value * 1e6) / 1e6
 
-const RANGE_WORDS: Record<ReportRange, string> = {
+const RANGE_WORDS = {
   today: 'today',
   '7d': 'in the last 7 days',
   '30d': 'in the last 30 days',
-}
+} as const
 
 function duration(sec: number): string {
   if (sec < 90) return `${Math.round(sec)} seconds`
@@ -227,7 +272,7 @@ function duration(sec: number): string {
 
 export function computeReports(input: ReportInput): Reports {
   const tz = input.tz ?? localTimeZone()
-  const { from, to, days } = reportWindow(input.range, input.now, tz)
+  const { from, to, days } = reportWindow(input.range, input.now, tz, input.custom)
   // Finish time and duration are kanban's own: completed_at, and created_at to completed_at.
   const finished = input.facts.tasks.filter(
     (task) =>
@@ -365,7 +410,12 @@ export function computeReports(input: ReportInput): Reports {
       ? null
       : money(sum(agentIds.map((agentId) => input.facts.spendUsd[agentId] ?? null))),
   }
-  const when = RANGE_WORDS[input.range]
+  const when =
+    input.range === 'custom'
+      ? input.custom!.from === input.custom!.to
+        ? `on ${input.custom!.from}`
+        : `from ${input.custom!.from} to ${input.custom!.to}`
+      : RANGE_WORDS[input.range]
   const summary = finished.length
     ? `${finished.length} ${finished.length === 1 ? 'task' : 'tasks'} finished ${when}` +
       (totals.medianTaskSec === null ? '.' : `, typically in ${duration(totals.medianTaskSec)}.`)
