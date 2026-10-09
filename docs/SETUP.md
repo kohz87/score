@@ -229,7 +229,12 @@ Upgrades: stop Score, back up `$SCORE_HOME` (at least `score.db`, `score.db-wal`
 `pnpm install && pnpm build`, start again. Migrations run automatically at start and are forward-only, so keep the backup
 if you may want to go back to the previous version.
 
+Knowledge vault (PLAN 6.2): notes live in `~/score-vault` (override with `SCORE_VAULT`), plain Markdown in a git repository
+Score creates on first use. It needs `git` on the PATH; without it notes still save but there is no history. Back the folder
+up like any other (it is the source of truth; Score's index of it is disposable). Fake mode uses a temporary seeded vault.
+
 ## Changelog of this file
+- 2026-10-09: the knowledge vault (`SCORE_VAULT`, git).
 - 2026-10-08: section 9, running the built app (pnpm start, launcher, systemd unit).
 - 2026-10-08: creating agents (bridge install URL/ref).
 - 2026-10-08: bridge plugin install pointer, live start and SSH tunnel.

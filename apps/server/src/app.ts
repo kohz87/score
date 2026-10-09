@@ -10,6 +10,8 @@ import { registerProfileRoutes } from './http/profiles.ts'
 import { registerAgentHistoryRoutes } from './http/agent-history.ts'
 import { registerAgentTabRoutes } from './http/agent-tabs.ts'
 import { registerWorkspaceRoutes } from './http/workspace.ts'
+import { registerKnowledgeRoutes } from './http/knowledge.ts'
+import type { KnowledgeVault } from './knowledge/vault.ts'
 import { registerReportRoutes } from './http/reports.ts'
 import { registerTaskRoutes } from './http/tasks.ts'
 import { registerRoutineRoutes } from './http/routines.ts'
@@ -76,6 +78,8 @@ interface BuildAppOptions {
   bridge?: BridgeDeps
   outbox?: ApprovalOutbox
   media?: MediaStore
+  /** The knowledge vault (started by the caller); without it the Knowledge routes are not served. */
+  knowledge?: KnowledgeVault
   /** TLS options for the browser listener; `SNICallback` serves named certificates (tls-names.ts). */
   https?: SecureContextOptions & Pick<TlsOptions, 'SNICallback'>
   webAssets?: WebAssets
@@ -97,6 +101,7 @@ export function buildApp({
   bridge,
   outbox,
   media,
+  knowledge,
   https,
   webAssets,
   security,
@@ -199,6 +204,7 @@ export function buildApp({
     registerProfileRoutes(app, { db, ingest, port, config, ...(clock ? { clock } : {}) })
   registerAgentTabRoutes(app, port, ingest, db, clock)
   registerWorkspaceRoutes(app, port, config)
+  if (knowledge) registerKnowledgeRoutes(app, knowledge)
   registerRoutineRoutes(app, port, db, clock)
   registerSettingsRoutes(app, port, db, clock)
   registerRulesRoutes(app, port, ingest, db, clock)
