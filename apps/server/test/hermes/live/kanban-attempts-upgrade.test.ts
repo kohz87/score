@@ -234,12 +234,16 @@ describe('late relationship backfill', () => {
 })
 
 describe('populated upgrade and the flag', () => {
-  test('migration 0039 adds tables only: runs, message_runs and the message/FTS triggers are untouched', () => {
+  test('the attempts migration adds tables only: runs, message_runs and the message/FTS triggers are untouched', () => {
+    // Found by name: the migration's number moves when other tasks merge first.
+    const attemptsMigration = readdirSync(MIGRATIONS).find((name) =>
+      name.endsWith('_kanban_attempts.sql'),
+    )!
     const home = createFixtureHome()
     try {
       const dir = join(home.home, 'migrations')
       mkdirSync(dir)
-      for (const name of readdirSync(MIGRATIONS).filter((file) => file < '0039'))
+      for (const name of readdirSync(MIGRATIONS).filter((file) => file < attemptsMigration))
         copyFileSync(join(MIGRATIONS, name), join(dir, name))
       const db = openDatabase(join(home.home, 'populated.db'))
       migrate(db, dir)
@@ -262,10 +266,7 @@ describe('populated upgrade and the flag', () => {
         messageRuns: db.sqlite.prepare('SELECT * FROM message_runs').all(),
       })
       const before = { shape: shape(), rows: rows() }
-      copyFileSync(
-        join(MIGRATIONS, '0039_kanban_attempts.sql'),
-        join(dir, '0039_kanban_attempts.sql'),
-      )
+      copyFileSync(join(MIGRATIONS, attemptsMigration), join(dir, attemptsMigration))
       migrate(db, dir)
       expect(shape()).toEqual(before.shape)
       expect(rows()).toEqual(before.rows)
