@@ -6,7 +6,9 @@ import {
   CredentialsUnavailable,
   ensureGeneration,
   readKey,
+  registerStoredKeys,
 } from '../../../../src/hermes/live/credentials.ts'
+import { redact } from '../../../../src/redact.ts'
 import { GatewayClient } from '../../../../src/hermes/live/gateway.ts'
 import { followRun } from '../../../../src/hermes/live/runs.ts'
 import { setup } from './helpers.ts'
@@ -202,4 +204,13 @@ test('streamed reply text stays raw through the gateway so a secret split across
   )
   expect(keyed.text).toBe('key [redacted] here')
   expect(JSON.stringify(keyed)).not.toContain('hunter2')
+})
+
+test('stored keys are masked from startup, before any request reads them (gate re-check)', () => {
+  const key = 'e5b2c8d14f6a7b9c0d1e2f3a4b5c6d7e'
+  writeFileSync(path(), `${key}\n`, { mode: 0o600 })
+  chmodSync(path(), 0o600)
+  expect(redact(`early bridge text ${key}`)).toContain(key)
+  registerStoredKeys(env.home)
+  expect(redact(`early bridge text ${key}`)).toBe('early bridge text [redacted]')
 })

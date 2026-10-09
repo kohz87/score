@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
-import { listBriefs, taskStatus } from '../domain/briefs.ts'
+import { emitBriefChange, listBriefs, taskStatus } from '../domain/briefs.ts'
 import { holdable, recordHolds } from '../domain/holds.ts'
 import { countRunningRuns, setTeamPaused, teamPausedAt } from '../domain/team-pause.ts'
 import { HttpError } from '../errors.ts'
@@ -104,22 +104,23 @@ export function registerTeamPauseRoutes(
           .array(IdRow)
           .parse(sqlite.prepare('SELECT brief_id FROM team_paused_briefs ORDER BY rowid').all())
           .map((row) => row.brief_id)
-        return []
+        // The briefs this Pause paused are resumed in the same transaction as the team: after a crash, startup
+        // recovery sees them unpaused and releases their task holds, instead of leaving them paused for good.
+        const drafts = briefs.flatMap((id) => {
+          sqlite.prepare('UPDATE briefs SET paused_at = NULL WHERE id = ?').run(id)
+          sqlite.prepare('DELETE FROM team_paused_briefs WHERE brief_id = ?').run(id)
+          return sqlite.prepare('SELECT 1 FROM briefs WHERE id = ?').get(id) === undefined
+            ? []
+            : emitBriefChange(sqlite, id, true)
+        })
+        return drafts
       },
     })
     await dispatch?.()
     const failed: string[] = []
     for (const id of briefs) {
       try {
-        await control.resume(id)
-        await ingest.submit({
-          source: 'team',
-          identity: randomUUID(),
-          apply({ sqlite }) {
-            sqlite.prepare('DELETE FROM team_paused_briefs WHERE brief_id = ?').run(id)
-            return []
-          },
-        })
+        if ((await holds.release({ kind: 'brief', id })).length) failed.push(id)
       } catch {
         failed.push(id)
       }

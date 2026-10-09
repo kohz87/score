@@ -239,3 +239,36 @@ test("a later turn is not recovered when Hermes never stored this run's user mes
       .get(),
   ).toEqual({ n: 0 })
 })
+
+test('a run sent with images is recovered from the text Hermes stores for it (gate re-check)', async () => {
+  const context = await admittedMessage()
+  const startedSec = Date.parse(readRun(env.db.sqlite, context.runId).started_at) / 1000
+  writeHistory([
+    [
+      'user',
+      'fixture\n\n(1 attached image could not be sent: too large)\n[screenshot]\n[screenshot]',
+      startedSec + 1,
+    ],
+    ['assistant', 'Looked at both.', startedSec + 2],
+  ])
+  await follow(context)
+  expect(readRun(env.db.sqlite, context.runId)).toMatchObject({ status: 'completed' })
+  expect(JSON.stringify(reply().parts)).toContain('Looked at both.')
+})
+
+test('a later turn that repeats the same words is not recovered as this run (gate re-check)', async () => {
+  const context = await admittedMessage()
+  const startedSec = Date.parse(readRun(env.db.sqlite, context.runId).started_at) / 1000
+  writeHistory([
+    ['user', 'fixture', startedSec + 600],
+    ['assistant', 'Again. @reviewer please check.', startedSec + 601],
+  ])
+  await follow(context)
+  expect(readRun(env.db.sqlite, context.runId).status).toBe('interrupted')
+  expect(JSON.stringify(reply().parts)).not.toContain('Again.')
+  expect(
+    env.db.sqlite
+      .prepare("SELECT COUNT(*) AS n FROM message_runs WHERE agent_id = 'reviewer'")
+      .get(),
+  ).toEqual({ n: 0 })
+})

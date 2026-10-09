@@ -20,22 +20,16 @@ export interface RecoverRequest {
   input: string | null
 }
 
-// Hermes stores a string input verbatim as the user message; an input with images arrives as a list of parts.
+// Hermes stores a string input verbatim as the user message. An input with images is stored as its text part (which can
+// end in Score's note about images it could not send) plus one "[screenshot]" line per image (session_persistence.py).
+// Hermes stores the user message as the turn starts; admission to that write takes seconds, not minutes.
+const TURN_START_SECONDS = 120
+const UNSENT_NOTE = /^\n\n\(\d+ attached images? could not be sent[^\n]*\)$/
 function isTurnInput(content: string | null, input: string): boolean {
   if (content === null) return false
-  if (content.trim() === input.trim()) return true
-  try {
-    const parts: unknown = JSON.parse(content)
-    return (
-      Array.isArray(parts) &&
-      parts.some(
-        (part) =>
-          typeof part === 'object' && part !== null && (part as { text?: unknown }).text === input,
-      )
-    )
-  } catch {
-    return false
-  }
+  const text = content.replace(/(?:\n\[screenshot\])+$/, '')
+  if (text.trim() === input.trim()) return true
+  return text.startsWith(input) && UNSENT_NOTE.test(text.slice(input.length))
 }
 
 /**
@@ -83,7 +77,15 @@ export function recoverRunOutput(request: RecoverRequest, hermesHome?: string): 
       const start = all.findIndex((row) => row.role === 'user')
       // Hermes can admit a run and stop before it stores the user message; the first later user message is then
       // another turn (the owner resumed the session) and its answer must not complete this run or route hand-offs.
-      if (start === -1 || !isTurnInput(all[start]!.content, request.input)) return null
+      // Hermes rows carry no run identity, so the turn is proven by its exact input *and* by Hermes having stored it
+      // when the run started: a turn typed by hand later, even with the same words ("go"), is not this run.
+      const first = all[start]
+      if (
+        !first ||
+        !isTurnInput(first.content, request.input) ||
+        first.timestamp - request.startedAt > TURN_START_SECONDS
+      )
+        return null
       // Only this turn: a later user message is another turn (the owner may have resumed the session in Hermes).
       const next = all.findIndex((row, index) => index > start && row.role === 'user')
       const rows = all.slice(start, next === -1 ? undefined : next)

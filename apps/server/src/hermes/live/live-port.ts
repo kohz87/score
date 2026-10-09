@@ -23,7 +23,7 @@ import {
   type HermesPortDeps,
   type ObservationSink,
 } from '../port.ts'
-import { CredentialsUnavailable } from './credentials.ts'
+import { CredentialsUnavailable, registerStoredKeys } from './credentials.ts'
 import {
   assertFeature,
   computeFingerprint,
@@ -124,6 +124,7 @@ export class LivePort implements HermesPort {
   private readonly profileFiles = new ProfileFiles()
   private readonly profileManagement: LiveProfileManagement
   constructor(private readonly options: LivePortOptions) {
+    registerStoredKeys(options.scoreHome)
     this.accepted = new AcceptedBuilds(options.scoreHome)
     this.profiles = new ProfilesReader(resolveHermesHome(options.hermesHome), options.runner)
     this.routines = new LiveRoutines(options.hermesHome, options.runner)

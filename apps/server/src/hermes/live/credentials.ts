@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { closeSync, constants, fstatSync, openSync, readFileSync } from 'node:fs'
+import { closeSync, constants, fstatSync, openSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
@@ -57,4 +57,25 @@ export function ensureGeneration(db: ScoreDb, profile: string, keySha256: string
       .parse(sqlite.prepare('SELECT generation FROM credentials WHERE profile = ?').get(profile))
       .generation
   })
+}
+
+/**
+ * Registers every stored gateway key with the redactor. Runs when the adapter is built, before the bridge listens or
+ * the first task poll: text that reaches Score before a key is first used for a request must already be masked.
+ */
+export function registerStoredKeys(scoreHome: string): void {
+  let names: string[]
+  try {
+    names = readdirSync(join(scoreHome, 'hermes-keys'))
+  } catch {
+    return
+  }
+  for (const name of names) {
+    if (!ProfileNameSchema.safeParse(name).success) continue
+    try {
+      readKey(scoreHome, name)
+    } catch {
+      // An unusable key file is reported when that profile is used; nothing to register.
+    }
+  }
 }

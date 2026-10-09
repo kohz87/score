@@ -38,3 +38,11 @@ hermes kanban [--board <slug>] stop --attempt <task_runs.id> --claim <claim_lock
 Score keeps the attempt id and claim lock it observed (bridge provenance) and calls `kanban stop` with both; it shows
 "Stopped" only on `terminated: true`, and "Held, still running: <evidence>" otherwise. Until Hermes ships this, Score
 says Stop is unavailable for Kanban attempts and offers reclaim only as "retry this task".
+
+## Related: park only tasks that have not started (found by Score's release gate, 2026-10-09)
+`hermes kanban schedule` parks `todo`, `ready`, **`running`** and `blocked` tasks (`kanban_db.py` `schedule_task`). A tool
+that wants to hold *not-yet-started* work (Score's Pause) checks the status first, but the dispatcher can claim the task
+between that read and the CLI's write transaction; the schedule then clears a live claim and worker PID and closes the
+attempt. Proposal: `hermes kanban schedule --only-unclaimed <task>` (or `--expect-status todo,ready`) that adds
+`AND status IN ('todo','ready') AND claim_lock IS NULL` to the same UPDATE and exits with a distinct code when it refuses.
+Score would pass it on every Pause and treat a refusal as "already started: left to finish".

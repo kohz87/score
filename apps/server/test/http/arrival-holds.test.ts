@@ -275,3 +275,27 @@ test('Pause everyone holds a standalone task that already exists, and Resume rel
   expect(await status(standing.id)).not.toBe('scheduled')
   expect(rows('SELECT 1 FROM team_paused_tasks')).toEqual([])
 })
+
+test('a crash during Resume everyone still leaves the team briefs resumed after recovery (gate re-check)', async () => {
+  const step = await port.createTask({ title: 'Step', assignee: 'builder', roomId }, 'crash-step')
+  const id = MessageSchema.parse((await send({ text: 'Do the crash thing' })).json().message).id
+  await link(id, step.id)
+  await ingest.flushListeners()
+  expect((await post('/api/team/pause')).statusCode).toBe(200)
+  expect(await status(step.id)).toBe('scheduled')
+  // The server stops right after Resume's first commit: every later write fails.
+  const submit = ingest.submit.bind(ingest)
+  let writes = 0
+  const crash = vi
+    .spyOn(ingest, 'submit')
+    .mockImplementation((observation) =>
+      writes++ === 0 ? submit(observation) : Promise.reject(new Error('stopped')),
+    )
+  expect((await post('/api/team/resume')).statusCode).toBeGreaterThanOrEqual(500)
+  crash.mockRestore()
+  expect(rows('SELECT paused_at FROM briefs WHERE id = ?', id)).toEqual([{ paused_at: null }])
+  expect(await app.recoverTaskHolds!()).toBe(0)
+  expect(await status(step.id)).not.toBe('scheduled')
+  expect(rows('SELECT 1 FROM brief_paused_tasks')).toEqual([])
+  expect(rows('SELECT 1 FROM team_paused_tasks')).toEqual([])
+})
