@@ -1012,3 +1012,195 @@ function readRoomUnread(roomId: string): number {
   return db.read((sqlite) => readRoom(sqlite, roomId, new Date(scheduler.now()).toISOString()))
     .unread
 }
+
+// PLAN 5.24: edit and resend, retry.
+async function ownMessage(roomId: string, text: string, extra: object = {}) {
+  const response = await post(`/api/rooms/${roomId}/messages`, { text, to: ['builder'], ...extra })
+  expect(response.statusCode).toBe(200)
+  return PostSchema.parse(response.json()).message
+}
+// Finishes the reply the room queued for `parent` (the mocked startRun never attaches one).
+async function finishReply(roomId: string, parentId: string, agentId = 'builder') {
+  const run = db.sqlite
+    .prepare('SELECT message_id FROM message_runs WHERE parent_message_id = ? AND agent_id = ?')
+    .get(parentId, agentId) as { message_id: string }
+  await ingest.submit({
+    source: 'test',
+    identity: `finish-${run.message_id}`,
+    apply: ({ sqlite, now }) => {
+      sqlite
+        .prepare("UPDATE message_runs SET state = 'completed' WHERE message_id = ?")
+        .run(run.message_id)
+      return storeMessage(
+        sqlite,
+        {
+          id: run.message_id,
+          roomId,
+          author: { kind: 'agent', agentId },
+          to: [],
+          parts: [{ kind: 'text', text: 'answer' }],
+          refs: [],
+          createdAt: now,
+          streaming: false,
+        },
+        now,
+      )
+    },
+  })
+  return run.message_id
+}
+
+test('edit and resend stores the correction as a new turn, marks the original and emits message.updated', async () => {
+  const room = await create()
+  const original = await ownMessage(room.id, 'first draft')
+  const replyId = await finishReply(room.id, original.id)
+  const response = await post(`/api/rooms/${room.id}/messages`, {
+    text: 'better draft',
+    edits: original.id,
+  })
+  expect(response.statusCode).toBe(200)
+  const body = PostSchema.parse(response.json())
+  // Recipients default to the original's.
+  expect(body.message.to).toEqual(['builder'])
+  expect(body.routedTo).toEqual(['builder'])
+  expect(body.message.edits).toBe(original.id)
+  const page = PageSchema.parse((await get(`/api/rooms/${room.id}/messages`)).json())
+  const stored = page.items.find((item) => item.id === original.id)!
+  expect(stored.editedBy).toBe(body.message.id)
+  expect(page.items.find((item) => item.id === replyId)).toBeDefined()
+  expect(page.items.find((item) => item.id === body.message.id)?.edits).toBe(original.id)
+  const updated = events().filter((event) => event.type === 'message.updated')
+  expect(updated.map((event) => event.data)).toEqual([
+    { roomId: room.id, messageId: original.id, editedBy: body.message.id },
+  ])
+  // The correction is an ordinary turn.
+  expect(
+    db.sqlite
+      .prepare('SELECT COUNT(*) AS n FROM message_runs WHERE parent_message_id = ?')
+      .get(body.message.id)?.n,
+  ).toBe(1)
+})
+
+test('edit validation: own, finished, undeleted, same-room, not edited twice', async () => {
+  const room = await create()
+  const other = await create('other')
+  const original = await ownMessage(room.id, 'mine')
+  const agent = await agentMessage(room.id, 'theirs')
+  const edit = (edits: string, roomId = room.id) =>
+    post(`/api/rooms/${roomId}/messages`, { text: 'fix', to: ['builder'], edits })
+  expect((await edit('nope')).statusCode).toBe(404)
+  expect((await edit(agent.id)).statusCode).toBe(400)
+  expect((await edit(original.id, other.id)).statusCode).toBe(400)
+  const writing = 'writing-own'
+  await ingest.submit({
+    source: 'test',
+    identity: 'streaming-own',
+    apply: ({ sqlite, now }) =>
+      storeMessage(
+        sqlite,
+        {
+          id: writing,
+          roomId: room.id,
+          author: { kind: 'you' },
+          to: [],
+          parts: [],
+          refs: [],
+          createdAt: now,
+          streaming: true,
+        },
+        now,
+      ),
+  })
+  expect((await edit(writing)).statusCode).toBe(400)
+  const gone = await ownMessage(room.id, 'gone')
+  expect((await del(`/api/rooms/${room.id}/messages/${gone.id}`)).statusCode).toBe(204)
+  expect((await edit(gone.id)).statusCode).toBe(404)
+  expect((await edit(original.id)).statusCode).toBe(200)
+  expect((await edit(original.id)).statusCode).toBe(409)
+  expect(events().filter((event) => event.type === 'message.updated')).toHaveLength(1)
+})
+
+test('retry queues a fresh turn for the same agent and input, keeps the old reply and is idempotent per key', async () => {
+  const room = await create()
+  const original = await ownMessage(room.id, 'do the thing')
+  const replyId = await finishReply(room.id, original.id)
+  const url = `/api/rooms/${room.id}/messages/${replyId}/retry`
+  const first = await post(url, {}, 'retry-key-1')
+  expect(first.statusCode).toBe(202)
+  const { messageId } = first.json() as { messageId: string }
+  expect(messageId).not.toBe(replyId)
+  const rows = db.sqlite
+    .prepare(
+      'SELECT message_id, agent_id, input, hop, state, chain_id FROM message_runs WHERE parent_message_id = ? ORDER BY rowid',
+    )
+    .all(original.id)
+  expect(rows).toHaveLength(2)
+  expect(rows[1]).toMatchObject({
+    message_id: messageId,
+    agent_id: 'builder',
+    hop: 0,
+    state: 'pending',
+  })
+  expect(rows[1]!.input).toBe(rows[0]!.input)
+  expect(rows[1]!.chain_id).toBe(rows[0]!.chain_id)
+  // Same key: the receipt replays, no third turn.
+  const again = await post(url, {}, 'retry-key-1')
+  expect(again.statusCode).toBe(202)
+  expect(again.json()).toEqual({ messageId })
+  expect(
+    db.sqlite
+      .prepare('SELECT COUNT(*) AS n FROM message_runs WHERE parent_message_id = ?')
+      .get(original.id)?.n,
+  ).toBe(2)
+  // The dispatcher admitted it through the normal path.
+  expect(port.startRun).toHaveBeenCalledTimes(2)
+  // Another retry while that one is still being answered is refused.
+  expect((await post(url, {}, 'retry-key-2')).statusCode).toBe(409)
+  // The old reply is untouched.
+  const page = PageSchema.parse((await get(`/api/rooms/${room.id}/messages`)).json())
+  expect(page.items.some((item) => item.id === replyId)).toBe(true)
+})
+
+test('retry refuses unknown replies, hand-offs, non-replies, a gone parent and every pause', async () => {
+  const room = await create()
+  const retry = (id: string, key?: string) =>
+    post(`/api/rooms/${room.id}/messages/${id}/retry`, {}, key)
+  expect((await retry('nope')).statusCode).toBe(404)
+  const agent = await agentMessage(room.id, 'plain-agent-message')
+  expect((await retry(agent.id)).statusCode).toBe(409)
+  const original = await ownMessage(room.id, 'hello')
+  expect((await retry(original.id)).statusCode).toBe(409)
+  const replyId = await finishReply(room.id, original.id)
+  db.sqlite
+    .prepare('UPDATE team_state SET paused_at = ? WHERE id = 1')
+    .run(new Date(scheduler.now()).toISOString())
+  expect((await retry(replyId)).statusCode).toBe(409)
+  db.sqlite.prepare('UPDATE team_state SET paused_at = NULL WHERE id = 1').run()
+  db.sqlite
+    .prepare('INSERT INTO agent_pauses (agent_id, paused_at) VALUES (?, ?)')
+    .run('builder', new Date(scheduler.now()).toISOString())
+  expect((await retry(replyId)).statusCode).toBe(409)
+  db.sqlite.prepare('DELETE FROM agent_pauses').run()
+  db.sqlite
+    .prepare('UPDATE briefs SET paused_at = ? WHERE id = ?')
+    .run(new Date(scheduler.now()).toISOString(), original.id)
+  expect((await retry(replyId)).statusCode).toBe(409)
+  db.sqlite.prepare('UPDATE briefs SET paused_at = NULL WHERE id = ?').run(original.id)
+  db.sqlite
+    .prepare('UPDATE message_runs SET from_agent_id = ? WHERE message_id = ?')
+    .run('lead', replyId)
+  expect((await retry(replyId)).statusCode).toBe(409)
+  db.sqlite
+    .prepare('UPDATE message_runs SET from_agent_id = NULL WHERE message_id = ?')
+    .run(replyId)
+  expect((await del(`/api/rooms/${room.id}/messages/${original.id}`)).statusCode).toBe(204)
+  expect((await retry(replyId)).statusCode).toBe(409)
+})
+
+test('migration 0029 adds nullable edited_by and edits to messages', () => {
+  const columns = db.sqlite
+    .prepare('SELECT name, "notnull" AS required FROM pragma_table_info(\'messages\')')
+    .all()
+  expect(columns).toContainEqual({ name: 'edited_by', required: 0 })
+  expect(columns).toContainEqual({ name: 'edits', required: 0 })
+})

@@ -26,6 +26,8 @@ const MessageRowSchema = z.object({
   created_at: z.iso.datetime(),
   updated_at: z.iso.datetime(),
   version: z.int().positive(),
+  edited_by: z.string().nullish(),
+  edits: z.string().nullish(),
 })
 const CountSchema = z.object({ count: z.int().nonnegative() })
 
@@ -128,6 +130,8 @@ export function messageFromRow(value: unknown): Message {
     refs: JSON.parse(row.refs) as unknown,
     createdAt: row.created_at,
     streaming: row.streaming === 1,
+    ...(row.edited_by ? { editedBy: row.edited_by } : {}),
+    ...(row.edits ? { edits: row.edits } : {}),
   })
 }
 
@@ -141,8 +145,8 @@ export function storeMessage(
   const result = sqlite
     .prepare(
       `INSERT INTO messages
-    (id, room_id, author_kind, author_agent_id, "to", parts, refs, streaming, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
+    (id, room_id, author_kind, author_agent_id, "to", parts, refs, streaming, created_at, updated_at, edits)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
     )
     .run(
       message.id,
@@ -155,6 +159,7 @@ export function storeMessage(
       Number(message.streaming),
       message.createdAt,
       now,
+      message.edits ?? null,
     )
   if (!result.changes) return []
   return [
@@ -232,6 +237,42 @@ export function deleteMessage(
     { type: 'message.deleted', data: { roomId, messageId } },
     ...roomChanged(sqlite, roomId, now, before),
   ]
+}
+
+/**
+ * The message a person is correcting (PLAN 5.24): their own, in this room, finished, not deleted and not corrected
+ * before. Throws the HTTP error the contract names.
+ */
+export function editableMessage(sqlite: DatabaseSync, roomId: string, messageId: string): Message {
+  const value = sqlite
+    .prepare('SELECT * FROM messages WHERE id = ? AND deleted_at IS NULL')
+    .get(messageId)
+  if (!value) throw new HttpError(404, 'not_found', 'Unknown message')
+  const row = MessageRowSchema.parse(value)
+  if (row.room_id !== roomId || row.author_kind !== 'you' || row.streaming === 1)
+    throw new HttpError(
+      400,
+      'bad_request',
+      'Only your own finished message in this room can be edited',
+    )
+  if (row.edited_by) throw new HttpError(409, 'conflict', 'This message was already edited')
+  return messageFromRow(value)
+}
+
+/** Marks the original as corrected; the new message is stored by the caller. */
+export function markEdited(
+  sqlite: DatabaseSync,
+  roomId: string,
+  originalId: string,
+  editedBy: string,
+  now: string,
+): DomainEventDraft[] {
+  sqlite
+    .prepare(
+      'UPDATE messages SET edited_by = ?, updated_at = ?, version = version + 1 WHERE id = ?',
+    )
+    .run(editedBy, now, originalId)
+  return [{ type: 'message.updated', data: { roomId, messageId: originalId, editedBy } }]
 }
 
 const MAX_COMPLETION_PARTS_CHARS = 256 * 1024

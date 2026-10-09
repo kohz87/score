@@ -20,6 +20,7 @@ import {
 } from './composer-model.ts'
 import { messagesQuery, type MessagePageData } from './queries.ts'
 import { newId } from '../../data/ids.ts'
+import { stopEdit, useEditing } from './message-edit.ts'
 
 type Notice = { kind: 'error'; text: string } | { kind: 'result'; command: CommandResult | null }
 type Attachment = { mediaId: string; name: string }
@@ -96,13 +97,53 @@ export function Composer({
   }, [])
   const fileInput = useRef<HTMLInputElement>(null)
 
+  // Edit and resend: the message loads into the composer; what was there before comes back afterwards.
+  const editingNow = useEditing()
+  const editing = editingNow?.roomId === roomId ? editingNow : null
+  const editId = editing?.messageId ?? null
+  const [stash, setStash] = useState<{
+    text: string
+    to: string[]
+    attachments: Attachment[]
+  } | null>(null)
+  const [loadedEdit, setLoadedEdit] = useState<string | null>(null)
+  if (editId !== loadedEdit) {
+    // Adjusting state while rendering: only a different message reloads the composer.
+    setLoadedEdit(editId)
+    if (editing) {
+      setStash((saved) => saved ?? { text, to, attachments })
+      setText(editing.text)
+      setCaret(editing.text.length)
+      setTo(editing.to)
+      setAttachments(editing.mediaIds.map((mediaId) => ({ mediaId, name: 'image' })))
+      setPlanFirst(false)
+      setNotice(null)
+    }
+  }
+  useEffect(() => {
+    if (editId) textarea.current?.focus()
+  }, [editId])
+  function leaveEdit() {
+    stopEdit()
+    setLoadedEdit(null)
+    if (!stash) return
+    setText(stash.text)
+    setCaret(stash.text.length)
+    setTo(stash.to)
+    setAttachments(stash.attachments)
+    setStash(null)
+  }
+  useEffect(() => () => stopEdit(), [])
+
   const commands = useQuery({
     queryKey: ['chat', 'commands'],
     queryFn: async () => parseCommands(await apiFetch('commands')),
     staleTime: Infinity,
   })
 
-  useEffect(() => saveDraft(roomId, text), [roomId, text])
+  useEffect(() => {
+    if (!editId) saveDraft(roomId, text)
+  }, [roomId, text, editId])
 
   const slash = slashQuery(text)
   const mention = slash === null ? mentionAt(text, caret) : null
@@ -184,6 +225,7 @@ export function Composer({
       ...(sent.length ? { attachments: sent.map(({ mediaId }) => ({ mediaId })) } : {}),
       ...(to.length ? { to } : {}),
       ...(planFirst ? { planFirst: true } : {}),
+      ...(editing ? { edits: editing.messageId } : {}),
     }
     // A retry of the same payload reuses its key, so a lost response cannot post twice.
     const signature = JSON.stringify(payload)
@@ -203,6 +245,7 @@ export function Composer({
         roomId,
         author: { kind: 'you' },
         to,
+        ...(editing ? { edits: editing.messageId } : {}),
         parts: [
           { kind: 'text', text: body },
           ...sent.map(({ mediaId }) => ({ kind: 'image' as const, mediaId })),
@@ -225,6 +268,11 @@ export function Composer({
       if (!mounted.current) {
         // The composer moved to another conversation mid-send: only drop the stored draft if it is still what we sent.
         if (loadDraft(roomId).trim() === body) saveDraft(roomId, '')
+        return
+      }
+      if (editing) {
+        leaveEdit()
+        setNotice({ kind: 'result', command: result.command })
         return
       }
       // Keep whatever was typed or attached while the request was in flight.
@@ -323,6 +371,14 @@ export function Composer({
                   <span>{agent.role}</span>
                 </button>
               ))}
+        </div>
+      )}
+      {editing && (
+        <div className="chat-editing" role="status">
+          <span>Editing your message</span>
+          <button type="button" className="chat-editing-cancel" onClick={leaveEdit}>
+            Cancel
+          </button>
         </div>
       )}
       <form
@@ -485,7 +541,7 @@ export function Composer({
             className="chat-send"
             disabled={!text.trim() || pending || uploading > 0}
           >
-            Send
+            {editing ? 'Send correction' : 'Send'}
           </button>
         </div>
       </form>

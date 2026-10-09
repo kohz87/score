@@ -225,6 +225,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `message.delta`      | `{ messageId, roomId, append: string }`                                                       | Chat (streaming text)                                    |
 | `message.completed`  | `{ messageId, roomId, parts?: MessagePart[] }` (final parts replace the cached message's)     | Chat                                                     |
 | `message.deleted`    | `{ roomId, messageId }` (remove it from the cached messages; Score-side only)                  | Chat, Now thread                                         |
+| `message.updated`    | `{ roomId, messageId, editedBy: MessageId \| null }` (the original of an edit; set its `editedBy`)  | Chat                                                     |
 | `knowledge.changed`  | `{ path; kind: 'written'\|'moved'\|'deleted'\|'restored'; to; by: 'you'\|'outside'\|{agentId} }` | Knowledge                                                |
 | `typing`             | `{ roomId, agentId, text /* "is re-reading the read layer" */ \| null }`                      | Chat, Now thread                                         |
 | `approval.requested` | `Approval`                                                                                    | Now card, Chat, Flow, Watch, Tasks, header dot           |
@@ -418,13 +419,25 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   exports. Runs, Reports and the agents' Hermes session history are untouched, so an agent may still remember it. `409
   conflict` while the message is still streaming; `404` for an unknown room or message; idempotent (deleting a deleted
   message is `204`). Emits `message.deleted`.
+- **H** `POST /api/rooms/:roomId/messages/:messageId/retry` → `202 { messageId }` (the new streaming placeholder
+  reply). `messageId` is a finished agent reply that answered a person's message: the same agent gets the same input
+  again through the normal dispatch path (pause, approvals, attachments and the one-turn-per-agent queue apply). The
+  original reply stays. `404` unknown; `409 conflict` when the message is not a retryable reply (no parent turn, parent
+  deleted or not from the person), when that agent is still answering that message, or while the team, the agent or the
+  brief is paused. Idempotent per `Idempotency-Key`.
 - `POST /api/rooms/:roomId/messages`
 
   ```ts
   req: { text: string; to?: AgentId[] /* explicit "To" chips; @mentions in text are merged */
-         planFirst?: boolean; model?: string /* one-shot /model */; attachments?: { mediaId: string }[] }
+         planFirst?: boolean; model?: string /* one-shot /model */; attachments?: { mediaId: string }[]
+         edits?: MessageId /* edit and resend: the sender's own earlier message in this room */ }
   res: { message: Message; routedTo: AgentId[]; command: CommandResult | null }
   ```
+
+  `edits` (PLAN 5.24) must name a finished, undeleted message of the person in the same room that has not been edited
+  yet: `404` unknown message, `400` not the person's own, streaming or in another room, `409` already edited. The new
+  message is an ordinary turn (it carries `edits`); the original stays, keeps its replies and gets `editedBy` (event
+  `message.updated`). The web composer pre-fills text, recipients and attachments from the original.
 
   Text starting with a slash command is parsed server-side:
 

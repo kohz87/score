@@ -110,6 +110,13 @@ export function reduceMessages(
   }
   if (event.type === 'message.deleted')
     return { ...data, items: data.items.filter((item) => item.id !== event.data.messageId) }
+  if (event.type === 'message.updated')
+    return {
+      ...data,
+      items: data.items.map((item) =>
+        item.id === event.data.messageId ? { ...item, editedBy: event.data.editedBy } : item,
+      ),
+    }
   if (event.type === 'message.created') {
     if (!latest) return data
     return {
@@ -155,6 +162,7 @@ export function messagesQuery(roomId: string, before: string | null = null) {
       'message.delta',
       'message.completed',
       'message.deleted',
+      'message.updated',
       'typing',
       'lane.upserted',
     ],

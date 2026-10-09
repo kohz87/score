@@ -82,6 +82,9 @@ export const PostMessageResponseSchema = z.object({
   routedTo: z.array(AgentIdSchema),
   command: CommandResultSchema.nullable(),
 })
+/** `POST /api/rooms/:roomId/messages/:messageId/retry` (202): the new placeholder reply. */
+export const RetryReplyResponseSchema = z.object({ messageId: z.string().min(1) })
+export type RetryReplyResponse = z.infer<typeof RetryReplyResponseSchema>
 
 // §8 Team: SOUL.md / AGENTS.md
 export const AgentFileSchema = z.object({

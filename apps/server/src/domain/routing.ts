@@ -62,9 +62,12 @@ export function decideHandoffs({
   return { targets, stopped }
 }
 
-export function messageTurnId(messageId: string, agentId: string): string {
+/** `retry` makes a further turn for the same message and agent (PLAN 5.24); without it the id is the original turn's. */
+export function messageTurnId(messageId: string, agentId: string, retry?: string): string {
   return `room-turn:${createHash('sha256')
-    .update(JSON.stringify([messageId, agentId]))
+    .update(
+      JSON.stringify(retry === undefined ? [messageId, agentId] : [messageId, agentId, retry]),
+    )
     .digest('hex')}`
 }
 

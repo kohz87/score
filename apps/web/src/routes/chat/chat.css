@@ -908,32 +908,91 @@
 .chat-message-body {
   position: relative;
 }
-.chat-message-delete {
-  position: absolute;
-  top: -4px;
-  right: 0;
+.chat-message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin-top: 4px;
+  opacity: 0;
+}
+.chat-message:hover .chat-message-actions,
+.chat-message:focus-within .chat-message-actions {
+  opacity: 1;
+}
+.chat-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   border: 0;
   background: none;
   color: var(--ink-muted);
   font: inherit;
   font-size: 13px;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border-radius: var(--radius-pill);
   cursor: pointer;
-  opacity: 0;
 }
-.chat-message:hover .chat-message-delete,
-.chat-message:focus-within .chat-message-delete,
-.chat-message-delete:focus-visible {
-  opacity: 1;
-}
-.chat-message-delete:hover {
+.chat-action:hover:not(:disabled) {
   color: var(--ink);
   background: var(--hairline);
 }
+.chat-action:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.chat-action-error {
+  flex-basis: 100%;
+  color: var(--ink-muted);
+  font-size: 13px;
+  padding: 2px 8px;
+}
+.chat-message--edited .chat-message-parts {
+  opacity: 0.55;
+}
+.chat-edited {
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+.chat-edited-link {
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.chat-editing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.chat-editing-cancel {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  text-decoration: underline;
+  cursor: pointer;
+}
 @media (hover: none) {
-  .chat-message-delete {
+  .chat-message-actions {
     opacity: 1;
+  }
+}
+@media (max-width: 640px) {
+  .chat-action-label {
+    display: none;
+  }
+  .chat-action {
+    padding: 6px 10px;
   }
 }
 .chat-toasts {
