@@ -1,10 +1,12 @@
+import { TaskDetailSchema } from '@score/contract'
 import { randomUUID } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
-import { listBriefs } from '../domain/briefs.ts'
-import { countRunningRuns, setTeamPaused } from '../domain/team-pause.ts'
+import { listBriefs, taskStatus } from '../domain/briefs.ts'
+import { holdable, recordHolds } from '../domain/holds.ts'
+import { countRunningRuns, setTeamPaused, teamPausedAt } from '../domain/team-pause.ts'
 import { HttpError } from '../errors.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import type { BriefControl } from './brief-control.ts'
@@ -12,6 +14,8 @@ import { requestIdempotency } from './idempotency.ts'
 import type { TaskHolds } from './task-holds.ts'
 
 const IdRow = z.object({ brief_id: z.string() })
+const DetailRow = z.object({ detail: z.string() })
+const TEAM = { kind: 'team', id: 'team' } as const
 
 // Pause everyone (H): holds Score's dispatch queue for all agents and pauses every running brief through the
 // same logic as a single brief. Steps already running finish, so affectedRuns counts runs, it does not stop them.
@@ -51,6 +55,19 @@ export function registerTeamPauseRoutes(
           .map((brief) => brief.id)
         for (const id of targets)
           sqlite.prepare('INSERT OR IGNORE INTO team_paused_briefs (brief_id) VALUES (?)').run(id)
+        // Tasks that exist already (standalone ones too) are held under the team owner, like later arrivals; the
+        // intent is written before Hermes is touched, so recovery finishes it after a crash.
+        recordHolds(
+          sqlite,
+          TEAM,
+          z
+            .array(DetailRow)
+            .parse(sqlite.prepare('SELECT detail FROM task_projections').all())
+            .map((row) => TaskDetailSchema.parse(JSON.parse(row.detail)))
+            .filter((task) => holdable(sqlite, task.id, taskStatus(task)))
+            .map((task) => task.id),
+          now,
+        )
         return []
       },
     })
@@ -62,12 +79,16 @@ export function registerTeamPauseRoutes(
         failed.push(id)
       }
     }
-    if (failed.length)
+    const teamFailed = await holds.apply(
+      TEAM,
+      () => db.read((sqlite) => teamPausedAt(sqlite)) !== null,
+    )
+    if (failed.length || teamFailed.length)
       throw new HttpError(
         502,
         'hermes_unavailable',
         'Paused, but some briefs could not hold all their tasks. Try Pause again.',
-        { briefIds: failed },
+        { briefIds: failed, taskIds: teamFailed },
       )
     return response(true)
   })

@@ -258,3 +258,20 @@ test('a failed park of an arrived task is retried without another task event', a
     vi.useRealTimers()
   }
 })
+
+test('Pause everyone holds a standalone task that already exists, and Resume releases it (gate 2026-10-09)', async () => {
+  const standing = await port.createTask(
+    { title: 'Standing', assignee: 'builder', roomId },
+    'standing',
+  )
+  await ingest.flushListeners()
+  expect(await status(standing.id)).not.toBe('scheduled')
+  expect((await post('/api/team/pause')).statusCode).toBe(200)
+  expect(await status(standing.id)).toBe('scheduled')
+  expect(rows('SELECT task_id, state FROM team_paused_tasks')).toEqual([
+    { task_id: standing.id, state: 'held' },
+  ])
+  expect((await post('/api/team/resume')).statusCode).toBe(200)
+  expect(await status(standing.id)).not.toBe('scheduled')
+  expect(rows('SELECT 1 FROM team_paused_tasks')).toEqual([])
+})
