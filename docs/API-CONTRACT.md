@@ -591,7 +591,8 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
   with `details: { etag }` (current etag, or null when the file was removed). Content ≤ 1 MiB, no NUL.
 - **H** `POST …/workspace/entries` `{ path; kind: 'file'|'dir' }` → `201 {}` (`409 exists`) · `POST …/workspace/move` `{ from; to }` → `{}`
   (never overwrites: `409 exists`) · `DELETE …/workspace/entries?path=[&recursive=1]` → `{}` (a non-empty folder without
-  `recursive` → `409 not_empty`; the UI asks for a typed confirmation first).
+  `recursive` → `409 not_empty`; a folder holding protected files or `.git` → `409 protected_inside`, never deleted from
+  here; the UI asks for a typed confirmation first).
 - **H** `POST …/workspace/upload?path=` raw body, `Content-Type: application/octet-stream`, ≤ 25 MiB, `path` = the new file's
   path → `201 { path, size }` (`409 exists`).
 - Path rules (all endpoints): `..`, NUL, absolute paths → `400 bad_path`; any component matching the blocked list (`.env*`,

@@ -6,6 +6,7 @@ import { withKeyedLock } from '../keyed-lock.ts'
 import {
   assertAllowedSegments,
   checkRoot,
+  isBlockedName,
   isInside,
   parseRelativePath,
   validateEntryName,
@@ -433,8 +434,12 @@ export class Workspace {
         if (st.isSymbolicLink())
           throw new WorkspaceError(403, 'symlink', 'Symbolic links are not changed from here')
         if (st.isDirectory()) {
-          if (recursive) await removeTree(target, { count: 0 }, 0)
-          else await fs.rmdir(target)
+          if (recursive) {
+            // The tree hides protected files (keys, .env) and the browser can't open .git, so a folder holding either
+            // is never deleted from here: the owner would be removing things they were never shown.
+            await assertNothingProtected(target, { count: 0 }, 0)
+            await removeTree(target, { count: 0 }, 0)
+          } else await fs.rmdir(target)
         } else if (st.isFile()) await fs.unlink(target)
         else throw new WorkspaceError(400, 'not_a_file', 'That entry cannot be deleted')
         await dir.sync()
@@ -492,6 +497,32 @@ function decodeText(bytes: Buffer): string | null {
 }
 
 /** Depth-first delete that opens every directory with O_NOFOLLOW (via fd paths) and unlinks symlinks as links. */
+async function assertNothingProtected(
+  dirPath: string,
+  budget: { count: number },
+  depth: number,
+): Promise<void> {
+  if (depth > 64) throw new WorkspaceError(400, 'too_deep', 'The folder is nested too deeply')
+  const fh = await fs.open(dirPath, C.O_RDONLY | C.O_DIRECTORY | C.O_NOFOLLOW)
+  try {
+    const base = LINUX ? `/proc/self/fd/${fh.fd}` : dirPath
+    for (const child of await fs.readdir(base)) {
+      if (++budget.count > MAX_DELETE_ENTRIES)
+        throw new WorkspaceError(400, 'too_large', 'The folder has too many entries')
+      if (child === '.git' || isBlockedName(child))
+        throw new WorkspaceError(
+          409,
+          'protected_inside',
+          'The folder holds protected files (keys, .env or a git repository); delete it on the machine itself',
+        )
+      const st = await fs.lstat(`${base}/${child}`)
+      if (st.isDirectory()) await assertNothingProtected(`${base}/${child}`, budget, depth + 1)
+    }
+  } finally {
+    await fh.close()
+  }
+}
+
 async function removeTree(
   dirPath: string,
   budget: { count: number },
@@ -504,6 +535,9 @@ async function removeTree(
     for (const child of await fs.readdir(base)) {
       if (++budget.count > MAX_DELETE_ENTRIES)
         throw new WorkspaceError(400, 'too_large', 'The folder has too many entries')
+      // Checked again here: something protected may have appeared since the scan.
+      if (child === '.git' || isBlockedName(child))
+        throw new WorkspaceError(409, 'protected_inside', 'The folder holds protected files')
       const childPath = `${base}/${child}`
       const st = await fs.lstat(childPath)
       if (st.isDirectory()) await removeTree(childPath, budget, depth + 1)

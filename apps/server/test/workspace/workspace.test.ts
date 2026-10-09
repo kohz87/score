@@ -157,6 +157,26 @@ describe('listing', () => {
     expect(await code(ws.remove('.git', true))).toBe('403:blocked')
     expect(await code(ws.move('.git', 'x'))).toBe('403:blocked')
   })
+  it('never deletes a folder that holds protected files or a git repository (lead review)', async () => {
+    for (const [folder, inner] of [
+      ['keys', 'deploy.pem'],
+      ['app', 'config/.env.local'],
+      ['repo', '.git/HEAD'],
+    ] as const) {
+      fs.mkdirSync(path.join(root, folder, path.dirname(inner)), { recursive: true })
+      fs.writeFileSync(path.join(root, folder, inner), 'secret')
+      fs.writeFileSync(path.join(root, folder, 'visible.txt'), 'x')
+    }
+    const ws = await open()
+    for (const folder of ['keys', 'app', 'repo']) {
+      expect(await code(ws.remove(folder, true))).toBe('409:protected_inside')
+      expect(fs.existsSync(path.join(root, folder, 'visible.txt'))).toBe(true)
+    }
+    fs.mkdirSync(path.join(root, 'plain', 'deep'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'plain', 'deep', 'a.txt'), 'x')
+    await ws.remove('plain', true)
+    expect(fs.existsSync(path.join(root, 'plain'))).toBe(false)
+  })
   it('shows symlinks as symlinks and refuses a listing that leaves the root', async () => {
     fs.symlinkSync(outside, path.join(root, 'escape'))
     fs.mkdirSync(path.join(root, 'real'))
