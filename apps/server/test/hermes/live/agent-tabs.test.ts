@@ -442,3 +442,56 @@ test('skills are listed and disabled by their declared name, not their directory
     status: 404,
   })
 })
+
+// A runner with a real in-memory `model` value, applying config set the way Hermes does.
+function modelRunner(initial: unknown, failing?: string) {
+  const state = { model: initial as unknown }
+  const calls: string[][] = []
+  const run = vi.fn<HermesRunner>(async (args) => {
+    const [, , ...rest] = args
+    calls.push(rest)
+    if (rest.join(' ') === 'config get --json model')
+      return state.model === undefined
+        ? { exitCode: 1 }
+        : state.model === 'UNREADABLE'
+          ? { exitCode: -1 }
+          : { exitCode: 0, stdout: JSON.stringify(state.model) }
+    if (rest[0] === 'config' && rest[1] === 'set') {
+      if (rest[2] === failing) return { exitCode: 1 }
+      const [, , key, value] = rest as [string, string, string, string]
+      if (key === 'model') state.model = value
+      else {
+        const dict = typeof state.model === 'object' && state.model ? { ...state.model } : {}
+        if (typeof state.model === 'string') Object.assign(dict, { default: state.model })
+        Object.assign(dict, { [key.replace('model.', '')]: value })
+        state.model = dict
+      }
+    }
+    return { exitCode: 0 }
+  })
+  const own = new LiveAgentTabs(
+    home,
+    (profile) => reader.profileHome(profile),
+    (profile) => reader.invalidate(profile),
+    run,
+  )
+  return { own, state, calls }
+}
+
+test('a failed provider write puts a scalar model back exactly as it was', async () => {
+  const { own, state } = modelRunner('plain-model', 'model.provider')
+  await expect(own.setModel('builder', { model: 'next', provider: 'acme' })).rejects.toBeTruthy()
+  expect(state.model).toBe('plain-model')
+})
+
+test('a failed provider write restores an object model, clearing a provider that was not set', async () => {
+  const { own, state } = modelRunner({ default: 'old' }, 'model.provider')
+  await expect(own.setModel('builder', { model: 'next', provider: 'acme' })).rejects.toBeTruthy()
+  expect(state.model).toEqual({ default: 'old' })
+})
+
+test('an unreadable current model stops the change before any write', async () => {
+  const { own, calls } = modelRunner('UNREADABLE')
+  await expect(own.setModel('builder', { model: 'next' })).rejects.toMatchObject({ status: 502 })
+  expect(calls.filter((c) => c[1] === 'set')).toEqual([])
+})
