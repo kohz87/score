@@ -72,7 +72,7 @@ export function fakeReportHistory(now: number, agentIds: string[]): FakeReportHi
       const createdAt = completedAt - work - depWait
       const reviewed = agentId !== 'reviewer' && rand() < 0.85
       const sentBack = reviewed && rand() < profile.sendBack * 1.5
-      const events: KanbanTaskFact['events'] = []
+      const events: { kind: string; at: number }[] = []
       if (hasParents) events.push({ kind: 'promoted', at: createdAt + depWait })
       const start = createdAt + depWait
       if (rand() < 0.12) {
@@ -89,6 +89,12 @@ export function fakeReportHistory(now: number, agentIds: string[]): FakeReportHi
       }
       events.push({ kind: 'completed', at: completedAt })
       events.sort((a, b) => a.at - b.at)
+      const numbered = events.map((event, index) => ({
+        ...event,
+        id: index + 1,
+        // The implementer is the one waiting on a review.
+        actor: event.kind === 'review_requested' ? agentId : null,
+      }))
       tasks.push({
         id: `history-${Math.floor(dayStart / DAY)}-${n}`,
         assignee: agentId,
@@ -96,7 +102,7 @@ export function fakeReportHistory(now: number, agentIds: string[]): FakeReportHi
         createdAt,
         completedAt,
         hasParents,
-        events,
+        events: numbered,
       })
       // Two runs per task covering most of the working time.
       const span = Math.max(MIN, work - 4 * MIN)

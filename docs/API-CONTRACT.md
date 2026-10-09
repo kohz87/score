@@ -604,7 +604,8 @@ costUsd: number | null; task: { id; title } | null; brief: { id; title } | null;
   the three categories are disjoint, with precedence working > waiting on you > waiting on another agent: working =
   a run is active (guardian approval time included); waiting on you = open human approvals and `blocked` intervals,
   minus time already working; waiting on another agent = waiting for dependencies (created → `promoted`) and in review
-  (`review_requested` → outcome), minus time already working or waiting on you. An hour of active run with a human
+  (`review_requested` → the next `completed`/`changes_requested` by event id), attributed to the implementer named on the
+  request, not the task's current assignee, minus time already working or waiting on you. An hour of active run with a human
   approval open the whole hour counts as working only. Spend = Hermes session costs (actual, else estimated);
   null when unknown. `totals.spendUsd` is null when any agent's spend is unknown (never a partial sum).
 - `GET /api/reports/export.csv?range=&tz=` → `text/csv`

@@ -755,8 +755,19 @@ export class FakePort implements HermesPort {
           completedAt: done ? finishedAt : null,
           hasParents: task.dependsOn.length > 0,
           events: [
-            ...(reviewed ? [{ kind: 'review_requested', at: finishedAt - 120_000 }] : []),
-            ...(sentBack ? [{ kind: 'changes_requested', at: finishedAt - 60_000 }] : []),
+            ...(reviewed
+              ? [
+                  {
+                    id: 1,
+                    kind: 'review_requested',
+                    at: finishedAt - 120_000,
+                    actor: task.assignee,
+                  },
+                ]
+              : []),
+            ...(sentBack
+              ? [{ id: 2, kind: 'changes_requested', at: finishedAt - 60_000, actor: null }]
+              : []),
           ],
         }
       }),

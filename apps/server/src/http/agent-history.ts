@@ -86,9 +86,11 @@ export function registerAgentHistoryRoutes(
     const filters: string[] = []
     const args: (string | number)[] = [agentId]
     if (query.outcome) {
-      const unknown = query.outcome === 'unknown'
-      const statuses = unknown ? knownStatuses : statusesByOutcome[query.outcome]
-      filters.push(`status ${unknown ? 'NOT IN' : 'IN'} (${statuses.map(() => '?').join(', ')})`)
+      const statuses =
+        query.outcome === 'unknown' ? knownStatuses : statusesByOutcome[query.outcome]
+      filters.push(
+        `status ${query.outcome === 'unknown' ? 'NOT IN' : 'IN'} (${statuses.map(() => '?').join(', ')})`,
+      )
       args.push(...statuses)
     }
     const needle = query.q?.trim()
