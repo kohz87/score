@@ -275,7 +275,7 @@ across days (cost deltas per window); history before the first snapshot stays un
 midnight is split correctly in tests.
 **5.16 Recover expired runs' results** · When Hermes no longer knows a run, Score reads the session's final answer from
 Hermes's own records (read-only) and completes the reply, else marks it interrupted. Done when both paths are tested.
-**5.17a Kanban attempts as runs (read-only projection)** · Kanban worker attempts become runs in Flow, Now and Reports with
+**5.17a Kanban attempts as runs (read-only projection; v3 splits it into 5.17a-1 Kanban DB only and 5.17a-2 bridge provenance)** · Kanban worker attempts become runs in Flow, Now and Reports with
 exact provenance (design v3 pending; see docs/briefs/5.17.md). Done when fixtures cover synthetic rows, restore/rollback,
 A→B→A revisions, pruned claims, short gaps, unknown states, host isolation and requested changes.
 **5.17b Kanban Stop** · Needs an upstream Hermes operation (docs/proposals/hermes-attempt-fenced-stop.md, to be extended
@@ -326,11 +326,11 @@ phone-friendly Enter (newline on touch) and a send-key setting.
 **5.29 Small wins** (owner 2026-10-09, ideas from the owner's description of ekko-studio; no code or docs read) · QR code
 for "Pair another device"; a log viewer (Score's log, filter by level and keyword, redacted); Reports: cache hit rate,
 currency toggle, 30-day trend chart.
-**5.30 Documents** · Attach and preview documents (drag, drop or paste PDF, DOCX, XLSX, CSV, HTML, text, images), inline
+**5.30 Documents** (docs/briefs/5.30.md) · Attach and preview documents (drag, drop or paste PDF, DOCX, XLSX, CSV, HTML, text, images), inline
 previews in chat and workspace, attach workspace files to a message.
-**5.31 Model settings** · Fallback chains, aliases, hide unused models, speech-to-text and text-to-speech model settings
+**5.31 Model settings** (docs/briefs/5.31.md) · Fallback chains, aliases, hide unused models, speech-to-text and text-to-speech model settings
 (per agent, through Hermes).
-**5.32 Profile import** · Restore an agent from an exported bundle (export exists), with a preview of what it contains.
+**5.32 Profile import** (docs/briefs/5.32.md) · Restore an agent from an exported bundle (export exists), with a preview of what it contains.
 
 **5.33 Rewind a conversation** · Owner 2026-10-09: editing or deleting your message hides it and everything after it as a
 previous version (switcher to view), and rewinds each agent's Hermes session to before it through the bridge plugin
