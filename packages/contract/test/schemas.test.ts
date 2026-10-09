@@ -393,6 +393,24 @@ const cases = [
     { name: 'docs', url: 'https://mcp.example.com/sse', command: ['x'] },
   ],
   ['PlatformParamSchema', 'telegram', 'Bad Name'],
+  [
+    'MessagingFieldSchema',
+    {
+      key: 'SLACK_BOT_TOKEN',
+      label: 'Bot token',
+      help: null,
+      url: null,
+      secret: true,
+      required: true,
+    },
+    { key: 'slack', label: 'Bot token', help: null, url: null, secret: true, required: true },
+  ],
+  ['MessagingFieldsResponseSchema', { fields: [], browserSetup: false }, { fields: [] }],
+  [
+    'MessagingSetupRequestSchema',
+    { values: { SLACK_BOT_TOKEN: 'xoxb-1' }, agentId: 'builder' },
+    { values: { SLACK_BOT_TOKEN: '-x' } },
+  ],
   ['ApprovalModeSchema', 'manual', 'yolo'],
   ['RuleSchema', rule, { ...rule, id: '' }],
   ['RulesResponseSchema', rules, { ...rules, drift: [{ agentId: 'builder' }] }],
@@ -630,4 +648,16 @@ test('HTTP snapshots accept asOfSeq 0 (fresh server) and reject negatives', () =
   expect(
     contract.ErrorEnvelopeSchema.parse({ error: { code: 'not_found', message: 'Unknown room' } }),
   ).toMatchObject({ error: { code: 'not_found' } })
+})
+
+test('messaging setup requests accept one-line values for env keys only', () => {
+  const ok = contract.MessagingSetupRequestSchema.safeParse({
+    values: { SLACK_BOT_TOKEN: 'xoxb-1' },
+  })
+  expect(ok.success).toBe(true)
+  for (const values of [{ lower: 'x' }, { SLACK_BOT_TOKEN: 'a\nb' }, { SLACK_BOT_TOKEN: '-x' }])
+    expect(contract.MessagingSetupRequestSchema.safeParse({ values }).success).toBe(false)
+  expect(contract.MessagingSetupRequestSchema.safeParse({ values: {}, extra: 1 }).success).toBe(
+    false,
+  )
 })

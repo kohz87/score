@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import type { AgentSummary } from '@score/contract'
+import { MessagingSetup } from './MessagingSetup.tsx'
 import { failure, TerminalCommand } from './TerminalCommand.tsx'
 import { useConnections, useRecheckSettings, useSettingsActions } from './settings-queries.ts'
 
@@ -7,18 +8,12 @@ export function ConnectionsSection({ agents }: { agents: AgentSummary[] }) {
   const [command, setCommand] = useState<{ id: string; text: string } | null>(null)
   const connections = useConnections(command !== null)
   const recheck = useRecheckSettings()
-  const { addToolServer, connectMessaging } = useSettingsActions()
+  const { addToolServer } = useSettingsActions()
+  const [setup, setSetup] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState({ name: '', target: '' })
   const names = new Map(agents.map((agent) => [agent.id, agent.name]))
 
-  function connect(platform: string) {
-    connectMessaging.mutate(platform, {
-      onSuccess: (result) => {
-        if (result.command) setCommand({ id: `messaging:${platform}`, text: result.command })
-      },
-    })
-  }
   function submit(event: FormEvent) {
     event.preventDefault()
     const target = draft.target.trim()
@@ -146,17 +141,20 @@ export function ConnectionsSection({ agents }: { agents: AgentSummary[] }) {
                       type="button"
                       className="settings-link"
                       aria-label={`Connect ${row.label}`}
-                      disabled={connectMessaging.isPending}
-                      onClick={() => connect(row.platform)}
+                      aria-expanded={setup === row.platform}
+                      onClick={() => setSetup(row.platform)}
                     >
                       Connect
                     </button>
                   )}
-                  {command?.id === `messaging:${row.platform}` && (
-                    <TerminalCommand
-                      command={command.text}
+                  {setup === row.platform && (
+                    <MessagingSetup
+                      platform={row.platform}
+                      label={row.label}
+                      terminalCommand="hermes gateway setup"
+                      onSaved={recheck}
                       onClose={() => {
-                        setCommand(null)
+                        setSetup(null)
                         recheck()
                       }}
                     />
@@ -164,9 +162,6 @@ export function ConnectionsSection({ agents }: { agents: AgentSummary[] }) {
                 </li>
               ))}
             </ul>
-            {connectMessaging.isError && (
-              <p role="alert">{failure(connectMessaging.error, 'start the connection')}</p>
-            )}
           </div>
         </div>
       )}

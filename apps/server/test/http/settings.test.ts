@@ -113,7 +113,9 @@ test('connections list, tool server and messaging connect', async () => {
     (await post('/api/settings/tool-servers', { name: 'd', command: ['-x'] })).statusCode,
   ).toBe(400)
   const messaging = await post('/api/settings/messaging/telegram/connect')
-  expect(ConnectResultSchema.parse(messaging.json()).command).toBe('hermes gateway setup')
+  expect(ConnectResultSchema.parse(messaging.json()).next).toBe('form')
+  const pairing = await post('/api/settings/messaging/whatsapp/connect')
+  expect(ConnectResultSchema.parse(pairing.json()).command).toBe('hermes gateway setup')
   expect((await post('/api/settings/messaging/BAD/connect')).statusCode).toBe(400)
 })
 
@@ -289,4 +291,62 @@ test('the fake adapter answers the Hermes version check cleanly', async () => {
   expect(check.compatible).toBe(true)
   const accepted = await post('/api/settings/hermes/accept', { hash: check.hash })
   expect(accepted.json()).toEqual({ ok: true })
+})
+
+const put = (url: string, payload: object, key = 'k-1') =>
+  app.inject({ method: 'PUT', url, headers: { ...headers, 'idempotency-key': key }, payload })
+test('messaging fields come from the table; pairing platforms have none', async () => {
+  const slack = (await app.inject('/api/settings/messaging/slack/fields')).json()
+  expect(slack.browserSetup).toBe(true)
+  expect(slack.fields.map((f: { key: string }) => f.key)).toEqual([
+    'SLACK_BOT_TOKEN',
+    'SLACK_APP_TOKEN',
+    'SLACK_ALLOWED_USERS',
+  ])
+  expect(slack.fields[0]).toMatchObject({ secret: true, required: true })
+  expect((await app.inject('/api/settings/messaging/whatsapp/fields')).json()).toEqual({
+    fields: [],
+    browserSetup: false,
+  })
+})
+test('messaging save: whitelist, required fields, receipt, no value in the response or receipt', async () => {
+  const secret = 'xoxb-super-secret-value'
+  const spy = vi.spyOn(port, 'saveMessaging')
+  const ok = await put('/api/settings/messaging/slack', {
+    values: { SLACK_BOT_TOKEN: secret, SLACK_APP_TOKEN: 'xapp-another' },
+  })
+  expect(ok.statusCode).toBe(200)
+  expect(ok.json()).toMatchObject({ platform: 'slack', status: 'connected' })
+  expect(ok.body).not.toContain(secret)
+  const receipts = env.db.sqlite.prepare('SELECT * FROM request_receipts').all()
+  expect(JSON.stringify(receipts)).not.toContain(secret)
+  // Same key, same body: replayed (the handler ran once).
+  await put('/api/settings/messaging/slack', {
+    values: { SLACK_BOT_TOKEN: secret, SLACK_APP_TOKEN: 'xapp-another' },
+  })
+  expect(spy).toHaveBeenCalledTimes(1)
+  const unknown = await put('/api/settings/messaging/slack', { values: { PATH: 'x' } }, 'k-2')
+  expect(unknown.statusCode).toBe(400)
+  const missing = await put(
+    '/api/settings/messaging/slack',
+    { values: { SLACK_BOT_TOKEN: secret } },
+    'k-3',
+  )
+  expect(missing.statusCode).toBe(400)
+  expect(missing.body).not.toContain(secret)
+  const flag = await put(
+    '/api/settings/messaging/telegram',
+    { values: { TELEGRAM_BOT_TOKEN: '-x' } },
+    'k-4',
+  )
+  expect(flag.statusCode).toBe(400)
+  expect(
+    (await put('/api/settings/messaging/whatsapp', { values: { A_B: 'x' } }, 'k-5')).statusCode,
+  ).toBe(409)
+  const anon = await app.inject({
+    method: 'PUT',
+    url: '/api/settings/messaging/slack',
+    payload: { values: {} },
+  })
+  expect(anon.statusCode).toBeGreaterThanOrEqual(400)
 })

@@ -10,6 +10,7 @@ import type {
   ToolServerRequest,
 } from '@score/contract'
 import { HttpError } from '../../errors.ts'
+import { messagingFields } from '../messaging-fields.ts'
 import { redact, redactBounded } from '../../redact.ts'
 import {
   runHermes,
@@ -495,7 +496,8 @@ export class LiveSettings {
   connectMessaging(platform: string): ConnectResult {
     if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(platform))
       throw new HttpError(404, 'not_found', 'Unknown platform')
-    // Setup asks for bot tokens and pairing codes; Score never handles them.
+    // Token-based platforms are set up in the browser form; pairings (QR codes) still need the terminal.
+    if (messagingFields(platform).browserSetup) return { next: 'form' }
     return { next: 'run_in_terminal', command: 'hermes gateway setup' }
   }
   addToolServer(req: ToolServerRequest): ConnectResult {

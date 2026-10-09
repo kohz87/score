@@ -19,6 +19,9 @@ import type {
   ConfigItem,
   ConfigPreviewResponse,
   ConnectResult,
+  MessagingFieldsResponse,
+  MessagingPlatform,
+  MessagingSetupRequest,
   ConnectionsResponse,
   HermesCheck,
   LocalProviderRequest,
@@ -237,6 +240,10 @@ export interface HermesPort extends ProfileManagementPort {
   listConnections(): Promise<ConnectionsResponse>
   addToolServer(req: ToolServerRequest): Promise<ConnectResult>
   connectMessaging(platform: string): Promise<ConnectResult>
+  /** Form fields for a platform's browser setup (`browserSetup: false` = terminal only). */
+  messagingFields(platform: string): Promise<MessagingFieldsResponse>
+  /** Writes the platform's values through `hermes config set` in the agent's profile; never stores or echoes them. */
+  saveMessaging(platform: string, req: MessagingSetupRequest): Promise<MessagingPlatform>
   /** Compares the running Hermes build with the tested and accepted ones. Read-only. */
   checkHermes(): Promise<HermesCheck>
   /** Records the checked build as accepted and re-enables the gate. 409 `conflict` when the hash is stale, 409 `not_compatible`. */

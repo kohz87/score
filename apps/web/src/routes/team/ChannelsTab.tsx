@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { TerminalCommand } from '../settings/TerminalCommand.tsx'
+import { MessagingSetup } from '../settings/MessagingSetup.tsx'
 import { useChannels } from './agent-tab-queries.ts'
 
-// Score never runs an interactive login or handles a bot token: it shows the command for the person to run.
+// Tokens are saved through the server into this agent's Hermes profile; interactive pairings still show a terminal command.
 export function ChannelsTab({ agentId, agentName }: { agentId: string; agentName: string }) {
   const channels = useChannels(agentId)
   const [open, setOpen] = useState<string | null>(null)
@@ -31,8 +31,12 @@ export function ChannelsTab({ agentId, agentName }: { agentId: string; agentName
                 <p className="team-muted">{row.detail.replace(/_/g, ' ')}</p>
               )}
               {open === row.platform && (
-                <TerminalCommand
-                  command={row.connectCommand}
+                <MessagingSetup
+                  platform={row.platform}
+                  label={row.label}
+                  agentId={agentId}
+                  terminalCommand={row.connectCommand}
+                  onSaved={() => void channels.refetch()}
                   onClose={() => {
                     setOpen(null)
                     void channels.refetch()

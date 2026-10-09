@@ -650,7 +650,20 @@ available: boolean; reason: string | null /* "Not on your plan" */; free: boolea
 - `POST /api/settings/providers/local` `{ label; baseUrl; model }` → provider item
 - `GET /api/settings/connections` → `{ toolServers: { id; label; status: 'ok'|'needs_signin'|'error'; usedBy: AgentId[] | 'everyone' }[]
 messaging: { platform; label; status: 'connected'|'disconnected'; detail: string | null }[] }`
-- `POST /api/settings/tool-servers` `{ name; command?: string[]; url?: string }` · `POST /api/settings/messaging/:platform/connect`
+- `POST /api/settings/tool-servers` `{ name; command?: string[]; url?: string }`
+- `POST /api/settings/messaging/:platform/connect` → `ConnectResult`: `next: 'form'` for platforms that can be set up in
+  the browser (token based), else `run_in_terminal` with the command (WhatsApp QR and other interactive pairings).
+- `GET /api/settings/messaging/:platform/fields` → `{ fields: { key; label; help: string | null; url: string | null;
+  secret: boolean; required: boolean }[]; browserSetup: boolean }`. Field metadata is an adapter-side table (Hermes has no
+  read-only CLI that lists env-var metadata) mirroring `hermes_cli/config_defaults.py`. `browserSetup: false` = no fields,
+  use the terminal command from `connect`.
+- **H** `PUT /api/settings/messaging/:platform` `{ values: Record<ENV_KEY, string>; agentId?: AgentId }` → the connection row
+  `{ platform; label; status; detail }`. Keys must be in the platform's field list (`400` otherwise), every `required`
+  field must be present and non-empty, empty optional values are skipped. Each value is written with `hermes [-p <profile>]
+  config set KEY value` (argv array, profile of `agentId`, default profile when absent). The route uses the HMAC receipt
+  (`secretBody`): values are never logged, stored, echoed or put in a receipt, and error messages are redacted. The gateway
+  reads its tokens at start, so the row stays as it was until the gateway restarts (Score has no gateway restart action;
+  the UI says so).
 - `GET /api/settings/rules` → `{ mode: 'manual' | 'smart' | 'off'; goAhead: Rule[]; askMe: Rule[]; never: Rule[];
 drift: { agentId; differs: boolean }[] }` with `type Rule = { id; label; pattern: string | null; readOnly: boolean }`.
   Hermes mapping (docs/reviews/2026-10-08-2.18-design-lead.md): Go ahead = pattern keys in `command_allowlist`, Ask me

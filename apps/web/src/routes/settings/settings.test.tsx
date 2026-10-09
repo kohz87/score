@@ -182,8 +182,82 @@ test('an unpaired browser gets a pairing hint, and a failed load shows an alert'
           : json(connections)
   mount()
   expect(await screen.findByText(/Could not load providers/)).toBeDefined()
+})
+
+const slackFields = {
+  browserSetup: true,
+  fields: [
+    {
+      key: 'SLACK_BOT_TOKEN',
+      label: 'Bot token (xoxb-)',
+      help: 'Copy the Bot User OAuth Token.',
+      url: 'https://api.slack.com/apps',
+      secret: true,
+      required: true,
+    },
+    {
+      key: 'SLACK_ALLOWED_USERS',
+      label: 'Allowed member IDs',
+      help: null,
+      url: null,
+      secret: false,
+      required: false,
+    },
+  ],
+}
+function messagingRespond(put: () => Response) {
+  const base = respond
+  respond = (path, init) => {
+    if (path === '/api/settings/messaging/slack/fields') return json(slackFields)
+    if (path === '/api/settings/messaging/slack' && init?.method === 'PUT') return put()
+    return base(path, init)
+  }
+}
+test('messaging setup: a form from the field metadata, secret toggle, save, restart note', async () => {
+  messagingRespond(() =>
+    json({ platform: 'slack', label: 'Slack', status: 'disconnected', detail: null }),
+  )
+  mount()
   fireEvent.click(await screen.findByRole('button', { name: 'Connect Slack' }))
-  expect(await screen.findByText(/Pair this browser/)).toBeDefined()
+  const form = await screen.findByRole('form', { name: 'Connect Slack' })
+  const token = within(form).getByLabelText(/Bot token/, { selector: 'input' }) as HTMLInputElement
+  expect(token.type).toBe('password')
+  expect(within(form).getByText('Copy the Bot User OAuth Token.')).toBeDefined()
+  expect(within(form).getByRole('link', { name: 'Where to get it' }).getAttribute('href')).toBe(
+    'https://api.slack.com/apps',
+  )
+  fireEvent.click(within(form).getByRole('button', { name: 'Show Bot token (xoxb-)' }))
+  expect(token.type).toBe('text')
+  fireEvent.change(token, { target: { value: 'xoxb-secret' } })
+  fireEvent.change(within(form).getByLabelText(/Allowed member IDs/), { target: { value: '  ' } })
+  fireEvent.click(within(form).getByRole('button', { name: 'Save' }))
+  expect(await screen.findByText(/Saved\. The gateway picks up/)).toBeDefined()
+  const put = calls.find((call) => call.init?.method === 'PUT')!
+  expect(put.path).toBe('/api/settings/messaging/slack')
+  expect(JSON.parse(String(put.init!.body))).toEqual({ values: { SLACK_BOT_TOKEN: 'xoxb-secret' } })
+  expect(document.body.textContent).not.toContain('xoxb-secret')
+})
+test('messaging setup: a failed save shows an error and clears the token', async () => {
+  messagingRespond(() => json({ error: { code: 'not_paired', message: 'x' } }, 401))
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Connect Slack' }))
+  const form = await screen.findByRole('form', { name: 'Connect Slack' })
+  const token = within(form).getByLabelText(/Bot token/, { selector: 'input' }) as HTMLInputElement
+  fireEvent.change(token, { target: { value: 'xoxb-secret' } })
+  fireEvent.click(within(form).getByRole('button', { name: 'Save' }))
+  expect(await within(form).findByText(/Pair this browser/)).toBeDefined()
+  expect(token.value).toBe('')
+})
+test('messaging setup: a pairing platform explains that it needs the terminal', async () => {
+  const base = respond
+  respond = (path, init) =>
+    path === '/api/settings/messaging/slack/fields'
+      ? json({ fields: [], browserSetup: false })
+      : base(path, init)
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Connect Slack' }))
+  expect(await screen.findByText(/This one needs the terminal/)).toBeDefined()
+  expect(screen.getByText('hermes gateway setup')).toBeDefined()
 })
 
 const HASH = 'a'.repeat(64)

@@ -6,6 +6,8 @@ import {
   ConfigSearchQuerySchema,
   HermesAcceptRequestSchema,
   LocalProviderRequestSchema,
+  MessagingFieldsResponseSchema,
+  MessagingSetupRequestSchema,
   ModelsQuerySchema,
   ModelsResponseSchema,
   PatchPluginRequestSchema,
@@ -95,6 +97,22 @@ export function registerSettingsRoutes(
     const { platform } = z.object({ platform: PlatformParamSchema }).parse(request.params)
     return port.connectMessaging(platform)
   })
+  app.get('/api/settings/messaging/:platform/fields', async (request) => {
+    const { platform } = z.object({ platform: PlatformParamSchema }).parse(request.params)
+    return MessagingFieldsResponseSchema.parse(await port.messagingFields(platform))
+  })
+  // Tokens go to `hermes config set` as argv and nowhere else: not logged, stored, echoed or put in a receipt.
+  app.put(
+    '/api/settings/messaging/:platform',
+    {
+      preHandler: [humanGuard(app.pairing), keyReceipts.preHandler],
+      onSend: keyReceipts.onSend,
+    },
+    async (request) => {
+      const { platform } = z.object({ platform: PlatformParamSchema }).parse(request.params)
+      return port.saveMessaging(platform, MessagingSetupRequestSchema.parse(request.body))
+    },
+  )
   app.get('/api/settings/config', async (request) => ({
     items: await port.searchConfig(ConfigSearchQuerySchema.parse(request.query).q),
   }))
