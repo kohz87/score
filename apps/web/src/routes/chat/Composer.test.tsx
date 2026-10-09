@@ -328,3 +328,26 @@ test('text typed while a send is in flight survives the response and its draft s
   expect(box().value).toBe('second')
   expect(localStorage.getItem('score.chat.draft.general')).toBe('second')
 })
+
+test('on a touch device Enter adds a newline and the Send button sends', async () => {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query === '(hover: none) and (pointer: coarse)',
+  }))
+  mount()
+  type('hello')
+  press('Enter')
+  expect(posts()).toHaveLength(0)
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+  await waitFor(() => expect(posts()).toHaveLength(1))
+})
+
+test('with "Send with Ctrl+Enter" on desktop, Enter does not send and Ctrl+Enter does', async () => {
+  localStorage.setItem('score.sendKey', 'ctrl-enter')
+  mount()
+  type('hello')
+  press('Enter')
+  expect(posts()).toHaveLength(0)
+  press('Enter', { ctrlKey: true })
+  await waitFor(() => expect(posts()).toHaveLength(1))
+  expect(body(0)).toEqual({ text: 'hello' })
+})

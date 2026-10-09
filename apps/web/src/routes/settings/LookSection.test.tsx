@@ -34,3 +34,22 @@ test('Display currency saves the typed code and rate', async () => {
     expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true),
   )
 })
+
+test('"Send messages with" is a per-device choice between Enter and Ctrl+Enter', () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(Response.json({ code: 'USD', rate: 1 }))),
+  )
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <LookSection />
+    </QueryClientProvider>,
+  )
+  const ctrl = screen.getByRole('radio', { name: 'Ctrl+Enter' })
+  expect(screen.getByRole('radio', { name: 'Enter' }).getAttribute('aria-checked')).toBe('true')
+  fireEvent.click(ctrl)
+  expect(localStorage.getItem('score.sendKey')).toBe('ctrl-enter')
+  expect(ctrl.getAttribute('aria-checked')).toBe('true')
+  fireEvent.click(screen.getByRole('radio', { name: 'Enter' }))
+  expect(localStorage.getItem('score.sendKey')).toBeNull()
+})

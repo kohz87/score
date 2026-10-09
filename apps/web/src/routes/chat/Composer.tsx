@@ -1,4 +1,5 @@
 import type { AgentSummary } from '@score/contract'
+import { sendsOnKey } from '../../data/send-key.ts'
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Link } from 'react-router'
@@ -443,7 +444,8 @@ export function Composer({
         return
       }
     }
-    if (event.key === 'Enter' && !event.shiftKey) {
+    // Phones: Enter is a newline and the Send button sends. Desktop: the "Send with" setting decides.
+    if (sendsOnKey(event)) {
       event.preventDefault()
       void send()
     }
