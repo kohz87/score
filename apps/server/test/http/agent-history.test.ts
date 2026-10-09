@@ -147,6 +147,30 @@ test('history filters by outcome and search, pages by 50, and rejects bad input'
   expect((await get('/api/agents/nobody/history')).statusCode).toBe(404)
 })
 
+test('history labels interrupted and unrecognised statuses honestly, never as stopped or running', async () => {
+  const insert = env.db.sqlite.prepare(
+    `INSERT INTO runs (id, profile, origin, status, started_at, updated_at) VALUES (?, 'lead', 'kanban', ?, ?, ?)`,
+  )
+  const when = (n: number) => new Date(Date.UTC(2026, 9, 3, 0, n)).toISOString()
+  insert.run('i-1', 'interrupted', when(1), when(1))
+  insert.run('u-1', 'mystery_status', when(2), when(2))
+  insert.run('s-1', 'cancelled', when(3), when(3))
+  const page = AgentHistoryPageSchema.parse((await get('/api/agents/lead/history')).json())
+  expect(page.items.map((item) => [item.runId, item.outcome])).toEqual([
+    ['s-1', 'stopped'],
+    ['u-1', 'unknown'],
+    ['i-1', 'interrupted'],
+  ])
+  const ids = async (outcome: string) =>
+    (await get(`/api/agents/lead/history?outcome=${outcome}`))
+      .json()
+      .items.map((item: { runId: string }) => item.runId)
+  expect(await ids('interrupted')).toEqual(['i-1'])
+  expect(await ids('unknown')).toEqual(['u-1'])
+  expect(await ids('stopped')).toEqual(['s-1'])
+  expect(await ids('running')).toEqual([])
+})
+
 test('channels (fake) lists platforms with the agent connect command; unknown agents are 404', async () => {
   const body = AgentChannelsResponseSchema.parse((await get('/api/agents/builder/channels')).json())
   expect(body.items.map((item) => item.platform)).toEqual(['telegram', 'discord', 'slack'])

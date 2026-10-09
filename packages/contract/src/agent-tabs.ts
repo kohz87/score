@@ -36,7 +36,15 @@ export const AgentChannelSchema = z.object({
   connectCommand: z.string().min(1),
 })
 export const AgentChannelsResponseSchema = z.object({ items: z.array(AgentChannelSchema) })
-export const HistoryOutcomeSchema = z.enum(['completed', 'failed', 'stopped', 'waiting', 'running'])
+export const HistoryOutcomeSchema = z.enum([
+  'completed',
+  'failed',
+  'stopped',
+  'interrupted',
+  'waiting',
+  'running',
+  'unknown',
+])
 export const AgentHistoryItemSchema = z.object({
   runId: z.string().min(1),
   title: z.string(),

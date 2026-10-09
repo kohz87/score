@@ -548,10 +548,11 @@ incarnation-aware reuse confirmation contract is agreed.
   Read-only gateway state for this agent's profile (secret-free); `connectCommand` is e.g. `hermes -p builder gateway setup`,
   shown for the person to run in their own terminal.
 - `GET /api/agents/:agentId/history?q=&outcome=&cursor=` → `AgentHistoryPage` `{ items: { runId; title; origin; outcome:
-'completed' | 'failed' | 'stopped' | 'waiting' | 'running'; startedAt; durationSec: number | null; model: string | null;
+'completed' | 'failed' | 'stopped' | 'interrupted' | 'waiting' | 'running' | 'unknown'; startedAt; durationSec: number | null; model: string | null;
 costUsd: number | null; task: { id; title } | null; brief: { id; title } | null; replaySeq: number | null }[]; nextCursor }`.
   Score's own runs for the agent (all origins), newest first, 50 per page; the cursor is an offset. `outcome` filters,
-  `q` matches task/brief title and model. Replay opens `/now/watch/:agentId?from=<replaySeq>`.
+  `q` matches task/brief title and model. `stopped` is a cancelled run; `interrupted` is a reclaimed attempt (not proof the
+  worker stopped); `unknown` is any status Score does not recognise (never shown as running). Replay opens `/now/watch/:agentId?from=<replaySeq>`.
 
 ## 9. Reports
 

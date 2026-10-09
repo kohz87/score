@@ -195,19 +195,29 @@ export function readNow(sqlite: DatabaseSync, options: NowOptions): Omit<NowSnap
           if (path !== null) paths.add(path)
         }
       }
+      // A reviewer run that ended normally is not a passed review: Hermes closes a "changes requested" review
+      // as a normal completion too. Pass only when the task is done and nobody else resumed work after the run.
+      const taskRuns = task.runIds.flatMap((runId) => {
+        const run = runById.get(runId)
+        return run ? [run] : []
+      })
       const checks = task.reviewer
-        ? task.runIds.flatMap((runId) => {
-            const run = runById.get(runId)
-            const agentId = AgentIdSchema.safeParse(run?.profile)
-            return run && agentId.success && run.profile === task.reviewer && isFinished(run.status)
-              ? [
-                  {
-                    label: `Review of ${task.title}`,
-                    agentId: agentId.data,
-                    ok: run.status === 'completed',
-                  },
-                ]
-              : []
+        ? taskRuns.flatMap((run) => {
+            const agentId = AgentIdSchema.safeParse(run.profile)
+            if (!agentId.success || run.profile !== task.reviewer || !isFinished(run.status))
+              return []
+            const sentBack = taskRuns.some(
+              (other) =>
+                other.profile !== task.reviewer &&
+                Date.parse(other.started_at) > Date.parse(run.started_at),
+            )
+            return [
+              {
+                label: `Review of ${task.title}`,
+                agentId: agentId.data,
+                ok: run.status === 'completed' && isDone(task) && !sentBack,
+              },
+            ]
           })
         : []
       return {
