@@ -168,6 +168,12 @@ export async function checkRoot(candidate: string, policy: RootPolicy): Promise<
   }
   const home = await realOrSelf(path.resolve(policy.home))
   for (const form of new Set([lexical, real])) {
+    // Inside .git (or another protected name) the root-relative checks would no longer see that component.
+    if (form.split(path.sep).some((part) => isGitName(part) || isBlockedName(part)))
+      return {
+        ok: false,
+        reason: 'A folder inside .git or a credential folder cannot be a workspace',
+      }
     if (form === path.parse(form).root)
       return { ok: false, reason: 'The whole file system cannot be a workspace' }
     for (const homeForm of new Set([path.resolve(policy.home), home]))

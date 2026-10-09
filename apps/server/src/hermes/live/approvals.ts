@@ -27,11 +27,13 @@ async function getJson(
   hermesHome: string,
   profile: string,
   key: 'command_allowlist' | 'approvals',
+  fresh: boolean,
 ): Promise<unknown> {
   const result = await runner(['-p', profile, 'config', 'get', '--json', key], {
     timeoutMs: TIMEOUT_MS,
     hermesHome,
     captureRead: true,
+    ...(fresh ? { fresh: true } : {}),
   }).catch(() => ({ exitCode: -1 }) as { exitCode: number; stdout?: string })
   if (result.exitCode !== 0 || !result.stdout)
     throw new HttpError(502, 'hermes_unavailable', 'Approval settings are unavailable')
@@ -46,12 +48,13 @@ export async function readApprovalConfig(
   runner: HermesRunner,
   hermesHome: string,
   profile: string,
+  fresh = false,
 ): Promise<ApprovalConfig> {
   const allowlist = ListSchema.nullable().safeParse(
-    await getJson(runner, hermesHome, profile, 'command_allowlist'),
+    await getJson(runner, hermesHome, profile, 'command_allowlist', fresh),
   )
   const approvals = ApprovalsSchema.safeParse(
-    await getJson(runner, hermesHome, profile, 'approvals'),
+    await getJson(runner, hermesHome, profile, 'approvals', fresh),
   )
   if (!allowlist.success || !approvals.success)
     throw new HttpError(502, 'hermes_unavailable', 'Approval settings are unreadable')
@@ -80,7 +83,8 @@ export function approvalIo(runner: HermesRunner, hermesHome: string, profile: st
   const differs = (a: string[], b: string[]) =>
     a.length !== b.length || a.some((item) => !b.includes(item))
   return {
-    read: () => readApprovalConfig(runner, hermesHome, profile),
+    // Mutations read their baseline (and verify) uncached: a cached answer may predate an outside edit.
+    read: () => readApprovalConfig(runner, hermesHome, profile, true),
     async write(current, next) {
       if (differs(current.allowlist, next.allowlist))
         await set('command_allowlist', JSON.stringify(next.allowlist))

@@ -11,6 +11,8 @@ try {
   if (guideOnly(config)) {
     // Remote mode needs a certificate: until there is one, only the setup guide is served.
     const guide = await startGuideServer(config)
+    // `scripts/score pair` signals every running Score; without HTTPS there is nothing to pair with, so ignore it.
+    process.on('SIGUSR2', () => {})
     for (const signal of ['SIGINT', 'SIGTERM'] as const)
       process.on(signal, () => {
         void guide.close().catch((error: unknown) => {
@@ -59,7 +61,24 @@ try {
     }
     if (consoleInput)
       process.stdout.write('Type pair in this terminal to mint a new pairing link.\n')
-    process.stdout.write(`Pair this browser: ${pairingOrigin}/pair#${server.pairingToken}\n`)
+    // A terminal shows the link (tests and dev tooling can ask for it with SCORE_PRINT_PAIR_LINK=1). Anything else (the launcher's score.log) must never hold a usable link: it goes to
+    // a 0600 file the launcher prints once and deletes.
+    if (process.stdout.isTTY || process.env.SCORE_PRINT_PAIR_LINK === '1')
+      process.stdout.write(`Pair this browser: ${pairingOrigin}/pair#${server.pairingToken}\n`)
+    else {
+      try {
+        const file = join(config.home, 'pair-link')
+        writeFileSync(`${file}.tmp`, `${pairingOrigin}/pair#${server.pairingToken}\n`, {
+          mode: 0o600,
+        })
+        renameSync(`${file}.tmp`, file)
+      } catch (error) {
+        process.stderr.write(`Could not write a pairing link: ${String(error)}\n`)
+      }
+      process.stdout.write(
+        `Pair this browser: ${pairingOrigin}/ (link withheld from logs; use scripts/score pair)\n`,
+      )
+    }
   }
 } catch (error) {
   process.stderr.write(`${formatStartupError(error)}\n`)

@@ -75,3 +75,17 @@ test('readings either side of a half-hour-offset local midnight keep their basel
   record(6, local + 10 * 60_000)
   expect(spend(local, local + 24 * H, 6)).toBeCloseTo(1)
 })
+
+test('a session that started after the window ends does not make the window unknown', () => {
+  record(5, midnight + H)
+  const known = session(5, midnight - 5 * H)
+  const later = { ...session(2, midnight + 3 * 24 * H), sessionId: 'later' }
+  // `later` has no snapshot reaching back into the window (it did not exist yet) and costs nothing there.
+  expect(
+    profileSpendInWindow(db.sqlite, 'builder', [known, later], midnight - 24 * H, midnight - 1),
+  ).toBeNull() // the earlier session itself has no baseline: unknown stays unknown
+  record(1, midnight - 4 * H)
+  expect(
+    profileSpendInWindow(db.sqlite, 'builder', [known, later], midnight - 24 * H, midnight - 1),
+  ).toBeCloseTo(1)
+})

@@ -42,18 +42,57 @@ export function parseGitStatus(output: string): GitStatus | null {
   return { branch: branch.slice(0, 200), changed, ahead, behind }
 }
 
-/** Branch and change count when `root` (or a parent) is a git repository, else null. Never throws. */
-export function gitStatus(root: string): Promise<GitStatus | null> {
+// Settings that make git run a program of the repository's choosing while it compares files or reads the index.
+const RISKY_CONFIG =
+  /^(?:filter\.|core\.fsmonitor$|core\.hookspath$|core\.sshcommand$|core\.askpass$|core\.editor$|core\.pager$|diff\.[^\0]*\.(?:textconv|command)$|include\.|includeif\.)/i
+
+/** Git's environment for these calls: no inherited GIT_* variables and no system or user configuration. */
+function gitEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {}
+  for (const [name, value] of Object.entries(process.env))
+    if (!name.startsWith('GIT_')) env[name] = value
+  return {
+    ...env,
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_OPTIONAL_LOCKS: '0',
+    LC_ALL: 'C',
+  }
+}
+
+function run(args: string[]): Promise<string | null> {
   return new Promise((resolve) => {
     execFile(
       'git',
-      [...ARGS, root, 'status', '--porcelain=v1', '-b'],
-      {
-        timeout: TIMEOUT_MS,
-        maxBuffer: MAX_OUTPUT,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' },
-      },
-      (error, stdout) => resolve(error ? null : parseGitStatus(stdout)),
+      args,
+      { timeout: TIMEOUT_MS, maxBuffer: MAX_OUTPUT, env: gitEnv() },
+      (error, stdout) => resolve(error ? null : stdout),
     )
   })
+}
+
+/** True when the repository's own configuration could make git execute something (filters, hooks, textconv, includes). */
+export function configIsRisky(listing: string): boolean {
+  return listing.split('\0').some((entry) => RISKY_CONFIG.test(entry.split('\n')[0] ?? ''))
+}
+
+/**
+ * Branch and change count when `root` (or a parent) is a git repository, else null. Never throws. A repository whose
+ * local configuration defines filters, fsmonitor, a hooks path, textconv or includes is reported as unavailable
+ * rather than run: comparing files would execute them under Score's user.
+ */
+export async function gitStatus(root: string): Promise<GitStatus | null> {
+  const config = await run(['-C', root, 'config', '--local', '--list', '-z'])
+  if (config === null || configIsRisky(config)) return null
+  const stdout = await run([
+    ...ARGS,
+    root,
+    'status',
+    '--porcelain=v1',
+    '-b',
+    '--untracked-files=all',
+    '--ignore-submodules=all',
+  ])
+  return stdout === null ? null : parseGitStatus(stdout)
 }

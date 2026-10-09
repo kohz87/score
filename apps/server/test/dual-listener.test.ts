@@ -194,3 +194,35 @@ test('closing the server does not wait for idle keep-alive connections (TLS or p
   await server.close()
   await Promise.all(idle.map((socket) => (socket.destroyed ? undefined : once(socket, 'close'))))
 })
+
+test('a connection that sends one byte and stops is closed after the deadline', async () => {
+  const port = await freePort()
+  const config = dualConfig(port)
+  const app = buildApp({
+    config,
+    logger: false,
+    https: { cert: Buffer.from(testCert), key: Buffer.from(testKey) },
+  })
+  const guide = buildGuideApp(config)
+  const { server, destroyConnections } = await listenDual(app, guide, {
+    host: '127.0.0.1',
+    port,
+    firstRequestDeadlineMs: 300,
+  })
+  cleanup.push(async () => {
+    const stopped = new Promise((resolve) => server.close(resolve))
+    destroyConnections()
+    await stopped
+    await app.close()
+    await guide.close()
+  })
+  const plain = connect(port, '127.0.0.1')
+  const tls = connect(port, '127.0.0.1')
+  await Promise.all([once(plain, 'connect'), once(tls, 'connect')])
+  plain.write('G')
+  tls.write(Buffer.from([0x16]))
+  await Promise.all([once(plain, 'close'), once(tls, 'close')])
+  // A normal request is unaffected and the deadline does not outlive it.
+  expect((await get('https', port, '/api/health')).status).toBe(200)
+  expect((await get('http', port, '/setup/https')).status).toBe(200)
+})

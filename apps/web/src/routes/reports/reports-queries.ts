@@ -50,9 +50,12 @@ export function viewerToday(now = Date.now()): string {
     return new Date(now).toISOString().slice(0, 10)
   }
 }
-const isDay = (value: string) =>
-  /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-  new Date(`${value}T00:00:00Z`).toISOString().startsWith(value)
+const isDay = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  // Invalid dates (2026-13-01) make toISOString throw: check the timestamp first.
+  const time = Date.parse(`${value}T00:00:00Z`)
+  return Number.isFinite(time) && new Date(time).toISOString().startsWith(value)
+}
 const dayCount = (from: string, to: string) =>
   (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 + 1
 

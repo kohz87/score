@@ -60,17 +60,20 @@ use_local_tls() {
 # serves each to browsers that ask for that name, and each name becomes a public origin.
 use_named_tls() {
   [[ "${SCORE_REMOTE:-}" == "1" && -n "${SCORE_TLS_CERT:-}" && -z "${SCORE_TLS_NAMES_DIR:-}" ]] || return 0
-  local dir="$home/tls/tailscale" crt name origins="${SCORE_PUBLIC_ORIGINS:-}"
+  local dir="$home/tls/tailscale" crt name origins="${SCORE_PUBLIC_ORIGINS:-}" found=0
   [[ -d "$dir" ]] || return 0
   for crt in "$dir"/*.crt; do
     [[ -f "$crt" ]] || continue
     name="$(basename "$crt" .crt)"
     [[ -f "$dir/$name.key" && "$name" =~ ^[a-z0-9.-]+$ ]] || continue
+    found=1
     [[ ",$origins," == *",https://$name:${SCORE_PORT:-8741},"* ]] && continue
     origins="${origins:+$origins,}https://$name:${SCORE_PORT:-8741}"
   done
-  [[ "$origins" != "${SCORE_PUBLIC_ORIGINS:-}" ]] || return 0
-  export SCORE_TLS_NAMES_DIR="$dir" SCORE_PUBLIC_ORIGINS="$origins"
+  # Usable certificates enable the directory even when every name is already listed as an origin.
+  [[ "$found" == 1 ]] || return 0
+  export SCORE_TLS_NAMES_DIR="$dir"
+  [[ "$origins" == "${SCORE_PUBLIC_ORIGINS:-}" ]] || export SCORE_PUBLIC_ORIGINS="$origins"
 }
 
 cmd_start() {
@@ -115,6 +118,11 @@ cmd_start() {
         sed -E 's#^.*(Pair this browser|Setup guide): (https?://[^/]+)/.*#\2#' >"$url_file" || true
       echo "Score started (pid $(running_pid)). Log: $log_file"
       tail -c +"$((offset + 1))" "$log_file" | grep -E 'Pair this browser|Setup guide:|Run scripts/score tls' | head -n 2
+      # The link itself never goes to score.log: the server leaves it in a 0600 file, shown once here.
+      if [[ -f "$pair_file" ]]; then
+        echo "Pair this browser: $(<"$pair_file")"
+        rm -f "$pair_file"
+      fi
       return 0
     fi
     sleep 0.2
@@ -180,6 +188,10 @@ cmd_pair() {
     fi
     sleep 0.1
   done
+  if grep -E 'Pair this browser|Setup guide:' "$log_file" | tail -n 1 | grep -q 'Setup guide:'; then
+    echo "Score is only serving the HTTPS setup guide: finish HTTPS setup (scripts/score tls) and restart, then pair." >&2
+    return 1
+  fi
   echo "Score did not produce a pairing link; see $log_file" >&2
   return 1
 }

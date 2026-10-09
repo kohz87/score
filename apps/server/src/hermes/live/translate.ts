@@ -284,10 +284,12 @@ export function translateRunEvent(
           )
         values.tools_used = JSON.stringify(tools.map(({ tool }) => tool))
       }
+      // The wire carries no call id. Hermes runs parallel calls concurrently but emits their completions in the
+      // original call order (agent/tool_executor.py), so a completion belongs to the OLDEST running call of that name.
       if (completed) {
         sqlite
           .prepare(
-            `UPDATE tool_calls SET status = ?, ended_at = ?, duration_ms = ?, result_preview = ? WHERE run_id = ? AND seq = (SELECT seq FROM tool_calls WHERE run_id = ? AND tool = ? AND status = 'running' ORDER BY seq DESC LIMIT 1)`,
+            `UPDATE tool_calls SET status = ?, ended_at = ?, duration_ms = ?, result_preview = ? WHERE run_id = ? AND seq = (SELECT seq FROM tool_calls WHERE run_id = ? AND tool = ? AND status = 'running' ORDER BY seq ASC LIMIT 1)`,
           )
           .run(
             completed.error ? 'error' : 'ok',

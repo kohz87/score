@@ -1212,3 +1212,44 @@ test('migration 0029 adds nullable edited_by and edits to messages', () => {
   expect(columns).toContainEqual({ name: 'edited_by', required: 0 })
   expect(columns).toContainEqual({ name: 'edits', required: 0 })
 })
+
+test('editing a message whose turn is still queued is refused until the work is stopped (audit wave 4, 5.33)', async () => {
+  const room = await create()
+  const original = await ownMessage(room.id, 'obsolete instruction')
+  // The mocked startRun never attaches a reply, so the turn is still queued when the edit arrives.
+  expect(
+    db.sqlite.prepare('SELECT state FROM message_runs WHERE parent_message_id = ?').get(original.id)
+      ?.state,
+  ).toBe('pending')
+  const edited = await post(`/api/rooms/${room.id}/messages`, {
+    text: 'new instruction',
+    edits: original.id,
+  })
+  // An edit would hide the original and everything after it; queued work must be stopped first, so the replaced
+  // instruction can never run behind the person's back.
+  expect(edited.statusCode).toBe(409)
+  expect(edited.json().error.message).toMatch(/queued work|stop it first/)
+  expect(
+    db.sqlite
+      .prepare('SELECT COUNT(*) AS n FROM messages WHERE room_id = ? AND deleted_at IS NOT NULL')
+      .get(room.id)?.n,
+  ).toBe(0)
+})
+
+test('retry sends the original admitted input again, not the room as it is now (audit wave 4)', async () => {
+  const room = await create()
+  const original = await ownMessage(room.id, 'do the thing')
+  const replyId = await finishReply(room.id, original.id)
+  await ownMessage(room.id, 'only say CANCELLED')
+  const first = (await post(`/api/rooms/${room.id}/messages/${replyId}/retry`, {}, 'k')).json() as {
+    messageId: string
+  }
+  const rows = db.sqlite
+    .prepare(
+      'SELECT message_id, admission_input FROM message_runs WHERE parent_message_id = ? ORDER BY rowid',
+    )
+    .all(original.id) as Array<{ message_id: string; admission_input: string }>
+  const retried = rows.find((row) => row.message_id === first.messageId)!
+  expect(retried.admission_input).toBe(rows[0]!.admission_input)
+  expect(retried.admission_input).not.toContain('CANCELLED')
+})

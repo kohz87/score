@@ -758,7 +758,13 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
 - **H** `GET /api/agents/:agentId/workspace` → `WorkspaceInfo` `{ root: string | null; available: boolean; reason: string | null }`.
   Unavailable (with the reason) when the terminal backend is not `local`, `terminal.cwd` is unset, `.` or relative, or the
   folder fails the root checks: `/`, the home folder or a parent of it, `~/.hermes`, `~/.score`, `~/.ssh` (or Score's/Hermes's
-  configured homes) or inside them, missing, not a directory, or owned by another user.
+  configured homes, and the default `~/.hermes` even when another Hermes home is configured) or inside them, inside `.git` or
+  a protected-name folder, missing, not a directory, or owned by another user.
+- **Root identity.** Every file route below (`tree`, `file` GET/PUT, `entries`, `move`, `upload`, `git`) accepts `?root=<the
+  WorkspaceInfo.root the browser is showing>`; when present and not the agent's current root the request is refused
+  `409 workspace_changed` (`details.root` = the current root) and nothing is touched. The web always sends it and includes
+  it in its query keys. `PUT …/file` re-checks the file right before replacing it (`412 precondition_failed` if an outside
+  writer changed it meanwhile).
 - **H** `PUT /api/agents/:agentId/workspace/root` `{ path }` → `WorkspaceInfo`. Same checks plus the folder must exist (never
   created); writes `terminal.cwd` through `hermes -p <profile> config set`. Refusal → `409 workspace_unavailable` with the reason;
   `~/…` is expanded. The stored value is the resolved real path. Logged.
@@ -779,8 +785,10 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
   here; the UI asks for a typed confirmation first).
 - **H** `GET …/workspace/git` → `{ branch: string; changed: number; ahead: number; behind: number } | null` (`WorkspaceGit`).
   The repository around the root (the root or a parent), from one read-only `git status --porcelain=v1 -b` (no index lock,
-  fsmonitor and hooks off, 5 s timeout); `changed` counts every non-clean path including untracked files; `null` when
-  there is no repository, git is missing or the call fails. Never runs a writing git command.
+  fsmonitor and hooks off, system/user git config and inherited `GIT_*` variables ignored, 5 s timeout); `changed` counts
+  every non-clean path, each untracked file individually (`--untracked-files=all`); `null` when there is no repository, git
+  is missing, the call fails or the repository's own config defines filters, fsmonitor, a hooks path, textconv or includes
+  (git would run them; the UI then shows no badge). Never runs a writing git command.
 - **H** `POST …/workspace/upload?path=` raw body, `Content-Type: application/octet-stream`, ≤ 25 MiB, `path` = the new file's
   path → `201 { path, size }` (`409 exists`).
 - **Links (web only, no endpoint).** In chat Markdown `workspace://<path>` and `workspace://<agentId>/<path>` open that file
@@ -961,8 +969,13 @@ tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
 - **H** `PUT /api/knowledge/notes/*path` `{ body; frontmatter?; etag | null }` → `{ etag; path }`; `412
   precondition_failed` with `details.etag` on a stale etag; `etag: null` creates and refuses an existing note (`409
   exists`); missing folders are created. Atomic write, then a git commit (author `You`); rapid edits of one note by one
-  author within 60 s amend Score's own last commit when it is still `HEAD`.
-- **H** `POST /api/knowledge/move` `{ from; to; updateLinks }` → `{ path; updatedNotes }` (one commit; `409 exists`).
+  author within 60 s amend Score's own last commit when it is still `HEAD`. Before any save, move, delete or restore Score
+  commits outside edits as "Outside changes"; if that snapshot fails the operation is refused `503 git_unavailable` (nothing
+  is overwritten), and a save whose note changed on disk meanwhile gets `412` with the new etag. Agent `write`/`append`
+  from an observe-only producer (`isolation: 'unknown'`) → `403 observe_only`.
+- **H** `POST /api/knowledge/move` `{ from; to; updateLinks }` → `{ path; updatedNotes }` (two commits: the pure rename, then the link edits, so
+  git follows the file; `409 exists`; `413` and nothing moved when a link rewrite would push a note over 2 MiB; links added
+  outside Score since the last scan are included).
 - **H** `DELETE /api/knowledge/notes/*path` → `204` (owner only; agents have no delete).
 - `GET /api/knowledge/search?q=&limit=` (limit ≤ 50, default 20) → `{ items: { path; title; snippet }[] }`: FTS5-ranked;
   the query is tokenised into quoted terms (no FTS syntax from the user); `[[`/`]]` in `snippet` mark matches.

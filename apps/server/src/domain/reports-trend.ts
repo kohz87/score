@@ -29,6 +29,8 @@ export function computeTrend(input: {
   tz: string
   runs: ReportRun[]
   costs?: Record<string, SessionCost[]>
+  /** Every agent that should have a reading: one missing from `costs` (unreadable) makes the spend unknown. */
+  agentIds?: string[]
   sqlite?: DatabaseSync
   /** Demo adapter: one value per day, oldest first, used when there are no cost readings. */
   demoSpendUsd?: number[]
@@ -44,12 +46,14 @@ export function computeTrend(input: {
     if (input.costs && input.sqlite) {
       const from = startOfDay(date, input.tz)
       const to = Math.min(input.now, startOfDay(addDays(date, 1), input.tz) - 1)
-      let total: number | null = 0
-      for (const [profile, sessions] of Object.entries(input.costs)) {
+      let total: number | null = (input.agentIds ?? []).some((id) => !(id in input.costs!))
+        ? null
+        : 0
+      for (const [profile, sessions] of total === null ? [] : Object.entries(input.costs)) {
         // A session that had not started yet cannot have spent anything that day.
         const existing = sessions.filter((session) => session.startedAt <= to)
         const spend = profileSpendInWindow(input.sqlite, profile, existing, from, to)
-        if (spend === null) {
+        if (spend === null || total === null) {
           total = null
           break
         }

@@ -134,6 +134,7 @@ export function cachingRunner(inner: HermesRunner, hermesHome: string): HermesRu
     const signature = signatureOf(home)
     if (
       signature === null ||
+      options.fresh ||
       !(options.captureRead || options.captureModel || options.captureSettings)
     )
       return inner(args, options)

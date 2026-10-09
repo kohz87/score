@@ -167,6 +167,7 @@ test.each([
   ['?range=custom&from=2026-03-01&to=2026-03-12&tz=UTC', /after today/],
   ['?range=custom&from=2024-01-01&to=2026-03-01', /at most 366/],
   ['?range=custom&from=2026-02-31&to=2026-03-01', /real dates/],
+  ['?range=custom&from=2026-13-01&to=2026-13-02', /real dates/],
   ['?range=7d&from=2026-03-01&to=2026-03-02', /only go with range=custom/],
 ])('an unusable custom range %s is a clear 400', async (query, message) => {
   for (const path of ['/api/reports', '/api/reports/export.csv']) {
