@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
+import { importOutsideSession } from '../../src/domain/outside-sessions.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { createHermesPort, type HermesPort } from '../../src/hermes/index.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
@@ -257,4 +258,23 @@ test('a continued session that becomes busy holds the turn, then fails it with s
     .all(roomId, 'agent')
     .map((row) => String(row.parts))
   expect(texts.some((text) => text.includes('session_busy'))).toBe(true)
+})
+
+// audit4-c 7: a session title can carry a secret; the room name is shown everywhere.
+test('the imported room name is made from the redacted session title', async () => {
+  const history = (await port.readOutsideSession('lead', 'ext-telegram-1'))!
+  const secret = 'sk-fakefakefakefake123456789'
+  history.session.title = `deploy with ${secret}`
+  let name = ''
+  await ingest.submit({
+    source: 'test',
+    identity: 'import-secret-title',
+    apply: ({ sqlite, now }) => {
+      const made = importOutsideSession(sqlite, history, now)
+      name = String(sqlite.prepare('SELECT name FROM rooms WHERE id = ?').get(made.roomId)?.name)
+      return made.events
+    },
+  })
+  expect(name).not.toContain('fakefake')
+  expect(name).toContain('deploy-with')
 })
