@@ -337,10 +337,21 @@ export class LivePort implements HermesPort {
   // Agents, Rooms and Now ask at once on a page load; on a cold cache each read starts several Hermes processes per
   // profile, so concurrent callers share one read (15 s per request after a restart, 2026-10-08 live).
   private agentDetailsFlight: Promise<AgentDetail[]> | undefined
+  private agentDetailsFlightGeneration = 0
   listAgentDetails(): Promise<AgentDetail[]> {
-    this.agentDetailsFlight ??= this.readAgentDetails().finally(() => {
+    // A read that began before Score changed a profile's settings must not answer a caller that asked after.
+    if (
+      this.agentDetailsFlight &&
+      this.agentDetailsFlightGeneration !== this.profiles.invalidations
+    )
       this.agentDetailsFlight = undefined
-    })
+    if (!this.agentDetailsFlight) {
+      this.agentDetailsFlightGeneration = this.profiles.invalidations
+      const mine = this.readAgentDetails().finally(() => {
+        if (this.agentDetailsFlight === mine) this.agentDetailsFlight = undefined
+      })
+      this.agentDetailsFlight = mine
+    }
     return this.agentDetailsFlight.then((details) => structuredClone(details))
   }
   private async readAgentDetails(): Promise<AgentDetail[]> {
