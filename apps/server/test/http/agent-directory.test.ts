@@ -64,9 +64,23 @@ test('the first agent read after an agent-affecting write goes to Hermes', async
   await port.listAgentDetails()
   await port.listAgents()
   expect(read).toHaveBeenCalledTimes(1)
-  await port.setAgentModel(details[0]!.id, { model: 'example-model' }).catch(() => undefined)
+  await port.setSkillEnabled(details[0]!.id, 'example', false).catch(() => undefined)
   await port.listAgentDetails()
   expect(read).toHaveBeenCalledTimes(2)
   await port.listAgentDetails()
   expect(read).toHaveBeenCalledTimes(2)
+})
+
+test('a model save answers from what was written and confirms it in the background (5.23)', async () => {
+  const port = withAgentDirectory(
+    fake,
+    createAgentDirectory(fake, env.db, env.ingest, undefined, () => now),
+  )
+  await port.listAgentDetails()
+  const read = vi.spyOn(fake, 'listAgentDetails')
+  const id = details[0]!.id
+  await port.setAgentModel(id, { model: 'example/new-model', provider: 'example' })
+  const answered = (await port.listAgentDetails()).find((agent) => agent.id === id)!
+  expect(answered.model).toMatchObject({ id: 'example/new-model', via: 'example' })
+  expect(read).toHaveBeenCalledTimes(1)
 })

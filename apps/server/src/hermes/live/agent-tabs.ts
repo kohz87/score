@@ -113,8 +113,10 @@ export class LiveAgentTabs {
       }
       const prior = await readModelPair(this.runner, this.hermesHome, profile)
       try {
-        await this.mutate(profile, ['config', 'set', 'model.default', req.model])
-        if (req.provider)
+        // Each write is a Hermes process (seconds): a value that is already set is not written again.
+        if (prior?.model !== req.model)
+          await this.mutate(profile, ['config', 'set', 'model.default', req.model])
+        if (req.provider && prior?.provider !== req.provider)
           await this.mutate(profile, ['config', 'set', 'model.provider', req.provider])
       } catch (error) {
         // Two CLI writes are not atomic: put the old pair back so a failure never leaves a model paired with

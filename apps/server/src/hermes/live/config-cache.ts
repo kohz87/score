@@ -36,9 +36,34 @@ function readKeyOf(cacheKey: string): string | null {
   const rest = argv[0] === '-p' ? argv.slice(2) : argv
   return rest.slice(0, 3).join(' ') === 'config get --json' ? (rest[3] ?? null) : null
 }
+// Config keys that can change the plugin and tool lists; any other `config set` leaves those lists as they were.
+const LIST_KEYS: Record<string, string[]> = {
+  plugins: ['plugins'],
+  tools: [
+    'toolsets',
+    'platform_toolsets',
+    'tools',
+    'mcp_servers',
+    'plugins',
+    'agent.disabled_toolsets',
+  ],
+}
+/** `plugins` or `tools` for a cached list read; undefined otherwise. */
+function listOf(cacheKey: string): string | undefined {
+  const argv = cacheKey.split('\0')[1]?.split('\u0001') ?? []
+  const rest = argv[0] === '-p' ? argv.slice(2) : argv
+  if (rest[0] === 'plugins' && rest[1] === 'list') return 'plugins'
+  if (rest[0] === 'tools' && rest[1] === 'list') return 'tools'
+  return undefined
+}
 /** Whether a write to `written` can change the answer for `read` (same key, or one contains the other). */
-function relatedKey(read: string | null, written: string): boolean {
-  if (read === null) return true
+function relatedKey(read: string | null, written: string, list?: string): boolean {
+  if (read === null) {
+    const prefixes = list ? LIST_KEYS[list] : undefined
+    if (!prefixes) return true
+    const key = written.toLowerCase()
+    return prefixes.some((prefix) => key === prefix || key.startsWith(`${prefix}.`))
+  }
   const a = read.toLowerCase()
   const b = written.toLowerCase()
   return a === b || a.startsWith(`${b}.`) || b.startsWith(`${a}.`)
@@ -91,7 +116,7 @@ export function cachingRunner(inner: HermesRunner, hermesHome: string): HermesRu
               ([key, entry]) =>
                 key.startsWith(`${target}\0`) &&
                 entry.signature === before &&
-                !relatedKey(readKeyOf(key), setKey!),
+                !relatedKey(readKeyOf(key), setKey!, listOf(key)),
             )
       drop(target)
       try {
@@ -112,7 +137,8 @@ export function cachingRunner(inner: HermesRunner, hermesHome: string): HermesRu
       !(options.captureRead || options.captureModel || options.captureSettings)
     )
       return inner(args, options)
-    const key = `${home}\0${args.join('\u0001')}\0${options.captureModel ? 'm' : ''}`
+    // captureModel and captureRead differ only in the output limit, and a model value is tiny: one entry serves both.
+    const key = `${home}\0${args.join('\u0001')}`
     const hit = entries.get(key)
     if (hit?.signature === signature) return hit.result
     const flightKey = `${key}\0${signature}`

@@ -1,7 +1,7 @@
 import { AgentDetailSchema, AgentSummarySchema, type AgentDetail } from '@score/contract'
 import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
-import { readAgent, readAgentNames, reconcileAgents } from '../domain/agents.ts'
+import { readAgent, readAgentNames, reconcileAgents, storeAgent } from '../domain/agents.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 
@@ -48,7 +48,35 @@ export function createAgentDirectory(
     })
   }
 
+  /**
+   * Records a model Score just wrote, so the save answers at once; a background read then confirms it from Hermes
+   * (re-reading costs another Hermes process, seconds on a busy machine).
+   */
+  async function recordModel(agentId: string, model: string, provider: string | undefined) {
+    await ingest.submit({
+      source: 'agent-model',
+      identity: `agent-model:${agentId}:${clock()}:${model}`,
+      apply({ sqlite }) {
+        const previous = readAgent(sqlite, agentId)
+        if (!previous) return []
+        const agent = AgentDetailSchema.parse({
+          ...previous,
+          model: {
+            id: model,
+            label: model,
+            via: provider ?? previous.model?.via ?? 'Hermes configuration',
+            fallback: previous.model?.fallback ?? null,
+          },
+        })
+        storeAgent(sqlite, agent)
+        return [{ type: 'agent.updated' as const, data: AgentSummarySchema.parse(agent) }]
+      },
+    })
+    void refresh().catch(onError)
+  }
+
   return {
+    recordModel,
     async details({ fresh = false }: { fresh?: boolean } = {}): Promise<AgentDetail[]> {
       if (fresh) return refresh()
       const cached = projected()
@@ -103,6 +131,11 @@ export function withAgentDirectory(port: HermesPort, directory: AgentDirectory):
       const value: unknown = Reflect.get(target, property, receiver)
       if (typeof value !== 'function') return value
       const method = value as (...args: unknown[]) => unknown
+      if (property === 'setAgentModel')
+        return async (agentId: string, req: { model: string; provider?: string }) => {
+          await method.apply(target, [agentId, req])
+          await directory.recordModel(agentId, req.model, req.provider)
+        }
       if (typeof property === 'string' && AGENT_WRITES.has(property))
         return (...args: unknown[]) => {
           // Before and after: a read that runs while the write is in flight must not count as the fresh one.

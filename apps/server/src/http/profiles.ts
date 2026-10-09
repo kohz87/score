@@ -99,8 +99,11 @@ export function registerProfileRoutes(
     await reconcileAgents(ingest, await port.listAgentDetails())
     if (!readAgent(db.sqlite, agentId)) throw new HttpError(404, 'not_found', 'Agent not found')
     assertAgentAdmits(db.sqlite, agentId)
-    if (body.role) await port.describeProfile(agentId, body.role)
-    await reconcileAgents(ingest, await port.listAgentDetails())
+    // The form sends both fields; a description that did not change costs no Hermes process.
+    if (body.role && body.role !== readAgent(db.sqlite, agentId)?.role) {
+      await port.describeProfile(agentId, body.role)
+      await reconcileAgents(ingest, await port.listAgentDetails())
+    }
     let response: z.infer<typeof AgentDetailSchema> | undefined
     await ingest.submit({
       source: 'profile-description',
