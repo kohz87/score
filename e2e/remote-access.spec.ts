@@ -104,6 +104,7 @@ test('remote pairing over HTTPS requires consent, protects reads, serves the gui
       SCORE_TLS_KEY: join(home, 'tls', 'server.key'),
       SCORE_PUBLIC_ORIGINS: origin,
       SCORE_BRIDGE_PORT: String(port + 1),
+      SCORE_PRINT_PAIR_LINK: '1',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   })

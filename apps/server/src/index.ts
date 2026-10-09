@@ -61,9 +61,9 @@ try {
     }
     if (consoleInput)
       process.stdout.write('Type pair in this terminal to mint a new pairing link.\n')
-    // A terminal shows the link. Anything else (the launcher's score.log) must never hold a usable link: it goes to
+    // A terminal shows the link (tests and dev tooling can ask for it with SCORE_PRINT_PAIR_LINK=1). Anything else (the launcher's score.log) must never hold a usable link: it goes to
     // a 0600 file the launcher prints once and deletes.
-    if (process.stdout.isTTY)
+    if (process.stdout.isTTY || process.env.SCORE_PRINT_PAIR_LINK === '1')
       process.stdout.write(`Pair this browser: ${pairingOrigin}/pair#${server.pairingToken}\n`)
     else {
       try {

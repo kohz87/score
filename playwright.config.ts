@@ -25,7 +25,13 @@ export default defineConfig({
     ? {
         command: `pnpm dev 2>&1 | tee ${join(scoreHome, 'dev.log')}`,
         // The server only accepts mutations from its own web origin, so it must follow SCORE_WEB_PORT.
-        env: { SCORE_HOME: scoreHome, SCORE_MODE: 'fake', SCORE_WEB_ORIGIN: baseURL },
+        env: {
+          SCORE_HOME: scoreHome,
+          SCORE_MODE: 'fake',
+          SCORE_WEB_ORIGIN: baseURL,
+          // The specs read the pairing link from dev.log: a non-terminal stdout only gets it on request.
+          SCORE_PRINT_PAIR_LINK: '1',
+        },
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 60_000,
@@ -38,6 +44,7 @@ export default defineConfig({
           SCORE_SERVE_WEB: '1',
           SCORE_PORT: webPort,
           SCORE_WEB_ORIGIN: baseURL,
+          SCORE_PRINT_PAIR_LINK: '1',
         },
         url: baseURL,
         reuseExistingServer: !process.env.CI,
