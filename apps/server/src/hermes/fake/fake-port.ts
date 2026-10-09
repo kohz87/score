@@ -792,7 +792,7 @@ export class FakePort implements HermesPort {
   async readOutsideSession(agentId: string, sessionId: string) {
     return fakeOutsideSession(agentId, sessionId, this.scheduler.now())
   }
-  sessionContinuation(): 'same_session' | 'new_session' {
+  sessionContinuation(): 'same_session' | 'new_session' | 'unknown' {
     return 'same_session'
   }
 

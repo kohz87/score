@@ -405,3 +405,8 @@
     padding: 0 12px;
   }
 }
+.reports-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+}

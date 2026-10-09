@@ -265,6 +265,7 @@ export function createVersion(
   const hide = sqlite.prepare(
     'UPDATE messages SET deleted_at = ?, version_id = ?, updated_at = ?, version = version + 1 WHERE id = ?',
   )
+  // References stay: a rewound message is still shown as a previous version, so its images must not be evicted.
   for (const messageId of ids) hide.run(now, id, now, messageId)
   const version = versionOfAnchor(sqlite, roomId, anchor.id)!
   return {

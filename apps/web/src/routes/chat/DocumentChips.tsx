@@ -18,7 +18,7 @@ function FileIcon() {
   )
 }
 
-/** An attached document in a message: a PDF opens in its own tab, anything else in a preview dialog. */
+/** An attached document in a message: a PDF is a download link, anything else in a preview dialog. */
 export function DocumentChip({ part }: { part: Extract<MessagePart, { kind: 'document' }> }) {
   const [open, setOpen] = useState(false)
   const label = (
@@ -32,10 +32,8 @@ export function DocumentChip({ part }: { part: Extract<MessagePart, { kind: 'doc
     return (
       <a
         className="chat-file-chip"
-        href={mediaUrl(part.mediaId)}
-        target="_blank"
-        rel="noreferrer"
-        aria-label={`Open ${part.name} in a new tab`}
+        href={mediaUrl(part.mediaId, part.name)}
+        aria-label={`Download ${part.name}`}
       >
         {label}
       </a>

@@ -298,6 +298,22 @@ test('a sign-count regression is refused and flags the credential', async () => 
   expect((await signIn(app, device, { counter: 50 })).statusCode).toBe(401)
 })
 
+test('two parallel assertions with the same counter cannot both sign in', async () => {
+  const { app } = makeApp()
+  const device = await register(app, await paired(app))
+  const optionsA = (await post(app, '/api/session/passkey/authentication-options', {})).json()
+  const optionsB = (await post(app, '/api/session/passkey/authentication-options', {})).json()
+  const bodyA = { response: device.get(optionsA, { origin, rpId, counter: 1 }) }
+  const bodyB = { response: device.get(optionsB, { origin, rpId, counter: 1 }) }
+  const codes = (
+    await Promise.all([
+      post(app, '/api/session/passkey/authentication', bodyA),
+      post(app, '/api/session/passkey/authentication', bodyB),
+    ])
+  ).map((r) => r.statusCode)
+  expect(codes.sort()).toEqual([204, 401])
+})
+
 test('authenticators whose counter is always zero keep working', async () => {
   const { app } = makeApp()
   const device = await register(app, await paired(app))

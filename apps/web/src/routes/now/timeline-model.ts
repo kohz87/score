@@ -10,6 +10,9 @@ export const BLOCK_HEIGHT = 40
 const PLANNED_DEFAULT = 20 * 60_000
 const VIEWBOX_WIDTH = 1000
 
+/** What screen readers and the hand-off list call the lane of attempts with no known agent. */
+export const UNATTRIBUTED_NAME = 'Unattributed'
+
 export type TimeWindow = { from: number; to: number; now: number }
 
 export function windowOf(nowIso: string): TimeWindow {
@@ -39,6 +42,22 @@ export function axisTicks(window: TimeWindow): { left: number; label: string }[]
   return ticks.filter((tick) => Math.abs(tick.left - nowLeft) > 4)
 }
 
+/**
+ * Blocks sort by their `order` key when they have one (attempts), never by id: ids are opaque. Blocks without it
+ * keep the order they came in relative to each other.
+ */
+export function compareByOrder(a: LaneBlock, b: LaneBlock): number {
+  if (!a.order || !b.order) return 0
+  return a.order[0] < b.order[0] ? -1 : a.order[0] > b.order[0] ? 1 : a.order[1] - b.order[1]
+}
+
+/** Where a block stops being drawn: observation that ended early is a boundary and wins over any end time. */
+function endOf(window: TimeWindow, block: LaneBlock, start: number): number {
+  if (block.observationEndedAt) return Date.parse(block.observationEndedAt)
+  if (block.end !== null) return Date.parse(block.end)
+  return block.state === 'planned' ? start + PLANNED_DEFAULT : window.now
+}
+
 export type BlockLayout = {
   block: LaneBlock
   left: number
@@ -51,12 +70,7 @@ export function layoutBlock(window: TimeWindow, block: LaneBlock): BlockLayout {
   const start = Date.parse(block.start)
   if (block.state === 'waiting')
     return { block, left: percent(window, window.now), width: null, atNow: true }
-  const end =
-    block.end !== null
-      ? Date.parse(block.end)
-      : block.state === 'planned'
-        ? start + PLANNED_DEFAULT
-        : window.now
+  const end = endOf(window, block, start)
   const left = percent(window, start)
   return {
     block,
@@ -81,12 +95,7 @@ export type LaneItem =
 function outsideWindow(window: TimeWindow, block: LaneBlock): boolean {
   if (block.state === 'waiting') return false
   const start = Date.parse(block.start)
-  const end =
-    block.end !== null
-      ? Date.parse(block.end)
-      : block.state === 'planned'
-        ? start + PLANNED_DEFAULT
-        : window.now
+  const end = endOf(window, block, start)
   return Math.max(end, start) < window.from || start > window.to
 }
 
@@ -100,7 +109,7 @@ const URGENCY: LaneBlock['state'][] = ['waiting', 'working', 'planned', 'done']
 export function laneItems(window: TimeWindow, blocks: LaneBlock[], plotPx: number): LaneItem[] {
   const items: LaneItem[] = []
   const candidates: BlockLayout[] = []
-  for (const block of blocks) {
+  for (const block of blocks.toSorted(compareByOrder)) {
     if (outsideWindow(window, block)) continue
     const layout = layoutBlock(window, block)
     if (block.kind === 'chat' && block.state !== 'waiting') items.push({ kind: 'chat', layout })
@@ -108,7 +117,10 @@ export function laneItems(window: TimeWindow, blocks: LaneBlock[], plotPx: numbe
     else candidates.push(layout)
   }
   const px = (percentValue: number) => (percentValue / 100) * plotPx
-  candidates.sort((a, b) => a.left - b.left || a.block.id.localeCompare(b.block.id))
+  candidates.sort(
+    (a, b) =>
+      a.left - b.left || compareByOrder(a.block, b.block) || a.block.id.localeCompare(b.block.id),
+  )
   let cluster: BlockLayout[] = []
   let clusterEnd = -Infinity
   const flush = () => {
@@ -134,7 +146,7 @@ function groupOf(cluster: BlockLayout[]): LaneItem {
   const right = Math.max(...cluster.map((layout) => layout.left + (layout.width ?? 0)))
   const state = URGENCY.find((candidate) => blocks.some((block) => block.state === candidate))!
   const first = blocks.toSorted(
-    (a, b) => a.start.localeCompare(b.start) || a.id.localeCompare(b.id),
+    (a, b) => a.start.localeCompare(b.start) || compareByOrder(a, b) || a.id.localeCompare(b.id),
   )[0]!
   const block: LaneBlock = {
     id: `group:${first.id}`,
@@ -163,7 +175,7 @@ export type Connector = {
 }
 
 export function connectors(
-  snapshot: Pick<NowSnapshot, 'lanes' | 'handoffs'>,
+  snapshot: Pick<NowSnapshot, 'lanes' | 'handoffs' | 'unattributed'>,
   window: TimeWindow,
   plotPx = VIEWBOX_WIDTH,
 ): Connector[] {
@@ -171,7 +183,14 @@ export function connectors(
     string,
     { lane: number; layout: BlockLayout; agent: string; chat: boolean; label: string }
   >()
-  snapshot.lanes.forEach((lane, index) => {
+  // The Unattributed lane (attempts on) is drawn under the agent lanes; hand-offs to or from it have no agent.
+  const lanes: { agentId: string; blocks: LaneBlock[] }[] = snapshot.lanes.map((lane) => ({
+    agentId: lane.agent.id,
+    blocks: lane.blocks,
+  }))
+  if (snapshot.unattributed)
+    lanes.push({ agentId: UNATTRIBUTED_NAME, blocks: snapshot.unattributed.blocks })
+  lanes.forEach((lane, index) => {
     for (const item of laneItems(window, lane.blocks, plotPx)) {
       // A grouped block's hand-offs attach to the group.
       const members = item.kind === 'group' ? item.blocks : [item.layout.block]
@@ -179,7 +198,7 @@ export function connectors(
         found.set(block.id, {
           lane: index,
           layout: item.layout,
-          agent: lane.agent.id,
+          agent: lane.agentId,
           chat: item.kind === 'chat',
           label: block.label,
         })

@@ -128,7 +128,9 @@ export class MediaStore {
     const now = new Date(this.clock()).toISOString()
     let evicted: string[] = []
     const result = this.db.tx((sqlite) => {
-      const found = sqlite.prepare('SELECT * FROM media WHERE sha256 = ?').get(sha256)
+      const found = sqlite
+        .prepare('SELECT * FROM media WHERE sha256 = ? AND content_type = ?')
+        .get(sha256, type)
       if (found) {
         const row = RowSchema.parse(found)
         sqlite.prepare('UPDATE media SET last_used_at = ? WHERE id = ?').run(now, row.id)
@@ -215,7 +217,7 @@ export class MediaStore {
           }
         } else if (row.refs === 0 && row.last_used_at <= cutoff) {
           sqlite.prepare('DELETE FROM media WHERE id = ?').run(row.id)
-          removed.push(row.sha256)
+          if (!blobShared(sqlite, row.sha256)) removed.push(row.sha256)
         }
       }
       removed.push(...evictFor(sqlite, this.quotaBytes, 0, false))
@@ -270,12 +272,17 @@ function evictFor(sqlite: DatabaseSync, quota: number, incoming: number, strict 
   for (const row of candidates) {
     if (total + incoming <= quota) break
     sqlite.prepare('DELETE FROM media WHERE id = ?').run(row.id)
-    victims.push(row.sha256)
+    if (!blobShared(sqlite, row.sha256)) victims.push(row.sha256)
     total -= row.size
   }
   if (strict && total + incoming > quota)
     throw new HttpError(507, 'media_quota_exceeded', 'Media storage is full')
   return victims
+}
+
+// Rows of different document types can share one blob; the file goes only with the last of them.
+function blobShared(sqlite: DatabaseSync, sha256: string): boolean {
+  return sqlite.prepare('SELECT 1 FROM media WHERE sha256 = ?').get(sha256) !== undefined
 }
 
 function sameBytes(path: string, bytes: Uint8Array): boolean {

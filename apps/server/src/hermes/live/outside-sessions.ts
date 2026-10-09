@@ -9,6 +9,7 @@ import {
   type OutsideSessionFact,
   type OutsideSessionHistory,
 } from '../outside-sessions.ts'
+import { compressionLineage } from './recover.ts'
 import { hermesPaths, ProfileNameSchema, resolveHermesHome } from './paths.ts'
 import { HermesDbMissing, HermesSchemaDrift, openReadOnly, readBatch } from './sqlite.ts'
 
@@ -56,6 +57,24 @@ function cut(text: string, chars: number): string {
   return flat.length > chars ? `${flat.slice(0, chars - 1)}…` : flat
 }
 
+const SessionWithParent = SessionRowSchema.extend({ parent_session_id: z.string().nullable() })
+
+// Compression ends the listed root and Hermes keeps writing to a child; activity is judged on the live tip while the
+// root stays the identity Score imports and continues.
+function activeRow(
+  db: Parameters<typeof compressionLineage>[0],
+  row: z.infer<typeof SessionRowSchema>,
+) {
+  const lineage = compressionLineage(db, row.id)
+  if (lineage.length < 2) return { row, lineage }
+  const tip = readBatch(db, 'sessions', SessionWithParent, 'WHERE id = ?', [lineage.at(-1)!])
+    .rows[0]
+  return {
+    row: tip ? { ...row, ended_at: tip.ended_at, last_activity_at: tip.last_activity_at } : row,
+    lineage,
+  }
+}
+
 const excluded = AUTOMATION_SOURCES.map((source) => `'${source}'`).join(', ')
 const SESSION_FILTER = `WHERE parent_session_id IS NULL AND COALESCE(message_count, 0) > 0
   AND source NOT IN (${excluded}) AND NOT (source = 'api_server' AND id LIKE 'score-%')`
@@ -93,7 +112,7 @@ export function listOutsideSessions(
             ).rows[0]
             title = first?.content ? cut(first.content, TITLE_CHARS) : ''
           }
-          items.push(fact(agentId, row, title, nowMs))
+          items.push(fact(agentId, activeRow(db, row).row, title, nowMs))
         }
       } finally {
         db.close()
@@ -135,23 +154,41 @@ export function readOutsideSession(
     if (!row) return null
     // The newest messages (a long session keeps its recent end), without rows Hermes soft-deleted by an undo/rewind
     // (`active = 0`) or wrote for display only. An older Hermes without those columns shows every row.
-    const read = (extra: string) =>
+    const { row: live, lineage } = activeRow(db, row)
+    const read = (id: string, extra: string) =>
       readBatch(
         db,
         'messages',
         MessageRowSchema,
         `WHERE session_id = ? AND role IN ('user', 'assistant') AND content IS NOT NULL AND TRIM(content) != ''${extra}
          ORDER BY id DESC LIMIT ${MAX_IMPORT_MESSAGES}`,
-        [sessionId],
-      ).rows
-    let newest
-    try {
-      newest = read(' AND active = 1 AND display_kind IS NULL')
-    } catch (error) {
-      if (!(error instanceof HermesSchemaDrift)) throw error
-      newest = read('')
+        [id],
+      ).rows.reverse()
+    let narrow = true
+    const readSession = (id: string) => {
+      if (narrow)
+        try {
+          return read(id, ' AND active = 1 AND display_kind IS NULL')
+        } catch (error) {
+          if (!(error instanceof HermesSchemaDrift)) throw error
+          narrow = false
+        }
+      return read(id, '')
     }
-    const rows = newest.reverse()
+    // A continuation starts with messages carried over from its parent: drop that repeated leading run.
+    const rows: z.infer<typeof MessageRowSchema>[] = []
+    const seen = new Set<string>()
+    for (const id of lineage) {
+      let carried = id !== lineage[0]
+      for (const message of readSession(id)) {
+        const key = `${message.role}\0${message.content}`
+        if (carried && seen.has(key)) continue
+        carried = false
+        rows.push(message)
+        seen.add(key)
+      }
+    }
+    rows.splice(0, Math.max(0, rows.length - MAX_IMPORT_MESSAGES))
     const messages = rows.map((message) => ({
       role: message.role === 'user' ? ('user' as const) : ('assistant' as const),
       text: redactBounded(message.content ?? '', MAX_IMPORT_TEXT_BYTES),
@@ -163,7 +200,7 @@ export function readOutsideSession(
       : first
         ? cut(first.text, TITLE_CHARS)
         : ''
-    return { session: fact(agentId, row, title, nowMs), messages }
+    return { session: fact(agentId, live, title, nowMs), messages }
   } catch (error) {
     if (error instanceof HermesSchemaDrift) return null
     throw error

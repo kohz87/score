@@ -555,7 +555,7 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 
   ```ts
   req: { text: string; to?: AgentId[] /* explicit "To" chips; @mentions in text are merged */
-         planFirst?: boolean; model?: string /* one-shot /model */; attachments?: ({ mediaId: string; name?: string } | { workspace: { agentId: AgentId; path: string } })[] /* ≤ 10 */
+         planFirst?: boolean; model?: string /* one-shot /model */; attachments?: ({ mediaId: string; name?: string } | { workspace: { agentId: AgentId; path: string; root?: string /* root the file was picked from: a changed root is 409 workspace_changed */ } })[] /* ≤ 10 */
          edits?: MessageId /* edit and resend: the sender's own earlier message in this room */ }
   res: { message: Message; routedTo: AgentId[]; command: CommandResult | null; notices?: string[] }
   ```
@@ -594,9 +594,9 @@ contentType: string }`. Types come from the bytes: png, jpeg, gif, webp, PDF, DO
   entries), and plain UTF-8 text, where the file name's extension (or the declared type) picks `text/plain`,
   `text/markdown`, `text/csv`, `application/json` or `text/html`. `400` empty or malformed, `413` over 8 MB for an image
   or 25 MiB for anything else, `415` unsupported or contradicting type, `507 media_quota_exceeded`. `GET /api/media/:mediaId`
-  serves by kind: images and text (HTML as `text/plain`, never rendered) inline under `default-src 'none'; sandbox`; PDF
-  inline with `nosniff` and no CSP (the browser's viewer needs it); DOCX/XLSX, and any file with `?download=1[&name=]`,
-  as `attachment`. Messages reference uploads with an `image` part, or a `document` part for everything else, plus
+  serves by kind: images and text (HTML as `text/plain`, never rendered) inline under `default-src 'none'; sandbox`; PDF,
+  DOCX/XLSX, and any file with `?download=1[&name=]`, as `attachment` (octet-stream, `nosniff`, sandbox CSP; a PDF is never rendered
+  from Score's origin, because Chrome's viewer cannot run under a sandbox CSP). Messages reference uploads with an `image` part, or a `document` part for everything else, plus
   `workspace` parts for workspace files (`{ workspace: { agentId, path } }`, checked against that agent's workspace, no
   copy); at most 10 attachments per message. What each addressed agent receives (5.30): text files (TXT, MD, CSV, JSON,
   HTML) inline in the run input, fenced, redacted, up to 64 KB each and 200 KB per message (truncated with a note); PDF,
@@ -886,7 +886,8 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
   (one level; folders first; blocked names are never listed; `.git` is listed but not its inside).
 - **H** `GET …/workspace/file?path=[&download=1]`
   - text (UTF-8, no NUL, ≤ 1 MiB): `200 text/plain; charset=utf-8`, header `ETag` (quoted), `X-Content-Type-Options: nosniff`;
-  - png/jpeg/gif/webp/pdf (extension + magic bytes, ≤ 25 MiB): the raw bytes, `Content-Disposition: inline`, nosniff, CSP `default-src 'none'; sandbox`;
+  - png/jpeg/gif/webp (extension + magic bytes, ≤ 25 MiB): the raw bytes, `Content-Disposition: inline`, nosniff, CSP `default-src 'none'; sandbox`;
+  - pdf (same checks): as the download case below (`application/octet-stream`, `attachment`, CSP), never inline;
   - anything else: `200 application/json` `{ binary: true; size; reason: 'binary' | 'too_large' }`;
   - `download=1`: any file ≤ 25 MiB as `application/octet-stream`, `Content-Disposition: attachment`, nosniff.
   Symlinks are followed for reading only when they resolve inside the root and the resolved path is allowed.

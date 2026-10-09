@@ -39,13 +39,13 @@ test('a PDF and a CSV attach, preview, and reach the agent; a workspace file att
   await expect(chips).toHaveCount(0)
   const mine = history.getByRole('article').filter({ hasText: text })
 
-  // The PDF opens in its own tab, served inline.
-  const pdf = mine.getByRole('link', { name: 'Open report.pdf in a new tab' })
-  await expect(pdf).toHaveAttribute('target', '_blank')
+  // The PDF is a download, never rendered from Score's origin.
+  const pdf = mine.getByRole('link', { name: 'Download report.pdf' })
   const response = await page.request.get((await pdf.getAttribute('href'))!)
-  expect(response.headers()['content-type']).toBe('application/pdf')
-  expect(response.headers()['content-disposition']).toBe('inline')
+  expect(response.headers()['content-type']).toBe('application/octet-stream')
+  expect(response.headers()['content-disposition']).toMatch(/^attachment/)
   expect(response.headers()['x-content-type-options']).toBe('nosniff')
+  expect(response.headers()['content-security-policy']).toContain('sandbox')
 
   // The CSV previews as a table.
   await mine.getByRole('button', { name: 'Preview data.csv' }).click()

@@ -184,6 +184,25 @@ test('workspace files are referenced by path, with the Workspace path rules', as
   expect(await refuse('x.txt', 'designer')).toBe(409)
 })
 
+test('a workspace attachment names the root it was picked from; a changed root is refused', async () => {
+  writeFileSync(join(root, 'report.csv'), 'a,b')
+  const wrong = await send({
+    text: '@builder x',
+    attachments: [
+      { workspace: { agentId: 'builder', path: 'report.csv', root: '/somewhere/else' } },
+    ],
+  })
+  expect(wrong.statusCode).toBe(409)
+  expect(wrong.json().error.code).toBe('workspace_changed')
+  const info = await app.inject({ url: '/api/agents/builder/workspace' })
+  const current = info.json().root as string
+  const right = await send({
+    text: '@builder x',
+    attachments: [{ workspace: { agentId: 'builder', path: 'report.csv', root: current } }],
+  })
+  expect(right.statusCode).toBe(200)
+})
+
 test('at most 10 attachments, and unknown uploads are refused', async () => {
   const many = Array.from({ length: 11 }, (_, i) => ({
     mediaId: `00000000-0000-0000-0000-0000000000${10 + i}`,

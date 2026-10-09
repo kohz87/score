@@ -21,6 +21,7 @@ import {
   pruneKanbanAttempts,
   kanbanAttemptsEnabled,
   RewindBroker,
+  seedFakeAttempts,
   sweepKanbanDenials,
   type HermesPort,
 } from './hermes/index.ts'
@@ -187,6 +188,13 @@ export async function startServer(
     migrate(db, fileURLToPath(new URL('../migrations/', import.meta.url)))
     restoreRoomHolds(db.sqlite, Date.now())
     ensureMessageFts(db.sqlite)
+    // Test-only: attempts for e2e against the fake adapter (it has no Kanban board to project from).
+    if (
+      config.mode === 'fake' &&
+      kanbanAttemptsEnabled() &&
+      process.env.SCORE_E2E_SEED_ATTEMPTS === '1'
+    )
+      seedFakeAttempts(db.sqlite)
     // A new epoch per start: a database restored from a backup may have caught up past a browser's cursor,
     // and only a changed epoch tells that browser its projections came from discarded history.
     resetEpoch(db)

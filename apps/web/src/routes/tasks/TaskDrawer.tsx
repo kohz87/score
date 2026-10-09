@@ -1,3 +1,4 @@
+import { EARLIER_ATTEMPT_TEXT } from '../attempts/attempt-format.ts'
 import { useState, type Ref } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
@@ -302,6 +303,18 @@ function Details({
       </dl>
       {task.body && <p className="task-drawer-body">{task.body}</p>}
       <Steps task={task} />
+      {task.unresolvedRunLinks && task.unresolvedRunLinks.length > 0 && (
+        <section className="task-drawer-section" aria-labelledby="task-earlier-heading">
+          <h3 id="task-earlier-heading">Earlier attempts</h3>
+          <ul className="task-earlier">
+            {task.unresolvedRunLinks.map((link) => (
+              <li key={link.legacyId} className="task-drawer-muted">
+                {EARLIER_ATTEMPT_TEXT}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section className="task-drawer-section" aria-labelledby="task-activity-heading">
         <h3 id="task-activity-heading">Activity</h3>
         {activity.length === 0 && <p className="task-drawer-muted">No activity yet.</p>}
