@@ -233,8 +233,12 @@ Knowledge vault (PLAN 6.2): notes live in `~/score-vault` (override with `SCORE_
 Score creates on first use. It needs `git` on the PATH; without it notes still save but there is no history. Back the folder
 up like any other (it is the source of truth; Score's index of it is disposable). Fake mode uses a temporary seeded vault.
 
+Do not `VACUUM` `score.db` by hand. The message search index (`message_fts`) is keyed on the implicit rowid of `messages`,
+which a VACUUM may renumber. Score checks the index at every start and rebuilds it when it no longer matches, but a manual
+VACUUM while Score runs can still leave search wrong until the next start.
+
 ## Changelog of this file
-- 2026-10-09: the knowledge vault (`SCORE_VAULT`, git).
+- 2026-10-09: do not VACUUM by hand (search index rebuilt at start).- 2026-10-09: the knowledge vault (`SCORE_VAULT`, git).
 - 2026-10-08: section 9, running the built app (pnpm start, launcher, systemd unit).
 - 2026-10-08: creating agents (bridge install URL/ref).
 - 2026-10-08: bridge plugin install pointer, live start and SSH tunnel.

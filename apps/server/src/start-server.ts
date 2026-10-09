@@ -36,6 +36,7 @@ import { deriveTaskEvents } from './domain/tasks.ts'
 import { createIngest, type Ingest } from './hub/ingest.ts'
 import { rotateLog } from './log-rotation.ts'
 import { snapshotSessionCosts } from './domain/spend.ts'
+import { ensureMessageFts } from './db/fts.ts'
 import { pruneEvents } from './hub/retention.ts'
 import { pruneAuxiliary } from './hub/retention-aux.ts'
 import { MediaStore } from './media/store.ts'
@@ -181,6 +182,7 @@ export async function startServer(
     homeLock = acquireHomeLock(config.home)
     db = openDatabase(join(config.home, 'score.db'))
     migrate(db, fileURLToPath(new URL('../migrations/', import.meta.url)))
+    ensureMessageFts(db.sqlite)
     // A new epoch per start: a database restored from a backup may have caught up past a browser's cursor,
     // and only a changed epoch tells that browser its projections came from discarded history.
     resetEpoch(db)

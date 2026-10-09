@@ -72,6 +72,7 @@ vi.mock('../src/hermes/index.ts', () => ({
   RewindBroker: class {},
 }))
 vi.mock('../src/hub/retention.ts', () => ({ pruneEvents: mocks.pruneEvents }))
+vi.mock('../src/db/fts.ts', () => ({ ensureMessageFts: vi.fn() }))
 vi.mock('../src/hub/retention-aux.ts', () => ({ pruneAuxiliary: vi.fn() }))
 vi.mock('../src/hub/retire.ts', () => ({ retireIngestKeys: mocks.retireIngestKeys }))
 vi.mock('../src/knowledge/vault.ts', () => ({
