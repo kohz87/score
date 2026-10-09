@@ -52,8 +52,8 @@ export interface CodingDriver {
   readonly runtime: CodingRuntime
   readonly label: string
   readonly executable: string
-  /** Version prefixes Score was tested with (see tested-versions.json). */
-  readonly testedSeries: readonly string[]
+  /** Exact versions Score was tested with. */
+  readonly testedVersions: readonly string[]
   /** Whether Score can run this CLI at all. */
   readonly supported: boolean
   readonly quota: string

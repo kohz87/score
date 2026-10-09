@@ -251,7 +251,7 @@ export const claudeDriver: CodingDriver = {
   runtime: 'claude-code',
   label: 'Claude Code',
   executable: 'claude',
-  testedSeries: ['2.1'],
+  testedVersions: ['2.1.295'],
   supported: true,
   quota: 'Uses your Claude plan quota (the CLI’s own login).',
   parseVersion(output) {

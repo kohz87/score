@@ -114,7 +114,7 @@ export class CodingRuntime {
       cli: {
         state: cli.state,
         version: cli.version,
-        testedSeries: [...driver.testedSeries],
+        testedVersions: [...driver.testedVersions],
         confirmed: cli.version !== null && agent.confirmedVersion === cli.version,
       },
       createdAt: agent.createdAt,
@@ -189,6 +189,28 @@ export class CodingRuntime {
     forgetCliSession(this.deps.db.sqlite, sessionKey.slice(6, -suffix.length), agentId)
   }
 
+  /** Why this CLI may not run for this agent right now, or null. Read fresh when `fresh` (before a spawn). */
+  private async cliRefusal(
+    agent: StoredCodingAgent,
+    driver: ReturnType<typeof driverFor>,
+    fresh: boolean,
+  ): Promise<{ code: string; message: string; notice: string } | null> {
+    const cli = await this.deps.locator.detect(driver, { fresh })
+    if (cli.state === 'not_supported' || cli.state === 'not_installed')
+      return {
+        code: 'cli_not_installed',
+        message: cli.message ?? 'The CLI is not available',
+        notice: `${driver.label} can't run: ${cli.message ?? 'not available'}`,
+      }
+    if (cli.state === 'untested_version' && agent.confirmedVersion !== cli.version)
+      return {
+        code: 'untested_cli_version',
+        message: cli.message ?? 'Untested CLI version',
+        notice: `${driver.label} ${cli.version ?? ''} is an untested version. Open this agent in Team and confirm it to run.`,
+      }
+    return null
+  }
+
   /** The CLIs' own login files: an agent has no business reading them. */
   private denyFiles(): string[] {
     const home = this.deps.policy.home
@@ -239,15 +261,8 @@ export class CodingRuntime {
       if (intent.state === 'accepted' && intent.result) return { runId: intent.result }
     }
     // Refuse before anything is stored: a missing or untested CLI is the person's to fix, not a retry loop.
-    const cli = await this.deps.locator.detect(driver)
-    if (cli.state === 'not_supported' || cli.state === 'not_installed')
-      throw new HttpError(422, 'cli_not_installed', cli.message ?? 'The CLI is not available', {
-        notice: `${driver.label} can't run: ${cli.message ?? 'not available'}`,
-      })
-    if (cli.state === 'untested_version' && agent.confirmedVersion !== cli.version)
-      throw new HttpError(422, 'untested_cli_version', cli.message ?? 'Untested CLI version', {
-        notice: `${driver.label} ${cli.version ?? ''} is an untested version. Open this agent in Team and confirm it to run.`,
-      })
+    const refusal = await this.cliRefusal(agent, driver, false)
+    if (refusal) throw new HttpError(422, refusal.code, refusal.message, { notice: refusal.notice })
     const checked = await checkRoot(agent.workspace, this.deps.policy)
     if (!checked.ok)
       throw new HttpError(422, 'workspace_unavailable', checked.reason, {
@@ -367,6 +382,14 @@ export class CodingRuntime {
     })
     if (entry.stopBeforeStart)
       return void (await this.finish(translation, stopped(entry.stopBeforeStart)))
+    // A queued turn may start long after admission: the CLI may have been replaced meanwhile.
+    const refusal = await this.cliRefusal(agent, driver, true)
+    if (refusal)
+      return void (await this.finish(translation, {
+        status: 'failed',
+        error: refusal.notice,
+        costKind,
+      }))
     // The folder may have changed since admission.
     const checked = await checkRoot(agent.workspace, this.deps.policy)
     if (!checked.ok)

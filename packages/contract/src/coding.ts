@@ -16,7 +16,7 @@ export const CliStateSchema = z.enum([
   'not_installed',
   /** Known, but this Score cannot drive it yet (OpenCode). */
   'not_supported',
-  /** Installed, but its version is outside the tested series: runs only after the person confirms that version. */
+  /** Installed, but its version is not one of the tested versions: runs only after the person confirms that version. */
   'untested_version',
 ])
 export type CliState = z.infer<typeof CliStateSchema>
@@ -26,8 +26,8 @@ export const CodingRuntimeInfoSchema = z.object({
   label: z.string(),
   state: CliStateSchema,
   version: z.string().nullable(),
-  /** Version prefixes Score was tested with, e.g. `2.1`. */
-  testedSeries: z.array(z.string()),
+  /** Exact versions Score was tested with, e.g. `2.1.295`. */
+  testedVersions: z.array(z.string()),
   /** "Uses your Claude plan quota" and the like. */
   quota: z.string(),
   /** Why it cannot run, when it cannot. */
@@ -49,7 +49,7 @@ export const CodingAgentSchema = z.object({
   cli: z.object({
     state: CliStateSchema,
     version: z.string().nullable(),
-    testedSeries: z.array(z.string()),
+    testedVersions: z.array(z.string()),
     /** The person confirmed the installed (untested) version for this agent. */
     confirmed: z.boolean(),
   }),

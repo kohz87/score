@@ -48,10 +48,11 @@ export class CliLocator {
     this.cache.clear()
   }
 
-  async detect(driver: CodingDriver): Promise<DetectedCli> {
+  /** `fresh` skips the cache: used right before a spawn, where a stale reading must not decide. */
+  async detect(driver: CodingDriver, { fresh = false } = {}): Promise<DetectedCli> {
     const now = (this.options.clock ?? Date.now)()
     const hit = this.cache.get(driver.runtime)
-    if (hit && now - hit.at < this.options.cacheMs) return hit.value
+    if (!fresh && hit && now - hit.at < this.options.cacheMs) return hit.value
     const value = await this.read(driver)
     this.cache.set(driver.runtime, { at: now, value })
     return value
@@ -96,7 +97,7 @@ export class CliLocator {
               : {
                   state: 'untested_version',
                   version,
-                  message: `${driver.label} ${version} is newer or older than the tested series (${driver.testedSeries.join(', ')}). Confirm it to run anyway.`,
+                  message: `${driver.label} ${version} is not one of the tested versions (${driver.testedVersions.join(', ')}). Confirm it to run anyway.`,
                 },
           )
         },
@@ -113,7 +114,7 @@ export class CliLocator {
           label: driver.label,
           state: detected.state,
           version: detected.version,
-          testedSeries: [...driver.testedSeries],
+          testedVersions: [...driver.testedVersions],
           quota: driver.quota,
           message: detected.message,
         }

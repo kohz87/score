@@ -344,7 +344,7 @@ function CodingSettings({
       {coding.cli.state === 'untested_version' && !coding.cli.confirmed && (
         <div role="alert">
           <p className="team-muted-strong">
-            Score was tested with versions {coding.cli.testedSeries.join(', ')}. The installed{' '}
+            Score was tested with {coding.cli.testedVersions.join(', ')}. The installed{' '}
             {coding.cli.version} may change its output; it runs only after you confirm it.
           </p>
           <button

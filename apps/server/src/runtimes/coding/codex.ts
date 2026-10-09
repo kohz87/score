@@ -209,7 +209,7 @@ export const codexDriver: CodingDriver = {
   runtime: 'codex',
   label: 'Codex CLI',
   executable: 'codex',
-  testedSeries: ['0.160'],
+  testedVersions: ['0.160.1'],
   supported: true,
   quota: 'Uses your ChatGPT plan quota, shared with other Codex work on that account.',
   parseVersion(output) {

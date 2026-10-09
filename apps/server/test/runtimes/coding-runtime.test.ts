@@ -118,8 +118,12 @@ async function addAgent(over: Record<string, unknown> = {}): Promise<CodingAgent
   expect(response.statusCode, response.body).toBe(201)
   return response.json()
 }
+let roomCount = 0
 async function makeRoom(): Promise<string> {
-  const created = await request('POST', '/api/rooms', { name: 'code', leadAgentId: 'lead' })
+  const created = await request('POST', '/api/rooms', {
+    name: `code${++roomCount}`,
+    leadAgentId: 'lead',
+  })
   roomId = RoomSchema.parse(created.json()).id
   return roomId
 }
@@ -639,3 +643,33 @@ test('removing an agent hides it; a running turn must be stopped first', async (
   const report = (await request('GET', '/api/reports?range=7d')).json()
   expect(report.byAgent.some((row: { agentId: string }) => row.agentId === 'coder')).toBe(false)
 })
+
+test('only the exact tested version runs unasked, and a queued turn is checked again right before it spawns (review: high 4)', async () => {
+  await coding.close()
+  await app.close()
+  await boot({ version: '2.1.1' })
+  expect((await addAgent()).cli).toMatchObject({ state: 'untested_version', version: '2.1.1' })
+  await coding.close()
+  await app.close()
+  // The CLI is the tested one when the first turn starts and is upgraded while the second waits its turn.
+  await boot({ version: '2.1.295' })
+  await makeRoom()
+  await say('@coder [fixture:slow] first')
+  await vi.waitFor(() => expect(runs()[0]?.status).toBe('running'), { timeout: 10_000 })
+  const firstRoom = roomId
+  // Another room: the same agent runs one turn at a time, so this one waits in the runtime's queue.
+  await makeRoom()
+  await say('@coder second')
+  await vi.waitFor(() => expect(runs()).toHaveLength(2), { timeout: 10_000 })
+  expect(runs()[1]!.status).toBe('queued')
+  setEnv('SCORE_CODING_FAKE_VERSION', '2.1.296')
+  const first = db.sqlite
+    .prepare("SELECT message_id FROM message_runs WHERE room_id = ? AND agent_id = 'coder'")
+    .get(firstRoom) as { message_id: string }
+  await request('POST', `/api/rooms/${firstRoom}/messages/${first.message_id}/stop`)
+  await finished(2)
+  expect(runs()[1]).toMatchObject({ status: 'failed' })
+  expect(runs()[1]!.error).toMatch(/untested version/)
+  // Only the first turn was ever spawned.
+  expect(calls().filter((call) => call.prompt.includes('second'))).toHaveLength(0)
+}, 30_000)

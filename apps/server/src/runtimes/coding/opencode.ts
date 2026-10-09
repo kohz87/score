@@ -6,7 +6,7 @@ export const opencodeDriver: CodingDriver = {
   runtime: 'opencode',
   label: 'OpenCode',
   executable: 'opencode',
-  testedSeries: [],
+  testedVersions: [],
   supported: false,
   quota: 'Uses whichever provider OpenCode is signed in to.',
   parseVersion: () => null,

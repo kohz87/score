@@ -11,9 +11,10 @@ export const DRIVERS: Record<CodingRuntime, CodingDriver> = {
 }
 export const driverFor = (runtime: CodingRuntime): CodingDriver => DRIVERS[runtime]
 
-/** The version gate (review 2026-10-09, 7.2 #2): a version is tested when it starts with a tested series. */
+/**
+ * The version gate (review 2026-10-09, 7.2 #2): only the exact versions Score was tested with run unasked; any other
+ * version (newer, older, a patch release) needs the person's confirmation for that agent.
+ */
 export function isTestedVersion(driver: CodingDriver, version: string): boolean {
-  return driver.testedSeries.some(
-    (series) => version === series || version.startsWith(`${series}.`),
-  )
+  return driver.testedVersions.includes(version)
 }
