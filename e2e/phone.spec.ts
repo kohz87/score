@@ -186,6 +186,8 @@ test.describe('passkeys over HTTPS', () => {
         SCORE_HOST: '127.0.0.1',
         SCORE_PORT: String(port),
         SCORE_REMOTE: '1',
+        // The spec reads the pairing link from stdout, which a non-terminal only gets on request (audit wave 4).
+        SCORE_PRINT_PAIR_LINK: '1',
         SCORE_TLS_CERT: join(home, 'tls', 'server.crt'),
         SCORE_TLS_KEY: join(home, 'tls', 'server.key'),
         SCORE_PUBLIC_ORIGINS: `${origin},https://127.0.0.1:${port}`,
