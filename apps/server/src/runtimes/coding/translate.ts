@@ -12,7 +12,7 @@ import {
 import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
 import { guardedUpsert } from '../../hub/projections.ts'
 import { redact, redactBounded } from '../../redact.ts'
-import { readRun, runDraft, runLifecycle } from '../../hermes/live/translate.ts'
+import { readRun, runDraft, runLifecycle } from '../../hermes/index.ts'
 import { rememberCliSession } from './store.ts'
 import type { CodingEvent, ToolDetail } from './types.ts'
 

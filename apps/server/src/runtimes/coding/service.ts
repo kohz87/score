@@ -7,7 +7,7 @@ import type { ScoreDb } from '../../db/index.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import { attachRunMessage, isCancelledTurn } from '../../domain/message-runs.ts'
 import { HttpError } from '../../errors.ts'
-import { runDraft } from '../../hermes/live/translate.ts'
+import { runDraft } from '../../hermes/index.ts'
 import type { Ingest } from '../../hub/ingest.ts'
 import { redact, redactBounded } from '../../redact.ts'
 import { checkRoot, type RootPolicy } from '../../workspace/policy.ts'
@@ -180,6 +180,13 @@ export class CodingRuntime {
         }
       }),
     )
+  }
+
+  /** The room's Hermes-style session key is `score-<room>-<agent>`: forget that room's CLI session. */
+  forgetRoomSession(sessionKey: string, agentId: string): void {
+    const suffix = `-${agentId}`
+    if (!sessionKey.startsWith('score-') || !sessionKey.endsWith(suffix)) return
+    forgetCliSession(this.deps.db.sqlite, sessionKey.slice(6, -suffix.length), agentId)
   }
 
   private roomOf(turnId: string): string | null {
@@ -455,7 +462,7 @@ export class CodingRuntime {
    * interrupted with a note. The CLI session id stays, so the next message resumes it.
    */
   async recover(): Promise<number> {
-    const { db, ingest } = this.deps
+    const { db } = this.deps
     const rows = z
       .array(z.object({ id: z.string(), profile: z.string() }))
       .parse(

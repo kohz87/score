@@ -26,7 +26,6 @@ const HERMES_ONLY = new Set([
   'listRoutines',
   'createRoutine',
   'readOutsideSession',
-  'rewindSession',
 ])
 
 const unsupported = () =>
@@ -90,6 +89,14 @@ export function withCodingAgents(port: HermesPort, coding: CodingRuntime): Herme
             idOf(req.agentId)
               ? coding.stopRun(req as Parameters<typeof coding.stopRun>[0])
               : call(req)
+        case 'rewindSession':
+          // A coding agent has no rewindable history: the room hides the messages in Score, and the agent's CLI
+          // session for this room is dropped so its next turn starts fresh instead of remembering what was undone.
+          return async (req: { agentId: string; sessionId: string; dryRun?: boolean }) => {
+            if (!idOf(req.agentId)) return call(req)
+            if (!req.dryRun) coding.forgetRoomSession(req.sessionId, req.agentId)
+            return { status: 'skipped', reason: 'no_session' }
+          }
         case 'readWorkspaceConfig':
           return async (agentId: string) =>
             idOf(agentId)

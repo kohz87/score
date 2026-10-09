@@ -1,5 +1,9 @@
 import { expect, test } from 'vitest'
-import { claudeDriver, createClaudeParser, CLAUDE_DENY_RULES } from '../../src/runtimes/coding/claude.ts'
+import {
+  claudeDriver,
+  createClaudeParser,
+  CLAUDE_DENY_RULES,
+} from '../../src/runtimes/coding/claude.ts'
 import { codexDriver, createCodexParser } from '../../src/runtimes/coding/codex.ts'
 import { opencodeDriver } from '../../src/runtimes/coding/opencode.ts'
 import { isTestedVersion } from '../../src/runtimes/coding/drivers.ts'
@@ -92,7 +96,9 @@ test('codex fixture: thread, commands, file changes, message, usage without cost
     detail: { type: 'command', command: 'bash -lc ls', cwd: '/work' },
   })
   expect(events[3]).toMatchObject({ ok: true, exitCode: 0 })
-  expect(events[4]).toMatchObject({ detail: { type: 'file', path: '/work/notes.txt', change: 'update' } })
+  expect(events[4]).toMatchObject({
+    detail: { type: 'file', path: '/work/notes.txt', change: 'update' },
+  })
   expect(events[6]).toMatchObject({ detail: { type: 'file', change: 'add' } })
   expect(events[9]).toMatchObject({ ok: false, exitCode: 1 })
   expect(events[11]).toEqual({ kind: 'usage', inputTokens: 2400, outputTokens: 150 })
@@ -114,20 +120,33 @@ test('claude flag mapping per permission level', () => {
     claudeDriver.buildArgs({ ...base, permission, ...extra })
   const read = args('read-only')
   expect(read.slice(0, 4)).toEqual(['-p', '--output-format', 'stream-json', '--verbose'])
-  expect(read).toEqual(expect.arrayContaining(['--permission-mode', 'dontAsk', '--tools', 'Read,Grep,Glob']))
+  expect(read).toEqual(
+    expect.arrayContaining(['--permission-mode', 'dontAsk', '--tools', 'Read,Grep,Glob']),
+  )
   const write = args('workspace-write')
-  expect(write).toEqual(expect.arrayContaining(['--permission-mode', 'acceptEdits', '--permission-prompts', 'none']))
+  expect(write).toEqual(
+    expect.arrayContaining(['--permission-mode', 'acceptEdits', '--permission-prompts', 'none']),
+  )
   expect(write.join(' ')).not.toContain('bypassPermissions')
   const full = args('full')
   expect(full).toEqual(
-    expect.arrayContaining(['--permission-mode', 'bypassPermissions', '--allow-dangerously-skip-permissions']),
+    expect.arrayContaining([
+      '--permission-mode',
+      'bypassPermissions',
+      '--allow-dangerously-skip-permissions',
+    ]),
   )
   // The deny rules are on every level, and the prompt is never an argument.
   for (const list of [read, write, full]) {
     expect(list[list.indexOf('--disallowed-tools') + 1]).toBe(CLAUDE_DENY_RULES.join(','))
   }
   expect(CLAUDE_DENY_RULES).toEqual(
-    expect.arrayContaining(['Read(~/.hermes/**)', 'Read(~/.score/**)', 'Read(~/.ssh/**)', 'Read(**/.env)']),
+    expect.arrayContaining([
+      'Read(~/.hermes/**)',
+      'Read(~/.score/**)',
+      'Read(~/.ssh/**)',
+      'Read(**/.env)',
+    ]),
   )
   const resumed = args('workspace-write', {
     model: 'sonnet',
@@ -142,8 +161,17 @@ test('claude flag mapping per permission level', () => {
 test('codex flag mapping per permission level, new and resumed', () => {
   const args = (permission: 'read-only' | 'workspace-write' | 'full', extra = {}) =>
     codexDriver.buildArgs({ ...base, permission, ...extra })
-  expect(args('read-only').slice(0, 6)).toEqual(['exec', '--json', '--skip-git-repo-check', '-s', 'read-only', '-C'])
-  expect(args('workspace-write')).toEqual(expect.arrayContaining(['-s', 'workspace-write', '-C', '/ws']))
+  expect(args('read-only').slice(0, 6)).toEqual([
+    'exec',
+    '--json',
+    '--skip-git-repo-check',
+    '-s',
+    'read-only',
+    '-C',
+  ])
+  expect(args('workspace-write')).toEqual(
+    expect.arrayContaining(['-s', 'workspace-write', '-C', '/ws']),
+  )
   expect(args('full')).toEqual(expect.arrayContaining(['-s', 'danger-full-access']))
   expect(args('full').at(-1)).toBe('-')
   const resumed = args('read-only', { sessionId: 'thread-1', model: 'gpt-x' })
@@ -196,7 +224,9 @@ test('child environment is an allowlist: no Score variables, no *_API_KEY, no to
     NO_PROXY: 'localhost',
   })
   // The fake CLI’s steering variables pass only in fake mode.
-  expect(buildChildEnv({ SCORE_CODING_FAKE_LOG: '/tmp/x', SCORE_HOME: '/h' }, { fake: true })).toEqual({
+  expect(
+    buildChildEnv({ SCORE_CODING_FAKE_LOG: '/tmp/x', SCORE_HOME: '/h' }, { fake: true }),
+  ).toEqual({
     SCORE_CODING_FAKE_LOG: '/tmp/x',
   })
 })

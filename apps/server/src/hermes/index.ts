@@ -116,3 +116,5 @@ export {
 } from './approvals.ts'
 export { ALWAYS_BLOCKED_KEYS, KNOWN_PATTERN_KEYS } from './pattern-keys.ts'
 export { ProfileInventorySchema, type ProfileStepContext } from './profile-management.ts'
+// Run rows are shared with the coding-agent runtime (PLAN 7.2): same table, same summary.
+export { readRun, runDraft, runLifecycle } from './live/translate.ts'

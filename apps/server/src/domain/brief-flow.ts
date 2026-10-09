@@ -489,6 +489,8 @@ function runSummary(sqlite: DatabaseSync, runId: string): RunSummary | null {
       output_tokens: z.int().nullable(),
       cost_usd: z.number().nullable(),
       tools_used: z.string(),
+      runtime: z.string().default('hermes'),
+      cost_kind: z.string().nullable().default(null),
     })
     .parse(row)
   const gaps = z
@@ -514,6 +516,9 @@ function runSummary(sqlite: DatabaseSync, runId: string): RunSummary | null {
         ? null
         : { input: run.input_tokens, output: run.output_tokens },
     costUsd: run.cost_usd,
+    ...(run.runtime === 'hermes'
+      ? {}
+      : { runtime: run.runtime, costKind: run.cost_kind ?? 'unknown' }),
     refs: [],
     gaps,
   })
