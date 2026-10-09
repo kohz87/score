@@ -56,9 +56,11 @@ export function setup({
   logger = false,
   mode = 'live',
   outbox,
+  mediaQuotaBytes,
 }: {
   logger?: FastifyServerOptions['logger']
   mode?: 'live' | 'fake'
+  mediaQuotaBytes?: number
   /** Builds the outbox the app's bridge routes use (from the test's db, ingest and clock). */
   outbox?: (deps: { db: ScoreDb; ingest: ReturnType<typeof createIngest> }) => ApprovalOutbox
 } = {}) {
@@ -75,7 +77,10 @@ export function setup({
   const port = createHermesPort({ ...config, mode: 'fake' })
   const metrics = { unknownHooks: 0 }
   const hermesHome = join(home, 'hermes-home')
-  const media = new MediaStore(db, join(home, 'media'), { clock })
+  const media = new MediaStore(db, join(home, 'media'), {
+    clock,
+    ...(mediaQuotaBytes ? { quotaBytes: mediaQuotaBytes } : {}),
+  })
   const app = buildApp({
     config,
     db,

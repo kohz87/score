@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { retireIngestKeys } from '../../../src/hub/retire.ts'
-import { event, setup } from './helpers.ts'
+import { event, initialTime, setup } from './helpers.ts'
 
 let server: ReturnType<typeof setup>
 let counter = 0
@@ -341,6 +341,40 @@ test('a browser_vision screenshot becomes a served media image held by its frame
   await vision(path, 'browser_vision', 'v1')
   expect(frames()).toHaveLength(1)
   expect(refs()).toMatchObject([{ refs: 1 }])
+})
+
+test('two screenshots in one batch near the media quota both keep their images', async () => {
+  await server.close()
+  server = setup({ mediaQuotaBytes: png(200).length + png(203).length + 2 })
+  const token = await server.token()
+  const dir = shotDir()
+  const batch = ['a', 'b'].map((name, index) => {
+    const path = join(dir, `browser_screenshot_0123abc${name}.png`)
+    writeFileSync(path, png(200 + index * 3))
+    return {
+      ...event(index + 1, 'post_tool_call', {
+        tool_name: 'browser_vision',
+        session_id: 's1',
+        tool_call_id: `v${name}`,
+        status: 'ok',
+        args: {},
+        result: JSON.stringify({ url: 'https://example.test/' }),
+        watch: { screenshotPath: path },
+      }),
+      sessionId: 's1',
+      toolCallId: `v${name}`,
+    }
+  })
+  // The store holds a newer unreferenced image, so by LRU the first screenshot would be the eviction victim
+  // when the second imports; it must already be retained by then.
+  server.setNow(initialTime + 60_000)
+  server.media.store(png(199))
+  server.setNow(initialTime)
+  expect((await server.send(token, batch)).statusCode).toBe(200)
+  const urls = frames().map((frame) => frame.payload.imageUrl)
+  expect(urls).toHaveLength(2)
+  expect(urls.every((url) => typeof url === 'string')).toBe(true)
+  expect(refs().filter((row) => row.refs === 1)).toHaveLength(2)
 })
 
 test('the legacy browser_screenshots directory is accepted', async () => {
