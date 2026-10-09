@@ -16,6 +16,7 @@ import { getEpoch, migrate, openDatabase } from '../../../src/db/index.ts'
 import { createIngest } from '../../../src/hub/ingest.ts'
 import { createHermesPort, createScreenshotImporter } from '../../../src/hermes/index.ts'
 import { MediaStore } from '../../../src/media/store.ts'
+import type { RewindBroker } from '../../../src/hermes/bridge/rewind-broker.ts'
 import { loadBridgeBootstrap } from '../../../src/hermes/bridge/bootstrap.ts'
 
 export const initialTime = Date.parse('2026-10-07T12:00:00Z')
@@ -57,10 +58,12 @@ export function setup({
   mode = 'live',
   outbox,
   mediaQuotaBytes,
+  rewind,
 }: {
   logger?: FastifyServerOptions['logger']
   mode?: 'live' | 'fake'
   mediaQuotaBytes?: number
+  rewind?: RewindBroker
   /** Builds the outbox the app's bridge routes use (from the test's db, ingest and clock). */
   outbox?: (deps: { db: ScoreDb; ingest: ReturnType<typeof createIngest> }) => ApprovalOutbox
 } = {}) {
@@ -93,6 +96,7 @@ export function setup({
     getEpoch: () => getEpoch(db),
     bridge: {
       importScreenshot: createScreenshotImporter({ hermesHome }, media),
+      ...(rewind ? { rewind } : {}),
       db,
       ingest,
       bootstrapHash,
