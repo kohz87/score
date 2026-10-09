@@ -426,7 +426,9 @@ export function RemoteSection() {
         The web terminal is <strong>{security.data?.terminal ? 'enabled' : 'disabled'}</strong>.
         {security.data?.terminal
           ? ' Open terminals are listed under Terminal below.'
-          : ' Start Score with SCORE_TERMINAL=1 to turn it on (a shell on this machine, for paired browsers).'}
+          : security.data?.terminalUnavailable
+            ? ` Unavailable: ${security.data.terminalUnavailable} (see docs/SETUP.md).`
+            : ' Start Score with SCORE_TERMINAL=1 to turn it on (a shell on this machine, for paired browsers).'}
       </p>
 
       {passwordSet && <PasskeysPanel password={password} origins={origins} />}

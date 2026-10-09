@@ -305,6 +305,8 @@ export const SecurityStatusSchema = z.object({
   origins: z.array(z.url({ protocol: /^https?$/ })).default([]),
   /** The web terminal is enabled on this server (SCORE_TERMINAL=1, PLAN 7.3). */
   terminal: z.boolean().default(false),
+  /** Why SCORE_TERMINAL=1 is not in effect (e.g. 'node-pty not built'); null otherwise. */
+  terminalUnavailable: z.string().nullable().default(null),
 })
 export const RevokeOthersResponseSchema = z.object({ revoked: z.int().nonnegative() })
 export type PairedBrowser = z.infer<typeof PairedBrowserSchema>

@@ -493,7 +493,7 @@ const cases = [
   ['PasskeyCeremonySchema', { challenge: 'abc' }, 'not an object'],
   [
     'SecurityStatusSchema',
-    { passwordSet: true, origins: [], terminal: false },
+    { passwordSet: true, origins: [], terminal: false, terminalUnavailable: null },
     { passwordSet: 'yes' },
   ],
   [

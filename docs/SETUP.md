@@ -161,12 +161,13 @@ of exact origins (scheme, host, port) browsers use. The bridge plugin keeps usin
 
 ## 6c. Web terminal (optional, PLAN 7.3)
 
-Off by default; start Score with `SCORE_TERMINAL=1` to enable it (Settings › Terminal shows the state). It uses `node-pty`,
-a native module with no Linux prebuilt binary, so `pnpm install` compiles it (`allowBuilds` in `pnpm-workspace.yaml`). That
-needs a C++ toolchain: on Ubuntu `sudo apt install build-essential python3` (system-level: ask the owner first). Without a
-compiler `pnpm install` stops with the node-pty build error; with a compiler missing only at run time, Score logs that the
-terminal module could not load and keeps the terminal off. Opening a terminal asks for the security password or a passkey every
-time, and the shell runs as the user that runs Score.
+Off by default; start Score with `SCORE_TERMINAL=1` to enable it (Settings › Remote access shows the state). It uses
+`node-pty`, a native module with no Linux prebuilt binary, so it is an optional dependency that `pnpm install` compiles
+(`allowBuilds` in `pnpm-workspace.yaml`). That needs a C++ toolchain: on Ubuntu `sudo apt install build-essential python3`
+(system-level: ask the owner first). Without one, `pnpm install` still succeeds; Score then reports the terminal as
+unavailable ("node-pty not built"). After installing a toolchain run `pnpm rebuild node-pty`. The terminal also needs HTTPS (remote
+mode), and a security password set on the Score machine with `scripts/score password`: a password set from a browser does not
+unlock it. Opening a terminal asks for that password or a passkey every time; the shell runs as the user that runs Score.
 
 ## 7. Live mode against Hermes
 

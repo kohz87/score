@@ -32,7 +32,10 @@ export function registerSessionRoutes(
   /** Passkeys (5.28); needs the database. */
   passkeys?: PasskeyService,
   /** The web terminal is enabled (SCORE_TERMINAL=1): reported to Settings and the terminal page. */
-  terminal = false,
+  terminal: { enabled: boolean; unavailable: string | null } = {
+    enabled: false,
+    unavailable: null,
+  },
 ): void {
   const guarded = { preHandler: humanGuard(pairing) }
   const PasswordBody = z.object({ password: z.unknown() }).loose()
@@ -73,7 +76,8 @@ export function registerSessionRoutes(
   app.get('/api/session/security', guarded, async () => ({
     passwordSet: security?.isSet() ?? false,
     origins: [...origins],
-    terminal,
+    terminal: terminal.enabled,
+    terminalUnavailable: terminal.unavailable,
   }))
   // First time from any paired browser; changing it needs the current password; a forgotten one is reset on the host.
   app.put('/api/session/security/password', guarded, async (request, reply) => {

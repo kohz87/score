@@ -214,9 +214,6 @@ importers:
       gray-matter:
         specifier: 4.0.3
         version: 4.0.3
-      node-pty:
-        specifier: 1.1.0
-        version: 1.1.0
       zod:
         specifier: 4.6.5
         version: 4.6.5
@@ -224,6 +221,10 @@ importers:
       tsx:
         specifier: 4.23.15
         version: 4.23.15
+    optionalDependencies:
+      node-pty:
+        specifier: 1.1.0
+        version: 1.1.0
 
   apps/web:
     dependencies:
@@ -4255,11 +4256,13 @@ snapshots:
 
   natural-compare@1.4.0: {}
 
-  node-addon-api@7.1.1: {}
+  node-addon-api@7.1.1:
+    optional: true
 
   node-pty@1.1.0:
     dependencies:
       node-addon-api: 7.1.1
+    optional: true
 
   node-releases@2.0.57: {}
 

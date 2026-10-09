@@ -338,6 +338,7 @@ export function buildApp({
   const securityPassword = security ?? (db ? new SecurityPassword(config.home, clock) : undefined)
   // The web terminal (PLAN 7.3): not registered at all unless SCORE_TERMINAL=1. A missing native module (node-pty is
   // built at install time) leaves it off and says why, rather than stopping Score.
+  let terminalUnavailable: string | null = null
   if (config.terminal) {
     try {
       app.decorate(
@@ -345,6 +346,7 @@ export function buildApp({
         registerTerminalRoutes(app, { origins: allowedOriginsFor(config), ...terminal }),
       )
     } catch (error) {
+      terminalUnavailable = 'node-pty not built'
       app.log.error(
         { err: error },
         'SCORE_TERMINAL=1 but the terminal module (node-pty) could not load: the terminal stays off. See docs/SETUP.md.',
@@ -360,7 +362,7 @@ export function buildApp({
     securityPassword,
     config.remote ? config.remote.origins : [pairingOrigin],
     db ? new PasskeyService(db, clock, allowedOriginsFor(config)) : undefined,
-    app.hasDecorator('terminals'),
+    { enabled: app.hasDecorator('terminals'), unavailable: terminalUnavailable },
   )
   if (db)
     registerShareRoutes(app, {
