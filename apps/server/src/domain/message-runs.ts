@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
-import type { MessagePart } from '@score/contract'
+import type { Message, MessagePart } from '@score/contract'
 import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
@@ -9,6 +9,8 @@ import { parseMessage } from './parse.ts'
 import { decideHandoffs, messageTurnId } from './routing.ts'
 import { messageFromRow, storeMessage, updateMessage } from './rooms.ts'
 import { parsePlanSteps, planPart } from './plan.ts'
+import { sanitizeSummaryText, summaryContext } from './room-summaries.ts'
+import { markStaleSummaries, visibleSummaries } from './summary-stale.ts'
 
 export const MessageRunSchema = z.object({
   message_id: z.string(),
@@ -29,6 +31,8 @@ export const MessageRunSchema = z.object({
   created_at: z.iso.datetime(),
   pending: z.string(),
   plan_first: z.int().min(0).max(1),
+  /** 'summary' = writes the room summary (PLAN 7.4a); null = answers a message. */
+  purpose: z.enum(['summary']).nullable().optional(),
 })
 export type MessageRun = z.infer<typeof MessageRunSchema>
 
@@ -50,6 +54,8 @@ export function reserveMessageRun(
     retryNonce?: string
     /** A retry repeats exactly what the first attempt was admitted with (the room has moved on since). */
     admissionInput?: string
+    /** The run writes the room summary instead of answering (PLAN 7.4a). */
+    purpose?: 'summary'
   },
   now: string,
 ): string {
@@ -58,8 +64,8 @@ export function reserveMessageRun(
   sqlite
     .prepare(
       `INSERT INTO message_runs
-    (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, from_agent_id, input, model, provider, agents, created_at, plan_first, admission_input)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+    (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, from_agent_id, input, model, provider, agents, created_at, plan_first, admission_input, purpose)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
     )
     .run(
       `reply:${turnId}`,
@@ -78,6 +84,7 @@ export function reserveMessageRun(
       now,
       req.planFirst ? 1 : 0,
       req.admissionInput ?? null,
+      req.purpose ?? null,
     )
   return `reply:${turnId}`
 }
@@ -101,7 +108,7 @@ export function retryReply(
     .prepare('SELECT * FROM message_runs WHERE message_id = ? AND room_id = ?')
     .get(messageId, roomId)
   const parsed = reply === undefined ? undefined : MessageRunSchema.parse(reply)
-  if (!parsed || parsed.hop !== 0 || parsed.from_agent_id !== null)
+  if (!parsed || parsed.hop !== 0 || parsed.from_agent_id !== null || parsed.purpose)
     throw new HttpError(409, 'conflict', 'Only an answer to your own message can be retried')
   if (parsed.state === 'pending' || parsed.state === 'active')
     throw new HttpError(409, 'conflict', 'This reply is still being written')
@@ -505,6 +512,8 @@ export function completeRunMessage(
   // A run that did not complete would otherwise end as an empty or truncated bubble with no explanation.
   if (status !== 'completed')
     message.parts.push({ kind: 'text', text: failureNotice(status, error) })
+  if (mapping.purpose === 'summary')
+    return [...drafts, ...finishSummaryRun(sqlite, mapping, message, status, now)]
   const tools = z
     .array(z.object({ tool: z.string() }))
     .parse(sqlite.prepare('SELECT tool FROM tool_calls WHERE run_id = ? ORDER BY seq').all(runId))
@@ -568,15 +577,77 @@ export function completeRunMessage(
   return [...drafts, ...updateMessage(sqlite, mapping.room_id, message.id, null, now)]
 }
 
+/**
+ * The summary run's reply becomes a `summary` part: text only, no tool cards, no hand-offs, no plan. An older summary
+ * of the room is replaced by it. A run that failed or came back empty leaves a short text notice instead.
+ */
+function finishSummaryRun(
+  sqlite: DatabaseSync,
+  mapping: MessageRun,
+  message: Message,
+  status: string,
+  now: string,
+): DomainEventDraft[] {
+  const text = sanitizeSummaryText(
+    message.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n'),
+  )
+  const ok = status === 'completed' && text.length > 0
+  const parts: MessagePart[] = ok
+    ? [{ kind: 'summary', coversUntil: mapping.parent_message_id, text }]
+    : [
+        {
+          kind: 'text',
+          text:
+            status === 'completed'
+              ? 'The summary came back empty.'
+              : `The summary was not written. ${failureNotice(status, null)}`,
+        },
+      ]
+  sqlite
+    .prepare('UPDATE messages SET parts = ? WHERE id = ?')
+    .run(JSON.stringify(parts), message.id)
+  sqlite
+    .prepare('UPDATE message_runs SET state = ? WHERE message_id = ?')
+    .run(ok ? 'completed' : 'failed', message.id)
+  const drafts: DomainEventDraft[] = []
+  if (ok) {
+    for (const older of visibleSummaries(sqlite, mapping.room_id)) {
+      if (older.id === message.id) continue
+      sqlite
+        .prepare(
+          'UPDATE messages SET deleted_at = ?, updated_at = ?, version = version + 1 WHERE id = ?',
+        )
+        .run(now, now, older.id)
+      drafts.push({
+        type: 'message.deleted',
+        data: { roomId: mapping.room_id, messageId: older.id },
+      })
+    }
+  }
+  return [
+    ...drafts,
+    ...updateMessage(sqlite, mapping.room_id, message.id, null, now),
+    ...markStaleSummaries(sqlite, mapping.room_id, now),
+  ]
+}
+
 export function roomRunInput(
   sqlite: DatabaseSync,
   roomId: string,
   input: string,
   parentMessageId: string,
 ): string {
+  // A usable summary replaces the plain window: "summary + the messages after it" (PLAN 7.4a).
+  const summarised = summaryContext(sqlite, roomId, parentMessageId)
+  if (summarised) return `${input}\n\nRoom context:\n${summarised}`
   const messages = sqlite
     .prepare(
-      'SELECT * FROM messages WHERE room_id = ? AND id != ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 10',
+      `SELECT * FROM messages WHERE room_id = ? AND id != ? AND deleted_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM json_each(messages.parts) WHERE json_extract(value, '$.kind') = 'summary')
+       ORDER BY created_at DESC, id DESC LIMIT 10`,
     )
     .all(roomId, parentMessageId)
     .map(messageFromRow)
