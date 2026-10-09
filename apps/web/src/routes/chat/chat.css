@@ -1278,3 +1278,10 @@
 .chat-usage-card {
   white-space: pre-wrap;
 }
+.chat-message-body,
+.chat-message-parts,
+.chat-md,
+.chat-code {
+  min-width: 0;
+  max-width: 100%;
+}
