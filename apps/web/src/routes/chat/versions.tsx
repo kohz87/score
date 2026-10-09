@@ -61,7 +61,8 @@ export function VersionSwitcher({
         ),
       )
       const anchor = detail.items.find((message) => message.id === version.anchorId)
-      if (anchor) startEdit(anchor)
+      // The rewind already happened: sending posts the correction without asking for it again.
+      if (anchor) startEdit(anchor, { rewound: true })
     } finally {
       setContinuing(false)
     }

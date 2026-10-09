@@ -157,3 +157,13 @@ test('a correction that finishes while the person kept typing brings the stashed
   await waitFor(() => expect(box().value).toBe('half typed\n\nnext thought'))
   expect(screen.queryByText('Editing your message')).toBeNull()
 })
+
+// audit5-e: "Continue editing" an edit whose rewind already happened must send, not ask for the rewind again.
+test('a resumed edit whose rewind already happened posts the correction without the rewind dialog', async () => {
+  act(() => startEdit(mine('a', 'text A'), { rewound: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
+  await waitFor(() => expect(posts()).toHaveLength(1))
+  expect(screen.queryByRole('button', { name: 'Rewind and edit' })).toBeNull()
+  expect(JSON.parse(String(posts()[0]![1]!.body))).toMatchObject({ edits: 'a' })
+  await act(async () => finishPost?.())
+})
