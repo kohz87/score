@@ -59,7 +59,10 @@ function inline(raw: string): string {
     .join('')
 }
 
-export function renderMarkdown(source: string): string {
+// Nested quotes recurse; past this depth the markers stay as (escaped) text so hostile input can't blow the stack.
+const MAX_QUOTE_DEPTH = 8
+
+export function renderMarkdown(source: string, depth = 0): string {
   const lines = source.replace(/\r\n?/g, '\n').split('\n')
   const out: string[] = []
   let index = 0
@@ -92,7 +95,7 @@ export function renderMarkdown(source: string): string {
       index++
       continue
     }
-    if (/^ {0,3}>/.test(line)) {
+    if (depth < MAX_QUOTE_DEPTH && /^ {0,3}>/.test(line)) {
       flushParagraph(paragraph)
       paragraph = []
       const quote: string[] = []
@@ -100,7 +103,7 @@ export function renderMarkdown(source: string): string {
         quote.push(lines[index]!.replace(/^ {0,3}> ?/, ''))
         index++
       }
-      out.push(`<blockquote>${renderMarkdown(quote.join('\n'))}</blockquote>`)
+      out.push(`<blockquote>${renderMarkdown(quote.join('\n'), depth + 1)}</blockquote>`)
       continue
     }
     const list = /^ {0,3}([-*+]|\d{1,9}[.)])\s+(.*)$/.exec(line)

@@ -564,3 +564,9 @@
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
+.task-earlier {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}

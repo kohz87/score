@@ -32,6 +32,8 @@ export function useUpdateModelSettings(agentId: string) {
           body: JSON.stringify(update),
         }),
       ),
+    // A failed save may have changed some keys (or been rolled back): show what Hermes holds now.
+    onError: () => queryClient.invalidateQueries({ queryKey: settingsKey(agentId) }),
     onSuccess: async (settings) => {
       queryClient.setQueryData(settingsKey(agentId), settings)
       // The agent card's "falls back to" line and the pickers' alias rows follow the new settings.

@@ -1,0 +1,37 @@
+.unattributed-glyph {
+  --size: 44px;
+  --radius: 14px;
+  --svg: 24px;
+  display: inline-flex;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--size);
+  height: var(--size);
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  border: 1.5px dashed var(--ink-muted);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-muted);
+}
+.unattributed-glyph--xs {
+  --size: 20px;
+  --radius: 7px;
+  --svg: 12px;
+}
+.unattributed-glyph--sm {
+  --size: 34px;
+  --radius: 11px;
+  --svg: 18px;
+}
+.unattributed-glyph--md {
+  --size: 40px;
+  --radius: 13px;
+  --svg: 20px;
+}
+.unattributed-glyph > svg {
+  display: block;
+  width: var(--svg);
+  height: var(--svg);
+}

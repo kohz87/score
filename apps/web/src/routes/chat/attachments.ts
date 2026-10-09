@@ -24,7 +24,7 @@ export const ACCEPT = [
 /** An upload (`/api/media`) or a reference to a file in an agent's workspace. */
 export type Attachment =
   | { kind: 'upload'; mediaId: string; name: string; contentType: string; size: number }
-  | { kind: 'workspace'; agentId: string; path: string }
+  | { kind: 'workspace'; agentId: string; path: string; root?: string }
 
 export const attachmentKey = (item: Attachment): string =>
   item.kind === 'upload' ? item.mediaId : `workspace:${item.agentId}:${item.path}`
@@ -50,7 +50,13 @@ export function parseUpload(value: unknown): Extract<Attachment, { kind: 'upload
 export const toRequest = (item: Attachment) =>
   item.kind === 'upload'
     ? { mediaId: item.mediaId, name: item.name }
-    : { workspace: { agentId: item.agentId, path: item.path } }
+    : {
+        workspace: {
+          agentId: item.agentId,
+          path: item.path,
+          ...(item.root === undefined ? {} : { root: item.root }),
+        },
+      }
 
 /** The part the message shows while its send is still in flight. */
 export function toPart(item: Attachment): MessagePart {

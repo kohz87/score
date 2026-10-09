@@ -89,6 +89,12 @@ export function registerOutsideSessionRoutes(
         `This session is still active on ${from.label}. Try again when it has been quiet for a few minutes.`,
       )
     const mode = port.sessionContinuation()
+    if (mode === 'unknown')
+      throw new HttpError(
+        503,
+        'hermes_unavailable',
+        'Hermes is not reachable yet, so Score cannot tell whether this conversation can continue. Try again in a moment.',
+      )
     await ingest.submit({
       source: 'rooms',
       identity: randomUUID(),

@@ -24,6 +24,7 @@ import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { HermesPort, ProviderBase } from '../hermes/index.ts'
 import { readChosenModels, replaceChosenModels } from '../domain/model-visibility.ts'
+import { CUSTOM_ALIAS_REASON } from '../domain/model-aliases.ts'
 import { requestIdempotency } from './idempotency.ts'
 
 const sameRow = (a: ModelOption, b: ModelOption) => a.provider === b.provider && a.model === b.model
@@ -68,7 +69,7 @@ export function registerSettingsRoutes(
     const chosen = db && all !== '1' ? readChosenModels(db) : []
     const items = await port.listModels(q, chosen)
     const hiddenCount = chosen.length
-      ? Math.max(0, (await port.listModels(q)).length - items.length)
+      ? Math.max(0, (await port.listModels(q, undefined, Infinity)).length - items.length)
       : 0
     const rows = [...(await aliasRows(agentId, q)), ...items]
     return ModelsResponseSchema.parse({
@@ -90,17 +91,21 @@ export function registerSettingsRoutes(
       if (!matches.length) return []
       const known = await port.listModels(undefined)
       return matches.map((alias) => {
-        const target = known.find(
-          (option) =>
-            option.model === alias.model && (!alias.provider || option.provider === alias.provider),
-        )
+        // A providerless alias keeps the provider the agent already has: equal model names prove no routing identity.
+        const target = alias.provider
+          ? known.find(
+              (option) => option.model === alias.model && option.provider === alias.provider,
+            )
+          : undefined
+        const custom = !alias.editable
         return {
           // Never invent a provider: an unconfirmed one stays empty and the model route resolves the alias.
           provider: target?.provider ?? alias.provider ?? '',
           providerLabel: target?.providerLabel ?? alias.provider ?? 'Alias',
           model: alias.model,
-          available: target?.available ?? true,
-          reason: target?.reason ?? null,
+          // Read-only: Score can't reproduce an alias's own endpoint or key per request.
+          available: custom ? false : (target?.available ?? true),
+          reason: custom ? CUSTOM_ALIAS_REASON : (target?.reason ?? null),
           free: target?.free ?? false,
           price: target?.price ?? null,
           ...(target?.contextLength === undefined ? {} : { contextLength: target.contextLength }),

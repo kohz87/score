@@ -42,7 +42,14 @@ import { messagingRows, readProfilePlatforms } from './settings.ts'
 import { ProfileLocks } from './profile-locks.ts'
 import { ProfileNameSchema } from './paths.ts'
 import { skillNames } from './profiles.ts'
-import { applyOps, deriveSettings, opArgs, planWrites, readRawSettings } from './model-settings.ts'
+import {
+  applyOps,
+  deriveSettings,
+  opArgs,
+  planWrites,
+  readRawSettings,
+  undoOps,
+} from './model-settings.ts'
 
 const HUB_LIMIT = 20
 
@@ -162,7 +169,21 @@ export class LiveAgentTabs {
     return this.serial(profile, async () => {
       const raw = await readRawSettings(this.runner, this.hermesHome, profile)
       const ops = planWrites(raw, update)
-      for (const op of ops) await this.mutate(profile, opArgs(op))
+      const attempted: typeof ops = []
+      try {
+        for (const op of ops) {
+          // Counted before it runs: a write that timed out may still have landed.
+          attempted.push(op)
+          await this.mutate(profile, opArgs(op))
+        }
+      } catch (error) {
+        // The CLI writes one key at a time: put back what this save already changed, so a failure leaves no
+        // half-applied settings. Best effort; the request still reports the original failure. (A crash between two
+        // writes can't be undone this way; the next read shows what Hermes holds.)
+        for (const op of undoOps(raw, attempted))
+          await this.mutate(profile, opArgs(op)).catch(() => undefined)
+        throw error
+      }
       return deriveSettings(applyOps(raw, ops))
     })
   }

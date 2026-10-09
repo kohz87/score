@@ -2,6 +2,7 @@
 import importlib.util
 import sys
 import threading
+import time
 import types
 from pathlib import Path
 
@@ -21,6 +22,7 @@ def hermes_private(monkeypatch):
     spec.loader.exec_module(module)
     monkeypatch.setattr(stub, "gateway_session_store", module.gateway_session_store)
     monkeypatch.setattr(stub, "rewind_session", module.rewind_session)
+    monkeypatch.setattr(stub, "CommandExpired", module.CommandExpired)
     return module
 
 
@@ -55,7 +57,8 @@ def gateway(monkeypatch):
 
 
 def command(**extra):
-    return {"commandId": "c1", "kind": "rewind", "sessionId": "score-room-builder", "turns": 2, **extra}
+    return {"commandId": "c1", "kind": "rewind", "sessionId": "score-room-builder", "turns": 2,
+            "expiresAt": time.time() + 60, **extra}
 
 
 def test_hermes_private_rewinds_through_the_gateway_store(gateway, hermes_private):
@@ -89,7 +92,8 @@ def test_no_gateway_means_no_store(monkeypatch, hermes_private):
 
 @pytest.mark.parametrize("bad", [None, [], {}, command(commandId=""), command(kind="other"), command(turns=0),
                                  command(turns=True), command(turns=1001), command(sessionId=""),
-                                 command(commandId="x" * 129)])
+                                 command(commandId="x" * 129), command(expiresAt=None), command(expiresAt=0),
+                                 command(expiresAt="soon")])
 def test_commands_are_validated(bad):
     with pytest.raises(ProtocolError):
         validate_command(bad)
@@ -143,7 +147,7 @@ def test_nothing_to_rewind_and_failures(gateway, hermes_private, monkeypatch):
     command_poller.process_once()
     assert transport.results[0][1] == {"outcome": "nothing"}
 
-    def boom(*_):
+    def boom(*_, **__):
         raise OSError("db locked: /home/user/.hermes/state.db")
     monkeypatch.setattr(stub, "rewind_session", boom)
     command_poller, transport = poller([command(commandId="c3")])
@@ -169,21 +173,28 @@ def test_the_poller_waits_outside_a_gateway(monkeypatch):
 class RowsDb:
     """Rows of one session; the repaired projection merges consecutive user rows into one turn (like Hermes)."""
 
-    def __init__(self, rows):
+    def __init__(self, rows, broken=False):
         self.rows = rows  # [role, timestamp, active] or [role, timestamp, active, display_kind]
+        self.broken, self.calls, self.on_read = broken, [], None
 
     def get_messages_as_conversation(self, session_id, repair_alternation=False, include_row_ids=False, **_):
+        if self.on_read:
+            self.on_read()
         out = []
-        for role, stamp, active, *kind in self.rows:
+        for row_id, (role, stamp, active, *kind) in enumerate(self.rows):
             if not active:
                 continue
             if repair_alternation and role == "user" and out and out[-1]["role"] == "user":
                 continue
-            out.append({"role": role, "timestamp": stamp, **({"display_kind": kind[0]} if kind else {})})
+            out.append({"role": role, "timestamp": stamp, "_row_id": row_id,
+                        **({"display_kind": kind[0]} if kind else {})})
         return out
 
     def rewind_user_turn(self, session_id, ordinal, **_):
         n = -ordinal
+        self.calls.append(n)
+        if self.broken:
+            return types.SimpleNamespace(rewound_count=1, turns_undone=n)
         users = [i for i, row in enumerate(self.rows) if row[0] == "user" and row[2]]
         # Mirror the repaired count: consecutive user rows are one turn.
         groups = []
@@ -201,8 +212,9 @@ class RowsDb:
 class RowsStore:
     """A gateway session store; ``indexed=False`` is a session its routing index doesn't know (an API session)."""
 
-    def __init__(self, db, broken=False, indexed=True):
-        self.db, self.broken, self.indexed, self.calls = db, broken, indexed, []
+    def __init__(self, db, indexed=True):
+        self.db, self.indexed, self.calls, self.lock, self.cleared = db, indexed, [], threading.RLock(), []
+        self.depth = 0
 
     def _owner_key_for_session_id(self, session_id):
         return "agent:main:s" if self.indexed else None
@@ -211,12 +223,23 @@ class RowsStore:
         return self.db
 
     def _get_transcript_drain_lock(self):
-        return threading.Lock()
+        store = self
+
+        class Held:
+            def __enter__(self):
+                store.lock.acquire()
+                store.depth += 1
+
+            def __exit__(self, *_):
+                store.depth -= 1
+                store.lock.release()
+        return Held()
+
+    def _clear_dirty_transcript(self, session_id):
+        self.cleared.append(session_id)
 
     def rewind_session(self, session_id, n=1, **_):
         self.calls.append(n)
-        if self.broken:
-            return {"rewound_count": 1, "turns_undone": n}
         outcome = self.db.rewind_user_turn(session_id, -n)
         return {"rewound_count": outcome.rewound_count, "turns_undone": outcome.turns_undone}
 
@@ -245,10 +268,10 @@ def test_rewind_target_is_absolute_when_a_turn_had_no_reply(monkeypatch, hermes_
     # Hermes counts u3+u4 as one repaired turn, so the message u4 (400) shares a turn with the unanswered u3: refused.
     with pytest.raises(ValueError):
         hermes_private.rewind_session("s", 2, 400)
-    assert store.calls == []
+    assert db.calls == []
     # Anchored on u5 the turns from `since` are exactly one, whatever Score counted.
     result = hermes_private.rewind_session("s", 3, 500)
-    assert store.calls == [1] and result == {"turns_undone": 1, "rewound_count": 2}
+    assert db.calls == [1] and result == {"turns_undone": 1, "rewound_count": 2} and store.cleared == ["s"]
     assert [row[2] for row in db.rows] == [True] * 7 + [False, False]
 
 
@@ -257,8 +280,9 @@ def test_rewind_refuses_when_no_turn_since_or_still_active(monkeypatch, hermes_p
     install(monkeypatch, RowsStore(db))
     with pytest.raises(ValueError):
         hermes_private.rewind_session("s", 1, 500)
-    db = RowsDb([["user", 100, True], ["assistant", 101, True], ["user", 600, True], ["assistant", 601, True]])
-    install(monkeypatch, RowsStore(db, broken=True))
+    db = RowsDb([["user", 100, True], ["assistant", 101, True], ["user", 600, True], ["assistant", 601, True]],
+                broken=True)
+    install(monkeypatch, RowsStore(db))
     with pytest.raises(RuntimeError):
         hermes_private.rewind_session("s", 1, 500)
 
@@ -278,7 +302,7 @@ def test_a_steer_row_after_the_message_counts_as_a_turn_like_hermes(monkeypatch,
     store = RowsStore(db)
     install(monkeypatch, store)
     hermes_private.rewind_session("s", 1, 200)
-    assert store.calls == [2]
+    assert db.calls == [2]
 
 
 def test_an_api_session_of_a_named_profile_is_rewound_in_that_profiles_own_store(monkeypatch, hermes_private):
@@ -301,3 +325,50 @@ def test_an_api_session_of_a_named_profile_is_rewound_in_that_profiles_own_store
     assert hermes_private.rewind_session("s", 1, 200, "scoretesta") == {"turns_undone": 1, "rewound_count": 2}
     assert acquired == [Path("/hermes/profiles/scoretesta/state.db")] and released == [db]
     assert store.calls == [] and [row[2] for row in db.rows] == [True, True, False, False]
+
+
+def test_counting_and_rewinding_happen_under_one_hold_of_the_transcript_lock(monkeypatch, hermes_private):
+    # audit5-e: counting outside the lock let a concurrent /undo remove the newest turn first, so the counted ordinal
+    # then reached back past the message.
+    db = RowsDb([["user", 100, True], ["assistant", 101, True], ["user", 200, True], ["assistant", 201, True],
+                 ["user", 300, True], ["assistant", 301, True]])
+    store = RowsStore(db)
+    install(monkeypatch, store)
+    held = []
+    db.on_read = lambda: held.append(store.depth > 0)
+    hermes_private.rewind_session("s", 2, 200)
+    assert held and all(held)
+
+
+def test_a_target_that_moved_between_counting_and_rewinding_is_refused(monkeypatch, hermes_private):
+    db = RowsDb([["user", 100, True], ["assistant", 101, True], ["user", 200, True], ["assistant", 201, True],
+                 ["user", 300, True], ["assistant", 301, True]])
+    install(monkeypatch, RowsStore(db))
+    reads = []
+
+    def undo_newest_after_counting():
+        reads.append(1)
+        if len(reads) == 3:  # between the plan and the re-check just before the mutation: another process /undo-es C
+            for row in db.rows[4:]:
+                row[2] = False
+    db.on_read = undo_newest_after_counting
+    with pytest.raises(RuntimeError):
+        hermes_private.rewind_session("s", 2, 200)
+    assert db.calls == [] and [row[2] for row in db.rows[:4]] == [True] * 4
+
+
+def test_an_expired_command_is_refused_before_it_touches_hermes(monkeypatch, hermes_private):
+    # audit5-e: Score gave up on a command (timeout, room released); a late claim must not rewind newer work.
+    db = RowsDb([["user", 100, True], ["assistant", 101, True], ["user", 200, True], ["assistant", 201, True]])
+    store = RowsStore(db)
+    install(monkeypatch, store)
+    command_poller, transport = poller([command(commandId="late", sessionId="s", turns=1, since=200,
+                                                expiresAt=time.time() - 1)])
+    command_poller.process_once()
+    assert transport.results[0][1] == {"outcome": "expired"}
+    assert db.calls == [] and all(row[2] for row in db.rows)
+    # It expires between claiming and mutating, too: the check sits right before the mutation.
+    db.on_read = lambda: time.sleep(0.05)
+    with pytest.raises(hermes_private.CommandExpired):
+        hermes_private.rewind_session("s", 1, 200, expires_at=time.time() + 0.1)
+    assert db.calls == []

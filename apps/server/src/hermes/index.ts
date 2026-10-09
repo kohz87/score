@@ -1,3 +1,4 @@
+export { seedFakeAttempts } from './fake/attempts-seed.ts'
 import { ProfileNameSchema } from '@score/contract'
 import type { Config } from '../config.ts'
 import { FakePort } from './fake/fake-port.ts'

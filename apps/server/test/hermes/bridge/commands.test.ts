@@ -36,7 +36,14 @@ test('a rewind command round trip: poll, run, result; delivered once', async () 
   const asked = broker.request('builder', { sessionId: 'score-room-builder', turns: 2 }, 5000)
   const first = BridgeCommandsResponseSchema.parse((await poll(token, 5)).json())
   expect(first.items).toEqual([
-    { commandId: expect.any(String), kind: 'rewind', sessionId: 'score-room-builder', turns: 2 },
+    {
+      commandId: expect.any(String),
+      kind: 'rewind',
+      sessionId: 'score-room-builder',
+      turns: 2,
+      // Issued now + the time the request waits: the plugin refuses it after that.
+      expiresAt: expect.closeTo(Date.now() / 1000 + 5, 1),
+    },
   ])
   expect((await poll(token)).json()).toEqual({ items: [] })
   expect(
@@ -96,4 +103,13 @@ test('an unanswered command ends as no_answer and is not run later', async () =>
 
 test('commands need a producer token', async () => {
   expect((await poll('x'.repeat(43))).statusCode).toBe(401)
+})
+
+test('the plugin may report a command as expired', async () => {
+  const token = await env.token()
+  await poll(token)
+  const asked = broker.request('builder', { sessionId: 's', turns: 1 }, 5000)
+  const items = BridgeCommandsResponseSchema.parse((await poll(token, 5)).json()).items
+  expect((await result(token, items[0]!.commandId, { outcome: 'expired' })).statusCode).toBe(204)
+  expect(await asked).toEqual({ status: 'expired' })
 })

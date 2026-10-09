@@ -792,7 +792,7 @@ export class FakePort implements HermesPort {
   async readOutsideSession(agentId: string, sessionId: string) {
     return fakeOutsideSession(agentId, sessionId, this.scheduler.now())
   }
-  sessionContinuation(): 'same_session' | 'new_session' {
+  sessionContinuation(): 'same_session' | 'new_session' | 'unknown' {
     return 'same_session'
   }
 
@@ -1251,8 +1251,8 @@ export class FakePort implements HermesPort {
       contextLength: 128000,
     },
   ]
-  async listModels(q?: string, only?: readonly ModelRef[]): Promise<ModelOption[]> {
-    return structuredClone(filterModels(this.fakeModels, q, only))
+  async listModels(q?: string, only?: readonly ModelRef[], limit?: number): Promise<ModelOption[]> {
+    return structuredClone(filterModels(this.fakeModels, q, only, limit))
   }
   async listProviders(): Promise<ProviderBase[]> {
     return structuredClone(this.fakeProviders)

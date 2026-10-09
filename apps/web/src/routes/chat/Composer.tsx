@@ -346,9 +346,14 @@ export function Composer({
     live.current = { ...live.current, attachments: next }
     setAttachments(next)
   }
-  function addWorkspaceFile(agentId: string, path: string) {
+  function addWorkspaceFile(agentId: string, path: string, root?: string) {
     changeAttachments((current) => {
-      const item: Attachment = { kind: 'workspace', agentId, path }
+      const item: Attachment = {
+        kind: 'workspace',
+        agentId,
+        path,
+        ...(root === undefined ? {} : { root }),
+      }
       return current.length >= MAX_ATTACHMENTS ||
         current.some((existing) => attachmentKey(existing) === attachmentKey(item))
         ? current
@@ -401,7 +406,7 @@ export function Composer({
     const local = editing ? null : parseLocalCommand(body)
     if (local) return runLocalCommand(local)
     // Editing rewinds the room and the agents first (PLAN 5.33); the person confirms what that does.
-    if (editing && rewoundEdit.current !== editing.messageId) {
+    if (editing && !editing.rewound && rewoundEdit.current !== editing.messageId) {
       setConfirmEdit(true)
       return
     }

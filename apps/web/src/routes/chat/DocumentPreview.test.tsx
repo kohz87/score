@@ -46,22 +46,22 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-test('a PDF is a link that opens in a new tab, with no dialog', () => {
+test('a PDF is a download link, with no dialog', () => {
   mount(<DocumentChip part={part({ name: 'r.pdf', contentType: 'application/pdf' })} />)
-  const link = screen.getByRole('link', { name: 'Open r.pdf in a new tab' })
-  expect(link.getAttribute('href')).toBe('/api/media/m1')
-  expect(link.getAttribute('target')).toBe('_blank')
-  expect(link.getAttribute('rel')).toContain('noreferrer')
+  const link = screen.getByRole('link', { name: 'Download r.pdf' })
+  expect(link.getAttribute('href')).toBe('/api/media/m1?download=1&name=r.pdf')
+  expect(link.getAttribute('target')).toBeNull()
 })
 
 test('CSV shows as a table, header first, and stops at 1000 rows', () => {
   const rows = Array.from({ length: 1200 }, (_, i) => `${i},v${i}`)
-  render(<CsvTable text={['id,value', ...rows].join('\n')} />)
+  const { container } = render(<CsvTable text={['id,value', ...rows].join('\n')} />)
   expect(screen.getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
     'id',
     'value',
   ])
-  expect(screen.getAllByRole('row')).toHaveLength(1000)
+  // Counted by element: a role query over a thousand rows is slow enough to time out on a loaded machine.
+  expect(container.querySelectorAll('tr')).toHaveLength(1000)
   expect(screen.getByText(/Showing the first 1000 rows/)).toBeTruthy()
 })
 

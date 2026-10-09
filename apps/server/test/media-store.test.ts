@@ -210,3 +210,20 @@ test('re-uploading the original bytes repairs a damaged blob, and sweep keeps re
   expect(store.store(bytes).mediaId).toBe(first.mediaId)
   expect(store.read(first.mediaId)?.bytes.equals(bytes)).toBe(true)
 })
+
+test('identical text bytes keep a separate document type per upload name and share one blob', () => {
+  const bytes = Buffer.from('a,b\n1,2\n')
+  const txt = store.store(bytes, undefined, 'data.txt')
+  const csv = store.store(bytes, undefined, 'data.csv')
+  expect(txt.contentType).toBe('text/plain')
+  expect(csv.contentType).toBe('text/csv')
+  expect(csv.mediaId).not.toBe(txt.mediaId)
+  expect(store.read(txt.mediaId)?.contentType).toBe('text/plain')
+  expect(store.store(bytes, undefined, 'again.csv').mediaId).toBe(csv.mediaId)
+  expect(readdirSync(join(dir, 'media')).filter((n) => n.length === 64)).toHaveLength(1)
+  // the blob outlives the first expiry while the other row still uses it
+  now += 40 * 24 * 3600 * 1000
+  store.retain(db.sqlite, [csv.mediaId], new Date(now).toISOString())
+  store.sweep()
+  expect(store.read(csv.mediaId)?.bytes.equals(bytes)).toBe(true)
+})

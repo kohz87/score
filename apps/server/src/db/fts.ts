@@ -1,6 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 const INDEXABLE = 'streaming = 0 AND deleted_at IS NULL'
+const BODY = `(SELECT group_concat(json_extract(value, '$.text'), char(10)) FROM json_each(messages.parts)
+           WHERE json_extract(value, '$.kind') = 'text')`
 
 /**
  * `message_fts` is keyed on the implicit rowid of `messages` (migration 0033). A manual VACUUM, or a table rebuild,
@@ -15,15 +17,18 @@ export function ensureMessageFts(sqlite: DatabaseSync): boolean {
     `SELECT count(*) AS n FROM message_fts f WHERE NOT EXISTS
        (SELECT 1 FROM messages m WHERE m.rowid = f.rowid AND m.${INDEXABLE.replaceAll(' AND ', ' AND m.')})`,
   )
-  if (indexed === expected && strays === 0) return false
+  // Swapped rowids keep counts and membership intact, so compare each indexed body with its message's text too.
+  const mismatched = count(
+    `SELECT count(*) AS n FROM message_fts f JOIN messages ON messages.rowid = f.rowid
+       WHERE f.body IS NOT ${BODY}`,
+  )
+  if (indexed === expected && strays === 0 && mismatched === 0) return false
   sqlite.exec('BEGIN IMMEDIATE')
   try {
     sqlite.exec('DELETE FROM message_fts')
     sqlite.exec(
       `INSERT INTO message_fts (rowid, body)
-       SELECT rowid,
-         (SELECT group_concat(json_extract(value, '$.text'), char(10)) FROM json_each(messages.parts)
-           WHERE json_extract(value, '$.kind') = 'text')
+       SELECT rowid, ${BODY}
        FROM messages WHERE ${INDEXABLE}`,
     )
     sqlite.exec('COMMIT')

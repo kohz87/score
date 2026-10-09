@@ -104,3 +104,78 @@ test('model field reading handles inline and nested forms', () => {
   expect(readModel('x: 1\nmodel:\n  provider: p\n  default: m\nother: 2\n')).toBe('m')
   expect(readModel('other:\n  default: no\n')).toBeNull()
 })
+
+const pax = (...pairs: [string, string][]) =>
+  Buffer.concat(
+    pairs.map(([k, v]) => {
+      const rest = Buffer.from(` ${k}=${v}\n`)
+      let n = rest.length + 1
+      while (String(n).length + rest.length !== n) n = String(n).length + rest.length
+      return Buffer.concat([Buffer.from(String(n)), rest])
+    }),
+  )
+const SPARSE = /tar features/
+
+test('refuses global PAX headers, sparse entries and PAX size overrides', async () => {
+  const base = [{ name: 'scout/' }]
+  await expect(
+    inspect(
+      tarGz([
+        ...base,
+        { name: 'g', type: 'g', body: pax(['path', 'scout/.env']) },
+        { name: 'scout/a', body: 'x' },
+      ]),
+    ),
+  ).rejects.toThrow(SPARSE)
+  await expect(
+    inspect(tarGz([...base, { name: 'scout/s', type: 'S', body: 'x' }])),
+  ).rejects.toThrow(SPARSE)
+  for (const key of ['GNU.sparse.size', 'GNU.sparse.map', 'size'])
+    await expect(
+      inspect(
+        tarGz([
+          ...base,
+          { name: 'p', type: 'x', body: pax([key, '3221225472']) },
+          { name: 'scout/b', body: 'X' },
+        ]),
+      ),
+    ).rejects.toThrow(SPARSE)
+})
+
+test('PAX records are framed by their length, so a newline inside a path cannot split a record', async () => {
+  const facts = await inspect(
+    tarGz([
+      { name: 'scout/' },
+      { name: 'p', type: 'x', body: pax(['path', 'scout/a\n9 path=scout/zzz']) },
+      { name: 'scout/ignored', body: 'x' },
+      { name: 'p', type: 'x', body: pax(['path', 'scout/.env']) },
+      { name: 'scout/readme', body: 'x' },
+    ]),
+  )
+  expect(facts.credentialFiles).toEqual(['.env'])
+})
+
+test("flags Hermes's own credential stores", async () => {
+  const names = [
+    '.anthropic_oauth.json',
+    'auth.json.bak',
+    '.env.bak1',
+    '.envrc',
+    'home/.config/gh/hosts.yml',
+    '.kube/config',
+    'mcp-tokens/x.json',
+    'vault/vault.key',
+    'google_token.json',
+    'browser-profile/Cookies',
+    'config.yaml.bak-20260101t010101z',
+  ]
+  const facts = await inspect(
+    sampleProfile(
+      'scout',
+      names.map((n) => ({ name: `scout/${n}`, body: 'x' })),
+    ),
+  )
+  for (const n of names)
+    expect(facts.credentialFiles).toContain(n.startsWith('home/') ? 'home/.config/gh/hosts.yml' : n)
+  expect(facts.credentialFiles.length).toBeGreaterThanOrEqual(names.length)
+})

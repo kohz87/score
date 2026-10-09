@@ -8,6 +8,7 @@ export type RewindOutcome =
   | { status: 'done'; turnsUndone: number; rewoundCount: number }
   | { status: 'nothing' }
   | { status: 'failed' }
+  | { status: 'expired' }
   | { status: 'unavailable' }
   | { status: 'no_answer' }
 
@@ -43,7 +44,13 @@ export class RewindBroker {
     timeoutMs: number,
   ): Promise<RewindOutcome> {
     if (!this.available(profile)) return { status: 'unavailable' }
-    const command: BridgeCommand = { commandId: randomUUID(), kind: 'rewind', ...req }
+    const command: BridgeCommand = {
+      commandId: randomUUID(),
+      kind: 'rewind',
+      ...req,
+      // The plugin refuses to act on it after this, so a command abandoned by a timeout can't run on later work.
+      expiresAt: this.clock() / 1000 + timeoutMs / 1000,
+    }
     return new Promise<RewindOutcome>((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(command.commandId)

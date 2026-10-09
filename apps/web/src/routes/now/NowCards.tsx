@@ -293,10 +293,19 @@ export function MadeTodayCard({
                   </div>
                 ))}
                 {item.checks.map((check) => {
-                  // Stage 2b renders "unknown" neutrally; until then only a passed review shows a tick.
-                  const ok = check.verdict === 'passed'
+                  // passed = tick, changes requested = cross, unknown = a neutral dash: no evidence either way is never red.
+                  const verdict = check.verdict
+                  const word =
+                    verdict === 'passed'
+                      ? 'passed'
+                      : verdict === 'unknown'
+                        ? 'not verified'
+                        : 'changes requested'
                   return (
-                    <div key={`${check.agentId}-${check.label}`} className="now-made-row">
+                    <div
+                      key={`${check.agentId}-${check.label}`}
+                      className={`now-made-row${verdict === 'unknown' ? ' now-made-row--unknown' : ''}`}
+                    >
                       <svg
                         width="18"
                         height="18"
@@ -305,8 +314,20 @@ export function MadeTodayCard({
                         aria-hidden="true"
                       >
                         <path
-                          d={ok ? 'M3 8.5 L6.5 12 L13 4.5' : 'M4 4 L12 12 M12 4 L4 12'}
-                          stroke={ok ? '#00785A' : '#B01E43'}
+                          d={
+                            verdict === 'passed'
+                              ? 'M3 8.5 L6.5 12 L13 4.5'
+                              : verdict === 'unknown'
+                                ? 'M4 8 H12'
+                                : 'M4 4 L12 12 M12 4 L4 12'
+                          }
+                          stroke={
+                            verdict === 'passed'
+                              ? '#00785A'
+                              : verdict === 'unknown'
+                                ? 'var(--ink-muted)'
+                                : '#B01E43'
+                          }
                           strokeWidth="1.8"
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -314,13 +335,11 @@ export function MadeTodayCard({
                       </svg>
                       <span className="now-made-check">
                         {check.label}
-                        <span className="now-sr-only">
-                          {check.verdict === 'passed'
-                            ? ' passed'
-                            : check.verdict === 'unknown'
-                              ? ' not verified'
-                              : ' changes requested'}
-                        </span>
+                        {verdict === 'unknown' ? (
+                          <span className="now-made-note"> · {word}</span>
+                        ) : (
+                          <span className="now-sr-only"> {word}</span>
+                        )}
                       </span>
                       <span className="now-made-agent">
                         {agents.find((agent) => agent.id === check.agentId)?.name ?? check.agentId}

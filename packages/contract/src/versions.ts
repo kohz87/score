@@ -88,6 +88,11 @@ export const RoomVersionDetailSchema = z.object({
 })
 export type RoomVersionDetail = z.infer<typeof RoomVersionDetailSchema>
 
+/** How long the bridge has to answer a rewind command; the command expires then (`expiresAt`). */
+export const REWIND_COMMAND_TTL_MS = 60_000
+/** Extra time a room stays held after a command's expiry, for clock differences between Score and the plugin. */
+export const REWIND_HOLD_SKEW_MS = 5_000
+
 /** Server → bridge plugin: rewind one Hermes session by `turns` user turns (contract §11). */
 export const BridgeCommandSchema = z.object({
   commandId: z.string().min(1).max(128),
@@ -96,12 +101,14 @@ export const BridgeCommandSchema = z.object({
   turns: z.int().positive().max(1000),
   /** Epoch seconds of the message being rewound: the plugin rewinds exactly the turns from there (absolute target). */
   since: z.number().positive().optional(),
+  /** Epoch seconds after which the plugin must not act (checked immediately before it mutates): `expired`. */
+  expiresAt: z.number().positive(),
 })
 export type BridgeCommand = z.infer<typeof BridgeCommandSchema>
 export const BridgeCommandsResponseSchema = z.object({ items: z.array(BridgeCommandSchema) })
 
 export const BridgeCommandResultSchema = z.object({
-  outcome: z.enum(['done', 'nothing', 'failed']),
+  outcome: z.enum(['done', 'nothing', 'failed', 'expired']),
   turnsUndone: z.int().nonnegative().optional(),
   rewoundCount: z.int().nonnegative().optional(),
   error: z.string().max(200).optional(),

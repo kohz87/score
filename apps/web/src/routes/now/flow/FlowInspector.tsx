@@ -1,11 +1,22 @@
 import type { AgentSummary, FlowNodeDetail } from '@score/contract'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../../components/AgentGlyph.tsx'
+import { UnattributedGlyph } from '../../../components/UnattributedGlyph.tsx'
 import { ApiError } from '../../../data/api.ts'
 import { ApprovalCard } from '../../chat/ApprovalCard.tsx'
 import { agentTextColor } from '../../chat/agent-text-color.ts'
+import {
+  attemptAgentName,
+  attemptStatusLabel,
+  attemptEndText,
+  attemptPath,
+  evidenceLabel,
+} from '../../attempts/attempt-format.ts'
 import { useFlowNode, useStopFlowNode } from './flow-queries.ts'
 import '../../chat/chat.css'
+
+const clockText = (iso: string) =>
+  new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 
 export function duration(seconds: number): string {
   return seconds < 60 ? `${Math.floor(seconds)} sec` : `${Math.floor(seconds / 60)} min`
@@ -112,7 +123,7 @@ function StepDetail({
       <dl className="flow-inspector__facts">
         <div>
           <dt>Model</dt>
-          <dd>{detail.model ?? '—'}</dd>
+          <dd>{detail.model ?? (detail.attempts?.length ? 'Not observed' : '—')}</dd>
         </div>
         <div>
           <dt>Running for</dt>
@@ -120,9 +131,36 @@ function StepDetail({
         </div>
         <div>
           <dt>Tools used</dt>
-          <dd>{detail.tools?.join(', ') || '—'}</dd>
+          <dd>{detail.tools === null ? 'Not observed' : detail.tools.join(', ') || '—'}</dd>
         </div>
       </dl>
+      {detail.attempts && detail.attempts.length > 0 && (
+        <section className="flow-attempts" aria-label="Attempts">
+          <h3>Attempts</h3>
+          <ul>
+            {detail.attempts.map((attempt) => (
+              <li key={attempt.id}>
+                <span className="flow-attempts__who">
+                  {attempt.agentId === null ? (
+                    <UnattributedGlyph size="xs" decorative />
+                  ) : (
+                    (() => {
+                      const owner = agents.find((item) => item.id === attempt.agentId)
+                      return owner ? <AgentGlyph agent={owner} size="xs" bare decorative /> : null
+                    })()
+                  )}
+                  <b>{attemptAgentName(attempt, agents)}</b>
+                </span>{' '}
+                <Link to={attemptPath(attempt)}>{attemptStatusLabel[attempt.status]}</Link>
+                <span className="flow-attempts__meta">
+                  started {clockText(attempt.startedAt)}, {attemptEndText(attempt, clockText)}.{' '}
+                  {evidenceLabel[attempt.evidence]}.
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <div className="flow-inspector__actions">
         <Link to={`/chat/${encodeURIComponent(roomId)}`}>Open in Chat</Link>
         <button

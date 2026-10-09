@@ -555,7 +555,7 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 
   ```ts
   req: { text: string; to?: AgentId[] /* explicit "To" chips; @mentions in text are merged */
-         planFirst?: boolean; model?: string /* one-shot /model */; attachments?: ({ mediaId: string; name?: string } | { workspace: { agentId: AgentId; path: string } })[] /* ≤ 10 */
+         planFirst?: boolean; model?: string /* one-shot /model */; attachments?: ({ mediaId: string; name?: string } | { workspace: { agentId: AgentId; path: string; root?: string /* root the file was picked from: a changed root is 409 workspace_changed */ } })[] /* ≤ 10 */
          edits?: MessageId /* edit and resend: the sender's own earlier message in this room */ }
   res: { message: Message; routedTo: AgentId[]; command: CommandResult | null; notices?: string[] }
   ```
@@ -594,9 +594,9 @@ contentType: string }`. Types come from the bytes: png, jpeg, gif, webp, PDF, DO
   entries), and plain UTF-8 text, where the file name's extension (or the declared type) picks `text/plain`,
   `text/markdown`, `text/csv`, `application/json` or `text/html`. `400` empty or malformed, `413` over 8 MB for an image
   or 25 MiB for anything else, `415` unsupported or contradicting type, `507 media_quota_exceeded`. `GET /api/media/:mediaId`
-  serves by kind: images and text (HTML as `text/plain`, never rendered) inline under `default-src 'none'; sandbox`; PDF
-  inline with `nosniff` and no CSP (the browser's viewer needs it); DOCX/XLSX, and any file with `?download=1[&name=]`,
-  as `attachment`. Messages reference uploads with an `image` part, or a `document` part for everything else, plus
+  serves by kind: images and text (HTML as `text/plain`, never rendered) inline under `default-src 'none'; sandbox`; PDF,
+  DOCX/XLSX, and any file with `?download=1[&name=]`, as `attachment` (octet-stream, `nosniff`, sandbox CSP; a PDF is never rendered
+  from Score's origin, because Chrome's viewer cannot run under a sandbox CSP). Messages reference uploads with an `image` part, or a `document` part for everything else, plus
   `workspace` parts for workspace files (`{ workspace: { agentId, path } }`, checked against that agent's workspace, no
   copy); at most 10 attachments per message. What each addressed agent receives (5.30): text files (TXT, MD, CSV, JSON,
   HTML) inline in the run input, fenced, redacted, up to 64 KB each and 200 KB per message (truncated with a note); PDF,
@@ -886,7 +886,8 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
   (one level; folders first; blocked names are never listed; `.git` is listed but not its inside).
 - **H** `GET …/workspace/file?path=[&download=1]`
   - text (UTF-8, no NUL, ≤ 1 MiB): `200 text/plain; charset=utf-8`, header `ETag` (quoted), `X-Content-Type-Options: nosniff`;
-  - png/jpeg/gif/webp/pdf (extension + magic bytes, ≤ 25 MiB): the raw bytes, `Content-Disposition: inline`, nosniff, CSP `default-src 'none'; sandbox`;
+  - png/jpeg/gif/webp (extension + magic bytes, ≤ 25 MiB): the raw bytes, `Content-Disposition: inline`, nosniff, CSP `default-src 'none'; sandbox`;
+  - pdf (same checks): as the download case below (`application/octet-stream`, `attachment`, CSP), never inline;
   - anything else: `200 application/json` `{ binary: true; size; reason: 'binary' | 'too_large' }`;
   - `download=1`: any file ≤ 25 MiB as `application/octet-stream`, `Content-Disposition: attachment`, nosniff.
   Symlinks are followed for reading only when they resolve inside the root and the resolved path is allowed.
@@ -1184,16 +1185,20 @@ sessionKey; requestId; choice: ApprovalChoice; reason: string | null }[] }`. Onl
 **Commands** (PLAN 5.33, server → plugin). A sibling long poll next to the decisions one, served only to a producer
 whose `isolation` is not `unknown`; the plugin polls only while it runs inside a gateway (it needs Hermes's session store).
 
-- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: { commandId; kind: 'rewind'; sessionId; turns; since? }[] }` (`since` = epoch seconds of the rewound message; the plugin then
+- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: { commandId; kind: 'rewind'; sessionId; turns; since?; expiresAt }[] }` (`expiresAt` = epoch seconds, issued + the 60 s answer
+  time; the plugin refuses the command (`expired`) when it is past, checked under the transcript lock immediately before it mutates, so a
+  command Score gave up on can't rewind later work; `since` = epoch seconds of the rewound message; the plugin then
   computes the number of turns itself, as every user turn of Hermes's alternation-repaired projection from the first one at or after
   `since`, uses `turns` only as Score's own count, refuses (`failed`) when the message shares a turn with an earlier unanswered
-  one or no turn starts at/after `since`, and checks afterwards that no active user row from `since` remains, else `failed`). A
+  one or no turn starts at/after `since`, counts, rewinds and verifies under one hold of Hermes's transcript lock (a concurrent `/undo`
+  can't move the target; a target that changed is `failed`), and checks afterwards that no active user row from `since` remains, else `failed`). A
   command is handed to one polling producer of the profile once and is not redelivered.
-- `POST /bridge/v1/commands/:commandId/result` `{ outcome: 'done' | 'nothing' | 'failed'; turnsUndone?; rewoundCount?;
+- `POST /bridge/v1/commands/:commandId/result` `{ outcome: 'done' | 'nothing' | 'failed' | 'expired'; turnsUndone?; rewoundCount?;
   error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what
   `/undo` uses; soft-deletes the rows, the next turn rebuilds from the active ones) from `hermes_private.py` and reports
   Hermes's `turns_undone` / `rewound_count`; `nothing` = Hermes had nothing to rewind. A command with no result within
-  60 s is reported to the person as `no_answer`. The plugin remembers results by `commandId`, so a repeated command never
+  60 s is reported to the person as `no_answer`, and Score keeps the room's rewind hold (persisted in `rewind_holds`, restored after a
+  restart) until `expiresAt` + 5 s, when the command can no longer act. The plugin remembers results by `commandId`, so a repeated command never
   rewinds twice.
 
 **Kanban denials** (D4.3, revised 2026-10-07): there are **no** grant endpoints. A Kanban worker's `post_tool_call`

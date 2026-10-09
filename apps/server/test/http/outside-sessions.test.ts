@@ -203,6 +203,18 @@ test('continue here starts a new session with a one-time summary when the sessio
   expect(vi.mocked(port.startRun).mock.calls[1]![0].input).not.toContain('Earlier conversation')
 })
 
+test('continue here is retryable, and stores nothing, while the gateway state is unknown', async () => {
+  vi.spyOn(port, 'sessionContinuation').mockReturnValue('unknown')
+  const roomId = await importedRoom('lead', 'ext-telegram-1')
+  const response = await post(`/api/rooms/${roomId}/continue-session`)
+  expect(response.statusCode).toBe(503)
+  expect(response.json().error.code).toBe('hermes_unavailable')
+  expect(db.sqlite.prepare('SELECT COUNT(*) AS n FROM room_sessions').get()?.n).toBe(0)
+  expect(
+    (await app.inject({ url: `/api/rooms/${roomId}` })).json().room.importedFrom.continued,
+  ).not.toBe('new_session')
+})
+
 test('continue here is refused while the session is still active on its platform', async () => {
   const roomId = await importedRoom('builder', 'ext-discord-1')
   const response = await post(`/api/rooms/${roomId}/continue-session`)

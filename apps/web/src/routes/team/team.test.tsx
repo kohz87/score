@@ -1094,6 +1094,76 @@ test('the History tab lists runs with links, filters by outcome, searches and pa
   await waitFor(() => expect(urls.some((url) => url.includes('q=stream'))).toBe(true))
 })
 
+test('the History tab shows Kanban attempts with their status and no replay', async () => {
+  const attempt = (id: string, over: object = {}) => ({
+    id,
+    kind: 'kanban',
+    agentId: 'builder',
+    role: 'implementer',
+    status: 'changes_requested',
+    closureReason: null,
+    startedAt: '2026-01-01T12:00:00.000Z',
+    endedAt: '2026-01-01T12:10:00.000Z',
+    observationEndedAt: null,
+    evidence: 'proven',
+    taskId: 't-1',
+    task: { taskId: 't-1', historyId: 'h', current: true },
+    order: ['2026-01-01T12:00:00.000Z', 1],
+    refusedUpdates: 0,
+    tools: null,
+    session: null,
+    model: null,
+    ...over,
+  })
+  const item = (id: string, a: object, extra = {}) => ({
+    runId: id,
+    title: `Attempt ${id}`,
+    origin: 'kanban',
+    outcome: 'completed',
+    startedAt: '2026-01-01T12:00:00.000Z',
+    durationSec: 600,
+    model: null,
+    costUsd: null,
+    task: null,
+    brief: null,
+    replaySeq: null,
+    attempt: a,
+    ...extra,
+  })
+  const base = respond
+  respond = (path, init) =>
+    path.startsWith('/api/agents/builder/history')
+      ? json({
+          items: [
+            item('kr_a', attempt('kr_a'), { task: { id: 't-1', title: 'Wire the stream' } }),
+            item(
+              'kr_b',
+              attempt('kr_b', {
+                endedAt: null,
+                observationEndedAt: '2026-01-01T12:30:00.000Z',
+                evidence: 'partial',
+                status: 'ended_unknown',
+                task: { taskId: 't-0', historyId: 'old', current: false },
+              }),
+            ),
+          ],
+          nextCursor: null,
+        })
+      : base(path, init)
+  renderTeam('/team/builder')
+  fireEvent.click(await screen.findByRole('tab', { name: 'History' }))
+  const panel = within(screen.getByRole('tabpanel'))
+  expect(await panel.findByText('Changes requested')).toBeDefined()
+  expect(panel.getAllByText('Ended (unknown)').length).toBeGreaterThan(1)
+  expect(panel.getByText(/no longer observed since/)).toBeDefined()
+  expect(panel.getByText(/Provenance unknown/)).toBeDefined()
+  expect(panel.getByRole('link', { name: /Task: Wire the stream/ })).toBeDefined()
+  expect(panel.getByRole('link', { name: /Open the attempt/ }).getAttribute('href')).toBe(
+    '/attempts/kr_b',
+  )
+  expect(panel.queryByRole('link', { name: /Replay/ })).toBeNull()
+})
+
 const pluginRows = [
   { id: 'score-bridge', label: 'score-bridge', enabled: true, locked: true, description: null },
   { id: 'memory-notes', label: 'memory-notes', enabled: true, locked: false, description: 'Notes' },

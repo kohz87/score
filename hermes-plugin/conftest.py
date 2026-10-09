@@ -32,6 +32,10 @@ private.resolve_exact_bounded = lambda session_key, choice, request_id, deadline
 private.detect_dangerous = lambda command: None
 
 private.gateway_session_store = lambda: None
-def _no_gateway(session_id, turns):
+class CommandExpired(Exception):
+    pass
+
+private.CommandExpired = CommandExpired
+def _no_gateway(session_id, turns, *_, **__):
     raise RuntimeError("no gateway session store")
 private.rewind_session = _no_gateway

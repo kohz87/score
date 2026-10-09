@@ -84,7 +84,14 @@ export const MessageAttachmentSchema = z.union([
   z.object({ mediaId: z.string().min(1), name: z.string().min(1).max(200).optional() }).strict(),
   z
     .object({
-      workspace: z.object({ agentId: AgentIdSchema, path: z.string().min(1).max(4096) }).strict(),
+      workspace: z
+        .object({
+          agentId: AgentIdSchema,
+          path: z.string().min(1).max(4096),
+          // The workspace root the person picked the file from; a different current root is refused (409 workspace_changed).
+          root: z.string().min(1).max(4096).optional(),
+        })
+        .strict(),
     })
     .strict(),
 ])

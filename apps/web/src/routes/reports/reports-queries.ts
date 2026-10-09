@@ -112,6 +112,7 @@ export function useReports(spec: ReportSpec) {
         // The agent list comes from Score's projection; on a cold start it fills while this page loads.
         event.type === 'agent.updated' ||
         event.type.startsWith('run.') ||
+        event.type === 'attempt.updated' ||
         event.type.startsWith('approval.')
       )
         refresh()

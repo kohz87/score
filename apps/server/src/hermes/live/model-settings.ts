@@ -16,9 +16,11 @@ import type { HermesRunner } from './cli.ts'
 // Per-profile model settings that Hermes keeps in config.yaml (hermes_cli/config_defaults.py, fallback_config.py,
 // model_switch.py). Score never opens the file: it asks `config get --json` for four sections, keeps the few fields
 // it shows, and writes single keys with `config set` / `config unset`.
-const KEYS = ['fallback_providers', 'model_aliases', 'tts', 'stt'] as const
+const KEYS = ['fallback_providers', 'fallback_model', 'model_aliases', 'tts', 'stt'] as const
 export interface RawSettings {
   fallback_providers: unknown
+  /** Legacy key: Hermes's `get_fallback_chain()` appends its entries after `fallback_providers`. */
+  fallback_model: unknown
   model_aliases: unknown
   tts: unknown
   stt: unknown
@@ -101,8 +103,18 @@ function providerOf(section: Record<string, unknown>, ids: readonly { id: string
   return ids.find((item) => item.id === section.provider)?.id ?? null
 }
 
+/** The effective chain Hermes runs: `fallback_providers`, then the legacy `fallback_model` entries not already in it. */
+function effectiveChain(raw: RawSettings): { entries: ModelRef[]; editable: boolean } {
+  const current = chainOf(raw.fallback_providers)
+  const legacy = chainOf(raw.fallback_model)
+  const entries = [...current.entries]
+  for (const entry of legacy.entries)
+    if (!entries.some((item) => sameRef(item, entry))) entries.push(entry)
+  return { entries, editable: current.editable && legacy.editable }
+}
+
 export function deriveSettings(raw: RawSettings): ModelSettings {
-  const chain = chainOf(raw.fallback_providers)
+  const chain = effectiveChain(raw)
   const tts = isRecord(raw.tts) ? raw.tts : {}
   const stt = isRecord(raw.stt) ? raw.stt : {}
   const ttsProvider = providerOf(tts, TTS_PROVIDERS)
@@ -147,15 +159,21 @@ export function planWrites(raw: RawSettings, update: ModelSettingsUpdate): Op[] 
       if (!prior.fallbacksEditable)
         throw conflict('This fallback chain has custom endpoints; change it in Hermes directly')
       ops.push({ kind: 'set', key: 'fallback_providers', value: JSON.stringify(update.fallbacks) })
+      // The legacy key would otherwise keep running after the person cleared or replaced the chain.
+      if (raw.fallback_model !== undefined && raw.fallback_model !== null)
+        ops.push({ kind: 'unset', key: 'fallback_model' })
     }
   }
   if (update.aliases) ops.push(...aliasWrites(prior.aliases, update.aliases))
   const speech = update.speech
   if (speech?.stt) {
     const { provider, model } = speech.stt
-    const next = provider ?? prior.speech.stt.provider
+    const next = provider === undefined ? prior.speech.stt.provider : provider
     if (provider && provider !== prior.speech.stt.provider)
       ops.push({ kind: 'set', key: 'stt.provider', value: provider })
+    // Automatic: Hermes picks the provider itself again.
+    else if (provider === null && prior.speech.stt.provider !== null)
+      ops.push({ kind: 'unset', key: 'stt.provider' })
     if (model !== undefined && model !== leaf(stt, next, sttModelKey(next ?? ''))) {
       if (!next || !STT_PROVIDERS.find((item) => item.id === next)?.model)
         throw conflict('Choose a speech-to-text provider with a model setting first')
@@ -201,6 +219,27 @@ function aliasWrites(prior: ModelAlias[], wanted: AliasInput[]): Op[] {
     if (!names.has(before.name) && before.editable)
       ops.push({ kind: 'unset', key: `model_aliases.${before.name}` })
   return ops
+}
+
+/** The writes that put `ops` back, last first: each key returns to what `raw` held (or is unset when it held nothing). */
+export function undoOps(raw: RawSettings, ops: Op[]): Op[] {
+  const read = (key: string): unknown => {
+    let node: unknown = raw
+    for (const part of key.split('.')) node = isRecord(node) ? node[part] : undefined
+    return node
+  }
+  return ops
+    .map((op): Op => {
+      const before = read(op.key)
+      if (before === undefined || before === null) return { kind: 'unset', key: op.key }
+      // Structured values travel as JSON (as in the original writes); scalars as they are.
+      return {
+        kind: 'set',
+        key: op.key,
+        value: typeof before === 'string' ? before : JSON.stringify(before),
+      }
+    })
+    .reverse()
 }
 
 /** `raw` with the writes applied, so a save answers from what it wrote without another round of Hermes reads. */

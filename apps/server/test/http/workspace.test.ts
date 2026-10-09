@@ -139,7 +139,7 @@ describe('tree and file', () => {
     expect(blocked.body).not.toContain('SECRET')
     expect((await call('GET', `${W}/file?path=missing.txt`)).statusCode).toBe(404)
   })
-  test('serves images and PDFs inline with a sandbox CSP, binaries as JSON, downloads as attachments', async () => {
+  test('serves images inline and PDFs as attachments under a sandbox CSP, binaries as JSON, downloads as attachments', async () => {
     fs.writeFileSync(path.join(root, 'a.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]))
     fs.writeFileSync(path.join(root, 'b.bin'), Buffer.from([1, 0, 2]))
     const image = await call('GET', `${W}/file?path=a.png`)
@@ -157,6 +157,12 @@ describe('tree and file', () => {
       /^attachment; filename\*=UTF-8''b\.bin$/,
     )
     expect(download.headers['content-type']).toBe('application/octet-stream')
+    // PDFs are never shown inline from Score's origin (the viewer can't run under the sandbox CSP): attachment.
+    fs.writeFileSync(path.join(root, 'r.pdf'), Buffer.from('%PDF-1.7\n%%EOF\n'))
+    const pdf = await call('GET', `${W}/file?path=r.pdf`)
+    expect(pdf.headers['content-type']).toBe('application/octet-stream')
+    expect(pdf.headers['content-disposition']).toBe("attachment; filename*=UTF-8''r.pdf")
+    expect(pdf.headers['content-security-policy']).toBe("default-src 'none'; sandbox")
   })
   test('refuses a symlink that leaves the workspace', async () => {
     fs.symlinkSync(path.join(outside, 'secret.txt'), path.join(root, 'leak.txt'))

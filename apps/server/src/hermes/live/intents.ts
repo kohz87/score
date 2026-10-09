@@ -20,6 +20,7 @@ const IntentRowSchema = z.object({
   state: z.enum(['pending', 'sent', 'accepted', 'failed', 'unknown']),
   result: z.string().nullable(),
   first_sent_at: z.iso.datetime().nullable(),
+  stop_state: z.enum(['pending', 'done']).nullable(),
 })
 interface IntentDeps {
   db: ScoreDb
@@ -128,7 +129,6 @@ async function dispatch(
     }
   }
   const id = z.string().min(1).parse(runId)
-  let cancelled = false
   await sink.submit({
     source: 'score-dispatch',
     identity: `admitted:${row.id}`,
@@ -150,7 +150,6 @@ async function dispatch(
           row.first_sent_at ?? now,
           now,
         )
-      cancelled = isCancelledTurn(sqlite, row.idempotency_key)
       return [
         ...(inserted.changes ? [runDraft(sqlite, id)] : []),
         ...attachRunMessage(sqlite, row.idempotency_key, id, now),
@@ -158,8 +157,34 @@ async function dispatch(
     },
   })
   // The reply was cancelled while Hermes admitted it: stop the run instead of letting it answer a deleted message.
-  if (cancelled) await gateway.stopRun(payload.profile, id, payload.credentialGeneration)
+  // Read after the (possibly deduplicated) admission, so a retry sees the cancellation too.
+  if (row.stop_state !== 'done' && isCancelledTurn(db.sqlite, row.idempotency_key))
+    await stopCancelledRun(deps, row.id, payload.profile, id, payload.credentialGeneration)
   return { runId: id }
+}
+
+/** Stops the run of a cancelled reply. The stop is recorded as owed first and retried (by recovery and by a repeated
+ *  admission) until Hermes confirms; a failure is not the caller's error, the reply is gone anyway. */
+async function stopCancelledRun(
+  deps: IntentDeps,
+  intentId: string,
+  profile: string,
+  runId: string,
+  generation: number,
+): Promise<void> {
+  const { db, gateway } = deps
+  db.sqlite
+    .prepare(
+      "UPDATE command_intents SET stop_state = 'pending' WHERE id = ? AND stop_state IS NULL",
+    )
+    .run(intentId)
+  try {
+    await gateway.stopRun(profile, runId, generation)
+  } catch (error) {
+    // Hermes no longer knows the run: it is over.
+    if (!(error instanceof HermesHttpError && error.status === 404)) return
+  }
+  db.sqlite.prepare("UPDATE command_intents SET stop_state = 'done' WHERE id = ?").run(intentId)
 }
 
 // The user's message reaches the agent unchanged: generic redaction (D6) is for data coming out of
@@ -237,7 +262,7 @@ export async function recoverIntents(deps: IntentDeps): Promise<void> {
     .parse(
       deps.db.sqlite
         .prepare(
-          `SELECT * FROM command_intents WHERE kind = 'start_run' AND (state IN ('pending','sent','unknown') OR (state = 'accepted' AND NOT EXISTS (SELECT 1 FROM runs WHERE runs.score_turn_id = command_intents.idempotency_key))) ORDER BY created_at, id`,
+          `SELECT * FROM command_intents WHERE kind = 'start_run' AND (state IN ('pending','sent','unknown') OR (state = 'accepted' AND (NOT EXISTS (SELECT 1 FROM runs WHERE runs.score_turn_id = command_intents.idempotency_key) OR (stop_state IS NOT 'done' AND EXISTS (SELECT 1 FROM message_runs mr WHERE mr.turn_id = command_intents.idempotency_key AND mr.run_id IS NULL AND mr.state != 'pending'))))) ORDER BY created_at, id`,
         )
         .all(),
     )

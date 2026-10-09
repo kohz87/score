@@ -20,7 +20,7 @@ function attachment(name: string | undefined): string {
 }
 
 // Upload (H): one image or document in a multipart body, bounded by the route's body limit. Bytes are served back only
-// from the index, with the sniffed type, by kind (images and text inline under a sandbox CSP, PDF inline, Word and Excel as downloads), never reinterpreted.
+// from the index, with the sniffed type, by kind (images and text inline under a sandbox CSP, PDF, Word and Excel as downloads), never reinterpreted.
 export function registerMediaRoutes(app: FastifyInstance, store: MediaStore): void {
   // The multipart parser lives in its own scope so no other route accepts that content type.
   void app.register(async (scope) => {
@@ -62,9 +62,11 @@ export function registerMediaRoutes(app: FastifyInstance, store: MediaStore): vo
         .header('X-Content-Type-Options', 'nosniff')
         .header('Cache-Control', 'private, max-age=3600')
         .header('ETag', `"${media.sha256}"`)
-      // Word and Excel files, and any file asked for with download=1, are never shown by the browser itself.
+      // PDF, Word and Excel files, and any file asked for with download=1, are never shown by the browser itself:
+      // Chrome's PDF viewer can't render under a sandbox CSP, so an inline PDF would run unsandboxed on Score's origin.
       if (
         query.download === '1' ||
+        media.contentType === 'application/pdf' ||
         media.contentType === DOCX_TYPE ||
         media.contentType === XLSX_TYPE
       )
@@ -72,12 +74,6 @@ export function registerMediaRoutes(app: FastifyInstance, store: MediaStore): vo
           .header('Content-Type', 'application/octet-stream')
           .header('Content-Disposition', attachment(query.name))
           .header('Content-Security-Policy', "default-src 'none'; sandbox")
-          .send(media.bytes)
-      // A PDF opens in the browser's own viewer, which does not work under a sandbox CSP; nothing else is exempt.
-      if (media.contentType === 'application/pdf')
-        return reply
-          .header('Content-Type', 'application/pdf')
-          .header('Content-Disposition', 'inline')
           .send(media.bytes)
       // Text kinds, HTML included, are served as plain text: the HTML is only ever shown as source.
       return reply
