@@ -46,6 +46,8 @@ export class FakeGateway {
   eof = false
   empty = false
   crashAfterAdmission = false
+  /** The next N stop requests fail with a 503. */
+  stopFails = 0
   terminalAfterPoll = 2
   /** Shown as the pending approval while a polled run is not yet terminal. */
   statusApproval: Record<string, unknown> | undefined
@@ -112,7 +114,13 @@ export class FakeGateway {
     const run = match && this.runs.get(this.identity(profile, decodeURIComponent(match[1]!)))
     if (!run) return json({ error: { code: 'run_not_found' } }, 404)
     const action = match![2]
-    if (action === 'stop') return json({ run_id: run.id, status: 'stopping' })
+    if (action === 'stop') {
+      if (this.stopFails > 0) {
+        this.stopFails--
+        return json({ error: { code: 'unavailable' } }, 503)
+      }
+      return json({ run_id: run.id, status: 'stopping' })
+    }
     if (action === 'steer') return json({ run_id: run.id, accepted: true })
     if (action === 'approval')
       return json({ error: { code: 'approval_not_pending', message: this.keys.get(profile) } }, 409)
