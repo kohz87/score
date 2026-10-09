@@ -275,6 +275,8 @@ export const SecurityStatusSchema = z.object({
   passwordSet: z.boolean(),
   /** Origins a pairing link may use (SCORE_PUBLIC_ORIGINS); the first is the default. */
   origins: z.array(z.url({ protocol: /^https?$/ })).default([]),
+  /** The web terminal is enabled on this server (SCORE_TERMINAL=1, PLAN 7.3). */
+  terminal: z.boolean().default(false),
 })
 export const RevokeOthersResponseSchema = z.object({ revoked: z.int().nonnegative() })
 export type PairedBrowser = z.infer<typeof PairedBrowserSchema>

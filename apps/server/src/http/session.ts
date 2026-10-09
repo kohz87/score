@@ -31,6 +31,8 @@ export function registerSessionRoutes(
   origins: readonly string[] = origin ? [origin] : [],
   /** Passkeys (5.28); needs the database. */
   passkeys?: PasskeyService,
+  /** The web terminal is enabled (SCORE_TERMINAL=1): reported to Settings and the terminal page. */
+  terminal = false,
 ): void {
   const guarded = { preHandler: humanGuard(pairing) }
   const PasswordBody = z.object({ password: z.unknown() }).loose()
@@ -39,6 +41,8 @@ export function registerSessionRoutes(
     if (!security)
       throw new HttpError(501, 'unsupported', 'Pairing management is not available here')
     await security.verify(PasswordBody.parse(body ?? {}).password, sessionOf(cookie))
+    // A correct password is also the "fresh second factor" the web terminal asks for (PLAN 7.3).
+    pairing.markFresh(cookie)
   }
   app.post('/api/session/pair', async (request, reply) => {
     const { token } = PairBodySchema.parse(request.body)
@@ -69,6 +73,7 @@ export function registerSessionRoutes(
   app.get('/api/session/security', guarded, async () => ({
     passwordSet: security?.isSet() ?? false,
     origins: [...origins],
+    terminal,
   }))
   // First time from any paired browser; changing it needs the current password; a forgotten one is reset on the host.
   app.put('/api/session/security/password', guarded, async (request, reply) => {
@@ -197,6 +202,12 @@ export function registerSessionRoutes(
         peer: request.ip,
         response,
       })
+      // An already paired browser proving itself again (the web terminal's second factor) keeps its session: it only
+      // becomes "fresh", and no second pairing is created.
+      if (pairing.pairedSession(request.headers.cookie) !== undefined) {
+        pairing.markFresh(request.headers.cookie)
+        return reply.code(204).send()
+      }
       const id = pairing.createSession(
         request.ip,
         `${request.headers['user-agent'] ?? 'Browser'} (passkey: ${used.label})`,
