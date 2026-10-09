@@ -183,6 +183,12 @@ const cases = [
     { asOfSeq: 0, rooms: [] },
   ],
   ['RoomProjectSchema', f.roomProject, { ...f.roomProject, color: 'purple' }],
+  [
+    'AutoSummarySchema',
+    { enabled: true, thresholdTokens: 12000 },
+    { enabled: true, thresholdTokens: 10 },
+  ],
+  ['SummaryEditBodySchema', { text: 'Edited summary' }, { text: '  ' }],
   ['RoomProjectBodySchema', { name: 'Launch', color: '#4A2FD9' }, { name: '', color: '#4A2FD9' }],
   ['RoomProjectEventSchema', { id: 'project-1' }, { id: '' }],
   ['RoomTagSchema', 'q4', 'Q 4'],
@@ -1139,4 +1145,16 @@ describe('model settings (audit5-e)', () => {
       contract.ModelSettingsUpdateSchema.safeParse({ speech: { stt: { provider: null } } }).success,
     ).toBe(true)
   })
+})
+
+test('a summary message part is text only and a room carries its setting', () => {
+  const part = { kind: 'summary', coversUntil: 'm1', text: 'Plan B', stale: true }
+  expect(contract.MessagePartSchema.parse(part)).toEqual(part)
+  expect(contract.MessagePartSchema.safeParse({ ...part, coversUntil: '' }).success).toBe(false)
+  expect(contract.MessagePartSchema.safeParse({ ...part, text: 'x'.repeat(16385) }).success).toBe(
+    false,
+  )
+  expect(
+    contract.MessageUpdatedSchema.parse({ roomId: 'r', messageId: 'm', parts: [part] }).parts,
+  ).toHaveLength(1)
 })
