@@ -20,6 +20,8 @@ export interface ProfileStepContext {
   /** Never globs of the baseline already applied (a rebaseline replaces them; the rest of the deny list is Hermes's). */
   previousNever?: string[]
   exportPath: string | null
+  /** Import only: the stored archive handed to `hermes profile import`. */
+  importArchive?: string | null
 }
 export interface ProfileManagementPort {
   profileInventory(name: string, cloneFrom?: string): Promise<ProfileInventory>

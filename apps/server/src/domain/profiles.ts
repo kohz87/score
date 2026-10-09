@@ -7,6 +7,7 @@ import {
   AgentPreviewSchema,
   AgentPreviewRequestSchema,
   AgentSummarySchema,
+  type AgentImportRequest,
   type AgentOperation,
   type AgentPreviewRequest,
   type ProfileStepName,
@@ -19,6 +20,7 @@ import { HttpError } from '../errors.ts'
 import { redact } from '../redact.ts'
 import { readAgent, reconcileAgents, storeAgent } from './agents.ts'
 import { applyLifecycle, lifecycleOf } from './agent-lifecycle.ts'
+import type { ProfileImportStore } from './profile-imports.ts'
 import { readBaseline } from './team-rules.ts'
 import { roomChanged, RoomRowSchema } from './rooms.ts'
 
@@ -29,6 +31,8 @@ const OperationRow = z.object({
 })
 const StoredRequest = z.object({
   input: AgentCreateInputSchema.nullable(),
+  /** Import only: the uploaded archive this operation installs from. */
+  importUpload: z.uuid().nullable().optional(),
   baseline: z.object({
     mode: z.enum(['manual', 'smart', 'off']),
     goAhead: z.array(z.string()),
@@ -52,6 +56,16 @@ const createSteps: ProfileStepName[] = [
   'enable_bridge',
   'verify_ready',
 ]
+const importSteps: ProfileStepName[] = [
+  'import_profile',
+  'describe_profile',
+  'preserve_key',
+  'configure_key',
+  'permissions',
+  'install_bridge',
+  'enable_bridge',
+  'verify_ready',
+]
 const deleteSteps: ProfileStepName[] = ['export', 'delete_profile', 'purge_identity', 'retire']
 function hash(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -61,6 +75,7 @@ function hash(value: unknown): string {
 // Score-side retirement.
 const RETRYABLE_STEPS: ReadonlySet<string> = new Set([
   'model',
+  'describe_profile',
   'permissions',
   'enable_bridge',
   'verify_ready',
@@ -77,6 +92,7 @@ export class ProfileOperations {
     private readonly ingest: Ingest,
     private readonly port: HermesPort,
     private readonly clock = Date.now,
+    private readonly imports?: ProfileImportStore,
   ) {}
 
   get(id: string): AgentOperation {
@@ -183,7 +199,12 @@ export class ProfileOperations {
       }),
     })
   }
-  async begin(request: AgentPreviewRequest, expectedHash: string, confirm = false) {
+  async begin(
+    request: AgentPreviewRequest,
+    expectedHash: string,
+    confirm = false,
+    imported?: { uploadId: string },
+  ) {
     const preview = await this.preview(request)
     if (preview.hash !== expectedHash)
       throw new HttpError(409, 'conflict', 'The preview changed. Preview again before confirming.')
@@ -206,19 +227,23 @@ export class ProfileOperations {
         : null
     const operation = AgentOperationSchema.parse({
       id,
-      kind: request.kind,
+      kind: imported ? 'import' : request.kind,
       targetName: preview.targetName,
       incarnationId:
         lifecycleOf(this.db.sqlite, preview.targetName)?.incarnation_id ?? randomUUID(),
       requestHash: expectedHash,
       state: 'running',
-      steps: (request.kind === 'create' ? createSteps : deleteSteps).map((name) => ({
+      steps: (imported ? importSteps : request.kind === 'create' ? createSteps : deleteSteps).map((name) => ({
         name,
         state: 'pending',
       })),
       createdAt: now,
       updatedAt: now,
-      nextStep: request.kind === 'create' ? 'create_profile' : 'export',
+      nextStep: imported
+        ? 'import_profile'
+        : request.kind === 'create'
+          ? 'create_profile'
+          : 'export',
       error: null,
       exportPath: preview.exportPath,
     })
@@ -252,7 +277,11 @@ export class ProfileOperations {
             id,
             preview.targetName,
             JSON.stringify(operation),
-            JSON.stringify({ input, baseline: readBaseline(sqlite) }),
+            JSON.stringify({
+              input,
+              baseline: readBaseline(sqlite),
+              importUpload: imported?.uploadId ?? null,
+            }),
             request.kind === 'delete' ? inventory.identity : null,
             'running',
           )
@@ -306,6 +335,46 @@ export class ProfileOperations {
     })
     this.launch(id)
     return operation
+  }
+  /**
+   * Import an uploaded archive as a new agent. Hermes refuses an existing profile, so there is no replace: an
+   * existing id is a blocker (delete the agent first, which keeps a private export).
+   */
+  async beginImport(request: AgentImportRequest, facts: { model: string | null; hasCredentials: boolean }) {
+    if (facts.hasCredentials && !request.confirmCredentials)
+      throw new HttpError(
+        400,
+        'bad_request',
+        'The archive contains credential files. Confirm that you want them copied into the new agent.',
+      )
+    // The model comes from the archive itself; the preview/begin machinery only needs a placeholder to validate.
+    const create = {
+      kind: 'create' as const,
+      id: request.id,
+      name: request.name,
+      role: request.role,
+      style: request.style,
+      model: facts.model ?? 'from the archive',
+    }
+    const preview = await this.preview(create)
+    return this.begin(create, preview.hash, false, { uploadId: request.uploadId })
+  }
+  /** Uploads still needed by an unfinished import must survive the stale-upload sweep. */
+  sweepImports() {
+    if (!this.imports) return
+    const keep = new Set<string>()
+    const rows = z
+      .array(z.object({ request: z.string() }))
+      .parse(
+        this.db.sqlite
+          .prepare("SELECT request FROM profile_operations WHERE state != 'completed'")
+          .all(),
+      )
+    for (const row of rows) {
+      const upload = StoredRequest.safeParse(JSON.parse(row.request))
+      if (upload.success && upload.data.importUpload) keep.add(upload.data.importUpload)
+    }
+    this.imports.sweep(keep)
   }
   private launch(id: string) {
     if (this.closed || this.flights.has(id)) return
@@ -373,15 +442,19 @@ export class ProfileOperations {
     )
       throw new HttpError(409, 'conflict', 'This step cannot be confirmed from Score.')
     let identity: string | null | undefined
-    if (step.name === 'create_profile' || step.name === 'delete_profile') {
+    if (
+      step.name === 'create_profile' ||
+      step.name === 'import_profile' ||
+      step.name === 'delete_profile'
+    ) {
       const inventory = ProfileInventorySchema.parse(
         await this.port.profileInventory(operation.targetName),
       )
-      if (step.name === 'create_profile' && !inventory.exists)
+      if (step.name !== 'delete_profile' && !inventory.exists)
         throw new HttpError(409, 'conflict', 'The profile does not exist, so it was not created.')
       if (step.name === 'delete_profile' && inventory.exists)
         throw new HttpError(409, 'conflict', 'The profile still exists, so it was not deleted.')
-      if (step.name === 'create_profile') identity = inventory.identity
+      if (step.name !== 'delete_profile') identity = inventory.identity
     }
     step.state = 'completed'
     operation.state = 'running'
@@ -415,9 +488,9 @@ export class ProfileOperations {
             .run(
               operation.state === 'needs_attention'
                 ? 'needs_attention'
-                : operation.kind === 'create'
-                  ? 'ready'
-                  : 'removed',
+                : operation.kind === 'delete'
+                  ? 'removed'
+                  : 'ready',
               operation.id,
               operation.targetName,
             )
@@ -447,6 +520,7 @@ export class ProfileOperations {
     )
     const stored = StoredRequest.parse(JSON.parse(row.request))
     let identity = row.target_identity
+    const importArchive = stored.importUpload ? this.imports?.pathFor(stored.importUpload) : null
     try {
       for (const step of operation.steps) {
         if (step.state === 'completed') continue
@@ -465,7 +539,7 @@ export class ProfileOperations {
               'Work appeared after admissions were frozen. Finish it before the next step.',
             )
         }
-        if (operation.kind === 'create' && step.name === 'verify_ready')
+        if (operation.kind !== 'delete' && step.name === 'verify_ready')
           await this.rebaseline(operation, stored, identity)
         step.state = 'running'
         operation.updatedAt = new Date(this.clock()).toISOString()
@@ -481,14 +555,18 @@ export class ProfileOperations {
             input: stored.input,
             baseline: stored.baseline,
             exportPath: operation.exportPath,
+            importArchive,
           })
           identity = result.identity
         }
         step.state = 'completed'
+        // Hermes has copied what it needs; the upload is not needed by any later step.
+        if (step.name === 'import_profile' && stored.importUpload)
+          this.imports?.remove(stored.importUpload)
         await this.save(operation, identity)
       }
       if (this.closed) return
-      if (operation.kind === 'create') {
+      if (operation.kind !== 'delete') {
         const inventory = ProfileInventorySchema.parse(
           await this.port.profileInventory(operation.targetName),
         )
@@ -509,6 +587,7 @@ export class ProfileOperations {
           input: stored.input,
           baseline: stored.baseline,
           exportPath: operation.exportPath,
+          importArchive,
         })
         await reconcileAgents(this.ingest, await this.port.listAgentDetails())
       } else if ((await this.port.profileInventory(operation.targetName)).exists) {
@@ -522,9 +601,14 @@ export class ProfileOperations {
       operation.nextStep = null
       operation.updatedAt = new Date(this.clock()).toISOString()
       await this.save(operation)
-      if (operation.kind === 'create')
+      if (operation.kind !== 'delete')
         await reconcileAgents(this.ingest, await this.port.listAgentDetails())
+      // The uploaded archive has served its purpose; nothing keeps it after a finished import.
+      if (stored.importUpload) this.imports?.remove(stored.importUpload)
     } catch (error) {
+      // A refused or interrupted import step never reuses the archive (it is not retryable), so don't keep 200 MiB.
+      if (operation.nextStep === 'import_profile' && stored.importUpload)
+        this.imports?.remove(stored.importUpload)
       operation.state = 'needs_attention'
       // Not an HttpError: Score could not verify the step (it was interrupted). Recorded failures are never confirmable.
       operation.confirmable = !(error instanceof HttpError) && operation.nextStep !== 'verify_ready'
