@@ -13,6 +13,7 @@ let dirs: Map<string, { name: string; kind: 'file' | 'dir' }[]>
 let etag: string
 let saveStatus: 200 | 412
 let removeNotEmpty: boolean
+let failFileReads = false
 let gitStatus: { branch: string; changed: number; ahead: number; behind: number } | null
 
 const json = (status: number, body: unknown) =>
@@ -41,6 +42,7 @@ function handler(input: string, init: RequestInit = {}): Response {
       })),
     })
   if (tail === '/file' && method === 'GET') {
+    if (failFileReads) return json(500, { error: { code: 'internal', message: 'down' } })
     if (path.endsWith('.bin')) return json(200, { binary: true, size: 2048, reason: 'binary' })
     return new Response(files.get(path) ?? '', {
       headers: { 'content-type': 'text/plain; charset=utf-8', etag: `"${etag}"` },
@@ -87,6 +89,7 @@ beforeEach(() => {
   etag = 'etag-1'
   saveStatus = 200
   removeNotEmpty = false
+  failFileReads = false
   gitStatus = null
   vi.stubGlobal(
     'fetch',
@@ -98,9 +101,11 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+let client: ReturnType<typeof createQueryClient>
 function mount(initialPath: string | null = null) {
+  client = createQueryClient()
   return render(
-    <QueryClientProvider client={createQueryClient()}>
+    <QueryClientProvider client={client}>
       <WorkspaceTab agentId="builder" agentName="Builder" initialPath={initialPath} />
     </QueryClientProvider>,
   )
@@ -361,3 +366,28 @@ test('upload posts the raw file as application/octet-stream into the current fol
   expect(post.headers.get('content-type')).toBe('application/octet-stream')
   expect(post.body).toBe(file)
 })
+
+test(
+  'a failed background read keeps the editor and the unsaved text, and says so',
+  { timeout: 20_000 },
+  async () => {
+    mount()
+    fireEvent.click(await screen.findByRole('treeitem', { name: /README\.md/ }))
+    await screen.findByLabelText('Contents of README.md', {}, { timeout: 10_000 })
+    setText('unsaved work')
+    failFileReads = true
+    const reads = () => calls.filter((c) => c.method === 'GET' && c.url.includes('/file')).length
+    const before = reads()
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['team', 'workspace', 'builder', 'file'] })
+    })
+    await waitFor(() => expect(reads()).toBeGreaterThan(before))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Could not/)
+    expect(view().state.doc.toString()).toBe('unsaved work')
+    // Retrying after the connection is back refreshes without replacing the draft.
+    failFileReads = false
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(view().state.doc.toString()).toBe('unsaved work')
+  },
+)
