@@ -38,7 +38,8 @@ const num = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null
 
 /** One log line as an entry. Pino JSON is unpacked; anything else (launcher output) is shown as it is. Every text
- * field is redacted here, so no caller can forget it. */
+ * field is redacted here, so no caller can forget it; redaction runs before any cut, so a secret split by a
+ * length limit is never left as an unrecognisable prefix. */
 export function parseLogLine(line: string): LogEntry {
   let data: unknown
   try {
@@ -54,7 +55,7 @@ export function parseLogLine(line: string): LogEntry {
         : /\bwarn(?:ing)?\b/i.test(line)
           ? 'warn'
           : 'info',
-      message: redact(line.slice(0, 2000)),
+      message: redact(line).slice(0, 2000),
       method: null,
       url: null,
       status: null,
@@ -73,9 +74,9 @@ export function parseLogLine(line: string): LogEntry {
   return {
     time: time && !Number.isNaN(time.getTime()) ? time.toISOString() : null,
     level: levelOf(record.level),
-    message: redact(`${base}${extra}`.slice(0, 2000)),
+    message: redact(`${base}${extra}`).slice(0, 2000),
     method: method ? redact(method) : null,
-    url: url ? redact(url.slice(0, 2000)) : null,
+    url: url ? redact(url).slice(0, 2000) : null,
     status: num(res.statusCode),
     durationMs: num(record.responseTime),
   }
