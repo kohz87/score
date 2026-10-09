@@ -9,6 +9,10 @@ async function stubNow(page: Page) {
   await page.route('**/api/now', (route) =>
     route.fulfill({ json: nowFixture(rooms.rooms[0]?.id ?? 'room-fixture') }),
   )
+  // The fixture's working agents must not grow a Todo card from the fake adapter's example list.
+  await page.route('**/api/agents/*/todos', (route) =>
+    route.fulfill({ contentType: 'application/json', body: 'null' }),
+  )
 }
 
 test('the Score view matches the design with fixed data', async ({ page }) => {

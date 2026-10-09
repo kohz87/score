@@ -94,6 +94,10 @@ export const visualFixtures: Record<string, unknown> = {
       },
     ]),
   ),
+  // Hermes todo lists: none in the pictures (the agent pages and Now would grow a Todo card).
+  ...Object.fromEntries(
+    ['lead', 'builder', 'reviewer', 'designer'].map((id) => [`/api/agents/${id}/todos`, null]),
+  ),
   '/api/approvals?status=all': ApprovalsPageSchema.parse(recorded['/api/approvals?status=all']),
   '/api/tasks': TasksSnapshotSchema.parse(recorded['/api/tasks']),
   '/api/tasks?room=room-activity-feed': TasksSnapshotSchema.parse(recorded['/api/tasks']),
