@@ -22,6 +22,7 @@ import {
   type AgentFile,
   type AgentFileName,
 } from '../agent-files.ts'
+import { fakeJourneyFacts } from './journey-history.ts'
 import { fakeReportHistory } from './report-history.ts'
 import { FakeWorkspaces } from './fake-workspace.ts'
 import { updateProjectedAgent } from '../../domain/agents.ts'
@@ -847,6 +848,27 @@ export class FakePort implements HermesPort {
           Math.round(days * (0.35 + 0.1 * i) * 100) / 100,
         ]),
       ),
+    }
+  }
+
+  async journeyFacts(req: Parameters<HermesPort['journeyFacts']>[0]) {
+    if (this.seedReportHistory)
+      return fakeJourneyFacts(req.to, req.agentIds, fakeReportHistory(req.to, req.agentIds).tasks)
+    return {
+      tasks: [...this.tasks.values()].flatMap((task) =>
+        task.hermesStatus === 'done' && task.assignee
+          ? [
+              {
+                agentId: task.assignee,
+                at: Date.parse(task.updatedAt),
+                id: task.id,
+                title: task.title,
+              },
+            ]
+          : [],
+      ),
+      skills: [],
+      memory: [],
     }
   }
 

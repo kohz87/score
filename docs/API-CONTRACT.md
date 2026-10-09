@@ -1003,6 +1003,24 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
   now, when `to` is today). Reports read only Score's own database and Hermes' read-only SQLite: agent ids come from Score's
   agent projection, never from a Hermes CLI call, so the answer does not wait on Hermes.
 
+- **Journey (7.4c).** `GET /api/reports/journey?from=YYYY-MM-DD&to=YYYY-MM-DD&tz=` (same day rules as `range=custom`: inclusive local
+  days in `tz`, `from <= to`, at most 366 days, `to` not after today; otherwise `400 bad_request`) →
+  ```ts
+  {
+    from: string; to: string /* the days asked for */
+    truncated: boolean /* a bound dropped older events */
+    agents: { id: AgentId; events: { at: string /* ISO */; kind: 'task_done' | 'note_written' | 'skill_changed' | 'memory_changed';
+                                    label: string; ref: string | null }[] }[]
+  }
+  ```
+  One entry per agent in Score's agent projection (even with no events), events newest first. Sources: tasks completed (Hermes
+  Kanban `completed_at`, title from Score's task projection, `ref` = task id), knowledge notes written (Score's vault index, notes whose
+  last author is `agent:<id>`, `label` = note title, `ref` = note path), skills (a skill's `SKILL.md` file time, `label` = skill name, `ref`
+  null) and memory (the profile's memory files' modified times, `label` = "Memory file changed", `ref` null). Memory contents are never
+  read or returned, and skills are by name only. Hermes files are read only through the adapter (`hermes/`). Bounds: at most 500 events per
+  agent and 2,000 in all, newest kept (the oldest are dropped first, `truncated: true`). File times are coarse: a mark means "this file
+  changed", not "something was added".
+
 ## 10. Settings
 
 - `GET /api/settings/providers` → `{ items: { id: string; label: string; status: 'connected' | 'needs_signin' | 'missing'
