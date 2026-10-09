@@ -12,6 +12,7 @@ import {
   attachRunMessage,
   isCancelledTurn,
   appendRunMessage,
+  noteRunProgress,
   completeRunMessage,
 } from '../../domain/message-runs.ts'
 import {
@@ -1653,6 +1654,9 @@ export class FakePort implements HermesPort {
       this.schedule(Math.max(0, startedAt + 250 / this.speed - this.scheduler.now()), async () => {
         await this.transitionRun(runId, 'running')
         if (this.runs.get(runId)?.status !== 'running') return
+        // Demo hook: a message that says "go quiet" leaves the run running and silent (a provider stuck retrying)
+        // until it is stopped, so the stalled-reply notice can be seen.
+        if (/go quiet/i.test(req.input.split('\n\nRoom context:')[0] ?? '')) return
         const chunks = response.text.match(/.{1,24}/gs) ?? []
         const stream = (index: number): void => {
           const chunk = chunks[index]
@@ -1666,7 +1670,10 @@ export class FakePort implements HermesPort {
                 await this.requireSink().submit({
                   source: 'fake',
                   identity: `${this.sessionId}:delta:${runId}:${index}`,
-                  apply: ({ sqlite, now }) => appendRunMessage(sqlite, runId, chunk, now),
+                  apply: ({ sqlite, now }) => [
+                    ...noteRunProgress(sqlite, runId, now, { announce: false }),
+                    ...appendRunMessage(sqlite, runId, chunk, now),
+                  ],
                 })
                 stream(index + 1)
               } else {

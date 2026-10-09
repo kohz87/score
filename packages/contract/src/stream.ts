@@ -52,6 +52,14 @@ export const MessageUpdatedSchema = z.object({
 })
 export type MessageUpdated = z.infer<typeof MessageUpdatedSchema>
 
+/** A streaming reply did something other than write text (a tool call, reasoning, an approval): its stall clock restarts. */
+export const MessageProgressedSchema = z.object({
+  roomId: z.string().min(1),
+  messageId: z.string().min(1),
+  at: z.iso.datetime(),
+})
+export type MessageProgressed = z.infer<typeof MessageProgressedSchema>
+
 export const TypingSchema = z.object({
   roomId: z.string().min(1),
   agentId: AgentIdSchema,
@@ -122,6 +130,10 @@ export const StreamEventSchema = z.discriminatedUnion('type', [
   }),
   StreamEnvelopeSchema.extend({ type: z.literal('message.deleted'), data: MessageDeletedSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('message.updated'), data: MessageUpdatedSchema }),
+  StreamEnvelopeSchema.extend({
+    type: z.literal('message.progressed'),
+    data: MessageProgressedSchema,
+  }),
   StreamEnvelopeSchema.extend({
     type: z.literal('room.version.created'),
     data: RoomVersionSchema,

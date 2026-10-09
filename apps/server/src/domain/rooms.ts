@@ -43,6 +43,7 @@ export const MessageRowSchema = z.object({
   edited_by: z.string().nullish(),
   edits: z.string().nullish(),
   deleted_at: z.string().nullish(),
+  progress_at: z.string().nullish(),
 })
 const CountSchema = z.object({ count: z.int().nonnegative() })
 
@@ -194,6 +195,7 @@ export function messageFromRow(value: unknown): Message {
     refs: JSON.parse(row.refs) as unknown,
     createdAt: row.created_at,
     streaming: row.streaming === 1,
+    ...(row.streaming === 1 && row.progress_at ? { progressAt: row.progress_at } : {}),
     ...(row.edited_by ? { editedBy: row.edited_by } : {}),
     ...(row.edits ? { edits: row.edits } : {}),
   })
@@ -209,8 +211,8 @@ export function storeMessage(
   const result = sqlite
     .prepare(
       `INSERT INTO messages
-    (id, room_id, author_kind, author_agent_id, "to", parts, refs, streaming, created_at, updated_at, edits)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
+    (id, room_id, author_kind, author_agent_id, "to", parts, refs, streaming, created_at, updated_at, edits, progress_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
     )
     .run(
       message.id,
@@ -224,6 +226,7 @@ export function storeMessage(
       message.createdAt,
       now,
       message.edits ?? null,
+      message.streaming ? (message.progressAt ?? now) : null,
     )
   if (!result.changes) return []
   return [
