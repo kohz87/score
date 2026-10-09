@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -5,6 +6,7 @@ import {
   CodingAgentCreateSchema,
   CodingAgentPatchSchema,
   CodingAgentSchema,
+  AgentSummarySchema,
   CodingAgentsResponseSchema,
   CodingRuntimesResponseSchema,
   CodingVersionConfirmSchema,
@@ -15,7 +17,7 @@ import { z } from 'zod'
 import { humanGuard } from '../auth/human.ts'
 import type { SecurityPassword } from '../auth/security-password.ts'
 import type { ScoreDb } from '../db/index.ts'
-import { reconcileAgents } from '../domain/agents.ts'
+import { readAgent, reconcileAgents } from '../domain/agents.ts'
 import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
@@ -169,6 +171,28 @@ export function registerCodingAgentRoutes(
       .get(agentId)
     if (busy) throw new HttpError(409, 'conflict', 'Stop this agent’s running turn first')
     db.tx((sqlite) => removeCodingAgent(sqlite, agentId, new Date(clock()).toISOString()))
+    // Gone from Team and Reports (their lists read the projection); browsers hear it as a removed agent.
+    await ingest.submit({
+      source: `coding:${agentId}`,
+      identity: `removed:${agentId}:${randomUUID()}`,
+      apply({ sqlite }) {
+        const previous = readAgent(sqlite, agentId)
+        sqlite.prepare('DELETE FROM agents_proj WHERE id = ?').run(agentId)
+        return previous
+          ? [
+              {
+                type: 'agent.updated' as const,
+                data: AgentSummarySchema.parse({
+                  ...previous,
+                  served: false,
+                  status: 'offline',
+                  lifecycle: { state: 'removed', incarnationId: randomUUID(), operationId: null },
+                }),
+              },
+            ]
+          : []
+      },
+    })
     return reply.code(204).send()
   })
 }

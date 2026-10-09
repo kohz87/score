@@ -896,7 +896,7 @@ room's CLI session (`skipped: no_session`).
   `full` needs the password; lowering never does.
 - **H** `POST /api/coding-agents/:id/confirm-version` `{ version }` → `CodingAgent`: lets an `untested_version` CLI run for this agent. `version`
   must equal the version Score reads right now (`409 conflict` otherwise).
-- **H** `DELETE /api/coding-agents/:id` → `204` (`409` while a turn runs). Past messages and runs stay.
+- **H** `DELETE /api/coding-agents/:id` → `204` (`409` while a turn runs). Past messages stay; its runs leave Reports.
 - Turns: a mention routes through the normal room queue. One turn per coding agent at a time (others show as `queued`); at most 30 minutes per
   turn; Stop = SIGINT, SIGTERM after 5 s, SIGKILL after 5 s more. An untested/missing CLI or an unavailable workspace fails the reply with a
   sentence in the room (`422`, never retried). A restart marks running turns `interrupted` ("Score restarted while this ran"); the CLI session id

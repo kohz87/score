@@ -93,8 +93,19 @@ export function registerReportRoutes(
       ? db.read((sqlite) => readReportRows(sqlite, window.from, window.to))
       : { runs: [], approvals: [] }
     const seeded = (await port.reportHistoryRows?.(now, agentIds)) ?? { runs: [], approvals: [] }
+    // A removed coding agent leaves the numbers (its runs stay in its rooms and history).
+    const removed = new Set(
+      db
+        ? db.read((sqlite) =>
+            sqlite
+              .prepare('SELECT id FROM coding_agents WHERE removed_at IS NOT NULL')
+              .all()
+              .map((row) => String(row.id)),
+          )
+        : [],
+    )
     const rows = {
-      runs: [...own.runs, ...seeded.runs],
+      runs: [...own.runs, ...seeded.runs].filter((run) => !removed.has(run.agentId)),
       approvals: [...own.approvals, ...seeded.approvals],
     }
     // The 30-day trend is independent of the range: its own window of runs and its own cost readings.
@@ -121,7 +132,9 @@ export function registerReportRoutes(
           return computeTrend({
             now,
             tz: trendTz,
-            runs: [...trendOwn.runs, ...trendAttempts, ...trendSeeded.runs],
+            runs: [...trendOwn.runs, ...trendAttempts, ...trendSeeded.runs].filter(
+              (run) => !removed.has(run.agentId),
+            ),
             ...(trendSeeded.trendSpendUsd ? { demoSpendUsd: trendSeeded.trendSpendUsd } : {}),
             ...(trendCosts ? { costs: trendCosts, agentIds, sqlite } : {}),
           })

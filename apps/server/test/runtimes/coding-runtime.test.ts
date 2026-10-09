@@ -636,4 +636,6 @@ test('removing an agent hides it; a running turn must be stopped first', async (
     ),
   ).toBe(false)
   expect(MessageSchema.safeParse(replies()[0]).success).toBe(true)
+  const report = (await request('GET', '/api/reports?range=7d')).json()
+  expect(report.byAgent.some((row: { agentId: string }) => row.agentId === 'coder')).toBe(false)
 })
