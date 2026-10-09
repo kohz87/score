@@ -375,10 +375,10 @@ test('an @mention runs Claude Code in the workspace: reply, tool cards, run, usa
   expect(call!.env).not.toContain('SCORE_SECRET_THING')
   expect(call!.env).not.toContain('SCORE_HOME')
   expect(call!.env).toContain('PATH')
-  // Deny rules for ~/.hermes etc. reach the CLI through its settings file.
+  // Deny rules for Score's, Hermes's and SSH folders reach the CLI through its settings file.
   const settingsPath = call!.args[call!.args.indexOf('--settings') + 1]!
   expect(JSON.parse(readFileSync(settingsPath, 'utf8')).permissions.deny).toContain(
-    'Read(~/.hermes/**)',
+    `Read(/${home}/**)`,
   )
 })
 

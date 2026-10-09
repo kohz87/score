@@ -2,7 +2,7 @@ import { expect, test } from 'vitest'
 import {
   claudeDriver,
   createClaudeParser,
-  CLAUDE_DENY_RULES,
+  claudeDenyRules,
 } from '../../src/runtimes/coding/claude.ts'
 import { codexDriver, createCodexParser } from '../../src/runtimes/coding/codex.ts'
 import { opencodeDriver } from '../../src/runtimes/coding/opencode.ts'
@@ -113,7 +113,8 @@ test('codex: a failed turn carries the CLI’s message; stray error events are n
   expect(parser.stats.unknown).toBe(1)
 })
 
-const base = { workspace: '/ws', model: null, sessionId: null, settingsPath: null }
+const deny = ['/home/u/.hermes', '/home/u/.score', '/home/u/.ssh']
+const base = { workspace: '/ws', model: null, sessionId: null, settingsPath: null, denyPaths: deny }
 
 test('claude flag mapping per permission level', () => {
   const args = (permission: 'read-only' | 'workspace-write' | 'full', extra = {}) =>
@@ -138,14 +139,15 @@ test('claude flag mapping per permission level', () => {
   )
   // The deny rules are on every level, and the prompt is never an argument.
   for (const list of [read, write, full]) {
-    expect(list[list.indexOf('--disallowed-tools') + 1]).toBe(CLAUDE_DENY_RULES.join(','))
+    expect(list[list.indexOf('--disallowed-tools') + 1]).toBe(claudeDenyRules(deny).join(','))
   }
-  expect(CLAUDE_DENY_RULES).toEqual(
+  expect(claudeDenyRules(deny)).toEqual(
     expect.arrayContaining([
-      'Read(~/.hermes/**)',
-      'Read(~/.score/**)',
-      'Read(~/.ssh/**)',
+      'Read(//home/u/.hermes/**)',
+      'Read(//home/u/.score/**)',
+      'Read(//home/u/.ssh/**)',
       'Read(**/.env)',
+      'Edit(//home/u/.hermes/**)',
     ]),
   )
   const resumed = args('workspace-write', {

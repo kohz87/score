@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { chmodSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import type { AgentDetail, CodingAgent } from '@score/contract'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
@@ -189,6 +189,19 @@ export class CodingRuntime {
     forgetCliSession(this.deps.db.sqlite, sessionKey.slice(6, -suffix.length), agentId)
   }
 
+  /** Folders the policy keeps off limits, in lexical and resolved form. */
+  private denyPaths(): string[] {
+    return this.deps.policy.forbidden.flatMap((folder) => {
+      const forms = [resolve(folder)]
+      try {
+        forms.push(realpathSync(folder))
+      } catch {
+        // not created yet: only the lexical form exists
+      }
+      return forms
+    })
+  }
+
   private roomOf(turnId: string): string | null {
     const row = this.deps.db.sqlite
       .prepare('SELECT room_id FROM message_runs WHERE turn_id = ?')
@@ -357,7 +370,7 @@ export class CodingRuntime {
         costKind,
       }))
     let settingsPath: string | null = null
-    const settings = driver.settingsFile?.(this.deps.home)
+    const settings = driver.settingsFile?.(this.denyPaths())
     if (settings) {
       const dir = join(this.deps.home, 'coding', agent.id)
       mkdirSync(dir, { recursive: true, mode: 0o700 })
@@ -386,6 +399,7 @@ export class CodingRuntime {
             model: agent.model,
             sessionId: resume,
             settingsPath,
+            denyPaths: this.denyPaths(),
           }),
         ],
         cwd: checked.real,

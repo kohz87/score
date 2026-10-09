@@ -42,6 +42,8 @@ export interface DriverRunOptions {
   sessionId: string | null
   /** Extra settings file the driver wants (Claude Code deny rules), written by the caller before the spawn. */
   settingsPath: string | null
+  /** Absolute folders the CLI must never read or write (Score's, the agent runtime's, SSH). */
+  denyPaths: readonly string[]
 }
 
 export interface CodingDriver {
@@ -59,7 +61,7 @@ export interface CodingDriver {
   buildArgs(options: DriverRunOptions): string[]
   createParser(options: { cwd: string }): LineParser
   /** File names under `<score home>/coding/<agent>/` this driver wants written before a run. */
-  settingsFile?(home: string): { name: string; content: string }
+  settingsFile?(denyPaths: readonly string[]): { name: string; content: string }
 }
 
 export const CODING_LIMITS = {

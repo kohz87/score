@@ -3,7 +3,7 @@ import type { HermesPort } from '../../hermes/index.ts'
 import type { CodingRuntime } from './service.ts'
 
 // Methods whose first argument is an agent id and that mean something only for a Hermes profile.
-const HERMES_ONLY = new Set([
+const PROFILE_ONLY = new Set([
   'readAgentFile',
   'writeAgentFile',
   'setAgentModel',
@@ -135,7 +135,7 @@ export function withCodingAgents(port: HermesPort, coding: CodingRuntime): Herme
         case 'listOutsideSessions':
           return async (agentIds: string[]) => call(agentIds.filter((id) => !idOf(id)))
         default:
-          if (typeof property === 'string' && HERMES_ONLY.has(property))
+          if (typeof property === 'string' && PROFILE_ONLY.has(property))
             return async (...args: unknown[]) => {
               if (idOf(args[0])) throw unsupported()
               return method.apply(target, args)

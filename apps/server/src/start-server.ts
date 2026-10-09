@@ -230,16 +230,13 @@ export async function startServer(
       process.env.SCORE_CODING_FAKE_CLI
         ? process.env.SCORE_CODING_FAKE_CLI
         : undefined
+    const { hermesHome: runtimeHome } = config
     coding = new CodingRuntime({
       db: database,
       ingest,
       locator: new CliLocator(fakeCli ? { fakeCli } : {}),
       home: config.home,
-      policy: defaultRootPolicy([
-        config.home,
-        resolveHermesHome(config.hermesHome),
-        resolveHermesHome(),
-      ]),
+      policy: defaultRootPolicy([config.home, resolveHermesHome(runtimeHome), resolveHermesHome()]),
       onError: (error) => app?.log.error({ err: error }, 'Coding agent run failed'),
     })
     // A CLI child dies with Score: turns still marked running are interrupted before anything else runs.
