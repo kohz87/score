@@ -1,7 +1,8 @@
 import { autocompletion, type CompletionContext } from '@codemirror/autocomplete'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
-import { defaultHighlightStyle, HighlightStyle, syntaxHighlighting } from '@codemirror/language'
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
+import { tags } from '@lezer/highlight'
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap, placeholder } from '@codemirror/view'
 import { useEffect, useRef } from 'react'
@@ -48,14 +49,17 @@ const scoreTheme = EditorView.theme({
   '.cm-placeholder': { color: 'var(--muted)' },
 })
 
-// The default style's tags with every colour swapped for a themed token (it has light and dark values), so the editor
-// follows Settings › Look. Reusing its specs avoids a direct dependency on @lezer/highlight just for the tag list.
-const scoreHighlight = HighlightStyle.define(
-  defaultHighlightStyle.specs.map((spec) => ({
-    ...spec,
-    ...('color' in spec ? { color: 'var(--agent-violet-text)' } : {}),
-  })),
-)
+// Colours are themed tokens (each has a light and a dark value), so the editor follows Settings › Look.
+const scoreHighlight = HighlightStyle.define([
+  { tag: tags.heading, color: 'var(--agent-violet-text)', fontWeight: '700' },
+  { tag: [tags.link, tags.url], color: 'var(--agent-coral-text)', textDecoration: 'underline' },
+  { tag: tags.monospace, color: 'var(--agent-jade-text)' },
+  { tag: tags.strong, fontWeight: '700' },
+  { tag: tags.emphasis, color: 'var(--agent-saffron-text)', fontStyle: 'italic' },
+  { tag: tags.strikethrough, textDecoration: 'line-through' },
+  { tag: tags.quote, color: 'var(--ink-muted)', fontStyle: 'italic' },
+  { tag: [tags.processingInstruction, tags.meta, tags.contentSeparator], color: 'var(--muted)' },
+])
 
 // Wikilink autocomplete after `[[` (adapted from the behaviour of the owner's Artemis editor; code written for Score).
 export function wikilinkCompletion(notes: () => KnowledgeNoteSummary[]) {

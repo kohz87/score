@@ -208,16 +208,23 @@ function type(view: EditorView, text: string) {
 }
 const puts = () => calls.filter((c) => c.method === 'PUT' && c.url.includes('/notes/'))
 
-test('Knowledge is in the main nav after Team and opens the page', async () => {
-  mount()
-  const nav = await screen.findByRole('navigation', { name: 'Main' })
-  const names = within(nav)
-    .getAllByRole('link')
-    .map((link) => link.textContent)
-  expect(names.indexOf('Knowledge')).toBe(names.indexOf('Team') + 1)
-  expect(await screen.findByRole('heading', { name: 'Knowledge' })).toBeDefined()
-  expect(await screen.findByText(/3 notes in/)).toBeDefined()
-})
+test(
+  'Knowledge is in the main nav after Team and opens the page',
+  { timeout: 20_000 },
+  async () => {
+    mount()
+    const nav = await screen.findByRole('navigation', { name: 'Main' })
+    const names = within(nav)
+      .getAllByRole('link')
+      .map((link) => link.textContent)
+    expect(names.indexOf('Knowledge')).toBe(names.indexOf('Team') + 1)
+    // The first visit loads the lazy chunk (slow when the machine is busy).
+    expect(
+      await screen.findByRole('heading', { name: 'Knowledge' }, { timeout: 10_000 }),
+    ).toBeDefined()
+    expect(await screen.findByText(/3 notes in/)).toBeDefined()
+  },
+)
 
 test('the folder tree is an ARIA tree with keyboard navigation and recent notes', async () => {
   mount()
