@@ -80,7 +80,17 @@ test('guide-only mode: the guide is a static page, /api answers 426 https_requir
     payload: 'x',
   })
   expect(odd.statusCode).toBe(426)
-  for (const url of ['/', '/pair', '/now', '/index.html', '/assets/app.js', '/bridge/v1/hello']) {
+  // Share links (5.26) are served over TLS only, like everything else.
+  for (const url of [
+    '/',
+    '/pair',
+    '/now',
+    '/index.html',
+    '/assets/app.js',
+    '/bridge/v1/hello',
+    `/s/${'a'.repeat(43)}`,
+    `/s/${'a'.repeat(43)}/media/0`,
+  ]) {
     const response = await app.inject({ url })
     expect(response.statusCode, url).toBe(308)
     expect(response.headers.location).toBe('/setup/https')

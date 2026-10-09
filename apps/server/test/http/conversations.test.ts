@@ -1,5 +1,5 @@
 import { RoomSchema, StreamEventSchema, type Message } from '@score/contract'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -283,4 +283,60 @@ test('export: markdown and json carry text, file and image references, redacted,
   })
   expect(JSON.stringify(json)).not.toContain('sk-abcdefghijklmnop123')
   expect((await get('/api/rooms/nope/export.md')).statusCode).toBe(404)
+})
+
+test('migration 0035 indexes the messages that already exist and keeps the room columns safe', () => {
+  const dir2 = mkdtempSync(join(tmpdir(), 'score-conv-mig-'))
+  try {
+    const source = fileURLToPath(new URL('../../migrations/', import.meta.url))
+    const names = readdirSync(source).sort()
+    mkdirSync(join(dir2, 'migrations'))
+    for (const name of names.filter((item) => item < '0035'))
+      copyFileSync(join(source, name), join(dir2, 'migrations', name))
+    const old = openDatabase(join(dir2, 'old.db'))
+    migrate(old, join(dir2, 'migrations'))
+    const at = '2026-01-01T00:00:00.000Z'
+    old.sqlite
+      .prepare(
+        `INSERT INTO rooms (id, name, kind, lead_agent_id, members, created_at, updated_at)
+         VALUES ('r1', '#old', 'room', NULL, '[]', ?, ?)`,
+      )
+      .run(at, at)
+    const add = old.sqlite.prepare(
+      `INSERT INTO messages (id, room_id, author_kind, author_agent_id, "to", parts, refs, streaming, created_at, updated_at, deleted_at)
+       VALUES (?, 'r1', 'you', NULL, '[]', ?, '[]', ?, ?, ?, ?)`,
+    )
+    const text = (value: string) =>
+      JSON.stringify([
+        { kind: 'text', text: value },
+        { kind: 'tool', tool: 't', args: 'zzz', result: null, status: 'ok' },
+      ])
+    add.run('m1', text('legacy pomegranate'), 0, at, at, null)
+    add.run('m2', text('legacy deleted pomegranate'), 0, at, at, at)
+    add.run('m3', text('legacy streaming pomegranate'), 1, at, at, null)
+    copyFileSync(
+      join(source, '0035_conversations.sql'),
+      join(dir2, 'migrations', '0035_conversations.sql'),
+    )
+    migrate(old, join(dir2, 'migrations'))
+    const hits = old.sqlite
+      .prepare(
+        "SELECT m.id FROM message_fts JOIN messages m ON m.rowid = message_fts.rowid WHERE message_fts MATCH 'pomegranate'",
+      )
+      .all()
+    expect(hits).toEqual([{ id: 'm1' }])
+    expect(
+      old.sqlite
+        .prepare("SELECT pinned, archived, project_id, tags FROM rooms WHERE id = 'r1'")
+        .get(),
+    ).toEqual({
+      pinned: 0,
+      archived: 0,
+      project_id: null,
+      tags: null,
+    })
+    old.close()
+  } finally {
+    rmSync(dir2, { recursive: true, force: true })
+  }
 })
