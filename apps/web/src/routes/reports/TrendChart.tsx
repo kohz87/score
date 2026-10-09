@@ -76,7 +76,7 @@ export function TrendChart({ trend, money }: Props) {
           {trend.map((day, index) => {
             const height = (day.runs / maxRuns) * PLOT_HEIGHT
             return (
-              <g key={day.date} data-day={day.date}>
+              <g key={day.date} data-trend-day={day.date}>
                 {day.runs > 0 && (
                   <rect
                     className="trend__bar"
