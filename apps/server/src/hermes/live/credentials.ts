@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { ProfileNameSchema } from './paths.ts'
+import { registerKnownSecret } from '../../redact.ts'
 
 export class CredentialsUnavailable extends Error {
   constructor(readonly profile: string) {
@@ -27,6 +28,8 @@ export function readKey(scoreHome: string, profile: string): { key: string; keyS
     const content = readFileSync(fd, 'utf8')
     const key = content.trim()
     if (!key || /[\r\n]/.test(key)) throw new CredentialsUnavailable(name)
+    // Every redaction now strips this key verbatim, even when it reaches Score split across reply chunks.
+    registerKnownSecret(key)
     return { key, keySha256: createHash('sha256').update(content).digest('hex') }
   } catch {
     throw new CredentialsUnavailable(name)

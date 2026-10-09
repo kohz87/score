@@ -19,10 +19,23 @@ function credentialKey(key: string): boolean {
   )
 }
 
+// Exact secrets Score itself holds (profile gateway keys): no pattern recognises an unlabeled random key, so every
+// redaction also replaces these verbatim. Volatile (process memory only); registered when a key is read.
+const knownSecrets = new Set<string>()
+export function registerKnownSecret(secret: string): void {
+  if (secret.length >= 16) knownSecrets.add(secret)
+}
+function withoutKnownSecrets(text: string): string {
+  let result = text
+  for (const secret of knownSecrets)
+    if (result.includes(secret)) result = result.replaceAll(secret, '[redacted]')
+  return result
+}
+
 /** Scrub before cutting: a truncated secret must never become an unrecognizable prefix. */
 export function redact(text: string): string {
   return (
-    text
+    withoutKnownSecrets(text)
       // URL query secrets and userinfo: the assignment pass below would otherwise swallow "https:" + the whole URL.
       .replace(
         /([?&;][\w.-]*?(?:token|key|secret|passw(?:or)?d|auth|sig|signature|credential|session|cookie)[\w.-]*=)[^&\s#"'<>]+/gi,

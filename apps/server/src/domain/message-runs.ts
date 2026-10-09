@@ -145,8 +145,10 @@ export function settledLength(text: string): number {
   const begin = text.lastIndexOf('-----BEGIN')
   if (begin !== -1 && !/-----END [A-Z0-9 ]+-----/.test(text.slice(begin)))
     cut = Math.min(cut, lineStart(text, begin))
-  return text.length - cut > MAX_HELD ? text.length : cut
+  return cut
 }
+/** Held text past the limit: true when it can't be kept back any longer. */
+const overflows = (text: string, cut: number) => text.length - cut > MAX_HELD
 
 const SEAL_KEY = randomBytes(32)
 function seal(text: string): string {
@@ -198,6 +200,17 @@ export function appendRunMessage(
   }
   const text = held.text + append
   const cut = settledLength(text)
+  // Too much unsettled text (an unterminated key block, a label whose value never ends): publishing it would lose the
+  // context that marks it secret, and later chunks would follow unredacted. Fail closed: publish the settled part,
+  // then nothing more until the run's final output arrives and is redacted whole (the "lost" path).
+  if (overflows(text, cut)) {
+    sqlite
+      .prepare('UPDATE message_runs SET pending = ? WHERE message_id = ?')
+      .run(writePending('', true), mapping.message_id)
+    return cut > 0
+      ? updateMessage(sqlite, mapping.room_id, mapping.message_id, redact(text.slice(0, cut)), now)
+      : []
+  }
   sqlite
     .prepare('UPDATE message_runs SET pending = ? WHERE message_id = ?')
     .run(writePending(text.slice(cut), held.lost), mapping.message_id)

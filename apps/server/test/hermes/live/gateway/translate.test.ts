@@ -615,3 +615,69 @@ test('a token streamed after a restart lost its "Bearer " label never reaches th
   const logged = JSON.stringify(env.db.sqlite.prepare('SELECT * FROM events').all())
   expect(logged).not.toContain(token)
 })
+
+const eventsText = () =>
+  JSON.stringify(env.db.sqlite.prepare("SELECT data FROM events WHERE type LIKE 'message.%'").all())
+
+test('a known gateway key split across two deltas never reaches the reply or the events log (gate 2026-10-09)', async () => {
+  const { registerKnownSecret } = await import('../../../../src/redact.ts')
+  const key = 'a3f1c9e07b5d42e88f60c1b2d3e4f5a6'
+  registerKnownSecret(key)
+  const context = await admittedMessage()
+  const base = { run_id: context.runId, timestamp: Date.now() / 1000 }
+  for (const event of [
+    { ...base, event: 'message.delta', delta: `The key is ${key.slice(0, 13)}`, seq: 1 },
+    { ...base, event: 'message.delta', delta: `${key.slice(13)} so keep it safe. `, seq: 2 },
+    {
+      ...base,
+      event: 'run.completed',
+      output: `The key is ${key} so keep it safe.`,
+      completed: true,
+      seq: 3,
+    },
+  ])
+    await env.ingest.submit(translateRunEvent(context, event, { unknownEvents: 0 }))
+  const stored = JSON.stringify(replyMessage())
+  expect(stored).not.toContain(key)
+  expect(stored).not.toContain(key.slice(0, 13))
+  expect(eventsText()).not.toContain(key.slice(0, 13))
+  expect(eventsText()).not.toContain(key.slice(13))
+})
+
+test('an unterminated key block past the hold limit publishes none of its body, then or later (gate 2026-10-09)', async () => {
+  const context = await admittedMessage()
+  const base = { run_id: context.runId, timestamp: Date.now() / 1000 }
+  const body = Array.from(
+    { length: 320 },
+    (_, i) => `QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo${String(i).padStart(4, '0')}abcdefghijk`,
+  )
+  const events = [
+    {
+      ...base,
+      event: 'message.delta',
+      delta: 'Here it is:\n-----BEGIN PRIVATE KEY-----\n',
+      seq: 1,
+    },
+    ...body.map((line, i) => ({ ...base, event: 'message.delta', delta: `${line}\n`, seq: i + 2 })),
+  ]
+  for (const event of events)
+    await env.ingest.submit(translateRunEvent(context, event, { unknownEvents: 0 }))
+  const midway = JSON.stringify(replyMessage()) + eventsText()
+  for (const line of body) expect(midway).not.toContain(line.slice(0, 40))
+  await env.ingest.submit(
+    translateRunEvent(
+      context,
+      {
+        ...base,
+        event: 'run.completed',
+        output: `Here it is:\n-----BEGIN PRIVATE KEY-----\n${body.join('\n')}\n-----END PRIVATE KEY-----\nDone.`,
+        completed: true,
+        seq: 999,
+      },
+      { unknownEvents: 0 },
+    ),
+  )
+  const final = JSON.stringify(replyMessage()) + eventsText()
+  for (const line of body) expect(final).not.toContain(line.slice(0, 40))
+  expect(replyMessage().streaming).toBe(false)
+})
