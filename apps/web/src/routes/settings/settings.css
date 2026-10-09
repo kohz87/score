@@ -823,3 +823,8 @@
   flex-direction: row;
   align-items: center;
 }
+/* Look: theme and display currency stacked; a side-by-side grid stretched the one-line theme row. */
+.look-stack {
+  display: grid;
+  gap: 12px;
+}

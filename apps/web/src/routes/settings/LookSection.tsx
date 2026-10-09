@@ -113,7 +113,7 @@ export function LookSection() {
         <h2 id="settings-look">Look</h2>
         <p className="settings-muted-strong">How Score looks on this device.</p>
       </div>
-      <div className="plugins-grid">
+      <div className="look-stack">
         <ThemeCard />
         <CurrencyCard />
       </div>
