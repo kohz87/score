@@ -93,7 +93,7 @@ async function connect(
   await app.ready()
   return app.injectWS(
     `/api/terminal/ws?ticket=${ticket}`,
-    { headers: { ...requestHeaders, cookie }, socket: { remoteAddress: '10.0.0.9' } },
+    { headers: { ...requestHeaders, cookie }, socket: { remoteAddress: '10.0.0.9' } as never },
     // Listen before the first frame can arrive (the server says "ready" the moment the socket opens).
     { onInit: (socket: WebSocket) => screens.set(socket, listen(socket)) },
   ) as Promise<WebSocket>
