@@ -313,7 +313,11 @@ export function RemoteSection() {
                 type="radio"
                 name="pairing-origin"
                 checked={(origin || origins[0]) === candidate}
-                onChange={() => setOrigin(candidate)}
+                onChange={() => {
+                  setOrigin(candidate)
+                  // The link on screen was minted for the other address: drop it rather than show one that won't work.
+                  invite.reset()
+                }}
               />{' '}
               {originLabel(candidate)}
             </label>

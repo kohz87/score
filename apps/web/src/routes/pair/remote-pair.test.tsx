@@ -270,3 +270,32 @@ test('the pairing link comes with a QR code that goes away when the link expires
   await screen.findByText(/That link expired/)
   expect(screen.queryByRole('img', { name: 'QR code for the pairing link' })).toBeNull()
 })
+
+test('choosing another address clears the pairing link and QR minted for the previous one', async () => {
+  document.documentElement.setAttribute('data-score-transport', 'tls')
+  const base = managementFetch(true)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string, init?: RequestInit) =>
+      url.endsWith('/api/session/security')
+        ? Promise.resolve(
+            Response.json({
+              passwordSet: true,
+              origins: ['http://10.1.1.199:8741', 'https://box.tail1234.ts.net'],
+            }),
+          )
+        : base(url, init),
+    ),
+  )
+  render(withClient(<RemoteSection />))
+  await screen.findByRole('button', { name: 'Terminate Old phone' })
+  fireEvent.change(screen.getByLabelText('Security password'), {
+    target: { value: 'correct horse battery' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Pair another device' }))
+  await screen.findByRole('img', { name: 'QR code for the pairing link' })
+  fireEvent.click(screen.getAllByRole('radio')[1]!)
+  expect(screen.queryByRole('img', { name: 'QR code for the pairing link' })).toBeNull()
+  expect(screen.queryByRole('group', { name: 'Pairing link' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Pair another device' })).toBeDefined()
+})
