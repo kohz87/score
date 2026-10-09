@@ -221,6 +221,27 @@ function aliasWrites(prior: ModelAlias[], wanted: AliasInput[]): Op[] {
   return ops
 }
 
+/** The writes that put `ops` back, last first: each key returns to what `raw` held (or is unset when it held nothing). */
+export function undoOps(raw: RawSettings, ops: Op[]): Op[] {
+  const read = (key: string): unknown => {
+    let node: unknown = raw
+    for (const part of key.split('.')) node = isRecord(node) ? node[part] : undefined
+    return node
+  }
+  return ops
+    .map((op): Op => {
+      const before = read(op.key)
+      if (before === undefined || before === null) return { kind: 'unset', key: op.key }
+      // Structured values travel as JSON (as in the original writes); scalars as they are.
+      return {
+        kind: 'set',
+        key: op.key,
+        value: typeof before === 'string' ? before : JSON.stringify(before),
+      }
+    })
+    .reverse()
+}
+
 /** `raw` with the writes applied, so a save answers from what it wrote without another round of Hermes reads. */
 export function applyOps(raw: RawSettings, ops: Op[]): RawSettings {
   const next = structuredClone(raw) as unknown as Record<string, unknown>

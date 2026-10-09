@@ -226,3 +226,21 @@ test('eleven fallbacks load and save (audit5-e)', async () => {
   const saved = await tabs.updateModelSettings('builder', { fallbacks: chain.slice().reverse() })
   expect(saved.fallbacks).toHaveLength(11)
 })
+
+test('a save that fails midway puts back what it already wrote (audit5-e)', async () => {
+  config.model_aliases = { old: { model: 'm-old', provider: 'openrouter' } }
+  config.stt = { provider: 'groq', groq: { model: 'whisper-large-v3-turbo' } }
+  runner.mockImplementation(async (args) => {
+    if (args.includes('unset') && args.includes('model_aliases.old')) return { exitCode: 1 }
+    return answer(args)
+  })
+  await expect(
+    tabs.updateModelSettings('builder', {
+      aliases: [{ name: 'new', model: 'm-new', provider: 'openrouter' }],
+      speech: { stt: { provider: 'openai' } },
+    }),
+  ).rejects.toBeDefined()
+  // Rolled back: no new alias, the old one and the speech provider are as they were.
+  expect(config.model_aliases).toEqual({ old: { model: 'm-old', provider: 'openrouter' } })
+  expect((config.stt as Record<string, unknown>).provider).toBe('groq')
+})
