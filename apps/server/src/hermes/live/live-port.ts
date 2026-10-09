@@ -680,6 +680,7 @@ export class LivePort implements HermesPort {
     turnId: string
     sessionId?: string
     model?: string
+    provider?: string
     images?: string[]
   }): Promise<{ runId: string }> {
     const { intents } = this.requireStarted()
@@ -693,6 +694,7 @@ export class LivePort implements HermesPort {
           profile: req.agentId,
           input: req.input,
           ...(req.model ? { model: req.model } : {}),
+          ...(req.provider ? { provider: req.provider } : {}),
           ...(req.sessionId ? { sessionId: req.sessionId } : {}),
           ...(req.images?.length ? { images: req.images } : {}),
         },

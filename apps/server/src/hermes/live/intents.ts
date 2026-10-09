@@ -4,7 +4,7 @@ import type { ScoreDb } from '../../db/index.ts'
 import type { ObservationSink } from '../port.ts'
 import { CredentialsUnavailable } from './credentials.ts'
 import { GatewayClient, HermesHttpError, StartRunSchema, type StartRun } from './gateway.ts'
-import { attachRunMessage } from '../../domain/message-runs.ts'
+import { attachRunMessage, isCancelledTurn } from '../../domain/message-runs.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import { runDraft } from './translate.ts'
 import { HttpError } from '../../errors.ts'
@@ -128,6 +128,7 @@ async function dispatch(
     }
   }
   const id = z.string().min(1).parse(runId)
+  let cancelled = false
   await sink.submit({
     source: 'score-dispatch',
     identity: `admitted:${row.id}`,
@@ -149,12 +150,15 @@ async function dispatch(
           row.first_sent_at ?? now,
           now,
         )
+      cancelled = isCancelledTurn(sqlite, row.idempotency_key)
       return [
         ...(inserted.changes ? [runDraft(sqlite, id)] : []),
         ...attachRunMessage(sqlite, row.idempotency_key, id, now),
       ]
     },
   })
+  // The reply was cancelled while Hermes admitted it: stop the run instead of letting it answer a deleted message.
+  if (cancelled) await gateway.stopRun(payload.profile, id, payload.credentialGeneration)
   return { runId: id }
 }
 
@@ -188,6 +192,7 @@ export async function startRunIntent(
       payload.profile !== parsed.profile ||
       payload.input !== parsed.input ||
       payload.model !== parsed.model ||
+      payload.provider !== parsed.provider ||
       payload.sessionId !== parsed.sessionId ||
       JSON.stringify(payload.images ?? []) !== JSON.stringify(parsed.images ?? [])
     )

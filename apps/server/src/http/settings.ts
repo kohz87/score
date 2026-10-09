@@ -95,8 +95,9 @@ export function registerSettingsRoutes(
             option.model === alias.model && (!alias.provider || option.provider === alias.provider),
         )
         return {
-          provider: target?.provider ?? alias.provider ?? 'custom',
-          providerLabel: target?.providerLabel ?? alias.provider ?? 'custom',
+          // Never invent a provider: an unconfirmed one stays empty and the model route resolves the alias.
+          provider: target?.provider ?? alias.provider ?? '',
+          providerLabel: target?.providerLabel ?? alias.provider ?? 'Alias',
           model: alias.model,
           available: target?.available ?? true,
           reason: target?.reason ?? null,

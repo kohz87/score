@@ -592,7 +592,7 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
     progress: null,
     elapsedSec: 30,
     note: 'Wants to install a package',
-    updatedAt: time(150),
+    updatedAt: time(552),
   }
   const docsApproval: Approval = {
     id: id('approval-docs'),
@@ -607,7 +607,7 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
     cwd: 'demo-project',
     description: 'This command changes the workspace and needs your approval.',
     choices: ['once', 'session', 'always', 'deny'],
-    createdAt: time(160),
+    createdAt: time(553),
     expiresAt: null,
     decision: null,
     delivery: 'none',
@@ -705,14 +705,15 @@ export function createScenario(startedAt: number, loop = 0): ScenarioStep[] {
     },
   )
   steps.push(
-    { at: 150, kind: 'task.upserted', data: docsTask },
-    { at: 160, kind: 'approval.requested', data: docsApproval },
+    // After the room exists (550): a task never points at a room the API doesn't list yet.
+    { at: 552, kind: 'task.upserted', data: docsTask },
+    { at: 553, kind: 'approval.requested', data: docsApproval },
     {
-      at: 170,
+      at: 554,
       kind: 'task.activity',
       data: {
         taskId: docsTaskId,
-        item: { at: time(170), agentId: 'designer', text: 'Asked to install typedoc@0.28.0' },
+        item: { at: time(554), agentId: 'designer', text: 'Asked to install typedoc@0.28.0' },
       },
     },
     {

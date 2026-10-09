@@ -20,19 +20,19 @@ test('Delete hides a message with an Undo window, then removes it for real', asy
     hasText: 'I have reviewed the room context',
   })
   await expect(replies.first()).toBeVisible({ timeout: 40_000 })
-  const before = await replies.count()
-  const mine = replies.first()
-  const all = replies
+  // Follow this one reply by its id: other agents' replies in the shared demo room keep arriving, so counts drift.
+  const id = await replies.first().getAttribute('id')
+  const mine = history.locator(`[id="${id}"]`)
 
   await mine.hover()
   await mine.getByRole('button', { name: /^Delete message from (?!You)/ }).click()
-  await expect(all).toHaveCount(before - 1)
+  await expect(mine).toHaveCount(0)
   const toast = page.getByRole('status').filter({ hasText: 'Message deleted' })
   await expect(
     toast.getByText('Removes it from Score. Agents may still remember it.'),
   ).toBeVisible()
   await toast.getByRole('button', { name: 'Undo' }).click()
-  await expect(all).toHaveCount(before)
+  await expect(mine).toHaveCount(1)
 
   const deleted = page.waitForResponse(
     (response) => response.request().method() === 'DELETE' && response.status() === 204,
@@ -42,5 +42,5 @@ test('Delete hides a message with an Undo window, then removes it for real', asy
   await deleted
   await page.reload()
   await expect(history.getByRole('article').first()).toBeVisible({ timeout: 15_000 })
-  await expect(all).toHaveCount(before - 1)
+  await expect(mine).toHaveCount(0)
 })

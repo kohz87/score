@@ -82,7 +82,8 @@ export function ModelPicker({ label, value, onChange, required, maxLength = 256,
     setTyped(false)
     setQuery(option.model)
     setProviderLabel(option.providerLabel)
-    onChange({ model: option.model, provider: option.provider })
+    // An alias row with no confirmed provider leaves it to the server to resolve the alias.
+    onChange({ model: option.model, provider: option.provider || null })
     setOpen(false)
   }
   // While the list still answers an older query, arrows and Enter must not act on it.

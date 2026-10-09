@@ -10,6 +10,7 @@ import {
 } from '@score/contract'
 import {
   attachRunMessage,
+  isCancelledTurn,
   appendRunMessage,
   completeRunMessage,
 } from '../../domain/message-runs.ts'
@@ -1598,6 +1599,7 @@ export class FakePort implements HermesPort {
         turnId: z.string().min(1),
         sessionId: z.string().min(1).optional(),
         model: z.string().min(1).optional(),
+        provider: z.string().min(1).optional(),
         images: z.array(z.string().min(1)).optional(),
       })
       .parse(input)
@@ -1624,10 +1626,12 @@ export class FakePort implements HermesPort {
       const response = received
         ? { ...withImages, text: `${withImages.text} I received: ${received}.` }
         : withImages
+      let cancelled = false
       await this.requireSink().submit({
         source: 'fake',
         identity: `${this.sessionId}:admitted:${req.turnId}`,
         apply({ sqlite, now }) {
+          cancelled = isCancelledTurn(sqlite, req.turnId)
           sqlite
             .prepare(
               `INSERT INTO runs (id, profile, origin, score_turn_id, session_id, status, model, started_at, updated_at)
@@ -1642,6 +1646,10 @@ export class FakePort implements HermesPort {
       })
       this.runs.set(runId, run)
       this.turns.set(req.turnId, runId)
+      if (cancelled) {
+        await this.transitionRun(runId, 'cancelled')
+        return { runId }
+      }
       this.schedule(Math.max(0, startedAt + 250 / this.speed - this.scheduler.now()), async () => {
         await this.transitionRun(runId, 'running')
         if (this.runs.get(runId)?.status !== 'running') return

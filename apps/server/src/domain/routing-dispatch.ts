@@ -144,6 +144,7 @@ export class RoutingDispatcher {
             this.db.read((sqlite) => continuationFor(sqlite, job.room_id, job.agent_id))
               .sessionId ?? `score-${job.room_id}-${job.agent_id}`,
           ...(job.model ? { model: job.model } : {}),
+          ...(frozen.provider ? { provider: frozen.provider } : {}),
           ...(images.length ? { images } : {}),
         })
       } catch (error) {
