@@ -57,7 +57,7 @@ export class CliLocator {
     return value
   }
 
-      })
+  private read(driver: CodingDriver): Promise<DetectedCli> {
     if (!driver.supported)
       return Promise.resolve({
         state: 'not_supported',
