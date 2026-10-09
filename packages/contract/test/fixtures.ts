@@ -162,6 +162,7 @@ export const message = {
   parts,
   createdAt: at,
   streaming: false,
+  progressAt: later,
   refs,
 } satisfies Contract.Message
 
@@ -323,6 +324,11 @@ export const updated = {
   roomId: 'room-1',
   editedBy: 'message-2',
 } satisfies Contract.MessageUpdated
+export const progressed = {
+  messageId: 'message-1',
+  roomId: 'room-1',
+  at,
+} satisfies Contract.MessageProgressed
 export const typing = {
   roomId: 'room-1',
   agentId: 'lead',

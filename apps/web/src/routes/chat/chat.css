@@ -1226,6 +1226,7 @@
 }
 .chat-stop-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-top: 6px;
@@ -2185,4 +2186,16 @@
   width: 18px;
   height: 18px;
   padding: 0;
+}
+.chat-stalled {
+  font-size: 13px;
+  color: var(--ink-muted, var(--ink));
+  max-width: 52ch;
+}
+.chat-model-failed {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--ground);
+  font-size: 14px;
 }

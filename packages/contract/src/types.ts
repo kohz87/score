@@ -337,6 +337,8 @@ export const MessageSchema = z.object({
   createdAt: z.iso.datetime(),
   streaming: z.boolean(),
   refs: z.array(RefSchema),
+  /** Streaming agent replies: when the run last did anything (text, tool, reasoning, approval). Absent = since `createdAt`. */
+  progressAt: z.iso.datetime().nullish(),
   /** Set on the original when a later message of the same sender corrected it (edit and resend). */
   editedBy: z.string().min(1).nullish(),
   /** Set on the corrected message: the id of the message it replaces. */

@@ -18,6 +18,8 @@ const make = (parts: MessagePart[], streaming = false): Message => ({
   parts,
   createdAt: '2026-10-09T10:00:00.000Z',
   streaming,
+  // Fresh, so these tests are about something other than the stalled-reply notice (MessageItem.stall.test.tsx).
+  progressAt: new Date().toISOString(),
   refs: [],
 })
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>
