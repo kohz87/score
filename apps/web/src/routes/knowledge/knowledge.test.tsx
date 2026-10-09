@@ -453,8 +453,10 @@ test('rename with update links shows the count; delete asks first', async () => 
     timeout: 5000,
   })
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Delete' }, { timeout: 5000 }))
-  const confirm = screen.getByRole('dialog', { name: 'Delete Plan?' })
+  // The moved note loads again under its new path: click Delete on that page, not on the one being replaced.
+  await screen.findByLabelText('Contents of archive/Plan.md', undefined, { timeout: 5000 })
+  fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+  const confirm = await screen.findByRole('dialog', { name: 'Delete Plan?' }, { timeout: 5000 })
   expect(calls.some((c) => c.method === 'DELETE')).toBe(false)
   fireEvent.click(within(confirm).getByRole('button', { name: 'Delete note' }))
   await waitFor(() => expect(router.state.location.pathname).toBe('/knowledge'), { timeout: 5000 })
