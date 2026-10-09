@@ -147,7 +147,13 @@ function seedWorld(options: { attempts?: boolean } = {}): void {
     )
     if (options.attempts === false) return
     // Same-second rejection, retry and approval with a null role in between (the lead's fixture, v4 §6).
-    seedAttempt(sqlite, { attempt: 1, task: 't-done', start: at('10:00'), end: at('10:30') })
+    seedAttempt(sqlite, {
+      attempt: 1,
+      task: 't-done',
+      start: at('10:00'),
+      end: at('10:30'),
+      copiedFrom: 'kr_00000000-0000-4000-8000-000000000009',
+    })
     seedAttempt(sqlite, {
       attempt: 2,
       task: 't-done',
@@ -198,13 +204,14 @@ function seedWorld(options: { attempts?: boolean } = {}): void {
       start: at('11:40'),
       observationEndedAt: iso('11:45'),
     })
-    // An ancestral copy of attempt 1 is never counted again.
+    // The ancestral row attempt 1 was copied from (a restore): aggregates count the attempt once, through its newest row.
     seedAttempt(sqlite, {
       attempt: 9,
       task: 't-done',
+      history: 'kh_old',
       start: at('10:00'),
       end: at('10:30'),
-      copiedFrom: 'kr_ancestor',
+      firstSeen: '2026-09-30T00:00:00.000Z',
     })
     // From an earlier copy of the board: displayed, but its task is not the current one.
     seedAttempt(sqlite, {

@@ -51,6 +51,10 @@ export interface SeedAttempt {
   observing?: 0 | 1
   observationEndedAt?: string | null
   copiedFrom?: string | null
+  /** ISO; copies pick the newest row of a group by this. */
+  firstSeen?: string
+  /** Observed stretches (ISO); default is derived: start to end, else to the observation boundary, else open. */
+  intervals?: { startedAt: string; endedAt: string | null }[]
   deletedUpstreamAt?: string | null
   snapshot?: { title: string; status: string; assignee: string | null } | null
   refused?: number
@@ -66,7 +70,7 @@ export function seedAttempt(sqlite: DatabaseSync, a: SeedAttempt): string {
          (id, source_id, history_id, attempt_id, task_id, profile, role, status, closure_reason, started_at, ended_at,
           first_seen_open, evidence, classification_basis, task_snapshot, revision, content_hash, copied_from,
           first_seen, last_observed_at, observing, observation_ended_at, deleted_upstream_at, refused_updates)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'seed', ?, 1, 'h', ?, '2026-10-01T00:00:00.000Z',
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'seed', ?, 1, 'h', ?, ?,
                '2026-10-01T00:00:00.000Z', ?, ?, ?, ?)`,
     )
     .run(
@@ -88,10 +92,26 @@ export function seedAttempt(sqlite: DatabaseSync, a: SeedAttempt): string {
           ? null
           : JSON.stringify(a.snapshot),
       a.copiedFrom ?? null,
+      a.firstSeen ?? '2026-10-01T00:00:00.000Z',
       a.observing ?? (end === null && !a.observationEndedAt ? 1 : 0),
       a.observationEndedAt ?? null,
       a.deletedUpstreamAt ?? null,
       a.refused ?? 0,
     )
+  const stored =
+    a.intervals ??
+    (a.observationEndedAt && end === null
+      ? [{ startedAt: new Date(a.start * 1000).toISOString(), endedAt: a.observationEndedAt }]
+      : undefined)
+  if (stored) {
+    sqlite.prepare('DELETE FROM kanban_attempt_observations WHERE attempt_id = ?').run(id)
+    stored.forEach((interval, seq) =>
+      sqlite
+        .prepare(
+          'INSERT INTO kanban_attempt_observations (attempt_id, seq, started_at, ended_at) VALUES (?, ?, ?, ?)',
+        )
+        .run(id, seq, interval.startedAt, interval.endedAt),
+    )
+  }
   return id
 }

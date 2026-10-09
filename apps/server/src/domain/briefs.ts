@@ -11,6 +11,7 @@ import { HttpError } from '../errors.ts'
 import type { DeriveEvents, DomainEventDraft } from '../hub/ingest.ts'
 import { redact } from '../redact.ts'
 import { holdable, recordHolds, type HoldOwner } from './holds.ts'
+import { kanbanAttemptsEnabled } from './kanban-attempts.ts'
 import { currentOnly, ownershipOf, stampHistoryId } from './ownership.ts'
 import { teamPausedAt } from './team-pause.ts'
 
@@ -81,6 +82,31 @@ export function briefTasks(
     taskId,
     detail: projectedDetail(sqlite, taskId),
   }))
+}
+
+/**
+ * The brief's tasks Score may act on (park, hold). With attempts on, a link made in another board lineage, or one
+ * whose projection belongs to a different lineage than the link, is display-only (5.17a-1 audit).
+ */
+export function actionableBriefTasks(
+  sqlite: DatabaseSync,
+  briefId: string,
+): { taskId: string; detail: TaskDetail | undefined }[] {
+  const tasks = briefTasks(sqlite, briefId)
+  if (!kanbanAttemptsEnabled()) return tasks
+  const links = z
+    .array(z.object({ task_id: z.string(), history_id: z.string().nullable() }))
+    .parse(
+      sqlite.prepare('SELECT task_id, history_id FROM brief_tasks WHERE brief_id = ?').all(briefId),
+    )
+  return tasks.filter(({ taskId }) => {
+    const link = links.find((row) => row.task_id === taskId)
+    if (!link || ownershipOf(sqlite, link.history_id) !== 'current') return false
+    const projected = sqlite
+      .prepare('SELECT history_id FROM task_projections WHERE id = ?')
+      .get(taskId) as { history_id: string | null } | undefined
+    return projected !== undefined && projected.history_id === link.history_id
+  })
 }
 
 const RunStatusRowSchema = z.object({

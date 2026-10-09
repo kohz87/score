@@ -61,6 +61,12 @@ export function kanbanAttemptsEnabled(env: NodeJS.ProcessEnv = process.env): boo
 
 const iso = (seconds: number) => new Date(seconds * 1000).toISOString()
 
+export interface ObservationInterval {
+  startedAt: string
+  /** Null while still observed. */
+  endedAt: string | null
+}
+
 export interface KanbanAttempt {
   id: string
   sourceId: string
@@ -75,8 +81,13 @@ export interface KanbanAttempt {
   closureReason: string | null
   startedAt: string
   endedAt: string | null
-  /** Set when observation stopped before the attempt ended; never an end time. */
+  /**
+   * Set while observation is stopped before the attempt ended (a boundary, never an end time); null while the attempt
+   * is observed, including after observation resumed.
+   */
   observationEndedAt: string | null
+  /** Every stretch Score observed the attempt (a copied attempt includes its ancestors'), oldest first. */
+  observations: ObservationInterval[]
   observationResumedAt: string | null
   observationGaps: number
   evidence: 'proven' | 'partial'
@@ -108,13 +119,48 @@ const SnapshotSchema = z.object({
   assignee: z.string().nullable(),
 })
 
+/** The intervals of an attempt and of the earlier copies of it, merged where they overlap. */
+export function observationsOf(
+  sqlite: DatabaseSync,
+  row: Pick<AttemptRow, 'id' | 'copied_from'>,
+): ObservationInterval[] {
+  const rows = z.array(z.object({ started_at: z.string(), ended_at: z.string().nullable() })).parse(
+    sqlite
+      .prepare(
+        `SELECT o.started_at, o.ended_at FROM kanban_attempt_observations o
+            WHERE o.attempt_id IN (SELECT id FROM kanban_attempts WHERE COALESCE(copied_from, id) = ?)
+            ORDER BY o.started_at, o.seq`,
+      )
+      .all(row.copied_from ?? row.id),
+  )
+  const merged: ObservationInterval[] = []
+  for (const interval of rows) {
+    const last = merged.at(-1)
+    if (last && (last.endedAt === null || interval.started_at <= last.endedAt)) {
+      if (last.endedAt !== null && (interval.ended_at === null || interval.ended_at > last.endedAt))
+        last.endedAt = interval.ended_at
+    } else merged.push({ startedAt: interval.started_at, endedAt: interval.ended_at })
+  }
+  return merged
+}
+
 export function attemptView(
   row: AttemptRow,
   historyState: KanbanAttempt['historyState'],
+  observed?: ObservationInterval[],
 ): KanbanAttempt {
   const snapshot = row.task_snapshot
     ? SnapshotSchema.safeParse(JSON.parse(row.task_snapshot))
     : undefined
+  const endedAt = row.ended_at === null ? null : iso(row.ended_at)
+  const last = observed?.at(-1)
+  // Observation that resumed (or never stopped) has no boundary; one that stopped before the end keeps it.
+  const boundary =
+    last === undefined
+      ? row.observation_ended_at
+      : last.endedAt !== null && (endedAt === null || last.endedAt < endedAt)
+        ? last.endedAt
+        : null
   return {
     id: row.id,
     sourceId: row.source_id,
@@ -127,7 +173,8 @@ export function attemptView(
     closureReason: row.closure_reason,
     startedAt: iso(row.started_at),
     endedAt: row.ended_at === null ? null : iso(row.ended_at),
-    observationEndedAt: row.observation_ended_at,
+    observationEndedAt: boundary,
+    observations: observed ?? [],
     observationResumedAt: row.observation_resumed_at,
     observationGaps: row.observation_gaps,
     evidence: row.evidence,
@@ -175,15 +222,17 @@ export function listAttempts(sqlite: DatabaseSync, input: ListAttemptsInput): Ka
       excludeCopies: z.boolean().optional(),
     })
     .parse(input)
-  const from = Math.floor(Date.parse(since) / 1000)
   const to = Math.floor(Date.parse(until) / 1000)
   const clauses = ['a.started_at <= ?']
   const params: (string | number)[] = [to]
-  // Closed attempts end at ended_at; an open one ends at its observation boundary, else it is still running.
+  // An attempt overlaps while one of its observed intervals does (an open interval runs to now).
   clauses.push(
-    `(a.ended_at IS NOT NULL AND a.ended_at >= ?) OR (a.ended_at IS NULL AND (a.observation_ended_at IS NULL OR a.observation_ended_at >= ?))`,
+    `EXISTS (SELECT 1 FROM kanban_attempt_observations o
+              WHERE o.attempt_id IN (SELECT id FROM kanban_attempts WHERE COALESCE(copied_from, id) = COALESCE(a.copied_from, a.id))
+                AND o.started_at <= ? AND (o.ended_at IS NULL OR o.ended_at >= ?))`,
   )
-  params.push(from, since)
+  // Interval times are Date#toISOString text: normalise the bounds the same way before comparing.
+  params.push(new Date(until).toISOString(), new Date(since).toISOString())
   if (taskId !== undefined) {
     clauses.push('a.task_id = ?')
     params.push(taskId)
@@ -192,7 +241,14 @@ export function listAttempts(sqlite: DatabaseSync, input: ListAttemptsInput): Ka
     clauses.push('a.profile = ?')
     params.push(agentId)
   }
-  if (excludeCopies) clauses.push('a.copied_from IS NULL')
+  // One representative per copied attempt: the newest row of the group carries the later observations and the
+  // terminal update; the earlier rows' intervals are merged into it by observationsOf().
+  if (excludeCopies)
+    clauses.push(
+      `NOT EXISTS (SELECT 1 FROM kanban_attempts c
+                    WHERE COALESCE(c.copied_from, c.id) = COALESCE(a.copied_from, a.id) AND c.id != a.id
+                      AND (c.first_seen > a.first_seen OR (c.first_seen = a.first_seen AND c.rowid > a.rowid)))`,
+    )
   const rows = sqlite
     .prepare(
       `SELECT a.*, h.state AS history_state FROM kanban_attempts a
@@ -201,14 +257,16 @@ export function listAttempts(sqlite: DatabaseSync, input: ListAttemptsInput): Ka
        ORDER BY a.started_at, a.attempt_id, a.id`,
     )
     .all(...params)
-  return rows.map(viewOf)
+  return rows.map((row) => viewOf(sqlite, row))
 }
 
-function viewOf(row: unknown): KanbanAttempt {
+function viewOf(sqlite: DatabaseSync, row: unknown): KanbanAttempt {
   const { history_state: historyState, ...rest } = row as Record<string, unknown>
+  const parsed = AttemptRowSchema.parse(rest)
   return attemptView(
-    AttemptRowSchema.parse(rest),
+    parsed,
     z.enum(['active', 'paused', 'closed']).parse(historyState),
+    observationsOf(sqlite, parsed),
   )
 }
 
@@ -222,7 +280,7 @@ export function attemptsByIds(sqlite: DatabaseSync, ids: readonly string[]): Kan
          JOIN kanban_histories h ON h.id = a.history_id WHERE a.id = ?`,
       )
       .get(id)
-    if (row !== undefined) out.push(viewOf(row))
+    if (row !== undefined) out.push(viewOf(sqlite, row))
   }
   return out
 }
@@ -297,7 +355,8 @@ export function attemptUpdates(sqlite: DatabaseSync, ids: readonly string[]): Do
 
 /**
  * The attempts of one task in the lineage Score follows now, oldest first by `(startedAt, upstream attempt id)`.
- * Attempts from an earlier copy of the board never join a task of the current one.
+ * Attempts from an earlier copy of the board never join a task of the current one; a copy made by a restore is the
+ * current lineage's own row, so it is included.
  */
 export function currentAttemptsOfTask(
   sqlite: DatabaseSync,
@@ -308,6 +367,5 @@ export function currentAttemptsOfTask(
     since: new Date(0).toISOString(),
     until: new Date(nowMs).toISOString(),
     taskId,
-    excludeCopies: true,
   }).filter((attempt) => attemptSummary(attempt).task.current)
 }

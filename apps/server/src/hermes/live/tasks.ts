@@ -19,7 +19,7 @@ import {
 import { createTailer } from './tailer.ts'
 import { hermesPaths, resolveHermesHome } from './paths.ts'
 import { incarnationOf, HermesDbMissing } from './sqlite.ts'
-import { stampHistoryId } from '../../domain/ownership.ts'
+import { currentOnly, liveHistory, stampHistoryId } from '../../domain/ownership.ts'
 import { KanbanAttemptsCoordinator } from './kanban-attempts/coordinator.ts'
 import { kanbanAttemptsEnabled } from './kanban-attempts/types.ts'
 
@@ -48,7 +48,13 @@ export class LiveTasks {
         sqlite.exec('BEGIN')
         try {
           const batch = tailTaskEvents(sqlite, { afterId, limit })
-          const tasks = this.withRooms(readTaskDetails(sqlite))
+          const tasks = this.withRooms(
+            readTaskDetails(
+              sqlite,
+              Date.now(),
+              this.attempts ? (id) => this.attemptRunIds(id) : undefined,
+            ),
+          )
           const reviews = reviewTransitionsFrom(batch.rows)
           // A task linked to a brief after its review events went past the tailer still needs its edges: read the
           // history of newly linked tasks once (by id), never the whole board.
@@ -81,13 +87,37 @@ export class LiveTasks {
     )
     return tasks.map((task) => ({ ...task, roomId: rooms.get(task.id) ?? null }))
   }
+  /** Numeric attempt ids of a task in the followed lineage, from Score's own projection (never Hermes's history). */
+  private attemptRunIds(taskId: string): string[] {
+    const live = liveHistory(this.db.sqlite)
+    if (!live) return []
+    return z
+      .array(z.object({ attempt_id: z.int() }))
+      .parse(
+        this.db.sqlite
+          .prepare(
+            'SELECT attempt_id FROM kanban_attempts WHERE history_id = ? AND task_id = ? ORDER BY attempt_id',
+          )
+          .all(live.id, taskId),
+      )
+      .map((row) => String(row.attempt_id))
+  }
   private latest: TaskDetail[] = []
   private reviews: ReviewTransition[] = []
   private readonly backfilled = new Set<string>()
+  private lastSuffix = ''
   private linkedTaskIds(): string[] {
+    // With attempts on, only links made in the followed history get review edges (inert ones are display-only).
+    const owned = this.attempts
+      ? currentOnly(this.db.sqlite, 'history_id')
+      : { sql: '', params: [] }
     return z
       .array(z.object({ task_id: z.string() }))
-      .parse(this.db.sqlite.prepare('SELECT DISTINCT task_id FROM brief_tasks').all())
+      .parse(
+        this.db.sqlite
+          .prepare(`SELECT DISTINCT task_id FROM brief_tasks WHERE 1 = 1${owned.sql}`)
+          .all(...owned.params),
+      )
       .map((row) => row.task_id)
   }
 
@@ -98,12 +128,33 @@ export class LiveTasks {
     return this.flight
   }
   private async pollAll(): Promise<void> {
-    try {
+    if (!this.attempts) {
       await this.pollOnce()
-    } finally {
-      // The projections are independent: a failure in one never starves the other.
-      await this.attempts?.poll()
+      return
     }
+    try {
+      // First: the history decision and the upgrade snapshot of legacy links must come before any task
+      // reconciliation can rewrite a projection. The projections are independent: a failure in one never starves
+      // the other.
+      await this.attempts.poll()
+    } finally {
+      await this.pollOnce()
+    }
+  }
+  /** The task cursors, identities and revisions of one board lineage (5.17a-1); '' without attempts. */
+  private scopeSuffix(): string {
+    if (!this.attempts) return ''
+    const live = liveHistory(this.db.sqlite)
+    if (!live) return ''
+    const first = this.db.sqlite
+      .prepare(
+        `SELECT id FROM kanban_histories
+         WHERE source_id = (SELECT source_id FROM kanban_histories WHERE id = ?)
+         ORDER BY opened_at, rowid LIMIT 1`,
+      )
+      .get(live.id) as { id: string } | undefined
+    // The first lineage inherits the checkpoints made before attempts were enabled.
+    return first === undefined || first.id === live.id ? '' : `:${live.id}`
   }
   private async pollOnce(): Promise<void> {
     let incarnation: string
@@ -113,7 +164,13 @@ export class LiveTasks {
       if (error instanceof HermesDbMissing) return
       throw error
     }
-    let source = `kanban:${incarnation}`
+    const suffix = this.scopeSuffix()
+    if (suffix !== this.lastSuffix) {
+      this.lastSuffix = suffix
+      this.backfilled.clear()
+      this.reviews.length = 0
+    }
+    let source = `kanban:${incarnation}${suffix}`
     const row = this.db.sqlite
       .prepare('SELECT cursor, incarnation FROM ingest_checkpoints WHERE source = ? AND scope = ?')
       .get(source, 'tasks')
@@ -130,7 +187,9 @@ export class LiveTasks {
     )
     if (batch.missing) return
     incarnation = batch.checkpoint.incarnation!
-    source = `kanban:${incarnation}`
+    source = `kanban:${incarnation}${suffix}`
+    // Revisions are event ids: a restored board starts them over, so they are compared within one lineage only.
+    const revisionScope = `${incarnation}${suffix}`
     const byId = new Map(this.latest.map((task) => [task.id, task]))
     for (const event of batch.rows) {
       const task = byId.get(event.task_id)
@@ -140,7 +199,7 @@ export class LiveTasks {
         checkpoint: { ...batch.checkpoint, position: event.id },
         apply: ({ sqlite }) => {
           if (!task) return []
-          const applied = projectTask(sqlite, task, event.id, incarnation)
+          const applied = projectTask(sqlite, task, event.id, revisionScope)
           return [
             ...(applied
               ? [
@@ -199,7 +258,7 @@ export class LiveTasks {
               JSON.stringify({ ...task, elapsedSec: null })
           )
             continue
-          if (projectTask(sqlite, task, batch.checkpoint.position, incarnation))
+          if (projectTask(sqlite, task, batch.checkpoint.position, revisionScope))
             drafts.push({
               type: 'task.upserted' as const,
               data: taskSummary(taskWithApproval(sqlite, task)),
