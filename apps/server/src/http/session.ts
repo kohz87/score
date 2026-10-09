@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { createHash } from 'node:crypto'
 import { readCookie, SESSION_COOKIE, sessionCookie } from '../auth/cookies.ts'
+import { RateLimiter } from '../shares/rate-limit.ts'
 import type { PairingService } from '../auth/pairing.ts'
 import { humanGuard } from '../auth/human.ts'
 import { HttpError } from '../errors.ts'
@@ -179,9 +180,13 @@ export function registerSessionRoutes(
       return reply.code(204).send()
     })
 
-    app.post('/api/session/passkey/authentication-options', async (request) =>
-      needed().authenticationOptions({ origin: originOf(request), peer: request.ip }),
-    )
+    // Public like the assertion: its own, looser per-address limit (a sign-in asks for options once).
+    const optionsLimiter = new RateLimiter(20, 60_000)
+    app.post('/api/session/passkey/authentication-options', async (request) => {
+      if (!optionsLimiter.allow(request.ip))
+        throw new HttpError(429, 'pairing_limited', 'Wait a minute before signing in again')
+      return needed().authenticationOptions({ origin: originOf(request), peer: request.ip })
+    })
 
     app.post('/api/session/passkey/authentication', async (request, reply) => {
       const service = needed()

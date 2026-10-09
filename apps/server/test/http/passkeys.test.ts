@@ -441,3 +441,13 @@ test('passkeys are not offered on an IP address, only on a domain name or localh
   })
   expect(signIn.statusCode).toBe(409)
 })
+
+// audit4-c 8: the options route is public too and was unlimited.
+test('requesting sign-in options over and over is rate limited like the sign-in itself', async () => {
+  const { app } = makeApp()
+  const statuses: number[] = []
+  for (let i = 0; i < 25; i++)
+    statuses.push((await post(app, '/api/session/passkey/authentication-options', {})).statusCode)
+  expect(statuses.slice(0, 4)).toEqual([200, 200, 200, 200])
+  expect(statuses.at(-1)).toBe(429)
+})
