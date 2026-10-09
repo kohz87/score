@@ -131,6 +131,22 @@ certificate, CA certificate), Linux/Chrome (Settings, Manage certificates, Autho
 Score lists the same steps. When `SCORE_PUBLIC_ORIGINS` is unset, `scripts/score start` derives
 `https://$SCORE_HOST:${SCORE_PORT:-8741}`; a `http://` value there is rewritten to `https://` when it uses these files.
 
+Option T (recommended for phones and use away from home): **Tailscale, together with option A.** Devices on your tailnet
+get a real Let's Encrypt certificate for the machine's `ts.net` name, so nothing has to be installed on them; the LAN
+address keeps working with Score's own certificate. Score picks the certificate by the name the browser asks for (SNI).
+Needs Tailscale on the Score machine with MagicDNS and HTTPS certificates on (admin console › DNS) and, once,
+`sudo tailscale set --operator=$USER`.
+```bash
+scripts/score tailscale     # fetches the ts.net certificate into $SCORE_HOME/tls/tailscale/
+SCORE_REMOTE=1 SCORE_REMOTE_ANY=1 SCORE_HOST=0.0.0.0 \
+SCORE_PUBLIC_ORIGINS=https://192.168.1.20:8741 scripts/score start
+```
+`start` adds `https://<name>.ts.net:8741` to the public origins and sets `SCORE_TLS_NAMES_DIR` (a folder of
+`<name>.crt`/`<name>.key` pairs) when that folder has a certificate. The server renews Tailscale certificates daily
+(`tailscale cert` replaces them only when due) and picks up renewed files without a restart. `SCORE_HOST=0.0.0.0` (with
+`SCORE_REMOTE_ANY=1`) is needed so Score answers on both the LAN and the Tailscale address; Host/Origin checks and pairing
+still apply to every request.
+
 Option B: your own certificate (reverse proxy, Tailscale, a CA you run), e.g. with Tailscale:
 ```bash
 tailscale cert myhost.tailnet.ts.net        # writes myhost.tailnet.ts.net.crt / .key (run by you, not by Score)

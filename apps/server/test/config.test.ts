@@ -108,3 +108,17 @@ test('the dev web origin follows SCORE_WEB_PORT unless SCORE_WEB_ORIGIN is set',
     loadConfig({ SCORE_WEB_PORT: '5595', SCORE_WEB_ORIGIN: 'http://127.0.0.1:6000' }).webOrigin,
   ).toBe('http://127.0.0.1:6000')
 })
+
+test('a folder of named certificates needs a default certificate (5.22)', () => {
+  const remote = {
+    SCORE_REMOTE: '1',
+    SCORE_HOST: '192.168.1.20',
+    SCORE_PUBLIC_ORIGINS: 'https://192.168.1.20:8741',
+    SCORE_TLS_NAMES_DIR: '/tmp/names',
+  }
+  expect(() => loadConfig(remote)).toThrow(/SCORE_TLS_NAMES_DIR needs a default certificate/)
+  expect(
+    loadConfig({ ...remote, SCORE_TLS_CERT: '/tmp/a.crt', SCORE_TLS_KEY: '/tmp/a.key' }).remote
+      ?.tlsNamesDir,
+  ).toBe('/tmp/names')
+})

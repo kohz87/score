@@ -295,6 +295,10 @@ shows the current model; Settings model edit fixed; plugins move to each agent's
 **5.21 Reports: instant ranges and a custom range** · Reports stops waiting on Hermes CLI reads (agent ids from Score's DB),
 loading state + prefetch, `range=custom&from&to` (docs/briefs/5.21.md).
 
+**5.22 Tailscale certificates** · Owner 2026-10-09: devices connect through Tailscale with a real (Let's Encrypt) certificate
+for the ts.net name, while the LAN address keeps Score's own certificate; Score picks by SNI, renews daily, reloads
+without a restart (`scripts/score tailscale`, `SCORE_TLS_NAMES_DIR`). Done by the lead.
+
 ---
 
 ## First five tasks

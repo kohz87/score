@@ -1,12 +1,13 @@
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
-import { createSecureContext } from 'node:tls'
+import { createSecureContext, type SecureContextOptions, type TlsOptions } from 'node:tls'
 import type { FastifyInstance, FastifyServerOptions } from 'fastify'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
 import { sweepExpiredApprovals } from './domain/approval-expiry.ts'
 import { buildApp, buildBridgeApp } from './app.ts'
 import { listenDual } from './dual-listener.ts'
+import { namedCertificates, renewTailscaleCertificates } from './tls-names.ts'
 import { buildGuideApp } from './http/https-guide.ts'
 import { loadWebAssets, type WebAssets } from './http/web-assets.ts'
 import { SqliteSessionStore } from './auth/sqlite-session-store.ts'
@@ -69,13 +70,15 @@ export async function startServer(
   config: Config,
   { logger, listen, listenBridge, webDirectory }: StartServerOptions = {},
 ) {
-  let https: { cert: Buffer; key: Buffer } | undefined
+  let https: (SecureContextOptions & Pick<TlsOptions, 'SNICallback'>) | undefined
   let webAssets: WebAssets | undefined
   // Validate transport and the build before opening Score state or starting the adapter.
   if (config.remote) {
     if (config.remote.tlsCert && config.remote.tlsKey) {
       https = { cert: readFileSync(config.remote.tlsCert), key: readFileSync(config.remote.tlsKey) }
       createSecureContext(https)
+      if (config.remote.tlsNamesDir)
+        https.SNICallback = namedCertificates(config.remote.tlsNamesDir).sniCallback
     }
   }
   if (config.remote || config.serveWeb)
@@ -92,6 +95,7 @@ export async function startServer(
   let deliverySweep: NodeJS.Timeout | undefined
   let retention: NodeJS.Timeout | undefined
   let logRotation: NodeJS.Timeout | undefined
+  let certificateRenewal: { stop(): void } | undefined
   let holdRecovery: { stop(): void } | undefined
   let spendSnapshots: NodeJS.Timeout | undefined
   let port: HermesPort | undefined
@@ -102,6 +106,7 @@ export async function startServer(
   async function closeResources(): Promise<void> {
     clearInterval(retention)
     clearInterval(logRotation)
+    certificateRenewal?.stop()
     holdRecovery?.stop()
     clearInterval(spendSnapshots)
     clearInterval(deliverySweep)
@@ -303,6 +308,10 @@ export async function startServer(
     spendSnapshots = setInterval(sampleSpend, 10 * 60 * 1000)
     spendSnapshots.unref()
     sampleSpend()
+    if (config.remote?.tlsNamesDir)
+      certificateRenewal = renewTailscaleCertificates(config.remote.tlsNamesDir, (error) =>
+        app?.log.warn({ err: error }, 'Could not renew a Tailscale certificate'),
+      )
     // The launcher names the file its output goes to; without it (tests, dev) nothing is rotated.
     const logFile = process.env.SCORE_LOG_FILE
     if (logFile) {

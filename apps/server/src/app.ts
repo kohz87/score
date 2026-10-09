@@ -1,3 +1,4 @@
+import type { SecureContextOptions, TlsOptions } from 'node:tls'
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify'
 import { CONTRACT_VERSION, type SystemStatus } from '@score/contract'
 import { serverOrigin, type Config } from './config.ts'
@@ -73,7 +74,8 @@ interface BuildAppOptions {
   bridge?: BridgeDeps
   outbox?: ApprovalOutbox
   media?: MediaStore
-  https?: { cert: Buffer; key: Buffer }
+  /** TLS options for the browser listener; `SNICallback` serves named certificates (tls-names.ts). */
+  https?: SecureContextOptions & Pick<TlsOptions, 'SNICallback'>
   webAssets?: WebAssets
   /** Pairing-management password; defaults to one stored in the Score home when there is a database (a real server). */
   security?: SecurityPassword

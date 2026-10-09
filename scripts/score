@@ -17,7 +17,7 @@ port="${SCORE_PORT:-8740}"
 host="${SCORE_HOST:-127.0.0.1}"
 
 usage() {
-  echo "Usage: score start|stop|status|logs [-f]|pair|password|tls [--new-ca]" >&2
+  echo "Usage: score start|stop|status|logs [-f]|pair|password|tls [--new-ca]|tailscale" >&2
   exit 2
 }
 
@@ -56,6 +56,23 @@ use_local_tls() {
   fi
 }
 
+# Named certificates (5.22): `<name>.crt` + `<name>.key` in $SCORE_HOME/tls/tailscale (see `score tailscale`). Score
+# serves each to browsers that ask for that name, and each name becomes a public origin.
+use_named_tls() {
+  [[ "${SCORE_REMOTE:-}" == "1" && -n "${SCORE_TLS_CERT:-}" && -z "${SCORE_TLS_NAMES_DIR:-}" ]] || return 0
+  local dir="$home/tls/tailscale" crt name origins="${SCORE_PUBLIC_ORIGINS:-}"
+  [[ -d "$dir" ]] || return 0
+  for crt in "$dir"/*.crt; do
+    [[ -f "$crt" ]] || continue
+    name="$(basename "$crt" .crt)"
+    [[ -f "$dir/$name.key" && "$name" =~ ^[a-z0-9.-]+$ ]] || continue
+    [[ ",$origins," == *",https://$name:${SCORE_PORT:-8741},"* ]] && continue
+    origins="${origins:+$origins,}https://$name:${SCORE_PORT:-8741}"
+  done
+  [[ "$origins" != "${SCORE_PUBLIC_ORIGINS:-}" ]] || return 0
+  export SCORE_TLS_NAMES_DIR="$dir" SCORE_PUBLIC_ORIGINS="$origins"
+}
+
 cmd_start() {
   local pid offset i child
   lock_launcher
@@ -69,6 +86,7 @@ cmd_start() {
   fi
   mkdir -p "$home"
   use_local_tls
+  use_named_tls
   # Keep the log bounded: past 10 MB the previous log becomes score.log.1 (one generation; the server only appends).
   if [[ -f "$log_file" && "$(wc -c <"$log_file")" -gt 10485760 ]]; then
     mv -f "$log_file" "$log_file.1"
@@ -166,6 +184,23 @@ cmd_pair() {
   return 1
 }
 
+# Tailscale certificate (Let's Encrypt, for this machine's ts.net name) into $SCORE_HOME/tls/tailscale. Needs Tailscale
+# with MagicDNS and HTTPS certificates on, and `sudo tailscale set --operator=$USER` once. Score renews it daily.
+cmd_tailscale() {
+  command -v tailscale >/dev/null || { echo "Tailscale is not installed." >&2; return 1; }
+  local name dir="$home/tls/tailscale"
+  name="$(tailscale status --json | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))')"
+  [[ "$name" =~ ^[a-z0-9.-]+\.ts\.net$ ]] || { echo "No ts.net name: turn on MagicDNS in the Tailscale admin console." >&2; return 1; }
+  umask 077
+  mkdir -p "$dir"
+  chmod 700 "$dir"
+  tailscale cert --cert-file "$dir/$name.crt" --key-file "$dir/$name.key" "$name"
+  chmod 600 "$dir/$name.key"
+  chmod 644 "$dir/$name.crt"
+  echo "Certificate for $name in $dir. Restart Score (it must listen on the Tailscale address too, e.g."
+  echo "SCORE_HOST=0.0.0.0 SCORE_REMOTE_ANY=1) and open https://$name:${SCORE_PORT:-8741}/"
+}
+
 # Local certificate authority and server certificate for remote (HTTPS-only) mode, kept in $SCORE_HOME/tls.
 cmd_tls() {
   local new_ca=0 tls_dir="$home/tls" host_name safe_name san="" entry item ext_file csr
@@ -259,6 +294,7 @@ case "${1:-}" in
   pair) cmd_pair ;;
   # Sets or resets the security password that guards pairing management (a forgotten one is reset only here).
   tls) shift; cmd_tls "${1:-}" ;;
+  tailscale) cmd_tailscale ;;
   password) SCORE_HOME="$home" exec node "$root/scripts/set-password.mjs" ;;
   *) usage ;;
 esac

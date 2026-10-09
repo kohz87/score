@@ -16,6 +16,8 @@ const RemoteSchema = z.object({
   bridgePort: z.coerce.number().int().min(1).max(65535).default(8740),
   tlsCert: z.string().min(1).optional(),
   tlsKey: z.string().min(1).optional(),
+  // Extra certificates by server name (`<name>.crt` + `<name>.key`), e.g. from `tailscale cert` (5.22).
+  tlsNamesDir: z.string().min(1).optional(),
 })
 
 export function isLoopback(host: string): boolean {
@@ -129,6 +131,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
             bridgePort: env.SCORE_BRIDGE_PORT,
             tlsCert: env.SCORE_TLS_CERT,
             tlsKey: env.SCORE_TLS_KEY,
+            tlsNamesDir: env.SCORE_TLS_NAMES_DIR,
           },
         }
       : {}),
@@ -153,6 +156,8 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     const options = config.remote
     if (Boolean(options.tlsCert) !== Boolean(options.tlsKey))
       fail('SCORE_TLS_CERT and SCORE_TLS_KEY must be set together')
+    if (options.tlsNamesDir && !options.tlsCert)
+      fail('SCORE_TLS_NAMES_DIR needs a default certificate (SCORE_TLS_CERT and SCORE_TLS_KEY)')
     // Without a certificate Score runs in guide-only mode (see guideOnly): the origins are never used to serve the app.
     if (options.tlsCert && options.origins.some((origin) => new URL(origin).protocol !== 'https:'))
       fail('SCORE_PUBLIC_ORIGINS must be https:// addresses')
