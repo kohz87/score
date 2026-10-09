@@ -9,6 +9,8 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { ApprovalOutbox } from '../../domain/approval-outbox.ts'
 import { registerBridgeDecisionRoutes } from './decisions.ts'
+import { registerBridgeKnowledgeRoutes } from './knowledge.ts'
+import type { KnowledgeAgentApi } from '../../knowledge/agent-api.ts'
 import type { CompatibilityEvaluation } from '../port.ts'
 import type { ScoreDb } from '../../db/index.ts'
 import { HttpError } from '../../errors.ts'
@@ -29,6 +31,8 @@ export interface BridgeDeps {
   outbox?: ApprovalOutbox
   /** Stores a browser_vision screenshot named by a tool result; live mode only. */
   importScreenshot?: ScreenshotImporter
+  /** Agent knowledge tools (6.4); without it the /bridge/v1/knowledge routes are not served. */
+  knowledge?: KnowledgeAgentApi
 }
 
 export const SHIPPED_PLUGIN_VERSION = '0.1.0'
@@ -162,20 +166,17 @@ export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): vo
     },
   )
 
-  if (deps.outbox)
-    registerBridgeDecisionRoutes(app, {
-      outbox: deps.outbox,
-      clock,
-      authenticate(value) {
-        const row = db.sqlite
-          .prepare('SELECT * FROM producers WHERE token_hash = ?')
-          .get(bearerHash(value).toString('hex'))
-        if (!row) throw unauthorized()
-        const producer = ProducerSchema.parse(row)
-        if (producer.token_expires_at <= clock()) throw unauthorized()
-        return producer
-      },
-    })
+  const authenticate = (value: unknown) => {
+    const row = db.sqlite
+      .prepare('SELECT * FROM producers WHERE token_hash = ?')
+      .get(bearerHash(value).toString('hex'))
+    if (!row) throw unauthorized()
+    const producer = ProducerSchema.parse(row)
+    if (producer.token_expires_at <= clock()) throw unauthorized()
+    return producer
+  }
+  if (deps.outbox) registerBridgeDecisionRoutes(app, { outbox: deps.outbox, clock, authenticate })
+  if (deps.knowledge) registerBridgeKnowledgeRoutes(app, { api: deps.knowledge, authenticate })
 
   app.post(
     '/bridge/v1/events',

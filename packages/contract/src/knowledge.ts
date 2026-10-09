@@ -104,3 +104,49 @@ export type KnowledgeMoveRequest = z.infer<typeof KnowledgeMoveRequestSchema>
 export type KnowledgeSearchHit = z.infer<typeof KnowledgeSearchHitSchema>
 export type KnowledgeCommit = z.infer<typeof KnowledgeCommitSchema>
 export type KnowledgeChanged = z.infer<typeof KnowledgeChangedSchema>
+
+// Contract §11/§12 (task 6.4): agent knowledge tools over the bridge, and their switches and counters.
+const AGENT_NOTE_BYTES = 256 * 1024
+export const KnowledgeToolPathSchema = z.string().min(1).max(1024)
+export const BridgeKnowledgeSearchRequestSchema = z.object({
+  query: z.string().min(1).max(500),
+  limit: z.int().min(1).max(20).default(20),
+})
+export const BridgeKnowledgeReadRequestSchema = z.object({ path: KnowledgeToolPathSchema })
+export const BridgeKnowledgeListRequestSchema = z.object({
+  folder: z.string().max(1024).optional(),
+})
+export const BridgeKnowledgeWriteRequestSchema = z.object({
+  path: KnowledgeToolPathSchema,
+  // Counted in bytes by the server (413); the schema cap is only a parse guard.
+  body: z.string().max(AGENT_NOTE_BYTES * 4),
+  expectedEtag: z.string().min(1).max(256).nullable(),
+})
+export const BridgeKnowledgeAppendRequestSchema = z.object({
+  path: KnowledgeToolPathSchema,
+  text: z.string().min(1).max(AGENT_NOTE_BYTES * 4),
+})
+export const BridgeKnowledgeSearchResponseSchema = z.object({
+  items: z.array(KnowledgeSearchHitSchema).max(200),
+})
+export const BridgeKnowledgeReadResponseSchema = z.object({
+  path: z.string(),
+  title: z.string(),
+  body: z.string(),
+  etag: z.string(),
+  /** The body was cut at 256 KiB; the etag is still the whole note's. */
+  truncated: z.boolean(),
+})
+export const BridgeKnowledgeListResponseSchema = z.object({
+  folders: z.array(z.string()),
+  notes: z.array(z.object({ path: z.string(), title: z.string(), mtime: z.string() })),
+  /** More than 200 entries matched; narrow with `folder`. */
+  truncated: z.boolean(),
+})
+export const BridgeKnowledgeWriteResponseSchema = KnowledgeWriteResponseSchema
+
+export const KnowledgeAgentAccessSchema = z.object({ enabled: z.boolean() })
+export const KnowledgeAgentUsageSchema = z.object({
+  items: z.array(z.object({ agentId: z.string(), writesToday: z.int().nonnegative() })),
+})
+export type KnowledgeAgentUsage = z.infer<typeof KnowledgeAgentUsageSchema>
