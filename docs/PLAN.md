@@ -289,6 +289,9 @@ brief's tests pass (docs/briefs/5.18.md) and the live LAN deployment runs on HTT
 shows the current model; Settings model edit fixed; plugins move to each agent's page; Advanced collapsible
 (docs/briefs/5.19.md).
 
+**5.20 Owner feedback round 2** · Messaging setup from the browser (tokens via `hermes config set`), delete messages
+(Score-side, with Undo), a task-first Now (chat replies as a band, close blocks grouped) (docs/briefs/5.20.md).
+
 ---
 
 ## First five tasks
