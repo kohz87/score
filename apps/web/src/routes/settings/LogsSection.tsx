@@ -93,32 +93,39 @@ export function LogsSection() {
         <p className="settings-muted">No matching log lines.</p>
       )}
       {items.length > 0 && (
-        <table className="logs-table" aria-label="Log lines">
-          <thead>
-            <tr>
-              <th scope="col">Time</th>
-              <th scope="col">Level</th>
-              <th scope="col">Message</th>
-              <th scope="col">Request</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((entry, index) => (
-              <tr key={index} data-level={entry.level}>
-                <td>{entry.time ? new Date(entry.time).toLocaleString() : '—'}</td>
-                <td>{entry.level}</td>
-                <td>{entry.message}</td>
-                <td>
-                  {entry.method || entry.url
-                    ? `${entry.method ?? ''} ${entry.url ?? ''}${entry.status !== null ? ` ${entry.status}` : ''}${
-                        entry.durationMs !== null ? ` ${Math.round(entry.durationMs)} ms` : ''
-                      }`
-                    : ''}
-                </td>
+        <div
+          className="logs-scroll"
+          role="region"
+          aria-label="Log lines, scroll to see all columns"
+          tabIndex={0}
+        >
+          <table className="logs-table" aria-label="Log lines table">
+            <thead>
+              <tr>
+                <th scope="col">Time</th>
+                <th scope="col">Level</th>
+                <th scope="col">Message</th>
+                <th scope="col">Request</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((entry, index) => (
+                <tr key={index} data-level={entry.level}>
+                  <td>{entry.time ? new Date(entry.time).toLocaleString() : '—'}</td>
+                  <td>{entry.level}</td>
+                  <td>{entry.message}</td>
+                  <td>
+                    {entry.method || entry.url
+                      ? `${entry.method ?? ''} ${entry.url ?? ''}${entry.status !== null ? ` ${entry.status}` : ''}${
+                          entry.durationMs !== null ? ` ${Math.round(entry.durationMs)} ms` : ''
+                        }`
+                      : ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {items.length >= limit && limit < 2000 && (
         <button

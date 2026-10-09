@@ -747,7 +747,10 @@
   border-collapse: collapse;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   font-size: 12px;
-  display: block;
+}
+.logs-scroll {
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
 }
 .logs-table th,
@@ -759,4 +762,31 @@
 }
 .logs-table tr[data-level='error'] td:nth-child(2) {
   font-weight: 700;
+}
+
+.plugins-currency {
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+}
+.plugins-currency label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.plugins-currency input {
+  min-width: 0;
+}
+.plugins-currency .settings-pill {
+  align-self: flex-start;
+}
+
+.logs-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.logs-controls label:has(input[type='checkbox']) {
+  flex-direction: row;
+  align-items: center;
 }

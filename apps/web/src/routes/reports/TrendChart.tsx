@@ -3,7 +3,7 @@ import './trend-chart.css'
 
 const WIDTH = 700
 const PLOT_TOP = 16
-const PLOT_HEIGHT = 168
+const PLOT_HEIGHT = 110
 const LABEL_HEIGHT = 28
 const HEIGHT = PLOT_TOP + PLOT_HEIGHT + LABEL_HEIGHT
 
@@ -37,7 +37,7 @@ export function TrendChart({ trend, money }: Props) {
     if (segments.length === 0) segments.push([])
     segments.at(-1)!.push({ x: centre(index), y: spendY(day.spendUsd) })
   })
-  const label = (date: string, index: number) => (index % 5 === 0 ? date.slice(5) : '')
+  const label = (date: string, index: number) => (index % 5 === 2 ? date.slice(5) : '')
 
   return (
     <div className="trend">

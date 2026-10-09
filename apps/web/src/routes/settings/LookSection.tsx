@@ -67,7 +67,7 @@ function CurrencyCard() {
   })
   return (
     <form
-      className="plugins-card"
+      className="plugins-card plugins-currency"
       aria-label="Display currency"
       onSubmit={(event: FormEvent) => {
         event.preventDefault()
