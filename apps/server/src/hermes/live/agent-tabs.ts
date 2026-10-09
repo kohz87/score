@@ -27,6 +27,7 @@ import {
   readDisabledSkills,
   readLocalProviderIds,
   readModelPair,
+  readTerminalConfig,
   readPlugins,
   readTools,
   RUN_TOOL_PLATFORM,
@@ -73,6 +74,22 @@ export class LiveAgentTabs {
         result.exitCode < 0 ? 'hermes_unavailable' : 'conflict',
         'Hermes rejected the change',
       )
+  }
+
+  /** The agent's terminal folder and backend (Workspace tab); 502 when Hermes can't answer. */
+  async readWorkspaceConfig(
+    agentId: string,
+  ): Promise<{ cwd: string | null; backend: string | null }> {
+    const { profile } = this.profile(agentId)
+    try {
+      return await readTerminalConfig(this.runner, this.hermesHome, profile)
+    } catch {
+      throw new HttpError(502, 'hermes_unavailable', 'Hermes could not be read')
+    }
+  }
+  async setWorkspaceCwd(agentId: string, cwd: string): Promise<void> {
+    const { profile } = this.profile(agentId)
+    await this.serial(profile, () => this.mutate(profile, ['config', 'set', 'terminal.cwd', cwd]))
   }
 
   async setModel(agentId: string, input: z.infer<typeof SetModelSchema>): Promise<void> {
