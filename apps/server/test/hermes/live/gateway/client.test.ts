@@ -23,6 +23,7 @@ test.each(['default', 'builder'])(
       profile,
       input: 'hello',
       model: 'fixture-model',
+      provider: 'fixture-provider',
       sessionId: 'fixture-session',
     }
     const admission = await env.gateway.startRun(request, 'client-turn')
@@ -49,7 +50,12 @@ test.each(['default', 'builder'])(
     const prefix = profile === 'default' ? '' : `/p/${profile}`
     expect(env.fake.calls[0]).toMatchObject({
       path: `${prefix}/v1/runs`,
-      body: { input: 'hello', model: 'fixture-model', session_id: 'fixture-session' },
+      body: {
+        input: 'hello',
+        model: 'fixture-model',
+        provider: 'fixture-provider',
+        session_id: 'fixture-session',
+      },
     })
     expect(env.fake.calls.find((call) => call.path.endsWith('/steer'))?.body).toEqual({
       input: 'continue carefully',

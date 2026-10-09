@@ -125,3 +125,13 @@ test('an agent alias is found by the picker search and resolves in PUT model', a
     via: 'local',
   })
 })
+
+test('an alias row without a confirmed provider never invents one', async () => {
+  await put('/api/agents/builder/model-settings', {
+    aliases: [{ name: 'hand', model: 'qwen3:8b-not-listed', provider: null }],
+  })
+  const found = await models('?q=hand&agentId=builder')
+  expect(found.items[0]).toMatchObject({ model: 'qwen3:8b-not-listed', alias: 'hand' })
+  expect(found.items[0]!.provider).not.toBe('custom')
+  expect(found.items[0]!.provider).toBe('')
+})

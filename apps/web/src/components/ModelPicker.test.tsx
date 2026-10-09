@@ -171,3 +171,21 @@ test('Show all lifts the chosen-models list, and an alias row says where it lead
   expect(urls.at(-1)).toContain('all=1')
   expect(screen.getByRole('button', { name: 'Show chosen models only' })).toBeTruthy()
 })
+
+test('picking an alias row without a confirmed provider passes no provider on', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      Promise.resolve(
+        Response.json({
+          items: [{ ...all[0]!, provider: '', providerLabel: 'Alias', alias: 'hand' }],
+        }),
+      ),
+    ),
+  )
+  const input = mount()
+  fireEvent.focus(input)
+  const list = await screen.findByRole('listbox', { name: 'Model suggestions' })
+  fireEvent.click(await within(list).findByText('hand → gpt-6.1-sol'))
+  expect(latest).toEqual({ model: 'gpt-6.1-sol', provider: null })
+})

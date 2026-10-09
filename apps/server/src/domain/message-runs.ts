@@ -23,6 +23,7 @@ export const MessageRunSchema = z.object({
   input: z.string(),
   admission_input: z.string().nullable(),
   model: z.string().nullable(),
+  provider: z.string().nullable(),
   agents: z.string().transform((value) => z.array(z.string()).parse(JSON.parse(value))),
   state: z.enum(['pending', 'active', 'completed', 'failed']),
   created_at: z.iso.datetime(),
@@ -42,6 +43,7 @@ export function reserveMessageRun(
     input: string
     agents: string[]
     model?: string
+    provider?: string
     fromAgentId?: string
     planFirst?: boolean
     /** A retry of an earlier reply (PLAN 5.24): a fresh turn for the same message and agent. */
@@ -56,8 +58,8 @@ export function reserveMessageRun(
   sqlite
     .prepare(
       `INSERT INTO message_runs
-    (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, from_agent_id, input, model, agents, created_at, plan_first, admission_input)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+    (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, from_agent_id, input, model, provider, agents, created_at, plan_first, admission_input)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
     )
     .run(
       `reply:${turnId}`,
@@ -71,6 +73,7 @@ export function reserveMessageRun(
       // The person's instruction is kept verbatim (the adapter strips the gateway key); agent text is redacted by callers.
       req.input,
       req.model ?? null,
+      req.provider ?? null,
       JSON.stringify(req.agents),
       now,
       req.planFirst ? 1 : 0,
@@ -133,12 +136,21 @@ export function retryReply(
       input: parsed.input,
       agents: parsed.agents,
       ...(parsed.model ? { model: parsed.model } : {}),
+      ...(parsed.provider ? { provider: parsed.provider } : {}),
       ...(parsed.plan_first ? { planFirst: true } : {}),
       retryNonce: nonce,
       ...(parsed.admission_input !== null ? { admissionInput: parsed.admission_input } : {}),
     },
     now,
   )
+}
+
+/** A turn whose reservation was cancelled (state no longer pending) before Hermes admitted its run. */
+export function isCancelledTurn(sqlite: DatabaseSync, turnId: string): boolean {
+  const row = sqlite
+    .prepare('SELECT run_id, state FROM message_runs WHERE turn_id = ?')
+    .get(turnId) as { run_id: string | null; state: string } | undefined
+  return row !== undefined && row.run_id === null && row.state !== 'pending'
 }
 
 export function attachRunMessage(
@@ -151,6 +163,8 @@ export function attachRunMessage(
   if (!value) return []
   const mapping = MessageRunSchema.parse(value)
   if (mapping.run_id !== null) return []
+  // Cancelled while Hermes was admitting it: no reply may stream into the room (the caller stops the run).
+  if (mapping.state !== 'pending') return []
   sqlite
     .prepare("UPDATE message_runs SET run_id = ?, state = 'active' WHERE turn_id = ?")
     .run(runId, turnId)

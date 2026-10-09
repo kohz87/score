@@ -522,7 +522,7 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   | `/routine`  | `/routine @agent <schedule> <prompt>`                  | creates a cron job                 | `{ kind: 'routine', routineId }`              |
   | `/remember` | `/remember [@agent…] <fact>`                           | writes agent memory                | `{ kind: 'remember', agentIds }`              |
   | `/skill`    | `/skill @agent <name>` (use) · `/skill install <name>` | loads or installs a skill          | `{ kind: 'skill', name, installed: boolean }` |
-  | `/model`    | `/model <model> <message…>`                            | runs this message on another model | `{ kind: 'model', model }`                    |
+  | `/model`    | `/model <model> <message…>`                            | runs this message on another model (a name that is one of the agent's aliases also carries the alias's provider to Hermes) | `{ kind: 'model', model }`                    |
 
   `/remember` and `/skill` are parsed but not implemented yet: they answer `501 not_implemented` and are left out of
   the slash menu. Use the agent's Memory and Skills tabs instead.
@@ -946,7 +946,7 @@ code?: string; signInId?: string; expiresAt?: string }`. For a `device_code` pro
   doesn't take a key → `409 not_supported`;
   a key already being added for that provider → `409 conflict`. The key never appears in any response, log or receipt
   (the receipt's body hash is an HMAC under a per-process secret, so a retry after a restart is `409`, not a replay).
-- `GET /api/models?q=&agentId=&all=` → `{ items: ModelOption[]; hiddenCount?: number }`, `ModelOption = { provider: string; providerLabel: string; model: string;
+- `GET /api/models?q=&agentId=&all=` → `{ items: ModelOption[]; hiddenCount?: number }`, `ModelOption = { provider: string /* "" only for an alias row whose provider is unconfirmed */; providerLabel: string; model: string;
 available: boolean; reason: string | null /* "Not on your plan" */; free: boolean; contextLength?: number | null /* tokens, when Hermes says */; price: { input: string; output: string } | null; alias?: string }`.
   Models of connected providers only (Hermes model options); `q` matches model or provider label, case-insensitive;
   at most 200 items, available first. When the chosen-models list (below) is not empty, only those models are listed and

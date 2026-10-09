@@ -50,13 +50,20 @@ export function inspectSession(
         ).count
       let turns: number
       let undone: number
+      // Rows Hermes writes for display only are not turns the person started, and rows an in-place compaction
+      // archived (`active = 0, compacted = 1`) were not undone: only an undo or rewind qualifies as "undone".
+      // Older schemas lack a column, so fall back to the narrower query.
       try {
-        // Rows Hermes writes for display only are not turns the person started.
         turns = count(' AND display_kind IS NULL')
-        undone = count(' AND display_kind IS NULL', 0)
+        undone = count(' AND display_kind IS NULL AND compacted = 0', 0)
       } catch {
-        turns = count('')
-        undone = count('', 0)
+        try {
+          turns = count(' AND display_kind IS NULL')
+          undone = count(' AND display_kind IS NULL', 0)
+        } catch {
+          turns = count('')
+          undone = count('', 0)
+        }
       }
       return { ok: true, sessionId: tip, turns, undone }
     } finally {
