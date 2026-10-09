@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { StreamContext, useStreamQuery } from '../../data/query-client.ts'
 import { ApiError } from '../../data/api.ts'
@@ -35,6 +35,7 @@ function MessagePage({
   before = null,
   agents,
   excluded = [],
+  seek = null,
   onChange,
   onPrepend,
 }: {
@@ -42,6 +43,8 @@ function MessagePage({
   before?: string | null
   agents: AgentSummary[]
   excluded?: string[]
+  /** A message to scroll to (search hit): older pages load until it is found. */
+  seek?: string | null
   onChange: () => void
   onPrepend: () => void
 }) {
@@ -55,6 +58,11 @@ function MessagePage({
     onPrepend()
     setOlder(data.nextCursor)
   }, [data, older, onPrepend])
+  useEffect(() => {
+    if (!seek || !data || data.items.some((item) => item.id === seek)) return
+    const timer = setTimeout(loadOlder, 0)
+    return () => clearTimeout(timer)
+  }, [seek, data, loadOlder])
   useEffect(() => {
     if (!trigger.current || !globalThis.IntersectionObserver) return
     const observer = new IntersectionObserver((entries) => {
@@ -80,6 +88,7 @@ function MessagePage({
           before={olderCursor}
           agents={agents}
           excluded={[...excluded, ...items.map((item) => item.id)]}
+          seek={seek}
           onChange={onChange}
           onPrepend={onPrepend}
         />
@@ -133,7 +142,10 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
   const { data: room, status, error } = useStreamQuery(definition)
   const context = useContext(StreamContext)!
   const viewport = useRef<HTMLDivElement>(null)
-  const position = useRef({ height: 0, pinned: true, prepend: false })
+  const [params] = useSearchParams()
+  const seek = params.get('message')
+  const seekRef = useRef<{ id: string | null; done: string | null }>({ id: seek, done: null })
+  const position = useRef({ height: 0, pinned: !seek, prepend: false })
   const onPrepend = useCallback(() => {
     position.current.prepend = true
     if (document.activeElement?.classList.contains('chat-history')) {
@@ -144,11 +156,30 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
     const element = viewport.current
     if (!element) return
     const state = position.current
-    if (state.prepend) element.scrollTop += element.scrollHeight - state.height
+    const target = seekRef.current
+    if (target.id && target.done !== target.id) {
+      // A search hit: bring the message into view once it has loaded, and keep the view there.
+      const found = document.getElementById(`message-${target.id}`)
+      if (found) {
+        target.done = target.id
+        state.pinned = false
+        found.scrollIntoView?.({ block: 'center' })
+        found.classList.add('chat-message--hit')
+        found.focus({ preventScroll: true })
+      }
+    } else if (state.prepend) element.scrollTop += element.scrollHeight - state.height
     else if (state.pinned) element.scrollTop = element.scrollHeight
     state.height = element.scrollHeight
     state.prepend = false
   }, [])
+  // Opening another hit in the same room.
+  useEffect(() => {
+    seekRef.current.id = seek
+    if (seek) {
+      position.current.pinned = false
+      onChange()
+    }
+  }, [seek, onChange])
   const lead = agents.find((agent) => agent.id === room?.leadAgentId)
   return (
     <section className="chat-thread" aria-label="Conversation">
@@ -194,6 +225,7 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
             <MessagePage
               roomId={roomId}
               agents={agents}
+              seek={seek}
               onChange={onChange}
               onPrepend={onPrepend}
             />

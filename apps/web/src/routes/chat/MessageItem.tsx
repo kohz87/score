@@ -321,6 +321,7 @@ export function MessageItem({ message, agents }: { message: Message; agents: Age
       id={`message-${message.id}`}
       className={`chat-message${you ? ' chat-message--you' : ''}${message.editedBy ? ' chat-message--edited' : ''}`}
       aria-label={`Message from ${name}`}
+      tabIndex={-1}
     >
       {!you && agent && <AgentGlyph agent={agent} size="sm" decorative />}
       <div className="chat-message-body">

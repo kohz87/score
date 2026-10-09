@@ -474,6 +474,27 @@ contentType: string }`. Types come from the bytes (png, jpeg, gif, webp); `400` 
   own message only, never hand-offs between agents): total raw size up to 6 MB per message; images that do not fit
   or are no longer stored are skipped and the run's text gets a short note saying so.
 
+### Conversations: organise, search, export (PLAN 5.26; schemas in `packages/contract/src/conversations.ts`)
+
+- `Room` also carries `pinned`, `archived` (booleans), `projectId: string | null`, `tags: string[]` (explicit tags, else the
+  `#tag` words after the first word of the name) and `importedFrom: RoomImport | null` (§ Outside sessions). Room names may
+  end in tag words: `#launch #q4 #urgent`. Score-side only; `room.upserted` carries them.
+- `GET /api/rooms` also returns `projects: RoomProject[]` (`{ id; name; color: '#RRGGBB' }`, by name).
+- `PATCH /api/rooms/:roomId` also takes `pinned?`, `archived?`, `projectId?: string | null` (`404` for an unknown project),
+  `tags?: string[] | null` (`null` = follow the name's tags again; at most 12, `^[a-z0-9][a-z0-9-]{0,31}$`).
+- **H** `POST /api/room-projects` `{ name; color }` → `RoomProject` (`409 conflict` on a name already used, case-insensitive) ·
+  **H** `PATCH /api/room-projects/:id` `{ name?; color? }` → `RoomProject` · **H** `DELETE /api/room-projects/:id` → `204`
+  (its rooms leave the project). Stream: `room-project.upserted` (the project) and `room-project.deleted` (`{ id }`); a
+  deleted project also emits `room.upserted` for each room that was in it.
+- `GET /api/search/messages?q=&roomId?&limit=` (limit ≤ 50, default 20) → `{ items: { messageId; roomId; roomName;
+  author; createdAt; snippet }[] }`: FTS5 over the text parts of finished, undeleted messages (a streaming reply is
+  indexed once it completes); the query is tokenised into quoted terms (no FTS syntax from the user, the last word is a
+  prefix); `[[`/`]]` in `snippet` mark matches (redacted). Used by the ⌘K palette ("Messages") and the Chat search box;
+  the web opens a hit at `/chat/:roomId?message=:messageId` and scrolls to it.
+- `GET /api/rooms/:roomId/export.md` and `.json` → a download (`Content-Disposition: attachment`): header (room, members,
+  exported at) and the room's finished, undeleted messages with author, time, text (redacted), `file` parts as
+  path and counts, `image` parts as media ids (no bytes). Tool, thinking, plan, review and approval parts are left out.
+
 ## 6. Approvals
 
 - **S** `GET /api/approvals?status=pending|all&agent=&cursor=` → `{ asOfSeq; items: Approval[]; nextCursor }`

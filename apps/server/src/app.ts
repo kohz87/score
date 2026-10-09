@@ -21,6 +21,7 @@ import { registerRoutineRoutes } from './http/routines.ts'
 import { registerRulesRoutes } from './http/rules.ts'
 import { registerSettingsRoutes } from './http/settings.ts'
 import { registerRoomRoutes } from './http/rooms.ts'
+import { registerConversationRoutes } from './http/conversations.ts'
 import { registerBriefRoutes } from './http/briefs.ts'
 import { createBriefControl } from './http/brief-control.ts'
 import { createPlanStarter } from './http/plan-start.ts'
@@ -216,6 +217,7 @@ export function buildApp({
   registerRulesRoutes(app, port, ingest, db, clock)
   if (db && ingest) {
     const dispatch = registerRoomRoutes(app, port, db, ingest, clock, mediaStore)
+    registerConversationRoutes(app, { db, ingest, port, ...(clock ? { clock } : {}) })
     const holds = createTaskHolds({ port, db, ingest })
     const control = createBriefControl({ port, db, ingest, holds, dispatch })
     // A crash between "pause recorded" and "task parked" (or "resumed" and "unparked") leaves holds behind. The
@@ -306,13 +308,14 @@ export function buildApp({
   }
   app.get('/api/health', async () => ({ ok: true, contract: CONTRACT_VERSION }))
   // The same origin the console prints in its pairing link.
+  const securityPassword = security ?? (db ? new SecurityPassword(config.home, clock) : undefined)
   const pairingOrigin = config.remote || config.serveWeb ? serverOrigin(config) : config.webOrigin
   registerSessionRoutes(
     app,
     app.pairing,
     Boolean(config.remote?.tlsCert),
     pairingOrigin,
-    security ?? (db ? new SecurityPassword(config.home, clock) : undefined),
+    securityPassword,
   )
   registerSystemRoutes(app, getSystemStatus)
   if (db && ingest && getEpoch) {

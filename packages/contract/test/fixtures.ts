@@ -119,7 +119,18 @@ export const room = {
   unread: 2,
   activeAgents: ['builder'],
   channels: [{ platform: 'local', label: 'Score' }],
+  pinned: true,
+  archived: false,
+  projectId: 'project-1',
+  tags: ['q4'],
+  importedFrom: null,
 } satisfies Contract.Room
+
+export const roomProject = {
+  id: 'project-1',
+  name: 'Launch',
+  color: '#4A2FD9',
+} satisfies Contract.RoomProject
 
 export const lane = {
   id: 'block-1',
