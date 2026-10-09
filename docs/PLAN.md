@@ -275,9 +275,11 @@ across days (cost deltas per window); history before the first snapshot stays un
 midnight is split correctly in tests.
 **5.16 Recover expired runs' results** · When Hermes no longer knows a run, Score reads the session's final answer from
 Hermes's own records (read-only) and completes the reply, else marks it interrupted. Done when both paths are tested.
-**5.17 Kanban attempts as runs** · Kanban worker attempts become runs in Flow, Now and Reports, with their session, model
-and tools, and Stop goes through Hermes. Design + adversarial review first (event and DB model). Done when a live-fixture
-attempt shows in all three and Stop works in fake mode.
+**5.17a Kanban attempts as runs (read-only projection)** · Kanban worker attempts become runs in Flow, Now and Reports with
+exact provenance (design v3 pending; see docs/briefs/5.17.md). Done when fixtures cover synthetic rows, restore/rollback,
+A→B→A revisions, pruned claims, short gaps, unknown states, host isolation and requested changes.
+**5.17b Kanban Stop** · Needs an upstream Hermes operation (docs/proposals/hermes-attempt-fenced-stop.md, to be extended
+with durable intent and fenced launch registration). Until then Score says Stop is unavailable for Kanban attempts.
 
 ---
 
