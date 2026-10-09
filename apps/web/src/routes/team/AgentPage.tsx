@@ -1,5 +1,5 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useLocation, useParams, useSearchParams } from 'react-router'
 import { agentTint } from '../../components/AgentGlyph.tsx'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery, statusLabels, useAgentDetail } from './team-queries.ts'
@@ -41,13 +41,18 @@ const tabs = [
 
 export function AgentPage() {
   const { agentId = '' } = useParams()
-  return <AgentProfile key={agentId} agentId={agentId} />
+  const location = useLocation()
+  // A workspace:// link to another file of the same agent must open it, so every navigation remounts the page.
+  return <AgentProfile key={`${agentId}:${location.key}`} agentId={agentId} />
 }
 
 function AgentProfile({ agentId }: { agentId: string }) {
   const detail = useAgentDetail(agentId)
   const agents = useStreamQuery(agentsQuery)
-  const [tab, setTab] = useState('Overview')
+  const { pathname } = useLocation()
+  const [search] = useSearchParams()
+  const deepLink = pathname.endsWith('/workspace')
+  const [tab, setTab] = useState(deepLink ? 'Workspace' : 'Overview')
   // The Overview's "New routine" link opens the form; clicking the tab itself shows the list.
   const [composing, setComposing] = useState(false)
   const [file, setFile] = useState<AgentFileName>('SOUL.md')
@@ -188,7 +193,11 @@ function AgentProfile({ agentId }: { agentId: string }) {
         ) : tab === 'Permissions' ? (
           <PermissionsTab agent={agent} />
         ) : tab === 'Workspace' ? (
-          <WorkspaceTab agentId={agent.id} agentName={agent.name} />
+          <WorkspaceTab
+            agentId={agent.id}
+            agentName={agent.name}
+            initialPath={deepLink ? search.get('path') : null}
+          />
         ) : tab === 'Channels' ? (
           <ChannelsTab agentId={agent.id} agentName={agent.name} />
         ) : (

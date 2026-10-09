@@ -217,7 +217,7 @@ function Editor({
       )}
       {preview ? (
         <div className="ws-md-preview" aria-label={`Preview of ${path}`}>
-          <Markdown text={draft} />
+          <Markdown text={draft} workspace={{ agentId, agentIds: [] }} />
         </div>
       ) : (
         <div className="ws-code">

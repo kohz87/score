@@ -98,10 +98,10 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function mount() {
+function mount(initialPath: string | null = null) {
   return render(
     <QueryClientProvider client={createQueryClient()}>
-      <WorkspaceTab agentId="builder" agentName="Builder" />
+      <WorkspaceTab agentId="builder" agentName="Builder" initialPath={initialPath} />
     </QueryClientProvider>,
   )
 }
@@ -250,6 +250,28 @@ test('the header shows the git branch and changed count only inside a repository
   expect(badge.textContent).toContain('3 changed')
   expect(badge.textContent).toContain('↑1')
 })
+
+test(
+  'a workspace:// deep link opens that file with its folders expanded; a bad path shows the error',
+  { timeout: 20_000 },
+  async () => {
+    mount('src/main.ts')
+    await screen.findByLabelText('Contents of src/main.ts', {}, { timeout: 10_000 })
+    expect(view().state.doc.toString()).toBe('export {}')
+    expect(screen.getByRole('treeitem', { name: /src/ }).getAttribute('aria-expanded')).toBe('true')
+    cleanup()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) =>
+        input.includes('/file?')
+          ? json(403, { error: { code: 'blocked', message: 'That file is not available' } })
+          : handler(input, init),
+      ),
+    )
+    mount('.env')
+    expect((await screen.findAllByRole('alert'))[0]!.textContent).toMatch(/not available|blocked/i)
+  },
+)
 
 test('images preview by URL and binaries offer a download', async () => {
   mount()

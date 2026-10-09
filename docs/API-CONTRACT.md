@@ -640,6 +640,10 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
   there is no repository, git is missing or the call fails. Never runs a writing git command.
 - **H** `POST …/workspace/upload?path=` raw body, `Content-Type: application/octet-stream`, ≤ 25 MiB, `path` = the new file's
   path → `201 { path, size }` (`409 exists`).
+- **Links (web only, no endpoint).** In chat Markdown `workspace://<path>` and `workspace://<agentId>/<path>` open that file
+  in the agent's Workspace tab at `/team/:agentId/workspace?path=<path>` (the deep link works on a fresh load too). The first
+  segment is an agent id only when it names a known agent; otherwise the file belongs to the message's author. Paths are
+  checked by the endpoints above, so a blocked or missing file shows the normal error.
 - Path rules (all endpoints): `..`, NUL, absolute paths → `400 bad_path`; any component matching the blocked list (`.env*`,
   `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `id_ecdsa*`, `id_dsa*`, `auth.json`, `.netrc`, case-insensitive) or
   anything inside `.git/` → `403 blocked`; leaving the root or reaching Hermes/Score/SSH data → `403 outside_workspace`/`blocked`;
