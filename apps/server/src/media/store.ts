@@ -18,9 +18,12 @@ import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
 import { HttpError } from '../errors.ts'
-import { declaredMatches, sniffImage, type MediaType } from './sniff.ts'
+import { declaredMatches, isImageType, MEDIA_TYPES, sniffMedia, type MediaType } from './sniff.ts'
 
-export const MAX_MEDIA_BYTES = 8 * 1024 * 1024
+export const MAX_IMAGE_BYTES = 8 * 1024 * 1024
+// Documents and the upload cap in general (the route's body limit is derived from it).
+export const MAX_MEDIA_BYTES = 25 * 1024 * 1024
+export const MAX_ATTACHMENTS = 10
 export const DEFAULT_MEDIA_QUOTA_BYTES = 512 * 1024 * 1024
 const UNUSED_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const ORPHAN_GRACE_MS = 10 * 60 * 1000
@@ -28,7 +31,7 @@ const ORPHAN_GRACE_MS = 10 * 60 * 1000
 const RowSchema = z.object({
   id: z.string(),
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
-  content_type: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+  content_type: z.enum(MEDIA_TYPES),
   size: z.int().positive(),
   created_at: z.string(),
   last_used_at: z.string(),
@@ -106,15 +109,21 @@ export class MediaStore {
     }
   }
 
-  // Stores an image and returns its id; identical bytes return the existing id. Throws HttpError for
+  // Stores an image or document and returns its id; identical bytes return the existing id. Throws HttpError for
   // unsupported content (415), oversized items (413) and a full store of referenced items (507).
-  store(bytes: Uint8Array, declaredType?: string): StoredMedia {
+  store(bytes: Uint8Array, declaredType?: string, name?: string): StoredMedia {
     if (bytes.length === 0) throw new HttpError(400, 'bad_request', 'The file is empty')
     if (bytes.length > this.maxItemBytes)
-      throw new HttpError(413, 'payload_too_large', 'The file is larger than 8 MB')
-    const type = sniffImage(bytes)
+      throw new HttpError(413, 'payload_too_large', 'The file is larger than 25 MB')
+    const type = sniffMedia(bytes, { name, declared: declaredType })
     if (!type || !declaredMatches(declaredType, type))
-      throw new HttpError(415, 'unsupported_media_type', 'Only PNG, JPEG, WebP and GIF are allowed')
+      throw new HttpError(
+        415,
+        'unsupported_media_type',
+        'Allowed: images, PDF, DOCX, XLSX, and TXT, Markdown, CSV, JSON or HTML text',
+      )
+    if (isImageType(type) && bytes.length > MAX_IMAGE_BYTES)
+      throw new HttpError(413, 'payload_too_large', 'The image is larger than 8 MB')
     const sha256 = createHash('sha256').update(bytes).digest('hex')
     const now = new Date(this.clock()).toISOString()
     let evicted: string[] = []

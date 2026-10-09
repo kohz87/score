@@ -10,7 +10,7 @@ import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
-import { gif, jpeg, multipart, png, webp } from '../media-fixtures.ts'
+import { docx, gif, jpeg, multipart, pdf, png, webp, xlsx } from '../media-fixtures.ts'
 
 let dir: string
 let db: ScoreDb
@@ -147,7 +147,7 @@ test('size limits: 8 MB per item, and a body past the route limit is refused ear
   const rejected = await upload(over)
   expect(rejected.statusCode).toBe(413)
   expect(rejected.json().error.code).toBe('payload_too_large')
-  const huge = await upload(Buffer.alloc(9 * 1024 * 1024, 7))
+  const huge = await upload(Buffer.alloc(26 * 1024 * 1024, 7))
   expect(huge.statusCode).toBe(413)
   expect(mediaFiles()).toHaveLength(1)
 })
@@ -257,4 +257,58 @@ test('the configured quota evicts the oldest unreferenced upload through the rou
   // The same store is what Watch frame capture calls for screenshots.
   expect(small.media?.store(png(10, 9), 'image/png').contentType).toBe('image/png')
   await small.close()
+})
+
+test('documents: stored by their bytes and served by kind', async () => {
+  const fetchOf = async (data: Buffer, filename: string, type?: string) => {
+    const stored = await upload(data, { filename, ...(type ? { type } : {}) })
+    expect(stored.statusCode).toBe(201)
+    const body = stored.json()
+    const res = await app.inject({ method: 'GET', url: `/api/media/${body.mediaId}`, headers })
+    return { body, res }
+  }
+  const doc = await fetchOf(pdf(), 'report.pdf', 'application/pdf')
+  expect(doc.body.contentType).toBe('application/pdf')
+  expect(doc.res.headers['content-type']).toBe('application/pdf')
+  expect(doc.res.headers['content-disposition']).toBe('inline')
+  expect(doc.res.headers['x-content-type-options']).toBe('nosniff')
+  expect(doc.res.headers['content-security-policy']).toBeUndefined()
+
+  const word = await fetchOf(docx(), 'a b.docx')
+  expect(word.res.headers['content-type']).toBe('application/octet-stream')
+  expect(word.res.headers['content-disposition']).toMatch(/^attachment/)
+  const sheet = await app.inject({
+    method: 'GET',
+    url: `/api/media/${(await fetchOf(xlsx(), 's.xlsx')).body.mediaId}?name=../x%0Ay.xlsx`,
+    headers,
+  })
+  expect(sheet.headers['content-disposition']).toBe("attachment; filename*=UTF-8''xy.xlsx")
+
+  const html = await fetchOf(Buffer.from('<script>alert(1)</script>'), 'page.html', 'text/html')
+  expect(html.body.contentType).toBe('text/html')
+  expect(html.res.headers['content-type']).toBe('text/plain; charset=utf-8')
+  expect(html.res.headers['content-security-policy']).toContain('sandbox')
+
+  const csv = await fetchOf(Buffer.from('a,b\n1,2\n'), 'data.csv', 'text/csv')
+  expect(csv.body.contentType).toBe('text/csv')
+  expect(
+    (
+      await app.inject({
+        method: 'GET',
+        url: `/api/media/${csv.body.mediaId}?download=1&name=data.csv`,
+        headers,
+      })
+    ).headers['content-disposition'],
+  ).toBe("attachment; filename*=UTF-8''data.csv")
+})
+
+test('documents the allowlist does not cover are refused, however they are named or labelled', async () => {
+  expect(
+    (await upload(Buffer.from('MZ\x90\x00'), { filename: 'a.pdf', type: 'application/pdf' }))
+      .statusCode,
+  ).toBe(415)
+  expect((await upload(Buffer.from('hi'), { filename: 'a.sh' })).statusCode).toBe(415)
+  expect((await upload(pdf(), { filename: 'a.pdf', type: 'image/png' })).statusCode).toBe(415)
+  expect((await upload(Buffer.from('PK\x03\x04junk'), { filename: 'a.docx' })).statusCode).toBe(415)
+  expect(mediaFiles()).toEqual([])
 })
