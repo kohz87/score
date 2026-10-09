@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
+import { releaseMessageMedia } from './media-refs.ts'
 import { continuationFor, IMPORTED_ID_PREFIX } from './outside-sessions.ts'
 import { MessageRowSchema, messageFromRow, readRoom, roomChanged, roomRow } from './rooms.ts'
 
@@ -265,6 +266,8 @@ export function createVersion(
   const hide = sqlite.prepare(
     'UPDATE messages SET deleted_at = ?, version_id = ?, updated_at = ?, version = version + 1 WHERE id = ?',
   )
+  // Released before the rows are hidden: they are still visible now, so each reference goes back exactly once.
+  releaseMessageMedia(sqlite, ids)
   for (const messageId of ids) hide.run(now, id, now, messageId)
   const version = versionOfAnchor(sqlite, roomId, anchor.id)!
   return {

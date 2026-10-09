@@ -10,7 +10,7 @@ import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
-import { docx, gif, jpeg, multipart, pdf, png, webp, xlsx } from '../media-fixtures.ts'
+import { docx, gif, jpeg, multipart, pdf, png, unique, webp, xlsx } from '../media-fixtures.ts'
 
 let dir: string
 let db: ScoreDb
@@ -312,4 +312,59 @@ test('documents the allowlist does not cover are refused, however they are named
   expect((await upload(pdf(), { filename: 'a.pdf', type: 'image/png' })).statusCode).toBe(415)
   expect((await upload(Buffer.from('PK\x03\x04junk'), { filename: 'a.docx' })).statusCode).toBe(415)
   expect(mediaFiles()).toEqual([])
+})
+
+// audit5-g: references go back when the message that held them is deleted or rewound away.
+test('deleting or rewinding a message releases its media references', async () => {
+  const room = RoomSchema.parse(
+    (
+      await app.inject({
+        method: 'POST',
+        url: '/api/rooms',
+        headers,
+        payload: { name: 'refs', leadAgentId: 'lead' },
+      })
+    ).json(),
+  )
+  const refs = (id: string) =>
+    (db.sqlite.prepare('SELECT refs FROM media WHERE id = ?').get(id) as { refs: number }).refs
+  const send = async (mediaId: string) =>
+    MessageSchema.parse(
+      (
+        await app.inject({
+          method: 'POST',
+          url: `/api/rooms/${room.id}/messages`,
+          headers,
+          payload: { text: 'look', attachments: [{ mediaId }] },
+        })
+      ).json().message,
+    )
+  const first = (await upload(unique(2000))).json().mediaId
+  const second = (await upload(unique(2000))).json().mediaId
+  const one = await send(first)
+  const two = await send(second)
+  expect([refs(first), refs(second)]).toEqual([1, 1])
+  // The fake agent is already answering; this test is about references, not routing.
+  db.sqlite.exec('UPDATE messages SET streaming = 0')
+  const removed = await app.inject({
+    method: 'DELETE',
+    url: `/api/rooms/${room.id}/messages/${one.id}`,
+    headers,
+  })
+  expect(removed.statusCode, removed.body).toBeLessThan(300)
+  await app.inject({
+    method: 'DELETE',
+    url: `/api/rooms/${room.id}/messages/${one.id}`,
+    headers,
+  })
+  expect(refs(first)).toBe(0)
+  db.sqlite.exec("UPDATE message_runs SET state = 'completed'")
+  const rewound = await app.inject({
+    method: 'POST',
+    url: `/api/rooms/${room.id}/messages/${two.id}/rewind`,
+    headers,
+    payload: { mode: 'delete' },
+  })
+  expect(rewound.statusCode, rewound.body).toBe(200)
+  expect(refs(second)).toBe(0)
 })

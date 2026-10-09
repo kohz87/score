@@ -1,3 +1,4 @@
+import { releaseMessageMedia } from './media-refs.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import {
   AgentIdSchema,
@@ -310,6 +311,7 @@ export function deleteMessage(
       'UPDATE messages SET deleted_at = ?, updated_at = ?, version = version + 1 WHERE id = ?',
     )
     .run(now, now, messageId)
+  releaseMessageMedia(sqlite, [messageId])
   return [
     { type: 'message.deleted', data: { roomId, messageId } },
     ...roomChanged(sqlite, roomId, now, before),
