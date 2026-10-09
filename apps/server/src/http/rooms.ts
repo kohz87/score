@@ -13,7 +13,9 @@ import type { ScoreDb } from '../db/index.ts'
 import {
   decodeMessageCursor,
   deleteMessage,
+  editableMessage,
   insertRoom,
+  markEdited,
   markRoomRead,
   messagePage,
   readRoom,
@@ -25,7 +27,7 @@ import {
 } from '../domain/rooms.ts'
 import { roomFilesInPlay, roomLearned } from '../domain/room-panels.ts'
 import { createBrief } from '../domain/briefs.ts'
-import { reserveMessageRun } from '../domain/message-runs.ts'
+import { reserveMessageRun, retryReply } from '../domain/message-runs.ts'
 import { PLAN_FIRST_ADDENDUM } from '../domain/plan.ts'
 import { COMMANDS } from '../domain/parse.ts'
 import { routeMessage, modelCommand } from '../domain/routing.ts'
@@ -63,6 +65,7 @@ const MessageBodySchema = z
       .array(z.object({ mediaId: z.string().min(1) }).strict())
       .max(8)
       .optional(),
+    edits: z.string().min(1).max(200).optional(),
   })
   .strict()
 const ParamsSchema = z.object({ roomId: z.string().min(1).max(256) })
@@ -284,10 +287,32 @@ export function registerRoomRoutes(
     },
   )
 
+  app.post('/api/rooms/:roomId/messages/:messageId/retry', mutation, async (request, reply) => {
+    const { roomId, messageId } = z
+      .object({ roomId: ParamsSchema.shape.roomId, messageId: z.string().min(1).max(200) })
+      .parse(request.params)
+    const nonce = randomUUID()
+    let replyId = ''
+    await ingest.submit({
+      source: 'rooms',
+      identity: randomUUID(),
+      apply: ({ sqlite, now }) => {
+        replyId = retryReply(sqlite, roomId, messageId, nonce, now)
+        return []
+      },
+    })
+    await routing.dispatch()
+    return reply.code(202).send({ messageId: replyId })
+  })
+
   app.post('/api/rooms/:roomId/messages', mutation, async (request) => {
     const { roomId } = ParamsSchema.parse(request.params)
     const body = MessageBodySchema.parse(request.body)
-    const to = [...new Set(body.to ?? [])]
+    // Edit and resend: checked before any side effect (a /assign task) and again inside the transaction below.
+    const original = body.edits
+      ? db.read((sqlite) => editableMessage(sqlite, roomId, body.edits!))
+      : undefined
+    const to = [...new Set(body.to ?? original?.to ?? [])]
     const mediaIds = [...new Set((body.attachments ?? []).map((item) => item.mediaId))]
     if (mediaIds.length && (!media || !mediaIds.every((item) => media.has(item))))
       throw new HttpError(400, 'bad_request', 'Unknown attachment')
@@ -349,10 +374,13 @@ export function registerRoomRoutes(
           createdAt: now,
           streaming: false,
           refs: [],
+          ...(original ? { edits: original.id } : {}),
         }
+        if (original) editableMessage(sqlite, roomId, original.id)
         // Inside the same transaction, so an item deleted since the check above fails the whole message.
         media?.retain(sqlite, mediaIds, now)
         const drafts = storeMessage(sqlite, message, now)
+        if (original) drafts.push(...markEdited(sqlite, roomId, original.id, id, now))
         // Plan first admits only the planner; the others are named in its prompt and start from the plan.
         const team = route.routedTo.filter((agentId) => agentId !== planner)
         const teamNote = team.length

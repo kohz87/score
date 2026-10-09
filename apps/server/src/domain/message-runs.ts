@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
+import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
 import { redact, redactBounded } from '../redact.ts'
 import { parseMessage } from './parse.ts'
@@ -42,11 +43,13 @@ export function reserveMessageRun(
     model?: string
     fromAgentId?: string
     planFirst?: boolean
+    /** A retry of an earlier reply (PLAN 5.24): a fresh turn for the same message and agent. */
+    retryNonce?: string
   },
   now: string,
-): void {
+): string {
   assertAgentAdmits(sqlite, req.agentId)
-  const turnId = messageTurnId(req.parentMessageId, req.agentId)
+  const turnId = messageTurnId(req.parentMessageId, req.agentId, req.retryNonce)
   sqlite
     .prepare(
       `INSERT INTO message_runs
@@ -69,6 +72,68 @@ export function reserveMessageRun(
       now,
       req.planFirst ? 1 : 0,
     )
+  return `reply:${turnId}`
+}
+
+/**
+ * Retry (PLAN 5.24): the same agent answers the same person's message again. The new turn is queued like any other,
+ * so pause holds, approvals, attachments and the one-active-turn-per-agent order behave the same.
+ */
+export function retryReply(
+  sqlite: DatabaseSync,
+  roomId: string,
+  messageId: string,
+  nonce: string,
+  now: string,
+): string {
+  const found = sqlite
+    .prepare('SELECT streaming FROM messages WHERE id = ? AND room_id = ? AND deleted_at IS NULL')
+    .get(messageId, roomId)
+  if (!found) throw new HttpError(404, 'not_found', 'Unknown message')
+  const reply = sqlite
+    .prepare('SELECT * FROM message_runs WHERE message_id = ? AND room_id = ?')
+    .get(messageId, roomId)
+  const parsed = reply === undefined ? undefined : MessageRunSchema.parse(reply)
+  if (!parsed || parsed.hop !== 0 || parsed.from_agent_id !== null)
+    throw new HttpError(409, 'conflict', 'Only an answer to your own message can be retried')
+  if (parsed.state === 'pending' || parsed.state === 'active')
+    throw new HttpError(409, 'conflict', 'This reply is still being written')
+  const parent = sqlite
+    .prepare(
+      "SELECT 1 FROM messages WHERE id = ? AND room_id = ? AND author_kind = 'you' AND deleted_at IS NULL",
+    )
+    .get(parsed.parent_message_id, roomId)
+  if (!parent) throw new HttpError(409, 'conflict', 'The message this answered is gone')
+  const busy = sqlite
+    .prepare(
+      `SELECT 1 FROM message_runs WHERE parent_message_id = ? AND agent_id = ? AND state IN ('pending', 'active')`,
+    )
+    .get(parsed.parent_message_id, parsed.agent_id)
+  if (busy) throw new HttpError(409, 'conflict', 'This agent is already answering that message')
+  const paused = sqlite
+    .prepare(
+      `SELECT 1 FROM team_state WHERE paused_at IS NOT NULL
+       UNION ALL SELECT 1 FROM agent_pauses WHERE agent_id = ?
+       UNION ALL SELECT 1 FROM briefs WHERE id = ? AND paused_at IS NOT NULL`,
+    )
+    .get(parsed.agent_id, parsed.chain_id)
+  if (paused) throw new HttpError(409, 'conflict', 'Resume the work before retrying')
+  return reserveMessageRun(
+    sqlite,
+    {
+      parentMessageId: parsed.parent_message_id,
+      roomId,
+      agentId: parsed.agent_id,
+      chainId: parsed.chain_id,
+      hop: 0,
+      input: parsed.input,
+      agents: parsed.agents,
+      ...(parsed.model ? { model: parsed.model } : {}),
+      ...(parsed.plan_first ? { planFirst: true } : {}),
+      retryNonce: nonce,
+    },
+    now,
+  )
 }
 
 export function attachRunMessage(
