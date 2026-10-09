@@ -67,6 +67,8 @@ vi.mock('../src/hermes/index.ts', () => ({
   createHermesPort: mocks.createHermesPort,
   loadBridgeBootstrap: mocks.loadBridgeBootstrap,
   pruneBridge: mocks.pruneBridge,
+  kanbanAttemptsEnabled: () => false,
+  pruneKanbanAttempts: () => ({ pages: 0, seenEvents: 0 }),
   createScreenshotImporter: mocks.createScreenshotImporter,
   sweepKanbanDenials: mocks.sweepKanbanDenials,
   RewindBroker: class {},
