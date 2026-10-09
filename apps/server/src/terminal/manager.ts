@@ -5,6 +5,7 @@ import {
   type TerminalSession,
 } from '@score/contract'
 import type { TerminalLaunch } from './env.ts'
+import { sessionMembers } from './session-members.ts'
 
 /** The slice of a node-pty terminal Score uses (tests substitute their own). */
 export interface PtyProcess {
@@ -253,14 +254,22 @@ export class TerminalManager {
   }
 
   private signal(terminal: Live, signal: NodeJS.Signals): void {
-    // node-pty starts the shell as a session leader, so its pid is also the process group: this reaches its jobs too.
-    for (const target of [-terminal.pty.pid, terminal.pty.pid]) {
+    // node-pty starts the shell as a session leader, so its pid is its session and process group id. Jobs run in groups
+    // of their own inside that session: signal each of those groups too, not only the shell's.
+    const groups = new Set([terminal.pty.pid])
+    for (const member of sessionMembers(terminal.pty.pid)) groups.add(member.pgid)
+    for (const group of groups) {
       try {
-        process.kill(target, signal)
-        return
+        process.kill(-group, signal)
       } catch {
-        // Already gone, or not a group of its own (a test double).
+        // Gone already.
       }
+    }
+    // A stand-in without a group of its own (tests): the process itself.
+    try {
+      process.kill(terminal.pty.pid, signal)
+    } catch {
+      // Gone already.
     }
   }
 

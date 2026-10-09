@@ -61,7 +61,11 @@ async function pair(app: FastifyInstance, requestHeaders = headers): Promise<str
   return String(response.headers['set-cookie']).split(';')[0]!
 }
 
-async function mint(app: FastifyInstance, cookie: string, requestHeaders = headers) {
+async function mint(
+  app: FastifyInstance,
+  cookie: string,
+  requestHeaders: Record<string, string> = headers,
+) {
   return app.inject({
     method: 'POST',
     url: '/api/terminal/tickets',
@@ -89,7 +93,7 @@ async function connect(
   await app.ready()
   return app.injectWS(
     `/api/terminal/ws?ticket=${ticket}`,
-    { headers: { ...requestHeaders, cookie } },
+    { headers: { ...requestHeaders, cookie }, socket: { remoteAddress: '10.0.0.9' } },
     // Listen before the first frame can arrive (the server says "ready" the moment the socket opens).
     { onInit: (socket: WebSocket) => screens.set(socket, listen(socket)) },
   ) as Promise<WebSocket>
@@ -224,8 +228,9 @@ test('minting needs the page origin and an allowed one', async () => {
   const { app } = makeApp()
   const cookie = await pair(app)
   app.pairing.markFresh(cookie)
-  const { origin: _origin, ...withoutOrigin } = headers
-  expect((await mint(app, cookie, withoutOrigin as typeof headers)).statusCode).toBe(403)
+  const withoutOrigin: Record<string, string> = { ...headers }
+  delete withoutOrigin.origin
+  expect((await mint(app, cookie, withoutOrigin)).statusCode).toBe(403)
   expect((await mint(app, cookie, { ...headers, origin: 'https://evil.example' })).statusCode).toBe(
     403,
   )
@@ -295,10 +300,9 @@ test('the upgrade needs a paired session, the right Host and Origin, and a valid
       origin: 'https://evil.example',
     }),
   )
-  const { origin: _origin, ...withoutOrigin } = headers
-  await rejected(
-    connect(app, await ticketFor(app, cookie), cookie, withoutOrigin as typeof headers),
-  )
+  const withoutOrigin: Record<string, string> = { ...headers }
+  delete withoutOrigin.origin
+  await rejected(connect(app, await ticketFor(app, cookie), cookie, withoutOrigin))
   // Unknown ticket, no ticket
   await rejected(connect(app, 'x'.repeat(43), cookie))
   // Not paired
@@ -463,12 +467,8 @@ test('remote mode: the terminal routes are not public, and Host is checked on th
   expect((await mint(app, cookie, wrongHost)).statusCode).toBe(403)
   const ticket = await ticketFor(app, cookie, remoteHeaders)
   await rejected(connect(app, ticket, cookie, wrongHost))
-  const good = await connect(
-    app,
-    await ticketFor(app, cookie, remoteHeaders),
-    cookie,
-    remoteHeaders,
-  )
+  const t2 = await ticketFor(app, cookie, remoteHeaders)
+  const good = await connect(app, t2, cookie, remoteHeaders)
   const screen = reader(good)
   good.send(Buffer.from('echo remote-$((1+1))\r'))
   await screen.until('remote-2')

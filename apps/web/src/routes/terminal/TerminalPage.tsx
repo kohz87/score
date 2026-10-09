@@ -53,7 +53,10 @@ export function TerminalPage() {
   const socket = useRef<WebSocket | null>(null)
   const term = useRef<Terminal | null>(null)
   const ctrlRef = useRef(false)
-  ctrlRef.current = ctrl
+
+  useEffect(() => {
+    ctrlRef.current = ctrl
+  }, [ctrl])
 
   useEffect(
     () => () => {
