@@ -12,7 +12,8 @@ const editor = (page: Page, path: string) => page.getByLabel(`Contents of ${path
 
 async function createNote(page: Page, name: string, text: string) {
   await page.goto('/knowledge')
-  await page.keyboard.press('Control+n')
+  // The button, not Ctrl+N: the shortcut is registered only once the lazily loaded page has mounted.
+  await page.getByRole('button', { name: 'New note' }).click({ timeout: 15_000 })
   const dialog = page.getByRole('dialog', { name: 'New note' })
   await dialog.getByLabel('Path in the vault').fill(name)
   await dialog.getByRole('button', { name: 'Create note' }).click()
