@@ -36,6 +36,8 @@ function withoutKnownSecrets(text: string): string {
 export function redact(text: string): string {
   return (
     withoutKnownSecrets(text)
+      // One-time pairing links (/pair#<token>) work for whoever holds them: never let one reach a log or a page.
+      .replace(/(\/pair#)[A-Za-z0-9_-]{16,}/g, '$1[redacted]')
       // URL query secrets and userinfo: the assignment pass below would otherwise swallow "https:" + the whole URL.
       .replace(
         /([?&;][\w.-]*?(?:token|key|secret|passw(?:or)?d|auth|sig|signature|credential|session|cookie)[\w.-]*=)[^&\s#"'<>]+/gi,

@@ -148,3 +148,9 @@ test('an END marker without its BEGIN (a window cut through a key) redacts the k
   expect(out).not.toContain('MIIEvQIBADANBgkqhkiG9w0BAQEF')
   expect(out).toContain('build ok')
 })
+
+test('a one-time pairing link is redacted wherever it appears (audit wave 4)', () => {
+  const line =
+    'Pair this browser: https://10.1.1.199:8741/pair#Da0Gmy9rFhPsr7zmsUDZ35bY_yjEojaIvmx2Yy-IOdc'
+  expect(redact(line)).toBe('Pair this browser: https://10.1.1.199:8741/pair#[redacted]')
+})
