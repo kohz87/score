@@ -1,3 +1,6 @@
+import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
 
@@ -142,8 +145,98 @@ test('a Markdown file previews rendered and switches back to the editor', async 
   const panel = await openWorkspace(page, 'reviewer')
   await panel.getByRole('treeitem', { name: /README\.md/ }).click()
   await expect(panel.getByLabel('Contents of README.md')).toBeVisible()
+  await replaceText(page, 'Contents of README.md', '# Preview heading\n\nsome **bold** text\n')
   await panel.getByRole('button', { name: 'Preview' }).click()
-  await expect(panel.getByLabel('Preview of README.md').getByRole('heading').first()).toBeVisible()
+  await expect(
+    panel.getByLabel('Preview of README.md').getByRole('heading', { name: 'Preview heading' }),
+  ).toBeVisible()
   await panel.getByRole('button', { name: 'Edit' }).click()
   await expect(panel.getByLabel('Contents of README.md')).toBeVisible()
+})
+
+test('the header shows the git branch and the changed-file count for a repository (read-only status)', async ({
+  page,
+}) => {
+  const info = await (await page.request.get('/api/agents/reviewer/workspace')).json()
+  const root = info.root as string
+  const git = (...args: string[]) =>
+    execFileSync(
+      'git',
+      ['-C', root, '-c', 'user.email=e2e@example.com', '-c', 'user.name=E2E', ...args],
+      { stdio: 'pipe' },
+    )
+  git('init', '-q')
+  // The fake workspace already has a stub .git/HEAD, which init keeps; name the branch explicitly.
+  git('symbolic-ref', 'HEAD', 'refs/heads/e2e-branch')
+  git('add', 'README.md')
+  git('commit', '-q', '-m', 'first')
+  fs.writeFileSync(path.join(root, 'untracked.txt'), 'x')
+  const panel = await openWorkspace(page, 'reviewer')
+  const badge = panel.getByLabel(/^Git branch e2e-branch, \d+ changed files?$/)
+  await expect(badge).toBeVisible()
+  await expect(badge).toContainText('e2e-branch')
+  // A folder that is no repository shows no badge.
+  const lead = await openWorkspace(page, 'lead')
+  await expect(lead.getByLabel(/^Git branch/)).toHaveCount(0)
+})
+
+test("a workspace:// link in chat opens the file in the agent's Workspace tab", async ({
+  page,
+}) => {
+  test.setTimeout(90_000)
+  await page.goto('/chat')
+  await page
+    .getByRole('navigation', { name: 'Conversations' })
+    .getByRole('link', { name: /#activity-feed/ })
+    .click({ timeout: 15_000 })
+  const history = page.getByRole('region', { name: 'Message history' })
+  await expect(history.getByRole('article').first()).toBeVisible({ timeout: 15_000 })
+  const box = page.getByRole('combobox', { name: /^Message/ })
+  await box.fill('open [the readme](workspace://reviewer/README.md) please')
+  await box.press('Enter')
+  await history.getByRole('link', { name: 'the readme' }).click()
+  await expect(page).toHaveURL(/\/team\/reviewer\/workspace\?path=README\.md$/)
+  await expect(page.getByRole('tab', { name: 'Workspace' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await expect(page.getByLabel('Contents of README.md')).toBeVisible({ timeout: 15_000 })
+  // A blocked path shows the normal error.
+  await page.goto('/team/reviewer/workspace?path=.env')
+  await expect(page.getByRole('alert').first()).toBeVisible({ timeout: 15_000 })
+})
+
+test('the file list can be resized by keyboard and by dragging, and the width is kept', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await openWorkspace(page, 'reviewer')
+  const bar = page.getByRole('separator', { name: 'Resize the file list' })
+  const tree = page.locator('.ws-tree-pane')
+  const before = (await tree.boundingBox())!.width
+  await bar.focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(bar).toHaveAttribute('aria-valuenow', '316')
+  const box = (await bar.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + 40)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2 + 120, box.y + 40, { steps: 6 })
+  await page.mouse.up()
+  const after = (await tree.boundingBox())!.width
+  expect(after).toBeGreaterThan(before + 80)
+  const value = Number(await bar.getAttribute('aria-valuenow'))
+  await page.reload()
+  await page.getByRole('tab', { name: 'Workspace' }).click()
+  await expect(page.getByRole('separator', { name: 'Resize the file list' })).toHaveAttribute(
+    'aria-valuenow',
+    String(value),
+  )
+})
+
+test("the Overview shows the agent's Todo card", async ({ page }) => {
+  await page.goto('/team/reviewer')
+  const card = page.getByRole('region', { name: 'Todo' })
+  await expect(card).toBeVisible({ timeout: 15_000 })
+  await expect(card.getByText('Pick the accent colours')).toBeVisible()
+  await expect(card.getByText('In progress')).toBeVisible()
 })
