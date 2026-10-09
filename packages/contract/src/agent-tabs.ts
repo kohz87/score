@@ -68,3 +68,22 @@ export type AgentChannelsResponse = z.infer<typeof AgentChannelsResponseSchema>
 export type HistoryOutcome = z.infer<typeof HistoryOutcomeSchema>
 export type AgentHistoryItem = z.infer<typeof AgentHistoryItemSchema>
 export type AgentHistoryPage = z.infer<typeof AgentHistoryPageSchema>
+
+// Contract §8: the agent's Hermes todo list (read-only), shown on Overview and in the Now thread.
+export const AgentTodoSchema = z.object({
+  id: z.string().max(200),
+  content: z.string().max(2000),
+  status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']),
+  /** Id of the parent item when this one is a subtask. */
+  parent: z.string().max(200).optional(),
+})
+export const AgentTodosSchema = z
+  .object({
+    todos: z.array(AgentTodoSchema).max(200),
+    revision: z.number().int().nonnegative(),
+    /** When the list was last written, from the Hermes message that carried it. */
+    updatedAt: z.string(),
+  })
+  .nullable()
+export type AgentTodo = z.infer<typeof AgentTodoSchema>
+export type AgentTodos = z.infer<typeof AgentTodosSchema>

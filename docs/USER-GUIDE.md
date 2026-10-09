@@ -128,6 +128,8 @@ Click an agent to open its page. It has an appearance picker (color and shape) a
 - **Overview**: a short summary of personality, who it reports to, where it works, its operating rules, the model
   and skills it uses and its routines, plus **Agent details** (display name, description) and a **Danger zone**
   with **Delete agent** (you type its name to confirm, and a private export is kept first).
+- **Todo** card (Overview, and on Now while the agent works): the agent's own Hermes todo list with each item's state,
+  read-only. It appears once the agent has used its todo tool.
 - **Personality**: edits the agent's `SOUL.md` (who it is) and `AGENTS.md` (standing rules). **Preview changes**
   shows the exact difference before anything is written. If the file changed meanwhile, you see the other version
   and choose **Reload theirs** or **Overwrite with mine**.

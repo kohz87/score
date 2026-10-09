@@ -50,6 +50,7 @@ import { readProfileSessionCosts, readReportFacts } from './report-facts.ts'
 import { createTask, patchTask } from './task-writes.ts'
 import { LiveRoutines } from './routines.ts'
 import { LiveAgentTabs } from './agent-tabs.ts'
+import { readAgentTodos } from './todos.ts'
 import { MemoryIdSchema } from '../agent-tabs.ts'
 import { ProfileLocks } from './profile-locks.ts'
 import { createLiveConfigService } from './config.ts'
@@ -406,6 +407,9 @@ export class LivePort implements HermesPort {
   }
   async searchSkillHub(query: string) {
     return this.tabs.searchHub(query)
+  }
+  async readAgentTodos(agentId: string) {
+    return readAgentTodos(agentId, resolveHermesHome(this.options.hermesHome))
   }
   async listAgentChannels(agentId: string) {
     return this.tabs.listChannels(agentId)

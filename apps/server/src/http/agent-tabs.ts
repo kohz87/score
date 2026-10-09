@@ -1,5 +1,6 @@
 import {
   AgentChannelsResponseSchema,
+  AgentTodosSchema,
   AgentDetailSchema,
   AgentSummarySchema,
   MemoryPageSchema,
@@ -100,6 +101,14 @@ export function registerAgentTabRoutes(
   app.get('/api/agents/:agentId/channels', async (request) => {
     const { agentId } = AgentParams.parse(request.params)
     return AgentChannelsResponseSchema.parse(await port.listAgentChannels(agentId))
+  })
+
+  // The agent's Hermes todo list, read-only; `null` when it has none.
+  app.get('/api/agents/:agentId/todos', async (request, reply) => {
+    const { agentId } = AgentParams.parse(request.params)
+    const todos = AgentTodosSchema.parse(await port.readAgentTodos(agentId))
+    if (todos === null) return reply.type('application/json; charset=utf-8').send('null')
+    return todos
   })
 
   app.get('/api/agents/:agentId/memory', async (request) => {

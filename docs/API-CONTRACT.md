@@ -582,6 +582,10 @@ incarnation-aware reuse confirmation contract is agreed.
 - `GET /api/agents/:agentId/skills` → `SkillsResponse` `{ items: AgentDetail['skills'] }` · `POST …/skills` `{ name }`
   (install) → `SkillsResponse` · `PATCH …/skills/:name` `{ enabled }` → `AgentDetail['skills'][number]` ·
   `GET /api/skills/hub?q=` → `SkillHubResponse` `{ items: { name; identifier; source; trust; description }[] }`
+- `GET /api/agents/:agentId/todos` → `AgentTodos` = `{ todos: { id; content; status: 'pending' | 'in_progress' | 'completed' | 'cancelled'; parent?: string }[]; revision: number; updatedAt: string } | null`.
+  The agent's Hermes todo list (the `todo_list` tool keeps it in memory but every call is also a tool result in `state.db`; the
+  newest `{ todos, revision, summary }` result wins, read-only). `null` when the agent never wrote one or its database is
+  missing; malformed items are dropped. Shown as the Todo card on Team › agent › Overview and on Now for working agents.
 - `GET /api/agents/:agentId/memory?q=&cursor=` → `MemoryPage` `{ items: AgentDetail['memory']; nextCursor: string | null }` ·
   `POST …/memory` `{ text }` · `DELETE …/memory/:id`
   `MemoryPage.writable: false` (live Hermes has no per-entry memory command) means both writes answer 501 and clients hide the controls; absent = writable.

@@ -196,3 +196,13 @@ test('live adapter: memory writes are 501 with a clear message; reads work from 
     await live.stop()
   }
 })
+
+test('GET todos is null without a list and returns the list when there is one', async () => {
+  const none = await app.inject({ method: 'GET', url: '/api/agents/builder/todos' })
+  expect(none.statusCode).toBe(200)
+  expect(none.json()).toBeNull()
+  const some = await app.inject({ method: 'GET', url: '/api/agents/reviewer/todos' })
+  expect(some.json().todos.map((todo: { status: string }) => todo.status)).toContain('in_progress')
+  const missing = await app.inject({ method: 'GET', url: '/api/agents/ghost/todos' })
+  expect(missing.statusCode).toBe(404)
+})

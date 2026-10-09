@@ -9,6 +9,8 @@ import type {
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { TodoItems, todoProgress, useAgentTodos } from '../../components/TodoList.tsx'
+import '../../components/todo.css'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentTextColor } from '../chat/agent-text-color.ts'
 import { approvalOutcome, choiceText, useApprovalDecision } from '../chat/ApprovalCard.tsx'
@@ -90,6 +92,23 @@ export function ThreadCard({
           })
         )}
       </div>
+    </section>
+  )
+}
+
+/** The Hermes todo list of an agent that is working right now; nothing is shown when it has none. */
+export function TodoCard({ agent }: { agent: AgentSummary }) {
+  const todos = useAgentTodos(agent.id, true).data
+  if (!todos || todos.todos.length === 0) return null
+  return (
+    <section className="now-card now-todo" aria-label={`Todo of ${agent.name}`}>
+      <div className="now-card-head">
+        <h2>Todo</h2>
+        <span className="now-card-sub">
+          {agent.name} · {todoProgress(todos.todos)}
+        </span>
+      </div>
+      <TodoItems todos={todos.todos} />
     </section>
   )
 }
