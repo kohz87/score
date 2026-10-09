@@ -45,3 +45,20 @@ test('daily spend is each day share of the cost snapshots, summed over agents', 
   expect(trend.at(-3)!.spendUsd).toBe(0)
   sqlite.close()
 })
+
+test('an agent whose costs could not be read makes every day unknown, never a partial sum', () => {
+  const sqlite = new DatabaseSync(':memory:')
+  sqlite.exec(`CREATE TABLE session_cost_snapshots (profile TEXT, session_id TEXT, hour INTEGER, observed_at INTEGER,
+    cost_usd REAL, estimated INTEGER, PRIMARY KEY (profile, session_id, hour))`)
+  const common = { now, tz: 'UTC', runs: [], sqlite }
+  // Nothing readable at all: unknown, not $0.
+  expect(computeTrend({ ...common, costs: {}, agentIds: ['a', 'b'] }).at(-1)!.spendUsd).toBeNull()
+  // Only a is readable: b is missing, so the total is unknown, not a's share.
+  const partial = computeTrend({ ...common, costs: { a: [] }, agentIds: ['a', 'b'] })
+  expect(partial.every((day) => day.spendUsd === null)).toBe(true)
+  // Everyone readable with no sessions is a real zero.
+  expect(
+    computeTrend({ ...common, costs: { a: [], b: [] }, agentIds: ['a', 'b'] }).at(-1)!.spendUsd,
+  ).toBe(0)
+  sqlite.close()
+})
