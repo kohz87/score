@@ -57,12 +57,6 @@ export class CliLocator {
     return value
   }
 
-  private read(driver: CodingDriver): Promise<DetectedCli> {
-    if (this.options.disabled)
-      return Promise.resolve({
-        state: 'not_installed',
-        version: null,
-        message: this.options.disabled,
       })
     if (!driver.supported)
       return Promise.resolve({
