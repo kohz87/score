@@ -101,10 +101,12 @@ function Editor({
   const [notice, setNotice] = useState('')
   const dirty = draft !== base.content
   const draftRef = useRef(draft)
-  draftRef.current = draft
   const baseRef = useRef(base)
-  baseRef.current = base
   const seen = useRef(latest.etag)
+  useEffect(() => {
+    draftRef.current = draft
+    baseRef.current = base
+  })
 
   // The agent (or anything else) changed the file: follow it when there is nothing to lose, warn otherwise.
   useEffect(() => {

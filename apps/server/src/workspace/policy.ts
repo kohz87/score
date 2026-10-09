@@ -98,7 +98,7 @@ export function assertAllowedSegments(segments: readonly string[], use: PathUse)
 export interface RootPolicy {
   /** The user's home folder. */
   home: string
-  /** Folders that may never be a root or contain one (~/.hermes, Score's own home, ~/.ssh …). */
+  /** Folders that may never be a root or contain one (the agent runtime's home, Score's own home, ~/.ssh …). */
   forbidden: string[]
 }
 
@@ -107,7 +107,6 @@ export function defaultRootPolicy(extraForbidden: Array<string | undefined> = []
   return {
     home,
     forbidden: [
-      path.join(home, '.hermes'),
       path.join(home, '.score'),
       path.join(home, '.ssh'),
       ...extraForbidden.filter((item): item is string => Boolean(item)),
@@ -178,7 +177,7 @@ export async function checkRoot(candidate: string, policy: RootPolicy): Promise<
       if (isInside(blocked, form) || isInside(form, blocked))
         return {
           ok: false,
-          reason: 'That folder holds Hermes, Score or SSH data and cannot be a workspace',
+          reason: 'That folder holds agent-runtime, Score or SSH data and cannot be a workspace',
         }
   }
   return { ok: true, real }

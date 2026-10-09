@@ -12,7 +12,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { Config } from '../config.ts'
 import { HttpError } from '../errors.ts'
-import type { HermesPort } from '../hermes/index.ts'
+import { resolveHermesHome, type HermesPort } from '../hermes/index.ts'
 import {
   checkRoot,
   defaultRootPolicy,
@@ -32,8 +32,8 @@ const DeleteQuery = PathQuery.extend({ recursive: z.enum(['1']).optional() })
 export function registerWorkspaceRoutes(
   app: FastifyInstance,
   port: HermesPort,
-  config: Pick<Config, 'home' | 'hermesHome'>,
-  policy: RootPolicy = defaultRootPolicy([config.home, config.hermesHome]),
+  { home, hermesHome }: Pick<Config, 'home' | 'hermesHome'>,
+  policy: RootPolicy = defaultRootPolicy([home, resolveHermesHome(hermesHome)]),
 ): void {
   async function info(agentId: string): Promise<WorkspaceInfo & { cwd: string | null }> {
     const { cwd, backend } = await port.readWorkspaceConfig(agentId)
