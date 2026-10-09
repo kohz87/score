@@ -225,6 +225,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `message.delta`      | `{ messageId, roomId, append: string }`                                                       | Chat (streaming text)                                    |
 | `message.completed`  | `{ messageId, roomId, parts?: MessagePart[] }` (final parts replace the cached message's)     | Chat                                                     |
 | `message.deleted`    | `{ roomId, messageId }` (remove it from the cached messages; Score-side only)                  | Chat, Now thread                                         |
+| `knowledge.changed`  | `{ path; kind: 'written'\|'moved'\|'deleted'\|'restored'; to; by: 'you'\|'outside'\|{agentId} }` | Knowledge                                                |
 | `typing`             | `{ roomId, agentId, text /* "is re-reading the read layer" */ \| null }`                      | Chat, Now thread                                         |
 | `approval.requested` | `Approval`                                                                                    | Now card, Chat, Flow, Watch, Tasks, header dot           |
 | `approval.updated`   | `Approval` (phase / decision / delivery changes)                                              | same                                                     |
@@ -752,6 +753,33 @@ compatible: boolean }`. Read-only: compares the running build (version, code sha
   store (`$SCORE_HOME`, never the repo registry) so the compatibility gate re-enables `gateway-approvals`. `409 conflict`
   when the build changed since the check (hash differs), `409 not_compatible` when the check is not compatible.
 - Theme (light, dark, system) is a per-browser setting in `localStorage` (`score.theme`); there is no settings/ui endpoint.
+
+## 12. Knowledge (central vault; design docs/briefs/6.0-workspace-knowledge.md § 6.2)
+Score's own Markdown vault (default `~/score-vault`, `$SCORE_VAULT`), git-versioned; the files are the source of truth and
+Score's DB only indexes them. Paths are POSIX, relative to the vault; notes end in `.md`, attachments live under
+`attachments/`. Schemas in `packages/contract/src/knowledge.ts`. Writes from browsers are **H**; agents use the bridge
+tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
+- `GET /api/knowledge` → `KnowledgeInfo` `{ vault; notes; gitAvailable; agentAccess }`
+- `GET /api/knowledge/tree` → `{ folders: string[]; notes: KnowledgeNoteSummary[] }` (`{ path; title; mtime; lastAuthor }`)
+- `GET /api/knowledge/notes/*path` → `KnowledgeNote` `{ path; title; frontmatter; body; etag; mtime; links: { target;
+  path | null }[]; backlinks: { path; title }[]; lastAuthor }`. Title: frontmatter `title`, else the first `# H1`, else
+  the file name. Wikilinks `[[Target]]`, `[[Target|alias]]`, `[[Target#heading]]` resolve Obsidian-style (exact path,
+  then a unique basename, case-insensitive); unresolved links have `path: null`.
+- **H** `PUT /api/knowledge/notes/*path` `{ body; frontmatter?; etag | null }` → `{ etag; path }`; `412
+  precondition_failed` with `details.etag` on a stale etag; `etag: null` creates and refuses an existing note (`409
+  exists`); missing folders are created. Atomic write, then a git commit (author `You`); rapid edits of one note by one
+  author within 60 s amend Score's own last commit when it is still `HEAD`.
+- **H** `POST /api/knowledge/move` `{ from; to; updateLinks }` → `{ path; updatedNotes }` (one commit; `409 exists`).
+- **H** `DELETE /api/knowledge/notes/*path` → `204` (owner only; agents have no delete).
+- `GET /api/knowledge/search?q=&limit=` (limit ≤ 50, default 20) → `{ items: { path; title; snippet }[] }`: FTS5-ranked;
+  the query is tokenised into quoted terms (no FTS syntax from the user); `[[`/`]]` in `snippet` mark matches.
+- `GET /api/knowledge/notes/*path/history` → `{ items: { commit; at; author; message }[] }` (newest first; empty with
+  `gitAvailable: false`). `GET /api/knowledge/notes/*path/versions/:commit` → `{ commit; body }`.
+- **H** `POST /api/knowledge/notes/*path/restore` `{ commit }` → `{ etag; path }` (a new commit with that version).
+- **H** `PUT /api/knowledge/settings` `{ agentAccess: boolean }` → `KnowledgeInfo`.
+- Stream `knowledge.changed` after every change (Score's, an agent's, or an outside edit the watcher saw).
+- Errors: path outside the vault, `..`, NUL, absolute, `.git` → `400 bad_path`; not a `.md` note where one is needed →
+  `400 not_a_note`; too large (note > 2 MiB) → `413 payload_too_large`; missing → `404 not_found`.
 
 ## 11. Internal: bridge plugin ↔ server (not for the front end)
 

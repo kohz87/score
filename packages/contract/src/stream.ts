@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { KnowledgeChangedSchema } from './knowledge.ts'
 import { BriefSummarySchema } from './briefs.ts'
 import {
   AgentIdSchema,
@@ -101,6 +102,10 @@ export const StreamEventSchema = z.discriminatedUnion('type', [
     data: MessageCompletedSchema,
   }),
   StreamEnvelopeSchema.extend({ type: z.literal('message.deleted'), data: MessageDeletedSchema }),
+  StreamEnvelopeSchema.extend({
+    type: z.literal('knowledge.changed'),
+    data: KnowledgeChangedSchema,
+  }),
   StreamEnvelopeSchema.extend({ type: z.literal('typing'), data: TypingSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('approval.requested'), data: ApprovalSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('approval.updated'), data: ApprovalSchema }),

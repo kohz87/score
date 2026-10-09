@@ -217,6 +217,12 @@ export const completed = {
   messageId: 'message-1',
   roomId: 'room-1',
 } satisfies Contract.MessageCompleted
+export const knowledgeChanged = {
+  path: 'projects/pager.md',
+  kind: 'written' as const,
+  to: null,
+  by: { agentId: 'builder' },
+}
 export const deleted = {
   messageId: 'message-1',
   roomId: 'room-1',
