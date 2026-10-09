@@ -293,6 +293,8 @@ export interface HermesPort extends ProfileManagementPort {
     turnId: string
     sessionId?: string
     model?: string
+    /** Per-request provider (an alias's own); Hermes honours it with or without `model`. */
+    provider?: string
     /** Media ids of the person's image attachments, in message order. */
     images?: string[]
   }): Promise<{ runId: string }>

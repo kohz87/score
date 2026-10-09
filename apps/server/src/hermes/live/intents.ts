@@ -188,6 +188,7 @@ export async function startRunIntent(
       payload.profile !== parsed.profile ||
       payload.input !== parsed.input ||
       payload.model !== parsed.model ||
+      payload.provider !== parsed.provider ||
       payload.sessionId !== parsed.sessionId ||
       JSON.stringify(payload.images ?? []) !== JSON.stringify(parsed.images ?? [])
     )

@@ -1597,6 +1597,7 @@ export class FakePort implements HermesPort {
         turnId: z.string().min(1),
         sessionId: z.string().min(1).optional(),
         model: z.string().min(1).optional(),
+        provider: z.string().min(1).optional(),
         images: z.array(z.string().min(1)).optional(),
       })
       .parse(input)

@@ -98,7 +98,11 @@ test('/model <alias> runs on the model the alias of that agent stands for', asyn
   const run = vi.spyOn(port, 'startRun')
   const sent = await send({ text: '/model Quick @builder Check this' }, 'alias')
   expect(sent.statusCode).toBe(200)
-  expect(run.mock.calls[0]![0]).toMatchObject({ agentId: 'builder', model: 'local-gpt-mini' })
+  expect(run.mock.calls[0]![0]).toMatchObject({
+      agentId: 'builder',
+      model: 'local-gpt-mini',
+      provider: 'local',
+    })
 })
 
 test.each([

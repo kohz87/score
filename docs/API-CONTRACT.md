@@ -522,7 +522,7 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   | `/routine`  | `/routine @agent <schedule> <prompt>`                  | creates a cron job                 | `{ kind: 'routine', routineId }`              |
   | `/remember` | `/remember [@agent…] <fact>`                           | writes agent memory                | `{ kind: 'remember', agentIds }`              |
   | `/skill`    | `/skill @agent <name>` (use) · `/skill install <name>` | loads or installs a skill          | `{ kind: 'skill', name, installed: boolean }` |
-  | `/model`    | `/model <model> <message…>`                            | runs this message on another model | `{ kind: 'model', model }`                    |
+  | `/model`    | `/model <model> <message…>`                            | runs this message on another model (a name that is one of the agent's aliases also carries the alias's provider to Hermes) | `{ kind: 'model', model }`                    |
 
   `/remember` and `/skill` are parsed but not implemented yet: they answer `501 not_implemented` and are left out of
   the slash menu. Use the agent's Memory and Skills tabs instead.

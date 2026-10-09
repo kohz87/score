@@ -542,10 +542,18 @@ export function registerRoomRoutes(
     let command: CommandResult | null = modelCommand(route.model)
     // `/model <alias>` names the model the alias stands for on each recipient (aliases belong to a profile).
     const typedModel = route.model ?? body.model
-    const modelOf = new Map<string, string>()
+    const modelOf = new Map<string, { model: string; provider?: string }>()
     if (typedModel)
       for (const agentId of route.routedTo)
-        modelOf.set(agentId, (await resolveAlias(port, agentId, typedModel))?.model ?? typedModel)
+      {
+        const alias = await resolveAlias(port, agentId, typedModel)
+        modelOf.set(
+          agentId,
+          alias
+            ? { model: alias.model, ...(alias.provider ? { provider: alias.provider } : {}) }
+            : { model: typedModel },
+        )
+      }
     const id = randomUUID()
     if (route.parsed.command?.kind === 'assign') {
       const assigned = route.parsed.command
@@ -647,7 +655,7 @@ export function registerRoomRoutes(
                   : route.input + (notes.get(agentId) ?? ''),
               agents: known,
               ...(agentId === planner ? { planFirst: true } : {}),
-              ...(modelOf.has(agentId) ? { model: modelOf.get(agentId) } : {}),
+              ...(modelOf.has(agentId) ? modelOf.get(agentId) : {}),
             },
             now,
           )
