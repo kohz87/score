@@ -308,6 +308,7 @@ export function buildApp({
     Boolean(config.remote?.tlsCert),
     pairingOrigin,
     security ?? (db ? new SecurityPassword(config.home, clock) : undefined),
+    config.remote ? config.remote.origins : [pairingOrigin],
   )
   registerSystemRoutes(app, getSystemStatus)
   if (db && ingest && getEpoch) {

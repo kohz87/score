@@ -153,7 +153,11 @@ const twoBrowsers = {
     },
   ],
 }
-function managementFetch(passwordSet: boolean, wrong = false) {
+function managementFetch(
+  passwordSet: boolean,
+  wrong = false,
+  expiresAt = new Date(Date.now() + 15 * 60_000).toISOString(),
+) {
   return vi.fn((url: string, init?: RequestInit) => {
     if (url.endsWith('/api/session/security'))
       return Promise.resolve(Response.json({ passwordSet }))
@@ -166,7 +170,7 @@ function managementFetch(passwordSet: boolean, wrong = false) {
       return Promise.resolve(
         Response.json({
           url: 'http://10.1.1.199:8741/pair#tok',
-          expiresAt: '2026-10-08T02:00:00.000Z',
+          expiresAt,
         }),
       )
     if (init?.method === 'PUT') return Promise.resolve(new Response(null, { status: 204 }))
@@ -251,4 +255,18 @@ test('Check password says whether the typed password is right (5.23)', async () 
   })
   fireEvent.click(screen.getByRole('button', { name: 'Check password' }))
   expect((await screen.findByRole('alert')).textContent).toBe('That is not the security password.')
+})
+
+test('the pairing link comes with a QR code that goes away when the link expires', async () => {
+  document.documentElement.setAttribute('data-score-transport', 'tls')
+  vi.stubGlobal('fetch', managementFetch(true, false, new Date(Date.now() + 300).toISOString()))
+  render(withClient(<RemoteSection />))
+  await screen.findByRole('button', { name: 'Terminate Old phone' })
+  fireEvent.change(screen.getByLabelText('Security password'), {
+    target: { value: 'correct horse battery' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Pair another device' }))
+  await screen.findByRole('img', { name: 'QR code for the pairing link' })
+  await screen.findByText(/That link expired/)
+  expect(screen.queryByRole('img', { name: 'QR code for the pairing link' })).toBeNull()
 })

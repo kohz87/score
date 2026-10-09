@@ -210,6 +210,10 @@ export const PairingLinkSchema = z.object({
 })
 export type PairingLink = z.infer<typeof PairingLinkSchema>
 /** Whether the security password that guards pairing management is set (contract §3). */
-export const SecurityStatusSchema = z.object({ passwordSet: z.boolean() })
+export const SecurityStatusSchema = z.object({
+  passwordSet: z.boolean(),
+  /** Origins a pairing link may use (SCORE_PUBLIC_ORIGINS); the first is the default. */
+  origins: z.array(z.url({ protocol: /^https?$/ })).default([]),
+})
 export const RevokeOthersResponseSchema = z.object({ revoked: z.int().nonnegative() })
 export type PairedBrowser = z.infer<typeof PairedBrowserSchema>

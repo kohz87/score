@@ -320,7 +320,7 @@ const cases = [
     { url: 'http://10.1.1.199:8741/pair#abc', expiresAt: '2026-10-08T13:00:00.000Z' },
     { url: 'javascript:alert(1)', expiresAt: '2026-10-08T13:00:00.000Z' },
   ],
-  ['SecurityStatusSchema', { passwordSet: true }, { passwordSet: 'yes' }],
+  ['SecurityStatusSchema', { passwordSet: true, origins: [] }, { passwordSet: 'yes' }],
   ['RevokeOthersResponseSchema', { revoked: 2 }, { revoked: -1 }],
   ['OperationConfirmRequestSchema', { step: 'create_profile' }, { step: 'x', extra: 1 }],
   ['ProviderItemSchema', provider, { ...provider, status: 'broken' }],

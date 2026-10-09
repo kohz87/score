@@ -298,13 +298,16 @@ expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a mana
     devices, keep itself alive or terminate the owner's pairings. Body `{ password }`; `409 password_not_set`,
     `403 wrong_password`, `429 too_many_attempts` (5 wrong in 15 minutes per paired browser, 20 overall; a new
     password clears the count).
-    - `GET /api/session/security` → `{ passwordSet: boolean }` · `PUT /api/session/security/password`
+    - `GET /api/session/security` → `{ passwordSet: boolean; origins: string[] }` (`origins` = `SCORE_PUBLIC_ORIGINS`, the
+      choices for a pairing link; the first is the default) · `PUT /api/session/security/password`
       `{ password; current? }` → `204` (first time without `current`; afterwards `current` is required; a forgotten
       password is reset on the host with `scripts/score password`). Stored as a salted scrypt hash, 0600.
     - `POST /api/session/security/check` `{ password }` → `204` when it is the security password (5.23: lets the owner
       confirm it before using it); same errors and the same attempt limits as every password-guarded action.
-    - `POST /api/session/pairing-links` `{ password }` → `{ url; expiresAt }`: the same one-time, 15-minute token the
-      console prints (minting replaces any unused one).
+    - `POST /api/session/pairing-links` `{ password; origin? }` → `{ url; expiresAt }`: the same one-time, 15-minute token the
+      console prints (minting replaces any unused one). `origin` (5.29) must be one of `origins` from the security status
+      (`400 bad_request` otherwise); the link uses it instead of the default, e.g. for the Tailscale address. The web page
+      draws the link as a QR code (inline SVG) while it is unexpired and unused.
     - `POST /api/session/browsers/:id/renew` `{ password }` → the browser with a fresh 30-day limit and 7-day idle
       window (renewing counts as activity); that browser's cookie is re-sent on its next request.
     - `POST /api/session/browsers/:id/revoke` `{ password }` → `204` (idempotent) · `POST /api/session/browsers/revoke-others`
