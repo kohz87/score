@@ -71,8 +71,8 @@ test('Settings › Knowledge lists each agent’s writes today', async () => {
   ]
   mount(<AgentUsage />)
   expect(await screen.findByText('Agent writes today')).toBeDefined()
-  expect(screen.getByText('builder').nextSibling?.textContent).toBe('7')
-  expect(screen.getByText('reviewer').nextSibling?.textContent).toBe('1')
+  expect(screen.getByText('builder').nextSibling?.textContent).toBe('7 writes')
+  expect(screen.getByText('reviewer').nextSibling?.textContent).toBe('1 write')
 })
 
 test('nothing is shown while no agent has written today', async () => {
