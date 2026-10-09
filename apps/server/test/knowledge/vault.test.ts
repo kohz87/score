@@ -212,7 +212,7 @@ describe('links and move', () => {
     expect((await h.vault.readNote('a.md')).links[0]?.path).toBeNull()
   })
 
-  test('move with updateLinks rewrites links in one commit; without it links break', async () => {
+  test('move with updateLinks rewrites links (rename first, then the edits); without it links break', async () => {
     h = await makeVault()
     await h.vault.writeNote('Old name.md', {
       body: '# Old\nself [[Old name]] and [[#x]]',
@@ -239,15 +239,22 @@ describe('links and move', () => {
     expect((await h.vault.readNote('Folder/New name.md')).backlinks.map((b) => b.path)).toEqual([
       'one.md',
     ])
-    expect(gitOut(h.vaultDir, 'log', '-1', '--format=%s')).toBe(
-      'Move Old name.md to Folder/New name.md\n',
+    // The rename is a commit of its own (so git follows the file); the link edits come right after it.
+    expect(gitOut(h.vaultDir, 'log', '-2', '--format=%s')).toBe(
+      'Update links after moving Old name.md\nMove Old name.md to Folder/New name.md\n',
     )
+    expect(
+      gitOut(h.vaultDir, 'show', '--name-only', '--no-renames', '--format=', 'HEAD~1')
+        .split('\n')
+        .filter(Boolean)
+        .sort(),
+    ).toEqual(['Folder/New name.md', 'Old name.md'])
     expect(
       gitOut(h.vaultDir, 'show', '--name-only', '--format=', 'HEAD')
         .split('\n')
         .filter(Boolean)
         .sort(),
-    ).toEqual(['Folder/New name.md', 'Old name.md', 'one.md'])
+    ).toEqual(['Folder/New name.md', 'one.md'])
     expect(h.events).toContainEqual({
       path: 'Old name.md',
       kind: 'moved',

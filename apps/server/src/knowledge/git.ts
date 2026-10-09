@@ -6,6 +6,14 @@ import { authorFromGit, authorToColumn, gitIdentity, sameAuthor } from './note.t
 
 const run = promisify(execFile)
 
+/** File names from `--name-only -z` output after a format: NUL-separated, never quoted or trimmed. */
+function namesOf(rest: string): string[] {
+  return rest
+    .replace(/^\0?\n?/, '')
+    .split('\0')
+    .filter((name) => name !== '')
+}
+
 export const AMEND_WINDOW_MS = 60_000
 
 interface LastCommit {
@@ -111,22 +119,19 @@ export class VaultGit {
 
   /**
    * Commits whatever changed outside Score as "Outside changes", so Score's own commit contains only its own
-   * change. Returns true when something was committed.
+   * change. Returns true when something was committed, false when there was nothing to commit (or git is off).
+   * A failure THROWS: callers about to overwrite or delete must not treat "could not snapshot" as "nothing changed".
    */
   async commitOutsideChanges(): Promise<boolean> {
     if (!this.available) return false
-    try {
-      const paths = await this.dirty()
-      if (paths.length === 0) return false
-      await this.git(['add', '-A', '--', ...paths])
-      await this.git(['commit', '-q', '--no-verify', '-m', 'Outside changes', '--', ...paths], {
-        author: 'outside',
-      })
-      this.last = undefined
-      return true
-    } catch {
-      return false
-    }
+    const paths = await this.dirty()
+    if (paths.length === 0) return false
+    await this.git(['add', '-A', '--', ...paths])
+    await this.git(['commit', '-q', '--no-verify', '-m', 'Outside changes', '--', ...paths], {
+      author: 'outside',
+    })
+    this.last = undefined
+    return true
   }
 
   /** Commits (or amends) the given paths. Resolves to the commit hash, or null when nothing changed or git failed. */
@@ -176,6 +181,7 @@ export class VaultGit {
         '-n',
         '200',
         '--name-only',
+        '-z',
         '--format=%x1e%H%x1f%cI%x1f%an%x1f%ae%x1f%s%x1f',
         '--',
         notePath,
@@ -188,7 +194,7 @@ export class VaultGit {
       if (record.trim() === '') continue
       const [commit, at, name, email, message, rest] = record.split('\x1f')
       if (!commit || !at) continue
-      const file = (rest ?? '').split('\n').find((line) => line.trim() !== '') ?? notePath
+      const file = namesOf(rest ?? '')[0] ?? notePath
       items.push({
         commit,
         at,
@@ -222,6 +228,7 @@ export class VaultGit {
         '-n',
         String(limit),
         '--name-only',
+        '-z',
         '--no-renames',
         '--format=%x1e%an%x1f%ae%x1f',
       ])
@@ -229,8 +236,7 @@ export class VaultGit {
         const [name, email, rest] = record.split('\x1f')
         if (!rest) continue
         const column = authorToColumn(authorFromGit(name ?? '', email ?? ''))
-        for (const line of rest.split('\n'))
-          if (line.trim() !== '' && !result.has(line)) result.set(line, column)
+        for (const name of namesOf(rest)) if (!result.has(name)) result.set(name, column)
       }
     } catch {
       // empty repository

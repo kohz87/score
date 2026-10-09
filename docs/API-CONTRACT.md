@@ -918,8 +918,13 @@ tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
 - **H** `PUT /api/knowledge/notes/*path` `{ body; frontmatter?; etag | null }` → `{ etag; path }`; `412
   precondition_failed` with `details.etag` on a stale etag; `etag: null` creates and refuses an existing note (`409
   exists`); missing folders are created. Atomic write, then a git commit (author `You`); rapid edits of one note by one
-  author within 60 s amend Score's own last commit when it is still `HEAD`.
-- **H** `POST /api/knowledge/move` `{ from; to; updateLinks }` → `{ path; updatedNotes }` (one commit; `409 exists`).
+  author within 60 s amend Score's own last commit when it is still `HEAD`. Before any save, move, delete or restore Score
+  commits outside edits as "Outside changes"; if that snapshot fails the operation is refused `503 git_unavailable` (nothing
+  is overwritten), and a save whose note changed on disk meanwhile gets `412` with the new etag. Agent `write`/`append`
+  from an observe-only producer (`isolation: 'unknown'`) → `403 observe_only`.
+- **H** `POST /api/knowledge/move` `{ from; to; updateLinks }` → `{ path; updatedNotes }` (two commits: the pure rename, then the link edits, so
+  git follows the file; `409 exists`; `413` and nothing moved when a link rewrite would push a note over 2 MiB; links added
+  outside Score since the last scan are included).
 - **H** `DELETE /api/knowledge/notes/*path` → `204` (owner only; agents have no delete).
 - `GET /api/knowledge/search?q=&limit=` (limit ≤ 50, default 20) → `{ items: { path; title; snippet }[] }`: FTS5-ranked;
   the query is tokenised into quoted terms (no FTS syntax from the user); `[[`/`]]` in `snippet` mark matches.
