@@ -315,7 +315,7 @@ test('documents the allowlist does not cover are refused, however they are named
 })
 
 // audit5-g: references go back when the message that held them is deleted or rewound away.
-test('deleting or rewinding a message releases its media references', async () => {
+test('deleting a message releases its media references; a rewind keeps them for the previous version', async () => {
   const room = RoomSchema.parse(
     (
       await app.inject({
@@ -366,5 +366,5 @@ test('deleting or rewinding a message releases its media references', async () =
     payload: { mode: 'delete' },
   })
   expect(rewound.statusCode, rewound.body).toBe(200)
-  expect(refs(second)).toBe(0)
+  expect(refs(second)).toBe(1)
 })
