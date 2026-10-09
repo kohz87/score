@@ -174,7 +174,7 @@ test('profile shows the header band, tabs and overview cards from the detail', a
   expect(await screen.findByRole('heading', { name: 'Builder', level: 1 })).toBeDefined()
   expect(screen.getByText('Builds what Lead plans.')).toBeDefined()
   expect(screen.getByRole('tablist', { name: "Builder's settings" })).toBeDefined()
-  expect(screen.getAllByRole('tab')).toHaveLength(11)
+  expect(screen.getAllByRole('tab')).toHaveLength(12)
   expect(screen.getByText('Calm and precise.')).toBeDefined()
   expect(
     within(screen.getByRole('main').querySelector('.team-facts')! as HTMLElement)

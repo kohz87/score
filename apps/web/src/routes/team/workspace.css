@@ -237,9 +237,12 @@
   background: var(--card);
   color: var(--ink);
 }
-.ws-back {
+.ws .ws-back {
   display: none;
   align-self: flex-start;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
 }
 .ws-unavailable {
   color: var(--agent-saffron-text);
@@ -257,8 +260,9 @@
   .ws-screen-file .ws-tree-pane {
     display: none;
   }
-  .ws-back {
+  .ws .ws-back {
     display: inline-flex;
+    align-items: center;
   }
   .ws-compare {
     grid-template-columns: 1fr;
