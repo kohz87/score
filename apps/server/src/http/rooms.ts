@@ -2,7 +2,10 @@ import { randomUUID } from 'node:crypto'
 import {
   AgentIdSchema,
   AgentSummarySchema,
+  RewindRequestSchema,
   type CommandResult,
+  type RewindPlan,
+  type RewindSkipReason,
   type Message,
   type Room,
 } from '@score/contract'
@@ -23,7 +26,17 @@ import {
   roomRow,
   storeMessage,
 } from '../domain/rooms.ts'
-import { editableMessage, markEdited } from '../domain/versions.ts'
+import {
+  createVersion,
+  editableMessage,
+  listVersions,
+  markEdited,
+  markRunsRewound,
+  rewindableMessage,
+  rewindScope,
+  versionMessages,
+  versionOfAnchor,
+} from '../domain/versions.ts'
 import { roomFilesInPlay, roomLearned } from '../domain/room-panels.ts'
 import { createBrief } from '../domain/briefs.ts'
 import { reserveMessageRun, retryReply } from '../domain/message-runs.ts'
@@ -285,6 +298,139 @@ export function registerRoomRoutes(
       return reply.code(204).send()
     },
   )
+
+  // Rewind (PLAN 5.33): the person's message and everything after it become a previous version, and the agents' Hermes
+  // sessions go back to just before it. One rewind per room at a time.
+  const MessageParamsSchema = z.object({
+    roomId: ParamsSchema.shape.roomId,
+    messageId: z.string().min(1).max(200),
+  })
+  const rewinding = new Set<string>()
+  async function rewindPlan(roomId: string, messageId: string) {
+    const found = db.read((sqlite) => {
+      const anchor = rewindableMessage(sqlite, roomId, messageId)
+      return { anchor, scope: rewindScope(sqlite, roomId, anchor) }
+    })
+    const checks = await Promise.all(
+      found.scope.agents.map(async (agent) => {
+        const result = await port.rewindSession({
+          agentId: agent.agentId,
+          sessionId: agent.sessionId,
+          turns: agent.turns,
+          sinceMs: Date.parse(found.anchor.createdAt),
+          dryRun: true,
+        })
+        return { agent, cannot: result.status === 'skipped' ? result.reason : null }
+      }),
+    )
+    return { ...found, checks }
+  }
+
+  app.get('/api/rooms/:roomId/messages/:messageId/rewind-plan', async (request): Promise<RewindPlan> => {
+    const { roomId, messageId } = MessageParamsSchema.parse(request.params)
+    const { scope, checks } = await rewindPlan(roomId, messageId)
+    return {
+      hiddenCount: scope.hiddenCount,
+      blocked: scope.blocked,
+      agents: checks.map(({ agent, cannot }) => ({
+        agentId: agent.agentId,
+        turns: agent.turns,
+        cannot,
+      })),
+    }
+  })
+
+  app.post('/api/rooms/:roomId/messages/:messageId/rewind', mutation, async (request) => {
+    const { roomId, messageId } = MessageParamsSchema.parse(request.params)
+    const body = RewindRequestSchema.strict().parse(request.body)
+    const prior = db.read((sqlite) => {
+      roomRow(sqlite, roomId)
+      return versionOfAnchor(sqlite, roomId, messageId)
+    })
+    // Repeating a rewind that already happened returns what it did, and never touches Hermes again.
+    if (prior) return { version: prior, rewound: prior.rewound, skipped: prior.skipped }
+    if (rewinding.has(roomId))
+      throw new HttpError(409, 'conflict', 'This room is already being rewound')
+    rewinding.add(roomId)
+    try {
+      const { anchor, scope, checks } = await rewindPlan(roomId, messageId)
+      if (scope.blocked) throw new HttpError(409, 'conflict', scope.blocked)
+      const skipped: { agentId: string; reason: RewindSkipReason }[] = body.scoreOnly
+        ? scope.agents.map((agent) => ({ agentId: agent.agentId, reason: 'score_only' }))
+        : checks.flatMap(({ agent, cannot }) =>
+            cannot ? [{ agentId: agent.agentId, reason: cannot }] : [],
+          )
+      if (!body.scoreOnly && skipped.length)
+        throw new HttpError(409, 'rewind_incomplete', 'Some agents cannot be rewound', {
+          skipped,
+          rewound: [],
+        })
+      const rewound: { agentId: string; turnsUndone: number }[] = []
+      if (!body.scoreOnly) {
+        for (const agent of scope.agents) {
+          const result = await port.rewindSession({
+            agentId: agent.agentId,
+            sessionId: agent.sessionId,
+            turns: agent.turns,
+            sinceMs: Date.parse(anchor.createdAt),
+          })
+          if (result.status !== 'rewound') {
+            const reason = result.status === 'skipped' ? result.reason : 'rewind_failed'
+            throw new HttpError(409, 'rewind_incomplete', 'Some agents could not be rewound', {
+              skipped: [{ agentId: agent.agentId, reason }],
+              rewound,
+            })
+          }
+          rewound.push({ agentId: agent.agentId, turnsUndone: result.turnsUndone })
+          // Remembered at once: a retry after a later agent failed must not rewind this one again.
+          await ingest.submit({
+            source: 'rooms',
+            identity: randomUUID(),
+            apply: ({ sqlite, now }) => {
+              markRunsRewound(sqlite, roomId, agent.agentId, anchor.createdAt, now)
+              return []
+            },
+          })
+        }
+      }
+      let created: ReturnType<typeof createVersion> | undefined
+      await ingest.submit({
+        source: 'rooms',
+        identity: randomUUID(),
+        apply: ({ sqlite, now }) => {
+          // Re-checked inside the transaction: new work may have been queued while Hermes was being asked.
+          const again = rewindScope(sqlite, roomId, anchor)
+          if (again.blocked) throw new HttpError(409, 'conflict', again.blocked)
+          created = createVersion(
+            sqlite,
+            { roomId, anchor, mode: body.mode, scoreOnly: Boolean(body.scoreOnly), rewound, skipped },
+            now,
+          )
+          return created.drafts
+        },
+      })
+      return { version: created!.version, rewound, skipped }
+    } finally {
+      rewinding.delete(roomId)
+    }
+  })
+
+  app.get('/api/rooms/:roomId/versions', async (request) => {
+    const { roomId } = ParamsSchema.parse(request.params)
+    const result = snapshot(db, (sqlite) => listVersions(sqlite, roomId))
+    return { asOfSeq: result.asOfSeq, items: result.data }
+  })
+
+  app.get('/api/rooms/:roomId/versions/:anchorId', async (request) => {
+    const { roomId, anchorId } = z
+      .object({ roomId: ParamsSchema.shape.roomId, anchorId: z.string().min(1).max(200) })
+      .parse(request.params)
+    return db.read((sqlite) => {
+      const version = versionOfAnchor(sqlite, roomId, anchorId)
+      if (!version) throw new HttpError(404, 'not_found', 'Unknown version')
+      return { version, items: versionMessages(sqlite, version.id) }
+    })
+  })
 
   app.post('/api/rooms/:roomId/messages/:messageId/retry', mutation, async (request, reply) => {
     const { roomId, messageId } = z

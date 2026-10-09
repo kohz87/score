@@ -18,6 +18,7 @@ import {
   createScreenshotImporter,
   loadBridgeBootstrap,
   pruneBridge,
+  RewindBroker,
   sweepKanbanDenials,
   type HermesPort,
 } from './hermes/index.ts'
@@ -193,8 +194,11 @@ export async function startServer(
     const media = new MediaStore(database, join(config.home, 'media'), {
       ...(config.mediaQuotaMb ? { quotaBytes: config.mediaQuotaMb * 1024 * 1024 } : {}),
     })
+    // Session rewinds (5.33): the live port asks, the bridge routes hand the command to the plugin.
+    const rewindBroker = new RewindBroker()
     port = createHermesPort(config, {
       db: database,
+      rewindBroker,
       imageReader: (id) => media.read(id),
       onError: (error) => app?.log.error({ err: error }, 'Hermes observation failed'),
     })
@@ -214,6 +218,7 @@ export async function startServer(
             bootstrapHash: loadBridgeBootstrap(config.home),
             getCompatibility: () => adapter.status().compatibility,
             importScreenshot: createScreenshotImporter(config, media),
+            rewind: rewindBroker,
           }
         : undefined
     // Fake mode (tests, e2e, demos) gets a throwaway seeded vault unless SCORE_VAULT names one.

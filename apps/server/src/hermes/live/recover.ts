@@ -37,7 +37,7 @@ function isTurnInput(content: string | null, input: string): boolean {
  * run keeps writing to a child. Branches, delegates and tool sessions are not continuations; an ambiguous fork
  * stops the walk.
  */
-function compressionLineage(db: DatabaseSync, sessionId: string): string[] {
+export function compressionLineage(db: DatabaseSync, sessionId: string): string[] {
   const lineage = [sessionId]
   try {
     const children = db.prepare(

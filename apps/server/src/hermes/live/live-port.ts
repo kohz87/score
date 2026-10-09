@@ -43,6 +43,7 @@ import { GatewayClient, HermesHttpError } from './gateway.ts'
 import { RunIntents } from './intents.ts'
 import { ProfileNameSchema, resolveHermesHome } from './paths.ts'
 import { recoverRunOutput } from './recover.ts'
+import { rewindSession } from './rewind.ts'
 import { followRun, waitForRun, type FollowOptions } from './runs.ts'
 import { taskAction, taskReader } from './task-actions.ts'
 import { LiveTasks } from './tasks.ts'
@@ -693,6 +694,12 @@ export class LivePort implements HermesPort {
     const row = readRun(db.sqlite, req.runId)
     if (row.profile !== req.agentId) throw new HttpError(404, 'not_found', 'Unknown run')
     await gateway.stopRun(req.agentId, req.runId, row.credential_generation ?? undefined)
+  }
+  rewindSession(req: Parameters<HermesPort['rewindSession']>[0]) {
+    return rewindSession(req, {
+      broker: this.options.rewindBroker,
+      ...(this.options.hermesHome ? { hermesHome: this.options.hermesHome } : {}),
+    })
   }
   async taskAction(
     req: Parameters<HermesPort['taskAction']>[0],

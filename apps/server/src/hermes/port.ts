@@ -32,7 +32,8 @@ import type {
   SignIn,
   ToolServerRequest,
 } from '@score/contract'
-import type { AgentTodos } from '@score/contract'
+import type { AgentTodos, RewindSkipReason } from '@score/contract'
+import type { RewindBroker } from './bridge/rewind-broker.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { AgentFile, AgentFileName } from './agent-files.ts'
 import type {
@@ -274,11 +275,29 @@ export interface HermesPort extends ProfileManagementPort {
     images?: string[]
   }): Promise<{ runId: string }>
   stopRun(req: { agentId: string; runId: string }): Promise<void>
+  /**
+   * Rewind one agent's room session by `turns` user turns (PLAN 5.33). Reads Hermes's own history first (the turn count
+   * must match, the session must not have been compressed since `sinceMs`), then asks the Score bridge inside the
+   * agent's gateway to run Hermes's own rewind. `dryRun` does the checks only. Never throws for a refusal.
+   */
+  rewindSession(req: {
+    agentId: string
+    sessionId: string
+    turns: number
+    /** Epoch ms of the message the room is rewound to. */
+    sinceMs: number
+    dryRun?: boolean
+  }): Promise<RewindSessionResult>
   taskAction(req: z.infer<typeof TaskActionRequestSchema>): Promise<{ hermesStatus: string }>
   deliverDecision(
     req: z.infer<typeof DecisionDeliveryRequestSchema>,
   ): Promise<'applied' | 'not_pending' | 'failed'>
 }
+
+export type RewindSessionResult =
+  | { status: 'ready' }
+  | { status: 'rewound'; turnsUndone: number; rewoundCount: number }
+  | { status: 'skipped'; reason: RewindSkipReason }
 
 export interface Scheduler {
   now(): number
@@ -293,6 +312,8 @@ export interface HermesPortDeps {
   onError?: (error: unknown) => void
   /** Reads an uploaded image by media id (wired from the media store; `hermes/` never imports it). */
   imageReader?: ImageReader
+  /** Live only: how rewinds reach the Score bridge inside an agent's gateway (the bridge routes share it). */
+  rewindBroker?: RewindBroker
 }
 
 export type ImageReader = (mediaId: string) => { contentType: string; bytes: Uint8Array } | null
