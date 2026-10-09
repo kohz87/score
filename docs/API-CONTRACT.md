@@ -228,6 +228,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `message.completed`  | `{ messageId, roomId, parts?: MessagePart[] }` (final parts replace the cached message's)     | Chat                                                     |
 | `message.deleted`    | `{ roomId, messageId }` (remove it from the cached messages; Score-side only)                  | Chat, Now thread                                         |
 | `message.updated`    | `{ roomId, messageId, editedBy: MessageId \| null }` (the original of an edit; set its `editedBy`)  | Chat                                                     |
+| `room.version.created` | `RoomVersion` (a rewind hid the anchor and everything after it; the `message.deleted` events for those messages precede it) | Chat |
 | `knowledge.changed`  | `{ path; kind: 'written'\|'moved'\|'deleted'\|'restored'; to; by: 'you'\|'outside'\|{agentId} }` | Knowledge                                                |
 | `typing`             | `{ roomId, agentId, text /* "is re-reading the read layer" */ \| null }`                      | Chat, Now thread                                         |
 | `approval.requested` | `Approval`                                                                                    | Now card, Chat, Flow, Watch, Tasks, header dot           |
@@ -441,6 +442,33 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 - **H** `POST /api/rooms/:roomId/messages/:messageId/stop` → `{ ok: true }` (PLAN 5.25): stops the Score-started run that is
   writing that streaming agent reply; the reply ends with "This run was stopped." `404` unknown; `409 conflict` when the
   message is not a reply being written by a running run (finished, or still queued).
+- **S** `GET /api/rooms/:roomId/messages/:messageId/rewind-plan` → `RewindPlan` `{ hiddenCount; agents: { agentId; turns;
+  cannot: RewindSkipReason | null }[]; blocked: string | null }` (PLAN 5.33): what a rewind of the person's own message
+  would do, for the confirmation. Nothing changes. `turns` is the number of Hermes user turns of that agent's room session
+  (`score-<room>-<agent>`) that started at or after the message and are still in Hermes; `blocked` says why a rewind can't
+  start now (an agent is answering or has queued work, or the room's work is paused with pending holds). `404`/`400` as for
+  `edits`.
+- **H** `POST /api/rooms/:roomId/messages/:messageId/rewind` `{ mode: 'edit' | 'delete'; scoreOnly?: boolean }` →
+  `{ version: RoomVersion; rewound: { agentId; turnsUndone }[]; skipped: { agentId; reason: RewindSkipReason }[] }`
+  (PLAN 5.33). The message is the person's own, finished, in this room. The message and **every message after it in the
+  room** become a *previous version* (`messages.deleted_at` plus `version_id`: left out of normal reads exactly like a
+  deleted message; `message.deleted` for each, then `room.version.created`). Unless `scoreOnly`, every agent whose Hermes
+  session for this room has user turns at or after the message is **rewound** to just before it, through the bridge
+  (`rewind` command, §11). Score counts the turns from its own records (`message_runs`, not already rewound) and checks
+  them against Hermes's own history read-only; the lineage of compressed sessions is followed and a rewind across a
+  compression boundary is not attempted. Nothing is hidden unless every needed rewind succeeded; otherwise `409
+  rewind_incomplete` with `details: { skipped: { agentId; reason }[]; rewound: … }` and the person may repeat the request
+  with `scoreOnly: true` (hide in Score only; `skipped` then lists every agent with `score_only`). `409 conflict` while an
+  agent is answering, has queued work, or the room is paused with pending holds. Long-term memory (MEMORY.md, skills,
+  Knowledge notes) is **not** rewound. Idempotent per message: repeating it returns the stored result and never rewinds
+  twice. For `mode: 'edit'` the correction is then posted through the normal `POST …/messages` with `edits`, which links
+  it (`RoomVersion.replacedBy`, original `editedBy`) instead of hiding again. Deleting an agent reply stays the Score-only
+  `DELETE`.
+- **S** `GET /api/rooms/:roomId/versions` → `{ asOfSeq; items: RoomVersion[] }` (newest first); **S** `GET
+  /api/rooms/:roomId/versions/:anchorId` → `{ version: RoomVersion; items: Message[] }` (the hidden messages, anchor
+  first, oldest to newest; shown read-only). `RoomVersion` `{ id; roomId; anchorId; anchorCreatedAt; mode; replacedBy |
+  null; number; count; hiddenCount; rewound; skipped; createdAt }`: `number` of `count` is the position in a chain of
+  edits (the correction itself was edited again). `404` unknown room or anchor.
 - **S** `GET /api/agents/:agentId/context` → `AgentContext` `{ model: string | null; tokens: { input; output } | null;
   costUsd: number | null; contextLength: number | null }` (PLAN 5.25): usage of the agent's latest finished or running run
   with usage and the model's context window when Hermes's model options carry one (else `null`). `404` unknown agent.
@@ -458,7 +486,8 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   already edited or an agent is still answering it. The new message is an ordinary turn (it carries `edits`); the
   original **is replaced** (owner 2026-10-09): it gets `editedBy` (`message.updated`) and is removed from Score together
   with every reply in its chain (`message.deleted` for each, as Delete). Agents' Hermes histories keep the old turn
-  unless the session is rewound (planned 5.33). The web composer pre-fills text, recipients and attachments from the
+  unless the session was rewound first (`…/rewind`, PLAN 5.33). A post with `edits` for a message that was not rewound
+  hides it and everything after it in Score only (a version with `scoreOnly`); one that was rewound is just linked. The web composer pre-fills text, recipients and attachments from the
   original.
 
   Text starting with a slash command is parsed server-side:
@@ -917,6 +946,18 @@ sessionKey; requestId; choice: ApprovalChoice; reason: string | null }[] }`. Onl
 - `requestId` in a `pre_approval_request` event is a **guarantee of exactness** by the producer: report it only when
   the queue entry is provably this hook's own; otherwise send `null` (view-only). Never use `register_gateway_settle`:
   it holds one callback per request and would displace the gateway's own (2026-10-07 design review, finding 9).
+
+**Commands** (PLAN 5.33, server → plugin). A sibling long poll next to the decisions one, served only to a producer
+whose `isolation` is not `unknown`; the plugin polls only while it runs inside a gateway (it needs Hermes's session store).
+
+- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: { commandId; kind: 'rewind'; sessionId; turns }[] }`. A
+  command is handed to one polling producer of the profile once and is not redelivered.
+- `POST /bridge/v1/commands/:commandId/result` `{ outcome: 'done' | 'nothing' | 'failed'; turnsUndone?; rewoundCount?;
+  error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what
+  `/undo` uses; soft-deletes the rows, the next turn rebuilds from the active ones) from `hermes_private.py` and reports
+  Hermes's `turns_undone` / `rewound_count`; `nothing` = Hermes had nothing to rewind. A command with no result within
+  60 s is reported to the person as `no_answer`. The plugin remembers results by `commandId`, so a repeated command never
+  rewinds twice.
 
 **Kanban denials** (D4.3, revised 2026-10-07): there are **no** grant endpoints. A Kanban worker's `post_tool_call`
 event may carry `kanbanDenial: { patternKey: string; commandDigest: string; taskId: string; runId: number | null }`
