@@ -1,20 +1,15 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto'
-import { gzipSync, gunzipSync } from 'node:zlib'
 import type { FastifyRequest, preHandlerHookHandler, onSendHookHandler } from 'fastify'
 import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
 import { HttpError } from '../errors.ts'
+import { decodeReceipt, encodeReceipt } from '../receipt-codec.ts'
 
 const ReceiptSchema = z.object({
   body_sha256: z.string(),
   status: z.int().nullable(),
   response: z.string().nullable(),
 })
-const CompressedReceiptSchema = z.object({ scoreReceiptGzip: z.string() }).strict()
-// Mirrors the request_receipts CHECK (migration 0010): task details may be larger than other responses.
-function storageLimit(route: string): number {
-  return route === '/api/tasks' || route.startsWith('/api/tasks/') ? 524288 : 65536
-}
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
   if (value !== null && typeof value === 'object')
@@ -104,15 +99,7 @@ export function requestIdempotency(
         // A crash may leave an uncertain side effect: never rerun a pending receipt.
         if (receipt.status === null || receipt.response === null)
           throw new HttpError(409, 'idempotency_pending', 'Original request has not completed')
-        const stored: unknown = JSON.parse(receipt.response)
-        const compressed = CompressedReceiptSchema.safeParse(stored)
-        const response: unknown = compressed.success
-          ? JSON.parse(
-              gunzipSync(Buffer.from(compressed.data.scoreReceiptGzip, 'base64'), {
-                maxOutputLength: maxResponseBytes,
-              }).toString('utf8'),
-            )
-          : stored
+        const response = decodeReceipt(receipt.response, maxResponseBytes)
         return reply.code(receipt.status).send(response)
       }
       db.sqlite
@@ -140,12 +127,7 @@ export function requestIdempotency(
           throw new Error('Idempotency response exceeds its size limit')
         JSON.parse(response)
         // Keep the DB's 64 KB cap while preserving larger, bounded JSON responses exactly.
-        const stored =
-          Buffer.byteLength(response) <= storageLimit(owner.route)
-            ? response
-            : JSON.stringify({ scoreReceiptGzip: gzipSync(response).toString('base64') })
-        if (Buffer.byteLength(stored) > storageLimit(owner.route))
-          throw new Error('Compressed idempotency response exceeds 64 KB')
+        const stored = encodeReceipt(response, owner.route)
         db.sqlite
           .prepare(
             'UPDATE request_receipts SET status = ?, response = ? WHERE key = ? AND route = ?',

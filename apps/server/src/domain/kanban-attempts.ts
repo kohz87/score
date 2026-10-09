@@ -294,3 +294,20 @@ export function attemptUpdates(sqlite: DatabaseSync, ids: readonly string[]): Do
     data: attemptSummary(attempt),
   }))
 }
+
+/**
+ * The attempts of one task in the lineage Score follows now, oldest first by `(startedAt, upstream attempt id)`.
+ * Attempts from an earlier copy of the board never join a task of the current one.
+ */
+export function currentAttemptsOfTask(
+  sqlite: DatabaseSync,
+  taskId: string,
+  nowMs: number,
+): KanbanAttempt[] {
+  return listAttempts(sqlite, {
+    since: new Date(0).toISOString(),
+    until: new Date(nowMs).toISOString(),
+    taskId,
+    excludeCopies: true,
+  }).filter((attempt) => attemptSummary(attempt).task.current)
+}

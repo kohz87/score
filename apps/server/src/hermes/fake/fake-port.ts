@@ -24,6 +24,7 @@ import {
 import { fakeReportHistory } from './report-history.ts'
 import { FakeWorkspaces } from './fake-workspace.ts'
 import { updateProjectedAgent } from '../../domain/agents.ts'
+import { assertNotKanbanAttempt } from '../../domain/brief-flow.ts'
 import { createBrief, linkTask, readBriefRow } from '../../domain/briefs.ts'
 import {
   recordKanbanDenial,
@@ -1816,7 +1817,8 @@ export class FakePort implements HermesPort {
     })
   }
 
-  stopRun(req: { agentId: string; runId: string }): Promise<void> {
+  async stopRun(req: { agentId: string; runId: string }): Promise<void> {
+    assertNotKanbanAttempt(req.runId)
     return this.enqueue(async () => {
       this.requireSink()
       if (this.runs.get(req.runId)?.agentId !== req.agentId) return

@@ -9,6 +9,7 @@ import { registerAgentRoutes } from './http/agents.ts'
 import { registerProfileRoutes } from './http/profiles.ts'
 import { registerAgentContextRoutes } from './http/agent-context.ts'
 import { registerAgentHistoryRoutes } from './http/agent-history.ts'
+import { registerAttemptRoutes } from './http/attempts.ts'
 import { registerAgentTabRoutes } from './http/agent-tabs.ts'
 import { registerWorkspaceRoutes } from './http/workspace.ts'
 import { createAgentWorkspaces } from './workspace/agent-workspace.ts'
@@ -307,6 +308,7 @@ export function buildApp({
     })
     registerWatchRoutes(app, { port, db, ingest })
     registerAgentHistoryRoutes(app, { port, db })
+    registerAttemptRoutes(app, { db })
     registerAgentContextRoutes(app, { port, db })
     registerAgentPauseRoutes(app, {
       db,

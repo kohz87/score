@@ -7,9 +7,17 @@ import {
   type HistoryOutcome,
 } from '@score/contract'
 import type { FastifyInstance } from 'fastify'
+import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
 import { HttpError } from '../errors.ts'
+import {
+  attemptSummary,
+  kanbanAttemptsEnabled,
+  listAttempts,
+  type KanbanAttempt,
+} from '../domain/kanban-attempts.ts'
+import { readProjectedTask } from '../domain/tasks.ts'
 import type { HermesPort } from '../hermes/index.ts'
 
 export const HISTORY_PAGE_SIZE = 50
@@ -62,6 +70,72 @@ const originTitles = {
   cron: 'Routine run',
 } as const
 
+// Kanban attempts (5.17a-1): a normal finish is a completed outcome, even when it hands the task on; a blocked,
+// unobserved or unknown ending is not guessed into one.
+function attemptOutcome(attempt: KanbanAttempt): HistoryOutcome {
+  if (attempt.status === 'running')
+    return attempt.observationEndedAt === null ? 'running' : 'unknown'
+  if (['completed', 'review_handoff', 'changes_requested'].includes(attempt.status))
+    return 'completed'
+  return attempt.status === 'failed' ? 'failed' : 'unknown'
+}
+
+function attemptItems(
+  sqlite: DatabaseSync,
+  agentId: string,
+  query: z.infer<typeof QuerySchema>,
+): { item: AgentHistoryItem; startedAt: string; id: string }[] {
+  const needle = query.q?.trim().toLowerCase()
+  return listAttempts(sqlite, {
+    since: new Date(0).toISOString(),
+    until: new Date(Date.now() + 86_400_000).toISOString(),
+    agentId,
+    excludeCopies: true,
+  }).flatMap((attempt) => {
+    const outcome = attemptOutcome(attempt)
+    if (query.outcome && query.outcome !== outcome) return []
+    const summary = attemptSummary(attempt)
+    const title =
+      (summary.task.current ? readProjectedTask(sqlite, attempt.taskId)?.title : undefined) ??
+      attempt.taskSnapshot?.title ??
+      originTitles.kanban
+    const brief = summary.task.current
+      ? ((sqlite
+          .prepare(
+            `SELECT b.id, b.title FROM brief_tasks bt JOIN briefs b ON b.id = bt.brief_id
+              WHERE bt.task_id = ? ORDER BY bt.linked_at LIMIT 1`,
+          )
+          .get(attempt.taskId) as { id: string; title: string } | undefined) ?? null)
+      : null
+    if (needle && !`${title} ${brief?.title ?? ''}`.toLowerCase().includes(needle)) return []
+    const end = attempt.endedAt ?? attempt.observationEndedAt
+    return [
+      {
+        startedAt: attempt.startedAt,
+        id: attempt.id,
+        item: {
+          runId: attempt.id,
+          title,
+          origin: 'kanban' as const,
+          outcome,
+          startedAt: attempt.startedAt,
+          durationSec:
+            end === null
+              ? null
+              : Math.max(0, Math.round((Date.parse(end) - Date.parse(attempt.startedAt)) / 1000)),
+          model: null,
+          costUsd: null,
+          // A task from an earlier copy of the board is not linked: the row opens its attempt detail instead.
+          task: summary.task.current ? { id: attempt.taskId, title } : null,
+          brief: brief ? { id: brief.id, title: brief.title } : null,
+          replaySeq: null,
+          attempt: summary,
+        },
+      },
+    ]
+  })
+}
+
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`)
 }
@@ -101,6 +175,9 @@ export function registerAgentHistoryRoutes(
       args.push(`%${escapeLike(needle)}%`)
     }
     const offset = Number(query.cursor ?? 0)
+    // With attempts on, runs and attempts are merged before paging, so runs are read from the top.
+    const withAttempts = kanbanAttemptsEnabled()
+    const attemptsOffset = withAttempts ? offset : 0
     const rows = db.sqlite
       .prepare(
         `SELECT * FROM (
@@ -120,9 +197,9 @@ export function registerAgentHistoryRoutes(
          ) ${filters.length ? `WHERE ${filters.join(' AND ')}` : ''}
          ORDER BY started_at DESC, id DESC LIMIT ? OFFSET ?`,
       )
-      .all(...args, HISTORY_PAGE_SIZE + 1, offset)
+      .all(...args, HISTORY_PAGE_SIZE + 1 + attemptsOffset, offset - attemptsOffset)
     const parsed = z.array(RowSchema).parse(rows)
-    const items: AgentHistoryItem[] = parsed.slice(0, HISTORY_PAGE_SIZE).map((row) => {
+    const runItems: AgentHistoryItem[] = parsed.map((row) => {
       const ended = row.ended_at ? Date.parse(row.ended_at) : null
       return {
         runId: row.id,
@@ -141,9 +218,19 @@ export function registerAgentHistoryRoutes(
         replaySeq: row.replay_seq,
       }
     })
+    if (!withAttempts)
+      return AgentHistoryPageSchema.parse({
+        items: runItems.slice(0, HISTORY_PAGE_SIZE),
+        nextCursor: parsed.length > HISTORY_PAGE_SIZE ? String(offset + HISTORY_PAGE_SIZE) : null,
+      })
+    const merged = [
+      ...runItems.map((item) => ({ item, startedAt: item.startedAt, id: item.runId })),
+      ...db.read((sqlite) => attemptItems(sqlite, agentId, query)),
+    ].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt) || (a.id < b.id ? 1 : -1))
     return AgentHistoryPageSchema.parse({
-      items,
-      nextCursor: parsed.length > HISTORY_PAGE_SIZE ? String(offset + HISTORY_PAGE_SIZE) : null,
+      items: merged.slice(offset, offset + HISTORY_PAGE_SIZE).map(({ item }) => item),
+      nextCursor:
+        merged.length > offset + HISTORY_PAGE_SIZE ? String(offset + HISTORY_PAGE_SIZE) : null,
     })
   })
 }
