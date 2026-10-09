@@ -9,7 +9,9 @@ import {
   type Approval,
   type LaneBlock,
   type Message,
+  type RewindPlan,
   type Room,
+  type RoomVersion,
   type StreamEvent,
 } from '@score/contract'
 import { App, appRoutes } from '../../App.tsx'
@@ -88,6 +90,10 @@ const pendingApproval: Approval = {
   refs: [],
 }
 let items: Message[]
+let versions: RoomVersion[]
+let versionItems: Message[]
+let plan: RewindPlan
+let rewindResponse: () => Response
 let rooms: Room[]
 let filesInPlay: string[]
 let learned: { text: string; savedTo: string[]; at: string }[]
@@ -121,6 +127,14 @@ function emit(type: StreamEvent['type'], data: unknown, seq: number) {
 }
 beforeEach(() => {
   items = [message]
+  versions = []
+  versionItems = []
+  plan = {
+    hiddenCount: 2,
+    blocked: null,
+    agents: [{ agentId: 'lead', turns: 2, cannot: null }],
+  }
+  rewindResponse = () => response({})
   rooms = [room]
   filesInPlay = []
   learned = []
@@ -130,6 +144,11 @@ beforeEach(() => {
       return response({ asOfSeq: 1, items: [pendingApproval], nextCursor: null })
     if (url === '/api/agents') return response({ asOfSeq: 1, items: [agent] })
     if (url === '/api/rooms') return response({ asOfSeq: 1, rooms, directs: [direct] })
+    if (url.endsWith('/versions')) return response({ asOfSeq: 1, items: versions })
+    if (url.includes('/versions/'))
+      return response({ version: versions[0], items: versionItems })
+    if (url.endsWith('/rewind-plan')) return response(plan)
+    if (url.endsWith('/rewind')) return rewindResponse()
     if (url.includes('/messages'))
       return response({
         asOfSeq: 1,
@@ -769,6 +788,20 @@ test('Edit loads text and recipients into the composer; Cancel restores the draf
   expect((screen.getByRole('combobox') as HTMLTextAreaElement).value).toBe('half typed')
   expect(screen.queryByRole('button', { name: 'Remove Lead' })).toBeNull()
 })
+const editVersion: RoomVersion = {
+  id: 'v1',
+  roomId: 'general',
+  anchorId: 'mine',
+  anchorCreatedAt: '2026-10-08T10:00:00.000Z',
+  mode: 'edit',
+  replacedBy: null,
+  number: 1,
+  count: 2,
+  hiddenCount: 2,
+  rewound: [{ agentId: 'lead', turnsUndone: 2 }],
+  skipped: [],
+  createdAt: '2026-10-08T10:05:00.000Z',
+}
 test('sending an edit posts `edits`; the original greys with a link to the new version', async () => {
   items = [mine]
   setup()
@@ -788,10 +821,23 @@ test('sending an edit posts `edits`; the original greys with a link to the new v
   fireEvent.click(screen.getByRole('button', { name: 'Edit message from You' }))
   fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Ship it today' } })
   fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
+  // The confirmation says what happens, then the room is rewound and the correction is posted.
+  const dialog = await screen.findByRole('dialog', { name: 'Edit and send again?' })
+  expect(await within(dialog).findByText(/Lead −2 turns/)).toBeDefined()
+  expect(within(dialog).getByText(/Long-term memory .* is not rewound/)).toBeDefined()
+  rewindResponse = () =>
+    response({ version: { ...editVersion }, rewound: [{ agentId: 'lead', turnsUndone: 2 }], skipped: [] })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Rewind and edit' }))
   await waitFor(() =>
-    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true),
+    expect(
+      fetchMock.mock.calls.some(([url, init]) => String(url) === '/api/rooms/general/messages' && init?.method === 'POST'),
+    ).toBe(true),
   )
-  const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')!
+  const rewindCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/mine/rewind'))!
+  expect(JSON.parse(String(rewindCall[1]!.body))).toEqual({ mode: 'edit' })
+  const post = fetchMock.mock.calls.find(
+    ([url, init]) => String(url) === '/api/rooms/general/messages' && init?.method === 'POST',
+  )!
   expect(JSON.parse(String(post[1]!.body))).toEqual({
     text: 'Ship it today',
     to: ['lead'],
@@ -808,6 +854,120 @@ test('sending an edit posts `edits`; the original greys with a link to the new v
   target.scrollIntoView = scroll
   fireEvent.click(within(first).getByRole('button', { name: 'see the new version' }))
   expect(scroll).toHaveBeenCalled()
+})
+test('an agent that cannot be rewound blocks Rewind and offers Hide in Score only', async () => {
+  items = [mine]
+  plan = {
+    hiddenCount: 3,
+    blocked: null,
+    agents: [
+      { agentId: 'lead', turns: 1, cannot: null },
+      { agentId: 'builder', turns: 1, cannot: 'compressed' },
+    ],
+  }
+  setup()
+  await screen.findByText('Ship it')
+  fireEvent.click(screen.getByRole('button', { name: 'Delete message from You' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Delete this message?' })
+  await within(dialog).findByText(/These agents cannot be rewound/)
+  expect(within(dialog).getByText(/builder: its Hermes session was compressed/)).toBeDefined()
+  expect(
+    (within(dialog).getByRole('button', { name: 'Rewind and delete' }) as HTMLButtonElement).disabled,
+  ).toBe(true)
+  rewindResponse = () =>
+    response({
+      version: { ...editVersion, mode: 'delete', replacedBy: null, count: 1 },
+      rewound: [],
+      skipped: [],
+    })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Hide in Score only' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/mine/rewind'))!
+  expect(JSON.parse(String(call[1]!.body))).toEqual({ mode: 'delete', scoreOnly: true })
+})
+test('a refused rewind says nothing was hidden and keeps the dialog', async () => {
+  items = [mine]
+  setup()
+  await screen.findByText('Ship it')
+  fireEvent.click(screen.getByRole('button', { name: 'Delete message from You' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Delete this message?' })
+  await within(dialog).findByText(/Lead −2 turns/)
+  rewindResponse = () =>
+    response(
+      {
+        error: {
+          code: 'rewind_incomplete',
+          message: 'Some agents could not be rewound',
+          details: { skipped: [{ agentId: 'lead', reason: 'no_answer' }], rewound: [] },
+        },
+      },
+      409,
+    )
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Rewind and delete' }))
+  await within(dialog).findByText(/Nothing was hidden/)
+  expect(within(dialog).getByText(/Lead: Hermes did not answer in time/)).toBeDefined()
+  expect(within(dialog).getByRole('button', { name: 'Hide in Score only' })).toBeDefined()
+})
+test('a blocked rewind explains why and cannot be confirmed', async () => {
+  items = [mine]
+  plan = { hiddenCount: 1, blocked: 'An agent is still answering', agents: [] }
+  setup()
+  await screen.findByText('Ship it')
+  fireEvent.click(screen.getByRole('button', { name: 'Delete message from You' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Delete this message?' })
+  await within(dialog).findByText(/An agent is still answering/)
+  expect(
+    (within(dialog).getByRole('button', { name: 'Rewind and delete' }) as HTMLButtonElement).disabled,
+  ).toBe(true)
+})
+test('the version switcher sits above a correction and shows the previous version read-only', async () => {
+  const correction: Message = {
+    ...mine,
+    id: 'mine-2',
+    createdAt: '2026-10-08T10:06:00.000Z',
+    edits: 'mine',
+    parts: [{ kind: 'text', text: 'Ship it today' }],
+  }
+  items = [correction]
+  versions = [{ ...editVersion, replacedBy: 'mine-2' }]
+  versionItems = [mine, { ...reply, createdAt: '2026-10-08T10:01:00.000Z' }]
+  setup()
+  await screen.findByText('Ship it today')
+  const switcher = await screen.findByTestId('version-switcher')
+  expect(within(switcher).getByText('Version 2 of 2')).toBeDefined()
+  fireEvent.click(within(switcher).getByRole('button', { name: 'Previous version' }))
+  const previous = await within(switcher).findByRole('region', { name: 'Previous version' })
+  expect(within(switcher).getByText('Version 1 of 2')).toBeDefined()
+  expect(await within(previous).findByText('Ship it')).toBeDefined()
+  // Greyed and read-only: none of the message actions.
+  expect(within(previous).queryByRole('button', { name: /^Edit message/ })).toBeNull()
+  expect(within(previous).queryByRole('button', { name: /^Delete message/ })).toBeNull()
+  fireEvent.click(within(switcher).getByRole('button', { name: 'Next version' }))
+  expect(within(switcher).queryByRole('region', { name: 'Previous version' })).toBeNull()
+  expect(within(switcher).getByText('Version 2 of 2')).toBeDefined()
+})
+test('a delete leaves a Previous version marker where the message was', async () => {
+  versions = [{ ...editVersion, mode: 'delete', count: 1, anchorCreatedAt: '2026-10-08T09:59:00.000Z' }]
+  versionItems = [mine]
+  setup()
+  await screen.findByText('Hello team')
+  const switcher = await screen.findByTestId('version-switcher')
+  expect(within(switcher).getByText('Previous version')).toBeDefined()
+  fireEvent.click(within(switcher).getByRole('button', { name: 'View' }))
+  expect(await within(switcher).findByText('Ship it')).toBeDefined()
+  fireEvent.click(within(switcher).getByRole('button', { name: 'Hide' }))
+  expect(within(switcher).queryByText('Ship it')).toBeNull()
+})
+test('room.version.created adds the marker live', async () => {
+  setup()
+  await screen.findByText('Hello team')
+  expect(screen.queryByTestId('version-switcher')).toBeNull()
+  emit(
+    'room.version.created',
+    { ...editVersion, mode: 'delete', count: 1, anchorCreatedAt: '2026-10-08T09:59:00.000Z' },
+    10,
+  )
+  expect(await screen.findByTestId('version-switcher')).toBeDefined()
 })
 test('message.updated sets editedBy on the cached original only', () => {
   const data = { items: [mine, reply], nextCursor: null, typing: {} }

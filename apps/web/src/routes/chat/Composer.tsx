@@ -31,6 +31,7 @@ import { messagesQuery, type MessagePageData } from './queries.ts'
 import { useVoiceInput } from './voice.ts'
 import { newId } from '../../data/ids.ts'
 import { stopEdit, useEditing } from './message-edit.ts'
+import { RewindDialog } from './RewindDialog.tsx'
 
 type Notice =
   | { kind: 'error'; text: string }
@@ -149,6 +150,9 @@ export function Composer({
     setStash(null)
   }
   useEffect(() => () => stopEdit(), [])
+  // The message whose rewind already happened: a failed send is retried without asking again.
+  const rewoundEdit = useRef<string | null>(null)
+  const [confirmEdit, setConfirmEdit] = useState(false)
 
   const commands = useQuery({
     queryKey: ['chat', 'commands'],
@@ -348,6 +352,11 @@ export function Composer({
     if (!body || pending || uploading) return
     const local = editing ? null : parseLocalCommand(body)
     if (local) return runLocalCommand(local)
+    // Editing rewinds the room and the agents first (PLAN 5.33); the person confirms what that does.
+    if (editing && rewoundEdit.current !== editing.messageId) {
+      setConfirmEdit(true)
+      return
+    }
     const sent = attachments
     const payload = {
       text: body,
@@ -506,10 +515,26 @@ export function Composer({
               ))}
         </div>
       )}
+      {editing && confirmEdit && (
+        <RewindDialog
+          roomId={roomId}
+          messageId={editing.messageId}
+          mode="edit"
+          agents={agents}
+          onClose={() => setConfirmEdit(false)}
+          onDone={() => {
+            rewoundEdit.current = editing.messageId
+            setConfirmEdit(false)
+            void send()
+          }}
+        />
+      )}
       {editing && (
         <div className="chat-editing" role="status">
           <span>Editing your message</span>
-          <span className="chat-edit-note">Sending replaces it and the replies it got.</span>
+          <span className="chat-edit-note">
+            Sending hides it and everything after it as the previous version.
+          </span>
           <button type="button" className="chat-editing-cancel" onClick={leaveEdit}>
             Cancel
           </button>

@@ -10,6 +10,7 @@ import { requestDelete } from './message-deletion.ts'
 import { startEdit } from './message-edit.ts'
 import { Markdown } from './Markdown.tsx'
 import { PlanCard } from './PlanCard.tsx'
+import { RewindDialog } from './RewindDialog.tsx'
 
 /** Expand all / Collapse all (PLAN 5.25): a counter, so pressing the same button twice still reaches cards opened by hand. */
 type Expansion = { open: boolean; version: number }
@@ -192,11 +193,20 @@ function Action({
 }
 
 /** Actions under a finished message (PLAN 5.24): Edit/Copy/Delete on yours, Copy/Retry/Delete on an agent reply. */
-function MessageActions({ message, name }: { message: Message; name: string }) {
+function MessageActions({
+  message,
+  name,
+  agents,
+}: {
+  message: Message
+  name: string
+  agents: AgentSummary[]
+}) {
   const you = message.author.kind === 'you'
   const [copied, setCopied] = useState(false)
   const [retry, setRetry] = useState<'idle' | 'busy' | 'queued'>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
   useEffect(() => {
     const pending = timers.current
@@ -266,9 +276,23 @@ function MessageActions({ message, name }: { message: Message; name: string }) {
         label="Delete"
         name={`Delete message from ${name}`}
         icon="delete"
-        title="Removes it from Score. Agents may still remember it."
-        onClick={() => requestDelete(message.roomId, message.id)}
+        title={
+          you
+            ? 'Hides it and everything after it, and rewinds the agents'
+            : 'Removes it from Score. Agents may still remember it.'
+        }
+        onClick={() => (you ? setConfirming(true) : requestDelete(message.roomId, message.id))}
       />
+      {confirming && (
+        <RewindDialog
+          roomId={message.roomId}
+          messageId={message.id}
+          mode="delete"
+          agents={agents}
+          onDone={() => setConfirming(false)}
+          onClose={() => setConfirming(false)}
+        />
+      )}
       {copied && (
         <span className="chat-sr-only" role="status">
           Copied
@@ -317,7 +341,16 @@ function StopReply({ message, name }: { message: Message; name: string }) {
   )
 }
 
-export function MessageItem({ message, agents }: { message: Message; agents: AgentSummary[] }) {
+export function MessageItem({
+  message,
+  agents,
+  readOnly = false,
+}: {
+  message: Message
+  agents: AgentSummary[]
+  /** A message of a previous version (PLAN 5.33): greyed, no actions. */
+  readOnly?: boolean
+}) {
   const author = message.author
   const agent =
     author.kind === 'agent' ? agents.find((item) => item.id === author.agentId) : undefined
@@ -328,7 +361,7 @@ export function MessageItem({ message, agents }: { message: Message; agents: Age
   return (
     <article
       id={`message-${message.id}`}
-      className={`chat-message${you ? ' chat-message--you' : ''}${message.editedBy ? ' chat-message--edited' : ''}`}
+      className={`chat-message${you ? ' chat-message--you' : ''}${message.editedBy ? ' chat-message--edited' : ''}${readOnly ? ' chat-message--previous' : ''}`}
       aria-label={`Message from ${name}`}
     >
       {!you && agent && <AgentGlyph agent={agent} size="sm" decorative />}
@@ -367,10 +400,10 @@ export function MessageItem({ message, agents }: { message: Message; agents: Age
             <Part key={index} part={part} agents={agents} message={message} expansion={expansion} />
           ))}
         </div>
-        {message.streaming && !you && !message.id.startsWith('pending-') && (
+        {!readOnly && message.streaming && !you && !message.id.startsWith('pending-') && (
           <StopReply message={message} name={name} />
         )}
-        {message.editedBy && (
+        {!readOnly && message.editedBy && (
           <button
             type="button"
             className="chat-edited-link"
@@ -383,8 +416,8 @@ export function MessageItem({ message, agents }: { message: Message; agents: Age
             see the new version
           </button>
         )}
-        {!message.streaming && !message.id.startsWith('pending-') && (
-          <MessageActions message={message} name={name} />
+        {!readOnly && !message.streaming && !message.id.startsWith('pending-') && (
+          <MessageActions message={message} name={name} agents={agents} />
         )}
       </div>
     </article>

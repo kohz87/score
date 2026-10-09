@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from 'react'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
@@ -16,7 +17,8 @@ import { Composer } from './Composer.tsx'
 import { DeleteToast } from './DeleteToast.tsx'
 import { usePendingDeletes } from './message-deletion.ts'
 import { MessageItem } from './MessageItem.tsx'
-import { messagesQuery, roomQuery } from './queries.ts'
+import { messagesQuery, roomQuery, versionsQuery } from './queries.ts'
+import { VersionSwitcher } from './versions.tsx'
 import { roomLabel } from './room-label.ts'
 
 export function QueryError({ text, retry }: { text: string; retry: () => void }) {
@@ -67,6 +69,8 @@ function MessagePage({
     if (data && status === 'success') onChange()
   }, [data, status, onChange])
   const hidden = usePendingDeletes().hidden
+  const versionsDefinition = useMemo(() => versionsQuery(roomId), [roomId])
+  const versions = useStreamQuery(versionsDefinition).data ?? []
   const items =
     data?.items.filter((item) => !excluded.includes(item.id) && !hidden.has(item.id)) ?? []
   // A resync can move the latest page boundary; follow its fresh cursor to avoid a gap.
@@ -104,11 +108,48 @@ function MessagePage({
       {data && !data.items.length && status === 'success' && before === null && (
         <p className="chat-state">No messages yet.</p>
       )}
-      {[...items]
-        .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
-        .map((message) => (
-          <MessageItem key={message.id} message={message} agents={agents} />
-        ))}
+      {(() => {
+        const sorted = [...items].sort(
+          (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+        )
+        const oldest = sorted[0]?.createdAt
+        const newest = sorted.at(-1)?.createdAt
+        // A delete leaves a marker where the message was; an edit's switcher sits above its correction.
+        const markers = versions.filter(
+          (version) =>
+            version.mode === 'delete' &&
+            ((before === null && (!newest || version.anchorCreatedAt > newest)) ||
+              (oldest !== undefined &&
+                newest !== undefined &&
+                version.anchorCreatedAt >= oldest &&
+                version.anchorCreatedAt <= newest) ||
+              (!data?.nextCursor && oldest !== undefined && version.anchorCreatedAt < oldest) ||
+              (!data?.nextCursor && !oldest && before === null)),
+        )
+        const nodes: ReactNode[] = []
+        const pending = [...markers].sort((a, b) => a.anchorCreatedAt.localeCompare(b.anchorCreatedAt))
+        const flush = (until: string | null) => {
+          while (pending[0] && (until === null || pending[0].anchorCreatedAt <= until)) {
+            const version = pending.shift()!
+            nodes.push(
+              <VersionSwitcher key={`v-${version.id}`} version={version} versions={versions} agents={agents} />,
+            )
+          }
+        }
+        for (const message of sorted) {
+          flush(message.createdAt)
+          const linked = versions.find(
+            (version) => version.mode === 'edit' && version.replacedBy === message.id,
+          )
+          if (linked)
+            nodes.push(
+              <VersionSwitcher key={`v-${linked.id}`} version={linked} versions={versions} agents={agents} />,
+            )
+          nodes.push(<MessageItem key={message.id} message={message} agents={agents} />)
+        }
+        flush(null)
+        return nodes
+      })()}
       {before === null && (
         <div className="chat-typing" role="status" aria-live="polite">
           {Object.entries(data?.typing ?? {}).map(([id, text]) => {

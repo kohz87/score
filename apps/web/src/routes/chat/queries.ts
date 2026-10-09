@@ -5,6 +5,8 @@ import {
   MessagePageSchema,
   RoomDetailSnapshotSchema,
   RoomsSnapshotSchema,
+  RoomVersionsSchema,
+  type RoomVersion,
   type Message,
   type StreamEvent,
 } from '@score/contract'
@@ -198,5 +200,27 @@ export function roomPanelsQuery(roomId: string) {
     },
     types: [],
     reduce: (data) => data,
+  })
+}
+
+// Previous versions of a room (PLAN 5.33): the stream's `room.version.created` upserts one (also when an edit's
+// correction is linked), the hidden messages themselves are read on demand.
+export function versionsQuery(roomId: string) {
+  return defineStreamQuery<RoomVersion[]>({
+    key: ['chat', 'versions', roomId],
+    async fetch() {
+      const { asOfSeq, items } = RoomVersionsSchema.parse(
+        await apiFetch(`rooms/${encodeURIComponent(roomId)}/versions`),
+      )
+      return { asOfSeq, data: items }
+    },
+    types: ['room.version.created'],
+    reduce(data, event) {
+      if (event.type !== 'room.version.created' || event.data.roomId !== roomId) return data
+      const version = event.data
+      return [version, ...data.filter((item) => item.id !== version.id)].sort((a, b) =>
+        b.createdAt.localeCompare(a.createdAt),
+      )
+    },
   })
 }
