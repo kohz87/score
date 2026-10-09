@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { z } from 'zod'
 import { projectTask } from '../../../src/domain/tasks.ts'
 import type { HermesPort } from '../../../src/hermes/index.ts'
+import { LiveTasks } from '../../../src/hermes/live/tasks.ts'
 import { createBriefControl } from '../../../src/http/brief-control.ts'
 import { createTaskHolds } from '../../../src/http/task-holds.ts'
 import { createHarness, type Harness } from '../../fixtures/kanban/harness.ts'
@@ -140,5 +141,46 @@ describe('hold actions revalidate ownership after reads', () => {
     expect(h.score.sqlite.prepare('SELECT state FROM brief_paused_tasks').get()).toEqual({
       state: 'pending',
     })
+  })
+})
+
+describe('task ingestion follows the attempts history', () => {
+  const activity = () =>
+    z
+      .array(z.object({ type: z.string(), data: z.string() }))
+      .parse(h.score.sqlite.prepare('SELECT type, data FROM events ORDER BY seq').all())
+      .filter((event) => event.type === 'task.activity')
+      .map((event) => (JSON.parse(event.data) as { taskId: string }).taskId)
+
+  test('a restored board whose events fall below the old cursor is ingested again', async () => {
+    for (const id of ['t_1', 't_2', 't_3', 't_4', 't_5']) h.board.task(id)
+    const tasks = new LiveTasks(h.score, h.ingest, h.home, { kanbanAttempts: true })
+    for (let index = 0; index < 3; index++) await tasks.poll()
+    const before = activity().length
+    expect(before).toBe(5)
+    // In-place restore: event ids start over, below the saved cursor (5).
+    h.board.db.exec(
+      "DELETE FROM task_events; DELETE FROM sqlite_sequence WHERE name = 'task_events'; DELETE FROM tasks",
+    )
+    h.board.task('t_new')
+    for (let index = 0; index < 4; index++) await tasks.poll()
+    await tasks.close()
+    expect(h.histories().map((row) => row.state)).toEqual(['closed', 'active'])
+    expect(activity().slice(before)).toContain('t_new')
+  })
+})
+
+describe('upgrade snapshot of legacy links', () => {
+  test('is complete before the first flag-on task reconciliation rewrites the projection', async () => {
+    h.board.task('t_a')
+    h.board.claim('t_a', { lock: 'host:1' })
+    h.score.tx((sqlite) => projectTask(sqlite, taskDetail('t_a', { runIds: ['99'] })))
+    const tasks = new LiveTasks(h.score, h.ingest, h.home, { kanbanAttempts: true })
+    await tasks.poll()
+    await tasks.close()
+    const links = h.score.sqlite
+      .prepare('SELECT task_id, legacy_id FROM kanban_upgrade_links ORDER BY legacy_id')
+      .all()
+    expect(links).toEqual([{ task_id: 't_a', legacy_id: '99' }])
   })
 })
