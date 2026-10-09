@@ -43,8 +43,11 @@ test('viewing a rewind that hid a correction still offers the edit history behin
   const edit = version({ id: 'v1', anchorId: 'x', mode: 'edit', replacedBy: 'y' })
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () =>
-      new Response(JSON.stringify({ version: outer, items: [mine('w', 'earlier'), mine('y', 'corrected')] })),
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ version: outer, items: [mine('w', 'earlier'), mine('y', 'corrected')] }),
+        ),
     ),
   )
   render(

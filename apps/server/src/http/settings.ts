@@ -93,7 +93,9 @@ export function registerSettingsRoutes(
       return matches.map((alias) => {
         // A providerless alias keeps the provider the agent already has: equal model names prove no routing identity.
         const target = alias.provider
-          ? known.find((option) => option.model === alias.model && option.provider === alias.provider)
+          ? known.find(
+              (option) => option.model === alias.model && option.provider === alias.provider,
+            )
           : undefined
         const custom = !alias.editable
         return {

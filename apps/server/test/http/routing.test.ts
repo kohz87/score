@@ -115,7 +115,9 @@ test('/model <alias> with a custom endpoint is refused before anything is queued
   const run = vi.spyOn(port, 'startRun')
   const sent = await send({ text: '/model private @builder Check this' }, 'custom-alias')
   expect(sent.statusCode).toBe(409)
-  expect(sent.json()).toMatchObject({ error: { message: expect.stringContaining('custom endpoint') } })
+  expect(sent.json()).toMatchObject({
+    error: { message: expect.stringContaining('custom endpoint') },
+  })
   await advance(100)
   expect(run).not.toHaveBeenCalled()
 })

@@ -180,7 +180,8 @@ export class LiveAgentTabs {
         // The CLI writes one key at a time: put back what this save already changed, so a failure leaves no
         // half-applied settings. Best effort; the request still reports the original failure. (A crash between two
         // writes can't be undone this way; the next read shows what Hermes holds.)
-        for (const op of undoOps(raw, attempted)) await this.mutate(profile, opArgs(op)).catch(() => undefined)
+        for (const op of undoOps(raw, attempted))
+          await this.mutate(profile, opArgs(op)).catch(() => undefined)
         throw error
       }
       return deriveSettings(applyOps(raw, ops))

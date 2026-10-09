@@ -955,7 +955,9 @@ const cases = [
   ],
   [
     'BridgeCommandsResponseSchema',
-    { items: [{ commandId: 'c1', kind: 'rewind', sessionId: 's', turns: 1, expiresAt: 1790000060 }] },
+    {
+      items: [{ commandId: 'c1', kind: 'rewind', sessionId: 's', turns: 1, expiresAt: 1790000060 }],
+    },
     { items: [{}] },
   ],
   ['BridgeCommandResultSchema', { outcome: 'nothing' }, { outcome: 'maybe' }],
@@ -1125,7 +1127,10 @@ describe('model settings (audit5-e)', () => {
       fallbacks: chain,
       fallbacksEditable: true,
       aliases: [],
-      speech: { stt: { provider: null, model: null }, tts: { provider: null, model: null, voice: null } },
+      speech: {
+        stt: { provider: null, model: null },
+        tts: { provider: null, model: null, voice: null },
+      },
     }
     expect(contract.ModelSettingsSchema.safeParse(settings).success).toBe(true)
   })

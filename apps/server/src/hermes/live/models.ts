@@ -16,11 +16,7 @@ export class LiveModels {
     private readonly now: () => number = Date.now,
   ) {}
 
-  async list(
-    q?: string,
-    only?: readonly ModelRef[],
-    limit?: number,
-  ): Promise<ModelOption[]> {
+  async list(q?: string, only?: readonly ModelRef[], limit?: number): Promise<ModelOption[]> {
     if (!this.cached || this.now() - this.cached.at > CACHE_MS) {
       try {
         const providers = await this.providers()

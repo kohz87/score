@@ -1251,11 +1251,7 @@ export class FakePort implements HermesPort {
       contextLength: 128000,
     },
   ]
-  async listModels(
-    q?: string,
-    only?: readonly ModelRef[],
-    limit?: number,
-  ): Promise<ModelOption[]> {
+  async listModels(q?: string, only?: readonly ModelRef[], limit?: number): Promise<ModelOption[]> {
     return structuredClone(filterModels(this.fakeModels, q, only, limit))
   }
   async listProviders(): Promise<ProviderBase[]> {

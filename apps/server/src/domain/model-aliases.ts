@@ -2,8 +2,7 @@ import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
 
 /** Shown on the alias row and in the 409: Score sends only model and provider per request. */
-export const CUSTOM_ALIAS_REASON =
-  'This alias uses a custom endpoint; switch to it in Hermes'
+export const CUSTOM_ALIAS_REASON = 'This alias uses a custom endpoint; switch to it in Hermes'
 
 /**
  * The model an agent's alias stands for (`/model fast`), or null when the name is no alias of that agent. Hermes

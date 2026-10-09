@@ -36,7 +36,9 @@ export function holdRoomUntil(sqlite: DatabaseSync, roomId: string, untilMs: num
       timers.delete(roomId)
       rewindingRooms.delete(roomId)
       try {
-        sqlite.prepare('DELETE FROM rewind_holds WHERE room_id = ? AND until_ms <= ?').run(roomId, Date.now())
+        sqlite
+          .prepare('DELETE FROM rewind_holds WHERE room_id = ? AND until_ms <= ?')
+          .run(roomId, Date.now())
       } catch {
         // The database is closed (shutdown): the row expires on its own.
       }

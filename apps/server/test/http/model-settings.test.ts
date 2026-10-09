@@ -152,7 +152,9 @@ test('an alias with a custom endpoint is shown read-only in the picker and refus
   })
   const refused = await put('/api/agents/builder/model', { model: 'private' })
   expect(refused.statusCode).toBe(409)
-  expect(refused.json()).toMatchObject({ error: { message: expect.stringContaining('custom endpoint') } })
+  expect(refused.json()).toMatchObject({
+    error: { message: expect.stringContaining('custom endpoint') },
+  })
   expect(set).not.toHaveBeenCalled()
 })
 

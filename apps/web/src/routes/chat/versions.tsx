@@ -37,7 +37,8 @@ function PreviousVersion({
       {detail.data?.items.map((message) => {
         // An edit whose correction was hidden by this rewind keeps its own switcher, so the original stays reachable.
         const linked = versions.find(
-          (item) => item.mode === 'edit' && item.replacedBy === message.id && item.id !== version.id,
+          (item) =>
+            item.mode === 'edit' && item.replacedBy === message.id && item.id !== version.id,
         )
         return (
           <Fragment key={message.id}>
