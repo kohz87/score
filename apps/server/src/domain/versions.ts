@@ -1,11 +1,12 @@
 import type { DatabaseSync } from 'node:sqlite'
 import {
   AgentIdSchema,
-  RewindSkipReasonSchema,
   RoomVersionSchema,
   type Message,
   type RewindMode,
+  type RewoundAgent,
   type RoomVersion,
+  type SkippedAgent,
 } from '@score/contract'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
@@ -38,7 +39,11 @@ function toVersions(rows: VersionRow[]): RoomVersion[] {
   )
   return rows.map((row) => {
     let before = 0
-    for (let at = byReplacement.get(row.anchor_id); at && before < 1000; at = byReplacement.get(at.anchor_id))
+    for (
+      let at = byReplacement.get(row.anchor_id);
+      at && before < 1000;
+      at = byReplacement.get(at.anchor_id)
+    )
       before++
     let after = 0
     for (
@@ -101,7 +106,11 @@ export function versionMessages(sqlite: DatabaseSync, versionId: string): Messag
 }
 
 /** The person's own, finished, visible message in this room: the only kind that can be rewound. */
-export function rewindableMessage(sqlite: DatabaseSync, roomId: string, messageId: string): Message {
+export function rewindableMessage(
+  sqlite: DatabaseSync,
+  roomId: string,
+  messageId: string,
+): Message {
   roomRow(sqlite, roomId)
   const value = sqlite
     .prepare('SELECT * FROM messages WHERE id = ? AND room_id = ? AND deleted_at IS NULL')
@@ -131,47 +140,41 @@ const AFTER = '(created_at, id) >= (?, ?)'
 
 /** What a rewind of `anchor` hides and how many Hermes turns each agent has from there, by Score's own records. */
 export function rewindScope(sqlite: DatabaseSync, roomId: string, anchor: Message): RewindScope {
-  const hidden = z
-    .object({ count: z.int(), streaming: z.int() })
-    .parse(
-      sqlite
-        .prepare(
-          `SELECT count(*) AS count, COALESCE(SUM(streaming), 0) AS streaming FROM messages
+  const hidden = z.object({ count: z.int(), streaming: z.int() }).parse(
+    sqlite
+      .prepare(
+        `SELECT count(*) AS count, COALESCE(SUM(streaming), 0) AS streaming FROM messages
            WHERE room_id = ? AND deleted_at IS NULL AND ${AFTER}`,
-        )
-        .get(roomId, anchor.createdAt, anchor.id),
-    )
-  const open = z
-    .object({ count: z.int(), held: z.int() })
-    .parse(
-      sqlite
-        .prepare(
-          `SELECT count(*) AS count,
+      )
+      .get(roomId, anchor.createdAt, anchor.id),
+  )
+  const open = z.object({ count: z.int(), held: z.int() }).parse(
+    sqlite
+      .prepare(
+        `SELECT count(*) AS count,
              COALESCE(SUM(EXISTS (SELECT 1 FROM team_state WHERE paused_at IS NOT NULL)
                OR EXISTS (SELECT 1 FROM briefs b WHERE b.id = mr.chain_id AND b.paused_at IS NOT NULL)), 0) AS held
            FROM message_runs mr WHERE mr.room_id = ? AND mr.state IN ('pending', 'active')`,
-        )
-        .get(roomId),
-    )
+      )
+      .get(roomId),
+  )
   let blocked: string | null = null
   if (open.held > 0)
-    blocked = 'The room\'s work is paused with queued turns; resume it or stop them first'
+    blocked = "The room's work is paused with queued turns; resume it or stop them first"
   else if (hidden.streaming > 0 || open.count > 0)
     blocked = 'An agent is still answering or has queued work in this room; stop it first'
   // A run counts from the moment its reply started (a retry or a queued turn can start after its message).
-  const rows = z
-    .array(z.object({ agent_id: AgentIdSchema, turns: z.int().positive() }))
-    .parse(
-      sqlite
-        .prepare(
-          `SELECT mr.agent_id, count(*) AS turns FROM message_runs mr
+  const rows = z.array(z.object({ agent_id: AgentIdSchema, turns: z.int().positive() })).parse(
+    sqlite
+      .prepare(
+        `SELECT mr.agent_id, count(*) AS turns FROM message_runs mr
            LEFT JOIN messages m ON m.id = mr.message_id
            WHERE mr.room_id = ? AND mr.rewound_at IS NULL AND mr.state IN ('completed', 'failed')
              AND COALESCE(m.created_at, mr.created_at) >= ?
            GROUP BY mr.agent_id ORDER BY mr.agent_id`,
-        )
-        .all(roomId, anchor.createdAt),
-    )
+      )
+      .all(roomId, anchor.createdAt),
+  )
   return {
     hiddenCount: hidden.count,
     blocked,
@@ -199,9 +202,6 @@ export function markRunsRewound(
     .run(now, roomId, agentId, since)
 }
 
-const RewoundSchema = z.array(z.object({ agentId: AgentIdSchema, turnsUndone: z.int().nonnegative() }))
-const SkippedSchema = z.array(z.object({ agentId: AgentIdSchema, reason: RewindSkipReasonSchema }))
-
 /**
  * Hides `anchor` and every visible message after it as a previous version of the room. Runs in the caller's
  * transaction after every needed rewind succeeded (or the person chose to hide in Score only).
@@ -213,8 +213,8 @@ export function createVersion(
     anchor: Message
     mode: RewindMode
     scoreOnly: boolean
-    rewound: z.infer<typeof RewoundSchema>
-    skipped: z.infer<typeof SkippedSchema>
+    rewound: RewoundAgent[]
+    skipped: SkippedAgent[]
     /** A message stored in the same transaction (the edit's correction) that must stay visible. */
     except?: string
   },
@@ -270,7 +270,11 @@ export function createVersion(
 }
 
 /** A message hidden by an edit's rewind that has no correction yet (null otherwise). */
-export function openEditVersion(sqlite: DatabaseSync, roomId: string, anchorId: string): string | null {
+export function openEditVersion(
+  sqlite: DatabaseSync,
+  roomId: string,
+  anchorId: string,
+): string | null {
   const row = sqlite
     .prepare(
       `SELECT id FROM room_versions WHERE room_id = ? AND anchor_id = ? AND mode = 'edit' AND replaced_by IS NULL`,
@@ -291,7 +295,9 @@ export function linkCorrection(
     .prepare('UPDATE room_versions SET replaced_by = ? WHERE anchor_id = ? AND replaced_by IS NULL')
     .run(correctionId, anchorId)
   sqlite
-    .prepare('UPDATE messages SET edited_by = ?, updated_at = ?, version = version + 1 WHERE id = ?')
+    .prepare(
+      'UPDATE messages SET edited_by = ?, updated_at = ?, version = version + 1 WHERE id = ?',
+    )
     .run(correctionId, now, anchorId)
   const version = versionOfAnchor(sqlite, roomId, anchorId)!
   return [
@@ -327,7 +333,11 @@ export function editableMessage(sqlite: DatabaseSync, roomId: string, messageId:
       )
       .get(messageId, messageId)
     if (answering)
-      throw new HttpError(409, 'conflict', 'An agent is still answering this message; stop it first')
+      throw new HttpError(
+        409,
+        'conflict',
+        'An agent is still answering this message; stop it first',
+      )
     const scope = rewindScope(sqlite, roomId, messageFromRow(value))
     if (scope.blocked) throw new HttpError(409, 'conflict', scope.blocked)
   }
@@ -358,7 +368,10 @@ export function markEdited(
           scoreOnly: true,
           except: editedBy,
           rewound: [],
-          skipped: scope.agents.map((agent) => ({ agentId: agent.agentId, reason: 'score_only' as const })),
+          skipped: scope.agents.map((agent) => ({
+            agentId: agent.agentId,
+            reason: 'score_only' as const,
+          })),
         },
         now,
       ).drafts,

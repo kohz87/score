@@ -5,13 +5,7 @@ import { apiFetch } from '../../data/api.ts'
 import { MessageItem } from './MessageItem.tsx'
 
 /** A hidden version's messages, read-only (PLAN 5.33). */
-function PreviousVersion({
-  version,
-  agents,
-}: {
-  version: RoomVersion
-  agents: AgentSummary[]
-}) {
+function PreviousVersion({ version, agents }: { version: RoomVersion; agents: AgentSummary[] }) {
   const detail = useQuery({
     queryKey: ['chat', 'version', version.roomId, version.anchorId],
     queryFn: async () =>
@@ -27,8 +21,7 @@ function PreviousVersion({
       <p className="chat-previous-note">
         Previous version, read-only. {version.hiddenCount} hidden{' '}
         {version.hiddenCount === 1 ? 'message' : 'messages'}.
-        {version.skipped.length > 0 &&
-          ' Agents were not rewound, so they may still remember it.'}
+        {version.skipped.length > 0 && ' Agents were not rewound, so they may still remember it.'}
       </p>
       {detail.isPending && <p role="status">Loading…</p>}
       {detail.isError && <p role="alert">Could not load that version.</p>}

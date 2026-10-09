@@ -141,12 +141,19 @@ function MessagePage({
               (!data?.nextCursor && !oldest && before === null)),
         )
         const nodes: ReactNode[] = []
-        const pending = [...markers].sort((a, b) => a.anchorCreatedAt.localeCompare(b.anchorCreatedAt))
+        const pending = [...markers].sort((a, b) =>
+          a.anchorCreatedAt.localeCompare(b.anchorCreatedAt),
+        )
         const flush = (until: string | null) => {
           while (pending[0] && (until === null || pending[0].anchorCreatedAt <= until)) {
             const version = pending.shift()!
             nodes.push(
-              <VersionSwitcher key={`v-${version.id}`} version={version} versions={versions} agents={agents} />,
+              <VersionSwitcher
+                key={`v-${version.id}`}
+                version={version}
+                versions={versions}
+                agents={agents}
+              />,
             )
           }
         }
@@ -157,14 +164,21 @@ function MessagePage({
           )
           if (linked)
             nodes.push(
-              <VersionSwitcher key={`v-${linked.id}`} version={linked} versions={versions} agents={agents} />,
+              <VersionSwitcher
+                key={`v-${linked.id}`}
+                version={linked}
+                versions={versions}
+                agents={agents}
+              />,
             )
-          nodes.push(<MessageItem
+          nodes.push(
+            <MessageItem
               key={message.id}
               message={message}
               agents={agents}
               importedLabel={importedLabel}
-            />)
+            />,
+          )
         }
         flush(null)
         return nodes

@@ -87,7 +87,10 @@ test('rewinding checks Hermes first, then asks the bridge and reports its answer
   const broker = new RewindBroker()
   const req = { agentId: 'builder', sessionId: SESSION, turns: 2, sinceMs: 5000 }
   const deps = { broker, hermesHome: hermes.home }
-  expect(await rewindSession(req, deps)).toEqual({ status: 'skipped', reason: 'bridge_unavailable' })
+  expect(await rewindSession(req, deps)).toEqual({
+    status: 'skipped',
+    reason: 'bridge_unavailable',
+  })
   expect(await rewindSession({ ...req, turns: 1 }, deps)).toEqual({
     status: 'skipped',
     reason: 'turn_count_mismatch',

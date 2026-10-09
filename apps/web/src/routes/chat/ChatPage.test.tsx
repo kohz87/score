@@ -148,8 +148,7 @@ beforeEach(() => {
     if (url === '/api/agents') return response({ asOfSeq: 1, items: [agent] })
     if (url === '/api/rooms') return response({ asOfSeq: 1, rooms, directs: [direct] })
     if (url.endsWith('/versions')) return response({ asOfSeq: 1, items: versions })
-    if (url.includes('/versions/'))
-      return response({ version: versions[0], items: versionItems })
+    if (url.includes('/versions/')) return response({ version: versions[0], items: versionItems })
     if (url.endsWith('/rewind-plan')) return response(plan)
     if (url.endsWith('/rewind')) return rewindResponse()
     if (url.includes('/messages'))
@@ -829,11 +828,17 @@ test('sending an edit posts `edits`; the original greys with a link to the new v
   expect(await within(dialog).findByText(/Lead −2 turns/)).toBeDefined()
   expect(within(dialog).getByText(/Long-term memory .* is not rewound/)).toBeDefined()
   rewindResponse = () =>
-    response({ version: { ...editVersion }, rewound: [{ agentId: 'lead', turnsUndone: 2 }], skipped: [] })
+    response({
+      version: { ...editVersion },
+      rewound: [{ agentId: 'lead', turnsUndone: 2 }],
+      skipped: [],
+    })
   fireEvent.click(within(dialog).getByRole('button', { name: 'Rewind and edit' }))
   await waitFor(() =>
     expect(
-      fetchMock.mock.calls.some(([url, init]) => String(url) === '/api/rooms/general/messages' && init?.method === 'POST'),
+      fetchMock.mock.calls.some(
+        ([url, init]) => String(url) === '/api/rooms/general/messages' && init?.method === 'POST',
+      ),
     ).toBe(true),
   )
   const rewindCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/mine/rewind'))!
@@ -875,7 +880,8 @@ test('an agent that cannot be rewound blocks Rewind and offers Hide in Score onl
   await within(dialog).findByText(/These agents cannot be rewound/)
   expect(within(dialog).getByText(/builder: its Hermes session was compressed/)).toBeDefined()
   expect(
-    (within(dialog).getByRole('button', { name: 'Rewind and delete' }) as HTMLButtonElement).disabled,
+    (within(dialog).getByRole('button', { name: 'Rewind and delete' }) as HTMLButtonElement)
+      .disabled,
   ).toBe(true)
   rewindResponse = () =>
     response({
@@ -920,7 +926,8 @@ test('a blocked rewind explains why and cannot be confirmed', async () => {
   const dialog = await screen.findByRole('dialog', { name: 'Delete this message?' })
   await within(dialog).findByText(/An agent is still answering/)
   expect(
-    (within(dialog).getByRole('button', { name: 'Rewind and delete' }) as HTMLButtonElement).disabled,
+    (within(dialog).getByRole('button', { name: 'Rewind and delete' }) as HTMLButtonElement)
+      .disabled,
   ).toBe(true)
 })
 test('the version switcher sits above a correction and shows the previous version read-only', async () => {
@@ -950,7 +957,9 @@ test('the version switcher sits above a correction and shows the previous versio
   expect(within(switcher).getByText('Version 2 of 2')).toBeDefined()
 })
 test('a delete leaves a Previous version marker where the message was', async () => {
-  versions = [{ ...editVersion, mode: 'delete', count: 1, anchorCreatedAt: '2026-10-08T09:59:00.000Z' }]
+  versions = [
+    { ...editVersion, mode: 'delete', count: 1, anchorCreatedAt: '2026-10-08T09:59:00.000Z' },
+  ]
   versionItems = [mine]
   setup()
   await screen.findByText('Hello team')

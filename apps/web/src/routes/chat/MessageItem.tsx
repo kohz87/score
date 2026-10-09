@@ -283,7 +283,9 @@ function MessageActions({
             ? 'Hides it and everything after it, and rewinds the agents'
             : 'Removes it from Score. Agents may still remember it.'
         }
-        onClick={() => (you && !imported ? setConfirming(true) : requestDelete(message.roomId, message.id))}
+        onClick={() =>
+          you && !imported ? setConfirming(true) : requestDelete(message.roomId, message.id)
+        }
       />
       {confirming && (
         <RewindDialog

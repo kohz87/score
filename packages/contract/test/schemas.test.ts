@@ -814,9 +814,17 @@ const cases = [
   ['PatchPluginRequestSchema', { enabled: false }, { enabled: false, extra: 1 }],
   ['RewindModeSchema', 'edit', 'undo'],
   ['RewindRequestSchema', { mode: 'delete', scoreOnly: true }, { mode: 'undo' }],
-  ['RewoundAgentSchema', { agentId: 'builder', turnsUndone: 2 }, { agentId: 'builder', turnsUndone: -1 }],
+  [
+    'RewoundAgentSchema',
+    { agentId: 'builder', turnsUndone: 2 },
+    { agentId: 'builder', turnsUndone: -1 },
+  ],
   ['RewindSkipReasonSchema', 'compressed', 'other'],
-  ['SkippedAgentSchema', { agentId: 'builder', reason: 'no_answer' }, { agentId: 'builder', reason: 'x' }],
+  [
+    'SkippedAgentSchema',
+    { agentId: 'builder', reason: 'no_answer' },
+    { agentId: 'builder', reason: 'x' },
+  ],
   ['RoomVersionSchema', f.roomVersion, { ...f.roomVersion, count: 0 }],
   [
     'RewindResponseSchema',

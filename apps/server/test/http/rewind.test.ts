@@ -22,7 +22,6 @@ import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
 import type { FakePort } from '../../src/hermes/fake/fake-port.ts'
 
-
 const PageSchema = z.object({
   asOfSeq: z.int().nonnegative(),
   items: z.array(MessageSchema),
@@ -125,7 +124,9 @@ async function answer(roomId: string, parentId: string, agentId: string, fromAge
     identity: `finish-${run.message_id}`,
     apply: ({ sqlite, now }) => {
       sqlite
-        .prepare("UPDATE message_runs SET state = 'completed', from_agent_id = ? WHERE message_id = ?")
+        .prepare(
+          "UPDATE message_runs SET state = 'completed', from_agent_id = ? WHERE message_id = ?",
+        )
         .run(fromAgent ?? null, run.message_id)
       return storeMessage(
         sqlite,
@@ -184,7 +185,7 @@ const rewind = (roomId: string, messageId: string, body: object = { mode: 'delet
 const visible = async (roomId: string) =>
   PageSchema.parse((await get(`/api/rooms/${roomId}/messages`)).json()).items.map((m) => m.id)
 
-test('a rewind counts each agent\'s turns from the message on (hand-offs, retries), hides the rest as a version and asks Hermes once', async () => {
+test("a rewind counts each agent's turns from the message on (hand-offs, retries), hides the rest as a version and asks Hermes once", async () => {
   const room = await createRoom()
   const first = await ask(room.id, 'first', ['builder'])
   await answer(room.id, first.id, 'builder')
@@ -238,7 +239,9 @@ test('a rewind counts each agent\'s turns from the message on (hand-offs, retrie
   expect(await visible(room.id)).toHaveLength(2)
   const types = events().map((event) => event.type)
   expect(types.filter((type) => type === 'message.deleted')).toHaveLength(5)
-  expect(types.indexOf('room.version.created')).toBeGreaterThan(types.lastIndexOf('message.deleted'))
+  expect(types.indexOf('room.version.created')).toBeGreaterThan(
+    types.lastIndexOf('message.deleted'),
+  )
 
   const detail = RoomVersionDetailSchema.parse(
     (await get(`/api/rooms/${room.id}/versions/${second.id}`)).json(),
@@ -337,7 +340,7 @@ test('a failure after the first agent keeps it rewound and counted once on retry
   expect(fake().rewinds.map((item) => item.agentId)).toEqual(['reviewer'])
 })
 
-test('a rewind is refused while an agent is answering or work is queued, and for other people\'s messages', async () => {
+test("a rewind is refused while an agent is answering or work is queued, and for other people's messages", async () => {
   const room = await createRoom()
   const message = await ask(room.id, 'go', ['builder'])
   const queued = await rewind(room.id, message.id)

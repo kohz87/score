@@ -76,7 +76,9 @@ export function RewindDialog({
   }
 
   const data = plan.data
-  const cannot = failed ?? data?.agents.flatMap((a) => (a.cannot ? [{ agentId: a.agentId, reason: a.cannot }] : []))
+  const cannot =
+    failed ??
+    data?.agents.flatMap((a) => (a.cannot ? [{ agentId: a.agentId, reason: a.cannot }] : []))
   const rewinds = data?.agents.filter((agent) => agent.turns > 0 && !agent.cannot) ?? []
   const title = mode === 'edit' ? 'Edit and send again?' : 'Delete this message?'
   return (
@@ -114,9 +116,7 @@ export function RewindDialog({
             {rewinds.length === 0 && !cannot?.length && (
               <li>No agent has a turn to rewind from here.</li>
             )}
-            <li>
-              Long-term memory (MEMORY.md, skills, Knowledge notes) is not rewound.
-            </li>
+            <li>Long-term memory (MEMORY.md, skills, Knowledge notes) is not rewound.</li>
           </ul>
           {data.blocked && (
             <p className="chat-rewind-warning" role="alert">
@@ -125,9 +125,7 @@ export function RewindDialog({
           )}
           {cannot && cannot.length > 0 && (
             <div className="chat-rewind-warning" role="alert">
-              <p>
-                {failed ? 'Nothing was hidden. ' : ''}These agents cannot be rewound:
-              </p>
+              <p>{failed ? 'Nothing was hidden. ' : ''}These agents cannot be rewound:</p>
               <ul>
                 {cannot.map((item) => (
                   <li key={item.agentId}>

@@ -75,7 +75,9 @@ test('Edit rewinds, then the correction shows "Version 2 of 2" with the original
   const dialog = page.getByRole('dialog', { name: 'Edit and send again?' })
   await expect(dialog.getByText(/Agents rewound: Lead −1 turn/)).toBeVisible()
   await dialog.getByRole('button', { name: 'Rewind and edit' }).click()
-  const corrected = history.getByRole('article', { name: /Message from You/ }).filter({ hasText: fixed })
+  const corrected = history
+    .getByRole('article', { name: /Message from You/ })
+    .filter({ hasText: fixed })
   await expect(corrected).toBeVisible()
   await expect(mine).toHaveCount(0)
   const switcher = page.getByTestId('version-switcher').filter({ hasText: 'Version 2 of 2' })
@@ -99,10 +101,16 @@ test('An agent that cannot be rewound is named, and Hide in Score only still wor
   await composer.fill(text)
   await composer.press('Escape')
   await composer.press('Enter')
-  const mine = history.getByRole('article', { name: /Message from You/ }).filter({ hasText: 'please look at this' })
+  const mine = history
+    .getByRole('article', { name: /Message from You/ })
+    .filter({ hasText: 'please look at this' })
   await expect(mine.last()).toBeVisible()
   await expect(
-    mine.last().locator('xpath=following-sibling::article').filter({ hasText: 'I have reviewed' }).first(),
+    mine
+      .last()
+      .locator('xpath=following-sibling::article')
+      .filter({ hasText: 'I have reviewed' })
+      .first(),
   ).toBeVisible({ timeout: 40_000 })
   await expect(history.getByRole('button', { name: /^Stop reply/ })).toHaveCount(0)
   await mine.last().hover()

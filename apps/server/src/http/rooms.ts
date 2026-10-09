@@ -352,19 +352,22 @@ export function registerRoomRoutes(
     return { ...found, checks }
   }
 
-  app.get('/api/rooms/:roomId/messages/:messageId/rewind-plan', async (request): Promise<RewindPlan> => {
-    const { roomId, messageId } = MessageParamsSchema.parse(request.params)
-    const { scope, checks } = await rewindPlan(roomId, messageId)
-    return {
-      hiddenCount: scope.hiddenCount,
-      blocked: scope.blocked,
-      agents: checks.map(({ agent, cannot }) => ({
-        agentId: agent.agentId,
-        turns: agent.turns,
-        cannot,
-      })),
-    }
-  })
+  app.get(
+    '/api/rooms/:roomId/messages/:messageId/rewind-plan',
+    async (request): Promise<RewindPlan> => {
+      const { roomId, messageId } = MessageParamsSchema.parse(request.params)
+      const { scope, checks } = await rewindPlan(roomId, messageId)
+      return {
+        hiddenCount: scope.hiddenCount,
+        blocked: scope.blocked,
+        agents: checks.map(({ agent, cannot }) => ({
+          agentId: agent.agentId,
+          turns: agent.turns,
+          cannot,
+        })),
+      }
+    },
+  )
 
   app.post('/api/rooms/:roomId/messages/:messageId/rewind', mutation, async (request) => {
     const { roomId, messageId } = MessageParamsSchema.parse(request.params)
@@ -429,7 +432,14 @@ export function registerRoomRoutes(
           if (again.blocked) throw new HttpError(409, 'conflict', again.blocked)
           created = createVersion(
             sqlite,
-            { roomId, anchor, mode: body.mode, scoreOnly: Boolean(body.scoreOnly), rewound, skipped },
+            {
+              roomId,
+              anchor,
+              mode: body.mode,
+              scoreOnly: Boolean(body.scoreOnly),
+              rewound,
+              skipped,
+            },
             now,
           )
           return created.drafts

@@ -45,9 +45,7 @@ export function registerBridgeCommandRoutes(
   })
   app.post('/bridge/v1/commands/:commandId/result', guard, async (request, reply) => {
     const producer = deps.authenticate(request.headers.authorization)
-    const { commandId } = z
-      .object({ commandId: z.string().min(1).max(128) })
-      .parse(request.params)
+    const { commandId } = z.object({ commandId: z.string().min(1).max(128) }).parse(request.params)
     deps.broker.complete(producer.profile, commandId, BridgeCommandResultSchema.parse(request.body))
     return reply.code(204).send()
   })

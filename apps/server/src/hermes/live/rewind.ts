@@ -7,7 +7,9 @@ import { HermesDbMissing, HermesSchemaDrift, openReadOnly } from './sqlite.ts'
 
 const BRIDGE_ANSWER_MS = 60_000
 
-type Inspection = { ok: true; sessionId: string; turns: number } | { ok: false; reason: 'no_session' | 'compressed' }
+type Inspection =
+  | { ok: true; sessionId: string; turns: number }
+  | { ok: false; reason: 'no_session' | 'compressed' }
 
 /**
  * Read-only look at the agent's room session in its Hermes history: the session that holds the turns from `since` on
@@ -38,16 +40,14 @@ export function inspectSession(
         return { ok: false, reason: 'compressed' }
       const tip = lineage.at(-1)!
       const count = (extra: string) =>
-        z
-          .object({ count: z.int() })
-          .parse(
-            db
-              .prepare(
-                `SELECT count(*) AS count FROM messages WHERE session_id = ? AND role = 'user' AND active = 1
+        z.object({ count: z.int() }).parse(
+          db
+            .prepare(
+              `SELECT count(*) AS count FROM messages WHERE session_id = ? AND role = 'user' AND active = 1
                  AND timestamp >= ?${extra}`,
-              )
-              .get(tip, req.sinceSeconds),
-          ).count
+            )
+            .get(tip, req.sinceSeconds),
+        ).count
       let turns: number
       try {
         // Rows Hermes writes for display only are not turns the person started.
@@ -82,7 +82,8 @@ export async function rewindSession(
   )
   if (!found.ok) return { status: 'skipped', reason: found.reason }
   if (found.turns !== req.turns) return { status: 'skipped', reason: 'turn_count_mismatch' }
-  if (!deps.broker?.available(req.agentId)) return { status: 'skipped', reason: 'bridge_unavailable' }
+  if (!deps.broker?.available(req.agentId))
+    return { status: 'skipped', reason: 'bridge_unavailable' }
   if (req.dryRun) return { status: 'ready' }
   const outcome = await deps.broker.request(
     req.agentId,
@@ -91,7 +92,11 @@ export async function rewindSession(
   )
   switch (outcome.status) {
     case 'done':
-      return { status: 'rewound', turnsUndone: outcome.turnsUndone, rewoundCount: outcome.rewoundCount }
+      return {
+        status: 'rewound',
+        turnsUndone: outcome.turnsUndone,
+        rewoundCount: outcome.rewoundCount,
+      }
     case 'unavailable':
       return { status: 'skipped', reason: 'bridge_unavailable' }
     case 'no_answer':

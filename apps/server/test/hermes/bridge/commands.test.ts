@@ -62,7 +62,7 @@ test('a long poll wakes when a command arrives', async () => {
   expect(await asked).toEqual({ status: 'nothing' })
 })
 
-test('commands go only to the profile\'s own producer and never to one that cannot tell where it runs', async () => {
+test("commands go only to the profile's own producer and never to one that cannot tell where it runs", async () => {
   const builder = await env.token()
   const other = await env.token({ ...hello, profile: 'reviewer', incarnation: 'worker-reviewer' })
   const blind = await env.token({
