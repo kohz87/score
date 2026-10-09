@@ -165,6 +165,15 @@ export function registerWorkspaceRoutes(
               .header('ETag', `"${result.etag}"`)
               .send(result.content)
           case 'raw':
+            if (result.contentType === 'application/pdf')
+              return reply
+                .header('Content-Type', 'application/octet-stream')
+                .header(
+                  'Content-Disposition',
+                  `attachment; filename*=UTF-8''${encodeURIComponent(path.split('/').pop() ?? 'file.pdf')}`,
+                )
+                .header('ETag', `"${result.etag}"`)
+                .send(result.bytes)
             return reply
               .header('Content-Type', result.contentType)
               .header('Content-Disposition', 'inline')

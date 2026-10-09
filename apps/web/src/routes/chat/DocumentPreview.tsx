@@ -8,7 +8,7 @@ import { Markdown } from './Markdown.tsx'
 import { workspaceFileLink } from './workspace-link.ts'
 
 // Previews are text on the page, never a frame of the file: HTML is shown as source, Markdown goes through the chat
-// renderer (no raw HTML), and PDFs open in the browser's own tab.
+// renderer (no raw HTML), and PDFs are downloads.
 const MAX_PREVIEW_BYTES = 512 * 1024
 const MAX_FETCH_BYTES = 2 * 1024 * 1024
 
@@ -153,7 +153,7 @@ export function DocumentDialog({ part, onClose }: { part: DocumentPart; onClose:
             Score can’t show Word and Excel files. Download it, or open the copy the agent got.
           </p>
         )}
-        {kind === 'pdf' && <p className="chat-doc-note">PDF files open in their own tab.</p>}
+        {kind === 'pdf' && <p className="chat-doc-note">PDF files are downloaded, not shown here.</p>}
         {textual && tooBig && (
           <p className="chat-doc-note">This file is too large to preview. Download it instead.</p>
         )}
@@ -162,11 +162,6 @@ export function DocumentDialog({ part, onClose }: { part: DocumentPart; onClose:
         {textual && text.data !== undefined && <TextPreview kind={kind} text={text.data} />}
       </div>
       <div className="chat-doc-actions">
-        {kind === 'pdf' && (
-          <a className="chat-doc-button" href={url} target="_blank" rel="noreferrer">
-            Open PDF
-          </a>
-        )}
         <a className="chat-doc-button" href={mediaUrl(part.mediaId, part.name)}>
           Download
         </a>

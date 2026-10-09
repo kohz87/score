@@ -80,16 +80,8 @@ export function WorkspaceFile({ agentId, path }: { agentId: string; path: string
   if (pdf)
     return (
       <div className="ws-preview">
-        <p className="ws-note">PDF files open in their own tab.</p>
+        <p className="ws-note">PDF files are downloaded, not shown here.</p>
         <div className="ws-actions">
-          <a
-            className="team-pill-button"
-            href={fileUrl(agentId, path, false, root)}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open PDF
-          </a>
           <a className="team-pill-button" href={download}>
             Download
           </a>

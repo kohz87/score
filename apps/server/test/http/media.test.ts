@@ -269,10 +269,11 @@ test('documents: stored by their bytes and served by kind', async () => {
   }
   const doc = await fetchOf(pdf(), 'report.pdf', 'application/pdf')
   expect(doc.body.contentType).toBe('application/pdf')
-  expect(doc.res.headers['content-type']).toBe('application/pdf')
-  expect(doc.res.headers['content-disposition']).toBe('inline')
+  // A PDF is never rendered by the browser from Score's origin: download + sandbox CSP (audit5-g).
+  expect(doc.res.headers['content-type']).toBe('application/octet-stream')
+  expect(doc.res.headers['content-disposition']).toMatch(/^attachment/)
   expect(doc.res.headers['x-content-type-options']).toBe('nosniff')
-  expect(doc.res.headers['content-security-policy']).toBeUndefined()
+  expect(doc.res.headers['content-security-policy']).toContain('sandbox')
 
   const word = await fetchOf(docx(), 'a b.docx')
   expect(word.res.headers['content-type']).toBe('application/octet-stream')

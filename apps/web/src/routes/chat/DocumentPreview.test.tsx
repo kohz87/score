@@ -46,12 +46,11 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-test('a PDF is a link that opens in a new tab, with no dialog', () => {
+test('a PDF is a download link, with no dialog', () => {
   mount(<DocumentChip part={part({ name: 'r.pdf', contentType: 'application/pdf' })} />)
-  const link = screen.getByRole('link', { name: 'Open r.pdf in a new tab' })
-  expect(link.getAttribute('href')).toBe('/api/media/m1')
-  expect(link.getAttribute('target')).toBe('_blank')
-  expect(link.getAttribute('rel')).toContain('noreferrer')
+  const link = screen.getByRole('link', { name: 'Download r.pdf' })
+  expect(link.getAttribute('href')).toBe('/api/media/m1?download=1&name=r.pdf')
+  expect(link.getAttribute('target')).toBeNull()
 })
 
 test('CSV shows as a table, header first, and stops at 1000 rows', () => {
