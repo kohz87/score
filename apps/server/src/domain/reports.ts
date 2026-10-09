@@ -353,7 +353,10 @@ export function computeReports(input: ReportInput): Reports {
     runs: runs.length,
     firstPassRate: rate(doneReviewed.filter(passedFirst).length, doneReviewed.length),
     medianTaskSec: median(finished.map(seconds)),
-    spendUsd: money(sum(agentIds.map((agentId) => input.facts.spendUsd[agentId] ?? null))),
+    // One unknown component makes the total unknown: a sum of the known ones would pass as complete.
+    spendUsd: agentIds.some((agentId) => (input.facts.spendUsd[agentId] ?? null) === null)
+      ? null
+      : money(sum(agentIds.map((agentId) => input.facts.spendUsd[agentId] ?? null))),
   }
   const when = RANGE_WORDS[input.range]
   const summary = finished.length

@@ -606,7 +606,7 @@ costUsd: number | null; task: { id; title } | null; brief: { id; title } | null;
   minus time already working; waiting on another agent = waiting for dependencies (created → `promoted`) and in review
   (`review_requested` → outcome), minus time already working or waiting on you. An hour of active run with a human
   approval open the whole hour counts as working only. Spend = Hermes session costs (actual, else estimated);
-  null when unknown.
+  null when unknown. `totals.spendUsd` is null when any agent's spend is unknown (never a partial sum).
 - `GET /api/reports/export.csv?range=&tz=` → `text/csv`
 - Both take an optional `tz` (IANA zone, e.g. `Europe/London`): days and "today" are the viewer's, not the server's
   (often UTC). An unknown zone is `400`. Without it, the server's zone is used.

@@ -152,8 +152,15 @@ test('7d report has known numbers', () => {
     runs: 3,
     firstPassRate: 2 / 3,
     medianTaskSec: 2700,
-    spendUsd: 1.75,
+    // designer's spend is unknown, so the total is unknown rather than a partial 1.75.
+    spendUsd: null,
   })
+  expect(
+    computeReports({
+      ...input,
+      facts: { ...input.facts, spendUsd: { builder: 1.5, designer: 0, reviewer: 0.25 } },
+    }).totals.spendUsd,
+  ).toBe(1.75)
   expect(report.summary).toBe('4 tasks finished in the last 7 days, typically in 45 minutes.')
   expect(report.byDay.map((day) => day.date)).toEqual([
     '2026-03-04',
