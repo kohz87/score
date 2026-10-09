@@ -12,6 +12,7 @@ import { KnowledgeSection } from '../knowledge/KnowledgeSection.tsx'
 import { LogsSection } from './LogsSection.tsx'
 import { SharesSection } from './SharesSection.tsx'
 import { RemoteSection } from './RemoteSection.tsx'
+import { TerminalSection } from './TerminalSection.tsx'
 import { remoteTransport } from '../../data/session.ts'
 import './settings.css'
 
@@ -54,6 +55,7 @@ export function SettingsPage() {
         <AdvancedSection />
         <LogsSection />
         <RemoteSection />
+        <TerminalSection />
       </div>
     </div>
   )

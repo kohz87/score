@@ -2,10 +2,7 @@ import { createRequire } from 'node:module'
 import type { FastifyInstance } from 'fastify'
 import websocket from '@fastify/websocket'
 import { z } from 'zod'
-import {
-  TerminalSessionsSchema,
-  TerminalTicketSchema,
-} from '@score/contract'
+import { TerminalSessionsSchema, TerminalTicketSchema } from '@score/contract'
 import { humanGuard } from '../auth/human.ts'
 import { HttpError } from '../errors.ts'
 import { RateLimiter } from '../shares/rate-limit.ts'
@@ -52,7 +49,10 @@ export function loadNodePty(): SpawnPty {
  * none of these routes exist. Every route needs a paired session (the remote guard and `humanGuard`), and a terminal
  * additionally needs a one-time ticket minted right after a password or passkey check.
  */
-export function registerTerminalRoutes(app: FastifyInstance, options: TerminalOptions): TerminalManager {
+export function registerTerminalRoutes(
+  app: FastifyInstance,
+  options: TerminalOptions,
+): TerminalManager {
   const clock = options.clock ?? Date.now
   const tickets = new TerminalTickets(clock)
   const manager = new TerminalManager(
@@ -90,7 +90,11 @@ export function registerTerminalRoutes(app: FastifyInstance, options: TerminalOp
       throw new HttpError(429, 'too_many_terminals', 'Two terminals are already open')
     // Taken (and used up) before anything is minted: one password or passkey check opens one terminal.
     if (!app.pairing.takeFresh(session, FRESH_AUTH_MS))
-      throw new HttpError(403, 'fresh_auth_required', 'Confirm your security password or passkey first')
+      throw new HttpError(
+        403,
+        'fresh_auth_required',
+        'Confirm your security password or passkey first',
+      )
     const minted = tickets.mint(session, origin)
     if (!minted) throw new HttpError(429, 'too_many_attempts', 'Wait a minute before trying again')
     return TerminalTicketSchema.parse({
@@ -133,7 +137,11 @@ export function registerTerminalRoutes(app: FastifyInstance, options: TerminalOp
       },
       (socket, request) => {
         const session = (request as unknown as { terminalSession: string }).terminalSession
-        const id = manager.open(socket as unknown as TerminalSocket, session, request.ip || 'unknown')
+        const id = manager.open(
+          socket as unknown as TerminalSocket,
+          session,
+          request.ip || 'unknown',
+        )
         if (id === undefined) return
         const forget = app.pairing.onRevoked(session, () => manager.closeSession(session))
         socket.once('close', forget)

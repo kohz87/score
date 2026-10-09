@@ -47,7 +47,8 @@ export class TerminalTickets {
 
   /** Void the tickets of a session that ended. */
   dropSession(session: string): void {
-    for (const [key, entry] of this.#entries) if (entry.session === session) this.#entries.delete(key)
+    for (const [key, entry] of this.#entries)
+      if (entry.session === session) this.#entries.delete(key)
   }
 
   private prune(): void {

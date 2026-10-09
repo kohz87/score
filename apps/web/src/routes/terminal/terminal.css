@@ -1,0 +1,54 @@
+.terminal-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 0;
+}
+.terminal-page h1 {
+  margin: 0;
+  font-family: 'Bricolage Grotesque', sans-serif;
+}
+.terminal-notice {
+  margin: 0;
+  color: var(--ink-muted);
+}
+.terminal-auth {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 360px;
+}
+.terminal-auth button,
+.terminal-keys button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+.terminal-auth .terminal-primary {
+  background: var(--ink);
+  color: var(--card);
+}
+.terminal-screen {
+  min-height: 360px;
+  height: 60vh;
+  padding: 12px;
+  border-radius: 20px;
+  background: var(--watch-window);
+  overflow: hidden;
+}
+.terminal-screen[hidden] {
+  display: none;
+}
+.terminal-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.terminal-keys button[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--card);
+}

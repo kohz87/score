@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Writable } from 'node:stream'
 import type { FastifyInstance } from 'fastify'
-import type { WebSocket } from 'ws'
+import type { WebSocket } from '@fastify/websocket'
 import { afterEach, expect, test, vi } from 'vitest'
 import { TerminalTicketSchema, SecurityStatusSchema } from '@score/contract'
 import { buildApp } from '../src/app.ts'
@@ -118,7 +118,9 @@ function listen(socket: WebSocket) {
       const start = Date.now()
       while (!output.includes(text)) {
         if (Date.now() - start > timeoutMs)
-          throw new Error(`Timed out waiting for ${text}; saw ${JSON.stringify(output.slice(-300))}`)
+          throw new Error(
+            `Timed out waiting for ${text}; saw ${JSON.stringify(output.slice(-300))}`,
+          )
         await new Promise((resolve) => setTimeout(resolve, 20))
       }
     },
@@ -148,18 +150,27 @@ test('the routes do not exist unless SCORE_TERMINAL=1, and Settings says so', as
   const { app } = makeApp({ SCORE_TERMINAL: '0' })
   const cookie = await pair(app)
   expect((await mint(app, cookie)).statusCode).toBe(404)
-  const sessions = await app.inject({ url: '/api/terminal/sessions', headers: { ...headers, cookie } })
+  const sessions = await app.inject({
+    url: '/api/terminal/sessions',
+    headers: { ...headers, cookie },
+  })
   expect(sessions.statusCode).toBe(404)
   const ws = await app.inject({ url: '/api/terminal/ws?ticket=x', headers: { ...headers, cookie } })
   expect(ws.statusCode).toBe(404)
-  const security = await app.inject({ url: '/api/session/security', headers: { ...headers, cookie } })
+  const security = await app.inject({
+    url: '/api/session/security',
+    headers: { ...headers, cookie },
+  })
   expect(SecurityStatusSchema.parse(security.json()).terminal).toBe(false)
 })
 
 test('enabled: the status says so, and the routes need a paired session', async () => {
   const { app } = makeApp()
   const cookie = await pair(app)
-  const security = await app.inject({ url: '/api/session/security', headers: { ...headers, cookie } })
+  const security = await app.inject({
+    url: '/api/session/security',
+    headers: { ...headers, cookie },
+  })
   expect(SecurityStatusSchema.parse(security.json()).terminal).toBe(true)
   const unpaired = await app.inject({
     method: 'POST',
@@ -215,9 +226,9 @@ test('minting needs the page origin and an allowed one', async () => {
   app.pairing.markFresh(cookie)
   const { origin: _origin, ...withoutOrigin } = headers
   expect((await mint(app, cookie, withoutOrigin as typeof headers)).statusCode).toBe(403)
-  expect(
-    (await mint(app, cookie, { ...headers, origin: 'https://evil.example' })).statusCode,
-  ).toBe(403)
+  expect((await mint(app, cookie, { ...headers, origin: 'https://evil.example' })).statusCode).toBe(
+    403,
+  )
 })
 
 test('a ticket opens one terminal, runs a command, and is single use', async () => {
@@ -229,7 +240,10 @@ test('a ticket opens one terminal, runs a command, and is single use', async () 
   socket.send(Buffer.from('echo score-$((20+22))\r'))
   await screen.until('score-42')
   expect(screen.frames[0]).toMatchObject({ type: 'ready' })
-  const sessions = await app.inject({ url: '/api/terminal/sessions', headers: { ...headers, cookie } })
+  const sessions = await app.inject({
+    url: '/api/terminal/sessions',
+    headers: { ...headers, cookie },
+  })
   expect(sessions.json().items).toHaveLength(1)
   // Replaying the ticket fails.
   await rejected(connect(app, ticket, cookie))
@@ -275,15 +289,24 @@ test('the upgrade needs a paired session, the right Host and Origin, and a valid
   // Wrong Host
   await rejected(connect(app, good, cookie, { ...headers, host: 'evil.example' }))
   // Wrong or missing Origin (a ticket is burned by any attempt that found it, so mint again each time)
-  await rejected(connect(app, await ticketFor(app, cookie), cookie, { ...headers, origin: 'https://evil.example' }))
+  await rejected(
+    connect(app, await ticketFor(app, cookie), cookie, {
+      ...headers,
+      origin: 'https://evil.example',
+    }),
+  )
   const { origin: _origin, ...withoutOrigin } = headers
-  await rejected(connect(app, await ticketFor(app, cookie), cookie, withoutOrigin as typeof headers))
+  await rejected(
+    connect(app, await ticketFor(app, cookie), cookie, withoutOrigin as typeof headers),
+  )
   // Unknown ticket, no ticket
   await rejected(connect(app, 'x'.repeat(43), cookie))
   // Not paired
   const unpairedTicket = await ticketFor(app, cookie)
   await app.ready()
-  await rejected(app.injectWS(`/api/terminal/ws?ticket=${unpairedTicket}`, { headers }) as Promise<unknown>)
+  await rejected(
+    app.injectWS(`/api/terminal/ws?ticket=${unpairedTicket}`, { headers }) as Promise<unknown>,
+  )
   expect(app.terminals?.count).toBe(0)
 })
 
@@ -370,7 +393,13 @@ test('revoking the session, signing out and stopping Score kill the shell and it
     if (how === 'revoke') app.pairing.revoke(cookie)
     if (how === 'sign-out')
       expect(
-        (await app.inject({ method: 'DELETE', url: '/api/session', headers: { ...headers, cookie } })).statusCode,
+        (
+          await app.inject({
+            method: 'DELETE',
+            url: '/api/session',
+            headers: { ...headers, cookie },
+          })
+        ).statusCode,
       ).toBe(204)
     if (how === 'stop') await app.close()
     expect(await gone(shell!), `${how}: shell`).toBe(true)
@@ -385,7 +414,10 @@ test('the owner can list and close an open terminal', async () => {
   const cookie = await pair(app)
   const socket = await connect(app, await ticketFor(app, cookie), cookie)
   const screen = reader(socket)
-  const listed = await app.inject({ url: '/api/terminal/sessions', headers: { ...headers, cookie } })
+  const listed = await app.inject({
+    url: '/api/terminal/sessions',
+    headers: { ...headers, cookie },
+  })
   const { items } = listed.json()
   expect(items).toHaveLength(1)
   const closed = await app.inject({
@@ -395,7 +427,9 @@ test('the owner can list and close an open terminal', async () => {
   })
   expect(closed.statusCode).toBe(204)
   await expectGone(app)
-  expect(screen.frames.some((frame) => (frame as { reason?: string }).reason === 'closed')).toBe(true)
+  expect(screen.frames.some((frame) => (frame as { reason?: string }).reason === 'closed')).toBe(
+    true,
+  )
   expect(
     (
       await app.inject({
@@ -429,7 +463,12 @@ test('remote mode: the terminal routes are not public, and Host is checked on th
   expect((await mint(app, cookie, wrongHost)).statusCode).toBe(403)
   const ticket = await ticketFor(app, cookie, remoteHeaders)
   await rejected(connect(app, ticket, cookie, wrongHost))
-  const good = await connect(app, await ticketFor(app, cookie, remoteHeaders), cookie, remoteHeaders)
+  const good = await connect(
+    app,
+    await ticketFor(app, cookie, remoteHeaders),
+    cookie,
+    remoteHeaders,
+  )
   const screen = reader(good)
   good.send(Buffer.from('echo remote-$((1+1))\r'))
   await screen.until('remote-2')

@@ -385,6 +385,34 @@ expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a mana
   (time null). `level` is a minimum (`warn` = warn and error); `q` is a case-insensitive substring of message, method or URL.
   **Every text field passes through `redact()` on the server**, so no secret leaves in a log line. `available: false` when
   `SCORE_LOG_FILE` is not set. No Hermes log files.
+- **Web terminal (PLAN 7.3; schemas in `packages/contract/src/terminal.ts`).** A shell on the Score machine for the owner.
+  **Off unless the server starts with `SCORE_TERMINAL=1`**: otherwise none of the routes below are registered (`404 not_found`)
+  and `GET /api/session/security` reports `terminal: false` (the field is `true` when on, and also `false` if the `node-pty`
+  native module failed to load, which is logged). None of the routes is public in remote mode: all need a paired session
+  (so the exact public list in the remote-access item above is **unchanged**), and the WebSocket needs the ticket as well.
+  - `POST /api/terminal/tickets` (paired; mutation, so `X-Score-Client` and an allowed `Origin`) → `{ ticket, expiresAt }`
+    (`TerminalTicketSchema`). Needs a second factor made **by this session in the last 60 s**: a correct security password
+    (`POST /api/session/security/check`, or any other password-guarded route) or a passkey assertion
+    (`POST /api/session/passkey/authentication` by an already paired browser now only marks the session fresh and returns
+    `204` without a new cookie). `freshAuthAt` lives on the server, is used up by minting (one check, one ticket) and
+    forgotten when the session ends. The ticket is 256 random bits, kept only as a hash, valid 60 s, **bound to the session and
+    the request `Origin`**, single use (any redeem attempt burns it). Errors: `403 fresh_auth_required`,
+    `429 too_many_terminals` (2 open), `429 too_many_attempts` (10 mints a minute per session), `403 forbidden` (missing or
+    disallowed Origin).
+  - `GET /api/terminal/ws?ticket=…` (WebSocket upgrade). Same Host rule as remote mode (`Host` must be the `Origin`'s host), an
+    allowed `Origin` (required), the paired-session cookie **and** a valid ticket for exactly this session and origin; any
+    failure is a plain HTTP error before the upgrade (`401 not_paired`, `403 forbidden`, `403 ticket_invalid`). The ticket is
+    redacted from every log line. Frames: client to server **binary** = stdin (at most 64 KiB), **text** JSON
+    `{ type: 'resize', cols, rows }`; server to client **binary** = stdout, **text** JSON `{ type: 'ready', id, user }` first and
+    `{ type: 'exit', reason: 'exited'|'idle'|'limit'|'closed'|'revoked'|'stalled'|'stopped', code }` last.
+  - `GET /api/terminal/sessions` (paired) → `{ items: { id, openedAt, lastActivityAt, address, cols, rows }[] }`;
+    `DELETE /api/terminal/sessions/:id` (paired) → `204`, `404` if not open. Settings › Terminal uses them.
+  - **Process.** `node-pty` spawns the account's login shell as `[shell, '-l']` (argv, no shell string) in `$HOME` with exactly
+    `HOME USER LANG PATH TERM=xterm-256color SHELL`, never Score's own environment. At most 2 terminals; closed after 15 min
+    without input or output, or 8 h absolute. Closing the socket, revoking or expiring the session, signing out, closing from
+    Settings or stopping Score sends the process group SIGHUP, then SIGKILL after 3 s. Output is paused while the socket holds
+    more than 1 MiB unsent; a client that stays stalled for 60 s is dropped. The log records open, close and kill (terminal
+    id, session prefix, address, reason, duration) and never keystrokes or output.
 - `GET /api/search?q=` → `{ items: { kind: 'agent'|'task'|'room'|'message'|'command'|'setting'; id: string;
 label: string; hint: string | null; ref: Ref | { kind: 'route'; path: string } }[] }` (⌘K palette)
 

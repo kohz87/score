@@ -9,9 +9,14 @@ import {
   type TerminalSocket,
 } from '../src/terminal/manager.ts'
 
-const launch = terminalLaunch({ HOME: '/tmp' }, { username: 'u', homedir: '/tmp', shell: '/bin/sh' })
+const launch = terminalLaunch(
+  { HOME: '/tmp' },
+  { username: 'u', homedir: '/tmp', shell: '/bin/sh' },
+)
 const lines: { fields: Record<string, unknown>; message: string }[] = []
-const audit = { info: (fields: Record<string, unknown>, message: string) => lines.push({ fields, message }) }
+const audit = {
+  info: (fields: Record<string, unknown>, message: string) => lines.push({ fields, message }),
+}
 const stop: (() => Promise<unknown>)[] = []
 afterEach(async () => {
   vi.useRealTimers()
@@ -76,12 +81,13 @@ function setup(limits = {}, spawnPty?: SpawnPty, stillPaired?: (session: string)
   let now = 1_000_000
   const ptys: FakePty[] = []
   const manager = new TerminalManager(
-    spawnPty ?? (() => {
-      // Pid 0 would signal our own group: a number no real process can have keeps `process.kill` harmless.
-      const pty = new FakePty(2 ** 22 + 1)
-      ptys.push(pty)
-      return pty
-    }),
+    spawnPty ??
+      (() => {
+        // Pid 0 would signal our own group: a number no real process can have keeps `process.kill` harmless.
+        const pty = new FakePty(2 ** 22 + 1)
+        ptys.push(pty)
+        return pty
+      }),
     audit,
     launch,
     () => now,
@@ -98,14 +104,20 @@ function setup(limits = {}, spawnPty?: SpawnPty, stillPaired?: (session: string)
 }
 
 const frames = (socket: FakeSocket) =>
-  socket.sent.filter((item): item is string => typeof item === 'string').map((item) => JSON.parse(item))
+  socket.sent
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => JSON.parse(item))
 
 test('input, resize and a bad frame', () => {
   const { manager, ptys } = setup()
   const socket = new FakeSocket()
   manager.open(socket as unknown as TerminalSocket, 's1', 'addr')
   socket.emit('message', Buffer.from('ls\r'), true)
-  socket.emit('message', Buffer.from(JSON.stringify({ type: 'resize', cols: 100, rows: 30 })), false)
+  socket.emit(
+    'message',
+    Buffer.from(JSON.stringify({ type: 'resize', cols: 100, rows: 30 })),
+    false,
+  )
   socket.emit('message', Buffer.from('{"type":"resize","cols":0,"rows":-5}'), false)
   socket.emit('message', Buffer.from('not json'), false)
   socket.emit('message', Buffer.alloc(70_000), true)
@@ -208,7 +220,9 @@ test('SIGHUP first, SIGKILL for the whole group after the grace period', async (
     detached: true,
     stdio: 'ignore',
   })
-  const exited = new Promise<number>((resolve) => child.once('exit', (code, signal) => resolve(code ?? (signal === 'SIGKILL' ? 137 : signal ? 1000 : -1))))
+  const exited = new Promise<string | null>((resolve) =>
+    child.once('exit', (_code, signal) => resolve(signal)),
+  )
   stop.push(async () => {
     try {
       process.kill(-child.pid!, 'SIGKILL')
@@ -228,11 +242,13 @@ test('SIGHUP first, SIGKILL for the whole group after the grace period', async (
   const { manager } = setup({ killGraceMs: 400 }, real)
   const socket = new FakeSocket()
   manager.open(socket as unknown as TerminalSocket, 's', 'a')
+  // Let bash install its trap first.
+  await new Promise((resolve) => setTimeout(resolve, 300))
   const started = Date.now()
   manager.close(manager.list()[0]!.id, 'closed')
   await new Promise((resolve) => setTimeout(resolve, 150))
   expect(child.exitCode).toBeNull()
-  expect(await exited).toBe(137)
+  expect(await exited).toBe('SIGKILL')
   expect(Date.now() - started).toBeGreaterThanOrEqual(350)
   expect(manager.count).toBe(0)
 })
