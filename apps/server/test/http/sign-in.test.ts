@@ -14,26 +14,15 @@ let app: ReturnType<typeof buildApp>
 let port: FakePort
 let headers: Record<string, string>
 let logs: string
-async function boot(plainHttpRemote: boolean) {
+async function boot() {
   env = setup()
   logs = ''
   port = new FakePort(1, { db: env.db }, false)
   await port.start(env.ingest)
   const config = loadConfig({ SCORE_MODE: 'fake' })
-  const base: Record<string, string> = plainHttpRemote
-    ? { host: '192.168.1.5:8741', origin: 'http://192.168.1.5:8741', 'x-score-client': 'web' }
-    : { 'x-score-client': 'web' }
+  const base: Record<string, string> = { 'x-score-client': 'web' }
   app = buildApp({
-    // Simulates plain-HTTP remote mode without binding a LAN address.
-    config: plainHttpRemote
-      ? loadConfig({
-          SCORE_MODE: 'fake',
-          SCORE_REMOTE: '1',
-          SCORE_HOST: '192.168.1.5',
-          SCORE_PUBLIC_ORIGINS: 'http://192.168.1.5:8741',
-          SCORE_REMOTE_INSECURE_HTTP: 'accept',
-        })
-      : config,
+    config,
     logger: {
       level: 'trace',
       stream: new Writable({
@@ -74,7 +63,7 @@ const post = (url: string, payload?: object, extra: Record<string, string> = {})
   })
 
 test('a device sign-in starts, is followed, and connects; cancel works and unknown ids are 404', async () => {
-  await boot(false)
+  await boot()
   const started = ConnectResultSchema.parse(
     (await post('/api/settings/providers/nous/connect')).json(),
   )
@@ -125,7 +114,7 @@ test('a device sign-in starts, is followed, and connects; cancel works and unkno
 })
 
 test('the key route needs a human, a key provider, and a valid body', async () => {
-  await boot(false)
+  await boot()
   const url = '/api/settings/providers/openrouter/key'
   expect(
     (await app.inject({ method: 'POST', url, payload: { apiKey: KEY } })).statusCode,
@@ -149,18 +138,8 @@ test('the key route needs a human, a key provider, and a valid body', async () =
     expect((await post(url, bad)).statusCode).toBe(400)
 })
 
-test('plain-HTTP remote refuses a key without the acknowledgement', async () => {
-  await boot(true)
-  const url = '/api/settings/providers/openrouter/key'
-  const refused = await post(url, { apiKey: KEY })
-  expect(refused.statusCode).toBe(400)
-  expect(refused.json().error.code).toBe('insecure_transport')
-  expect((await post(url, { apiKey: KEY, acknowledgeInsecure: false })).statusCode).toBe(400)
-  expect((await post(url, { apiKey: KEY, acknowledgeInsecure: true })).statusCode).toBe(200)
-})
-
 test('no trace of the key in responses, logs, the database or the receipt', async () => {
-  await boot(false)
+  await boot()
   const url = '/api/settings/providers/openrouter/key'
   const bodies = [
     await post(url, { apiKey: KEY }, { 'idempotency-key': 'key-1' }),

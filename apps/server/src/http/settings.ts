@@ -19,9 +19,6 @@ import {
 import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { HermesPort, ProviderBase } from '../hermes/index.ts'
-import type { Config } from '../config.ts'
-import { HttpError } from '../errors.ts'
-import { profileManagementAllowed } from './profiles.ts'
 import { requestIdempotency } from './idempotency.ts'
 
 const SignInParamsSchema = z.object({ signInId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/) })
@@ -32,7 +29,6 @@ export function registerSettingsRoutes(
   port: HermesPort,
   db?: ScoreDb,
   clock = Date.now,
-  config?: Pick<Config, 'host' | 'remote'>,
 ): void {
   const receipts = requestIdempotency(db, clock)
   // The pasted key's route: the receipt never holds a plain hash of the body (D2.7).
@@ -88,13 +84,6 @@ export function registerSettingsRoutes(
     async (request) => {
       const { id } = ProviderParamsSchema.parse(request.params)
       const req = ProviderKeyRequestSchema.parse(request.body)
-      // Over plain-HTTP remote the key crosses the LAN unencrypted: only with the person's explicit acknowledgement.
-      if (config && !profileManagementAllowed(config) && req.acknowledgeInsecure !== true)
-        throw new HttpError(
-          400,
-          'insecure_transport',
-          'This connection is not encrypted: confirm that you understand before sending a key',
-        )
       return (await withUsage([await port.addProviderKey(id, req)]))[0]
     },
   )

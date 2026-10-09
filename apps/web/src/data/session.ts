@@ -2,9 +2,9 @@ import type { QueryClient } from '@tanstack/react-query'
 import type { StreamClient } from './stream.ts'
 import type { StreamQueryRegistry } from './resync.ts'
 
-export function remoteTransport(): 'http' | 'tls' | undefined {
-  const value = document.documentElement.getAttribute('data-score-transport')
-  return value === 'http' || value === 'tls' ? value : undefined
+// Remote mode is HTTPS-only: the server marks the page 'tls'; local mode has no marker.
+export function remoteTransport(): 'tls' | undefined {
+  return document.documentElement.getAttribute('data-score-transport') === 'tls' ? 'tls' : undefined
 }
 
 export function announceLogout(): void {

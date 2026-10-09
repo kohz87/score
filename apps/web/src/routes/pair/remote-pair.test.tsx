@@ -18,7 +18,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function pairPage(transport = 'http') {
+function pairPage(transport = 'tls') {
   document.documentElement.setAttribute('data-score-transport', transport)
   window.history.replaceState(null, '', '/pair#one-time-token')
   const router = createMemoryRouter([{ path: '/pair', Component: PairPage, loader: pairBrowser }], {
@@ -32,7 +32,7 @@ function pairPage(transport = 'http') {
   )
 }
 
-test.each(['http', 'tls'])(
+test.each(['tls'])(
   'remote %s pairing clears the fragment and waits for explicit consent',
   async (transport) => {
     const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
@@ -63,8 +63,8 @@ test('a consumed remote link explains terminal regeneration', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Pair this browser' }))
   await screen.findByText(/Type pair in the server terminal for a new link/)
 })
-test.each(['http', 'tls'])('%s shows the appropriate permanent transport warning', (transport) => {
-  document.documentElement.setAttribute('data-score-transport', transport)
+test('remote pages show no plain-HTTP warning (remote mode is HTTPS-only)', () => {
+  document.documentElement.setAttribute('data-score-transport', 'tls')
   const router = createMemoryRouter([{ path: '/', Component: AppShell }])
   routers.push(router)
   vi.stubGlobal(
@@ -72,21 +72,14 @@ test.each(['http', 'tls'])('%s shows the appropriate permanent transport warning
     vi.fn(() => Promise.reject(new Error('offline'))),
   )
   render(withClient(<RouterProvider router={router} />))
-  if (transport === 'http') {
-    expect(screen.getByLabelText('Transport warning').textContent).toContain(
-      'Plain HTTP: anyone on this network could read and control Score',
-    )
-    expect(screen.getByRole('link', { name: 'TLS setup' }).getAttribute('href')).toBe(
-      'https://tailscale.com/docs/how-to/set-up-https-certificates',
-    )
-  } else expect(screen.queryByLabelText('Transport warning')).toBeNull()
+  expect(screen.queryByLabelText('Transport warning')).toBeNull()
 })
 function withClient(children: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>
 }
 test('logout uses the documented session endpoint and signals cache cleanup', async () => {
-  document.documentElement.setAttribute('data-score-transport', 'http')
+  document.documentElement.setAttribute('data-score-transport', 'tls')
   const fetch = vi.fn((url: string, init?: RequestInit) =>
     Promise.resolve(
       init?.method === 'DELETE'
@@ -108,7 +101,7 @@ test('logout uses the documented session endpoint and signals cache cleanup', as
   }
 })
 test('failed logout keeps the session and offers a retry', async () => {
-  document.documentElement.setAttribute('data-score-transport', 'http')
+  document.documentElement.setAttribute('data-score-transport', 'tls')
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
   render(withClient(<RemoteSection />))
   fireEvent.click(screen.getByRole('button', { name: 'Log out this browser' }))
@@ -118,7 +111,7 @@ test('failed logout keeps the session and offers a retry', async () => {
   ).toBe(false)
 })
 test('unauthorized background reads on the pairing page cannot reload and lose its token', async () => {
-  document.documentElement.setAttribute('data-score-transport', 'http')
+  document.documentElement.setAttribute('data-score-transport', 'tls')
   window.history.replaceState(null, '', '/pair')
   vi.stubGlobal(
     'fetch',
@@ -182,7 +175,7 @@ function managementFetch(passwordSet: boolean, wrong = false) {
 }
 
 test('pairing management stays locked until the security password is entered, then sends it', async () => {
-  document.documentElement.setAttribute('data-score-transport', 'http')
+  document.documentElement.setAttribute('data-score-transport', 'tls')
   const fetch = managementFetch(true)
   vi.stubGlobal('fetch', fetch)
   render(withClient(<RemoteSection />))
@@ -206,7 +199,7 @@ test('pairing management stays locked until the security password is entered, th
 })
 
 test('a wrong security password says so', async () => {
-  document.documentElement.setAttribute('data-score-transport', 'http')
+  document.documentElement.setAttribute('data-score-transport', 'tls')
   vi.stubGlobal('fetch', managementFetch(true, true))
   render(withClient(<RemoteSection />))
   fireEvent.change(await screen.findByLabelText('Security password'), {
@@ -217,7 +210,7 @@ test('a wrong security password says so', async () => {
 })
 
 test('without a password yet, Settings asks to set one first', async () => {
-  document.documentElement.setAttribute('data-score-transport', 'http')
+  document.documentElement.setAttribute('data-score-transport', 'tls')
   const fetch = managementFetch(false)
   vi.stubGlobal('fetch', fetch)
   render(withClient(<RemoteSection />))

@@ -506,9 +506,7 @@ test('agent management needs loopback or a TLS remote connection', async () => {
   expect(
     profileManagementAllowed({ host: '192.168.1.5', remote: { tlsCert: '/c.pem' } } as never),
   ).toBe(true)
-  expect(
-    profileManagementAllowed({ host: '192.168.1.5', remote: { insecureHttp: true } } as never),
-  ).toBe(false)
+  expect(profileManagementAllowed({ host: '192.168.1.5', remote: {} } as never)).toBe(false)
 })
 
 test('a person can retry a harmless step that failed with a recorded error, never create_profile', async () => {

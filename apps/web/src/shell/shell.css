@@ -219,19 +219,6 @@
   color: var(--card);
   cursor: pointer;
 }
-.remote-warning {
-  padding: 14px 28px;
-  background: var(--ink);
-  color: var(--card);
-}
-.remote-warning a {
-  margin-left: 14px;
-  color: inherit;
-  text-decoration: underline;
-}
-.remote-warning a:focus-visible {
-  outline-color: var(--card);
-}
 @media (width < 900px) {
   .top-bar {
     flex-wrap: wrap;

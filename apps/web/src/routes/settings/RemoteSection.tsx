@@ -24,14 +24,6 @@ function failure(error: unknown, action: string): string {
   return `Could not ${action}. Please try again.`
 }
 
-// Over plain HTTP on a LAN the password crosses the network unencrypted when it is used.
-function plainHttp(): boolean {
-  return (
-    window.location.protocol === 'http:' &&
-    !['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
-  )
-}
-
 function SetPassword({ change, onDone }: { change: boolean; onDone: () => void }) {
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
@@ -185,9 +177,11 @@ export function RemoteSection() {
       </p>
       <h3>TLS setup</h3>
       <p>
-        Use a trusted certificate for your Score hostname. Configure <code>SCORE_TLS_CERT</code> and{' '}
-        <code>SCORE_TLS_KEY</code>, set <code>SCORE_PUBLIC_ORIGINS</code> to its HTTPS origin, and
-        remove <code>SCORE_REMOTE_INSECURE_HTTP</code> before restarting.
+        Remote access is HTTPS only. Run <code>scripts/score tls</code> on the Score machine and
+        install its certificate authority on each device (the setup guide at{' '}
+        <code>/setup/https</code> has the steps), or configure your own certificate with{' '}
+        <code>SCORE_TLS_CERT</code>, <code>SCORE_TLS_KEY</code> and an https{' '}
+        <code>SCORE_PUBLIC_ORIGINS</code>, then restart.
       </p>
 
       <h3>Security password</h3>
@@ -196,12 +190,6 @@ export function RemoteSection() {
         compromised device can&apos;t invite others or lock you out. If you forget it, reset it on
         the Score machine with <code>scripts/score password</code>.
       </p>
-      {plainHttp() && (
-        <p className="settings-warning">
-          This page is not encrypted (plain HTTP). The password crosses your network when you use
-          it.
-        </p>
-      )}
       {security.isSuccess && !passwordSet && (
         <SetPassword change={false} onDone={() => void security.refetch()} />
       )}

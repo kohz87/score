@@ -48,7 +48,6 @@ export const ProviderKeyRequestSchema = z
       .string()
       .regex(/^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$/)
       .optional(),
-    acknowledgeInsecure: z.boolean().optional(),
   })
   .strict()
 export type ProviderKeyRequest = z.infer<typeof ProviderKeyRequestSchema>

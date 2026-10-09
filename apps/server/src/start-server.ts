@@ -6,6 +6,8 @@ import type { FastifyInstance, FastifyServerOptions } from 'fastify'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
 import { sweepExpiredApprovals } from './domain/approval-expiry.ts'
 import { buildApp, buildBridgeApp } from './app.ts'
+import { listenDual } from './dual-listener.ts'
+import { buildGuideApp } from './http/https-guide.ts'
 import { loadWebAssets, type WebAssets } from './http/web-assets.ts'
 import { SqliteSessionStore } from './auth/sqlite-session-store.ts'
 import type { Config } from './config.ts'
@@ -36,11 +38,31 @@ import { pruneEvents } from './hub/retention.ts'
 import { MediaStore } from './media/store.ts'
 import { retireIngestKeys, retireMedia } from './hub/retire.ts'
 
+const INSECURE_FLAG_REMOVED =
+  'SCORE_REMOTE_INSECURE_HTTP was removed and is ignored: Score serves its app over HTTPS only (see /setup/https)'
+
 interface StartServerOptions {
   logger?: FastifyServerOptions['logger']
   listen?: (app: FastifyInstance) => Promise<unknown>
   listenBridge?: (app: FastifyInstance) => Promise<unknown>
   webDirectory?: string
+}
+
+/** Remote mode without a certificate: nothing but the HTTPS setup guide (no database, adapter, pairing or API). */
+export async function startGuideServer(
+  config: Config,
+  { logger, listen }: Pick<StartServerOptions, 'logger' | 'listen'> = {},
+) {
+  const app = buildGuideApp(config, logger ?? false)
+  if (config.ignoredInsecureHttp) app.log.warn(INSECURE_FLAG_REMOVED)
+  try {
+    if (listen) await listen(app)
+    else await app.listen({ host: config.host, port: config.port })
+  } catch (error) {
+    await app.close()
+    throw new Error('Could not bind the browser listener', { cause: error })
+  }
+  return { app, close: () => app.close() }
 }
 
 export async function startServer(
@@ -74,6 +96,8 @@ export async function startServer(
   let spendSnapshots: NodeJS.Timeout | undefined
   let port: HermesPort | undefined
   let closing: Promise<void> | undefined
+  let dualServer: Awaited<ReturnType<typeof listenDual>> | undefined
+  let guideApp: FastifyInstance | undefined
 
   async function closeResources(): Promise<void> {
     clearInterval(retention)
@@ -93,7 +117,22 @@ export async function startServer(
         try {
           await bridgeApp?.close()
         } finally {
-          await app?.close()
+          // Stop accepting first, but wait for the sockets only after the apps dropped the connections they were
+          // handed (open streams would otherwise hold the close forever).
+          const listener = dualServer
+          const stopped = listener?.server.listening
+            ? new Promise<void>((resolve) => listener.server.close(() => resolve()))
+            : undefined
+          try {
+            await app?.close()
+          } finally {
+            try {
+              await guideApp?.close()
+            } finally {
+              listener?.destroyConnections()
+              await stopped
+            }
+          }
         }
       } finally {
         try {
@@ -182,14 +221,15 @@ export async function startServer(
       } catch (error) {
         throw new Error('Could not bind the loopback bridge listener', { cause: error })
       }
-      if (config.remote.insecureHttp)
-        app.log.warn(
-          'PLAIN HTTP: anyone on this network could read and control Score. Use TLS; SCORE_REMOTE_INSECURE_HTTP=accept acknowledges this risk.',
-        )
     }
+    if (config.ignoredInsecureHttp) app.log.warn(INSECURE_FLAG_REMOVED)
     try {
       if (listen) await listen(app)
-      else await app.listen({ host: config.host, port: config.port })
+      else if (config.remote) {
+        // One port, both protocols: TLS goes to the app, plain HTTP gets the setup guide.
+        guideApp = buildGuideApp(config, logger ?? false)
+        dualServer = await listenDual(app, guideApp, { host: config.host, port: config.port })
+      } else await app.listen({ host: config.host, port: config.port })
     } catch (error) {
       if (!config.remote) throw error
       throw new Error('Could not bind the browser listener', { cause: error })

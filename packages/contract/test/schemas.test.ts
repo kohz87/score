@@ -353,7 +353,7 @@ const cases = [
   ],
   [
     'ProviderKeyRequestSchema',
-    { apiKey: 'sk-test-0123456789', label: 'Work key', acknowledgeInsecure: true },
+    { apiKey: 'sk-test-0123456789', label: 'Work key' },
     { apiKey: 'sk-test 0123456789\nsecond-answer' },
   ],
   [

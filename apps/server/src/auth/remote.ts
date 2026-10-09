@@ -3,7 +3,14 @@ import type { Config } from '../config.ts'
 import { HttpError } from '../errors.ts'
 import { readCookie, SESSION_COOKIE, sessionCookie } from './cookies.ts'
 
-const publicRoutes = new Set(['POST /api/session/pair', 'GET /api/session', 'GET /api/health'])
+const publicRoutes = new Set([
+  'POST /api/session/pair',
+  'GET /api/session',
+  'GET /api/health',
+  // The HTTPS setup guide and the public CA certificate (never the key).
+  'GET /setup/https',
+  'GET /setup/https/score-ca.crt',
+])
 
 export function registerRemoteGuard(
   app: FastifyInstance,

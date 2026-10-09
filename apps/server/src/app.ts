@@ -30,6 +30,7 @@ import { registerApprovalRoutes } from './http/approvals.ts'
 import { registerErrorHandlers } from './errors.ts'
 import { registerCsrfGuard } from './auth/csrf.ts'
 import { registerRemoteGuard } from './auth/remote.ts'
+import { registerHttpsGuide } from './http/https-guide.ts'
 import { registerWebAssets, type WebAssets } from './http/web-assets.ts'
 import { PairingService } from './auth/pairing.ts'
 import type { SessionStore } from './auth/session-store.ts'
@@ -186,7 +187,7 @@ export function buildApp({
     registerProfileRoutes(app, { db, ingest, port, config, ...(clock ? { clock } : {}) })
   registerAgentTabRoutes(app, port, ingest, db, clock)
   registerRoutineRoutes(app, port, db, clock)
-  registerSettingsRoutes(app, port, db, clock, config)
+  registerSettingsRoutes(app, port, db, clock)
   registerRulesRoutes(app, port, ingest, db, clock)
   if (db && ingest) {
     const dispatch = registerRoomRoutes(app, port, db, ingest, clock, mediaStore)
@@ -298,12 +299,8 @@ export function buildApp({
       ...streamOptions,
     })
   }
-  if (webAssets)
-    registerWebAssets(
-      app,
-      webAssets,
-      config.remote ? (config.remote.insecureHttp ? 'http' : 'tls') : undefined,
-    )
+  if (config.remote) registerHttpsGuide(app, config)
+  if (webAssets) registerWebAssets(app, webAssets, config.remote ? 'tls' : undefined)
   return app
 }
 
