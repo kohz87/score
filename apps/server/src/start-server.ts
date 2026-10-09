@@ -37,6 +37,8 @@ import { createIngest, type Ingest } from './hub/ingest.ts'
 import { rotateLog } from './log-rotation.ts'
 import { snapshotSessionCosts } from './domain/spend.ts'
 import { pruneEvents } from './hub/retention.ts'
+import { pruneKanbanAttempts } from './hermes/live/kanban-attempts/retention.ts'
+import { kanbanAttemptsEnabled } from './hermes/live/kanban-attempts/types.ts'
 import { MediaStore } from './media/store.ts'
 import { KnowledgeAgentApi } from './knowledge/agent-api.ts'
 import { KnowledgeVault } from './knowledge/vault.ts'
@@ -323,6 +325,11 @@ export async function startServer(
           pruneEvents(database)
         } catch (error) {
           app?.log.error({ err: error }, 'Event retention prune failed')
+        }
+        try {
+          if (kanbanAttemptsEnabled()) pruneKanbanAttempts(database)
+        } catch (error) {
+          app?.log.error({ err: error }, 'Kanban attempts retention failed')
         }
         try {
           retireIngestKeys(database)
