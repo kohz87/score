@@ -16,7 +16,11 @@ const data = { items: [message], typing: {}, nextCursor: null } as unknown as Pa
   typeof reduceMessages
 >[0]
 const event = (type: string, body: object) =>
-  ({ type, id: '1', data: { roomId: 'general', messageId: 'reply-1', ...body } }) as StreamEvent
+  ({
+    type,
+    id: '1',
+    data: { roomId: 'general', messageId: 'reply-1', ...body },
+  }) as unknown as StreamEvent
 
 test('a tool/reasoning/approval move and a text delta both restart the reply’s stall clock', () => {
   const progressed = reduceMessages(

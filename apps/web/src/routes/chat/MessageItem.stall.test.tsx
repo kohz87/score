@@ -75,7 +75,9 @@ test('Hermes’s “not processed” text becomes a plain failure line and keeps
     <MessageItem
       message={reply({
         streaming: false,
-        parts: [{ kind: 'text', text: 'Your request was not processed because the provider failed.' }],
+        parts: [
+          { kind: 'text', text: 'Your request was not processed because the provider failed.' },
+        ],
       })}
       agents={[]}
     />,

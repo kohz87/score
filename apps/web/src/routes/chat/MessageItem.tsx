@@ -14,12 +14,7 @@ import { PlanCard } from './PlanCard.tsx'
 import { RewindDialog } from './RewindDialog.tsx'
 import { approvalsQuery } from './queries.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
-import {
-  MODEL_DIDNT_ANSWER,
-  formatElapsed,
-  isNotProcessedNotice,
-  stalledFor,
-} from './stall.ts'
+import { MODEL_DIDNT_ANSWER, formatElapsed, isNotProcessedNotice, stalledFor } from './stall.ts'
 
 /** Expand all / Collapse all (PLAN 5.25): a counter, so pressing the same button twice still reaches cards opened by hand. */
 type Expansion = { open: boolean; version: number }
