@@ -21,17 +21,18 @@ export function WorkspacePicker({
   const dialog = useRef<HTMLDialogElement>(null)
   const [agentId, setAgentId] = useState(agents[0]?.id ?? '')
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
-  const [selected, setSelected] = useState<Selection | null>(null)
+  const [pick, setPick] = useState<{
+    agentId: string
+    root: string | undefined
+    item: Selection
+  } | null>(null)
   useEffect(() => {
     dialog.current?.showModal?.()
   }, [])
   const info = useWorkspace(agentId)
   const root = info.data?.available ? (info.data.root ?? undefined) : undefined
   // The folder can change while the dialog is open: a selection made in the old one must not be attached.
-  useEffect(() => {
-    setSelected(null)
-    setExpanded(new Set())
-  }, [root])
+  const selected = pick && pick.agentId === agentId && pick.root === root ? pick.item : null
   const agent = agents.find((candidate) => candidate.id === agentId)
   return (
     <dialog
@@ -52,7 +53,7 @@ export function WorkspacePicker({
             onChange={(event) => {
               setAgentId(event.target.value)
               setExpanded(new Set())
-              setSelected(null)
+              setPick(null)
             }}
           >
             {agents.map((candidate) => (
@@ -87,7 +88,7 @@ export function WorkspacePicker({
                   return next
                 })
               }
-              onSelect={setSelected}
+              onSelect={(item) => setPick({ agentId, root, item })}
             />
           </WorkspaceRootContext.Provider>
         )}
