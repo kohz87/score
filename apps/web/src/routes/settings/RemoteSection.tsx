@@ -421,6 +421,14 @@ export function RemoteSection() {
       {notice && !actionError && <p role="status">{notice}</p>}
       {browsers.isError && <p role="alert">Could not load paired browsers.</p>}
 
+      <h3>Web terminal</h3>
+      <p>
+        The web terminal is <strong>{security.data?.terminal ? 'enabled' : 'disabled'}</strong>.
+        {security.data?.terminal
+          ? ' Open terminals are listed under Terminal below.'
+          : ' Start Score with SCORE_TERMINAL=1 to turn it on (a shell on this machine, for paired browsers).'}
+      </p>
+
       {passwordSet && <PasskeysPanel password={password} origins={origins} />}
 
       <button

@@ -12,7 +12,7 @@ test('open a terminal, run echo, see the output, close it', async ({ page }) => 
   })
   await page.goto('/settings')
   await expect(page.getByRole('heading', { name: 'Terminal' })).toBeVisible()
-  await expect(page.getByText('enabled', { exact: true })).toBeVisible()
+  await expect(page.getByText('enabled', { exact: false }).first()).toBeVisible()
 
   await page.goto('/terminal')
   await expect(page.getByText(/This is a shell on the Score machine/)).toBeVisible()

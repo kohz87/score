@@ -23,42 +23,35 @@ export function TerminalSection() {
     mutationFn: (id: string) => apiFetch(`terminal/sessions/${id}`, { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: sessionsKey }),
   })
-  if (!security.isSuccess) return null
+  // Off (the default): nothing here. Settings › Remote access says so.
+  if (!enabled) return null
   return (
     <section id="terminal" className="settings-card" aria-labelledby="settings-terminal">
       <h2 id="settings-terminal">Terminal</h2>
-      {enabled ? (
-        <>
-          <p>
-            The web terminal is <strong>enabled</strong>: a shell on the Score machine, for paired
-            browsers that confirm the security password or a passkey each time.{' '}
-            <Link to="/terminal">Open the terminal</Link>
-          </p>
-          <ul aria-label="Open terminals">
-            {sessions.data?.map((session) => (
-              <li key={session.id}>
-                Opened {new Date(session.openedAt).toLocaleTimeString()} from {session.address},
-                last active {new Date(session.lastActivityAt).toLocaleTimeString()}{' '}
-                <button
-                  type="button"
-                  className="settings-pill"
-                  disabled={close.isPending}
-                  onClick={() => close.mutate(session.id)}
-                >
-                  Close
-                </button>
-              </li>
-            ))}
-          </ul>
-          {sessions.data?.length === 0 && <p className="settings-muted">No terminals are open.</p>}
-        </>
-      ) : (
+      <>
         <p>
-          The web terminal is <strong>disabled</strong>. Start Score with{' '}
-          <code>SCORE_TERMINAL=1</code> to turn it on (it needs the node-pty module; see
-          docs/SETUP.md).
+          The web terminal is <strong>enabled</strong>: a shell on the Score machine, for paired
+          browsers that confirm the security password or a passkey each time.{' '}
+          <Link to="/terminal">Open the terminal</Link>
         </p>
-      )}
+        <ul aria-label="Open terminals">
+          {sessions.data?.map((session) => (
+            <li key={session.id}>
+              Opened {new Date(session.openedAt).toLocaleTimeString()} from {session.address}, last
+              active {new Date(session.lastActivityAt).toLocaleTimeString()}{' '}
+              <button
+                type="button"
+                className="settings-pill"
+                disabled={close.isPending}
+                onClick={() => close.mutate(session.id)}
+              >
+                Close
+              </button>
+            </li>
+          ))}
+        </ul>
+        {sessions.data?.length === 0 && <p className="settings-muted">No terminals are open.</p>}
+      </>{' '}
     </section>
   )
 }

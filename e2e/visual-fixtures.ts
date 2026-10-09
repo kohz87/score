@@ -87,6 +87,7 @@ const extras = {
   })),
 }
 export const visualFixtures: Record<string, unknown> = {
+  '/api/session/security': { passwordSet: false, origins: [], terminal: false },
   '/api/settings/currency': { code: 'USD', rate: 1 },
   '/api/settings/model-visibility': { items: [] },
   '/api/agents/lead/model-settings': {
