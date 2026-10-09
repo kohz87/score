@@ -397,3 +397,11 @@
 .reports-approvals :focus-visible {
   outline-color: #fff;
 }
+.reports-tabs button {
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .reports-tabs button {
+    padding: 0 12px;
+  }
+}

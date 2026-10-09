@@ -29,7 +29,11 @@ export function readAgent(sqlite: DatabaseSync, id: string): AgentDetail | null 
 /** Id and display name of every projected agent: what Reports needs, without asking Hermes. */
 export function readAgentNames(sqlite: DatabaseSync): { id: string; name: string }[] {
   return sqlite
-    .prepare("SELECT id, json_extract(detail, '$.name') AS name FROM agents_proj ORDER BY id")
+    .prepare(
+      `SELECT id, json_extract(detail, '$.name') AS name FROM agents_proj
+       WHERE COALESCE(json_extract(detail, '$.lifecycle.state'), 'ready') NOT IN ('removed', 'deleting')
+       ORDER BY id`,
+    )
     .all()
     .map((row) => z.object({ id: z.string(), name: z.string() }).parse(row))
 }

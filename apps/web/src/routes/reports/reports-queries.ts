@@ -106,6 +106,8 @@ export function useReports(spec: ReportSpec) {
     const offEvent = stream.subscribe((event) => {
       if (
         event.type === 'task.upserted' ||
+        // The agent list comes from Score's projection; on a cold start it fills while this page loads.
+        event.type === 'agent.updated' ||
         event.type.startsWith('run.') ||
         event.type.startsWith('approval.')
       )

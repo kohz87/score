@@ -45,6 +45,15 @@ export const visualFixtures: Record<string, unknown> = {
   '/api/tasks': TasksSnapshotSchema.parse(recorded['/api/tasks']),
   '/api/tasks?room=room-activity-feed': TasksSnapshotSchema.parse(recorded['/api/tasks']),
   '/api/reports?range=7d': ReportsSchema.parse(recorded['/api/reports?range=7d']),
+  // Reports warms the other presets once the first one loads; the picture only needs them to exist.
+  '/api/reports?range=today': ReportsSchema.parse({
+    ...recorded['/api/reports?range=7d'],
+    range: 'today',
+  }),
+  '/api/reports?range=30d': ReportsSchema.parse({
+    ...recorded['/api/reports?range=7d'],
+    range: '30d',
+  }),
   '/api/settings/providers': ProvidersResponseSchema.parse(recorded['/api/settings/providers']),
   '/api/settings/connections': ConnectionsResponseSchema.parse(
     recorded['/api/settings/connections'],
