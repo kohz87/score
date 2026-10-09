@@ -90,6 +90,24 @@
       "approvedBy": "owner",
       "date": "2026-10-09",
       "reason": "Public-domain data; test environment only, not shipped. Found when the check was made recursive."
+    },
+    {
+      "name": "tslib",
+      "version": "1.14.1",
+      "license": "0BSD",
+      "scope": "runtime (server: @simplewebauthn/server via @peculiar/*)",
+      "approvedBy": "owner",
+      "date": "2026-10-09",
+      "reason": "Public-domain-like licence with no conditions; required by the WebAuthn library for passkeys (5.28)."
+    },
+    {
+      "name": "tslib",
+      "version": "2.8.1",
+      "license": "0BSD",
+      "scope": "runtime (server: @simplewebauthn/server via @peculiar/*)",
+      "approvedBy": "owner",
+      "date": "2026-10-09",
+      "reason": "Public-domain-like licence with no conditions; required by the WebAuthn library for passkeys (5.28)."
     }
   ]
 }
