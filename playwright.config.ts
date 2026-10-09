@@ -74,8 +74,6 @@ export default defineConfig({
             SCORE_MODE: 'fake',
             // The fake adapter cannot rewind this agent (PLAN 5.33: "Hide in Score only").
             SCORE_FAKE_REWIND_SKIP: 'reviewer:compressed',
-            // The web terminal (PLAN 7.3) is off in a normal start; its spec needs it on.
-            SCORE_TERMINAL: '1',
             SCORE_SERVE_WEB: '1',
             SCORE_PORT: webPort,
             SCORE_WEB_ORIGIN: baseURL,

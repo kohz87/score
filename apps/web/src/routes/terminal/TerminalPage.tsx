@@ -58,13 +58,20 @@ export function TerminalPage() {
     ctrlRef.current = ctrl
   }, [ctrl])
 
-  useEffect(
-    () => () => {
+  // Leaving the page (or a second effect run in development) invalidates everything still in flight.
+  const alive = useRef(false)
+  const pending = useRef<AbortController | null>(null)
+  useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false
+      pending.current?.abort()
       socket.current?.close()
+      socket.current = null
       term.current?.dispose()
-    },
-    [],
-  )
+      term.current = null
+    }
+  }, [])
 
   const send = useCallback((data: string) => {
     if (socket.current?.readyState === WebSocket.OPEN)
@@ -73,13 +80,12 @@ export function TerminalPage() {
 
   const open = useCallback(
     (ticket: string) => {
+      const parent = host.current
+      if (!alive.current || !parent) return
       setPhase('connecting')
       const url = new URL('/api/terminal/ws', window.location.href)
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
       url.searchParams.set('ticket', ticket)
-      const ws = new WebSocket(url)
-      ws.binaryType = 'arraybuffer'
-      socket.current = ws
       const xterm = new Terminal({
         fontFamily: '"JetBrains Mono", ui-monospace, monospace',
         fontSize: 14,
@@ -94,8 +100,11 @@ export function TerminalPage() {
       term.current = xterm
       const fit = new FitAddon()
       xterm.loadAddon(fit)
-      const parent = host.current!
+      // Anything that can throw runs before the socket exists, so a failed setup never leaves a terminal behind.
       xterm.open(parent)
+      const ws = new WebSocket(url)
+      ws.binaryType = 'arraybuffer'
+      socket.current = ws
       const tell = () => {
         if (ws.readyState === WebSocket.OPEN)
           ws.send(JSON.stringify({ type: 'resize', cols: xterm.cols, rows: xterm.rows }))
@@ -131,17 +140,23 @@ export function TerminalPage() {
     [send],
   )
 
-  async function begin(proof: () => Promise<unknown>) {
+  async function begin(proof: (signal: AbortSignal) => Promise<unknown>) {
+    pending.current?.abort()
+    const controller = new AbortController()
+    pending.current = controller
     setError('')
     setPhase('connecting')
     try {
-      await proof()
+      await proof(controller.signal)
+      if (!alive.current || controller.signal.aborted) return
       const ticket = TerminalTicketSchema.parse(
-        await apiFetch('terminal/tickets', { method: 'POST' }),
+        await apiFetch('terminal/tickets', { method: 'POST', signal: controller.signal }),
       ).ticket
+      if (!alive.current || controller.signal.aborted) return
       setPassword('')
       open(ticket)
     } catch (caught) {
+      if (!alive.current || controller.signal.aborted) return
       setError(authError(caught))
       setPhase('auth')
     }
@@ -149,8 +164,9 @@ export function TerminalPage() {
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    void begin(() =>
+    void begin((signal) =>
       apiFetch('session/security/check', {
+        signal,
         method: 'POST',
         body: JSON.stringify({ password }),
       }),

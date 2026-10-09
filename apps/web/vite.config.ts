@@ -6,6 +6,8 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
 const serverPort = process.env.SCORE_PORT ?? '8740'
+// Point the dev proxy at a TLS Score (https://127.0.0.1:8741) to use the web terminal, which needs HTTPS end to end.
+const apiTarget = process.env.SCORE_API_TARGET ?? `http://127.0.0.1:${serverPort}`
 
 /** Gives public/sw.js a build id (a hash of the built index.html, which names every hashed asset), so a new build is a new worker. */
 function serviceWorkerBuildId(): Plugin {
@@ -33,7 +35,11 @@ export default defineConfig({
     host: '127.0.0.1',
     port: Number(process.env.SCORE_WEB_PORT ?? 5173),
     strictPort: true,
-    proxy: { '/api': `http://127.0.0.1:${serverPort}` },
+    proxy: {
+      // ws: the terminal's WebSocket upgrade. The Host header is kept (no changeOrigin) so the server's Host and Origin
+      // checks see the address the browser used; a development certificate is self-signed.
+      '/api': { target: apiTarget, ws: true, secure: false },
+    },
   },
   test: {
     environment: 'jsdom',
