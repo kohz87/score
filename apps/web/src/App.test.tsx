@@ -100,7 +100,7 @@ test.each(routes)('%s renders %s inside the shell with the active nav', async (p
   expect(screen.getByRole('banner')).toBeDefined()
   expect(screen.getByRole('img', { name: 'You' }).textContent).toBe('Y')
   const nav = within(screen.getByRole('navigation', { name: 'Main' }))
-  expect(nav.getAllByRole('link')).toHaveLength(6)
+  expect(nav.getAllByRole('link')).toHaveLength(7)
   for (const destination of destinations) {
     expect(nav.getByRole('link', { name: destination.title }).getAttribute('aria-current')).toBe(
       destination.title === title ? 'page' : null,
@@ -149,7 +149,7 @@ test('palette opens on click, autofocuses, closes on Esc and restores focus', ()
   expect(trigger.getAttribute('aria-expanded')).toBe('true')
   const input = within(dialog).getByRole('searchbox', { name: 'Search destinations' })
   expect(document.activeElement).toBe(input)
-  expect(within(dialog).getAllByRole('link')).toHaveLength(6)
+  expect(within(dialog).getAllByRole('link')).toHaveLength(7)
   fireEvent.keyDown(input, { key: 'Escape' })
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(document.activeElement).toBe(trigger)
