@@ -911,3 +911,35 @@ test('learned lists memory.saved events whose source is this room, newest first,
   ])
   expect(detail.learned[0]).toMatchObject({ savedTo: ['lead', 'builder'] })
 })
+
+test('a completion whose parts exceed the bound omits them instead of making an oversized event', async () => {
+  const room = await create()
+  const placeholder: Message = {
+    id: 'big',
+    roomId: room.id,
+    author: { kind: 'agent', agentId: 'builder' },
+    to: [],
+    parts: [],
+    refs: [],
+    createdAt: new Date(scheduler.now()).toISOString(),
+    streaming: true,
+  }
+  await ingest.submit({
+    source: 'test',
+    identity: 'big-create',
+    apply: ({ sqlite, now }) => storeMessage(sqlite, placeholder, now),
+  })
+  let drafts: ReturnType<typeof updateMessage> = []
+  await ingest.submit({
+    source: 'test',
+    identity: 'big-fill',
+    apply: ({ sqlite, now }) => {
+      updateMessage(sqlite, room.id, 'big', 'x'.repeat(300 * 1024), now)
+      drafts = updateMessage(sqlite, room.id, 'big', null, now)
+      return drafts
+    },
+  })
+  expect(drafts).toEqual([
+    { type: 'message.completed', data: { messageId: 'big', roomId: room.id } },
+  ])
+})

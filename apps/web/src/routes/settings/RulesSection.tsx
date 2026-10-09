@@ -114,12 +114,16 @@ export function RulesSection({ agents }: { agents: AgentSummary[] }) {
   }
   function commit() {
     if (!reviewed) return
+    const at = revision.current
     save.mutate(reviewed.request, {
       onSuccess: (result) => {
-        revision.current += 1
-        setDraft(null)
-        setReviewed(null)
-        setAdding(false)
+        // An edit made while saving stays as an unsaved draft.
+        if (revision.current === at) {
+          revision.current += 1
+          setDraft(null)
+          setReviewed(null)
+          setAdding(false)
+        }
         setNotice(
           result.failed.length
             ? `Saved, but ${result.failed.join(', ')} could not be updated. They are listed below.`

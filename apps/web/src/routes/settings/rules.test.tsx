@@ -177,6 +177,35 @@ test('editing is staged: review shows the dry-run diff, saving sends the full ba
   expect(put.body).toEqual(dry.body)
 })
 
+test('an edit made while a save is in flight stays as an unsaved draft', async () => {
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  respond = ({ path, method }) =>
+    path === '/api/settings/rules?dryRun=1' && method === 'PUT'
+      ? json({ preview: '+mode: manual' })
+      : undefined
+  const inner = globalThis.fetch
+  vi.stubGlobal('fetch', (path: string, init?: RequestInit) =>
+    path === '/api/settings/rules' && init?.method === 'PUT'
+      ? gate.then(() => json({ ...rules, mode: 'manual', failed: [] }))
+      : inner(path, init),
+  )
+  mount('/settings')
+  const section = await screen.findByRole('region', { name: 'Rules and approvals' })
+  await within(section).findByRole('group', { name: 'Go ahead' })
+  fireEvent.click(within(section).getByRole('radio', { name: /Always ask me/ }))
+  fireEvent.click(within(section).getByRole('button', { name: 'Review changes' }))
+  await within(section).findByLabelText('Changes')
+  fireEvent.click(within(section).getByRole('button', { name: 'Save for the whole team' }))
+  fireEvent.click(within(section).getByRole('radio', { name: /Guardian first/ }))
+  release()
+  await waitFor(() => expect(within(section).getByText('Saved for the whole team.')).toBeDefined())
+  expect(
+    (within(section).getByRole('radio', { name: /Guardian first/ }) as HTMLInputElement).checked,
+  ).toBe(true)
+  expect(within(section).queryByLabelText('Changes')).toBeNull()
+})
+
 test('Apply team rules re-applies the baseline to a drifted agent', async () => {
   respond = ({ path, method }) =>
     method === 'POST' && path === '/api/settings/rules/apply/builder'

@@ -86,9 +86,19 @@ export function registerTaskRoutes(
     const { taskId } = ParamsSchema.parse(request.params)
     const task = await port.getTask(taskId)
     return db
-      ? db.read((sqlite) =>
-          taskWithApproval(sqlite, readProjectedTask(sqlite, taskId) ?? task, clock()),
-        )
+      ? db.read((sqlite) => {
+          const detail = taskWithApproval(
+            sqlite,
+            readProjectedTask(sqlite, taskId) ?? task,
+            clock(),
+          )
+          const brief = sqlite
+            .prepare(
+              'SELECT brief_id FROM brief_tasks WHERE task_id = ? ORDER BY linked_at DESC, rowid DESC LIMIT 1',
+            )
+            .get(taskId) as { brief_id: string } | undefined
+          return brief ? { ...detail, briefId: brief.brief_id } : detail
+        })
       : task
   })
   app.post(

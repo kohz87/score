@@ -8,7 +8,7 @@ import type { ServerResponse } from 'node:http'
 import { setImmediate } from 'node:timers/promises'
 import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
-import { eventFrame, type Fanout } from './fanout.ts'
+import { eventFrame, OVERSIZED_RESET_FRAME, type Fanout } from './fanout.ts'
 import { retainEvents } from './retention.ts'
 import { snapshot } from './snapshot.ts'
 
@@ -84,6 +84,12 @@ export async function serveStream(
         for (const row of rows) {
           if (subscriber.closed) break
           const stored = EventRowSchema.parse(row)
+          if (Buffer.byteLength(stored.data) + 256 > fanout.maxFrameBytes) {
+            // Too big to ever send: make the client resync instead of retrying the same event forever.
+            subscriber.write(OVERSIZED_RESET_FRAME)
+            after = stored.seq
+            continue
+          }
           const event = StreamEventSchema.parse({ ...stored, data: JSON.parse(stored.data) })
           subscriber.write(eventFrame(event))
           after = event.seq

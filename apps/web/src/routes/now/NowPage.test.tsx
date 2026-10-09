@@ -158,6 +158,7 @@ function snapshot(overrides: Partial<NowSnapshot> = {}): NowSnapshot {
 
 let current: NowSnapshot
 let paused: boolean
+let queuedDecision = false
 let calls: { url: string; method: string; body: string | undefined; key: string | null }[]
 const cleanups: (() => void)[] = []
 
@@ -165,6 +166,7 @@ function respond(body: unknown, status = 200) {
   return Promise.resolve(new Response(JSON.stringify(body), { status }))
 }
 beforeEach(() => {
+  queuedDecision = false
   current = snapshot()
   paused = false
   calls = []
@@ -193,6 +195,8 @@ beforeEach(() => {
         paused = false
         return respond({ paused: false, affectedRuns: 1 })
       }
+      if (url === '/api/approvals/ap1/decision' && queuedDecision)
+        return respond({ ...approval, delivery: 'intent' })
       if (url === '/api/approvals/ap1/decision')
         return respond({
           ...approval,
@@ -337,6 +341,15 @@ test('Approve posts the decision once with an idempotency key and shows the outc
   expect(decisions).toHaveLength(1)
   expect(decisions[0]).toMatchObject({ method: 'POST', body: JSON.stringify({ choice: 'once' }) })
   expect(decisions[0]!.key).toBeTruthy()
+})
+
+test('a queued approval is not announced as approved', async () => {
+  queuedDecision = true
+  renderNow()
+  const asking = await screen.findByRole('region', { name: 'Needs you' })
+  fireEvent.click(within(asking).getByRole('button', { name: 'Approve' }))
+  expect(await within(asking).findByText(/Decision queued/)).toBeTruthy()
+  expect(within(asking).queryByText(/You approved/)).toBeNull()
 })
 
 test('with nothing to decide the card says so', async () => {

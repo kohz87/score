@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import type { BriefStatus, BriefSummary } from '@score/contract'
 import { useStreamQuery } from '../../../data/query-client.ts'
 import { taskAgentsQuery, taskRoomsQuery } from '../../tasks/task-queries.ts'
@@ -21,17 +21,30 @@ const clock = (iso: string) =>
 
 function RunControl({ brief }: { brief: BriefSummary }) {
   const control = useBriefRunControl(brief.id)
-  if (brief.status !== 'running' && brief.status !== 'paused') return null
+  // A partial pause or resume still changes the brief's status, so the failed action is offered again
+  // from the error itself instead of following the status.
+  const failed = control.isError ? control.variables : undefined
+  if (brief.status !== 'running' && brief.status !== 'paused' && !failed) return null
   const paused = brief.status === 'paused'
+  const action = failed ?? (paused ? 'resume' : 'pause')
   return (
-    <button
-      type="button"
-      className="flow-run-button"
-      disabled={control.isPending}
-      onClick={() => control.mutate(paused ? 'resume' : 'pause')}
-    >
-      {paused ? 'Resume run' : 'Pause run'}
-    </button>
+    <>
+      <button
+        type="button"
+        className="flow-run-button"
+        disabled={control.isPending}
+        onClick={() => control.mutate(action)}
+      >
+        {failed ? `Try ${failed} again` : paused ? 'Resume run' : 'Pause run'}
+      </button>
+      {control.isError && (
+        <p role="alert" className="flow-notice">
+          {control.error instanceof Error
+            ? control.error.message
+            : 'That did not work. Please try again.'}
+        </p>
+      )}
+    </>
   )
 }
 
@@ -40,6 +53,9 @@ export type FlowViewProps = { onSelect?: (nodeId: string | null) => void }
 export function FlowView({ onSelect }: FlowViewProps = {}) {
   const { briefId: routeBriefId } = useParams()
   const navigate = useNavigate()
+  // `?node=` comes from links such as a task's "See it in Flow"; a click in the graph takes over.
+  const [search] = useSearchParams()
+  const requestedNode = search.get('node')
   const { active, recent } = useBriefLists()
   const agents = useStreamQuery(taskAgentsQuery)
   const rooms = useStreamQuery(taskRoomsQuery)
@@ -57,7 +73,8 @@ export function FlowView({ onSelect }: FlowViewProps = {}) {
     selection.briefId === briefId &&
     flow.data?.nodes.some((node) => node.id === selection.nodeId)
       ? selection.nodeId
-      : (flow.data?.nodes.find((node) => node.state === 'needs_you')?.id ??
+      : (flow.data?.nodes.find((node) => node.id === requestedNode)?.id ??
+        flow.data?.nodes.find((node) => node.state === 'needs_you')?.id ??
         flow.data?.nodes.find((node) => node.kind === 'step')?.id ??
         null)
   const [now, setNow] = useState(Date.now)

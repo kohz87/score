@@ -707,3 +707,98 @@ test('the first hello refetches snapshots fetched while the stream was still con
   hello(source)
   expect(requests).toHaveLength(2)
 })
+
+function setupWith(options: Parameters<typeof createStreamQueryRegistry>[3]) {
+  const client = createStreamClient({ EventSourceImpl: MockEventSource, random: () => 0.5 })
+  const queryClient = createQueryClient()
+  const queries = createStreamQueryRegistry(
+    queryClient,
+    client,
+    (run) => (run(), () => {}),
+    options,
+  )
+  clients.push(client)
+  registries.push(queries)
+  queryClients.push(queryClient)
+  return { client, queryClient, queries, source: MockEventSource.instances.at(-1)! }
+}
+
+test('a failed fenced snapshot is retried with backoff and again on a plain reconnect', async () => {
+  vi.useFakeTimers()
+  const { queries, source } = setupWith({ retryBaseMs: 1000 })
+  hello(source)
+  const { def, requests } = definition()
+  const handle = queries.register(def)
+  handle.subscribe(() => {})
+  await vi.waitFor(() => expect(requests).toHaveLength(1))
+  requests[0]!.resolve({ data: 'before', asOfSeq: 1 })
+  await vi.waitFor(() => expect(handle.getSnapshot().data).toBe('before'))
+  source.frame({ type: 'stream.reset', data: { reason: 'pruned' } }, 'stream.reset')
+  await vi.waitFor(() => expect(requests).toHaveLength(2))
+  requests[1]!.reject(new Error('offline'))
+  await vi.waitFor(() => expect(handle.getSnapshot().status).toBe('error'))
+  delta(source, 5, '!')
+  // The timer retries without any stream control.
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(requests).toHaveLength(3)
+  requests[2]!.reject(new Error('still offline'))
+  await vi.waitFor(() => expect(handle.getSnapshot().status).toBe('error'))
+  // A plain same-epoch reconnect retries at once, without waiting for the doubled delay.
+  hello(source)
+  expect(requests).toHaveLength(4)
+  requests[3]!.resolve({ data: 'fresh', asOfSeq: 6 })
+  await vi.waitFor(() => expect(handle.getSnapshot().data).toBe('fresh'))
+  expect(handle.getSnapshot().status).toBe('success')
+})
+
+test('events held behind a fence are capped: reaching the cap restarts the snapshot', async () => {
+  const { queries, source } = setupWith({ maxBuffered: 3 })
+  hello(source)
+  const { def, requests } = definition()
+  const handle = queries.register(def)
+  handle.subscribe(() => {})
+  await vi.waitFor(() => expect(requests).toHaveLength(1))
+  requests[0]!.resolve({ data: 'a', asOfSeq: 1 })
+  await vi.waitFor(() => expect(handle.getSnapshot().data).toBe('a'))
+  source.frame({ type: 'stream.reset', data: { reason: 'pruned' } }, 'stream.reset')
+  await vi.waitFor(() => expect(requests).toHaveLength(2))
+  for (let seq = 10; seq < 14; seq++) delta(source, seq)
+  expect(requests).toHaveLength(3)
+})
+
+test('an unobserved registration is evicted after the idle period and registers again on next use', async () => {
+  vi.useFakeTimers()
+  const { queries, queryClient } = setupWith({ idleEvictMs: 1000 })
+  // TanStack keeps its subscribers private; the count is what leaked before.
+  const cacheListeners = () =>
+    (queryClient.getQueryCache() as unknown as { listeners: Set<unknown> }).listeners.size
+  const baseline = cacheListeners()
+  const handles = Array.from({ length: 20 }, (_, index) => {
+    const { def, requests } = definition(`page-${index}`)
+    const handle = queries.register(def)
+    const off = handle.subscribe(() => {})
+    off()
+    return { def, handle, requests }
+  })
+  expect(cacheListeners()).toBe(baseline + 20)
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(cacheListeners()).toBe(baseline)
+  const again = handles[0]!
+  expect(queries.register(again.def)).not.toBe(again.handle)
+  // A holder of the old handle is moved to the fresh registration instead of a dead one.
+  const off = again.handle.subscribe(() => {})
+  expect(cacheListeners()).toBe(baseline + 1)
+  off()
+})
+
+test('a re-subscribe inside the idle period keeps the registration', async () => {
+  vi.useFakeTimers()
+  const { queries } = setupWith({ idleEvictMs: 1000 })
+  const { def } = definition()
+  const handle = queries.register(def)
+  handle.subscribe(() => {})()
+  await vi.advanceTimersByTimeAsync(500)
+  handle.subscribe(() => {})
+  await vi.advanceTimersByTimeAsync(5000)
+  expect(queries.register(def)).toBe(handle)
+})

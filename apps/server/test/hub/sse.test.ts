@@ -364,3 +364,16 @@ test('a client that stops reading exceeds its byte budget while a fast client re
   expect(fast.failure).toBeUndefined()
   expect(fast.seqs).toEqual(Array.from({ length: 200 }, (_, i) => i + 1))
 }, 15_000)
+
+test('replay turns an event too large to send into a reset instead of looping on it', async () => {
+  await start({ streamOptions: { fanoutOptions: { maxFrameBytes: 4096 } } })
+  await ingest.submit(observation('one'))
+  await ingest.submit(observation('two', 'y'.repeat(8000)))
+  await ingest.submit(observation('three'))
+  const stream = await client(`?since=0&epoch=${getEpoch(db)}`)
+  await waitFor(() => expect(stream.seqs).toEqual([1, 3]))
+  const types = stream.frames.map((frame) => frame.type)
+  expect(types).toContain('stream.reset')
+  expect(stream.ended).toBe(false)
+  expect(stream.failure).toBeUndefined()
+})

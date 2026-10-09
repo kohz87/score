@@ -86,6 +86,7 @@ function detail(overrides: Partial<TaskDetail> = {}): TaskDetail {
     dependsOn: [],
     blocks: [],
     runIds: [],
+    briefId: 'brief-9',
     ...overrides,
   }
 }
@@ -227,12 +228,20 @@ test('shows a loading state, then the populated drawer', async () => {
     expect.stringContaining('started this task'),
   ])
   expect(within(panel).getByRole('link', { name: 'See it in Flow' }).getAttribute('href')).toBe(
-    '/now/flow?task=t1',
+    '/now/flow/brief-9?node=task%3At1',
   )
   expect(within(panel).getByRole('checkbox', { name: 'Subscribe to events' })).toHaveProperty(
     'checked',
     true,
   )
+})
+
+test('a task that belongs to no run offers no Flow link', async () => {
+  current = detail({ briefId: null })
+  setup()
+  const panel = await drawer()
+  await within(panel).findByRole('heading', { name: 'Event stream for the feed' })
+  expect(within(panel).queryByRole('link', { name: 'See it in Flow' })).toBeNull()
 })
 
 test('a failed detail request can be retried', async () => {

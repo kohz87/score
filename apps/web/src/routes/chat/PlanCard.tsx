@@ -1,5 +1,8 @@
-import type { AgentSummary, MessagePart } from '@score/contract'
+import { PlanStartResponseSchema, type AgentSummary, type MessagePart } from '@score/contract'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
+import { apiFetch } from '../../data/api.ts'
+import { newId } from '../../data/ids.ts'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { agentTextColor } from './agent-text-color.ts'
 
@@ -34,13 +37,57 @@ const stateText = {
   waiting: 'waiting',
 }
 
-export function PlanCard({ part, agents }: { part: PlanPart; agents: AgentSummary[] }) {
+export function PlanCard({
+  part,
+  agents,
+  roomId,
+  messageId,
+}: {
+  part: PlanPart
+  agents: AgentSummary[]
+  roomId: string
+  messageId: string
+}) {
   const axis = planAxis(part.lanes)
+  const queryClient = useQueryClient()
+  // The server waits for this call before it creates any task; it is idempotent per message, so retry is safe.
+  const start = useMutation({
+    mutationFn: async () =>
+      PlanStartResponseSchema.parse(
+        await apiFetch(
+          `rooms/${encodeURIComponent(roomId)}/messages/${encodeURIComponent(messageId)}/plan/start`,
+          { method: 'POST', headers: { 'Idempotency-Key': newId() } },
+        ),
+      ),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['flow'] }),
+  })
   return (
     <section className="chat-plan-card" aria-label="Plan">
       <div className="chat-plan-head">
         <strong>Plan</strong>
-        <Link to={`/now?brief=${encodeURIComponent(part.briefId)}`}>Open in Score</Link>
+        <Link to={`/now/flow/${encodeURIComponent(part.briefId)}`}>Open in Flow</Link>
+      </div>
+      <div className="chat-plan-start">
+        {start.isSuccess ? (
+          <span role="status">
+            Plan started: {start.data.taskIds.length}{' '}
+            {start.data.taskIds.length === 1 ? 'task' : 'tasks'} created.
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="chat-plan-start-button"
+            disabled={start.isPending}
+            onClick={() => start.mutate()}
+          >
+            {start.isPending ? 'Starting…' : start.isError ? 'Try starting again' : 'Start plan'}
+          </button>
+        )}
+        {start.isError && (
+          <span role="alert">
+            {start.error instanceof Error ? start.error.message : 'Could not start the plan.'}
+          </span>
+        )}
       </div>
       <div className="chat-plan-grid">
         {part.lanes.map((lane) => {
