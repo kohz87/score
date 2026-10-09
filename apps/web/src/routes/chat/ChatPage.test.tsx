@@ -1002,6 +1002,18 @@ test('a delete leaves a Previous version marker where the message was', async ()
   fireEvent.click(within(switcher).getByRole('button', { name: 'Hide' }))
   expect(within(switcher).queryByText('Ship it')).toBeNull()
 })
+// audit4-c 3: an edit whose rewind is done but whose correction was never sent still leaves a marker.
+test('an open edit shows where the original was, with View and Continue editing', async () => {
+  versions = [{ ...editVersion, count: 2, anchorCreatedAt: '2026-10-08T09:59:00.000Z' }]
+  versionItems = [mine]
+  setup()
+  await screen.findByText('Hello team')
+  const switcher = await screen.findByTestId('version-switcher')
+  expect(within(switcher).getByText(/Edit not sent yet/)).toBeDefined()
+  fireEvent.click(within(switcher).getByRole('button', { name: 'Continue editing' }))
+  expect(await screen.findByText('Editing your message')).toBeDefined()
+  expect((screen.getByRole('combobox') as HTMLTextAreaElement).value).toBe('Ship it')
+})
 test('room.version.created adds the marker live', async () => {
   setup()
   await screen.findByText('Hello team')

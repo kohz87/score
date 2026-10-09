@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { apiFetch } from '../../data/api.ts'
 import { MessageItem } from './MessageItem.tsx'
+import { startEdit } from './message-edit.ts'
 
 /** A hidden version's messages, read-only (PLAN 5.33). */
 function PreviousVersion({ version, agents }: { version: RoomVersion; agents: AgentSummary[] }) {
@@ -48,6 +49,23 @@ export function VersionSwitcher({
   // Which hidden version is on screen; null = the live conversation.
   const [viewing, setViewing] = useState<RoomVersion | null>(null)
   const isDelete = version.mode === 'delete'
+  // An edit whose rewind is done but whose correction was never sent: the original is hidden with no replacement yet.
+  const open = version.mode === 'edit' && version.replacedBy === null
+  const [continuing, setContinuing] = useState(false)
+  async function continueEditing() {
+    setContinuing(true)
+    try {
+      const detail = RoomVersionDetailSchema.parse(
+        await apiFetch(
+          `rooms/${encodeURIComponent(version.roomId)}/versions/${encodeURIComponent(version.anchorId)}`,
+        ),
+      )
+      const anchor = detail.items.find((message) => message.id === version.anchorId)
+      if (anchor) startEdit(anchor)
+    } finally {
+      setContinuing(false)
+    }
+  }
   const older = viewing ? versions.find((item) => item.replacedBy === viewing.anchorId) : version
   const newer = viewing
     ? (versions.find((item) => item.anchorId === viewing.replacedBy) ?? null)
@@ -56,9 +74,9 @@ export function VersionSwitcher({
   return (
     <div className="chat-version" data-testid="version-switcher">
       <div className="chat-version-bar">
-        {isDelete ? (
+        {isDelete || open ? (
           <>
-            <span>Previous version</span>
+            <span>{open ? 'Edit not sent yet: the original is hidden' : 'Previous version'}</span>
             <button
               type="button"
               className="chat-version-toggle"
@@ -67,6 +85,16 @@ export function VersionSwitcher({
             >
               {viewing ? 'Hide' : 'View'}
             </button>
+            {open && (
+              <button
+                type="button"
+                className="chat-version-toggle"
+                disabled={continuing}
+                onClick={() => void continueEditing()}
+              >
+                Continue editing
+              </button>
+            )}
           </>
         ) : (
           <>
