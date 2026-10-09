@@ -4,7 +4,7 @@ import { RoomImportSchema } from '@score/contract'
 import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
-import type { OutsideSessionHistory } from '../hermes/outside-sessions.ts'
+import type { OutsideSessionHistory } from '../hermes/index.ts'
 import { redact } from '../redact.ts'
 import { insertRoom, readRoom, roomChanged, roomRow } from './rooms.ts'
 
