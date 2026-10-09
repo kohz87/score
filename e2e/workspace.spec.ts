@@ -13,6 +13,14 @@ async function openWorkspace(page: Page, agent: string) {
   return panel
 }
 
+// The editor is CodeMirror (a contenteditable), so it is typed into rather than filled.
+async function replaceText(page: Page, label: string, text: string) {
+  const editor = page.getByLabel(label)
+  await editor.click()
+  await page.keyboard.press('Control+a')
+  await page.keyboard.insertText(text)
+}
+
 test.beforeEach(async ({ page }) => {
   await pair(page)
 })
@@ -36,8 +44,8 @@ test('edit and save, then a change made behind the page shows the conflict banne
   const panel = await openWorkspace(page, 'reviewer')
   await panel.getByRole('treeitem', { name: /README\.md/ }).click()
   const editor = panel.getByLabel('Contents of README.md')
-  await expect(editor).toHaveValue(/reviewer workspace/)
-  await editor.fill('# Edited in the e2e\n')
+  await expect(editor).toContainText('reviewer workspace')
+  await replaceText(page, 'Contents of README.md', '# Edited in the e2e\n')
   await panel.getByRole('button', { name: 'Save' }).click()
   await expect(panel.getByText('Saved.')).toBeVisible()
 
@@ -45,7 +53,7 @@ test('edit and save, then a change made behind the page shows the conflict banne
   await page.reload()
   await page.getByRole('tab', { name: 'Workspace' }).click()
   await page.getByRole('treeitem', { name: /README\.md/ }).click()
-  await expect(page.getByLabel('Contents of README.md')).toHaveValue('# Edited in the e2e\n')
+  await expect(page.getByLabel('Contents of README.md')).toContainText('# Edited in the e2e')
 
   // Something else writes the file (the agent, an editor); the page still holds the old etag.
   const url = '/api/agents/reviewer/workspace/file?path=README.md'
@@ -56,13 +64,13 @@ test('edit and save, then a change made behind the page shows the conflict banne
     data: { content: 'written by someone else\n', etag },
   })
   expect(behind.ok()).toBe(true)
-  await page.getByLabel('Contents of README.md').fill('my edit\n')
+  await replaceText(page, 'Contents of README.md', 'my edit\n')
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page.getByText('Changed on disk.')).toBeVisible()
   await page.getByRole('button', { name: 'Compare' }).click()
   await expect(page.getByLabel('On disk')).toHaveValue('written by someone else\n')
   await page.getByRole('button', { name: 'Reload from disk' }).click()
-  await expect(page.getByLabel('Contents of README.md')).toHaveValue('written by someone else\n')
+  await expect(page.getByLabel('Contents of README.md')).toContainText('written by someone else')
 })
 
 test('create a file and a folder, then delete both (a folder with files needs its name typed)', async ({
@@ -79,7 +87,7 @@ test('create a file and a folder, then delete both (a folder with files needs it
   await panel.getByLabel(/New file in scratch/).fill('todo.txt')
   await panel.getByRole('button', { name: 'Create' }).click()
   await expect(panel.getByLabel('Contents of scratch/todo.txt')).toBeVisible()
-  await panel.getByLabel('Contents of scratch/todo.txt').fill('buy milk\n')
+  await replaceText(page, 'Contents of scratch/todo.txt', 'buy milk\n')
   await panel.getByRole('button', { name: 'Save' }).click()
   await expect(panel.getByText('Saved.')).toBeVisible()
 
@@ -117,7 +125,7 @@ test('looks right at desktop and phone width', async ({ page }) => {
     const panel = await openWorkspace(page, 'lead')
     await panel.getByRole('treeitem', { name: /src/ }).click()
     await panel.getByRole('treeitem', { name: /README\.md/ }).click()
-    await expect(panel.getByLabel('Contents of README.md')).toHaveValue(/lead workspace/)
+    await expect(panel.getByLabel('Contents of README.md')).toContainText('lead workspace')
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
     ).toBeLessThanOrEqual(1)
@@ -128,4 +136,14 @@ test('looks right at desktop and phone width', async ({ page }) => {
       maxDiffPixelRatio: 0.02,
     })
   }
+})
+
+test('a Markdown file previews rendered and switches back to the editor', async ({ page }) => {
+  const panel = await openWorkspace(page, 'reviewer')
+  await panel.getByRole('treeitem', { name: /README\.md/ }).click()
+  await expect(panel.getByLabel('Contents of README.md')).toBeVisible()
+  await panel.getByRole('button', { name: 'Preview' }).click()
+  await expect(panel.getByLabel('Preview of README.md').getByRole('heading').first()).toBeVisible()
+  await panel.getByRole('button', { name: 'Edit' }).click()
+  await expect(panel.getByLabel('Contents of README.md')).toBeVisible()
 })

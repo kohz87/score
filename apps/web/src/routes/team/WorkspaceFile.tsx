@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { Markdown } from '../chat/Markdown.tsx'
+import '../chat/chat.css'
 import {
   conflictOf,
   fetchFile,
@@ -10,6 +12,12 @@ import {
   workspaceFailure,
   type LoadedFile,
 } from './workspace-queries.ts'
+
+// CodeMirror is heavy: it loads when the first text file opens (as Knowledge does).
+const CodeEditor = lazy(async () => ({
+  default: (await import('../../components/CodeEditor.tsx')).CodeEditor,
+}))
+const isMarkdownPath = (path: string) => /\.(md|markdown|mdx)$/i.test(path)
 
 function size(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
@@ -99,13 +107,16 @@ function Editor({
   const [disk, setDisk] = useState<Disk | null>(null)
   const [comparing, setComparing] = useState(false)
   const [notice, setNotice] = useState('')
+  const [preview, setPreview] = useState(false)
   const dirty = draft !== base.content
   const draftRef = useRef(draft)
+  const dirtyRef = useRef(false)
   const baseRef = useRef(base)
   const seen = useRef(latest.etag)
   useEffect(() => {
     draftRef.current = draft
     baseRef.current = base
+    dirtyRef.current = dirty
   })
 
   // The agent (or anything else) changed the file: follow it when there is nothing to lose, warn otherwise.
@@ -194,19 +205,35 @@ function Editor({
           )}
         </div>
       )}
-      <textarea
-        className="ws-textarea"
-        aria-label={`Contents of ${path}`}
-        spellCheck={false}
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={(event) => {
-          if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
-            event.preventDefault()
-            if (dirty && !save.isPending) submit()
-          }
-        }}
-      />
+      {isMarkdownPath(path) && (
+        <div className="ws-actions" role="group" aria-label="View">
+          <button type="button" aria-pressed={!preview} onClick={() => setPreview(false)}>
+            Edit
+          </button>
+          <button type="button" aria-pressed={preview} onClick={() => setPreview(true)}>
+            Preview
+          </button>
+        </div>
+      )}
+      {preview ? (
+        <div className="ws-md-preview" aria-label={`Preview of ${path}`}>
+          <Markdown text={draft} />
+        </div>
+      ) : (
+        <div className="ws-code">
+          <Suspense fallback={<p role="status">Loading editor…</p>}>
+            <CodeEditor
+              value={draft}
+              path={path}
+              label={`Contents of ${path}`}
+              onChange={setDraft}
+              onSave={() => {
+                if (dirtyRef.current && !save.isPending) submit()
+              }}
+            />
+          </Suspense>
+        </div>
+      )}
       <div className="ws-actions">
         <button
           type="button"

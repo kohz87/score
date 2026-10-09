@@ -1,5 +1,6 @@
+import { EditorView } from '@codemirror/view'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { createQueryClient } from '../../data/query-client.ts'
 import { WorkspaceTab } from './WorkspaceTab.tsx'
@@ -101,6 +102,13 @@ function mount() {
     </QueryClientProvider>,
   )
 }
+const view = () => EditorView.findFromDOM(document.querySelector<HTMLElement>('.cm-editor')!)!
+function setText(text: string) {
+  const editor = view()
+  act(() => {
+    editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: text } })
+  })
+}
 const treeCalls = () => calls.filter((c) => c.url.includes('/workspace/tree')).map((c) => c.url)
 
 test('an unavailable workspace shows the reason and lets the folder be set', async () => {
@@ -151,55 +159,81 @@ test('the tree loads lazily: a folder is listed only when opened', async () => {
   expect(screen.getByRole('treeitem', { name: /src/ }).getAttribute('aria-expanded')).toBe('true')
 })
 
-test('open, edit and save sends the loaded etag; the button disables when clean', async () => {
-  mount()
-  fireEvent.click(await screen.findByRole('treeitem', { name: /README\.md/ }))
-  const editor = (await screen.findByLabelText('Contents of README.md')) as HTMLTextAreaElement
-  expect(editor.value).toBe('hello')
-  const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement
-  expect(save.disabled).toBe(true)
-  fireEvent.change(editor, { target: { value: 'hello world' } })
-  expect(save.disabled).toBe(false)
-  fireEvent.click(save)
-  await screen.findByText('Saved.')
-  const put = calls.find((c) => c.method === 'PUT' && c.url.includes('/file'))!
-  expect(put.body).toEqual({ content: 'hello world', etag: 'etag-1' })
-  expect(put.url).toContain('path=README.md')
-})
+test(
+  'open, edit and save sends the loaded etag; the button disables when clean',
+  { timeout: 20_000 },
+  async () => {
+    mount()
+    fireEvent.click(await screen.findByRole('treeitem', { name: /README\.md/ }))
+    await screen.findByLabelText('Contents of README.md', {}, { timeout: 10_000 })
+    expect(view().state.doc.toString()).toBe('hello')
+    const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+    setText('hello world')
+    expect(save.disabled).toBe(false)
+    fireEvent.click(save)
+    await screen.findByText('Saved.')
+    const put = calls.find((c) => c.method === 'PUT' && c.url.includes('/file'))!
+    expect(put.body).toEqual({ content: 'hello world', etag: 'etag-1' })
+    expect(put.url).toContain('path=README.md')
+  },
+)
 
-test('a stale etag shows the conflict banner; reload takes the disk version, overwrite retries with its etag', async () => {
-  mount()
-  fireEvent.click(await screen.findByRole('treeitem', { name: /README\.md/ }))
-  const editor = (await screen.findByLabelText('Contents of README.md')) as HTMLTextAreaElement
-  fireEvent.change(editor, { target: { value: 'mine' } })
-  saveStatus = 412
-  files.set('README.md', 'on disk')
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-  const banner = await screen.findByText('Changed on disk.')
-  expect(banner).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: 'Compare' }))
-  expect(((await screen.findByLabelText('On disk')) as HTMLTextAreaElement).value).toBe('on disk')
-  expect((screen.getByLabelText('My version') as HTMLTextAreaElement).value).toBe('mine')
-  saveStatus = 200
-  fireEvent.click(screen.getByRole('button', { name: 'Overwrite with my version' }))
-  await screen.findByText('Saved.')
-  const puts = calls.filter((c) => c.method === 'PUT' && c.url.includes('/file'))
-  expect(puts.at(-1)!.body).toEqual({ content: 'mine', etag: 'disk2' })
+test(
+  'a stale etag shows the conflict banner; reload takes the disk version, overwrite retries with its etag',
+  { timeout: 20_000 },
+  async () => {
+    mount()
+    fireEvent.click(await screen.findByRole('treeitem', { name: /README\.md/ }))
+    await screen.findByLabelText('Contents of README.md', {}, { timeout: 10_000 })
+    setText('mine')
+    saveStatus = 412
+    files.set('README.md', 'on disk')
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const banner = await screen.findByText('Changed on disk.')
+    expect(banner).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Compare' }))
+    expect(((await screen.findByLabelText('On disk')) as HTMLTextAreaElement).value).toBe('on disk')
+    expect((screen.getByLabelText('My version') as HTMLTextAreaElement).value).toBe('mine')
+    saveStatus = 200
+    fireEvent.click(screen.getByRole('button', { name: 'Overwrite with my version' }))
+    await screen.findByText('Saved.')
+    const puts = calls.filter((c) => c.method === 'PUT' && c.url.includes('/file'))
+    expect(puts.at(-1)!.body).toEqual({ content: 'mine', etag: 'disk2' })
 
-  // Reload path.
-  fireEvent.change(editor, { target: { value: 'again' } })
-  saveStatus = 412
-  files.set('README.md', 'on disk')
-  etag = 'disk2'
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-  await screen.findByText('Changed on disk.')
-  fireEvent.click(screen.getByRole('button', { name: 'Reload from disk' }))
-  await waitFor(() =>
-    expect((screen.getByLabelText('Contents of README.md') as HTMLTextAreaElement).value).toBe(
-      'on disk',
-    ),
-  )
-})
+    // Reload path.
+    setText('again')
+    saveStatus = 412
+    files.set('README.md', 'on disk')
+    etag = 'disk2'
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByText('Changed on disk.')
+    fireEvent.click(screen.getByRole('button', { name: 'Reload from disk' }))
+    await waitFor(() => expect(view().state.doc.toString()).toBe('on disk'))
+  },
+)
+
+test(
+  'a Markdown file has a rendered Preview without raw HTML; code files have none',
+  { timeout: 20_000 },
+  async () => {
+    files.set('README.md', '# Title\n\nsome **bold** <script>alert(1)</script>')
+    mount()
+    fireEvent.click(await screen.findByRole('treeitem', { name: /README\.md/ }))
+    await screen.findByLabelText('Contents of README.md', {}, { timeout: 10_000 })
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    const preview = screen.getByLabelText('Preview of README.md')
+    expect(within(preview).getByRole('heading', { name: 'Title' })).toBeTruthy()
+    expect(preview.querySelector('strong')?.textContent).toBe('bold')
+    expect(preview.querySelector('script')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    await screen.findByLabelText('Contents of README.md')
+    fireEvent.click(screen.getByRole('treeitem', { name: /src/ }))
+    fireEvent.click(await screen.findByRole('treeitem', { name: /main\.ts/ }))
+    await screen.findByLabelText('Contents of src/main.ts')
+    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull()
+  },
+)
 
 test('images preview by URL and binaries offer a download', async () => {
   mount()

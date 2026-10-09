@@ -169,20 +169,28 @@
   text-decoration: underline;
   cursor: pointer;
 }
-.ws-textarea {
-  width: 100%;
-  min-height: 320px;
-  resize: vertical;
-  padding: 12px;
+.ws-code {
   border: 1px solid var(--hairline);
   border-radius: var(--radius-14);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--ink);
+  padding: 8px 12px;
   background: var(--card);
-  box-sizing: border-box;
-  tab-size: 2;
+}
+.ws-code .cm-editor {
+  min-height: 320px;
+  max-height: 70vh;
+}
+.ws-code .cm-scroller {
+  font-family: var(--font-code);
+  font-size: 13px;
+  overflow: auto;
+}
+.ws-md-preview {
+  min-height: 320px;
+  padding: 12px 16px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  background: var(--card);
+  overflow-wrap: anywhere;
 }
 .ws-editor {
   display: flex;
