@@ -9,7 +9,7 @@ import { tabFailure } from '../../routes/team/tab-errors.ts'
 import { useUpdateModelSettings } from '../../routes/team/model-settings-queries.ts'
 import './model-settings.css'
 
-interface Draft {
+export interface Draft {
   sttProvider: string
   sttModel: string
   ttsProvider: string
@@ -37,12 +37,28 @@ export function speechChanges(
   const sttInfo = STT_PROVIDERS.find((item) => item.id === draft.sttProvider)
   const ttsInfo = TTS_PROVIDERS.find((item) => item.id === draft.ttsProvider)
   if (sttInfo && switchedStt) stt.provider = sttInfo.id
-  if (sttInfo?.model && draft.sttModel.trim() && draft.sttModel.trim() !== before.sttModel)
+  // Automatic: Hermes picks the speech-to-text provider again.
+  else if (switchedStt && draft.sttProvider === '') stt.provider = null
+  // A value is compared with the previous provider's only when the provider stays: after a switch the destination
+  // keeps its own model and voice, so a filled field is always sent (the server skips what it already holds).
+  if (
+    sttInfo?.model &&
+    draft.sttModel.trim() &&
+    (switchedStt || draft.sttModel.trim() !== before.sttModel)
+  )
     stt.model = draft.sttModel.trim()
   if (ttsInfo && switchedTts) tts.provider = ttsInfo.id
-  if (ttsInfo?.model && draft.ttsModel.trim() && draft.ttsModel.trim() !== before.ttsModel)
+  if (
+    ttsInfo?.model &&
+    draft.ttsModel.trim() &&
+    (switchedTts || draft.ttsModel.trim() !== before.ttsModel)
+  )
     tts.model = draft.ttsModel.trim()
-  if (ttsInfo?.voice && draft.ttsVoice.trim() && draft.ttsVoice.trim() !== before.ttsVoice)
+  if (
+    ttsInfo?.voice &&
+    draft.ttsVoice.trim() &&
+    (switchedTts || draft.ttsVoice.trim() !== before.ttsVoice)
+  )
     tts.voice = draft.ttsVoice.trim()
   const speech = {
     ...(Object.keys(stt).length ? { stt } : {}),
