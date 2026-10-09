@@ -25,7 +25,12 @@ export default defineConfig({
     ? {
         command: `pnpm dev 2>&1 | tee ${join(scoreHome, 'dev.log')}`,
         // The server only accepts mutations from its own web origin, so it must follow SCORE_WEB_PORT.
-        env: { SCORE_HOME: scoreHome, SCORE_MODE: 'fake', SCORE_WEB_ORIGIN: baseURL },
+        env: {
+          SCORE_HOME: scoreHome,
+          SCORE_MODE: 'fake',
+          SCORE_FAKE_REWIND_SKIP: 'reviewer:compressed',
+          SCORE_WEB_ORIGIN: baseURL,
+        },
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 60_000,
@@ -35,6 +40,8 @@ export default defineConfig({
         env: {
           SCORE_HOME: scoreHome,
           SCORE_MODE: 'fake',
+          // The fake adapter cannot rewind this agent (PLAN 5.33: "Hide in Score only").
+          SCORE_FAKE_REWIND_SKIP: 'reviewer:compressed',
           SCORE_SERVE_WEB: '1',
           SCORE_PORT: webPort,
           SCORE_WEB_ORIGIN: baseURL,

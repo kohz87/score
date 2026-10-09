@@ -745,6 +745,35 @@ const cases = [
   ['PluginsQuerySchema', { agent: 'builder' }, {}],
   ['PluginsResponseSchema', { items: [] }, { items: [{ id: 'x' }] }],
   ['PatchPluginRequestSchema', { enabled: false }, { enabled: false, extra: 1 }],
+  ['RewindModeSchema', 'edit', 'undo'],
+  ['RewindRequestSchema', { mode: 'delete', scoreOnly: true }, { mode: 'undo' }],
+  ['RewoundAgentSchema', { agentId: 'builder', turnsUndone: 2 }, { agentId: 'builder', turnsUndone: -1 }],
+  ['RewindSkipReasonSchema', 'compressed', 'other'],
+  ['SkippedAgentSchema', { agentId: 'builder', reason: 'no_answer' }, { agentId: 'builder', reason: 'x' }],
+  ['RoomVersionSchema', f.roomVersion, { ...f.roomVersion, count: 0 }],
+  [
+    'RewindResponseSchema',
+    { version: f.roomVersion, rewound: [], skipped: [] },
+    { version: f.roomVersion, rewound: 1, skipped: [] },
+  ],
+  [
+    'RewindPlanSchema',
+    { hiddenCount: 1, blocked: null, agents: [{ agentId: 'builder', turns: 1, cannot: null }] },
+    { hiddenCount: 1, blocked: null, agents: [{ agentId: 'builder', turns: 1 }] },
+  ],
+  ['RoomVersionsSchema', { asOfSeq: 1, items: [f.roomVersion] }, { asOfSeq: 1, items: [{}] }],
+  ['RoomVersionDetailSchema', { version: f.roomVersion, items: [] }, { version: f.roomVersion }],
+  [
+    'BridgeCommandSchema',
+    { commandId: 'c1', kind: 'rewind', sessionId: 's', turns: 1 },
+    { commandId: 'c1', kind: 'rewind', sessionId: 's', turns: 0 },
+  ],
+  [
+    'BridgeCommandsResponseSchema',
+    { items: [{ commandId: 'c1', kind: 'rewind', sessionId: 's', turns: 1 }] },
+    { items: [{}] },
+  ],
+  ['BridgeCommandResultSchema', { outcome: 'nothing' }, { outcome: 'maybe' }],
 ] as const satisfies ReadonlyArray<readonly [keyof typeof contract, unknown, unknown]>
 
 test('every exported schema has valid and invalid fixtures', () => {

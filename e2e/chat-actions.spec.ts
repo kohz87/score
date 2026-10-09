@@ -45,10 +45,14 @@ test('Edit (replaces), Copy and Retry work from the action row under a message',
   const fixed = `Please check the room context, corrected ${stamp}`
   await composer.fill(fixed)
   await composer.press('Enter')
+  // PLAN 5.33: the edit rewinds the room and the agents; the person confirms first.
+  const dialog = page.getByRole('dialog', { name: 'Edit and send again?' })
+  await dialog.getByRole('button', { name: 'Rewind and edit' }).click({ timeout: 15_000 })
   const corrected = history.getByRole('article').filter({ hasText: fixed })
   await expect(corrected).toBeVisible()
-  // The edit replaces the original and its replies (owner 2026-10-09).
+  // The original and its replies become the previous version.
   await expect(mine).toHaveCount(0)
+  await expect(page.getByTestId('version-switcher')).toContainText('Version 2 of 2')
   await expect(replyAfter(corrected).first()).toBeVisible({ timeout: 40_000 })
 
   // Retry: the same agent answers again; the first reply stays.
