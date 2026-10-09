@@ -81,7 +81,11 @@ docs/                plan, architecture, contract, setup, spike, design referenc
    all code stays ours or MIT-compatible.
 2. You MAY read, copy and adapt code from these MIT sources, cloned **outside** this repo in `../reference/`:
    JPeetz/Hermes-Studio, outsourc-e/hermes-workspace, NousResearch/hermes-agent,
-   NousResearch/hermes-example-plugins, nesquena/hermes-webui (MIT, added by the owner 2026-10-09). When you copy or closely adapt code, add the source file path and its
+   NousResearch/hermes-example-plugins, nesquena/hermes-webui (MIT, added by the owner 2026-10-09).
+   **kohz87/artemis** (`../reference/artemis`) is the owner's own code (AGPL there, but the owner is the copyright
+   holder and contributes it to Score under Score's license, owner 2026-10-09): reuse it freely, note the source file in
+   a one-line comment, and still check each *dependency* it uses against rule 4 (e.g. BlockNote is MPL-2.0: flag it).
+   Its commit author names include persona names: never copy those into Score (rule 5). When you copy or closely adapt code, add the source file path and its
    copyright notice to `THIRD_PARTY_NOTICES.md` and leave a one-line comment at the top of the adapted code.
    Never clone them inside this repo.
 3. **Never read, fetch, search for or reproduce code from EKKOLearnAI/ekko-studio** (formerly hermes-web-ui /
