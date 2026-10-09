@@ -1,5 +1,13 @@
 import type { DatabaseSync } from 'node:sqlite'
-import { AgentIdSchema, MessageSchema, RoomSchema, type Message, type Room } from '@score/contract'
+import {
+  AgentIdSchema,
+  MessageSchema,
+  RoomImportSchema,
+  RoomSchema,
+  RoomTagSchema,
+  type Message,
+  type Room,
+} from '@score/contract'
 import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
@@ -13,6 +21,11 @@ export const RoomRowSchema = z.object({
   created_at: z.iso.datetime(),
   updated_at: z.iso.datetime(),
   version: z.int().positive(),
+  pinned: z.union([z.literal(0), z.literal(1)]),
+  archived: z.union([z.literal(0), z.literal(1)]),
+  project_id: z.string().nullable(),
+  tags: z.string().nullable(),
+  imported_from: z.string().nullable(),
 })
 export const MessageRowSchema = z.object({
   id: z.string(),
@@ -31,6 +44,38 @@ export const MessageRowSchema = z.object({
   deleted_at: z.string().nullish(),
 })
 const CountSchema = z.object({ count: z.int().nonnegative() })
+
+/** `#tag` words after the first word of a room's name ("#launch #q4 #urgent"), lower-case and valid only. */
+export function nameTags(name: string): string[] {
+  const tags = name
+    .split(/\s+/)
+    .slice(1)
+    .flatMap((word) => (word.startsWith('#') ? [word.slice(1).toLowerCase()] : []))
+    .filter((tag) => RoomTagSchema.safeParse(tag).success)
+  return [...new Set(tags)]
+}
+
+function importedFrom(
+  sqlite: DatabaseSync,
+  row: z.infer<typeof RoomRowSchema>,
+): Room['importedFrom'] {
+  if (row.imported_from === null) return null
+  const base = z
+    .object({
+      agentId: AgentIdSchema,
+      sessionId: z.string(),
+      source: z.string(),
+      label: z.string(),
+    })
+    .parse(JSON.parse(row.imported_from))
+  const mode = sqlite
+    .prepare('SELECT mode FROM room_sessions WHERE room_id = ? AND agent_id = ?')
+    .get(row.id, base.agentId)
+  return RoomImportSchema.parse({
+    ...base,
+    continued: z.object({ mode: z.string() }).nullish().parse(mode)?.mode ?? null,
+  })
+}
 
 export function roomRow(sqlite: DatabaseSync, id: string) {
   const row = sqlite.prepare('SELECT * FROM rooms WHERE id = ?').get(id)
@@ -72,6 +117,11 @@ export function readRoom(sqlite: DatabaseSync, id: string, now: string): Room {
     unread,
     activeAgents,
     channels: [],
+    pinned: row.pinned === 1,
+    archived: row.archived === 1,
+    projectId: row.project_id,
+    tags: row.tags === null ? nameTags(row.name) : z.array(z.string()).parse(JSON.parse(row.tags)),
+    importedFrom: importedFrom(sqlite, row),
   })
 }
 
@@ -84,17 +134,29 @@ export function roomIds(sqlite: DatabaseSync): string[] {
 
 export function insertRoom(
   sqlite: DatabaseSync,
-  room: Pick<Room, 'id' | 'name' | 'kind' | 'leadAgentId' | 'members'>,
+  room: Pick<Room, 'id' | 'name' | 'kind' | 'leadAgentId' | 'members'> & {
+    /** Stored as given (agentId, sessionId, source, label); `continued` is derived from room_sessions. */
+    importedFrom?: { agentId: string; sessionId: string; source: string; label: string }
+  },
   now: string,
 ): void {
   if (sqlite.prepare('SELECT id FROM rooms WHERE name = ?').get(room.name))
     throw new HttpError(409, 'conflict', 'Room name already exists')
   sqlite
     .prepare(
-      `INSERT INTO rooms (id, name, kind, lead_agent_id, members, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO rooms (id, name, kind, lead_agent_id, members, created_at, updated_at, imported_from)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(room.id, room.name, room.kind, room.leadAgentId, JSON.stringify(room.members), now, now)
+    .run(
+      room.id,
+      room.name,
+      room.kind,
+      room.leadAgentId,
+      JSON.stringify(room.members),
+      now,
+      now,
+      room.importedFrom ? JSON.stringify(room.importedFrom) : null,
+    )
 }
 
 export function roomChanged(

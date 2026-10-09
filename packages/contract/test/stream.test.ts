@@ -14,6 +14,8 @@ const eventData = {
   'system.status': f.system,
   'agent.updated': f.agent,
   'room.upserted': f.room,
+  'room-project.upserted': f.roomProject,
+  'room-project.deleted': { id: 'project-1' },
   'message.created': f.message,
   'message.delta': f.delta,
   'message.completed': f.completed,

@@ -48,6 +48,7 @@ import { followRun, waitForRun, type FollowOptions } from './runs.ts'
 import { taskAction, taskReader } from './task-actions.ts'
 import { LiveTasks } from './tasks.ts'
 import { readProfileSessionCosts, readReportFacts } from './report-facts.ts'
+import { listOutsideSessions, readOutsideSession } from './outside-sessions.ts'
 import { createTask, patchTask } from './task-writes.ts'
 import { LiveRoutines } from './routines.ts'
 import { LiveAgentTabs } from './agent-tabs.ts'
@@ -723,6 +724,17 @@ export class LivePort implements HermesPort {
   }
   async reportFacts(req: Parameters<HermesPort['reportFacts']>[0]) {
     return readReportFacts(req, this.options.hermesHome)
+  }
+  async listOutsideSessions(agentIds: string[]) {
+    return listOutsideSessions(agentIds, this.options.hermesHome)
+  }
+  async readOutsideSession(agentId: string, sessionId: string) {
+    return readOutsideSession(agentId, sessionId, this.options.hermesHome)
+  }
+  // Hermes' /v1/runs takes `session_id` and loads that session's history (api_server_runs.py); Score already passes
+  // one on every run. A gateway without the run API cannot start Score runs at all.
+  sessionContinuation(): 'same_session' | 'new_session' {
+    return this.current.hermes.apiServer ? 'same_session' : 'new_session'
   }
   async sessionCosts(req: { sinceMs: number; agentIds: string[] }) {
     return readProfileSessionCosts(req, this.options.hermesHome)

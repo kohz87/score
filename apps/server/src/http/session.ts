@@ -8,6 +8,13 @@ import { HttpError } from '../errors.ts'
 import { PairingLinkSchema } from '@score/contract'
 import type { SecurityPassword } from '../auth/security-password.ts'
 
+// Rate limits count per paired browser; the cookie's hash names it without keeping the secret.
+export function sessionKey(cookie: string | undefined): string {
+  return createHash('sha256')
+    .update(readCookie(cookie, SESSION_COOKIE) ?? '')
+    .digest('hex')
+}
+
 const PairBodySchema = z.object({ token: z.string().max(256) })
 
 export function registerSessionRoutes(
@@ -23,11 +30,7 @@ export function registerSessionRoutes(
 ): void {
   const guarded = { preHandler: humanGuard(pairing) }
   const PasswordBody = z.object({ password: z.unknown() }).loose()
-  // Rate limits count per paired browser; the cookie's hash names it without keeping the secret.
-  const sessionOf = (cookie: string | undefined) =>
-    createHash('sha256')
-      .update(readCookie(cookie, SESSION_COOKIE) ?? '')
-      .digest('hex')
+  const sessionOf = sessionKey
   async function checkPassword(body: unknown, cookie: string | undefined): Promise<void> {
     if (!security)
       throw new HttpError(501, 'unsupported', 'Pairing management is not available here')

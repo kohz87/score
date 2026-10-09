@@ -197,10 +197,12 @@ function MessageActions({
   message,
   name,
   agents,
+  imported,
 }: {
   message: Message
   name: string
   agents: AgentSummary[]
+  imported: boolean
 }) {
   const you = message.author.kind === 'you'
   const [copied, setCopied] = useState(false)
@@ -245,7 +247,7 @@ function MessageActions({
       role="group"
       aria-label={`Actions for message from ${name}`}
     >
-      {you && !message.editedBy && (
+      {you && !imported && !message.editedBy && (
         <Action
           label="Edit"
           name={`Edit message from ${name}`}
@@ -262,7 +264,7 @@ function MessageActions({
           onClick={() => void copy()}
         />
       )}
-      {!you && (
+      {!you && !imported && (
         <Action
           label={retry === 'queued' ? 'Retrying' : 'Retry'}
           name={`Retry reply from ${name}`}
@@ -277,11 +279,11 @@ function MessageActions({
         name={`Delete message from ${name}`}
         icon="delete"
         title={
-          you
+          you && !imported
             ? 'Hides it and everything after it, and rewinds the agents'
             : 'Removes it from Score. Agents may still remember it.'
         }
-        onClick={() => (you ? setConfirming(true) : requestDelete(message.roomId, message.id))}
+        onClick={() => (you && !imported ? setConfirming(true) : requestDelete(message.roomId, message.id))}
       />
       {confirming && (
         <RewindDialog
@@ -345,12 +347,16 @@ export function MessageItem({
   message,
   agents,
   readOnly = false,
+  importedLabel,
 }: {
   message: Message
   agents: AgentSummary[]
   /** A message of a previous version (PLAN 5.33): greyed, no actions. */
   readOnly?: boolean
+  /** Where an imported copy came from ("Telegram"); such messages cannot be edited or retried. */
+  importedLabel?: string | undefined
 }) {
+  const imported = message.id.startsWith('import:')
   const author = message.author
   const agent =
     author.kind === 'agent' ? agents.find((item) => item.id === author.agentId) : undefined
@@ -363,6 +369,7 @@ export function MessageItem({
       id={`message-${message.id}`}
       className={`chat-message${you ? ' chat-message--you' : ''}${message.editedBy ? ' chat-message--edited' : ''}${readOnly ? ' chat-message--previous' : ''}`}
       aria-label={`Message from ${name}`}
+      tabIndex={-1}
     >
       {!you && agent && <AgentGlyph agent={agent} size="sm" decorative />}
       <div className="chat-message-body">
@@ -376,6 +383,9 @@ export function MessageItem({
           </time>
           {message.streaming && <span className="chat-streaming">Writing…</span>}
           {message.editedBy && <span className="chat-edited">edited</span>}
+          {imported && importedLabel && (
+            <span className="chat-imported-chip">from {importedLabel}</span>
+          )}
         </div>
         <div
           className="chat-message-parts"
@@ -417,7 +427,7 @@ export function MessageItem({
           </button>
         )}
         {!readOnly && !message.streaming && !message.id.startsWith('pending-') && (
-          <MessageActions message={message} name={name} agents={agents} />
+          <MessageActions message={message} name={name} agents={agents} imported={imported} />
         )}
       </div>
     </article>
