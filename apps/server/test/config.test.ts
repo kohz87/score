@@ -14,6 +14,7 @@ test('loads defaults without reading process.env', () => {
     fakeSpeed: 1,
     fakeLoop: true,
     serveWeb: false,
+    terminal: false,
     ignoredInsecureHttp: false,
   })
 })
@@ -39,6 +40,7 @@ test('loads explicit config and normalizes the web origin', () => {
     fakeSpeed: 2.5,
     fakeLoop: false,
     serveWeb: false,
+    terminal: false,
     ignoredInsecureHttp: false,
   })
   expect(env.SCORE_WEB_ORIGIN).toBe('https://localhost:5173/')
@@ -121,4 +123,11 @@ test('a folder of named certificates needs a default certificate (5.22)', () => 
     loadConfig({ ...remote, SCORE_TLS_CERT: '/tmp/a.crt', SCORE_TLS_KEY: '/tmp/a.key' }).remote
       ?.tlsNamesDir,
   ).toBe('/tmp/names')
+})
+
+test('the web terminal is on only with SCORE_TERMINAL=1', () => {
+  expect(loadConfig({}).terminal).toBe(false)
+  expect(loadConfig({ SCORE_TERMINAL: '0' }).terminal).toBe(false)
+  expect(loadConfig({ SCORE_TERMINAL: '1' }).terminal).toBe(true)
+  expect(() => loadConfig({ SCORE_TERMINAL: 'yes' })).toThrow()
 })

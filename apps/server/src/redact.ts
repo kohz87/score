@@ -42,7 +42,7 @@ export function redact(text: string): string {
       .replace(/(\/pair#)[A-Za-z0-9_-]{16,}/g, '$1[redacted]')
       // URL query secrets and userinfo: the assignment pass below would otherwise swallow "https:" + the whole URL.
       .replace(
-        /([?&;][\w.-]*?(?:token|key|secret|passw(?:or)?d|auth|sig|signature|credential|session|cookie)[\w.-]*=)[^&\s#"'<>]+/gi,
+        /([?&;][\w.-]*?(?:token|ticket|key|secret|passw(?:or)?d|auth|sig|signature|credential|session|cookie)[\w.-]*=)[^&\s#"'<>]+/gi,
         '$1[redacted]',
       )
       .replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:)[^\s/@]+@/gi, '$1[redacted]@')

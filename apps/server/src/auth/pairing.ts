@@ -25,6 +25,8 @@ export class PairingService {
   readonly #timers = new Map<string, NodeJS.Timeout>()
   /** When each session's cookie lifetime was last re-sent (in memory: a restart just re-sends once). */
   readonly #cookieSentAt = new Map<string, number>()
+  readonly #freshAuthAt = new Map<string, number>()
+  readonly #revoked = new Map<string, Set<() => void>>()
 
   constructor(
     private readonly sessions: SessionStore = new InMemorySessionStore(),
@@ -78,13 +80,53 @@ export class PairingService {
 
   isPaired(cookie: string | undefined): boolean {
     const hash = this.sessionHash(cookie)
-    if (hash === undefined) return false
+    return hash !== undefined && this.isHashPaired(hash)
+  }
+
+  /** `isPaired` for a session already named by its hash (sessionKey in http/session.ts); long-lived holders re-check it. */
+  isHashPaired(hash: string): boolean {
     if (!this.remote) return this.sessions.has(hash, this.clock())
     const session = this.sessions.getRemote(hash)
     if (session && this.clock() < Math.min(session.expiresAt, session.lastSeenAt + SESSION_IDLE_MS))
       return true
     this.revokeHash(hash)
     return false
+  }
+
+  /** The session hash for a cookie that is paired right now (the terminal binds tickets and processes to it). */
+  pairedSession(cookie: string | undefined): string | undefined {
+    const hash = this.sessionHash(cookie)
+    return hash !== undefined && this.isHashPaired(hash) ? hash : undefined
+  }
+
+  /**
+   * Records that this session just proved the security password or a passkey (server side: a cookie alone can't set
+   * it). In memory on purpose: a restart asks again, and it only ever gates short-lived tickets.
+   */
+  markFresh(cookie: string | undefined): void {
+    const hash = this.pairedSession(cookie)
+    if (hash !== undefined) this.#freshAuthAt.set(hash, this.clock())
+  }
+
+  /**
+   * True if this session proved the password or a passkey no more than `maxAgeMs` ago, and uses that proof up: one
+   * second-factor check opens one terminal.
+   */
+  takeFresh(hash: string, maxAgeMs: number): boolean {
+    const at = this.#freshAuthAt.get(hash)
+    this.#freshAuthAt.delete(hash)
+    return at !== undefined && this.clock() - at <= maxAgeMs
+  }
+
+  /** Calls `callback` once when this session is revoked or expires (revoke, sign out, terminate). */
+  onRevoked(hash: string, callback: () => void): () => void {
+    const listeners = this.#revoked.get(hash) ?? new Set<() => void>()
+    listeners.add(callback)
+    this.#revoked.set(hash, listeners)
+    return () => {
+      listeners.delete(callback)
+      if (!listeners.size) this.#revoked.delete(hash)
+    }
   }
 
   /** The token's expiry, for a link minted from a paired browser ("Pair another device"). */
@@ -201,6 +243,10 @@ export class PairingService {
 
   private revokeHash(hash: string): void {
     this.#cookieSentAt.delete(hash)
+    this.#freshAuthAt.delete(hash)
+    const listeners = this.#revoked.get(hash)
+    this.#revoked.delete(hash)
+    if (listeners) for (const callback of listeners) callback()
     if (this.remote) this.sessions.revokeRemote(hash)
     else this.sessions.revoke(hash)
     clearTimeout(this.#timers.get(hash))

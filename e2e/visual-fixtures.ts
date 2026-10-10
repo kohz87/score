@@ -136,6 +136,12 @@ const journeyFixture = {
   ],
 }
 export const visualFixtures: Record<string, unknown> = {
+  '/api/session/security': {
+    passwordSet: false,
+    origins: [],
+    terminal: false,
+    terminalUnavailable: null,
+  },
   [`/api/reports/journey?from=${journeyFixture.from}&to=${journeyFixture.to}`]: journeyFixture,
   '/api/briefs?status=active': { items: [popFlow.flow.brief] },
   '/api/briefs?status=recent': { items: [] },
