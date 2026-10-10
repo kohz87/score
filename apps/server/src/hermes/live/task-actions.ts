@@ -59,7 +59,7 @@ export async function taskAction(
   } catch {
     throw new HttpError(502, 'hermes_unavailable', 'Task credentials unavailable')
   }
-  const args = actionArgs(req.action, req.taskId, text)
+  const args = actionArgs(req.action, req.taskId, text, req.author)
   const result = await (deps.runner ?? runHermes)(args, {
     timeoutMs: 10_000,
     ...(deps.hermesHome ? { hermesHome: deps.hermesHome } : {}),
@@ -82,10 +82,11 @@ function actionArgs(
   action: z.infer<typeof TaskActionRequestSchema>['action'],
   taskId: string,
   text: string,
+  author?: string,
 ): string[] {
   switch (action) {
     case 'comment':
-      return ['kanban', 'comment', '--author', 'score', '--', taskId, text]
+      return ['kanban', 'comment', '--author', author ?? 'score', '--', taskId, text]
     case 'unblock':
       return ['kanban', 'unblock', `--reason=${text}`, '--', taskId]
     case 'start':

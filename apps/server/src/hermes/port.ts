@@ -90,8 +90,15 @@ export const TaskActionRequestSchema = z
       .max(2000)
       .refine((value) => !value.includes('\0'))
       .optional(),
+    // Comment author when an agent speaks through Score's MCP server (7.4d); absent = the owner ("score").
+    author: z
+      .string()
+      .regex(/^[a-z0-9][a-z0-9_-]{0,63}$/)
+      .refine((value) => value !== 'score')
+      .optional(),
   })
   .refine((req) => req.action !== 'comment' || Boolean(req.text?.trim()))
+  .refine((req) => req.author === undefined || req.action === 'comment')
 
 const InputTextSchema = z.string().refine((value) => !value.includes('\0'))
 const StepTextSchema = InputTextSchema.refine((value) => !/[\r\n]/.test(value))

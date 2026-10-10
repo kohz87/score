@@ -102,14 +102,17 @@ function Part({
           </p>
         )
       return (
-        <Markdown
-          text={part.text}
-          streaming={message.streaming}
-          workspace={{
-            agentId: message.author.kind === 'agent' ? message.author.agentId : null,
-            agentIds: agents.map((agent) => agent.id),
-          }}
-        />
+        <>
+          {part.via === 'mcp' && <span className="chat-via-mcp">via MCP</span>}
+          <Markdown
+            text={part.text}
+            streaming={message.streaming}
+            workspace={{
+              agentId: message.author.kind === 'agent' ? message.author.agentId : null,
+              agentIds: agents.map((agent) => agent.id),
+            }}
+          />
+        </>
       )
     case 'tool':
       return <ToolCard part={part} expansion={expansion} live={message.streaming} />
