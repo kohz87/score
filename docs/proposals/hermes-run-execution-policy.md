@@ -13,3 +13,10 @@
    retention so a client can confirm the final state after its own restart.
 3. **Lookup by session.** `GET /v1/runs?session_id=` (or by idempotency key) so a client that lost a run id after a crash
    can recover the handle and stop or observe the run.
+
+## Amendment (2026-10-10, after Score's 7.1 v6 review)
+A per-run `enabled_toolsets` restricts tools only. For Score to drop its "agents may still start background work"
+acknowledgement, a run would also need a way to **exclude or report asynchronous runtime work** it triggers — automatic
+memory/skill reviews, background delegations, curator passes — e.g. `async_work: "none" | "report"` on the run, with
+any such work reported as child runs of that run. Until that exists, Score keeps the acknowledgement and describes
+`enabled_toolsets` only as tool restriction.
