@@ -118,10 +118,19 @@ export function RunControls({ run, actions }: { run: OrchestrationDetail; action
   )
 }
 
-export function RunStatus({ run }: { run: OrchestrationDetail }) {
+export function RunStatus({
+  run,
+  badge = true,
+}: {
+  run: OrchestrationDetail
+  /** The room panel already shows the badge in its sticky header. */
+  badge?: boolean
+}) {
   return (
     <div className="orch-status">
-      <span className={`orch-badge orch-badge--${run.status}`}>{statusLabel[run.status]}</span>
+      {badge && (
+        <span className={`orch-badge orch-badge--${run.status}`}>{statusLabel[run.status]}</span>
+      )}
       {run.status === 'paused' && <span>{pauseReasonText(run.pauseReason)}</span>}
       {run.ownership !== 'released' && isRunOver(run.status) && (
         <span title="Score still owes Hermes a Stop, or an attempt is not confirmed ended">

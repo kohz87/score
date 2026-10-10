@@ -31,7 +31,11 @@ export function ChatPage() {
         <button className="chat-new" type="button" disabled>
           ＋ New chat
         </button>
-        <button className="chat-new" type="button" onClick={() => setStarting(true)}>
+        <button
+          className="chat-new chat-new--secondary"
+          type="button"
+          onClick={() => setStarting(true)}
+        >
           ＋ New orchestration
         </button>
         {rooms.status === 'pending' && !rooms.data && <p role="status">Loading conversations…</p>}

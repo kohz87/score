@@ -63,7 +63,7 @@ export function RoomRunPanel({
           {detail && (
             <div className="orch-room-body">
               <p className="orch-goal">{detail.goal}</p>
-              <RunStatus run={detail} />
+              <RunStatus run={detail} badge={false} />
               <p className="orch-muted">
                 The room is the run&apos;s own; use the run controls instead of the composer while
                 it runs.{' '}
