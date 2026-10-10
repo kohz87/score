@@ -289,10 +289,12 @@ const HANDLERS: Record<ToolName, Handler> = {
     const after = (args.after as string[] | undefined) ?? []
     const replaces = args.replaces as string | undefined
     const needsApproval = args.needsApproval === true
-    if (needsApproval && o.gate_policy !== 'lead-asks')
+    // Under every-step the step is gated anyway, so the flag is already satisfied; refusing it only cost the lead a
+    // turn in the first live run. Under `none` the person chose no gates, so asking for one stays an error.
+    if (needsApproval && o.gate_policy === 'none')
       return refuse(
         'not_lead_asks',
-        `This run's gate policy is ${o.gate_policy}; needsApproval only exists under lead-asks`,
+        "This run's gate policy is none; steps start without approval, so leave needsApproval out",
       )
     if (containsCapability(rawInstruction))
       return refuse(

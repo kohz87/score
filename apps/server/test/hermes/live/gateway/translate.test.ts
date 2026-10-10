@@ -138,6 +138,30 @@ test('older observations and newer delayed tools cannot regress terminal state',
   expect(env.db.sqlite.prepare('SELECT cursor FROM ingest_checkpoints').get()?.cursor).toBe('12')
 })
 
+test('an MCP tool event with a null preview is recorded instead of stalling the run', async () => {
+  const context = await admitted()
+  const metrics = { unknownEvents: 0 }
+  const base = {
+    run_id: context.runId,
+    timestamp: 1791290587,
+    tool: 'mcp__score__orch_plan',
+    preview: null,
+  }
+  await env.ingest.submit(
+    translateRunEvent(context, { ...base, seq: 0, event: 'tool.started' }, metrics),
+  )
+  await env.ingest.submit(
+    translateRunEvent(
+      context,
+      { ...base, seq: 1, event: 'tool.completed', duration: 0.06, error: false },
+      metrics,
+    ),
+  )
+  expect(env.db.sqlite.prepare('SELECT seq, tool, preview, status FROM tool_calls').all()).toEqual([
+    { seq: 0, tool: 'mcp__score__orch_plan', preview: '', status: 'ok' },
+  ])
+})
+
 test('parallel calls of one tool complete in call order: a completion closes the oldest running call of that name', async () => {
   const context = await admitted()
   const metrics = { unknownEvents: 0 }

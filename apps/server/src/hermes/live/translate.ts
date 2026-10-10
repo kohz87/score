@@ -103,7 +103,15 @@ const EnvelopeSchema = z.object({
   seq: z.int().nonnegative(),
   timestamp: z.number().finite().nonnegative(),
 })
-const ToolStartedSchema = z.object({ tool: z.string().min(1), preview: z.string() })
+// Hermes sends `preview: null` for MCP tools (seen live with `mcp__score__orch_plan`); a parse error here would stall the
+// whole run's event feed on that one event, so an absent preview is just empty text.
+const ToolStartedSchema = z.object({
+  tool: z.string().min(1),
+  preview: z
+    .string()
+    .nullish()
+    .transform((preview) => preview ?? ''),
+})
 const ToolCompletedSchema = ToolStartedSchema.extend({
   duration: z.number().finite().nonnegative(),
   error: z.boolean(),

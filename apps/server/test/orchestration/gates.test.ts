@@ -191,6 +191,31 @@ test('needsApproval is refused under the other policies', async () => {
   expect(out[0]!.code).toBe('not_lead_asks')
 })
 
+test('every-step: needsApproval is accepted (the step is gated anyway)', async () => {
+  const out: OrchReceipt[] = []
+  h = await harness({
+    lead: {
+      script: byTurn({
+        1: async (t) => {
+          out.push(
+            r(
+              await t.call('orch.assign', {
+                agent: 'builder',
+                instruction: 'x',
+                needsApproval: true,
+              }),
+            ),
+          )
+        },
+      }),
+    },
+  })
+  const id = await h.create({ gatePolicy: 'every-step' })
+  await h.until(() => out.length === 1)
+  expect(out[0]!.status).toBe('ok')
+  await h.until(() => detail(id).gates.some((g) => g.status === 'open'))
+})
+
 test('requestApproval is refused under the other policies, and after the step started', async () => {
   const out: OrchReceipt[] = []
   h = await harness({
