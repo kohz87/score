@@ -65,7 +65,7 @@ test('Edit rewinds, then the correction shows ‹ 2 / 2 › and the original is 
   page,
 }) => {
   test.setTimeout(120_000)
-  const { history, room } = await openRoom(page)
+  const { history } = await openRoom(page)
   const stamp = Date.now()
   const text = `First wording ${stamp}`
   const { mine } = await sendAndWait(page, history, text)
@@ -103,7 +103,7 @@ test('An agent that cannot be rewound is named, and Hide in Score only still wor
   page,
 }) => {
   test.setTimeout(120_000)
-  const { history, room } = await openRoom(page)
+  const { history } = await openRoom(page)
   const text = `@reviewer please look at this ${Date.now()}`
   const composer = page.getByRole('combobox', { name: /^Message/ })
   await composer.fill(text)
