@@ -127,6 +127,7 @@ export class Orchestrator {
   private readonly cooldown = new Map<string, number>()
   private readonly stopTried = new Map<string, number>()
   private readonly fingerprints = new Map<string, string>()
+  private readonly ownershipSeen = new Map<string, string>()
 
   constructor(private readonly options: OrchestratorOptions) {
     this.db = options.db
@@ -270,6 +271,12 @@ export class Orchestrator {
         .digest('hex')
       if (this.fingerprints.get(id) === fingerprint) continue
       this.fingerprints.set(id, fingerprint)
+      // Ownership transitions (owned, draining, released) are part of the recorded history.
+      const ownership = summaryOf(sqlite, o).ownership
+      if (this.ownershipSeen.get(id) !== ownership) {
+        this.ownershipSeen.set(id, ownership)
+        addHistory(sqlite, id, 'ownership', { state: ownership }, now)
+      }
       sqlite
         .prepare('UPDATE orchestrations SET revision = revision + 1, updated_at = ? WHERE id = ?')
         .run(now, id)

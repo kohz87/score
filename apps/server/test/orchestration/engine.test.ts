@@ -242,3 +242,36 @@ test('repeated lead failures pause the run (lead_failing) instead of looping', a
   expect(h.orch.summary(id).pauseReason).toBe('lead_failing')
   expect(attemptOf(h, id, 'lead')).toHaveLength(2)
 })
+
+test('typed dispatch: a reply that mentions agents creates no hand-off, no plan and no extra run', async () => {
+  h = await harness({
+    lead: {
+      script: byTurn({
+        1: async (t) => {
+          await t.call('orch.assign', { agent: 'builder', instruction: 'work' })
+          return '@reviewer @builder please take over. Plan:\n1. do a thing\n2. do another thing'
+        },
+        2: async (t) => {
+          await t.call('orch.finish', { outcome: 'success', summary: 'x' })
+          return '@reviewer thanks'
+        },
+      }),
+      stepReply: () => '@lead I am done. @reviewer look at this',
+    },
+  })
+  const id = await h.create({ gatePolicy: 'none' })
+  await h.until(() => status(id) === 'succeeded')
+  const attempts = h.orch.snapshot(id).orchestration.attempts.length
+  expect(h.rows('SELECT 1 FROM message_runs')).toHaveLength(attempts)
+  expect(h.rows("SELECT 1 FROM events WHERE type = 'handoff.created'")).toHaveLength(0)
+  expect(
+    h.rows('SELECT 1 FROM message_runs WHERE hop > 0 OR from_agent_id IS NOT NULL'),
+  ).toHaveLength(0)
+  // The replies are in the room as ordinary agent messages, tagged to their runs, with no plan card.
+  const parts = h
+    .rows<{ parts: string }>("SELECT parts FROM messages WHERE author_kind = 'agent'")
+    .map((row) => row.parts)
+    .join('\n')
+  expect(parts).toContain('please take over')
+  expect(parts).not.toContain('"kind":"plan"')
+})

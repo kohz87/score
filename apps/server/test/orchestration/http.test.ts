@@ -352,6 +352,14 @@ test('draining keeps the guards: a finished run with an owed Stop still owns its
   })
   expect(abandoned.statusCode).toBe(200)
   await h.until(() => detail(id).ownership === 'released')
+  await h.settle(300)
+  expect(
+    h
+      .rows<{ detail: string }>(
+        "SELECT detail FROM orc_history WHERE kind = 'ownership' ORDER BY id",
+      )
+      .map((row) => JSON.parse(row.detail).state),
+  ).toEqual(['owned', 'draining', 'released'])
   expect(
     (await post(`/api/rooms/${detail(id).roomId}/messages`, { text: 'hi again' })).statusCode,
   ).toBe(200)
