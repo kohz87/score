@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { NARROW_QUERY, useMediaQuery } from '../../data/use-media.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery } from '../team/team-queries.ts'
 import { AdvancedSection } from './AdvancedSection.tsx'
@@ -32,17 +34,69 @@ const sections = [
 
 export function SettingsPage() {
   const agents = useStreamQuery(agentsQuery).data ?? []
+  const narrow = useMediaQuery(NARROW_QUERY)
+  const [jumpOpen, setJumpOpen] = useState(false)
+  const [current, setCurrent] = useState<string>(sections[0].label)
   return (
     <div className="settings-layout">
       <nav className="settings-nav" aria-label="Settings sections">
         <h1>Settings</h1>
-        {sections.map((section) => (
-          <a key={section.id} href={`#${section.id}`}>
-            {section.label}
-          </a>
-        ))}
-        <p>Settings for one agent live on their page in Team.</p>
-        {remoteTransport() && <a href="#remote-access">Remote access</a>}
+        {narrow ? (
+          <>
+            <button
+              type="button"
+              className="settings-jump"
+              aria-expanded={jumpOpen}
+              aria-controls="settings-jump-list"
+              onClick={() => setJumpOpen((open) => !open)}
+            >
+              <span>
+                <small>Section</small>
+                {current}
+              </span>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path
+                  d="M3 5 L7 9 L11 5"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+            {jumpOpen && (
+              <div id="settings-jump-list" className="settings-jump-list">
+                {[
+                  ...sections,
+                  ...(remoteTransport()
+                    ? [{ id: 'remote-access', label: 'Remote access', built: true }]
+                    : []),
+                ].map((section) => (
+                  <a
+                    key={section.id}
+                    href={`#${section.id}`}
+                    onClick={() => {
+                      setCurrent(section.label)
+                      setJumpOpen(false)
+                    }}
+                  >
+                    {section.label}
+                  </a>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {sections.map((section) => (
+              <a key={section.id} href={`#${section.id}`}>
+                {section.label}
+              </a>
+            ))}
+            <p>Settings for one agent live on their page in Team.</p>
+            {remoteTransport() && <a href="#remote-access">Remote access</a>}
+          </>
+        )}
       </nav>
       <div className="settings-content">
         <HermesVersionBanner />

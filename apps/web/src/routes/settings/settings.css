@@ -835,3 +835,82 @@
 .plugins-sendkey p {
   margin: 0;
 }
+
+/* Phone and tablet (PLAN 5.34): the section list collapses into one "Section" disclosure above the content. */
+.settings-jump {
+  display: none;
+}
+@media (width < 1024px) {
+  .settings-layout {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .settings-nav {
+    flex: none;
+    max-width: none;
+    padding-top: 0;
+  }
+  .settings-nav h1 {
+    margin: 0 0 8px;
+    font-size: clamp(34px, 8vw, 40px);
+  }
+  .settings-jump {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 52px;
+    padding: 6px 18px;
+    border-radius: var(--radius-16);
+    border: 1px solid var(--hairline);
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+  .settings-jump small {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+  .settings-jump[aria-expanded='true'] svg {
+    transform: rotate(180deg);
+  }
+  .settings-jump-list {
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    border-radius: var(--radius-16);
+    border: 1px solid var(--hairline);
+    background: var(--card);
+  }
+  .settings-jump-list a {
+    padding: 12px 14px;
+    border-radius: var(--radius-14);
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .settings-jump-list a:hover,
+  .settings-jump-list a:focus-visible {
+    background: var(--subtle);
+  }
+  .settings-nav a:first-of-type {
+    background: transparent;
+    border-color: transparent;
+  }
+  .settings-content {
+    flex: none;
+    gap: 16px;
+  }
+}
+@media (width < 600px) {
+  .settings-card {
+    padding: 20px 16px;
+    border-radius: var(--radius-20);
+  }
+}
