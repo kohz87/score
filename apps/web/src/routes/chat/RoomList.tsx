@@ -14,6 +14,7 @@ function RoomRow({
   onTag,
   activeTag,
   orchestrationRooms,
+  workflowRooms,
 }: {
   room: Room
   projects: RoomProject[]
@@ -23,6 +24,7 @@ function RoomRow({
   onTag: (tag: string | null) => void
   activeTag: string | null
   orchestrationRooms?: ReadonlySet<string> | undefined
+  workflowRooms?: ReadonlySet<string> | undefined
 }) {
   return (
     <div className={`chat-room-row${room.archived ? ' chat-room-row--archived' : ''}`}>
@@ -30,7 +32,9 @@ function RoomRow({
         room={room}
         selected={selected}
         agents={agents}
-        orchestration={orchestrationRooms?.has(room.id) ?? false}
+        orchestration={
+          workflowRooms?.has(room.id) ? 'workflow' : (orchestrationRooms?.has(room.id) ?? false)
+        }
       />
       <RoomMenu room={room} projects={projects} onShare={onShare} />
       {(room.tags ?? []).length > 0 && (
@@ -127,6 +131,7 @@ export function RoomList({
   agents,
   onShare,
   orchestrationRooms,
+  workflowRooms,
 }: {
   rooms: Room[]
   projects: RoomProject[]
@@ -135,6 +140,8 @@ export function RoomList({
   onShare?: ((room: Room) => void) | undefined
   /** Rooms that belong to an orchestration, marked in the list (they are ordinary rooms otherwise). */
   orchestrationRooms?: ReadonlySet<string> | undefined
+  /** The subset of those that belong to a workflow run. */
+  workflowRooms?: ReadonlySet<string> | undefined
 }) {
   const [showArchived, setShowArchived] = useState(false)
   const [tag, setTag] = useState<string | null>(null)
@@ -152,6 +159,7 @@ export function RoomList({
       onTag={setTag}
       activeTag={tag}
       orchestrationRooms={orchestrationRooms}
+      workflowRooms={workflowRooms}
     />
   )
   return (

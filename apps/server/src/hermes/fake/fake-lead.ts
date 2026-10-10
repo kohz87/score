@@ -103,6 +103,7 @@ export interface FakeLeadOptions {
 }
 
 let commandCounter = 0
+const losses = new Map<string, number>()
 
 /** Installs the scripted lead on a fake port. Lead turns are told apart by their input, not by agent. */
 export function attachFakeLead(
@@ -118,6 +119,16 @@ export function attachFakeLead(
       // Scripted step outcomes for workflow runs (fake mode and e2e): `[fake:fail]` ends the run `failed`;
       // `[fake:verdict:passed]` / `[fake:verdict:changes_requested]` reply with a `score-verdict` block.
       if (/\[fake:fail\]/.test(run.input)) return { fail: true, text: 'The step failed.' }
+      // `[fake:lose:N]`: the first N runs of this node are reported cancelled (not confirmed ended); a bare marker is one.
+      const lose = /\[fake:lose(?::(\d+))?\]/.exec(run.input)
+      if (lose) {
+        const key =
+          /\((\S+): [^)]*\) of a workflow run \(([^)]+)\)/.exec(run.input)?.slice(1).join('@') ??
+          run.agentId
+        const seen = (losses.get(key) ?? 0) + 1
+        losses.set(key, seen)
+        if (seen <= Number(lose[1] ?? 1)) return { lose: true }
+      }
       const verdict = /\[fake:verdict:(passed|changes_requested)\]/.exec(run.input)?.[1]
       if (verdict)
         return {

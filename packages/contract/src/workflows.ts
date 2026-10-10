@@ -733,6 +733,8 @@ export type WorkflowEventKind = z.infer<typeof WorkflowEventKindSchema>
 export const WorkflowEventSchema = OrchEventSchema.omit({ kind: true }).extend({
   kind: WorkflowEventKindSchema,
   nodeId: NodeIdSchema.nullable(),
+  /** `token` events: the edge the token travelled (`start:<node>` for a start token). Additive (7.1b). */
+  edgeId: z.string().min(1).max(80).nullable().default(null),
 })
 export type WorkflowEvent = z.infer<typeof WorkflowEventSchema>
 

@@ -239,6 +239,7 @@ export const visualFixtures: Record<string, unknown> = {
   '/api/rooms': RoomsSnapshotSchema.parse(recorded['/api/rooms']),
   '/api/shares': { items: [] },
   '/api/orchestrations': { asOfSeq: 0, items: [] },
+  '/api/workflow-runs': { asOfSeq: 0, items: [] },
   '/api/orchestrations/fence': {
     fenced: false,
     reason: null,

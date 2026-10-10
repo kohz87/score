@@ -238,6 +238,7 @@ const event = {
   code: null,
   summary: 'Draft is ready',
   nodeId: 'draft',
+  edgeId: null,
 } as const
 const preflightCheck = { id: 'definition', status: 'ok', message: 'Valid' } as const
 const preflight = {

@@ -1710,7 +1710,7 @@ message }`; only `error`s block. Codes: limits (`too_many_nodes`, `too_many_edge
   and freezes definition, inputs and mapping.
 - **S** `GET /api/workflow-runs` → `WorkflowRunList`. **S** `GET /api/workflow-runs/:id` → `WorkflowRunSnapshot`
   (`asOfSeq` read in the same transaction). `GET /api/workflow-runs/:id/events` → `WorkflowRunEvents`: §14's causal event
-  history plus `node_state`, `token`, `planner` and `graph_end` events and a `nodeId` on each, derived on read.
+  history plus `node_state`, `token`, `planner` and `graph_end` events, a `nodeId` on each and, on `token` events, the `edgeId` the token travelled (additive, 7.1b), derived on read.
 - Stream: `workflow.run.upserted` (`WorkflowRunSummary`) after every change; refetch the snapshot for detail.
 - Controls (**H**; bodies and semantics are §14's): `POST /api/workflow-runs/:id/{pause,resume,stop}` `RunControl`,
   `…/limits` `LimitsDecision`, `…/waiver` `WaiverDecision`, `…/abandon` `AbandonDecision` → the new `WorkflowRunSummary`.
@@ -1832,5 +1832,6 @@ ten-minute timer are the same for orchestration step attempts (the executor owns
 `SCORE_MODE=fake` runs workflows against the fake adapter with the same executor. Markers in a step's text script the agent:
 `[fake:hold]` (stays running until stopped or ended), `[fake:fail]` (the run ends `failed`), `[fake:verdict:passed]` /
 `[fake:verdict:changes_requested]` (reply with a `score-verdict` block) and `[fake:refuse:N]` (the first N dispatches are
-refused as proven unsent). The fake adapter reports complete spend evidence, so its runs settle. E2E specs never use a live
+refused as proven unsent) and `[fake:lose:N]` (added in 7.1b: the first N runs of the node are reported cancelled, which is not
+termination evidence, so the attempt is "not confirmed ended" and the abandon → Retry path can be exercised). The fake adapter reports complete spend evidence, so its runs settle. E2E specs never use a live
 Hermes or tokens.

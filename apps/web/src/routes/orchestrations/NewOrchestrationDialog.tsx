@@ -24,7 +24,11 @@ const checkWord: Record<PreflightCheck['status'], string> = {
   unknown: "Can't be checked",
 }
 
-export function PreflightList({ checks }: { checks: PreflightCheck[] }) {
+export function PreflightList({
+  checks,
+}: {
+  checks: (Pick<PreflightCheck, 'status' | 'message'> & { id: string })[]
+}) {
   return (
     <ul className="orch-checks" aria-label="Preflight checks">
       {checks.map((check) => (
@@ -295,7 +299,7 @@ export function NewOrchestrationDialog({
   )
 }
 
-function describeCreateError(error: unknown): string {
+export function describeCreateError(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === 'preflight_failed') return 'Something it needs is missing:'
     if (error.code === 'capacity')

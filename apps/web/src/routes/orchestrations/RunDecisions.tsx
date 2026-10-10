@@ -2,7 +2,11 @@ import type { AgentSummary, NeedsYou, OrchestrationDetail } from '@score/contrac
 import { useState } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { needsYouText, usd } from './orch-model.ts'
-import { describeOrchError, type RunActions } from './orchestration-queries.ts'
+import {
+  describeOrchError,
+  type DecisionActions,
+  type RunActions,
+} from './orchestration-queries.ts'
 
 // The decisions a run asks of the person, each bound to the revision the page showed (contract §14). A stale page
 // is answered with `409 conflict`: the run is read again and the person decides again.
@@ -17,7 +21,7 @@ export function AgentChip({ agentId, agents }: { agentId: string; agents: AgentS
   )
 }
 
-function ErrorLine({ error }: { error: unknown }) {
+export function ErrorLine({ error }: { error: unknown }) {
   return error ? (
     <p role="alert" className="orch-error">
       {describeOrchError(error)}
@@ -25,16 +29,24 @@ function ErrorLine({ error }: { error: unknown }) {
   ) : null
 }
 
+/** The parts of a run the shared cards read; a workflow run supplies them from its own view (7.1b). */
+export type GateRun = Pick<OrchestrationDetail, 'gates' | 'stepsList' | 'revision'>
+export type LimitsRun = Pick<OrchestrationDetail, 'budget' | 'revision'>
+export type AttemptsRun = Pick<OrchestrationDetail, 'attempts' | 'revision'>
+
 export function GateCard({
   run,
   gateId,
   agents,
   actions,
+  label,
 }: {
-  run: OrchestrationDetail
+  run: GateRun
   gateId: string
   agents: AgentSummary[]
-  actions: RunActions
+  actions: Pick<DecisionActions, 'gate'>
+  /** What the card calls the step (a workflow names the node); defaults to the step id. */
+  label?: string
 }) {
   const gate = run.gates.find((item) => item.id === gateId)
   const [note, setNote] = useState('')
@@ -42,6 +54,7 @@ export function GateCard({
   const replaced = gate.payload.replaces
     ? run.stepsList.find((step) => step.id === gate.payload.replaces)
     : undefined
+  const name = label ?? gate.stepId
   const decide = (decision: 'approve' | 'reject') =>
     actions.gate.mutate({
       gateId,
@@ -53,9 +66,9 @@ export function GateCard({
       },
     })
   return (
-    <section className="orch-decision orch-decision--gate" aria-label={`Approve ${gate.stepId}`}>
+    <section className="orch-decision orch-decision--gate" aria-label={`Approve ${name}`}>
       <h3>
-        Approve {gate.stepId}?{' '}
+        Approve {name}?{' '}
         <small>{gate.requestedBy === 'lead' ? 'The lead asked' : 'Your gate policy asks'}</small>
       </h3>
       <p className="orch-gate-lead">
@@ -114,7 +127,7 @@ export function GateCard({
           disabled={actions.gate.isPending}
           onClick={() => decide('approve')}
         >
-          Approve {gate.stepId}
+          Approve {name}
         </button>
         <button type="button" disabled={actions.gate.isPending} onClick={() => decide('reject')}>
           Reject
@@ -179,9 +192,9 @@ export function LimitsCard({
   reason,
   actions,
 }: {
-  run: OrchestrationDetail
+  run: LimitsRun
   reason: Extract<NeedsYou, { kind: 'budget' }>['reason']
-  actions: RunActions
+  actions: Pick<DecisionActions, 'limits'>
 }) {
   const [budget, setBudget] = useState('')
   const [deadline, setDeadline] = useState('')
@@ -254,10 +267,13 @@ export function UnknownCard({
   attemptId,
   actions,
   fenceStepId,
+  label,
 }: {
-  run: OrchestrationDetail
+  run: AttemptsRun
   attemptId: string
-  actions: RunActions
+  /** What the card calls the step (a workflow names the node). */
+  label?: string
+  actions: Pick<DecisionActions, 'abandon' | 'waiver'>
   /** The same attempt also fences the run as a cancelled step: its waiver is offered on this card. */
   fenceStepId?: string
 }) {
@@ -267,7 +283,7 @@ export function UnknownCard({
   if (!attempt) return null
   return (
     <section className="orch-decision" aria-label="Attempt not confirmed ended">
-      <h3>Not confirmed ended: {attempt.stepId ?? 'lead turn'}</h3>
+      <h3>Not confirmed ended: {label ?? attempt.stepId ?? 'lead turn'}</h3>
       <p>
         Hermes has not said this run finished ({attempt.unknownReason ?? 'no reason recorded'}).
         Score keeps trying to stop it. Until it ends, nothing new starts.
@@ -331,9 +347,9 @@ export function CancelFenceCard({
   stepId,
   actions,
 }: {
-  run: OrchestrationDetail
+  run: Pick<OrchestrationDetail, 'revision'>
   stepId: string
-  actions: RunActions
+  actions: Pick<DecisionActions, 'waiver'>
 }) {
   const [sure, setSure] = useState(false)
   return (

@@ -16,6 +16,21 @@ import {
 
 const NODE_W = 196
 const NODE_H = 68
+
+/** Workflow nodes (7.1b) keep the agent card's size; the local nodes are smaller and shaped for what they are. */
+export const nodeSize = (node: Pick<GraphNode, 'shape'>): { w: number; h: number } => {
+  switch (node.shape) {
+    case 'gate':
+      return { w: 176, h: 96 }
+    case 'branch':
+      return { w: 176, h: 76 }
+    case 'join':
+    case 'end':
+      return { w: 132, h: 52 }
+    default:
+      return { w: NODE_W, h: NODE_H }
+  }
+}
 /** Each effect starts at least this long after the previous one (owner: dots paced at 300 ms or more). */
 export const EFFECT_GAP_MS = 300
 const DOT_MS = 800
@@ -97,6 +112,60 @@ export function useEffectPlayer(reducedMotion: boolean, gapMs = EFFECT_GAP_MS) {
 
 const toneClass = (tone: EffectTone) => `orch-tone--${tone}`
 
+const SHAPE_NAME = { gate: 'Gate', branch: 'Branch', join: 'Join', end: 'End' } as const
+
+/** The word under a workflow node's title: a gate is approved, not "succeeded". */
+export function shapedWord(shape: NonNullable<GraphNode['shape']>, visual: NodeVisual): string {
+  if (shape === 'gate') {
+    if (visual === 'succeeded') return 'approved'
+    if (visual === 'failed') return 'rejected'
+  }
+  if (shape === 'end' && visual === 'succeeded') return 'reached'
+  if ((shape === 'branch' || shape === 'join') && visual === 'succeeded') return 'passed on'
+  return visualLabel[visual]
+}
+
+/** The outline of a local node, drawn behind its text: a diamond for a gate, a hexagon for a branch, a pill otherwise. */
+export function NodeShape({
+  shape,
+  w,
+  h,
+}: {
+  shape: NonNullable<GraphNode['shape']>
+  w: number
+  h: number
+}) {
+  const inset = 2
+  const points =
+    shape === 'gate'
+      ? `${w / 2},${inset} ${w - inset},${h / 2} ${w / 2},${h - inset} ${inset},${h / 2}`
+      : shape === 'branch'
+        ? `${h / 3},${inset} ${w - h / 3},${inset} ${w - inset},${h / 2} ${w - h / 3},${h - inset} ${h / 3},${h - inset} ${inset},${h / 2}`
+        : null
+  return (
+    <svg
+      className="orch-node__shape"
+      width={w}
+      height={h}
+      viewBox={`0 0 ${w} ${h}`}
+      aria-hidden="true"
+      focusable="false"
+    >
+      {points ? (
+        <polygon points={points} strokeLinejoin="round" />
+      ) : (
+        <rect
+          x={inset}
+          y={inset}
+          width={w - inset * 2}
+          height={h - inset * 2}
+          rx={shape === 'end' ? (h - inset * 2) / 2 : 14}
+        />
+      )}
+    </svg>
+  )
+}
+
 function polylineLength(points: Point[]): number {
   let total = 0
   for (let i = 1; i < points.length; i++)
@@ -156,6 +225,13 @@ export interface DiagramProps {
   reducedMotion: boolean
   /** Steps that do not exist yet at the replayed time: not drawn, but the layout keeps their room. */
   hidden?: ReadonlySet<string>
+  /** Workflow runs (7.1b): which edges a token travelled (`taken`) or that were passed over (`skipped`). */
+  edgeStates?: ReadonlyMap<string, 'taken' | 'skipped'>
+  /** What the screen reader calls the group of nodes; orchestrations say "Step". */
+  noun?: string
+  ariaLabel?: string
+  /** Room between columns; workflow edges carry labels, so they get more. */
+  columnGap?: number
 }
 
 const unknownStyle: AgentSummary['style'] = { color: '#8a909b', shape: 'circle-dot' }
@@ -171,6 +247,10 @@ export function LiveDiagram({
   active,
   reducedMotion,
   hidden,
+  edgeStates,
+  noun = 'Step',
+  ariaLabel = 'Live diagram of the run. The log next to it says the same in words.',
+  columnGap = 56,
 }: DiagramProps) {
   const viewport = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(1)
@@ -178,18 +258,23 @@ export function LiveDiagram({
     () =>
       layoutFlow(
         {
-          nodes: nodes.map((node) => ({ id: node.id, width: NODE_W, height: NODE_H })),
+          nodes: nodes.map((node) => {
+            const size = nodeSize(node)
+            return { id: node.id, width: size.w, height: size.h }
+          }),
           edges: edges.map(({ id, from, to, kind }) => ({ id, from, to, kind })),
         },
-        { columnGap: 56, rowGap: 28, marginX: 14, marginY: 18 },
+        { columnGap, rowGap: 28, marginX: 14, marginY: 18 },
       ),
-    [nodes, edges],
+    [nodes, edges, columnGap],
   )
   const position = useMemo(() => new Map(layout.nodes.map((n) => [n.id, n])), [layout.nodes])
   const routed = useMemo(() => new Map(layout.edges.map((e) => [e.id, e.points])), [layout.edges])
+  const sizes = useMemo(() => new Map(nodes.map((node) => [node.id, nodeSize(node)])), [nodes])
   const center = (id: string): Point | null => {
     const at = position.get(id)
-    return at ? { x: at.x + NODE_W / 2, y: at.y + NODE_H / 2 } : null
+    const size = sizes.get(id) ?? { w: NODE_W, h: NODE_H }
+    return at ? { x: at.x + size.w / 2, y: at.y + size.h / 2 } : null
   }
   // Fit the diagram to the available width (never above 100%), so a phone sees all of it.
   useLayoutEffect(() => {
@@ -207,6 +292,8 @@ export function LiveDiagram({
   }, [layout.width])
 
   const pathFor = (effect: Effect): Point[] | null => {
+    const named = effect.edge ? routed.get(effect.edge) : undefined
+    if (named) return named
     const forward = routed.get(`${effect.from}>${effect.to}`)
     if (forward) return forward
     const reverse = [...edges].find((e) => e.from === effect.to && e.to === effect.from)
@@ -234,12 +321,7 @@ export function LiveDiagram({
   const byId = new Map(agents.map((a) => [a.id, a]))
 
   return (
-    <div
-      className="orch-canvas"
-      ref={viewport}
-      role="group"
-      aria-label="Live diagram of the run. The log next to it says the same in words."
-    >
+    <div className="orch-canvas" ref={viewport} role="group" aria-label={ariaLabel}>
       <div
         className="orch-world"
         style={{ width: layout.width * scale, height: layout.height * scale }}
@@ -272,14 +354,30 @@ export function LiveDiagram({
               const points = routed.get(edge.id)
               if (!points || hidden?.has(edge.from) || hidden?.has(edge.to)) return null
               const d = points.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' ')
+              const state = edgeStates?.get(edge.id)
+              // The label sits on the middle run, where the edge turns; the text has its own halo.
+              const a = points[1]
+              const b = points[2]
               return (
-                <path
-                  key={edge.id}
-                  d={d}
-                  data-edge={edge.id}
-                  className={`orch-edge orch-edge--${edge.kind}${litEdges.has(edge.id) ? ' orch-edge--lit' : ''}`}
-                  markerEnd="url(#orch-arrow)"
-                />
+                <g key={edge.id}>
+                  <path
+                    d={d}
+                    data-edge={edge.id}
+                    {...(state ? { 'data-edge-state': state } : {})}
+                    className={`orch-edge orch-edge--${edge.kind}${state ? ` orch-edge--${state}` : ''}${litEdges.has(edge.id) ? ' orch-edge--lit' : ''}`}
+                    markerEnd="url(#orch-arrow)"
+                  />
+                  {edge.label && a && b && (
+                    <text
+                      className={`orch-edge-label${state === 'skipped' ? ' orch-edge-label--skipped' : ''}`}
+                      x={(a.x + b.x) / 2}
+                      y={(a.y + b.y) / 2 + (a.y === b.y ? -6 : 4)}
+                      textAnchor="middle"
+                    >
+                      {edge.label}
+                    </text>
+                  )}
+                </g>
               )
             })}
             {!reducedMotion &&
@@ -303,37 +401,68 @@ export function LiveDiagram({
               style: agent?.style ?? unknownStyle,
             }
             const tone = litNodes.get(node.id)
-            const word = isLead
-              ? lead === 'working'
-                ? 'working'
-                : lead === 'ended'
-                  ? 'run ended'
-                  : 'waiting'
-              : visualLabel[visual!]
+            const shaped = node.shape !== undefined && node.shape !== 'agent'
+            const size = nodeSize(node)
+            const title = node.title ?? node.id
+            const word =
+              node.caption ??
+              (isLead
+                ? lead === 'working'
+                  ? 'working'
+                  : lead === 'ended'
+                    ? 'run ended'
+                    : 'waiting'
+                : shaped
+                  ? shapedWord(node.shape!, visual!)
+                  : visualLabel[visual!])
+            const what = isLead
+              ? 'Lead'
+              : shaped
+                ? SHAPE_NAME[node.shape as keyof typeof SHAPE_NAME]
+                : noun
             return (
               <button
                 key={node.id}
                 type="button"
-                className={`orch-node orch-node--${isLead ? `lead-${lead}` : visual}${selected === node.id ? ' orch-node--selected' : ''}${tone ? ` orch-node--lit ${toneClass(tone)}` : ''}`}
+                className={`orch-node orch-node--${isLead ? `lead-${lead}` : visual}${shaped ? ` orch-node--shaped orch-node--shape-${node.shape}` : ''}${selected === node.id ? ' orch-node--selected' : ''}${tone ? ` orch-node--lit ${toneClass(tone)}` : ''}`}
                 style={{
                   left: at.x,
                   top: at.y,
-                  width: NODE_W,
-                  height: NODE_H,
+                  width: size.w,
+                  height: size.h,
                   ['--node-agent' as string]: glyph.style.color,
                 }}
                 data-node={node.id}
                 data-state={isLead ? `lead-${lead}` : visual}
                 aria-pressed={selected === node.id}
-                aria-label={`${isLead ? 'Lead' : `Step ${node.id}`}, ${glyph.name}, ${word}`}
+                aria-label={
+                  shaped
+                    ? `${what} ${title}, ${word}`
+                    : `${isLead ? 'Lead' : `${what} ${title}`}, ${glyph.name}, ${word}`
+                }
                 onClick={() => onSelect(selected === node.id ? null : node.id)}
               >
-                <AgentGlyph agent={glyph} size="sm" decorative />
+                {shaped ? (
+                  <NodeShape shape={node.shape!} w={size.w} h={size.h} />
+                ) : (
+                  <AgentGlyph agent={glyph} size="sm" decorative />
+                )}
                 <span className="orch-node__text">
-                  <b>
-                    {isLead ? 'Lead' : node.id} <i>{glyph.name}</i>
-                  </b>
-                  <span>{word}</span>
+                  {node.title !== undefined && !shaped ? (
+                    <>
+                      <b>{title}</b>
+                      <span>
+                        {glyph.name} · {word}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <b>
+                        {isLead ? 'Lead' : title} {!shaped && <i>{glyph.name}</i>}
+                      </b>
+                      <span>{word}</span>
+                    </>
+                  )}
                 </span>
                 {visual === 'gate' && <span className="orch-node__flag">Needs you</span>}
                 {visual === 'unknown' && (

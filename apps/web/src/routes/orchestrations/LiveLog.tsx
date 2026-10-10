@@ -1,11 +1,20 @@
-import type { OrchEvent } from '@score/contract'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { LEAD_NODE } from './orch-model.ts'
 
 const clock = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
-const kindLabel: Record<OrchEvent['kind'], string> = {
+/** What the log reads from an event: orchestration and workflow events both fit (7.1b). */
+export type LogEvent = {
+  id: string
+  at: string
+  kind: string
+  tool?: string | null
+  verdict: string | null
+  summary: string
+}
+
+const kindLabel: Record<string, string> = {
   run_started: 'Run',
   lead_wake: 'Lead',
   lead_done: 'Lead',
@@ -18,14 +27,19 @@ const kindLabel: Record<OrchEvent['kind'], string> = {
   inquiry_opened: 'Question',
   inquiry_answered: 'Question',
   control: 'Run',
+  node_state: 'Step',
+  token: 'Path',
+  planner: 'Run',
+  graph_end: 'Run',
 }
 
-const isBad = (event: OrchEvent) =>
+const isBad = (event: LogEvent) =>
   (event.kind === 'command' && event.verdict !== 'accepted') ||
   event.verdict === 'failed' ||
   event.verdict === 'rejected' ||
   event.verdict === 'unknown' ||
-  event.verdict === 'blocked'
+  event.verdict === 'blocked' ||
+  event.verdict === 'unresolved'
 
 /**
  * The live log: one line per recorded event, including Score's verdict on every call the lead made. It is also the
@@ -37,7 +51,7 @@ export function LiveLog({
   onClearNode,
   label,
 }: {
-  events: OrchEvent[]
+  events: LogEvent[]
   node: string | null
   onClearNode: () => void
   label: string
@@ -94,7 +108,7 @@ export function LiveLog({
               data-kind={event.kind}
             >
               <time dateTime={event.at}>{clock(event.at)}</time>
-              <span className="orch-log-kind">{kindLabel[event.kind]}</span>
+              <span className="orch-log-kind">{kindLabel[event.kind] ?? 'Run'}</span>
               <span className="orch-log-text">{event.summary}</span>
             </li>
           ))}

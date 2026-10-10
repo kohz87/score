@@ -9,7 +9,7 @@ import {
   visualLabel,
   type NodeVisual,
 } from './orch-model.ts'
-import { describeOrchError, type RunActions } from './orchestration-queries.ts'
+import { describeOrchError, type DecisionActions } from './orchestration-queries.ts'
 import { AgentChip } from './RunDecisions.tsx'
 
 const time = (iso: string | null) =>
@@ -38,7 +38,7 @@ export function StateMark({ visual }: { visual: NodeVisual }) {
           <path d="M6 1 L11 6 L6 11 L1 6 Z" fill="currentColor" />
         ) : visual === 'running' || visual === 'admitting' ? (
           <circle cx="6" cy="6" r="4" fill="currentColor" />
-        ) : visual === 'cancelled' || visual === 'not_started' ? (
+        ) : visual === 'cancelled' || visual === 'not_started' || visual === 'skipped' ? (
           <path d="M2 6 H10" fill="none" stroke="currentColor" strokeWidth="2" />
         ) : (
           <circle
@@ -57,7 +57,13 @@ export function StateMark({ visual }: { visual: NodeVisual }) {
   )
 }
 
-export function RunControls({ run, actions }: { run: OrchestrationDetail; actions: RunActions }) {
+export function RunControls({
+  run,
+  actions,
+}: {
+  run: Pick<OrchestrationDetail, 'status' | 'revision'>
+  actions: Pick<DecisionActions, 'pause' | 'resume' | 'stop'>
+}) {
   const [confirming, setConfirming] = useState(false)
   if (isRunOver(run.status)) return null
   const control = { orchestrationRevision: run.revision }
@@ -146,7 +152,11 @@ export function RunStatus({
   )
 }
 
-export function BudgetBlock({ run }: { run: OrchestrationDetail }) {
+export function BudgetBlock({
+  run,
+}: {
+  run: Pick<OrchestrationDetail, 'budget' | 'stepEstimateUsd'> & { leadTurnEstimateUsd?: number }
+}) {
   const b = run.budget
   return (
     <dl className="orch-facts orch-budget" aria-label="Budget">
@@ -166,14 +176,21 @@ export function BudgetBlock({ run }: { run: OrchestrationDetail }) {
         {b.unknownSpend ? '; some spend is unknown and is never counted as zero' : ''}
       </dd>
       <dd className="orch-muted orch-wide">
-        Estimates are per lead turn ({usd(run.leadTurnEstimateUsd)}) and per step (
-        {usd(run.stepEstimateUsd)}). Summaries and titles are not counted.
+        {run.leadTurnEstimateUsd === undefined ? (
+          <>Estimates are per step ({usd(run.stepEstimateUsd)}).</>
+        ) : (
+          <>
+            Estimates are per lead turn ({usd(run.leadTurnEstimateUsd)}) and per step (
+            {usd(run.stepEstimateUsd)}).
+          </>
+        )}{' '}
+        Summaries and titles are not counted.
       </dd>
     </dl>
   )
 }
 
-function AttemptLine({ attempt }: { attempt: AttemptView }) {
+export function AttemptLine({ attempt }: { attempt: AttemptView }) {
   const evidence = attempt.evidence
     ? `ended (Hermes reported ${attempt.evidence})`
     : attempt.state === 'abandoned'

@@ -703,3 +703,37 @@
   display: block;
   color: var(--ink-muted);
 }
+
+/* Flow sections: the runs and the workflows (PLAN 7.1b) */
+.flow-sections {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.flow-section {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.flow-section--on {
+  background: var(--ink);
+  color: var(--card);
+  border-color: var(--ink);
+}
+.flow-section:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+a.flow-run-button {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
