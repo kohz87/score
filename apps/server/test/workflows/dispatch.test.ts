@@ -6,14 +6,27 @@ import { notDispatched } from '../../src/hermes/port.ts'
 import { byTurn } from '../../src/hermes/fake/fake-lead.ts'
 import { tempDir } from '../orchestration/harness-db.ts'
 import { attemptOf } from '../orchestration/harness.ts'
-import { agent, definition, edge, end, node, run, start, wfHarness, type Harness } from './wf-harness.ts'
+import {
+  agent,
+  definition,
+  edge,
+  end,
+  node,
+  run,
+  start,
+  wfHarness,
+  type Harness,
+} from './wf-harness.ts'
 
 let h: Harness | undefined
 afterEach(async () => {
   await h?.close()
   h = undefined
 })
-const done = (id: string, status = 'succeeded') => (): boolean => run(h!, id).status === status
+const done =
+  (id: string, status = 'succeeded') =>
+  (): boolean =>
+    run(h!, id).status === status
 
 /** Hermes refuses every dispatch while `refusing` is true (nothing is sent: a proven refusal). */
 function outage(harness: Harness) {
@@ -99,14 +112,19 @@ test('twenty refused generations need the person: Try again continues, Stop ends
   const out = outage(h)
   const id = await start(h, definition([agent('a'), end()], [edge('a', 'done')]))
   for (let i = 0; i < 40 && attemptRow(h)[0]?.needs_person !== 1; i++) {
-    await h.until(() => (attemptRow(h!)[0]?.refused_streak ?? 0) > 0, 600_000).catch(() => undefined)
+    await h
+      .until(() => (attemptRow(h!)[0]?.refused_streak ?? 0) > 0, 600_000)
+      .catch(() => undefined)
     await h.orch.agentReady('builder')
     await h.settle(2000)
   }
   expect(attemptRow(h)[0]!.needs_person).toBe(1)
   expect(attemptRow(h)[0]!.refused_total).toBe(20)
   expect(node(h, id, 'a').waitingFor).toBe('refusal_limit')
-  expect(run(h, id).needsYou.find((n) => n.kind === 'refusal_limit')).toMatchObject({ nodeId: 'a', refusals: 20 })
+  expect(run(h, id).needsYou.find((n) => n.kind === 'refusal_limit')).toMatchObject({
+    nodeId: 'a',
+    refusals: 20,
+  })
   // Automatic readiness changes do not clear it.
   const before = out.calls
   await h.orch.agentReady('builder')
@@ -141,7 +159,11 @@ test('in an orchestration the step fails at the lifetime limit and the lead deci
     return original(req)
   }
   const id = await h.create({ gatePolicy: 'none' })
-  for (let i = 0; i < 80 && h.orch.snapshot(id).orchestration.stepsList[0]?.status !== 'failed'; i++) {
+  for (
+    let i = 0;
+    i < 80 && h.orch.snapshot(id).orchestration.stepsList[0]?.status !== 'failed';
+    i++
+  ) {
     await h.settle(2000)
     await h.orch.agentReady('builder')
   }
@@ -175,26 +197,51 @@ test('100 refusals with compaction in between keep the journal bounded and the l
   try {
     const journal = new ExecutionJournal(tmp.dir, 'scope')
     for (let g = 1; g <= 100; g++) {
-      journal.append({ kind: 'send_started', attemptId: 'att', orchestrationId: 'o', attemptKind: 'step', agentId: 'builder', generation: g })
-      journal.append({ kind: 'send_refused', attemptId: 'att', orchestrationId: 'o', generation: g })
+      journal.append({
+        kind: 'send_started',
+        attemptId: 'att',
+        orchestrationId: 'o',
+        attemptKind: 'step',
+        agentId: 'builder',
+        generation: g,
+      })
+      journal.append({
+        kind: 'send_refused',
+        attemptId: 'att',
+        orchestrationId: 'o',
+        generation: g,
+      })
       if (g % 10 === 0) journal.compact(() => false)
     }
     const read = journal.readOwn()
     if (!read.ok) throw new Error(read.reason)
     const mine = read.entries.filter((e) => 'attemptId' in e && e.attemptId === 'att')
     expect(mine.length).toBeLessThanOrEqual(3)
-    expect(journalDispatches(read.entries).get('att')).toMatchObject({ generation: 100, state: 'refused' })
+    expect(journalDispatches(read.entries).get('att')).toMatchObject({
+      generation: 100,
+      state: 'refused',
+    })
     const last = read.entries.at(-1)!
     expect(last.n).toBeGreaterThanOrEqual(200)
     // Numbering never goes back, even though most entries are gone.
-    journal.append({ kind: 'send_started', attemptId: 'att', orchestrationId: 'o', attemptKind: 'step', agentId: 'builder', generation: 101 })
+    journal.append({
+      kind: 'send_started',
+      attemptId: 'att',
+      orchestrationId: 'o',
+      attemptKind: 'step',
+      agentId: 'builder',
+      generation: 101,
+    })
     const after = journal.readOwn()
     if (!after.ok) throw new Error(after.reason)
     expect(after.entries.at(-1)!.n).toBeGreaterThan(last.n)
     journal.compact(() => false)
     const again = journal.readOwn()
     if (!again.ok) throw new Error(again.reason)
-    expect(journalDispatches(again.entries).get('att')).toMatchObject({ generation: 101, state: 'sent' })
+    expect(journalDispatches(again.entries).get('att')).toMatchObject({
+      generation: 101,
+      state: 'sent',
+    })
     expect(again.entries.filter((e) => 'attemptId' in e && e.attemptId === 'att')).toHaveLength(1)
   } finally {
     tmp.cleanup()
@@ -202,7 +249,9 @@ test('100 refusals with compaction in between keep the journal bounded and the l
 })
 
 /** A database that is behind the journal on one attempt's dispatch generation. */
-async function restoredAt(generation: number): Promise<{ fenced: boolean; store: GlobalFenceStore }> {
+async function restoredAt(
+  generation: number,
+): Promise<{ fenced: boolean; store: GlobalFenceStore }> {
   if (!h) throw new Error('no harness')
   const sqlite = h.db.sqlite
   sqlite.prepare('UPDATE orc_attempts SET dispatch_generation = ?').run(generation)
@@ -232,10 +281,15 @@ test('restore after compaction across a refused generation: a database behind th
 test('restore across a later accepted generation: a database behind the sent generation is a doubt', async () => {
   h = await wfHarness()
   const out = outage(h)
-  const id = await start(h, definition([agent('a', { instruction: '[fake:hold] A' }), end()], [edge('a', 'done')]))
+  const id = await start(
+    h,
+    definition([agent('a', { instruction: '[fake:hold] A' }), end()], [edge('a', 'done')]),
+  )
   await h.until(() => (attemptRow(h!)[0]?.dispatch_generation ?? 0) >= 2)
   out.refusing = false
-  await h.until(() => run(h!, id).attempts[0]?.runId !== null && run(h!, id).attempts[0]?.runId !== undefined)
+  await h.until(
+    () => run(h!, id).attempts[0]?.runId !== null && run(h!, id).attempts[0]?.runId !== undefined,
+  )
   const generation = attemptRow(h)[0]!.dispatch_generation
   h.journal.compact(() => false)
   expect((await restoredAt(generation)).fenced).toBe(false)
@@ -249,7 +303,14 @@ test('a journal that says the latest generation was sent keeps the attempt from 
   await h.until(() => (attemptRow(h!)[0]?.dispatch_generation ?? 0) >= 2)
   const attempt = attemptRow(h)[0]!
   // The database lost the refusal and shows `created`, but the journal's newest word is a sent generation.
-  h.journal.append({ kind: 'send_started', attemptId: attempt.id, orchestrationId: 'x', attemptKind: 'step', agentId: 'builder', generation: attempt.dispatch_generation + 1 })
+  h.journal.append({
+    kind: 'send_started',
+    attemptId: attempt.id,
+    orchestrationId: 'x',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: attempt.dispatch_generation + 1,
+  })
   out.refusing = false
   await h.settle(5000)
   expect(attemptRow(h)[0]!.state).toBe('unknown')

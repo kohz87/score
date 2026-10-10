@@ -20,7 +20,10 @@ afterEach(async () => {
   await h?.close()
   h = undefined
 })
-const done = (id: string, status = 'succeeded') => (): boolean => run(h!, id).status === status
+const done =
+  (id: string, status = 'succeeded') =>
+  (): boolean =>
+    run(h!, id).status === status
 const simple = () => definition([agent('a'), end()], [edge('a', 'done')])
 const stored = (id: string) =>
   h!.rows<{ stored_bytes: number; reserve_bytes: number }>(
@@ -37,7 +40,9 @@ test('a prolonged adapter outage adds no rows and no stored bytes: the unsent at
     return original(req)
   }
   const id = await start(h, simple())
-  await h.until(() => (h!.rows<{ n: number }>('SELECT refused_total AS n FROM orc_attempts')[0]?.n ?? 0) >= 3)
+  await h.until(
+    () => (h!.rows<{ n: number }>('SELECT refused_total AS n FROM orc_attempts')[0]?.n ?? 0) >= 3,
+  )
   const base = stored(id).stored_bytes
   const counts = () => ({
     attempts: h!.rows<{ n: number }>('SELECT COUNT(*) AS n FROM orc_attempts')[0]!.n,
@@ -50,7 +55,9 @@ test('a prolonged adapter outage adds no rows and no stored bytes: the unsent at
     await h.orch.agentReady('builder')
     await h.settle(2000)
   }
-  expect(h.rows<{ n: number }>('SELECT refused_total AS n FROM orc_attempts')[0]!.n).toBeGreaterThanOrEqual(10)
+  expect(
+    h.rows<{ n: number }>('SELECT refused_total AS n FROM orc_attempts')[0]!.n,
+  ).toBeGreaterThanOrEqual(10)
   expect(counts()).toEqual(before)
   expect(stored(id).stored_bytes).toBe(base)
   refusing = false
@@ -60,7 +67,10 @@ test('a prolonged adapter outage adds no rows and no stored bytes: the unsent at
 
 test('500 Pause/Resume cycles keep the control history at 200 records, folded into a counter', async () => {
   h = await wfHarness()
-  const id = await start(h, definition([agent('a', { instruction: '[fake:hold] A' }), end()], [edge('a', 'done')]))
+  const id = await start(
+    h,
+    definition([agent('a', { instruction: '[fake:hold] A' }), end()], [edge('a', 'done')]),
+  )
   await h.until(() => runIdOf(h!, id, 'a') !== undefined)
   // The executor's own sweeps change the revision between a read and the decision; a page just reloads and retries.
   const decide = async (fn: (revision: number) => Promise<unknown>): Promise<void> => {
@@ -94,15 +104,27 @@ test('500 Pause/Resume cycles keep the control history at 200 records, folded in
 
 test('quota saturation never blocks result acceptance or Stop', async () => {
   h = await wfHarness()
-  const id = await start(h, definition([agent('a', { instruction: '[fake:hold] A' }), agent('b'), end()], [edge('a', 'b'), edge('b', 'done')]))
+  const id = await start(
+    h,
+    definition(
+      [agent('a', { instruction: '[fake:hold] A' }), agent('b'), end()],
+      [edge('a', 'b'), edge('b', 'done')],
+    ),
+  )
   await h.until(() => runIdOf(h!, id, 'a') !== undefined)
   // The run has used more than its whole allowance.
-  h.db.sqlite.prepare('UPDATE orchestrations SET stored_bytes = reserve_bytes + 1000000 WHERE id = ?').run(id)
+  h.db.sqlite
+    .prepare('UPDATE orchestrations SET stored_bytes = reserve_bytes + 1000000 WHERE id = ?')
+    .run(id)
   await finishNode(h, id, 'a', 'completed', 'result of a')
   await h.until(() => node(h!, id, 'a').state === 'succeeded')
   expect(node(h, id, 'a').output).toBe('result of a')
   // The next node cannot be stored any more: it fails with a reason, and Stop still works.
-  await h.until(() => ['failed', 'stopping', 'stopped'].includes(run(h!, id).status) || node(h!, id, 'b').state === 'failed')
+  await h.until(
+    () =>
+      ['failed', 'stopping', 'stopped'].includes(run(h!, id).status) ||
+      node(h!, id, 'b').state === 'failed',
+  )
   expect(node(h, id, 'b').reason).toContain('quota')
   await h.orch.wfStop(id).catch(() => undefined)
   await h.until(() => ['failed', 'stopped'].includes(run(h!, id).status))
@@ -125,21 +147,45 @@ test('the inventory covers every row a run keeps, and pruning deletes them toget
   expect(inventory.storedBytes).toBeGreaterThan(0)
   // Ninety days later the run and everything it left behind go in one transaction; a tombstone remains.
   const old = new Date(h.scheduler.now() - 100 * 24 * 3600 * 1000).toISOString()
-  h.db.sqlite.prepare('UPDATE orchestrations SET ended_at = ?, updated_at = ? WHERE id = ?').run(old, old, id)
+  h.db.sqlite
+    .prepare('UPDATE orchestrations SET ended_at = ?, updated_at = ? WHERE id = ?')
+    .run(old, old, id)
   const result = h.orch.maintenance()
   expect(result.pruned).toBe(1)
-  for (const table of ['orchestrations', 'orc_steps', 'orc_attempts', 'wf_runs', 'wf_nodes', 'wf_tokens', 'wf_steps', 'wf_commands', 'wf_results', 'message_runs', 'runs', 'tool_calls', 'command_intents'])
+  for (const table of [
+    'orchestrations',
+    'orc_steps',
+    'orc_attempts',
+    'wf_runs',
+    'wf_nodes',
+    'wf_tokens',
+    'wf_steps',
+    'wf_commands',
+    'wf_results',
+    'message_runs',
+    'runs',
+    'tool_calls',
+    'command_intents',
+  ])
     expect(h.rows<{ n: number }>(`SELECT COUNT(*) AS n FROM ${table}`)[0]!.n, table).toBe(0)
   expect(h.rows("SELECT kind FROM orc_history WHERE kind = 'pruned'")).toHaveLength(1)
-  expect(h.rows<{ n: number }>("SELECT COUNT(*) AS n FROM messages WHERE id NOT LIKE 'orc-goal:%'")[0]!.n).toBe(0)
+  expect(
+    h.rows<{ n: number }>("SELECT COUNT(*) AS n FROM messages WHERE id NOT LIKE 'orc-goal:%'")[0]!
+      .n,
+  ).toBe(0)
 })
 
 test('a run that is still draining is never pruned', async () => {
   h = await wfHarness()
-  const id = await start(h, definition([agent('a', { instruction: '[fake:hold] A' }), end()], [edge('a', 'done')]))
+  const id = await start(
+    h,
+    definition([agent('a', { instruction: '[fake:hold] A' }), end()], [edge('a', 'done')]),
+  )
   await h.until(() => runIdOf(h!, id, 'a') !== undefined)
   await h.orch.wfStop(id)
   const old = new Date(h.scheduler.now() - 100 * 24 * 3600 * 1000).toISOString()
-  h.db.sqlite.prepare('UPDATE orchestrations SET ended_at = ?, updated_at = ?, status = ? WHERE id = ?').run(old, old, 'finished_with_unresolved', id)
+  h.db.sqlite
+    .prepare('UPDATE orchestrations SET ended_at = ?, updated_at = ?, status = ? WHERE id = ?')
+    .run(old, old, 'finished_with_unresolved', id)
   expect(h.orch.maintenance().pruned).toBe(0)
 })

@@ -86,6 +86,12 @@ ALTER TABLE orc_attempts ADD COLUMN next_try_at TEXT;
 -- Set at the lifetime limit: only the person's decision continues the attempt.
 ALTER TABLE orc_attempts ADD COLUMN needs_person INTEGER NOT NULL DEFAULT 0 CHECK (needs_person IN (0, 1));
 
+-- A lead attempt's journaled generation is its capability generation; attempts sent before this migration keep a
+-- consistent restore check (their step generations were journaled as 0).
+UPDATE orc_attempts
+  SET dispatch_generation = (SELECT COUNT(*) FROM orc_capabilities WHERE attempt_id = orc_attempts.id)
+  WHERE kind = 'lead';
+
 -- v8.1 item 3: the dispatched bytes are hashed when the assignment is frozen; the send compares.
 ALTER TABLE orc_steps ADD COLUMN payload_hash TEXT;
 

@@ -123,7 +123,9 @@ export const replaceAgent = (h: Harness, agentId: string, incarnation = B): void
 export function openGate(h: Harness, id: string, nodeId?: string) {
   const d = run(h, id)
   const node = d.nodeGates.find((g) => g.status === 'open' && (!nodeId || g.nodeId === nodeId))
-  const assignment = d.assignmentGates.find((g) => g.status === 'open' && (!nodeId || g.nodeId === nodeId))
+  const assignment = d.assignmentGates.find(
+    (g) => g.status === 'open' && (!nodeId || g.nodeId === nodeId),
+  )
   const gate = node ?? assignment
   if (!gate) throw new Error('no open gate')
   return { gateId: gate.id, expectedRevision: gate.revision, orchestrationRevision: d.revision }
@@ -144,8 +146,7 @@ export async function decide(
 /** Which node's reply text to use: the payload header names the node as `(<id>: <label>)`. */
 export const nodeOf = (input: string): string | undefined => /\(([a-z0-9_-]+): /.exec(input)?.[1]
 export const replies =
-  (byNode: Record<string, string>) =>
-  (req: { agentId: string; input: string }) => ({
+  (byNode: Record<string, string>) => (req: { agentId: string; input: string }) => ({
     text: byNode[nodeOf(req.input) ?? ''] ?? 'The step is done.',
     tools: [] as string[],
   })
@@ -170,7 +171,8 @@ export async function finishNode(
     const runId = runIdOf(h, id, nodeId)
     return (
       runId !== undefined &&
-      h.rows<{ status: string }>('SELECT status FROM runs WHERE id = ?', runId)[0]?.status === 'running'
+      h.rows<{ status: string }>('SELECT status FROM runs WHERE id = ?', runId)[0]?.status ===
+        'running'
     )
   })
   await endRun(h, runIdOf(h, id, nodeId)!, status, output)

@@ -2,7 +2,11 @@ import { createHash } from 'node:crypto'
 import { WORKFLOW_LIMITS } from '@score/contract'
 import { afterEach, expect, test } from 'vitest'
 import { parseTemplate, validateDefinition } from '../../src/domain/workflows/definition.ts'
-import { cutBytes, parseVerdict, recordRunResult, resultFacts } from '../../src/domain/workflows/verdict.ts'
+import {
+  cutBytes,
+  parseVerdict,
+  resultFacts,
+} from '../../src/domain/workflows/verdict.ts'
 import {
   agent,
   decide,
@@ -24,7 +28,10 @@ afterEach(async () => {
   await h?.close()
   h = undefined
 })
-const done = (id: string, status = 'succeeded') => (): boolean => run(h!, id).status === status
+const done =
+  (id: string, status = 'succeeded') =>
+  (): boolean =>
+    run(h!, id).status === status
 const sha = (text: string): string => createHash('sha256').update(text).digest('hex')
 const block = (verdict: string, reason = 'because') =>
   '```score-verdict\n' + JSON.stringify({ verdict, reason }) + '\n```'
@@ -32,7 +39,10 @@ const block = (verdict: string, reason = 'because') =>
 // -------------------------------------------------------------------------------------------------- verdict parser
 
 test('verdicts: exactly one valid block, otherwise none', () => {
-  expect(parseVerdict(`Review.\n${block('passed')}\nDone.`)).toEqual({ verdict: 'passed', reason: 'because' })
+  expect(parseVerdict(`Review.\n${block('passed')}\nDone.`)).toEqual({
+    verdict: 'passed',
+    reason: 'because',
+  })
   expect(parseVerdict('no block at all')).toBeNull()
   expect(parseVerdict(`${block('passed')}\n${block('changes_requested')}`)).toBeNull()
   expect(parseVerdict('```score-verdict\n{not json}\n```')).toBeNull()
@@ -55,7 +65,11 @@ test('verdicts: a block crossing the truncation boundary is parsed from the comp
   const pad = 'y'.repeat(WORKFLOW_LIMITS.outputBytes - 20)
   const facts = resultFacts(`${pad}\n${block('passed')}\nthe end`)
   expect(facts.truncated).toBe(true)
-  expect(facts.verdict).toMatchObject({ verdict: 'passed', source: 'runtime', outputTruncated: true })
+  expect(facts.verdict).toMatchObject({
+    verdict: 'passed',
+    source: 'runtime',
+    outputTruncated: true,
+  })
   // The stored output is cut inside the block, so it alone could never have produced the verdict.
   expect(parseVerdict(facts.output)).toBeNull()
 })
@@ -106,9 +120,14 @@ test('without complete-reply facts a run record that may have been cut gives no 
     identity: `end:${runId}`,
     apply: ({ sqlite, now }) => {
       sqlite
-        .prepare("UPDATE runs SET status = 'completed', ended_at = ?, output = ?, updated_at = ? WHERE id = ?")
+        .prepare(
+          "UPDATE runs SET status = 'completed', ended_at = ?, output = ?, updated_at = ? WHERE id = ?",
+        )
         .run(now, output, now, runId)
-      return [runDraft(sqlite, runId), ...completeRunMessage(sqlite, runId, now, { output, status: 'completed' })]
+      return [
+        runDraft(sqlite, runId),
+        ...completeRunMessage(sqlite, runId, now, { output, status: 'completed' }),
+      ]
     },
   })
   await h.until(done(id))
@@ -137,9 +156,14 @@ test('the gate shows the exact dispatched text and its hash equals the approved 
   expect(gate.payload.instruction).toContain('‹‹‹release›››')
   await decide(h, id, 'a', 'approve')
   await h.until(done(id))
-  const attempt = h.rows<{ input: string }>('SELECT input FROM orc_attempts WHERE step_id = ?', step.id)[0]!
+  const attempt = h.rows<{ input: string }>(
+    'SELECT input FROM orc_attempts WHERE step_id = ?',
+    step.id,
+  )[0]!
   expect(attempt.input).toBe(gate.payload.instruction)
-  expect(h.rows('SELECT payload_hash FROM orc_steps WHERE id = ?', step.id)).toEqual([{ payload_hash: sha(attempt.input) }])
+  expect(h.rows('SELECT payload_hash FROM orc_steps WHERE id = ?', step.id)).toEqual([
+    { payload_hash: sha(attempt.input) },
+  ])
 })
 
 test('multibyte text is measured in bytes: it fits at the limit and fails one byte over, before any gate', async () => {
@@ -152,10 +176,15 @@ test('multibyte text is measured in bytes: it fits at the limit and fails one by
   await h.until(done(fits))
   const tooBig = await start(
     h,
-    definition([agent('a', { instruction: instruction + '日'.repeat(200) }), end()], [edge('a', 'done')]),
+    definition(
+      [agent('a', { instruction: instruction + '日'.repeat(200) }), end()],
+      [edge('a', 'done')],
+    ),
     { gatePolicy: 'every-step' },
   )
-  await h.until(() => node(h!, tooBig, 'a').state === 'failed' || run(h!, tooBig).status === 'failed')
+  await h.until(
+    () => node(h!, tooBig, 'a').state === 'failed' || run(h!, tooBig).status === 'failed',
+  )
   expect(node(h, tooBig, 'a').reason).toContain('payload_too_large')
   // Refused before the assignment was frozen: no step, no gate.
   expect(run(h, tooBig).steps).toHaveLength(0)
@@ -180,7 +209,9 @@ test('quoting expansion counts: three angle brackets become nine bytes in the re
 })
 
 test('template syntax: defaults, escapes and the references a definition may use', () => {
-  const { parts, errors } = parseTemplate('A {{inputs.x|default:"say \\"hi\\""}} B {{nodes.n1.verdict}} {{ nodes.n2 }}')
+  const { parts, errors } = parseTemplate(
+    'A {{inputs.x|default:"say \\"hi\\""}} B {{nodes.n1.verdict}} {{ nodes.n2 }}',
+  )
   expect(errors).toEqual([])
   expect(parts).toEqual([
     'A ',

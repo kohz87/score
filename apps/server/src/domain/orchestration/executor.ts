@@ -220,7 +220,9 @@ function inputWithdrawn(
     if (c.withdrawn === 1) return `${c.producer}'s result was withdrawn`
     if (c.kind === 'default') continue
     const producer = sqlite
-      .prepare('SELECT state, output_revision FROM wf_nodes WHERE orchestration_id = ? AND node_id = ?')
+      .prepare(
+        'SELECT state, output_revision FROM wf_nodes WHERE orchestration_id = ? AND node_id = ?',
+      )
       .get(orchId, c.producer) as { state: string; output_revision: number } | undefined
     if (!producer || !['succeeded', 'failed'].includes(producer.state))
       return `${c.producer} is no longer a resolved result`
@@ -412,7 +414,10 @@ export class Orchestrator {
         .update(
           JSON.stringify({
             ...(workflow
-              ? workflowDetailOf(sqlite, o, now, { lineageProvable: this.lineageProvable })
+              ? workflowDetailOf(sqlite, o, now, {
+                  lineageProvable: this.lineageProvable,
+                  skipStorage: true,
+                })
               : detailOf(sqlite, o)),
             revision: 0,
             updatedAt: '',
@@ -2437,7 +2442,9 @@ export class Orchestrator {
     const compacted = journal.compact((entry) => {
       if (entry.kind === 'send_refused' || entry.kind === 'witness') {
         const attempt = readAttempt(sqlite, entry.attemptId)
-        return attempt !== undefined && (attempt.state === 'terminated' || attempt.state === 'refused')
+        return (
+          attempt !== undefined && (attempt.state === 'terminated' || attempt.state === 'refused')
+        )
       }
       if (
         entry.kind === 'send_started' ||

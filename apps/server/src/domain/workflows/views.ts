@@ -432,7 +432,7 @@ export function workflowDetailOf(
   sqlite: DatabaseSync,
   o: OrchRow,
   now: string,
-  options: { lineageProvable: boolean; journal?: ExecutionJournal },
+  options: { lineageProvable: boolean; journal?: ExecutionJournal; skipStorage?: boolean },
 ): WorkflowRunDetail {
   const wf = requireWfRun(sqlite, o.id)
   const summary = workflowSummaryOf(sqlite, o, options.journal)
@@ -579,7 +579,15 @@ export function workflowDetailOf(
     waiverAt: o.waiver_at,
     acknowledgedAt: (JSON.parse(o.acknowledgement) as { at: string }).at,
     endReason: o.end_reason,
-    storage: storageInventory(sqlite, o),
+    storage: options.skipStorage
+      ? {
+          reserveBytes: o.reserve_bytes,
+          storedBytes: o.stored_bytes,
+          protectedBytes: 0,
+          items: [],
+          compactedControlRecords: 0,
+        }
+      : storageInventory(sqlite, o),
   }
 }
 

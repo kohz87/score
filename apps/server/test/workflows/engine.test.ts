@@ -25,7 +25,10 @@ afterEach(async () => {
   await h?.close()
   h = undefined
 })
-const done = (id: string, status = 'succeeded') => (): boolean => run(h!, id).status === status
+const done =
+  (id: string, status = 'succeeded') =>
+  (): boolean =>
+    run(h!, id).status === status
 
 test('the smallest graph: agent → end succeeds with the graph at its end', async () => {
   h = await wfHarness()
@@ -55,7 +58,9 @@ test('a failure route: A --failed→ B runs even though A did not succeed', asyn
   expect(node(h, id, 'b').state).toBe('succeeded')
   expect(run(h, id).graphOutcome).toBe('reached_end')
   // The executor never saw B as a dependent of A: B is a step with no `after`.
-  expect(h.rows('SELECT after_steps FROM orc_steps WHERE id = ?', 's2')).toEqual([{ after_steps: '[]' }])
+  expect(h.rows('SELECT after_steps FROM orc_steps WHERE id = ?', 's2')).toEqual([
+    { after_steps: '[]' },
+  ])
 })
 
 test('an unrouted failure fails the run and stops the other branches', async () => {
@@ -63,7 +68,11 @@ test('an unrouted failure fails the run and stops the other branches', async () 
   const id = await start(
     h,
     definition(
-      [agent('a', { instruction: '[fake:hold] A' }), agent('slow', { instruction: '[fake:hold] S' }), end()],
+      [
+        agent('a', { instruction: '[fake:hold] A' }),
+        agent('slow', { instruction: '[fake:hold] S' }),
+        end(),
+      ],
       [edge('a', 'done'), edge('slow', 'done')],
     ),
   )
@@ -71,7 +80,8 @@ test('an unrouted failure fails the run and stops the other branches', async () 
   await endRun(h, runIdOf(h, id, 'a')!, 'failed', 'boom')
   await h.until(done(id, 'stopping'))
   // The run drains: it ends `failed` only once the other branch's attempt has real termination evidence.
-  const slowAttempt = () => run(h!, id).attempts.find((x) => x.stepId === node(h!, id, 'slow').stepId)!
+  const slowAttempt = () =>
+    run(h!, id).attempts.find((x) => x.stepId === node(h!, id, 'slow').stepId)!
   expect(slowAttempt().stopRequestedAt).not.toBeNull()
   // Hermes' cancellation is not termination evidence: the attempt is unknown until the runtime reports an end.
   await h.until(() => slowAttempt().state === 'unknown')
@@ -86,7 +96,12 @@ test('a rejected gate follows its rejected edge', async () => {
     h,
     definition(
       [gate('g', { onReject: 'route' }), agent('ship'), agent('rework'), end()],
-      [edge('g', 'ship'), edge('g', 'rework', 'rejected'), edge('ship', 'done'), edge('rework', 'done')],
+      [
+        edge('g', 'ship'),
+        edge('g', 'rework', 'rejected'),
+        edge('ship', 'done'),
+        edge('rework', 'done'),
+      ],
     ),
   )
   await h.until(() => node(h!, id, 'g').state === 'gate_open')
@@ -98,7 +113,10 @@ test('a rejected gate follows its rejected edge', async () => {
 
 test('a rejected gate without a route stops the run', async () => {
   h = await wfHarness()
-  const id = await start(h, definition([gate('g'), agent('a'), end()], [edge('g', 'a'), edge('a', 'done')]))
+  const id = await start(
+    h,
+    definition([gate('g'), agent('a'), end()], [edge('g', 'a'), edge('a', 'done')]),
+  )
   await h.until(() => node(h!, id, 'g').state === 'gate_open')
   await decide(h, id, 'g', 'reject')
   await h.until(done(id, 'stopped'))
@@ -147,7 +165,13 @@ test('fan-out to two agents joined, then the end', async () => {
     h,
     definition(
       [agent('root'), agent('l'), agent('r'), join('merge'), end()],
-      [edge('root', 'l'), edge('root', 'r'), edge('l', 'merge'), edge('r', 'merge'), edge('merge', 'done')],
+      [
+        edge('root', 'l'),
+        edge('root', 'r'),
+        edge('l', 'merge'),
+        edge('r', 'merge'),
+        edge('merge', 'done'),
+      ],
     ),
   )
   await h.until(done(id))

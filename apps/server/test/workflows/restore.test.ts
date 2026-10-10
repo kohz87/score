@@ -32,8 +32,12 @@ const startup = () => {
   const store = new GlobalFenceStore(h!.db, h!.journal, () => h!.scheduler.now())
   return { store, check: store.startupCheck() }
 }
-const done = (id: string, status = 'succeeded') => (): boolean => run(h!, id).status === status
-const hold = () => definition([agent('a', { instruction: '[fake:hold] A' }), end()], [edge('a', 'done')])
+const done =
+  (id: string, status = 'succeeded') =>
+  (): boolean =>
+    run(h!, id).status === status
+const hold = () =>
+  definition([agent('a', { instruction: '[fake:hold] A' }), end()], [edge('a', 'done')])
 
 test('a database-only restore fences: the workflow run the old database never saw is listed', async () => {
   h = await wfHarness()
@@ -87,14 +91,24 @@ test('a rolled-back lower budget, a lost manual Pause, a lost remap and a lost a
   await h.settle(1500)
   await h.orch.wfPause(id, { orchestrationRevision: run(h, id).revision })
   expect(startup().check.fenced).toBe(false)
-  h.db.sqlite.prepare("UPDATE orchestrations SET manual_paused_at = NULL, status = 'running', pause_reason = NULL WHERE id = ?").run(id)
+  h.db.sqlite
+    .prepare(
+      "UPDATE orchestrations SET manual_paused_at = NULL, status = 'running', pause_reason = NULL WHERE id = ?",
+    )
+    .run(id)
   expect(startup().check.fenced).toBe(true)
 })
 
 test('a workflow remap that the database lost is detected; the honest one is not', async () => {
   h = await wfHarness()
   seedAgent(h, 'builder')
-  const id = await start(h, definition([gate('g'), agent('a', { instruction: '[fake:hold] A' }), end()], [edge('g', 'a'), edge('a', 'done')]))
+  const id = await start(
+    h,
+    definition(
+      [gate('g'), agent('a', { instruction: '[fake:hold] A' }), end()],
+      [edge('g', 'a'), edge('a', 'done')],
+    ),
+  )
   await h.until(() => node(h!, id, 'g').state === 'gate_open')
   replaceAgent(h, 'builder')
   await decide(h, id, 'g', 'approve')
@@ -110,7 +124,9 @@ test('a workflow remap that the database lost is detected; the honest one is not
     plan: card.plan.map((p) => ({ nodeId: p.nodeId, payloadHash: p.payloadHash })),
   })
   expect(startup().check.fenced).toBe(false)
-  h.db.sqlite.prepare("UPDATE orc_agent_map SET incarnation = ? WHERE agent_id = 'builder'").run(card.frozenIncarnation)
+  h.db.sqlite
+    .prepare("UPDATE orc_agent_map SET incarnation = ? WHERE agent_id = 'builder'")
+    .run(card.frozenIncarnation)
   expect(startup().check.fenced).toBe(true)
 })
 

@@ -1,5 +1,9 @@
 import { afterEach, expect, test } from 'vitest'
-import { makeSpendReader, runSpendReader, spendEvidence } from '../../src/domain/orchestration/budget.ts'
+import {
+  makeSpendReader,
+  runSpendReader,
+  spendEvidence,
+} from '../../src/domain/orchestration/budget.ts'
 import { planWorkflow } from '../../src/domain/workflows/planner.ts'
 import { readOrch, type AttemptRow } from '../../src/domain/orchestration/store.ts'
 import { attemptsOf } from '../../src/domain/orchestration/store.ts'
@@ -22,7 +26,10 @@ afterEach(async () => {
   await h?.close()
   h = undefined
 })
-const done = (id: string, status = 'succeeded') => (): boolean => run(h!, id).status === status
+const done =
+  (id: string, status = 'succeeded') =>
+  (): boolean =>
+    run(h!, id).status === status
 const simple = () => definition([agent('a'), end()], [edge('a', 'done')])
 const commands = (id: string) =>
   h!.rows<{ attempt: number; generation: number; outcome: string }>(
@@ -44,7 +51,9 @@ test('a budget refusal waits (no stored refusal), then a raised budget assigns u
   await h.orch.wfLimits(id, { budgetUsd: 5, orchestrationRevision: run(h, id).revision })
   await h.until(done(id))
   expect(run(h, id).plannerGeneration).toBeGreaterThan(before)
-  expect(commands(id)).toEqual([{ attempt: 1, generation: run(h, id).plannerGeneration, outcome: 'ok' }])
+  expect(commands(id)).toEqual([
+    { attempt: 1, generation: run(h, id).plannerGeneration, outcome: 'ok' },
+  ])
   expect(h.rows('SELECT 1 FROM wf_commands WHERE outcome = ?', 'refused')).toHaveLength(0)
 })
 
@@ -59,15 +68,22 @@ test('unknown spend with a budget waits for the person unless the run chose to c
   await h.settle(5000)
   expect(node(h, id, 'b').waitingFor).toBe('unknown_spend')
   expect(run(h, id).budget.unknownSpend).toBe(true)
-  await h.orch.wfLimits(id, { acceptUnknownSpend: true, orchestrationRevision: run(h, id).revision })
+  await h.orch.wfLimits(id, {
+    acceptUnknownSpend: true,
+    orchestrationRevision: run(h, id).revision,
+  })
   await h.until(done(id))
 })
 
 test('a deadline acts as Stop: the run drains and ends stopped', async () => {
   h = await wfHarness()
-  const id = await start(h, definition([agent('a', { instruction: '[fake:hold] A' }), end()], [edge('a', 'done')]), {
-    deadlineAt: new Date(h.scheduler.now() + 60_000).toISOString(),
-  })
+  const id = await start(
+    h,
+    definition([agent('a', { instruction: '[fake:hold] A' }), end()], [edge('a', 'done')]),
+    {
+      deadlineAt: new Date(h.scheduler.now() + 60_000).toISOString(),
+    },
+  )
   await h.until(() => runIdOf(h!, id, 'a') !== undefined)
   await h.settle(65_000)
   expect(run(h, id).status).toBe('stopping')

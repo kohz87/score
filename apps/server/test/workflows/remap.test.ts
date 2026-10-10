@@ -30,7 +30,10 @@ afterEach(async () => {
   await h?.close()
   h = undefined
 })
-const done = (id: string, status = 'succeeded') => (): boolean => run(h!, id).status === status
+const done =
+  (id: string, status = 'succeeded') =>
+  (): boolean =>
+    run(h!, id).status === status
 
 function remapCard(harness: Harness, id: string) {
   const card = run(harness, id).needsYou.find((n) => n.kind === 'remap')
@@ -50,8 +53,14 @@ test('remap after approval: the unsent step is retired as remapped, its gate wit
   h = await wfHarness()
   seedAgent(h, 'builder')
   // The agent is paused so the approved step stays unsent while it is replaced.
-  h.db.sqlite.prepare("INSERT INTO agent_pauses (agent_id, paused_at) VALUES ('builder', '2026-01-01T00:00:00.000Z')").run()
-  const id = await start(h, definition([agent('a'), end()], [edge('a', 'done')]), { gatePolicy: 'every-step' })
+  h.db.sqlite
+    .prepare(
+      "INSERT INTO agent_pauses (agent_id, paused_at) VALUES ('builder', '2026-01-01T00:00:00.000Z')",
+    )
+    .run()
+  const id = await start(h, definition([agent('a'), end()], [edge('a', 'done')]), {
+    gatePolicy: 'every-step',
+  })
   await h.until(() => node(h!, id, 'a').state === 'gate_open')
   const first = node(h, id, 'a').stepId!
   await decide(h, id, 'a', 'approve')
@@ -80,7 +89,10 @@ test('remap after approval: the unsent step is retired as remapped, its gate wit
 test('under gates-only the remap decision is the approval: the node continues without another gate', async () => {
   h = await wfHarness()
   seedAgent(h, 'builder')
-  const id = await start(h, definition([gate('g'), agent('a'), end()], [edge('g', 'a'), edge('a', 'done')]))
+  const id = await start(
+    h,
+    definition([gate('g'), agent('a'), end()], [edge('g', 'a'), edge('a', 'done')]),
+  )
   await h.until(() => node(h!, id, 'g').state === 'gate_open')
   replaceAgent(h, 'builder')
   await decide(h, id, 'g', 'approve')
@@ -93,7 +105,13 @@ test('under gates-only the remap decision is the approval: the node continues wi
 test('crash around the remap transaction: a rolled-back remap changes nothing and the same decision then applies once', async () => {
   h = await wfHarness()
   seedAgent(h, 'builder')
-  const id = await start(h, definition([gate('g'), agent('a', { instruction: '[fake:hold] A' }), end()], [edge('g', 'a'), edge('a', 'done')]))
+  const id = await start(
+    h,
+    definition(
+      [gate('g'), agent('a', { instruction: '[fake:hold] A' }), end()],
+      [edge('g', 'a'), edge('a', 'done')],
+    ),
+  )
   await h.until(() => node(h!, id, 'g').state === 'gate_open')
   replaceAgent(h, 'builder')
   await decide(h, id, 'g', 'approve')
@@ -106,7 +124,9 @@ test('crash around the remap transaction: a rolled-back remap changes nothing an
   })
   const before = snapshot()
   // The transaction dies after the remap was journaled (journal first, database second): nothing is applied.
-  h.db.sqlite.exec("CREATE TRIGGER crash BEFORE UPDATE ON wf_nodes BEGIN SELECT RAISE(ABORT, 'crash'); END")
+  h.db.sqlite.exec(
+    "CREATE TRIGGER crash BEFORE UPDATE ON wf_nodes BEGIN SELECT RAISE(ABORT, 'crash'); END",
+  )
   await h.orch.wfRemap(id, decision(h, id, card)).catch(() => undefined)
   h.db.sqlite.exec('DROP TRIGGER crash')
   expect(snapshot()).toEqual(before)
@@ -127,7 +147,10 @@ test('possibly-sent work keeps its attempt and obligations; the remap applies to
   seedAgent(h, 'builder')
   const id = await start(
     h,
-    definition([agent('a', { instruction: '[fake:hold] A' }), agent('b'), end()], [edge('a', 'b'), edge('b', 'done')]),
+    definition(
+      [agent('a', { instruction: '[fake:hold] A' }), agent('b'), end()],
+      [edge('a', 'b'), edge('b', 'done')],
+    ),
   )
   await h.until(() => runIdOf(h!, id, 'a') !== undefined)
   replaceAgent(h, 'builder')
@@ -146,23 +169,32 @@ test('possibly-sent work keeps its attempt and obligations; the remap applies to
 test('a remap decision needs the exact incarnations and the exact payloads, and a node is remapped at most twice', async () => {
   h = await wfHarness()
   seedAgent(h, 'builder')
-  const id = await start(h, definition([gate('g'), agent('a'), end()], [edge('g', 'a'), edge('a', 'done')]))
+  const id = await start(
+    h,
+    definition([gate('g'), agent('a'), end()], [edge('g', 'a'), edge('a', 'done')]),
+  )
   await h.until(() => node(h!, id, 'g').state === 'gate_open')
   replaceAgent(h, 'builder')
   await decide(h, id, 'g', 'approve')
   await h.until(() => node(h!, id, 'a').waitingFor === 'remap')
   const card = remapCard(h, id)
-  await expect(h.orch.wfRemap(id, { ...decision(h, id, card), frozenIncarnation: 'other' })).rejects.toMatchObject({ code: 'conflict' })
-  await expect(h.orch.wfRemap(id, { ...decision(h, id, card), plan: [] })).rejects.toMatchObject({ code: 'stale_plan' })
+  await expect(
+    h.orch.wfRemap(id, { ...decision(h, id, card), frozenIncarnation: 'other' }),
+  ).rejects.toMatchObject({ code: 'conflict' })
+  await expect(h.orch.wfRemap(id, { ...decision(h, id, card), plan: [] })).rejects.toMatchObject({
+    code: 'stale_plan',
+  })
   h.db.sqlite.prepare("UPDATE wf_nodes SET remaps = 2 WHERE node_id = 'a'").run()
-  await expect(h.orch.wfRemap(id, decision(h, id, card))).rejects.toMatchObject({ code: 'conflict' })
+  await expect(h.orch.wfRemap(id, decision(h, id, card))).rejects.toMatchObject({
+    code: 'conflict',
+  })
 })
 
 test('a legacy run gets its mapping backfilled from the incarnation its attempts recorded, journaled', async () => {
   h = await wfHarness()
   seedAgent(h, 'builder')
   const id = await h.create({ gatePolicy: 'none' })
-  await h.until(() => h.rows('SELECT 1 FROM orc_attempts WHERE kind = ?', 'lead').length > 0)
+  await h.until(() => h!.rows('SELECT 1 FROM orc_attempts WHERE kind = ?', 'lead').length > 0)
   // What 0049 produced for a run whose agent had been replaced before the upgrade: the map holds the current
   // incarnation although the run's own attempts recorded another.
   h.db.sqlite
@@ -170,9 +202,20 @@ test('a legacy run gets its mapping backfilled from the incarnation its attempts
       "INSERT INTO orc_attempts (id, orchestration_id, kind, step_id, n, agent_id, agent_incarnation, session_id, turn_id, message_id, state, input, created_at, updated_at) VALUES ('legacy-a', ?, 'step', NULL, 1, 'builder', ?, 's', 't-legacy', 'm-legacy', 'terminated', '', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')",
     )
     .run(id, '33333333-3333-4333-8333-333333333333')
-  h.db.sqlite.prepare("UPDATE orc_agent_map SET incarnation = ?, updated_at = (SELECT created_at FROM orchestrations WHERE id = ?) WHERE agent_id = 'builder'").run(B, id)
+  h.db.sqlite
+    .prepare(
+      "UPDATE orc_agent_map SET incarnation = ?, updated_at = (SELECT created_at FROM orchestrations WHERE id = ?) WHERE agent_id = 'builder'",
+    )
+    .run(B, id)
   await h.orch.close()
-  const next = new Orchestrator({ db: h.db, ingest: h.ingest, port: h.port, access: h.access, fence: h.fence, clock: () => h!.scheduler.now() })
+  const next = new Orchestrator({
+    db: h.db,
+    ingest: h.ingest,
+    port: h.port,
+    access: h.access,
+    fence: h.fence,
+    clock: () => h!.scheduler.now(),
+  })
   h.orch = next
   await next.recover()
   expect(h.rows('SELECT incarnation FROM orc_agent_map WHERE agent_id = ?', 'builder')).toEqual([
