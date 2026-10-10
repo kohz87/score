@@ -345,8 +345,8 @@ export class Orchestrator {
    * v8.2 item 1: an agent that becomes served again (a version check or gateway reachability recovering) wakes the
    * attempts that waited out refusals. Only asked while some attempt is in that wait.
    */
-  private async observeReadiness(): Promise<void> {
-    const waiting = this.db.read(
+  private readinessWaiting(): boolean {
+    return this.db.read(
       (sqlite) =>
         sqlite
           .prepare(
@@ -354,7 +354,9 @@ export class Orchestrator {
           )
           .get() !== undefined,
     )
-    if (!waiting) return
+  }
+
+  private async observeReadiness(): Promise<void> {
     try {
       for (const agent of await this.options.port.listAgents()) {
         const before = this.served.get(agent.id)
@@ -367,7 +369,8 @@ export class Orchestrator {
   }
 
   private async cycle(): Promise<void> {
-    await this.observeReadiness()
+    // Not awaited when nothing waits, so the cycle starts in the same tick as before.
+    if (this.readinessWaiting()) await this.observeReadiness()
     for (let round = 0; round < 100 && !this.closed; round++) {
       let progressed = await this.reconcile()
       const live = this.db.read((sqlite) =>
