@@ -40,6 +40,7 @@ test('paths: normalise, encode, and link targets', () => {
 test('buildTree nests folders (empty ones too), folders first, then notes by name', () => {
   const tree = buildTree({
     folders: ['empty', 'a'],
+    documents: [],
     notes: [
       { path: 'z.md', title: 'z', mtime: '', lastAuthor: null },
       { path: 'a/b/n.md', title: 'n', mtime: '', lastAuthor: null },

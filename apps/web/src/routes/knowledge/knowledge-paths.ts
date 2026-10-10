@@ -1,4 +1,4 @@
-import type { KnowledgeNoteSummary, KnowledgeTree } from '@score/contract'
+import type { KnowledgeDocumentSummary, KnowledgeNoteSummary, KnowledgeTree } from '@score/contract'
 
 export const notePath = (path: string) =>
   path
@@ -38,6 +38,7 @@ export function linkTargetFor(note: KnowledgeNoteSummary, notes: KnowledgeNoteSu
 export type TreeNode =
   | { kind: 'folder'; path: string; name: string; children: TreeNode[] }
   | { kind: 'note'; path: string; name: string; note: KnowledgeNoteSummary }
+  | { kind: 'document'; path: string; name: string; document: KnowledgeDocumentSummary }
 
 export function buildTree(tree: KnowledgeTree): TreeNode[] {
   const root: TreeNode[] = []
@@ -60,11 +61,21 @@ export function buildTree(tree: KnowledgeTree): TreeNode[] {
       name: baseName(note.path),
       note,
     })
+  for (const document of tree.documents)
+    folder(folderOf(document.path)).push({
+      kind: 'document',
+      path: document.path,
+      name: document.path.split('/').pop()!,
+      document,
+    })
   const sort = (nodes: TreeNode[]) => {
     nodes.sort(
       (a, b) =>
-        (a.kind === b.kind ? 0 : a.kind === 'folder' ? -1 : 1) ||
-        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+        (a.kind === b.kind || (a.kind !== 'folder' && b.kind !== 'folder')
+          ? 0
+          : a.kind === 'folder'
+            ? -1
+            : 1) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
     )
     for (const node of nodes) if (node.kind === 'folder') sort(node.children)
   }

@@ -10,7 +10,7 @@ import {
 import { knowledgeFailure } from './knowledge-queries.ts'
 import { baseName, normalizeNewPath } from './knowledge-paths.ts'
 
-function Modal({
+export function Modal({
   title,
   onClose,
   children,
@@ -113,14 +113,26 @@ export function NewNoteDialog({
   )
 }
 
+/** What the person types for a document's new path: trimmed, no leading slash, the file type stays as typed. */
+function normalizeFilePath(input: string): string | null {
+  const cleaned = input
+    .trim()
+    .replace(/^\/+/, '')
+    .replace(/\/{2,}/g, '/')
+  return !cleaned || cleaned.endsWith('/') ? null : cleaned
+}
+
 export function MoveDialog({
   from,
+  document = false,
   busy,
   error,
   onSubmit,
   onClose,
 }: {
   from: string
+  /** A document (PDF, ...) rather than a note: the file type is kept and there are no links to update. */
+  document?: boolean
   busy: boolean
   error: unknown
   onSubmit: (to: string, updateLinks: boolean) => void
@@ -128,9 +140,12 @@ export function MoveDialog({
 }) {
   const [value, setValue] = useState(from)
   const [updateLinks, setUpdateLinks] = useState(true)
-  const to = normalizeNewPath(value)
+  const to = document ? normalizeFilePath(value) : normalizeNewPath(value)
   return (
-    <Modal title={`Rename or move ${baseName(from)}`} onClose={onClose}>
+    <Modal
+      title={`Rename or move ${document ? from.split('/').pop() : baseName(from)}`}
+      onClose={onClose}
+    >
       <form
         onSubmit={(event) => {
           event.preventDefault()
@@ -141,15 +156,21 @@ export function MoveDialog({
           New path
           <input value={value} maxLength={500} onChange={(event) => setValue(event.target.value)} />
         </label>
-        <label className="kn-check">
-          <input
-            type="checkbox"
-            checked={updateLinks}
-            onChange={(event) => setUpdateLinks(event.target.checked)}
-          />
-          Update links in other notes
-        </label>
-        {error != null && <p role="alert">{knowledgeFailure(error, 'move the note')}</p>}
+        {!document && (
+          <label className="kn-check">
+            <input
+              type="checkbox"
+              checked={updateLinks}
+              onChange={(event) => setUpdateLinks(event.target.checked)}
+            />
+            Update links in other notes
+          </label>
+        )}
+        {error != null && (
+          <p role="alert">
+            {knowledgeFailure(error, document ? 'move the file' : 'move the note')}
+          </p>
+        )}
         <div className="kn-actions">
           <button type="submit" className="kn-primary" disabled={!to || to === from || busy}>
             {busy ? 'Moving…' : 'Move'}
@@ -165,32 +186,85 @@ export function MoveDialog({
 
 export function DeleteDialog({
   path,
+  document = false,
   busy,
   error,
   onConfirm,
   onClose,
 }: {
   path: string
+  document?: boolean
   busy: boolean
   error: unknown
   onConfirm: () => void
   onClose: () => void
 }) {
   return (
-    <Modal title={`Delete ${baseName(path)}?`} onClose={onClose}>
+    <Modal title={`Delete ${document ? path.split('/').pop() : baseName(path)}?`} onClose={onClose}>
       <p>
-        The note is removed from the vault. If git is available, its history keeps every earlier
-        version.
+        {document
+          ? 'The file is removed from the vault. If it is versioned in git (files up to 10 MB), its history keeps the last version; larger files are gone for good.'
+          : 'The note is removed from the vault. If git is available, its history keeps every earlier version.'}
       </p>
-      {error != null && <p role="alert">{knowledgeFailure(error, 'delete the note')}</p>}
+      {error != null && (
+        <p role="alert">
+          {knowledgeFailure(error, document ? 'delete the file' : 'delete the note')}
+        </p>
+      )}
       <div className="kn-actions">
         <button type="button" className="kn-primary" disabled={busy} onClick={onConfirm}>
-          {busy ? 'Deleting…' : 'Delete note'}
+          {busy ? 'Deleting…' : document ? 'Delete file' : 'Delete note'}
         </button>
         <button type="button" onClick={onClose}>
           Cancel
         </button>
       </div>
+    </Modal>
+  )
+}
+
+export function NewFolderDialog({
+  parent,
+  busy,
+  error,
+  onSubmit,
+  onClose,
+}: {
+  parent: string
+  busy: boolean
+  error: unknown
+  onSubmit: (path: string) => void
+  onClose: () => void
+}) {
+  const [value, setValue] = useState(parent === '' ? '' : `${parent}/`)
+  const path = normalizeFilePath(value)
+  return (
+    <Modal title="New folder" onClose={onClose}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (path) onSubmit(path)
+        }}
+      >
+        <label>
+          Folder path
+          <input
+            value={value}
+            maxLength={500}
+            placeholder="projects/contracts"
+            onChange={(event) => setValue(event.target.value)}
+          />
+        </label>
+        {error != null && <p role="alert">{knowledgeFailure(error, 'create the folder')}</p>}
+        <div className="kn-actions">
+          <button type="submit" className="kn-primary" disabled={!path || busy}>
+            {busy ? 'Creating…' : 'Create folder'}
+          </button>
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </form>
     </Modal>
   )
 }

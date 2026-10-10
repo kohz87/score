@@ -2378,3 +2378,48 @@
     margin-left: auto;
   }
 }
+
+/* "Also save to Knowledge" on an attachment chip (PLAN 6.6) */
+.chat-attachment.has-save {
+  height: auto;
+  min-height: 44px;
+  flex-wrap: wrap;
+  padding: 4px 8px 4px 6px;
+  border-radius: 22px;
+}
+.chat-attachment-save {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  max-width: none !important;
+  white-space: normal !important;
+  overflow: visible !important;
+}
+.chat-attachment-save label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.chat-attachment-save label span {
+  max-width: none;
+  white-space: nowrap;
+}
+.chat-attachment-save input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+.chat-attachment-save .kn-folder-input {
+  width: 150px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}

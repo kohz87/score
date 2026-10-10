@@ -17,13 +17,14 @@ TIMEOUT = 20.0
 
 _VAULT = (
     "Score's shared knowledge vault: a folder of Markdown notes (with [[wikilinks]]) that you, your teammates and the "
-    "user all read and write. Use it for durable facts, decisions, plans and how-tos worth keeping. "
+    "user all read and write, plus documents the user uploaded (PDF, DOCX, CSV, JSON, HTML; read-only for you). Use it "
+    "for durable facts, decisions, plans and how-tos worth keeping, and to look things up in the user's documents. "
 )
 _SEARCH_FIRST = "Search (knowledge_search) before writing so you extend an existing note instead of duplicating it. "
 
 SCHEMAS = {
     "knowledge_search": {
-        "description": _VAULT + "Full-text search over all notes; returns paths, titles and snippets (matches in [[ ]]).",
+        "description": _VAULT + "Full-text search over all notes and the text of uploaded documents; returns paths, titles, snippets (matches in [[ ]]) and for each hit kind (note or document) and type.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -35,17 +36,17 @@ SCHEMAS = {
         },
     },
     "knowledge_read": {
-        "description": _VAULT + "Read one note. Returns its body and an etag; pass the etag to knowledge_write to update it.",
+        "description": _VAULT + "Read one note. Returns its body and an etag; pass the etag to knowledge_write to update it. Given a document path (e.g. reports/q3.pdf) it returns the extracted text with kind \"document\" and a notice if the text is missing or cut; documents cannot be written.",
         "parameters": {
             "type": "object",
             "properties": {"path": {"type": "string", "minLength": 1, "maxLength": 1024,
-                                    "description": "Vault-relative path ending in .md, e.g. projects/launch.md"}},
+                                    "description": "Vault-relative path, e.g. projects/launch.md (or reports/q3.pdf for an uploaded document)"}},
             "required": ["path"],
             "additionalProperties": False,
         },
     },
     "knowledge_list": {
-        "description": _VAULT + "List the folders and notes (path, title, modified time), optionally inside one folder.",
+        "description": _VAULT + "List the folders, notes (path, title, modified time) and uploaded documents (path, type, size), optionally inside one folder.",
         "parameters": {
             "type": "object",
             "properties": {"folder": {"type": "string", "maxLength": 1024,
@@ -88,8 +89,8 @@ SCHEMAS = {
 }
 
 DESCRIPTIONS = {
-    "knowledge_search": "Search Score's shared knowledge vault.",
-    "knowledge_read": "Read a note from Score's shared knowledge vault.",
+    "knowledge_search": "Search Score's shared knowledge vault (notes and uploaded documents).",
+    "knowledge_read": "Read a note, or the extracted text of an uploaded document, from Score's shared knowledge vault.",
     "knowledge_list": "List notes in Score's shared knowledge vault.",
     "knowledge_write": "Create or update a note in Score's shared knowledge vault.",
     "knowledge_append": "Append text to a note in Score's shared knowledge vault.",

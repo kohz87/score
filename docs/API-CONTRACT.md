@@ -1244,6 +1244,42 @@ tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
 - `GET /api/knowledge/agent-usage` → `{ items: { agentId; writesToday }[] }`: agent writes since local midnight
   (Settings › Knowledge).
 - Stream `knowledge.changed` after every change (Score's, an agent's, or an outside edit the watcher saw).
+**Documents and zips (PLAN 6.6).** Files that are not Markdown notes live in the same vault and tree: `.pdf`, `.docx`,
+`.csv`, `.json`, `.html`/`.htm`, images (png, jpeg, gif, webp) and `.zip`. `.md`/`.markdown` uploads and `.txt`
+(stored as `<name>.md`) become notes. Limits: 25 MB per file; documents up to 10 MB are committed to the vault's git,
+larger ones are stored but not versioned (`versioned: false`); extracted text is redacted (D6), cut at 2 MiB
+(`textStatus: 'truncated'`) and indexed in its own FTS table. Text of PDF (`unpdf`) and DOCX (`mammoth`) is extracted in a
+worker thread (20 s, 512 MB heap); a failure keeps the file with `textStatus: 'unavailable'`. Types are decided from
+the bytes (magic numbers), never the extension or declared type alone. Names: no `..`, absolute, dot-segments or `.git`.
+- `GET /api/knowledge/tree` now also returns `documents: KnowledgeDocumentSummary[]` `{ path; type; size; mtime;
+  lastAuthor; versioned; textStatus }`; `GET /api/knowledge` also `documents` and `documentBytes`.
+- **H** `PUT /api/knowledge/files/*path?onConflict=ask|keep|replace&mode=keep|unzip|preview&folder=` with the raw file as
+  the body (`application/octet-stream`, at most 25 MB) -> `{ path; kind: 'note'|'document'; replaced }` (201). A name that
+  exists answers `409 exists` with `details.existing[]` (`ask`, the default); `keep` adds ` (2)`, ` (3)` to the name;
+  `replace` overwrites (a note keeps its history; a document is a new commit when versioned). Unsupported or
+  mismatching content -> `415 unsupported_type`; over 25 MB -> `413`.
+- Zip files (`mode`, default `keep`): `keep` stores the zip as a document (its file list shows on its page; not
+  indexed); `preview` stores nothing and returns `KnowledgeZipPreview` `{ entries: { path; size; action; reason }[];
+  more; extractCount }`; `unzip` extracts into `folder` (default: the zip's name) -> `KnowledgeUnzipResult` `{ folder;
+  written[]; skipped[] }` in one commit "Unzipped <name>.zip". The zip is read in a worker thread: at most 1,000
+  entries, 200 MB uncompressed in total, 100:1 compression ratio per entry (entries under 64 KiB exempt), sizes
+  checked while inflating; entry paths are normalised and confined to the folder (no `..`, absolute paths, drive
+  letters, dot-files, `.git`); symlinks and directories are ignored; nested zips are kept as files; only the allowed
+  types are extracted, the rest are `skipped`. A clash anywhere in the batch answers `409 exists` (all clashing names in
+  `details.existing`); one `onConflict` applies to the whole batch. A zip that breaks a limit -> `413 zip_limits`; an
+  unreadable zip -> `415 unsupported_type`.
+- `GET /api/knowledge/documents/*path` -> `KnowledgeDocument` (summary + `text` + `entries` for zips).
+  `GET /api/knowledge/files/*path` -> the bytes (images inline, everything else as an attachment; always `nosniff` and a
+  sandbox CSP). **H** `DELETE /api/knowledge/documents/*path` -> `204`.
+- **H** `POST /api/knowledge/move` also moves documents (`updateLinks` is ignored for them).
+- **H** `POST /api/knowledge/folders` `{ path }` -> `{ path }` (creates the folder, `409 exists` if present);
+  **H** `DELETE /api/knowledge/folders/*path` -> `204` for an empty folder (`409 not_empty` otherwise).
+- **H** `POST /api/knowledge/files-from-media` `{ mediaId; path; onConflict }` -> `KnowledgeUploadResult`: saves a chat
+  upload (`/api/media`) into Knowledge ("Also save to Knowledge"); same rules as an upload.
+- Search hits gain `kind: 'note'|'document'` and `type`. Agents: `knowledge_search` covers documents; `knowledge_read` on a
+  document path returns its extracted text as `body` (`kind: 'document'`, `notice` when the text is missing or cut at
+  256 KiB); `knowledge_list` adds `documents`. Agents cannot upload or delete documents; their write tools stay
+  notes-only (`400 not_a_note`).
 - Errors: path outside the vault, `..`, NUL, absolute, `.git` → `400 bad_path`; not a `.md` note where one is needed →
   `400 not_a_note`; too large (note > 2 MiB) → `413 payload_too_large`; missing → `404 not_found`.
 

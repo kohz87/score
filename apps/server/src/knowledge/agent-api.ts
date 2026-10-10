@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
 import { HttpError } from '../errors.ts'
 import { redact } from '../redact.ts'
+import { isDocumentPath } from './doc-types.ts'
 import type { KnowledgeVault } from './vault.ts'
 
 export const AGENT_WRITE_BYTES = 256 * 1024
@@ -14,6 +15,7 @@ const HOUR = 60 * 60 * 1000
 export interface AgentListing {
   folders: string[]
   notes: { path: string; title: string; mtime: string }[]
+  documents: { path: string; type: string; size: number; mtime: string }[]
   truncated: boolean
 }
 
@@ -126,6 +128,20 @@ export class KnowledgeAgentApi {
 
   async read(agentId: string, path: string) {
     this.gate(agentId)
+    if (isDocumentPath(path)) {
+      // An uploaded file (PDF, DOCX, ...): its extracted text, bounded like a note.
+      const document = await this.vault.docs.agentRead(path)
+      const cut = this.cut(document.body)
+      return {
+        path: document.path,
+        title: document.title,
+        body: cut.body,
+        etag: document.etag,
+        truncated: cut.truncated,
+        kind: 'document' as const,
+        notice: document.notice ?? (cut.truncated ? 'The text was cut at 256 KiB.' : null),
+      }
+    }
     const note = await this.vault.readNote(path)
     let body = note.body
     let truncated = false
@@ -135,7 +151,21 @@ export class KnowledgeAgentApi {
       body = body.replace(/�+$/, '')
       truncated = true
     }
-    return { path: note.path, title: note.title, body, etag: note.etag, truncated }
+    return {
+      path: note.path,
+      title: note.title,
+      body,
+      etag: note.etag,
+      truncated,
+      kind: 'note' as const,
+      notice: null,
+    }
+  }
+
+  private cut(text: string): { body: string; truncated: boolean } {
+    if (Buffer.byteLength(text) <= AGENT_READ_BYTES) return { body: text, truncated: false }
+    const body = new TextDecoder('utf-8').decode(Buffer.from(text).subarray(0, AGENT_READ_BYTES))
+    return { body: body.replace(/�+$/, ''), truncated: true }
   }
 
   async list(agentId: string, folder: string | undefined): Promise<AgentListing> {
@@ -148,13 +178,16 @@ export class KnowledgeAgentApi {
       prefix === '' || path === prefix || path.startsWith(`${prefix}/`)
     const folders = tree.folders.filter((path) => inside(path) && path !== prefix)
     const notes = tree.notes.filter((note) => inside(note.path))
-    const total = folders.length + notes.length
+    const documents = tree.documents.filter((document) => inside(document.path))
+    const total = folders.length + notes.length + documents.length
     const keptFolders = folders.slice(0, AGENT_LIST_ITEMS)
+    const keptNotes = notes.slice(0, AGENT_LIST_ITEMS - keptFolders.length)
     return {
       folders: keptFolders,
-      notes: notes
-        .slice(0, AGENT_LIST_ITEMS - keptFolders.length)
-        .map(({ path, title, mtime }) => ({ path, title, mtime })),
+      notes: keptNotes.map(({ path, title, mtime }) => ({ path, title, mtime })),
+      documents: documents
+        .slice(0, AGENT_LIST_ITEMS - keptFolders.length - keptNotes.length)
+        .map(({ path, type, size, mtime }) => ({ path, type, size, mtime })),
       truncated: total > AGENT_LIST_ITEMS,
     }
   }
