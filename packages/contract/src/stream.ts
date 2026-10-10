@@ -3,6 +3,7 @@ import { RoomProjectEventSchema, RoomProjectSchema } from './conversations.ts'
 import { KnowledgeChangedSchema } from './knowledge.ts'
 import { BriefSummarySchema } from './briefs.ts'
 import { RoomVersionSchema } from './versions.ts'
+import { GlobalFenceSchema, OrchestrationSummarySchema } from './orchestration.ts'
 import {
   AgentIdSchema,
   AgentSummarySchema,
@@ -153,6 +154,14 @@ export const StreamEventSchema = z.discriminatedUnion('type', [
   StreamEnvelopeSchema.extend({ type: z.literal('lane.upserted'), data: LaneUpsertedSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('handoff.created'), data: HandoffCreatedSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('brief.upserted'), data: BriefSummarySchema }),
+  StreamEnvelopeSchema.extend({
+    type: z.literal('orchestration.upserted'),
+    data: OrchestrationSummarySchema,
+  }),
+  StreamEnvelopeSchema.extend({
+    type: z.literal('orchestration.fence.updated'),
+    data: GlobalFenceSchema,
+  }),
   StreamEnvelopeSchema.extend({ type: z.literal('run.updated'), data: RunSummarySchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('attempt.updated'), data: AttemptSummarySchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('gap.recorded'), data: GapRecordedSchema }),

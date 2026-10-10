@@ -420,3 +420,33 @@ export const bridgeAck = {
   resolved: 0,
   error: 'Request no longer pending',
 } satisfies Contract.BridgeDecisionAckRequest
+
+export const orchestrationSummary = {
+  id: 'orch-1',
+  title: 'Ship the release notes',
+  status: 'running',
+  pauseReason: null,
+  leadAgentId: 'lead',
+  roomId: 'room-orch-1',
+  briefId: 'brief-orch-1',
+  gatePolicy: 'every-step',
+  revision: 3,
+  ownership: 'owned',
+  steps: { total: 2, active: 1, succeeded: 1, failed: 0 },
+  leadTurnsUsed: 1,
+  maxLeadTurns: 20,
+  needsYou: [{ kind: 'gate', gateId: 'g2', stepId: 's2' }],
+  createdAt: at,
+  updatedAt: later,
+  endedAt: null,
+} satisfies Contract.OrchestrationSummary
+
+export const globalFence = {
+  fenced: true,
+  reason: 'journal_mismatch',
+  untrustedHistory: false,
+  revision: 2,
+  since: at,
+  items: [{ kind: 'attempt', ref: 'orc-1-s1-1', detail: 'In the journal, not in the database' }],
+  journal: { ok: true, entries: 4, bytes: 512, sizeAlarm: false },
+} satisfies Contract.GlobalFence
