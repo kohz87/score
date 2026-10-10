@@ -22,6 +22,11 @@ import { SecurityPassword } from '../../src/auth/security-password.ts'
 import { defaultRootPolicy } from '../../src/workspace/policy.ts'
 import { FAKE_CLI } from './coding-fixtures.ts'
 
+// Every test here spawns real child processes (a version probe per agent and per turn, then the CLI itself). Alone that
+// is ~1-2 s, but in the full parallel run on 4 cores node start-up alone takes seconds, and the two-agent Reports test
+// (six spawns) overran the 5 s default: the work is real, so the budget says so (same as the other process-spawning tests).
+vi.setConfig({ testTimeout: 30_000 })
+
 let dir: string
 let home: string
 let workspace: string

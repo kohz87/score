@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { pair } from './pair.ts'
+import { makeRoom, openRoom } from './rooms.ts'
 
 // PLAN 5.25: Markdown replies with a code block, tool and thinking cards, and Stop.
 test('a Markdown reply renders with a copyable code block, tool cards and a thinking card', async ({
@@ -9,13 +10,9 @@ test('a Markdown reply renders with a copyable code block, tool cards and a thin
   test.setTimeout(120_000)
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await pair(page)
-  await page.goto('/chat')
-  await page
-    .getByRole('navigation', { name: 'Conversations' })
-    .getByRole('link', { name: /#activity-feed/ })
-    .click({ timeout: 15_000 })
+  const room = await makeRoom(page, 'fmt')
+  await openRoom(page, room.label)
   const history = page.getByRole('region', { name: 'Message history' })
-  await expect(history.getByRole('article').first()).toBeVisible({ timeout: 15_000 })
   await page.getByRole('combobox', { name: /^Message/ }).fill('markdown demo please')
   await page.getByRole('combobox', { name: /^Message/ }).press('Enter')
   const reply = history
@@ -46,13 +43,9 @@ test('a Markdown reply renders with a copyable code block, tool cards and a thin
 test('Stop ends a long reply early and the reply says it was stopped', async ({ page }) => {
   test.setTimeout(120_000)
   await pair(page)
-  await page.goto('/chat')
-  await page
-    .getByRole('navigation', { name: 'Conversations' })
-    .getByRole('link', { name: /#activity-feed/ })
-    .click({ timeout: 15_000 })
+  const room = await makeRoom(page, 'fmt')
+  await openRoom(page, room.label)
   const history = page.getByRole('region', { name: 'Message history' })
-  await expect(history.getByRole('article').first()).toBeVisible({ timeout: 15_000 })
   const composer = page.getByRole('combobox', { name: /^Message/ })
   await composer.fill('give me a long reply')
   await composer.press('Enter')
