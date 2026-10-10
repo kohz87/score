@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import * as contract from '../src/index.ts'
 import * as f from './fixtures.ts'
+import { workflowCases } from './workflow-cases.ts'
 
 const orcCap = `orc_${'a'.repeat(43)}`
 const orcAttempt = {
@@ -1358,6 +1359,7 @@ const cases = [
   ],
   ['OrchReceiptArgsSchema', orcTool, { capability: 'orc_short', commandId: 'c-1' }],
   ['OrchReceiptSchema', { status: 'ok' }, { status: 'maybe' }],
+  ...workflowCases,
 ] as const satisfies ReadonlyArray<readonly [keyof typeof contract, unknown, unknown]>
 
 test('every exported schema has valid and invalid fixtures', () => {
