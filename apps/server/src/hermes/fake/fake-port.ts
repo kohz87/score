@@ -1633,7 +1633,7 @@ export class FakePort implements HermesPort {
     input: string
     turnId: string
     runId: string
-  }) => Promise<{ text?: string; hold?: boolean; fail?: boolean } | void>
+  }) => Promise<{ text?: string; hold?: boolean; fail?: boolean; lose?: boolean } | void>
 
   private readonly refusals = new Map<string, number>()
 
@@ -1730,6 +1730,12 @@ export class FakePort implements HermesPort {
           if (this.runs.get(runId)?.status !== 'running') return
           // `hold`: the run stays running and silent until it is stopped (a stuck agent).
           if (hooked?.hold) return
+          // `lose`: Hermes reports the run cancelled, which is not termination evidence (the attempt is "not confirmed
+          // ended"), as when a run handle is lost.
+          if (hooked?.lose) {
+            await this.transitionRun(runId, 'cancelled')
+            return
+          }
           if (hooked && typeof hooked.text === 'string') replyText = hooked.text
           failRun = hooked?.fail === true
         }

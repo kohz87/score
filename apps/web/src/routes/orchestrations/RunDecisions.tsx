@@ -267,9 +267,12 @@ export function UnknownCard({
   attemptId,
   actions,
   fenceStepId,
+  label,
 }: {
   run: AttemptsRun
   attemptId: string
+  /** What the card calls the step (a workflow names the node). */
+  label?: string
   actions: Pick<DecisionActions, 'abandon' | 'waiver'>
   /** The same attempt also fences the run as a cancelled step: its waiver is offered on this card. */
   fenceStepId?: string
@@ -280,7 +283,7 @@ export function UnknownCard({
   if (!attempt) return null
   return (
     <section className="orch-decision" aria-label="Attempt not confirmed ended">
-      <h3>Not confirmed ended: {attempt.stepId ?? 'lead turn'}</h3>
+      <h3>Not confirmed ended: {label ?? attempt.stepId ?? 'lead turn'}</h3>
       <p>
         Hermes has not said this run finished ({attempt.unknownReason ?? 'no reason recorded'}).
         Score keeps trying to stop it. Until it ends, nothing new starts.

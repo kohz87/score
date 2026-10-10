@@ -82,7 +82,9 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   // Add a gate after it (connected from "when done"), then a branch after the gate.
   await page.getByRole('button', { name: 'Add a gate' }).click()
   await inspector.getByLabel('Title').fill('Approve the draft')
-  await inspector.getByRole('combobox', { name: 'Question' }).fill('Is the draft good enough to publish?')
+  await inspector
+    .getByRole('combobox', { name: 'Question' })
+    .fill('Is the draft good enough to publish?')
   await page.getByRole('button', { name: 'Add a branch' }).click()
   await inspector.getByLabel('Title').fill('Passed review?')
   await inspector.getByLabel('Looks at').selectOption({ label: 'Draft' })
@@ -92,7 +94,9 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   await node(page, 'branch1').click()
   await page.getByRole('button', { name: /Add an agent step for reviewer/ }).click()
   await inspector.getByLabel('Title').fill('Repair')
-  await inspector.getByRole('combobox', { name: 'Instruction' }).fill('Fix the draft: {{nodes.step1.output}}')
+  await inspector
+    .getByRole('combobox', { name: 'Instruction' })
+    .fill('Fix the draft: {{nodes.step1.output}}')
   await page.getByRole('button', { name: 'Add an end' }).click()
   await inspector.getByLabel('Title').fill('Repaired')
 
@@ -134,7 +138,9 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   }).toPass({ timeout: 45_000 })
 
   // The branch takes the "verdict passed" path; the repair step is skipped, struck and faded.
-  await expect(page.getByText('Succeeded', { exact: true }).first()).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByText('Succeeded', { exact: true }).first()).toBeVisible({
+    timeout: 60_000,
+  })
   await expect(page.getByText('Graph reached the end').first()).toBeVisible()
   await expect(node(page, 'step2')).toHaveAttribute('data-state', 'skipped')
   await expect(node(page, 'end1')).toHaveAttribute('data-state', 'succeeded')
@@ -209,4 +215,60 @@ test('a failing step is routed to a repair step, and the run still reaches its e
   // The failure route is drawn as such, with its words on the edge.
   await expect(page.locator('[data-edge="e2"]')).toHaveClass(/orch-edge--failed/)
   await expect(page.locator('.orch-edge-label', { hasText: 'if it fails' })).toBeVisible()
+})
+
+test('an attempt that is not confirmed ended is abandoned, the step is retried, and the run says both what it did and what the graph did', async ({
+  page,
+}) => {
+  test.setTimeout(150_000)
+  await pair(page)
+  const name = `Flaky step ${Date.now().toString(36)}`
+  await createWorkflow(page, {
+    name,
+    inputs: [],
+    nodes: [
+      {
+        id: 'flaky',
+        kind: 'agent',
+        label: 'Flaky step',
+        agentId: 'builder',
+        instruction: '[fake:lose:1] Do the thing',
+        retries: 1,
+        onFailure: 'fail_run',
+      },
+      { id: 'done', kind: 'end', label: 'Done' },
+    ],
+    edges: [{ id: 'e1', from: 'flaky', port: 'ok', to: 'done' }],
+  })
+  await startFromList(page, name)
+  // The fake Hermes reports the first run cancelled, which is not termination evidence.
+  const unknown = page.getByRole('region', { name: 'Attempt not confirmed ended' })
+  await expect(unknown).toContainText('Not confirmed ended: Flaky step', { timeout: 60_000 })
+  await expect(node(page, 'flaky')).toHaveAttribute('data-state', 'running')
+  await unknown.getByRole('checkbox').first().check()
+  await unknown.getByRole('button', { name: 'Abandon this attempt' }).click()
+  // Abandoning pauses the run; the step is unresolved and offers Retry once the run is resumed.
+  await expect(page.getByText(/Paused/).first()).toBeVisible({ timeout: 30_000 })
+  await expect(node(page, 'flaky')).toHaveAttribute('data-state', 'abandoned')
+  await page.getByRole('button', { name: 'Resume', exact: true }).click()
+  const retry = page.getByRole('region', { name: 'Retry Flaky step' })
+  await expect(retry).toBeVisible({ timeout: 30_000 })
+  const button = retry.getByRole('button', { name: 'Retry Flaky step' })
+  await expect(button).toBeDisabled()
+  await retry.getByRole('checkbox').check()
+  await expect(async () => {
+    if (await retry.isVisible()) await button.click()
+    await expect(retry).toBeHidden({ timeout: 4000 })
+  }).toPass({ timeout: 45_000 })
+  await expect(node(page, 'flaky')).toHaveAttribute('data-state', 'succeeded', { timeout: 60_000 })
+  await expect(page.getByText('Finished, not everything confirmed')).toBeVisible({
+    timeout: 60_000,
+  })
+  await expect(page.getByText('Graph reached the end', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('Graph reached the end — 1 abandoned attempt not confirmed ended'),
+  ).toBeVisible()
+  // The retried attempt is the second of two logical attempts.
+  await node(page, 'flaky').click()
+  await expect(page.getByRole('region', { name: 'Selected node' })).toContainText('2 of 2 used')
 })

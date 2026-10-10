@@ -1832,5 +1832,6 @@ ten-minute timer are the same for orchestration step attempts (the executor owns
 `SCORE_MODE=fake` runs workflows against the fake adapter with the same executor. Markers in a step's text script the agent:
 `[fake:hold]` (stays running until stopped or ended), `[fake:fail]` (the run ends `failed`), `[fake:verdict:passed]` /
 `[fake:verdict:changes_requested]` (reply with a `score-verdict` block) and `[fake:refuse:N]` (the first N dispatches are
-refused as proven unsent). The fake adapter reports complete spend evidence, so its runs settle. E2E specs never use a live
+refused as proven unsent) and `[fake:lose:N]` (added in 7.1b: the first N runs of the node are reported cancelled, which is not
+termination evidence, so the attempt is "not confirmed ended" and the abandon → Retry path can be exercised). The fake adapter reports complete spend evidence, so its runs settle. E2E specs never use a live
 Hermes or tokens.

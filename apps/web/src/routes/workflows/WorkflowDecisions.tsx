@@ -330,19 +330,24 @@ export function WorkflowNeeds({
     () => ({ gates: run.assignmentGates, stepsList: run.steps, revision: run.revision }),
     [run.assignmentGates, run.steps, run.revision],
   )
-  if (run.needsYou.length === 0) return null
+  // Only a running or paused run can be decided on; while it stops or after it ended the server answers 409 not_open,
+  // so only what winding down still needs (unconfirmed attempts, a cancelled step, the fence) is offered.
+  const deciding = run.status === 'running' || run.status === 'paused'
+  const items = run.needsYou.filter(
+    (item) =>
+      deciding || item.kind === 'unknown' || item.kind === 'cancel_fence' || item.kind === 'fence',
+  )
+  if (items.length === 0) return null
   const unknownIds = new Set(
-    run.needsYou.flatMap((item) => (item.kind === 'unknown' ? [item.attemptId] : [])),
+    items.flatMap((item) => (item.kind === 'unknown' ? [item.attemptId] : [])),
   )
   const fenceFor = (attemptId: string): { fenceStepId?: string } => {
-    const fence = run.needsYou.find(
-      (item) => item.kind === 'cancel_fence' && item.attemptId === attemptId,
-    )
+    const fence = items.find((item) => item.kind === 'cancel_fence' && item.attemptId === attemptId)
     return fence?.kind === 'cancel_fence' ? { fenceStepId: fence.stepId } : {}
   }
   return (
     <div className="orch-needs" aria-label="Needs you">
-      {run.needsYou.map((item) => {
+      {items.map((item) => {
         switch (item.kind) {
           case 'gate':
             return item.gateKind === 'node' ? (
@@ -378,6 +383,7 @@ export function WorkflowNeeds({
                 run={run}
                 attemptId={item.attemptId}
                 actions={actions}
+                {...(item.nodeId ? { label: labelOf(run, item.nodeId) } : {})}
                 {...fenceFor(item.attemptId)}
               />
             )
