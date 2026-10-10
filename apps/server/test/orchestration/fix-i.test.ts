@@ -48,3 +48,57 @@ test('fix-i 1: a sibling that turns unknown while an earlier dispatch awaits its
   expect(attemptOf(h, id, 'step', 's3')[0]!.runId).toBeNull()
   expect(status(id)).not.toBe('succeeded')
 })
+
+// ------------------------------------------------------------------ item 3: remap keeps a manual Pause
+
+const A = '11111111-1111-4111-8111-111111111111'
+const B = '22222222-2222-4222-8222-222222222222'
+
+test('fix-i 3: replacement pause -> manual Pause -> remap leaves the run paused with no new lead attempt; Resume restores', async () => {
+  h = await harness({
+    lead: {
+      script: byTurn({
+        1: async (t) => {
+          await t.call('orch.ask', { question: 'ready?' })
+        },
+      }),
+    },
+  })
+  h.db.sqlite
+    .prepare(
+      "INSERT INTO agent_lifecycle (agent_id, incarnation_id, state) VALUES ('lead', ?, 'ready')",
+    )
+    .run(A)
+  const id = await h.create()
+  await h.until(() => detail(id).inquiries.length === 1)
+  await h.until(() => attemptOf(h, id, 'lead')[0]!.state === 'terminated')
+  h.db.sqlite
+    .prepare("UPDATE agent_lifecycle SET incarnation_id = ? WHERE agent_id = 'lead'")
+    .run(B)
+  await h.orch.inquiryAnswer(id, 'q1', {
+    answer: 'yes',
+    expectedRevision: 1,
+    orchestrationRevision: detail(id).revision,
+  })
+  await h.until(() => status(id) === 'paused')
+  expect(h.orch.summary(id).pauseReason).toBe('agent_unavailable')
+  await h.orch.pause(id, { orchestrationRevision: detail(id).revision })
+  await h.orch.remap(id, {
+    agentId: 'lead',
+    frozenIncarnation: A,
+    currentIncarnation: B,
+    orchestrationRevision: detail(id).revision,
+    acknowledge: true,
+  })
+  await h.settle(5000)
+  expect(status(id)).toBe('paused')
+  expect(h.orch.summary(id).pauseReason).not.toBe('agent_unavailable')
+  expect(h.rows('SELECT manual_paused_at FROM orchestrations WHERE id = ?', id)[0]).not.toEqual({
+    manual_paused_at: null,
+  })
+  expect(attemptOf(h, id, 'lead')).toHaveLength(1)
+  // Restore: Resume ends the hold and the lead gets its turn.
+  await h.orch.resume(id, { orchestrationRevision: detail(id).revision })
+  await h.until(() => attemptOf(h, id, 'lead').length === 2)
+  expect(status(id)).not.toBe('paused')
+})

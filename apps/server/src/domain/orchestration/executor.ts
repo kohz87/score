@@ -916,7 +916,8 @@ export class Orchestrator {
     if (isFenced(sqlite)) return []
     const counts = activeStepCounts(sqlite)
     for (const o of listOrchs(sqlite).reverse()) {
-      if (o.status !== 'running') continue
+      // The manual hold is checked on its own, whatever the status says (fix-i 3).
+      if (o.status !== 'running' || o.manual_paused_at !== null) continue
       if ((this.cooldown.get(o.id) ?? 0) > this.nowMs()) continue
       this.admitRun(ctx, o, counts)
     }

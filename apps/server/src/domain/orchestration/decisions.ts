@@ -385,9 +385,14 @@ export function remapAgent(ctx: Ctx, orchId: string, body: RemapDecision): void 
       .prepare('UPDATE orchestrations SET lead_incarnation = ? WHERE id = ?')
       .run(current, orchId)
     // The pause this replacement caused ends with the decision about it; admission re-pauses if something else applies.
+    // Only that condition goes: a manual hold that is still there keeps the run paused, now for its own reason.
     if (o.status === 'paused' && o.pause_reason === 'agent_unavailable')
       sqlite
-        .prepare("UPDATE orchestrations SET status = 'running', pause_reason = NULL WHERE id = ?")
+        .prepare(
+          o.manual_paused_at !== null
+            ? "UPDATE orchestrations SET pause_reason = 'person' WHERE id = ?"
+            : "UPDATE orchestrations SET status = 'running', pause_reason = NULL WHERE id = ?",
+        )
         .run(orchId)
   }
   addHistory(
