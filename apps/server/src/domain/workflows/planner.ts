@@ -515,6 +515,17 @@ function assign(p: Pass, node: WfNodeRow): boolean {
     )
     .get(p.o.id, node.node_id, attempt, generation) as { outcome: string } | undefined
   if (stored) return false
+  // Readiness is revalidated at assignment: a producer whose result was withdrawn after this node became ready
+  // (it is unresolved again) no longer supports it. The node waits until that producer is resolved again.
+  if (
+    agentAncestors(p, node.node_id).some(
+      (id) => !['succeeded', 'failed'].includes(p.nodes.get(id)!.state),
+    )
+  ) {
+    if (node.reason !== 'evidence withdrawn')
+      setNode(sqlite, p.o.id, node.node_id, { reason: 'evidence withdrawn' })
+    return false
+  }
   const wait = assignWait(sqlite, p.o, p.wf, def.agentId)
   if (wait) {
     if (node.reason !== wait && wait === 'remap')
@@ -629,7 +640,6 @@ function assign(p: Pass, node: WfNodeRow): boolean {
   )
   for (const producerId of agentAncestors(p, node.node_id)) {
     const producer = p.nodes.get(producerId)!
-    if (producer.state !== 'succeeded' && producer.state !== 'failed') continue
     provenance.run(
       p.o.id,
       stepId,

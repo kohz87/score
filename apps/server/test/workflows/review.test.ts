@@ -4,6 +4,7 @@ import {
   agent,
   branch,
   decide,
+  finishNode,
   definition,
   edge,
   end,
@@ -239,4 +240,55 @@ test('a node gate cannot be approved when the producer it displays changed after
       orchestrationRevision: run(h, id).revision,
     }),
   ).rejects.toMatchObject({ code: 'conflict' })
+})
+
+// round 2 (H): withdrawal before the consumer has a step
+test('a ready-but-waiting consumer is not assigned while its supporting producer is unresolved, and is after it is resolved again', async () => {
+  h = await wfHarness()
+  seedAgent(h, 'reviewer')
+  const id = await start(
+    h,
+    definition(
+      [
+        agent('a', { retries: 1, instruction: '[fake:hold] A' }),
+        agent('b', { agentId: 'reviewer', instruction: 'Do b without looking at a' }),
+        end(),
+      ],
+      [edge('a', 'b'), edge('b', 'done')],
+    ),
+  )
+  await h.until(() => node(h!, id, 'a').stepId !== null && run(h!, id).attempts[0]?.runId != null)
+  const { replaceAgent } = await import('./wf-harness.ts')
+  replaceAgent(h, 'reviewer')
+  await finishNode(h, id, 'a', 'completed', 'A result')
+  await h.until(() => node(h!, id, 'b').waitingFor === 'remap')
+  expect(node(h, id, 'b').stepId).toBeNull()
+  // A's result is withdrawn while B is ready but has no step yet (its run only ever ended on recovered text).
+  h.db.sqlite.prepare("UPDATE runs SET terminal_source = 'recovered' WHERE id = ?").run(run(h, id).attempts[0]!.runId!)
+  await withdrawProducer(id, 'a')
+  expect(node(h, id, 'a').state).toBe('unresolved')
+  const card = run(h, id).needsYou.find((n) => n.kind === 'remap')
+  if (card?.kind !== 'remap') throw new Error('no card')
+  await h.orch.wfRemap(id, {
+    agentId: 'reviewer',
+    frozenIncarnation: card.frozenIncarnation,
+    currentIncarnation: card.currentIncarnation,
+    orchestrationRevision: run(h, id).revision,
+    acknowledge: true,
+    plan: card.plan.map((p) => ({ nodeId: p.nodeId, payloadHash: p.payloadHash })),
+  })
+  await h.orch.agentReady('reviewer')
+  await h.settle(6000)
+  expect(node(h, id, 'b').stepId).toBeNull()
+  // Abandon, Resume, Retry A: only then does B get a step, with A in its provenance.
+  await h.orch.wfAbandon(id, { attemptIds: [run(h, id).attempts[0]!.id], orchestrationRevision: run(h, id).revision, acknowledge: true })
+  await h.settle(2000)
+  await h.orch.wfResume(id, { orchestrationRevision: run(h, id).revision })
+  await h.settle(2000)
+  expect(node(h, id, 'b').stepId).toBeNull()
+  await h.orch.wfRetry(id, 'a', { expectedNodeRevision: node(h, id, 'a').revision, orchestrationRevision: run(h, id).revision, acknowledge: true })
+  await h.until(() => run(h!, id).attempts.length === 2 && run(h!, id).attempts[1]!.runId != null)
+  await finishNode(h, id, 'a', 'completed', 'A again')
+  await h.until(() => node(h!, id, 'b').stepId !== null)
+  expect(run(h, id).consumed.filter((c) => c.consumer === 'b').map((c) => [c.producer, c.eligible])).toEqual([['a', true]])
 })
