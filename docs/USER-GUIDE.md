@@ -1,6 +1,7 @@
 # Score user guide
 
-This guide walks through the six destinations along the top of Score: **Now, Chat, Tasks, Team, Reports, Settings**.
+This guide walks through the destinations along the top of Score: **Now, Chat, Tasks, Team, Knowledge, Reports, Settings**
+(plus the optional **Terminal**).
 For installing and starting Score, see the [README](../README.md). The examples use the demo team (`lead`,
 `builder`, `reviewer`, `designer`); your own agents will show up under their own names.
 
@@ -57,6 +58,60 @@ run** / **Resume run** controls the whole run. Below the graph are a live log of
 numbers (steps, hand-offs, time, spend when known). If no run exists yet: "No runs yet. Send a message to a room and
 the work it causes shows up here."
 
+### Orchestrations
+
+An orchestration is a run where a **lead agent** plans a goal and hands the steps to other agents. Start one with
+**New orchestration** (in Chat or in Flow): write the **Goal**, choose the lead, tick the **agents the lead may hand
+work to**, and pick when you want to be asked: **Ask me before each step**, **Ask only when the lead asks** or **Never
+ask**. An optional budget and deadline sit there too, and **Limits and estimates** holds the finer settings. The list
+under **Before it starts** shows the checks Score runs first; tick the acknowledgement (Score controls the work it
+starts and can stop it, but agents may still use other tools and start background work Score cannot see) and start.
+
+The run page shows the live diagram, a log of every request the lead made, the plan, and the budget and limits. A
+step that needs you appears as a card with its approval buttons; **Pause** and **Stop** control the whole run. A
+stopped step whose end Score could not confirm is flagged "Not confirmed ended" and waits for your decision.
+
+### Workflows
+
+A workflow is a **fixed graph** you draw yourself, instead of a lead agent planning on the fly. Open **Flow ›
+Workflows** (the **Runs | Workflows** switch at the top of Flow) to see your saved workflows; **a new one** starts an
+empty drawing.
+
+- **Editor.** Click an item in the left panel to add it after the selected node (or drag it onto the canvas); dropping
+  on a node connects the new one after it. Items are your **agents** (an agent step does work from an instruction) and
+  the flow controls below. Select a node to edit it on the right: title, agent, instruction, retries and what happens on
+  failure. An instruction can read earlier results with `{{nodes.<id>.output}}`, `{{nodes.<id>.verdict}}` or a run
+  input with `{{inputs.<name>}}`. Nodes are arranged for you; the outline under the canvas lists the same graph as
+  text. **Undo** and **Redo** work as you expect.
+- **Live checking.** A badge above the canvas says "Looks good" or "n problems to fix", the **Problems** list explains
+  each one in plain words and clicking it selects the node, and a node with a problem is marked on the canvas. Only
+  errors block saving or running.
+- **Gates.** A **Gate** stops the run until you approve or reject. Approving follows its approved path; rejecting
+  follows a rejection path if you drew one, otherwise stops the run.
+- **Branches.** A **Branch** sends the run down one path by a rule on an earlier agent step: its verdict (*passed* or
+  *changes requested*), its outcome (*succeeded* or *failed*) or whether its output contains some text. Every branch
+  needs a default path. A verdict only exists when the agent's reply ends with a `score-verdict` block; without one the
+  default path is taken. A **Join** waits for all of its inputs, and an **End** closes a path.
+- **Retries.** Each agent step can retry 0 to 2 times, and can either route a failure to a repair path or fail the run.
+- **Saving.** **Save as new version** never overwrites: saved versions are fixed, and a run keeps the version it
+  started with. If someone else saved first you are told, and you can start from an older version. **Export** gives a
+  scrubbed copy of a saved version (agents travel as name and role); it shows what the scrubber changed and lets you
+  leave fields out. There is no import yet.
+- **Running.** **Run…** (in the editor, or **Run a workflow** in Flow) asks for the run's inputs, the approvals
+  (**Ask me only at gates** or **Ask me before every agent step, too**), an optional budget and deadline, what to do
+  when Hermes does not say what a step cost (**Pause the run and ask me** or **Keep going**) and which agents the run
+  will use. It also shows the checks that run first and the same acknowledgement as an orchestration, which you tick to
+  start. Running needs a saved version.
+- **The run.** The run page is the live diagram (diamond: a gate that waits for you; hexagon: a branch), a log in plain
+  words and, below, the budget and limits. Click a node to filter the log and see its details. When it needs you there
+  is a card at the top: a **gate** (with the exact text and the Approve and Reject buttons); **Retry** for a step you
+  abandoned, which runs it again while attempts are left; **Try again** when Hermes has refused a step 20 times, which
+  asks Hermes once more (or stop the run); and **Remap** when an agent the run used has been replaced, which keeps
+  its steps blocked until you choose to continue with the new agent (the card lists the steps it will affect). A run
+  can also be paused or stopped, and finished runs replay on the same diagram.
+- **Honest spend.** Hermes usually reports tokens but not dollars, so Score does not claim a settled cost: the budget
+  block says "spend not settled" and keeps the reserved amount until the run ends. Unknown cost never counts as zero.
+
 ### Routines
 
 A read-only list of every agent's scheduled routines and when each last ran. Create and edit them on the agent's
@@ -98,6 +153,15 @@ Conversations with your team. The list on the left has **Rooms** (several agents
   belongs to the agent who wrote it) or `[main](workspace://builder/src/main.ts)` (a named agent). Clicking it opens
   the file in that agent's Team › Workspace tab. Tell an agent to write file references this way. A path that is not
   allowed shows the same error as in the Workspace.
+- **Message versions.** **Edit** on one of your messages puts its text in the box; sending the correction rewinds the
+  agents' sessions in this room to before that message and hides the old message and everything after it as a previous
+  version. The corrected message then carries a small **‹ 2 / 3 ›** control: the arrows switch between its versions,
+  showing an older one in place, read-only, together with what followed it. Score tells you when an agent's session
+  could not be rewound; long-term memory and Knowledge notes are not rewound.
+- **Deleted messages.** Deleted messages and previous versions stay out of the way. The room's actions menu has **Show
+  deleted messages** (and **Hide deleted messages**) to bring them back for this tab, read-only.
+- **Save to Knowledge.** Under a message, **Save to Knowledge** saves its attachments or an agent's reply (as a note)
+  into a Knowledge folder you choose.
 - **Plans.** A plan card shows who will do what on a small timeline, with **Open in Score**.
 - **Room details** (the "Show room details" panel): **Files in play** (files agents touched here), **Learned here**
   (facts saved to an agent's memory from this room, with **Open memory**) and **Also reachable on** (messaging
@@ -149,6 +213,41 @@ Click an agent to open its page. It has an appearance picker (color and shape) a
   that match some text.
 - **Channels** and **History** say "coming soon".
 
+### Coding agents
+
+**Add agent** also offers **Coding agent**: Claude Code or Codex CLI joins the team next to your Hermes agents, using
+your own CLI login and plan quota. Choose the CLI (the form shows whether it is installed and whether its version is
+one Score has tested; an untested version needs your confirmation before it runs), a name, a workspace folder (default
+`~/score-workspaces/<name>`) and a permission level:
+
+- **Read only**: looks at files, changes nothing;
+- **Workspace write**: edits files in its workspace (the default);
+- **Full access**: no sandbox, anything it is told runs as your user. Choosing it needs the security password, and
+  so does raising an agent to it later (lowering never does).
+
+The level limits what the agent can **change**, not what it can **read**. For Codex the form says so and you must tick
+"I understand this Codex agent can read every file my user can, including secrets outside its workspace" before it
+is created; Claude Code runs with deny rules for `~/.hermes`, `~/.score`, `~/.ssh` and `.env` files. A coding agent
+works in rooms only (@mention it like any other); it cannot take Tasks, and its Hermes-only tabs (skills, memory,
+routines and so on) do not apply. One turn runs at a time (others show as queued), a turn is stopped after 30
+minutes, and **Stop** works as for other agents.
+
+## Knowledge
+
+A shared folder (the vault, default `~/score-vault`) of Markdown notes and files that you and your agents use. Notes
+link to each other (`[[Note]]`), show backlinks, properties and history, and an agent's edits carry its name.
+
+- **Upload.** **Upload** (or **Upload files** in the **Files** view) takes files of up to 25 MB, or drag them onto
+  the page or a folder in the tree. Markdown files and `.txt` become notes; PDF, Word (`.docx`), CSV, JSON, HTML and
+  images are stored as files. Text is pulled out of PDFs and Word files so search and agents can read it; if that fails
+  the file is kept without text. A name that already exists asks whether to keep both or replace it. **New folder**
+  creates folders.
+- **Zip files.** A zip asks what to do: **Unzip into a folder** (with a preview of the files that will be added or
+  skipped) or **Keep as a zip** (stored and downloadable, not searched). Only the allowed file types are unzipped.
+- **Save to Knowledge** from Chat (see Chat) puts a message's attachments or an agent's reply into a folder.
+- Agents can search and read notes and file text through Score; they cannot upload or delete files. Settings ›
+  Knowledge controls agent access, and each agent has a Knowledge tools switch under Team › Tools.
+
 ## Reports
 
 How the team is doing over **Today**, **7 days** or **30 days**. A one-line summary sits on top, then:
@@ -185,3 +284,19 @@ A navigation list on the left, one card per section. Settings for a single agent
   Changes go through the `hermes` command only.
 - **Remote access** (only visible in remote mode): how to set up TLS, the list of **Paired browsers** with a
   revoke button for each, and **Log out this browser**. See the README for pairing and remote mode.
+
+## Terminal
+
+An optional shell on the machine Score runs on, in your browser (**Terminal** in the top bar, or in the menu on
+small screens). It is off unless Score was started with `SCORE_TERMINAL=1`, and it works only over **HTTPS** in
+remote mode, where the page tells you if it is unavailable and why. Opening one asks for the **security password**,
+which must be set on the Score machine with `scripts/score password` (a password set in the browser does not unlock
+it); a passkey works too where the browser allows it. The terminal runs as your user, so anyone who can use it can do
+anything that account can. It closes after 15 minutes without activity (use tmux for long jobs), at most two are
+open at once, and the open ones are listed and can be closed under Settings.
+
+## On a phone or tablet
+
+Below 1024 px wide the top bar turns into a **Menu** button that opens a side drawer with Now (and its Score, Flow and
+Routines views), Chat, Tasks, Team, Knowledge, Reports and Settings, plus Terminal when it is on. Pages reflow to one
+column; in Chat the room list comes first, above the conversation.
