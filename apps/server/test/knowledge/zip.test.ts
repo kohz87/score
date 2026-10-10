@@ -186,6 +186,20 @@ describe('unzip', () => {
     expect((await h.vault.docs.get('into/b.pdf')).text).toContain('new b')
   })
 
+  test('fix-l: keep both never overwrites an incoming file whose name is the suffixed one', async () => {
+    await h.vault.writeNote('bundle/report.md', { body: 'old', etag: null })
+    const zip = await makeZip({ 'report.md': 'first', 'report (2).md': 'second' })
+    const result = await h.vault.docs.unzip(zip, 'z.zip', 'bundle', 'keep')
+    expect(new Set(result.written).size).toBe(result.written.length)
+    expect(result.written.sort()).toEqual(['bundle/report (2).md', 'bundle/report (3).md'])
+    const bodies = [
+      (await h.vault.readNote('bundle/report (2).md')).body,
+      (await h.vault.readNote('bundle/report (3).md')).body,
+    ].sort()
+    expect(bodies).toEqual(['first', 'second'])
+    expect((await h.vault.readNote('bundle/report.md')).body).toBe('old')
+  })
+
   test('a zip name clash inside the zip (a.txt and a.md) keeps the first', async () => {
     const result = await h.vault.docs.unzip(
       await makeZip({ 'a.md': 'one', 'a.txt': 'two' }),
