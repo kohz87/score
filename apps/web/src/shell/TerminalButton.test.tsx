@@ -1,4 +1,3 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
@@ -10,11 +9,9 @@ const status = (terminal: boolean, terminalUnavailable: string | null = null) =>
   })
 function mount() {
   render(
-    <QueryClientProvider client={new QueryClient()}>
-      <MemoryRouter>
-        <TerminalButton />
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <TerminalButton />
+    </MemoryRouter>,
   )
 }
 afterEach(() => {
