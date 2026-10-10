@@ -26,6 +26,7 @@ export {
 export { inspectProfileArchive, type ArchiveFacts } from './archive-inspect.ts'
 export { assertFeature } from './live/fingerprint.ts'
 export { resolveHermesHome } from './live/paths.ts'
+export { mcpAddCommand } from './mcp-command.ts'
 export { loadBridgeBootstrap } from './bridge/bootstrap.ts'
 export {
   registerBridgeRoutes,

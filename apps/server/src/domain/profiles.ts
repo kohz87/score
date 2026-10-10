@@ -693,6 +693,8 @@ export class ProfileOperations {
           .run(operation.targetName)
         // Credential files and backups are retained privately; invalidate generations and bridge tokens in Score.
         sqlite.prepare('DELETE FROM credentials WHERE profile = ?').run(operation.targetName)
+        // MCP access (7.4d): token and both switches go with the agent, so a profile of the same name starts from off.
+        sqlite.prepare('DELETE FROM mcp_access WHERE agent_id = ?').run(operation.targetName)
         sqlite
           .prepare('UPDATE producers SET token_expires_at = 0 WHERE profile = ?')
           .run(operation.targetName)

@@ -5,6 +5,9 @@ const cases: [string, string][] = [
   ['Bearer fixture-token.abc', 'Bearer [redacted]'],
   ['bearer abc+xyz/=', 'Bearer [redacted]'],
   ['sk-abcdefgh12345678', '[redacted]'],
+  [`scm_${'Ab_-9'.repeat(8)}xyz`, '[redacted]'],
+  [`posted scm_${'Q'.repeat(43)}, thanks`, 'posted [redacted], thanks'],
+  [`(scm_${'Q'.repeat(43)})`, '([redacted])'],
   ['sk-or-abcdefgh12345678', '[redacted]'],
   ['ghp_abcdefgh12345678', '[redacted]'],
   ['github_pat_abcdefgh_12345678', '[redacted]'],
@@ -153,4 +156,12 @@ test('a one-time pairing link is redacted wherever it appears (audit wave 4)', (
   const line =
     'Pair this browser: https://10.1.1.199:8741/pair#Da0Gmy9rFhPsr7zmsUDZ35bY_yjEojaIvmx2Yy-IOdc'
   expect(redact(line)).toBe('Pair this browser: https://10.1.1.199:8741/pair#[redacted]')
+})
+
+test('MCP tokens are redacted from nested hook payloads and survive truncation order', () => {
+  const token = `scm_${'k'.repeat(43)}`
+  expect(
+    JSON.stringify(redactValue({ output: `curl -H x ${token}`, nested: [token] })),
+  ).not.toContain('scm_')
+  expect(redactBounded(`${'a'.repeat(10)} ${token}`, 20)).not.toContain('scm_k')
 })

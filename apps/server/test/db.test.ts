@@ -118,6 +118,8 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'knowledge_links',
     'knowledge_notes',
     'knowledge_settings',
+    'mcp_access',
+    'mcp_posts',
     'media',
     'message_fts',
     'message_fts_config',

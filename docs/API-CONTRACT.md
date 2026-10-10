@@ -134,7 +134,7 @@ type Room = {
 }
 
 type MessagePart =
-  | { kind: 'text'; text: string }
+  | { kind: 'text'; text: string; via?: 'mcp' }   // via: posted by an agent through Score's MCP server (§13); the UI tags it "via MCP"
   | { kind: 'plan'; lanes: { agentId: AgentId; blocks: LaneBlock[] }[]; briefId: string }
   | { kind: 'tools'; summary: string /* "Ran 6 commands and edited 2 files" */; runId: string }
   | { kind: 'tool'; tool: string; args: string; result: string | null; status: 'running' | 'ok' | 'error' } // one tool call (5.25)
@@ -1316,3 +1316,45 @@ move for agents.
 
 Hook → domain mapping lives in `apps/server/src/hermes/translate.ts`; payload fixtures in
 `apps/server/test/fixtures/bridge/` (seeded from `docs/spike/`).
+
+## 13. MCP access for agents (PLAN 7.4d; schemas in `packages/contract/src/mcp.ts`)
+Score is an MCP server for its own agents (rooms, tasks, knowledge). Design: `docs/briefs/7.4-backlog.md` § 7.4d; review
+changes: `docs/reviews/2026-10-09-phase7-lead.md`.
+
+**Server.** Streamable HTTP, stateless (`POST` only, JSON responses; `GET`/`DELETE` → `405`), at `/bridge/mcp` on the
+**loopback bridge listener only** (remote mode's `SCORE_BRIDGE_PORT`); it is not registered on the browser listener, where
+the path is `404`. Requests with an `Origin` header or a non-loopback `Host` → `403`. Auth: `Authorization: Bearer scm_<43
+base64url>`, a per-agent token Score stores as a SHA-256 hash and shows once. A missing, malformed, unknown, rotated or
+revoked token → `401`; a valid token whose agent has MCP access off → `403 mcp_off`. Bridge tokens do not open this path,
+and an MCP token is `401` on every `/api/*` and `/bridge/v1/*` path (its format is rejected before any handler). At most
+120 requests per minute per agent (`429 rate_limited`).
+
+**Identity** is the token's agent: no tool takes an agent argument (extra arguments are ignored). The tools below are the
+whole surface; none approves anything, reads another agent's session or changes settings. Tool errors come back as MCP
+tool results with `isError` and text `<code>: <message>`.
+
+| Tool | Needs | Behaviour |
+|---|---|---|
+| `rooms.list` | access | Rooms the agent is a member of (not archived; ≤ 50): `{ rooms: { id; name; kind; members; lastMessage: { from; preview } \| null }[] }` |
+| `rooms.post` `{ roomId; text ≤ 8 KiB }` | access + writes | Stores an agent-authored message (`to: []`, text part `via: 'mcp'`, redacted) in a room the agent is a member of; it starts no run and `@mentions` are not routed. `404` for other rooms; `409` while the room is rewinding or the agent is not ready. → `{ messageId }` |
+| `tasks.list` `{ limit? ≤ 50 }` | access | Tasks where the agent is assignee or reviewer (`TaskSummary[]`) |
+| `tasks.comment` `{ taskId; text ≤ 1500 }` | access + writes | A comment on such a task, text prefixed `[via MCP: <agentId>]`. `404` for other tasks |
+| `knowledge.search` `{ query; limit? ≤ 20 }`, `knowledge.read` `{ path }` | access | As §11 knowledge tools (same global and per-agent knowledge switches, 256 KiB read cap) |
+| `knowledge.write` `{ path; body; expectedEtag? }` | access + writes | As §11 `write` (256 KiB, 60 writes/hour/agent, etag/`409` rules); attributed to the agent in git |
+
+`access` = `enabled`, `writes` = `writesEnabled`; both are **off by default** and checked on every call. Posting
+(`rooms.post` and `tasks.comment` share one budget) is limited to 30 per hour per agent: `429 rate_limited` with
+`details.retryAfterSeconds`; a post that fails gives its slot back.
+
+**Browser API** (Team › agent › Tools › MCP access):
+- `GET /api/agents/:agentId/mcp` → `McpAccess` `{ agentId; enabled; writesEnabled; hasToken; tokenCreatedAt; available;
+  url; command; postsThisHour; postLimitPerHour }`. `available: false` (and `url`/`command: null`) when Score has no bridge
+  listener (local single-port mode).
+- **H** `PUT /api/agents/:agentId/mcp` `{ enabled?; writesEnabled? }` (at least one) → `McpAccess`.
+- **H** `POST /api/agents/:agentId/mcp/token` → `{ token; access: McpAccess }`: creates or rotates (the old token stops
+  working at once); the only response that carries the token (`Cache-Control: no-store`).
+- **H** `DELETE /api/agents/:agentId/mcp/token` → `McpAccess` (revokes).
+
+`command` is text for the owner to run in a terminal; **Score never runs it** and never writes Hermes configuration for
+this: `hermes --profile <agentId> mcp add score --url http://127.0.0.1:<bridge port>/bridge/mcp --auth header`. Hermes
+prompts for the bearer token and keeps it in the profile's own environment file (`MCP_SCORE_API_KEY`); the token is not part of the command. For an entry that already exists Hermes reuses the stored token without asking, so after a rotation the owner replaces that value in the profile's `.env` by hand and reloads MCP; the UI says so. Retiring an agent deletes its `mcp_access` row (token and both switches); the row also records the agent's lifecycle incarnation, and a removed, not-ready or different-incarnation agent has no access. A `tasks.comment` is stored with the agent as the comment author (`TaskActionRequest.author`, text prefixed `[via MCP]`). JSON-RPC batches are refused (`400`), and at most 4 requests per agent run at once. Text limits are in bytes (`413 payload_too_large`). Tokens (`scm_…`) are redacted wherever text is redacted.

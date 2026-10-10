@@ -11,6 +11,7 @@ import { MemoryTab } from './MemoryTab.tsx'
 import { ModelTab } from './ModelTab.tsx'
 import { SkillsTab } from './SkillsTab.tsx'
 import { PermissionsTab } from './PermissionsTab.tsx'
+import { McpAccessSection } from './McpAccessSection.tsx'
 import { ToolsTab } from './ToolsTab.tsx'
 import { PluginsTab } from './PluginsTab.tsx'
 import { ChannelsTab } from './ChannelsTab.tsx'
@@ -199,7 +200,10 @@ function AgentProfile({ agentId }: { agentId: string }) {
         ) : tab === 'Memory' ? (
           <MemoryTab agentId={agent.id} agentName={agent.name} />
         ) : tab === 'Tools' ? (
-          <ToolsTab agent={agent} />
+          <>
+            <ToolsTab agent={agent} />
+            <McpAccessSection agent={agent} />
+          </>
         ) : tab === 'Plugins' ? (
           <PluginsTab agent={agent} />
         ) : tab === 'Permissions' ? (
