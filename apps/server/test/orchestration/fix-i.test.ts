@@ -192,9 +192,7 @@ test('fix-i 2: a dependent that consumed the recovered result is withdrawn and r
   await h.orch.pause(id, { orchestrationRevision: detail(id).revision })
   // s2 is waiting behind its own approved gate when the result turns out to have been synthetic.
   legacyRecovered('s1', 'accepted text')
-  h.db.sqlite
-    .prepare("UPDATE orc_steps SET status = 'queued' WHERE id = 's2'")
-    .run()
+  h.db.sqlite.prepare("UPDATE orc_steps SET status = 'queued' WHERE id = 's2'").run()
   h.db.sqlite.prepare("UPDATE orc_gates SET status = 'approved' WHERE step_id = 's2'").run()
   await h.orch.recover()
   expect(stepStatus(id, 's2')).toBe('blocked')

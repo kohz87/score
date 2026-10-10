@@ -796,7 +796,10 @@ export class Orchestrator {
       for (const step of steps) {
         if (step.status !== 'succeeded') continue
         const mine = attempts.filter((a) => a.step_id === step.id)
-        const last = mine.reduce<AttemptRow | undefined>((best, a) => (!best || a.n > best.n ? a : best), undefined)
+        const last = mine.reduce<AttemptRow | undefined>(
+          (best, a) => (!best || a.n > best.n ? a : best),
+          undefined,
+        )
         if (
           !last ||
           last.unknown_reason !== 'recovered_text_only' ||
