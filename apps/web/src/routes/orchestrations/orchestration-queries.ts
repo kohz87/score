@@ -83,21 +83,28 @@ export type RunData = {
 export const runKey = (id: string) => ['orchestrations', 'run', id] as const
 
 /**
- * One run: its snapshot and its event history, read together. Changes arrive as `orchestration.upserted`, which only
- * says "read it again" (the summary has no detail); a snapshot older than an upsert already seen is read again.
+ * One run's data kept live: `load` reads the snapshot and the event history together; the stream's upsert for this
+ * run only says "read it again" (the summary has no detail), and a snapshot older than an upsert already seen is read
+ * again. Shared by orchestration runs and workflow runs (7.1b), which differ only in the event type, key and loader.
  */
-export function useRun(id: string | undefined) {
+export function useLiveRun<T extends { snapshot: { asOfSeq: number } }>(options: {
+  id: string | undefined
+  type: 'orchestration.upserted' | 'workflow.run.upserted'
+  key: readonly unknown[]
+  load: (id: string, signal: AbortSignal) => Promise<T>
+}) {
+  const { id, type, key, load } = options
   const stream = useStream()
   const queryClient = useQueryClient()
   const [needSeq, setNeedSeq] = useState(0)
   useEffect(() => {
     if (!id) return
     const refresh = throttle(
-      () => void queryClient.invalidateQueries({ queryKey: runKey(id), exact: true }),
+      () => void queryClient.invalidateQueries({ queryKey: key, exact: true }),
       REFRESH_MS,
     )
     const offEvent = stream.subscribe((event) => {
-      if (event.type === 'orchestration.upserted' && event.data.id === id) {
+      if (event.type === type && (event.data as { id: string }).id === id) {
         setNeedSeq((seq) => Math.max(seq, event.seq))
         refresh()
       }
@@ -114,20 +121,13 @@ export function useRun(id: string | undefined) {
       offControl()
       refresh.cancel()
     }
-  }, [stream, queryClient, id])
+    // `key` is rebuilt on every render from `id`; only `id` and `type` identify the subscription.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stream, queryClient, id, type])
   const query = useQuery({
-    queryKey: runKey(id ?? ''),
+    queryKey: key,
     enabled: id !== undefined,
-    queryFn: async ({ signal }): Promise<RunData> => {
-      const path = `orchestrations/${encodeURIComponent(id!)}`
-      const [snapshot, events] = await Promise.all([
-        apiFetch(path, { signal }).then((value) => OrchestrationSnapshotSchema.parse(value)),
-        apiFetch(`${path}/events`, { signal }).then((value) =>
-          OrchestrationEventsSchema.parse(value),
-        ),
-      ])
-      return { snapshot, events: events.events }
-    },
+    queryFn: ({ signal }) => load(id!, signal),
     retry: false,
   })
   // The read raced an update (its asOfSeq is older than an upsert already seen): read once more.
@@ -147,6 +147,25 @@ export function useRun(id: string | undefined) {
   return query
 }
 
+/** One orchestration: its snapshot and its event history. */
+export function useRun(id: string | undefined) {
+  return useLiveRun<RunData>({
+    id,
+    type: 'orchestration.upserted',
+    key: runKey(id ?? ''),
+    load: async (runId, signal) => {
+      const path = `orchestrations/${encodeURIComponent(runId)}`
+      const [snapshot, events] = await Promise.all([
+        apiFetch(path, { signal }).then((value) => OrchestrationSnapshotSchema.parse(value)),
+        apiFetch(`${path}/events`, { signal }).then((value) =>
+          OrchestrationEventsSchema.parse(value),
+        ),
+      ])
+      return { snapshot, events: events.events }
+    },
+  })
+}
+
 export function usePreflight(leadAgentId: string, allowedAgents: string[]) {
   const key = allowedAgents.join(',')
   return useQuery({
@@ -164,7 +183,7 @@ export function usePreflight(leadAgentId: string, allowedAgents: string[]) {
   })
 }
 
-const post = (path: string, body: unknown) =>
+export const post = (path: string, body: unknown) =>
   apiFetch(path, {
     method: 'POST',
     headers: { 'Idempotency-Key': newId() },
@@ -185,10 +204,28 @@ export function describeOrchError(error: unknown): string {
     return 'This changed while you were looking. The page now shows the latest; check it and decide again.'
   if (error.code === 'orchestration_owned')
     return 'This room belongs to a running orchestration. Use the run controls instead.'
+  if (error.code === 'stale_plan')
+    return 'What would be re-created changed while you were looking. The page now shows the new plan; check it and decide again.'
+  if (error.code === 'not_retryable')
+    return 'This step can not be retried any more (no attempts left, or it moved on). The page now shows where it is.'
+  if (error.code === 'not_open')
+    return 'That is not waiting for a decision any more. The page now shows where the run is.'
   return error.message
 }
 
 export type RunActions = ReturnType<typeof useRunActions>
+
+/** What a decision card needs from a mutation; orchestration and workflow runs both satisfy it (7.1b). */
+export type Act<V> = { mutate: (variables: V) => void; isPending: boolean; error: unknown }
+export type DecisionActions = {
+  gate: Act<{ gateId: string; body: GateDecision }>
+  limits: Act<LimitsDecision>
+  pause: Act<RunControl>
+  resume: Act<RunControl>
+  stop: Act<RunControl>
+  waiver: Act<WaiverDecision>
+  abandon: Act<AbandonDecision>
+}
 
 function useRunPost<V>(id: string, build: (variables: V) => { path: string; body: unknown }) {
   const queryClient = useQueryClient()

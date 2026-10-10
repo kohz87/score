@@ -13,6 +13,7 @@ import { RoomLink } from './RoomLink.tsx'
 import { RoomList } from './RoomList.tsx'
 import { NewOrchestrationDialog } from '../orchestrations/NewOrchestrationDialog.tsx'
 import { orchestrationsQuery } from '../orchestrations/orchestration-queries.ts'
+import { workflowRunsQuery } from '../workflows/workflow-queries.ts'
 import './chat.css'
 
 export function ChatPage() {
@@ -25,9 +26,13 @@ export function ChatPage() {
   const navigate = useNavigate()
   const [listOpen, setListOpen] = useState(false)
   const closeList = useCallback(() => setListOpen(false), [])
-  const orchestrationRooms = new Set(
-    (useStreamQuery(orchestrationsQuery).data ?? []).map((run) => run.roomId),
-  )
+  const orchestrationRoomList = useStreamQuery(orchestrationsQuery).data
+  const workflowRoomList = useStreamQuery(workflowRunsQuery).data
+  const workflowRooms = new Set((workflowRoomList ?? []).map((run) => run.roomId))
+  const orchestrationRooms = new Set([
+    ...(orchestrationRoomList ?? []).map((run) => run.roomId),
+    ...workflowRooms,
+  ])
   return (
     <div className="chat-layout">
       {roomId && (
@@ -93,6 +98,7 @@ export function ChatPage() {
               selected={roomId}
               agents={agents.data ?? []}
               orchestrationRooms={orchestrationRooms}
+              workflowRooms={workflowRooms}
               onShare={setSharing}
             />
           )}

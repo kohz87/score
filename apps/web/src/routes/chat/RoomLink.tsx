@@ -13,7 +13,7 @@ export function RoomLink({
   room: Room
   selected?: string | undefined
   agents: AgentSummary[]
-  orchestration?: boolean
+  orchestration?: boolean | 'workflow'
 }) {
   const agent = agents.find((item) => item.id === room.leadAgentId)
   return (
@@ -44,7 +44,11 @@ export function RoomLink({
           </small>
         )}
         {room.importedFrom && <small>From {room.importedFrom.label}</small>}
-        {orchestration && <small className="chat-room-orch">Orchestration</small>}
+        {orchestration && (
+          <small className="chat-room-orch">
+            {orchestration === 'workflow' ? 'Workflow run' : 'Orchestration'}
+          </small>
+        )}
       </span>
       {room.unread > 0 && (
         <span className="chat-unread" aria-label={`${room.unread} unread messages`}>

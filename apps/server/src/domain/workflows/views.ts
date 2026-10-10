@@ -640,6 +640,7 @@ export function workflowEventsOf(sqlite: DatabaseSync, o: OrchRow): WorkflowEven
             : row.kind.replaceAll('_', ' '),
       ).slice(0, 300),
       nodeId,
+      edgeId: row.kind === 'wf_token' && typeof detail.edgeId === 'string' ? detail.edgeId : null,
     })
   }
   return events

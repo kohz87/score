@@ -26,6 +26,10 @@ export type NodeVisual =
   | 'blocked'
   | 'rejected'
   | 'not_started'
+  // Workflow nodes (7.1b): not reached yet, ready but waiting for a condition, passed over by a branch.
+  | 'waiting'
+  | 'ready'
+  | 'skipped'
 
 export const visualLabel: Record<NodeVisual, string> = {
   queued: 'queued',
@@ -40,6 +44,9 @@ export const visualLabel: Record<NodeVisual, string> = {
   blocked: 'blocked',
   rejected: 'rejected',
   not_started: 'not started',
+  waiting: 'waiting',
+  ready: 'ready',
+  skipped: 'skipped',
 }
 
 export function stepVisual(
@@ -65,9 +72,16 @@ export function stepVisual(
 
 /** Steps that are over, one way or another. */
 export const isSettledVisual = (visual: NodeVisual): boolean =>
-  ['succeeded', 'failed', 'cancelled', 'blocked', 'rejected', 'not_started', 'abandoned'].includes(
-    visual,
-  )
+  [
+    'succeeded',
+    'failed',
+    'cancelled',
+    'blocked',
+    'rejected',
+    'not_started',
+    'abandoned',
+    'skipped',
+  ].includes(visual)
 
 // ------------------------------------------------------------------------------------------------------ the graph
 
@@ -76,12 +90,20 @@ export interface GraphNode {
   kind: 'lead' | 'step'
   agentId: string
   label: string
+  /** Workflow nodes (7.1b): what kind of node it is; absent for orchestration steps. */
+  shape?: 'agent' | 'gate' | 'branch' | 'join' | 'end'
+  /** Shown instead of the id. */
+  title?: string
+  /** Replaces the state word on the second line (for example the branch's rule count). */
+  caption?: string
 }
 export interface GraphEdge {
   id: string
   from: string
   to: string
-  kind: 'assign' | 'after' | 'replaces'
+  kind: 'assign' | 'after' | 'replaces' | 'ok' | 'failed' | 'rejected' | 'branch' | 'default'
+  /** Drawn on the edge (a workflow port: "failed", a branch rule). */
+  label?: string
 }
 
 /** A lead node plus one node per step; edges from `after` and `replaces` (dashed); the lead feeds steps with no `after`. */
@@ -124,6 +146,8 @@ export type EffectTone = 'ok' | 'refused' | 'need' | 'fail'
 export interface Effect {
   /** The event that caused it: an effect is never created without one. */
   eventId: string
+  /** The edge a dot travels on, when the event names one (workflow tokens). */
+  edge?: string
   kind: 'dot' | 'pulse'
   /** Node ids. A pulse lights `to`. */
   from: string
@@ -338,7 +362,7 @@ export function replayAt(events: readonly OrchEvent[], count: number): ReplaySta
 
 /** The pause the replay waits after an event before showing the next, at 1x: the recorded gap, kept readable. */
 export function replayDelayMs(
-  events: readonly OrchEvent[],
+  events: readonly Pick<OrchEvent, 'at'>[],
   index: number,
   speed: 1 | 4 | 16,
 ): number {

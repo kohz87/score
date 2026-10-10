@@ -736,3 +736,146 @@ button.orch-primary,
   display: grid;
   gap: 12px;
 }
+
+/* Workflow runs (PLAN 7.1b): local nodes are shapes (gate diamond, branch hexagon, join and end pills), edges carry
+   labels, and a branch that was not taken is struck and faded. State is always a word as well as a colour and a
+   line style. */
+.orch-edge--failed,
+.orch-edge--rejected {
+  stroke: var(--agent-coral-text);
+  stroke-dasharray: 6 4;
+}
+.orch-edge--branch,
+.orch-edge--default {
+  stroke: var(--flow-edge);
+}
+.orch-edge--taken {
+  stroke: var(--ink);
+  stroke-width: 2.4;
+}
+.orch-edge--skipped {
+  stroke-dasharray: 2 5;
+  opacity: 0.55;
+}
+.orch-edge-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  fill: var(--ink-muted);
+  paint-order: stroke;
+  stroke: var(--flow-canvas);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.orch-edge-label--skipped {
+  opacity: 0.6;
+}
+.orch-node--shaped {
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+  padding: 0 14px;
+  text-align: center;
+}
+.orch-node--shape-gate {
+  padding: 0 28px;
+}
+.orch-node--shape-branch {
+  padding: 0 26px;
+}
+.orch-node--shaped .orch-node__text {
+  align-items: center;
+  max-width: 100%;
+}
+.orch-node__shape {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.orch-node__shape polygon,
+.orch-node__shape rect {
+  fill: var(--card);
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+}
+.orch-node--shaped .orch-node__text {
+  position: relative;
+}
+.orch-node--shaped.orch-node--waiting .orch-node__shape :is(polygon, rect),
+.orch-node--shaped.orch-node--ready .orch-node__shape :is(polygon, rect) {
+  stroke-dasharray: 5 4;
+}
+.orch-node--shaped.orch-node--gate .orch-node__shape :is(polygon, rect) {
+  fill: var(--agent-saffron-tint);
+  stroke: var(--ink);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--agent-saffron) 70%, transparent));
+}
+.orch-node--shaped.orch-node--running .orch-node__shape :is(polygon, rect),
+.orch-node--shaped.orch-node--admitting .orch-node__shape :is(polygon, rect) {
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+.orch-node--shaped.orch-node--succeeded .orch-node__shape :is(polygon, rect) {
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+.orch-node--shaped.orch-node--failed .orch-node__shape :is(polygon, rect),
+.orch-node--shaped.orch-node--rejected .orch-node__shape :is(polygon, rect) {
+  fill: var(--agent-coral-tint);
+  stroke: var(--agent-coral-text);
+  stroke-width: 2.5;
+}
+.orch-node--shaped.orch-node--abandoned .orch-node__shape :is(polygon, rect),
+.orch-node--shaped.orch-node--unknown .orch-node__shape :is(polygon, rect) {
+  fill: var(--subtle-2);
+  stroke: var(--muted);
+  stroke-width: 2.5;
+  stroke-dasharray: 2 4;
+}
+.orch-node--skipped,
+.orch-node--shaped.orch-node--skipped {
+  opacity: 0.55;
+  border-style: dotted;
+}
+.orch-node--skipped .orch-node__text b {
+  text-decoration: line-through;
+}
+.orch-node--shaped.orch-node--skipped .orch-node__shape :is(polygon, rect) {
+  stroke-dasharray: 2 5;
+}
+.orch-node--waiting {
+  border: 1.5px dashed var(--line-strong);
+}
+.orch-node--ready {
+  border: 2px solid var(--line-strong);
+}
+.orch-node--shaped:focus-visible {
+  outline: none;
+}
+.orch-node--shaped:focus-visible .orch-node__shape :is(polygon, rect) {
+  stroke: var(--ink);
+  stroke-width: 4;
+}
+.orch-node--shaped.orch-node--selected .orch-node__shape :is(polygon, rect) {
+  stroke: var(--ink);
+  stroke-width: 4;
+}
+.orch-state--skipped,
+.orch-state--waiting,
+.orch-state--ready {
+  color: var(--ink-muted);
+}
+.orch-node--shaped.orch-node--lit .orch-node__shape :is(polygon, rect) {
+  stroke: var(--ink);
+  stroke-width: 5;
+}
+.orch-node--shaped.orch-node--lit.orch-tone--need .orch-node__shape :is(polygon, rect) {
+  stroke: var(--agent-saffron);
+}
+.orch-node--shaped.orch-node--lit.orch-tone--fail .orch-node__shape :is(polygon, rect),
+.orch-node--shaped.orch-node--lit.orch-tone--refused .orch-node__shape :is(polygon, rect) {
+  stroke: var(--agent-coral);
+}

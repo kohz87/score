@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router'
+import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import type { BriefStatus, BriefSummary } from '@score/contract'
 import { useStreamQuery } from '../../../data/query-client.ts'
 import { taskAgentsQuery, taskRoomsQuery } from '../../tasks/task-queries.ts'
@@ -10,6 +10,10 @@ import { useBriefFlow, useBriefLists, useBriefRunControl } from './flow-queries.
 import { NewOrchestrationDialog } from '../../orchestrations/NewOrchestrationDialog.tsx'
 import { OrchestrationLive } from '../../orchestrations/OrchestrationLive.tsx'
 import { orchestrationsQuery } from '../../orchestrations/orchestration-queries.ts'
+import { WorkflowEditorRoute } from '../../workflows/WorkflowEditor.tsx'
+import { WorkflowRunLive } from '../../workflows/WorkflowRunLive.tsx'
+import { WorkflowsPage } from '../../workflows/WorkflowsPage.tsx'
+import { workflowRunsQuery } from '../../workflows/workflow-queries.ts'
 import './flow.css'
 
 const statusLabel: Record<BriefStatus, string> = {
@@ -53,7 +57,40 @@ function RunControl({ brief }: { brief: BriefSummary }) {
 
 export type FlowViewProps = { onSelect?: (nodeId: string | null) => void }
 
-export function FlowView({ onSelect }: FlowViewProps = {}) {
+/** Flow has two sections: the runs (graphs of work, orchestrations and workflow runs) and the workflows that are drawn. */
+export function FlowView(props: FlowViewProps = {}) {
+  const { pathname } = useLocation()
+  const workflows = pathname.startsWith('/now/flow/workflows')
+  return (
+    <>
+      <nav aria-label="Flow sections" className="flow-sections">
+        <NavLink
+          to="/now/flow"
+          end={false}
+          className={() => `flow-section${workflows ? '' : ' flow-section--on'}`}
+        >
+          Runs
+        </NavLink>
+        <NavLink
+          to="/now/flow/workflows"
+          className={() => `flow-section${workflows ? ' flow-section--on' : ''}`}
+        >
+          Workflows
+        </NavLink>
+      </nav>
+      {workflows ? <WorkflowsArea /> : <RunsView {...props} />}
+    </>
+  )
+}
+
+function WorkflowsArea() {
+  const { workflowId } = useParams()
+  const { pathname } = useLocation()
+  if (pathname.replace(/\/+$/, '') === '/now/flow/workflows') return <WorkflowsPage />
+  return <WorkflowEditorRoute key={workflowId ?? 'new'} />
+}
+
+function RunsView({ onSelect }: FlowViewProps) {
   const { briefId: routeBriefId } = useParams()
   const navigate = useNavigate()
   // `?node=` comes from links such as a task's "See it in Flow"; a click in the graph takes over.
@@ -73,6 +110,9 @@ export function FlowView({ onSelect }: FlowViewProps = {}) {
   const briefId = routeBriefId ?? activeItems[0]?.id ?? recentItems[0]?.id
   const flow = useBriefFlow(briefId)
   const orchestration = orchestrations.find((item) => item.briefId === briefId)
+  const workflowRun = (useStreamQuery(workflowRunsQuery).data ?? []).find(
+    (item) => item.briefId === briefId,
+  )
 
   const selectedId =
     selection &&
@@ -174,12 +214,15 @@ export function FlowView({ onSelect }: FlowViewProps = {}) {
               <span className={`flow-status flow-status--${brief.status}`}>
                 {statusLabel[brief.status]}
               </span>
-              {!orchestration && <RunControl brief={brief} />}
+              {!orchestration && !workflowRun && <RunControl brief={brief} />}
             </>
           )}
           <button type="button" className="flow-run-button" onClick={() => setStarting(true)}>
             New orchestration
           </button>
+          <Link to="/now/flow/workflows" className="flow-run-button">
+            Run a workflow
+          </Link>
         </div>
       </section>
       {starting && (
@@ -192,7 +235,13 @@ export function FlowView({ onSelect }: FlowViewProps = {}) {
           }}
         />
       )}
-      {orchestration ? (
+      {workflowRun ? (
+        <WorkflowRunLive
+          key={workflowRun.id}
+          runId={workflowRun.id}
+          onStarted={(run) => void navigate(`/now/flow/${encodeURIComponent(run.briefId)}`)}
+        />
+      ) : orchestration ? (
         <OrchestrationLive key={orchestration.id} orchestrationId={orchestration.id} />
       ) : flow.isError ? (
         <p role="alert" className="flow-empty">
@@ -227,7 +276,7 @@ export function FlowView({ onSelect }: FlowViewProps = {}) {
           />
         </div>
       )}
-      {flow.data && !orchestration && (
+      {flow.data && !orchestration && !workflowRun && (
         <div className="flow-bottom">
           <FlowLog key={briefId} briefId={briefId} agents={agents.data ?? []} />
           <FlowStats stats={flow.data.stats} />

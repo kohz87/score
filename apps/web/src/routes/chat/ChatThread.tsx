@@ -30,6 +30,8 @@ import { useShowDeleted } from './deleted-toggle.ts'
 import { roomLabel } from './room-label.ts'
 import { orchestrationsQuery } from '../orchestrations/orchestration-queries.ts'
 import { RoomRunPanel } from '../orchestrations/RoomRunPanel.tsx'
+import { WorkflowRoomPanel } from '../workflows/WorkflowRoomPanel.tsx'
+import { workflowRunsQuery } from '../workflows/workflow-queries.ts'
 
 export function QueryError({ text, retry }: { text: string; retry: () => void }) {
   return (
@@ -303,6 +305,10 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
   const orchestration = useStreamQuery(orchestrationsQuery).data?.find(
     (item) => item.roomId === roomId,
   )
+  // A workflow run owns its room the same way (contract §15).
+  const workflowRun = useStreamQuery(workflowRunsQuery).data?.find((item) => item.roomId === roomId)
+  const owned = (orchestration ?? workflowRun)?.ownership
+  const roomIsOwned = owned !== undefined && owned !== 'released'
   return (
     <section className="chat-thread" aria-label="Conversation">
       <header className="chat-thread-header">
@@ -345,6 +351,7 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
           }}
         >
           {orchestration && <RoomRunPanel summary={orchestration} agents={agents} />}
+          {workflowRun && <WorkflowRoomPanel summary={workflowRun} agents={agents} />}
           <div className="chat-messages">
             <MessagePage
               roomId={roomId}
@@ -360,17 +367,17 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
         </div>
       )}
       <DeleteToast />
-      {room && orchestration && orchestration.ownership !== 'released' && (
+      {room && roomIsOwned && (
         <div className="chat-composer-locked">
           <textarea
             disabled
             rows={1}
             aria-label="Message"
-            placeholder="This room belongs to a running orchestration. Use the run controls above."
+            placeholder={`This room belongs to a running ${workflowRun ? 'workflow' : 'orchestration'}. Use the run controls above.`}
           />
         </div>
       )}
-      {room && !(orchestration && orchestration.ownership !== 'released') && (
+      {room && !roomIsOwned && (
         // The composer stays mounted (keeping a draft) but is out of reach while an older version is on screen.
         <div className={view ? undefined : 'chat-composer-slot'} hidden={view !== null}>
           <Composer
