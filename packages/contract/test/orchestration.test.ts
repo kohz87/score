@@ -5,6 +5,7 @@ import {
   ORC_CAPABILITY_PLACEHOLDER,
   OrchAssignArgsSchema,
   OrchestrationCreateSchema,
+  OrchestrationEventsSchema,
   OrchestrationSummarySchema,
 } from '../src/index.ts'
 import * as f from './fixtures.ts'
@@ -53,5 +54,23 @@ describe('orchestration contract', () => {
 
   test('summary round-trips', () => {
     expect(OrchestrationSummarySchema.parse(f.orchestrationSummary)).toEqual(f.orchestrationSummary)
+  })
+
+  test('event history entries need a stable id and a time', () => {
+    const event = {
+      id: 'cmd:a1:c1',
+      at: '2026-10-10T10:00:00.000Z',
+      kind: 'command',
+      stepId: 's1',
+      attemptId: 'a1',
+      tool: 'orch.assign',
+      verdict: 'accepted',
+      code: null,
+      summary: 'Assigned s1',
+    }
+    expect(OrchestrationEventsSchema.parse({ asOfSeq: 3, events: [event] }).events).toHaveLength(1)
+    expect(() =>
+      OrchestrationEventsSchema.parse({ asOfSeq: 3, events: [{ ...event, kind: 'nope' }] }),
+    ).toThrow()
   })
 })
