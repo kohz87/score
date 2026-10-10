@@ -1,0 +1,42 @@
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  background: color-mix(in srgb, var(--ink) 40%, transparent);
+  animation: drawer-fade 200ms ease-out;
+}
+@media (width < 1024px) {
+  .responsive-drawer:not(.is-inline) {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    flex: none;
+    width: min(340px, calc(100vw - 40px));
+    max-width: none;
+    padding: 20px 16px max(20px, env(safe-area-inset-bottom));
+    background: var(--ground);
+    border-radius: 0 var(--radius-card) var(--radius-card) 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition:
+      transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      visibility 0s linear 220ms;
+  }
+  .responsive-drawer.is-open:not(.is-inline) {
+    transform: none;
+    visibility: visible;
+    transition-delay: 0s;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .responsive-drawer:not(.is-inline) {
+    transition: none;
+  }
+  .drawer-backdrop {
+    animation: none;
+  }
+}

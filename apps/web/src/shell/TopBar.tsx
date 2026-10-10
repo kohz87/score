@@ -1,4 +1,5 @@
 import type { Ref } from 'react'
+import { NAV_DRAWER_ID } from './NavDrawer.tsx'
 import { MainNav } from './MainNav.tsx'
 import { TerminalButton } from './TerminalButton.tsx'
 
@@ -6,11 +7,41 @@ type TopBarProps = {
   commandButtonRef: Ref<HTMLButtonElement>
   onOpenCommand: () => void
   commandOpen: boolean
+  menuButtonRef: Ref<HTMLButtonElement>
+  onToggleMenu: () => void
+  menuOpen: boolean
+  terminalOffered: boolean
 }
 
-export function TopBar({ commandButtonRef, onOpenCommand, commandOpen }: TopBarProps) {
+export function TopBar({
+  commandButtonRef,
+  onOpenCommand,
+  commandOpen,
+  menuButtonRef,
+  onToggleMenu,
+  menuOpen,
+  terminalOffered,
+}: TopBarProps) {
   return (
     <header className="top-bar">
+      <button
+        ref={menuButtonRef}
+        className="menu-trigger"
+        type="button"
+        onClick={onToggleMenu}
+        aria-expanded={menuOpen}
+        aria-controls={NAV_DRAWER_ID}
+        aria-label="Menu"
+      >
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+          <path
+            d="M3 5 H15 M3 9 H15 M3 13 H15"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
       <div className="brand">
         <svg
           className="brand-mark"
@@ -52,7 +83,7 @@ export function TopBar({ commandButtonRef, onOpenCommand, commandOpen }: TopBarP
         <span>Search or run a command</span>
         <kbd className="command-shortcut">⌘K</kbd>
       </button>
-      <TerminalButton />
+      <TerminalButton offered={terminalOffered} />
       <div className="avatar" role="img" aria-label="You">
         Y
       </div>

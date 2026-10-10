@@ -7,11 +7,11 @@ import { apiFetch } from '../data/api.ts'
  * Top-bar shortcut to the web terminal (PLAN 7.3), shown only when the server offers one. Reads the status itself (the
  * shell renders outside the query provider) and never on the pairing page, which must make no other request.
  */
-export function TerminalButton() {
+export function useTerminalAvailable(skip = false) {
   const pairing = useLocation().pathname.startsWith('/pair')
   const [available, setAvailable] = useState(false)
   useEffect(() => {
-    if (pairing) return
+    if (pairing || skip) return
     let alive = true
     apiFetch('session/security')
       .then((body) => {
@@ -22,8 +22,14 @@ export function TerminalButton() {
     return () => {
       alive = false
     }
-  }, [pairing])
-  if (pairing || !available) return null
+  }, [pairing, skip])
+  return !pairing && available
+}
+
+/** `offered` lets the shell share one status read with the navigation drawer; alone, the button reads it itself. */
+export function TerminalButton({ offered }: { offered?: boolean }) {
+  const own = useTerminalAvailable(offered !== undefined)
+  if (!(offered ?? own)) return null
   return (
     <Link className="top-bar-terminal" to="/terminal" aria-label="Terminal" title="Terminal">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">

@@ -210,6 +210,11 @@ h1 {
   letter-spacing: -0.035em;
   line-height: 0.98;
 }
+@media (width < 1024px) {
+  h1 {
+    font-size: clamp(30px, 6.4vw, 58px);
+  }
+}
 code,
 pre,
 kbd {
