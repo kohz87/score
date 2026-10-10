@@ -262,3 +262,38 @@ test('tool readiness: a lead whose Hermes lists old MCP tools fails with a reloa
   expect((await readiness(null)).status).toBe('unknown')
   expect((await readiness(null)).message).toContain('reload MCP')
 })
+
+test('fix-l: a room summary that points at a lead note does not block pruning; the note stays with its references', async () => {
+  h = await harness({
+    lead: {
+      script: byTurn({
+        1: async (t) => {
+          await t.call('orch.note', { text: 'a lead note' }, 'n1')
+          await t.call('orch.finish', { outcome: 'success', summary: 'done' })
+        },
+      }),
+    },
+  })
+  const id = await h.create({ gatePolicy: 'none' })
+  await h.until(() => status(id) === 'succeeded')
+  const note = h.rows("SELECT id, room_id FROM messages WHERE id LIKE 'orc-note:%'") as {
+    id: string
+    room_id: string
+  }[]
+  expect(note).toHaveLength(1)
+  // A post-release summary whose boundary is the lead note (what reserveMessageRun writes).
+  h.db.sqlite
+    .prepare(
+      `INSERT INTO message_runs (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, state, created_at, purpose)
+       VALUES ('sum-1', ?1, 'lead', ?2, 0, 'turn-sum-1', ?2, 'Summarise', '["lead"]', 'completed', '2026-10-10T00:00:00.000Z', 'summary')`,
+    )
+    .run(note[0]!.room_id, note[0]!.id)
+  h.db.sqlite.prepare("UPDATE orchestrations SET ended_at = '2020-01-01T00:00:00.000Z'").run()
+  h.db.sqlite
+    .prepare("UPDATE message_runs SET orchestration_attempt_id = NULL WHERE message_id = 'sum-1'")
+    .run()
+  expect(h.orch.maintenance().pruned).toBe(1)
+  expect(h.rows('SELECT 1 FROM orchestrations')).toHaveLength(0)
+  // Referenced data stays, like a referenced reply.
+  expect(h.rows("SELECT 1 FROM messages WHERE id LIKE 'orc-note:%'")).toHaveLength(1)
+})
