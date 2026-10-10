@@ -2451,7 +2451,17 @@ export class Orchestrator {
       }
       tx.prepare('DELETE FROM command_intents WHERE idempotency_key = ?').run(turn)
     }
-    tx.prepare('DELETE FROM messages WHERE room_id = ? AND id != ?').run(o.room_id, o.brief_id)
+    // Only what the run's attempts wrote: their reply rows and the lead's notes. Anything the person or another
+    // process added to the room after it was released stays, with whatever refers to it.
+    for (const attempt of tx
+      .prepare('SELECT id, message_id FROM orc_attempts WHERE orchestration_id = ?')
+      .all(o.id) as { id: string; message_id: string }[]) {
+      tx.prepare('DELETE FROM messages WHERE room_id = ? AND id = ?').run(o.room_id, attempt.message_id)
+      tx.prepare("DELETE FROM messages WHERE room_id = ? AND id LIKE ? ESCAPE '\\'").run(
+        o.room_id,
+        `orc-note:${attempt.id.replace(/[\\%_]/g, '\\$&')}:%`,
+      )
+    }
   }
 
   /** Daily: compacts reconciled journal entries and prunes finished, released runs older than the retention. */
