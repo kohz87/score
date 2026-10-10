@@ -1,6 +1,7 @@
 import type { KnowledgeChanged } from '@score/contract'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { ResponsiveDrawer } from '../../components/ResponsiveDrawer.tsx'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery } from '../team/team-queries.ts'
 import { DeleteDialog, MoveDialog, NewNoteDialog } from './KnowledgeDialogs.tsx'
@@ -24,6 +25,8 @@ export function KnowledgePage() {
   const params = useParams()
   const path = params['*'] ? params['*'] : null
   const navigate = useNavigate()
+  const [notesOpen, setNotesOpen] = useState(false)
+  const closeNotes = useCallback(() => setNotesOpen(false), [])
   const info = useKnowledgeInfo()
   const tree = useKnowledgeTree()
   const agents = useStreamQuery(agentsQuery).data ?? []
@@ -119,7 +122,30 @@ export function KnowledgePage() {
   const searching = debounced !== '' || query.trim() !== ''
   return (
     <div className="kn-layout">
-      <nav className="kn-left" aria-label="Notes">
+      <button
+        type="button"
+        className="kn-notes-toggle"
+        aria-haspopup="dialog"
+        aria-expanded={notesOpen}
+        onClick={() => setNotesOpen(true)}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path
+            d="M2.5 4 H13.5 M2.5 8 H13.5 M2.5 12 H9"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+          />
+        </svg>
+        All notes
+      </button>
+      <ResponsiveDrawer
+        as="nav"
+        label="Notes"
+        className="kn-left"
+        open={notesOpen}
+        onClose={closeNotes}
+      >
         <div className="kn-left-head">
           <h1>Knowledge</h1>
           <button
@@ -186,7 +212,7 @@ export function KnowledgePage() {
             </section>
           </>
         )}
-      </nav>
+      </ResponsiveDrawer>
 
       <main className="kn-main" aria-label="Note">
         {notice && (

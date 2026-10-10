@@ -457,17 +457,41 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
-@media (width < 900px) {
+.kn-notes-toggle {
+  display: none;
+}
+@media (width < 1024px) {
   .kn-layout {
     grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
   }
-  .kn-left {
-    position: static;
+  .kn-notes-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 44px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--hairline);
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .kn-left.responsive-drawer:not(.is-inline) {
+    background: var(--card);
     max-height: none;
+    border: 0;
+    border-radius: 0 var(--radius-card) var(--radius-card) 0;
   }
-  .kn-left,
   .kn-main {
     padding: 16px;
+  }
+}
+@media (width < 600px) {
+  .kn-main {
+    border-radius: var(--radius-20);
   }
 }
 
