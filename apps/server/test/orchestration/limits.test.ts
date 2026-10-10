@@ -126,23 +126,44 @@ test('lowering the budget below what is committed pauses the run; raising it res
   expect(status(id)).toBe('running')
 })
 
-test('a deadline fences admission and pauses the run; a new deadline continues it', async () => {
-  h = await harness()
-  const id = await h.create({
-    deadlineAt: new Date(h.scheduler.now() + 5_000).toISOString(),
-    gatePolicy: 'every-step',
+test('deadline expiry fences, retires queued work and owes a Stop on every admitted attempt', async () => {
+  h = await harness({
+    lead: {
+      script: byTurn({
+        1: async (t) => {
+          await t.call('orch.assign', { agent: 'builder', instruction: '[fake:hold] running' })
+          await t.call('orch.assign', { agent: 'reviewer', instruction: 'later', after: ['s1'] })
+        },
+      }),
+    },
   })
-  await h.until(() => status(id) === 'paused', 60_000)
-  expect(h.orch.summary(id).pauseReason).toBe('deadline')
-  expect(h.orch.summary(id).needsYou).toContainEqual({ kind: 'budget', reason: 'deadline' })
+  const id = await h.create({
+    deadlineAt: new Date(h.scheduler.now() + 20_000).toISOString(),
+    gatePolicy: 'none',
+  })
+  await h.until(() => attemptOf(h, id, 'step', 's1').some((a) => a.state === 'running'))
+  expect(attemptOf(h, id, 'step', 's1')[0]!.stopRequestedAt).toBeNull()
+  await h.until(() => ['stopping', 'stopped'].includes(status(id)), 60_000)
+  const d = detail(id)
+  expect(d.endReason ?? 'deadline expired').toBe('deadline expired')
+  expect(d.stepsList[1]!.disposition).toBe('not_started: stopped')
+  expect(attemptOf(h, id, 'step', 's1')[0]!.stopRequestedAt).not.toBeNull()
+  await h.until(() => attemptOf(h, id, 'step', 's1')[0]!.stopAcknowledgedAt !== null)
+  expect(attemptOf(h, id, 'step', 's2')).toHaveLength(0)
+  await expect(
+    h.orch.limits(id, {
+      deadlineAt: new Date(h.scheduler.now() + 99_000).toISOString(),
+      orchestrationRevision: detail(id).revision,
+    }),
+  ).resolves.toBeDefined()
+  expect(['stopping', 'stopped']).toContain(status(id))
+  // A deadline in the past cannot be set.
   await expect(
     h.orch.limits(id, {
       deadlineAt: new Date(h.scheduler.now() - 1000).toISOString(),
       orchestrationRevision: detail(id).revision,
     }),
   ).rejects.toMatchObject({ status: 400 })
-  await h.orch.limits(id, { deadlineAt: null, orchestrationRevision: detail(id).revision })
-  expect(status(id)).toBe('running')
 })
 
 test('capacity: at most 5 running orchestrations', async () => {
@@ -179,37 +200,64 @@ test('capacity: concurrent steps per run, per agent and overall', async () => {
   expect(detail(id).stepsList.filter((s) => s.status === 'queued')).toHaveLength(2)
 })
 
-test('capacity: at most 6 steps run at once across all orchestrations', async () => {
+test('capacity: at most 6 steps run at once across all orchestrations (more than the per-agent limit alone allows)', async () => {
   h = await harness({
     lead: {
       script: byTurn({
         1: async (t) => {
-          for (const agent of ['builder', 'builder', 'reviewer', 'reviewer', 'designer'])
-            await t.call('orch.assign', { agent, instruction: '[fake:hold]' })
+          for (const agent of t.allowedAgents) {
+            await t.call('orch.assign', { agent, instruction: '[fake:hold] a' })
+            await t.call('orch.assign', { agent, instruction: '[fake:hold] b' })
+          }
         },
       }),
     },
   })
-  // three runs of 3 concurrent steps would be 9; the overall limit holds it at 6
-  const ids: string[] = []
-  for (let i = 0; i < 3; i++)
-    ids.push(
-      await h.create({
-        goal: `g${i}`,
-        gatePolicy: 'none',
-        maxConcurrentSteps: 3,
-        allowedAgents: ['builder', 'reviewer', 'designer'],
-        maxSteps: 30,
-      }),
-    )
-  await h.until(() => h.rows("SELECT 1 FROM orc_attempts WHERE kind = 'step'").length >= 6)
-  await h.settle(5000)
-  expect(
+  // Four agents can run 2 each (8) but the overall ceiling is 6; the second run uses another lead.
+  await h.create({
+    goal: 'a',
+    gatePolicy: 'none',
+    maxConcurrentSteps: 3,
+    allowedAgents: ['builder', 'reviewer', 'designer'],
+    maxSteps: 30,
+  })
+  await h.create({
+    goal: 'b',
+    leadAgentId: 'designer',
+    gatePolicy: 'none',
+    maxConcurrentSteps: 3,
+    allowedAgents: ['lead', 'builder', 'reviewer'],
+    maxSteps: 30,
+  })
+  const live = () =>
     h.rows(
       "SELECT 1 FROM orc_attempts WHERE kind = 'step' AND state IN ('created','send_started','running')",
-    ).length,
-  ).toBeLessThanOrEqual(6)
-  expect(ids).toHaveLength(3)
+    ).length
+  await h.until(() => live() >= 5)
+  await h.settle(8000)
+  expect(live()).toBeLessThanOrEqual(6)
+  expect(live()).toBe(6)
+})
+
+test('a finished run whose attempts are still unresolved keeps its orchestration capacity', async () => {
+  h = await harness({
+    lead: {
+      script: byTurn({
+        1: async (t) => {
+          await t.call('orch.assign', { agent: 'builder', instruction: '[fake:hold]' })
+          await t.call('orch.finish', { outcome: 'success', summary: 'x' })
+        },
+      }),
+    },
+  })
+  const { endRun } = await import('./harness.ts')
+  const id = await h.create({ gatePolicy: 'none' })
+  await h.until(() => attemptOf(h, id, 'step', 's1').some((a) => a.state === 'running'))
+  await endRun(h, attemptOf(h, id, 'step', 's1')[0]!.runId!, 'interrupted')
+  await h.until(() => status(id) === 'finished_with_unresolved')
+  expect(
+    (await h.orch.preflight('lead', ['builder'])).checks.find((c) => c.id === 'capacity')!.message,
+  ).toContain('1 of 5')
 })
 
 test('storage quota: a run does not start when its reserve does not fit; the control reserve is kept for Stop', async () => {

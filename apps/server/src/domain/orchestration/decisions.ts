@@ -183,17 +183,37 @@ export function resumeRun(ctx: Ctx, orchId: string, body: RunControl): void {
  * disposition, withdraws gates and inquiries, refuses attempts not yet sent, and owes a Stop on every attempt that may
  * be running. The Stop fence is journaled before the commit.
  */
-export function stopRun(ctx: Ctx, orchId: string): void {
+export function stopRun(ctx: Ctx, orchId: string, reason: 'stop' | 'deadline' = 'stop'): void {
   const { sqlite, now } = ctx
   const o = requireOrch(sqlite, orchId)
-  if (isTerminalStatus(o.status))
-    throw new HttpError(409, 'conflict', `The run is already ${o.status}`)
+  if (isTerminalStatus(o.status)) {
+    // A finished run can still hold attempts that are not confirmed ended: Stop owes Hermes a Stop on each, without
+    // reopening admission or releasing their capacity (that is abandonment's job).
+    const open = attemptsOf(sqlite, orchId).filter(
+      (a) =>
+        ['send_started', 'running', 'unknown'].includes(a.state) && a.stop_requested_at === null,
+    )
+    if (open.length === 0) throw new HttpError(409, 'conflict', `The run is already ${o.status}`)
+    for (const attempt of open) oweStop(sqlite, attempt, now)
+    addHistory(
+      sqlite,
+      orchId,
+      'stop_requested',
+      { after: o.status, attempts: open.map((a) => a.id) },
+      now,
+    )
+    journalSoft(ctx, () =>
+      ctx.journal.append({ kind: 'stop_fence', orchestrationId: orchId, reason: 'stop_after_end' }),
+    )
+    touch(ctx, orchId)
+    return
+  }
   if (o.status === 'stopping') return
   sqlite
     .prepare(
-      "UPDATE orchestrations SET status = 'stopping', pause_reason = NULL, stop_requested_at = ? WHERE id = ?",
+      "UPDATE orchestrations SET status = 'stopping', pause_reason = NULL, stop_requested_at = ?, end_reason = ? WHERE id = ?",
     )
-    .run(now, orchId)
+    .run(now, reason === 'deadline' ? 'deadline expired' : null, orchId)
   retireQueued(sqlite, orchId, 'not_started: stopped', now)
   withdrawGates(sqlite, orchId, now)
   withdrawInquiries(sqlite, orchId, now)
@@ -210,7 +230,7 @@ export function stopRun(ctx: Ctx, orchId: string): void {
   }
   addHistory(sqlite, orchId, 'stop_requested', {}, now)
   journalSoft(ctx, () =>
-    ctx.journal.append({ kind: 'stop_fence', orchestrationId: orchId, reason: 'stop' }),
+    ctx.journal.append({ kind: 'stop_fence', orchestrationId: orchId, reason }),
   )
   touch(ctx, orchId)
 }

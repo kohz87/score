@@ -1514,3 +1514,13 @@ any entry missing from or newer than the database puts the global admission fenc
 Restore `$SCORE_HOME` only with `scripts/score restore <backup>` (sets the fence and the untrusted-history marker); a restore
 done any other way on the same host and boot cannot be detected. A Hermes admission is never replayed after `send_started`:
 the attempt is `unknown`.
+
+### 7.5a review round (Codex pre-merge review) — behaviour changes
+- **Deadline expiry is a fence-and-drain, not a pause:** when `deadlineAt` passes the run is stopped exactly like Stop (queued work `not_started: stopped`, Stop owed on every admitted attempt), ends `stopped` with `endReason: "deadline expired"` once every attempt is terminated or abandoned. There is no `deadline` pause any more.
+- **Stop on a finished run** (`finished_with_unresolved`/`failed`/…) with attempts that are not confirmed ended records the owed Stop on each of them without changing the status or releasing capacity; `409` only when there is nothing to stop.
+- **Capacity** counts finished runs while any of their attempts is `unknown` and not abandoned.
+- **Lifting the global fence never makes work sendable:** every attempt the journal records as sent is `unknown` (with its journaled handle attached) before the fence lifts, and the send barrier refuses it again.
+- **Capability hygiene:** any `orch.*` field (ids included) that contains something shaped like a capability (`orc_` + 8 or more id characters, whatever precedes it) is refused with `capability_in_text` and stored nowhere.
+- **Commands** are refused as soon as the lead's run is terminal in Hermes' record, before the executor reconciles it.
+- **Streamed replies** of orchestration attempts are cut at 8 KiB with a `[reply truncated]` marker.
+- **Spend** is settled only when the run's session is known and every other run in it ended `completed`/`failed`; compression continuations in other sessions remain unverifiable and keep reservations until abandonment (open item for the adapter).

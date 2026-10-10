@@ -107,6 +107,49 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
   return mismatches
 }
 
+/**
+ * The journal is authoritative about what was sent. For every journaled `send_started` whose attempt the database still
+ * shows as `created`, the attempt becomes `unknown` (never sent again), and a journaled handle is attached so the Stop
+ * owed on it can be delivered. Lifting a fence is not allowed to turn these back into sendable work.
+ */
+export function applyJournalEvidence(
+  sqlite: DatabaseSync,
+  entries: readonly JournalEntry[],
+  now: string,
+): number {
+  let changed = 0
+  for (const entry of entries) {
+    if (entry.kind === 'send_started') {
+      const attempt = sqlite
+        .prepare('SELECT id, state, step_id, orchestration_id FROM orc_attempts WHERE id = ?')
+        .get(entry.attemptId) as
+        { id: string; state: string; step_id: string | null; orchestration_id: string } | undefined
+      if (attempt && attempt.state === 'created') {
+        sqlite
+          .prepare(
+            "UPDATE orc_attempts SET state = 'unknown', unknown_reason = 'journal_records_send', sent_at = COALESCE(sent_at, ?), updated_at = ? WHERE id = ?",
+          )
+          .run(now, now, attempt.id)
+        if (attempt.step_id)
+          sqlite
+            .prepare(
+              "UPDATE orc_steps SET status = 'unknown', disposition = 'journal_records_send', updated_at = ? WHERE orchestration_id = ? AND id = ? AND status = 'admitted'",
+            )
+            .run(now, attempt.orchestration_id, attempt.step_id)
+        changed++
+      }
+    } else if (entry.kind === 'run_handle') {
+      const result = sqlite
+        .prepare(
+          'UPDATE orc_attempts SET run_id = ?, updated_at = ? WHERE id = ? AND run_id IS NULL',
+        )
+        .run(entry.runId, now, entry.attemptId)
+      changed += Number(result.changes)
+    }
+  }
+  return changed
+}
+
 export function fenceItems(sqlite: DatabaseSync): FenceItem[] {
   const seq = readGlobal(sqlite).fence_seq
   return z
@@ -168,8 +211,14 @@ export class GlobalFenceStore {
     const current = this.db.read((sqlite) => readGlobal(sqlite))
     const fenceSeq = this.nextSeq(current.fence_seq)
     // A fence that is already up keeps its number: only new doubts are added to its list.
-    if (current.fenced !== 1 && this.journalUsable())
-      this.journal.append({ kind: 'global_fence', action: 'set', fenceSeq, reason })
+    // Fail closed: the fence is the safety, so a journal that cannot record it must not stop the database from holding it.
+    if (current.fenced !== 1 && this.journalUsable()) {
+      try {
+        this.journal.append({ kind: 'global_fence', action: 'set', fenceSeq, reason })
+      } catch {
+        // The database fence below stands on its own.
+      }
+    }
     const now = new Date(this.clock()).toISOString()
     this.db.tx((sqlite) => {
       const row = readGlobal(sqlite)
@@ -236,7 +285,9 @@ export class GlobalFenceStore {
       accepted,
     })
     const now = new Date(this.clock()).toISOString()
+    const own = this.journal.readOwn()
     this.db.tx((sqlite) => {
+      if (own.ok) applyJournalEvidence(sqlite, own.entries, now)
       sqlite
         .prepare(
           `UPDATE orc_global SET fenced = 0, fence_seq = ?, lifted_at = ?, revision = revision + 1 WHERE id = 1`,
@@ -330,6 +381,9 @@ export class GlobalFenceStore {
         if (mismatches.length > 0) {
           reasons.push('journal_mismatch')
           this.set('journal_mismatch', mismatches)
+          // What the journal says was sent is never sendable again, whatever happens to the fence.
+          const now = new Date(this.clock()).toISOString()
+          this.db.tx((sqlite) => applyJournalEvidence(sqlite, entries.entries, now))
         }
       }
     }

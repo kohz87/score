@@ -174,6 +174,17 @@ export function runCommand(
     return { kind: 'unauthorized', message: 'this capability has expired (the turn is over)' }
   const o = readOrch(sqlite, attempt.orchestration_id)
   if (!o) return { kind: 'unauthorized', message: 'unknown capability' }
+  // The turn is over as soon as Hermes says its run ended, not only once the executor has reconciled it.
+  const ended = attempt.run_id
+    ? (sqlite.prepare('SELECT status FROM runs WHERE id = ?').get(attempt.run_id) as
+        { status: string } | undefined)
+    : undefined
+  if (ended && ['completed', 'failed', 'cancelled', 'interrupted'].includes(ended.status)) {
+    sqlite
+      .prepare('UPDATE orc_capabilities SET expired_at = ? WHERE hash = ? AND expired_at IS NULL')
+      .run(now, hashCapability(args.capability))
+    return { kind: 'unauthorized', message: 'this capability has expired (the turn is over)' }
+  }
 
   const stored = sqlite
     .prepare(
