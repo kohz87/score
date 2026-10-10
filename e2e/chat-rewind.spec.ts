@@ -1,18 +1,16 @@
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
+import { makeRoom, openRoom as openRoomByName } from './rooms.ts'
 
 // PLAN 5.33: editing or deleting your own message rewinds the room and the agents' sessions; what was hidden stays
 // readable as the previous version.
+// Rewinding is refused while any agent is answering in the room, so each test rewinds in a room of its own.
 async function openRoom(page: Page) {
   await pair(page)
-  await page.goto('/chat')
-  await page
-    .getByRole('navigation', { name: 'Conversations' })
-    .getByRole('link', { name: /#activity-feed/ })
-    .click({ timeout: 15_000 })
+  const room = await makeRoom(page, 'rew', ['lead', 'reviewer'])
+  await openRoomByName(page, room.label)
   const history = page.getByRole('region', { name: 'Message history' })
-  await expect(history.getByRole('article').first()).toBeVisible({ timeout: 15_000 })
-  return history
+  return { history, room }
 }
 async function sendAndWait(page: Page, history: ReturnType<Page['getByRole']>, text: string) {
   const composer = page.getByRole('combobox', { name: /^Message/ })
@@ -33,7 +31,7 @@ test('Delete rewinds: your message and the reply become a read-only previous ver
   page,
 }) => {
   test.setTimeout(120_000)
-  const history = await openRoom(page)
+  const { history, room } = await openRoom(page)
   const text = `Rewind this ${Date.now()}`
   const { mine } = await sendAndWait(page, history, text)
   await mine.hover()
@@ -47,12 +45,13 @@ test('Delete rewinds: your message and the reply become a read-only previous ver
   // Deleted messages leave no rows in the thread.
   await expect(page.getByTestId('deleted-messages')).toHaveCount(0)
   await page.reload()
-  await expect(history.getByRole('article').first()).toBeVisible({ timeout: 15_000 })
+  // Nothing else is in this room, so the thread is empty: the page is loaded once its composer is.
+  await expect(page.getByRole('combobox', { name: /^Message/ })).toBeEnabled({ timeout: 15_000 })
   await expect(mine).toHaveCount(0)
   // The room's menu shows them dimmed and read-only, in place.
   await page
     .getByRole('navigation', { name: 'Conversations' })
-    .getByRole('button', { name: /^Actions for .*activity-feed/ })
+    .getByRole('button', { name: `Actions for ${room.label}` })
     .click()
   await page.getByRole('menuitemcheckbox', { name: 'Show deleted messages' }).click()
   const previous = page.getByTestId('deleted-messages').last()
@@ -66,7 +65,7 @@ test('Edit rewinds, then the correction shows ‹ 2 / 2 › and the original is 
   page,
 }) => {
   test.setTimeout(120_000)
-  const history = await openRoom(page)
+  const { history, room } = await openRoom(page)
   const stamp = Date.now()
   const text = `First wording ${stamp}`
   const { mine } = await sendAndWait(page, history, text)
@@ -104,7 +103,7 @@ test('An agent that cannot be rewound is named, and Hide in Score only still wor
   page,
 }) => {
   test.setTimeout(120_000)
-  const history = await openRoom(page)
+  const { history, room } = await openRoom(page)
   const text = `@reviewer please look at this ${Date.now()}`
   const composer = page.getByRole('combobox', { name: /^Message/ })
   await composer.fill(text)

@@ -4,11 +4,11 @@ const web = { 'x-score-client': 'web' }
 
 // Specs run in parallel against one server and the fake #activity-feed room is shared (and capped at one 50-message page),
 // so a spec that posts or stops runs makes its own room, with a short unique name.
-export async function makeRoom(page: Page, tag: string) {
+export async function makeRoom(page: Page, tag: string, members: string[] = ['lead']) {
   const name = `${tag}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
   const response = await page.request.post('/api/rooms', {
     headers: web,
-    data: { name, leadAgentId: 'lead', members: ['lead'] },
+    data: { name, leadAgentId: 'lead', members },
   })
   expect(response.ok()).toBe(true)
   const room = (await response.json()) as { id: string; name: string }
