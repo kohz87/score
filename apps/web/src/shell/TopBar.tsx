@@ -1,5 +1,6 @@
 import type { Ref } from 'react'
 import { MainNav } from './MainNav.tsx'
+import { TerminalButton } from './TerminalButton.tsx'
 
 type TopBarProps = {
   commandButtonRef: Ref<HTMLButtonElement>
@@ -51,6 +52,7 @@ export function TopBar({ commandButtonRef, onOpenCommand, commandOpen }: TopBarP
         <span>Search or run a command</span>
         <kbd className="command-shortcut">⌘K</kbd>
       </button>
+      <TerminalButton />
       <div className="avatar" role="img" aria-label="You">
         Y
       </div>

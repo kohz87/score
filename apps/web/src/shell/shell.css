@@ -305,3 +305,19 @@
   color: #12131a;
   cursor: pointer;
 }
+
+.top-bar-terminal {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline);
+  background: var(--card);
+  color: var(--ink-muted);
+}
+.top-bar-terminal:hover,
+.top-bar-terminal:focus-visible {
+  color: var(--ink);
+}
