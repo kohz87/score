@@ -1,0 +1,31 @@
+{
+  "items": [
+    {
+      "runtime": "claude-code",
+      "label": "Claude Code",
+      "state": "ready",
+      "version": "2.1.295",
+      "testedVersions": ["2.1.295"],
+      "quota": "Uses your Claude plan quota (the CLI’s own login).",
+      "message": null
+    },
+    {
+      "runtime": "codex",
+      "label": "Codex CLI",
+      "state": "ready",
+      "version": "0.160.1",
+      "testedVersions": ["0.160.1"],
+      "quota": "Uses your ChatGPT plan quota, shared with other Codex work on that account.",
+      "message": null
+    },
+    {
+      "runtime": "opencode",
+      "label": "OpenCode",
+      "state": "not_supported",
+      "version": null,
+      "testedVersions": [],
+      "quota": "Uses whichever provider OpenCode is signed in to.",
+      "message": "OpenCode is not supported by this version of Score yet."
+    }
+  ]
+}

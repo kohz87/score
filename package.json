@@ -19,6 +19,7 @@
     "typecheck": "pnpm -r typecheck && tsc -p scripts/tsconfig.json",
     "test": "pnpm -r test",
     "e2e": "playwright test",
+    "screenshots": "playwright test -c e2e/readme/playwright.config.ts",
     "e2e:install": "playwright install chromium",
     "license:check": "node scripts/license-check.mjs",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm test:plugin && pnpm license:check",

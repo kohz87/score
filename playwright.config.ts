@@ -30,6 +30,8 @@ process.env.TMPDIR = scratch
 export default defineConfig({
   testDir: './e2e',
   globalTeardown: './e2e/global-teardown.ts',
+  // The README screenshot generator has its own config (`pnpm screenshots`).
+  testIgnore: /e2e\/readme\//,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   reporter: [['list']],
