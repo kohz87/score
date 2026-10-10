@@ -13,6 +13,7 @@ import { redact, redactBounded } from '../../redact.ts'
 import { checkRoot, type RootPolicy } from '../../workspace/policy.ts'
 import { CliLocator } from './cli.ts'
 import { driverFor } from './drivers.ts'
+import { killRecordedGroup, processStart } from './proc.ts'
 import { spawnCli, type CliRun, type StopReason } from './process.ts'
 import {
   cliSessionFor,
@@ -434,6 +435,7 @@ export class CodingRuntime {
         ],
         cwd: checked.real,
         env: locator.childEnv(),
+        onSpawn: (pid) => this.recordProcess(entry.runId, pid),
         stdin: input,
         parser,
         maxMs: this.deps.maxTurnMs ?? 30 * 60_000,
@@ -451,6 +453,7 @@ export class CodingRuntime {
       if (entry.stopBeforeStart) run.stop(entry.stopBeforeStart)
       const outcome = await run.done
       entry.process = undefined
+      this.forgetProcess(entry.runId)
       const stderr = oneLine(outcome.stderr, 400)
       // A resumed session the CLI no longer has: start fresh once, and forget the dead id.
       if (
@@ -505,8 +508,40 @@ export class CodingRuntime {
    * On start (review 2026-10-09, 7.2 #3): a CLI child dies with Score, so a turn still marked running or queued is
    * interrupted with a note. The CLI session id stays, so the next message resumes it.
    */
+  /** Durable before anything reads the child's output: the detached child is its own group leader (pgid = pid). */
+  private recordProcess(runId: string, pid: number): void {
+    this.deps.db.sqlite
+      .prepare(
+        `INSERT INTO coding_processes (run_id, pid, pgid, start_time, created_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (run_id) DO UPDATE SET pid = excluded.pid, pgid = excluded.pgid, start_time = excluded.start_time`,
+      )
+      .run(runId, pid, pid, processStart(pid), new Date().toISOString())
+  }
+  private forgetProcess(runId: string): void {
+    this.deps.db.sqlite.prepare('DELETE FROM coding_processes WHERE run_id = ?').run(runId)
+  }
+
   async recover(): Promise<number> {
     const { db } = this.deps
+    // Children can outlive a crashed Score: stop what is left of each recorded group before admitting anything.
+    const survivors = z
+      .array(
+        z.object({
+          run_id: z.string(),
+          pid: z.int(),
+          pgid: z.int(),
+          start_time: z.string().nullable(),
+        }),
+      )
+      .parse(db.sqlite.prepare('SELECT * FROM coding_processes').all())
+    for (const record of survivors) {
+      await killRecordedGroup({
+        pid: record.pid,
+        pgid: record.pgid,
+        startTime: record.start_time,
+      })
+      this.forgetProcess(record.run_id)
+    }
     const rows = z
       .array(z.object({ id: z.string(), profile: z.string() }))
       .parse(

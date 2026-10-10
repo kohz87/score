@@ -32,6 +32,8 @@ export interface SpawnOptions {
   parser: LineParser
   /** Called in order, one at a time; a rejection is the caller's to handle (the run goes on). */
   onEvent(event: CodingEvent): Promise<void>
+  /** Called synchronously right after the spawn, before any output is read (records the process durably). */
+  onSpawn?(pid: number): void
   maxMs?: number
   graceMs?: number
 }
@@ -59,6 +61,7 @@ export function spawnCli(options: SpawnOptions): CliRun {
     // Own process group, so Stop reaches the tools the CLI started too.
     detached: true,
   })
+  if (child.pid !== undefined) options.onSpawn?.(child.pid)
   const signal = (name: NodeJS.Signals) => {
     if (child.pid === undefined) return
     try {

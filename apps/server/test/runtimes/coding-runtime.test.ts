@@ -531,33 +531,6 @@ test('an untested CLI version runs only after the person confirms that version',
   expect(runs()[0]!.status).toBe('completed')
 })
 
-test('a restart marks turns that were running as interrupted and keeps the CLI session', async () => {
-  await addAgent()
-  await makeRoom()
-  await say('@coder [fixture:slow] long job')
-  await vi.waitFor(() => expect(runs()[0]?.status).toBe('running'), { timeout: 10_000 })
-  await vi.waitFor(
-    () => expect(db.sqlite.prepare('SELECT 1 FROM coding_sessions').get()).toBeDefined(),
-    { timeout: 10_000 },
-  )
-  // "Restart": a second runtime over the same database, as after a crash (the first one's child is still alive here,
-  // but the second knows nothing of it — the same view a new process has).
-  const restarted = new CodingRuntime({
-    db,
-    ingest,
-    locator: new CliLocator({ fakeCli: FAKE_CLI }),
-    home,
-    policy: defaultRootPolicy([home]),
-  })
-  expect(await restarted.recover()).toBe(1)
-  await ingest.drain()
-  expect(runs()[0]).toMatchObject({ status: 'interrupted' })
-  expect(JSON.stringify(replies()[0]!.parts)).toContain('Score restarted')
-  expect(db.sqlite.prepare('SELECT session_id FROM coding_sessions').all()).toHaveLength(1)
-  // The first runtime's process is still running: stop it so the test ends.
-  await coding.close()
-})
-
 test('the intent is durable before anything spawns', async () => {
   await addAgent()
   await makeRoom()
@@ -673,3 +646,75 @@ test('only the exact tested version runs unasked, and a queued turn is checked a
   // Only the first turn was ever spawned.
   expect(calls().filter((call) => call.prompt.includes('second'))).toHaveLength(0)
 }, 30_000)
+
+test('a real server crash leaves the CLI child running; the next start stops its group before admitting turns (review: high 2)', async () => {
+  const { spawn } = await import('node:child_process')
+  const { isSameProcess } = await import('../../src/runtimes/coding/proc.ts')
+  const crashDir = join(dir, 'crash')
+  mkdirSync(crashDir)
+  const script = fileURLToPath(new URL('./crash-server.ts', import.meta.url))
+  const server = spawn(
+    process.execPath,
+    ['--import', 'tsx', script, crashDir, workspace, FAKE_CLI],
+    {
+      cwd: fileURLToPath(new URL('../..', import.meta.url)),
+      env: { ...process.env, SCORE_CODING_FAKE_LOG: log },
+      stdio: ['ignore', 'pipe', 'inherit'],
+    },
+  )
+  let childPid = 0
+  try {
+    childPid = await new Promise<number>((resolve, reject) => {
+      let out = ''
+      server.stdout.on('data', (chunk: Buffer) => {
+        out += chunk.toString()
+        const match = /READY (\d+)/.exec(out)
+        if (match) resolve(Number(match[1]))
+      })
+      server.on('exit', () => reject(new Error(`server exited early: ${out}`)))
+    })
+    expect(isSameProcess(childPid, null)).toBe(true)
+    server.removeAllListeners('exit')
+    server.kill('SIGKILL')
+    await new Promise((resolve) => server.on('exit', resolve))
+    // The crash: the server is gone, its child is not.
+    expect(isSameProcess(childPid, null)).toBe(true)
+    const crashDb = openDatabase(join(crashDir, 'score.db'))
+    migrate(crashDb, fileURLToPath(new URL('../../migrations/', import.meta.url)))
+    const crashIngest = createIngest(crashDb)
+    const restarted = new CodingRuntime({
+      db: crashDb,
+      ingest: crashIngest,
+      locator: new CliLocator({ fakeCli: FAKE_CLI }),
+      home: join(crashDir, 'home'),
+      policy: defaultRootPolicy([join(crashDir, 'home')]),
+    })
+    expect(
+      crashDb.sqlite.prepare('SELECT pid, pgid, start_time FROM coding_processes').get() as {
+        pid: number
+        pgid: number
+        start_time: string
+      },
+    ).toMatchObject({ pid: childPid, pgid: childPid, start_time: expect.stringMatching(/^\d+$/) })
+    expect(await restarted.recover()).toBe(1)
+    // Stopped before the run was released, and the record is gone.
+    expect(isSameProcess(childPid, null)).toBe(false)
+    expect(crashDb.sqlite.prepare('SELECT 1 FROM coding_processes').get()).toBeUndefined()
+    expect(crashDb.sqlite.prepare('SELECT status FROM runs').get()).toEqual({
+      status: 'interrupted',
+    })
+    await crashIngest.close()
+    crashDb.close()
+  } finally {
+    server.kill('SIGKILL')
+    if (childPid && isSameProcess(childPid, null)) process.kill(-childPid, 'SIGKILL')
+  }
+}, 60_000)
+
+test('recovery never signals a reused pid: a different start time is left alone (review: high 2)', async () => {
+  const { killRecordedGroup } = await import('../../src/runtimes/coding/proc.ts')
+  // This test process is alive, but not "the" recorded process.
+  expect(
+    await killRecordedGroup({ pid: process.pid, pgid: process.pid, startTime: '1' }, 100),
+  ).toBe(false)
+})

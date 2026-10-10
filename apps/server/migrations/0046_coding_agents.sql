@@ -28,3 +28,14 @@ CREATE TABLE coding_sessions (
 -- 'hermes' for every earlier run. cost_kind: NULL = reported (Hermes), else 'estimated' | 'unknown'.
 ALTER TABLE runs ADD COLUMN runtime TEXT NOT NULL DEFAULT 'hermes';
 ALTER TABLE runs ADD COLUMN cost_kind TEXT;
+
+-- The CLI process of each running turn, written right after the spawn: after a crash the next start finds the exact
+-- process (pid + start time, so a reused pid is never signalled) and stops its whole group before admitting new turns.
+CREATE TABLE coding_processes (
+  run_id TEXT PRIMARY KEY,
+  pid INTEGER NOT NULL,
+  pgid INTEGER NOT NULL,
+  -- /proc/<pid>/stat field 22 (clock ticks since boot); NULL where /proc is not available.
+  start_time TEXT,
+  created_at TEXT NOT NULL
+) STRICT;

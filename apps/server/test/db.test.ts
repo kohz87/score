@@ -88,6 +88,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'brief_tasks',
     'briefs',
     'coding_agents',
+    'coding_processes',
     'coding_sessions',
     'command_intents',
     'credentials',

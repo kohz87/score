@@ -928,7 +928,7 @@ room's CLI session (`skipped: no_session`).
 - **H** `DELETE /api/coding-agents/:id` → `204` (`409` while a turn runs). Past messages stay; its runs leave Reports.
 - Turns: a mention routes through the normal room queue. One turn per coding agent at a time (others show as `queued`); at most 30 minutes per
   turn; Stop = SIGINT, SIGTERM after 5 s, SIGKILL after 5 s more. An untested/missing CLI or an unavailable workspace fails the reply with a
-  sentence in the room (`422`, never retried). A restart marks running turns `interrupted` ("Score restarted while this ran"); the CLI session id
+  sentence in the room (`422`, never retried). The CLI's pid, process group and start time are stored right after the spawn; a restart first stops what is left of each recorded group (only when pid and start time still match; SIGTERM, then SIGKILL) and then marks running turns `interrupted` ("Score restarted while this ran"); the CLI session id
   is kept so the next message resumes it. Runs carry `runtime` and `costKind`; run ids start with `cr_`.
 - Security: the CLI gets an allowlisted environment (no Score variables, nothing named `*_API_KEY`/`*TOKEN*`/`*SECRET*`); the prompt goes on stdin,
   never in argv; output is redacted before it is stored; Claude Code runs with deny rules for `~/.hermes`, `~/.score`, `~/.ssh` and `.env*`.
