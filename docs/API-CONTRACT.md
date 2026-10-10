@@ -1821,7 +1821,7 @@ and are not charged per run.
 **Watch.** Per-attempt filtering is not part of 7.1: a node's Watch link opens the agent's Watch at the attempt's time window,
 labelled "agent-wide: may include other work".
 
-**Implementation notes (7.1a).** A consumed entry of kind `default` for a producer that never ran (skipped) has `producerAttempt: 0`. A re-created step (retry, remap) is gated again under `every-step`. The remap re-creation
+**Implementation notes (7.1a).** Observed tool and thinking rows of a run's attempts are charged to its allowance at the writer and dropped when it is used up; the inventory lists them (`tool_rows`, `thinking`). A version's `used` flag is permanent (it survives pruning of its runs). The readiness evidence of a step (the producers whose results made its node ready) is recorded in `consumed` even when the text does not use it. A consumed entry of kind `default` for a producer that never ran (skipped) has `producerAttempt: 0`. A re-created step (retry, remap) is gated again under `every-step`. The remap re-creation
 shares the logical attempt number with the step it replaces; its command identity differs by planner generation, which the
 remap decision increments. The validation codes `join_deadlock` and `agent_missing` are reserved: with `skip` tokens an `all`
 join always resolves, and an empty `agentId` cannot pass the schema. The 20-refusal limit, the five-in-a-row wait and the

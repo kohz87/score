@@ -610,6 +610,7 @@ export const StorageInventorySchema = z.object({
         'message_runs',
         'attempt_runs',
         'tool_rows',
+        'thinking',
         'control_history',
       ]),
       rows: z.int().nonnegative(),

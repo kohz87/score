@@ -382,6 +382,10 @@ export function storageInventory(sqlite: DatabaseSync, o: OrchRow): StorageInven
     `SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(COALESCE(preview, '')) + LENGTH(COALESCE(result_preview, ''))), 0) AS b FROM tool_calls WHERE run_id IN (SELECT id FROM runs WHERE score_turn_id IN (${marks}))`,
     ...turnIds,
   )
+  const thinking = sum(
+    `SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(text)), 0) AS b FROM run_thinking WHERE run_id IN (SELECT id FROM runs WHERE score_turn_id IN (${marks}))`,
+    ...turnIds,
+  )
   const history = sum(
     'SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(detail)), 0) AS b FROM orc_history WHERE orchestration_id = ?',
     id,
@@ -412,6 +416,7 @@ export function storageInventory(sqlite: DatabaseSync, o: OrchRow): StorageInven
       { kind: 'message_runs', rows: messageRuns.n, bytes: messageRuns.b },
       { kind: 'attempt_runs', rows: runs.n, bytes: runs.b },
       { kind: 'tool_rows', rows: tools.n, bytes: tools.b },
+      { kind: 'thinking', rows: thinking.n, bytes: thinking.b },
       { kind: 'control_history', rows: history.n, bytes: history.b },
     ],
     compactedControlRecords: compacted

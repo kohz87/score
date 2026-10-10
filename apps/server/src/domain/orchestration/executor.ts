@@ -2567,6 +2567,8 @@ export class Orchestrator {
           'DELETE FROM orc_capabilities WHERE attempt_id IN (SELECT id FROM orc_attempts WHERE orchestration_id = ?)',
         ).run(o.id)
         tx.prepare('DELETE FROM orc_attempts WHERE orchestration_id = ?').run(o.id)
+        // The history goes with the rest; the single 'pruned' row added below is the tombstone restore checks use.
+        tx.prepare('DELETE FROM orc_history WHERE orchestration_id = ?').run(o.id)
         tx.prepare('DELETE FROM orchestrations WHERE id = ?').run(o.id)
         addHistory(
           tx,

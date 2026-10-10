@@ -281,3 +281,23 @@ export function compactControlHistory(sqlite: DatabaseSync, orchId: string, limi
       )
       .run(orchId, JSON.stringify({ count: extra }), new Date().toISOString())
 }
+
+/**
+ * Observed tool and thinking rows of an orchestration attempt's run are retained with the run, so they are charged to its
+ * allowance at the writer (v8.1 item 5). Returns false when the run has no room left (the protected reserve for Stop and
+ * obligation evidence is never spent here): the writer then drops the row. Runs outside any orchestration are unbounded.
+ */
+export function chargeObservation(sqlite: DatabaseSync, runId: string, bytes: number): boolean {
+  const owner = sqlite
+    .prepare(
+      `SELECT o.id AS id, o.reserve_bytes AS reserve, o.stored_bytes AS stored FROM message_runs m
+       JOIN orc_attempts a ON a.id = m.orchestration_attempt_id JOIN orchestrations o ON o.id = a.orchestration_id
+       WHERE m.run_id = ?`,
+    )
+    .get(runId) as { id: string; reserve: number; stored: number } | undefined
+  if (!owner) return true
+  if (bytes > storageRoom({ reserve_bytes: owner.reserve, stored_bytes: owner.stored }))
+    return false
+  addStored(sqlite, owner.id, bytes)
+  return true
+}

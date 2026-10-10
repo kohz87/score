@@ -22,6 +22,7 @@ import {
   type GatewayRun,
 } from './gateway.ts'
 import { appendRunMessage, completeRunMessage, noteRunProgress } from '../../domain/message-runs.ts'
+import { chargeObservation } from '../../domain/orchestration/ops.ts'
 import { recordRunResult } from '../../domain/workflows/verdict.ts'
 import { ProfileNameSchema } from './paths.ts'
 
@@ -288,7 +289,7 @@ export function translateRunEvent(
           .prepare('UPDATE runs SET last_seq = ?, updated_at = ? WHERE id = ?')
           .run(seq, at, row.id)
         // Kept for the collapsed thinking part (PLAN 5.25); `safe` is already redacted, and the text is bounded.
-        if (reasoning?.text.trim())
+        if (reasoning?.text.trim() && chargeObservation(sqlite, row.id, MAX_THINKING_CHARS * 4))
           sqlite
             .prepare(
               'INSERT INTO run_thinking (run_id, seq, text) VALUES (?, ?, ?) ON CONFLICT DO NOTHING',
@@ -305,7 +306,7 @@ export function translateRunEvent(
       }
       const values: Record<string, SQLInputValue> = { last_seq: seq }
       if (!ignored && known) values.status = 'running'
-      if (started) {
+      if (started && chargeObservation(sqlite, row.id, 2048 + 256)) {
         sqlite
           .prepare(
             `INSERT INTO tool_calls (run_id, seq, tool, preview, status, started_at) VALUES (?, ?, ?, ?, 'running', ?) ON CONFLICT DO NOTHING`,
