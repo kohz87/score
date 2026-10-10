@@ -51,22 +51,49 @@ function acceptedSet(entries: readonly JournalEntry[]): Set<number> {
 export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEntry[]): Mismatch[] {
   const accepted = acceptedSet(entries)
   const mismatches: Mismatch[] = []
-  const attempt = sqlite.prepare('SELECT state, run_id, sent_at FROM orc_attempts WHERE id = ?')
-  const orchestration = sqlite.prepare('SELECT stop_requested_at FROM orchestrations WHERE id = ?')
+  const attempt = sqlite.prepare(
+    'SELECT state, run_id, sent_at, abandoned_at FROM orc_attempts WHERE id = ?',
+  )
+  const orchestration = sqlite.prepare(
+    'SELECT stop_requested_at, finish_requested_at, waiver_at, status FROM orchestrations WHERE id = ?',
+  )
   const attemptStop = sqlite.prepare('SELECT stop_requested_at FROM orc_attempts WHERE id = ?')
+  const pruned = new Set(
+    (
+      sqlite
+        .prepare("SELECT orchestration_id AS id FROM orc_history WHERE kind = 'pruned'")
+        .all() as {
+        id: string
+      }[]
+    ).map((row) => row.id),
+  )
   const dbSeq = readGlobal(sqlite).fence_seq
   let journalSeq = 0
+  // The last pause/resume per orchestration decides whether the journal expects a pause.
+  const lastPauseState = new Map<string, { what: 'pause' | 'resume'; n: number }>()
+  for (const entry of entries) {
+    if (
+      (entry.kind === 'transition' || (entry.kind === 'tombstone' && entry.of === 'transition')) &&
+      (entry.what === 'pause' || entry.what === 'resume')
+    )
+      lastPauseState.set(entry.orchestrationId, { what: entry.what, n: entry.n })
+  }
   for (const entry of entries) {
     if (entry.kind === 'global_fence') journalSeq = Math.max(journalSeq, entry.fenceSeq)
     if (accepted.has(entry.n)) continue
-    if (entry.kind === 'send_started') {
-      const row = attempt.get(entry.attemptId) as { sent_at: string | null } | undefined
+    const orchestrationId =
+      'orchestrationId' in entry ? (entry.orchestrationId as string) : undefined
+    if (orchestrationId && pruned.has(orchestrationId)) continue
+    const kind = entry.kind === 'tombstone' ? entry.of : entry.kind
+    if (kind === 'send_started') {
+      const id = (entry as { attemptId: string }).attemptId
+      const row = attempt.get(id) as { sent_at: string | null } | undefined
       if (!row || row.sent_at === null)
         mismatches.push({
           kind: 'attempt',
-          ref: entry.attemptId,
+          ref: id,
           journalN: entry.n,
-          detail: `Admission of ${entry.attemptKind} attempt ${entry.attemptId} (${entry.agentId}) was started, but the database has no record of it`,
+          detail: `Admission of attempt ${id} was started, but the database has no record of it`,
         })
     } else if (entry.kind === 'run_handle') {
       const row = attempt.get(entry.attemptId) as { run_id: string | null } | undefined
@@ -77,18 +104,44 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
           journalN: entry.n,
           detail: `Hermes run ${entry.runId} was returned for attempt ${entry.attemptId}, but the database does not hold that handle`,
         })
-    } else if (entry.kind === 'stop_fence') {
+    } else if (kind === 'stop_fence') {
+      const e = entry as { orchestrationId: string; attemptId?: string }
       const row = (
-        entry.attemptId === undefined
-          ? orchestration.get(entry.orchestrationId)
-          : attemptStop.get(entry.attemptId)
+        e.attemptId === undefined
+          ? orchestration.get(e.orchestrationId)
+          : attemptStop.get(e.attemptId)
       ) as { stop_requested_at: string | null } | undefined
       if (!row || row.stop_requested_at === null)
         mismatches.push({
           kind: 'fence',
-          ref: entry.attemptId ?? entry.orchestrationId,
+          ref: e.attemptId ?? e.orchestrationId,
           journalN: entry.n,
-          detail: `Stop was requested for ${entry.attemptId ?? entry.orchestrationId}, but the database does not record it`,
+          detail: `Stop was requested for ${e.attemptId ?? e.orchestrationId}, but the database does not record it`,
+        })
+    } else if (kind === 'transition') {
+      const e = entry as { orchestrationId: string; what: string; attemptIds?: string[]; n: number }
+      const row = orchestration.get(e.orchestrationId) as
+        { finish_requested_at: string | null; waiver_at: string | null; status: string } | undefined
+      let missing = !row
+      if (row && e.what === 'finish') missing = row.finish_requested_at === null
+      if (row && e.what === 'waiver') missing = row.waiver_at === null
+      if (row && e.what === 'pause')
+        missing =
+          lastPauseState.get(e.orchestrationId)?.what === 'pause' &&
+          lastPauseState.get(e.orchestrationId)!.n === e.n &&
+          row.status === 'running'
+      if (row && e.what === 'abandon')
+        missing = (e.attemptIds ?? []).some(
+          (id) =>
+            (attempt.get(id) as { abandoned_at: string | null } | undefined)?.abandoned_at == null,
+        )
+      if (e.what === 'resume') missing = false
+      if (missing)
+        mismatches.push({
+          kind: 'fence',
+          ref: e.orchestrationId,
+          journalN: entry.n,
+          detail: `The ${e.what} of ${e.orchestrationId} was recorded, but the database does not hold it`,
         })
     }
   }
@@ -105,6 +158,51 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
       })
   }
   return mismatches
+}
+
+/**
+ * The journal is authoritative about what was sent. For every journaled `send_started` (or its tombstone) whose attempt
+ * the database still shows as `created`, the attempt becomes `unknown` (never sent again), and a journaled handle is
+ * attached so the Stop owed on it can be delivered. Lifting a fence never turns these back into sendable work.
+ */
+export function applyJournalEvidence(
+  sqlite: DatabaseSync,
+  entries: readonly JournalEntry[],
+  now: string,
+): number {
+  let changed = 0
+  for (const entry of entries) {
+    const sent =
+      entry.kind === 'send_started' || (entry.kind === 'tombstone' && entry.of === 'send_started')
+    if (sent && 'attemptId' in entry && entry.attemptId) {
+      const attempt = sqlite
+        .prepare('SELECT id, state, step_id, orchestration_id FROM orc_attempts WHERE id = ?')
+        .get(entry.attemptId) as
+        { id: string; state: string; step_id: string | null; orchestration_id: string } | undefined
+      if (attempt && attempt.state === 'created') {
+        sqlite
+          .prepare(
+            "UPDATE orc_attempts SET state = 'unknown', unknown_reason = 'journal_records_send', sent_at = COALESCE(sent_at, ?), updated_at = ? WHERE id = ?",
+          )
+          .run(now, now, attempt.id)
+        if (attempt.step_id)
+          sqlite
+            .prepare(
+              "UPDATE orc_steps SET status = 'unknown', disposition = 'journal_records_send', updated_at = ? WHERE orchestration_id = ? AND id = ? AND status = 'admitted'",
+            )
+            .run(now, attempt.orchestration_id, attempt.step_id)
+        changed++
+      }
+    } else if (entry.kind === 'run_handle') {
+      const result = sqlite
+        .prepare(
+          'UPDATE orc_attempts SET run_id = ?, updated_at = ? WHERE id = ? AND run_id IS NULL',
+        )
+        .run(entry.runId, now, entry.attemptId)
+      changed += Number(result.changes)
+    }
+  }
+  return changed
 }
 
 export function fenceItems(sqlite: DatabaseSync): FenceItem[] {
@@ -168,8 +266,14 @@ export class GlobalFenceStore {
     const current = this.db.read((sqlite) => readGlobal(sqlite))
     const fenceSeq = this.nextSeq(current.fence_seq)
     // A fence that is already up keeps its number: only new doubts are added to its list.
-    if (current.fenced !== 1 && this.journalUsable())
-      this.journal.append({ kind: 'global_fence', action: 'set', fenceSeq, reason })
+    // Fail closed: the fence is the safety, so a journal that cannot record it must not stop the database from holding it.
+    if (current.fenced !== 1 && this.journalUsable()) {
+      try {
+        this.journal.append({ kind: 'global_fence', action: 'set', fenceSeq, reason })
+      } catch {
+        // The database fence below stands on its own.
+      }
+    }
     const now = new Date(this.clock()).toISOString()
     this.db.tx((sqlite) => {
       const row = readGlobal(sqlite)
@@ -236,7 +340,9 @@ export class GlobalFenceStore {
       accepted,
     })
     const now = new Date(this.clock()).toISOString()
+    const own = this.journal.readOwn()
     this.db.tx((sqlite) => {
+      if (own.ok) applyJournalEvidence(sqlite, own.entries, now)
       sqlite
         .prepare(
           `UPDATE orc_global SET fenced = 0, fence_seq = ?, lifted_at = ?, revision = revision + 1 WHERE id = 1`,
@@ -330,6 +436,9 @@ export class GlobalFenceStore {
         if (mismatches.length > 0) {
           reasons.push('journal_mismatch')
           this.set('journal_mismatch', mismatches)
+          // What the journal says was sent is never sendable again, whatever happens to the fence.
+          const now = new Date(this.clock()).toISOString()
+          this.db.tx((sqlite) => applyJournalEvidence(sqlite, entries.entries, now))
         }
       }
     }

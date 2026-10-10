@@ -248,6 +248,7 @@ which a VACUUM may renumber. Score checks the index at every start and rebuilds 
 VACUUM while Score runs can still leave search wrong until the next start.
 
 ### Orchestrations: the execution journal and restoring a backup (PLAN 7.5)
+
 Orchestrations start Hermes runs on their own, so Score keeps an **execution journal** outside `$SCORE_HOME`:
 `$SCORE_JOURNAL_DIR`, else `$XDG_STATE_HOME/score/execution-journal`, else `~/.local/state/score/execution-journal`
 (fake mode keeps it inside the home; it starts no real runs). It records, before the effect, each admission, each run

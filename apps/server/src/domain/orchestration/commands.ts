@@ -174,6 +174,17 @@ export function runCommand(
     return { kind: 'unauthorized', message: 'this capability has expired (the turn is over)' }
   const o = readOrch(sqlite, attempt.orchestration_id)
   if (!o) return { kind: 'unauthorized', message: 'unknown capability' }
+  // The turn is over as soon as Hermes says its run ended, not only once the executor has reconciled it.
+  const ended = attempt.run_id
+    ? (sqlite.prepare('SELECT status FROM runs WHERE id = ?').get(attempt.run_id) as
+        { status: string } | undefined)
+    : undefined
+  if (ended && ['completed', 'failed', 'cancelled', 'interrupted'].includes(ended.status)) {
+    sqlite
+      .prepare('UPDATE orc_capabilities SET expired_at = ? WHERE hash = ? AND expired_at IS NULL')
+      .run(now, hashCapability(args.capability))
+    return { kind: 'unauthorized', message: 'this capability has expired (the turn is over)' }
+  }
 
   const stored = sqlite
     .prepare(
@@ -277,6 +288,12 @@ const HANDLERS: Record<ToolName, Handler> = {
     const rawInstruction = args.instruction as string
     const after = (args.after as string[] | undefined) ?? []
     const replaces = args.replaces as string | undefined
+    const needsApproval = args.needsApproval === true
+    if (needsApproval && o.gate_policy !== 'lead-asks')
+      return refuse(
+        'not_lead_asks',
+        `This run's gate policy is ${o.gate_policy}; needsApproval only exists under lead-asks`,
+      )
     if (containsCapability(rawInstruction))
       return refuse(
         'capability_in_text',
@@ -337,7 +354,7 @@ const HANDLERS: Record<ToolName, Handler> = {
       )
     const seq = o.steps_created + 1
     const id = `s${seq}`
-    const policyGate = o.gate_policy === 'every-step'
+    const policyGate = o.gate_policy === 'every-step' || needsApproval
     const payload = {
       agentId: agent,
       agentIncarnation: life?.incarnation_id ?? 'untracked',
@@ -382,12 +399,13 @@ const HANDLERS: Record<ToolName, Handler> = {
       sqlite
         .prepare(
           `INSERT INTO orc_gates (orchestration_id, id, step_id, requested_by, payload, payload_hash, status, created_at)
-           VALUES (?, ?, ?, 'policy', ?, ?, 'open', ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, 'open', ?)`,
         )
         .run(
           o.id,
           gateId,
           id,
+          needsApproval ? 'lead' : 'policy',
           payloadText,
           createHash('sha256').update(payloadText).digest('hex'),
           now,
@@ -411,6 +429,11 @@ const HANDLERS: Record<ToolName, Handler> = {
     const stepId = args.stepId as string
     const step = readStep(sqlite, o.id, stepId)
     if (!step) return refuse('unknown_step', `${stepId} is not a step of this run`)
+    if (attemptsOf(sqlite, o.id).some((x) => x.step_id === stepId))
+      return refuse(
+        'already_admitted',
+        `${stepId} has already been admitted; approval is requested in orch.assign (needsApproval) before it can start`,
+      )
     if (step.status !== 'queued')
       return refuse(
         'not_queued',
@@ -553,6 +576,9 @@ const HANDLERS: Record<ToolName, Handler> = {
     }
     addStored(sqlite, o.id, utf8Bytes(summary))
     addHistory(sqlite, o.id, 'finish_requested', { outcome, attemptId: attempt.id, retired }, now)
+    journalSoft(ctx, () =>
+      ctx.journal.append({ kind: 'transition', orchestrationId: o.id, what: 'finish' }),
+    )
     return ok({ finishing: true, retiredSteps: retired })
   },
 

@@ -127,40 +127,68 @@ test('rejecting a gate marks the step rejected, blocks its dependents and wakes 
   expect(attemptOf(h, id, 'step')).toHaveLength(0)
 })
 
-test('lead-asks: a step is admitted unless the lead requested approval; steps wait until the creating turn ends', async () => {
+test('lead-asks: approval is requested in the assign call itself; an admitted step can no longer be put behind a gate', async () => {
+  const out: OrchReceipt[] = []
+  const later: OrchReceipt[] = []
+  h = await harness({
+    lead: {
+      script: byTurn({
+        1: async (t) => {
+          out.push(
+            r(
+              await t.call('orch.assign', {
+                agent: 'builder',
+                instruction: 'needs a human look',
+                needsApproval: true,
+              }),
+            ),
+          )
+          out.push(r(await t.call('orch.assign', { agent: 'reviewer', instruction: 'goes ahead' })))
+          out.push(r(await t.call('orch.requestApproval', { stepId: 's9' })))
+        },
+        2: async (t) => {
+          later.push(r(await t.call('orch.requestApproval', { stepId: 's2' })))
+        },
+      }),
+    },
+  })
+  const id = await h.create({ gatePolicy: 'lead-asks' })
+  await h.until(() => out.length === 3)
+  expect(out.map((o) => o.code ?? o.status)).toEqual(['ok', 'ok', 'unknown_step'])
+  expect(out[0]!.result).toMatchObject({ stepId: 's1', gateId: 'g1', status: 'pending_gate' })
+  await h.until(() => later.length === 1)
+  // s2 ran (no gate asked for); asking now is too late.
+  expect(later[0]!.code).toBe('already_admitted')
+  const d = detail(id)
+  expect(d.stepsList.map((s) => s.status)).toEqual(['pending_gate', 'succeeded'])
+  expect(d.gates[0]).toMatchObject({ stepId: 's1', requestedBy: 'lead', status: 'open' })
+  expect(attemptOf(h, id, 'step', 's1')).toHaveLength(0)
+  await h.orch.gateDecision(id, 'g1', gateBody(id, 'g1', 'approve'))
+  await h.until(() => detail(id).stepsList[0]!.status === 'succeeded')
+})
+
+test('needsApproval is refused under the other policies', async () => {
   const out: OrchReceipt[] = []
   h = await harness({
     lead: {
       script: byTurn({
         1: async (t) => {
           out.push(
-            r(await t.call('orch.assign', { agent: 'builder', instruction: 'needs a human look' })),
+            r(
+              await t.call('orch.assign', {
+                agent: 'builder',
+                instruction: 'x',
+                needsApproval: true,
+              }),
+            ),
           )
-          out.push(r(await t.call('orch.assign', { agent: 'reviewer', instruction: 'goes ahead' })))
-          out.push(r(await t.call('orch.requestApproval', { stepId: 's1' })))
-          out.push(r(await t.call('orch.requestApproval', { stepId: 's1' })))
-          out.push(r(await t.call('orch.requestApproval', { stepId: 's9' })))
         },
       }),
     },
   })
-  const id = await h.create({ gatePolicy: 'lead-asks' })
-  await h.until(() => out.length === 5)
-  expect(out.map((o) => o.code ?? o.status)).toEqual([
-    'ok',
-    'ok',
-    'ok',
-    'not_queued',
-    'unknown_step',
-  ])
-  await h.until(() => detail(id).stepsList[1]!.status === 'succeeded')
-  const d = detail(id)
-  // s1 stays behind its gate; s2 (no request) was admitted after the lead turn ended.
-  expect(d.stepsList.map((s) => s.status)).toEqual(['pending_gate', 'succeeded'])
-  expect(d.gates[0]).toMatchObject({ stepId: 's1', requestedBy: 'lead', status: 'open' })
-  expect(attemptOf(h, id, 'step', 's1')).toHaveLength(0)
-  await h.orch.gateDecision(id, 'g1', gateBody(id, 'g1', 'approve'))
-  await h.until(() => detail(id).stepsList[0]!.status === 'succeeded')
+  await h.create({ gatePolicy: 'none' })
+  await h.until(() => out.length === 1)
+  expect(out[0]!.code).toBe('not_lead_asks')
 })
 
 test('requestApproval is refused under the other policies, and after the step started', async () => {

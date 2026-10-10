@@ -134,7 +134,13 @@ test('compaction drops only entries the caller marks reconciled and keeps number
     generation: 0,
   })
   const result = journal.compact((entry) => 'attemptId' in entry && entry.attemptId === 'a1')
-  expect(result).toEqual({ kept: 1, dropped: 1 })
+  // The detail goes, a permanent tombstone stays, numbering never goes back.
+  expect(result.kept).toBe(2)
+  const read = journal.readOwn()
+  expect(read.ok && read.entries.map((e) => [e.n, e.kind])).toEqual([
+    [1, 'tombstone'],
+    [2, 'send_started'],
+  ])
   const next = journal.append({ kind: 'reconciled', attemptId: 'a2' })
   expect(next.n).toBe(3)
 })
@@ -317,4 +323,101 @@ test('a fence that stays up across starts does not grow the journal or renumber 
     expect(store.view().items).toHaveLength(1)
   }
   expect(entries()).toBe(afterFirst)
+})
+
+test('compaction that removes the newest entries leaves a checkpoint so the sequence stays monotonic', () => {
+  const journal = journalOf()
+  journal.append({
+    kind: 'send_started',
+    attemptId: 'a1',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'b',
+    generation: 0,
+  })
+  journal.append({ kind: 'run_handle', attemptId: 'a1', runId: 'r1' })
+  journal.append({ kind: 'reconciled', attemptId: 'a1' })
+  journal.compact(() => true)
+  const read = journal.readOwn()
+  expect(read.ok && read.entries.map((e) => [e.n, e.kind])).toEqual([
+    [1, 'tombstone'],
+    [3, 'checkpoint'],
+  ])
+  expect(journalOf().readOwn().ok).toBe(true)
+  expect(journal.append({ kind: 'reconciled', attemptId: 'x' }).n).toBe(4)
+  // A crash before the rename leaves only a temp file; the journal itself is untouched.
+  writeFileSync(join(journalDir, `${JOURNAL_FILE}.tmp`), 'garbage')
+  expect(journalOf().readOwn().ok).toBe(true)
+})
+
+test('DB-only restore after compaction is still detected through the tombstones', () => {
+  seedAttempt(db, 'a1', AT, 'run-1')
+  const journal = journalOf()
+  db.sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+  const backup = join(tmp.dir, 'old.db')
+  copyFileSync(join(tmp.dir, 'score.db'), backup)
+  // The backup predates the admission.
+  db.sqlite.prepare('UPDATE orc_attempts SET sent_at = NULL, run_id = NULL').run()
+  db.sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+  copyFileSync(join(tmp.dir, 'score.db'), backup)
+  db.sqlite.prepare("UPDATE orc_attempts SET sent_at = ?, run_id = 'run-1'").run(AT)
+  journal.append({
+    kind: 'send_started',
+    attemptId: 'a1',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: 0,
+  })
+  journal.append({ kind: 'run_handle', attemptId: 'a1', runId: 'run-1' })
+  journal.append({ kind: 'transition', orchestrationId: 'o1', what: 'finish' })
+  db.sqlite.prepare("UPDATE orc_attempts SET state = 'terminated'").run()
+  db.sqlite
+    .prepare("UPDATE orchestrations SET finish_requested_at = ?, status = 'succeeded'")
+    .run(AT)
+  journal.compact(() => true)
+  const read = journalOf().readOwn()
+  expect(
+    read.ok && read.entries.every((e) => e.kind === 'tombstone' || e.kind === 'checkpoint'),
+  ).toBe(true)
+  expect(new GlobalFenceStore(db, journalOf(), clock).startupCheck().fenced).toBe(false)
+  db.close()
+  copyFileSync(backup, join(tmp.dir, 'score.db'))
+  for (const suffix of ['-wal', '-shm']) writeFileSync(join(tmp.dir, `score.db${suffix}`), '')
+  db = openMigrated(tmp.dir)
+  const store = new GlobalFenceStore(db, journalOf(), clock)
+  expect(store.startupCheck().fenced).toBe(true)
+  expect(store.view().items.map((i) => i.kind)).toContain('attempt')
+})
+
+test('a database restored from before a Finish or a Pause is detected without any further dispatch', () => {
+  seedAttempt(db, 'a1', AT, 'run-1')
+  db.sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+  const backup = join(tmp.dir, 'before.db')
+  copyFileSync(join(tmp.dir, 'score.db'), backup)
+  const journal = journalOf()
+  journal.append({
+    kind: 'send_started',
+    attemptId: 'a1',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: 0,
+  })
+  journal.append({ kind: 'run_handle', attemptId: 'a1', runId: 'run-1' })
+  journal.append({ kind: 'transition', orchestrationId: 'o1', what: 'pause' })
+  db.close()
+  copyFileSync(backup, join(tmp.dir, 'score.db'))
+  for (const suffix of ['-wal', '-shm']) writeFileSync(join(tmp.dir, `score.db${suffix}`), '')
+  db = openMigrated(tmp.dir)
+  const store = new GlobalFenceStore(db, journalOf(), clock)
+  expect(store.startupCheck().fenced).toBe(true)
+  expect(store.view().items.some((i) => i.detail.includes('pause'))).toBe(true)
+  // A pause that was resumed afterwards is not a doubt.
+  const fresh = journalOf()
+  fresh.append({ kind: 'transition', orchestrationId: 'o1', what: 'resume' })
+  store.lift(store.view().revision, 'reviewed')
+  const again = new GlobalFenceStore(db, journalOf(), clock)
+  const res = again.startupCheck()
+  expect(res, JSON.stringify(again.view().items)).toEqual({ fenced: false, reasons: [] })
 })

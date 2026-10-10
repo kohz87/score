@@ -1894,6 +1894,21 @@ export class FakePort implements HermesPort {
     })
   }
 
+  /** Test and demo hook: the tools the fake Hermes lists for the Score MCP server (default: every orch.* tool). */
+  fakeMcpTools: string[] | null = [
+    'orch.plan',
+    'orch.assign',
+    'orch.cancel',
+    'orch.ask',
+    'orch.requestApproval',
+    'orch.note',
+    'orch.finish',
+    'orch.receipt',
+  ]
+  mcpTools(): Promise<string[] | null> {
+    return Promise.resolve(this.fakeMcpTools)
+  }
+
   async stopRun(req: { agentId: string; runId: string }): Promise<void> {
     assertNotKanbanAttempt(req.runId)
     return this.enqueue(async () => {

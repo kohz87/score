@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
-import type { Message, MessagePart } from '@score/contract'
+import { ORCH_LIMITS, type Message, type MessagePart } from '@score/contract'
 import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
@@ -279,6 +279,34 @@ function readPending(value: string): { text: string; lost: boolean } {
 }
 const writePending = (text: string, lost: boolean) => (lost ? LOST : '') + seal(text)
 
+const REPLY_MARK = '\n[reply truncated]'
+
+/**
+ * An orchestration attempt's reply is bounded at the ingestion edge (PLAN 7.5): streamed text past the result limit is
+ * dropped and flagged once, so a runaway agent cannot grow the room, the events or the run's storage reserve.
+ */
+function clampReply(sqlite: DatabaseSync, mapping: MessageRun, piece: string): string {
+  if (!mapping.orchestration_attempt_id || !piece) return piece
+  const row = sqlite.prepare('SELECT parts FROM messages WHERE id = ?').get(mapping.message_id) as
+    { parts: string } | undefined
+  const current = row
+    ? (JSON.parse(row.parts) as { kind: string; text?: string }[])
+        .filter((part) => part.kind === 'text')
+        .map((part) => part.text ?? '')
+        .join('')
+    : ''
+  if (current.endsWith(REPLY_MARK)) return ''
+  const room = ORCH_LIMITS.resultBytes - Buffer.byteLength(current)
+  if (room <= 0) return REPLY_MARK
+  if (Buffer.byteLength(piece) <= room) return piece
+  let kept = ''
+  for (const char of piece) {
+    if (Buffer.byteLength(kept + char) > room) break
+    kept += char
+  }
+  return kept + REPLY_MARK
+}
+
 export function appendRunMessage(
   sqlite: DatabaseSync,
   runId: string,
@@ -307,15 +335,20 @@ export function appendRunMessage(
       .prepare('UPDATE message_runs SET pending = ? WHERE message_id = ?')
       .run(writePending('', true), mapping.message_id)
     return cut > 0
-      ? updateMessage(sqlite, mapping.room_id, mapping.message_id, redact(text.slice(0, cut)), now)
+      ? updateMessage(
+          sqlite,
+          mapping.room_id,
+          mapping.message_id,
+          clampReply(sqlite, mapping, redact(text.slice(0, cut))),
+          now,
+        )
       : []
   }
   sqlite
     .prepare('UPDATE message_runs SET pending = ? WHERE message_id = ?')
     .run(writePending(text.slice(cut), held.lost), mapping.message_id)
-  return cut > 0
-    ? updateMessage(sqlite, mapping.room_id, mapping.message_id, redact(text.slice(0, cut)), now)
-    : []
+  const piece = cut > 0 ? clampReply(sqlite, mapping, redact(text.slice(0, cut))) : ''
+  return piece ? updateMessage(sqlite, mapping.room_id, mapping.message_id, piece, now) : []
 }
 
 function flushHeld(sqlite: DatabaseSync, mapping: MessageRun, now: string): DomainEventDraft[] {
@@ -324,7 +357,8 @@ function flushHeld(sqlite: DatabaseSync, mapping: MessageRun, now: string): Doma
   sqlite
     .prepare("UPDATE message_runs SET pending = '' WHERE message_id = ?")
     .run(mapping.message_id)
-  return held ? updateMessage(sqlite, mapping.room_id, mapping.message_id, redact(held), now) : []
+  const piece = held ? clampReply(sqlite, mapping, redact(held)) : ''
+  return piece ? updateMessage(sqlite, mapping.room_id, mapping.message_id, piece, now) : []
 }
 
 /**
@@ -507,7 +541,11 @@ export function completeRunMessage(
         { kind: 'text', text },
         ...message.parts.filter((part) => part.kind !== 'text'),
       ]
-    const rest = !streamed ? text : text.startsWith(streamed) ? text.slice(streamed.length) : ''
+    const rest = clampReply(
+      sqlite,
+      mapping,
+      !streamed ? text : text.startsWith(streamed) ? text.slice(streamed.length) : '',
+    )
     if (rest) {
       drafts.push(...updateMessage(sqlite, mapping.room_id, message.id, rest, now))
       const last = message.parts.findLast((part) => part.kind === 'text')

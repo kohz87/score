@@ -27,7 +27,8 @@ export function addStored(sqlite: DatabaseSync, orchId: string, bytes: number): 
 
 /** The reserve a run takes at creation: steps and lead turns at 64 KiB each plus the control reserve. */
 export const reserveFor = (maxSteps: number, maxLeadTurns: number): number =>
-  (maxSteps + maxLeadTurns) * ORCH_LIMITS.storagePerItemBytes + ORCH_LIMITS.controlReserveBytes
+  (maxSteps + maxLeadTurns) * (ORCH_LIMITS.storagePerItemBytes + ORCH_LIMITS.recordsPerItemBytes) +
+  ORCH_LIMITS.controlReserveBytes
 
 export function setStepStatus(
   sqlite: DatabaseSync,

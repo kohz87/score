@@ -30,14 +30,16 @@ export const runSpendReader: SpendReader = (sqlite, attempt) => {
   if (row === undefined) return { usd: null, complete: false }
   const run = RunSpendSchema.parse(row)
   const terminal = TERMINAL_RUN.includes(run.status)
-  let open = false
-  if (run.session_id !== null)
-    open =
-      sqlite
-        .prepare(
-          `SELECT 1 FROM runs WHERE session_id = ? AND id != ? AND status NOT IN ('completed','failed','cancelled','interrupted') LIMIT 1`,
-        )
-        .get(run.session_id, attempt.run_id) !== undefined
+  // Closure must be shown, never assumed: an unknown session, or a sibling run in it that has not ended with evidence
+  // (running, cancelled, interrupted), keeps the spend provisional. Compression continuations in other sessions cannot
+  // be seen from here, so they are an open item for the adapter (documented in the contract).
+  const open =
+    run.session_id === null ||
+    sqlite
+      .prepare(
+        `SELECT 1 FROM runs WHERE session_id = ? AND id != ? AND status NOT IN ('completed','failed') LIMIT 1`,
+      )
+      .get(run.session_id, attempt.run_id) !== undefined
   return { usd: run.cost_usd, complete: terminal && run.cost_usd !== null && !open }
 }
 

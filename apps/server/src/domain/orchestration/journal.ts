@@ -59,6 +59,26 @@ const EntrySchema = z.discriminatedUnion('kind', [
     accepted: z.array(z.int().positive()).optional(),
   }),
   z.object({ ...Base, kind: z.literal('reconciled'), attemptId: z.string().min(1) }),
+  // Every transition whose rollback would restore admission authority (design v3.2).
+  z.object({
+    ...Base,
+    kind: z.literal('transition'),
+    orchestrationId: z.string().min(1),
+    what: z.enum(['finish', 'pause', 'resume', 'waiver', 'abandon']),
+    attemptIds: z.array(z.string().min(1)).optional(),
+  }),
+  // What compaction leaves of an admission or a fence: permanent, tiny, enough to prove an older database is older.
+  z.object({
+    ...Base,
+    kind: z.literal('tombstone'),
+    of: z.enum(['send_started', 'stop_fence', 'transition']),
+    orchestrationId: z.string().min(1),
+    attemptId: z.string().min(1).optional(),
+    what: z.enum(['finish', 'pause', 'resume', 'waiver', 'abandon']).optional(),
+    attemptIds: z.array(z.string().min(1)).optional(),
+  }),
+  // Keeps the sequence monotonic when compaction removed the newest entries.
+  z.object({ ...Base, kind: z.literal('checkpoint') }),
 ])
 export type JournalEntry = z.infer<typeof EntrySchema>
 
@@ -167,6 +187,8 @@ export class ExecutionJournal {
     if (this.broken !== undefined)
       throw new Error(`Execution journal is unreadable: ${this.broken}`)
     if (this.nextN === undefined && !this.open()) throw new Error('Execution journal is unreadable')
+    // Another handle on the same file (a second executor, a test) may have appended: number from the file's own tail.
+    this.nextN = Math.max(this.nextN ?? 1, this.tailN() + 1)
     const entry = EntrySchema.parse({
       ...body,
       n: this.nextN!,
@@ -186,6 +208,25 @@ export class ExecutionJournal {
     if (fresh) this.syncDirectory()
     this.nextN = entry.n + 1
     return entry
+  }
+
+  /** The newest entry number in the file, read from its tail. */
+  private tailN(): number {
+    try {
+      const raw = readFileSync(this.file, 'utf8')
+      const lines = raw.split('\n').filter(Boolean)
+      for (let i = lines.length - 1; i >= 0; i--) {
+        try {
+          const n = (JSON.parse(lines[i]!) as { n?: unknown }).n
+          if (typeof n === 'number') return n
+        } catch {
+          // a torn last line
+        }
+      }
+    } catch {
+      // no file yet
+    }
+    return 0
   }
 
   private syncDirectory(): void {
@@ -220,9 +261,59 @@ export class ExecutionJournal {
   compact(droppable: (entry: JournalEntry) => boolean): { kept: number; dropped: number } {
     const result = this.read()
     if (!result.ok) throw new Error(`Cannot compact an unreadable journal: ${result.reason}`)
-    const keep = result.entries.filter((entry) => entry.scope !== this.scope || !droppable(entry))
+    // Detail goes, the proof stays: an admission or a fence becomes a permanent tombstone with its original number.
+    const out: JournalEntry[] = []
+    for (const entry of result.entries) {
+      const compactable = [
+        'send_started',
+        'run_handle',
+        'reconciled',
+        'stop_fence',
+        'transition',
+      ].includes(entry.kind)
+      if (entry.scope !== this.scope || !compactable || !droppable(entry)) {
+        out.push(entry)
+      } else if (entry.kind === 'send_started') {
+        out.push({
+          n: entry.n,
+          at: entry.at,
+          scope: entry.scope,
+          kind: 'tombstone',
+          of: 'send_started',
+          orchestrationId: entry.orchestrationId,
+          attemptId: entry.attemptId,
+        })
+      } else if (entry.kind === 'stop_fence') {
+        out.push({
+          n: entry.n,
+          at: entry.at,
+          scope: entry.scope,
+          kind: 'tombstone',
+          of: 'stop_fence',
+          orchestrationId: entry.orchestrationId,
+          ...(entry.attemptId ? { attemptId: entry.attemptId } : {}),
+        })
+      } else if (entry.kind === 'transition') {
+        out.push({
+          n: entry.n,
+          at: entry.at,
+          scope: entry.scope,
+          kind: 'tombstone',
+          of: 'transition',
+          orchestrationId: entry.orchestrationId,
+          what: entry.what,
+          ...(entry.attemptIds ? { attemptIds: entry.attemptIds } : {}),
+        })
+      }
+      // run_handle and reconciled entries carry nothing the tombstone does not.
+    }
+    const last = result.entries.at(-1)
+    if (last && out.at(-1)?.n !== last.n)
+      out.push({ n: last.n, at: last.at, scope: last.scope, kind: 'checkpoint' })
+    const keep = out
     const dropped = result.entries.length - keep.length
-    if (dropped === 0) return { kept: keep.length, dropped: 0 }
+    if (JSON.stringify(keep) === JSON.stringify(result.entries))
+      return { kept: keep.length, dropped: 0 }
     const text = keep
       .map((entry) => JSON.stringify({ ...entry, c: checksum(JSON.stringify(entry)) }))
       .map((line) => `${line}\n`)

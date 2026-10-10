@@ -325,6 +325,12 @@ export interface HermesPort extends ProfileManagementPort {
   }): Promise<{ runId: string }>
   stopRun(req: { agentId: string; runId: string }): Promise<void>
   /**
+   * The MCP tool names the agent's serving Hermes process currently lists for the Score server (PLAN 7.5 v3.2: Hermes
+   * caches the list per connection, so a freshly deployed `orch.*` needs a reload). `null` = cannot be established.
+   * Absent on adapters that cannot ask.
+   */
+  mcpTools?(agentId: string): Promise<string[] | null>
+  /**
    * Rewind one agent's room session by `turns` user turns (PLAN 5.33). Reads Hermes's own history first (the turn count
    * must match, the session must not have been compressed since `sinceMs`), then asks the Score bridge inside the
    * agent's gateway to run Hermes's own rewind. `dryRun` does the checks only. Never throws for a refusal.

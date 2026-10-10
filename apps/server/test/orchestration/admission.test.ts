@@ -193,11 +193,12 @@ test('daily maintenance compacts reconciled journal entries, keeps unresolved on
     generation: 0,
   })
   const result = h.orch.maintenance()
-  expect(result.journal.dropped).toBeGreaterThanOrEqual(6)
+  expect(result.journal.dropped).toBeGreaterThanOrEqual(3)
   const after = h.journal.readOwn()
-  expect(after.ok && after.entries.map((e) => e.kind === 'send_started' && e.attemptId)).toEqual([
-    'orc-ghost',
-  ])
+  expect(
+    after.ok && after.entries.filter((e) => e.kind === 'send_started').map((e) => e.attemptId),
+  ).toEqual(['orc-ghost'])
+  expect(after.ok && after.entries.some((e) => e.kind === 'tombstone')).toBe(true)
   expect(result.pruned).toBe(0)
   // Past the retention a finished, released run is removed (a tombstone stays in the history).
   h.db.sqlite.prepare("UPDATE orchestrations SET ended_at = '2020-01-01T00:00:00.000Z'").run()
@@ -205,6 +206,9 @@ test('daily maintenance compacts reconciled journal entries, keeps unresolved on
   expect(h.rows('SELECT 1 FROM orchestrations')).toHaveLength(0)
   expect(h.rows('SELECT 1 FROM orc_attempts')).toHaveLength(0)
   expect(h.rows("SELECT 1 FROM orc_history WHERE kind = 'pruned'")).toHaveLength(1)
+  // Pruned runs leave tombstones in the journal; they are not a doubt at the next start.
+  const { GlobalFenceStore } = await import('../../src/domain/orchestration/fence.ts')
+  expect(new GlobalFenceStore(h.db, h.journal).startupCheck().fenced).toBe(false)
 })
 
 test('the journal size alarm shows in the fence view and in the preflight', async () => {
@@ -225,4 +229,36 @@ test('the journal size alarm shows in the fence view and in the preflight', asyn
   })
   const preflight = await alarmed.preflight('lead', ['builder'])
   expect(preflight.checks.find((c) => c.id === 'journal')!.status).toBe('fail')
+})
+
+test('tool readiness: a lead whose Hermes lists old MCP tools fails with a reload instruction; a full list passes', async () => {
+  h = await harness()
+  h.access.patch('lead', { enabled: true })
+  h.access.issueToken('lead')
+  const make = (tools: string[] | null) =>
+    new Orchestrator({
+      db: h.db,
+      ingest: h.ingest,
+      port: {
+        mode: 'live' as const,
+        startRun: h.port.startRun.bind(h.port),
+        stopRun: h.port.stopRun.bind(h.port),
+        listAgents: async () => (await h.port.listAgents()).map((a) => ({ ...a, served: true })),
+        mcpTools: async () => tools,
+      },
+      access: h.access,
+      fence: h.fence,
+      mcpAvailable: true,
+    })
+  const readiness = async (tools: string[] | null) =>
+    (await make(tools).preflight('lead', ['builder'])).checks.find(
+      (c) => c.id === 'tool_readiness',
+    )!
+  const old = await readiness(['rooms.list', 'orch.plan', 'orch.note'])
+  expect(old.status).toBe('fail')
+  expect(old.message).toContain('Reload MCP')
+  expect(old.message).toContain('orch.assign')
+  expect((await readiness(h.port.fakeMcpTools)).status).toBe('ok')
+  expect((await readiness(null)).status).toBe('unknown')
+  expect((await readiness(null)).message).toContain('reload MCP')
 })

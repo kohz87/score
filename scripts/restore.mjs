@@ -29,12 +29,17 @@ const fail = (message) => {
 const [backupArg, ...rest] = process.argv.slice(2)
 if (!backupArg || rest.length > 0) fail('usage: score restore <backup-folder>')
 
-const home = resolve(process.env.SCORE_HOME ?? join(homedir(), '.score'))
+// A symlinked home is restored through the link: the resolved directory is what is moved aside and replaced, so the link
+// (and the home's canonical identity, which the journal scope is derived from) stays the same.
+const requestedHome = resolve(process.env.SCORE_HOME ?? join(homedir(), '.score'))
+const home = existsSync(requestedHome) ? realpathSync(requestedHome) : requestedHome
 const stateHome = process.env.XDG_STATE_HOME || join(homedir(), '.local', 'state')
-const journalDir = resolve(
+const journalDirRequested = resolve(
   process.env.SCORE_JOURNAL_DIR ?? join(stateHome, 'score', 'execution-journal'),
 )
 const backup = resolve(backupArg)
+mkdirSync(journalDirRequested, { recursive: true, mode: 0o700 })
+const journalDir = realpathSync(journalDirRequested)
 
 if (!existsSync(backup) || !statSync(backup).isDirectory()) fail(`${backup} is not a folder`)
 if (!existsSync(join(backup, 'score.db')))
@@ -56,7 +61,7 @@ if (existsSync(pidFile)) {
   }
 }
 
-const realHome = existsSync(home) ? realpathSync(home) : home
+const realHome = home
 const scope = createHash('sha256').update(realHome).digest('hex').slice(0, 12)
 const stamp = new Date().toISOString().replace(/[:.]/g, '-')
 

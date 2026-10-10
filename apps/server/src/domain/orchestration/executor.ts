@@ -35,7 +35,13 @@ import { briefTitle, createBrief, emitBriefChange } from '../briefs.ts'
 import { insertRoom, storeMessage } from '../rooms.ts'
 import { teamPausedAt } from '../team-pause.ts'
 import { budgetView, canReserve, overBudget, runSpendReader, type SpendReader } from './budget.ts'
-import { containsCapability, hashCapability, mintCapability, withCapability } from './capability.ts'
+import {
+  containsCapability,
+  hashCapability,
+  mintCapability,
+  valueHasCapability,
+  withCapability,
+} from './capability.ts'
 import { runCommand, type ToolName, parseToolArgs } from './commands.ts'
 import { journalSoft, touch, type Ctx } from './ctx.ts'
 import {
@@ -48,7 +54,7 @@ import {
   setLimits,
   stopRun,
 } from './decisions.ts'
-import { fenceView, isFenced, type GlobalFenceStore } from './fence.ts'
+import { applyJournalEvidence, fenceView, isFenced, type GlobalFenceStore } from './fence.ts'
 import {
   activeStepCounts,
   addStored,
@@ -93,7 +99,7 @@ const RETENTION_MS = 90 * 24 * 60 * 60 * 1000
 export interface OrchestratorOptions {
   db: ScoreDb
   ingest: Ingest
-  port: Pick<HermesPort, 'mode' | 'startRun' | 'stopRun' | 'listAgents'>
+  port: Pick<HermesPort, 'mode' | 'startRun' | 'stopRun' | 'listAgents' | 'mcpTools'>
   access: McpAccessStore
   fence: GlobalFenceStore
   clock?: () => number
@@ -422,9 +428,7 @@ export class Orchestrator {
           : 'The execution journal is healthy'
         : 'The execution journal cannot be read',
     )
-    const running = this.db.read(
-      (sqlite) => listOrchs(sqlite).filter((o) => !isTerminalStatus(o.status)).length,
-    )
+    const running = this.db.read((sqlite) => this.capacityUsed(sqlite))
     add(
       'capacity',
       running < ORCH_CAPACITY.runningOrchestrations ? 'ok' : 'fail',
@@ -441,13 +445,37 @@ export class Orchestrator {
         ? 'There is room for another run'
         : 'Orchestration storage is full; remove old runs first',
     )
-    add(
-      'tool_readiness',
-      fake ? 'ok' : 'unknown',
-      fake
-        ? 'Scripted lead'
-        : 'Hermes loads MCP tools per session; Score cannot see whether the lead has the orch.* tools. Each lead turn is a new session, so they appear once the profile has the Score MCP entry.',
-    )
+    // Hermes caches the MCP tool list per connection: the lead's serving process must list every orch.* tool.
+    const required = [
+      'orch.plan',
+      'orch.assign',
+      'orch.cancel',
+      'orch.ask',
+      'orch.requestApproval',
+      'orch.note',
+      'orch.finish',
+      'orch.receipt',
+    ]
+    const listed = leadProblem
+      ? null
+      : ((await port.mcpTools?.(leadAgentId).catch(() => null)) ?? null)
+    if (listed) {
+      const missing = required.filter((name) => !listed.includes(name))
+      add(
+        'tool_readiness',
+        missing.length ? 'fail' : 'ok',
+        missing.length
+          ? `The lead's Hermes does not list ${missing.join(', ')}. Reload MCP (/reload-mcp in that profile, or restart its gateway), then try again.`
+          : 'The lead sees every orch.* tool',
+      )
+    } else
+      add(
+        'tool_readiness',
+        fake ? 'ok' : 'unknown',
+        fake
+          ? 'Scripted lead'
+          : 'Score cannot see which MCP tools the lead has. Hermes caches the tool list per connection, so after Score is upgraded reload MCP (/reload-mcp, or restart the gateway) before starting.',
+      )
     return {
       ok: checks.every((check) => check.status !== 'fail'),
       checks,
@@ -467,6 +495,15 @@ export class Orchestrator {
       },
       reserveBytes: reserve,
     }
+  }
+
+  /** Orchestrations that hold capacity: running ones, and finished ones whose attempts are still not confirmed ended. */
+  private capacityUsed(sqlite: DatabaseSync): number {
+    return listOrchs(sqlite).filter(
+      (o) =>
+        !isTerminalStatus(o.status) ||
+        attemptsOf(sqlite, o.id).some((a) => a.state === 'unknown' && a.abandoned_at === null),
+    ).length
   }
 
   private quotaUsed(sqlite: DatabaseSync): number {
@@ -510,7 +547,7 @@ export class Orchestrator {
   private insert(ctx: Ctx, id: string, body: OrchestrationCreate, preflight: Preflight): void {
     const { sqlite, now } = ctx
     if (isFenced(sqlite)) throw new HttpError(409, 'fenced', 'Admission is fenced')
-    const live = listOrchs(sqlite).filter((o) => !isTerminalStatus(o.status)).length
+    const live = this.capacityUsed(sqlite)
     if (live >= ORCH_CAPACITY.runningOrchestrations)
       throw new HttpError(
         429,
@@ -660,6 +697,17 @@ export class Orchestrator {
         kind: 'receipt',
         receipt: { status: 'refused', code: 'bad_arguments', message: parsed.message, tool },
       }
+    // Nothing the lead sends may carry a capability (ids, agents, text): it would be stored or reflected in a receipt.
+    if (valueHasCapability(parsed.args, ['capability']))
+      return {
+        kind: 'receipt',
+        receipt: {
+          status: 'refused',
+          code: 'capability_in_text',
+          message: 'A field contains something shaped like a capability; remove it',
+          tool,
+        },
+      }
     const outcome = await this.mutate((ctx) =>
       runCommand(ctx, agentId, tool, parsed.args, {
         commandsPerAttempt: ORCH_LIMITS.commandsPerLeadAttempt,
@@ -683,6 +731,39 @@ export class Orchestrator {
         if (isTerminalStatus(o.status)) continue
         for (const attempt of attemptsOf(sqlite, o.id))
           if (attempt.state === 'send_started') {
+            // The adapter may have committed the handle Hermes returned before Score recorded it: keep it, so the
+            // run can be observed and a Stop delivered. The attempt is still never resent.
+            const committed =
+              (
+                sqlite
+                  .prepare(
+                    "SELECT result FROM command_intents WHERE idempotency_key = ? AND state = 'accepted' AND result IS NOT NULL",
+                  )
+                  .get(attempt.turn_id) as { result: string } | undefined
+              )?.result ??
+              (
+                sqlite
+                  .prepare('SELECT id FROM runs WHERE score_turn_id = ?')
+                  .get(attempt.turn_id) as { id: string } | undefined
+              )?.id
+            if (committed) {
+              sqlite
+                .prepare(
+                  "UPDATE orc_attempts SET run_id = ?, state = 'running', updated_at = ? WHERE id = ? AND run_id IS NULL",
+                )
+                .run(committed, now, attempt.id)
+              journalSoft(ctx, () =>
+                ctx.journal.append({ kind: 'run_handle', attemptId: attempt.id, runId: committed }),
+              )
+              addHistory(
+                sqlite,
+                o.id,
+                'recovered_handle',
+                { attemptId: attempt.id, runId: committed },
+                now,
+              )
+              continue
+            }
             this.markUnknown(ctx, o, attempt, 'crash_after_send_started')
             addHistory(sqlite, o.id, 'recovered_unknown', { attemptId: attempt.id }, now)
           }
@@ -727,9 +808,18 @@ export class Orchestrator {
       addHistory(sqlite, orchId, 'ended', { status, reason }, now)
       return true
     }
+    // The deadline is a fence-and-drain: admission stops, queued work is retired, owed Stops go to every admitted attempt.
+    if (
+      (o.status === 'running' || o.status === 'paused') &&
+      o.deadline_at !== null &&
+      now >= o.deadline_at
+    ) {
+      stopRun(ctx, orchId, 'deadline')
+      return true
+    }
     if (o.status === 'stopping') {
       const unresolved = attempts.some((a) => a.state === 'unknown' && a.abandoned_at === null)
-      return !live && !unresolved ? end('stopped', 'stopped by the person') : false
+      return !live && !unresolved ? end('stopped', o.end_reason ?? 'stopped by the person') : false
     }
     if (o.status === 'finishing') {
       if (live) return false
@@ -740,10 +830,6 @@ export class Orchestrator {
         : end('succeeded', null)
     }
     if (o.status !== 'running') return false
-    if (o.deadline_at !== null && now >= o.deadline_at) {
-      this.pauseFor(ctx, o, 'deadline')
-      return true
-    }
     const steps = stepsOf(sqlite, orchId)
     const wakeSource =
       live ||
@@ -807,7 +893,7 @@ export class Orchestrator {
     const attempts = attemptsOf(sqlite, o.id)
     if (unknownFenceAttempts(o, attempts).length > 0 || cancelFenceAttempts(o, attempts).length > 0)
       return
-    if (o.deadline_at !== null && now >= o.deadline_at) return this.pauseFor(ctx, o, 'deadline')
+    if (o.deadline_at !== null && now >= o.deadline_at) return
     const view = budgetView(sqlite, o)
     if (overBudget(view)) return this.pauseFor(ctx, o, 'budget')
     if (view.limitUsd !== null && view.unknownSpend && !o.accepted_unknown_spend)
@@ -1025,6 +1111,21 @@ export class Orchestrator {
     const attempt = readAttempt(sqlite, attemptId)
     if (!attempt || attempt.state !== 'created') return undefined
     const o = requireOrch(sqlite, attempt.orchestration_id)
+    // The journal outlives the database: if it says this attempt was sent, it is never sent again.
+    const journaled = ctx.journal.readOwn()
+    // Without a readable journal we can't prove this attempt was never sent: fail closed (the caller fences).
+    if (!journaled.ok) throw new Error(`Execution journal is unreadable: ${journaled.reason}`)
+    if (
+      journaled.entries.some(
+        (e) =>
+          (e.kind === 'send_started' || (e.kind === 'tombstone' && e.of === 'send_started')) &&
+          e.attemptId === attempt.id,
+      )
+    ) {
+      applyJournalEvidence(sqlite, journaled.entries, now)
+      touch(ctx, o.id)
+      return undefined
+    }
     const refuse = (reason: string, step?: { status: StepRow['status']; disposition: string }) => {
       refuseAttempt(sqlite, attempt, reason, now)
       if (attempt.step_id && step)
@@ -1067,6 +1168,20 @@ export class Orchestrator {
       })
     }
     if (!agentAdmits(sqlite, attempt.agent_id)) return undefined
+    // The last barrier before Hermes: spend, reservations and the deadline as they are now, not as they were when this
+    // attempt was prepared (another send may have been awaiting its reply since).
+    this.reconcileAttempts(ctx)
+    const fresh = requireOrch(sqlite, o.id)
+    if (fresh.deadline_at !== null && now >= fresh.deadline_at) return undefined
+    const view = budgetView(sqlite, fresh)
+    if (overBudget(view)) {
+      this.pauseFor(ctx, fresh, 'budget')
+      return undefined
+    }
+    if (view.limitUsd !== null && view.unknownSpend && !fresh.accepted_unknown_spend) {
+      this.pauseFor(ctx, fresh, 'unknown_spend')
+      return undefined
+    }
     let capability: string | undefined
     let generation = 0
     if (attempt.kind === 'lead') {
@@ -1440,15 +1555,24 @@ export class Orchestrator {
           attempt !== undefined && (attempt.state === 'terminated' || attempt.state === 'refused')
         )
       }
+      if (entry.kind === 'transition') {
+        const o = readOrch(sqlite, entry.orchestrationId)
+        return (
+          o !== undefined &&
+          isTerminalStatus(o.status) &&
+          attemptsOf(sqlite, o.id).every((x) => x.state === 'terminated' || x.state === 'refused')
+        )
+      }
       if (entry.kind === 'stop_fence') {
+        // Only fully reconciled work lets a fence go: every attempt it covers is terminated (evidence) or never sent.
+        const done = (a: AttemptRow) => a.state === 'terminated' || a.state === 'refused'
+        if (entry.attemptId !== undefined) {
+          const attempt = readAttempt(sqlite, entry.attemptId)
+          return attempt !== undefined && done(attempt)
+        }
         const o = readOrch(sqlite, entry.orchestrationId)
         if (!o || !isTerminalStatus(o.status)) return false
-        const attempts = attemptsOf(sqlite, o.id)
-        return !attempts.some(
-          (a) =>
-            a.state === 'unknown' ||
-            (a.stop_requested_at !== null && a.stop_acknowledged_at === null),
-        )
+        return attemptsOf(sqlite, o.id).every(done)
       }
       return false
     })
@@ -1457,6 +1581,8 @@ export class Orchestrator {
     this.db.tx((tx) => {
       for (const o of listOrchs(tx)) {
         if (!isTerminalStatus(o.status) || (o.ended_at ?? o.updated_at) >= cutoff) continue
+        if (attemptsOf(tx, o.id).some((x) => x.state !== 'terminated' && x.state !== 'refused'))
+          continue
         if (
           attemptsOf(tx, o.id).some(
             (a) =>
