@@ -108,6 +108,24 @@
       "approvedBy": "owner",
       "date": "2026-10-09",
       "reason": "Public-domain-like licence with no conditions; required by the WebAuthn library for passkeys (5.28)."
+    },
+    {
+      "name": "pako",
+      "version": "1.0.11",
+      "license": "(MIT AND Zlib)",
+      "scope": "server (mammoth \u2192 jszip)",
+      "approvedBy": "owner",
+      "date": "2026-10-10",
+      "reason": "Permissive Zlib licence; needed by mammoth (BSD-2) for .docx text extraction in Knowledge (6.6). Owner approved mammoth's dependencies."
+    },
+    {
+      "name": "duck",
+      "version": "0.1.12",
+      "license": "BSD",
+      "scope": "server (mammoth \u2192 lop)",
+      "approvedBy": "owner",
+      "date": "2026-10-10",
+      "reason": "BSD-family licence without a named variant; transitive dependency of mammoth, approved with it for .docx extraction (6.6)."
     }
   ]
 }
