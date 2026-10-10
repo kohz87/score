@@ -1172,6 +1172,9 @@ export class Orchestrator {
     const { sqlite, now } = ctx
     const attempt = readAttempt(sqlite, attemptId)
     if (!attempt || attempt.state !== 'created') return undefined
+    // Fresh run facts first (another dispatch may have been awaiting its reply while a sibling's run ended or was
+    // recovered): every fence and hold below is judged on what reconciliation just established (fix-i 1).
+    this.reconcileAttempts(ctx)
     const o = requireOrch(sqlite, attempt.orchestration_id)
     // The journal outlives the database: if it says this attempt was sent, it is never sent again.
     const journaled = ctx.journal.readOwn()
@@ -1205,8 +1208,15 @@ export class Orchestrator {
         status: 'not_started',
         disposition: `not_started: run ${o.status}`,
       })
-    // These keep the attempt `created`: it is sent when the condition clears.
-    if (o.status === 'paused' || isFenced(sqlite) || teamPausedAt(sqlite) !== null) return undefined
+    // These keep the attempt `created`: it is sent when the condition clears. The manual hold is read directly: it is
+    // independent of the status a remap or a limits decision may have cleared (fix-i 3).
+    if (
+      o.status === 'paused' ||
+      o.manual_paused_at !== null ||
+      isFenced(sqlite) ||
+      teamPausedAt(sqlite) !== null
+    )
+      return undefined
     const attempts = attemptsOf(sqlite, o.id)
     if (unknownFenceAttempts(o, attempts).length > 0 || cancelFenceAttempts(o, attempts).length > 0)
       return undefined
@@ -1250,7 +1260,6 @@ export class Orchestrator {
     if (!agentAdmits(sqlite, attempt.agent_id)) return undefined
     // The last barrier before Hermes: spend, reservations and the deadline as they are now, not as they were when this
     // attempt was prepared (another send may have been awaiting its reply since).
-    this.reconcileAttempts(ctx)
     const fresh = requireOrch(sqlite, o.id)
     if (fresh.deadline_at !== null && now >= fresh.deadline_at) return undefined
     const view = budgetView(sqlite, fresh)
