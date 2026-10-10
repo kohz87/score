@@ -166,8 +166,9 @@ export class GlobalFenceStore {
    */
   set(reason: string, items: Mismatch[], options: { untrustedHistory?: boolean } = {}): void {
     const current = this.db.read((sqlite) => readGlobal(sqlite))
-    const fenceSeq = current.fence_seq + 1
-    if (this.journalUsable())
+    const fenceSeq = this.nextSeq(current.fence_seq)
+    // A fence that is already up keeps its number: only new doubts are added to its list.
+    if (current.fenced !== 1 && this.journalUsable())
       this.journal.append({ kind: 'global_fence', action: 'set', fenceSeq, reason })
     const now = new Date(this.clock()).toISOString()
     this.db.tx((sqlite) => {
@@ -219,7 +220,7 @@ export class GlobalFenceStore {
           ),
       )
       .flatMap((row) => (row.journal_n === null ? [] : [row.journal_n]))
-    const fenceSeq = current.fence_seq + 1
+    const fenceSeq = this.nextSeq(current.fence_seq)
     // A journal that cannot be written must not be "lifted" past: the next effect could not be recorded.
     if (!this.journalUsable())
       throw new HttpError(
@@ -248,6 +249,18 @@ export class GlobalFenceStore {
         .run('global_fence_lifted', JSON.stringify({ note: note ?? null, accepted }), now)
     })
     this.onChange()
+  }
+
+  /** Fence numbers only grow: past the database's and past anything the journal remembers (a restored database lags). */
+  private nextSeq(dbSeq: number): number {
+    const read = this.journal.readOwn()
+    const journalMax = read.ok
+      ? read.entries.reduce(
+          (max, entry) => (entry.kind === 'global_fence' ? Math.max(max, entry.fenceSeq) : max),
+          0,
+        )
+      : 0
+    return Math.max(dbSeq, journalMax) + 1
   }
 
   private journalUsable(): boolean {

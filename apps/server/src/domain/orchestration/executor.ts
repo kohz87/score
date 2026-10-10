@@ -1,4 +1,5 @@
 import {
+  type AgentSummary,
   ORCH_ACKNOWLEDGEMENT_TEXT,
   ORCH_CAPACITY,
   ORCH_LIMITS,
@@ -323,14 +324,21 @@ export class Orchestrator {
 
   // ----------------------------------------------------------------------------------------------- preflight, create
 
-  async preflight(leadAgentId: string, allowedAgents: string[]): Promise<Preflight> {
+  /**
+   * `agents` is the team as the caller sees it (the HTTP routes pass the cached agent directory, which is fast against a
+   * live Hermes); without it the adapter is asked.
+   */
+  async preflight(
+    leadAgentId: string,
+    allowedAgents: string[],
+    agents?: Pick<AgentSummary, 'id' | 'served'>[],
+  ): Promise<Preflight> {
     const { port, access } = this.options
     const fake = port.mode === 'fake'
     const checks: PreflightCheck[] = []
     const add = (id: PreflightCheck['id'], status: PreflightCheck['status'], message: string) =>
       checks.push({ id, status, message })
-    const agents = await port.listAgents()
-    const known = new Map(agents.map((agent) => [agent.id, agent]))
+    const known = new Map((agents ?? (await port.listAgents())).map((agent) => [agent.id, agent]))
     const ready = (id: string): string | undefined => {
       const agent = known.get(id)
       if (!agent) return `${id} is not a team member`
@@ -453,8 +461,11 @@ export class Orchestrator {
     )
   }
 
-  async create(body: OrchestrationCreate): Promise<OrchestrationCreated> {
-    const preflight = await this.preflight(body.leadAgentId, body.allowedAgents)
+  async create(
+    body: OrchestrationCreate,
+    agents?: Pick<AgentSummary, 'id' | 'served'>[],
+  ): Promise<OrchestrationCreated> {
+    const preflight = await this.preflight(body.leadAgentId, body.allowedAgents, agents)
     if (new Set(body.allowedAgents).size !== body.allowedAgents.length)
       throw new HttpError(400, 'bad_request', 'allowedAgents lists an agent twice')
     if (!preflight.ok) {
@@ -1024,6 +1035,12 @@ export class Orchestrator {
     if (incarnation !== attempt.agent_incarnation) {
       if (attempt.kind === 'lead') {
         refuseAttempt(sqlite, attempt, 'not dispatched: the lead agent changed', now)
+        // Nothing was sent, so the turn's causes go back to the wake cursor.
+        sqlite
+          .prepare(
+            'UPDATE orchestrations SET causes_consumed_up_to = ?, lead_turns_used = lead_turns_used - 1 WHERE id = ?',
+          )
+          .run(attempt.claim_from ?? 0, o.id)
         this.pauseFor(ctx, o, 'agent_unavailable')
         return undefined
       }

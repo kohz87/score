@@ -293,3 +293,28 @@ test('a fence the database lost is restored from the journal (lifted journal ent
   const again = new GlobalFenceStore(db, journalOf(), clock)
   expect(again.startupCheck().fenced).toBe(true)
 })
+
+test('a fence that stays up across starts does not grow the journal or renumber itself', () => {
+  seedAttempt(db, 'a1', AT, 'run-1')
+  const journal = journalOf()
+  journal.append({
+    kind: 'send_started',
+    attemptId: 'ghost',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: 0,
+  })
+  new GlobalFenceStore(db, journalOf(), clock).startupCheck()
+  const entries = () => {
+    const read = journalOf().readOwn()
+    return read.ok ? read.entries.length : -1
+  }
+  const afterFirst = entries()
+  for (let i = 0; i < 3; i++) {
+    const store = new GlobalFenceStore(db, journalOf(), clock)
+    expect(store.startupCheck().fenced).toBe(true)
+    expect(store.view().items).toHaveLength(1)
+  }
+  expect(entries()).toBe(afterFirst)
+})

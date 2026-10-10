@@ -337,7 +337,7 @@ export function buildApp({
       ...(clock ? { clock } : {}),
     })
     if (orchestrator)
-      registerOrchestrationRoutes(app, { orchestrator, db, ...(clock ? { clock } : {}) })
+      registerOrchestrationRoutes(app, { orchestrator, db, port, ...(clock ? { clock } : {}) })
     registerTeamPauseRoutes(app, {
       db,
       ingest,

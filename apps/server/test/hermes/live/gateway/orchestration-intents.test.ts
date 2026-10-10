@@ -23,7 +23,9 @@ test('the rendered capability goes to Hermes, the stored intent keeps the placeh
     owner: 'orchestration',
     render: (input) => input.replaceAll('{{SCORE_ORCHESTRATION_CAPABILITY}}', capability),
   })
-  const create = env.fake.calls.find((call) => call.path.endsWith('/v1/runs') && call.method === 'POST')!
+  const create = env.fake.calls.find(
+    (call) => call.path.endsWith('/v1/runs') && call.method === 'POST',
+  )!
   expect((create.body as { input: string }).input).toContain(capability)
   const row = env.db.sqlite.prepare('SELECT payload, owner FROM command_intents').get() as {
     payload: string
@@ -32,7 +34,9 @@ test('the rendered capability goes to Hermes, the stored intent keeps the placeh
   expect(row.owner).toBe('orchestration')
   expect(row.payload).toContain('{{SCORE_ORCHESTRATION_CAPABILITY}}')
   expect(row.payload).not.toContain(capability)
-  expect(JSON.stringify(env.db.sqlite.prepare('SELECT * FROM runs').all())).not.toContain(capability)
+  expect(JSON.stringify(env.db.sqlite.prepare('SELECT * FROM runs').all())).not.toContain(
+    capability,
+  )
 })
 
 test('generic intent recovery never resends an orchestration intent, even one left sent or unknown', async () => {
