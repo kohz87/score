@@ -29,10 +29,14 @@ export const agentIdsOf = (version: WorkflowVersion): string[] => [
 /** Steps the run may create: every logical attempt, plus up to two remap re-creations per agent node. */
 export const stepBudgetOf = (version: WorkflowVersion): number => {
   const agents = version.definition.nodes.filter((n) => n.kind === 'agent')
-  return Math.min(
-    100,
-    agents.reduce((sum, n) => sum + (n.kind === 'agent' ? n.retries + 1 : 0), 0) +
-      agents.length * WORKFLOW_LIMITS.maxRemapsPerNode,
+  // At least one: a graph of gates alone creates no steps, but the run row's limit is a positive number.
+  return Math.max(
+    1,
+    Math.min(
+      100,
+      agents.reduce((sum, n) => sum + (n.kind === 'agent' ? n.retries + 1 : 0), 0) +
+        agents.length * WORKFLOW_LIMITS.maxRemapsPerNode,
+    ),
   )
 }
 

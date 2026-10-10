@@ -63,3 +63,12 @@ test('a version stays used after its last run is pruned, so the workflow still c
   expect(getWorkflow(h.db.sqlite, wf).versions[0]!.used).toBe(true)
   expect(() => deleteWorkflow(h!.db.sqlite, wf)).toThrow(/used/i)
 })
+
+// medium: gate-only workflow
+test('a workflow made only of a gate and an end starts and finishes', async () => {
+  h = await wfHarness()
+  const id = await start(h, definition([gate('g'), end()], [edge('g', 'done')]))
+  await h.until(() => node(h!, id, 'g').state === 'gate_open')
+  await decide(h, id, 'g', 'approve')
+  await h.until(done(id))
+})
