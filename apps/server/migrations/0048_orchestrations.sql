@@ -38,6 +38,8 @@ CREATE TABLE orchestrations (
   -- Stop fence (journaled) and the recorded waiver "continue while a cancelled step may still run".
   stop_requested_at TEXT,
   waiver_at TEXT,
+  -- The person accepted that spend of some attempts is unknown and wants the run to continue (budget runs only).
+  accepted_unknown_spend INTEGER NOT NULL DEFAULT 0 CHECK (accepted_unknown_spend IN (0, 1)),
   acknowledgement TEXT NOT NULL CHECK (json_valid(acknowledgement)),
   preflight TEXT NOT NULL CHECK (json_valid(preflight)),
   -- Storage: the reserve taken at creation and the bytes of text stored so far.

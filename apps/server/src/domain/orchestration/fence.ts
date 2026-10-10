@@ -55,6 +55,7 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
   const orchestration = sqlite.prepare(
     'SELECT stop_requested_at FROM orchestrations WHERE id = ?',
   )
+  const attemptStop = sqlite.prepare('SELECT stop_requested_at FROM orc_attempts WHERE id = ?')
   const dbSeq = readGlobal(sqlite).fence_seq
   let journalSeq = 0
   for (const entry of entries) {
@@ -79,15 +80,17 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
           detail: `Hermes run ${entry.runId} was returned for attempt ${entry.attemptId}, but the database does not hold that handle`,
         })
     } else if (entry.kind === 'stop_fence') {
-      const row = orchestration.get(entry.orchestrationId) as
-        | { stop_requested_at: string | null }
-        | undefined
+      const row = (
+        entry.attemptId === undefined
+          ? orchestration.get(entry.orchestrationId)
+          : attemptStop.get(entry.attemptId)
+      ) as { stop_requested_at: string | null } | undefined
       if (!row || row.stop_requested_at === null)
         mismatches.push({
           kind: 'fence',
-          ref: entry.orchestrationId,
+          ref: entry.attemptId ?? entry.orchestrationId,
           journalN: entry.n,
-          detail: `Stop was requested for ${entry.orchestrationId}, but the database does not record it`,
+          detail: `Stop was requested for ${entry.attemptId ?? entry.orchestrationId}, but the database does not record it`,
         })
     }
   }

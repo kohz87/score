@@ -39,6 +39,7 @@ import type {
   ModelSettingsUpdate,
   RewindSkipReason,
 } from '@score/contract'
+import { HttpError } from '../errors.ts'
 import type { RewindBroker } from './bridge/rewind-broker.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { AgentFile, AgentFileName } from './agent-files.ts'
@@ -311,6 +312,16 @@ export interface HermesPort extends ProfileManagementPort {
     provider?: string
     /** Media ids of the person's image attachments, in message order. */
     images?: string[]
+    /**
+     * Orchestration dispatch (PLAN 7.5): the executor owns recovery of this admission, so generic intent recovery must
+     * never resend it.
+     */
+    owner?: 'orchestration'
+    /**
+     * Applied to the stored input only for the payload sent to Hermes, in memory. The orchestrator uses it to insert a
+     * per-turn capability that must never be stored.
+     */
+    render?: (stored: string) => string
   }): Promise<{ runId: string }>
   stopRun(req: { agentId: string; runId: string }): Promise<void>
   /**
@@ -365,4 +376,19 @@ export class ApprovalDeliveryError extends Error {
     super('Approval delivery failed')
     this.name = 'ApprovalDeliveryError'
   }
+}
+
+/** Marks a refusal raised before anything was sent to Hermes (callers may conclude nothing was dispatched). */
+export function notDispatched(error: unknown): unknown {
+  return error instanceof HttpError
+    ? new HttpError(error.status, error.code, error.message, { notDispatched: true })
+    : error
+}
+export function isNotDispatched(error: unknown): boolean {
+  return (
+    error instanceof HttpError &&
+    typeof error.details === 'object' &&
+    error.details !== null &&
+    (error.details as { notDispatched?: unknown }).notDispatched === true
+  )
 }

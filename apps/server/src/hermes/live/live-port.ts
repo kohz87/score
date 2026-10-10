@@ -23,6 +23,7 @@ import {
   type HermesPort,
   type HermesPortDeps,
   type ObservationSink,
+  notDispatched,
 } from '../port.ts'
 import { CredentialsUnavailable, registerStoredKeys } from './credentials.ts'
 import {
@@ -683,12 +684,20 @@ export class LivePort implements HermesPort {
     model?: string
     provider?: string
     images?: string[]
+    owner?: 'orchestration'
+    render?: (stored: string) => string
   }): Promise<{ runId: string }> {
-    const { intents } = this.requireStarted()
-    assertAgentAdmits(this.db!.sqlite, req.agentId)
-    assertFeature(this.current, 'score-runs')
-    if (!this.current.hermes.servedProfiles.includes(req.agentId))
-      throw new HttpError(503, 'hermes_unavailable', 'Profile is not served')
+    let intents: RunIntents
+    try {
+      ;({ intents } = this.requireStarted())
+      assertAgentAdmits(this.db!.sqlite, req.agentId)
+      assertFeature(this.current, 'score-runs')
+      if (!this.current.hermes.servedProfiles.includes(req.agentId))
+        throw new HttpError(503, 'hermes_unavailable', 'Profile is not served')
+    } catch (error) {
+      // Nothing was sent: the orchestrator may conclude "not dispatched" from this.
+      throw notDispatched(error)
+    }
     const result = await intents
       .startRunIntent(
         {
@@ -700,6 +709,10 @@ export class LivePort implements HermesPort {
           ...(req.images?.length ? { images: req.images } : {}),
         },
         req.turnId,
+        {
+          ...(req.owner ? { owner: req.owner } : {}),
+          ...(req.render ? { render: req.render } : {}),
+        },
       )
       .catch((error: unknown) => {
         // A definite refusal (4xx other than timeout/conflict/rate limit) is permanent: surface it as an

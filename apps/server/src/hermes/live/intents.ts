@@ -22,6 +22,11 @@ const IntentRowSchema = z.object({
   first_sent_at: z.iso.datetime().nullable(),
   stop_state: z.enum(['pending', 'done']).nullable(),
 })
+/** Orchestration dispatches (PLAN 7.5): `render` fills in the per-turn capability for the wire payload only. */
+export interface RunIntentOptions {
+  owner?: 'orchestration'
+  render?: (stored: string) => string
+}
 interface IntentDeps {
   db: ScoreDb
   gateway: GatewayClient
@@ -36,7 +41,11 @@ export class RunIntents {
   >()
   constructor(private readonly deps: IntentDeps) {}
 
-  async startRunIntent(request: StartRun, turnId: string): Promise<{ runId: string }> {
+  async startRunIntent(
+    request: StartRun,
+    turnId: string,
+    options: RunIntentOptions = {},
+  ): Promise<{ runId: string }> {
     const safe = parseRequest(this.deps.gateway, request)
     const fingerprint = JSON.stringify(safe)
     const pending = this.flights.get(turnId)
@@ -45,7 +54,7 @@ export class RunIntents {
         return Promise.reject(new Error('Idempotency key belongs to a different request'))
       return pending.promise
     }
-    const work = startRunIntent(this.deps, safe, turnId).finally(() => this.flights.delete(turnId))
+    const work = startRunIntent(this.deps, safe, turnId, options).finally(() => this.flights.delete(turnId))
     this.flights.set(turnId, { fingerprint, promise: work })
     return work
   }
@@ -60,6 +69,7 @@ export class RunIntents {
 async function dispatch(
   deps: IntentDeps,
   row: z.infer<typeof IntentRowSchema>,
+  render?: (stored: string) => string,
 ): Promise<{ runId: string }> {
   const { db, gateway, sink } = deps
   const payload = PayloadSchema.parse(JSON.parse(row.payload))
@@ -95,7 +105,9 @@ async function dispatch(
         payload.credentialGeneration,
         payload.images?.length
           ? buildRunInput(payload.input, payload.images, deps.imageReader)
-          : undefined,
+          : render
+            ? render(payload.input)
+            : undefined,
       )
       runId = result.runId
       db.tx((sqlite) => {
@@ -199,6 +211,7 @@ export async function startRunIntent(
   deps: IntentDeps,
   request: StartRun,
   turnId: string,
+  options: RunIntentOptions = {},
 ): Promise<{ runId: string }> {
   const parsed = parseRequest(deps.gateway, request)
   z.string()
@@ -222,7 +235,7 @@ export async function startRunIntent(
       JSON.stringify(payload.images ?? []) !== JSON.stringify(parsed.images ?? [])
     )
       throw new Error('Idempotency key belongs to a different request')
-    return dispatch(deps, row)
+    return dispatch(deps, row, options.render)
   }
   const credentialGeneration = deps.gateway.generation(parsed.profile)
   const active = z
@@ -244,15 +257,16 @@ export async function startRunIntent(
     const now = new Date().toISOString()
     sqlite
       .prepare(
-        `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at) VALUES (?, 'start_run', ?, ?, 'pending', ?, ?)`,
+        `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, owner, created_at, updated_at) VALUES (?, 'start_run', ?, ?, 'pending', ?, ?, ?)`,
       )
-      .run(id, turnId, JSON.stringify(payload), now, now)
+      .run(id, turnId, JSON.stringify(payload), options.owner ?? null, now, now)
   })
   return dispatch(
     deps,
     IntentRowSchema.parse(
       deps.db.sqlite.prepare('SELECT * FROM command_intents WHERE id = ?').get(id),
     ),
+    options.render,
   )
 }
 
@@ -262,7 +276,7 @@ export async function recoverIntents(deps: IntentDeps): Promise<void> {
     .parse(
       deps.db.sqlite
         .prepare(
-          `SELECT * FROM command_intents WHERE kind = 'start_run' AND (state IN ('pending','sent','unknown') OR (state = 'accepted' AND (NOT EXISTS (SELECT 1 FROM runs WHERE runs.score_turn_id = command_intents.idempotency_key) OR (stop_state IS NOT 'done' AND EXISTS (SELECT 1 FROM message_runs mr WHERE mr.turn_id = command_intents.idempotency_key AND mr.run_id IS NULL AND mr.state != 'pending'))))) ORDER BY created_at, id`,
+          `SELECT * FROM command_intents WHERE kind = 'start_run' AND owner IS NULL AND (state IN ('pending','sent','unknown') OR (state = 'accepted' AND (NOT EXISTS (SELECT 1 FROM runs WHERE runs.score_turn_id = command_intents.idempotency_key) OR (stop_state IS NOT 'done' AND EXISTS (SELECT 1 FROM message_runs mr WHERE mr.turn_id = command_intents.idempotency_key AND mr.run_id IS NULL AND mr.state != 'pending'))))) ORDER BY created_at, id`,
         )
         .all(),
     )

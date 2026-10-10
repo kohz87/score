@@ -45,6 +45,8 @@ const EntrySchema = z.discriminatedUnion('kind', [
     ...Base,
     kind: z.literal('stop_fence'),
     orchestrationId: z.string().min(1),
+    /** Set for a cancelled step: the fence is on that attempt, not on the whole run. */
+    attemptId: z.string().min(1).optional(),
     reason: z.string(),
   }),
   z.object({

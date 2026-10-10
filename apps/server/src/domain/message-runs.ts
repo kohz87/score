@@ -33,6 +33,8 @@ export const MessageRunSchema = z.object({
   plan_first: z.int().min(0).max(1),
   /** 'summary' = writes the room summary (PLAN 7.4a); null = answers a message. */
   purpose: z.enum(['summary']).nullable().optional(),
+  /** Set for the reply of an orchestration lead or step attempt (PLAN 7.5): no hand-offs, no plan, no retry. */
+  orchestration_attempt_id: z.string().nullable().optional(),
 })
 export type MessageRun = z.infer<typeof MessageRunSchema>
 
@@ -108,7 +110,13 @@ export function retryReply(
     .prepare('SELECT * FROM message_runs WHERE message_id = ? AND room_id = ?')
     .get(messageId, roomId)
   const parsed = reply === undefined ? undefined : MessageRunSchema.parse(reply)
-  if (!parsed || parsed.hop !== 0 || parsed.from_agent_id !== null || parsed.purpose)
+  if (
+    !parsed ||
+    parsed.hop !== 0 ||
+    parsed.from_agent_id !== null ||
+    parsed.purpose ||
+    parsed.orchestration_attempt_id
+  )
     throw new HttpError(409, 'conflict', 'Only an answer to your own message can be retried')
   if (parsed.state === 'pending' || parsed.state === 'active')
     throw new HttpError(409, 'conflict', 'This reply is still being written')
@@ -465,7 +473,7 @@ export function completeRunMessage(
   now: string,
   {
     output,
-    handoffs = true,
+    handoffs: wantHandoffs = true,
     status = 'completed',
     error,
   }: { output?: string | null; handoffs?: boolean; status?: string; error?: string | null } = {},
@@ -474,6 +482,8 @@ export function completeRunMessage(
   if (!value) return []
   const mapping = MessageRunSchema.parse(value)
   if (mapping.state !== 'active') return []
+  // An orchestration attempt's reply is data for the executor: never a hand-off, never a plan (PLAN 7.5).
+  let handoffs = wantHandoffs && !mapping.orchestration_attempt_id
   // Nothing can extend the held text any more.
   const lostHeld = readPending(mapping.pending).lost
   const drafts: DomainEventDraft[] = flushHeld(sqlite, mapping, now)
@@ -525,7 +535,7 @@ export function completeRunMessage(
     message.parts.push({ kind: 'tools', summary, runId })
   // A plan-first turn only proposes: the checklist becomes a plan part, and nothing is handed off until the
   // person presses Start plan.
-  if (mapping.plan_first) {
+  if (mapping.plan_first && !mapping.orchestration_attempt_id) {
     const text = message.parts
       .filter((part) => part.kind === 'text')
       .map((part) => part.text)

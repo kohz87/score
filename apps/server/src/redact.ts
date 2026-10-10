@@ -38,6 +38,8 @@ export function redact(text: string): string {
     withoutKnownSecrets(text)
       // Score's MCP bearer tokens (scm_ + base64url): distinctive, so recognised bare and embedded, even when cut short.
       .replace(/(?<![A-Za-z0-9])scm_[A-Za-z0-9_-]{8,}/g, '[redacted]')
+      // Orchestration capabilities (orc_ + base64url, 7.5): bearer authority for one lead attempt.
+      .replace(/(?<![A-Za-z0-9])orc_[A-Za-z0-9_-]{8,}/g, '[redacted]')
       // One-time pairing links (/pair#<token>) work for whoever holds them: never let one reach a log or a page.
       .replace(/(\/pair#)[A-Za-z0-9_-]{16,}/g, '$1[redacted]')
       // URL query secrets and userinfo: the assignment pass below would otherwise swallow "https:" + the whole URL.
