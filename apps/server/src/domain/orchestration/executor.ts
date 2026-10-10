@@ -1,5 +1,6 @@
 import {
   type AgentSummary,
+  WORKFLOW_LIMITS,
   ORCH_ACKNOWLEDGEMENT_TEXT,
   ORCH_CAPACITY,
   ORCH_LIMITS,
@@ -20,6 +21,16 @@ import {
   type RunControl,
   type RemapDecision,
   type WaiverDecision,
+  type WorkflowPreflight,
+  type WorkflowRemapDecision,
+  type WorkflowRetryDecision,
+  type WorkflowRunCreate,
+  type WorkflowRunCreated,
+  type WorkflowRunEvents,
+  type WorkflowRunList,
+  type WorkflowRunSnapshot,
+  type WorkflowRunSummary,
+  type WorkflowTryAgainDecision,
 } from '@score/contract'
 import { createHash, randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
@@ -35,7 +46,7 @@ import { agentAdmits, agentPausedAt, lifecycleOf } from '../agent-lifecycle.ts'
 import { briefTitle, createBrief, emitBriefChange } from '../briefs.ts'
 import { insertRoom, storeMessage } from '../rooms.ts'
 import { teamPausedAt } from '../team-pause.ts'
-import { budgetView, canReserve, overBudget, runSpendReader, type SpendReader } from './budget.ts'
+import { budgetView, canReserve, makeSpendReader, overBudget, type SpendReader } from './budget.ts'
 import {
   containsCapability,
   hashCapability,
@@ -57,15 +68,31 @@ import {
   stopRun,
 } from './decisions.ts'
 import { applyJournalEvidence, fenceView, isFenced, type GlobalFenceStore } from './fence.ts'
+import { journalDispatches } from './journal.ts'
 import {
   activeStepCounts,
   addStored,
+  bumpAdmission,
   cascadeBlocked,
+  compactControlHistory,
   refuseAttempt,
   reserveFor,
   setStepStatus,
 } from './ops.ts'
 import { renderLeadInput, renderStepInput } from './render.ts'
+import { finalizeGraph, planWorkflow } from '../workflows/planner.ts'
+import { workflowDetailOf, workflowEventsOf, workflowSummaryOf } from '../workflows/views.ts'
+import { readVersion } from '../workflows/definitions.ts'
+import { validateDefinition } from '../workflows/definition.ts'
+import {
+  agentIdsOf,
+  insertWorkflowRun,
+  stepBudgetOf,
+  validateInputs,
+  workflowReserve,
+} from '../workflows/runs.ts'
+import { decideNodeGate, remapWorkflow, retryNode, tryAgain } from '../workflows/decisions.ts'
+import { nodesOf, readResult, requireWfRun } from '../workflows/store.ts'
 import { timelineOf } from './timeline.ts'
 import {
   AttemptRowSchema,
@@ -77,7 +104,10 @@ import {
   gatesOf,
   inquiriesOf,
   isTerminalStatus,
+  leadOf,
+  listLeadOrchs,
   listOrchs,
+  listWorkflowOrchs,
   readAttempt,
   readOrch,
   readStep,
@@ -87,7 +117,13 @@ import {
   type OrchRow,
   type StepRow,
 } from './store.ts'
-import { cancelFenceAttempts, detailOf, summaryOf, unknownFenceAttempts } from './views.ts'
+import {
+  cancelFenceAttempts,
+  detailOf,
+  ownershipOf,
+  summaryOf,
+  unknownFenceAttempts,
+} from './views.ts'
 
 interface RunFacts {
   status: string
@@ -180,6 +216,13 @@ function inputWithdrawn(
   return undefined
 }
 
+/** A lead-planned run; a workflow run id answers 404 here (its routes are /api/workflow-runs). */
+function requireLeadOrch(sqlite: DatabaseSync, id: string): OrchRow {
+  const o = requireOrch(sqlite, id)
+  if (o.planner !== 'lead') throw new HttpError(404, 'not_found', 'Unknown orchestration')
+  return o
+}
+
 export class Orchestrator {
   private readonly db: ScoreDb
   private readonly ingest: Ingest
@@ -187,6 +230,8 @@ export class Orchestrator {
   private readonly spend: SpendReader
   private readonly quotaBytes: number
   private readonly retryMs: number
+  /** Whether this adapter can prove a session's compression lineage is complete (only the fake one can). */
+  private readonly lineageProvable: boolean
   private pumping: Promise<void> | undefined
   private again = false
   private closed = false
@@ -202,9 +247,10 @@ export class Orchestrator {
     this.db = options.db
     this.ingest = options.ingest
     this.clock = options.clock ?? Date.now
-    this.spend = options.spend ?? runSpendReader
+    this.spend = options.spend ?? makeSpendReader(options.port.mode !== 'fake')
     this.quotaBytes = options.quotaBytes ?? ORCHESTRATION_QUOTA_BYTES
     this.retryMs = options.retryMs ?? 5_000
+    this.lineageProvable = options.port.mode === 'fake'
     options.fence.onChange = () => this.announceFence()
   }
 
@@ -335,24 +381,39 @@ export class Orchestrator {
     for (const id of ctx.touched) {
       const o = readOrch(sqlite, id)
       if (!o) continue
+      const workflow = o.planner === 'workflow'
       const fingerprint = createHash('sha1')
-        .update(JSON.stringify({ ...detailOf(sqlite, o), revision: 0, updatedAt: '' }))
+        .update(
+          JSON.stringify({
+            ...(workflow
+              ? workflowDetailOf(sqlite, o, now, { lineageProvable: this.lineageProvable })
+              : detailOf(sqlite, o)),
+            revision: 0,
+            updatedAt: '',
+          }),
+        )
         .digest('hex')
       if (this.fingerprints.get(id) === fingerprint) continue
       this.fingerprints.set(id, fingerprint)
       // Ownership transitions (owned, draining, released) are part of the recorded history.
-      const ownership = summaryOf(sqlite, o).ownership
+      const ownership = ownershipOf(o, attemptsOf(sqlite, o.id))
       if (this.ownershipSeen.get(id) !== ownership) {
         this.ownershipSeen.set(id, ownership)
         addHistory(sqlite, id, 'ownership', { state: ownership }, now)
       }
+      compactControlHistory(sqlite, id)
       sqlite
         .prepare('UPDATE orchestrations SET revision = revision + 1, updated_at = ? WHERE id = ?')
         .run(now, id)
-      events.push({
-        type: 'orchestration.upserted',
-        data: summaryOf(sqlite, readOrch(sqlite, id)!),
-      })
+      const fresh = readOrch(sqlite, id)!
+      events.push(
+        workflow
+          ? {
+              type: 'workflow.run.upserted',
+              data: workflowSummaryOf(sqlite, fresh, this.options.fence.journal),
+            }
+          : { type: 'orchestration.upserted', data: summaryOf(sqlite, fresh) },
+      )
       events.push(...emitBriefChange(sqlite, o.brief_id))
     }
     return events
@@ -379,14 +440,14 @@ export class Orchestrator {
   list(): OrchestrationList {
     return this.db.read((sqlite) => ({
       asOfSeq: headSeq(sqlite),
-      items: listOrchs(sqlite).map((o) => summaryOf(sqlite, o)),
+      items: listLeadOrchs(sqlite).map((o) => summaryOf(sqlite, o)),
     }))
   }
 
   snapshot(id: string): OrchestrationSnapshot {
     return this.db.read((sqlite) => ({
       asOfSeq: headSeq(sqlite),
-      orchestration: detailOf(sqlite, requireOrch(sqlite, id)),
+      orchestration: detailOf(sqlite, requireLeadOrch(sqlite, id)),
     }))
   }
 
@@ -394,12 +455,12 @@ export class Orchestrator {
   events(id: string): OrchestrationEvents {
     return this.db.read((sqlite) => ({
       asOfSeq: headSeq(sqlite),
-      events: timelineOf(sqlite, requireOrch(sqlite, id)),
+      events: timelineOf(sqlite, requireLeadOrch(sqlite, id)),
     }))
   }
 
   summary(id: string): OrchestrationSummary {
-    return this.db.read((sqlite) => summaryOf(sqlite, requireOrch(sqlite, id)))
+    return this.db.read((sqlite) => summaryOf(sqlite, requireLeadOrch(sqlite, id)))
   }
 
   /**
@@ -785,6 +846,267 @@ export class Orchestrator {
     return this.options.fence.view()
   }
 
+  // ------------------------------------------------------------------------------------------------------ workflows
+
+  private requireWorkflowOrch(sqlite: DatabaseSync, id: string): OrchRow {
+    const o = requireOrch(sqlite, id)
+    if (o.planner !== 'workflow') throw new HttpError(404, 'not_found', 'Unknown workflow run')
+    return o
+  }
+
+  workflowRuns(): WorkflowRunList {
+    return this.db.read((sqlite) => ({
+      asOfSeq: headSeq(sqlite),
+      items: listWorkflowOrchs(sqlite).map((o) =>
+        workflowSummaryOf(sqlite, o, this.options.fence.journal),
+      ),
+    }))
+  }
+
+  workflowSnapshot(id: string): WorkflowRunSnapshot {
+    return this.db.read((sqlite) => ({
+      asOfSeq: headSeq(sqlite),
+      run: workflowDetailOf(
+        sqlite,
+        this.requireWorkflowOrch(sqlite, id),
+        new Date(this.nowMs()).toISOString(),
+        {
+          lineageProvable: this.lineageProvable,
+          journal: this.options.fence.journal,
+        },
+      ),
+    }))
+  }
+
+  workflowEvents(id: string): WorkflowRunEvents {
+    return this.db.read((sqlite) => ({
+      asOfSeq: headSeq(sqlite),
+      events: workflowEventsOf(sqlite, this.requireWorkflowOrch(sqlite, id)),
+    }))
+  }
+
+  workflowSummary(id: string): WorkflowRunSummary {
+    return this.db.read((sqlite) =>
+      workflowSummaryOf(sqlite, this.requireWorkflowOrch(sqlite, id), this.options.fence.journal),
+    )
+  }
+
+  async workflowPreflight(
+    workflowId: string,
+    version: number,
+    agents?: Pick<AgentSummary, 'id' | 'served'>[],
+  ): Promise<WorkflowPreflight> {
+    const { port } = this.options
+    const fake = port.mode === 'fake'
+    const checks: WorkflowPreflight['checks'] = []
+    const add = (
+      id: WorkflowPreflight['checks'][number]['id'],
+      status: 'ok' | 'fail' | 'unknown',
+      message: string,
+    ) => checks.push({ id, status, message })
+    const found = this.db.read((sqlite) => readVersion(sqlite, workflowId, version))
+    const validation = validateDefinition(found.definition)
+    add(
+      'definition',
+      validation.ok ? 'ok' : 'fail',
+      validation.ok
+        ? 'The workflow is valid'
+        : `${validation.issues.length} problems in the workflow`,
+    )
+    const known = new Map((agents ?? (await port.listAgents())).map((agent) => [agent.id, agent]))
+    const ids = agentIdsOf(found)
+    const problems = ids.flatMap((id) => {
+      const agent = known.get(id)
+      if (!agent) return [`${id} is not a team member`]
+      if (!this.db.read((sqlite) => agentAdmits(sqlite, id)))
+        return [`${id} is not ready for new work`]
+      if (!fake && !agent.served) return [`${id} is not served by Hermes right now`]
+      return []
+    })
+    add('agents', problems.length ? 'fail' : 'ok', problems.join('; ') || 'All agents are ready')
+    const mapping = this.db.read((sqlite) =>
+      ids.map((agentId) => ({
+        agentId,
+        name: agentId,
+        incarnation: lifecycleOf(sqlite, agentId)?.incarnation_id ?? 'untracked',
+      })),
+    )
+    add(
+      'mapping',
+      'ok',
+      `${mapping.length} agent${mapping.length === 1 ? '' : 's'} will be bound to this run`,
+    )
+    const fence = this.options.fence.view()
+    add(
+      'global_fence',
+      fence.fenced ? 'fail' : 'ok',
+      fence.fenced
+        ? `Admission is fenced (${fence.reason}); review the list in Settings`
+        : 'No fence',
+    )
+    add(
+      'journal',
+      fence.journal.ok && !fence.journal.sizeAlarm ? 'ok' : 'fail',
+      fence.journal.ok
+        ? fence.journal.sizeAlarm
+          ? 'The execution journal is over its size alarm'
+          : 'The execution journal is healthy'
+        : 'The execution journal cannot be read',
+    )
+    const running = this.db.read((sqlite) => this.capacityUsed(sqlite))
+    add(
+      'capacity',
+      running < ORCH_CAPACITY.runningOrchestrations ? 'ok' : 'fail',
+      `${running} of ${ORCH_CAPACITY.runningOrchestrations} runs are using capacity`,
+    )
+    const reserve = workflowReserve(stepBudgetOf(found))
+    const fits = this.db.read((sqlite) => this.quotaUsed(sqlite) + reserve <= this.quotaBytes)
+    add(
+      'quota',
+      fits ? 'ok' : 'fail',
+      fits ? 'There is room for another run' : 'Run storage is full; remove old runs first',
+    )
+    return {
+      ok: checks.every((check) => check.status !== 'fail'),
+      checks,
+      mapping,
+      gatePolicyNotes: {
+        'gates-only':
+          'Only gate nodes stop for you; agent steps start as soon as their inputs are ready.',
+        'every-step': 'You approve every agent step before it starts, as well as the gate nodes.',
+      },
+      acknowledgementText: ORCH_ACKNOWLEDGEMENT_TEXT,
+      spendNote:
+        'Hermes reports tokens, often not dollars. Unknown cost is shown as unknown, never as zero, and spend of a live Hermes run is not settled: reservations are held until the run ends.',
+      maxSteps: found.maxSteps,
+      reserveBytes: reserve,
+      defaults: { gatePolicy: 'gates-only', maxConcurrentSteps: 2, stepEstimateUsd: 0.5 },
+    }
+  }
+
+  async createWorkflowRun(
+    body: WorkflowRunCreate,
+    agents?: Pick<AgentSummary, 'id' | 'served'>[],
+  ): Promise<WorkflowRunCreated> {
+    const found = this.db.read((sqlite) => readVersion(sqlite, body.workflowId, body.version))
+    validateInputs(found, body.inputs)
+    const preflight = await this.workflowPreflight(body.workflowId, body.version, agents)
+    if (!preflight.ok) {
+      const failed = (id: string) =>
+        preflight.checks.some((check) => check.id === id && check.status === 'fail')
+      const details = { checks: preflight.checks }
+      if (failed('global_fence')) throw new HttpError(409, 'fenced', 'Admission is fenced', details)
+      if (failed('capacity'))
+        throw new HttpError(429, 'capacity', 'Too many runs are using capacity', details)
+      if (failed('quota'))
+        throw new HttpError(409, 'quota_exhausted', 'There is not enough run storage left', details)
+      throw new HttpError(409, 'preflight_failed', 'The preflight failed', details)
+    }
+    const id = `orc-${randomUUID().slice(0, 8)}`
+    await this.mutate((ctx) => {
+      const { sqlite, now } = ctx
+      if (isFenced(sqlite)) throw new HttpError(409, 'fenced', 'Admission is fenced')
+      if (this.capacityUsed(sqlite) >= ORCH_CAPACITY.runningOrchestrations)
+        throw new HttpError(429, 'capacity', 'Too many runs are using capacity')
+      if (this.quotaUsed(sqlite) + workflowReserve(stepBudgetOf(found)) > this.quotaBytes)
+        throw new HttpError(
+          409,
+          'quota_exhausted',
+          'There is not enough run storage left for this run',
+        )
+      if (body.deadlineAt !== undefined && body.deadlineAt <= now)
+        throw new HttpError(400, 'bad_request', 'The deadline must be in the future')
+      // The person must have seen the incarnations the run will be bound to.
+      const shown = new Map(body.agentMap.map((entry) => [entry.agentId, entry.incarnation]))
+      for (const entry of preflight.mapping) {
+        const current = lifecycleOf(sqlite, entry.agentId)?.incarnation_id ?? 'untracked'
+        if (shown.get(entry.agentId) !== current || shown.size !== preflight.mapping.length)
+          throw new HttpError(
+            409,
+            'conflict',
+            `${entry.agentId} changed; look at the start screen again`,
+          )
+      }
+      insertWorkflowRun(ctx, id, body, found, preflight)
+    })
+    this.kick()
+    return { run: this.workflowSummary(id), preflight }
+  }
+
+  private async decideWf(id: string, fn: (ctx: Ctx) => void): Promise<WorkflowRunSummary> {
+    this.db.read((sqlite) => this.requireWorkflowOrch(sqlite, id))
+    await this.mutate((ctx) => {
+      fn(ctx)
+    })
+    this.kick()
+    return this.workflowSummary(id)
+  }
+
+  wfGateDecision(id: string, gateId: string, body: GateDecision) {
+    const isNode = this.db.read(
+      (sqlite) =>
+        sqlite
+          .prepare('SELECT 1 FROM wf_gates WHERE orchestration_id = ? AND id = ?')
+          .get(id, gateId) !== undefined,
+    )
+    return this.decideWf(id, (ctx) =>
+      isNode ? decideNodeGate(ctx, id, gateId, body) : decideGate(ctx, id, gateId, body),
+    )
+  }
+  wfRetry(id: string, nodeId: string, body: WorkflowRetryDecision) {
+    return this.decideWf(id, (ctx) => retryNode(ctx, id, nodeId, body))
+  }
+  wfTryAgain(id: string, nodeId: string, body: WorkflowTryAgainDecision) {
+    return this.decideWf(id, (ctx) => tryAgain(ctx, id, nodeId, body))
+  }
+  wfRemap(id: string, body: WorkflowRemapDecision) {
+    return this.decideWf(id, (ctx) => remapWorkflow(ctx, id, body, this.options.fence.journal))
+  }
+  wfLimits(id: string, body: LimitsDecision) {
+    return this.decideWf(id, (ctx) => setLimits(ctx, id, body))
+  }
+  wfPause(id: string, body: RunControl) {
+    return this.decideWf(id, (ctx) => pauseRun(ctx, id, body))
+  }
+  wfResume(id: string, body: RunControl) {
+    return this.decideWf(id, (ctx) => resumeRun(ctx, id, body))
+  }
+  wfStop(id: string) {
+    return this.decideWf(id, (ctx) => stopRun(ctx, id))
+  }
+  wfWaiver(id: string, body: WaiverDecision) {
+    return this.decideWf(id, (ctx) => grantWaiver(ctx, id, body))
+  }
+  wfAbandon(id: string, body: AbandonDecision) {
+    return this.decideWf(id, (ctx) => abandonAttempts(ctx, id, body))
+  }
+
+  /**
+   * An agent became ready again (a version check or gateway reachability recovered): attempts waiting out a refusal
+   * backoff are tried at once, and every run with waiting work is re-evaluated (v8.2 item 1).
+   */
+  async agentReady(agentId: string): Promise<void> {
+    await this.mutate((ctx) => {
+      ctx.sqlite
+        .prepare(
+          "UPDATE orc_attempts SET next_try_at = NULL, refused_streak = 0 WHERE agent_id = ? AND state = 'created' AND needs_person = 0",
+        )
+        .run(agentId)
+      bumpAdmission(ctx.sqlite)
+      for (const o of listOrchs(ctx.sqlite)) if (!isTerminalStatus(o.status)) touch(ctx, o.id)
+    })
+    this.kick()
+  }
+
+  /** Raised by routes that change a hold the executor does not see itself (team / agent Resume). */
+  async admissionChanged(): Promise<void> {
+    await this.mutate((ctx) => {
+      bumpAdmission(ctx.sqlite)
+      for (const o of listOrchs(ctx.sqlite)) if (!isTerminalStatus(o.status)) touch(ctx, o.id)
+    })
+    this.kick()
+  }
+
   // ------------------------------------------------------------------------------------------------------ MCP tools
 
   /** One `orch.*` call from the MCP server. `agentId` is the token's agent. */
@@ -944,11 +1266,7 @@ export class Orchestrator {
   private journaledSend(ctx: Ctx, attemptId: string): boolean {
     const journaled = ctx.journal.readOwn()
     if (!journaled.ok) return true
-    return journaled.entries.some(
-      (e) =>
-        (e.kind === 'send_started' || (e.kind === 'tombstone' && e.of === 'send_started')) &&
-        e.attemptId === attemptId,
-    )
+    return journalDispatches(journaled.entries).get(attemptId)?.state === 'sent'
   }
 
   async recover(): Promise<void> {
@@ -1022,9 +1340,15 @@ export class Orchestrator {
   /** Per-run housekeeping done after every transaction that touched the run. Returns whether the status changed. */
   private settle(ctx: Ctx, orchId: string): boolean {
     const { sqlite, now } = ctx
-    const o = readOrch(sqlite, orchId)
+    let o = readOrch(sqlite, orchId)
     if (!o || isTerminalStatus(o.status)) return false
     cascadeBlocked(sqlite, orchId, now)
+    // A workflow run's planner is its graph: it runs inside the transaction of whatever woke the run.
+    if (o.planner === 'workflow') {
+      const planned = planWorkflow(ctx, o)
+      o = readOrch(sqlite, orchId) ?? o
+      if (planned && o.status !== 'running') touch(ctx, orchId)
+    }
     const attempts = attemptsOf(sqlite, orchId)
     const live = attempts.some((a) => ['created', 'send_started', 'running'].includes(a.state))
     const end = (status: OrchRow['status'], reason: string | null): boolean => {
@@ -1034,6 +1358,9 @@ export class Orchestrator {
         )
         .run(status, now, reason, orchId)
       addHistory(sqlite, orchId, 'ended', { status, reason }, now)
+      // Capacity and reservations of this run are released: waiting work elsewhere may be admissible now.
+      bumpAdmission(sqlite)
+      if (o!.planner === 'workflow') finalizeGraph(ctx, orchId, status)
       return true
     }
     // The deadline is a fence-and-drain: admission stops, queued work is retired, owed Stops go to every admitted attempt.
@@ -1047,7 +1374,13 @@ export class Orchestrator {
     }
     if (o.status === 'stopping') {
       const unresolved = attempts.some((a) => a.state === 'unknown' && a.abandoned_at === null)
-      return !live && !unresolved ? end('stopped', o.end_reason ?? 'stopped by the person') : false
+      if (live || unresolved) return false
+      // An unrouted failure is a fence-and-drain too, but its run ends `failed`, not `stopped`.
+      const failedGraph =
+        o.planner === 'workflow' && requireWfRun(sqlite, orchId).graph_outcome === 'failed'
+      return failedGraph
+        ? end('failed', o.end_reason ?? 'the graph failed')
+        : end('stopped', o.end_reason ?? 'stopped by the person')
     }
     if (o.status === 'finishing') {
       if (live) return false
@@ -1061,7 +1394,11 @@ export class Orchestrator {
     const steps = stepsOf(sqlite, orchId)
     const wakeSource =
       live ||
-      causesAfter(sqlite, orchId, o.causes_consumed_up_to).length > 0 ||
+      (o.planner === 'workflow' &&
+        nodesOf(sqlite, orchId).some((n) =>
+          ['ready', 'gate_open', 'running', 'unresolved'].includes(n.state),
+        )) ||
+      (o.planner === 'lead' && causesAfter(sqlite, orchId, o.causes_consumed_up_to).length > 0) ||
       steps.some((s) => ['pending_gate', 'queued', 'admitted'].includes(s.status)) ||
       inquiriesOf(sqlite, orchId).some((q) => q.status === 'open') ||
       gatesOf(sqlite, orchId).some((g) => g.status === 'open') ||
@@ -1136,15 +1473,16 @@ export class Orchestrator {
       (a) => a.kind === 'lead' && ['created', 'send_started', 'running'].includes(a.state),
     )
     const pending = causesAfter(sqlite, o.id, o.causes_consumed_up_to)
-    if (!leadLive && pending.length > 0) {
-      const life = lifecycleOf(sqlite, o.lead_agent_id)
+    if (o.planner === 'lead' && !leadLive && pending.length > 0) {
+      const lead = leadOf(o)
+      const life = lifecycleOf(sqlite, lead.agentId)
       const incarnation = life?.incarnation_id ?? 'untracked'
-      if (incarnation !== o.lead_incarnation || !agentAdmits(sqlite, o.lead_agent_id))
+      if (incarnation !== lead.incarnation || !agentAdmits(sqlite, lead.agentId))
         return this.pauseFor(ctx, o, 'agent_unavailable')
       if (o.lead_turns_used >= o.max_lead_turns) return this.pauseFor(ctx, o, 'turns_exhausted')
       if (o.consecutive_lead_failures >= 2) return this.pauseFor(ctx, o, 'lead_failing')
       if (!canReserve(view, o.lead_turn_estimate_usd)) return this.pauseFor(ctx, o, 'budget')
-      if (agentPausedAt(sqlite, o.lead_agent_id) === null) {
+      if (agentPausedAt(sqlite, lead.agentId) === null) {
         const turn = o.lead_turns_used + 1
         const n = attempts.filter((a) => a.kind === 'lead').length + 1
         const attemptId = `orc-${o.id.slice(4)}-lead-${n}`
@@ -1166,7 +1504,7 @@ export class Orchestrator {
           kind: 'lead',
           stepId: null,
           n,
-          agentId: o.lead_agent_id,
+          agentId: lead.agentId,
           incarnation,
           input,
           reserved: o.lead_turn_estimate_usd,
@@ -1225,7 +1563,9 @@ export class Orchestrator {
       if (counts.total >= ORCH_CAPACITY.concurrentSteps) continue
       if ((counts.perAgent.get(step.agent_id) ?? 0) >= ORCH_CAPACITY.stepsPerAgent) continue
       const dependencies = step.after_steps.map((id) => byId.get(id)!)
-      const input = renderStepInput({ o, step, dependencies })
+      // A workflow step's instruction already is the final, validated payload (it is never re-rendered or clipped).
+      const input =
+        o.planner === 'workflow' ? step.instruction : renderStepInput({ o, step, dependencies })
       // Scanned after rendering and before anything is stored: a capability in a step input blocks admission.
       if (containsCapability(input) || containsCapability(step.instruction)) {
         setStepStatus(sqlite, o.id, step.id, 'blocked', 'capability_in_input', now)
@@ -1320,7 +1660,9 @@ export class Orchestrator {
         turnId,
         o.brief_id,
         a.kind === 'lead' ? `Lead turn ${a.n}` : `Step ${a.stepId}`,
-        JSON.stringify([o.lead_agent_id, ...o.allowed_agents]),
+        JSON.stringify(
+          o.lead_agent_id === null ? o.allowed_agents : [o.lead_agent_id, ...o.allowed_agents],
+        ),
         now,
         a.id,
       )
@@ -1372,17 +1714,13 @@ export class Orchestrator {
     // recovered): every fence and hold below is judged on what reconciliation just established (fix-i 1).
     this.reconcileAttempts(ctx)
     const o = requireOrch(sqlite, attempt.orchestration_id)
-    // The journal outlives the database: if it says this attempt was sent, it is never sent again.
+    // The journal outlives the database: if it says this attempt's latest dispatch generation was sent, it is never sent
+    // again. A proven refusal (`send_refused`) of that generation leaves it sendable as the next generation.
     const journaled = ctx.journal.readOwn()
     // Without a readable journal we can't prove this attempt was never sent: fail closed (the caller fences).
     if (!journaled.ok) throw new Error(`Execution journal is unreadable: ${journaled.reason}`)
-    if (
-      journaled.entries.some(
-        (e) =>
-          (e.kind === 'send_started' || (e.kind === 'tombstone' && e.of === 'send_started')) &&
-          e.attemptId === attempt.id,
-      )
-    ) {
+    const dispatched = journalDispatches(journaled.entries).get(attempt.id)
+    if (dispatched?.state === 'sent') {
       applyJournalEvidence(sqlite, journaled.entries, now)
       touch(ctx, o.id)
       return undefined
@@ -1418,6 +1756,21 @@ export class Orchestrator {
       touch(ctx, o.id)
       return undefined
     }
+    // The input is exactly what was frozen and, for workflows, approved: the dispatched bytes hash to the frozen hash.
+    if (attempt.kind === 'step' && attempt.step_id) {
+      const frozenStep = readStep(sqlite, o.id, attempt.step_id)
+      if (
+        frozenStep?.payload_hash &&
+        createHash('sha256').update(attempt.input).digest('hex') !== frozenStep.payload_hash
+      )
+        return refuse('not dispatched: the input is not the approved payload', {
+          status: 'blocked',
+          disposition: 'payload_mismatch: the input is not the approved payload',
+        })
+    }
+    // Refused dispatch generations: the person is needed at the lifetime limit; after five in a row the attempt waits.
+    if (attempt.needs_person || (attempt.next_try_at !== null && attempt.next_try_at > now))
+      return undefined
     // These keep the attempt `created`: it is sent when the condition clears. The manual hold is read directly: it is
     // independent of the status a remap or a limits decision may have cleared (fix-i 3).
     if (
@@ -1482,7 +1835,12 @@ export class Orchestrator {
       return undefined
     }
     let capability: string | undefined
-    let generation = 0
+    // Dispatch generation g: 1, 2, ... for a step attempt (never reused, even after a journaled refusal); the lead's is
+    // its capability generation.
+    let generation =
+      attempt.kind === 'step'
+        ? Math.max(attempt.dispatch_generation, dispatched?.generation ?? 0) + 1
+        : 0
     if (attempt.kind === 'lead') {
       capability = mintCapability()
       generation =
@@ -1512,9 +1870,9 @@ export class Orchestrator {
     }
     sqlite
       .prepare(
-        "UPDATE orc_attempts SET state = 'send_started', sent_at = ?, updated_at = ? WHERE id = ?",
+        "UPDATE orc_attempts SET state = 'send_started', sent_at = ?, dispatch_generation = ?, next_try_at = NULL, updated_at = ? WHERE id = ?",
       )
-      .run(now, now, attempt.id)
+      .run(now, generation, now, attempt.id)
     // Journal first (fsync'd) and last in the transaction: if it cannot be written the whole send is abandoned.
     ctx.journal.append({
       kind: 'send_started',
@@ -1535,7 +1893,7 @@ export class Orchestrator {
     const o = requireOrch(sqlite, attempt.orchestration_id)
     sqlite
       .prepare(
-        `UPDATE orc_attempts SET run_id = ?, state = CASE WHEN state = 'send_started' THEN 'running' ELSE state END, updated_at = ? WHERE id = ?`,
+        `UPDATE orc_attempts SET run_id = ?, state = CASE WHEN state = 'send_started' THEN 'running' ELSE state END, refused_streak = 0, updated_at = ? WHERE id = ?`,
       )
       .run(runId, now, attemptId)
     // A Stop (or finish of a non-requesting attempt) that raced the admission: the handle arrived late; stop it now.
@@ -1559,6 +1917,10 @@ export class Orchestrator {
       error.status >= 400 &&
       error.status < 500 &&
       ![408, 409, 429].includes(error.status)
+    if (isNotDispatched(error) && attempt.kind === 'step') {
+      this.refuseDispatch(ctx, o, attempt)
+      return
+    }
     if (isNotDispatched(error)) {
       // Provably nothing was sent: put the work back and try again after a pause.
       sqlite
@@ -1610,6 +1972,72 @@ export class Orchestrator {
     } else {
       this.markUnknown(ctx, o, attempt, 'admission_uncertain')
       // A Stop owed to a run whose handle never arrived is kept; the attempt stays fenced until resolved.
+    }
+    touch(ctx, o.id)
+  }
+
+  /**
+   * v8.2 / v8.3: a proven refusal of one dispatch generation of a step attempt. The refusal is journaled (fsync) in the
+   * transaction that returns the attempt to `created`; if it cannot be journaled the attempt stays sent/unknown. The
+   * generation is not a logical attempt. After five refusals in a row the attempt waits (ten minutes, or a readiness
+   * change); at twenty over its lifetime only the person continues a workflow node, and an orchestration step fails.
+   */
+  private refuseDispatch(ctx: Ctx, o: OrchRow, attempt: AttemptRow): void {
+    const { sqlite, now } = ctx
+    try {
+      ctx.journal.append({
+        kind: 'send_refused',
+        attemptId: attempt.id,
+        orchestrationId: o.id,
+        generation: attempt.dispatch_generation,
+      })
+    } catch (error) {
+      ctx.journalFailure = error instanceof Error ? error.message : String(error)
+      this.markUnknown(ctx, o, attempt, 'refusal_unjournaled')
+      return
+    }
+    const total = attempt.refused_total + 1
+    const streak = attempt.refused_streak + 1
+    const lifetime = total >= WORKFLOW_LIMITS.refusedLifetime
+    if (lifetime && o.planner === 'lead') {
+      // The lead decides what to do with a step Hermes keeps refusing.
+      sqlite
+        .prepare(
+          "UPDATE orc_attempts SET state = 'refused', unknown_reason = 'hermes_refused', refused_total = ?, refused_streak = ?, terminated_at = ?, updated_at = ? WHERE id = ?",
+        )
+        .run(total, streak, now, now, attempt.id)
+      sqlite
+        .prepare("UPDATE message_runs SET state = 'failed' WHERE turn_id = ? AND state = 'pending'")
+        .run(attempt.turn_id)
+      if (attempt.step_id) {
+        setStepStatus(sqlite, o.id, attempt.step_id, 'failed', 'hermes_refused', now)
+        addCause(
+          sqlite,
+          o.id,
+          'step_failed',
+          attempt.step_id,
+          now,
+          'Hermes refused this step 20 times',
+        )
+      }
+      bumpAdmission(sqlite)
+    } else {
+      const wait = streak >= WORKFLOW_LIMITS.refusedPause
+      sqlite
+        .prepare(
+          "UPDATE orc_attempts SET state = 'created', refused_total = ?, refused_streak = ?, needs_person = ?, next_try_at = ?, updated_at = ? WHERE id = ?",
+        )
+        .run(
+          total,
+          streak,
+          lifetime ? 1 : 0,
+          wait && !lifetime
+            ? new Date(this.nowMs() + WORKFLOW_LIMITS.refusedRetryMinutes * 60_000).toISOString()
+            : null,
+          now,
+          attempt.id,
+        )
+      this.cooldown.set(o.id, this.nowMs() + this.retryMs)
     }
     touch(ctx, o.id)
   }
@@ -1749,6 +2177,7 @@ export class Orchestrator {
         'UPDATE orc_capabilities SET expired_at = ? WHERE attempt_id = ? AND expired_at IS NULL',
       )
       .run(now, attempt.id)
+    bumpAdmission(sqlite)
     if (attempt.kind === 'lead') {
       if (evidence === 'failed') {
         sqlite
@@ -1792,10 +2221,15 @@ export class Orchestrator {
           .map((part) => part.text ?? '')
           .join('\n')
       : ''
-    const body = run.output ?? (messageText || '')
+    // A workflow step keeps up to 32 KiB, taken from the complete-reply facts recorded when the run ended (the run record
+    // itself is cut at 8 KiB); orchestration steps keep 8 KiB.
+    const workflow = o.planner === 'workflow'
+    const facts = workflow ? readResult(sqlite, attempt.id) : undefined
+    const body = facts?.output ?? run.output ?? (messageText || '')
+    const limit = workflow ? WORKFLOW_LIMITS.outputBytes : ORCH_LIMITS.resultBytes
     const result = redactBounded(
       evidence === 'failed' && run.error ? `${body}\n[error] ${run.error}`.trim() : body,
-      ORCH_LIMITS.resultBytes,
+      limit,
     )
     sqlite
       .prepare(
@@ -1809,7 +2243,15 @@ export class Orchestrator {
         o.id,
         step.id,
       )
-    addStored(sqlite, o.id, Buffer.byteLength(result))
+    // Every retained copy is charged (v8.1 item 5): the stored result, the streamed reply row and the run record.
+    // Accepting a result never fails on quota: the protected reserve exists for exactly this.
+    addStored(
+      sqlite,
+      o.id,
+      Buffer.byteLength(result) +
+        Buffer.byteLength(messageText) +
+        Buffer.byteLength(run.output ?? ''),
+    )
     addCause(
       sqlite,
       o.id,

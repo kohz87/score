@@ -19,18 +19,16 @@ import { containsCapability, hashCapability } from './capability.ts'
 import { journalSoft, touch, type Ctx } from './ctx.ts'
 import {
   addStored,
+  beginFinish,
   cascadeBlocked,
   oweStop,
   refuseAttempt,
-  retireQueued,
   setStepStatus,
   storageRoom,
   utf8Bytes,
   withdrawGates,
-  withdrawInquiries,
 } from './ops.ts'
 import {
-  addHistory,
   attemptsOf,
   frozenIncarnation,
   gatesOf,
@@ -560,36 +558,9 @@ const HANDLERS: Record<ToolName, Handler> = {
   },
 
   'orch.finish'(ctx, o, attempt, args) {
-    const { sqlite, now } = ctx
     const outcome = args.outcome as 'success' | 'partial' | 'failed'
     const summary = redact(args.summary as string)
-    // An admission barrier in one transaction: no further admission, queued work retired with a disposition, open
-    // gates and inquiries withdrawn, further commands sealed. Admitted attempts drain.
-    sqlite
-      .prepare(
-        `UPDATE orchestrations SET status = 'finishing', pause_reason = NULL, finish_requested_at = ?, finish_attempt_id = ?, finish_outcome = ?, finish_summary = ? WHERE id = ?`,
-      )
-      .run(now, attempt.id, outcome, summary, o.id)
-    const retired = retireQueued(sqlite, o.id, 'not_started: run_finishing', now)
-    withdrawGates(sqlite, o.id, now)
-    withdrawInquiries(sqlite, o.id, now)
-    for (const created of attemptsOf(sqlite, o.id).filter((a) => a.state === 'created')) {
-      refuseAttempt(sqlite, created, 'not dispatched: run finishing', now)
-      if (created.step_id)
-        setStepStatus(
-          sqlite,
-          o.id,
-          created.step_id,
-          'not_started',
-          'not_started: run_finishing',
-          now,
-        )
-    }
-    addStored(sqlite, o.id, utf8Bytes(summary))
-    addHistory(sqlite, o.id, 'finish_requested', { outcome, attemptId: attempt.id, retired }, now)
-    journalSoft(ctx, () =>
-      ctx.journal.append({ kind: 'transition', orchestrationId: o.id, what: 'finish' }),
-    )
+    const retired = beginFinish(ctx, o, attempt.id, outcome, summary)
     return ok({ finishing: true, retiredSteps: retired })
   },
 

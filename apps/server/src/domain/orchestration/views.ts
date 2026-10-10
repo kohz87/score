@@ -18,6 +18,7 @@ import {
   inquiriesOf,
   isFinalStep,
   isTerminalStatus,
+  leadOf,
   stepsOf,
   type AttemptRow,
   type GateRow,
@@ -136,7 +137,7 @@ export function summaryOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationSummar
     status: o.status,
     pauseReason:
       o.status === 'paused' ? (o.pause_reason as OrchestrationSummary['pauseReason']) : null,
-    leadAgentId: o.lead_agent_id,
+    leadAgentId: leadOf(o).agentId,
     roomId: o.room_id,
     briefId: o.brief_id,
     gatePolicy: o.gate_policy,
@@ -159,7 +160,7 @@ export function summaryOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationSummar
   }
 }
 
-const attemptView = (a: AttemptRow): AttemptView => ({
+export const attemptViewOf = (a: AttemptRow): AttemptView => ({
   id: a.id,
   kind: a.kind,
   stepId: a.step_id,
@@ -194,7 +195,7 @@ export function gateView(g: GateRow): GateView {
   }
 }
 
-const stepView = (s: StepRow, gates: GateRow[], attempts: AttemptRow[]): StepView => ({
+export const stepViewOf = (s: StepRow, gates: GateRow[], attempts: AttemptRow[]): StepView => ({
   id: s.id,
   agentId: s.agent_id,
   instruction: s.instruction,
@@ -236,8 +237,8 @@ export function detailOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationDetail 
     leadTurnEstimateUsd: o.lead_turn_estimate_usd,
     stepEstimateUsd: o.step_estimate_usd,
     budget: budgetView(sqlite, o),
-    stepsList: steps.map((s) => stepView(s, gates, attempts)),
-    attempts: attempts.map(attemptView),
+    stepsList: steps.map((s) => stepViewOf(s, gates, attempts)),
+    attempts: attempts.map(attemptViewOf),
     gates: gates.map(gateView),
     inquiries: inquiryViews,
     finish:

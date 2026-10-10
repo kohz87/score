@@ -11,8 +11,10 @@ export const OrchRowSchema = z.object({
   id: z.string(),
   title: z.string(),
   goal: z.string(),
-  lead_agent_id: z.string(),
-  lead_incarnation: z.string(),
+  planner: z.enum(['lead', 'workflow']),
+  /** NULL for a workflow run (its planner is the graph; there is no lead). */
+  lead_agent_id: z.string().nullable(),
+  lead_incarnation: z.string().nullable(),
   allowed_agents: jsonArray,
   room_id: z.string(),
   brief_id: z.string(),
@@ -57,6 +59,7 @@ export const OrchRowSchema = z.object({
   updated_at: z.string(),
   ended_at: z.string().nullable(),
   end_reason: z.string().nullable(),
+  admission_seen: z.int(),
 })
 export type OrchRow = z.infer<typeof OrchRowSchema>
 
@@ -95,6 +98,7 @@ export const StepRowSchema = z.object({
   result: z.string().nullable(),
   result_revision: z.int(),
   retired: bool,
+  payload_hash: z.string().nullable(),
   created_in_attempt: z.string(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -151,6 +155,11 @@ export const AttemptRowSchema = z.object({
   created_at: z.string(),
   updated_at: z.string(),
   abandoned_at: z.string().nullable(),
+  dispatch_generation: z.int(),
+  refused_total: z.int(),
+  refused_streak: z.int(),
+  next_try_at: z.string().nullable(),
+  needs_person: bool,
 })
 export type AttemptRow = z.infer<typeof AttemptRowSchema>
 
@@ -196,10 +205,22 @@ export function requireOrch(sqlite: DatabaseSync, id: string): OrchRow {
   if (!row) throw new HttpError(404, 'not_found', 'Unknown orchestration')
   return row
 }
+/** Every run, whatever plans it (the executor serves both kinds). */
 export const listOrchs = (sqlite: DatabaseSync): OrchRow[] =>
   z
     .array(OrchRowSchema)
     .parse(sqlite.prepare('SELECT * FROM orchestrations ORDER BY created_at DESC, id').all())
+export const listLeadOrchs = (sqlite: DatabaseSync): OrchRow[] =>
+  listOrchs(sqlite).filter((o) => o.planner === 'lead')
+export const listWorkflowOrchs = (sqlite: DatabaseSync): OrchRow[] =>
+  listOrchs(sqlite).filter((o) => o.planner === 'workflow')
+
+/** The lead of a lead-planned run; a workflow run has none, and asking for it is a programming error. */
+export function leadOf(o: OrchRow): { agentId: string; incarnation: string } {
+  if (o.lead_agent_id === null || o.lead_incarnation === null)
+    throw new Error(`Run ${o.id} is planned by a workflow and has no lead`)
+  return { agentId: o.lead_agent_id, incarnation: o.lead_incarnation }
+}
 
 export const stepsOf = (sqlite: DatabaseSync, orchId: string): StepRow[] =>
   z

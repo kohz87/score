@@ -29,7 +29,8 @@ export function registerAgentPauseRoutes(
     holds: TaskHolds
     dispatch?: () => Promise<void>
     clock?: () => number
-    orchestrator?: Pick<Orchestrator, 'recordHold'>
+    orchestrator?: Pick<Orchestrator, 'recordHold'> &
+      Partial<Pick<Orchestrator, 'admissionChanged'>>
   },
 ): void {
   const { db, ingest, port, holds, dispatch, orchestrator } = deps
@@ -104,6 +105,7 @@ export function registerAgentPauseRoutes(
         return []
       },
     })
+    await orchestrator?.admissionChanged?.()
     await dispatch?.()
     const failed = await holds.release({ kind: 'agent', id: agentId })
     const agent = await refresh(agentId)

@@ -22,6 +22,7 @@ import {
   type GatewayRun,
 } from './gateway.ts'
 import { appendRunMessage, completeRunMessage, noteRunProgress } from '../../domain/message-runs.ts'
+import { recordRunResult } from '../../domain/workflows/verdict.ts'
 import { ProfileNameSchema } from './paths.ts'
 
 export const terminalStatuses = ['completed', 'failed', 'cancelled', 'interrupted'] as const
@@ -359,6 +360,9 @@ export function translateRunEvent(
         values.ended_at = at
         values.output = terminal.output == null ? null : redactBounded(terminal.output, 8192)
         values.error = terminal.error == null ? null : redactBounded(terminal.error, 2048)
+        // Workflow steps keep the complete-reply facts (verdict, bounded output) before the 8 KiB cut above.
+        if (event === 'run.completed' || event === 'run.failed')
+          recordRunResult(sqlite, row.id, terminal.output ?? null, at)
         if (terminal.usage) {
           values.input_tokens = terminal.usage.input_tokens
           values.output_tokens = terminal.usage.output_tokens
@@ -459,6 +463,8 @@ export function runStatusObservation(context: RunContext, run: GatewayRun): Obse
             }
           : {}),
       })
+      if (terminal && (safe.status === 'completed' || safe.status === 'failed'))
+        recordRunResult(sqlite, row.id, safe.output, now)
       return [
         ...(changed ? [runDraft(sqlite, row.id)] : []),
         ...(terminal ? closeRunApprovals(sqlite, row.id, now) : []),

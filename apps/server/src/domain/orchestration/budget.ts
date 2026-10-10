@@ -43,6 +43,62 @@ export const runSpendReader: SpendReader = (sqlite, attempt) => {
   return { usd: run.cost_usd, complete: terminal && run.cost_usd !== null && !open }
 }
 
+/**
+ * v8.1 item 4: an adapter evidence contract instead of a settlement claim. Today's Hermes adapter cannot prove that a
+ * session's compression lineage is complete, so live spend is never settled: it stays provisional and reservations stay
+ * held until the run ends. The fake adapter can report full evidence (tests).
+ */
+export interface SpendEvidence {
+  attributed: boolean
+  lineageComplete: boolean
+  fresh: boolean
+  costScope: 'dollars' | 'tokens' | 'none'
+}
+
+export function spendEvidence(
+  sqlite: DatabaseSync,
+  attempt: AttemptRow,
+  lineageProvable: boolean,
+): SpendEvidence {
+  if (attempt.run_id === null)
+    return { attributed: false, lineageComplete: false, fresh: false, costScope: 'none' }
+  const row = sqlite
+    .prepare(
+      'SELECT status, session_id, cost_usd, input_tokens, output_tokens FROM runs WHERE id = ?',
+    )
+    .get(attempt.run_id) as
+    | {
+        status: string
+        session_id: string | null
+        cost_usd: number | null
+        input_tokens: number | null
+        output_tokens: number | null
+      }
+    | undefined
+  if (!row) return { attributed: false, lineageComplete: false, fresh: false, costScope: 'none' }
+  const open =
+    row.session_id === null ||
+    sqlite
+      .prepare(
+        `SELECT 1 FROM runs WHERE session_id = ? AND id != ? AND status NOT IN ('completed','failed') LIMIT 1`,
+      )
+      .get(row.session_id, attempt.run_id) !== undefined
+  return {
+    attributed: row.session_id !== null,
+    lineageComplete: lineageProvable && !open,
+    fresh: TERMINAL_RUN.includes(row.status),
+    costScope: row.cost_usd !== null ? 'dollars' : row.input_tokens !== null ? 'tokens' : 'none',
+  }
+}
+
+/** The reader the executor uses: a live adapter's spend is never settled (see `SpendEvidence`). */
+export const makeSpendReader =
+  (live: boolean): SpendReader =>
+  (sqlite, attempt) => {
+    const reading = runSpendReader(sqlite, attempt)
+    return live ? { ...reading, complete: false } : reading
+  }
+
 export function budgetView(sqlite: DatabaseSync, o: OrchRow): BudgetView {
   let settled = 0
   let provisional = 0

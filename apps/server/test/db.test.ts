@@ -170,6 +170,16 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'team_state',
     'tool_calls',
     'watch_frames',
+    'wf_commands',
+    'wf_consumed',
+    'wf_gates',
+    'wf_nodes',
+    'wf_results',
+    'wf_runs',
+    'wf_steps',
+    'wf_tokens',
+    'workflow_definitions',
+    'workflow_versions',
   ])
   expect(
     db.sqlite
