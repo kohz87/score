@@ -370,27 +370,42 @@ async function lostRefusal(planner: Planner, previousTotal: number, previousStre
   else {
     const { attachFakeLead } = await import('../../src/hermes/fake/fake-lead.ts')
     attachFakeLead(h.port, h.orch, {
-      script: byTurn({ 1: async (t) => void (await t.call('orch.assign', { agent: 'builder', instruction: 'work' })) }),
+      script: byTurn({
+        1: async (t) =>
+          void (await t.call('orch.assign', { agent: 'builder', instruction: 'work' })),
+      }),
     })
     await h.create({ gatePolicy: 'none' })
   }
   const stepAttempts = () =>
     h!.rows<ReturnType<typeof attemptRow>[number]>("SELECT * FROM orc_attempts WHERE kind = 'step'")
-  await h.until(() => (stepAttempts()[0]?.refused_total ?? 0) >= 1 && stepAttempts()[0]!.state === 'created')
+  await h.until(
+    () => (stepAttempts()[0]?.refused_total ?? 0) >= 1 && stepAttempts()[0]!.state === 'created',
+  )
   await h.orch.close()
   const row = stepAttempts()[0]!
   // The crash: send_refused(g) is journaled, but the database still reads send_started at g.
   h.db.sqlite
-    .prepare("UPDATE orc_attempts SET state = 'send_started', refused_total = ?, refused_streak = ?, refused_generation = ?, needs_person = 0, next_try_at = NULL WHERE id = ?")
+    .prepare(
+      "UPDATE orc_attempts SET state = 'send_started', refused_total = ?, refused_streak = ?, refused_generation = ?, needs_person = 0, next_try_at = NULL WHERE id = ?",
+    )
     .run(previousTotal, previousStreak, row.dispatch_generation - 1, row.id)
   const store = new GlobalFenceStore(h.db, h.journal, () => h!.scheduler.now())
   expect(store.startupCheck().fenced).toBe(true)
-  const after = h.rows<Record<string, unknown>>('SELECT * FROM orc_attempts WHERE id = ?', row.id)[0]!
-  const step = h.rows<{ status: string; disposition: string | null }>('SELECT status, disposition FROM orc_steps')[0]!
+  const after = h.rows<Record<string, unknown>>(
+    'SELECT * FROM orc_attempts WHERE id = ?',
+    row.id,
+  )[0]!
+  const step = h.rows<{ status: string; disposition: string | null }>(
+    'SELECT status, disposition FROM orc_steps',
+  )[0]!
   return { after, step }
 }
 
-test.each<[Planner, string]>([['workflow', 'workflow'], ['lead', 'orchestration']])(
+test.each<[Planner, string]>([
+  ['workflow', 'workflow'],
+  ['lead', 'orchestration'],
+])(
   'a lost fifth refusal (%s) sets the ten-minute wait, not an immediate resend',
   async (planner) => {
     const { after } = await lostRefusal(planner, 3, 4)

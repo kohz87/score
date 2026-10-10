@@ -2416,10 +2416,19 @@ export class Orchestrator {
     for (const attempt of tx
       .prepare('SELECT id, message_id FROM orc_attempts WHERE orchestration_id = ?')
       .all(o.id) as { id: string; message_id: string }[]) {
-      tx.prepare('DELETE FROM messages WHERE room_id = ? AND id = ?').run(
-        o.room_id,
-        attempt.message_id,
-      )
+      // A reply that something outside the run now hangs on (a later room summary) stays, with its references: it is
+      // ordinary room data from here on.
+      const referenced = tx
+        .prepare(
+          `SELECT 1 FROM message_runs WHERE (chain_id = ?1 OR parent_message_id = ?1)
+             AND (orchestration_attempt_id IS NULL OR orchestration_attempt_id NOT IN (SELECT id FROM orc_attempts WHERE orchestration_id = ?2)) LIMIT 1`,
+        )
+        .get(attempt.message_id, o.id)
+      if (referenced === undefined)
+        tx.prepare('DELETE FROM messages WHERE room_id = ? AND id = ?').run(
+          o.room_id,
+          attempt.message_id,
+        )
       tx.prepare("DELETE FROM messages WHERE room_id = ? AND id LIKE ? ESCAPE '\\'").run(
         o.room_id,
         `orc-note:${attempt.id.replace(/[\\%_]/g, '\\$&')}:%`,
@@ -2491,57 +2500,68 @@ export class Orchestrator {
     })
     const cutoff = new Date(this.nowMs() - RETENTION_MS).toISOString()
     let pruned = 0
-    this.db.tx((tx) => {
-      for (const o of listOrchs(tx)) {
-        if (!isTerminalStatus(o.status) || (o.ended_at ?? o.updated_at) >= cutoff) continue
-        if (attemptsOf(tx, o.id).some((x) => x.state !== 'terminated' && x.state !== 'refused'))
-          continue
-        if (
-          attemptsOf(tx, o.id).some(
-            (a) =>
-              a.state === 'unknown' ||
-              (a.stop_requested_at !== null && a.stop_acknowledged_at === null),
+    // Each run is pruned in its own transaction: one that cannot be pruned never holds the others (or the quota) back.
+    for (const candidate of this.db.read((sqlite) => listOrchs(sqlite))) {
+      if (
+        !isTerminalStatus(candidate.status) ||
+        (candidate.ended_at ?? candidate.updated_at) >= cutoff
+      )
+        continue
+      try {
+        const done = this.db.tx((tx) => {
+          const o = readOrch(tx, candidate.id)
+          if (!o) return false
+          if (attemptsOf(tx, o.id).some((x) => x.state !== 'terminated' && x.state !== 'refused'))
+            return false
+          if (
+            attemptsOf(tx, o.id).some(
+              (a) =>
+                a.state === 'unknown' ||
+                (a.stop_requested_at !== null && a.stop_acknowledged_at === null),
+            )
           )
-        )
-          continue
-        // The covered data goes together (v8.1 item 5): the charge is released only with every associated row. The
-        // run's room and its goal message stay as the tombstone the brief hangs on.
-        this.pruneAssociated(tx, o)
-        for (const table of [
-          'wf_consumed',
-          'wf_commands',
-          'wf_gates',
-          'wf_tokens',
-          'wf_steps',
-          'wf_nodes',
-          'wf_runs',
-          'orc_agent_map',
-          'orc_commands',
-          'orc_causes',
-          'orc_gates',
-          'orc_inquiries',
-          'orc_steps',
-        ])
-          tx.prepare(`DELETE FROM ${table} WHERE orchestration_id = ?`).run(o.id)
-        tx.prepare(
-          'DELETE FROM orc_capabilities WHERE attempt_id IN (SELECT id FROM orc_attempts WHERE orchestration_id = ?)',
-        ).run(o.id)
-        tx.prepare('DELETE FROM orc_attempts WHERE orchestration_id = ?').run(o.id)
-        // The history goes with the rest; the single 'pruned' row added below is the tombstone restore checks use.
-        tx.prepare('DELETE FROM orc_history WHERE orchestration_id = ?').run(o.id)
-        tx.prepare('DELETE FROM orchestrations WHERE id = ?').run(o.id)
-        addHistory(
-          tx,
-          o.id,
-          'pruned',
-          { endedAt: o.ended_at, status: o.status },
-          new Date(this.nowMs()).toISOString(),
-        )
-        pruned++
+            return false
+          // The covered data goes together (v8.1 item 5): the charge is released only with every associated row. The
+          // run's room and its goal message stay as the tombstone the brief hangs on.
+          this.pruneAssociated(tx, o)
+          for (const table of [
+            'wf_consumed',
+            'wf_commands',
+            'wf_gates',
+            'wf_tokens',
+            'wf_steps',
+            'wf_nodes',
+            'wf_runs',
+            'orc_agent_map',
+            'orc_commands',
+            'orc_causes',
+            'orc_gates',
+            'orc_inquiries',
+            'orc_steps',
+          ])
+            tx.prepare(`DELETE FROM ${table} WHERE orchestration_id = ?`).run(o.id)
+          tx.prepare(
+            'DELETE FROM orc_capabilities WHERE attempt_id IN (SELECT id FROM orc_attempts WHERE orchestration_id = ?)',
+          ).run(o.id)
+          tx.prepare('DELETE FROM orc_attempts WHERE orchestration_id = ?').run(o.id)
+          // The history goes with the rest; the single 'pruned' row added below is the tombstone restore checks use.
+          tx.prepare('DELETE FROM orc_history WHERE orchestration_id = ?').run(o.id)
+          tx.prepare('DELETE FROM orchestrations WHERE id = ?').run(o.id)
+          addHistory(
+            tx,
+            o.id,
+            'pruned',
+            { endedAt: o.ended_at, status: o.status },
+            new Date(this.nowMs()).toISOString(),
+          )
+          bumpAdmission(tx) // quota released by a pruned run can make waiting work admissible
+          return true
+        })
+        if (done) pruned++
+      } catch (error) {
+        this.err(error)
       }
-      // Quota released by a pruned run can make waiting work admissible.
-      if (pruned > 0) bumpAdmission(tx)
-    })
+    }
     return { journal: compacted, pruned }
   }
 }

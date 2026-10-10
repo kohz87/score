@@ -264,7 +264,9 @@ test('a ready-but-waiting consumer is not assigned while its supporting producer
   await h.until(() => node(h!, id, 'b').waitingFor === 'remap')
   expect(node(h, id, 'b').stepId).toBeNull()
   // A's result is withdrawn while B is ready but has no step yet (its run only ever ended on recovered text).
-  h.db.sqlite.prepare("UPDATE runs SET terminal_source = 'recovered' WHERE id = ?").run(run(h, id).attempts[0]!.runId!)
+  h.db.sqlite
+    .prepare("UPDATE runs SET terminal_source = 'recovered' WHERE id = ?")
+    .run(run(h, id).attempts[0]!.runId!)
   await withdrawProducer(id, 'a')
   expect(node(h, id, 'a').state).toBe('unresolved')
   const card = run(h, id).needsYou.find((n) => n.kind === 'remap')
@@ -281,14 +283,73 @@ test('a ready-but-waiting consumer is not assigned while its supporting producer
   await h.settle(6000)
   expect(node(h, id, 'b').stepId).toBeNull()
   // Abandon, Resume, Retry A: only then does B get a step, with A in its provenance.
-  await h.orch.wfAbandon(id, { attemptIds: [run(h, id).attempts[0]!.id], orchestrationRevision: run(h, id).revision, acknowledge: true })
+  await h.orch.wfAbandon(id, {
+    attemptIds: [run(h, id).attempts[0]!.id],
+    orchestrationRevision: run(h, id).revision,
+    acknowledge: true,
+  })
   await h.settle(2000)
   await h.orch.wfResume(id, { orchestrationRevision: run(h, id).revision })
   await h.settle(2000)
   expect(node(h, id, 'b').stepId).toBeNull()
-  await h.orch.wfRetry(id, 'a', { expectedNodeRevision: node(h, id, 'a').revision, orchestrationRevision: run(h, id).revision, acknowledge: true })
+  await h.orch.wfRetry(id, 'a', {
+    expectedNodeRevision: node(h, id, 'a').revision,
+    orchestrationRevision: run(h, id).revision,
+    acknowledge: true,
+  })
   await h.until(() => run(h!, id).attempts.length === 2 && run(h!, id).attempts[1]!.runId != null)
   await finishNode(h, id, 'a', 'completed', 'A again')
   await h.until(() => node(h!, id, 'b').stepId !== null)
-  expect(run(h, id).consumed.filter((c) => c.consumer === 'b').map((c) => [c.producer, c.eligible])).toEqual([['a', true]])
+  expect(
+    run(h, id)
+      .consumed.filter((c) => c.consumer === 'b')
+      .map((c) => [c.producer, c.eligible]),
+  ).toEqual([['a', true]])
+})
+
+// round 2 (M): pruning with a post-release summary that references the run's reply
+test('a later summary referencing a run reply keeps that reply; the other runs are still pruned independently', async () => {
+  h = await wfHarness()
+  const first = await start(h, simple())
+  await h.until(done(first))
+  const second = await start(h, simple())
+  await h.until(done(second))
+  const room = h.rows<{ room_id: string }>(
+    'SELECT room_id FROM orchestrations WHERE id = ?',
+    first,
+  )[0]!.room_id
+  const reply = h.rows<{ message_id: string }>(
+    'SELECT a.message_id FROM orc_attempts a WHERE a.orchestration_id = ?',
+    first,
+  )[0]!.message_id
+  const at = new Date(h.scheduler.now()).toISOString()
+  const goal = h.rows<{ brief_id: string }>(
+    'SELECT brief_id FROM orchestrations WHERE id = ?',
+    first,
+  )[0]!.brief_id
+  h.db.sqlite
+    .prepare(
+      `INSERT INTO messages (id, room_id, author_kind, author_agent_id, "to", parts, refs, streaming, created_at, updated_at) VALUES ('sum-1', ?, 'agent', 'lead', '[]', '[]', '[]', 0, ?, ?)`,
+    )
+    .run(room, at, at)
+  h.db.sqlite
+    .prepare(
+      `INSERT INTO message_runs (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, created_at)
+       VALUES ('sum-1', ?, 'lead', ?, 0, 'sum-turn', ?, 'summarise', '["lead"]', ?)`,
+    )
+    .run(room, reply, reply, at)
+  void goal
+  // The second run's prune is made to fail; the first must still go.
+  h.db.sqlite.exec(
+    `CREATE TRIGGER boom BEFORE DELETE ON orchestrations WHEN old.id = '${second}' BEGIN SELECT RAISE(ABORT, 'boom'); END`,
+  )
+  aged(first)
+  aged(second)
+  const result = h.orch.maintenance()
+  expect(result.pruned).toBe(1)
+  expect(h.rows('SELECT 1 FROM orchestrations WHERE id = ?', first)).toHaveLength(0)
+  expect(h.rows('SELECT 1 FROM orchestrations WHERE id = ?', second)).toHaveLength(1)
+  // The reply the summary hangs on is preserved, with the summary.
+  expect(h.rows('SELECT 1 FROM messages WHERE id = ?', reply)).toHaveLength(1)
+  expect(h.rows("SELECT 1 FROM message_runs WHERE message_id = 'sum-1'")).toHaveLength(1)
 })
