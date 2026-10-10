@@ -157,3 +157,21 @@ export const rawNode = (h: Harness, id: string, nodeId: string) =>
     id,
     nodeId,
   )[0]!
+
+/** Ends a node's Hermes run once the fake adapter has it running (its own start transition must not land afterwards). */
+export async function finishNode(
+  h: Harness,
+  id: string,
+  nodeId: string,
+  status: 'completed' | 'failed' | 'cancelled',
+  output = 'done',
+): Promise<void> {
+  await h.until(() => {
+    const runId = runIdOf(h, id, nodeId)
+    return (
+      runId !== undefined &&
+      h.rows<{ status: string }>('SELECT status FROM runs WHERE id = ?', runId)[0]?.status === 'running'
+    )
+  })
+  await endRun(h, runIdOf(h, id, nodeId)!, status, output)
+}
