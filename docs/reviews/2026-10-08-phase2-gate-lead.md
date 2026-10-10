@@ -7,7 +7,6 @@ the owner decides whether to run it for Phase 2.
 **Verdict: pass after the fixes below.** One high finding (redaction across streamed chunks), three medium, three low.
 
 ## What was checked and held
-
 - **Hermes boundary.** Hermes paths, URLs, CLI verbs and event names are only in `apps/server/src/hermes/`. The
   `kanban_*` names in `domain/` are Score's own ledger columns.
 - **Processes.** Everything is spawned with `execFile` and argument arrays; no shell strings. Every argv that takes user
@@ -40,41 +39,39 @@ the owner decides whether to run it for Phase 2.
   - No persona names ship in code. The config-index generator names them only to filter them out.
 
 ## Findings
-
 1. **High: secrets split across streamed chunks escape redaction.**
-   - _Where:_ `appendRunMessage` (`domain/message-runs.ts`).
-   - _What:_ each `message.delta` is redacted on its own and then appended to the stored message and emitted as a
+   - *Where:* `appendRunMessage` (`domain/message-runs.ts`).
+   - *What:* each `message.delta` is redacted on its own and then appended to the stored message and emitted as a
      `message.delta` event. A token split across two deltas (`sk-ab` + `cd12…`), or a context pattern split from its
      value (`Authorization: Bearer` + `eyJ…`, `api_key:` + value, a PEM block over several deltas), is stored and
      logged unredacted.
-   - _Fix:_ hold back the unfinished tail of each streaming message in `message_runs` (migration 0013) and emit only
+   - *Fix:* hold back the unfinished tail of each streaming message in `message_runs` (migration 0013) and emit only
      text that can't still be completed by a later chunk:
      - text up to the last line break, or up to the last whitespace when the line has no secret context before it;
      - from an unterminated `-----BEGIN` onwards, everything is held;
      - the hold is bounded.
-       The tail is flushed (redacted) on completion and failure, and the whole text is redacted again at completion.
+     The tail is flushed (redacted) on completion and failure, and the whole text is redacted again at completion.
 2. **Medium: approval cards for older approvals say "no longer available".**
-   - _What:_ the card looks the approval up in the first 50 items of `GET /api/approvals`.
-   - _Fix:_ add `GET /api/approvals/:approvalId` (contract §6). The card reads the approval by id when it isn't in the
+   - *What:* the card looks the approval up in the first 50 items of `GET /api/approvals`.
+   - *Fix:* add `GET /api/approvals/:approvalId` (contract §6). The card reads the approval by id when it isn't in the
      list.
 3. **Medium: a per-agent stricter choice can't be undone.**
-   - _What:_ re-adding a Go-ahead returns `not_stricter`, and "Apply team rules" keeps the overrides. The owner has no
+   - *What:* re-adding a Go-ahead returns `not_stricter`, and "Apply team rules" keeps the overrides. The owner has no
      way back to the team rules.
-   - _Fix:_ add **H** `DELETE /api/agents/:agentId/permissions/:permId`, which removes that override and returns the
+   - *Fix:* add **H** `DELETE /api/agents/:agentId/permissions/:permId`, which removes that override and returns the
      agent to the team baseline (never looser than the team). Add a "Use team rule" control on the Permissions tab.
 4. **Medium (fixed during 2.18 integration): Advanced config could edit the approval keys.** Those edits bypassed the team
    baseline, the stricter-only rule and the verified write loop. Advanced now excludes `command_allowlist`,
    `approvals.deny` and `approvals.mode`.
-5. **Low: Advanced can write `skills.disabled`.** That races the Skills tab's serialized read-modify-write. _Fix:_ exclude
+5. **Low: Advanced can write `skills.disabled`.** That races the Skills tab's serialized read-modify-write. *Fix:* exclude
    it from Advanced, which also edits only the default profile. Model keys stay: both paths verify, and last writer wins.
 6. **Low: the Team tab responses have no contract envelopes.** The skills, hub and memory responses aren't in
-   `packages/contract`; the web parses the items with `AgentDetailSchema` parts and builds the wrappers ad hoc. _Fix:_
+   `packages/contract`; the web parses the items with `AgentDetailSchema` parts and builds the wrappers ad hoc. *Fix:*
    add `SkillsResponseSchema`, `SkillHubResponseSchema` and `MemoryPageSchema` to the contract (doc §8 and the package),
    and use them on both sides.
-7. **Low: the contract doc has a persona name in an example** (`"Fern, 2 passes"`). _Fix:_ use a neutral agent.
+7. **Low: the contract doc has a persona name in an example** (`"Fern, 2 passes"`). *Fix:* use a neutral agent.
 
 ## Rejected or deferred
-
 - **Hermes "always" answers create drift.** The drift is shown and fixed only by a human ("Apply team rules"). That is
   the decided design (2.18 review, finding 3).
 - **Memory add/delete and MCP tool toggles return 501 in live.** Hermes has no per-entry or per-tool mechanism. The UI

@@ -20,7 +20,7 @@ Reviewed read-only against Hermes commit `e97923c38acba2066aff9c45e35fe1584a2155
 
    **Failure:** `approve_permanent` adds a pattern to a process/profile allowlist. It has no execution count, command binding, expiry, or automatic removal. Marking the Score row consumed does not remove that permission. Later or concurrent commands matching “delete in root path” retain permission until worker exit. [Hermes/tools/approval.py:360](/home/raven/reference/hermes-agent/tools/approval.py:360)
 
-   L5 proves process isolation, not single-use consent. The probe installs the grant on every `pre_tool_call`, including `kanban_show` and `kanban_complete`. [docs/spike/score-spike-plugin/**init**.py:65](/home/raven/score/docs/spike/score-spike-plugin/__init__.py:65), [docs/spike/l5-worker-hooks.json:95](/home/raven/score/docs/spike/l5-worker-hooks.json:95)
+   L5 proves process isolation, not single-use consent. The probe installs the grant on every `pre_tool_call`, including `kanban_show` and `kanban_complete`. [docs/spike/score-spike-plugin/__init__.py:65](/home/raven/score/docs/spike/score-spike-plugin/__init__.py:65), [docs/spike/l5-worker-hooks.json:95](/home/raven/score/docs/spike/l5-worker-hooks.json:95)
 
    **Change:** Implement an atomic, exact-operation grant at the Hermes authorization gate, bound to command digest, cwd, profile and worker attempt. Until that exists, expose this mechanism only as an explicitly described worker-lifetime pattern permission.
 

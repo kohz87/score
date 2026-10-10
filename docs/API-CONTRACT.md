@@ -119,9 +119,7 @@ type TaskDetail = TaskSummary & {
   blocks: string[]
   runIds: string[]
   completedAt?: string | null /* kanban completed_at; "Made today" uses it, not updatedAt */
-  briefId?:
-    | string
-    | null /* newest brief Score linked this task to (GET /api/tasks/:taskId); "See it in Flow" opens /now/flow/:briefId */
+  briefId?: string | null /* newest brief Score linked this task to (GET /api/tasks/:taskId); "See it in Flow" opens /now/flow/:briefId */
 }
 
 type Room = {
@@ -136,27 +134,14 @@ type Room = {
 }
 
 type MessagePart =
-  | { kind: 'text'; text: string; via?: 'mcp' } // via: posted by an agent through Score's MCP server (§13); the UI tags it "via MCP"
+  | { kind: 'text'; text: string; via?: 'mcp' }   // via: posted by an agent through Score's MCP server (§13); the UI tags it "via MCP"
   | { kind: 'plan'; lanes: { agentId: AgentId; blocks: LaneBlock[] }[]; briefId: string }
   | { kind: 'tools'; summary: string /* "Ran 6 commands and edited 2 files" */; runId: string }
-  | {
-      kind: 'tool'
-      tool: string
-      args: string
-      result: string | null
-      status: 'running' | 'ok' | 'error'
-    } // one tool call (5.25)
+  | { kind: 'tool'; tool: string; args: string; result: string | null; status: 'running' | 'ok' | 'error' } // one tool call (5.25)
   | { kind: 'thinking'; text: string } // reasoning text, collapsed in the UI (5.25)
   | { kind: 'file'; path: string; added: number; removed: number }
   | { kind: 'image'; mediaId: string } // an uploaded image, served by GET /api/media/:mediaId
-  | {
-      kind: 'document'
-      mediaId: string
-      name: string
-      contentType: string
-      size: number
-      saved?: { agentId: AgentId; path: string }[]
-    } // an uploaded PDF/DOCX/XLSX/text file (5.30; `file` is taken by changed files)
+  | { kind: 'document'; mediaId: string; name: string; contentType: string; size: number; saved?: { agentId: AgentId; path: string }[] } // an uploaded PDF/DOCX/XLSX/text file (5.30; `file` is taken by changed files)
   | { kind: 'workspace'; agentId: AgentId; path: string } // a reference to a workspace file, not a copy (5.30)
   | { kind: 'approval'; approvalId: string }
   | { kind: 'review'; verdict: 'approved' | 'changes_requested'; taskId: string | null }
@@ -169,9 +154,7 @@ type Message = {
   parts: MessagePart[]
   createdAt: string
   streaming: boolean
-  progressAt?:
-    | string
-    | null /* streaming agent replies: last sign of life from the run (text, tool, reasoning, approval); absent = createdAt. The web shows "Waiting for the model" after 60 s without it. */
+  progressAt?: string | null /* streaming agent replies: last sign of life from the run (text, tool, reasoning, approval); absent = createdAt. The web shows "Waiting for the model" after 60 s without it. */
   refs: Ref[]
 }
 
@@ -191,8 +174,7 @@ type LaneBlock = {
   count?: number /* chat bands: replies covered */
   /* Kanban attempt blocks only (5.17a-1, SCORE_KANBAN_ATTEMPTS=1): `id` is `attempt:<kr id>`, `runId` is null. */
   attemptId?: string
-  observationEndedAt?:
-    string | null /* observation stopped here; the block ends here, nothing after counts */
+  observationEndedAt?: string | null /* observation stopped here; the block ends here, nothing after counts */
   provenance?: 'proven' | 'partial' /* partial = the claim could not be proven */
   order?: [startedAt: string, upstreamAttemptId: number] /* clients sort by this, never by `id` */
 }
@@ -241,19 +223,11 @@ type AttemptSummary = {
   kind: 'kanban'
   agentId: AgentId | null /* the frozen claim profile */
   role: 'implementer' | 'reviewer' | null /* from the claim event, never the current assignee */
-  status:
-    | 'running'
-    | 'completed'
-    | 'failed'
-    | 'blocked'
-    | 'review_handoff'
-    | 'changes_requested'
-    | 'ended_unknown'
+  status: 'running' | 'completed' | 'failed' | 'blocked' | 'review_handoff' | 'changes_requested' | 'ended_unknown'
   closureReason: string | null
   startedAt: string
   endedAt: string | null
-  observationEndedAt:
-    string | null /* observation stopped before the attempt ended: a boundary, never an end time */
+  observationEndedAt: string | null /* observation stopped before the attempt ended: a boundary, never an end time */
   evidence: 'proven' | 'partial'
   taskId: string /* = task.taskId */
   task: TaskRef
@@ -264,11 +238,7 @@ type AttemptSummary = {
   model: null
 }
 type AttemptDetail = AttemptSummary & {
-  taskSnapshot: {
-    title: string /* <= 300 */
-    status: string
-    assignee: string | null
-  } | null /* as last observed */
+  taskSnapshot: { title: string /* <= 300 */; status: string; assignee: string | null } | null /* as last observed */
 }
 type WorkItem = { kind: 'run'; run: RunSummary } | { kind: 'attempt'; attempt: AttemptSummary }
 ```
@@ -294,35 +264,35 @@ type WorkItem = { kind: 'run'; run: RunSummary } | { kind: 'attempt'; attempt: A
 
 Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 
-| type                   | data                                                                                                                                                                                    | Consumers                                                                                                 |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `stream.hello`         | `{ epoch: string, headSeq: number, mode: 'live'\|'fake', system: SystemStatus }` (no id)                                                                                                | all                                                                                                       |
-| `stream.reset`         | `{ reason: 'pruned'\|'epoch'\|'future_cursor' }` (no id)                                                                                                                                | all → resync                                                                                              |
-| `system.status`        | `SystemStatus`                                                                                                                                                                          | header banner, Settings                                                                                   |
-| `agent.updated`        | `AgentSummary`                                                                                                                                                                          | everywhere agents render                                                                                  |
-| `room.upserted`        | `Room`                                                                                                                                                                                  | Chat rooms list                                                                                           |
-| `message.created`      | `Message`                                                                                                                                                                               | Chat, Now thread                                                                                          |
-| `message.delta`        | `{ messageId, roomId, append: string }`                                                                                                                                                 | Chat (streaming text)                                                                                     |
-| `message.completed`    | `{ messageId, roomId, parts?: MessagePart[] }` (final parts replace the cached message's)                                                                                               | Chat                                                                                                      |
-| `message.deleted`      | `{ roomId, messageId }` (remove it from the cached messages; Score-side only)                                                                                                           | Chat, Now thread                                                                                          |
-| `message.updated`      | `{ roomId, messageId, editedBy?: MessageId \| null, parts?: MessagePart[] }` (`editedBy`: the original of an edit; `parts`: a summary edited or marked stale, replace the cached parts) | Chat                                                                                                      |
-| `message.progressed`   | `{ roomId, messageId, at }` (a streaming reply's run made a non-text move: tool call, reasoning, approval; set its `progressAt`. Text moves it via `message.delta`)                     | Chat                                                                                                      |
-| `room.version.created` | `RoomVersion` (a rewind hid the anchor and everything after it; the `message.deleted` events for those messages precede it)                                                             | Chat                                                                                                      |
-| `knowledge.changed`    | `{ path; kind: 'written'\|'moved'\|'deleted'\|'restored'; to; by: 'you'\|'outside'\|{agentId} }`                                                                                        | Knowledge                                                                                                 |
-| `typing`               | `{ roomId, agentId, text /* "is re-reading the read layer" */ \| null }`                                                                                                                | Chat, Now thread                                                                                          |
-| `approval.requested`   | `Approval`                                                                                                                                                                              | Now card, Chat, Flow, Watch, Tasks, header dot                                                            |
-| `approval.updated`     | `Approval` (phase / decision / delivery changes)                                                                                                                                        | same                                                                                                      |
-| `task.upserted`        | `TaskSummary`                                                                                                                                                                           | Tasks, Now, Flow                                                                                          |
-| `task.activity`        | `{ taskId, item: TaskActivity }`                                                                                                                                                        | task drawer, Flow inspector                                                                               |
-| `lane.upserted`        | `{ briefId \| null, agentId, block: LaneBlock }`                                                                                                                                        | Now › Score, Chat plan card                                                                               |
-| `handoff.created`      | `{ briefId \| null, handoff: Handoff }`                                                                                                                                                 | Score connectors, Flow edges, live log                                                                    |
-| `brief.upserted`       | `BriefSummary`                                                                                                                                                                          | Flow brief picker and header; refetch that brief's graph                                                  |
-| `run.updated`          | `RunSummary`                                                                                                                                                                            | Flow inspector, Watch header                                                                              |
-| `attempt.updated`      | `AttemptSummary` (5.17a-1, only with attempts on; created, closed, bounded or resumed)                                                                                                  | Now, Flow, Reports, Team history; notifications open the task (current) or the attempt, never a Watch URL |
-| `gap.recorded`         | `{ source: string; runId: string \| null; from: string; to: string \| null; reason: string }`                                                                                           | Watch, Flow log                                                                                           |
-| `log.line`             | `LogLine`                                                                                                                                                                               | Flow live log, Watch "What she's doing"                                                                   |
-| `watch.frame`          | `WatchFrame`                                                                                                                                                                            | Watch                                                                                                     |
-| `memory.saved`         | `{ agentIds: AgentId[], text, source: Ref \| null }`                                                                                                                                    | Chat "Learned here", Team memory                                                                          |
+| type                 | data                                                                                          | Consumers                                                |
+| -------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `stream.hello`       | `{ epoch: string, headSeq: number, mode: 'live'\|'fake', system: SystemStatus }` (no id)      | all                                                      |
+| `stream.reset`       | `{ reason: 'pruned'\|'epoch'\|'future_cursor' }` (no id)                                      | all → resync                                             |
+| `system.status`      | `SystemStatus`                                                                                | header banner, Settings                                  |
+| `agent.updated`      | `AgentSummary`                                                                                | everywhere agents render                                 |
+| `room.upserted`      | `Room`                                                                                        | Chat rooms list                                          |
+| `message.created`    | `Message`                                                                                     | Chat, Now thread                                         |
+| `message.delta`      | `{ messageId, roomId, append: string }`                                                       | Chat (streaming text)                                    |
+| `message.completed`  | `{ messageId, roomId, parts?: MessagePart[] }` (final parts replace the cached message's)     | Chat                                                     |
+| `message.deleted`    | `{ roomId, messageId }` (remove it from the cached messages; Score-side only)                  | Chat, Now thread                                         |
+| `message.updated`    | `{ roomId, messageId, editedBy?: MessageId \| null, parts?: MessagePart[] }` (`editedBy`: the original of an edit; `parts`: a summary edited or marked stale, replace the cached parts) | Chat                                                     |
+| `message.progressed` | `{ roomId, messageId, at }` (a streaming reply's run made a non-text move: tool call, reasoning, approval; set its `progressAt`. Text moves it via `message.delta`) | Chat |
+| `room.version.created` | `RoomVersion` (a rewind hid the anchor and everything after it; the `message.deleted` events for those messages precede it) | Chat |
+| `knowledge.changed`  | `{ path; kind: 'written'\|'moved'\|'deleted'\|'restored'; to; by: 'you'\|'outside'\|{agentId} }` | Knowledge                                                |
+| `typing`             | `{ roomId, agentId, text /* "is re-reading the read layer" */ \| null }`                      | Chat, Now thread                                         |
+| `approval.requested` | `Approval`                                                                                    | Now card, Chat, Flow, Watch, Tasks, header dot           |
+| `approval.updated`   | `Approval` (phase / decision / delivery changes)                                              | same                                                     |
+| `task.upserted`      | `TaskSummary`                                                                                 | Tasks, Now, Flow                                         |
+| `task.activity`      | `{ taskId, item: TaskActivity }`                                                              | task drawer, Flow inspector                              |
+| `lane.upserted`      | `{ briefId \| null, agentId, block: LaneBlock }`                                              | Now › Score, Chat plan card                              |
+| `handoff.created`    | `{ briefId \| null, handoff: Handoff }`                                                       | Score connectors, Flow edges, live log                   |
+| `brief.upserted`     | `BriefSummary`                                                                                | Flow brief picker and header; refetch that brief's graph |
+| `run.updated`        | `RunSummary`                                                                                  | Flow inspector, Watch header                             |
+| `attempt.updated`    | `AttemptSummary` (5.17a-1, only with attempts on; created, closed, bounded or resumed)         | Now, Flow, Reports, Team history; notifications open the task (current) or the attempt, never a Watch URL |
+| `gap.recorded`       | `{ source: string; runId: string \| null; from: string; to: string \| null; reason: string }` | Watch, Flow log                                          |
+| `log.line`           | `LogLine`                                                                                     | Flow live log, Watch "What she's doing"                  |
+| `watch.frame`        | `WatchFrame`                                                                                  | Watch                                                    |
+| `memory.saved`       | `{ agentIds: AgentId[], text, source: Ref \| null }`                                          | Chat "Learned here", Team memory                         |
 
 ## 3. System and search
 
@@ -362,7 +332,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
   session's open `/api/stream` connections. Bridge routes (`/bridge/v1/*`) are served only on a separate loopback listener.
   - **HTTPS only (5.18).** Remote mode serves the app only over TLS. The browser port accepts TLS and plain HTTP together
     (the first byte of a connection decides: `0x16` is a TLS handshake). Over plain HTTP, and for every request while no
-    certificate is configured (_guide-only mode_: no database, pairing, API, stream or web app is started), the server
+    certificate is configured (*guide-only mode*: no database, pairing, API, stream or web app is started), the server
     answers `GET`/`HEAD /setup/https` and `GET /setup/https/score-ca.crt` and nothing else: any path under `/api` gets
     `426 { error: { code: 'https_required', message } }` and every other path `308` to `/setup/https`.
     `SCORE_REMOTE_INSECURE_HTTP` no longer exists: it is ignored and the server logs that it was removed.
@@ -406,7 +376,7 @@ expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a mana
     registration challenge is bound to the paired session that asked (an authentication challenge to the caller's address);
     every verification failure is `401 passkey_failed`.
     - `GET /api/session/passkeys` (paired) → `{ available: boolean; rpId: string | null; items: { id; label; createdAt: iso;
-lastUsedAt: iso | null; flagged: boolean }[] }` (`PasskeysSchema`; `available` is false on an IP address).
+      lastUsedAt: iso | null; flagged: boolean }[] }` (`PasskeysSchema`; `available` is false on an IP address).
     - `POST /api/session/passkeys/registration-options` `{ password; label? }` (paired + security password) → WebAuthn
       creation options (JSON). `POST /api/session/passkeys` `{ response }` (paired) → `201` the new item.
     - `POST /api/session/passkeys/:id/remove` `{ password }` → `204`. Removing every passkey leaves pairing links working;
@@ -418,7 +388,7 @@ lastUsedAt: iso | null; flagged: boolean }[] }` (`PasskeysSchema`; `available` i
   - Paired browsers' cookies are re-sent at most hourly with Max-Age = the session's remaining lifetime.
 - **Log viewer (5.29).** `GET /api/system/logs?level=info|warn|error&q=&limit=` (paired browsers only, in every mode; `limit`
   1 to 2000, default 500) → `{ available: boolean; items: { time: iso | null; level: 'info' | 'warn' | 'error'; message: string;
-method: string | null; url: string | null; status: number | null; durationMs: number | null }[] }` (`LogsResponseSchema`).
+  method: string | null; url: string | null; status: number | null; durationMs: number | null }[] }` (`LogsResponseSchema`).
   Reads Score's own log file (`SCORE_LOG_FILE`, set by `scripts/score`; the rotated `<file>.1` follows the live file), newest
   first, from the last 4 MB of each. Lines are pino JSON (time, level, msg, req, res, responseTime) or plain launcher output
   (time null). `level` is a minimum (`warn` = warn and error); `q` is a case-insensitive substring of message, method or URL.
@@ -584,7 +554,7 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 - **H** `DELETE /api/rooms/:roomId/messages/:messageId` → `204`. Removes the message from Score for everyone (soft delete:
   `messages.deleted_at`); it is left out of room reads, unread counts, the Now thread, the context handed to agents and
   exports. Runs, Reports and the agents' Hermes session history are untouched, so an agent may still remember it. `409
-conflict` while the message is still streaming; `404` for an unknown room or message; idempotent (deleting a deleted
+  conflict` while the message is still streaming; `404` for an unknown room or message; idempotent (deleting a deleted
   message is `204`). Emits `message.deleted`.
 - **H** `POST /api/rooms/:roomId/messages/:messageId/retry` → `202 { messageId }` (the new streaming placeholder
   reply). `messageId` is a finished agent reply that answered a person's message: the same agent gets the same input
@@ -596,7 +566,7 @@ conflict` while the message is still streaming; `404` for an unknown room or mes
   writing that streaming agent reply; the reply ends with "This run was stopped." `404` unknown; `409 conflict` when the
   message is not a reply being written by a running run (finished, or still queued).
 - **S** `GET /api/rooms/:roomId/messages/:messageId/rewind-plan` → `RewindPlan` `{ hiddenCount; agents: { agentId; turns;
-cannot: RewindSkipReason | null }[]; blocked: string | null }` (PLAN 5.33): what a rewind of the person's own message
+  cannot: RewindSkipReason | null }[]; blocked: string | null }` (PLAN 5.33): what a rewind of the person's own message
   would do, for the confirmation. Nothing changes. `turns` is the number of Hermes user turns of that agent's room session
   (`score-<room>-<agent>`) that started at or after the message and are still in Hermes; `blocked` says why a rewind can't
   start now (an agent is answering or has queued work, or the room's work is paused with pending holds). `404`/`400` as for
@@ -604,13 +574,13 @@ cannot: RewindSkipReason | null }[]; blocked: string | null }` (PLAN 5.33): what
 - **H** `POST /api/rooms/:roomId/messages/:messageId/rewind` `{ mode: 'edit' | 'delete'; scoreOnly?: boolean }` →
   `{ version: RoomVersion; rewound: { agentId; turnsUndone }[]; skipped: { agentId; reason: RewindSkipReason }[] }`
   (PLAN 5.33). The message is the person's own, finished, in this room. The message and **every message after it in the
-  room** become a _previous version_ (`messages.deleted_at` plus `version_id`: left out of normal reads exactly like a
+  room** become a *previous version* (`messages.deleted_at` plus `version_id`: left out of normal reads exactly like a
   deleted message; `message.deleted` for each, then `room.version.created`). Unless `scoreOnly`, every agent whose Hermes
   session for this room has user turns at or after the message is **rewound** to just before it, through the bridge
   (`rewind` command, §11). Score counts the turns from its own records (`message_runs`, not already rewound) and checks
   them against Hermes's own history read-only; the lineage of compressed sessions is followed and a rewind across a
   compression boundary is not attempted. Nothing is hidden unless every needed rewind succeeded; otherwise `409
-rewind_incomplete` with `details: { skipped: { agentId; reason }[]; rewound: … }` and the person may repeat the request
+  rewind_incomplete` with `details: { skipped: { agentId; reason }[]; rewound: … }` and the person may repeat the request
   with `scoreOnly: true` (hide in Score only; `skipped` then lists every agent with `score_only`). `409 conflict` while an
   agent is answering, has queued work, or the room is paused with pending holds. Long-term memory (MEMORY.md, skills,
   Knowledge notes) is **not** rewound. Idempotent per message: repeating it returns the stored result and never rewinds
@@ -618,12 +588,12 @@ rewind_incomplete` with `details: { skipped: { agentId; reason }[]; rewound: …
   it (`RoomVersion.replacedBy`, original `editedBy`) instead of hiding again. Deleting an agent reply stays the Score-only
   `DELETE`.
 - **S** `GET /api/rooms/:roomId/versions` → `{ asOfSeq; items: RoomVersion[] }` (newest first); **S** `GET
-/api/rooms/:roomId/versions/:anchorId` → `{ version: RoomVersion; items: Message[] }` (the hidden messages, anchor
+  /api/rooms/:roomId/versions/:anchorId` → `{ version: RoomVersion; items: Message[] }` (the hidden messages, anchor
   first, oldest to newest; shown read-only). `RoomVersion` `{ id; roomId; anchorId; anchorCreatedAt; mode; replacedBy |
-null; number; count; hiddenCount; rewound; skipped; createdAt }`: `number` of `count` is the position in a chain of
+  null; number; count; hiddenCount; rewound; skipped; createdAt }`: `number` of `count` is the position in a chain of
   edits (the correction itself was edited again). `404` unknown room or anchor.
 - **S** `GET /api/agents/:agentId/context` → `AgentContext` `{ model: string | null; tokens: { input; output } | null;
-costUsd: number | null; contextLength: number | null }` (PLAN 5.25): usage of the agent's latest finished or running run
+  costUsd: number | null; contextLength: number | null }` (PLAN 5.25): usage of the agent's latest finished or running run
   with usage and the model's context window when Hermes's model options carry one (else `null`). `404` unknown agent.
 - `POST /api/rooms/:roomId/messages`
 
@@ -645,12 +615,12 @@ costUsd: number | null; contextLength: number | null }` (PLAN 5.25): usage of th
 
   Text starting with a slash command is parsed server-side:
 
-  | Command     | Syntax                                                 | Effect                                                                                                                     | `CommandResult`                               |
-  | ----------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-  | `/assign`   | `/assign @agent <title> [-- body]`                     | creates a Kanban task                                                                                                      | `{ kind: 'assign', taskId, taskKey }`         |
-  | `/routine`  | `/routine @agent <schedule> <prompt>`                  | creates a cron job                                                                                                         | `{ kind: 'routine', routineId }`              |
-  | `/remember` | `/remember [@agent…] <fact>`                           | writes agent memory                                                                                                        | `{ kind: 'remember', agentIds }`              |
-  | `/skill`    | `/skill @agent <name>` (use) · `/skill install <name>` | loads or installs a skill                                                                                                  | `{ kind: 'skill', name, installed: boolean }` |
+  | Command     | Syntax                                                 | Effect                             | `CommandResult`                               |
+  | ----------- | ------------------------------------------------------ | ---------------------------------- | --------------------------------------------- |
+  | `/assign`   | `/assign @agent <title> [-- body]`                     | creates a Kanban task              | `{ kind: 'assign', taskId, taskKey }`         |
+  | `/routine`  | `/routine @agent <schedule> <prompt>`                  | creates a cron job                 | `{ kind: 'routine', routineId }`              |
+  | `/remember` | `/remember [@agent…] <fact>`                           | writes agent memory                | `{ kind: 'remember', agentIds }`              |
+  | `/skill`    | `/skill @agent <name>` (use) · `/skill install <name>` | loads or installs a skill          | `{ kind: 'skill', name, installed: boolean }` |
   | `/model`    | `/model <model> <message…>`                            | runs this message on another model (a name that is one of the agent's aliases also carries the alias's provider to Hermes) | `{ kind: 'model', model }`                    |
 
   `/remember` and `/skill` are parsed but not implemented yet: they answer `501 not_implemented` and are left out of
@@ -693,7 +663,7 @@ contentType: string }`. Types come from the bytes: png, jpeg, gif, webp, PDF, DO
   (its rooms leave the project). Stream: `room-project.upserted` (the project) and `room-project.deleted` (`{ id }`); a
   deleted project also emits `room.upserted` for each room that was in it.
 - `GET /api/search/messages?q=&roomId?&limit=` (limit ≤ 50, default 20) → `{ items: { messageId; roomId; roomName;
-author; createdAt; snippet }[] }`: FTS5 over the text parts of finished, undeleted messages (a streaming reply is
+  author; createdAt; snippet }[] }`: FTS5 over the text parts of finished, undeleted messages (a streaming reply is
   indexed once it completes); the query is tokenised into quoted terms (no FTS syntax from the user, the last word is a
   prefix); `[[`/`]]` in `snippet` mark matches (redacted). Used by the ⌘K palette ("Messages") and the Chat search box;
   the web opens a hit at `/chat/:roomId?message=:messageId` and scrolls to it.
@@ -744,7 +714,7 @@ create dialog says so). Nothing live is exposed.
   data. The room's later edits and deletions do not change it. At most the latest 2000 messages.
 - Token: 32 random bytes (base64url, 43 chars). Only its SHA-256 is stored (`room_shares.token_hash`); the token is shown once.
 - `GET /api/shares` → `{ items: ShareSummary[] }` (`{ id; roomId; roomName; createdAt; expiresAt; views; includeImages;
-status: 'active' | 'expired'; roomChanged }`, newest first; `roomChanged` = a message of the room was deleted or rewound after the
+  status: 'active' | 'expired'; roomChanged }`, newest first; `roomChanged` = a message of the room was deleted or rewound after the
   snapshot (the link still shows the old text); revoked shares are gone) · `GET /api/rooms/:roomId/shares` → the same, active
   ones of that room (Chat › room menu › Share…, Settings › Shares lists all).
 - **H** `DELETE /api/shares/:id` → `204` (no password needed; idempotent; `404` unknown id). Revoking withdraws the link at once
@@ -767,7 +737,7 @@ Hermes sessions that Score did not start (Telegram, CLI, Discord, …), read thr
 Score's own runs (`score-<room>-<agent>`), compression children and empty sessions are left out.
 
 - `GET /api/outside-sessions` → `{ items: OutsideSession[]; unavailable: AgentId[] }` (`{ id; agentId; source; sourceLabel;
-title; startedAt; messageCount; busy; roomId }`, newest first, at most 200 per agent). `title` = the session title, else
+  title; startedAt; messageCount; busy; roomId }`, newest first, at most 200 per agent). `title` = the session title, else
   the first user message (redacted, cut to 120 characters). `busy` = not ended and active within the last 5 minutes.
   `roomId` = the Score room made from it, if imported. `unavailable` = profiles whose database is missing or has a changed
   schema.
@@ -835,20 +805,20 @@ title; startedAt; messageCount; busy; roomId }`, newest first, at most 200 per a
   must be gone) and never confirms a recorded failure. `step` must be the interrupted step; otherwise `409`.
 
 - **H** `POST /api/agents/imports` (body: the archive, `Content-Type: application/octet-stream`, ≤ 200 MiB) → `201
-ImportInspection`. Score stores the upload privately (`$SCORE_HOME/profile-imports/<uploadId>.tar.gz`, directory 0700,
+  ImportInspection`. Score stores the upload privately (`$SCORE_HOME/profile-imports/<uploadId>.tar.gz`, directory 0700,
   file 0600) and inspects it by streaming, never extracting it: one top-level directory; only regular files and
   directories (links, devices and special files are refused, as Hermes does); no absolute, drive-letter or `..`
   paths; at most 50,000 entries, 2 GiB unpacked and a 200x expansion ratio. A refused archive is `400 bad_request` with the
   reason and is not kept. `ImportInspection` = `{ uploadId; sizeBytes; archiveRoot; suggestedId: string|null; description;
-model; configVersion; skills: string[]; plugins: string[]; memoryBytes; fileCount; totalBytes; credentialFiles: string[];
-hasBridge; warnings: string[] }`: names and counts only, never file contents (credential files are listed by path and
+  model; configVersion; skills: string[]; plugins: string[]; memoryBytes; fileCount; totalBytes; credentialFiles: string[];
+  hasBridge; warnings: string[] }`: names and counts only, never file contents (credential files are listed by path and
   never read). Uploads nobody imports are dropped after 24 hours.
 - **H** `DELETE /api/agents/imports/:uploadId` → `204`: discards the upload (the preview was cancelled).
 - **H** `POST /api/agents/import` `{ uploadId; id; name; role; style; confirmCredentials? }` → `202 AgentOperation`
   (`kind: 'import'`). The archive is inspected again; credential files need `confirmCredentials: true` (else `400`).
   Hermes never overwrites a profile, so an existing id (or `default`, or a retired name) is `409`: there is no replace;
   delete the agent first (which keeps a private export). Steps: `import_profile` (`hermes profile import <archive> --name
-<id>`, argv only; Hermes extracts to its own staging directory, refuses unsafe members and drops the exporting
+  <id>`, argv only; Hermes extracts to its own staging directory, refuses unsafe members and drops the exporting
   profile's runtime directories and role), `describe_profile` (the role), `preserve_key`, `configure_key`, `permissions`,
   `install_bridge` (pinned, `--force` over a bridge that came in the archive), `enable_bridge`, `verify_ready`. The model
   is the archive's own and is not changed. `import_profile` is neither retried nor adopted; if it fails nothing is
@@ -922,11 +892,11 @@ incarnation-aware reuse confirmation contract is agreed.
 - `AgentDetail.model.fallback` is the agent's `fallback_providers` chain as text (`"model-a, then model-b"`), `null` when none.
 - **H** `GET|PUT /api/agents/:agentId/model-settings` (5.31, `packages/contract/src/model-settings.ts`) →
   `ModelSettings` `{ fallbacks: { provider; model }[] /* ordered chain, Hermes `fallback_providers`, any length */;
-fallbacksEditable: boolean /* false: an entry has a custom endpoint or key; shown, never rewritten (409) */;
-aliases: { name; model; provider: string | null; editable }[] /* Hermes `model_aliases`, per profile */;
-speech: { stt: { provider; model }; tts: { provider; model; voice } } }`. The PUT body is `ModelSettingsUpdate`
+  fallbacksEditable: boolean /* false: an entry has a custom endpoint or key; shown, never rewritten (409) */;
+  aliases: { name; model; provider: string | null; editable }[] /* Hermes `model_aliases`, per profile */;
+  speech: { stt: { provider; model }; tts: { provider; model; voice } } }`. The PUT body is `ModelSettingsUpdate`
   `{ fallbacks?; aliases? /* the full list of editable aliases wanted */; speech?: { stt?: { provider?; model? };
-tts?: { provider?; model?; voice? } } }`, strict. Only keys whose value differs from what Hermes holds are written
+  tts?: { provider?; model?; voice? } } }`, strict. Only keys whose value differs from what Hermes holds are written
   (`hermes -p <profile> config set …`, `config unset model_aliases.<name>` for a removed alias), and the answer is built from
   what was written, with no re-read. Speech provider ids and which of model/voice each has are `STT_PROVIDERS` /
   `TTS_PROVIDERS` in the contract package. `409 conflict` for a non-editable chain/alias, a model or voice the chosen
@@ -977,10 +947,10 @@ unsupported`. Hermes-profile endpoints for an agent id that is a coding agent (`
 room's CLI session (`skipped: no_session`).
 
 - `GET /api/coding-agents/runtimes` → `{ items: CodingRuntimeInfo[] }`: `{ runtime: 'claude-code'|'codex'|'opencode'; label; state:
-'ready'|'not_installed'|'not_supported'|'untested_version'; version: string|null; testedVersions: string[]; quota: string; message:
-string|null }`. Read with `<cli> --version` only (never a prompt). `untested_version` = installed, but not one of the tested versions.
+  'ready'|'not_installed'|'not_supported'|'untested_version'; version: string|null; testedVersions: string[]; quota: string; message:
+  string|null }`. Read with `<cli> --version` only (never a prompt). `untested_version` = installed, but not one of the tested versions.
 - `GET /api/coding-agents` → `{ items: CodingAgent[] }`: `{ id; name; role; runtime; workspace; permission: 'read-only'|'workspace-write'|'full';
-model: string|null; style; quota; cli: { state; version; testedVersions; confirmed: boolean }; createdAt }`.
+  model: string|null; style; quota; cli: { state; version; testedVersions; confirmed: boolean }; createdAt }`.
 - **H** `POST /api/coding-agents` `{ id; name; role?; runtime; workspace?; permission?; model?; style; password?; acknowledgeReads? }` → `201 CodingAgent`. A Codex agent needs `acknowledgeReads: true` (`400 acknowledgement_required`): Codex can read every file the owner's user can (live-checked 2026-10-10).
   `id` is a profile-style name (`^[a-z0-9][a-z0-9_-]{0,63}$`), unique among all agents (`409 conflict`). `workspace` defaults to
   `~/score-workspaces/<id>` (created) and follows the Workspace folder rules (no home folder, `~/.hermes`, `~/.score`, `~/.ssh`;
@@ -1000,18 +970,16 @@ model: string|null; style; quota; cli: { state; version; testedVersions; confirm
   The sandbox limits what an agent can change, **not what it can read** (Codex has no read rules): the Add agent form says so.
 
 ### Workspace (Team › agent › Workspace)
-
 The agent's Hermes working folder (`terminal.cwd`), browsed and edited from Score. **Every** workspace endpoint is **H**
 (paired browser), reads included, because the files can hold secrets. `path` is POSIX and relative to the root; the root
 itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
-
 - **H** `GET /api/agents/:agentId/workspace` → `WorkspaceInfo` `{ root: string | null; available: boolean; reason: string | null }`.
   Unavailable (with the reason) when the terminal backend is not `local`, `terminal.cwd` is unset, `.` or relative, or the
   folder fails the root checks: `/`, the home folder or a parent of it, `~/.hermes`, `~/.score`, `~/.ssh` (or Score's/Hermes's
   configured homes, and the default `~/.hermes` even when another Hermes home is configured) or inside them, inside `.git` or
   a protected-name folder, missing, not a directory, or owned by another user.
 - **Root identity.** Every file route below (`tree`, `file` GET/PUT, `entries`, `move`, `upload`, `git`) accepts `?root=<the
-WorkspaceInfo.root the browser is showing>`; when present and not the agent's current root the request is refused
+  WorkspaceInfo.root the browser is showing>`; when present and not the agent's current root the request is refused
   `409 workspace_changed` (`details.root` = the current root) and nothing is touched. The web always sends it and includes
   it in its query keys. `PUT …/file` re-checks the file right before replacing it (`412 precondition_failed` if an outside
   writer changed it meanwhile).
@@ -1026,7 +994,7 @@ WorkspaceInfo.root the browser is showing>`; when present and not the agent's cu
   - pdf (same checks): as the download case below (`application/octet-stream`, `attachment`, CSP), never inline;
   - anything else: `200 application/json` `{ binary: true; size; reason: 'binary' | 'too_large' }`;
   - `download=1`: any file ≤ 25 MiB as `application/octet-stream`, `Content-Disposition: attachment`, nosniff.
-    Symlinks are followed for reading only when they resolve inside the root and the resolved path is allowed.
+  Symlinks are followed for reading only when they resolve inside the root and the resolved path is allowed.
 - **H** `PUT …/workspace/file?path=` `{ content; etag: string | null }` → `{ etag }`. Atomic (temp file in the same directory,
   fsync, rename). `etag: null` creates and refuses an existing file (`409 exists`); a stale etag → `412 precondition_failed`
   with `details: { etag }` (current etag, or null when the file was removed). Content ≤ 1 MiB, no NUL.
@@ -1126,7 +1094,7 @@ WorkspaceInfo.root the browser is showing>`; when present and not the agent's cu
   is `spendUsd: null`, `spendBasis: 'unknown'`, and it is listed in `totals.spendExcluded` and left out of the total (not counted as 0).
   An agent with no run in the range has no `spendBasis`. The 30-day `trend` spend covers Hermes sessions only.
 - **Cache hit rate and trend (5.29).** `cacheHitRate` = cache-read tokens / (uncached input + cache-read + cache-write) of the
-  Hermes sessions that _started_ in the range (a session's counters are cumulative), read-only from each profile's
+  Hermes sessions that *started* in the range (a session's counters are cumulative), read-only from each profile's
   `state.db` through the report-facts adapter. `null` ("—") when no such session exists, a counter is missing, or Hermes
   never recorded a cache token (a provider without caching is not a 0% hit rate). The total is over the agents that report;
   null when none does. `trend` is always the last 30 local days (oldest first) whatever `range` is: `runs` = runs started
@@ -1134,7 +1102,7 @@ WorkspaceInfo.root the browser is showing>`; when present and not the agent's cu
   range spend), `null` when any agent's reading is missing for the day (e.g. before Score started sampling), never zero.
   The Reports page draws it with an accessible table fallback.
 - **Display currency (5.29).** Reports and the API stay in USD. `GET /api/settings/currency` → `{ code: string /* ISO-4217
-shape, ^[A-Z]{3}$ */; rate: number /* units of `code` per 1 USD, typed by the person; no network fetch */ }` (default
+  shape, ^[A-Z]{3}$ */; rate: number /* units of `code` per 1 USD, typed by the person; no network fetch */ }` (default
   `{ code: 'USD', rate: 1 }`); **H** `PUT /api/settings/currency` `{ code; rate }` → the stored value (`400` for a bad code or a
   rate that is not > 0; USD is always stored with rate 1). Stored in Score's `meta` table (key `display_currency`). The page
   multiplies and rounds once to the displayed cent; Reports offers a USD / `code` toggle (remembered per browser).
@@ -1151,20 +1119,10 @@ shape, ^[A-Z]{3}$ */; rate: number /* units of `code` per 1 USD, typed by the pe
   days in `tz`, `from <= to`, at most 366 days, `to` not after today; otherwise `400 bad_request`) →
   ```ts
   {
-    from: string
-    to: string /* the days asked for */
+    from: string; to: string /* the days asked for */
     truncated: boolean /* a bound dropped older events */
-    agents: {
-      id: AgentId
-      events: {
-        at: string /* ISO */
-        kind: 'task_done' | 'note_written' | 'skill_changed' | 'memory_changed'
-        label: string
-        ref: string | null
-      }
-      ;[]
-    }
-    ;[]
+    agents: { id: AgentId; events: { at: string /* ISO */; kind: 'task_done' | 'note_written' | 'skill_changed' | 'memory_changed';
+                                    label: string; ref: string | null }[] }[]
   }
   ```
   One entry per agent in Score's agent projection (even with no events), events newest first. Sources: tasks completed (Hermes
@@ -1208,13 +1166,13 @@ messaging: { platform; label; status: 'connected'|'disconnected'; detail: string
 - `POST /api/settings/messaging/:platform/connect` → `ConnectResult`: `next: 'form'` for platforms that can be set up in
   the browser (token based), else `run_in_terminal` with the command (WhatsApp QR and other interactive pairings).
 - `GET /api/settings/messaging/:platform/fields` → `{ fields: { key; label; help: string | null; url: string | null;
-secret: boolean; required: boolean }[]; browserSetup: boolean }`. Field metadata is an adapter-side table (Hermes has no
+  secret: boolean; required: boolean }[]; browserSetup: boolean }`. Field metadata is an adapter-side table (Hermes has no
   read-only CLI that lists env-var metadata) mirroring `hermes_cli/config_defaults.py`. `browserSetup: false` = no fields,
   use the terminal command from `connect`.
 - **H** `PUT /api/settings/messaging/:platform` `{ values: Record<ENV_KEY, string>; agentId?: AgentId }` → the connection row
   `{ platform; label; status; detail }`. Keys must be in the platform's field list (`400` otherwise), every `required`
   field must be present and non-empty, empty optional values are skipped. Each value is written with `hermes [-p <profile>]
-config set KEY value` (argv array, profile of `agentId`, default profile when absent). The route uses the HMAC receipt
+  config set KEY value` (argv array, profile of `agentId`, default profile when absent). The route uses the HMAC receipt
   (`secretBody`): values are never logged, stored, echoed or put in a receipt, and error messages are redacted. The gateway
   reads its tokens at start, so the row stays as it was until the gateway restarts (Score has no gateway restart action;
   the UI says so).
@@ -1254,21 +1212,19 @@ compatible: boolean }`. Read-only: compares the running build (version, code sha
 - Theme (light, dark, system) is a per-browser setting in `localStorage` (`score.theme`); there is no settings/ui endpoint.
 
 ## 12. Knowledge (central vault; design docs/briefs/6.0-workspace-knowledge.md § 6.2)
-
 Score's own Markdown vault (default `~/score-vault`, `$SCORE_VAULT`), git-versioned; the files are the source of truth and
 Score's DB only indexes them. Paths are POSIX, relative to the vault; notes end in `.md`, attachments live under
 `attachments/`. Schemas in `packages/contract/src/knowledge.ts`. Writes from browsers are **H**; agents use the bridge
 tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
-
 - `GET /api/knowledge` → `KnowledgeInfo` `{ vault; notes; gitAvailable; agentAccess }`
 - `GET /api/knowledge/tree` → `{ folders: string[]; notes: KnowledgeNoteSummary[] }` (`{ path; title; mtime; lastAuthor }`)
 - `GET /api/knowledge/notes/*path` → `KnowledgeNote` `{ path; title; frontmatter; body; etag; mtime; links: { target;
-path | null }[]; backlinks: { path; title }[]; lastAuthor }`. Title: frontmatter `title`, else the first `# H1`, else
+  path | null }[]; backlinks: { path; title }[]; lastAuthor }`. Title: frontmatter `title`, else the first `# H1`, else
   the file name. Wikilinks `[[Target]]`, `[[Target|alias]]`, `[[Target#heading]]` resolve Obsidian-style (exact path,
   then a unique basename, case-insensitive); unresolved links have `path: null`.
 - **H** `PUT /api/knowledge/notes/*path` `{ body; frontmatter?; etag | null }` → `{ etag; path }`; `412
-precondition_failed` with `details.etag` on a stale etag; `etag: null` creates and refuses an existing note (`409
-exists`); missing folders are created. Atomic write, then a git commit (author `You`); rapid edits of one note by one
+  precondition_failed` with `details.etag` on a stale etag; `etag: null` creates and refuses an existing note (`409
+  exists`); missing folders are created. Atomic write, then a git commit (author `You`); rapid edits of one note by one
   author within 60 s amend Score's own last commit when it is still `HEAD`. Before any save, move, delete or restore Score
   commits outside edits as "Outside changes"; if that snapshot fails the operation is refused `503 git_unavailable` (nothing
   is overwritten), and a save whose note changed on disk meanwhile gets `412` with the new etag. Agent `write`/`append`
@@ -1368,7 +1324,7 @@ whose `isolation` is not `unknown`; the plugin polls only while it runs inside a
   can't move the target; a target that changed is `failed`), and checks afterwards that no active user row from `since` remains, else `failed`). A
   command is handed to one polling producer of the profile once and is not redelivered.
 - `POST /bridge/v1/commands/:commandId/result` `{ outcome: 'done' | 'nothing' | 'failed' | 'expired'; turnsUndone?; rewoundCount?;
-error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what
+  error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what
   `/undo` uses; soft-deletes the rows, the next turn rebuilds from the active ones) from `hermes_private.py` and reports
   Hermes's `turns_undone` / `rewound_count`; `nothing` = Hermes had nothing to rewind. A command with no result within
   60 s is reported to the person as `no_answer`, and Score keeps the room's rewind hold (persisted in `rewind_holds`, restored after a
@@ -1397,7 +1353,6 @@ Hook → domain mapping lives in `apps/server/src/hermes/translate.ts`; payload 
 `apps/server/test/fixtures/bridge/` (seeded from `docs/spike/`).
 
 ## 13. MCP access for agents (PLAN 7.4d; schemas in `packages/contract/src/mcp.ts`)
-
 Score is an MCP server for its own agents (rooms, tasks, knowledge). Design: `docs/briefs/7.4-backlog.md` § 7.4d; review
 changes: `docs/reviews/2026-10-09-phase7-lead.md`.
 
@@ -1413,23 +1368,22 @@ and an MCP token is `401` on every `/api/*` and `/bridge/v1/*` path (its format 
 whole surface; none approves anything, reads another agent's session or changes settings. Tool errors come back as MCP
 tool results with `isError` and text `<code>: <message>`.
 
-| Tool                                                                     | Needs           | Behaviour                                                                                                                                                                                                                                                                |
-| ------------------------------------------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `rooms.list`                                                             | access          | Rooms the agent is a member of (not archived; ≤ 50): `{ rooms: { id; name; kind; members; lastMessage: { from; preview } \| null }[] }`                                                                                                                                  |
-| `rooms.post` `{ roomId; text ≤ 8 KiB }`                                  | access + writes | Stores an agent-authored message (`to: []`, text part `via: 'mcp'`, redacted) in a room the agent is a member of; it starts no run and `@mentions` are not routed. `404` for other rooms; `409` while the room is rewinding or the agent is not ready. → `{ messageId }` |
-| `tasks.list` `{ limit? ≤ 50 }`                                           | access          | Tasks where the agent is assignee or reviewer (`TaskSummary[]`)                                                                                                                                                                                                          |
-| `tasks.comment` `{ taskId; text ≤ 1500 }`                                | access + writes | A comment on such a task, text prefixed `[via MCP: <agentId>]`. `404` for other tasks                                                                                                                                                                                    |
-| `knowledge.search` `{ query; limit? ≤ 20 }`, `knowledge.read` `{ path }` | access          | As §11 knowledge tools (same global and per-agent knowledge switches, 256 KiB read cap)                                                                                                                                                                                  |
-| `knowledge.write` `{ path; body; expectedEtag? }`                        | access + writes | As §11 `write` (256 KiB, 60 writes/hour/agent, etag/`409` rules); attributed to the agent in git                                                                                                                                                                         |
+| Tool | Needs | Behaviour |
+|---|---|---|
+| `rooms.list` | access | Rooms the agent is a member of (not archived; ≤ 50): `{ rooms: { id; name; kind; members; lastMessage: { from; preview } \| null }[] }` |
+| `rooms.post` `{ roomId; text ≤ 8 KiB }` | access + writes | Stores an agent-authored message (`to: []`, text part `via: 'mcp'`, redacted) in a room the agent is a member of; it starts no run and `@mentions` are not routed. `404` for other rooms; `409` while the room is rewinding or the agent is not ready. → `{ messageId }` |
+| `tasks.list` `{ limit? ≤ 50 }` | access | Tasks where the agent is assignee or reviewer (`TaskSummary[]`) |
+| `tasks.comment` `{ taskId; text ≤ 1500 }` | access + writes | A comment on such a task, text prefixed `[via MCP: <agentId>]`. `404` for other tasks |
+| `knowledge.search` `{ query; limit? ≤ 20 }`, `knowledge.read` `{ path }` | access | As §11 knowledge tools (same global and per-agent knowledge switches, 256 KiB read cap) |
+| `knowledge.write` `{ path; body; expectedEtag? }` | access + writes | As §11 `write` (256 KiB, 60 writes/hour/agent, etag/`409` rules); attributed to the agent in git |
 
 `access` = `enabled`, `writes` = `writesEnabled`; both are **off by default** and checked on every call. Posting
 (`rooms.post` and `tasks.comment` share one budget) is limited to 30 per hour per agent: `429 rate_limited` with
 `details.retryAfterSeconds`; a post that fails gives its slot back.
 
 **Browser API** (Team › agent › Tools › MCP access):
-
 - `GET /api/agents/:agentId/mcp` → `McpAccess` `{ agentId; enabled; writesEnabled; hasToken; tokenCreatedAt; available;
-url; command; postsThisHour; postLimitPerHour }`. `available: false` (and `url`/`command: null`) when Score has no bridge
+  url; command; postsThisHour; postLimitPerHour }`. `available: false` (and `url`/`command: null`) when Score has no bridge
   listener (local single-port mode).
 - **H** `PUT /api/agents/:agentId/mcp` `{ enabled?; writesEnabled? }` (at least one) → `McpAccess`.
 - **H** `POST /api/agents/:agentId/mcp/token` → `{ token; access: McpAccess }`: creates or rotates (the old token stops

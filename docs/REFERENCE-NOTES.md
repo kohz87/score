@@ -2,12 +2,12 @@
 
 What we can learn from (and reuse from) the MIT reference code. All four repos are cloned **outside** this repo:
 
-| Path                                  | Upstream                                                                                 | License                                              | Notes                                     |
-| ------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------- |
-| `../reference/Hermes-Studio`          | github.com/JPeetz/Hermes-Studio @ `356b3d5` (2026-07-03)                                 | MIT © 2026 JPeetz; portions © 2026 Eric (outsourc-e) | Studio 1.20.0, a TanStack Start app       |
-| `../reference/hermes-workspace`       | github.com/outsourc-e/hermes-workspace (2026-08-22)                                      | MIT © 2026 Eric (outsourc-e)                         | The ancestor Studio was forked from       |
-| `../reference/hermes-agent`           | github.com/NousResearch/hermes-agent, **checked out at `e97923c3`** (= the live install) | MIT © 2025 Nous Research                             |                                           |
-| `../reference/hermes-example-plugins` | github.com/NousResearch/hermes-example-plugins                                           | MIT © 2026 Nous Research                             | Hook, tool and dashboard plugin templates |
+| Path | Upstream | License | Notes |
+|---|---|---|---|
+| `../reference/Hermes-Studio` | github.com/JPeetz/Hermes-Studio @ `356b3d5` (2026-07-03) | MIT © 2026 JPeetz; portions © 2026 Eric (outsourc-e) | Studio 1.20.0, a TanStack Start app |
+| `../reference/hermes-workspace` | github.com/outsourc-e/hermes-workspace (2026-08-22) | MIT © 2026 Eric (outsourc-e) | The ancestor Studio was forked from |
+| `../reference/hermes-agent` | github.com/NousResearch/hermes-agent, **checked out at `e97923c3`** (= the live install) | MIT © 2025 Nous Research | |
+| `../reference/hermes-example-plugins` | github.com/NousResearch/hermes-example-plugins | MIT © 2026 Nous Research | Hook, tool and dashboard plugin templates |
 
 EKKOLearnAI/ekko-studio (BSL) was **not** read or fetched, and must never be.
 
@@ -21,7 +21,6 @@ EKKOLearnAI/ekko-studio (BSL) was **not** read or fetched, and must never be.
 ## 1. Connecting to the Hermes gateway
 
 **Studio** (`src/server/gateway-capabilities.ts`, `src/server/hermes-api.ts`):
-
 - Plain HTTP `fetch` to `HERMES_API_URL` (default `http://127.0.0.1:8642`, auto-falls back to `:8643`), optional
   `Authorization: Bearer $HERMES_API_TOKEN`.
 - **Capability probe**: hits `/health`, `/v1/chat/completions` (GET → 405 = exists), `/v1/models`, `/api/sessions`,
@@ -34,8 +33,7 @@ EKKOLearnAI/ekko-studio (BSL) was **not** read or fetched, and must never be.
 - Crew and workflow state lives in `.runtime/*.json` inside the Studio checkout.
 
 **What changed by v0.21** (verified in source at `e97923c3`):
-
-- The API server is an opt-in gateway _platform_ (`platforms.api_server.enabled`), aiohttp-based, in
+- The API server is an opt-in gateway *platform* (`platforms.api_server.enabled`), aiohttp-based, in
   `gateway/platforms/api_server*.py`. It is not enabled on the live install.
 - Health is `/v1/health`, and there is a first-class **`GET /v1/capabilities`**. A probe should prefer that over
   Studio's 404-sniffing.
@@ -59,7 +57,6 @@ files for state. Probe `/v1/capabilities` once at startup and on reconnect.
 ## 2. Streaming events
 
 **Studio**:
-
 - Per-message streaming: `POST /api/send-stream` → upstream `POST /api/sessions/{id}/chat/stream`; it parses SSE by hand
   (`hermes-api.ts:streamChat`) and translates events (`send-stream.ts:550-850`: `run.started`, `message.started`,
   `assistant.delta`, `assistant.completed`, `tool.pending|started|calling|running|progress|completed|failed`,
@@ -73,7 +70,6 @@ files for state. Probe `/v1/capabilities` once at startup and on reconnect.
   reload history.
 
 **v0.21 drift**:
-
 - The session stream now emits `approval.request` (not `approval.required`/`tool.approval`/`exec.approval`), so
   **Studio silently misses approvals on v0.21**. It also emits `assistant.commentary`, `reasoning.available`,
   `run.queued`, `run.cancelled`.
@@ -83,14 +79,13 @@ files for state. Probe `/v1/capabilities` once at startup and on reconnect.
   `on_kanban_*` and approval hooks. Studio has no plugin component.
 - `state.db` now flushes after every tool result (see SPIKE (a)), so DB tailing is a viable fallback.
 
-**Score takeaway**: reuse the _bus + persisted seq + Last-Event-ID replay_ design, but with **one** stream
+**Score takeaway**: reuse the *bus + persisted seq + Last-Event-ID replay* design, but with **one** stream
 for the whole app. Feed it from (1) run SSE for runs Score starts, (2) a Score bridge plugin for everything else,
 (3) SQLite tailing as backstop and for history.
 
 ## 3. Resolving approvals
 
 **Studio**:
-
 - The client keeps approvals in `sessionStorage` (`src/lib/approvals-store.ts`). They are lost when the tab closes and
   never seen by other tabs.
 - `POST /api/approvals/{id}/approve|deny` (`approvals.$approvalId.approve.ts`) first tries
@@ -100,7 +95,6 @@ for the whole app. Feed it from (1) run SSE for runs Score starts, (2) a Score b
 - Scope `once | session | always` maps to `/approve`, `/approve session`, `/approve always`.
 
 **v0.21 reality** (details in SPIKE (b)):
-
 - Runs API: `approval.request` event (redacted command, `choices`, optional `request_id`) and
   `POST /v1/runs/{id}/approval {"choice": "once"|"session"|"always"|"deny", "request_id"?, "all"?}`.
 - Approvals from other surfaces are held **in-process** (`tools/approval.py:_pending`). They can be reached only by a
@@ -115,9 +109,8 @@ you" is a separate concept (blocked tasks). Do **not** copy Studio's chat-comman
 ## 4. Crews and the workflow DAG
 
 **Studio**:
-
-- A _crew_ (`crew-store.ts`) is a named list of chat sessions with roles (`coordinator | executor | reviewer |
-specialist`), persona, color and optional profile name. It is stored in `.runtime/crews.json`.
+- A *crew* (`crew-store.ts`) is a named list of chat sessions with roles (`coordinator | executor | reviewer |
+  specialist`), persona, color and optional profile name. It is stored in `.runtime/crews.json`.
 - Dispatch (`crews/$crewId.dispatch.ts`) fires one `POST /api/send-stream` per targeted member, fire-and-forget,
   then watches the shared bus for completions. No Hermes-side coordination.
 - The workflow is a per-crew DAG `{tasks:[{id,label,prompt,assigneeId,x,y}], edges:[{from,to}]}`
@@ -129,7 +122,6 @@ specialist`), persona, color and optional profile name. It is stored in `.runtim
 - `computeAutoLayout` lays nodes out by layer: x = layer × 220, y = index × 120.
 
 **v0.21 reality**:
-
 - Hermes now has a durable, server-side **Kanban** with dependencies (`task_links`), per-profile assignment,
   claims, retries / circuit breaker, review states (`review`, `request-changes`), goal loops, `swarm`
   (parallel workers → verifier → synthesizer), `decompose`, and a dispatcher **inside the gateway**. That is what
@@ -144,26 +136,26 @@ layering algorithm (adapted, as the seed for Flow auto-layout) and cycle validat
 
 ## Reuse candidates (with attribution in THIRD_PARTY_NOTICES.md if copied)
 
-| Studio file                                                                                             | Use in Score                       | Adaptation                                                                                 |
-| ------------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------ |
-| `src/server/chat-event-bus.ts` + `event-store.ts` + `routes/api/chat-events.ts`                         | Event hub + SSE endpoint pattern   | Rewrite for Fastify; single global stream with typed envelope; no `globalThis` hack needed |
-| `src/server/hermes-api.ts:streamChat` (SSE line parser)                                                 | Upstream SSE client in the adapter | Add `id:`/`Last-Event-ID` handling, multi-line `data:`, comments                           |
-| `src/server/gateway-capabilities.ts`                                                                    | Capability probe idea              | Use `/v1/capabilities` + `/p/{profile}`                                                    |
-| `screens/crews/components/workflow-builder.tsx` (`topoLayers`, `wouldCreateCycle`, `computeAutoLayout`) | Flow layout seed, cycle checks     | Pure functions in `packages/core`, unit-tested                                             |
-| `src/routes/api/crews/$crewId.workflow.ts:hasCycle`                                                     | Dependency validation              | Same                                                                                       |
+| Studio file | Use in Score | Adaptation |
+|---|---|---|
+| `src/server/chat-event-bus.ts` + `event-store.ts` + `routes/api/chat-events.ts` | Event hub + SSE endpoint pattern | Rewrite for Fastify; single global stream with typed envelope; no `globalThis` hack needed |
+| `src/server/hermes-api.ts:streamChat` (SSE line parser) | Upstream SSE client in the adapter | Add `id:`/`Last-Event-ID` handling, multi-line `data:`, comments |
+| `src/server/gateway-capabilities.ts` | Capability probe idea | Use `/v1/capabilities` + `/p/{profile}` |
+| `screens/crews/components/workflow-builder.tsx` (`topoLayers`, `wouldCreateCycle`, `computeAutoLayout`) | Flow layout seed, cycle checks | Pure functions in `packages/core`, unit-tested |
+| `src/routes/api/crews/$crewId.workflow.ts:hasCycle` | Dependency validation | Same |
 
 Do **not** reuse: the approvals store or approve routes, `hermes-agent.ts` (reads `.env`), the `send-stream.ts`
 event translation tables (wrong names for v0.21), or TanStack Start routing (Score uses Fastify + Vite SPA).
 
 ## Version map (what targets old Hermes)
 
-| Studio area                                          | Built for | Status on v0.21                                                        |
-| ---------------------------------------------------- | --------- | ---------------------------------------------------------------------- |
-| `/api/sessions` list `{items,total}` shape           | v0.18     | ✅ still valid                                                         |
-| Session chat stream event names                      | v0.8–v0.9 | ⚠️ approvals missed (`approval.request`), commentary/reasoning ignored |
-| `/api/sessions/{key}/approve`                        | fork only | ❌ never upstream                                                      |
-| `/api/skills`, `/api/memory`, `/api/config` on :8642 | fork/v0.9 | ❌ moved to `/v1/skills` and the dashboard app                         |
-| `/health`                                            | v0.8      | ⚠️ upstream is `/v1/health`                                            |
-| Jobs via `/api/jobs`, run SSE via `/v1/runs`         | v0.9+     | ✅ still valid, now profile-prefixable                                 |
-| Profiles = `~/.hermes/profiles/<name>` files         | v0.8+     | ✅ layout still valid; gateway now serves several profiles at once     |
-| Crews/workflows as client-orchestrated chats         | —         | Superseded by Kanban + dispatcher                                      |
+| Studio area | Built for | Status on v0.21 |
+|---|---|---|
+| `/api/sessions` list `{items,total}` shape | v0.18 | ✅ still valid |
+| Session chat stream event names | v0.8–v0.9 | ⚠️ approvals missed (`approval.request`), commentary/reasoning ignored |
+| `/api/sessions/{key}/approve` | fork only | ❌ never upstream |
+| `/api/skills`, `/api/memory`, `/api/config` on :8642 | fork/v0.9 | ❌ moved to `/v1/skills` and the dashboard app |
+| `/health` | v0.8 | ⚠️ upstream is `/v1/health` |
+| Jobs via `/api/jobs`, run SSE via `/v1/runs` | v0.9+ | ✅ still valid, now profile-prefixable |
+| Profiles = `~/.hermes/profiles/<name>` files | v0.8+ | ✅ layout still valid; gateway now serves several profiles at once |
+| Crews/workflows as client-orchestrated chats | — | Superseded by Kanban + dispatcher |

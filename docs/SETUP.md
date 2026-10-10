@@ -6,13 +6,13 @@ project-local.
 
 ## 1. Prerequisites
 
-| Tool          | Version                                                              | Why                                          |
-| ------------- | -------------------------------------------------------------------- | -------------------------------------------- |
-| git           | any recent                                                           | source control                               |
-| curl, tar, xz | any                                                                  | Node download                                |
-| Node.js       | **24.21.0** (LTS "Krypton"; ≥ 22.22.2 works)                         | server, build, tests                         |
-| pnpm          | **12.9.1**, via corepack (pinned in `package.json → packageManager`) | package manager                              |
-| Hermes Agent  | v0.21.x                                                              | only for live mode; the fake mode needs none |
+| Tool | Version | Why |
+|---|---|---|
+| git | any recent | source control |
+| curl, tar, xz | any | Node download |
+| Node.js | **24.21.0** (LTS "Krypton"; ≥ 22.22.2 works) | server, build, tests |
+| pnpm | **12.9.1**, via corepack (pinned in `package.json → packageManager`) | package manager |
+| Hermes Agent | v0.21.x | only for live mode; the fake mode needs none |
 
 ### 1a. Node 24 without sudo (user-local)
 
@@ -108,7 +108,6 @@ codex exec --disable apps -m gpt-6.1-sol -s read-only "run: ls" # should list fi
 ```
 
 ## 6b. Remote access (optional)
-
 Default is local only (`127.0.0.1`); a non-loopback `SCORE_HOST` without `SCORE_REMOTE=1` is refused. Build the web app first
 (`pnpm build`); remote mode serves `apps/web/dist` itself.
 
@@ -118,12 +117,10 @@ pairing cookie and API keys would cross the network in clear), so over plain HTT
 serves nothing else. `SCORE_REMOTE_INSECURE_HTTP` was removed and is ignored.
 
 Option A (recommended): Score's own certificate authority. Needs `openssl` on the Score machine.
-
 ```bash
 SCORE_HOST=192.168.1.20 SCORE_PUBLIC_ORIGINS=https://192.168.1.20:8741 scripts/score tls
 SCORE_REMOTE=1 SCORE_HOST=192.168.1.20 scripts/score start     # uses $SCORE_HOME/tls/server.{crt,key} automatically
 ```
-
 `scripts/score tls` writes a local CA (`ca.crt`, `ca.key`; 10 years) and a server certificate (825 days, valid for
 `SCORE_HOST`, the hosts in `SCORE_PUBLIC_ORIGINS`, `localhost` and `127.0.0.1`) into `$SCORE_HOME/tls/` (0700, keys 0600).
 Running it again keeps the CA and only re-issues the server certificate, so devices stay trusted; `--new-ca` replaces both.
@@ -139,13 +136,11 @@ get a real Let's Encrypt certificate for the machine's `ts.net` name, so nothing
 address keeps working with Score's own certificate. Score picks the certificate by the name the browser asks for (SNI).
 Needs Tailscale on the Score machine with MagicDNS and HTTPS certificates on (admin console › DNS) and, once,
 `sudo tailscale set --operator=$USER`.
-
 ```bash
 scripts/score tailscale     # fetches the ts.net certificate into $SCORE_HOME/tls/tailscale/
 SCORE_REMOTE=1 SCORE_REMOTE_ANY=1 SCORE_HOST=0.0.0.0 \
 SCORE_PUBLIC_ORIGINS=https://192.168.1.20:8741 scripts/score start
 ```
-
 `start` adds `https://<name>.ts.net:8741` to the public origins and sets `SCORE_TLS_NAMES_DIR` (a folder of
 `<name>.crt`/`<name>.key` pairs) when that folder has a certificate. The server renews Tailscale certificates daily
 (`tailscale cert` replaces them only when due) and picks up renewed files without a restart. `SCORE_HOST=0.0.0.0` (with
@@ -153,14 +148,12 @@ SCORE_PUBLIC_ORIGINS=https://192.168.1.20:8741 scripts/score start
 still apply to every request.
 
 Option B: your own certificate (reverse proxy, Tailscale, a CA you run), e.g. with Tailscale:
-
 ```bash
 tailscale cert myhost.tailnet.ts.net        # writes myhost.tailnet.ts.net.crt / .key (run by you, not by Score)
 SCORE_REMOTE=1 SCORE_HOST=100.x.y.z SCORE_PORT=8741 \
 SCORE_TLS_CERT=$PWD/myhost.tailnet.ts.net.crt SCORE_TLS_KEY=$PWD/myhost.tailnet.ts.net.key \
 SCORE_PUBLIC_ORIGINS=https://myhost.tailnet.ts.net:8741 pnpm --filter @score/server start
 ```
-
 Browsers then use the `https://` address; the same port answers plain HTTP with the guide.
 Wildcard binds (`0.0.0.0`, `::`) additionally need `SCORE_REMOTE_ANY=1`. `SCORE_PUBLIC_ORIGINS` is a comma-separated list
 of exact origins (scheme, host, port) browsers use. The bridge plugin keeps using loopback (`SCORE_BRIDGE_PORT`, default
@@ -219,20 +212,16 @@ this machine or over remote access (always HTTPS). Deleting an agent keeps a pri
 export in `$SCORE_HOME/profile-backups/` (it omits credentials and is not a full undo).
 
 ## 9. Run Score every day (built app, one port)
-
 `pnpm dev` is for development. For daily use build once and serve everything from one loopback port:
-
 ```bash
 pnpm build           # builds apps/web and typechecks the server
 pnpm start           # http://127.0.0.1:8740 (SCORE_PORT to change); prints a one-time pairing link
 ```
-
 `pnpm start` sets `SCORE_SERVE_WEB=1` (`NODE_ENV=production` does the same), so the server serves `apps/web/dist` and the API
 on the same port, with SPA fallback. It runs the TypeScript sources through `tsx` (the same runner as `pnpm dev`). Set
 `SCORE_MODE=live` for a real Hermes (default is `fake`).
 
 Launcher (background process, PID file `$SCORE_HOME/score.pid`, log `$SCORE_HOME/score.log`):
-
 ```bash
 scripts/score start     # start in the background and print the first pairing link
 scripts/score status    # running? pid and URL
@@ -241,7 +230,6 @@ scripts/score password  # set or reset the security password (guards pairing, re
 scripts/score logs [-f] # last 100 log lines, or follow
 scripts/score stop
 ```
-
 Put it on your PATH if you like: `ln -s "$PWD/scripts/score" ~/.local/bin/score`.
 
 systemd user unit (not installed by Score): copy `docs/score.service.example` to `~/.config/systemd/user/score.service`,
@@ -276,7 +264,6 @@ hand, a filesystem rollback) on the same host and boot **cannot be detected**: H
 was made are then unknown to Score and may still be running. This is the wording Settings › Backup repeats.
 
 ## Changelog of this file
-
 - 2026-10-10: orchestrations: execution journal location and `scripts/score restore` (PLAN 7.5a).
 - 2026-10-09: do not VACUUM by hand (search index rebuilt at start).- 2026-10-09: the knowledge vault (`SCORE_VAULT`, git).
 - 2026-10-08: section 9, running the built app (pnpm start, launcher, systemd unit).
@@ -291,7 +278,6 @@ e2e specs read it from a log). Without it a terminal gets the link and anything 
 line without it; the launcher shows the link once from a 0600 `pair-link` file and deletes it.
 
 ## Coding agents (PLAN 7.2, optional)
-
 Team › Add agent › Coding agent runs the CLIs you already have, signed in with their own logins (Score never reads or
 passes credentials): `claude` (Claude Code, tested with exactly 2.1.295) and `codex` (Codex CLI, tested with exactly 0.160.1). Both must be
 on the `PATH` Score starts with. A newer or older version shows "untested version" and runs only after you confirm it for that

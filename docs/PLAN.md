@@ -3,7 +3,6 @@
 Every task is ≤ half a day. **Operating model (owner decision, 2026-10-06):** Codex CLI (`gpt-6.1-sol`, high)
 implements every task; Claude writes the brief, reviews every diff, integrates and commits (see CLAUDE.md
 "Task loop"). The owner label on each task now means:
-
 - **Lead**: integration-heavy or design-sensitive. Claude writes a detailed brief and reviews line by line;
   Claude may take it over if Codex fails twice.
 - **Codex**: isolated and well-specified. Standard brief and review.
@@ -19,66 +18,56 @@ fake adapter), `pnpm check` (= lint + typecheck + test + license), `uv run pytes
 ---
 
 ## Phase 0: Setup and plan ✅ (this phase)
-
 Toolchain, reference study, spike, architecture, contract, plan, AGENTS.md / CLAUDE.md, empty scaffold.
 Open items: Codex plugin enablement, the architecture adversarial review, and live tests L1–L5 (all need you).
 
 ## Phase 1: Foundation
-
 **Plan approved by the owner on 2026-10-06.**
 Revised after the architecture review (ARCHITECTURE v0.2). Section refs like D1 point to ARCHITECTURE.md.
 
 **1.1 Contract package** · Lead
-
 - Goal: zod schemas + inferred types for API-CONTRACT §1 (shared types), §2 (stream envelope, control frames, event union) and §11 (bridge protocol).
 - Files: `packages/contract/src/{types,stream,bridge,index}.ts`, `packages/contract/test/*.test.ts`
 - Done when: every type in §1, §2 and §11 has a schema; round-trip tests pass for one fixture per type; control frames are a separate union from durable events.
 - Test: `pnpm --filter @score/contract test`
 
 **1.2 Server skeleton + session pairing** · Lead
-
 - Goal: Fastify app factory, config (`SCORE_HOME`, port, mode), error shape, CSRF guard, `GET /api/system` (fake), pairing (`/api/session*`, one-time token printed to the server terminal, hashed at rest), and an **H** route guard (D7.1).
 - Files: `apps/server/src/{app,config,errors}.ts`, `apps/server/src/http/{system,session}.ts`, `apps/server/src/auth/*`, tests
 - Done when: `inject()` tests cover the error shape, a 403 without `X-Score-Client`, a 401 `not_paired` on an H route, a successful pairing, token reuse rejected, and the cookie flags.
 - Test: `pnpm --filter @score/server test`
 
 **1.3 score.db + migrations** · Lead
-
 - Goal: `node:sqlite` wrapper (WAL, busy timeout), forward-only migrations, infrastructure tables (`events` with `epoch`, `ingest_keys`, `ingest_checkpoints`, `gaps`, `command_intents`).
 - Files: `apps/server/src/db/*`, `apps/server/migrations/0001_infra.sql`
 - Done when: fresh DB migrates; re-run is a no-op; the epoch is created once; tests use temp dirs.
 - Test: `pnpm --filter @score/server test -- db`
 
-**1.4a Ingest path** · Lead · _adversarial review before merge_
-
+**1.4a Ingest path** · Lead · *adversarial review before merge*
 - Goal: single-writer ingest queue; each observation applies dedupe + projection updates + event append + checkpoint in **one transaction**; terminal-state guards (D1, D2.3).
 - Files: `apps/server/src/hub/{ingest,projections}.ts`, tests
 - Done when: tests prove duplicates are dropped by ingest key; out-of-order delayed observations can't regress terminal states; a crash mid-transaction leaves neither the event nor the projection; snapshot reads return projection + `asOfSeq` from one read transaction.
 - Test: `pnpm --filter @score/server test -- hub/ingest`
 
 **1.4b `/api/stream` with subscription fence** · Lead
-
 - Goal: SSE endpoint: register-buffer → head H → replay `(since,H]` → release; control frames without IDs; epoch/retention/future-cursor resets; byte budget + write timeout; retention prune (D1).
 - Files: `apps/server/src/hub/{sse,fanout}.ts`, `apps/server/src/http/stream.ts`, tests
 - Done when: a concurrency test with producers writing during replay shows no gap and no duplicate; slow-client disconnect doesn't block others; each reset reason is covered.
 - Test: `pnpm --filter @score/server test -- hub/sse`
 
 **1.4c Ingest-key retirement** · Codex (added after the 1.4a review)
-
 - Goal: keep `ingest_keys` from growing forever without re-enabling duplicates. Per source, retire keys strictly below a durable acknowledged floor: the checkpoint position for monotonic sources; for bridge producers, the incarnation's acked counter after the producer is gone for longer than the spool lifetime. Keep a per-source floor row so anything at or below the floor is still rejected as a duplicate.
 - Files: `apps/server/src/hub/retire.ts`, migration if a floor table is needed, tests
 - Done when: after retirement, redelivery at or below the floor is still rejected; keys above the floor are untouched; retirement runs in bounded batches.
 - Test: `pnpm --filter @score/server test -- retire`
 
 **1.5 HermesPort + fake adapter** · Lead
-
 - Goal: adapter interface (domain calls + observations into the ingest path) and a scripted fake with the four neutral agents, including approvals of all three origins and a gap interval.
 - Files: `apps/server/src/hermes/{port,index}.ts`, `apps/server/src/hermes/fake/*`, boundary lint rule + boundary test
 - Done when: `SCORE_MODE=fake pnpm dev` streams the scenario; the boundary test fails if non-adapter code mentions Hermes paths, URLs or event names.
 - Test: `pnpm --filter @score/server test -- fake boundary`
 
 **1.6 Web shell** · Lead
-
 - Goal: tokens (CSS vars), @fontsource fonts, top nav (6 destinations + "Now" dot), route stubs, ⌘K stub, avatar.
 - Files: `apps/web/src/{main,App}.tsx`, `apps/web/src/styles/tokens.css`, `apps/web/src/shell/*`
 - Done when: each route renders its title; no network requests to font CDNs (asserted in e2e); matches the nav in `docs/design/*.png`.
@@ -86,42 +75,36 @@ Revised after the architecture review (ARCHITECTURE v0.2). Section refs like D1 
 - Test: `pnpm --filter @score/web test && pnpm e2e -- shell`
 
 **1.7 `useStream` with per-query resync** · Lead
-
 - Goal: one EventSource per tab; per-query `asOfSeq`; buffer during refetch; apply `seq > asOfSeq`; drop superseded fetches; handle `stream.hello` epoch and `stream.reset` (D1, contract §2).
 - Files: `apps/web/src/data/{stream,resync,queryClient}.ts`, tests with a mock EventSource and controllable fetches
 - Done when: tests cover a delta arriving during refetch (not lost, not double-applied), a stale fetch resolving last (ignored), an epoch change → full resync, and unknown event types ignored and logged.
 - Test: `pnpm --filter @score/web test -- stream`
 
 **1.8 AgentGlyph component** · Codex
-
 - Goal: render an agent as color + shape (8 shapes), sizes S/M/L, accessible name, high-contrast outline mode.
 - Files: `apps/web/src/components/AgentGlyph.tsx` + test
 - Done when: a snapshot per shape; `aria-label` includes the agent name; the shape is distinguishable in a grayscale test.
 - Test: `pnpm --filter @score/web test -- AgentGlyph`
 
 **1.9a SQLite readers + checkpoints** · Lead
-
 - Goal: read-only readers for `kanban.db` and per-profile `state.db`; tail `task_events.id` and `messages.id` per DB incarnation; never timestamps (D2.4).
 - Files: `apps/server/src/hermes/live/{sqlite,kanban,sessions}.ts`, fixture DBs built from `docs/spike/*-schema.sql`
 - Done when: tests cover carried rows with older timestamps, same-millisecond rows, DB replacement (incarnation change → re-baseline), and `mode=ro` opening.
 - Test: `pnpm --filter @score/server test -- live/sqlite`
 
 **1.9b Session reconciliation** · Codex
-
 - Goal: reconcile recently active sessions by `message_uid`/`tool_call_uid` (edits, `active`/`compacted` flips, rewind, compaction) into ingest observations.
 - Files: `apps/server/src/hermes/live/reconcile.ts` + fixtures
 - Done when: fixtures for rewind, compaction and edit produce the expected observations with no duplicates on re-run.
 - Test: `pnpm --filter @score/server test -- reconcile`
 
 **1.10 Upstream SSE client** · Codex
-
 - Goal: robust SSE parser/client (multi-line `data:`, comments, `id:`, retry, `Last-Event-ID` resume, abort, `replay.truncated` surfaced).
 - Files: `apps/server/src/hermes/live/sse-client.ts` + tests
 - Done when: WHATWG event-stream parsing cases pass; resume test against a local server; truncation produces a typed signal.
 - Test: `pnpm --filter @score/server test -- sse-client`
 
 **1.11a Gateway runs** · Lead
-
 - Goal: start/stop/steer via `/p/{profile}/v1/runs` with `Idempotency-Key` = `score_turn_id` through `command_intents`; status polling; truncation/restart → gap interval + reconciliation; credential generations (D2.5, D2.4).
 - Files: `apps/server/src/hermes/live/{gateway,translate,intents}.ts`, `apps/server/src/hermes/live/credentials.ts`
 - Done when: recorded-fixture tests (L2/L3/L4) pass; a crash after admission reconciles via idempotency without a double run; an unknown event is counted, not fatal.
@@ -133,7 +116,6 @@ Revised after the architecture review (ARCHITECTURE v0.2). Section refs like D1 
   change, and builds the identity with a per-message version counter (`message:<…>:<logicalId>@v<n>:<revision>`).
 
 **1.11b Compatibility fingerprint gate** · Codex
-
 - Goal: compute the fingerprint (D2.2), compare against `tested-fingerprints.json`, expose `SystemStatus.compatibility`, disable features with `feature_disabled`.
 - Files: `apps/server/src/hermes/live/fingerprint.ts`, `apps/server/src/hermes/tested-fingerprints.json`
 - Done when: tests cover tested, unknown and partial (bridge private API missing) fingerprints.
@@ -141,22 +123,19 @@ Revised after the architecture review (ARCHITECTURE v0.2). Section refs like D1 
 
 **1.12 Live tests L1–L5** · ✅ done 2026-10-06 (SPIKE.md). Remaining: convert `docs/spike/*.json` into server fixtures (part of 1.9a/1.11a).
 
-**1.13a Bridge plugin: handshake, events, redaction, spool** · Lead · _adversarial review before merge_
-
+**1.13a Bridge plugin: handshake, events, redaction, spool** · Lead · *adversarial review before merge*
 - Goal: Python plugin with `hermes_private.py` (all private calls), `hello` handshake (isolation mode, private API availability), hooks → batched events with `(incarnation, counter)`, mandatory `redact_sensitive_text(force=True)` before truncation, bounded on-disk spool, fail-open (D2.1, D2.4, D6).
 - Files: `hermes-plugin/score_bridge/{plugin.yaml,__init__.py,client.py,spool.py,redact.py,hermes_private.py}`, `hermes-plugin/tests/*`, `hermes-plugin/pyproject.toml`
 - Done when: pytest covers batching, Score down (spool, then drain, drop counter), secret fixtures redacted in every hook payload, host-isolation mode reported; manual install steps are in SETUP.md.
 - Test: `cd hermes-plugin && uv run pytest`
 
-**1.13b Bridge: gateway approvals with exact targets** · Lead · _adversarial review before merge_
-
+**1.13b Bridge: gateway approvals with exact targets** · Lead · *adversarial review before merge*
 - Goal: report `requestId` only when provably exact (D4.2); poll leased decisions and resolve by exact id only; never `register_gateway_settle` (D4.4); live check. Gate ids and the ledger come from 1.14b.
 - Files: `hermes-plugin/score_bridge/approvals.py`, `apps/server/src/hermes/bridge.ts`, tests
 - Done when: tests show no FIFO path exists; a missing id → non-actionable; delivery only to the reporting producer; a live check on scoretesta (manual mode) resolves the exact request.
 - Test: `cd hermes-plugin && uv run pytest && pnpm --filter @score/server test -- bridge`
 
 **1.13c Bridge: Kanban denials, view-only (rescoped 2026-10-07, owner decision)** · Lead
-
 - Goal: verified unattended-denial detection in the plugin; view-only "Needs you" cards linked to the task; a `hermes`
   CLI runner; `POST /api/tasks/:taskId/actions` for `comment` (Deny) and `unblock` (with a note) (D4.3). No grants.
 - Done when: positive/negative denial detection tests; a card per (task, run, digest), closed when the task leaves
@@ -168,7 +147,6 @@ Revised after the architecture review (ARCHITECTURE v0.2). Section refs like D1 
 1.14b, then 1.13b, then 1.13c.
 
 **1.14a Bridge server: handshake, producer tokens, event ingest** · Lead
-
 - Goal: `~/.score/bridge.token` bootstrap; `/bridge/v1/hello` (producer registry, hashed short-lived producer tokens,
   enabled features); `/bridge/v1/events` → ingest observations with D2.3 identities, gap handling, `ackedThrough`;
   bridge tool calls into a session-keyed projection plus `log.line`; approval-hook signals kept for 1.14b;
@@ -179,14 +157,13 @@ Revised after the architecture review (ARCHITECTURE v0.2). Section refs like D1 
 - Test: `pnpm --filter @score/server test -- bridge`
 
 **1.14b Approvals ledger + delivery outbox** · Lead (was 1.14)
-
 - Goal (design: docs/briefs/1.14b.md after two design reviews): gate-id correlation in the plugin; operations with phases; `approval_deliveries` outbox (`intent → delivering → applied | not_pending | failed | unknown`); attribution only on confirmed delivery; `/api/approvals*` (H); origin dedupe (D4).
 - Files: `apps/server/src/domain/approvals.ts`, `apps/server/src/http/approvals.ts`, migration
 - Done when: tests cover a double decision (409), an answer from another surface first (`not_pending` → "answered elsewhere", never deny), a Score crash between intent and apply, guardian escalation linking, and a non-actionable card rejecting decisions.
 - Test: `pnpm --filter @score/server test -- approvals`
 
 **Phase 1 gate** · Codex code review at `max` against `main` + Gemini whole-repo review (you)
-**Done 2026-10-08:** Codex gate review (fail → 13 + 3 findings fixed, merged); Gemini review **skipped by the owner**.
+  **Done 2026-10-08:** Codex gate review (fail → 13 + 3 findings fixed, merged); Gemini review **skipped by the owner**.
 
 ## Phase 2: Chat, Tasks, Team, Settings
 
@@ -211,7 +188,7 @@ resolves integration conflicts. Migrations from Phase 1 end at `0007`; numbers b
 **2.15 SOUL/AGENTS editor** · Lead: get, preview diff, put with etag. Done when a conflicting edit returns 409 and the UI shows the diff.
 **2.16 Model, skills, memory, tools** · Lead (+ Codex for the skills-hub search list component). Done when each tab reads and edits through the adapter.
 **2.17 Routines** · Lead: cron jobs via `/api/jobs` or `hermes cron`. Done when create/pause/run-now work against fake + stubbed live.
-**2.18 Permissions + team rules** · Lead · _adversarial review_: map Go ahead / Ask me / Never to Hermes approval config; per-agent stricter-only. Done when tests reject loosening.
+**2.18 Permissions + team rules** · Lead · *adversarial review*: map Go ahead / Ask me / Never to Hermes approval config; per-agent stricter-only. Done when tests reject loosening.
 **2.19 Settings: providers + connections** · Lead. Done when status renders without ever reading secrets (test asserts no access to `.env`/`auth.json`).
 **2.20 Settings: advanced config** · Codex: config search index + diff preview UI. Done when search finds keys by name and comment; apply requires a matching diff hash.
 **Phase 2 gate** · Gemini + `/codex:review --base main` — **done 2026-10-08**: lead review (Codex out of credits; owner: "do it yourself"), pass after 6 fixes
@@ -222,7 +199,7 @@ resolves integration conflicts. Migrations from Phase 1 end at `0007`; numbers b
 **3.1 Lanes + hand-offs builder** · Lead: server computes `LaneBlock[]`/`Handoff[]` from tasks, runs, Score runs and events. Done when fixture timelines produce the blocks shown in `now-score.png`.
 **3.2 Score timeline UI** · Lead: time axis, lanes, blocks, connectors, now line, hatched future, legend. Done when visual e2e snapshot matches with fake data.
 **3.3 Now page cards** · Lead: headline, thread, "X is asking", Made today, composer, Pause everyone. Done when e2e covers approve-from-Now.
-**3.4 Briefs model** · Lead · _adversarial review_: what a brief is (room message → plan → tasks); `/api/briefs*`. Done when a fake scenario yields one brief with nodes and edges.
+**3.4 Briefs model** · Lead · *adversarial review*: what a brief is (room message → plan → tasks); `/api/briefs*`. Done when a fake scenario yields one brief with nodes and edges.
 **3.5 Flow auto-layout** · Codex: pure layered layout (seed: Studio's Kahn layering, MIT, attributed) with edge routing for back-edges ("sent back"). Done when property tests show no overlaps for ≤50 nodes.
 **3.6 Flow canvas** · Lead: SVG nodes and edges, pan/zoom, fit-to-screen, scrollable area, zoom % control. Done when e2e zooms and fits; keyboard focus moves across nodes.
 **3.7 Flow inspector + live log + stats** · Lead. Done when it matches `now-flow.png` with fake data.
@@ -230,11 +207,11 @@ resolves integration conflicts. Migrations from Phase 1 end at `0007`; numbers b
 **3.9 Stacked bar chart** · Codex: `TasksByDayChart` (SVG, per-agent color + pattern for accessibility). Done when component tests pass.
 **3.10 Time-split bars + tables + approvals card** · Lead. Done when it matches `reports.png`.
 **3.11 CSV export** · Codex. Done when the CSV columns match the on-screen table.
-**3.12 Profile management** · Codex · _adversarial review_ (owner request, 2026-10-08): create (blank or cloned) / rename /
+**3.12 Profile management** · Codex · *adversarial review* (owner request, 2026-10-08): create (blank or cloned) / rename /
 describe / delete agents from Team via `hermes profile …`; a new agent is ready for Score (per-profile API key, bridge
 plugin, gateway); delete needs the typed name and keeps an export first. Done when create → drive → delete works on test
 profiles and every Hermes write is an exact, tested CLI call.
-**3.13 Remote access mode** · Codex · _adversarial review_ (owner request, 2026-10-08: "allow private network and plain LAN
+**3.13 Remote access mode** · Codex · *adversarial review* (owner request, 2026-10-08: "allow private network and plain LAN
 address"): opt-in listen address (Tailscale/WireGuard interface or LAN), pairing required for every request and the stream,
 Host/Origin allowlist (DNS rebinding), optional TLS with the owner's certificate, a clear warning when serving plain HTTP
 beyond loopback. Done when an unpaired LAN client gets nothing but the pairing page and loopback behaviour is unchanged.
@@ -255,7 +232,6 @@ empty and screenshot e2e covers each destination.
 **Phase 4 gate** · Gemini + `/codex:review --base main`
 
 ## Phase 5: Hardening
-
 Packaging (`pnpm build && pnpm start`), a11y audit, perf (1k events/min), Hermes-upgrade drill (re-run fixtures against the newest Hermes), docs.
 
 **5.1 Packaging** · `pnpm build && pnpm start` serves the built app and API from one loopback port, a `score` launcher
@@ -363,7 +339,6 @@ previous version (switcher to view), and rewinds each agent's Hermes session to 
 ---
 
 ## First five tasks
-
 1. **1.1** Contract package
 2. **1.2** Server skeleton + session pairing
 3. **1.3** score.db + migrations
@@ -373,7 +348,6 @@ previous version (switcher to view), and rewinds each agent's Hermes session to 
 None of them need the live Hermes install.
 
 ## Phase 6: Workspace and Knowledge (owner request 2026-10-09; design docs/briefs/6.0-workspace-knowledge.md)
-
 **6.1 Workspace** · Team › agent › Workspace: browse, preview, edit the agent's `terminal.cwd`; set the folder. Path safety
 and blocked list per the design. Done when the design's tests pass on the fake adapter and a live check on a test profile.
 **6.2 Knowledge server** · `~/score-vault` (git), index + FTS5 (migration), notes/search/backlinks/history API, stream event.
@@ -381,7 +355,6 @@ and blocked list per the design. Done when the design's tests pass on the fake a
 **6.4 Agent knowledge tools** · score_bridge tools (search/read/list/write/append) over the bridge, attributed, limited.
 
 ## Phase 7: larger features (owner 2026-10-09; each needs a design + security review before building)
-
 **7.1 Workflow builder** · Reusable multi-agent pipelines on a canvas extending Flow: nodes per agent/runtime, branches,
 human approval gates, budgets and deadlines, pause/resume/stop, replay, JSON export/import.
 **7.2 Coding agents as team members** · Claude Code, Codex, OpenCode as room participants next to Hermes agents.
@@ -391,3 +364,4 @@ human approval gates, budgets and deadlines, pause/resume/stop, replay, JSON exp
 memories, skills over time); Score as an MCP tool server for its agents.
 **6.5 Knowledge editor** · (owner 2026-10-10) Obsidian-style live preview in CodeMirror (Markdown rendered inline except the edited line; files stay byte-exact), notes open rendered by default, split view on wide screens, styled tables/code/quotes/task lists/callouts.
 Not planned (owner): full-screen voice stage; multiple user accounts with roles.
+
