@@ -53,7 +53,7 @@ export function registerWorkflowRoutes(
 ): void {
   const { orchestrator, db } = deps
   const now = () => new Date((deps.clock ?? Date.now)()).toISOString()
-  const receipts = requestIdempotency(db, deps.clock ?? Date.now)
+  const receipts = requestIdempotency(db, deps.clock ?? Date.now, 300 * 1024)
   const mutation = {
     preHandler: [humanGuard(app.pairing), receipts.preHandler],
     onSend: receipts.onSend,

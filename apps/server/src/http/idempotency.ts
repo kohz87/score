@@ -99,6 +99,7 @@ export function requestIdempotency(
         // A crash may leave an uncertain side effect: never rerun a pending receipt.
         if (receipt.status === null || receipt.response === null)
           throw new HttpError(409, 'idempotency_pending', 'Original request has not completed')
+        if (receipt.status === 204) return reply.code(204).send()
         const response = decodeReceipt(receipt.response, maxResponseBytes)
         return reply.code(receipt.status).send(response)
       }
@@ -122,7 +123,8 @@ export function requestIdempotency(
       const owner = owners.get(request)
       if (!owner || !db) return payload
       try {
-        const response = z.string().parse(payload)
+        // A bodyless answer (204) is stored as JSON null and replayed as bodyless.
+        const response = reply.statusCode === 204 ? 'null' : z.string().parse(payload)
         if (Buffer.byteLength(response) > maxResponseBytes)
           throw new Error('Idempotency response exceeds its size limit')
         JSON.parse(response)

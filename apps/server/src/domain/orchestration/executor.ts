@@ -2456,7 +2456,10 @@ export class Orchestrator {
     for (const attempt of tx
       .prepare('SELECT id, message_id FROM orc_attempts WHERE orchestration_id = ?')
       .all(o.id) as { id: string; message_id: string }[]) {
-      tx.prepare('DELETE FROM messages WHERE room_id = ? AND id = ?').run(o.room_id, attempt.message_id)
+      tx.prepare('DELETE FROM messages WHERE room_id = ? AND id = ?').run(
+        o.room_id,
+        attempt.message_id,
+      )
       tx.prepare("DELETE FROM messages WHERE room_id = ? AND id LIKE ? ESCAPE '\\'").run(
         o.room_id,
         `orc-note:${attempt.id.replace(/[\\%_]/g, '\\$&')}:%`,

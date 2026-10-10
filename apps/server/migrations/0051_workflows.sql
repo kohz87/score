@@ -235,3 +235,25 @@ CREATE TABLE wf_results (
   full_bytes INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 ) STRICT;
+
+-- Saving a definition answers with the whole definition (up to 256 KiB): its idempotency receipt may be that large too,
+-- like task details (0010).
+CREATE TABLE request_receipts_next (
+  key TEXT NOT NULL,
+  route TEXT NOT NULL,
+  body_sha256 TEXT NOT NULL,
+  status INTEGER,
+  response TEXT CHECK (
+    response IS NULL OR (
+      json_valid(response) AND length(CAST(response AS BLOB)) <=
+        CASE WHEN route = '/api/tasks' OR route LIKE '/api/tasks/%' OR route = '/api/workflows' OR route LIKE '/api/workflows/%'
+          THEN 524288 ELSE 65536 END
+    )
+  ),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (key, route)
+) STRICT;
+INSERT INTO request_receipts_next SELECT * FROM request_receipts;
+DROP TABLE request_receipts;
+ALTER TABLE request_receipts_next RENAME TO request_receipts;
+CREATE INDEX request_receipts_created ON request_receipts(created_at);
