@@ -1785,7 +1785,16 @@ and are not charged per run.
 **Watch.** Per-attempt filtering is not part of 7.1: a node's Watch link opens the agent's Watch at the attempt's time window,
 labelled "agent-wide: may include other work".
 
+**Implementation notes (7.1a).** A re-created step (retry, remap) is gated again under `every-step`. The remap re-creation
+shares the logical attempt number with the step it replaces; its command identity differs by planner generation, which the
+remap decision increments. The validation codes `join_deadlock` and `agent_missing` are reserved: with `skip` tokens an `all`
+join always resolves, and an empty `agentId` cannot pass the schema. The 20-refusal limit, the five-in-a-row wait and the
+ten-minute timer are the same for orchestration step attempts (the executor owns them); only their end differs (see above).
+
 ### Fake mode
 
-`SCORE_MODE=fake` runs workflows against the fake adapter with the same executor: scripted agents reply with fixed text or
-`score-verdict` blocks, can fail, refuse dispatch or report spend evidence, so e2e specs never use a live Hermes or tokens.
+`SCORE_MODE=fake` runs workflows against the fake adapter with the same executor. Markers in a step's text script the agent:
+`[fake:hold]` (stays running until stopped or ended), `[fake:fail]` (the run ends `failed`), `[fake:verdict:passed]` /
+`[fake:verdict:changes_requested]` (reply with a `score-verdict` block) and `[fake:refuse:N]` (the first N dispatches are
+refused as proven unsent). The fake adapter reports complete spend evidence, so its runs settle. E2E specs never use a live
+Hermes or tokens.

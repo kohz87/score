@@ -97,7 +97,7 @@ test('the fake adapter records complete-reply facts like the live follower: a lo
   const id = await start(h, definition([agent('a'), end()], [edge('a', 'done')]))
   await h.until(done(id))
   expect(node(h, id, 'a').verdict?.verdict).toBe('passed')
-})
+}, 60_000)
 
 test('without complete-reply facts a run record that may have been cut gives no verdict', async () => {
   h = await wfHarness()

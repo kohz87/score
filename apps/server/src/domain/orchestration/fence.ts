@@ -456,7 +456,7 @@ export class GlobalFenceStore {
       if (own.ok) applyJournalEvidence(sqlite, own.entries, now)
       sqlite
         .prepare(
-          `UPDATE orc_global SET fenced = 0, fence_seq = ?, lifted_at = ?, revision = revision + 1 WHERE id = 1`,
+          `UPDATE orc_global SET fenced = 0, fence_seq = ?, lifted_at = ?, revision = revision + 1, admission_revision = admission_revision + 1 WHERE id = 1`,
         )
         .run(fenceSeq, now)
       sqlite

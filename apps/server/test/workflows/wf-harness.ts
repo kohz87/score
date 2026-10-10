@@ -4,6 +4,7 @@ import {
   type WorkflowEdge,
   type WorkflowNode,
   type WorkflowRunCreate,
+  WorkflowRunSnapshotSchema,
   type WorkflowRunDetail,
 } from '@score/contract'
 import { createWorkflow } from '../../src/domain/workflows/definitions.ts'
@@ -92,7 +93,9 @@ export async function start(
   return created.run.id
 }
 
-export const run = (h: Harness, id: string): WorkflowRunDetail => h.orch.workflowSnapshot(id).run
+// Every view the tests read is parsed with the contract schema: the engine can't drift from §15 unnoticed.
+export const run = (h: Harness, id: string): WorkflowRunDetail =>
+  WorkflowRunSnapshotSchema.parse(h.orch.workflowSnapshot(id)).run
 export const node = (h: Harness, id: string, nodeId: string) =>
   run(h, id).nodeStates.find((n) => n.nodeId === nodeId)!
 

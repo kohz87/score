@@ -89,16 +89,15 @@ export function remapPlan(
           .filter((a) => a.step_id === step.id)
           .reduce<AttemptRow | undefined>((b, a) => (!b || a.n > b.n ? a : b), undefined)
       : undefined
-    // Provably unsent: no attempt, or a `created` one the journal never recorded as sent.
-    if (
-      attempt &&
-      (attempt.state !== 'created' || !dispatches || dispatches.get(attempt.id)?.state === 'sent')
-    )
-      if (!(
-        step?.status === 'blocked' &&
-        (attempt.state === 'refused' || attempt.state === 'created')
-      ))
-        continue
+    // Provably unsent: no attempt yet, one refused before it was sent, or a `created` one that neither the database nor
+    // the journal ever recorded as sent. An unreadable journal proves nothing, so that work counts as possibly sent.
+    const unsent =
+      !attempt ||
+      attempt.state === 'refused' ||
+      (attempt.state === 'created' &&
+        dispatches !== undefined &&
+        dispatches.get(attempt.id)?.state !== 'sent')
+    if (!unsent) continue
     const rendered = renderAgentPayload({
       runId: o.id,
       nodeId: def.id,

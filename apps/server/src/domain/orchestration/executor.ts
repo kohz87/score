@@ -270,6 +270,7 @@ export class Orchestrator {
   private readonly stopTried = new Map<string, number>()
   private readonly fingerprints = new Map<string, string>()
   private readonly ownershipSeen = new Map<string, string>()
+  private readonly served = new Map<string, boolean>()
 
   constructor(private readonly options: OrchestratorOptions) {
     this.db = options.db
@@ -340,7 +341,33 @@ export class Orchestrator {
     return this.pumping
   }
 
+  /**
+   * v8.2 item 1: an agent that becomes served again (a version check or gateway reachability recovering) wakes the
+   * attempts that waited out refusals. Only asked while some attempt is in that wait.
+   */
+  private async observeReadiness(): Promise<void> {
+    const waiting = this.db.read(
+      (sqlite) =>
+        sqlite
+          .prepare(
+            "SELECT 1 FROM orc_attempts WHERE state = 'created' AND refused_streak > 0 AND needs_person = 0 LIMIT 1",
+          )
+          .get() !== undefined,
+    )
+    if (!waiting) return
+    try {
+      for (const agent of await this.options.port.listAgents()) {
+        const before = this.served.get(agent.id)
+        this.served.set(agent.id, agent.served)
+        if (before === false && agent.served) await this.agentReady(agent.id)
+      }
+    } catch (error) {
+      this.err(error)
+    }
+  }
+
   private async cycle(): Promise<void> {
+    await this.observeReadiness()
     for (let round = 0; round < 100 && !this.closed; round++) {
       let progressed = await this.reconcile()
       const live = this.db.read((sqlite) =>
@@ -2534,6 +2561,8 @@ export class Orchestrator {
         )
         pruned++
       }
+      // Quota released by a pruned run can make waiting work admissible.
+      if (pruned > 0) bumpAdmission(tx)
     })
     return { journal: compacted, pruned }
   }

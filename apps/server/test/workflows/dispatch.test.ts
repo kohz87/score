@@ -316,3 +316,19 @@ test('a journal that says the latest generation was sent keeps the attempt from 
   expect(attemptRow(h)[0]!.state).toBe('unknown')
   expect(attemptRow(h)[0]!.state).not.toBe('running')
 })
+
+test('an agent that becomes served again ends the refusal wait without any person or timer', async () => {
+  h = await wfHarness()
+  const out = outage(h)
+  const served = { value: false }
+  const list = h.port.listAgents.bind(h.port)
+  h.port.listAgents = async () => (await list()).map((a) => ({ ...a, served: served.value }))
+  const id = await start(h, definition([agent('a'), end()], [edge('a', 'done')]))
+  await h.until(() => attemptRow(h!)[0]?.refused_streak === 5, 600_000)
+  await h.settle(30_000)
+  expect(attemptRow(h)[0]!.next_try_at).not.toBeNull()
+  out.refusing = false
+  served.value = true
+  await h.settle(15_000)
+  await h.until(done(id))
+})

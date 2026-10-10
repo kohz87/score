@@ -71,7 +71,7 @@ test('every change that can make waiting work admissible increments the admissio
   h.fence.set('test', [{ kind: 'journal', ref: 'x', journalN: null, detail: 'x' }])
   const beforeLift = revision()
   h.fence.lift(h.fence.view().revision, 'ok')
-  expect(revision()).toBe(beforeLift)
+  expect(revision()).toBeGreaterThan(beforeLift)
   void bumpAdmission
 })
 

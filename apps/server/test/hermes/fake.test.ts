@@ -94,6 +94,8 @@ test('the whole fake scenario passes real ingest validation and covers every scr
         // Orchestrations (7.5a) are started by a person, never by the scripted scenario.
         type !== 'orchestration.upserted' &&
         type !== 'orchestration.fence.updated' &&
+        // Workflow runs (7.1a) are started by a person, like orchestrations.
+        type !== 'workflow.run.upserted' &&
         type !== 'room.version.created' &&
         type !== 'room-project.upserted' &&
         type !== 'room-project.deleted',

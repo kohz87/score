@@ -145,6 +145,43 @@ test('the room and brief of a workflow run are owned like an orchestration, and 
   })
 })
 
+test('Pause and Resume on the brief of a workflow run go to the workflow run', async () => {
+  const headers = await boot()
+  const id = await start(
+    h!,
+    definition([agent('a', { instruction: '[fake:hold] A' }), end()], [edge('a', 'done')]),
+  )
+  await h!.until(() => runIdOf(h!, id, 'a') !== undefined)
+  await h!.settle(1500)
+  const briefId = h!.rows<{ brief_id: string }>(
+    'SELECT brief_id FROM orchestrations WHERE id = ?',
+    id,
+  )[0]!.brief_id
+  expect(
+    (
+      await app!.inject({
+        method: 'POST',
+        url: `/api/briefs/${briefId}/pause`,
+        headers,
+        payload: {},
+      })
+    ).statusCode,
+  ).toBe(200)
+  expect(run(h!, id).status).toBe('paused')
+  await h!.settle(1500)
+  expect(
+    (
+      await app!.inject({
+        method: 'POST',
+        url: `/api/briefs/${briefId}/resume`,
+        headers,
+        payload: {},
+      })
+    ).statusCode,
+  ).toBe(200)
+  expect(run(h!, id).status).toBe('running')
+})
+
 test('the brief of a workflow run takes its status from the run', async () => {
   await boot()
   const statuses: string[] = []
