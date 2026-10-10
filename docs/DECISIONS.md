@@ -24,3 +24,6 @@ rejects is reverted or changed then.
 | 13 | Orchestrations: after 20 Hermes refusals a step fails (`hermes_refused`) and the lead decides; workflows ask you ("Try again / Stop") | no new decision type for orchestrations | — |
 | 14 | Database: the orchestrations table is rebuilt so workflows have no lead (rejected the builder's "placeholder lead" idea) | a fake lead could trigger lead-only logic (pauses, remaps) | — |
 | 15 | Known flaky e2e tests (chat.spec after rewind specs, chat-formatting Copy/Stop, coding-runtime under load) are fixed in one follow-up batch, not per feature | they fail identically on main | — |
+| 16 | Knowledge files live; plugin copies on `default` and `scoretesta` updated (tool descriptions only); Hermes **not** restarted for it — agents see the new descriptions after the next gateway restart, document search already works | avoid an unneeded restart of your real agent | restart `hermes-gateway.service` when convenient |
+| 17 | Live check wrote a test PDF into your Knowledge vault (`score-live-check/`) and deleted it; the vault's git history keeps the add + delete commits | prove upload → extraction → search on the real vault | — |
+| 18 | Knowledge: `.txt` uploads become notes (`.md`); XLSX isn't offered "Save to Knowledge" (no spreadsheet text extraction yet) | notes are Markdown; no approved XLSX library | later task |
