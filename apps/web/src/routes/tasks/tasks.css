@@ -21,6 +21,12 @@
   gap: 8px;
   min-width: 0;
 }
+.tasks-chips {
+  display: contents;
+}
+.tasks-column-tabs {
+  display: none;
+}
 .task-filter {
   height: 40px;
   padding: 0 16px;
@@ -569,4 +575,130 @@
   padding-left: 18px;
   display: grid;
   gap: 4px;
+}
+
+/* Phone and tablet (PLAN 5.34): one row of filter chips, New task beside the heading, the board as snapping columns. */
+@media (width < 1024px) {
+  .tasks-page {
+    gap: 16px;
+  }
+  .tasks-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+  }
+  .tasks-heading h1 {
+    font-size: clamp(34px, 8vw, 54px);
+  }
+  .tasks-filters {
+    display: contents;
+  }
+  .tasks-new {
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0;
+    height: 44px;
+    padding: 0 20px;
+  }
+  .tasks-chips {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 2px 16px 2px 0;
+    margin-right: -16px;
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+  .tasks-chips > * {
+    flex-shrink: 0;
+  }
+  .task-filter {
+    height: 40px;
+  }
+  .tasks-column-tabs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-bottom: 12px;
+  }
+  .tasks-column-tab {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 14px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--hairline);
+    background: var(--card);
+    color: var(--ink-muted);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .tasks-column-tab span {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .tasks-column-tab[aria-pressed='true'] {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--card);
+    font-weight: 600;
+  }
+  .tasks-column-tab[aria-pressed='true'] span {
+    color: var(--card);
+  }
+  .tasks-board-scroll {
+    container-type: inline-size;
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: 12px;
+    border-radius: var(--radius-20);
+    background: var(--tasks-ground);
+  }
+  .tasks-board {
+    display: flex;
+    min-width: 0;
+    min-height: 420px;
+    padding: 12px;
+    gap: 12px;
+    border-radius: 0;
+    width: max-content;
+  }
+  .task-column {
+    flex: 0 0 calc((100cqw - 36px) / 2);
+    scroll-snap-align: start;
+  }
+  .task-card {
+    padding: 12px 14px;
+  }
+  .tasks-layout {
+    display: block;
+  }
+  /* The selected task opens as a full-screen sheet instead of dropping below the board. */
+  .task-placeholder.task-drawer {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    max-width: none;
+    border-radius: 0;
+    border: 0;
+    overflow-y: auto;
+    padding: 20px 24px max(24px, env(safe-area-inset-bottom));
+  }
+}
+@media (width < 600px) {
+  .task-column {
+    flex-basis: calc(100cqw - 36px);
+  }
+  .task-placeholder.task-drawer {
+    padding: 16px;
+  }
 }
