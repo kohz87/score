@@ -194,7 +194,10 @@ test('a run that is still draining is never pruned', async () => {
 test('observed tool and thinking rows are charged to the run and stop at its allowance', async () => {
   h = await wfHarness()
   const { chargeObservation } = await import('../../src/domain/orchestration/ops.ts')
-  const id = await start(h, definition([agent('a', { instruction: '[fake:hold] A' }), end()], [edge('a', 'done')]))
+  const id = await start(
+    h,
+    definition([agent('a', { instruction: '[fake:hold] A' }), end()], [edge('a', 'done')]),
+  )
   await h.until(() => runIdOf(h!, id, 'a') !== undefined)
   const runId = runIdOf(h, id, 'a')!
   const base = stored(id).stored_bytes
@@ -218,12 +221,23 @@ test('thinking rows are part of the inventory and pruning releases the whole his
   const id = await start(h, simple())
   await h.until(done(id))
   const runId = h.rows<{ id: string }>('SELECT id FROM runs')[0]!.id
-  h.db.sqlite.prepare("INSERT INTO run_thinking (run_id, seq, text) VALUES (?, 1, 'thinking about it')").run(runId)
+  h.db.sqlite
+    .prepare("INSERT INTO run_thinking (run_id, seq, text) VALUES (?, 1, 'thinking about it')")
+    .run(runId)
   expect(run(h, id).storage.items.find((i) => i.kind === 'thinking')).toMatchObject({ rows: 1 })
-  expect(h.rows<{ n: number }>('SELECT COUNT(*) AS n FROM orc_history WHERE orchestration_id = ?', id)[0]!.n).toBeGreaterThan(3)
+  expect(
+    h.rows<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM orc_history WHERE orchestration_id = ?',
+      id,
+    )[0]!.n,
+  ).toBeGreaterThan(3)
   const old = new Date(h.scheduler.now() - 100 * 24 * 3600 * 1000).toISOString()
-  h.db.sqlite.prepare('UPDATE orchestrations SET ended_at = ?, updated_at = ? WHERE id = ?').run(old, old, id)
+  h.db.sqlite
+    .prepare('UPDATE orchestrations SET ended_at = ?, updated_at = ? WHERE id = ?')
+    .run(old, old, id)
   expect(h.orch.maintenance().pruned).toBe(1)
-  expect(h.rows('SELECT kind FROM orc_history WHERE orchestration_id = ?', id)).toEqual([{ kind: 'pruned' }])
+  expect(h.rows('SELECT kind FROM orc_history WHERE orchestration_id = ?', id)).toEqual([
+    { kind: 'pruned' },
+  ])
   expect(h.rows('SELECT 1 FROM run_thinking')).toHaveLength(0)
 })

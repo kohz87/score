@@ -12,7 +12,6 @@ import {
   node,
   replies,
   run,
-  save,
   seedAgent,
   start,
   wfHarness,
@@ -24,11 +23,16 @@ afterEach(async () => {
   await h?.close()
   h = undefined
 })
-const done = (id: string, status = 'succeeded') => (): boolean => run(h!, id).status === status
+const done =
+  (id: string, status = 'succeeded') =>
+  (): boolean =>
+    run(h!, id).status === status
 const simple = () => definition([agent('a'), end()], [edge('a', 'done')])
 const aged = (id: string) => {
   const old = new Date(h!.scheduler.now() - 100 * 24 * 3600 * 1000).toISOString()
-  h!.db.sqlite.prepare('UPDATE orchestrations SET ended_at = ?, updated_at = ? WHERE id = ?').run(old, old, id)
+  h!.db.sqlite
+    .prepare('UPDATE orchestrations SET ended_at = ?, updated_at = ? WHERE id = ?')
+    .run(old, old, id)
 }
 
 // Codex 7.1a review, high 1
@@ -36,7 +40,10 @@ test('pruning deletes only what the run owned: a message added after release sur
   h = await wfHarness()
   const id = await start(h, simple())
   await h.until(done(id))
-  const room = h.rows<{ room_id: string }>('SELECT room_id FROM orchestrations WHERE id = ?', id)[0]!.room_id
+  const room = h.rows<{ room_id: string }>(
+    'SELECT room_id FROM orchestrations WHERE id = ?',
+    id,
+  )[0]!.room_id
   const at = new Date(h.scheduler.now()).toISOString()
   h.db.sqlite
     .prepare(
@@ -44,7 +51,11 @@ test('pruning deletes only what the run owned: a message added after release sur
     )
     .run(room, at, at)
   // A brief hangs on it too (an FK reference that would make a blanket delete fail).
-  h.db.sqlite.prepare("INSERT INTO briefs (id, room_id, title, started_at, started_by) VALUES ('later', ?, 't', ?, 'you')").run(room, at)
+  h.db.sqlite
+    .prepare(
+      "INSERT INTO briefs (id, room_id, title, started_at, started_by) VALUES ('later', ?, 't', ?, 'you')",
+    )
+    .run(room, at)
   aged(id)
   expect(h.orch.maintenance().pruned).toBe(1)
   expect(h.rows('SELECT id FROM messages WHERE id = ?', 'later')).toHaveLength(1)
@@ -56,7 +67,10 @@ test('a version stays used after its last run is pruned, so the workflow still c
   h = await wfHarness()
   const id = await start(h, simple())
   await h.until(done(id))
-  const wf = h.rows<{ workflow_id: string }>('SELECT workflow_id FROM wf_runs WHERE orchestration_id = ?', id)[0]!.workflow_id
+  const wf = h.rows<{ workflow_id: string }>(
+    'SELECT workflow_id FROM wf_runs WHERE orchestration_id = ?',
+    id,
+  )[0]!.workflow_id
   aged(id)
   expect(h.orch.maintenance().pruned).toBe(1)
   const { getWorkflow, deleteWorkflow } = await import('../../src/domain/workflows/definitions.ts')
@@ -110,7 +124,8 @@ test('a default for a skipped producer yields a snapshot that satisfies the cont
 // medium: unknown-spend continue
 test("unknown spend 'continue' is honoured by planning, claim and send; 'pause' still pauses; revoking works", async () => {
   h = await wfHarness({ orchestrator: { spend: () => ({ usd: null, complete: false }) } })
-  const chain = () => definition([agent('a'), agent('b'), end()], [edge('a', 'b'), edge('b', 'done')])
+  const chain = () =>
+    definition([agent('a'), agent('b'), end()], [edge('a', 'b'), edge('b', 'done')])
   const go = await start(h, chain(), { budgetUsd: 50, unknownSpend: 'continue' })
   await h.until(done(go))
   const held = await start(h, chain(), { budgetUsd: 50, unknownSpend: 'pause' })
@@ -119,13 +134,25 @@ test("unknown spend 'continue' is honoured by planning, claim and send; 'pause' 
   expect(node(h, held, 'b').state).not.toBe('succeeded')
   expect(['running', 'paused']).toContain(run(h, held).status)
   // Revoking the acceptance later stops a 'continue' run at the next admission.
-  const slow = await start(h, definition([agent('a', { instruction: '[fake:hold] A' }), agent('b'), end()], [edge('a', 'b'), edge('b', 'done')]), {
-    budgetUsd: 50,
-    unknownSpend: 'continue',
-  })
+  const slow = await start(
+    h,
+    definition(
+      [agent('a', { instruction: '[fake:hold] A' }), agent('b'), end()],
+      [edge('a', 'b'), edge('b', 'done')],
+    ),
+    {
+      budgetUsd: 50,
+      unknownSpend: 'continue',
+    },
+  )
   await h.settle(2000)
-  await h.orch.wfLimits(slow, { acceptUnknownSpend: false, orchestrationRevision: run(h, slow).revision })
-  expect(h.rows('SELECT accepted_unknown_spend AS a FROM orchestrations WHERE id = ?', slow)).toEqual([{ a: 0 }])
+  await h.orch.wfLimits(slow, {
+    acceptUnknownSpend: false,
+    orchestrationRevision: run(h, slow).revision,
+  })
+  expect(
+    h.rows('SELECT accepted_unknown_spend AS a FROM orchestrations WHERE id = ?', slow),
+  ).toEqual([{ a: 0 }])
 })
 
 // high 2: withdrawn graph evidence
@@ -142,14 +169,27 @@ const withdrawProducer = async (id: string, nodeId: string) => {
 test('an unsent successor with no template reference is retired when its producer is withdrawn', async () => {
   h = await wfHarness({ reply: replies({ a: 'accepted' }) })
   seedAgent(h, 'reviewer')
-  h.db.sqlite.prepare("INSERT INTO agent_pauses (agent_id, paused_at) VALUES ('reviewer', '2026-01-01T00:00:00.000Z')").run()
+  h.db.sqlite
+    .prepare(
+      "INSERT INTO agent_pauses (agent_id, paused_at) VALUES ('reviewer', '2026-01-01T00:00:00.000Z')",
+    )
+    .run()
   const id = await start(
     h,
-    definition([agent('a'), agent('b', { agentId: 'reviewer', instruction: 'Do b without looking at a' }), end()], [edge('a', 'b'), edge('b', 'done')]),
+    definition(
+      [
+        agent('a'),
+        agent('b', { agentId: 'reviewer', instruction: 'Do b without looking at a' }),
+        end(),
+      ],
+      [edge('a', 'b'), edge('b', 'done')],
+    ),
   )
   await h.until(() => node(h!, id, 'b').state === 'running')
   // Readiness evidence is recorded even without a template reference.
-  expect(run(h, id).consumed.map((c) => [c.consumer, c.producer, c.eligible])).toEqual([['b', 'a', true]])
+  expect(run(h, id).consumed.map((c) => [c.consumer, c.producer, c.eligible])).toEqual([
+    ['b', 'a', true],
+  ])
   await withdrawProducer(id, 'a')
   h.db.sqlite.prepare("DELETE FROM agent_pauses WHERE agent_id = 'reviewer'").run()
   await h.orch.admissionChanged()
@@ -162,25 +202,41 @@ test('an unsent successor with no template reference is retired when its produce
 
 test('an open node gate that displays a withdrawn result is withdrawn and cannot be approved', async () => {
   h = await wfHarness({ reply: replies({ a: 'accepted' }) })
-  const id = await start(h, definition([agent('a'), gate('g'), end()], [edge('a', 'g'), edge('g', 'done')]))
+  const id = await start(
+    h,
+    definition([agent('a'), gate('g'), end()], [edge('a', 'g'), edge('g', 'done')]),
+  )
   await h.until(() => node(h!, id, 'g').state === 'gate_open')
   const g = run(h, id).nodeGates[0]!
   await withdrawProducer(id, 'a')
   expect(run(h, id).nodeGates.find((x) => x.id === g.id)!.status).toBe('withdrawn')
   expect(node(h, id, 'g').state).not.toBe('gate_open')
   await expect(
-    h.orch.wfGateDecision(id, g.id, { decision: 'approve', expectedRevision: g.revision, orchestrationRevision: run(h, id).revision }),
+    h.orch.wfGateDecision(id, g.id, {
+      decision: 'approve',
+      expectedRevision: g.revision,
+      orchestrationRevision: run(h, id).revision,
+    }),
   ).rejects.toMatchObject({ status: 409 })
   expect(run(h, id).status).toBe('running')
 })
 
 test('a node gate cannot be approved when the producer it displays changed after it opened', async () => {
   h = await wfHarness({ reply: replies({ a: 'accepted' }) })
-  const id = await start(h, definition([agent('a'), gate('g'), end()], [edge('a', 'g'), edge('g', 'done')]))
+  const id = await start(
+    h,
+    definition([agent('a'), gate('g'), end()], [edge('a', 'g'), edge('g', 'done')]),
+  )
   await h.until(() => node(h!, id, 'g').state === 'gate_open')
   const g = run(h, id).nodeGates[0]!
-  h.db.sqlite.prepare("UPDATE wf_nodes SET output_revision = output_revision + 1 WHERE node_id = 'a'").run()
+  h.db.sqlite
+    .prepare("UPDATE wf_nodes SET output_revision = output_revision + 1 WHERE node_id = 'a'")
+    .run()
   await expect(
-    h.orch.wfGateDecision(id, g.id, { decision: 'approve', expectedRevision: g.revision, orchestrationRevision: run(h, id).revision }),
+    h.orch.wfGateDecision(id, g.id, {
+      decision: 'approve',
+      expectedRevision: g.revision,
+      orchestrationRevision: run(h, id).revision,
+    }),
   ).rejects.toMatchObject({ code: 'conflict' })
 })
