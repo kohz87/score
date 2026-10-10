@@ -2,11 +2,7 @@ import { createHash } from 'node:crypto'
 import { WORKFLOW_LIMITS } from '@score/contract'
 import { afterEach, expect, test } from 'vitest'
 import { parseTemplate, validateDefinition } from '../../src/domain/workflows/definition.ts'
-import {
-  cutBytes,
-  parseVerdict,
-  resultFacts,
-} from '../../src/domain/workflows/verdict.ts'
+import { cutBytes, parseVerdict, resultFacts } from '../../src/domain/workflows/verdict.ts'
 import {
   agent,
   decide,
