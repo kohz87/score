@@ -856,3 +856,20 @@ test('fix-l: a permission downgrade applies to a turn already waiting in the que
   expect(second.args).toEqual(expect.arrayContaining(['--permission-mode', 'dontAsk']))
   expect(second.args).not.toContain('acceptEdits')
 }, 30_000)
+
+test('fix-l: a credential label clipped off a huge tool result never leaves its value in a Watch frame', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:bigsecret] go')
+  await finished()
+  const frames = JSON.stringify(
+    db.sqlite.prepare('SELECT surface, payload, caption FROM watch_frames').all(),
+  )
+  expect(frames).toContain('terminal')
+  expect(frames).not.toContain('v'.repeat(200))
+  const stored = JSON.stringify([
+    db.sqlite.prepare('SELECT * FROM tool_calls').all(),
+    db.sqlite.prepare('SELECT data FROM events').all(),
+  ])
+  expect(stored).not.toContain('v'.repeat(200))
+})
