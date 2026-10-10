@@ -1,6 +1,6 @@
 import type { Room } from '@score/contract'
 import { useContext, useState } from 'react'
-import { useParams } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import { StreamContext, useStreamQuery } from '../../data/query-client.ts'
 import { ChatThread, QueryError } from './ChatThread.tsx'
 import { RoomPanels } from './RoomPanels.tsx'
@@ -10,6 +10,8 @@ import { ShareDialog } from './ShareDialog.tsx'
 import { OutsideSessions } from './OutsideSessions.tsx'
 import { RoomLink } from './RoomLink.tsx'
 import { RoomList } from './RoomList.tsx'
+import { NewOrchestrationDialog } from '../orchestrations/NewOrchestrationDialog.tsx'
+import { orchestrationsQuery } from '../orchestrations/orchestration-queries.ts'
 import './chat.css'
 
 export function ChatPage() {
@@ -18,11 +20,19 @@ export function ChatPage() {
   const agents = useStreamQuery(agentsQuery)
   const context = useContext(StreamContext)!
   const [sharing, setSharing] = useState<Room | null>(null)
+  const [starting, setStarting] = useState(false)
+  const navigate = useNavigate()
+  const orchestrationRooms = new Set(
+    (useStreamQuery(orchestrationsQuery).data ?? []).map((run) => run.roomId),
+  )
   return (
     <div className="chat-layout">
       <aside className="chat-conversations" aria-label="Conversations">
         <button className="chat-new" type="button" disabled>
           ＋ New chat
+        </button>
+        <button className="chat-new" type="button" onClick={() => setStarting(true)}>
+          ＋ New orchestration
         </button>
         {rooms.status === 'pending' && !rooms.data && <p role="status">Loading conversations…</p>}
         {rooms.status === 'error' && (
@@ -48,6 +58,7 @@ export function ChatPage() {
               projects={rooms.data.projects}
               selected={roomId}
               agents={agents.data ?? []}
+              orchestrationRooms={orchestrationRooms}
               onShare={setSharing}
             />
           )}
@@ -73,6 +84,16 @@ export function ChatPage() {
       )}
       {roomId && <RoomPanels key={`panels:${roomId}`} roomId={roomId} agents={agents.data ?? []} />}
       {sharing && <ShareDialog room={sharing} close={() => setSharing(null)} />}
+      {starting && (
+        <NewOrchestrationDialog
+          agents={agents.data ?? []}
+          close={() => setStarting(false)}
+          created={(run) => {
+            setStarting(false)
+            void navigate(`/chat/${encodeURIComponent(run.roomId)}`)
+          }}
+        />
+      )}
     </div>
   )
 }

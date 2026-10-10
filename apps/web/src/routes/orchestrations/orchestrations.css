@@ -1,0 +1,729 @@
+/* Orchestrator pages (PLAN 7.5b). Tokens from styles/tokens.css; node look follows the Flow cards. */
+.orch-live,
+.orch-room-body,
+.orch-dialog {
+  font-size: 14px;
+  line-height: 1.45;
+}
+.orch-muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+.orch-mono {
+  font-family: var(--font-code);
+  font-size: 12px;
+}
+.orch-error {
+  color: var(--agent-coral-text);
+  font-weight: 600;
+}
+.orch-link {
+  background: none;
+  border: 0;
+  padding: 0 4px;
+  color: var(--ink);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+.orch-live button,
+.orch-room button,
+.orch-dialog button,
+.orch-now button {
+  font: inherit;
+  border: 1px solid var(--hairline);
+  background: var(--card);
+  color: var(--ink);
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.orch-live button.orch-link,
+.orch-room button.orch-link {
+  border: 0;
+  background: none;
+  padding: 0 4px;
+  border-radius: 0;
+}
+.orch-live button:focus-visible,
+.orch-room button:focus-visible,
+.orch-dialog button:focus-visible,
+.orch-now button:focus-visible,
+.orch-node:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+.orch-live button:disabled,
+.orch-dialog button:disabled,
+.orch-room button:disabled,
+.orch-now button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+button.orch-primary,
+.orch-live button.orch-primary,
+.orch-room button.orch-primary,
+.orch-dialog button.orch-primary,
+.orch-now button.orch-primary {
+  background: var(--ink);
+  color: var(--card);
+  border-color: var(--ink);
+}
+.orch-live button.orch-danger,
+.orch-room button.orch-danger {
+  border: 2px solid var(--agent-coral-text);
+  color: var(--agent-coral-text);
+  font-weight: 700;
+}
+.orch-live button[aria-pressed='true'],
+.orch-speeds button[aria-checked='true'] {
+  background: var(--ink);
+  color: var(--card);
+}
+
+/* Heading and status */
+.orch-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: flex-start;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: 18px 22px;
+  margin-bottom: 16px;
+}
+.orch-head h2 {
+  margin: 0 0 4px;
+  font-family: var(--font-heading);
+  font-size: 22px;
+}
+.orch-goal {
+  margin: 0 0 8px;
+  max-width: 70ch;
+  white-space: pre-wrap;
+}
+.orch-head-actions,
+.orch-controls,
+.orch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.orch-head-actions {
+  flex-direction: column;
+  align-items: flex-end;
+}
+.orch-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.orch-badge {
+  border-radius: var(--radius-pill);
+  padding: 2px 12px;
+  font-weight: 700;
+  background: var(--subtle-2);
+  border: 1px solid var(--hairline);
+}
+.orch-badge--running,
+.orch-badge--finishing {
+  background: var(--agent-saffron-tint);
+  border-color: var(--agent-saffron);
+  color: var(--agent-saffron-text);
+}
+.orch-badge--paused,
+.orch-badge--stopping {
+  background: var(--agent-saffron-tint);
+  border: 2px dashed var(--agent-saffron);
+  color: var(--agent-saffron-text);
+}
+.orch-badge--succeeded {
+  background: var(--agent-jade-tint);
+  border-color: var(--agent-jade);
+  color: var(--agent-jade-text);
+}
+.orch-badge--failed,
+.orch-badge--finished_with_unresolved,
+.orch-badge--stopped {
+  background: var(--agent-coral-tint);
+  border-color: var(--agent-coral);
+  color: var(--agent-coral-text);
+}
+.orch-pill {
+  margin-left: 8px;
+  background: var(--ink);
+  color: var(--card);
+  border-radius: var(--radius-pill);
+  padding: 1px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Decisions */
+.orch-needs {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.orch-decision {
+  background: var(--card);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-20);
+  padding: 16px 20px;
+}
+.orch-decision h3,
+.orch-lower h3,
+.orch-selected h3,
+.orch-finish h3,
+.orch-room-body h3 {
+  margin: 0 0 6px;
+  font-family: var(--font-heading);
+  font-size: 16px;
+}
+.orch-decision h3 small {
+  font-family: var(--font-body);
+  font-weight: 400;
+  color: var(--muted);
+}
+.orch-quote {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  background: var(--subtle);
+  border-left: 3px solid var(--ink);
+  white-space: pre-wrap;
+}
+.orch-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 14px;
+  margin: 8px 0;
+}
+.orch-facts dt {
+  color: var(--muted);
+}
+.orch-facts dd {
+  margin: 0;
+  min-width: 0;
+}
+.orch-facts .orch-wide {
+  grid-column: 1 / -1;
+}
+.orch-pre {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--subtle);
+  border-radius: var(--radius-8);
+  font-family: var(--font-code);
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 260px;
+  overflow: auto;
+}
+.orch-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.orch-field > span,
+.orch-field > legend {
+  font-weight: 600;
+  font-size: 13px;
+}
+.orch-field input,
+.orch-field textarea,
+.orch-field select {
+  font: inherit;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-14);
+  padding: 8px 10px;
+  background: var(--card);
+  color: var(--ink);
+  min-width: 0;
+}
+.orch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.orch-row > .orch-field {
+  flex: 1 1 160px;
+}
+.orch-check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 6px 0;
+}
+.orch-policy small {
+  display: block;
+  color: var(--muted);
+}
+.orch-ack {
+  background: var(--subtle);
+  border-radius: var(--radius-14);
+  padding: 10px 12px;
+  font-weight: 600;
+}
+.orch-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.orch-agent-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+}
+
+/* Preflight */
+.orch-checks {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0;
+  display: grid;
+  gap: 4px;
+}
+.orch-check-item {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.orch-check-item strong {
+  flex: 0 0 8.5em;
+}
+.orch-check-item--fail strong {
+  color: var(--agent-coral-text);
+}
+.orch-check-item--unknown strong {
+  color: var(--agent-saffron-text);
+}
+.orch-check-item--ok strong {
+  color: var(--agent-jade-text);
+}
+
+/* Dialog */
+.orch-dialog {
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--ink);
+  padding: 22px 26px;
+}
+.orch-dialog::backdrop {
+  background: rgb(18 19 26 / 55%);
+}
+.orch-dialog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.orch-dialog-head h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+}
+
+/* Diagram */
+.orch-main {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .orch-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .orch-head-actions {
+    align-items: flex-start;
+  }
+}
+.orch-diagram,
+.orch-log,
+.orch-selected,
+.orch-lower > section,
+.orch-finish {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: 14px 16px;
+  min-width: 0;
+}
+.orch-selected,
+.orch-lower,
+.orch-finish {
+  margin-top: 16px;
+}
+.orch-lower {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.orch-canvas {
+  overflow: auto;
+  background: var(--flow-canvas);
+  background-image: radial-gradient(var(--flow-canvas-dot) 1px, transparent 1px);
+  background-size: 18px 18px;
+  border-radius: var(--radius-20);
+  min-height: 160px;
+  max-height: 560px;
+}
+.orch-world {
+  position: relative;
+}
+.orch-world-inner {
+  position: relative;
+  transform-origin: 0 0;
+}
+.orch-edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.orch-edge {
+  fill: none;
+  stroke: var(--flow-edge);
+  stroke-width: 1.6;
+}
+.orch-edge--assign {
+  stroke: var(--flow-edge-planned);
+}
+.orch-edge--replaces {
+  stroke: var(--flow-edge-sent-back);
+  stroke-dasharray: 6 4;
+}
+.orch-edge--lit {
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+.orch-arrow {
+  fill: var(--flow-edge);
+}
+.orch-dot {
+  fill: var(--ink);
+  stroke: var(--card);
+  stroke-width: 2;
+}
+.orch-dot.orch-tone--fail {
+  fill: var(--agent-coral-text);
+}
+.orch-dot.orch-tone--need {
+  fill: var(--agent-saffron);
+}
+.orch-node {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-radius: 18px;
+  border: 1px solid var(--hairline);
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+.orch-node__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.orch-node__text b,
+.orch-node__text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.orch-node__text span {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.orch-node__flag {
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  background: var(--ink);
+  color: var(--card);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+}
+.orch-node__q {
+  position: absolute;
+  right: 10px;
+  top: 6px;
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--muted);
+}
+.orch-node--lead-idle,
+.orch-node--lead-working,
+.orch-node--lead-ended {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--card);
+}
+.orch-node--lead-idle .orch-node__text span,
+.orch-node--lead-working .orch-node__text span,
+.orch-node--lead-ended .orch-node__text span {
+  color: var(--rules-muted);
+}
+.orch-node--queued {
+  border: 1.5px dashed color-mix(in srgb, var(--node-agent) 60%, var(--card));
+}
+.orch-node--gate {
+  background: var(--agent-saffron-tint);
+  border: 2px solid var(--ink);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--agent-saffron) 45%, transparent);
+}
+.orch-node--admitting,
+.orch-node--running,
+.orch-node--lead-working {
+  border: 2px solid var(--agent-saffron);
+  animation: orch-pulse 1.6s ease-in-out infinite;
+}
+.orch-node--running,
+.orch-node--admitting {
+  background: var(--agent-saffron-tint);
+}
+.orch-node--succeeded {
+  border: 2px solid var(--ink);
+}
+.orch-node--failed,
+.orch-node--rejected {
+  border: 2px solid var(--agent-coral-text);
+  background: var(--agent-coral-tint);
+}
+.orch-node--blocked {
+  border: 2px dashed var(--agent-coral-text);
+}
+.orch-node--cancelled .orch-node__text b {
+  text-decoration: line-through;
+}
+.orch-node--cancelled,
+.orch-node--not_started {
+  opacity: 0.7;
+  border-style: dotted;
+}
+.orch-node--unknown,
+.orch-node--abandoned {
+  background: var(--subtle-2);
+  border: 2px solid var(--muted);
+}
+.orch-node--abandoned {
+  border-style: dotted;
+}
+.orch-node--selected {
+  box-shadow:
+    0 0 0 3px var(--card),
+    0 0 0 5px var(--ink);
+}
+.orch-node--lit {
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--ink) 30%, transparent);
+}
+.orch-node--lit.orch-tone--need {
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--agent-saffron) 70%, transparent);
+}
+.orch-node--lit.orch-tone--refused,
+.orch-node--lit.orch-tone--fail {
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--agent-coral) 70%, transparent);
+}
+@keyframes orch-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--agent-saffron) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--agent-saffron) 0%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .orch-node--admitting,
+  .orch-node--running,
+  .orch-node--lead-working {
+    animation: none;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--agent-saffron) 45%, transparent);
+  }
+  .orch-node {
+    transition: none;
+  }
+}
+.orch-legend {
+  margin: 8px 0 0;
+}
+
+/* Step states, text + shape */
+.orch-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+  background: var(--subtle-2);
+  border: 1px solid var(--hairline);
+}
+.orch-state--succeeded {
+  color: var(--agent-jade-text);
+}
+.orch-state--failed,
+.orch-state--rejected,
+.orch-state--blocked {
+  color: var(--agent-coral-text);
+}
+.orch-state--gate,
+.orch-state--running,
+.orch-state--admitting {
+  color: var(--agent-saffron-text);
+}
+
+/* Log */
+.orch-log {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.orch-log header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.orch-log h3 {
+  margin: 0;
+  font-family: var(--font-heading);
+}
+.orch-log-scroll {
+  max-height: 520px;
+  overflow: auto;
+  margin-top: 8px;
+}
+.orch-log-scroll ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.orch-log-scroll li {
+  display: grid;
+  grid-template-columns: 5.5em 4.8em 1fr;
+  gap: 8px;
+  padding: 5px 0;
+  border-top: 1px solid var(--flow-log-border);
+  font-size: 13px;
+}
+.orch-log-scroll time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.orch-log-kind {
+  font-weight: 700;
+  font-size: 12px;
+}
+.orch-log-text {
+  overflow-wrap: anywhere;
+}
+.orch-log-bad .orch-log-text {
+  color: var(--agent-coral-text);
+}
+.orch-jump {
+  position: absolute;
+  bottom: 14px;
+  right: 18px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 20%);
+}
+
+/* Replay */
+.orch-replay {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-20);
+  padding: 10px 14px;
+  margin-bottom: 8px;
+}
+.orch-replay input[type='range'] {
+  flex: 1 1 200px;
+  min-width: 120px;
+}
+.orch-speeds {
+  display: inline-flex;
+  gap: 4px;
+}
+
+/* Cards */
+.orch-steps {
+  display: grid;
+  gap: 10px;
+}
+.orch-step {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-16);
+  padding: 10px 14px;
+  background: var(--card);
+}
+.orch-step--on {
+  border: 2px solid var(--ink);
+}
+.orch-step header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.orch-step-instruction {
+  margin: 6px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.orch-step summary {
+  cursor: pointer;
+}
+.orch-attempts {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.orch-plan {
+  margin: 0 0 8px;
+  padding-left: 22px;
+}
+.orch-room {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-20);
+  margin: 0 0 8px;
+  padding: 10px 16px;
+  max-height: 46vh;
+  overflow: auto;
+}
+.orch-room > summary {
+  cursor: pointer;
+}
+.orch-fence-items {
+  padding-left: 18px;
+}
+.orch-now {
+  display: grid;
+  gap: 12px;
+}

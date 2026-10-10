@@ -21,6 +21,8 @@ import { ImportedBanner } from './ImportedBanner.tsx'
 import { messagesQuery, roomQuery, versionsQuery } from './queries.ts'
 import { VersionSwitcher } from './versions.tsx'
 import { roomLabel } from './room-label.ts'
+import { orchestrationsQuery } from '../orchestrations/orchestration-queries.ts'
+import { RoomRunPanel } from '../orchestrations/RoomRunPanel.tsx'
 
 export function QueryError({ text, retry }: { text: string; retry: () => void }) {
   return (
@@ -246,6 +248,9 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
     }
   }, [seek, onChange])
   const lead = agents.find((agent) => agent.id === room?.leadAgentId)
+  const orchestration = useStreamQuery(orchestrationsQuery).data?.find(
+    (item) => item.roomId === roomId,
+  )
   return (
     <section className="chat-thread" aria-label="Conversation">
       <header className="chat-thread-header">
@@ -272,6 +277,7 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
           retry={() => void context.queries.register(definition).refetch()}
         />
       )}
+      {orchestration && <RoomRunPanel summary={orchestration} agents={agents} />}
       {room?.importedFrom && <ImportedBanner room={room} agents={agents} />}
       {room && (
         <div

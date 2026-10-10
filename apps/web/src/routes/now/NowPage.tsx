@@ -5,6 +5,7 @@ import { FlowView } from './flow/FlowView.tsx'
 import { RoutinesView } from './RoutinesView.tsx'
 import { ScoreTimeline } from './ScoreTimeline.tsx'
 import { WatchPage } from '../watch/WatchPage.tsx'
+import { OrchestrationNow } from '../orchestrations/OrchestrationNow.tsx'
 import './now.css'
 
 const views = [
@@ -72,6 +73,7 @@ export function NowPage() {
           Could not {paused ? 'resume' : 'pause'} the team. Please try again.
         </p>
       )}
+      {view === 'score' && <OrchestrationNow />}
       {view === 'flow' && <FlowView />}
       {view === 'routines' && <RoutinesView agents={snapshot?.lanes.map((lane) => lane.agent)} />}
       {view === 'score' &&

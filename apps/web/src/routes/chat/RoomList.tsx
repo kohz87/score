@@ -13,6 +13,7 @@ function RoomRow({
   onShare,
   onTag,
   activeTag,
+  orchestrationRooms,
 }: {
   room: Room
   projects: RoomProject[]
@@ -21,10 +22,16 @@ function RoomRow({
   onShare?: ((room: Room) => void) | undefined
   onTag: (tag: string | null) => void
   activeTag: string | null
+  orchestrationRooms?: ReadonlySet<string> | undefined
 }) {
   return (
     <div className={`chat-room-row${room.archived ? ' chat-room-row--archived' : ''}`}>
-      <RoomLink room={room} selected={selected} agents={agents} />
+      <RoomLink
+        room={room}
+        selected={selected}
+        agents={agents}
+        orchestration={orchestrationRooms?.has(room.id) ?? false}
+      />
       <RoomMenu room={room} projects={projects} onShare={onShare} />
       {(room.tags ?? []).length > 0 && (
         <ul className="chat-tags" aria-label="Tags">
@@ -119,12 +126,15 @@ export function RoomList({
   selected,
   agents,
   onShare,
+  orchestrationRooms,
 }: {
   rooms: Room[]
   projects: RoomProject[]
   selected: string | undefined
   agents: AgentSummary[]
   onShare?: ((room: Room) => void) | undefined
+  /** Rooms that belong to an orchestration, marked in the list (they are ordinary rooms otherwise). */
+  orchestrationRooms?: ReadonlySet<string> | undefined
 }) {
   const [showArchived, setShowArchived] = useState(false)
   const [tag, setTag] = useState<string | null>(null)
@@ -141,6 +151,7 @@ export function RoomList({
       onShare={onShare}
       onTag={setTag}
       activeTag={tag}
+      orchestrationRooms={orchestrationRooms}
     />
   )
   return (
