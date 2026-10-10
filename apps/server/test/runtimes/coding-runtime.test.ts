@@ -218,6 +218,7 @@ test('refuses duplicates, a missing CLI, OpenCode, full access without the passw
         id: 'coder',
         name: 'X',
         runtime: 'codex',
+        acknowledgeReads: true,
         workspace,
         style,
       })
@@ -229,6 +230,7 @@ test('refuses duplicates, a missing CLI, OpenCode, full access without the passw
         id: 'lead',
         name: 'X',
         runtime: 'codex',
+        acknowledgeReads: true,
         workspace,
         style,
       })
@@ -247,6 +249,7 @@ test('refuses duplicates, a missing CLI, OpenCode, full access without the passw
     id: 'bold',
     name: 'Bold',
     runtime: 'codex',
+    acknowledgeReads: true,
     workspace,
     style,
     permission: 'full',
@@ -257,6 +260,7 @@ test('refuses duplicates, a missing CLI, OpenCode, full access without the passw
     id: 'bad',
     name: 'Bad',
     runtime: 'codex',
+    acknowledgeReads: true,
     workspace: '/',
     style,
   })
@@ -267,6 +271,7 @@ test('refuses duplicates, a missing CLI, OpenCode, full access without the passw
         id: 'bad',
         name: 'Bad',
         runtime: 'codex',
+        acknowledgeReads: true,
         workspace: join(home, 'x'),
         style,
       })
@@ -280,6 +285,7 @@ test('full access needs the security password, and lowering it never does', asyn
     id: 'bold',
     name: 'Bold',
     runtime: 'codex',
+    acknowledgeReads: true,
     workspace,
     style,
     permission: 'full',
@@ -290,6 +296,7 @@ test('full access needs the security password, and lowering it never does', asyn
     id: 'bold',
     name: 'Bold',
     runtime: 'codex',
+    acknowledgeReads: true,
     workspace,
     style,
     permission: 'full',
@@ -401,7 +408,13 @@ test('the next turn in the same room resumes the CLI session; another room does 
 })
 
 test('Codex: tokens without cost are shown as unknown, never zero; sandbox flags follow the permission', async () => {
-  await addAgent({ id: 'cx', name: 'Cx', runtime: 'codex', permission: 'read-only' })
+  await addAgent({
+    id: 'cx',
+    name: 'Cx',
+    runtime: 'codex',
+    acknowledgeReads: true,
+    permission: 'read-only',
+  })
   await makeRoom()
   await say('@cx look around')
   await finished()
@@ -556,7 +569,7 @@ test('Kanban tasks stay Hermes-only: assigning a task to a coding agent is refus
 
 test('Reports: Claude Code spend is estimated, Codex without a cost is unknown and left out of the total', async () => {
   await addAgent()
-  await addAgent({ id: 'cx', name: 'Cx', runtime: 'codex' })
+  await addAgent({ id: 'cx', name: 'Cx', runtime: 'codex', acknowledgeReads: true })
   await makeRoom()
   await say('@coder one')
   await finished(1)
@@ -779,4 +792,17 @@ test('an unused coding agent does not make known spend unknown; the trend stays 
   expect(after.byAgent.find((row: { agentId: string }) => row.agentId === 'coder')).toMatchObject({
     spendUsd: 0,
   })
+})
+
+test('a Codex agent needs the read acknowledgement (it can read every file the user can)', async () => {
+  const refused = await request('POST', '/api/coding-agents', {
+    id: 'cx-noack',
+    name: 'Cx',
+    runtime: 'codex',
+    workspace,
+    style,
+  })
+  expect(refused.statusCode).toBe(400)
+  expect(refused.json().error.code).toBe('acknowledgement_required')
+  await addAgent({ id: 'cx-ack', name: 'Cx', runtime: 'codex', acknowledgeReads: true })
 })

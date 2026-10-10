@@ -88,6 +88,7 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
   const [model, setModel] = useState('')
   const [permission, setPermission] = useState<CodingPermission>('workspace-write')
   const [password, setPassword] = useState('')
+  const [acknowledged, setAcknowledged] = useState(false)
   const [style, setStyle] = useState<AgentStyle>({ color: '#6B4EFF', shape: 'hexagon' })
   const info = runtimes.data?.find((item) => item.runtime === runtime)
   const usable = info?.state === 'ready' || info?.state === 'untested_version'
@@ -105,6 +106,7 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
             ...(workspace.trim() ? { workspace: workspace.trim() } : {}),
             ...(model.trim() ? { model: model.trim() } : {}),
             ...(permission === 'full' ? { password } : {}),
+            ...(runtime === 'codex' ? { acknowledgeReads: true } : {}),
           }),
         }),
       ),
@@ -188,6 +190,18 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
         />
       </label>
       <PermissionPicker value={permission} onChange={setPermission} name="coding-permission" />
+      {runtime === 'codex' && (
+        <label className="coding-acknowledge">
+          <input
+            type="checkbox"
+            required
+            checked={acknowledged}
+            onChange={(event) => setAcknowledged(event.target.checked)}
+          />
+          I understand this Codex agent can read every file my user can, including secrets outside
+          its workspace (Codex limits what it changes, not what it reads).
+        </label>
+      )}
       {permission === 'full' && (
         <label>
           Security password
@@ -232,7 +246,10 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
       <ReadAccessWarning />
       {create.error && <p role="alert">{create.error.message}</p>}
       <div className="team-file-actions">
-        <button className="team-primary" disabled={create.isPending || !usable || !id}>
+        <button
+          className="team-primary"
+          disabled={create.isPending || !usable || !id || (runtime === 'codex' && !acknowledged)}
+        >
           {create.isPending ? 'Adding…' : 'Add coding agent'}
         </button>
       </div>

@@ -951,7 +951,7 @@ room's CLI session (`skipped: no_session`).
   string|null }`. Read with `<cli> --version` only (never a prompt). `untested_version` = installed, but not one of the tested versions.
 - `GET /api/coding-agents` → `{ items: CodingAgent[] }`: `{ id; name; role; runtime; workspace; permission: 'read-only'|'workspace-write'|'full';
   model: string|null; style; quota; cli: { state; version; testedVersions; confirmed: boolean }; createdAt }`.
-- **H** `POST /api/coding-agents` `{ id; name; role?; runtime; workspace?; permission?; model?; style; password? }` → `201 CodingAgent`.
+- **H** `POST /api/coding-agents` `{ id; name; role?; runtime; workspace?; permission?; model?; style; password?; acknowledgeReads? }` → `201 CodingAgent`. A Codex agent needs `acknowledgeReads: true` (`400 acknowledgement_required`): Codex can read every file the owner's user can (live-checked 2026-10-10).
   `id` is a profile-style name (`^[a-z0-9][a-z0-9_-]{0,63}$`), unique among all agents (`409 conflict`). `workspace` defaults to
   `~/score-workspaces/<id>` (created) and follows the Workspace folder rules (no home folder, `~/.hermes`, `~/.score`, `~/.ssh`;
   `422 workspace_unavailable`). A CLI that is not installed/supported is `422 cli_not_installed`. `permission: 'full'` needs

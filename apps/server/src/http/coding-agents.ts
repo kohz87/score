@@ -97,6 +97,12 @@ export function registerCodingAgentRoutes(
     const cli = await coding.locator.detect(driver)
     if (cli.state === 'not_supported' || cli.state === 'not_installed')
       throw new HttpError(422, 'cli_not_installed', cli.message ?? 'The CLI is not available')
+    if (body.runtime === 'codex' && body.acknowledgeReads !== true)
+      throw new HttpError(
+        400,
+        'acknowledgement_required',
+        'A Codex agent can read every file your user can (secrets outside its workspace too); confirm that to add it',
+      )
     if (body.permission === 'full') await requirePassword(request, body.password)
     const workspace = await workspaceFor(body.id, body.workspace)
     const createdAt = new Date(clock()).toISOString()

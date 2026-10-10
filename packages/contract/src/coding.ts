@@ -84,6 +84,11 @@ export const CodingAgentCreateSchema = z
     style: AgentStyleSchema,
     /** The security password; required when `permission` is `full`. */
     password: z.string().max(1024).optional(),
+    /**
+     * Codex can read every file the owner's user can (its sandbox limits writes and commands, not reads; live-checked
+     * 2026-10-10). Creating a Codex agent requires this acknowledgement (owner decision: allow with a clear warning).
+     */
+    acknowledgeReads: z.literal(true).optional(),
   })
   .strict()
 export type CodingAgentCreate = z.infer<typeof CodingAgentCreateSchema>
