@@ -10,6 +10,7 @@ import {
   type OrchReceipt,
   type OrchestrationCreate,
   type OrchestrationCreated,
+  type OrchestrationEvents,
   type OrchestrationList,
   type OrchestrationSnapshot,
   type OrchestrationSummary,
@@ -63,6 +64,7 @@ import {
   setStepStatus,
 } from './ops.ts'
 import { renderLeadInput, renderStepInput } from './render.ts'
+import { timelineOf } from './timeline.ts'
 import {
   AttemptRowSchema,
   addCause,
@@ -324,6 +326,14 @@ export class Orchestrator {
     return this.db.read((sqlite) => ({
       asOfSeq: headSeq(sqlite),
       orchestration: detailOf(sqlite, requireOrch(sqlite, id)),
+    }))
+  }
+
+  /** Event history for the live diagram, log and replay (contract §14 "Events"). */
+  events(id: string): OrchestrationEvents {
+    return this.db.read((sqlite) => ({
+      asOfSeq: headSeq(sqlite),
+      events: timelineOf(sqlite, requireOrch(sqlite, id)),
     }))
   }
 

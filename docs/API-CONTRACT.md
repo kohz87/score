@@ -1441,6 +1441,13 @@ conflict`; gates and inquiries also carry their own `expectedRevision`; the resp
   - `POST …/:id/waiver` `WaiverDecision` — "continue while a cancelled step may still run". Recorded; not termination evidence.
   - `POST …/:id/abandon` `AbandonDecision` — releases capacity and reservations of the listed unresolved attempts, keeps
     their owed stops, records that late results are ignored; the run then pauses (`pauseReason: abandonment`) until Resume.
+- `GET /api/orchestrations/:id/events` → `OrchestrationEvents` `{ asOfSeq, events[] }` (PLAN 7.5b, additive). The run's event
+  history in causal order, derived on read from the persisted rows (no new table): run start, every lead wake and end, every
+  `orch.*` command with **Score's verdict** (`verdict: accepted|refused|retry|conflict`, `code`, one redacted line), step
+  admissions and results (with a result preview), gate and inquiry open/decision, blocked/unknown/abandoned steps, and
+  control actions (pause, resume, Stop, waiver, abandonment, finish request, end). Event `id`s are stable across reads;
+  the browser refetches it on `orchestration.upserted` and diffs by id. It drives the live diagram's moving dots, the live
+  log and the replay, so nothing in them is invented client-side. Not paginated (≤ 40 lead turns × 20 commands + steps).
 - `GET /api/orchestrations/fence` → `GlobalFence`; **H** `POST /api/orchestrations/fence/lift` `FenceLift`. The global
   fence stops admission for all orchestrations; lifting is a recorded human decision after the reconciliation list and is
   never termination evidence.

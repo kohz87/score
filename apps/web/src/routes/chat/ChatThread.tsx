@@ -21,6 +21,8 @@ import { ImportedBanner } from './ImportedBanner.tsx'
 import { messagesQuery, roomQuery, versionsQuery } from './queries.ts'
 import { VersionSwitcher } from './versions.tsx'
 import { roomLabel } from './room-label.ts'
+import { orchestrationsQuery } from '../orchestrations/orchestration-queries.ts'
+import { RoomRunPanel } from '../orchestrations/RoomRunPanel.tsx'
 
 export function QueryError({ text, retry }: { text: string; retry: () => void }) {
   return (
@@ -246,6 +248,9 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
     }
   }, [seek, onChange])
   const lead = agents.find((agent) => agent.id === room?.leadAgentId)
+  const orchestration = useStreamQuery(orchestrationsQuery).data?.find(
+    (item) => item.roomId === roomId,
+  )
   return (
     <section className="chat-thread" aria-label="Conversation">
       <header className="chat-thread-header">
@@ -287,6 +292,7 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
             position.current.height = element.scrollHeight
           }}
         >
+          {orchestration && <RoomRunPanel summary={orchestration} agents={agents} />}
           <div className="chat-messages">
             <MessagePage
               roomId={roomId}
@@ -300,7 +306,17 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
         </div>
       )}
       <DeleteToast />
-      {room && (
+      {room && orchestration && orchestration.ownership !== 'released' && (
+        <div className="chat-composer-locked">
+          <textarea
+            disabled
+            rows={1}
+            aria-label="Message"
+            placeholder="This room belongs to a running orchestration. Use the run controls above."
+          />
+        </div>
+      )}
+      {room && !(orchestration && orchestration.ownership !== 'released') && (
         <Composer
           roomId={roomId}
           roomName={room.name}

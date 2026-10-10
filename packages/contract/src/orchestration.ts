@@ -519,3 +519,51 @@ export const OrchReceiptSchema = z.object({
   result: z.record(z.string(), z.unknown()).optional(),
 })
 export type OrchReceipt = z.infer<typeof OrchReceiptSchema>
+
+// ---------------------------------------------------------------------------------------------------------------
+// Event history (PLAN 7.5b): what the live diagram, the live log and the replay are drawn from. Derived on read from
+// the persisted rows (commands with their receipts, attempts, gates, inquiries, causes, history), so nothing is
+// invented client-side and no migration is needed.
+
+export const OrchEventKindSchema = z.enum([
+  'run_started',
+  'lead_wake',
+  'lead_done',
+  /** An orch.* call and Score's verdict on it. */
+  'command',
+  'step_admitted',
+  'step_result',
+  /** A step changed state without a result (blocked, unknown, abandoned). */
+  'step_state',
+  'gate_opened',
+  'gate_decided',
+  'inquiry_opened',
+  'inquiry_answered',
+  /** Stop, pause, resume, limits, waiver, abandonment, finish request, end. */
+  'control',
+])
+export type OrchEventKind = z.infer<typeof OrchEventKindSchema>
+
+export const OrchEventSchema = z.object({
+  /** Stable across reads, so a client can tell which events are new. */
+  id: z.string().min(1),
+  at: z.iso.datetime(),
+  kind: OrchEventKindSchema,
+  stepId: z.string().nullable(),
+  attemptId: z.string().nullable(),
+  /** `command`: the tool (`orch.assign`, …). */
+  tool: z.string().nullable(),
+  /** `command`: Score's verdict. `step_result`: `succeeded` or `failed`. `gate_decided`: approved/rejected/withdrawn. */
+  verdict: z.string().nullable(),
+  /** `command` refusals: the machine-readable code (`budget_exceeded`, …). */
+  code: z.string().nullable(),
+  /** One redacted line for the log (≤ 300 characters). */
+  summary: z.string(),
+})
+export type OrchEvent = z.infer<typeof OrchEventSchema>
+
+export const OrchestrationEventsSchema = z.object({
+  asOfSeq: z.int().nonnegative(),
+  events: z.array(OrchEventSchema),
+})
+export type OrchestrationEvents = z.infer<typeof OrchestrationEventsSchema>

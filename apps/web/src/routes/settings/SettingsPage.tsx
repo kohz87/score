@@ -12,6 +12,7 @@ import { KnowledgeSection } from '../knowledge/KnowledgeSection.tsx'
 import { LogsSection } from './LogsSection.tsx'
 import { SharesSection } from './SharesSection.tsx'
 import { RemoteSection } from './RemoteSection.tsx'
+import { BackupSection } from './BackupSection.tsx'
 import { TerminalSection } from './TerminalSection.tsx'
 import { remoteTransport } from '../../data/session.ts'
 import './settings.css'
@@ -25,6 +26,7 @@ const sections = [
   { id: 'knowledge', label: 'Knowledge', built: true },
   { id: 'shares', label: 'Shares', built: true },
   { id: 'advanced', label: 'Advanced', built: true },
+  { id: 'backup', label: 'Backup', built: true },
   { id: 'logs', label: 'Logs', built: true },
 ] as const
 
@@ -53,6 +55,7 @@ export function SettingsPage() {
         <KnowledgeSection />
         <SharesSection />
         <AdvancedSection />
+        <BackupSection />
         <LogsSection />
         <RemoteSection />
         <TerminalSection />

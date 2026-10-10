@@ -7,6 +7,9 @@ import { FlowInspector } from './FlowInspector.tsx'
 import { FlowLog, FlowStats } from './FlowLog.tsx'
 import { FlowCanvas } from './FlowCanvas.tsx'
 import { useBriefFlow, useBriefLists, useBriefRunControl } from './flow-queries.ts'
+import { NewOrchestrationDialog } from '../../orchestrations/NewOrchestrationDialog.tsx'
+import { OrchestrationLive } from '../../orchestrations/OrchestrationLive.tsx'
+import { orchestrationsQuery } from '../../orchestrations/orchestration-queries.ts'
 import './flow.css'
 
 const statusLabel: Record<BriefStatus, string> = {
@@ -60,6 +63,8 @@ export function FlowView({ onSelect }: FlowViewProps = {}) {
   const agents = useStreamQuery(taskAgentsQuery)
   const rooms = useStreamQuery(taskRoomsQuery)
   const [selection, setSelection] = useState<{ briefId: string; nodeId: string } | null>(null)
+  const orchestrations = useStreamQuery(orchestrationsQuery).data ?? []
+  const [starting, setStarting] = useState(false)
 
   const activeItems = active.data ?? []
   const recentItems = (recent.data ?? []).filter(
@@ -67,6 +72,7 @@ export function FlowView({ onSelect }: FlowViewProps = {}) {
   )
   const briefId = routeBriefId ?? activeItems[0]?.id ?? recentItems[0]?.id
   const flow = useBriefFlow(briefId)
+  const orchestration = orchestrations.find((item) => item.briefId === briefId)
 
   const selectedId =
     selection &&
@@ -98,6 +104,19 @@ export function FlowView({ onSelect }: FlowViewProps = {}) {
           <p className="flow-empty">
             No runs yet. Send a message to a room and the work it causes shows up here.
           </p>
+        )}
+        <button type="button" className="flow-run-button" onClick={() => setStarting(true)}>
+          New orchestration
+        </button>
+        {starting && (
+          <NewOrchestrationDialog
+            agents={agents.data ?? []}
+            close={() => setStarting(false)}
+            created={(run) => {
+              setStarting(false)
+              void navigate(`/now/flow/${encodeURIComponent(run.briefId)}`)
+            }}
+          />
         )}
       </div>
     )
@@ -155,12 +174,27 @@ export function FlowView({ onSelect }: FlowViewProps = {}) {
               <span className={`flow-status flow-status--${brief.status}`}>
                 {statusLabel[brief.status]}
               </span>
-              <RunControl brief={brief} />
+              {!orchestration && <RunControl brief={brief} />}
             </>
           )}
+          <button type="button" className="flow-run-button" onClick={() => setStarting(true)}>
+            New orchestration
+          </button>
         </div>
       </section>
-      {flow.isError ? (
+      {starting && (
+        <NewOrchestrationDialog
+          agents={agents.data ?? []}
+          close={() => setStarting(false)}
+          created={(run) => {
+            setStarting(false)
+            void navigate(`/now/flow/${encodeURIComponent(run.briefId)}`)
+          }}
+        />
+      )}
+      {orchestration ? (
+        <OrchestrationLive key={orchestration.id} orchestrationId={orchestration.id} />
+      ) : flow.isError ? (
         <p role="alert" className="flow-empty">
           This run could not load.{' '}
           <button type="button" onClick={() => void flow.refetch()}>
@@ -193,7 +227,7 @@ export function FlowView({ onSelect }: FlowViewProps = {}) {
           />
         </div>
       )}
-      {flow.data && (
+      {flow.data && !orchestration && (
         <div className="flow-bottom">
           <FlowLog key={briefId} briefId={briefId} agents={agents.data ?? []} />
           <FlowStats stats={flow.data.stats} />

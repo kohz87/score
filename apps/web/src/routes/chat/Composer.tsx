@@ -61,6 +61,8 @@ function errorText(error: unknown): string {
       : {}
   const reason = typeof details.error === 'string' ? details.error : null
   const usage = typeof details.usage === 'string' ? `Usage: ${details.usage}` : null
+  if (error.status === 409 && error.code === 'orchestration_owned')
+    return 'This room belongs to a running orchestration. Use the run controls above instead.'
   if (error.status === 501)
     return ['That command is not available yet.', usage].filter(Boolean).join(' ')
   if (reason || usage) return [reason, usage].filter(Boolean).join(' ')

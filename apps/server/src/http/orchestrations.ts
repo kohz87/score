@@ -74,6 +74,10 @@ export function registerOrchestrationRoutes(
     orchestrator.snapshot(IdParams.parse(request.params).id),
   )
 
+  app.get('/api/orchestrations/:id/events', async (request) =>
+    orchestrator.events(IdParams.parse(request.params).id),
+  )
+
   app.post('/api/orchestrations/:id/stop', mutation, async (request) => {
     const { id } = IdParams.parse(request.params)
     // Stop never waits on a stale page: the body is validated but its revision is not compared.

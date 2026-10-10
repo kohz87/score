@@ -22,6 +22,13 @@
   font-weight: 700;
   font-size: 15px;
 }
+
+/* Secondary to New chat: the ink fill stays for the primary action. */
+.chat-new--secondary {
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+}
 .chat-conversations nav {
   display: flex;
   flex-direction: column;
@@ -77,6 +84,9 @@
   color: var(--muted);
   font-size: 13px;
   font-weight: 400;
+}
+.chat-room-name small.chat-room-orch {
+  display: block;
 }
 .chat-unread {
   font-size: 12px;
@@ -2206,5 +2216,19 @@
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
+  color: var(--muted);
+}
+
+.chat-composer-locked {
+  padding: 0 16px 16px;
+}
+.chat-composer-locked textarea {
+  width: 100%;
+  resize: none;
+  font: inherit;
+  padding: 14px 18px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-20);
+  background: var(--subtle);
   color: var(--muted);
 }
