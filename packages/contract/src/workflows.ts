@@ -488,7 +488,8 @@ export const ConsumedViewSchema = z.object({
   consumer: NodeIdSchema,
   consumerAttempt: z.int().positive(),
   producer: NodeIdSchema,
-  producerAttempt: z.int().positive(),
+  /** 0 when a template default stood in for a producer that never ran (skipped). */
+  producerAttempt: z.int().nonnegative(),
   outputRevision: z.int().nonnegative(),
   /** `output` of a succeeded node, `failure` of a routed failure, `default` a template default was used. */
   kind: z.enum(['output', 'failure', 'default']),

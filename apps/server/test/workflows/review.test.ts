@@ -72,3 +72,37 @@ test('a workflow made only of a gate and an end starts and finishes', async () =
   await decide(h, id, 'g', 'approve')
   await h.until(done(id))
 })
+
+// medium: skipped-node defaults
+test('a default for a skipped producer yields a snapshot that satisfies the contract', async () => {
+  h = await wfHarness({
+    reply: replies({ review: 'ok\n```score-verdict\n{"verdict":"passed","reason":"ok"}\n```' }),
+  })
+  const id = await start(
+    h,
+    definition(
+      [
+        agent('review'),
+        branch('route', 'review', [{ id: 'pass', when: { kind: 'verdict', is: 'passed' } }]),
+        agent('ship'),
+        agent('rework'),
+        join('merge'),
+        agent('report', { instruction: 'Rework was: {{nodes.rework.output|default:"no rework"}}' }),
+        end(),
+      ],
+      [
+        edge('review', 'route'),
+        edge('route', 'ship', 'pass'),
+        edge('route', 'rework', 'default'),
+        edge('ship', 'merge'),
+        edge('rework', 'merge'),
+        edge('merge', 'report'),
+        edge('report', 'done'),
+      ],
+    ),
+  )
+  await h.until(done(id))
+  const c = run(h, id).consumed.find((x) => x.producer === 'rework')!
+  expect(c).toMatchObject({ kind: 'default', producerAttempt: 0, eligible: true })
+  expect(() => WorkflowRunSnapshotSchema.parse(h!.orch.workflowSnapshot(id))).not.toThrow()
+})
