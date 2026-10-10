@@ -309,7 +309,8 @@ export function createMcpServer(agentId: string, deps: McpToolDeps): McpServer {
     server.registerTool(
       'knowledge.search',
       {
-        description: 'Search the shared Score knowledge vault of Markdown notes.',
+        description:
+          'Search the shared Score knowledge vault: Markdown notes and the text of uploaded documents (PDF, DOCX, CSV, JSON, HTML). Hits say whether they are a note or a document.',
         inputSchema: {
           query: z.string().min(1).max(500),
           limit: z.int().min(1).max(20).optional(),
@@ -323,7 +324,7 @@ export function createMcpServer(agentId: string, deps: McpToolDeps): McpServer {
       'knowledge.read',
       {
         description:
-          'Read one note from the Score knowledge vault by path. Returns its etag, needed to update it.',
+          'Read one note from the Score knowledge vault by path. Returns its etag, needed to update it. For an uploaded document (e.g. .pdf, .docx, .csv) it returns the extracted text, read-only, with a notice when the text is missing or was cut.',
         inputSchema: { path: z.string().min(1).max(1024) },
       },
       guarded(false, ({ path }: { path: string }) => knowledge.read(agentId, path)),

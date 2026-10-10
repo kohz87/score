@@ -38,6 +38,8 @@ export interface CommitOptions {
 // serialise calls (the vault's lock); nothing here is Hermes-specific.
 export class VaultGit {
   available = false
+  /** Paths the vault keeps out of git on purpose (stored-only documents). */
+  private ignore: () => string[] = () => []
   private last: LastCommit | undefined
 
   constructor(
@@ -95,6 +97,10 @@ export class VaultGit {
     }
   }
 
+  setIgnore(ignore: () => string[]): void {
+    this.ignore = ignore
+  }
+
   setVault(vault: string): void {
     this.vault = vault
   }
@@ -111,10 +117,12 @@ export class VaultGit {
   /** Paths with uncommitted changes (modified, deleted or untracked). */
   private async dirty(): Promise<string[]> {
     const out = await this.git(['status', '--porcelain=v1', '-z', '-uall', '--no-renames'])
+    const skip = new Set(this.ignore())
     return out
       .split('\0')
       .filter((entry) => entry.length > 3)
       .map((entry) => entry.slice(3))
+      .filter((entry) => !skip.has(entry))
   }
 
   /**

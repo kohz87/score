@@ -28,9 +28,12 @@ import {
   noteTitle,
   parseNote,
   parseNotePath,
+  parseVaultPath,
   serialiseNote,
 } from './note.ts'
 import { SEED_NOTES } from './seed.ts'
+import { isDocumentPath } from './doc-types.ts'
+import { KnowledgeDocuments } from './documents.ts'
 
 // The central vault (contract §12, design 6.0 § 6.2). Files are the source of truth; the DB only indexes them.
 // Everything that changes files runs through one lock, so scans, saves and git never interleave. Nothing here is
@@ -86,6 +89,8 @@ Every save is a git commit, so nothing is ever lost.
 
 export class KnowledgeVault {
   readonly git: VaultGit
+  /** Uploaded documents (PLAN 6.6); share this vault's lock, git and index. */
+  readonly docs: KnowledgeDocuments
   private root: string
   private readonly now: () => number
   private queue: Promise<unknown> = Promise.resolve()
@@ -98,6 +103,9 @@ export class KnowledgeVault {
     this.root = path.resolve(options.vault)
     this.now = options.now ?? Date.now
     this.git = new VaultGit(this.root, this.now)
+    this.docs = new KnowledgeDocuments(this, options.db)
+    // Stored-only documents (over 10 MB) are not in git, so "Outside changes" must not sweep them in.
+    this.git.setIgnore(() => this.docs.unversionedPaths())
   }
 
   get vault(): string {
@@ -108,6 +116,15 @@ export class KnowledgeVault {
     const run = this.queue.then(work, work)
     this.queue = run.catch(() => undefined)
     return run
+  }
+
+  /** Runs `work` under the vault lock (for the documents module). */
+  runLocked<T>(work: () => Promise<T>): Promise<T> {
+    return this.serial(work)
+  }
+
+  publishChange(change: KnowledgeChanged): Promise<void> {
+    return this.publish(change)
   }
 
   private async publish(change: KnowledgeChanged): Promise<void> {
@@ -210,7 +227,7 @@ export class KnowledgeVault {
    * Walks the segments from the vault root without following symlinks. Missing parents give `exists: false`;
    * a symlink or a file in the way is refused. Returns the absolute path of the last segment.
    */
-  private async lookup(segments: string[]): Promise<{ abs: string; stat: Stats | null }> {
+  async lookup(segments: string[]): Promise<{ abs: string; stat: Stats | null }> {
     let current = this.root
     for (const [index, segment] of segments.entries()) {
       current = path.join(current, segment)
@@ -234,7 +251,7 @@ export class KnowledgeVault {
   }
 
   /** Creates missing parent folders, then checks the real parent is still inside the vault (symlink race). */
-  private async prepareParent(rel: string): Promise<string> {
+  async prepareParent(rel: string): Promise<string> {
     const abs = path.join(this.root, ...rel.split('/'))
     const parent = path.dirname(abs)
     await fs.mkdir(parent, { recursive: true })
@@ -249,9 +266,9 @@ export class KnowledgeVault {
   }
 
   /** `expect`: the content hash the target must still have (null = must not exist) right before it is replaced. */
-  private async atomicWrite(
+  async atomicWrite(
     abs: string,
-    content: string,
+    content: string | Uint8Array,
     expect?: { hash: string | null },
   ): Promise<void> {
     const parent = path.dirname(abs)
@@ -280,6 +297,10 @@ export class KnowledgeVault {
    * after the path was checked cannot make Score read (and index) a file elsewhere.
    */
   private async readContained(abs: string): Promise<string> {
+    return (await this.readContainedBuffer(abs)).toString('utf8')
+  }
+
+  async readContainedBuffer(abs: string): Promise<Buffer> {
     const handle = await fs.open(abs, C.O_RDONLY | C.O_NOFOLLOW)
     try {
       if (process.platform === 'linux') {
@@ -287,7 +308,7 @@ export class KnowledgeVault {
         if (actual !== abs)
           throw new HttpError(400, 'bad_path', 'The note moved while it was being read')
       }
-      return await handle.readFile('utf8')
+      return await handle.readFile()
     } finally {
       await handle.close()
     }
@@ -411,9 +432,11 @@ export class KnowledgeVault {
 
   private async walk(): Promise<{
     files: Map<string, { mtimeMs: number; size: number }>
+    documents: Map<string, { mtimeMs: number; size: number }>
     folders: string[]
   }> {
     const files = new Map<string, { mtimeMs: number; size: number }>()
+    const documents = new Map<string, { mtimeMs: number; size: number }>()
     const folders: string[] = []
     const visit = async (dir: string, rel: string, depth: number): Promise<void> => {
       if (depth > MAX_DEPTH) return
@@ -436,11 +459,18 @@ export class KnowledgeVault {
           } catch {
             // vanished between readdir and stat
           }
+        } else if (entry.isFile() && isDocumentPath(entry.name) && documents.size < MAX_FILES) {
+          try {
+            const stat = await fs.lstat(path.join(dir, entry.name))
+            documents.set(childRel, { mtimeMs: stat.mtimeMs, size: stat.size })
+          } catch {
+            // vanished between readdir and stat
+          }
         }
       }
     }
     await visit(this.root, '', 0)
-    return { files, folders: folders.sort() }
+    return { files, documents, folders: folders.sort() }
   }
 
   /**
@@ -449,7 +479,7 @@ export class KnowledgeVault {
    */
   private async scan(announce: boolean): Promise<string[]> {
     if (this.closed) return []
-    const { files } = await this.walk()
+    const { files, documents } = await this.walk()
     const known = new Map(
       this.options.db.read((sqlite) => this.noteRows(sqlite)).map((row) => [row.path, row]),
     )
@@ -497,8 +527,11 @@ export class KnowledgeVault {
       }
       if (changed.length > 0) this.relink(sqlite)
     })
+    changed.push(...(await this.docs.scan(documents, announce)))
     if (announce)
-      for (const rel of changed.slice(0, MAX_EVENTS_PER_SCAN))
+      for (const rel of changed
+        .filter((item) => !isDocumentPath(item))
+        .slice(0, MAX_EVENTS_PER_SCAN))
         await this.publish({
           path: rel,
           kind: files.has(rel) ? 'written' : 'deleted',
@@ -518,6 +551,7 @@ export class KnowledgeVault {
       )
       for (const [rel, column] of authors) update.run(column, rel)
     })
+    this.docs.fillAuthors(authors)
   }
 
   /** Drops the index and rebuilds it from the files (it is disposable). */
@@ -525,7 +559,7 @@ export class KnowledgeVault {
     return this.serial(async () => {
       this.options.db.tx((sqlite) => {
         sqlite.exec(
-          'DELETE FROM knowledge_fts; DELETE FROM knowledge_links; DELETE FROM knowledge_notes;',
+          'DELETE FROM knowledge_fts; DELETE FROM knowledge_links; DELETE FROM knowledge_notes; DELETE FROM knowledge_doc_fts; DELETE FROM knowledge_documents;',
         )
       })
       await this.scan(false)
@@ -563,11 +597,14 @@ export class KnowledgeVault {
           .object({ count: z.number() })
           .parse(sqlite.prepare('SELECT COUNT(*) AS count FROM knowledge_notes').get()).count,
     )
+    const documents = this.docs.stats()
     return {
       vault: this.root,
       notes: count,
       gitAvailable: this.git.available,
       agentAccess: this.agentAccess(),
+      documents: documents.documents,
+      documentBytes: documents.bytes,
     }
   }
 
@@ -576,6 +613,7 @@ export class KnowledgeVault {
     const notes = this.options.db.read((sqlite) => this.noteRows(sqlite))
     return {
       folders,
+      documents: this.docs.list(),
       notes: notes.map((row) => ({
         path: row.path,
         title: row.title,
@@ -640,18 +678,42 @@ export class KnowledgeVault {
     const match = words
       .map((word, index) => `"${word}"${index === words.length - 1 ? '*' : ''}`)
       .join(' ')
+    const max = Math.min(Math.max(limit, 1), 50)
     try {
-      return this.options.db.read((sqlite) =>
+      const notes = this.options.db.read((sqlite) =>
         sqlite
           .prepare(
-            `SELECT path, title, snippet(knowledge_fts, -1, '[[', ']]', '…', 16) AS snippet
-             FROM knowledge_fts WHERE knowledge_fts MATCH ? ORDER BY bm25(knowledge_fts, 0.0, 8.0, 1.0) LIMIT ?`,
+            `SELECT path, title, snippet(knowledge_fts, -1, '[[', ']]', '…', 16) AS snippet,
+                    bm25(knowledge_fts, 0.0, 8.0, 1.0) AS rank
+             FROM knowledge_fts WHERE knowledge_fts MATCH ? ORDER BY rank LIMIT ?`,
           )
-          .all(match, Math.min(Math.max(limit, 1), 50))
+          .all(match, max)
           .map((row) =>
-            z.object({ path: z.string(), title: z.string(), snippet: z.string() }).parse(row),
+            z
+              .object({
+                path: z.string(),
+                title: z.string(),
+                snippet: z.string(),
+                rank: z.number(),
+              })
+              .parse(row),
           ),
       )
+      const documents = this.docs.search(match, max)
+      // bm25 is lower for better matches in both indexes; the two scales are close enough to interleave.
+      return [
+        ...notes.map((hit) => ({ ...hit, kind: 'note' as const, type: null })),
+        ...documents.map((hit) => ({ ...hit, kind: 'document' as const })),
+      ]
+        .sort((a, b) => a.rank - b.rank)
+        .slice(0, max)
+        .map((hit) => ({
+          path: hit.path,
+          title: hit.title,
+          snippet: hit.snippet,
+          kind: hit.kind,
+          type: hit.type,
+        }))
     } catch {
       return []
     }
@@ -678,7 +740,7 @@ export class KnowledgeVault {
   // ---- writes ------------------------------------------------------------------------------------------------
 
   /** Commits whatever changed behind Score's back before Score's own commit. */
-  private async commitOutside(): Promise<void> {
+  async commitOutside(): Promise<void> {
     try {
       await this.git.commitOutsideChanges()
     } catch (error) {
@@ -693,6 +755,16 @@ export class KnowledgeVault {
         'The vault history is not working (git failed), so notes cannot be changed safely. Fix the vault repository and try again.',
       )
     }
+  }
+
+  /** Commits paths for the documents module (same author and failure rules as notes). */
+  commitPaths(paths: string[], message: string, author: KnowledgeAuthor): Promise<void> {
+    return this.commit(paths, message, author)
+  }
+
+  /** Indexes a note file Score has just written itself. */
+  async indexNote(rel: string, author: KnowledgeAuthor): Promise<void> {
+    await this.indexFile(rel, author)
   }
 
   private async commit(
@@ -714,6 +786,8 @@ export class KnowledgeVault {
     input: string,
     request: KnowledgeWriteRequest,
     author: KnowledgeAuthor = 'you',
+    /** Uploads: `request.body` is the whole file (frontmatter included), written byte for byte. */
+    rawContent = false,
   ): Promise<{ etag: string; path: string }> {
     const rel = parseNotePath(input)
     return this.serial(async () => {
@@ -735,8 +809,9 @@ export class KnowledgeVault {
             etag: etagOf(currentHash),
           })
       }
-      const content =
-        request.frontmatter === undefined
+      const content = rawContent
+        ? request.body
+        : request.frontmatter === undefined
           ? (current?.prefix ?? '') + request.body
           : serialiseNote(request.body, request.frontmatter)
       if (Buffer.byteLength(content) > MAX_NOTE_BYTES)
@@ -821,6 +896,34 @@ export class KnowledgeVault {
       for (const rel of rewritten)
         if (rel !== to) await this.publish({ path: rel, kind: 'written', to: null, by: author })
       return { path: to, updatedNotes: rewritten.filter((rel) => rel !== to).length }
+    })
+  }
+
+  /** A new, empty folder (git does not track empty folders; the tree lists it from the disk). */
+  async createFolder(input: string): Promise<{ path: string }> {
+    const segments = parseVaultPath(input)
+    if (segments.some((segment) => segment.startsWith('.')))
+      throw new HttpError(400, 'bad_path', 'Hidden files and folders are not part of the vault')
+    return this.serial(async () => {
+      const { stat } = await this.lookup(segments)
+      if (stat) throw new HttpError(409, 'exists', 'That name already exists')
+      await this.prepareParent(segments.join('/'))
+      await fs.mkdir(path.join(this.root, ...segments))
+      await this.publish({ path: segments.join('/'), kind: 'written', to: null, by: 'you' })
+      return { path: segments.join('/') }
+    })
+  }
+
+  /** Removes a folder only when nothing is in it. */
+  async deleteFolder(input: string): Promise<void> {
+    const segments = parseVaultPath(input)
+    return this.serial(async () => {
+      const { abs, stat } = await this.lookup(segments)
+      if (!stat?.isDirectory()) throw new HttpError(404, 'not_found', 'Unknown folder')
+      if ((await fs.readdir(abs)).length > 0)
+        throw new HttpError(409, 'not_empty', 'The folder is not empty')
+      await fs.rmdir(abs)
+      await this.publish({ path: segments.join('/'), kind: 'deleted', to: null, by: 'you' })
     })
   }
 

@@ -1,6 +1,9 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import {
+  KnowledgeDocumentSchema,
+  KnowledgeFolderRequestSchema,
+  KnowledgeFromMediaRequestSchema,
   KnowledgeHistorySchema,
   KnowledgeInfoSchema,
   KnowledgeMoveRequestSchema,
@@ -9,13 +12,20 @@ import {
   KnowledgeRestoreRequestSchema,
   KnowledgeSearchResponseSchema,
   KnowledgeTreeSchema,
+  KnowledgeUnzipResultSchema,
+  KnowledgeUploadConflictSchema,
+  KnowledgeUploadResultSchema,
+  KnowledgeZipPreviewSchema,
   KnowledgeVersionSchema,
   KnowledgeWriteRequestSchema,
   KnowledgeWriteResponseSchema,
 } from '@score/contract'
 import { humanGuard } from '../auth/human.ts'
 import { HttpError } from '../errors.ts'
+import { MAX_FILE_BYTES, isDocumentPath } from '../knowledge/doc-types.ts'
 import { MAX_NOTE_BYTES } from '../knowledge/note.ts'
+import { sniffImage } from '../media/sniff.ts'
+import type { MediaStore } from '../media/store.ts'
 import type { KnowledgeVault } from '../knowledge/vault.ts'
 
 const WildcardSchema = z.object({ '*': z.string().min(1).max(4096) })
@@ -24,11 +34,21 @@ const SearchQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 })
 const SettingsSchema = z.object({ agentAccess: z.boolean() })
+const UploadQuerySchema = z.object({
+  onConflict: KnowledgeUploadConflictSchema.default('ask'),
+  mode: z.enum(['keep', 'unzip', 'preview']).default('keep'),
+  folder: z.string().max(1024).optional(),
+})
+const DownloadQuerySchema = z.object({ download: z.enum(['1']).optional() })
 const COMMIT = /^[0-9a-f]{7,64}$/
 
 // Knowledge (contract §12). Reads are open to any caller the server already trusts; every change needs a paired
 // browser (**H**). Agents write through the bridge (6.4) via KnowledgeVault.writeNote, never through these routes.
-export function registerKnowledgeRoutes(app: FastifyInstance, vault: KnowledgeVault): void {
+export function registerKnowledgeRoutes(
+  app: FastifyInstance,
+  vault: KnowledgeVault,
+  media?: MediaStore,
+): void {
   const guard = { preHandler: [humanGuard(app.pairing)] }
   // A note may be 2 MiB; the JSON envelope and escaping need headroom over Fastify's 1 MiB default.
   const write = { ...guard, bodyLimit: MAX_NOTE_BYTES * 2 + 64 * 1024 }
@@ -78,7 +98,107 @@ export function registerKnowledgeRoutes(app: FastifyInstance, vault: KnowledgeVa
 
   app.post('/api/knowledge/move', guard, async (request) => {
     const { from, to, updateLinks } = KnowledgeMoveRequestSchema.parse(request.body)
+    // Documents (PLAN 6.6) move by the same route; they have no links to rewrite.
+    if (isDocumentPath(from))
+      return KnowledgeMoveResponseSchema.parse(await vault.docs.move(from, to))
     return KnowledgeMoveResponseSchema.parse(await vault.moveNote(from, to, updateLinks))
+  })
+
+  // ---- documents and folders (PLAN 6.6) ----------------------------------------------------------------------
+
+  app.get('/api/knowledge/documents/*', async (request) =>
+    KnowledgeDocumentSchema.parse(await vault.docs.get(rest(request))),
+  )
+
+  app.delete('/api/knowledge/documents/*', guard, async (request, reply) => {
+    await vault.docs.delete(rest(request))
+    return reply.code(204).send()
+  })
+
+  // The bytes are served by kind and never reinterpreted: images inline, everything else (PDF and Word included) as a
+  // download, always under a sandbox CSP, so an uploaded HTML or PDF can't run on Score's origin.
+  app.get('/api/knowledge/files/*', async (request, reply) => {
+    const { download } = DownloadQuerySchema.parse(request.query)
+    const file = await vault.docs.bytes(rest(request))
+    void reply
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('Content-Security-Policy', "default-src 'none'; sandbox")
+      .header('Cache-Control', 'no-store')
+    const inline = file.type === 'image' && download === undefined
+    const type = inline
+      ? (sniffImage(file.bytes) ?? 'application/octet-stream')
+      : 'application/octet-stream'
+    return reply
+      .header('Content-Type', type)
+      .header(
+        'Content-Disposition',
+        inline ? 'inline' : `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+      )
+      .send(file.bytes)
+  })
+
+  app.post('/api/knowledge/folders', guard, async (request, reply) => {
+    const { path } = KnowledgeFolderRequestSchema.parse(request.body)
+    return reply.code(201).send(await vault.createFolder(path))
+  })
+  app.delete('/api/knowledge/folders/*', guard, async (request, reply) => {
+    await vault.deleteFolder(rest(request))
+    return reply.code(204).send()
+  })
+
+  if (media)
+    app.post('/api/knowledge/files-from-media', guard, async (request, reply) => {
+      const body = KnowledgeFromMediaRequestSchema.parse(request.body)
+      const stored = media.read(body.mediaId)
+      if (!stored) throw new HttpError(404, 'not_found', 'That attachment is no longer stored')
+      const result = await vault.docs.upload(body.path, stored.bytes, body.onConflict)
+      return reply.code(201).send(KnowledgeUploadResultSchema.parse(result))
+    })
+
+  // The raw-body parser lives in its own scope so no other route accepts that content type.
+  void app.register(async (scope) => {
+    const limit = MAX_FILE_BYTES + 1024
+    scope.addContentTypeParser(
+      'application/octet-stream',
+      { parseAs: 'buffer', bodyLimit: limit },
+      (_request, body, done) => done(null, body),
+    )
+    scope.put(
+      '/api/knowledge/files/*',
+      {
+        bodyLimit: limit,
+        // Before the body is read, so an unpaired caller can't make the server buffer megabytes.
+        onRequest: async (request) => {
+          if (!app.pairing.isPaired(request.headers.cookie))
+            throw new HttpError(401, 'not_paired', 'Pair this browser to make human decisions')
+        },
+      },
+      async (request, reply) => {
+        if (!Buffer.isBuffer(request.body))
+          throw new HttpError(400, 'bad_request', 'The file is missing')
+        const target = rest(request)
+        const query = UploadQuerySchema.parse(request.query)
+        const name = target.split('/').pop()!
+        if (/\.zip$/i.test(name)) {
+          if (query.mode === 'preview')
+            return KnowledgeZipPreviewSchema.parse(await vault.docs.zipPreview(request.body))
+          if (query.mode === 'unzip') {
+            const folder =
+              query.folder ??
+              [...target.split('/').slice(0, -1), name.replace(/\.zip$/i, '')].join('/')
+            return reply
+              .code(201)
+              .send(
+                KnowledgeUnzipResultSchema.parse(
+                  await vault.docs.unzip(request.body, name, folder, query.onConflict),
+                ),
+              )
+          }
+        }
+        const result = await vault.docs.upload(target, request.body, query.onConflict)
+        return reply.code(201).send(KnowledgeUploadResultSchema.parse(result))
+      },
+    )
   })
 
   app.put('/api/knowledge/settings', guard, async (request) => {
