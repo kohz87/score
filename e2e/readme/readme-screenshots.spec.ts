@@ -100,12 +100,9 @@ test('flow', async ({ page }) => {
 
 test('orchestration live', async ({ page }) => {
   withOrchestration = true
+  // Taller than the other pictures so the run header, the approval card, the diagram and the log all show.
+  await page.setViewportSize({ width: 1440, height: 1660 })
   await visit(page, '/now/flow/brief-orch-1', '[data-node="s2"]')
-  // Room below the page so the diagram and log can sit at the top of the picture.
-  await page.addStyleTag({ content: 'body { padding-bottom: 400px; }' })
-  await page.locator('.orch-diagram').evaluate((element) => {
-    window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - 4)
-  })
   await shot(page, 'orchestration')
 })
 
