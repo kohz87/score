@@ -70,7 +70,10 @@ export function createHermesPort(
       })
 }
 
-export { ApprovalDeliveryError } from './port.ts'
+export { ApprovalDeliveryError, isNotDispatched, notDispatched } from './port.ts'
+// The fake adapter and its scripted orchestration lead (PLAN 7.5a): fake mode and tests only.
+export { FakePort } from './fake/fake-port.ts'
+export { attachFakeLead } from './fake/fake-lead.ts'
 export {
   CreateRoutineSchema,
   CreateTaskSchema,

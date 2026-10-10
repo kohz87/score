@@ -91,6 +91,9 @@ test('the whole fake scenario passes real ingest validation and covers every scr
         type !== 'knowledge.changed' &&
         // Kanban attempts come from the attempts projection (5.17a-1), never from the scripted scenario.
         type !== 'attempt.updated' &&
+        // Orchestrations (7.5a) are started by a person, never by the scripted scenario.
+        type !== 'orchestration.upserted' &&
+        type !== 'orchestration.fence.updated' &&
         type !== 'room.version.created' &&
         type !== 'room-project.upserted' &&
         type !== 'room-project.deleted',

@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
-import type { Message, MessagePart } from '@score/contract'
+import { ORCH_LIMITS, type Message, type MessagePart } from '@score/contract'
 import { z } from 'zod'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
@@ -33,6 +33,8 @@ export const MessageRunSchema = z.object({
   plan_first: z.int().min(0).max(1),
   /** 'summary' = writes the room summary (PLAN 7.4a); null = answers a message. */
   purpose: z.enum(['summary']).nullable().optional(),
+  /** Set for the reply of an orchestration lead or step attempt (PLAN 7.5): no hand-offs, no plan, no retry. */
+  orchestration_attempt_id: z.string().nullable().optional(),
 })
 export type MessageRun = z.infer<typeof MessageRunSchema>
 
@@ -108,7 +110,13 @@ export function retryReply(
     .prepare('SELECT * FROM message_runs WHERE message_id = ? AND room_id = ?')
     .get(messageId, roomId)
   const parsed = reply === undefined ? undefined : MessageRunSchema.parse(reply)
-  if (!parsed || parsed.hop !== 0 || parsed.from_agent_id !== null || parsed.purpose)
+  if (
+    !parsed ||
+    parsed.hop !== 0 ||
+    parsed.from_agent_id !== null ||
+    parsed.purpose ||
+    parsed.orchestration_attempt_id
+  )
     throw new HttpError(409, 'conflict', 'Only an answer to your own message can be retried')
   if (parsed.state === 'pending' || parsed.state === 'active')
     throw new HttpError(409, 'conflict', 'This reply is still being written')
@@ -271,6 +279,34 @@ function readPending(value: string): { text: string; lost: boolean } {
 }
 const writePending = (text: string, lost: boolean) => (lost ? LOST : '') + seal(text)
 
+const REPLY_MARK = '\n[reply truncated]'
+
+/**
+ * An orchestration attempt's reply is bounded at the ingestion edge (PLAN 7.5): streamed text past the result limit is
+ * dropped and flagged once, so a runaway agent cannot grow the room, the events or the run's storage reserve.
+ */
+function clampReply(sqlite: DatabaseSync, mapping: MessageRun, piece: string): string {
+  if (!mapping.orchestration_attempt_id || !piece) return piece
+  const row = sqlite.prepare('SELECT parts FROM messages WHERE id = ?').get(mapping.message_id) as
+    { parts: string } | undefined
+  const current = row
+    ? (JSON.parse(row.parts) as { kind: string; text?: string }[])
+        .filter((part) => part.kind === 'text')
+        .map((part) => part.text ?? '')
+        .join('')
+    : ''
+  if (current.endsWith(REPLY_MARK)) return ''
+  const room = ORCH_LIMITS.resultBytes - Buffer.byteLength(current)
+  if (room <= 0) return REPLY_MARK
+  if (Buffer.byteLength(piece) <= room) return piece
+  let kept = ''
+  for (const char of piece) {
+    if (Buffer.byteLength(kept + char) > room) break
+    kept += char
+  }
+  return kept + REPLY_MARK
+}
+
 export function appendRunMessage(
   sqlite: DatabaseSync,
   runId: string,
@@ -299,15 +335,20 @@ export function appendRunMessage(
       .prepare('UPDATE message_runs SET pending = ? WHERE message_id = ?')
       .run(writePending('', true), mapping.message_id)
     return cut > 0
-      ? updateMessage(sqlite, mapping.room_id, mapping.message_id, redact(text.slice(0, cut)), now)
+      ? updateMessage(
+          sqlite,
+          mapping.room_id,
+          mapping.message_id,
+          clampReply(sqlite, mapping, redact(text.slice(0, cut))),
+          now,
+        )
       : []
   }
   sqlite
     .prepare('UPDATE message_runs SET pending = ? WHERE message_id = ?')
     .run(writePending(text.slice(cut), held.lost), mapping.message_id)
-  return cut > 0
-    ? updateMessage(sqlite, mapping.room_id, mapping.message_id, redact(text.slice(0, cut)), now)
-    : []
+  const piece = cut > 0 ? clampReply(sqlite, mapping, redact(text.slice(0, cut))) : ''
+  return piece ? updateMessage(sqlite, mapping.room_id, mapping.message_id, piece, now) : []
 }
 
 function flushHeld(sqlite: DatabaseSync, mapping: MessageRun, now: string): DomainEventDraft[] {
@@ -316,7 +357,8 @@ function flushHeld(sqlite: DatabaseSync, mapping: MessageRun, now: string): Doma
   sqlite
     .prepare("UPDATE message_runs SET pending = '' WHERE message_id = ?")
     .run(mapping.message_id)
-  return held ? updateMessage(sqlite, mapping.room_id, mapping.message_id, redact(held), now) : []
+  const piece = held ? clampReply(sqlite, mapping, redact(held)) : ''
+  return piece ? updateMessage(sqlite, mapping.room_id, mapping.message_id, piece, now) : []
 }
 
 /**
@@ -465,7 +507,7 @@ export function completeRunMessage(
   now: string,
   {
     output,
-    handoffs = true,
+    handoffs: wantHandoffs = true,
     status = 'completed',
     error,
   }: { output?: string | null; handoffs?: boolean; status?: string; error?: string | null } = {},
@@ -474,6 +516,8 @@ export function completeRunMessage(
   if (!value) return []
   const mapping = MessageRunSchema.parse(value)
   if (mapping.state !== 'active') return []
+  // An orchestration attempt's reply is data for the executor: never a hand-off, never a plan (PLAN 7.5).
+  const handoffs = wantHandoffs && !mapping.orchestration_attempt_id
   // Nothing can extend the held text any more.
   const lostHeld = readPending(mapping.pending).lost
   const drafts: DomainEventDraft[] = flushHeld(sqlite, mapping, now)
@@ -497,7 +541,11 @@ export function completeRunMessage(
         { kind: 'text', text },
         ...message.parts.filter((part) => part.kind !== 'text'),
       ]
-    const rest = !streamed ? text : text.startsWith(streamed) ? text.slice(streamed.length) : ''
+    const rest = clampReply(
+      sqlite,
+      mapping,
+      !streamed ? text : text.startsWith(streamed) ? text.slice(streamed.length) : '',
+    )
     if (rest) {
       drafts.push(...updateMessage(sqlite, mapping.room_id, message.id, rest, now))
       const last = message.parts.findLast((part) => part.kind === 'text')
@@ -525,7 +573,7 @@ export function completeRunMessage(
     message.parts.push({ kind: 'tools', summary, runId })
   // A plan-first turn only proposes: the checklist becomes a plan part, and nothing is handed off until the
   // person presses Start plan.
-  if (mapping.plan_first) {
+  if (mapping.plan_first && !mapping.orchestration_attempt_id) {
     const text = message.parts
       .filter((part) => part.kind === 'text')
       .map((part) => part.text)

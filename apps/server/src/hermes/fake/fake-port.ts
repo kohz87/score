@@ -103,6 +103,7 @@ import {
   type HermesPortDeps,
   type ProviderBase,
   type ObservationSink,
+  notDispatched,
   type RewindSessionResult,
   type Scheduler,
 } from '../port.ts'
@@ -1622,6 +1623,17 @@ export class FakePort implements HermesPort {
     })
   }
 
+  /**
+   * Scripted agents for tests and e2e (PLAN 7.5a): called when a run starts, with the input as Hermes would receive it
+   * (an orchestration capability included). May return the reply text; the run completes afterwards.
+   */
+  runHook?: (run: {
+    agentId: string
+    input: string
+    turnId: string
+    runId: string
+  }) => Promise<{ text?: string; hold?: boolean } | void>
+
   startRun(input: Parameters<HermesPort['startRun']>[0]): Promise<{ runId: string }> {
     const req = z
       .object({
@@ -1635,15 +1647,22 @@ export class FakePort implements HermesPort {
       })
       .parse(input)
     return this.enqueue(async () => {
-      if (this.db) assertAgentAdmits(this.db.sqlite, input.agentId)
-      this.requireSink()
+      try {
+        if (this.db) assertAgentAdmits(this.db.sqlite, input.agentId)
+        this.requireSink()
+        if (!this.turns.has(req.turnId) && !this.agents.has(req.agentId))
+          throw new HttpError(404, 'not_found', 'Unknown agent')
+      } catch (error) {
+        throw notDispatched(error)
+      }
       const existing = this.turns.get(req.turnId)
       if (existing) return { runId: existing }
-      if (!this.agents.has(req.agentId)) throw new HttpError(404, 'not_found', 'Unknown agent')
       const runId = `fake-run:${req.turnId}`
       const startedAt = this.scheduler.now()
       const run = { ...exampleRun(req.agentId, runId, this.now()), model: req.model ?? null }
-      const base = demoReply(req.input, this.reply(req))
+      // What Hermes would receive: an orchestration capability is filled in here, in memory, and stored nowhere.
+      const wire = input.render ? input.render(req.input) : req.input
+      const base = demoReply(wire, this.reply({ ...req, input: wire }))
       const seen = req.images?.length ?? 0
       // Attachment notes (PLAN 5.30) are visible in the reply so end-to-end tests can see what an agent received.
       const received = [
@@ -1687,7 +1706,20 @@ export class FakePort implements HermesPort {
         // Demo hook: a message that says "go quiet" leaves the run running and silent (a provider stuck retrying)
         // until it is stopped, so the stalled-reply notice can be seen.
         if (/go quiet/i.test(req.input.split('\n\nRoom context:')[0] ?? '')) return
-        const chunks = response.text.match(/.{1,24}/gs) ?? []
+        let replyText = response.text
+        if (this.runHook) {
+          const hooked = await this.runHook({
+            agentId: req.agentId,
+            input: wire,
+            turnId: req.turnId,
+            runId,
+          })
+          if (this.runs.get(runId)?.status !== 'running') return
+          // `hold`: the run stays running and silent until it is stopped (a stuck agent).
+          if (hooked?.hold) return
+          if (hooked && typeof hooked.text === 'string') replyText = hooked.text
+        }
+        const chunks = replyText.match(/.{1,24}/gs) ?? []
         const stream = (index: number): void => {
           const chunk = chunks[index]
           const at =
@@ -1860,6 +1892,21 @@ export class FakePort implements HermesPort {
         endedAt: status === 'running' || status === 'waiting_for_approval' ? null : this.now(),
       },
     })
+  }
+
+  /** Test and demo hook: the tools the fake Hermes lists for the Score MCP server (default: every orch.* tool). */
+  fakeMcpTools: string[] | null = [
+    'orch.plan',
+    'orch.assign',
+    'orch.cancel',
+    'orch.ask',
+    'orch.requestApproval',
+    'orch.note',
+    'orch.finish',
+    'orch.receipt',
+  ]
+  mcpTools(): Promise<string[] | null> {
+    return Promise.resolve(this.fakeMcpTools)
   }
 
   async stopRun(req: { agentId: string; runId: string }): Promise<void> {

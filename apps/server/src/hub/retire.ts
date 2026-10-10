@@ -25,6 +25,7 @@ export const INTERNAL_OBSERVATION_SOURCES = [
   'briefs',
   'team',
   'agents',
+  'orchestration',
   'fake',
 ] as const
 

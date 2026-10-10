@@ -82,7 +82,7 @@ export class RoutingDispatcher {
           sqlite
             .prepare(
               `
-        SELECT q.* FROM message_runs q WHERE q.state = 'pending' AND NOT EXISTS (
+        SELECT q.* FROM message_runs q WHERE q.state = 'pending' AND q.orchestration_attempt_id IS NULL AND NOT EXISTS (
           SELECT 1 FROM agent_lifecycle l WHERE l.agent_id = q.agent_id AND l.state != 'ready'
         ) AND NOT EXISTS (
           SELECT 1 FROM team_state WHERE paused_at IS NOT NULL

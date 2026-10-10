@@ -2,7 +2,20 @@ import { randomUUID } from 'node:crypto'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import type { Message } from '@score/contract'
+import {
+  OrchAskArgsSchema,
+  OrchAssignArgsSchema,
+  OrchCancelArgsSchema,
+  OrchFinishArgsSchema,
+  OrchNoteArgsSchema,
+  OrchPlanArgsSchema,
+  OrchReceiptArgsSchema,
+  OrchRequestApprovalArgsSchema,
+  type Message,
+} from '@score/contract'
+import { assertRoomFree } from '../domain/orchestration/ownership.ts'
+import type { Orchestrator } from '../domain/orchestration/executor.ts'
+import type { ToolName } from '../domain/orchestration/commands.ts'
 import { assertAgentAdmits } from '../domain/agent-lifecycle.ts'
 import { readRoom, roomIds, roomRow, storeMessage } from '../domain/rooms.ts'
 import { rewindingRooms } from '../domain/room-rewinding.ts'
@@ -21,6 +34,8 @@ export interface McpToolDeps {
   ingest: Pick<Ingest, 'submit'>
   port: Pick<HermesPort, 'taskAction'>
   knowledge?: KnowledgeAgentApi
+  /** The orchestration executor (PLAN 7.5a); without it the `orch.*` tools are not offered. */
+  orchestrator?: Pick<Orchestrator, 'handleTool'>
   clock?: () => number
 }
 
@@ -50,7 +65,7 @@ const failure = (message: string): CallToolResult => ({
  * switches, so turning access off takes effect on the next call.
  */
 export function createMcpServer(agentId: string, deps: McpToolDeps): McpServer {
-  const { db, access, ingest, port, knowledge, clock = Date.now } = deps
+  const { db, access, ingest, port, knowledge, orchestrator, clock = Date.now } = deps
   const server = new McpServer({ name: 'score', version: '1' })
 
   function guarded<A>(write: boolean, run: (args: A) => Promise<unknown> | unknown) {
@@ -133,6 +148,7 @@ export function createMcpServer(agentId: string, deps: McpToolDeps): McpServer {
     guarded(true, async ({ roomId, text: body }: { roomId: string; text: string }) => {
       checkText(body, POST_BYTES)
       db.read((sqlite) => {
+        assertRoomFree(sqlite, roomId, 'mcp.rooms.post')
         memberRoom(sqlite, roomId)
         assertAgentAdmits(sqlite, agentId)
       })
@@ -147,6 +163,7 @@ export function createMcpServer(agentId: string, deps: McpToolDeps): McpServer {
           apply({ sqlite, now }) {
             // Checked again in the writing transaction: membership, a rewind or the agent's lifecycle may have
             // changed while this waited in the queue.
+            assertRoomFree(sqlite, roomId, 'mcp.rooms.post')
             memberRoom(sqlite, roomId)
             assertAgentAdmits(sqlite, agentId)
             if (rewindingRooms.has(roomId))
@@ -227,6 +244,66 @@ export function createMcpServer(agentId: string, deps: McpToolDeps): McpServer {
       return { ok: true }
     }),
   )
+
+  if (orchestrator) {
+    // `orch.*` (contract §14): they need the MCP access switch and an active per-turn capability for this agent, and not
+    // the writes switch (v3.1). Identity is still the token's agent; the capability binds the lead attempt.
+    const orch = (name: ToolName, description: string, shape: Record<string, z.ZodType>) =>
+      server.registerTool(
+        name,
+        { description, inputSchema: shape },
+        async (args: Record<string, unknown>): Promise<CallToolResult> => {
+          const state = access.get(agentId)
+          if (!state.enabled)
+            return failure('mcp_off: MCP access is turned off for this agent in Score')
+          const outcome = await orchestrator.handleTool(agentId, name, args)
+          if (outcome.kind === 'unauthorized') return failure(`unauthorized: ${outcome.message}`)
+          const receipt = outcome.receipt
+          return { ...text(receipt), ...(receipt.status === 'ok' ? {} : { isError: true }) }
+        },
+      )
+    const withoutBase = (shape: Record<string, z.ZodType>) => shape
+    orch(
+      'orch.plan',
+      'Record or replace the visible plan of the orchestration run. Executes nothing. Needs the capability from your turn input and a commandId.',
+      withoutBase(OrchPlanArgsSchema.shape),
+    )
+    orch(
+      'orch.assign',
+      'Queue a step for a team agent. Score validates it against the run limits, budget and gates; the step starts when its "after" steps succeeded. Use replaces to retry or replace a failed or cancelled step.',
+      withoutBase(OrchAssignArgsSchema.shape),
+    )
+    orch(
+      'orch.cancel',
+      'Cancel a step. If it already started, Score stops it and admits nothing new in the run until it has ended or the person decides otherwise.',
+      withoutBase(OrchCancelArgsSchema.shape),
+    )
+    orch(
+      'orch.ask',
+      'Ask the person a question. Their answer arrives as data in your next turn; it never grants permission.',
+      withoutBase(OrchAskArgsSchema.shape),
+    )
+    orch(
+      'orch.requestApproval',
+      'Under the lead-asks policy: ask the person to approve a queued step before it starts.',
+      withoutBase(OrchRequestApprovalArgsSchema.shape),
+    )
+    orch(
+      'orch.note',
+      'Post a progress line into the run room.',
+      withoutBase(OrchNoteArgsSchema.shape),
+    )
+    orch(
+      'orch.finish',
+      'Finish the run: stops new work, retires queued steps and waits for started ones to end.',
+      withoutBase(OrchFinishArgsSchema.shape),
+    )
+    orch(
+      'orch.receipt',
+      'Look up the stored receipt of an earlier command of this turn by its commandId (use after a reply was lost).',
+      withoutBase(OrchReceiptArgsSchema.shape),
+    )
+  }
 
   if (knowledge) {
     server.registerTool(

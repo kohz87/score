@@ -32,6 +32,8 @@ const eventData = {
   'lane.upserted': f.laneUpserted,
   'handoff.created': f.handoffCreated,
   'brief.upserted': f.brief,
+  'orchestration.upserted': f.orchestrationSummary,
+  'orchestration.fence.updated': f.globalFence,
   'run.updated': f.run,
   'attempt.updated': f.attemptUpdated,
   'gap.recorded': f.gap,

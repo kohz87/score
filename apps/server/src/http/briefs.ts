@@ -5,6 +5,14 @@ import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import { activeRunOfNode, readBriefFlow, readBriefLog, readFlowNode } from '../domain/brief-flow.ts'
 import { briefSummary, listBriefs, requireBrief } from '../domain/briefs.ts'
+import type { Orchestrator } from '../domain/orchestration/executor.ts'
+import {
+  assertBriefFree,
+  assertNotOwned,
+  assertRoomFree,
+  briefOfRun,
+  ownerOfBrief,
+} from '../domain/orchestration/ownership.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { snapshot } from '../hub/snapshot.ts'
@@ -35,10 +43,12 @@ export function registerBriefRoutes(
     ingest: Ingest
     control: BriefControl
     plans: PlanStarter
+    /** Brief pause / resume of an orchestration's brief are delegated to the run (contract §14). */
+    orchestrator?: Orchestrator
     clock?: () => number
   },
 ): void {
-  const { port, db, control, plans } = deps
+  const { port, db, control, plans, orchestrator } = deps
   const clock = deps.clock ?? Date.now
   const receipts = requestIdempotency(db, clock)
   const mutation = {
@@ -72,19 +82,40 @@ export function registerBriefRoutes(
 
   app.post('/api/briefs/:briefId/pause', mutation, async (request) => {
     const { briefId } = BriefParams.parse(request.params)
+    const owner = db.read((sqlite) => ownerOfBrief(sqlite, briefId))
+    if (owner) {
+      assertNotOwned(owner.state === 'owned' ? undefined : owner, 'brief.pause')
+      await orchestrator?.pause(owner.orchestration.id, {
+        orchestrationRevision: owner.orchestration.revision,
+      })
+      return summaryOf(briefId)
+    }
     await control.pause(briefId)
     return summaryOf(briefId)
   })
 
   app.post('/api/briefs/:briefId/resume', mutation, async (request) => {
     const { briefId } = BriefParams.parse(request.params)
+    const owner = db.read((sqlite) => ownerOfBrief(sqlite, briefId))
+    if (owner) {
+      assertNotOwned(owner.state === 'owned' ? undefined : owner, 'brief.resume')
+      await orchestrator?.resume(owner.orchestration.id, {
+        orchestrationRevision: owner.orchestration.revision,
+      })
+      return summaryOf(briefId)
+    }
     await control.resume(briefId)
     return summaryOf(briefId)
   })
 
   app.post('/api/flow/nodes/:nodeId/stop', mutation, async (request) => {
     const { nodeId } = NodeParams.parse(request.params)
-    const run = db.read((sqlite) => activeRunOfNode(sqlite, nodeId))
+    const run = db.read((sqlite) => {
+      const found = activeRunOfNode(sqlite, nodeId)
+      const briefId = briefOfRun(sqlite, found.runId)
+      if (briefId) assertBriefFree(sqlite, briefId, 'flow.stop')
+      return found
+    })
     await port.stopRun(run)
     return { ok: true }
   })
@@ -93,6 +124,7 @@ export function registerBriefRoutes(
   // (plan-start.ts): a repeated start, or a restart, resumes where the last one stopped.
   app.post('/api/rooms/:roomId/messages/:messageId/plan/start', mutation, (request) => {
     const { roomId, messageId } = PlanParams.parse(request.params)
+    db.read((sqlite) => assertRoomFree(sqlite, roomId, 'plan.start'))
     return plans.start(roomId, messageId)
   })
 }

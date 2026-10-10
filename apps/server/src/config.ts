@@ -81,6 +81,8 @@ const ConfigSchema = z.object({
     .transform((value) => new URL(value).origin)
     .default('http://127.0.0.1:5173'),
   mode: z.enum(['fake', 'live']).default('fake'),
+  // The orchestration execution journal (SCORE_JOURNAL_DIR); see resolveJournalDir.
+  journalDir: z.string().min(1).optional(),
   // The knowledge vault (SCORE_VAULT); default ~/score-vault, or a temporary folder in fake mode (start-server).
   vault: z.string().min(1).optional(),
   // Media store quota in MiB (default 512, applied by the store).
@@ -124,6 +126,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
       env.SCORE_WEB_ORIGIN ??
       (env.SCORE_WEB_PORT ? `http://127.0.0.1:${env.SCORE_WEB_PORT}` : undefined),
     mode: env.SCORE_MODE,
+    journalDir: env.SCORE_JOURNAL_DIR,
     logFile: env.SCORE_LOG_FILE || undefined,
     vault: env.SCORE_VAULT,
     mediaQuotaMb: env.SCORE_MEDIA_QUOTA_MB,
@@ -186,4 +189,22 @@ export function serverOrigin(config: Config): string {
   if (config.remote) return config.remote.origins[0]!
   const host = isIP(config.host) === 6 ? `[${config.host}]` : config.host
   return new URL(`http://${host}:${config.port}`).origin
+}
+
+/**
+ * Where the orchestration execution journal lives (design 7.5 v3): outside $SCORE_HOME, so restoring the home cannot
+ * rewind it. Live: `$SCORE_JOURNAL_DIR`, else `$XDG_STATE_HOME/score/execution-journal`, else
+ * `~/.local/state/score/execution-journal`. The fake adapter starts no real runs, so its journal stays in the home.
+ */
+export function resolveJournalDir(
+  config: Pick<Config, 'mode' | 'home' | 'journalDir'>,
+  env: Record<string, string | undefined> = process.env,
+): string {
+  if (config.journalDir) return config.journalDir
+  if (config.mode === 'fake') return join(config.home, 'execution-journal')
+  return join(
+    env.XDG_STATE_HOME || join(homedir(), '.local', 'state'),
+    'score',
+    'execution-journal',
+  )
 }

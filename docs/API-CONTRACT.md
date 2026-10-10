@@ -1393,3 +1393,150 @@ tool results with `isError` and text `<code>: <message>`.
 `command` is text for the owner to run in a terminal; **Score never runs it** and never writes Hermes configuration for
 this: `hermes --profile <agentId> mcp add score --url http://127.0.0.1:<bridge port>/bridge/mcp --auth header`. Hermes
 prompts for the bearer token and keeps it in the profile's own environment file (`MCP_SCORE_API_KEY`); the token is not part of the command. For an entry that already exists Hermes reuses the stored token without asking, so after a rotation the owner replaces that value in the profile's `.env` by hand and reloads MCP; the UI says so. Retiring an agent deletes its `mcp_access` row (token and both switches); the row also records the agent's lifecycle incarnation, and a removed, not-ready or different-incarnation agent has no access. A `tasks.comment` is stored with the agent as the comment author (`TaskActionRequest.author`, text prefixed `[via MCP]`). JSON-RPC batches are refused (`400`), and at most 4 requests per agent run at once. Text limits are in bytes (`413 payload_too_large`). Tokens (`scm_…`) are redacted wherever text is redacted.
+
+## 14. Orchestrator (PLAN 7.5a; schemas in `packages/contract/src/orchestration.ts`; design docs/briefs/7.5-orchestrator.md v3 + v3.1)
+
+A person gives a goal; a **lead** agent decides steps at runtime, hands them to team agents, asks the person when needed
+and finishes. Score is the referee: every request the lead makes is validated against the run's limits, budget, gates and
+fences. The lead works in short, event-driven **lead attempts** (one Hermes run each, fresh session `orc-<run>-lead-<n>`);
+steps are Hermes runs of the target agent (session `orc-<run>-<step>-<attempt>`). Both go through an orchestration-only
+dispatch path: fixed recipient, no mention routing, no plan materialisation, no room-context assembly, no automatic
+summaries. Needs remote mode (the MCP server lives on the loopback bridge listener) and the lead's MCP access switch plus
+token; the **writes** switch is not needed (§13 still governs `rooms.post`, `tasks.comment`, `knowledge.write`).
+
+**Statuses.** Run: `running | paused | stopping | finishing | succeeded | finished_with_unresolved | stopped | failed`
+(`pauseReason` explains `paused`). Step: `pending_gate | queued | admitted | succeeded | failed | unknown | cancelled |
+blocked | rejected | not_started`. Attempt: `created | send_started | running | terminated | unknown | refused | abandoned`.
+`terminated` needs **termination evidence** (7.1 v6): Hermes reported `completed` or `failed` from the run's own agent loop.
+`cancelled`, `interrupted`, a lost run or a lost handle keep the attempt `unknown` ("not confirmed ended") until evidence or
+a recorded human abandonment; neither a 404, a Stop acknowledgement nor a human decision is termination evidence.
+
+**Acknowledgement.** Creating a run requires `acknowledgement.text === ORCH_ACKNOWLEDGEMENT_TEXT` (covers lead and steps).
+Controls and accounting cover observed, Score-started work only.
+
+### Browser API
+
+- `GET /api/orchestrations/preflight?leadAgentId=&allowedAgents=a,b` → `Preflight` (`checks[]`: listener, lead ready, lead
+  MCP access, lead MCP token, allowed agents, global fence, journal, capacity, quota, tool readiness (`unknown`: Hermes loads
+  MCP tools per session, which Score cannot see), plus `gatePolicyNotes`, the acknowledgement text and the defaults).
+- **H** `POST /api/orchestrations` `OrchestrationCreate` → `201 OrchestrationCreated` (`Idempotency-Key` honoured). The
+  server re-runs the preflight; a failing check → `409 preflight_failed` `{ checks }`; capacity → `429 capacity`; storage
+  quota → `409 quota_exhausted`; global fence → `409 fenced`. It creates the run's room and brief (owner: `orchestration`) and
+  queues the first lead attempt.
+- **S** `GET /api/orchestrations` → `OrchestrationList`; **S** `GET /api/orchestrations/:id` → `OrchestrationSnapshot`.
+  Lists are not paginated (≤ 200 runs; finished runs are kept 90 days).
+- Decisions (all **H**, all carry `orchestrationRevision` = the run `revision` the page showed; a stale one → `409
+conflict`; gates and inquiries also carry their own `expectedRevision`; the response is the new `OrchestrationSummary`):
+  - `POST …/:id/gates/:gateId/decision` `GateDecision` — approve admits exactly the frozen payload; reject marks the step
+    `rejected`, blocks its dependents and wakes the lead.
+  - `POST …/:id/inquiries/:inquiryId/answer` `InquiryAnswer` — the answer is data for the next lead turn; it never changes
+    permissions.
+  - `POST …/:id/limits` `LimitsDecision` — raise/clear the budget or deadline, or `acceptUnknownSpend`.
+  - `POST …/:id/pause`, `…/resume`, `…/stop` `RunControl`. Resume never lifts a cancel fence, an unknown-attempt fence or the
+    global fence. **Stop ignores a stale `orchestrationRevision`** (it can only reduce risk); it is an admission barrier: one
+    transaction fences all further admissions, retires queued steps (`not_started: stopped`), withdraws gates and inquiries,
+    refuses attempts not yet sent and owes Hermes a Stop on every attempt that may be running (retried until acknowledged;
+    a run handle that arrives after the Stop is stopped at once). The run is `stopping` until every attempt is terminated
+    (evidence) or abandoned, then `stopped`.
+  - `POST …/:id/waiver` `WaiverDecision` — "continue while a cancelled step may still run". Recorded; not termination evidence.
+  - `POST …/:id/abandon` `AbandonDecision` — releases capacity and reservations of the listed unresolved attempts, keeps
+    their owed stops, records that late results are ignored; the run then pauses (`pauseReason: abandonment`) until Resume.
+- `GET /api/orchestrations/fence` → `GlobalFence`; **H** `POST /api/orchestrations/fence/lift` `FenceLift`. The global
+  fence stops admission for all orchestrations; lifting is a recorded human decision after the reconciliation list and is
+  never termination evidence.
+- Stream (§2): `orchestration.upserted` (`OrchestrationSummary`, after every change; refetch the snapshot for detail) and
+  `orchestration.fence.updated` (`GlobalFence`).
+
+A stale revision answers `409 conflict` with `details.currentRevision`. `GET /api/orchestrations/:id` also carries, per
+attempt, `state`, `evidence`, `unknownReason`, owed-Stop timestamps and spend, so the page can show "not confirmed ended".
+Not in stage A: the Watch replay scoped to an attempt's session (design v3 "Watch scope"); orchestration frames stay in the
+agent-wide Watch feed until 7.5b/7.5c, and the start screen says Watch shows them mixed with the agent's other work.
+
+### MCP tools (`orch.*`, on the §13 server)
+
+Every call takes `capability` (`orc_` + 43 base64url, per lead attempt) and `commandId` (1–64 chars `[A-Za-z0-9._:-]`, unique
+within the lead attempt). Access: the agent's MCP **access** switch (not writes) **and** an active capability for that exact
+agent incarnation; the capability binds (run, lead attempt, generation). Replies are a `OrchReceipt`
+`{ status: ok|refused|retry|conflict|not_found, code?, message?, result? }` as JSON text of the MCP tool result.
+
+| Tool                                                            | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `orch.plan { entries[] ≤ 30 × 500 B }`                          | Replaces the visible plan; executes nothing                                                                                                                                                                                                                                                                                                                                                                                  |
+| `orch.assign { agent, instruction ≤ 8 KiB, after?, replaces? }` | Queues a step → `{ stepId, gateId? }`. Refusals: `agent_not_allowed`, `agent_unavailable`, `step_limit`, `bad_dependency`, `budget_exceeded`, `deadline_passed`, `bad_replaces`, `quota`, `sealed`. `after` must name existing earlier steps of the run. Under `every-step` the gate is created in the same transaction and freezes agent + incarnation, instruction, dependencies, estimate and dependency result revisions |
+| `orch.requestApproval { stepId }`                               | Under `lead-asks`: creates the same assignment-bound gate for a queued, not yet admitted step. Steps under `lead-asks` are not admitted while the lead attempt that created them runs; one with no gate is admitted afterwards                                                                                                                                                                                               |
+| `orch.cancel { stepId }`                                        | Retires the step. If it was admitted: stop is owed and **all admissions in the run are fenced** until that attempt is terminated, abandoned or the person records a waiver                                                                                                                                                                                                                                                   |
+| `orch.ask { question ≤ 2 KiB }`                                 | Opens an inquiry (Needs you); the answer arrives in the next lead input as data                                                                                                                                                                                                                                                                                                                                              |
+| `orch.note { text ≤ 2 KiB }`                                    | A progress line in the run's room (agent message)                                                                                                                                                                                                                                                                                                                                                                            |
+| `orch.finish { outcome, summary }`                              | Durable finish request: fences admissions, retires queued steps (`not_started: run_finishing`), withdraws open gates and inquiries, seals further commands, then drains. Succeeds only when every admitted attempt (the requesting one included) is terminated; otherwise `finished_with_unresolved`                                                                                                                         |
+| `orch.receipt { commandId }`                                    | Returns a stored receipt (`not_found` if none) so the lead can verify after an uncertain reply                                                                                                                                                                                                                                                                                                                               |
+
+Same `commandId` + same canonical payload → the stored receipt; different payload → `conflict`. A `retry` (the lead
+attempt's admission is not recorded yet) and an unknown/stale capability store nothing. JSON-RPC and provider call ids are
+never used for deduplication. At most 20 commands per lead attempt.
+
+### Limits and capacity
+
+Goal 8 KiB, instruction 8 KiB, plan ≤ 30 entries × 500 B, note/question 2 KiB, answer 4 KiB, result 8 KiB, rendered lead
+input ≤ 64 KiB (results newest first, truncated with markers), step input ≤ 32 KiB, ≤ 30 steps, ≤ 40 lead turns, ≤ 3
+concurrent steps per run. Global: ≤ 5 running orchestrations, ≤ 6 concurrent steps, ≤ 2 per agent; admitting, stopping,
+paused-active and unknown attempts count. Storage reserve per run = (max steps + max lead turns) × (64 KiB + 8 KiB of receipts, transitions and associations) + 256 KiB
+(kept for Stop and obligation records); a run does not start unless it fits in the remaining orchestration quota (200 MiB).
+
+### Budget
+
+Owner-set estimates per lead turn and per step. A reservation is taken once (step: at queueing, lead turn: at claim) and
+transfers through admission; spend is read fresh per attempt. An attempt's spend is _settled_ only when it is terminated and
+its session has no open run; until then it is _provisional_ and budgets use provisional + reservations. Unknown spend is
+never zero: it pauses the run (`unknown_spend`) until the person accepts it or raises the limit. Auxiliary usage outside the
+observed runs (summaries, titles) is not counted and the UI says so.
+
+### Ownership and controls
+
+The run's room and brief are owned by the orchestration. Ownership is `owned` while the run is `running|paused|stopping|
+finishing`, `draining` once it is terminal but an owed Stop is unacknowledged or an attempt is `unknown` and not abandoned,
+and `released` after that. Actions on owned or draining objects get `409 orchestration_owned` `{ orchestrationId, state,
+action }` unless delegated:
+
+| Action                                                                                                  | owned                                                                                                                              | draining                        | released                |
+| ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ----------------------- |
+| Post / edit / delete / retry / rewind a message in the room, room rename / members / archive, summaries | 409                                                                                                                                | 409                             | allowed (ordinary room) |
+| `rooms.post` (MCP) into the room                                                                        | 409                                                                                                                                | 409                             | allowed                 |
+| Stop a message run (`…/messages/:id/stop`), stop a flow node (`/api/flow/nodes/:id/stop`)               | 409 (use Stop)                                                                                                                     | 409                             | n/a                     |
+| Brief pause / resume (`/api/briefs/:id/pause                                                            | resume`)                                                                                                                           | delegated to run pause / resume | 409                     | 409 |
+| Plan Start on the room                                                                                  | 409                                                                                                                                | 409                             | 409                     |
+| Team pause / agent pause                                                                                | independent holds: block admission, never cleared by run Resume                                                                    | same                            | n/a                     |
+| Team resume / agent resume                                                                              | clears only its own holds; never lifts a run pause, fence or waiver                                                                | same                            | n/a                     |
+| Retire / replace / pause the lead or a step agent                                                       | admission checks the frozen incarnation: a changed lead pauses the run (`agent_unavailable`), a changed step agent blocks the step | same                            | n/a                     |
+
+Brief status of an owned brief comes from the run (`running`/`paused` while the run is, `done` for `succeeded`, `failed`
+otherwise), never from turns between lead attempts.
+
+### Safety rules in short
+
+Capability: hashed at rest, stored input holds a placeholder, inserted only into the payload sent to Hermes (in memory),
+new generation on re-dispatch, expires when the attempt ends; `orc_…` is redacted wherever text is redacted and step inputs
+are scanned for the prefix (a match blocks admission). The execution journal (`$XDG_STATE_HOME/score/execution-journal`,
+outside `$SCORE_HOME`) records, before the effect, each admission, run handle, Stop fence and global fence change; on start
+any entry missing from or newer than the database puts the global admission fence on and lists exactly those entries.
+Restore `$SCORE_HOME` only with `scripts/score restore <backup>` (sets the fence and the untrusted-history marker); a restore
+done any other way on the same host and boot cannot be detected. A Hermes admission is never replayed after `send_started`:
+the attempt is `unknown`.
+
+### 7.5a review round (Codex pre-merge review) — behaviour changes
+
+- **Deadline expiry is a fence-and-drain, not a pause:** when `deadlineAt` passes the run is stopped exactly like Stop (queued work `not_started: stopped`, Stop owed on every admitted attempt), ends `stopped` with `endReason: "deadline expired"` once every attempt is terminated or abandoned. There is no `deadline` pause any more.
+- **Stop on a finished run** (`finished_with_unresolved`/`failed`/…) with attempts that are not confirmed ended records the owed Stop on each of them without changing the status or releasing capacity; `409` only when there is nothing to stop.
+- **Capacity** counts finished runs while any of their attempts is `unknown` and not abandoned.
+- **Lifting the global fence never makes work sendable:** every attempt the journal records as sent is `unknown` (with its journaled handle attached) before the fence lifts, and the send barrier refuses it again.
+- **Capability hygiene:** any `orch.*` field (ids included) that contains something shaped like a capability (`orc_` + 8 or more id characters, whatever precedes it) is refused with `capability_in_text` and stored nowhere.
+- **Commands** are refused as soon as the lead's run is terminal in Hermes' record, before the executor reconciles it.
+- **Streamed replies** of orchestration attempts are cut at 8 KiB with a `[reply truncated]` marker.
+- **Spend** is settled only when the run's session is known and every other run in it ended `completed`/`failed`; compression continuations in other sessions remain unverifiable and keep reservations until abandonment (open item for the adapter).
+
+### v3.2 amendments (Codex review of design v3)
+
+- **Journal tombstones:** compaction turns each reconciled admission, Stop/Cancel fence and Finish/Pause/waiver/abandon transition into a permanent tombstone (same sequence number) and keeps a `checkpoint` so numbering never goes back; the file is replaced crash-safely (write, fsync, rename, fsync directory). Startup checks the database against tombstones, so a database older than any of them is detected after compaction. `finish`, `pause`/`resume`, `waiver`, `abandon`, cancel fences and fence lifts are journaled.
+- **`orch.assign { needsApproval: true }`** (lead-asks only; `not_lead_asks` otherwise) creates the gate in the assign call. `orch.requestApproval` on a step that already has an attempt → `already_admitted`.
+- **Preflight `tool_readiness`** asks the adapter which MCP tools the lead's serving Hermes lists (`HermesPort.mcpTools`): all `orch.*` present → ok; any missing → `fail` with "Reload MCP"; not establishable (the live adapter cannot ask yet) → `unknown` with the same instruction.
+- Capability recovery: never sent → new generation (older ones revoked in the same transaction); handle known → observe, no POST; possibly sent without handle → `unknown`, fenced, no replay.
+- Watch scoping to an attempt's session remains not done in 7.5a.

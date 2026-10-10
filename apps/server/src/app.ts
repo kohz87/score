@@ -33,6 +33,8 @@ import { registerOutsideSessionRoutes } from './http/outside-sessions.ts'
 import { registerShareRoutes } from './http/shares.ts'
 import { registerConversationRoutes } from './http/conversations.ts'
 import { registerBriefRoutes } from './http/briefs.ts'
+import { registerOrchestrationRoutes } from './http/orchestrations.ts'
+import type { Orchestrator } from './domain/orchestration/executor.ts'
 import { createBriefControl } from './http/brief-control.ts'
 import { createPlanStarter } from './http/plan-start.ts'
 import { createTaskHolds } from './http/task-holds.ts'
@@ -109,6 +111,8 @@ interface BuildAppOptions {
   security?: SecurityPassword
   /** Coding agents (PLAN 7.2): Claude Code / Codex CLI as team members; without it there are none. */
   coding?: CodingRuntime
+  /** The orchestration executor (PLAN 7.5a); without it the orchestration routes are not served. */
+  orchestrator?: Orchestrator
   /** Test hooks for the web terminal: a stand-in PTY, a launch description, limits (the origins come from config). */
   terminal?: Pick<TerminalOptions, 'spawn' | 'launch' | 'limits' | 'clock' | 'isSecure'>
 }
@@ -132,6 +136,7 @@ export function buildApp({
   webAssets,
   security,
   coding,
+  orchestrator,
   terminal,
 }: BuildAppOptions): FastifyInstance {
   const logging = logger ?? process.env.NODE_ENV !== 'test'
@@ -322,7 +327,17 @@ export function buildApp({
     })
     const plans = createPlanStarter({ port, db, ingest })
     app.decorate('recoverPlanStarts', () => plans.recover())
-    registerBriefRoutes(app, { port, db, ingest, control, plans, ...(clock ? { clock } : {}) })
+    registerBriefRoutes(app, {
+      port,
+      db,
+      ingest,
+      control,
+      plans,
+      ...(orchestrator ? { orchestrator } : {}),
+      ...(clock ? { clock } : {}),
+    })
+    if (orchestrator)
+      registerOrchestrationRoutes(app, { orchestrator, db, port, ...(clock ? { clock } : {}) })
     registerTeamPauseRoutes(app, {
       db,
       ingest,

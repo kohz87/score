@@ -247,7 +247,24 @@ Do not `VACUUM` `score.db` by hand. The message search index (`message_fts`) is 
 which a VACUUM may renumber. Score checks the index at every start and rebuilds it when it no longer matches, but a manual
 VACUUM while Score runs can still leave search wrong until the next start.
 
+### Orchestrations: the execution journal and restoring a backup (PLAN 7.5)
+
+Orchestrations start Hermes runs on their own, so Score keeps an **execution journal** outside `$SCORE_HOME`:
+`$SCORE_JOURNAL_DIR`, else `$XDG_STATE_HOME/score/execution-journal`, else `~/.local/state/score/execution-journal`
+(fake mode keeps it inside the home; it starts no real runs). It records, before the effect, each admission, each run
+handle Hermes returned and each Stop. On every start Score compares it with the database; anything the database lacks
+(a database restored from a backup, a lost Stop), an unreadable journal, or a journal that vanished puts a **global
+admission fence** on all orchestrations until you review the list in Settings and lift it. The journal is compacted daily
+(only reconciled entries) and raises a size alarm at 50 MB.
+
+**Restore `$SCORE_HOME` only with `scripts/score restore <backup-folder>`** (Score stopped; the folder must contain
+`score.db`). It keeps the current home next to the restored one (`<home>.before-restore-<time>`) and leaves a marker so the
+next start fences admission and marks execution history untrusted. A restore done any other way (copying files back by
+hand, a filesystem rollback) on the same host and boot **cannot be detected**: Hermes runs Score started after the backup
+was made are then unknown to Score and may still be running. This is the wording Settings › Backup repeats.
+
 ## Changelog of this file
+- 2026-10-10: orchestrations: execution journal location and `scripts/score restore` (PLAN 7.5a).
 - 2026-10-09: do not VACUUM by hand (search index rebuilt at start).- 2026-10-09: the knowledge vault (`SCORE_VAULT`, git).
 - 2026-10-08: section 9, running the built app (pnpm start, launcher, systemd unit).
 - 2026-10-08: creating agents (bridge install URL/ref).
