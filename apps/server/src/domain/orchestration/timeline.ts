@@ -39,7 +39,6 @@ const CONTROL_TEXT: Record<string, string> = {
   ended: 'Run ended',
   late_result: 'A late result arrived and was recorded, not used',
   recovered_unknown: 'After a restart an attempt is not confirmed ended',
-  ownership: 'Ownership changed',
 }
 
 const CAUSE_TEXT: Record<string, string> = {

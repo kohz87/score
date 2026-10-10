@@ -10,24 +10,35 @@ async function start(page: Page, goal: string, policy?: string) {
   await page.goto('/chat')
   await page.getByRole('button', { name: /New orchestration/ }).click()
   const dialog = page.getByRole('dialog', { name: 'New orchestration' })
-  await dialog.getByLabel('Goal').fill(goal)
-  await dialog.getByLabel('Lead').selectOption({ label: 'lead' })
-  await dialog.getByLabel('builder').check()
-  await dialog.getByLabel('reviewer').check()
-  if (policy) await dialog.getByLabel(policy).check()
+  await dialog.getByRole('textbox', { name: 'Goal' }).fill(goal)
+  await dialog.getByRole('combobox', { name: 'Lead' }).selectOption({ label: 'lead' })
+  await dialog.getByRole('checkbox', { name: /builder/ }).check()
+  await dialog.getByRole('checkbox', { name: /reviewer/ }).check()
+  if (policy) await dialog.getByRole('radio', { name: policy }).check()
   // The acknowledgement, the estimates note and the preflight are on the start screen.
   await expect(dialog.getByText(/Score controls the work it starts/).first()).toBeVisible()
   await expect(dialog.getByRole('list', { name: 'Preflight checks' })).toContainText(
-    "Can't be checked",
+    'The lead has an MCP token',
   )
   await expect(dialog.getByText(/per lead turn and per step/)).toBeAttached()
   const startButton = dialog.getByRole('button', { name: 'Start orchestration' })
   await expect(startButton).toBeDisabled()
-  await dialog.getByLabel(/Score controls the work it starts/).check()
+  await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
   await expect(startButton).toBeEnabled({ timeout: 15_000 })
   await startButton.click()
   await expect(dialog).toBeHidden()
   await expect(page.getByLabel('Orchestration', { exact: true }).first()).toBeVisible()
+}
+
+// A gate decision carries the revision the page showed; a click that races a fresh update is answered with a
+// conflict, the page reads the run again and the person decides again. The test does the same.
+async function approve(page: Page, step: string) {
+  const gate = page.getByRole('region', { name: `Approve ${step}` })
+  await expect(gate).toBeVisible({ timeout: 60_000 })
+  await expect(async () => {
+    if (await gate.isVisible()) await gate.getByRole('button', { name: `Approve ${step}` }).click()
+    await expect(gate).toBeHidden({ timeout: 4000 })
+  }).toPass({ timeout: 45_000 })
 }
 
 async function openLive(page: Page) {
@@ -50,15 +61,13 @@ test('start with every-step gates, approve each step, watch the diagram reach su
   await expect(gate).toBeVisible({ timeout: 30_000 })
   await expect(gate).toContainText('Draft: Write the release notes e2e-a')
   await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'gate')
-  await gate.getByRole('button', { name: 'Approve s1' }).click()
+  await approve(page, 's1')
 
   // Dots are the playback of real events: the step result sends one back to the lead.
   await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'succeeded', {
     timeout: 60_000,
   })
-  const second = page.getByRole('region', { name: 'Approve s2' })
-  await expect(second).toBeVisible({ timeout: 60_000 })
-  await second.getByRole('button', { name: 'Approve s2' }).click()
+  await approve(page, 's2')
   await expect(page.locator('[data-node="s2"]')).toHaveAttribute('data-state', 'succeeded', {
     timeout: 60_000,
   })
@@ -90,34 +99,30 @@ test('start with every-step gates, approve each step, watch the diagram reach su
   })
   const max = await scrub.getAttribute('max')
   await expect(scrub).toHaveValue(max!)
-  await scrub.fill('3')
+  // Stepping from the start: s1 appears queued the moment its assignment is accepted, then waits at its gate.
+  await scrub.fill('0')
+  await expect(page.locator('[data-node="s1"]')).toHaveCount(0)
+  for (let i = 0; i < 12 && (await page.locator('[data-node="s1"]').count()) === 0; i++)
+    await page.getByRole('button', { name: 'Step forward' }).click()
   await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'queued')
   await expect(log).toContainText('Assigned s1')
   await expect(log).not.toContainText('s1 succeeded')
   await page.getByRole('button', { name: 'Step forward' }).click()
-  await expect(scrub).toHaveValue('4')
+  await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'gate')
 })
 
-test('dots travel for real events and give way to highlights with reduced motion', async ({
-  page,
-  browser,
-}) => {
+test('dots travel along the edges for real events', async ({ page }) => {
   test.setTimeout(120_000)
   await pair(page)
   await start(page, 'Dots e2e-b')
   await openLive(page)
-  const gate = page.getByRole('region', { name: 'Approve s1' })
-  await expect(gate).toBeVisible({ timeout: 30_000 })
-  await gate.getByRole('button', { name: 'Approve s1' }).click()
+  await approve(page, 's1')
   await expect(page.locator('.orch-dot').first()).toBeAttached({ timeout: 30_000 })
   // Let the run finish: approve the second step.
-  const second = page.getByRole('region', { name: 'Approve s2' })
-  await expect(second).toBeVisible({ timeout: 60_000 })
-  await second.getByRole('button', { name: 'Approve s2' }).click()
+  await approve(page, 's2')
   await expect(page.getByText('Succeeded', { exact: true }).first()).toBeVisible({
     timeout: 60_000,
   })
-  void browser
 })
 
 test('reduced motion: no travelling dot, the nodes and the edge light up instead', async ({
@@ -130,14 +135,10 @@ test('reduced motion: no travelling dot, the nodes and the edge light up instead
     await pair(page)
     await start(page, 'Reduced e2e-c')
     await openLive(page)
-    const gate = page.getByRole('region', { name: 'Approve s1' })
-    await expect(gate).toBeVisible({ timeout: 30_000 })
-    await gate.getByRole('button', { name: 'Approve s1' }).click()
+    await approve(page, 's1')
     await expect(page.locator('.orch-node--lit').first()).toBeAttached({ timeout: 30_000 })
     await expect(page.locator('.orch-dot')).toHaveCount(0)
-    const second = page.getByRole('region', { name: 'Approve s2' })
-    await expect(second).toBeVisible({ timeout: 60_000 })
-    await second.getByRole('button', { name: 'Approve s2' }).click()
+    await approve(page, 's2')
     await expect(page.getByText('Succeeded', { exact: true }).first()).toBeVisible({
       timeout: 60_000,
     })
@@ -161,7 +162,7 @@ test('the lead asks a question: it appears on Now, the answer reaches the lead a
   await expect(needs).toBeHidden({ timeout: 60_000 })
 })
 
-test('a held step is stopped: the run shows Stopping then Stopped, with the step not confirmed ended until Hermes says so', async ({
+test('Stop: the run is Stopping and its attempts are not confirmed ended until the person abandons them, then it is Stopped', async ({
   page,
 }) => {
   test.setTimeout(120_000)
@@ -173,7 +174,24 @@ test('a held step is stopped: the run shows Stopping then Stopped, with the step
   })
   await page.getByRole('button', { name: 'Stop', exact: true }).click()
   await page.getByRole('button', { name: 'Stop the run' }).click()
-  await expect(page.getByText(/^(Stopping|Stopped)$/).first()).toBeVisible({ timeout: 30_000 })
+  // The fake Hermes answers a Stop with a cancelled run, which is not termination evidence: "not confirmed ended".
+  await expect(page.getByText('Stopping', { exact: true }).first()).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'unknown', {
+    timeout: 30_000,
+  })
+  await expect(page.getByRole('region', { name: 'Finish' })).toContainText('Not confirmed ended')
+  // Abandoning is a separate, acknowledged human decision.
+  const card = page.getByRole('region', { name: 'Attempt not confirmed ended' })
+  await expect(async () => {
+    const before = await card.count()
+    if (before > 0) {
+      await card.first().getByRole('checkbox').check()
+      await card.first().getByRole('button', { name: 'Abandon this attempt' }).click()
+      await expect(card).toHaveCount(before - 1, { timeout: 4000 })
+    }
+    expect(await card.count()).toBe(0)
+  }).toPass({ timeout: 45_000 })
+  await expect(card).toHaveCount(0, { timeout: 30_000 })
   await expect(page.getByText('Stopped', { exact: true }).first()).toBeVisible({ timeout: 60_000 })
 })
 
