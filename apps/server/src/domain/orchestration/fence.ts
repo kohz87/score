@@ -55,7 +55,7 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
     'SELECT state, run_id, sent_at, abandoned_at FROM orc_attempts WHERE id = ?',
   )
   const orchestration = sqlite.prepare(
-    'SELECT stop_requested_at, finish_requested_at, waiver_at, status FROM orchestrations WHERE id = ?',
+    'SELECT stop_requested_at, finish_requested_at, waiver_at, status, manual_paused_at FROM orchestrations WHERE id = ?',
   )
   const attemptStop = sqlite.prepare('SELECT stop_requested_at FROM orc_attempts WHERE id = ?')
   const pruned = new Set(
@@ -195,7 +195,13 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
     } else if (kind === 'transition') {
       const e = entry as { orchestrationId: string; what: string; attemptIds?: string[]; n: number }
       const row = orchestration.get(e.orchestrationId) as
-        { finish_requested_at: string | null; waiver_at: string | null; status: string } | undefined
+        | {
+            finish_requested_at: string | null
+            waiver_at: string | null
+            status: string
+            manual_paused_at: string | null
+          }
+        | undefined
       let missing = !row
       if (row && e.what === 'finish') missing = row.finish_requested_at === null
       if (row && e.what === 'waiver') missing = row.waiver_at === null
@@ -203,7 +209,8 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
         missing =
           lastPauseState.get(e.orchestrationId)?.what === 'pause' &&
           lastPauseState.get(e.orchestrationId)!.n === e.n &&
-          row.status === 'running'
+          row.manual_paused_at === null &&
+          (row.status === 'running' || row.status === 'paused')
       if (row && e.what === 'abandon')
         missing = (e.attemptIds ?? []).some(
           (id) =>

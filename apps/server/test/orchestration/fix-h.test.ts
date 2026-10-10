@@ -6,6 +6,7 @@ import { attemptOf, harness, type Harness } from './harness.ts'
 let h: Harness
 afterEach(async () => {
   await h?.close()
+  h = undefined as never
 })
 const status = (id: string) => h.orch.summary(id).status
 const detail = (id: string) => h.orch.snapshot(id).orchestration
@@ -419,4 +420,169 @@ test('fix-h 2: compaction keeps only the newest limits and hold entries, and the
   expect(kept.map((e) => e.kind)).toEqual(['authorization', 'hold'])
   h.db.sqlite.prepare('UPDATE orchestrations SET budget_usd = 20 WHERE id = ?').run(id)
   expect(startup().check.fenced).toBe(true)
+})
+
+// ------------------------------------------------------------- item 4: legacy provenance of recovered runs
+
+import { mkdirSync, copyFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { migrate, openDatabase } from '../../src/db/index.ts'
+import { readOrch } from '../../src/domain/orchestration/store.ts'
+import { summaryOf } from '../../src/domain/orchestration/views.ts'
+import { migrationsDir, tempDir } from './harness-db.ts'
+
+test('fix-h 4: upgrading backfills terminal_source and turns attempts that ended on recovered text into unknown', () => {
+  const tmp = tempDir('orc-upgrade-')
+  try {
+    const before = join(tmp.dir, 'migrations-before')
+    mkdirSync(before)
+    for (const name of readdirSync(migrationsDir))
+      if (!name.startsWith('0049_')) copyFileSync(join(migrationsDir, name), join(before, name))
+    const db = openDatabase(join(tmp.dir, 'score.db'))
+    migrate(db, before)
+    const at = '2026-10-10T10:00:00.000Z'
+    db.sqlite.exec('PRAGMA foreign_keys = OFF')
+    const run = db.sqlite.prepare(
+      "INSERT INTO runs (id, profile, origin, status, started_at, updated_at, ended_at, output) VALUES (?, 'builder', 'score', ?, ?, ?, ?, 'text')",
+    )
+    run.run('r-rec', 'completed', at, at, at)
+    run.run('r-rt', 'completed', at, at, at)
+    run.run('r-open', 'running', at, at, null)
+    db.sqlite
+      .prepare('INSERT INTO gaps (source, run_id, from_ts, to_ts, reason) VALUES (?, ?, ?, ?, ?)')
+      .run(
+        'run-sse:builder',
+        'r-rec',
+        at,
+        at,
+        'Run record expired; the result was recovered from the session history',
+      )
+    db.sqlite
+      .prepare(
+        `INSERT INTO orchestrations (id, title, goal, lead_agent_id, lead_incarnation, allowed_agents, room_id, brief_id,
+         gate_policy, max_steps, max_lead_turns, max_concurrent_steps, lead_turn_estimate_usd, step_estimate_usd, status,
+         acknowledgement, preflight, reserve_bytes, created_at, updated_at)
+         VALUES ('orc-up', 't', 'g', 'lead', 'i', '["builder"]', 'r', 'b', 'none', 5, 5, 2, 1, 1, 'running', '{}', '{}', 0, ?, ?)`,
+      )
+      .run(at, at)
+    const step = db.sqlite.prepare(
+      `INSERT INTO orc_steps (orchestration_id, id, seq, agent_id, agent_incarnation, instruction, after_steps, status, estimate_usd, result, result_revision, created_in_attempt, created_at, updated_at)
+       VALUES ('orc-up', ?, ?, 'builder', 'i', 'x', ?, ?, 1, ?, ?, 'a0', ?, ?)`,
+    )
+    step.run('s1', 1, '[]', 'succeeded', 'accepted text', 1, at, at)
+    step.run('s2', 2, '[]', 'succeeded', 'real result', 1, at, at)
+    step.run('s3', 3, '["s1"]', 'queued', null, 0, at, at)
+    const attempt = db.sqlite.prepare(
+      `INSERT INTO orc_attempts (id, orchestration_id, kind, step_id, n, agent_id, agent_incarnation, session_id, turn_id,
+       message_id, state, input, run_id, evidence, terminated_at, settled, sent_at, created_at, updated_at)
+       VALUES (?, 'orc-up', 'step', ?, 1, 'builder', 'i', ?, ?, ?, ?, '', ?, ?, ?, 1, ?, ?, ?)`,
+    )
+    attempt.run(
+      'a-rec',
+      's1',
+      'sess-1',
+      'turn-1',
+      'm1',
+      'terminated',
+      'r-rec',
+      'completed',
+      at,
+      at,
+      at,
+      at,
+    )
+    attempt.run(
+      'a-rt',
+      's2',
+      'sess-2',
+      'turn-2',
+      'm2',
+      'terminated',
+      'r-rt',
+      'completed',
+      at,
+      at,
+      at,
+      at,
+    )
+    db.sqlite.exec('PRAGMA foreign_keys = ON')
+    migrate(db, migrationsDir)
+    const source = (id: string) =>
+      (
+        db.sqlite.prepare('SELECT terminal_source AS s FROM runs WHERE id = ?').get(id) as {
+          s: string | null
+        }
+      ).s
+    expect([source('r-rec'), source('r-rt'), source('r-open')]).toEqual([
+      'recovered',
+      'runtime',
+      null,
+    ])
+    const state = (id: string) =>
+      db.sqlite
+        .prepare('SELECT state, unknown_reason, evidence FROM orc_attempts WHERE id = ?')
+        .get(id)
+    expect(state('a-rec')).toMatchObject({
+      state: 'unknown',
+      unknown_reason: 'recovered_text_only',
+      evidence: null,
+    })
+    expect(state('a-rt')).toMatchObject({ state: 'terminated', evidence: 'completed' })
+    // The accepted result stays visible, but the unknown attempt fences the run so s3 is not admitted.
+    expect(
+      db.sqlite.prepare("SELECT status, result FROM orc_steps WHERE id = 's1'").get(),
+    ).toMatchObject({
+      status: 'succeeded',
+      result: 'accepted text',
+    })
+    const summary = summaryOf(db.sqlite, readOrch(db.sqlite, 'orc-up')!)
+    expect(summary.needsYou).toContainEqual({ kind: 'unknown', attemptId: 'a-rec' })
+    db.close()
+  } finally {
+    tmp.cleanup()
+  }
+})
+
+// ------------------------------------------------------ item 5: a manual Pause is independent of limit pauses
+
+test('fix-h 5: Pause during a budget pause survives raising the budget until Resume', async () => {
+  h = await harness({ lead: holdScript })
+  const id = await running({ budgetUsd: 50 })
+  const rev = () => detail(id).revision
+  await h.orch.limits(id, { budgetUsd: 0.1, orchestrationRevision: rev() })
+  await h.until(() => status(id) === 'paused')
+  expect(h.orch.summary(id).pauseReason).toBe('budget')
+  await h.orch.pause(id, { orchestrationRevision: rev() })
+  await h.orch.limits(id, { budgetUsd: 50, orchestrationRevision: rev() })
+  await h.settle(3000)
+  expect(status(id)).toBe('paused')
+  expect(h.orch.summary(id).pauseReason).toBe('person')
+  // Restore after overlapping holds: a database that lost the manual hold is detected.
+  expect(startup().check.fenced).toBe(false)
+  h.db.sqlite.prepare('UPDATE orchestrations SET manual_paused_at = NULL WHERE id = ?').run(id)
+  expect(startup().check.fenced).toBe(true)
+  h.db.sqlite
+    .prepare('UPDATE orchestrations SET manual_paused_at = ? WHERE id = ?')
+    .run('2026-10-10T10:00:00.000Z', id)
+  await h.orch.resume(id, { orchestrationRevision: rev() })
+  expect(status(id)).toBe('running')
+})
+
+test('fix-h 5: Pause then a budget condition: Resume does not lift the budget pause, raising the budget does', async () => {
+  h = await harness({ lead: holdScript })
+  const id = await running({ budgetUsd: 50 })
+  const rev = () => detail(id).revision
+  await h.orch.pause(id, { orchestrationRevision: rev() })
+  await h.orch.limits(id, { budgetUsd: 0.1, orchestrationRevision: rev() })
+  await h.orch.resume(id, { orchestrationRevision: rev() })
+  await h.until(() => status(id) === 'paused')
+  expect(h.orch.summary(id).pauseReason).toBe('budget')
+  // A second Pause on top of the budget pause, then Resume: only the manual hold goes.
+  await h.orch.pause(id, { orchestrationRevision: rev() })
+  await h.orch.resume(id, { orchestrationRevision: rev() })
+  await h.settle(3000)
+  expect(status(id)).toBe('paused')
+  expect(h.orch.summary(id).pauseReason).toBe('budget')
+  await h.orch.limits(id, { budgetUsd: 50, orchestrationRevision: rev() })
+  expect(status(id)).toBe('running')
 })

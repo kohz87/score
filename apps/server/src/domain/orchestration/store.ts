@@ -35,6 +35,7 @@ export const OrchRowSchema = z.object({
     'failed',
   ]),
   pause_reason: z.string().nullable(),
+  manual_paused_at: z.string().nullable(),
   plan: jsonArray,
   lead_turns_used: z.int(),
   steps_created: z.int(),

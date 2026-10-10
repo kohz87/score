@@ -149,8 +149,13 @@ export function setLimits(ctx: Ctx, orchId: string, body: LimitsDecision): void 
     o.status === 'paused' &&
     ['budget', 'unknown_spend', 'deadline'].includes(o.pause_reason ?? '')
   )
+    // The condition is gone; a manual hold that is still there keeps the run paused, now for its own reason.
     sqlite
-      .prepare("UPDATE orchestrations SET status = 'running', pause_reason = NULL WHERE id = ?")
+      .prepare(
+        o.manual_paused_at !== null
+          ? "UPDATE orchestrations SET pause_reason = 'person' WHERE id = ?"
+          : "UPDATE orchestrations SET status = 'running', pause_reason = NULL WHERE id = ?",
+      )
       .run(orchId)
   addHistory(sqlite, orchId, 'limits_changed', { ...body, orchestrationRevision: undefined }, now)
   // Every change is journaled as the full resulting state, so a database that lost a tightening is detected at start.
@@ -170,11 +175,18 @@ export function setLimits(ctx: Ctx, orchId: string, body: LimitsDecision): void 
 export function pauseRun(ctx: Ctx, orchId: string, body: RunControl): void {
   const o = requireOrch(ctx.sqlite, orchId)
   expectRevision(o, body.orchestrationRevision)
-  if (o.status === 'paused') return
-  if (o.status !== 'running') throw new HttpError(409, 'conflict', `The run is ${o.status}`)
+  if (o.status === 'paused' && o.manual_paused_at !== null) return
+  if (o.status !== 'running' && o.status !== 'paused')
+    throw new HttpError(409, 'conflict', `The run is ${o.status}`)
+  // The manual hold is its own fact. Pausing a run that a budget (or any other condition) already paused keeps that
+  // condition's reason; the hold outlives it (fix-h item 5).
   ctx.sqlite
-    .prepare("UPDATE orchestrations SET status = 'paused', pause_reason = 'person' WHERE id = ?")
-    .run(orchId)
+    .prepare(
+      o.status === 'running'
+        ? "UPDATE orchestrations SET status = 'paused', pause_reason = 'person', manual_paused_at = ? WHERE id = ?"
+        : 'UPDATE orchestrations SET manual_paused_at = ? WHERE id = ?',
+    )
+    .run(ctx.now, orchId)
   addHistory(ctx.sqlite, orchId, 'paused', { by: 'person' }, ctx.now)
   journalSoft(ctx, () =>
     ctx.journal.append({ kind: 'transition', orchestrationId: orchId, what: 'pause' }),
@@ -188,9 +200,17 @@ export function resumeRun(ctx: Ctx, orchId: string, body: RunControl): void {
   expectRevision(o, body.orchestrationRevision)
   if (o.status === 'running') return
   if (o.status !== 'paused') throw new HttpError(409, 'conflict', `The run is ${o.status}`)
-  ctx.sqlite
-    .prepare("UPDATE orchestrations SET status = 'running', pause_reason = NULL WHERE id = ?")
-    .run(orchId)
+  // Resume ends the manual hold. A budget / unknown-spend / deadline pause is that condition's own and stays until the
+  // limits decision (or, without a manual hold, is simply re-evaluated by admission as before).
+  const limitPause = ['budget', 'unknown_spend', 'deadline'].includes(o.pause_reason ?? '')
+  if (limitPause && o.manual_paused_at !== null)
+    ctx.sqlite.prepare('UPDATE orchestrations SET manual_paused_at = NULL WHERE id = ?').run(orchId)
+  else
+    ctx.sqlite
+      .prepare(
+        "UPDATE orchestrations SET status = 'running', pause_reason = NULL, manual_paused_at = NULL WHERE id = ?",
+      )
+      .run(orchId)
   addHistory(ctx.sqlite, orchId, 'resumed', {}, ctx.now)
   journalSoft(ctx, () =>
     ctx.journal.append({ kind: 'transition', orchestrationId: orchId, what: 'resume' }),

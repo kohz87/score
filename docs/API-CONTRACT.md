@@ -1545,6 +1545,16 @@ termination evidence: the attempt becomes `unknown` with `unknownReason: "recove
 run history (not accepted as the step result), no successor is admitted and its obligations stay until real evidence or a
 recorded abandonment.
 
+Upgrade: migration 0049 backfills `terminal_source` (`recovered` for a terminal run with the recovery's gap row, `runtime` for
+every other terminal run) and turns every `terminated` attempt whose run is `recovered` into `unknown` (`recovered_text_only`),
+which fences its run; a result already accepted from it stays visible.
+
+**Manual Pause (fix batch H).** A person's Pause is its own hold (`manual_paused_at`), independent of budget, unknown-spend,
+deadline and agent conditions. Pause on a run already paused by a condition keeps that reason and adds the hold; a limits
+decision clears only its own condition (the run then stays paused as `person` while the hold exists); Resume clears only the
+hold (a budget / unknown-spend / deadline pause stays until its limits decision). The run runs only when neither remains. The
+`pause` journal entry is verified against the hold, so a database that lost it is fenced.
+
 **Journaled authorization changes (fix batch H).** Besides admissions and fences, the journal records every change to a
 run's limits (`authorization` entry with the resulting budget, deadline and unknown-spend acceptance), every team and agent
 pause hold and its lift (`hold`), and every remap (`remap`). At start the newest entry of each kind is compared with the

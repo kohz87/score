@@ -322,6 +322,7 @@ test('rendered lead input is bounded: results newest first, older ones omitted w
     step_estimate_usd: 0.5,
     status: 'running' as const,
     pause_reason: null,
+    manual_paused_at: null,
     plan: [],
     lead_turns_used: 2,
     steps_created: 30,

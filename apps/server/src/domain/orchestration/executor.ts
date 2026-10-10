@@ -898,6 +898,8 @@ export class Orchestrator {
   // ---------------------------------------------------------------------------------------------------- admission
 
   private pauseFor(ctx: Ctx, o: OrchRow, reason: string): void {
+    // A manual hold is never overwritten by a condition.
+    if (o.manual_paused_at !== null) return
     ctx.sqlite
       .prepare("UPDATE orchestrations SET status = 'paused', pause_reason = ? WHERE id = ?")
       .run(reason, o.id)
