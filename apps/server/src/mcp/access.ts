@@ -56,7 +56,16 @@ export class McpAccessStore {
   /** True while the agent exists in the incarnation the row was made for and is ready. */
   private current(agentId: string, stored: string | null): boolean {
     const life = this.db.read((sqlite) => lifecycleOf(sqlite, agentId))
-    if (!life) return stored === null
+    if (!life) {
+      // Coding agents have no lifecycle row: a removed one has no access.
+      const removed = this.db.read((sqlite) =>
+        sqlite
+          .prepare('SELECT 1 FROM coding_agents WHERE id = ? AND removed_at IS NOT NULL')
+          .get(agentId),
+      )
+      if (removed !== undefined) return false
+      return stored === null
+    }
     if (life.state !== 'ready') return false
     return stored === null || stored === life.incarnation_id
   }

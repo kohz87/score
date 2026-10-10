@@ -16,6 +16,7 @@ import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { messageFromRow } from '../../src/domain/rooms.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
+import { McpAccessStore } from '../../src/mcp/access.ts'
 import { CliLocator } from '../../src/runtimes/coding/cli.ts'
 import { CodingRuntime } from '../../src/runtimes/coding/service.ts'
 import { SecurityPassword } from '../../src/auth/security-password.ts'
@@ -810,4 +811,26 @@ test('a Codex agent needs the read acknowledgement (it can read every file the u
   expect(refused.statusCode).toBe(400)
   expect(refused.json().error.code).toBe('acknowledgement_required')
   await addAgent({ id: 'cx-ack', name: 'Cx', runtime: 'codex', acknowledgeReads: true })
+})
+
+test('fix-l: deleting a coding agent revokes its MCP token and switches', async () => {
+  await addAgent()
+  const access = new McpAccessStore(db)
+  access.patch('coder', { enabled: true, writesEnabled: true })
+  const token = access.issueToken('coder')
+  expect(access.agentForToken(token)).toEqual({ agentId: 'coder' })
+  expect((await request('DELETE', '/api/coding-agents/coder')).statusCode).toBe(204)
+  expect(access.agentForToken(token)).toBeUndefined()
+  expect(access.get('coder')).toMatchObject({ enabled: false, hasToken: false })
+  expect(db.sqlite.prepare('SELECT 1 FROM mcp_access WHERE agent_id = ?').get('coder')).toBe(
+    undefined,
+  )
+})
+
+test('fix-l: a removed coding agent fails MCP auth even if a stale access row survives', async () => {
+  await addAgent()
+  const access = new McpAccessStore(db)
+  const token = access.issueToken('coder')
+  db.sqlite.prepare("UPDATE coding_agents SET removed_at = 'x' WHERE id = 'coder'").run()
+  expect(access.agentForToken(token)).toBeUndefined()
 })
