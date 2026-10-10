@@ -14,7 +14,7 @@ import {
 
 // The live diagram: SVG edges, HTML nodes, CSS animation. Dots are the playback of real events (see orch-model.ts).
 
-const NODE_W = 176
+const NODE_W = 196
 const NODE_H = 68
 /** Each effect starts at least this long after the previous one (owner: dots paced at 300 ms or more). */
 export const EFFECT_GAP_MS = 300
@@ -197,7 +197,8 @@ export function LiveDiagram({
     if (!element || typeof ResizeObserver === 'undefined') return
     const update = () => {
       const width = element.clientWidth
-      setScale(width > 0 && layout.width > width ? width / layout.width : 1)
+      // Never smaller than 75%: below that the text is unreadable, so a narrow screen scrolls sideways instead.
+      setScale(width > 0 && layout.width > width ? Math.max(0.75, width / layout.width) : 1)
     }
     update()
     const observer = new ResizeObserver(update)
@@ -329,10 +330,10 @@ export function LiveDiagram({
               >
                 <AgentGlyph agent={glyph} size="sm" decorative />
                 <span className="orch-node__text">
-                  <b>{isLead ? 'Lead' : node.id}</b>
-                  <span>
-                    {glyph.name} · {word}
-                  </span>
+                  <b>
+                    {isLead ? 'Lead' : node.id} <i>{glyph.name}</i>
+                  </b>
+                  <span>{word}</span>
                 </span>
                 {visual === 'gate' && <span className="orch-node__flag">Needs you</span>}
                 {visual === 'unknown' && (

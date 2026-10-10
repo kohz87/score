@@ -44,7 +44,7 @@ export function RoomLink({
           </small>
         )}
         {room.importedFrom && <small>From {room.importedFrom.label}</small>}
-        {orchestration && <small>Orchestration</small>}
+        {orchestration && <small className="chat-room-orch">Orchestration</small>}
       </span>
       {room.unread > 0 && (
         <span className="chat-unread" aria-label={`${room.unread} unread messages`}>

@@ -78,6 +78,9 @@
   font-size: 13px;
   font-weight: 400;
 }
+.chat-room-name small.chat-room-orch {
+  display: block;
+}
 .chat-unread {
   font-size: 12px;
   font-weight: 700;
