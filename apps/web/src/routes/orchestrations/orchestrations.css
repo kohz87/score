@@ -95,7 +95,7 @@ button.orch-primary,
   padding: 18px 22px;
   margin-bottom: 16px;
 }
-.orch-head h2 {
+.orch-head .orch-title {
   margin: 0 0 4px;
   font-family: var(--font-heading);
   font-size: 22px;

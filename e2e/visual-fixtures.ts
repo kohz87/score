@@ -215,6 +215,16 @@ export const visualFixtures: Record<string, unknown> = {
   '/api/agents/builder/history': { items: [], nextCursor: null },
   '/api/rooms': RoomsSnapshotSchema.parse(recorded['/api/rooms']),
   '/api/shares': { items: [] },
+  '/api/orchestrations': { asOfSeq: 0, items: [] },
+  '/api/orchestrations/fence': {
+    fenced: false,
+    reason: null,
+    untrustedHistory: false,
+    revision: 1,
+    since: null,
+    items: [],
+    journal: { ok: true, entries: 0, bytes: 0, sizeAlarm: false },
+  },
   '/api/knowledge/agent-usage': { items: [] },
   '/api/rooms/room-activity-feed/versions': RoomVersionsSchema.parse({ asOfSeq: 0, items: [] }),
   '/api/rooms/room-activity-feed': RoomDetailSnapshotSchema.parse(

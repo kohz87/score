@@ -1,4 +1,4 @@
-import type { AgentSummary, OrchestrationDetail } from '@score/contract'
+import type { AgentSummary, NeedsYou, OrchestrationDetail } from '@score/contract'
 import { useState } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { needsYouText, usd } from './orch-model.ts'
@@ -180,7 +180,7 @@ export function LimitsCard({
   actions,
 }: {
   run: OrchestrationDetail
-  reason: 'budget' | 'unknown_spend' | 'deadline'
+  reason: Extract<NeedsYou, { kind: 'budget' }>['reason']
   actions: RunActions
 }) {
   const [budget, setBudget] = useState('')
@@ -369,7 +369,7 @@ export function RunNeeds({
               <LimitsCard
                 key={`b${item.reason}`}
                 run={run}
-                reason={item.reason as 'budget'}
+                reason={item.reason}
                 actions={actions}
               />
             )

@@ -212,7 +212,7 @@ export function OrchestrationLive({ orchestrationId }: { orchestrationId: string
     <div className="orch-live">
       <section className="orch-head" aria-label="Orchestration">
         <div>
-          <h2>{detail.title}</h2>
+          <h3 className="orch-title">{detail.title}</h3>
           <p className="orch-goal">{detail.goal}</p>
           <RunStatus run={detail} />
         </div>

@@ -1,0 +1,283 @@
+import {
+  OrchestrationEventsSchema,
+  OrchestrationSnapshotSchema,
+  OrchestrationSummarySchema,
+  type OrchEvent,
+} from '../packages/contract/src/index.ts'
+import { fixtureNow } from './now-fixture.ts'
+
+// A run caught mid-way, for the visual baselines: s1 done, s2 running, s3 waiting for the person. It reuses the
+// visual fixtures' room so Chat can show it; ids and names are the neutral example agents.
+const at = (seconds: number) => new Date(Date.parse(fixtureNow) + seconds * 1000).toISOString()
+
+const summary = OrchestrationSummarySchema.parse({
+  id: 'orch-1',
+  title: 'Write the release notes',
+  status: 'running',
+  pauseReason: null,
+  leadAgentId: 'lead',
+  roomId: 'room-activity-feed',
+  briefId: 'brief-orch-1',
+  gatePolicy: 'every-step',
+  revision: 9,
+  ownership: 'owned',
+  steps: { total: 3, active: 2, succeeded: 1, failed: 0 },
+  leadTurnsUsed: 2,
+  maxLeadTurns: 20,
+  needsYou: [{ kind: 'gate', gateId: 'g3', stepId: 's3' }],
+  createdAt: at(-600),
+  updatedAt: at(-5),
+  endedAt: null,
+})
+
+const attempt = (patch: Record<string, unknown>) => ({
+  kind: 'step',
+  n: 1,
+  sessionId: 'orc-orch-1-x',
+  runId: null,
+  retired: false,
+  stopRequestedAt: null,
+  stopAcknowledgedAt: null,
+  terminatedAt: null,
+  evidence: null,
+  unknownReason: null,
+  spendUsd: null,
+  spendComplete: false,
+  abandonedAt: null,
+  ...patch,
+})
+
+const step = (patch: Record<string, unknown>) => ({
+  after: [],
+  replaces: null,
+  disposition: null,
+  estimateUsd: 0.5,
+  result: null,
+  resultRevision: 0,
+  gateId: null,
+  attemptId: null,
+  createdAt: at(-500),
+  updatedAt: at(-60),
+  ...patch,
+})
+
+export const orchestrationSnapshot = OrchestrationSnapshotSchema.parse({
+  asOfSeq: 47,
+  orchestration: {
+    ...summary,
+    goal: 'Write the release notes for 2.4 and have them reviewed before Friday.',
+    allowedAgents: ['builder', 'reviewer', 'designer'],
+    plan: ['Draft the notes', 'Review the draft', 'Design the announcement image'],
+    maxSteps: 12,
+    maxConcurrentSteps: 2,
+    deadlineAt: null,
+    leadTurnEstimateUsd: 0.25,
+    stepEstimateUsd: 0.5,
+    budget: {
+      limitUsd: 5,
+      settledUsd: 0.31,
+      provisionalUsd: 0.12,
+      reservedUsd: 0.75,
+      remainingUsd: 3.82,
+      unknownSpend: false,
+      complete: false,
+    },
+    stepsList: [
+      step({
+        id: 's1',
+        agentId: 'builder',
+        instruction: 'Draft the 2.4 release notes from the merged changes.',
+        status: 'succeeded',
+        result: 'Draft ready: 14 changes grouped into Added, Fixed and Removed.',
+        resultRevision: 1,
+        attemptId: 'a2',
+      }),
+      step({
+        id: 's2',
+        agentId: 'reviewer',
+        instruction: 'Review the draft and list problems.',
+        after: ['s1'],
+        status: 'admitted',
+        attemptId: 'a3',
+      }),
+      step({
+        id: 's3',
+        agentId: 'designer',
+        instruction: 'Design a announcement image for the release.',
+        after: ['s1'],
+        status: 'pending_gate',
+        gateId: 'g3',
+      }),
+    ],
+    attempts: [
+      attempt({
+        id: 'a1',
+        kind: 'lead',
+        stepId: null,
+        agentId: 'lead',
+        state: 'terminated',
+        terminatedAt: at(-300),
+        evidence: 'completed',
+        spendUsd: 0.1,
+        spendComplete: true,
+      }),
+      attempt({
+        id: 'a2',
+        stepId: 's1',
+        agentId: 'builder',
+        state: 'terminated',
+        terminatedAt: at(-200),
+        evidence: 'completed',
+        spendUsd: 0.21,
+        spendComplete: true,
+      }),
+      attempt({ id: 'a3', stepId: 's2', agentId: 'reviewer', state: 'running' }),
+      attempt({
+        id: 'a4',
+        kind: 'lead',
+        n: 2,
+        stepId: null,
+        agentId: 'lead',
+        state: 'terminated',
+        terminatedAt: at(-120),
+        evidence: 'completed',
+        spendUsd: 0.1,
+        spendComplete: false,
+      }),
+    ],
+    gates: [
+      {
+        id: 'g3',
+        stepId: 's3',
+        requestedBy: 'policy',
+        status: 'open',
+        payload: {
+          agentId: 'designer',
+          agentIncarnation: 'inc-designer-1a2b3c',
+          instruction: 'Design a announcement image for the release.',
+          after: ['s1'],
+          replaces: null,
+          estimateUsd: 0.5,
+          dependencyRevisions: { s1: 1 },
+        },
+        payloadHash: 'h3',
+        revision: 1,
+        note: null,
+        createdAt: at(-110),
+        decidedAt: null,
+      },
+    ],
+    inquiries: [],
+    finish: null,
+    unconfirmed: [],
+    cancelFence: [],
+    waiverAt: null,
+    acknowledgedAt: at(-600),
+    endReason: null,
+    storage: { reserveBytes: 2_000_000, storedBytes: 12_000 },
+  },
+})
+
+const ev = (
+  i: number,
+  seconds: number,
+  patch: Partial<OrchEvent> & Pick<OrchEvent, 'kind' | 'summary'>,
+): OrchEvent => ({
+  id: `e${i}`,
+  at: at(seconds),
+  stepId: null,
+  attemptId: null,
+  tool: null,
+  verdict: null,
+  code: null,
+  ...patch,
+})
+
+export const orchestrationEvents = OrchestrationEventsSchema.parse({
+  asOfSeq: 47,
+  events: [
+    ev(1, -600, { kind: 'run_started', summary: 'Run started' }),
+    ev(2, -590, { kind: 'lead_wake', attemptId: 'a1', summary: 'Lead turn 1 started' }),
+    ev(3, -580, {
+      kind: 'command',
+      tool: 'orch.plan',
+      verdict: 'accepted',
+      summary: 'Plan updated (3 entries)',
+    }),
+    ev(4, -575, {
+      kind: 'command',
+      tool: 'orch.assign',
+      verdict: 'accepted',
+      stepId: 's1',
+      summary: 'Assigned s1 to builder: Draft the 2.4 release notes from the merged changes.',
+    }),
+    ev(5, -575, { kind: 'gate_opened', stepId: 's1', summary: 's1 waits for your approval' }),
+    ev(6, -570, {
+      kind: 'command',
+      tool: 'orch.assign',
+      verdict: 'refused',
+      code: 'agent_not_allowed',
+      summary: 'orch.assign refused (agent_not_allowed): ops is not on the run list',
+    }),
+    ev(7, -560, {
+      kind: 'lead_done',
+      attemptId: 'a1',
+      verdict: 'completed',
+      summary: 'Lead turn 1 ended',
+    }),
+    ev(8, -500, {
+      kind: 'gate_decided',
+      stepId: 's1',
+      verdict: 'approved',
+      summary: 'You approved s1',
+    }),
+    ev(9, -499, {
+      kind: 'step_admitted',
+      stepId: 's1',
+      attemptId: 'a2',
+      summary: 's1 started by builder (attempt 1)',
+    }),
+    ev(10, -200, {
+      kind: 'step_result',
+      stepId: 's1',
+      attemptId: 'a2',
+      verdict: 'succeeded',
+      summary:
+        's1 succeeded (builder): Draft ready: 14 changes grouped into Added, Fixed and Removed.',
+    }),
+    ev(11, -190, { kind: 'lead_wake', attemptId: 'a4', summary: 'Lead turn 2 started' }),
+    ev(12, -150, {
+      kind: 'command',
+      tool: 'orch.assign',
+      verdict: 'accepted',
+      stepId: 's2',
+      summary: 'Assigned s2 to reviewer: Review the draft and list problems.',
+    }),
+    ev(13, -148, {
+      kind: 'command',
+      tool: 'orch.assign',
+      verdict: 'accepted',
+      stepId: 's3',
+      summary: 'Assigned s3 to designer: Design a announcement image for the release.',
+    }),
+    ev(14, -148, { kind: 'gate_opened', stepId: 's3', summary: 's3 waits for your approval' }),
+    ev(15, -140, {
+      kind: 'lead_done',
+      attemptId: 'a4',
+      verdict: 'completed',
+      summary: 'Lead turn 2 ended',
+    }),
+    ev(16, -130, {
+      kind: 'step_admitted',
+      stepId: 's2',
+      attemptId: 'a3',
+      summary: 's2 started by reviewer (attempt 1)',
+    }),
+  ],
+})
+
+export const orchestrationFixtures: Record<string, unknown> = {
+  '/api/orchestrations': { asOfSeq: 47, items: [summary] },
+  '/api/orchestrations/orch-1': orchestrationSnapshot,
+  '/api/orchestrations/orch-1/events': orchestrationEvents,
+}
