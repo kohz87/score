@@ -2130,7 +2130,7 @@ export class Orchestrator {
       // The lead decides what to do with a step Hermes keeps refusing.
       sqlite
         .prepare(
-          "UPDATE orc_attempts SET state = 'refused', unknown_reason = 'hermes_refused', refused_total = ?, refused_streak = ?, terminated_at = ?, updated_at = ? WHERE id = ?",
+          "UPDATE orc_attempts SET state = 'refused', unknown_reason = 'hermes_refused', refused_total = ?, refused_streak = ?, refused_generation = dispatch_generation, terminated_at = ?, updated_at = ? WHERE id = ?",
         )
         .run(total, streak, now, now, attempt.id)
       sqlite
@@ -2152,7 +2152,7 @@ export class Orchestrator {
       const wait = streak >= WORKFLOW_LIMITS.refusedPause
       sqlite
         .prepare(
-          "UPDATE orc_attempts SET state = 'created', refused_total = ?, refused_streak = ?, needs_person = ?, next_try_at = ?, updated_at = ? WHERE id = ?",
+          "UPDATE orc_attempts SET state = 'created', refused_total = ?, refused_streak = ?, refused_generation = dispatch_generation, needs_person = ?, next_try_at = ?, updated_at = ? WHERE id = ?",
         )
         .run(
           total,

@@ -82,6 +82,8 @@ ALTER TABLE orc_global ADD COLUMN admission_revision INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE orc_attempts ADD COLUMN dispatch_generation INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE orc_attempts ADD COLUMN refused_total INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE orc_attempts ADD COLUMN refused_streak INTEGER NOT NULL DEFAULT 0;
+-- The generation of the latest proven refusal the database committed (restore verification compares it with the journal).
+ALTER TABLE orc_attempts ADD COLUMN refused_generation INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE orc_attempts ADD COLUMN next_try_at TEXT;
 -- Set at the lifetime limit: only the person's decision continues the attempt.
 ALTER TABLE orc_attempts ADD COLUMN needs_person INTEGER NOT NULL DEFAULT 0 CHECK (needs_person IN (0, 1));

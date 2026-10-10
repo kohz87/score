@@ -332,3 +332,26 @@ test('an agent that becomes served again ends the refusal wait without any perso
   await h.settle(15_000)
   await h.until(done(id))
 })
+
+// Codex review: a refusal lost within the same generation
+test('a refusal journaled for generation g but lost by the database (still send_started at g) is detected and reconciled', async () => {
+  h = await wfHarness()
+  outage(h)
+  await start(h, definition([agent('a'), end()], [edge('a', 'done')]))
+  await h.until(() => (attemptRow(h!)[0]?.refused_total ?? 0) >= 2)
+  await h.orch.close()
+  const row = attemptRow(h)[0]!
+  // The crash: the journal has send_refused(g); the transaction that records it never committed.
+  h.db.sqlite
+    .prepare(
+      "UPDATE orc_attempts SET state = 'send_started', refused_total = ?, refused_streak = ?, refused_generation = ? WHERE id = ?",
+    )
+    .run(row.refused_total - 1, row.refused_streak - 1, row.dispatch_generation - 1, row.id)
+  const store = new GlobalFenceStore(h.db, h.journal, () => h!.scheduler.now())
+  expect(store.startupCheck()).toMatchObject({ fenced: true, reasons: ['journal_mismatch'] })
+  const after = attemptRow(h)[0]! as typeof row & { refused_generation: number }
+  expect(after.state).toBe('created')
+  expect(after.refused_total).toBe(row.refused_total)
+  expect(after.refused_streak).toBe(row.refused_streak)
+  expect(after.refused_generation).toBe(row.dispatch_generation)
+})

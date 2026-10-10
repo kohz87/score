@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import type { FenceItem, GlobalFence } from '@score/contract'
+import { WORKFLOW_LIMITS, type FenceItem, type GlobalFence } from '@score/contract'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { HttpError } from '../../errors.ts'
@@ -52,7 +52,7 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
   const accepted = acceptedSet(entries)
   const mismatches: Mismatch[] = []
   const attempt = sqlite.prepare(
-    'SELECT state, run_id, sent_at, abandoned_at, dispatch_generation FROM orc_attempts WHERE id = ?',
+    'SELECT state, run_id, sent_at, abandoned_at, dispatch_generation, refused_generation FROM orc_attempts WHERE id = ?',
   )
   const orchestration = sqlite.prepare(
     'SELECT stop_requested_at, finish_requested_at, waiver_at, status, manual_paused_at FROM orchestrations WHERE id = ?',
@@ -170,13 +170,27 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
       const latest = dispatches.get(id)
       if (!latest || latest.n !== entry.n) continue
       const row = attempt.get(id) as
-        { sent_at: string | null; dispatch_generation: number } | undefined
+        | { sent_at: string | null; dispatch_generation: number; refused_generation: number }
+        | undefined
       if (!row || (latest.state === 'sent' && row.sent_at === null))
         mismatches.push({
           kind: 'attempt',
           ref: id,
           journalN: entry.n,
           detail: `Admission of attempt ${id} was started, but the database has no record of it`,
+        })
+      else if (
+        latest.state === 'refused' &&
+        latest.generation > 0 &&
+        row.refused_generation < latest.generation
+      )
+        // The journal proves generation g was refused, but the database never committed that refusal (a crash between
+        // the two): its state at g may still read "sent".
+        mismatches.push({
+          kind: 'attempt',
+          ref: id,
+          journalN: entry.n,
+          detail: `The journal records a refusal of dispatch generation ${latest.generation} of attempt ${id}, but the database does not hold it`,
         })
       else if (latest.generation > 0 && row.dispatch_generation < latest.generation)
         mismatches.push({
@@ -271,7 +285,7 @@ export function applyJournalEvidence(
   for (const [attemptId, latest] of journalDispatches(entries)) {
     const attempt = sqlite
       .prepare(
-        'SELECT id, state, step_id, orchestration_id, dispatch_generation FROM orc_attempts WHERE id = ?',
+        'SELECT id, state, step_id, orchestration_id, dispatch_generation, refused_generation, refused_total, refused_streak FROM orc_attempts WHERE id = ?',
       )
       .get(attemptId) as
       | {
@@ -280,8 +294,37 @@ export function applyJournalEvidence(
           step_id: string | null
           orchestration_id: string
           dispatch_generation: number
+          refused_generation: number
+          refused_total: number
+          refused_streak: number
         }
       | undefined
+    // A refusal the journal proved but the database lost, with the attempt still `send_started` at that very generation:
+    // it was never sent. It goes back to `created` with the refusal counted (and the lifetime limit honoured).
+    if (
+      attempt &&
+      attempt.state === 'send_started' &&
+      latest.state === 'refused' &&
+      latest.generation > 0 &&
+      attempt.dispatch_generation === latest.generation &&
+      attempt.refused_generation < latest.generation
+    ) {
+      const total = attempt.refused_total + 1
+      sqlite
+        .prepare(
+          "UPDATE orc_attempts SET state = 'created', refused_total = ?, refused_streak = ?, refused_generation = ?, needs_person = ?, updated_at = ? WHERE id = ?",
+        )
+        .run(
+          total,
+          attempt.refused_streak + 1,
+          latest.generation,
+          total >= WORKFLOW_LIMITS.refusedLifetime ? 1 : 0,
+          now,
+          attempt.id,
+        )
+      changed++
+      continue
+    }
     if (!attempt || attempt.state !== 'created') continue
     if (latest.state === 'refused') {
       // Proven unsent: it stays sendable, but the generation counter never goes back (a restored database lagged).

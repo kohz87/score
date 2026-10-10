@@ -158,6 +158,7 @@ export const AttemptRowSchema = z.object({
   dispatch_generation: z.int(),
   refused_total: z.int(),
   refused_streak: z.int(),
+  refused_generation: z.int(),
   next_try_at: z.string().nullable(),
   needs_person: bool,
 })
