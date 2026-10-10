@@ -106,3 +106,24 @@ test('a default for a skipped producer yields a snapshot that satisfies the cont
   expect(c).toMatchObject({ kind: 'default', producerAttempt: 0, eligible: true })
   expect(() => WorkflowRunSnapshotSchema.parse(h!.orch.workflowSnapshot(id))).not.toThrow()
 })
+
+// medium: unknown-spend continue
+test("unknown spend 'continue' is honoured by planning, claim and send; 'pause' still pauses; revoking works", async () => {
+  h = await wfHarness({ orchestrator: { spend: () => ({ usd: null, complete: false }) } })
+  const chain = () => definition([agent('a'), agent('b'), end()], [edge('a', 'b'), edge('b', 'done')])
+  const go = await start(h, chain(), { budgetUsd: 50, unknownSpend: 'continue' })
+  await h.until(done(go))
+  const held = await start(h, chain(), { budgetUsd: 50, unknownSpend: 'pause' })
+  await h.until(() => node(h!, held, 'b').waitingFor === 'unknown_spend')
+  await h.settle(8000)
+  expect(node(h, held, 'b').state).not.toBe('succeeded')
+  expect(['running', 'paused']).toContain(run(h, held).status)
+  // Revoking the acceptance later stops a 'continue' run at the next admission.
+  const slow = await start(h, definition([agent('a', { instruction: '[fake:hold] A' }), agent('b'), end()], [edge('a', 'b'), edge('b', 'done')]), {
+    budgetUsd: 50,
+    unknownSpend: 'continue',
+  })
+  await h.settle(2000)
+  await h.orch.wfLimits(slow, { acceptUnknownSpend: false, orchestrationRevision: run(h, slow).revision })
+  expect(h.rows('SELECT accepted_unknown_spend AS a FROM orchestrations WHERE id = ?', slow)).toEqual([{ a: 0 }])
+})

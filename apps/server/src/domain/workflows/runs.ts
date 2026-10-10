@@ -104,8 +104,8 @@ export function insertWorkflowRun(
     .prepare(
       `INSERT INTO orchestrations (id, title, goal, planner, lead_agent_id, lead_incarnation, allowed_agents, room_id, brief_id, gate_policy,
          budget_usd, deadline_at, max_steps, max_lead_turns, max_concurrent_steps, lead_turn_estimate_usd, step_estimate_usd,
-         status, acknowledgement, preflight, reserve_bytes, stored_bytes, created_at, updated_at)
-       VALUES (?, ?, ?, 'workflow', NULL, NULL, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0.25, ?, 'running', ?, ?, ?, ?, ?, ?)`,
+         status, acknowledgement, preflight, reserve_bytes, stored_bytes, created_at, updated_at, accepted_unknown_spend)
+       VALUES (?, ?, ?, 'workflow', NULL, NULL, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0.25, ?, 'running', ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -126,6 +126,9 @@ export function insertWorkflowRun(
       bytesOf(JSON.stringify(body.inputs)) + 2048,
       now,
       now,
+      // 'continue' chosen at start is the person's acceptance of unknown spend; one rule then governs planning, claim
+      // and send (and a later limits decision can revoke it).
+      body.unknownSpend === 'continue' ? 1 : 0,
     )
   const freeze = sqlite.prepare(
     "INSERT INTO orc_agent_map (orchestration_id, agent_id, role, incarnation, updated_at) VALUES (?, ?, 'agent', ?, ?)",

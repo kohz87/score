@@ -458,12 +458,7 @@ export function assignWait(
   if (frozen !== undefined && frozen !== current) return 'remap'
   if (!agentAdmits(sqlite, agentId)) return 'agent_unavailable'
   const view = budgetView(sqlite, o)
-  if (
-    o.budget_usd !== null &&
-    view.unknownSpend &&
-    !o.accepted_unknown_spend &&
-    wf.unknown_spend === 'pause'
-  )
+  if (o.budget_usd !== null && view.unknownSpend && !o.accepted_unknown_spend)
     return 'unknown_spend'
   return null
 }

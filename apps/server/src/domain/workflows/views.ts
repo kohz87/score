@@ -151,12 +151,7 @@ function waitingFor(
     return 'agent_hold'
   if (!agentAdmits(sqlite, step.agent_id)) return 'agent_unavailable'
   const view = budgetView(sqlite, o)
-  if (
-    view.limitUsd !== null &&
-    view.unknownSpend &&
-    !o.accepted_unknown_spend &&
-    wf.unknown_spend === 'pause'
-  )
+  if (view.limitUsd !== null && view.unknownSpend && !o.accepted_unknown_spend)
     return 'unknown_spend'
   if (!attempt) {
     if (
