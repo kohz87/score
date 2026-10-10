@@ -162,6 +162,12 @@ function updateRun(
   now: string,
   values: Record<string, SQLInputValue>,
 ): boolean {
+  // Every terminal writer says where its status came from (fix-h item 1); only Hermes' own word is 'runtime'.
+  if (
+    typeof values.status === 'string' &&
+    runLifecycle.isTerminal(values.status as Parameters<typeof runLifecycle.isTerminal>[0])
+  )
+    values = { terminal_source: 'runtime', ...values }
   return (
     guardedUpsert(sqlite, {
       table: 'runs',
@@ -507,6 +513,7 @@ export function runRecoveredObservation(context: RunContext, output: string): Ob
       const reason = 'Run record expired; the result was recovered from the session history'
       const changed = updateRun(sqlite, row, now, {
         status: 'completed',
+        terminal_source: 'recovered',
         ended_at: now,
         output: redactBounded(output, 8192),
         error: null,

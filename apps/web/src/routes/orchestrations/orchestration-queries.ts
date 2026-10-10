@@ -17,6 +17,7 @@ import {
   type OrchestrationDetail,
   type OrchestrationSummary,
   type RunControl,
+  type RemapDecision,
   type WaiverDecision,
 } from '@score/contract'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -223,6 +224,7 @@ export function useRunActions(id: string) {
     resume: useRunPost<RunControl>(id, plain('resume')),
     stop: useRunPost<RunControl>(id, plain('stop')),
     waiver: useRunPost<WaiverDecision>(id, plain('waiver')),
+    remap: useRunPost<RemapDecision>(id, plain('remap')),
     abandon: useRunPost<AbandonDecision>(id, plain('abandon')),
   }
 }

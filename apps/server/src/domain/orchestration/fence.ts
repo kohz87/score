@@ -55,7 +55,7 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
     'SELECT state, run_id, sent_at, abandoned_at FROM orc_attempts WHERE id = ?',
   )
   const orchestration = sqlite.prepare(
-    'SELECT stop_requested_at, finish_requested_at, waiver_at, status FROM orchestrations WHERE id = ?',
+    'SELECT stop_requested_at, finish_requested_at, waiver_at, status, manual_paused_at FROM orchestrations WHERE id = ?',
   )
   const attemptStop = sqlite.prepare('SELECT stop_requested_at FROM orc_attempts WHERE id = ?')
   const pruned = new Set(
@@ -78,6 +78,20 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
     )
       lastPauseState.set(entry.orchestrationId, { what: entry.what, n: entry.n })
   }
+  // The newest authorization per orchestration and the newest hold per target say what the database must at least hold.
+  const authorization = new Map<string, Extract<JournalEntry, { kind: 'authorization' }>>()
+  const hold = new Map<string, Extract<JournalEntry, { kind: 'hold' }>>()
+  for (const entry of entries) {
+    if (entry.kind === 'authorization') authorization.set(entry.orchestrationId, entry)
+    if (entry.kind === 'hold')
+      hold.set(entry.target === 'team' ? 'team' : `agent:${entry.agentId}`, entry)
+  }
+  const remap = new Map<string, Extract<JournalEntry, { kind: 'remap' }>>()
+  for (const entry of entries)
+    if (entry.kind === 'remap') remap.set(`${entry.orchestrationId}:${entry.agentId}`, entry)
+  const limits = sqlite.prepare(
+    'SELECT budget_usd, deadline_at, accepted_unknown_spend FROM orchestrations WHERE id = ?',
+  )
   for (const entry of entries) {
     if (entry.kind === 'global_fence') journalSeq = Math.max(journalSeq, entry.fenceSeq)
     if (accepted.has(entry.n)) continue
@@ -85,7 +99,67 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
       'orchestrationId' in entry ? (entry.orchestrationId as string) : undefined
     if (orchestrationId && pruned.has(orchestrationId)) continue
     const kind = entry.kind === 'tombstone' ? entry.of : entry.kind
-    if (kind === 'send_started') {
+    if (entry.kind === 'authorization') {
+      if (authorization.get(entry.orchestrationId) !== entry) continue
+      const row = limits.get(entry.orchestrationId) as
+        | {
+            budget_usd: number | null
+            deadline_at: string | null
+            accepted_unknown_spend: number
+          }
+        | undefined
+      const lost: string[] = []
+      if (!row) lost.push('the run')
+      else {
+        if (
+          entry.budgetUsd !== null &&
+          (row.budget_usd === null || row.budget_usd > entry.budgetUsd)
+        )
+          lost.push('a lowered budget')
+        if (
+          entry.deadlineAt !== null &&
+          (row.deadline_at === null || Date.parse(row.deadline_at) > Date.parse(entry.deadlineAt))
+        )
+          lost.push('a shorter deadline')
+        if (!entry.acceptUnknownSpend && row.accepted_unknown_spend === 1)
+          lost.push('a revoked unknown-spend acceptance')
+      }
+      if (lost.length > 0)
+        mismatches.push({
+          kind: 'fence',
+          ref: entry.orchestrationId,
+          journalN: entry.n,
+          detail: `The limits of ${entry.orchestrationId} were tightened (${lost.join(', ')}), but the database does not hold that`,
+        })
+    } else if (entry.kind === 'remap') {
+      if (remap.get(`${entry.orchestrationId}:${entry.agentId}`) !== entry) continue
+      const row = sqlite
+        .prepare(
+          'SELECT incarnation FROM orc_agent_map WHERE orchestration_id = ? AND agent_id = ?',
+        )
+        .get(entry.orchestrationId, entry.agentId) as { incarnation: string } | undefined
+      if (!row || row.incarnation !== entry.incarnation)
+        mismatches.push({
+          kind: 'fence',
+          ref: entry.orchestrationId,
+          journalN: entry.n,
+          detail: `The remap of ${entry.agentId} in ${entry.orchestrationId} was recorded, but the database does not hold it`,
+        })
+    } else if (entry.kind === 'hold') {
+      const key = entry.target === 'team' ? 'team' : `agent:${entry.agentId}`
+      if (hold.get(key) !== entry || entry.action !== 'set') continue
+      const held =
+        entry.target === 'team'
+          ? sqlite.prepare('SELECT 1 FROM team_state WHERE id = 1 AND paused_at IS NOT NULL').get()
+          : sqlite.prepare('SELECT 1 FROM agent_pauses WHERE agent_id = ?').get(entry.agentId ?? '')
+      if (!held)
+        mismatches.push({
+          kind: 'fence',
+          ref: key,
+          journalN: entry.n,
+          detail: `The pause of ${entry.target === 'team' ? 'the team' : `agent ${entry.agentId}`} was recorded, but the database does not hold it`,
+        })
+    } else if (kind === 'send_started') {
       const id = (entry as { attemptId: string }).attemptId
       const row = attempt.get(id) as { sent_at: string | null } | undefined
       if (!row || row.sent_at === null)
@@ -121,7 +195,13 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
     } else if (kind === 'transition') {
       const e = entry as { orchestrationId: string; what: string; attemptIds?: string[]; n: number }
       const row = orchestration.get(e.orchestrationId) as
-        { finish_requested_at: string | null; waiver_at: string | null; status: string } | undefined
+        | {
+            finish_requested_at: string | null
+            waiver_at: string | null
+            status: string
+            manual_paused_at: string | null
+          }
+        | undefined
       let missing = !row
       if (row && e.what === 'finish') missing = row.finish_requested_at === null
       if (row && e.what === 'waiver') missing = row.waiver_at === null
@@ -129,7 +209,8 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
         missing =
           lastPauseState.get(e.orchestrationId)?.what === 'pause' &&
           lastPauseState.get(e.orchestrationId)!.n === e.n &&
-          row.status === 'running'
+          row.manual_paused_at === null &&
+          (row.status === 'running' || row.status === 'paused')
       if (row && e.what === 'abandon')
         missing = (e.attemptIds ?? []).some(
           (id) =>

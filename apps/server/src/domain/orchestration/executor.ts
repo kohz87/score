@@ -18,6 +18,7 @@ import {
   type PreflightCheck,
   type AbandonDecision,
   type RunControl,
+  type RemapDecision,
   type WaiverDecision,
 } from '@score/contract'
 import { createHash, randomUUID } from 'node:crypto'
@@ -49,6 +50,7 @@ import {
   answerInquiry,
   decideGate,
   grantWaiver,
+  remapAgent,
   pauseRun,
   resumeRun,
   setLimits,
@@ -71,6 +73,7 @@ import {
   addHistory,
   attemptsOf,
   causesAfter,
+  frozenIncarnation,
   gatesOf,
   inquiriesOf,
   isTerminalStatus,
@@ -90,7 +93,12 @@ interface RunFacts {
   output: string | null
   error: string | null
   ended_at: string | null
+  terminal_source: string | null
 }
+
+/** Only Hermes' own terminal word is evidence; a status rebuilt from session-history text is not (fix-h item 1). */
+const isEvidence = (run: RunFacts): boolean =>
+  (run.status === 'completed' || run.status === 'failed') && run.terminal_source !== 'recovered'
 
 export const ORCHESTRATION_QUOTA_BYTES = 200 * 1024 * 1024
 const SWEEP_MS = 10_000
@@ -339,6 +347,26 @@ export class Orchestrator {
 
   summary(id: string): OrchestrationSummary {
     return this.db.read((sqlite) => summaryOf(sqlite, requireOrch(sqlite, id)))
+  }
+
+  /**
+   * Journals a team or agent pause hold (or its lift) before the route changes the database, so a database that later
+   * loses the hold is fenced. A journal that cannot be written fences admission at once (fail closed).
+   */
+  recordHold(
+    target: { kind: 'team' } | { kind: 'agent'; agentId: string },
+    action: 'set' | 'lift',
+  ): void {
+    try {
+      this.options.fence.journal.append({
+        kind: 'hold',
+        target: target.kind,
+        ...(target.kind === 'agent' ? { agentId: target.agentId } : {}),
+        action,
+      })
+    } catch (error) {
+      this.fenceNow('journal_unwritable', error instanceof Error ? error.message : String(error))
+    }
   }
 
   fenceStore(): GlobalFenceStore {
@@ -627,6 +655,19 @@ export class Orchestrator {
         now,
         now,
       )
+    // Freeze who this run was started with: the lead and every allowed agent (fix-h item 3).
+    const freeze = sqlite.prepare(
+      'INSERT INTO orc_agent_map (orchestration_id, agent_id, role, incarnation, updated_at) VALUES (?, ?, ?, ?, ?)',
+    )
+    freeze.run(id, body.leadAgentId, 'lead', lifecycle?.incarnation_id ?? 'untracked', now)
+    for (const agentId of body.allowedAgents)
+      freeze.run(
+        id,
+        agentId,
+        'agent',
+        lifecycleOf(sqlite, agentId)?.incarnation_id ?? 'untracked',
+        now,
+      )
     addCause(sqlite, id, 'started', null, now)
     addHistory(
       sqlite,
@@ -668,6 +709,10 @@ export class Orchestrator {
   stop(id: string) {
     return this.decide(id, (ctx) => stopRun(ctx, id))
   }
+  remap(id: string, body: RemapDecision) {
+    return this.decide(id, (ctx) => remapAgent(ctx, id, body))
+  }
+
   waiver(id: string, body: WaiverDecision) {
     return this.decide(id, (ctx) => grantWaiver(ctx, id, body))
   }
@@ -853,6 +898,8 @@ export class Orchestrator {
   // ---------------------------------------------------------------------------------------------------- admission
 
   private pauseFor(ctx: Ctx, o: OrchRow, reason: string): void {
+    // A manual hold is never overwritten by a condition.
+    if (o.manual_paused_at !== null) return
     ctx.sqlite
       .prepare("UPDATE orchestrations SET status = 'paused', pause_reason = ? WHERE id = ?")
       .run(reason, o.id)
@@ -968,6 +1015,21 @@ export class Orchestrator {
           now,
         )
         addCause(sqlite, o.id, 'step_blocked', step.id, now, 'agent_unavailable')
+        touch(ctx, o.id)
+        continue
+      }
+      // The step must also match the mapping the person started (or remapped) the run with.
+      const frozen = frozenIncarnation(sqlite, o.id, step.agent_id)
+      if (frozen !== undefined && frozen !== step.agent_incarnation) {
+        setStepStatus(
+          sqlite,
+          o.id,
+          step.id,
+          'blocked',
+          'agent_changed: not the agent mapping approved for this run',
+          now,
+        )
+        addCause(sqlite, o.id, 'step_blocked', step.id, now, 'agent_changed')
         touch(ctx, o.id)
         continue
       }
@@ -1167,6 +1229,24 @@ export class Orchestrator {
         disposition: 'agent_unavailable: the agent was replaced or removed',
       })
     }
+    // Re-checked against the frozen mapping as the last step before Hermes (fix-h item 3).
+    const frozen = frozenIncarnation(sqlite, o.id, attempt.agent_id)
+    if (frozen !== undefined && frozen !== attempt.agent_incarnation) {
+      if (attempt.kind === 'lead') {
+        refuseAttempt(sqlite, attempt, 'not dispatched: the lead agent mapping changed', now)
+        sqlite
+          .prepare(
+            'UPDATE orchestrations SET causes_consumed_up_to = ?, lead_turns_used = lead_turns_used - 1 WHERE id = ?',
+          )
+          .run(attempt.claim_from ?? 0, o.id)
+        this.pauseFor(ctx, o, 'agent_unavailable')
+        return undefined
+      }
+      return refuse('not dispatched: not the approved agent mapping', {
+        status: 'blocked',
+        disposition: 'agent_changed: not the agent mapping approved for this run',
+      })
+    }
     if (!agentAdmits(sqlite, attempt.agent_id)) return undefined
     // The last barrier before Hermes: spend, reservations and the deadline as they are now, not as they were when this
     // attempt was prepared (another send may have been awaiting its reply since).
@@ -1333,12 +1413,12 @@ export class Orchestrator {
     const work: { attempt: AttemptRow; run: RunFacts; spend: ReturnType<SpendReader> }[] = []
     for (const attempt of rows) {
       const run = sqlite
-        .prepare('SELECT status, output, error, ended_at FROM runs WHERE id = ?')
+        .prepare('SELECT status, output, error, ended_at, terminal_source FROM runs WHERE id = ?')
         .get(attempt.run_id!) as RunFacts | undefined
       if (!run) continue
       const spend = this.spend(sqlite, attempt)
       const terminalRun = ['completed', 'failed', 'cancelled', 'interrupted'].includes(run.status)
-      const evidence = run.status === 'completed' || run.status === 'failed'
+      const evidence = isEvidence(run)
       const ends =
         terminalRun &&
         ((attempt.state === 'running' && true) ||
@@ -1368,8 +1448,13 @@ export class Orchestrator {
       if (!o) continue
       changed = true
       touch(ctx, o.id)
-      const evidence = run.status === 'completed' || run.status === 'failed'
-      const terminalRun = evidence || run.status === 'cancelled' || run.status === 'interrupted'
+      const evidence = isEvidence(run)
+      const terminalRun =
+        evidence ||
+        run.status === 'completed' ||
+        run.status === 'failed' ||
+        run.status === 'cancelled' ||
+        run.status === 'interrupted'
       const ending =
         terminalRun &&
         (attempt.state === 'running' ||
@@ -1395,7 +1480,21 @@ export class Orchestrator {
       }
       if (evidence) this.accept(ctx, o, attempt, run.status as 'completed' | 'failed', run)
       // `cancelled` / `interrupted` do not prove the agent loop ended (7.1 v6): the attempt is unknown, not terminated.
-      else this.markUnknown(ctx, o, attempt, `run_${run.status}`)
+      else if (run.terminal_source === 'recovered') {
+        // The text is shown to the person (chat is unchanged) but proves nothing about the agent loop: obligations stay.
+        addHistory(
+          sqlite,
+          o.id,
+          'recovered_text',
+          {
+            attemptId: attempt.id,
+            status: run.status,
+            text: run.output ? redactBounded(run.output, 500) : null,
+          },
+          now,
+        )
+        this.markUnknown(ctx, o, attempt, 'recovered_text_only')
+      } else this.markUnknown(ctx, o, attempt, `run_${run.status}`)
     }
     return changed
   }
@@ -1544,6 +1643,17 @@ export class Orchestrator {
   maintenance(): { journal: { kept: number; dropped: number }; pruned: number } {
     const journal = this.options.fence.journal
     const sqlite = this.db.sqlite
+    const holdKey = (e: { target: string; agentId?: string | undefined }) =>
+      e.target === 'team' ? 'h:team' : `h:agent:${e.agentId}`
+    const newest = new Map<string, number>()
+    const own = journal.readOwn()
+    if (own.ok)
+      for (const entry of own.entries) {
+        if (entry.kind === 'authorization') newest.set(`a:${entry.orchestrationId}`, entry.n)
+        if (entry.kind === 'hold') newest.set(holdKey(entry), entry.n)
+        if (entry.kind === 'remap')
+          newest.set(`m:${entry.orchestrationId}:${entry.agentId}`, entry.n)
+      }
     const compacted = journal.compact((entry) => {
       if (
         entry.kind === 'send_started' ||
@@ -1561,6 +1671,15 @@ export class Orchestrator {
           o !== undefined &&
           isTerminalStatus(o.status) &&
           attemptsOf(sqlite, o.id).every((x) => x.state === 'terminated' || x.state === 'refused')
+        )
+      }
+      if (entry.kind === 'remap')
+        return newest.get(`m:${entry.orchestrationId}:${entry.agentId}`) !== entry.n
+      if (entry.kind === 'authorization' || entry.kind === 'hold') {
+        // Only the newest word per run / per target is needed; the older ones are superseded.
+        return (
+          newest.get(entry.kind === 'hold' ? holdKey(entry) : `a:${entry.orchestrationId}`) !==
+          entry.n
         )
       }
       if (entry.kind === 'stop_fence') {
@@ -1592,6 +1711,7 @@ export class Orchestrator {
         )
           continue
         for (const table of [
+          'orc_agent_map',
           'orc_commands',
           'orc_causes',
           'orc_gates',

@@ -6,6 +6,7 @@ import {
   LimitsDecisionSchema,
   OrchestrationCreateSchema,
   RunControlSchema,
+  RemapDecisionSchema,
   WaiverDecisionSchema,
 } from '@score/contract'
 import type { FastifyInstance } from 'fastify'
@@ -107,6 +108,10 @@ export function registerOrchestrationRoutes(
   app.post('/api/orchestrations/:id/waiver', mutation, async (request) => {
     const { id } = IdParams.parse(request.params)
     return orchestrator.waiver(id, WaiverDecisionSchema.parse(request.body))
+  })
+  app.post('/api/orchestrations/:id/remap', mutation, async (request) => {
+    const { id } = IdParams.parse(request.params)
+    return orchestrator.remap(id, RemapDecisionSchema.parse(request.body))
   })
   app.post('/api/orchestrations/:id/abandon', mutation, async (request) => {
     const { id } = IdParams.parse(request.params)

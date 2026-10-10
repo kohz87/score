@@ -1305,6 +1305,23 @@ const cases = [
   ],
   ['RunControlSchema', { orchestrationRevision: 2 }, { orchestrationRevision: 0 }],
   [
+    'RemapDecisionSchema',
+    {
+      agentId: 'builder',
+      frozenIncarnation: 'inc-a',
+      currentIncarnation: 'inc-b',
+      orchestrationRevision: 2,
+      acknowledge: true,
+    },
+    {
+      agentId: 'builder',
+      frozenIncarnation: 'inc-a',
+      currentIncarnation: 'inc-b',
+      orchestrationRevision: 2,
+      acknowledge: false,
+    },
+  ],
+  [
     'WaiverDecisionSchema',
     { orchestrationRevision: 2, acknowledge: true },
     { orchestrationRevision: 2, acknowledge: false },

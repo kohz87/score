@@ -370,6 +370,8 @@ export function needsYouText(item: NeedsYou): string {
       return 'An attempt is not confirmed ended'
     case 'cancel_fence':
       return `Cancelled ${item.stepId} may still be running`
+    case 'remap':
+      return `${item.agentId} was replaced: decide whether this run uses the new one`
     case 'fence':
       return 'Starting work is blocked until you review a reconciliation list'
   }

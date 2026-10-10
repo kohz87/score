@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
+import type { Orchestrator } from '../domain/orchestration/executor.ts'
 import { ownerOfBrief } from '../domain/orchestration/ownership.ts'
 import { emitBriefChange, listBriefs, taskStatus } from '../domain/briefs.ts'
 import { holdable, recordHolds } from '../domain/holds.ts'
@@ -29,9 +30,10 @@ export function registerTeamPauseRoutes(
     holds: TaskHolds
     dispatch?: () => Promise<void>
     clock?: () => number
+    orchestrator?: Pick<Orchestrator, 'recordHold'>
   },
 ): void {
-  const { db, ingest, control, holds, dispatch } = deps
+  const { db, ingest, control, holds, dispatch, orchestrator } = deps
   const receipts = requestIdempotency(db, deps.clock ?? Date.now)
   const mutation = {
     preHandler: [humanGuard(app.pairing), receipts.preHandler],
@@ -43,6 +45,8 @@ export function registerTeamPauseRoutes(
   })
 
   app.post('/api/team/pause', mutation, async () => {
+    // Journaled first: an orchestration's admissions depend on this hold (fix-h item 2).
+    orchestrator?.recordHold({ kind: 'team' }, 'set')
     let targets: string[] = []
     await ingest.submit({
       source: 'team',
@@ -97,6 +101,7 @@ export function registerTeamPauseRoutes(
   })
 
   app.post('/api/team/resume', mutation, async () => {
+    orchestrator?.recordHold({ kind: 'team' }, 'lift')
     let briefs: string[] = []
     await ingest.submit({
       source: 'team',

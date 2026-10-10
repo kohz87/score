@@ -363,6 +363,54 @@ export function CancelFenceCard({
   )
 }
 
+/** An agent was replaced after the run started: use the new one for the rest of the run, or Stop the run. */
+export function RemapCard({
+  run,
+  item,
+  agents,
+  actions,
+}: {
+  run: OrchestrationDetail
+  item: Extract<NeedsYou, { kind: 'remap' }>
+  agents: AgentSummary[]
+  actions: RunActions
+}) {
+  const gone = item.currentIncarnation === 'untracked'
+  return (
+    <section className="orch-decision" aria-label={`Replaced ${item.agentId}`}>
+      <h3>
+        <AgentChip agentId={item.agentId} agents={agents} /> was replaced
+        <small>{item.role === 'lead' ? ' The lead of this run' : ' An agent of this run'}</small>
+      </h3>
+      <p>
+        {gone
+          ? 'This agent no longer exists, so the run cannot use it. You can stop the run.'
+          : `This run was started with the earlier ${item.agentId}. Nothing is assigned to the new one until you decide. Steps already given to the earlier one stay blocked, and the lead assigns them again.`}
+      </p>
+      <div className="orch-actions">
+        {!gone && (
+          <button
+            type="button"
+            disabled={actions.remap.isPending}
+            onClick={() =>
+              actions.remap.mutate({
+                agentId: item.agentId,
+                frozenIncarnation: item.frozenIncarnation,
+                currentIncarnation: item.currentIncarnation,
+                orchestrationRevision: run.revision,
+                acknowledge: true,
+              })
+            }
+          >
+            Use the new {item.agentId} for this run
+          </button>
+        )}
+      </div>
+      <ErrorLine error={actions.remap.error} />
+    </section>
+  )
+}
+
 /** Every item the run needs from the person, typed as the server lists them (`needsYou[]`). */
 export function RunNeeds({
   run,
@@ -433,6 +481,16 @@ export function RunNeeds({
                 key={`c${item.attemptId}`}
                 run={run}
                 stepId={item.stepId}
+                actions={actions}
+              />
+            )
+          case 'remap':
+            return (
+              <RemapCard
+                key={`m${item.agentId}`}
+                run={run}
+                item={item}
+                agents={agents}
                 actions={actions}
               />
             )

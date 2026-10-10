@@ -344,6 +344,7 @@ export function buildApp({
       control,
       holds,
       dispatch,
+      ...(orchestrator ? { orchestrator } : {}),
       ...(clock ? { clock } : {}),
     })
     registerWatchRoutes(app, { port, db, ingest })
@@ -356,6 +357,7 @@ export function buildApp({
       port,
       holds,
       dispatch,
+      ...(orchestrator ? { orchestrator } : {}),
       ...(clock ? { clock } : {}),
     })
     registerNowRoutes(app, {

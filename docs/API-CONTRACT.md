@@ -1439,6 +1439,15 @@ conflict`; gates and inquiries also carry their own `expectedRevision`; the resp
     a run handle that arrives after the Stop is stopped at once). The run is `stopping` until every attempt is terminated
     (evidence) or abandoned, then `stopped`.
   - `POST …/:id/waiver` `WaiverDecision` — "continue while a cancelled step may still run". Recorded; not termination evidence.
+  - `POST …/:id/remap` `RemapDecision` `{ agentId, frozenIncarnation, currentIncarnation, orchestrationRevision, acknowledge: true }` —
+    "use the new <agent> for this run" (fix batch H). A run freezes the incarnation of its lead and of every allowed agent
+    when it starts. While an agent's current incarnation differs, `needsYou` lists `{ kind: 'remap', agentId, role,
+    frozenIncarnation, currentIncarnation }`; `orch.assign` for that agent is refused `agent_changed`, queued steps of the
+    earlier incarnation are blocked (`agent_changed` / `agent_unavailable`), and the send barrier re-checks against the
+    frozen mapping. The decision must name exactly the frozen and current incarnations the page showed (otherwise `409
+    conflict`, as for a stale `orchestrationRevision`); it updates the frozen mapping, is journaled (`remap` entry), wakes
+    the lead and, for the lead, ends the `agent_unavailable` pause. Steps assigned under the old mapping stay blocked and
+    are assigned again. A removed agent (`currentIncarnation: "untracked"`) cannot be remapped; the person can only Stop.
   - `POST …/:id/abandon` `AbandonDecision` — releases capacity and reservations of the listed unresolved attempts, keeps
     their owed stops, records that late results are ignored; the run then pauses (`pauseReason: abandonment`) until Resume.
 - `GET /api/orchestrations/:id/events` → `OrchestrationEvents` `{ asOfSeq, events[] }` (PLAN 7.5b, additive). The run's event
@@ -1513,7 +1522,7 @@ action }` unless delegated:
 | Plan Start on the room                                                                                  | 409                                                                                                                                | 409                             | 409                     |
 | Team pause / agent pause                                                                                | independent holds: block admission, never cleared by run Resume                                                                    | same                            | n/a                     |
 | Team resume / agent resume                                                                              | clears only its own holds; never lifts a run pause, fence or waiver                                                                | same                            | n/a                     |
-| Retire / replace / pause the lead or a step agent                                                       | admission checks the frozen incarnation: a changed lead pauses the run (`agent_unavailable`), a changed step agent blocks the step | same                            | n/a                     |
+| Retire / replace / pause the lead or a step agent                                                       | admission checks the frozen incarnation: a changed lead pauses the run (`agent_unavailable`), a changed step agent blocks the step; every change adds a `remap` Needs-you item | same                            | n/a                     |
 
 Brief status of an owned brief comes from the run (`running`/`paused` while the run is, `done` for `succeeded`, `failed`
 otherwise), never from turns between lead attempts.
@@ -1528,6 +1537,30 @@ any entry missing from or newer than the database puts the global admission fenc
 Restore `$SCORE_HOME` only with `scripts/score restore <backup>` (sets the fence and the untrusted-history marker); a restore
 done any other way on the same host and boot cannot be detected. A Hermes admission is never replayed after `send_started`:
 the attempt is `unknown`.
+
+**Termination provenance (fix batch H).** `runs.terminal_source` is `runtime` (Hermes reported the terminal status; NULL
+is a legacy runtime row) or `recovered` (Hermes forgot the run and Score rebuilt `completed` from a matching assistant
+reply in the session history). A recovered run keeps showing its text in chat, but for orchestration attempts it is **not**
+termination evidence: the attempt becomes `unknown` with `unknownReason: "recovered_text_only"`, the text is recorded in the
+run history (not accepted as the step result), no successor is admitted and its obligations stay until real evidence or a
+recorded abandonment.
+
+Upgrade: migration 0049 backfills `terminal_source` (`recovered` for a terminal run with the recovery's gap row, `runtime` for
+every other terminal run) and turns every `terminated` attempt whose run is `recovered` into `unknown` (`recovered_text_only`),
+which fences its run; a result already accepted from it stays visible.
+
+**Manual Pause (fix batch H).** A person's Pause is its own hold (`manual_paused_at`), independent of budget, unknown-spend,
+deadline and agent conditions. Pause on a run already paused by a condition keeps that reason and adds the hold; a limits
+decision clears only its own condition (the run then stays paused as `person` while the hold exists); Resume clears only the
+hold (a budget / unknown-spend / deadline pause stays until its limits decision). The run runs only when neither remains. The
+`pause` journal entry is verified against the hold, so a database that lost it is fenced.
+
+**Journaled authorization changes (fix batch H).** Besides admissions and fences, the journal records every change to a
+run's limits (`authorization` entry with the resulting budget, deadline and unknown-spend acceptance), every team and agent
+pause hold and its lift (`hold`), and every remap (`remap`). At start the newest entry of each kind is compared with the
+database: a database with a higher budget, a later or missing deadline, an acceptance the journal says was revoked, a
+missing pause hold or a missing remap puts the global fence on and lists the entry, even when nothing was dispatched
+afterwards. Compaction keeps only the newest entry per run, hold target and remapped agent.
 
 ### 7.5a review round (Codex pre-merge review) — behaviour changes
 

@@ -35,6 +35,9 @@ const CONTROL_TEXT: Record<string, string> = {
   waiver: 'Continued while a cancelled step may still run',
   abandoned: 'Unresolved attempts abandoned',
   limits_changed: 'Limits changed',
+  agent_remapped: 'A replaced agent was accepted for the rest of the run',
+  recovered_text:
+    'Hermes forgot a run; its text was recovered from the history but does not prove it ended',
   finish_requested: 'The lead asked to finish',
   ended: 'Run ended',
   late_result: 'A late result arrived and was recorded, not used',

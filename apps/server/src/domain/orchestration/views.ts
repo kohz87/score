@@ -9,6 +9,7 @@ import type {
   StepView,
 } from '@score/contract'
 import type { DatabaseSync } from 'node:sqlite'
+import { lifecycleOf } from '../agent-lifecycle.ts'
 import { budgetView } from './budget.ts'
 import { isFenced } from './fence.ts'
 import {
@@ -103,6 +104,24 @@ export function needsYouOf(
     result.push({ kind: 'cancel_fence', stepId: attempt.step_id ?? '', attemptId: attempt.id })
   if (!isTerminalStatus(o.status) && isFenced(sqlite))
     result.push({ kind: 'fence', reason: 'global' })
+  if (!isTerminalStatus(o.status) && o.status !== 'stopping' && o.status !== 'finishing') {
+    const mapped = sqlite
+      .prepare(
+        'SELECT agent_id, role, incarnation FROM orc_agent_map WHERE orchestration_id = ? ORDER BY role DESC, agent_id',
+      )
+      .all(o.id) as { agent_id: string; role: 'lead' | 'agent'; incarnation: string }[]
+    for (const row of mapped) {
+      const current = lifecycleOf(sqlite, row.agent_id)?.incarnation_id ?? 'untracked'
+      if (current !== row.incarnation)
+        result.push({
+          kind: 'remap',
+          agentId: row.agent_id,
+          role: row.role,
+          frozenIncarnation: row.incarnation,
+          currentIncarnation: current,
+        })
+    }
+  }
   return result
 }
 

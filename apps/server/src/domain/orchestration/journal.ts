@@ -67,6 +67,32 @@ const EntrySchema = z.discriminatedUnion('kind', [
     what: z.enum(['finish', 'pause', 'resume', 'waiver', 'abandon']),
     attemptIds: z.array(z.string().min(1)).optional(),
   }),
+  // The person's limits after every change (fix-h item 2): a database that is less restrictive than the newest one lost
+  // a lowered budget, a shorter deadline or a revoked acceptance. The values are the full state, not the delta.
+  z.object({
+    ...Base,
+    kind: z.literal('authorization'),
+    orchestrationId: z.string().min(1),
+    budgetUsd: z.number().nullable(),
+    deadlineAt: z.string().nullable(),
+    acceptUnknownSpend: z.boolean(),
+  }),
+  // The person's decision to use a replacement agent for the rest of the run (fix-h item 3).
+  z.object({
+    ...Base,
+    kind: z.literal('remap'),
+    orchestrationId: z.string().min(1),
+    agentId: z.string().min(1),
+    incarnation: z.string().min(1),
+  }),
+  // Team and agent pause holds live outside the orchestration tables but gate its admissions.
+  z.object({
+    ...Base,
+    kind: z.literal('hold'),
+    target: z.enum(['team', 'agent']),
+    agentId: z.string().min(1).optional(),
+    action: z.enum(['set', 'lift']),
+  }),
   // What compaction leaves of an admission or a fence: permanent, tiny, enough to prove an older database is older.
   z.object({
     ...Base,
@@ -270,6 +296,9 @@ export class ExecutionJournal {
         'reconciled',
         'stop_fence',
         'transition',
+        'authorization',
+        'hold',
+        'remap',
       ].includes(entry.kind)
       if (entry.scope !== this.scope || !compactable || !droppable(entry)) {
         out.push(entry)
@@ -305,7 +334,8 @@ export class ExecutionJournal {
           ...(entry.attemptIds ? { attemptIds: entry.attemptIds } : {}),
         })
       }
-      // run_handle and reconciled entries carry nothing the tombstone does not.
+      // run_handle, reconciled, authorization and hold entries carry nothing a tombstone would keep (the caller only
+      // marks them droppable once superseded or settled).
     }
     const last = result.entries.at(-1)
     if (last && out.at(-1)?.n !== last.n)
