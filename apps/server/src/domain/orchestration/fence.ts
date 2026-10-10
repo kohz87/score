@@ -1,8 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite'
-import { WORKFLOW_LIMITS, type FenceItem, type GlobalFence } from '@score/contract'
+import { type FenceItem, type GlobalFence } from '@score/contract'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { HttpError } from '../../errors.ts'
+import { recordRefusal } from './ops.ts'
 import { journalDispatches, type ExecutionJournal, type JournalEntry } from './journal.ts'
 
 // The persistent global admission fence (design v3). It is set when the journal and the database disagree, when the
@@ -285,11 +286,12 @@ export function applyJournalEvidence(
   for (const [attemptId, latest] of journalDispatches(entries)) {
     const attempt = sqlite
       .prepare(
-        'SELECT id, state, step_id, orchestration_id, dispatch_generation, refused_generation, refused_total, refused_streak FROM orc_attempts WHERE id = ?',
+        'SELECT id, turn_id, state, step_id, orchestration_id, dispatch_generation, refused_generation, refused_total, refused_streak FROM orc_attempts WHERE id = ?',
       )
       .get(attemptId) as
       | {
           id: string
+          turn_id: string
           state: string
           step_id: string | null
           orchestration_id: string
@@ -309,19 +311,19 @@ export function applyJournalEvidence(
       attempt.dispatch_generation === latest.generation &&
       attempt.refused_generation < latest.generation
     ) {
-      const total = attempt.refused_total + 1
-      sqlite
-        .prepare(
-          "UPDATE orc_attempts SET state = 'created', refused_total = ?, refused_streak = ?, refused_generation = ?, needs_person = ?, updated_at = ? WHERE id = ?",
-        )
-        .run(
-          total,
-          attempt.refused_streak + 1,
-          latest.generation,
-          total >= WORKFLOW_LIMITS.refusedLifetime ? 1 : 0,
-          now,
-          attempt.id,
-        )
+      const planner =
+        (
+          sqlite
+            .prepare('SELECT planner FROM orchestrations WHERE id = ?')
+            .get(attempt.orchestration_id) as { planner: 'lead' | 'workflow' } | undefined
+        )?.planner ?? 'lead'
+      recordRefusal(
+        sqlite,
+        { id: attempt.orchestration_id, planner },
+        attempt,
+        latest.generation,
+        now,
+      )
       changed++
       continue
     }

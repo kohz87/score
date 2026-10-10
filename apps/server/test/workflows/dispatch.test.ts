@@ -355,3 +355,62 @@ test('a refusal journaled for generation g but lost by the database (still send_
   expect(after.refused_streak).toBe(row.refused_streak)
   expect(after.refused_generation).toBe(row.dispatch_generation)
 })
+
+// round 2 (M): recovery of a lost refusal follows the normal policy
+type Planner = 'workflow' | 'lead'
+async function lostRefusal(planner: Planner, previousTotal: number, previousStreak: number) {
+  h = await wfHarness()
+  const { HttpError: E } = await import('../../src/errors.ts')
+  const original = h.port.startRun.bind(h.port)
+  h.port.startRun = async (req) => {
+    if (req.agentId === 'builder') throw notDispatched(new E(503, 'hermes_unavailable', 'down'))
+    return original(req)
+  }
+  if (planner === 'workflow') await start(h, definition([agent('a'), end()], [edge('a', 'done')]))
+  else {
+    const { attachFakeLead } = await import('../../src/hermes/fake/fake-lead.ts')
+    attachFakeLead(h.port, h.orch, {
+      script: byTurn({ 1: async (t) => void (await t.call('orch.assign', { agent: 'builder', instruction: 'work' })) }),
+    })
+    await h.create({ gatePolicy: 'none' })
+  }
+  const stepAttempts = () =>
+    h!.rows<ReturnType<typeof attemptRow>[number]>("SELECT * FROM orc_attempts WHERE kind = 'step'")
+  await h.until(() => (stepAttempts()[0]?.refused_total ?? 0) >= 1 && stepAttempts()[0]!.state === 'created')
+  await h.orch.close()
+  const row = stepAttempts()[0]!
+  // The crash: send_refused(g) is journaled, but the database still reads send_started at g.
+  h.db.sqlite
+    .prepare("UPDATE orc_attempts SET state = 'send_started', refused_total = ?, refused_streak = ?, refused_generation = ?, needs_person = 0, next_try_at = NULL WHERE id = ?")
+    .run(previousTotal, previousStreak, row.dispatch_generation - 1, row.id)
+  const store = new GlobalFenceStore(h.db, h.journal, () => h!.scheduler.now())
+  expect(store.startupCheck().fenced).toBe(true)
+  const after = h.rows<Record<string, unknown>>('SELECT * FROM orc_attempts WHERE id = ?', row.id)[0]!
+  const step = h.rows<{ status: string; disposition: string | null }>('SELECT status, disposition FROM orc_steps')[0]!
+  return { after, step }
+}
+
+test.each<[Planner, string]>([['workflow', 'workflow'], ['lead', 'orchestration']])(
+  'a lost fifth refusal (%s) sets the ten-minute wait, not an immediate resend',
+  async (planner) => {
+    const { after } = await lostRefusal(planner, 3, 4)
+    expect(after['state']).toBe('created')
+    expect(after['refused_streak']).toBe(5)
+    expect(after['next_try_at']).not.toBeNull()
+    expect(after['needs_person']).toBe(0)
+  },
+)
+
+test('a lost twentieth refusal needs the person in a workflow', async () => {
+  const { after } = await lostRefusal('workflow', 19, 3)
+  expect(after['state']).toBe('created')
+  expect(after['needs_person']).toBe(1)
+  expect(after['refused_total']).toBe(20)
+})
+
+test('a lost twentieth refusal in an orchestration fails the step for the lead', async () => {
+  const { after, step } = await lostRefusal('lead', 19, 3)
+  expect(after['state']).toBe('refused')
+  expect(after['needs_person']).toBe(0)
+  expect(step).toEqual({ status: 'failed', disposition: 'hermes_refused' })
+})
