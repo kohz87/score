@@ -102,3 +102,112 @@ test('fix-i 3: replacement pause -> manual Pause -> remap leaves the run paused 
   await h.until(() => attemptOf(h, id, 'lead').length === 2)
   expect(status(id)).not.toBe('paused')
 })
+
+// ------------------------------------------------ item 2: recovered success is never consumable
+
+/** What a database upgraded from before fix-h holds: the step accepted recovered text, its attempt is now unknown. */
+const legacyRecovered = (stepId: string, text: string) => {
+  h.db.sqlite
+    .prepare(
+      "UPDATE orc_attempts SET state = 'unknown', unknown_reason = 'recovered_text_only', evidence = NULL, terminated_at = NULL, settled = 0 WHERE step_id = ?",
+    )
+    .run(stepId)
+  h.db.sqlite
+    .prepare(
+      "UPDATE orc_steps SET status = 'succeeded', disposition = NULL, result = ?, result_revision = 1 WHERE id = ?",
+    )
+    .run(text, stepId)
+}
+const chain = {
+  script: byTurn({
+    1: async (t) => {
+      await t.call('orch.assign', { agent: 'builder', instruction: '[fake:hold] write it' })
+      await t.call('orch.assign', { agent: 'reviewer', instruction: 'check it', after: ['s1'] })
+    },
+  }),
+}
+const stepStatus = (id: string, stepId: string) =>
+  detail(id).stepsList.find((s) => s.id === stepId)!.status
+
+test('fix-i 2: upgrade -> Abandon -> Resume never admits a dependent on the recovered result', async () => {
+  h = await harness({ lead: chain })
+  const id = await h.create({ gatePolicy: 'none' })
+  await h.until(() => attemptOf(h, id, 'step', 's1').some((a) => a.state === 'running'))
+  await h.orch.pause(id, { orchestrationRevision: detail(id).revision })
+  legacyRecovered('s1', 'accepted text')
+  await h.orch.recover()
+  expect(stepStatus(id, 's1')).toBe('unknown')
+  expect(h.rows('SELECT result FROM orc_steps WHERE id = ?', 's1')).toEqual([{ result: null }])
+  const a = attemptOf(h, id, 'step', 's1')[0]!
+  await h.orch.abandon(id, {
+    attemptIds: [a.id],
+    orchestrationRevision: detail(id).revision,
+    acknowledge: true,
+  })
+  expect(stepStatus(id, 's1')).toBe('failed')
+  await h.orch.resume(id, { orchestrationRevision: detail(id).revision })
+  await h.settle(5000)
+  expect(attemptOf(h, id, 'step', 's2')).toHaveLength(0)
+  expect(stepStatus(id, 's1')).not.toBe('succeeded')
+  expect(stepStatus(id, 's2')).not.toBe('admitted')
+})
+
+test('fix-i 2: a run that finished on a recovered result becomes finished_with_unresolved', async () => {
+  h = await harness({
+    lead: {
+      script: byTurn({
+        1: async (t) => {
+          await t.call('orch.assign', { agent: 'builder', instruction: 'one' })
+        },
+        2: async (t) => {
+          await t.call('orch.finish', { outcome: 'success', summary: 'done' })
+        },
+      }),
+    },
+  })
+  const id = await h.create({ gatePolicy: 'none' })
+  await h.until(() => status(id) === 'succeeded')
+  legacyRecovered('s1', 'accepted text')
+  await h.orch.recover()
+  expect(status(id)).toBe('finished_with_unresolved')
+  expect(stepStatus(id, 's1')).toBe('unknown')
+  // Idempotent: a second start changes nothing.
+  const history = h.rows('SELECT COUNT(*) AS n FROM orc_history WHERE orchestration_id = ?', id)
+  await h.orch.recover()
+  expect(h.rows('SELECT COUNT(*) AS n FROM orc_history WHERE orchestration_id = ?', id)).toEqual(
+    history,
+  )
+})
+
+test('fix-i 2: a dependent that consumed the recovered result is withdrawn and recorded', async () => {
+  h = await harness({ lead: chain })
+  const id = await h.create({ gatePolicy: 'every-step' })
+  await h.until(() => detail(id).gates.length >= 1)
+  await h.orch.gateDecision(id, 'g1', {
+    decision: 'approve',
+    expectedRevision: 1,
+    orchestrationRevision: detail(id).revision,
+  })
+  await h.until(() => attemptOf(h, id, 'step', 's1').some((a) => a.state === 'running'))
+  await h.orch.pause(id, { orchestrationRevision: detail(id).revision })
+  // s2 is waiting behind its own approved gate when the result turns out to have been synthetic.
+  legacyRecovered('s1', 'accepted text')
+  h.db.sqlite
+    .prepare("UPDATE orc_steps SET status = 'queued' WHERE id = 's2'")
+    .run()
+  h.db.sqlite.prepare("UPDATE orc_gates SET status = 'approved' WHERE step_id = 's2'").run()
+  await h.orch.recover()
+  expect(stepStatus(id, 's2')).toBe('blocked')
+  expect(h.rows("SELECT status FROM orc_gates WHERE step_id = 's2'")).toEqual([
+    { status: 'withdrawn' },
+  ])
+  expect(
+    h.rows<{ detail: string }>(
+      "SELECT detail FROM orc_history WHERE orchestration_id = ? AND kind = 'recovered_result_withdrawn'",
+      id,
+    ),
+  ).toHaveLength(1)
+  await h.orch.resume(id, { orchestrationRevision: detail(id).revision })
+  await h.settle(5000)
+  expect(attemptOf(h, id, 'step', 's2')).toHaveLength(0)
+})

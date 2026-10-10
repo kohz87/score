@@ -321,7 +321,12 @@ export function abandonAttempts(ctx: Ctx, orchId: string, body: AbandonDecision)
       )
       .run(now, now, now, id)
     const step = steps.find((candidate) => candidate.id === attempt.step_id)
-    if (step && step.status === 'unknown') {
+    // A result accepted from recovered text is never restored as a success (fix-i 2).
+    if (
+      step &&
+      (step.status === 'unknown' ||
+        (step.status === 'succeeded' && attempt.unknown_reason === 'recovered_text_only'))
+    ) {
       setStepStatus(sqlite, orchId, step.id, 'failed', 'abandoned: not confirmed ended', now)
       addCause(sqlite, orchId, 'step_abandoned', step.id, now)
     }

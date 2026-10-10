@@ -127,6 +127,18 @@ type ToolResult =
  * The orchestration executor: the single admission authority for lead attempts and steps (design v3). All writes go
  * through `mutate`, one ingest transaction each, so events, revisions and the database stay consistent.
  */
+/** Whether the step's latest attempt ended on recovered session text and was never confirmed ended. */
+function recoveredOnly(attempts: AttemptRow[], stepId: string): boolean {
+  const last = attempts
+    .filter((a) => a.step_id === stepId)
+    .reduce<AttemptRow | undefined>((best, a) => (!best || a.n > best.n ? a : best), undefined)
+  return (
+    last !== undefined &&
+    last.unknown_reason === 'recovered_text_only' &&
+    ['unknown', 'abandoned'].includes(last.state)
+  )
+}
+
 export class Orchestrator {
   private readonly db: ScoreDb
   private readonly ingest: Ingest
@@ -769,9 +781,91 @@ export class Orchestrator {
    * After a restart: an attempt whose admission was started but whose handle was never recorded is `unknown` and is
    * never replayed (design v3); attempts never sent (`created`) are dispatched again with a fresh capability.
    */
+  /**
+   * Upgrade repair (fix-i 2): migration 0049 turned attempts that ended on recovered session text into `unknown` but
+   * left a result already accepted from them in place, where it kept satisfying dependencies (also after Abandon). The
+   * text stays in the history; the step stops being a success, a run that finished on it is no longer clean, and a
+   * dependent that was waiting on it is withdrawn. Idempotent: it only touches a `succeeded` step.
+   */
+  private repairRecoveredResults(ctx: Ctx): void {
+    const { sqlite, now } = ctx
+    for (const o of listOrchs(sqlite)) {
+      const attempts = attemptsOf(sqlite, o.id)
+      const steps = stepsOf(sqlite, o.id)
+      let changed = false
+      for (const step of steps) {
+        if (step.status !== 'succeeded') continue
+        const mine = attempts.filter((a) => a.step_id === step.id)
+        const last = mine.reduce<AttemptRow | undefined>((best, a) => (!best || a.n > best.n ? a : best), undefined)
+        if (
+          !last ||
+          last.unknown_reason !== 'recovered_text_only' ||
+          !['unknown', 'abandoned'].includes(last.state)
+        )
+          continue
+        changed = true
+        const abandoned = last.state === 'abandoned'
+        sqlite
+          .prepare(
+            'UPDATE orc_steps SET status = ?, disposition = ?, result = NULL, result_revision = result_revision + 1, updated_at = ? WHERE orchestration_id = ? AND id = ?',
+          )
+          .run(
+            abandoned ? 'failed' : 'unknown',
+            abandoned ? 'abandoned: not confirmed ended' : 'recovered_text_only',
+            now,
+            o.id,
+            step.id,
+          )
+        const consumers = steps.filter((c) => c.after_steps.includes(step.id))
+        for (const consumer of consumers) {
+          if (consumer.status === 'queued' || consumer.status === 'pending_gate') {
+            // An approval given on the strength of that result no longer stands.
+            sqlite
+              .prepare(
+                "UPDATE orc_gates SET status = 'withdrawn', revision = revision + 1, decided_at = ? WHERE orchestration_id = ? AND step_id = ? AND status IN ('open', 'approved')",
+              )
+              .run(now, o.id, consumer.id)
+            setStepStatus(
+              sqlite,
+              o.id,
+              consumer.id,
+              'blocked',
+              `result_withdrawn: ${step.id} only ended on recovered text`,
+              now,
+            )
+            addCause(sqlite, o.id, 'step_blocked', consumer.id, now, `after ${step.id}`)
+          }
+        }
+        addHistory(
+          sqlite,
+          o.id,
+          'recovered_result_withdrawn',
+          {
+            stepId: step.id,
+            attemptId: last.id,
+            text: step.result ? redactBounded(step.result, 500) : null,
+            consumers: consumers.map((c) => ({ stepId: c.id, status: c.status })),
+          },
+          now,
+        )
+        if (abandoned) addCause(sqlite, o.id, 'step_abandoned', step.id, now)
+      }
+      if (!changed) continue
+      // A run that ended believing in that result did not end cleanly.
+      if (o.status === 'succeeded')
+        sqlite
+          .prepare(
+            "UPDATE orchestrations SET status = 'finished_with_unresolved', end_reason = 'a result recovered from session text was withdrawn' WHERE id = ?",
+          )
+          .run(o.id)
+      touch(ctx, o.id)
+    }
+  }
+
   async recover(): Promise<void> {
     await this.mutate((ctx) => {
       const { sqlite, now } = ctx
+      this.repairRecoveredResults(ctx)
       for (const o of listOrchs(sqlite)) {
         if (isTerminalStatus(o.status)) continue
         for (const attempt of attemptsOf(sqlite, o.id))
@@ -1005,6 +1099,8 @@ export class Orchestrator {
       // A lead-asks step waits until the turn that created it ends, so the lead can ask for approval first.
       if (o.gate_policy === 'lead-asks' && leadLive) continue
       if (!step.after_steps.every((id) => byId.get(id)?.status === 'succeeded')) continue
+      // A result that only ever ended on recovered text is history, never an input (fix-i 2).
+      if (step.after_steps.some((id) => recoveredOnly(attempts, id))) continue
       const life = lifecycleOf(sqlite, step.agent_id)
       if ((life?.incarnation_id ?? 'untracked') !== step.agent_incarnation) {
         setStepStatus(
