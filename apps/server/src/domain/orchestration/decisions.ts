@@ -321,7 +321,12 @@ export function abandonAttempts(ctx: Ctx, orchId: string, body: AbandonDecision)
       )
       .run(now, now, now, id)
     const step = steps.find((candidate) => candidate.id === attempt.step_id)
-    if (step && step.status === 'unknown') {
+    // A result accepted from recovered text is never restored as a success (fix-i 2).
+    if (
+      step &&
+      (step.status === 'unknown' ||
+        (step.status === 'succeeded' && attempt.unknown_reason === 'recovered_text_only'))
+    ) {
       setStepStatus(sqlite, orchId, step.id, 'failed', 'abandoned: not confirmed ended', now)
       addCause(sqlite, orchId, 'step_abandoned', step.id, now)
     }
@@ -385,9 +390,14 @@ export function remapAgent(ctx: Ctx, orchId: string, body: RemapDecision): void 
       .prepare('UPDATE orchestrations SET lead_incarnation = ? WHERE id = ?')
       .run(current, orchId)
     // The pause this replacement caused ends with the decision about it; admission re-pauses if something else applies.
+    // Only that condition goes: a manual hold that is still there keeps the run paused, now for its own reason.
     if (o.status === 'paused' && o.pause_reason === 'agent_unavailable')
       sqlite
-        .prepare("UPDATE orchestrations SET status = 'running', pause_reason = NULL WHERE id = ?")
+        .prepare(
+          o.manual_paused_at !== null
+            ? "UPDATE orchestrations SET pause_reason = 'person' WHERE id = ?"
+            : "UPDATE orchestrations SET status = 'running', pause_reason = NULL WHERE id = ?",
+        )
         .run(orchId)
   }
   addHistory(
