@@ -85,9 +85,11 @@ export function registerBriefRoutes(
     const owner = db.read((sqlite) => ownerOfBrief(sqlite, briefId))
     if (owner) {
       assertNotOwned(owner.state === 'owned' ? undefined : owner, 'brief.pause')
-      await orchestrator?.pause(owner.orchestration.id, {
-        orchestrationRevision: owner.orchestration.revision,
-      })
+      // A workflow run is paused and resumed through its own controls; the brief is just another way in.
+      const control = { orchestrationRevision: owner.orchestration.revision }
+      await (owner.orchestration.planner === 'workflow'
+        ? orchestrator?.wfPause(owner.orchestration.id, control)
+        : orchestrator?.pause(owner.orchestration.id, control))
       return summaryOf(briefId)
     }
     await control.pause(briefId)
@@ -99,9 +101,11 @@ export function registerBriefRoutes(
     const owner = db.read((sqlite) => ownerOfBrief(sqlite, briefId))
     if (owner) {
       assertNotOwned(owner.state === 'owned' ? undefined : owner, 'brief.resume')
-      await orchestrator?.resume(owner.orchestration.id, {
-        orchestrationRevision: owner.orchestration.revision,
-      })
+      // A workflow run is paused and resumed through its own controls; the brief is just another way in.
+      const control = { orchestrationRevision: owner.orchestration.revision }
+      await (owner.orchestration.planner === 'workflow'
+        ? orchestrator?.wfResume(owner.orchestration.id, control)
+        : orchestrator?.resume(owner.orchestration.id, control))
       return summaryOf(briefId)
     }
     await control.resume(briefId)

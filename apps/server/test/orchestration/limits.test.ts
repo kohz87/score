@@ -344,6 +344,8 @@ test('rendered lead input is bounded: results newest first, older ones omitted w
     updated_at: now,
     ended_at: null,
     end_reason: null,
+    planner: 'lead' as const,
+    admission_seen: 0,
   }
   const steps = Array.from({ length: 30 }, (_, i) => ({
     orchestration_id: 'orc-x',
@@ -360,6 +362,7 @@ test('rendered lead input is bounded: results newest first, older ones omitted w
     result: `result ${i + 1} ` + 'é'.repeat(ORCH_LIMITS.resultBytes),
     result_revision: 1,
     retired: false,
+    payload_hash: null,
     created_in_attempt: 'a',
     created_at: now,
     updated_at: `2026-01-01T00:00:${String(i).padStart(2, '0')}.000Z`,

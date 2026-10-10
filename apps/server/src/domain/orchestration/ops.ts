@@ -1,7 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite'
-import { ORCH_LIMITS } from '@score/contract'
+import { ORCH_LIMITS, WORKFLOW_LIMITS } from '@score/contract'
+import { journalSoft, touch, type Ctx } from './ctx.ts'
 import {
   addCause,
+  addHistory,
   attemptsOf,
   isFinalStep,
   stepsOf,
@@ -185,3 +187,175 @@ export const liveAttempts = (sqlite: DatabaseSync, orchId: string): AttemptRow[]
   attemptsOf(sqlite, orchId).filter((attempt) =>
     ['created', 'send_started', 'running'].includes(attempt.state),
   )
+
+/**
+ * v8.1 item 2: every change that can make waiting work admissible (limits raised, Resume, fence lift, waiver, capacity
+ * or quota released, an agent ready again) increments the global admission revision in its own transaction. Runs
+ * remember the revision they last evaluated, so a restart between the change and the pass loses nothing.
+ */
+export function bumpAdmission(sqlite: DatabaseSync): void {
+  sqlite
+    .prepare('UPDATE orc_global SET admission_revision = admission_revision + 1 WHERE id = 1')
+    .run()
+}
+export const admissionRevision = (sqlite: DatabaseSync): number =>
+  (
+    sqlite.prepare('SELECT admission_revision AS r FROM orc_global WHERE id = 1').get() as {
+      r: number
+    }
+  ).r
+
+/**
+ * Finish request: an admission barrier in one transaction. No further admission, queued work retired with a
+ * disposition, open gates and inquiries withdrawn, further commands sealed; admitted attempts drain. Shared by the
+ * lead's `orch.finish` and the workflow planner (attemptId null).
+ */
+export function beginFinish(
+  ctx: Ctx,
+  o: OrchRow,
+  attemptId: string | null,
+  outcome: 'success' | 'partial' | 'failed',
+  summary: string,
+): string[] {
+  const { sqlite, now } = ctx
+  sqlite
+    .prepare(
+      `UPDATE orchestrations SET status = 'finishing', pause_reason = NULL, finish_requested_at = ?, finish_attempt_id = ?, finish_outcome = ?, finish_summary = ? WHERE id = ?`,
+    )
+    .run(now, attemptId, outcome, summary, o.id)
+  const retired = retireQueued(sqlite, o.id, 'not_started: run_finishing', now)
+  withdrawGates(sqlite, o.id, now)
+  withdrawInquiries(sqlite, o.id, now)
+  for (const created of attemptsOf(sqlite, o.id).filter((a) => a.state === 'created')) {
+    refuseAttempt(sqlite, created, 'not dispatched: run finishing', now)
+    if (created.step_id)
+      setStepStatus(sqlite, o.id, created.step_id, 'not_started', 'not_started: run_finishing', now)
+  }
+  addStored(sqlite, o.id, utf8Bytes(summary))
+  addHistory(sqlite, o.id, 'finish_requested', { outcome, attemptId, retired }, now)
+  journalSoft(ctx, () =>
+    ctx.journal.append({ kind: 'transition', orchestrationId: o.id, what: 'finish' }),
+  )
+  touch(ctx, o.id)
+  return retired
+}
+
+const CONTROL_KINDS = ['paused', 'resumed', 'limits_changed']
+
+/**
+ * v8.1 item 5: control history is bounded (200 records per run). Older pause / resume / limits records fold into one
+ * counter row; the journaled transitions (finish, waiver, abandon, ...) are different kinds and are never compacted.
+ */
+export function compactControlHistory(sqlite: DatabaseSync, orchId: string, limit = 200): void {
+  const marks = CONTROL_KINDS.map(() => '?').join(',')
+  const count = (
+    sqlite
+      .prepare(
+        `SELECT COUNT(*) AS n FROM orc_history WHERE orchestration_id = ? AND kind IN (${marks})`,
+      )
+      .get(orchId, ...CONTROL_KINDS) as { n: number }
+  ).n
+  if (count <= limit) return
+  const extra = count - limit
+  sqlite
+    .prepare(
+      `DELETE FROM orc_history WHERE id IN (SELECT id FROM orc_history WHERE orchestration_id = ? AND kind IN (${marks}) ORDER BY id LIMIT ?)`,
+    )
+    .run(orchId, ...CONTROL_KINDS, extra)
+  const row = sqlite
+    .prepare(
+      "SELECT id, detail FROM orc_history WHERE orchestration_id = ? AND kind = 'compacted_control'",
+    )
+    .get(orchId) as { id: number; detail: string } | undefined
+  if (row)
+    sqlite
+      .prepare('UPDATE orc_history SET detail = ? WHERE id = ?')
+      .run(
+        JSON.stringify({ count: (JSON.parse(row.detail) as { count: number }).count + extra }),
+        row.id,
+      )
+  else
+    sqlite
+      .prepare(
+        "INSERT INTO orc_history (orchestration_id, kind, detail, at) VALUES (?, 'compacted_control', ?, ?)",
+      )
+      .run(orchId, JSON.stringify({ count: extra }), new Date().toISOString())
+}
+
+/**
+ * Observed tool and thinking rows of an orchestration attempt's run are retained with the run, so they are charged to its
+ * allowance at the writer (v8.1 item 5). Returns false when the run has no room left (the protected reserve for Stop and
+ * obligation evidence is never spent here): the writer then drops the row. Runs outside any orchestration are unbounded.
+ */
+export function chargeObservation(sqlite: DatabaseSync, runId: string, bytes: number): boolean {
+  const owner = sqlite
+    .prepare(
+      `SELECT o.id AS id, o.reserve_bytes AS reserve, o.stored_bytes AS stored FROM message_runs m
+       JOIN orc_attempts a ON a.id = m.orchestration_attempt_id JOIN orchestrations o ON o.id = a.orchestration_id
+       WHERE m.run_id = ?`,
+    )
+    .get(runId) as { id: string; reserve: number; stored: number } | undefined
+  if (!owner) return true
+  if (bytes > storageRoom({ reserve_bytes: owner.reserve, stored_bytes: owner.stored }))
+    return false
+  addStored(sqlite, owner.id, bytes)
+  return true
+}
+
+/**
+ * The one transition for a proven refusal of a step attempt's dispatch generation (v8.2 / v8.3), used by the live path
+ * and by restore reconciliation: counters, the five-in-a-row ten-minute wait and the lifetime limit (a workflow node
+ * then needs the person; an orchestration step fails for the lead). Returns what happened.
+ */
+export function recordRefusal(
+  sqlite: DatabaseSync,
+  o: { id: string; planner: 'lead' | 'workflow' },
+  attempt: Pick<AttemptRow, 'id' | 'turn_id' | 'step_id' | 'refused_total' | 'refused_streak'>,
+  generation: number,
+  now: string,
+): 'retry' | 'wait' | 'needs_person' | 'failed' {
+  const total = attempt.refused_total + 1
+  const streak = attempt.refused_streak + 1
+  const lifetime = total >= WORKFLOW_LIMITS.refusedLifetime
+  if (lifetime && o.planner === 'lead') {
+    // The lead decides what to do with a step Hermes keeps refusing.
+    sqlite
+      .prepare(
+        "UPDATE orc_attempts SET state = 'refused', unknown_reason = 'hermes_refused', refused_total = ?, refused_streak = ?, refused_generation = ?, terminated_at = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(total, streak, generation, now, now, attempt.id)
+    sqlite
+      .prepare("UPDATE message_runs SET state = 'failed' WHERE turn_id = ? AND state = 'pending'")
+      .run(attempt.turn_id)
+    if (attempt.step_id) {
+      setStepStatus(sqlite, o.id, attempt.step_id, 'failed', 'hermes_refused', now)
+      addCause(
+        sqlite,
+        o.id,
+        'step_failed',
+        attempt.step_id,
+        now,
+        'Hermes refused this step 20 times',
+      )
+    }
+    bumpAdmission(sqlite)
+    return 'failed'
+  }
+  const wait = streak >= WORKFLOW_LIMITS.refusedPause && !lifetime
+  sqlite
+    .prepare(
+      "UPDATE orc_attempts SET state = 'created', refused_total = ?, refused_streak = ?, refused_generation = ?, needs_person = ?, next_try_at = ?, updated_at = ? WHERE id = ?",
+    )
+    .run(
+      total,
+      streak,
+      generation,
+      lifetime ? 1 : 0,
+      wait
+        ? new Date(Date.parse(now) + WORKFLOW_LIMITS.refusedRetryMinutes * 60_000).toISOString()
+        : null,
+      now,
+      attempt.id,
+    )
+  return lifetime ? 'needs_person' : wait ? 'wait' : 'retry'
+}

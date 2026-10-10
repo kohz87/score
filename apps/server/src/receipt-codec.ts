@@ -8,7 +8,12 @@ const CompressedReceiptSchema = z.object({ scoreReceiptGzip: z.string() }).stric
 
 /** Mirrors the request_receipts CHECK (migration 0010): task details may be larger than other responses. */
 export function storageLimit(route: string): number {
-  return route === '/api/tasks' || route.startsWith('/api/tasks/') ? 524288 : 65536
+  return route === '/api/tasks' ||
+    route.startsWith('/api/tasks/') ||
+    route === '/api/workflows' ||
+    route.startsWith('/api/workflows/')
+    ? 524288
+    : 65536
 }
 
 /** The response a receipt holds. */

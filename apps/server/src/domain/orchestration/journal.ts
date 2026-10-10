@@ -35,6 +35,26 @@ const EntrySchema = z.discriminatedUnion('kind', [
     agentId: z.string().min(1),
     generation: z.int().nonnegative(),
   }),
+  // v8.2: a proven refusal (nothing reached Hermes) of dispatch generation `generation`. With the matching
+  // `send_started` it says the attempt is unsent again; any later generation starts with a new `send_started`.
+  z.object({
+    ...Base,
+    kind: z.literal('send_refused'),
+    attemptId: z.string().min(1),
+    orchestrationId: z.string().min(1),
+    generation: z.int().positive(),
+  }),
+  // v8.3: what compaction leaves of an attempt's older generations. Latest generation + its state keep the restore
+  // check able to see a database that is behind it; `refusedCount` is informational.
+  z.object({
+    ...Base,
+    kind: z.literal('witness'),
+    attemptId: z.string().min(1),
+    orchestrationId: z.string().min(1),
+    lastGeneration: z.int().positive(),
+    lastState: z.enum(['refused', 'sent']),
+    refusedCount: z.int().nonnegative(),
+  }),
   z.object({
     ...Base,
     kind: z.literal('run_handle'),
@@ -64,8 +84,10 @@ const EntrySchema = z.discriminatedUnion('kind', [
     ...Base,
     kind: z.literal('transition'),
     orchestrationId: z.string().min(1),
-    what: z.enum(['finish', 'pause', 'resume', 'waiver', 'abandon']),
+    what: z.enum(['finish', 'pause', 'resume', 'waiver', 'abandon', 'retry', 'try_again']),
     attemptIds: z.array(z.string().min(1)).optional(),
+    /** Workflow decisions (retry, try_again) name their node. */
+    nodeId: z.string().min(1).optional(),
   }),
   // The person's limits after every change (fix-h item 2): a database that is less restrictive than the newest one lost
   // a lowered budget, a shorter deadline or a revoked acceptance. The values are the full state, not the delta.
@@ -100,7 +122,11 @@ const EntrySchema = z.discriminatedUnion('kind', [
     of: z.enum(['send_started', 'stop_fence', 'transition']),
     orchestrationId: z.string().min(1),
     attemptId: z.string().min(1).optional(),
-    what: z.enum(['finish', 'pause', 'resume', 'waiver', 'abandon']).optional(),
+    /** For a send: the latest generation and whether it was sent (always `sent` for a tombstone made from a send). */
+    generation: z.int().nonnegative().optional(),
+    what: z
+      .enum(['finish', 'pause', 'resume', 'waiver', 'abandon', 'retry', 'try_again'])
+      .optional(),
     attemptIds: z.array(z.string().min(1)).optional(),
   }),
   // Keeps the sequence monotonic when compaction removed the newest entries.
@@ -110,6 +136,35 @@ export type JournalEntry = z.infer<typeof EntrySchema>
 
 type DistributiveOmit<T, K extends string> = T extends unknown ? Omit<T, K> : never
 export type JournalEntryBody = DistributiveOmit<JournalEntry, 'n' | 'at' | 'scope'>
+
+/** What the journal says about an attempt's dispatch: its latest generation and whether that one was sent. */
+export interface JournalDispatch {
+  generation: number
+  state: 'sent' | 'refused'
+  n: number
+}
+
+/** The journal's latest word on every attempt that has a `send_started` (or its tombstone, or a witness). */
+export function journalDispatches(entries: readonly JournalEntry[]): Map<string, JournalDispatch> {
+  const result = new Map<string, JournalDispatch>()
+  for (const entry of entries) {
+    if (entry.kind === 'send_started')
+      result.set(entry.attemptId, { generation: entry.generation, state: 'sent', n: entry.n })
+    else if (entry.kind === 'send_refused') {
+      const current = result.get(entry.attemptId)
+      if (!current || current.generation <= entry.generation)
+        result.set(entry.attemptId, { generation: entry.generation, state: 'refused', n: entry.n })
+    } else if (entry.kind === 'witness')
+      result.set(entry.attemptId, {
+        generation: entry.lastGeneration,
+        state: entry.lastState,
+        n: entry.n,
+      })
+    else if (entry.kind === 'tombstone' && entry.of === 'send_started' && entry.attemptId)
+      result.set(entry.attemptId, { generation: entry.generation ?? 0, state: 'sent', n: entry.n })
+  }
+  return result
+}
 
 export type JournalRead =
   | { ok: true; entries: JournalEntry[]; bytes: number }
@@ -289,7 +344,8 @@ export class ExecutionJournal {
     if (!result.ok) throw new Error(`Cannot compact an unreadable journal: ${result.reason}`)
     // Detail goes, the proof stays: an admission or a fence becomes a permanent tombstone with its original number.
     const out: JournalEntry[] = []
-    for (const entry of result.entries) {
+    const folded = foldGenerations(result.entries, this.scope)
+    for (const entry of folded) {
       const compactable = [
         'send_started',
         'run_handle',
@@ -299,6 +355,8 @@ export class ExecutionJournal {
         'authorization',
         'hold',
         'remap',
+        'send_refused',
+        'witness',
       ].includes(entry.kind)
       if (entry.scope !== this.scope || !compactable || !droppable(entry)) {
         out.push(entry)
@@ -311,6 +369,7 @@ export class ExecutionJournal {
           of: 'send_started',
           orchestrationId: entry.orchestrationId,
           attemptId: entry.attemptId,
+          generation: entry.generation,
         })
       } else if (entry.kind === 'stop_fence') {
         out.push({
@@ -337,6 +396,7 @@ export class ExecutionJournal {
       // run_handle, reconciled, authorization and hold entries carry nothing a tombstone would keep (the caller only
       // marks them droppable once superseded or settled).
     }
+    // Folded generation entries and the checkpoint below keep the sequence monotonic.
     const last = result.entries.at(-1)
     if (last && out.at(-1)?.n !== last.n)
       out.push({ n: last.n, at: last.at, scope: last.scope, kind: 'checkpoint' })
@@ -383,6 +443,60 @@ export class ExecutionJournal {
       // Already gone.
     }
   }
+}
+
+/**
+ * v8.3: an attempt's older dispatch generations fold into at most one entry. If the latest generation was sent, its
+ * `send_started` stays and the earlier pairs go; if it was refused, one `witness` takes the place of the whole group at
+ * the number of its newest entry. The latest generation, its state and the numbering are preserved, so a restored
+ * database that is behind the newest generation is still detected after compaction.
+ */
+export function foldGenerations(entries: readonly JournalEntry[], scope: string): JournalEntry[] {
+  const byAttempt = new Map<string, JournalEntry[]>()
+  for (const entry of entries) {
+    if (entry.scope !== scope) continue
+    if (
+      entry.kind === 'send_started' ||
+      entry.kind === 'send_refused' ||
+      entry.kind === 'witness'
+    ) {
+      const group = byAttempt.get(entry.attemptId) ?? []
+      group.push(entry)
+      byAttempt.set(entry.attemptId, group)
+    }
+  }
+  const drop = new Set<number>()
+  const replace = new Map<number, JournalEntry>()
+  for (const group of byAttempt.values()) {
+    if (group.length < 2) continue
+    const latest = [...journalDispatches(group).values()][0]!
+    const newest = group.at(-1)!
+    if (latest.state === 'sent') {
+      // Keep the latest send_started; everything older is superseded.
+      const keep = group.findLast((e) => e.kind === 'send_started')!
+      for (const e of group) if (e.n !== keep.n) drop.add(e.n)
+    } else {
+      const refused = group.reduce(
+        (sum, e) =>
+          sum + (e.kind === 'send_refused' ? 1 : e.kind === 'witness' ? e.refusedCount : 0),
+        0,
+      )
+      for (const e of group) drop.add(e.n)
+      drop.delete(newest.n)
+      replace.set(newest.n, {
+        n: newest.n,
+        at: newest.at,
+        scope: newest.scope,
+        kind: 'witness',
+        attemptId: (newest as { attemptId: string }).attemptId,
+        orchestrationId: (newest as { orchestrationId: string }).orchestrationId,
+        lastGeneration: latest.generation,
+        lastState: 'refused',
+        refusedCount: refused,
+      })
+    }
+  }
+  return entries.filter((e) => !drop.has(e.n)).map((e) => replace.get(e.n) ?? e)
 }
 
 /** Journal entries are scoped to a home so a shared directory never confuses two homes. */

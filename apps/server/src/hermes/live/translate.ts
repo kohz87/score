@@ -22,6 +22,8 @@ import {
   type GatewayRun,
 } from './gateway.ts'
 import { appendRunMessage, completeRunMessage, noteRunProgress } from '../../domain/message-runs.ts'
+import { chargeObservation } from '../../domain/orchestration/ops.ts'
+import { recordRunResult } from '../../domain/workflows/verdict.ts'
 import { ProfileNameSchema } from './paths.ts'
 
 export const terminalStatuses = ['completed', 'failed', 'cancelled', 'interrupted'] as const
@@ -287,7 +289,7 @@ export function translateRunEvent(
           .prepare('UPDATE runs SET last_seq = ?, updated_at = ? WHERE id = ?')
           .run(seq, at, row.id)
         // Kept for the collapsed thinking part (PLAN 5.25); `safe` is already redacted, and the text is bounded.
-        if (reasoning?.text.trim())
+        if (reasoning?.text.trim() && chargeObservation(sqlite, row.id, MAX_THINKING_CHARS * 4))
           sqlite
             .prepare(
               'INSERT INTO run_thinking (run_id, seq, text) VALUES (?, ?, ?) ON CONFLICT DO NOTHING',
@@ -304,7 +306,10 @@ export function translateRunEvent(
       }
       const values: Record<string, SQLInputValue> = { last_seq: seq }
       if (!ignored && known) values.status = 'running'
-      if (started) {
+      if (
+        started && // The whole bounded row is reserved at the start: preview (2048) and result preview (500 chars, 2000 bytes) and overhead.
+        chargeObservation(sqlite, row.id, 2048 + 2000 + 256)
+      ) {
         sqlite
           .prepare(
             `INSERT INTO tool_calls (run_id, seq, tool, preview, status, started_at) VALUES (?, ?, ?, ?, 'running', ?) ON CONFLICT DO NOTHING`,
@@ -359,6 +364,9 @@ export function translateRunEvent(
         values.ended_at = at
         values.output = terminal.output == null ? null : redactBounded(terminal.output, 8192)
         values.error = terminal.error == null ? null : redactBounded(terminal.error, 2048)
+        // Workflow steps keep the complete-reply facts (verdict, bounded output) before the 8 KiB cut above.
+        if (event === 'run.completed' || event === 'run.failed')
+          recordRunResult(sqlite, row.id, terminal.output ?? null, at)
         if (terminal.usage) {
           values.input_tokens = terminal.usage.input_tokens
           values.output_tokens = terminal.usage.output_tokens
@@ -459,6 +467,8 @@ export function runStatusObservation(context: RunContext, run: GatewayRun): Obse
             }
           : {}),
       })
+      if (terminal && (safe.status === 'completed' || safe.status === 'failed'))
+        recordRunResult(sqlite, row.id, safe.output, now)
       return [
         ...(changed ? [runDraft(sqlite, row.id)] : []),
         ...(terminal ? closeRunApprovals(sqlite, row.id, now) : []),

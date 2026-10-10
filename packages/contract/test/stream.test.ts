@@ -33,6 +33,7 @@ const eventData = {
   'handoff.created': f.handoffCreated,
   'brief.upserted': f.brief,
   'orchestration.upserted': f.orchestrationSummary,
+  'workflow.run.upserted': f.workflowRunSummary,
   'orchestration.fence.updated': f.globalFence,
   'run.updated': f.run,
   'attempt.updated': f.attemptUpdated,

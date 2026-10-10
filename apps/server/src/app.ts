@@ -34,6 +34,7 @@ import { registerShareRoutes } from './http/shares.ts'
 import { registerConversationRoutes } from './http/conversations.ts'
 import { registerBriefRoutes } from './http/briefs.ts'
 import { registerOrchestrationRoutes } from './http/orchestrations.ts'
+import { registerWorkflowRoutes } from './http/workflows.ts'
 import type { Orchestrator } from './domain/orchestration/executor.ts'
 import { createBriefControl } from './http/brief-control.ts'
 import { createPlanStarter } from './http/plan-start.ts'
@@ -336,8 +337,10 @@ export function buildApp({
       ...(orchestrator ? { orchestrator } : {}),
       ...(clock ? { clock } : {}),
     })
-    if (orchestrator)
+    if (orchestrator) {
       registerOrchestrationRoutes(app, { orchestrator, db, port, ...(clock ? { clock } : {}) })
+      registerWorkflowRoutes(app, { orchestrator, db, port, ...(clock ? { clock } : {}) })
+    }
     registerTeamPauseRoutes(app, {
       db,
       ingest,

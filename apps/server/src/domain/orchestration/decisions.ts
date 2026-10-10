@@ -12,6 +12,7 @@ import { lifecycleOf } from '../agent-lifecycle.ts'
 import { journalSoft, touch, type Ctx } from './ctx.ts'
 import {
   addStored,
+  bumpAdmission,
   cascadeBlocked,
   oweStop,
   refuseAttempt,
@@ -158,6 +159,7 @@ export function setLimits(ctx: Ctx, orchId: string, body: LimitsDecision): void 
       )
       .run(orchId)
   addHistory(sqlite, orchId, 'limits_changed', { ...body, orchestrationRevision: undefined }, now)
+  bumpAdmission(sqlite)
   // Every change is journaled as the full resulting state, so a database that lost a tightening is detected at start.
   const after = requireOrch(sqlite, orchId)
   journalSoft(ctx, () =>
@@ -212,6 +214,7 @@ export function resumeRun(ctx: Ctx, orchId: string, body: RunControl): void {
       )
       .run(orchId)
   addHistory(ctx.sqlite, orchId, 'resumed', {}, ctx.now)
+  bumpAdmission(ctx.sqlite)
   journalSoft(ctx, () =>
     ctx.journal.append({ kind: 'transition', orchestrationId: orchId, what: 'resume' }),
   )
@@ -223,7 +226,12 @@ export function resumeRun(ctx: Ctx, orchId: string, body: RunControl): void {
  * disposition, withdraws gates and inquiries, refuses attempts not yet sent, and owes a Stop on every attempt that may
  * be running. The Stop fence is journaled before the commit.
  */
-export function stopRun(ctx: Ctx, orchId: string, reason: 'stop' | 'deadline' = 'stop'): void {
+export function stopRun(
+  ctx: Ctx,
+  orchId: string,
+  reason: 'stop' | 'deadline' | 'graph' = 'stop',
+  endReason: string | null = null,
+): void {
   const { sqlite, now } = ctx
   const o = requireOrch(sqlite, orchId)
   if (isTerminalStatus(o.status)) {
@@ -253,7 +261,7 @@ export function stopRun(ctx: Ctx, orchId: string, reason: 'stop' | 'deadline' = 
     .prepare(
       "UPDATE orchestrations SET status = 'stopping', pause_reason = NULL, stop_requested_at = ?, end_reason = ? WHERE id = ?",
     )
-    .run(now, reason === 'deadline' ? 'deadline expired' : null, orchId)
+    .run(now, reason === 'deadline' ? 'deadline expired' : endReason, orchId)
   retireQueued(sqlite, orchId, 'not_started: stopped', now)
   withdrawGates(sqlite, orchId, now)
   withdrawInquiries(sqlite, orchId, now)
@@ -285,6 +293,7 @@ export function grantWaiver(ctx: Ctx, orchId: string, body: WaiverDecision): voi
     throw new HttpError(409, 'conflict', 'No cancelled step may still be running')
   sqlite.prepare('UPDATE orchestrations SET waiver_at = ? WHERE id = ?').run(now, orchId)
   addHistory(sqlite, orchId, 'waiver', { attempts: fenced.map((a) => a.id) }, now)
+  bumpAdmission(sqlite)
   journalSoft(ctx, () =>
     ctx.journal.append({ kind: 'transition', orchestrationId: orchId, what: 'waiver' }),
   )
@@ -333,6 +342,7 @@ export function abandonAttempts(ctx: Ctx, orchId: string, body: AbandonDecision)
   }
   cascadeBlocked(sqlite, orchId, now)
   addHistory(sqlite, orchId, 'abandoned', { attempts: body.attemptIds }, now)
+  bumpAdmission(sqlite)
   journalSoft(ctx, () =>
     ctx.journal.append({
       kind: 'transition',
@@ -409,5 +419,6 @@ export function remapAgent(ctx: Ctx, orchId: string, body: RemapDecision): void 
   )
   // The lead learns of it (an assignment it was refused may now succeed).
   addCause(sqlite, orchId, 'agent_remapped', body.agentId, now)
+  bumpAdmission(sqlite)
   touch(ctx, orchId)
 }

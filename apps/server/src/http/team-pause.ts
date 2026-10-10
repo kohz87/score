@@ -30,7 +30,8 @@ export function registerTeamPauseRoutes(
     holds: TaskHolds
     dispatch?: () => Promise<void>
     clock?: () => number
-    orchestrator?: Pick<Orchestrator, 'recordHold'>
+    orchestrator?: Pick<Orchestrator, 'recordHold'> &
+      Partial<Pick<Orchestrator, 'admissionChanged'>>
   },
 ): void {
   const { db, ingest, control, holds, dispatch, orchestrator } = deps
@@ -124,6 +125,8 @@ export function registerTeamPauseRoutes(
         return drafts
       },
     })
+    // v8.1 item 2: a lifted hold can make waiting work admissible.
+    await orchestrator?.admissionChanged?.()
     await dispatch?.()
     const failed: string[] = []
     for (const id of briefs) {

@@ -1,3 +1,4 @@
+import { recordRunResult } from '../../domain/workflows/verdict.ts'
 import {
   AgentDetailSchema,
   RewindSkipReasonSchema,
@@ -1632,7 +1633,9 @@ export class FakePort implements HermesPort {
     input: string
     turnId: string
     runId: string
-  }) => Promise<{ text?: string; hold?: boolean } | void>
+  }) => Promise<{ text?: string; hold?: boolean; fail?: boolean } | void>
+
+  private readonly refusals = new Map<string, number>()
 
   startRun(input: Parameters<HermesPort['startRun']>[0]): Promise<{ runId: string }> {
     const req = z
@@ -1648,6 +1651,15 @@ export class FakePort implements HermesPort {
       .parse(input)
     return this.enqueue(async () => {
       try {
+        // Scripted outage for workflow tests and e2e: `[fake:refuse:N]` refuses the first N sends of a turn as proven
+        // unsent (nothing reached Hermes); a bare `[fake:refuse]` refuses once.
+        const refuse = /\[fake:refuse(?::(\d+))?\]/.exec(req.input)
+        if (refuse) {
+          const seen = (this.refusals.get(req.turnId) ?? 0) + 1
+          this.refusals.set(req.turnId, seen)
+          if (seen <= Number(refuse[1] ?? 1))
+            throw new HttpError(503, 'hermes_unavailable', 'The fake Hermes is unavailable')
+        }
         if (this.db) assertAgentAdmits(this.db.sqlite, input.agentId)
         this.requireSink()
         if (!this.turns.has(req.turnId) && !this.agents.has(req.agentId))
@@ -1707,6 +1719,7 @@ export class FakePort implements HermesPort {
         // until it is stopped, so the stalled-reply notice can be seen.
         if (/go quiet/i.test(req.input.split('\n\nRoom context:')[0] ?? '')) return
         let replyText = response.text
+        let failRun = false
         if (this.runHook) {
           const hooked = await this.runHook({
             agentId: req.agentId,
@@ -1718,6 +1731,7 @@ export class FakePort implements HermesPort {
           // `hold`: the run stays running and silent until it is stopped (a stuck agent).
           if (hooked?.hold) return
           if (hooked && typeof hooked.text === 'string') replyText = hooked.text
+          failRun = hooked?.fail === true
         }
         const chunks = replyText.match(/.{1,24}/gs) ?? []
         const stream = (index: number): void => {
@@ -1771,6 +1785,8 @@ export class FakePort implements HermesPort {
                           'UPDATE runs SET input_tokens = 1200, output_tokens = 240, cost_usd = 0.0042 WHERE id = ?',
                         )
                         .run(runId)
+                      // Workflow steps keep the complete-reply facts (verdict, bounded output), as the live follower does.
+                      recordRunResult(sqlite, runId, replyText, now)
                       if (response.tools.length)
                         sqlite
                           .prepare(
@@ -1821,7 +1837,7 @@ export class FakePort implements HermesPort {
                   })
                   const current = this.runs.get(runId)!
                   this.runs.set(runId, { ...current, toolsUsed: [...new Set(response.tools)] })
-                  await this.transitionRun(runId, 'completed')
+                  await this.transitionRun(runId, failRun ? 'failed' : 'completed')
                 }
                 // Demo hook: a message that says "ask for approval" makes the run raise one and wait.
                 if (!/ask for approval/i.test(req.input.split('\n\nRoom context:')[0] ?? ''))
@@ -1879,7 +1895,7 @@ export class FakePort implements HermesPort {
 
   private async transitionRun(
     runId: string,
-    status: 'running' | 'completed' | 'cancelled' | 'waiting_for_approval',
+    status: 'running' | 'completed' | 'failed' | 'cancelled' | 'waiting_for_approval',
   ): Promise<void> {
     const run = this.runs.get(runId)
     if (!run || !['queued', 'running', 'waiting_for_approval'].includes(run.status)) return

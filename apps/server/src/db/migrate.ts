@@ -84,21 +84,39 @@ export function migrate(db: ScoreDb, dir: string): void {
   const applied = db.read((sqlite) => appliedMigrations(sqlite, migrations))
   if (migrations.length === 0) throw new Error('Missing migration number: 1')
   for (const migration of migrations.slice(applied)) {
-    db.tx((sqlite) => {
-      // Recheck under the writer lock in case another process migrated since the initial read.
-      if (appliedMigrations(sqlite, migrations) >= migration.version) return
-      sqlite.exec(migration.sql)
-      if (migration.version === 1) {
-        resetEpoch(db)
+    // A table rebuild (create new, copy, drop, rename) needs foreign keys off, and that pragma is a no-op inside a
+    // transaction, so a migration that needs it says so on its first line. The rebuilt schema is verified with
+    // `foreign_key_check` before the commit, and enforcement is switched back on afterwards in every case.
+    const rebuild = /^-- migrate: foreign_keys=off\r?$/m.test(migration.sql.split('\n', 1)[0] ?? '')
+    if (rebuild) db.sqlite.exec('PRAGMA foreign_keys = OFF')
+    try {
+      db.tx((sqlite) => {
+        // Recheck under the writer lock in case another process migrated since the initial read.
+        if (appliedMigrations(sqlite, migrations) >= migration.version) return
+        // Violations that already existed are not this migration's to judge; it must not add any.
+        const before = rebuild ? sqlite.prepare('PRAGMA foreign_key_check').all().length : 0
+        sqlite.exec(migration.sql)
+        if (rebuild) {
+          const after = sqlite.prepare('PRAGMA foreign_key_check').all().length
+          if (after > before)
+            throw new Error(
+              `Migration ${migration.name} left ${after - before} broken foreign keys`,
+            )
+        }
+        if (migration.version === 1) {
+          resetEpoch(db)
+          sqlite
+            .prepare("INSERT INTO meta (key, value) VALUES ('created_at', ?)")
+            .run(new Date().toISOString())
+        }
         sqlite
-          .prepare("INSERT INTO meta (key, value) VALUES ('created_at', ?)")
-          .run(new Date().toISOString())
-      }
-      sqlite
-        .prepare(
-          'INSERT INTO schema_migrations (version, name, checksum, applied_at) VALUES (?, ?, ?, ?)',
-        )
-        .run(migration.version, migration.name, migration.checksum, new Date().toISOString())
-    })
+          .prepare(
+            'INSERT INTO schema_migrations (version, name, checksum, applied_at) VALUES (?, ?, ?, ?)',
+          )
+          .run(migration.version, migration.name, migration.checksum, new Date().toISOString())
+      })
+    } finally {
+      if (rebuild) db.sqlite.exec('PRAGMA foreign_keys = ON')
+    }
   }
 }

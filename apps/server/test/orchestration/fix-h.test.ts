@@ -437,7 +437,7 @@ test('fix-h 4: upgrading backfills terminal_source and turns attempts that ended
     const before = join(tmp.dir, 'migrations-before')
     mkdirSync(before)
     for (const name of readdirSync(migrationsDir))
-      if (name < '0049_') copyFileSync(join(migrationsDir, name), join(before, name))
+      if (Number(name.slice(0, 4)) < 49) copyFileSync(join(migrationsDir, name), join(before, name))
     const db = openDatabase(join(tmp.dir, 'score.db'))
     migrate(db, before)
     const at = '2026-10-10T10:00:00.000Z'

@@ -4,6 +4,7 @@ import { KnowledgeChangedSchema } from './knowledge.ts'
 import { BriefSummarySchema } from './briefs.ts'
 import { RoomVersionSchema } from './versions.ts'
 import { GlobalFenceSchema, OrchestrationSummarySchema } from './orchestration.ts'
+import { WorkflowRunSummarySchema } from './workflows.ts'
 import {
   AgentIdSchema,
   AgentSummarySchema,
@@ -157,6 +158,10 @@ export const StreamEventSchema = z.discriminatedUnion('type', [
   StreamEnvelopeSchema.extend({
     type: z.literal('orchestration.upserted'),
     data: OrchestrationSummarySchema,
+  }),
+  StreamEnvelopeSchema.extend({
+    type: z.literal('workflow.run.upserted'),
+    data: WorkflowRunSummarySchema,
   }),
   StreamEnvelopeSchema.extend({
     type: z.literal('orchestration.fence.updated'),

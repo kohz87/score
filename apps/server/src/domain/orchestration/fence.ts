@@ -1,9 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite'
-import type { FenceItem, GlobalFence } from '@score/contract'
+import { type FenceItem, type GlobalFence } from '@score/contract'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { HttpError } from '../../errors.ts'
-import type { ExecutionJournal, JournalEntry } from './journal.ts'
+import { recordRefusal } from './ops.ts'
+import { journalDispatches, type ExecutionJournal, type JournalEntry } from './journal.ts'
 
 // The persistent global admission fence (design v3). It is set when the journal and the database disagree, when the
 // journal is unreadable or missing, or when the operator restored a backup; only a recorded human decision lifts it.
@@ -52,7 +53,7 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
   const accepted = acceptedSet(entries)
   const mismatches: Mismatch[] = []
   const attempt = sqlite.prepare(
-    'SELECT state, run_id, sent_at, abandoned_at FROM orc_attempts WHERE id = ?',
+    'SELECT state, run_id, sent_at, abandoned_at, dispatch_generation, refused_generation FROM orc_attempts WHERE id = ?',
   )
   const orchestration = sqlite.prepare(
     'SELECT stop_requested_at, finish_requested_at, waiver_at, status, manual_paused_at FROM orchestrations WHERE id = ?',
@@ -92,6 +93,8 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
   const limits = sqlite.prepare(
     'SELECT budget_usd, deadline_at, accepted_unknown_spend FROM orchestrations WHERE id = ?',
   )
+  // v8.2 / v8.3: only the newest word on an attempt's dispatch counts; older generations are history.
+  const dispatches = journalDispatches(entries)
   for (const entry of entries) {
     if (entry.kind === 'global_fence') journalSeq = Math.max(journalSeq, entry.fenceSeq)
     if (accepted.has(entry.n)) continue
@@ -159,15 +162,43 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
           journalN: entry.n,
           detail: `The pause of ${entry.target === 'team' ? 'the team' : `agent ${entry.agentId}`} was recorded, but the database does not hold it`,
         })
-    } else if (kind === 'send_started') {
+    } else if (
+      kind === 'send_started' ||
+      entry.kind === 'send_refused' ||
+      entry.kind === 'witness'
+    ) {
       const id = (entry as { attemptId: string }).attemptId
-      const row = attempt.get(id) as { sent_at: string | null } | undefined
-      if (!row || row.sent_at === null)
+      const latest = dispatches.get(id)
+      if (!latest || latest.n !== entry.n) continue
+      const row = attempt.get(id) as
+        | { sent_at: string | null; dispatch_generation: number; refused_generation: number }
+        | undefined
+      if (!row || (latest.state === 'sent' && row.sent_at === null))
         mismatches.push({
           kind: 'attempt',
           ref: id,
           journalN: entry.n,
           detail: `Admission of attempt ${id} was started, but the database has no record of it`,
+        })
+      else if (
+        latest.state === 'refused' &&
+        latest.generation > 0 &&
+        row.refused_generation < latest.generation
+      )
+        // The journal proves generation g was refused, but the database never committed that refusal (a crash between
+        // the two): its state at g may still read "sent".
+        mismatches.push({
+          kind: 'attempt',
+          ref: id,
+          journalN: entry.n,
+          detail: `The journal records a refusal of dispatch generation ${latest.generation} of attempt ${id}, but the database does not hold it`,
+        })
+      else if (latest.generation > 0 && row.dispatch_generation < latest.generation)
+        mismatches.push({
+          kind: 'attempt',
+          ref: id,
+          journalN: entry.n,
+          detail: `The journal records dispatch generation ${latest.generation} of attempt ${id} (${latest.state === 'sent' ? 'sent' : 'refused'}), but the database is behind it`,
         })
     } else if (entry.kind === 'run_handle') {
       const row = attempt.get(entry.attemptId) as { run_id: string | null } | undefined
@@ -252,36 +283,80 @@ export function applyJournalEvidence(
   now: string,
 ): number {
   let changed = 0
-  for (const entry of entries) {
-    const sent =
-      entry.kind === 'send_started' || (entry.kind === 'tombstone' && entry.of === 'send_started')
-    if (sent && 'attemptId' in entry && entry.attemptId) {
-      const attempt = sqlite
-        .prepare('SELECT id, state, step_id, orchestration_id FROM orc_attempts WHERE id = ?')
-        .get(entry.attemptId) as
-        { id: string; state: string; step_id: string | null; orchestration_id: string } | undefined
-      if (attempt && attempt.state === 'created') {
-        sqlite
-          .prepare(
-            "UPDATE orc_attempts SET state = 'unknown', unknown_reason = 'journal_records_send', sent_at = COALESCE(sent_at, ?), updated_at = ? WHERE id = ?",
-          )
-          .run(now, now, attempt.id)
-        if (attempt.step_id)
+  for (const [attemptId, latest] of journalDispatches(entries)) {
+    const attempt = sqlite
+      .prepare(
+        'SELECT id, turn_id, state, step_id, orchestration_id, dispatch_generation, refused_generation, refused_total, refused_streak FROM orc_attempts WHERE id = ?',
+      )
+      .get(attemptId) as
+      | {
+          id: string
+          turn_id: string
+          state: string
+          step_id: string | null
+          orchestration_id: string
+          dispatch_generation: number
+          refused_generation: number
+          refused_total: number
+          refused_streak: number
+        }
+      | undefined
+    // A refusal the journal proved but the database lost, with the attempt still `send_started` at that very generation:
+    // it was never sent. It goes back to `created` with the refusal counted (and the lifetime limit honoured).
+    if (
+      attempt &&
+      attempt.state === 'send_started' &&
+      latest.state === 'refused' &&
+      latest.generation > 0 &&
+      attempt.dispatch_generation === latest.generation &&
+      attempt.refused_generation < latest.generation
+    ) {
+      const planner =
+        (
           sqlite
-            .prepare(
-              "UPDATE orc_steps SET status = 'unknown', disposition = 'journal_records_send', updated_at = ? WHERE orchestration_id = ? AND id = ? AND status = 'admitted'",
-            )
-            .run(now, attempt.orchestration_id, attempt.step_id)
+            .prepare('SELECT planner FROM orchestrations WHERE id = ?')
+            .get(attempt.orchestration_id) as { planner: 'lead' | 'workflow' } | undefined
+        )?.planner ?? 'lead'
+      recordRefusal(
+        sqlite,
+        { id: attempt.orchestration_id, planner },
+        attempt,
+        latest.generation,
+        now,
+      )
+      changed++
+      continue
+    }
+    if (!attempt || attempt.state !== 'created') continue
+    if (latest.state === 'refused') {
+      // Proven unsent: it stays sendable, but the generation counter never goes back (a restored database lagged).
+      if (attempt.dispatch_generation < latest.generation) {
+        sqlite
+          .prepare('UPDATE orc_attempts SET dispatch_generation = ? WHERE id = ?')
+          .run(latest.generation, attempt.id)
         changed++
       }
-    } else if (entry.kind === 'run_handle') {
-      const result = sqlite
-        .prepare(
-          'UPDATE orc_attempts SET run_id = ?, updated_at = ? WHERE id = ? AND run_id IS NULL',
-        )
-        .run(entry.runId, now, entry.attemptId)
-      changed += Number(result.changes)
+      continue
     }
+    sqlite
+      .prepare(
+        "UPDATE orc_attempts SET state = 'unknown', unknown_reason = 'journal_records_send', sent_at = COALESCE(sent_at, ?), dispatch_generation = MAX(dispatch_generation, ?), updated_at = ? WHERE id = ?",
+      )
+      .run(now, latest.generation, now, attempt.id)
+    if (attempt.step_id)
+      sqlite
+        .prepare(
+          "UPDATE orc_steps SET status = 'unknown', disposition = 'journal_records_send', updated_at = ? WHERE orchestration_id = ? AND id = ? AND status = 'admitted'",
+        )
+        .run(now, attempt.orchestration_id, attempt.step_id)
+    changed++
+  }
+  for (const entry of entries) {
+    if (entry.kind !== 'run_handle') continue
+    const result = sqlite
+      .prepare('UPDATE orc_attempts SET run_id = ?, updated_at = ? WHERE id = ? AND run_id IS NULL')
+      .run(entry.runId, now, entry.attemptId)
+    changed += Number(result.changes)
   }
   return changed
 }
@@ -426,7 +501,7 @@ export class GlobalFenceStore {
       if (own.ok) applyJournalEvidence(sqlite, own.entries, now)
       sqlite
         .prepare(
-          `UPDATE orc_global SET fenced = 0, fence_seq = ?, lifted_at = ?, revision = revision + 1 WHERE id = 1`,
+          `UPDATE orc_global SET fenced = 0, fence_seq = ?, lifted_at = ?, revision = revision + 1, admission_revision = admission_revision + 1 WHERE id = 1`,
         )
         .run(fenceSeq, now)
       sqlite

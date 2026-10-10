@@ -441,6 +441,40 @@ export const orchestrationSummary = {
   endedAt: null,
 } satisfies Contract.OrchestrationSummary
 
+export const workflowRunSummary = {
+  id: 'wf-run-1',
+  title: 'Release notes',
+  workflowId: 'wf-1',
+  workflowName: 'Release notes',
+  version: 2,
+  status: 'running',
+  pauseReason: null,
+  graphOutcome: null,
+  outcomeNote: null,
+  gatePolicy: 'gates-only',
+  roomId: 'room-wf-1',
+  briefId: 'brief-wf-1',
+  revision: 4,
+  ownership: 'owned',
+  nodes: {
+    total: 4,
+    waiting: 1,
+    ready: 0,
+    running: 1,
+    gateOpen: 0,
+    succeeded: 2,
+    failed: 0,
+    skipped: 0,
+    unresolved: 0,
+  },
+  needsYou: [{ kind: 'gate', gateId: 'g1', gateKind: 'node', nodeId: 'approve' }],
+  unconfirmed: 0,
+  rerunOf: null,
+  createdAt: at,
+  updatedAt: later,
+  endedAt: null,
+} satisfies Contract.WorkflowRunSummary
+
 export const globalFence = {
   fenced: true,
   reason: 'journal_mismatch',

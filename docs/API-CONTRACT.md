@@ -278,6 +278,7 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `message.updated`    | `{ roomId, messageId, editedBy?: MessageId \| null, parts?: MessagePart[] }` (`editedBy`: the original of an edit; `parts`: a summary edited or marked stale, replace the cached parts) | Chat                                                     |
 | `message.progressed` | `{ roomId, messageId, at }` (a streaming reply's run made a non-text move: tool call, reasoning, approval; set its `progressAt`. Text moves it via `message.delta`) | Chat |
 | `room.version.created` | `RoomVersion` (a rewind hid the anchor and everything after it; the `message.deleted` events for those messages precede it) | Chat |
+| `workflow.run.upserted` | `WorkflowRunSummary` (§15; after every change of a workflow run, which is not announced as `orchestration.upserted`) | Flow › Workflows run view, Now "Needs you" |
 | `knowledge.changed`  | `{ path; kind: 'written'\|'moved'\|'deleted'\|'restored'; to; by: 'you'\|'outside'\|{agentId} }` | Knowledge                                                |
 | `typing`             | `{ roomId, agentId, text /* "is re-reading the read layer" */ \| null }`                      | Chat, Now thread                                         |
 | `approval.requested` | `Approval`                                                                                    | Now card, Chat, Flow, Watch, Tasks, header dot           |
@@ -1560,6 +1561,21 @@ action }` unless delegated:
 | Team resume / agent resume                                                                              | clears only its own holds; never lifts a run pause, fence or waiver                                                                | same                            | n/a                     |
 | Retire / replace / pause the lead or a step agent                                                       | admission checks the frozen incarnation: a changed lead pauses the run (`agent_unavailable`), a changed step agent blocks the step; every change adds a `remap` Needs-you item | same                            | n/a                     |
 
+Workflow runs (§15) are orchestrations with `planner = 'workflow'` and use this table unchanged for their room and brief
+(same `409 orchestration_owned`, details also carry `planner: 'workflow'`). Their own actions:
+
+| Action (§15)                                                                  | owned (`running`/`paused`/`stopping`/`finishing`)                          | draining                                  | released                          |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------- | --------------------------------- |
+| Save a new version of a definition                                            | allowed (never changes a version a run uses)                               | allowed                                   | allowed                           |
+| Delete a definition                                                           | `409 workflow_used` if any run ever used a version                         | same                                      | same                              |
+| Start a run / re-run (new run, same version)                                  | allowed (capacity counts every run that is not released)                   | allowed                                   | allowed                           |
+| Node-gate decision, assignment-gate decision                                  | allowed while the gate is `open`; else `409 not_open`                      | `409 not_open` (gates are withdrawn)      | `409 not_open`                    |
+| Retry an `unresolved` node                                                    | allowed with attempts left, else `409 not_retryable`                       | `409 not_open`                            | `409 not_open`                    |
+| Try again after `refusedLifetime` refused dispatches                          | allowed while the node waits for it, else `409 not_open`                   | `409 not_open`                            | `409 not_open`                    |
+| Remap (workflow form)                                                         | allowed while an agent differs; `409 stale_plan` if the payloads changed   | `409 not_open`                            | `409 not_open`                    |
+| Pause / resume / limits / waiver / abandon / Stop (`/api/workflow-runs/:id/…`) | as §14 (Stop never waits on a stale revision)                              | Stop records owed Stops; others `409`     | `409` (nothing to do)             |
+| Workflow-room messages, brief controls, Start plan, `rooms.post`              | `409 orchestration_owned`                                                  | `409 orchestration_owned`                 | allowed (ordinary room)           |
+
 Brief status of an owned brief comes from the run (`running`/`paused` while the run is, `done` for `succeeded`, `failed`
 otherwise), never from turns between lead attempts.
 
@@ -1616,3 +1632,205 @@ afterwards. Compaction keeps only the newest entry per run, hold target and rema
 - **Preflight `tool_readiness`** asks the adapter which MCP tools the lead's serving Hermes lists (`HermesPort.mcpTools`): all `orch.*` present → ok; any missing → `fail` with "Reload MCP"; not establishable (the live adapter cannot ask yet) → `unknown` with the same instruction.
 - Capability recovery: never sent → new generation (older ones revoked in the same transaction); handle known → observe, no POST; possibly sent without handle → `unknown`, fenced, no replay.
 - Watch scoping to an attempt's session remains not done in 7.5a.
+
+## 15. Workflows (PLAN 7.1a; schemas in `packages/contract/src/workflows.ts`; design docs/briefs/7.1-workflow-builder.md v8 – v8.3)
+
+A **workflow definition** is a fixed graph of agent steps, human gates, branches, joins and ends. A **workflow run** is an
+orchestration (§14) whose planner is that graph instead of a lead model: `orchestrations.planner = 'workflow'`. There are no
+lead attempts, no capabilities and no MCP calls. Everything below the planner (admission authority, typed dispatch, journal,
+fences, Stop / Finish barriers, owed stops, abandonment, budgets and reservations, deadlines, capacity, storage reserve,
+termination evidence, ownership of the run's room and brief) is §14 unchanged. A run's `id` is its orchestration id.
+
+Differences a client must know:
+
+- Workflow runs are **not** listed by `GET /api/orchestrations` and not announced as `orchestration.upserted`; they have
+  `GET /api/workflow-runs` and `workflow.run.upserted`. The §14 run routes answer `404 not_found` for a workflow run id; use
+  the `/api/workflow-runs/:id/…` routes below. `orchestration.fence.updated` and the global fence are shared.
+- Every browser mutation here is **H** (paired session) and carries `orchestrationRevision` = the run's `revision` the page
+  showed (stale → `409 conflict`, `details.currentRevision`). Decisions that name a node or gate also carry that object's
+  revision (`expectedNodeRevision`, gate `expectedRevision`). Stop ignores a stale revision, as in §14.
+- Time is ISO-8601; money USD; unknown spend is `null`, never zero.
+
+### Definitions
+
+`WorkflowDefinition { name, description?, inputs[], nodes[], edges[] }`, ≤ 30 nodes, ≤ 100 edges, ≤ 10 inputs (name, label,
+`required`, `maxChars` ≤ 4 KiB), ≤ 256 KiB in total, agent `instruction` template ≤ 32 KiB UTF-8, gate `question` ≤ 2 KiB.
+Node ids are `[a-z][a-z0-9_-]{0,31}`.
+
+| Node     | Fields                                                                                           | Ports (`edge.port`)                            |
+| -------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| `agent`  | `agentId`, `instruction`, `retries` 0–2, `estimateUsd?`, `onFailure: route\|fail_run`            | `ok`, `failed`                                 |
+| `gate`   | `question`, `onReject: route\|stop_run`                                                          | `ok` (approved), `rejected`                    |
+| `branch` | `subject` (an agent node), `rules[] ≤ 8` (`id`, `when`)                                          | each rule `id`, and `default` (required)       |
+| `join`   | `mode: 'all'` (no first-joins)                                                                   | `ok`                                           |
+| `end`    | —                                                                                                | none                                           |
+
+Branch conditions are fixed: `verdict` is `passed|changes_requested`, `outcome` is `succeeded|failed`, `output_contains`
+matches the **stored sanitized output** case-insensitively (the editor says so; it is advisory and never a gate). Templates
+are plain substitution: `{{inputs.<name>}}`, `{{nodes.<id>.output}}`, `{{nodes.<id>.verdict}}`, each with an optional
+`|default:"…"`. DAG only; several edges may leave one port (fan-out, one token per target). Per-node deadlines do not exist
+(run deadline only). Versions are immutable once saved; editing saves a new version. Node `agentId`s are local ids.
+
+**Validation** is one function used by the editor, save and start. Issues are `{ code, severity, nodeId, edgeId, field,
+message }`; only `error`s block. Codes: limits (`too_many_nodes`, `too_many_edges`, `definition_too_large`,
+`steps_over_limit` = Σ nodes × (retries + 1) > 30), structure (`duplicate_node_id`, `duplicate_edge_id`, `duplicate_edge`,
+`duplicate_input`, `unknown_node`, `bad_port`, `no_root`, `bad_root_kind` (roots must be `agent` or `gate`), `cycle`,
+`unreachable_node`, `no_end`, `end_has_outgoing`), failure routing (`unrouted_failure` = `onFailure: route` without a
+`failed` edge, `unrouted_rejection`, `failure_edge_with_fail_run`, `port_unconnected`), branches (`branch_no_default`,
+`branch_duplicate_rule`, `branch_subject_invalid` = not an agent ancestor, `branch_condition_unusable`), joins
+(`join_needs_inputs`, `join_deadlock` = inputs from mutually exclusive branches without a `default` path), templates
+(`template_syntax`, `template_unknown_input`, `template_unknown_node`, `template_self_reference`,
+`template_forward_reference`, `template_not_ancestor`, `template_needs_default` = a conditional ancestor needs a default,
+`template_field_unavailable`) and `agent_missing`.
+
+- **S** `GET /api/workflows` → `WorkflowList` (summaries + retained-inventory counts).
+- **S** `GET /api/workflows/:id` → `WorkflowDetail` (version list + latest). `GET /api/workflows/:id/versions/:version` →
+  `WorkflowVersion`.
+- `POST /api/workflows/validate` `WorkflowValidate` → `ValidationResult` (stores nothing, no pairing needed).
+- **H** `POST /api/workflows` `WorkflowCreate` → `201 WorkflowVersion` (version 1). **H** `POST /api/workflows/:id/versions`
+  `WorkflowVersionCreate { baseVersion, definition }` → `201 WorkflowVersion`; `baseVersion` must be the latest (`409
+  conflict`, `details.latestVersion`). An invalid definition → `422 invalid_definition` `{ result: ValidationResult }`; limits
+  (200 definitions, 20 versions each) → `409 quota_exhausted`.
+- **H** `DELETE /api/workflows/:id` → `204`; `409 workflow_used` when any run ever used a version.
+- `POST /api/workflows/:id/versions/:version/export` `WorkflowExportRequest` → `WorkflowExport` (format
+  `score.workflow/1`): every free-text field passes `redact()`, `changes` lists every difference, `removePaths` drops fields
+  the person removed, the result is revalidated, agents travel as `{ name, role }` descriptors, never as ids. It is described
+  as "scrubbed", not "guaranteed secret-free". There is no import in 7.1.
+
+### Runs
+
+- `GET /api/workflow-runs/preflight?workflowId=&version=` → `WorkflowPreflight`: checks (`definition`, `agents` ready,
+  `mapping`, `global_fence`, `journal`, `capacity`, `quota`), the agents the definition uses with their **current
+  incarnations**, both gate-policy notes, `ORCH_ACKNOWLEDGEMENT_TEXT`, the spend note and the true maximum step count.
+- **H** `POST /api/workflow-runs` `WorkflowRunCreate` → `201 WorkflowRunCreated` (`Idempotency-Key` honoured). The server
+  re-runs the preflight; failing check → `409 preflight_failed` `{ checks }`; `429 capacity`; `409 quota_exhausted`; `409
+  fenced`; `agentMap` must name exactly the incarnations the page showed (else `409 conflict`); inputs must fit the
+  definition (`422 invalid_inputs`). Gate policy: `gates-only` (default; only gate nodes stop for the person) or
+  `every-step` (each agent node also gets §14's assignment gate). It creates the run's room and brief (owner: orchestration)
+  and freezes definition, inputs and mapping.
+- **S** `GET /api/workflow-runs` → `WorkflowRunList`. **S** `GET /api/workflow-runs/:id` → `WorkflowRunSnapshot`
+  (`asOfSeq` read in the same transaction). `GET /api/workflow-runs/:id/events` → `WorkflowRunEvents`: §14's causal event
+  history plus `node_state`, `token`, `planner` and `graph_end` events and a `nodeId` on each, derived on read.
+- Stream: `workflow.run.upserted` (`WorkflowRunSummary`) after every change; refetch the snapshot for detail.
+- Controls (**H**; bodies and semantics are §14's): `POST /api/workflow-runs/:id/{pause,resume,stop}` `RunControl`,
+  `…/limits` `LimitsDecision`, `…/waiver` `WaiverDecision`, `…/abandon` `AbandonDecision` → the new `WorkflowRunSummary`.
+- **Node gate** `POST /api/workflow-runs/:id/gates/:gateId/decision` `GateDecision` (§14's body). Applies to node gates and,
+  under `every-step`, to assignment gates. A node gate is a **local graph node**: it never queues or rejects an executor
+  assignment. Approve → `ok` token; reject → `rejected` token when the edge exists, else the run stops (Stop semantics). The
+  decision is one transaction: gate status, token, node transition and journal entry.
+- **Retry** `POST /api/workflow-runs/:id/nodes/:nodeId/retry` `WorkflowRetryDecision` → `WorkflowRunSummary`. Only for an
+  `unresolved` node (its attempt was administratively abandoned) with logical attempts left; creates the next attempt as a
+  `replaces` lineage step. `409 not_retryable` otherwise.
+- **Try again** `POST /api/workflow-runs/:id/nodes/:nodeId/try-again` `WorkflowTryAgainDecision`: continues a node that
+  stopped at `refusedLifetime` (20) refused dispatch generations (`needsYou.refusal_limit`). The alternative is Stop.
+- **Remap** `POST /api/workflow-runs/:id/remap` `WorkflowRemapDecision`: §14's agent-level decision plus `plan`, the exact
+  `{ nodeId, payloadHash }` list the Remap card showed. A different current plan → `409 stale_plan`.
+
+### Graph semantics
+
+**Planner principal.** Server-only (no capability, no MCP). Its commands (`assign`, `cancel`, `finish`) use the run-scoped
+identity `wf:<run>:<node>:<attempt>:<verb>:<generation>` (`plannerCommandId`), stored in `wf_commands` with tool, payload
+hash, receipt and outcome. Node→step mapping, token transitions and the receipt commit **atomically**; a crash before or
+after a pass re-derives the same commands and a stored identity returns its receipt. Passes run only on wake causes; commands
+per pass ≤ node count. **Waiting is not failing:** admission conditions that can change (budget, unknown spend, reservations,
+capacity, agent capacity, fences, holds, quota, Hermes availability, deadline not yet passed) never store a refusal: the node
+stays `ready` with `waitingFor` and is re-evaluated on the next wake cause with a **new generation**. Only permanent
+refusals (validation, mapping mismatch with no remap possible, payload too large, limits that cannot change) fail the node,
+with a recorded reason.
+
+**Readiness is the graph's, not the executor's.** The executor's `after` is not used. An agent node is handed to the
+executor, as a step with no `after`, only once its tokens say it is ready (routed failures, skips, joins and rejected-gate
+routes resolved). The inputs it consumed — including routed failures and template defaults — are frozen in `wf_consumed`
+(consumer attempt → producer attempt + output revision) in the same transaction.
+
+| Node   | Ready when                      | Succeeds →                                        | Fails →                                                   | Cancelled / skipped →                       |
+| ------ | ------------------------------- | ------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------- |
+| agent  | all inputs resolved, ≥ 1 token  | `ok` token                                        | `failed` token if the edge exists (`route`), else the run fails | `skip` on every out edge                    |
+| gate   | same                            | approve → `ok`                                    | reject → `rejected` token, else the run stops             | `skip`                                      |
+| branch | same                            | one `branch` token on the first matching rule, else `default` | —                                                         | `skip`                                      |
+| join   | every input resolved            | token if ≥ 1 input token and no unrouted failure  | —                                                         | `skip` if every input was skipped           |
+| end    | any token                       | records an end token only                         | —                                                         | —                                           |
+
+Token kinds: `ok | failed | rejected | skip | branch`. Roots (no incoming edge) each get one token at start (edge id `start:<node>`, produced by `__start`).
+
+**Finish is strict.** Reaching an `end` records its token; the planner issues Finish only when the graph is terminal: no node
+in `waiting|ready|gate_open|running|unresolved`, no queued or admitted step, no planner command without a receipt, and every
+produced token consumed or at an `end`. A pending gate on another branch therefore always blocks Finish. **Two outcomes:**
+the run's `status` is the executor's (`succeeded`, `finished_with_unresolved`, `failed`, `stopped`); `graphOutcome` is
+`reached_end | failed | stopped` (`null` while running). A reached end with a node that failed unrouted is `failed`.
+Abandon → Retry → B succeeds → end gives `status: finished_with_unresolved`, `graphOutcome: reached_end`, and
+`outcomeNote` says so ("Graph reached the end — 1 abandoned attempt not confirmed ended"); summaries, the brief, history and
+the UI show both.
+
+**Retries and abandonment.** Logical attempts per node = `retries + 1` (≤ 3), counted across replacement lineage. A failed
+attempt with attempts left becomes a new executor step that `replaces` the old one (new session `orc-<run>-<step>-<n>`).
+Abandonment is administrative: it never produces a `failed` token; the node becomes `unresolved` and offers **Retry** (paired,
+attempts left only) or Stop. A late result of an abandoned attempt is recorded and never consumed.
+
+**Results and verdicts.** The verdict is parsed from the complete sanitized final reply **before** truncation, only for
+attempts the runtime terminated: exactly one fenced `score-verdict` block with `{"verdict":"passed"|"changes_requested",
+"reason":"…"}`; none, several or malformed → no verdict (branch rules on verdict take `default`). Stored: verdict, reason ≤
+500 chars, `source: 'runtime'`, `outputTruncated`; output ≤ 32 KiB. Recovered or incomplete observation → no verdict and no
+success (fix batch H/I). **Result eligibility:** an attempt that consumed another's result is checked through `wf_consumed`
+when created and again at send; a consumed result that was withdrawn or whose revision moved retires every provably unsent
+consumer (`input_withdrawn`) and withdraws its approvals.
+
+**Payload bound.** The final dispatched text (wrappers, quoting, consumed results) is rendered and validated (≤ 32 KiB UTF-8)
+**before** the assignment is frozen and its gate shown; rendering never clips. Oversized → the node fails at readiness with
+the reason (`payload_too_large`). The gate shows the exact text and the dispatched payload's hash equals the approved hash.
+The internal workflow assignment accepts 32 KiB; the MCP `orch.assign` keeps 8 KiB.
+
+**Mapping.** Definitions reference local agent ids. A run freezes the incarnation of every agent it uses (and the executor's
+`orc_agent_map`). Assignment and send re-check against the frozen map; a changed agent blocks only its nodes
+(`waitingFor: 'remap'`) and `needsYou` lists a `remap` item with its `plan`. A remap decision moves every affected step to
+`remapping`: provably unsent steps (no `send_started` in the database or the journal) are retired with disposition `remapped`
+and re-created for the new incarnation (old gate withdrawn; under `every-step` the new frozen payload needs its own approval,
+under `gates-only` the remap decision is that approval); possibly sent work keeps its attempt and obligations, the remap
+applies to later work. Re-creations use no logical retry but count against `maxSteps`; ≤ 2 remaps per node. Runs from before
+the migration get their mapping backfilled from their attempts' recorded incarnations (journaled).
+
+**Dispatch generations (v8.2 / v8.3).** Every send of an attempt has a generation `g` (1, 2, …): `send_started(attempt, g)` is
+journaled before the adapter call. A proven refusal (`not_dispatched`) journals `send_refused(attempt, g)` in the transaction
+that returns the attempt to `created`; any other outcome keeps it sent/unknown. The send barrier and restore verification treat
+an attempt as sent iff its latest generation has `send_started` without `send_refused`. After 5 consecutive refused
+generations the node waits `hermes_unavailable` and retries on the next `admission_revision` change caused by agent readiness
+or every 10 minutes; a successful send resets the count. The journal keeps, per attempt, a **witness** `{attempt,
+lastGeneration, lastState, refusedCount}`; compaction folds older generations into it (crash-safe, keeping the latest
+generation, its state and the monotonic sequence). After **20** refused generations an attempt stops retrying on its own:
+workflow nodes show `needsYou.refusal_limit` ("Hermes has refused this step 20 times — Try again / Stop the run"; paired,
+revision-bound, journaled); in orchestrations the step fails with disposition `hermes_refused` and the lead decides.
+
+**Durable wakes.** A global `admission_revision` (`orc_global`) increments in the same transaction as every change that can
+make waiting work admissible (limits raised, Resume of run/agent/team, fence lift, waiver, capacity or quota released by any
+run, agent readiness). Each run with waiting work records the revision it last evaluated; the executor re-evaluates runs whose
+revision is behind, also at startup. A `ready` + waiting node is a wake source, so a workflow never pauses `no_wake_source`
+while it has waiting nodes.
+
+**Spend (honest).** The adapter reports evidence per attempt `{ attributed, lineageComplete, fresh, costScope }`. Live Hermes
+cannot prove `lineageComplete` and reports tokens, usually not dollars, so its spend is **never settled**: provisional,
+reservations held until the run ends, and `spend.note` says "spend not settled — Hermes doesn't report complete costs".
+Unknown-spend acceptance is a risk decision, never evidence. The fake adapter can report full evidence.
+
+**Storage.** The per-run charge covers orchestration and workflow rows, receipts, owned intents, the run room's messages and
+`message_runs`, its attempts' `runs`/tool rows and control history (see `StorageInventory`); retained definition versions are
+charged globally (≤ 200 × 20 × 256 KiB). Control history is ≤ 200 records per run (older ones fold into counters; journaled
+transitions stay); 64 KiB per run is protected for Stop and obligation evidence. Charges are released only when every
+associated row is deleted (pruning deletes them together; a tombstone stays). Watch and media keep their global retention
+and are not charged per run.
+
+**Watch.** Per-attempt filtering is not part of 7.1: a node's Watch link opens the agent's Watch at the attempt's time window,
+labelled "agent-wide: may include other work".
+
+**Implementation notes (7.1a).** Observed tool and thinking rows of a run's attempts are charged to its allowance at the writer and dropped when it is used up; the inventory lists them (`tool_rows`, `thinking`). A version's `used` flag is permanent (it survives pruning of its runs). The readiness evidence of a step (the producers whose results made its node ready) is recorded in `consumed` even when the text does not use it. A consumed entry of kind `default` for a producer that never ran (skipped) has `producerAttempt: 0`. A re-created step (retry, remap) is gated again under `every-step`. The remap re-creation
+shares the logical attempt number with the step it replaces; its command identity differs by planner generation, which the
+remap decision increments. The validation codes `join_deadlock` and `agent_missing` are reserved: with `skip` tokens an `all`
+join always resolves, and an empty `agentId` cannot pass the schema. The 20-refusal limit, the five-in-a-row wait and the
+ten-minute timer are the same for orchestration step attempts (the executor owns them); only their end differs (see above).
+
+### Fake mode
+
+`SCORE_MODE=fake` runs workflows against the fake adapter with the same executor. Markers in a step's text script the agent:
+`[fake:hold]` (stays running until stopped or ended), `[fake:fail]` (the run ends `failed`), `[fake:verdict:passed]` /
+`[fake:verdict:changes_requested]` (reply with a `score-verdict` block) and `[fake:refuse:N]` (the first N dispatches are
+refused as proven unsent). The fake adapter reports complete spend evidence, so its runs settle. E2E specs never use a live
+Hermes or tokens.
