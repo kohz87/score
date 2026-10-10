@@ -25,6 +25,12 @@ function authError(error: unknown): string {
   if (code === 'too_many_attempts') return 'Too many wrong passwords. Try again later.'
   if (code === 'password_not_set') return 'Set a security password in Settings first.'
   if (code === 'too_many_terminals') return 'Two terminals are already open. Close one in Settings.'
+  if (code === 'second_factor_not_enrolled')
+    return 'The terminal needs a security password set on the Score machine: run scripts/score password there (a password set in the browser does not unlock the terminal).'
+  if (code === 'https_required')
+    return 'The terminal only works over HTTPS (Score in remote mode with a certificate).'
+  if (code === 'fresh_auth_required')
+    return 'Confirm your password or passkey again, then open the terminal.'
   return 'Could not open the terminal. Please try again.'
 }
 

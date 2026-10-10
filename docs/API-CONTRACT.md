@@ -393,6 +393,13 @@ expiresAt: iso; current: boolean }[] }` (`PairedBrowsersSchema`). `id` is a mana
   and `GET /api/session/security` reports `terminal: false` (the field is `true` when on, and also `false` if the `node-pty`
   native module failed to load, which is logged). None of the routes is public in remote mode: all need a paired session
   (so the exact public list in the remote-access item above is **unchanged**), and the WebSocket needs the ticket as well.
+  **HTTPS only:** the routes exist only on the TLS listener (remote mode with a certificate); local mode never has them and
+  `GET /api/session/security` reports `terminalUnavailable: string | null` with the reason ("needs HTTPS (remote mode with a
+  certificate)", "node-pty not built"). Ticket minting and the upgrade check the socket is encrypted (`426 https_required`).
+  **Host-issued second factor:** a ticket needs a fresh password or passkey check (≤ 60 s, consumed by the mint) **and** a
+  security password set on the Score machine with `scripts/score password` (`security-password.origin` = `host <digest>`);
+  a password set or changed from a browser does not unlock terminals (`403 second_factor_not_enrolled`), and passkeys count
+  only while the password is host-issued.
   - `POST /api/terminal/tickets` (paired; mutation, so `X-Score-Client` and an allowed `Origin`) → `{ ticket, expiresAt }`
     (`TerminalTicketSchema`). Needs a second factor made **by this session in the last 60 s**: a correct security password
     (`POST /api/session/security/check`, or any other password-guarded route) or a passkey assertion
