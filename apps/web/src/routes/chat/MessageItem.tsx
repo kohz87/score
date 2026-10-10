@@ -66,6 +66,15 @@ function ToolCard({
   )
 }
 
+// A part keeps its component state (an open card, a code block's "Copied") when the final parts arrive with another kind
+// inserted before it, which a plain index key would remount: key by kind and its position among parts of that kind.
+function partKey(parts: MessagePart[], index: number) {
+  const kind = parts[index]!.kind
+  let ordinal = 0
+  for (let i = 0; i < index; i++) if (parts[i]!.kind === kind) ordinal++
+  return `${kind}-${ordinal}`
+}
+
 function Thinking({ text, streaming }: { text: string; streaming: boolean }) {
   return (
     <details className="chat-card chat-thinking">
@@ -495,7 +504,7 @@ export function MessageItem({
           )}
           {message.parts.map((part, index) => (
             <Part
-              key={index}
+              key={partKey(message.parts, index)}
               part={part}
               agents={agents}
               message={message}
