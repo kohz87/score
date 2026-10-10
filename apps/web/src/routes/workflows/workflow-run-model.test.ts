@@ -2,6 +2,7 @@ import { NodeStateSchema, type TokenKind, type WorkflowEvent } from '@score/cont
 import { expect, test } from 'vitest'
 import {
   buildWorkflowGraph,
+  describeWorkflowEvents,
   edgeIndex,
   edgeStatesOf,
   filterWorkflowLog,
@@ -200,4 +201,54 @@ test('the outcome is two statements: the graph, and the note that qualifies it',
     note: 'Graph reached the end — 1 abandoned attempt not confirmed ended',
   })
   expect(outcomeLines({ graphOutcome: 'stopped', outcomeNote: null }).graph).toBe('Graph stopped')
+})
+
+test('the log speaks in titles and plain words, never ids, states or internal summaries', () => {
+  const run = {
+    definition,
+    tokens: [
+      { edgeId: 'e1', kind: 'ok' },
+      { edgeId: 'e2', kind: 'failed' },
+      { edgeId: 'e5', kind: 'branch' },
+      { edgeId: 'e6', kind: 'skip' },
+      { edgeId: 'start:a', kind: 'ok' },
+    ],
+  } as never
+  const events = [
+    ev('1', { kind: 'run_started', summary: 'created' }),
+    ev('2', { kind: 'token', edgeId: 'start:a', summary: 'token ok on start:a' }),
+    ev('3', { nodeId: 'a', verdict: 'running', summary: 'a: running' }),
+    ev('4', { nodeId: 'a', verdict: 'succeeded', summary: 'a: succeeded' }),
+    ev('5', { kind: 'token', edgeId: 'e1', nodeId: 'a', summary: 'token ok on e1' }),
+    ev('6', {
+      nodeId: 'g',
+      verdict: 'gate_open',
+      summary: 'g: gate_open (waiting for your decision)',
+    }),
+    ev('7', { kind: 'gate_decided', nodeId: 'g', summary: 'wf gate decided' }),
+    ev('8', { nodeId: 'b', verdict: 'succeeded', summary: 'b: succeeded (matched r1)' }),
+    ev('9', { kind: 'token', edgeId: 'e5', nodeId: 'b', summary: 'token branch on e5' }),
+    ev('10', { kind: 'token', edgeId: 'e6', nodeId: 'b', summary: 'token skip on e6' }),
+    ev('11', { nodeId: 'fix', verdict: 'skipped', summary: 'fix: skipped (no path led here)' }),
+    ev('12', { kind: 'token', edgeId: 'e2', nodeId: 'a', summary: 'token failed on e2' }),
+    ev('13', { nodeId: 'a', verdict: 'failed', summary: 'a: failed (the step failed)' }),
+    ev('14', { nodeId: 'end', verdict: 'succeeded', summary: 'end: succeeded' }),
+    ev('15', { kind: 'control', summary: 'ended' }),
+  ]
+  const lines = describeWorkflowEvents(events, run, (id) => id).map((l) => l.summary)
+  expect(lines).toEqual([
+    'Run started',
+    'Draft started (builder)',
+    'Draft finished',
+    'Draft → Approve',
+    'Approve is waiting for you',
+    'You approved Approve',
+    "Passed? took 'verdict passed' → Done",
+    'Repair was skipped',
+    'Draft failed → Repair',
+    'Draft failed: the step failed',
+    'The run reached Done',
+    'The run ended',
+  ])
+  for (const text of lines) expect(text).not.toMatch(/\b(e\d|start:|gate_open|token|node_state)\b/)
 })

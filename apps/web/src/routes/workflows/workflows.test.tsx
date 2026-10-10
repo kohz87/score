@@ -141,7 +141,9 @@ test('the run view draws the graph from the definition: shapes, states, the gate
   expect([...document.querySelectorAll('.orch-edge-label')].map((e) => e.textContent)).toEqual(
     expect.arrayContaining(['approved', 'verdict passed', 'otherwise']),
   )
-  expect(within(screen.getByRole('log')).getByText('draft: running')).toBeTruthy()
+  expect(
+    within(screen.getByRole('log')).getByText('Draft the notes started (builder)'),
+  ).toBeTruthy()
   expect(screen.getByText(/spend settled/)).toBeTruthy()
 })
 
@@ -309,8 +311,8 @@ test('clicking a node filters the log to it and shows what it read, its verdict 
   expect(within(panel).getByText(/The output of Draft the notes/)).toBeTruthy()
   expect(within(panel).getByText(/result v1/, { selector: 'li' })).toBeTruthy()
   expect(within(panel).getByText(/Verdict: passed/)).toBeTruthy()
-  expect(within(log).queryByText('draft: running')).toBeNull()
-  expect(within(log).getByText('review: running')).toBeTruthy()
+  expect(within(log).queryByText('Draft the notes started (builder)')).toBeNull()
+  expect(within(log).getByText('Review the draft started (reviewer)')).toBeTruthy()
   expect(within(panel).getByText(/agent-wide: may include other work/)).toBeTruthy()
 })
 

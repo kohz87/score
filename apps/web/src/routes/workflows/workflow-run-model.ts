@@ -317,3 +317,133 @@ export function workflowNeedsText(
       return `Hermes refused ${nodeLabel(item.nodeId)} ${item.refusals} times`
   }
 }
+
+// ------------------------------------------------------------------------------------------------------- the log
+
+export interface WorkflowLogLine {
+  id: string
+  at: string
+  kind: string
+  verdict: string | null
+  summary: string
+}
+
+const reasonOf = (summary: string): string | null => /\(([^()]*)\)\s*$/.exec(summary)?.[1] ?? null
+
+/**
+ * The run's history in the person's words: node titles, the port or rule an edge belongs to, nothing internal. The
+ * server's own summary lines name ids and states; this maps each event with the run's frozen definition instead.
+ * Events that only repeat another line (start tokens, passed-over edges, a branch's own "succeeded") have no line.
+ */
+export function describeWorkflowEvents(
+  events: readonly WorkflowEvent[],
+  run: Pick<WorkflowRunDetail, 'definition' | 'tokens'>,
+  agentName: (agentId: string) => string,
+): WorkflowLogLine[] {
+  const nodes = new Map(run.definition.nodes.map((node) => [node.id, node]))
+  const edges = new Map(run.definition.edges.map((edge) => [edge.id, edge]))
+  const tokenKinds = new Map(run.tokens.map((token) => [token.edgeId, token.kind]))
+  const title = (id: string | null) => (id ? (nodes.get(id)?.label ?? id) : 'a node')
+  const line = (event: WorkflowEvent, summary: string | null): WorkflowLogLine[] =>
+    summary === null
+      ? []
+      : [{ id: event.id, at: event.at, kind: event.kind, verdict: event.verdict, summary }]
+  return events.flatMap((event): WorkflowLogLine[] => {
+    const node = event.nodeId ? nodes.get(event.nodeId) : undefined
+    const name = title(event.nodeId)
+    switch (event.kind) {
+      case 'run_started':
+        return line(event, 'Run started')
+      case 'node_state': {
+        const reason = reasonOf(event.summary)
+        switch (event.verdict) {
+          case 'ready':
+            return line(event, `${name} is ready${reason ? ` (${reason})` : ''}`)
+          case 'running':
+            return line(
+              event,
+              node?.kind === 'agent'
+                ? `${name} started (${agentName(node.agentId)})`
+                : `${name} started`,
+            )
+          case 'gate_open':
+            return line(event, `${name} is waiting for you`)
+          case 'succeeded':
+            if (node?.kind === 'agent') return line(event, `${name} finished`)
+            if (node?.kind === 'end') return line(event, `The run reached ${name}`)
+            return []
+          case 'failed':
+            return line(event, `${name} failed${reason ? `: ${reason}` : ''}`)
+          case 'skipped':
+            return line(event, `${name} was skipped`)
+          case 'cancelled':
+            return line(event, `${name} was cancelled`)
+          case 'unresolved':
+            return line(event, `${name} was abandoned: retry it or stop the run`)
+          default:
+            return []
+        }
+      }
+      case 'token': {
+        const edge = event.edgeId ? edges.get(event.edgeId) : undefined
+        if (!edge) return []
+        const kind = tokenKinds.get(edge.id)
+        const from = title(edge.from)
+        const to = title(edge.to)
+        if (kind === 'skip') return []
+        if (kind === 'failed') return line(event, `${from} failed → ${to}`)
+        if (kind === 'rejected') return line(event, `You rejected ${from} → ${to}`)
+        if (kind === 'branch') {
+          const source = nodes.get(edge.from)
+          const label = source ? edgeLabelOf(source, edge.port) : undefined
+          return line(event, `${from} took '${label ?? edge.port}' → ${to}`)
+        }
+        return line(event, `${from} → ${to}`)
+      }
+      case 'gate_decided': {
+        const decided = event.summary.includes('rejected')
+          ? 'rejected'
+          : event.summary.includes('approved')
+            ? 'approved'
+            : null
+        const produced = run.tokens.find((t) => t.producedBy === event.nodeId)
+        const how = decided ?? (produced?.kind === 'rejected' ? 'rejected' : 'approved')
+        return line(event, event.nodeId ? `You ${how} ${name}` : `You ${how} a step`)
+      }
+      case 'planner': {
+        if (event.summary.includes('retried')) return line(event, `${name} is being retried`)
+        if (event.summary.includes('try again'))
+          return line(event, `${name} is being sent to Hermes again`)
+        return line(
+          event,
+          `${name} could not start${reasonOf(event.summary) ? `: ${reasonOf(event.summary)}` : ''}`,
+        )
+      }
+      case 'graph_end':
+        return line(event, 'Every path is done; finishing the run')
+      case 'control': {
+        const s = event.summary
+        const text = s.startsWith('paused')
+          ? 'The run was paused'
+          : s.startsWith('resumed')
+            ? 'The run was resumed'
+            : s.startsWith('stop requested')
+              ? 'You asked to stop the run'
+              : s.startsWith('limits')
+                ? 'The budget or deadline was changed'
+                : s.startsWith('abandoned')
+                  ? 'You abandoned an attempt that was not confirmed ended'
+                  : s.startsWith('waiver')
+                    ? 'You chose to continue while a cancelled step may still run'
+                    : s.startsWith('agent remapped')
+                      ? 'The run now uses a replaced agent'
+                      : s.startsWith('ended')
+                        ? 'The run ended'
+                        : s
+        return line(event, text)
+      }
+      default:
+        return line(event, event.summary)
+    }
+  })
+}

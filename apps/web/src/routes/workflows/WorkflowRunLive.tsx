@@ -17,6 +17,7 @@ import { useWorkflowRun, useWorkflowRunActions } from './workflow-queries.ts'
 import {
   buildWorkflowGraph,
   captionsOf,
+  describeWorkflowEvents,
   edgeIndex,
   edgeStatesOf,
   filterWorkflowLog,
@@ -90,7 +91,12 @@ export function WorkflowRunLive({
 
   const visuals = replaying ? replay.nodes : liveWorkflowVisuals(detail)
   const edgeStates = replaying ? replay.edges : edgeStatesOf(detail.tokens)
-  const logEvents = filterWorkflowLog(replaying ? events.slice(0, count) : events, selected)
+  const agentName = (id: string) => agents.find((agent) => agent.id === id)?.name ?? id
+  const logEvents = describeWorkflowEvents(
+    filterWorkflowLog(replaying ? events.slice(0, count) : events, selected),
+    detail,
+    agentName,
+  )
   const over = isRunOver(detail.status)
   const { graph: graphLine, note } = outcomeLines(detail)
   const selectedLabel = detail.definition.nodes.find((node) => node.id === selected)?.label
@@ -226,8 +232,14 @@ export function WorkflowRunLive({
                 {detail.agentMap.map((entry) => (
                   <li key={entry.agentId}>
                     <AgentChip agentId={entry.agentId} agents={agents} />{' '}
-                    <span className="orch-mono" title="The exact agent this run uses">
-                      {entry.incarnation.slice(0, 12)}
+                    <span
+                      className="wf-incarnation"
+                      role="img"
+                      tabIndex={0}
+                      title={`The exact agent this run uses (${entry.incarnation})`}
+                      aria-label={`Incarnation ${entry.incarnation}`}
+                    >
+                      ⓘ
                     </span>{' '}
                     {entry.status !== 'current' && (
                       <strong className="orch-error">

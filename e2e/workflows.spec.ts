@@ -147,7 +147,7 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   await expect(node(page, 'end2')).toHaveAttribute('data-state', 'skipped')
   await expect(page.locator('[data-edge-state="skipped"]').first()).toBeAttached()
   const log = page.getByRole('log', { name: 'Events' })
-  await expect(log).toContainText('branch1: succeeded')
+  await expect(log).toContainText("Passed review? took 'verdict passed'")
 
   // Clicking a node filters the log to it and shows what it read and its verdict.
   await node(page, 'step1').click()

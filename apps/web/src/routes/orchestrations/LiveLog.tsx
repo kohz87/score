@@ -27,9 +27,9 @@ const kindLabel: Record<string, string> = {
   inquiry_opened: 'Question',
   inquiry_answered: 'Question',
   control: 'Run',
-  node_state: 'Node',
-  token: 'Token',
-  planner: 'Planner',
+  node_state: 'Step',
+  token: 'Path',
+  planner: 'Run',
   graph_end: 'Run',
 }
 

@@ -743,3 +743,9 @@
   color: var(--card);
   border-color: var(--ink);
 }
+
+.wf-incarnation {
+  color: var(--muted);
+  cursor: help;
+  font-size: 13px;
+}
