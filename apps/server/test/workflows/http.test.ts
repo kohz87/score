@@ -42,7 +42,9 @@ beforeEach(async () => {
   })
   headers = { 'x-score-client': 'web', cookie: paired.headers['set-cookie']!.toString().split(';')[0]! }
   eventTypes = []
-  h.ingest.onCommitted((events) => eventTypes.push(...events.map((e) => e.type)))
+  h.ingest.onCommitted((events) => {
+    eventTypes.push(...events.map((e) => e.type))
+  })
 })
 afterEach(async () => {
   await app.close()

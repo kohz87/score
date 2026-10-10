@@ -38,7 +38,12 @@ export function assertNotOwned(owner: Owner | undefined, action: string): void {
     409,
     'orchestration_owned',
     'This belongs to an orchestration run; use the run controls instead',
-    { orchestrationId: owner.orchestration.id, state: owner.state, action },
+    {
+      orchestrationId: owner.orchestration.id,
+      state: owner.state,
+      action,
+      planner: owner.orchestration.planner,
+    },
   )
 }
 

@@ -59,7 +59,9 @@ test('an outage is waited out with one attempt: every refused generation is jour
   const kinds = journalFor(h, attemptRow(h)[0]!.id).map((e) => `${e.kind}`)
   expect(kinds.filter((k) => k === 'send_refused').length).toBeGreaterThanOrEqual(2)
   expect(kinds.filter((k) => k.startsWith('send_')).at(-1)).toBe('send_started')
-  expect(journalDispatches(h.journal.readOwn().ok ? (h.journal.readOwn() as { entries: never[] }).entries : []).get(attemptRow(h)[0]!.id)).toMatchObject({
+  const read = h.journal.readOwn()
+  if (!read.ok) throw new Error(read.reason)
+  expect(journalDispatches(read.entries).get(attemptRow(h)[0]!.id)).toMatchObject({
     state: 'sent',
     generation: attemptRow(h)[0]!.dispatch_generation,
   })
@@ -147,7 +149,7 @@ test('in an orchestration the step fails at the lifetime limit and the lead deci
   expect(step.status).toBe('failed')
   expect(step.disposition).toBe('hermes_refused')
   expect(attemptOf(h, id, 'step', 's1')[0]!.state).toBe('refused')
-  await h.until(() => h.orch.summary(id).status === 'succeeded', 240_000)
+  await h.until(() => h!.orch.summary(id).status === 'succeeded', 240_000)
 })
 
 test('a refusal that cannot be journaled keeps the attempt sent/unknown: nothing is claimed unsent', async () => {
@@ -201,7 +203,8 @@ test('100 refusals with compaction in between keep the journal bounded and the l
 
 /** A database that is behind the journal on one attempt's dispatch generation. */
 async function restoredAt(generation: number): Promise<{ fenced: boolean; store: GlobalFenceStore }> {
-  const sqlite = h!.db.sqlite
+  if (!h) throw new Error('no harness')
+  const sqlite = h.db.sqlite
   sqlite.prepare('UPDATE orc_attempts SET dispatch_generation = ?').run(generation)
   const store = new GlobalFenceStore(h!.db, h!.journal, () => h!.scheduler.now())
   return { fenced: store.startupCheck().fenced, store }

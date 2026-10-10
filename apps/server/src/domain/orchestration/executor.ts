@@ -823,6 +823,8 @@ export class Orchestrator {
   // ---------------------------------------------------------------------------------------------- human decisions
 
   private async decide(id: string, fn: (ctx: Ctx) => void): Promise<OrchestrationSummary> {
+    // A workflow run answers 404 before anything changes: its controls are /api/workflow-runs/:id/….
+    this.db.read((sqlite) => requireLeadOrch(sqlite, id))
     await this.mutate((ctx) => {
       fn(ctx)
     })

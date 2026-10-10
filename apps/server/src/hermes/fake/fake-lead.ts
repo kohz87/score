@@ -115,6 +115,14 @@ export function attachFakeLead(
     const parsed = parseLeadInput(run.input)
     if (!parsed) {
       if ((options.holdStep ?? ((r) => /\[fake:hold\]/.test(r.input)))(run)) return { hold: true }
+      // Scripted step outcomes for workflow runs (fake mode and e2e): `[fake:fail]` ends the run `failed`;
+      // `[fake:verdict:passed]` / `[fake:verdict:changes_requested]` reply with a `score-verdict` block.
+      if (/\[fake:fail\]/.test(run.input)) return { fail: true, text: 'The step failed.' }
+      const verdict = /\[fake:verdict:(passed|changes_requested)\]/.exec(run.input)?.[1]
+      if (verdict)
+        return {
+          text: `Reviewed.\n\`\`\`score-verdict\n${JSON.stringify({ verdict, reason: 'scripted' })}\n\`\`\``,
+        }
       const reply = options.stepReply?.(run)
       return reply === undefined ? undefined : { text: reply }
     }
