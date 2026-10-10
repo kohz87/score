@@ -2211,3 +2211,17 @@
   font-weight: 600;
   color: var(--muted);
 }
+
+.chat-composer-locked {
+  padding: 0 16px 16px;
+}
+.chat-composer-locked textarea {
+  width: 100%;
+  resize: none;
+  font: inherit;
+  padding: 14px 18px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-20);
+  background: var(--subtle);
+  color: var(--muted);
+}

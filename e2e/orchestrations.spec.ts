@@ -42,6 +42,10 @@ async function approve(page: Page, step: string) {
 }
 
 async function openLive(page: Page) {
+  // The room panel is collapsed unless something needs the person.
+  const toggle = page.getByRole('button', { name: /Orchestration · / }).first()
+  await expect(toggle).toBeVisible()
+  if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click()
   await page.getByRole('link', { name: 'Open the live diagram' }).first().click()
   await expect(page.locator('[data-node="lead"]')).toBeVisible()
 }
@@ -54,6 +58,9 @@ test('start with every-step gates, approve each step, watch the diagram reach su
   await start(page, 'Write the release notes e2e-a')
   // The room is an ordinary room marked as an orchestration in the list; its composer answers 409 with a hint.
   await expect(page.getByRole('link', { name: /Orchestration/ }).first()).toBeVisible()
+  // While the run owns the room the composer is disabled with a hint.
+  await expect(page.getByRole('textbox', { name: 'Message' })).toBeDisabled()
+  await expect(page.getByPlaceholder(/Use the run controls above/)).toBeVisible()
   await openLive(page)
 
   // The first step waits for the person, with the frozen assignment shown.
@@ -185,7 +192,7 @@ test('Stop: the run is Stopping and its attempts are not confirmed ended until t
   await expect(async () => {
     const before = await card.count()
     if (before > 0) {
-      await card.first().getByRole('checkbox').check()
+      await card.first().getByRole('checkbox').first().check()
       await card.first().getByRole('button', { name: 'Abandon this attempt' }).click()
       await expect(card).toHaveCount(before - 1, { timeout: 4000 })
     }

@@ -132,9 +132,8 @@ button.orch-primary,
 }
 .orch-badge--running,
 .orch-badge--finishing {
-  background: var(--agent-saffron-tint);
-  border-color: var(--agent-saffron);
-  color: var(--agent-saffron-text);
+  background: var(--card);
+  border: 2px solid var(--ink-muted);
 }
 .orch-badge--paused,
 .orch-badge--stopping {
@@ -478,19 +477,7 @@ button.orch-primary,
   font-size: 16px;
   color: var(--muted);
 }
-.orch-node--lead-idle,
-.orch-node--lead-working,
-.orch-node--lead-ended {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--card);
-}
-.orch-node--lead-idle .orch-node__text span,
-.orch-node--lead-working .orch-node__text span,
-.orch-node--lead-ended .orch-node__text span {
-  color: inherit;
-  opacity: 0.85;
-}
+
 .orch-node--queued {
   border: 1.5px dashed color-mix(in srgb, var(--node-agent) 60%, var(--card));
 }
@@ -502,12 +489,8 @@ button.orch-primary,
 .orch-node--admitting,
 .orch-node--running,
 .orch-node--lead-working {
-  border: 2px solid var(--agent-saffron);
+  border: 2px solid var(--node-agent);
   animation: orch-pulse 1.6s ease-in-out infinite;
-}
-.orch-node--running,
-.orch-node--admitting {
-  background: var(--agent-saffron-tint);
 }
 .orch-node--succeeded {
   border: 2px solid var(--ink);
@@ -554,10 +537,10 @@ button.orch-primary,
 @keyframes orch-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--agent-saffron) 55%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--node-agent) 55%, transparent);
   }
   50% {
-    box-shadow: 0 0 0 7px color-mix(in srgb, var(--agent-saffron) 0%, transparent);
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--node-agent) 0%, transparent);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -565,7 +548,7 @@ button.orch-primary,
   .orch-node--running,
   .orch-node--lead-working {
     animation: none;
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--agent-saffron) 45%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--node-agent) 40%, transparent);
   }
   .orch-node {
     transition: none;
@@ -595,9 +578,7 @@ button.orch-primary,
 .orch-state--blocked {
   color: var(--agent-coral-text);
 }
-.orch-state--gate,
-.orch-state--running,
-.orch-state--admitting {
+.orch-state--gate {
   color: var(--agent-saffron-text);
 }
 
@@ -715,17 +696,38 @@ button.orch-primary,
   padding-left: 22px;
 }
 .orch-room {
+  margin: 0 0 12px;
+}
+.orch-room-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-20);
-  margin: 0 16px 8px;
-  padding: 10px 16px;
-  max-height: 46vh;
-  overflow: auto;
-  flex-shrink: 0;
+  padding: 8px 14px;
 }
-.orch-room > summary {
-  cursor: pointer;
+.orch-room-head .orch-controls {
+  margin-left: auto;
+}
+.orch-room-toggle {
+  border: 0 !important;
+  background: none !important;
+  padding: 0 !important;
+  text-align: left;
+}
+.orch-room-toggle::before {
+  content: '▸ ';
+}
+.orch-room-toggle[aria-expanded='true']::before {
+  content: '▾ ';
+}
+.orch-room-body {
+  padding: 12px 6px 0;
 }
 .orch-fence-items {
   padding-left: 18px;

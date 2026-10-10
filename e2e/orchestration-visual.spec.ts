@@ -48,6 +48,11 @@ async function open(page: Page, target: (typeof pages)[number], width: number, d
   await expect(page.locator(target.ready).first()).toBeVisible()
   await expect(page.getByText(/^Loading/)).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
+  // The thread pins itself to the newest message; the baseline shows the panel from its top.
+  await page.evaluate(() => {
+    const scroll = document.querySelector('.chat-scroll')
+    if (scroll) scroll.scrollTop = 0
+  })
 }
 
 for (const target of pages) {

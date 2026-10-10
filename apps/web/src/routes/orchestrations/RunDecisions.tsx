@@ -253,13 +253,17 @@ export function UnknownCard({
   run,
   attemptId,
   actions,
+  fenceStepId,
 }: {
   run: OrchestrationDetail
   attemptId: string
   actions: RunActions
+  /** The same attempt also fences the run as a cancelled step: its waiver is offered on this card. */
+  fenceStepId?: string
 }) {
   const attempt = run.attempts.find((item) => item.id === attemptId)
   const [sure, setSure] = useState(false)
+  const [waive, setWaive] = useState(false)
   if (!attempt) return null
   return (
     <section className="orch-decision" aria-label="Attempt not confirmed ended">
@@ -289,6 +293,35 @@ export function UnknownCard({
         </button>
       </div>
       <ErrorLine error={actions.abandon.error} />
+      {fenceStepId && (
+        <>
+          <p>
+            It is also the cancelled step {fenceStepId}: nothing new starts until it has ended. You
+            can instead continue while it may still run; that is recorded and is not proof that it
+            stopped.
+          </p>
+          <label className="orch-check">
+            <input
+              type="checkbox"
+              checked={waive}
+              onChange={(event) => setWaive(event.target.checked)}
+            />
+            Continue while the cancelled step may still run.
+          </label>
+          <div className="orch-actions">
+            <button
+              type="button"
+              disabled={!waive || actions.waiver.isPending}
+              onClick={() =>
+                actions.waiver.mutate({ orchestrationRevision: run.revision, acknowledge: true })
+              }
+            >
+              Continue anyway
+            </button>
+          </div>
+          <ErrorLine error={actions.waiver.error} />
+        </>
+      )}
     </section>
   )
 }
@@ -341,6 +374,16 @@ export function RunNeeds({
   actions: RunActions
 }) {
   if (run.needsYou.length === 0) return null
+  // A cancelled step whose attempt is also not confirmed ended is one card with both actions.
+  const unknownIds = new Set(
+    run.needsYou.flatMap((item) => (item.kind === 'unknown' ? [item.attemptId] : [])),
+  )
+  const fenceFor = (attemptId: string): { fenceStepId?: string } => {
+    const fence = run.needsYou.find(
+      (item) => item.kind === 'cancel_fence' && item.attemptId === attemptId,
+    )
+    return fence?.kind === 'cancel_fence' ? { fenceStepId: fence.stepId } : {}
+  }
   return (
     <div className="orch-needs" aria-label="Needs you">
       {run.needsYou.map((item) => {
@@ -380,9 +423,11 @@ export function RunNeeds({
                 run={run}
                 attemptId={item.attemptId}
                 actions={actions}
+                {...fenceFor(item.attemptId)}
               />
             )
           case 'cancel_fence':
+            if (unknownIds.has(item.attemptId)) return null
             return (
               <CancelFenceCard
                 key={`c${item.attemptId}`}

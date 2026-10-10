@@ -277,7 +277,6 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
           retry={() => void context.queries.register(definition).refetch()}
         />
       )}
-      {orchestration && <RoomRunPanel summary={orchestration} agents={agents} />}
       {room?.importedFrom && <ImportedBanner room={room} agents={agents} />}
       {room && (
         <div
@@ -293,6 +292,7 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
             position.current.height = element.scrollHeight
           }}
         >
+          {orchestration && <RoomRunPanel summary={orchestration} agents={agents} />}
           <div className="chat-messages">
             <MessagePage
               roomId={roomId}
@@ -306,7 +306,17 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
         </div>
       )}
       <DeleteToast />
-      {room && (
+      {room && orchestration && orchestration.ownership !== 'released' && (
+        <div className="chat-composer-locked">
+          <textarea
+            disabled
+            rows={1}
+            aria-label="Message"
+            placeholder="This room belongs to a running orchestration. Use the run controls above."
+          />
+        </div>
+      )}
+      {room && !(orchestration && orchestration.ownership !== 'released') && (
         <Composer
           roomId={roomId}
           roomName={room.name}
