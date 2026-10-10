@@ -80,6 +80,7 @@ import {
   listOrchs,
   readAttempt,
   readOrch,
+  readStep,
   requireOrch,
   stepsOf,
   type AttemptRow,
@@ -137,6 +138,46 @@ function recoveredOnly(attempts: AttemptRow[], stepId: string): boolean {
     last.unknown_reason === 'recovered_text_only' &&
     ['unknown', 'abandoned'].includes(last.state)
   )
+}
+
+/** The result revisions a step's input was built from (recorded at claim); undefined for an attempt claimed before. */
+function frozenRevisions(
+  sqlite: DatabaseSync,
+  attemptId: string,
+): Record<string, number> | undefined {
+  const row = sqlite
+    .prepare(
+      "SELECT detail FROM orc_history WHERE kind = 'step_input_frozen' AND json_extract(detail, '$.attemptId') = ? ORDER BY id DESC LIMIT 1",
+    )
+    .get(attemptId) as { detail: string } | undefined
+  if (!row) return undefined
+  return (JSON.parse(row.detail) as { revisions?: Record<string, number> }).revisions
+}
+
+/**
+ * Why an unsent step attempt's input is no longer usable (fix-j 2): a result it consumed is not a current success, only
+ * ever ended on recovered text, or is at another revision than the one frozen into the input.
+ */
+function inputWithdrawn(
+  sqlite: DatabaseSync,
+  orchId: string,
+  attempt: AttemptRow,
+): string | undefined {
+  if (attempt.kind !== 'step' || !attempt.step_id) return undefined
+  const step = readStep(sqlite, orchId, attempt.step_id)
+  if (!step) return undefined
+  const steps = stepsOf(sqlite, orchId)
+  const attempts = attemptsOf(sqlite, orchId)
+  const frozen = frozenRevisions(sqlite, attempt.id)
+  for (const dep of step.after_steps) {
+    const current = steps.find((s) => s.id === dep)
+    if (!current || current.status !== 'succeeded' || current.result === null)
+      return `${dep} is no longer a successful result`
+    if (recoveredOnly(attempts, dep)) return `${dep} only ended on recovered text`
+    if (frozen && frozen[dep] !== undefined && frozen[dep] !== current.result_revision)
+      return `${dep} changed after this step's input was built`
+  }
+  return undefined
 }
 
 export class Orchestrator {
@@ -820,8 +861,41 @@ export class Orchestrator {
             step.id,
           )
         const consumers = steps.filter((c) => c.after_steps.includes(step.id))
+        const sentConsumers: { stepId: string; status: string }[] = []
         for (const consumer of consumers) {
-          if (consumer.status === 'queued' || consumer.status === 'pending_gate') {
+          const latest = attemptsOf(sqlite, o.id)
+            .filter((a) => a.step_id === consumer.id)
+            .reduce<AttemptRow | undefined>(
+              (best, a) => (!best || a.n > best.n ? a : best),
+              undefined,
+            )
+          const unsent = latest?.state === 'created' && !this.journaledSend(ctx, latest.id)
+          if (
+            latest &&
+            !unsent &&
+            ['created', 'send_started', 'running', 'unknown'].includes(latest.state)
+          ) {
+            // Possibly sent: its obligations are unchanged; only recorded.
+            sentConsumers.push({ stepId: consumer.id, status: consumer.status })
+            continue
+          }
+          if (
+            consumer.status === 'queued' ||
+            consumer.status === 'pending_gate' ||
+            (consumer.status === 'admitted' && unsent)
+          ) {
+            if (unsent && latest) {
+              // Retired before it can ever be sent; its frozen input held the withdrawn text.
+              refuseAttempt(
+                sqlite,
+                latest,
+                'input_withdrawn: a result it consumed was withdrawn',
+                now,
+              )
+              sqlite
+                .prepare("UPDATE orc_attempts SET input = '[input withdrawn]' WHERE id = ?")
+                .run(latest.id)
+            }
             // An approval given on the strength of that result no longer stands.
             sqlite
               .prepare(
@@ -833,7 +907,7 @@ export class Orchestrator {
               o.id,
               consumer.id,
               'blocked',
-              `result_withdrawn: ${step.id} only ended on recovered text`,
+              `input_withdrawn: ${step.id} only ended on recovered text`,
               now,
             )
             addCause(sqlite, o.id, 'step_blocked', consumer.id, now, `after ${step.id}`)
@@ -848,6 +922,7 @@ export class Orchestrator {
             attemptId: last.id,
             text: step.result ? redactBounded(step.result, 500) : null,
             consumers: consumers.map((c) => ({ stepId: c.id, status: c.status })),
+            sentConsumers,
           },
           now,
         )
@@ -863,6 +938,17 @@ export class Orchestrator {
           .run(o.id)
       touch(ctx, o.id)
     }
+  }
+
+  /** Whether the journal (or an unreadable journal, failing closed) says the attempt may have been sent. */
+  private journaledSend(ctx: Ctx, attemptId: string): boolean {
+    const journaled = ctx.journal.readOwn()
+    if (!journaled.ok) return true
+    return journaled.entries.some(
+      (e) =>
+        (e.kind === 'send_started' || (e.kind === 'tombstone' && e.of === 'send_started')) &&
+        e.attemptId === attemptId,
+    )
   }
 
   async recover(): Promise<void> {
@@ -1160,6 +1246,16 @@ export class Orchestrator {
         reserved: step.estimate_usd,
         claim: null,
       })
+      addHistory(
+        sqlite,
+        o.id,
+        'step_input_frozen',
+        {
+          attemptId,
+          revisions: Object.fromEntries(dependencies.map((d) => [d.id, d.result_revision])),
+        },
+        now,
+      )
       setStepStatus(sqlite, o.id, step.id, 'admitted', null, now)
       addStored(sqlite, o.id, Buffer.byteLength(input))
       counts.perRun.set(o.id, (counts.perRun.get(o.id) ?? 0) + 1)
@@ -1308,6 +1404,20 @@ export class Orchestrator {
         status: 'not_started',
         disposition: `not_started: run ${o.status}`,
       })
+    // Result eligibility of everything the input consumed, judged at send (fix-j 2).
+    const withdrawn = inputWithdrawn(sqlite, o.id, attempt)
+    if (withdrawn) {
+      refuseAttempt(sqlite, attempt, `input_withdrawn: ${withdrawn}`, now)
+      sqlite
+        .prepare(
+          "UPDATE orc_gates SET status = 'withdrawn', revision = revision + 1, decided_at = ? WHERE orchestration_id = ? AND step_id = ? AND status IN ('open', 'approved')",
+        )
+        .run(now, o.id, attempt.step_id!)
+      setStepStatus(sqlite, o.id, attempt.step_id!, 'blocked', `input_withdrawn: ${withdrawn}`, now)
+      addCause(sqlite, o.id, 'step_blocked', attempt.step_id!, now, 'input_withdrawn')
+      touch(ctx, o.id)
+      return undefined
+    }
     // These keep the attempt `created`: it is sent when the condition clears. The manual hold is read directly: it is
     // independent of the status a remap or a limits decision may have cleared (fix-i 3).
     if (
