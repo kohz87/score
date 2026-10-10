@@ -501,6 +501,10 @@ test('MCP: the orch tools need the access switch and the lead capability, not th
   })
   expect(spoof.error).toBe(true)
   expect(spoof.text).toContain('unauthorized')
+  // The writes switch does not open the run's room either: rooms.post into an owned room is refused.
+  const roomPost = await tool(builderClient, 'rooms.post', { roomId: detail(id).roomId, text: 'hi' })
+  expect(roomPost.error).toBe(true)
+  expect(roomPost.text).toContain('orchestration_owned')
   // With MCP access off the tools are off, whatever the capability says.
   h.access.patch('lead', { enabled: false })
   const off = await fetch(bridgeUrl, {

@@ -1431,7 +1431,11 @@ Controls and accounting cover observed, Score-started work only.
     permissions.
   - `POST …/:id/limits` `LimitsDecision` — raise/clear the budget or deadline, or `acceptUnknownSpend`.
   - `POST …/:id/pause`, `…/resume`, `…/stop` `RunControl`. Resume never lifts a cancel fence, an unknown-attempt fence or the
-    global fence. Stop is an admission barrier (see below).
+    global fence. **Stop ignores a stale `orchestrationRevision`** (it can only reduce risk); it is an admission barrier: one
+    transaction fences all further admissions, retires queued steps (`not_started: stopped`), withdraws gates and inquiries,
+    refuses attempts not yet sent and owes Hermes a Stop on every attempt that may be running (retried until acknowledged;
+    a run handle that arrives after the Stop is stopped at once). The run is `stopping` until every attempt is terminated
+    (evidence) or abandoned, then `stopped`.
   - `POST …/:id/waiver` `WaiverDecision` — "continue while a cancelled step may still run". Recorded; not termination evidence.
   - `POST …/:id/abandon` `AbandonDecision` — releases capacity and reservations of the listed unresolved attempts, keeps
     their owed stops, records that late results are ignored; the run then pauses (`pauseReason: abandonment`) until Resume.
@@ -1440,6 +1444,11 @@ Controls and accounting cover observed, Score-started work only.
   never termination evidence.
 - Stream (§2): `orchestration.upserted` (`OrchestrationSummary`, after every change; refetch the snapshot for detail) and
   `orchestration.fence.updated` (`GlobalFence`).
+
+A stale revision answers `409 conflict` with `details.currentRevision`. `GET /api/orchestrations/:id` also carries, per
+attempt, `state`, `evidence`, `unknownReason`, owed-Stop timestamps and spend, so the page can show "not confirmed ended".
+Not in stage A: the Watch replay scoped to an attempt's session (design v3 "Watch scope"); orchestration frames stay in the
+agent-wide Watch feed until 7.5b/7.5c, and the start screen says Watch shows them mixed with the agent's other work.
 
 ### MCP tools (`orch.*`, on the §13 server)
 Every call takes `capability` (`orc_` + 43 base64url, per lead attempt) and `commandId` (1–64 chars `[A-Za-z0-9._:-]`, unique

@@ -88,6 +88,7 @@ export class ExecutionJournal {
     readonly dir: string,
     readonly scope: string,
     private readonly clock: () => number = Date.now,
+    private readonly alarmBytes: number = JOURNAL_SIZE_ALARM_BYTES,
   ) {
     this.file = join(dir, JOURNAL_FILE)
   }
@@ -209,7 +210,7 @@ export class ExecutionJournal {
   }
 
   sizeAlarm(): boolean {
-    return this.size() >= JOURNAL_SIZE_ALARM_BYTES
+    return this.size() >= this.alarmBytes
   }
 
   /**
