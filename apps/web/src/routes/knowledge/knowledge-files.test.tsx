@@ -2,11 +2,11 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import type { AgentSummary, StreamEvent } from '@score/contract'
+import type { AgentSummary } from '@score/contract'
 import { App, appRoutes } from '../../App.tsx'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry } from '../../data/resync.ts'
-import type { StreamClient, StreamControl } from '../../data/stream.ts'
+import type { StreamClient } from '../../data/stream.ts'
 import { KnowledgeSection } from './KnowledgeSection.tsx'
 
 vi.mock('../../shell/use-needs-you.ts', () => ({ useNeedsYou: vi.fn(() => false) }))
@@ -153,7 +153,7 @@ function mount(url = '/knowledge') {
   queryClient.setDefaultOptions({ queries: { retry: false } })
   const stream = {
     subscribe: () => () => undefined,
-    onControl: (_listener: (control: StreamControl) => void) => () => undefined,
+    onControl: () => () => undefined,
   }
   registry = createStreamQueryRegistry(queryClient, stream)
   router = createMemoryRouter(appRoutes, { initialEntries: [url] })
