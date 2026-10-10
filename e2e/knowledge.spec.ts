@@ -80,9 +80,28 @@ test('history: restore an earlier version', async ({ page }) => {
   await page.keyboard.press('Control+a')
   await page.keyboard.insertText(`# ${name}\n\nsecond version\n`)
   await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+  // How many commits the note has depends on whether Score amended its last commit (only when no other commit, from a
+  // parallel spec sharing the vault, landed in between), so the test never counts them: it waits until the newest
+  // commit holds the second version, and the one right below it holds the first.
+  type Item = { commit: string }
+  let items: Item[] = []
+  await expect
+    .poll(async () => {
+      items = (
+        (await (await page.request.get(`/api/knowledge/notes/${path}/history`)).json()) as {
+          items: Item[]
+        }
+      ).items
+      if (items.length < 2) return false
+      const newest = await page.request.get(
+        `/api/knowledge/notes/${path}/versions/${items[0]!.commit}`,
+      )
+      return ((await newest.json()) as { body: string }).body.includes('second version')
+    })
+    .toBe(true)
   const history = page.getByRole('heading', { name: 'History' }).locator('..')
-  await expect(history.getByRole('listitem')).toHaveCount(2)
-  await history.getByRole('listitem').last().getByRole('button').click()
+  await expect(history.getByRole('listitem')).toHaveCount(items.length)
+  await history.getByRole('listitem').nth(1).getByRole('button').click()
   await expect(history.getByText('first version')).toBeVisible()
   await history.getByRole('button', { name: 'Restore this version' }).click()
   await expect(editor(page, path)).toContainText('first version')
