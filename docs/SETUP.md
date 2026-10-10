@@ -159,6 +159,16 @@ Wildcard binds (`0.0.0.0`, `::`) additionally need `SCORE_REMOTE_ANY=1`. `SCORE_
 of exact origins (scheme, host, port) browsers use. The bridge plugin keeps using loopback (`SCORE_BRIDGE_PORT`, default
 8740). Type `pair` in the server terminal to mint another pairing link; manage and revoke browsers in Settings.
 
+## 6c. Web terminal (optional, PLAN 7.3)
+
+Off by default; start Score with `SCORE_TERMINAL=1` to enable it (Settings › Remote access shows the state). It uses
+`node-pty`, a native module with no Linux prebuilt binary, so it is an optional dependency that `pnpm install` compiles
+(`allowBuilds` in `pnpm-workspace.yaml`). That needs a C++ toolchain: on Ubuntu `sudo apt install build-essential python3`
+(system-level: ask the owner first). Without one, `pnpm install` still succeeds; Score then reports the terminal as
+unavailable ("node-pty not built"). After installing a toolchain run `pnpm rebuild node-pty`. The terminal also needs HTTPS (remote
+mode), and a security password set on the Score machine with `scripts/score password`: a password set from a browser does not
+unlock it. Opening a terminal asks for that password or a passkey every time; the shell runs as the user that runs Score.
+
 ## 7. Live mode against Hermes
 
 Score talks to the Hermes gateway's API server. **(system: these write Hermes config.)**

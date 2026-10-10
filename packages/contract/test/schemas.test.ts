@@ -491,7 +491,39 @@ const cases = [
     { available: 'yes', rpId: null, items: [] },
   ],
   ['PasskeyCeremonySchema', { challenge: 'abc' }, 'not an object'],
-  ['SecurityStatusSchema', { passwordSet: true, origins: [] }, { passwordSet: 'yes' }],
+  [
+    'SecurityStatusSchema',
+    { passwordSet: true, origins: [], terminal: false, terminalUnavailable: null },
+    { passwordSet: 'yes' },
+  ],
+  [
+    'TerminalTicketSchema',
+    { ticket: 't'.repeat(43), expiresAt: '2026-10-09T10:00:00.000Z' },
+    { ticket: 'short', expiresAt: '2026-10-09T10:00:00.000Z' },
+  ],
+  [
+    'TerminalSessionSchema',
+    {
+      id: '6a6f5a54-1a6e-4f4e-8a60-7d7a1b8f4f5a',
+      openedAt: '2026-10-09T10:00:00.000Z',
+      lastActivityAt: '2026-10-09T10:01:00.000Z',
+      address: '192.168.1.5',
+      cols: 120,
+      rows: 36,
+    },
+    { id: 'x', cols: 0 },
+  ],
+  ['TerminalSessionsSchema', { items: [] }, { items: 1 }],
+  [
+    'TerminalClientFrameSchema',
+    { type: 'resize', cols: 80, rows: 24 },
+    { type: 'resize', cols: 0, rows: 24 },
+  ],
+  [
+    'TerminalServerFrameSchema',
+    { type: 'exit', reason: 'idle', code: null },
+    { type: 'exit', reason: 'bored', code: null },
+  ],
   ['DisplayCurrencySchema', { code: 'EUR', rate: 0.92 }, { code: 'euro', rate: 0.92 }],
   ['LogLevelSchema', 'warn', 'debug'],
   [

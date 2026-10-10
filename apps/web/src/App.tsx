@@ -26,6 +26,18 @@ function KnowledgeRoute() {
   )
 }
 
+// The terminal brings xterm.js: loaded on first visit.
+const LazyTerminalPage = lazy(async () => ({
+  default: (await import('./routes/terminal/TerminalPage.tsx')).TerminalPage,
+}))
+function TerminalRoute() {
+  return (
+    <Suspense fallback={<p role="status">Opening Terminal…</p>}>
+      <LazyTerminalPage />
+    </Suspense>
+  )
+}
+
 function StubPage({ title }: { title: string }) {
   return <h1>{title}</h1>
 }
@@ -91,6 +103,7 @@ export const appRoutes: RouteObject[] = [
           ],
         }
       }),
+      { path: '/terminal', Component: TerminalRoute },
       { path: '/attempts/:attemptId', Component: AttemptPage },
       { path: '/pair', loader: pairBrowser, Component: PairPage },
       { path: '*', element: <StubPage title="Page not found" /> },

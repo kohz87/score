@@ -46,6 +46,8 @@ import { registerApprovalRoutes } from './http/approvals.ts'
 import { registerErrorHandlers } from './errors.ts'
 import { allowedOriginsFor, registerCsrfGuard } from './auth/csrf.ts'
 import { registerRemoteGuard } from './auth/remote.ts'
+import { registerTerminalRoutes, type TerminalOptions } from './http/terminal.ts'
+import type { TerminalManager } from './terminal/manager.ts'
 import { registerHttpsGuide } from './http/https-guide.ts'
 import { registerWebAssets, type WebAssets } from './http/web-assets.ts'
 import { PairingService } from './auth/pairing.ts'
@@ -75,6 +77,8 @@ declare module 'fastify' {
     // Present when the app has a database. Resolves to the number of held tasks that still need another attempt.
     recoverTaskHolds?: () => Promise<number>
     recoverPlanStarts?: () => Promise<number>
+    // Present only when the web terminal is on (SCORE_TERMINAL=1) and its native module loaded.
+    terminals?: TerminalManager
   }
 }
 
@@ -99,6 +103,8 @@ interface BuildAppOptions {
   webAssets?: WebAssets
   /** Pairing-management password; defaults to one stored in the Score home when there is a database (a real server). */
   security?: SecurityPassword
+  /** Test hooks for the web terminal: a stand-in PTY, a launch description, limits (the origins come from config). */
+  terminal?: Pick<TerminalOptions, 'spawn' | 'launch' | 'limits' | 'clock' | 'isSecure'>
 }
 
 export function buildApp({
@@ -119,6 +125,7 @@ export function buildApp({
   https,
   webAssets,
   security,
+  terminal,
 }: BuildAppOptions): FastifyInstance {
   const logging = logger ?? process.env.NODE_ENV !== 'test'
   // Live Hermes reads cost seconds per profile: pages read agents from Score's projection (5.23).
@@ -337,7 +344,31 @@ export function buildApp({
   }
   app.get('/api/health', async () => ({ ok: true, contract: CONTRACT_VERSION }))
   // The same origin the console prints in its pairing link.
+  // The web terminal (PLAN 7.3): not registered at all unless SCORE_TERMINAL=1. A missing native module (node-pty is
+  // built at install time) leaves it off and says why, rather than stopping Score.
   const securityPassword = security ?? (db ? new SecurityPassword(config.home, clock) : undefined)
+  let terminalUnavailable: string | null = null
+  if (config.terminal && !https) {
+    // Plain-HTTP listeners (local mode) never get a shell: a terminal needs a TLS connection.
+    terminalUnavailable = 'needs HTTPS (remote mode with a certificate)'
+  } else if (config.terminal) {
+    try {
+      app.decorate(
+        'terminals',
+        registerTerminalRoutes(app, {
+          origins: allowedOriginsFor(config),
+          hostEnrolled: () => securityPassword?.hostIssued() ?? false,
+          ...terminal,
+        }),
+      )
+    } catch (error) {
+      terminalUnavailable = 'node-pty not built'
+      app.log.error(
+        { err: error },
+        'SCORE_TERMINAL=1 but the terminal module (node-pty) could not load: the terminal stays off. See docs/SETUP.md.',
+      )
+    }
+  }
   const pairingOrigin = config.remote || config.serveWeb ? serverOrigin(config) : config.webOrigin
   registerSessionRoutes(
     app,
@@ -347,6 +378,7 @@ export function buildApp({
     securityPassword,
     config.remote ? config.remote.origins : [pairingOrigin],
     db ? new PasskeyService(db, clock, allowedOriginsFor(config)) : undefined,
+    { enabled: app.hasDecorator('terminals'), unavailable: terminalUnavailable },
   )
   if (db)
     registerShareRoutes(app, {

@@ -16,6 +16,7 @@ minimumReleaseAgeExclude:
   - '@typescript-eslint/visitor-keys@8.71.1'
   - typescript-eslint@8.71.1
   - vite@8.3.3
+  - '@fastify/websocket@11.3.4'
 
 savePrefix: ''
 
@@ -23,3 +24,5 @@ savePrefix: ''
 # dependency (@esbuild/<platform>), so its postinstall is not needed.
 allowBuilds:
   esbuild: false
+  # node-pty (web terminal, 7.3) has no Linux prebuilt binary: its install script compiles the PTY helper with node-gyp.
+  node-pty: true

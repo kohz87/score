@@ -94,6 +94,9 @@ const ConfigSchema = z.object({
   // The launcher's log file (SCORE_LOG_FILE), for the log viewer; absent in dev and tests.
   logFile: z.string().min(1).optional(),
   serveWeb: z.boolean().default(false),
+  // The web terminal (PLAN 7.3): a shell on this machine for paired browsers. Off unless SCORE_TERMINAL=1; the routes
+  // are not registered otherwise.
+  terminal: z.boolean().default(false),
   // SCORE_REMOTE_INSECURE_HTTP was removed (5.18): it is ignored, and the server says so at startup.
   ignoredInsecureHttp: z.boolean().default(false),
   remote: RemoteSchema.optional(),
@@ -127,6 +130,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     fakeSpeed: env.SCORE_FAKE_SPEED,
     fakeLoop: env.SCORE_FAKE_LOOP,
     ignoredInsecureHttp: env.SCORE_REMOTE_INSECURE_HTTP !== undefined,
+    terminal: z.enum(['0', '1']).optional().parse(env.SCORE_TERMINAL) === '1',
     serveWeb:
       z.enum(['0', '1']).optional().parse(env.SCORE_SERVE_WEB) === '1' ||
       env.NODE_ENV === 'production',

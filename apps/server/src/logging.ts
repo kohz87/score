@@ -14,6 +14,7 @@ export function redactLogError(error: unknown, headers: IncomingHttpHeaders): Er
     return (
       text
         .replace(/\bscore_session\s*=\s*[^;\s,]+/gi, 'score_session=[Redacted]')
+        .replace(/([?&]ticket=)[^&\s#"']+/gi, '$1[Redacted]')
         .replace(/\b(?:Bearer|Basic)\s+[^\s,;]+/gi, '[Redacted]')
         // Generated pairing tokens and session IDs have this shape; retain only hashes in memory.
         .replace(/[A-Za-z0-9_-]{43,}/g, '[Redacted]')
