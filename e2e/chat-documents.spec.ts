@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { pair } from './pair.ts'
+import { makeRoom, openRoom } from './rooms.ts'
 
 // Documents in Chat (PLAN 5.30), against the fake adapter: attach a PDF and a CSV, preview, and see what the agent got.
 const PDF = Buffer.from('%PDF-1.7\n% e2e document\n%%EOF\n')
@@ -8,13 +9,9 @@ test('a PDF and a CSV attach, preview, and reach the agent; a workspace file att
   page,
 }) => {
   await pair(page)
-  await page.goto('/chat')
-  await page
-    .getByRole('navigation', { name: 'Conversations' })
-    .getByRole('link', { name: /#activity-feed/ })
-    .click({ timeout: 15_000 })
+  const room = await makeRoom(page, 'docs')
+  await openRoom(page, room.label)
   const history = page.getByRole('region', { name: 'Message history' })
-  await expect(history.getByRole('article').first()).toBeVisible({ timeout: 15_000 })
   const composer = page.getByRole('combobox', { name: /^Message/ })
 
   await page.getByTestId('attach-input').setInputFiles([
