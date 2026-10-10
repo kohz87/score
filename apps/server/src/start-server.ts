@@ -1,6 +1,6 @@
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { createSecureContext, type SecureContextOptions, type TlsOptions } from 'node:tls'
 import type { FastifyInstance, FastifyServerOptions } from 'fastify'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
@@ -11,11 +11,16 @@ import { namedCertificates, renewTailscaleCertificates } from './tls-names.ts'
 import { buildGuideApp } from './http/https-guide.ts'
 import { loadWebAssets, type WebAssets } from './http/web-assets.ts'
 import { SqliteSessionStore } from './auth/sqlite-session-store.ts'
-import type { Config } from './config.ts'
+import { resolveJournalDir, type Config } from './config.ts'
+import { Orchestrator } from './domain/orchestration/executor.ts'
+import { GlobalFenceStore } from './domain/orchestration/fence.ts'
+import { ExecutionJournal, journalScope } from './domain/orchestration/journal.ts'
 import { retryUntilResolved } from './retry-until-resolved.ts'
 import {
+  attachFakeLead,
   createHermesPort,
   createScreenshotImporter,
+  FakePort,
   loadBridgeBootstrap,
   pruneBridge,
   pruneKanbanAttempts,
@@ -67,6 +72,15 @@ interface StartServerOptions {
 }
 
 /** Remote mode without a certificate: nothing but the HTTPS setup guide (no database, adapter, pairing or API). */
+/** The home's identity for the execution journal: its real path (a symlinked home is the same home). */
+function realHome(home: string): string {
+  try {
+    return realpathSync(home)
+  } catch {
+    return resolve(home)
+  }
+}
+
 export async function startGuideServer(
   config: Config,
   { logger, listen }: Pick<StartServerOptions, 'logger' | 'listen'> = {},
@@ -116,6 +130,7 @@ export async function startServer(
   let holdRecovery: { stop(): void } | undefined
   let spendSnapshots: NodeJS.Timeout | undefined
   let port: HermesPort | undefined
+  let orchestrator: Orchestrator | undefined
   let coding: CodingRuntime | undefined
   let knowledge: KnowledgeVault | undefined
   let fakeVaultDir: string | undefined
@@ -138,6 +153,7 @@ export async function startServer(
     }
     try {
       try {
+        await orchestrator?.close()
         await coding?.close()
         await outbox?.stop()
       } finally {
@@ -225,6 +241,30 @@ export async function startServer(
       onError: (error) => app?.log.error({ err: error }, 'Hermes observation failed'),
     })
     const adapter = port
+    // Orchestrations (PLAN 7.5a): the execution journal lives outside the home; every start compares it with the
+    // database and fences admission when they disagree (design v3).
+    const journal = new ExecutionJournal(
+      resolveJournalDir(config),
+      journalScope(realHome(config.home)),
+    )
+    const fenceStore = new GlobalFenceStore(database, journal)
+    const fenced = fenceStore.startupCheck()
+    if (fenced.reasons.length > 0)
+      process.stderr.write(
+        `Orchestration admission is fenced (${fenced.reasons.join(', ')}): review the reconciliation list in Score before lifting it.\n`,
+      )
+    const executor = new Orchestrator({
+      db: database,
+      ingest,
+      port,
+      access: new McpAccessStore(database),
+      fence: fenceStore,
+      mcpAvailable: Boolean(config.remote),
+      onError: (error) => app?.log.error({ err: error }, 'Orchestration executor failed'),
+    })
+    orchestrator = executor
+    // The fake adapter has no models: a scripted lead stands in (it calls the same tools in-process).
+    if (config.mode === 'fake' && port instanceof FakePort) attachFakeLead(port, executor)
     // Coding agents (PLAN 7.2): fake mode never starts a real CLI (see locatorForMode).
     const { hermesHome: runtimeHome } = config
     coding = new CodingRuntime({
@@ -290,6 +330,7 @@ export async function startServer(
       ...(knowledge ? { knowledge } : {}),
       outbox,
       media,
+      orchestrator: executor,
       ...(logger === undefined ? {} : { logger }),
       db: database,
       ingest,
@@ -311,6 +352,7 @@ export async function startServer(
           access: new McpAccessStore(database),
           ingest,
           port,
+          orchestrator: executor,
           ...(knowledge ? { knowledge: new KnowledgeAgentApi(knowledge, database) } : {}),
         },
       )
@@ -334,6 +376,8 @@ export async function startServer(
       throw new Error('Could not bind the browser listener', { cause: error })
     }
     await port.start(ingest)
+    // Only now can runs be started or stopped: recover unfinished attempts, then work event-driven.
+    await executor.start()
     // Only now can the adapter read tasks. Retried (bounded) while Hermes or a write keeps failing.
     const { recoverTaskHolds, recoverPlanStarts } = app
     const recoverHolds =

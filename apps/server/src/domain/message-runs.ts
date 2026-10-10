@@ -483,7 +483,7 @@ export function completeRunMessage(
   const mapping = MessageRunSchema.parse(value)
   if (mapping.state !== 'active') return []
   // An orchestration attempt's reply is data for the executor: never a hand-off, never a plan (PLAN 7.5).
-  let handoffs = wantHandoffs && !mapping.orchestration_attempt_id
+  const handoffs = wantHandoffs && !mapping.orchestration_attempt_id
   // Nothing can extend the held text any more.
   const lostHeld = readPending(mapping.pending).lost
   const drafts: DomainEventDraft[] = flushHeld(sqlite, mapping, now)

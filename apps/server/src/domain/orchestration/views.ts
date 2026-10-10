@@ -49,7 +49,11 @@ export function cancelFenceAttempts(o: OrchRow, attempts: AttemptRow[]): Attempt
       attempt.retired &&
       attempt.kind === 'step' &&
       ['send_started', 'running', 'unknown'].includes(attempt.state) &&
-      !(o.waiver_at !== null && attempt.stop_requested_at !== null && attempt.stop_requested_at <= o.waiver_at),
+      !(
+        o.waiver_at !== null &&
+        attempt.stop_requested_at !== null &&
+        attempt.stop_requested_at <= o.waiver_at
+      ),
   )
 }
 
@@ -97,7 +101,8 @@ export function needsYouOf(
     result.push({ kind: 'unknown', attemptId: attempt.id })
   for (const attempt of cancelFenceAttempts(o, attempts))
     result.push({ kind: 'cancel_fence', stepId: attempt.step_id ?? '', attemptId: attempt.id })
-  if (!isTerminalStatus(o.status) && isFenced(sqlite)) result.push({ kind: 'fence', reason: 'global' })
+  if (!isTerminalStatus(o.status) && isFenced(sqlite))
+    result.push({ kind: 'fence', reason: 'global' })
   return result
 }
 
@@ -110,7 +115,8 @@ export function summaryOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationSummar
     id: o.id,
     title: o.title,
     status: o.status,
-    pauseReason: o.status === 'paused' ? (o.pause_reason as OrchestrationSummary['pauseReason']) : null,
+    pauseReason:
+      o.status === 'paused' ? (o.pause_reason as OrchestrationSummary['pauseReason']) : null,
     leadAgentId: o.lead_agent_id,
     roomId: o.room_id,
     briefId: o.brief_id,
@@ -119,7 +125,9 @@ export function summaryOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationSummar
     ownership: ownershipOf(o, attempts),
     steps: {
       total: steps.length,
-      active: steps.filter((s) => ['pending_gate', 'queued', 'admitted', 'unknown'].includes(s.status)).length,
+      active: steps.filter((s) =>
+        ['pending_gate', 'queued', 'admitted', 'unknown'].includes(s.status),
+      ).length,
       succeeded: steps.filter((s) => s.status === 'succeeded').length,
       failed: steps.filter((s) => ['failed', 'blocked', 'rejected'].includes(s.status)).length,
     },
@@ -215,7 +223,11 @@ export function detailOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationDetail 
     inquiries: inquiryViews,
     finish:
       o.finish_requested_at && o.finish_outcome
-        ? { requestedAt: o.finish_requested_at, outcome: o.finish_outcome, summary: o.finish_summary ?? '' }
+        ? {
+            requestedAt: o.finish_requested_at,
+            outcome: o.finish_outcome,
+            summary: o.finish_summary ?? '',
+          }
         : null,
     unconfirmed: openObligations(attempts).map((a) => a.id),
     cancelFence: cancelFenceAttempts(o, attempts).map((a) => ({

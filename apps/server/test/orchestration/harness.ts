@@ -31,6 +31,8 @@ export interface Harness {
   settle(ms?: number): Promise<void>
   create(overrides?: Partial<OrchestrationCreate>): Promise<string>
   close(): Promise<void>
+  /** Errors the executor reported (it never throws into the caller). */
+  errors: unknown[]
   rows<T = Record<string, unknown>>(sql: string, ...args: (string | number)[]): T[]
 }
 
@@ -82,7 +84,18 @@ export async function harness(
   const fence = new GlobalFenceStore(db, journal, clock)
   fence.startupCheck()
   const access = new McpAccessStore(db, clock)
-  const orch = new Orchestrator({ db, ingest, port, access, fence, clock, retryMs: 1000, ...options.orchestrator })
+  const errors: unknown[] = []
+  const orch = new Orchestrator({
+    db,
+    ingest,
+    port,
+    access,
+    fence,
+    clock,
+    retryMs: 1000,
+    onError: (error) => errors.push(error),
+    ...options.orchestrator,
+  })
   attachFakeLead(port, orch, options.lead)
   await orch.start()
   const self: Harness = {
@@ -96,11 +109,15 @@ export async function harness(
     journal,
     access,
     journalDir,
+    errors,
     async settle(ms = 300) {
       await scheduler.advance(ms)
       await ingest.flushListeners()
       await ingest.drain()
-      await orch.idle()
+      // Stands in for the executor's periodic sweep (a real timer in production).
+      orch.kick()
+      // A held Hermes call keeps the executor busy on purpose; do not wait for it forever.
+      await Promise.race([orch.idle(), new Promise<void>((resolve) => setTimeout(resolve, 30))])
     },
     async until(done, maxMs = 120_000) {
       for (let spent = 0; spent < maxMs; spent += 300) {
@@ -126,3 +143,37 @@ export async function harness(
   }
   return self
 }
+
+import { completeRunMessage } from '../../src/domain/message-runs.ts'
+import { runDraft } from '../../src/hermes/live/translate.ts'
+
+/** Simulates Hermes ending a run with the given terminal status (the fake adapter only completes or cancels). */
+export async function endRun(
+  h: Harness,
+  runId: string,
+  status: 'failed' | 'completed' | 'cancelled' | 'interrupted',
+  output = 'done',
+): Promise<void> {
+  await h.ingest.submit({
+    source: 'test',
+    identity: `end:${runId}:${status}`,
+    apply: ({ sqlite, now }) => {
+      sqlite
+        .prepare(
+          'UPDATE runs SET status = ?, ended_at = ?, output = ?, error = ?, cost_usd = COALESCE(cost_usd, 0.01), updated_at = ? WHERE id = ?',
+        )
+        .run(status, now, output, status === 'failed' ? 'boom' : null, now, runId)
+      return [
+        runDraft(sqlite, runId),
+        ...completeRunMessage(sqlite, runId, now, { output, status }),
+      ]
+    },
+  })
+}
+
+export const attemptOf = (h: Harness, id: string, kind: 'lead' | 'step', stepId?: string) =>
+  h.orch
+    .snapshot(id)
+    .orchestration.attempts.filter(
+      (a) => a.kind === kind && (stepId === undefined || a.stepId === stepId),
+    )

@@ -23,8 +23,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { HttpError } from '../../errors.ts'
-import type { HermesPort } from '../../hermes/port.ts'
-import { isNotDispatched } from '../../hermes/port.ts'
+import { isNotDispatched, type HermesPort } from '../../hermes/index.ts'
 import type { DomainEventDraft, Ingest } from '../../hub/ingest.ts'
 import { headSeq } from '../../hub/snapshot.ts'
 import type { McpAccessStore } from '../../mcp/access.ts'
@@ -65,7 +64,6 @@ import {
   causesAfter,
   gatesOf,
   inquiriesOf,
-  isFinalStep,
   isTerminalStatus,
   listOrchs,
   readAttempt,
@@ -76,12 +74,7 @@ import {
   type OrchRow,
   type StepRow,
 } from './store.ts'
-import {
-  cancelFenceAttempts,
-  detailOf,
-  summaryOf,
-  unknownFenceAttempts,
-} from './views.ts'
+import { cancelFenceAttempts, detailOf, summaryOf, unknownFenceAttempts } from './views.ts'
 
 interface RunFacts {
   status: string
@@ -111,8 +104,7 @@ export interface OrchestratorOptions {
 }
 
 type ToolResult =
-  | { kind: 'receipt'; receipt: OrchReceipt }
-  | { kind: 'unauthorized'; message: string }
+  { kind: 'receipt'; receipt: OrchReceipt } | { kind: 'unauthorized'; message: string }
 
 /**
  * The orchestration executor: the single admission authority for lead attempts and steps (design v3). All writes go
@@ -129,6 +121,7 @@ export class Orchestrator {
   private again = false
   private closed = false
   private timer: NodeJS.Timeout | undefined
+  private maintenanceTimer: NodeJS.Timeout | undefined
   private unsubscribe: (() => void) | undefined
   private readonly cooldown = new Map<string, number>()
   private readonly stopTried = new Map<string, number>()
@@ -141,6 +134,7 @@ export class Orchestrator {
     this.spend = options.spend ?? runSpendReader
     this.quotaBytes = options.quotaBytes ?? ORCHESTRATION_QUOTA_BYTES
     this.retryMs = options.retryMs ?? 5_000
+    options.fence.onChange = () => this.announceFence()
   }
 
   // ---------------------------------------------------------------------------------------------------- lifecycle
@@ -148,6 +142,17 @@ export class Orchestrator {
   /** Crash recovery, then event-driven operation plus a periodic sweep. */
   async start(): Promise<void> {
     await this.recover()
+    if (this.options.fence.view().fenced) this.announceFence()
+    const maintain = () => {
+      try {
+        this.maintenance()
+      } catch (error) {
+        this.err(error)
+      }
+    }
+    maintain()
+    this.maintenanceTimer = setInterval(maintain, 24 * 60 * 60 * 1000)
+    this.maintenanceTimer.unref()
     this.unsubscribe = this.ingest.onCommitted((events) => {
       if (events.some((event) => event.type === 'run.updated')) this.kick()
     })
@@ -160,6 +165,7 @@ export class Orchestrator {
     this.closed = true
     this.unsubscribe?.()
     clearInterval(this.timer)
+    clearInterval(this.maintenanceTimer)
     await this.pumping?.catch(() => undefined)
   }
 
@@ -192,7 +198,9 @@ export class Orchestrator {
   private async cycle(): Promise<void> {
     for (let round = 0; round < 100 && !this.closed; round++) {
       let progressed = await this.reconcile()
-      const live = this.db.read((sqlite) => listOrchs(sqlite).some((o) => !isTerminalStatus(o.status)))
+      const live = this.db.read((sqlite) =>
+        listOrchs(sqlite).some((o) => !isTerminalStatus(o.status)),
+      )
       if (live) await this.mutate((ctx) => this.sweep(ctx))
       const jobs = await this.mutate((ctx) => this.admit(ctx))
       for (const id of jobs) progressed = (await this.dispatch(id)) || progressed
@@ -264,13 +272,17 @@ export class Orchestrator {
       sqlite
         .prepare('UPDATE orchestrations SET revision = revision + 1, updated_at = ? WHERE id = ?')
         .run(now, id)
-      events.push({ type: 'orchestration.upserted', data: summaryOf(sqlite, readOrch(sqlite, id)!) })
+      events.push({
+        type: 'orchestration.upserted',
+        data: summaryOf(sqlite, readOrch(sqlite, id)!),
+      })
       events.push(...emitBriefChange(sqlite, o.brief_id))
     }
     return events
   }
 
-  private emitFence(): void {
+  /** Emits the global fence to the stream (set at start, by a journal failure, or lifted by the person). */
+  announceFence(): void {
     void this.ingest
       .submit({
         source: 'orchestration',
@@ -322,7 +334,8 @@ export class Orchestrator {
     const ready = (id: string): string | undefined => {
       const agent = known.get(id)
       if (!agent) return `${id} is not a team member`
-      if (!this.db.read((sqlite) => agentAdmits(sqlite, id))) return `${id} is not ready for new work`
+      if (!this.db.read((sqlite) => agentAdmits(sqlite, id)))
+        return `${id} is not ready for new work`
       if (!fake && !agent.served) return `${id} is not served by Hermes right now`
       return undefined
     }
@@ -362,15 +375,31 @@ export class Orchestrator {
         return problem ? [problem] : []
       }),
     ]
-    add('allowed_agents', problems.length ? 'fail' : 'ok', problems.join('; ') || 'All step agents are ready')
+    add(
+      'allowed_agents',
+      problems.length ? 'fail' : 'ok',
+      problems.join('; ') || 'All step agents are ready',
+    )
     const fence = this.options.fence.view()
-    add('global_fence', fence.fenced ? 'fail' : 'ok', fence.fenced ? `Admission is fenced (${fence.reason}); review the list in Settings` : 'No fence')
+    add(
+      'global_fence',
+      fence.fenced ? 'fail' : 'ok',
+      fence.fenced
+        ? `Admission is fenced (${fence.reason}); review the list in Settings`
+        : 'No fence',
+    )
     add(
       'journal',
       fence.journal.ok && !fence.journal.sizeAlarm ? 'ok' : 'fail',
-      fence.journal.ok ? (fence.journal.sizeAlarm ? 'The execution journal is over its size alarm' : 'The execution journal is healthy') : 'The execution journal cannot be read',
+      fence.journal.ok
+        ? fence.journal.sizeAlarm
+          ? 'The execution journal is over its size alarm'
+          : 'The execution journal is healthy'
+        : 'The execution journal cannot be read',
     )
-    const running = this.db.read((sqlite) => listOrchs(sqlite).filter((o) => !isTerminalStatus(o.status)).length)
+    const running = this.db.read(
+      (sqlite) => listOrchs(sqlite).filter((o) => !isTerminalStatus(o.status)).length,
+    )
     add(
       'capacity',
       running < ORCH_CAPACITY.runningOrchestrations ? 'ok' : 'fail',
@@ -380,7 +409,13 @@ export class Orchestrator {
     )
     const reserve = reserveFor(12, 20)
     const fits = this.db.read((sqlite) => this.quotaUsed(sqlite) + reserve <= this.quotaBytes)
-    add('quota', fits ? 'ok' : 'fail', fits ? 'There is room for another run' : 'Orchestration storage is full; remove old runs first')
+    add(
+      'quota',
+      fits ? 'ok' : 'fail',
+      fits
+        ? 'There is room for another run'
+        : 'Orchestration storage is full; remove old runs first',
+    )
     add(
       'tool_readiness',
       fake ? 'ok' : 'unknown',
@@ -393,7 +428,8 @@ export class Orchestrator {
       checks,
       gatePolicyNotes: {
         'every-step': 'You approve every assignment before it starts.',
-        'lead-asks': 'A step starts without approval unless the lead asks you. Steps wait until the lead has finished its turn so it can ask first.',
+        'lead-asks':
+          'A step starts without approval unless the lead asks you. Steps wait until the lead has finished its turn so it can ask first.',
         none: 'Assignments start without approval. Budget uncertainty and agent tool approvals still reach you.',
       },
       acknowledgementText: ORCH_ACKNOWLEDGEMENT_TEXT,
@@ -410,7 +446,9 @@ export class Orchestrator {
 
   private quotaUsed(sqlite: DatabaseSync): number {
     return listOrchs(sqlite).reduce(
-      (sum, o) => sum + (isTerminalStatus(o.status) ? o.stored_bytes : Math.max(o.reserve_bytes, o.stored_bytes)),
+      (sum, o) =>
+        sum +
+        (isTerminalStatus(o.status) ? o.stored_bytes : Math.max(o.reserve_bytes, o.stored_bytes)),
       0,
     )
   }
@@ -420,10 +458,20 @@ export class Orchestrator {
     if (new Set(body.allowedAgents).size !== body.allowedAgents.length)
       throw new HttpError(400, 'bad_request', 'allowedAgents lists an agent twice')
     if (!preflight.ok) {
-      const fenced = preflight.checks.find((check) => check.id === 'global_fence' && check.status === 'fail')
-      throw new HttpError(409, fenced ? 'fenced' : 'preflight_failed', 'The preflight failed', {
-        checks: preflight.checks,
-      })
+      const failed = (id: string) =>
+        preflight.checks.some((check) => check.id === id && check.status === 'fail')
+      const details = { checks: preflight.checks }
+      if (failed('global_fence')) throw new HttpError(409, 'fenced', 'Admission is fenced', details)
+      if (failed('capacity'))
+        throw new HttpError(429, 'capacity', 'Too many orchestrations are running', details)
+      if (failed('quota'))
+        throw new HttpError(
+          409,
+          'quota_exhausted',
+          'There is not enough orchestration storage left',
+          details,
+        )
+      throw new HttpError(409, 'preflight_failed', 'The preflight failed', details)
     }
     const id = `orc-${randomUUID().slice(0, 8)}`
     await this.mutate((ctx) => this.insert(ctx, id, body, preflight))
@@ -436,10 +484,18 @@ export class Orchestrator {
     if (isFenced(sqlite)) throw new HttpError(409, 'fenced', 'Admission is fenced')
     const live = listOrchs(sqlite).filter((o) => !isTerminalStatus(o.status)).length
     if (live >= ORCH_CAPACITY.runningOrchestrations)
-      throw new HttpError(429, 'capacity', `${ORCH_CAPACITY.runningOrchestrations} orchestrations are already running`)
+      throw new HttpError(
+        429,
+        'capacity',
+        `${ORCH_CAPACITY.runningOrchestrations} orchestrations are already running`,
+      )
     const reserve = reserveFor(body.maxSteps, body.maxLeadTurns)
     if (this.quotaUsed(sqlite) + reserve > this.quotaBytes)
-      throw new HttpError(409, 'quota_exhausted', 'There is not enough orchestration storage left for this run')
+      throw new HttpError(
+        409,
+        'quota_exhausted',
+        'There is not enough orchestration storage left for this run',
+      )
     if (body.deadlineAt !== undefined && body.deadlineAt <= now)
       throw new HttpError(400, 'bad_request', 'The deadline must be in the future')
     const title = body.title ?? briefTitle(body.goal)
@@ -507,7 +563,13 @@ export class Orchestrator {
         now,
       )
     addCause(sqlite, id, 'started', null, now)
-    addHistory(sqlite, id, 'created', { leadAgentId: body.leadAgentId, gatePolicy: body.gatePolicy }, now)
+    addHistory(
+      sqlite,
+      id,
+      'created',
+      { leadAgentId: body.leadAgentId, gatePolicy: body.gatePolicy },
+      now,
+    )
     touch(ctx, id)
     ctx.events.push(...emitBriefChange(sqlite, messageId, true))
   }
@@ -551,9 +613,11 @@ export class Orchestrator {
   fence(): ReturnType<GlobalFenceStore['view']> {
     return this.options.fence.view()
   }
-  liftFence(expectedRevision: number, note: string | undefined): ReturnType<GlobalFenceStore['view']> {
+  liftFence(
+    expectedRevision: number,
+    note: string | undefined,
+  ): ReturnType<GlobalFenceStore['view']> {
     this.options.fence.lift(expectedRevision, note)
-    this.emitFence()
     this.kick()
     return this.options.fence.view()
   }
@@ -564,9 +628,14 @@ export class Orchestrator {
   async handleTool(agentId: string, tool: ToolName, raw: unknown): Promise<ToolResult> {
     const parsed = parseToolArgs(tool, raw)
     if (!parsed.ok)
-      return { kind: 'receipt', receipt: { status: 'refused', code: 'bad_arguments', message: parsed.message, tool } }
+      return {
+        kind: 'receipt',
+        receipt: { status: 'refused', code: 'bad_arguments', message: parsed.message, tool },
+      }
     const outcome = await this.mutate((ctx) =>
-      runCommand(ctx, agentId, tool, parsed.args, { commandsPerAttempt: ORCH_LIMITS.commandsPerLeadAttempt }),
+      runCommand(ctx, agentId, tool, parsed.args, {
+        commandsPerAttempt: ORCH_LIMITS.commandsPerLeadAttempt,
+      }),
     )
     if (outcome.kind === 'unauthorized') return outcome
     if (outcome.changed) this.kick()
@@ -597,7 +666,9 @@ export class Orchestrator {
   private markUnknown(ctx: Ctx, o: OrchRow, attempt: AttemptRow, reason: string): void {
     const { sqlite, now } = ctx
     sqlite
-      .prepare("UPDATE orc_attempts SET state = 'unknown', unknown_reason = ?, updated_at = ? WHERE id = ?")
+      .prepare(
+        "UPDATE orc_attempts SET state = 'unknown', unknown_reason = ?, updated_at = ? WHERE id = ?",
+      )
       .run(reason, now, attempt.id)
     if (attempt.step_id) {
       const step = stepsOf(sqlite, o.id).find((candidate) => candidate.id === attempt.step_id)
@@ -706,7 +777,8 @@ export class Orchestrator {
   private admitRun(ctx: Ctx, o: OrchRow, counts: ReturnType<typeof activeStepCounts>): void {
     const { sqlite, now } = ctx
     const attempts = attemptsOf(sqlite, o.id)
-    if (unknownFenceAttempts(o, attempts).length > 0 || cancelFenceAttempts(o, attempts).length > 0) return
+    if (unknownFenceAttempts(o, attempts).length > 0 || cancelFenceAttempts(o, attempts).length > 0)
+      return
     if (o.deadline_at !== null && now >= o.deadline_at) return this.pauseFor(ctx, o, 'deadline')
     const view = budgetView(sqlite, o)
     if (overBudget(view)) return this.pauseFor(ctx, o, 'budget')
@@ -715,7 +787,9 @@ export class Orchestrator {
     if (teamPausedAt(sqlite) !== null) return
 
     const steps = stepsOf(sqlite, o.id)
-    let leadLive = attempts.some((a) => a.kind === 'lead' && ['created', 'send_started', 'running'].includes(a.state))
+    let leadLive = attempts.some(
+      (a) => a.kind === 'lead' && ['created', 'send_started', 'running'].includes(a.state),
+    )
     const pending = causesAfter(sqlite, o.id, o.causes_consumed_up_to)
     if (!leadLive && pending.length > 0) {
       const life = lifecycleOf(sqlite, o.lead_agent_id)
@@ -740,7 +814,8 @@ export class Orchestrator {
           budget: view,
           now,
         })
-        if (!input.includes(ORC_CAPABILITY_PLACEHOLDER)) throw new Error('Lead input lost its capability placeholder')
+        if (!input.includes(ORC_CAPABILITY_PLACEHOLDER))
+          throw new Error('Lead input lost its capability placeholder')
         this.insertAttempt(ctx, o, {
           id: attemptId,
           kind: 'lead',
@@ -753,7 +828,9 @@ export class Orchestrator {
           claim: { from: o.causes_consumed_up_to, to: claimTo },
         })
         sqlite
-          .prepare('UPDATE orchestrations SET causes_consumed_up_to = ?, lead_turns_used = lead_turns_used + 1 WHERE id = ?')
+          .prepare(
+            'UPDATE orchestrations SET causes_consumed_up_to = ?, lead_turns_used = lead_turns_used + 1 WHERE id = ?',
+          )
           .run(claimTo, o.id)
         addStored(sqlite, o.id, Buffer.byteLength(input))
         leadLive = true
@@ -768,12 +845,20 @@ export class Orchestrator {
       if (!step.after_steps.every((id) => byId.get(id)?.status === 'succeeded')) continue
       const life = lifecycleOf(sqlite, step.agent_id)
       if ((life?.incarnation_id ?? 'untracked') !== step.agent_incarnation) {
-        setStepStatus(sqlite, o.id, step.id, 'blocked', 'agent_unavailable: the agent was replaced or removed', now)
+        setStepStatus(
+          sqlite,
+          o.id,
+          step.id,
+          'blocked',
+          'agent_unavailable: the agent was replaced or removed',
+          now,
+        )
         addCause(sqlite, o.id, 'step_blocked', step.id, now, 'agent_unavailable')
         touch(ctx, o.id)
         continue
       }
-      if (!agentAdmits(sqlite, step.agent_id) || agentPausedAt(sqlite, step.agent_id) !== null) continue
+      if (!agentAdmits(sqlite, step.agent_id) || agentPausedAt(sqlite, step.agent_id) !== null)
+        continue
       if ((counts.perRun.get(o.id) ?? 0) >= o.max_concurrent_steps) continue
       if (counts.total >= ORCH_CAPACITY.concurrentSteps) continue
       if ((counts.perAgent.get(step.agent_id) ?? 0) >= ORCH_CAPACITY.stepsPerAgent) continue
@@ -904,23 +989,36 @@ export class Orchestrator {
     return true
   }
 
-  private beginSend(ctx: Ctx, attemptId: string): { attempt: AttemptRow; capability?: string } | undefined {
+  private beginSend(
+    ctx: Ctx,
+    attemptId: string,
+  ): { attempt: AttemptRow; capability?: string } | undefined {
     const { sqlite, now } = ctx
     const attempt = readAttempt(sqlite, attemptId)
     if (!attempt || attempt.state !== 'created') return undefined
     const o = requireOrch(sqlite, attempt.orchestration_id)
     const refuse = (reason: string, step?: { status: StepRow['status']; disposition: string }) => {
       refuseAttempt(sqlite, attempt, reason, now)
-      if (attempt.step_id && step) setStepStatus(sqlite, o.id, attempt.step_id, step.status, step.disposition, now)
+      if (attempt.step_id && step)
+        setStepStatus(sqlite, o.id, attempt.step_id, step.status, step.disposition, now)
       touch(ctx, o.id)
       return undefined
     }
-    if (isTerminalStatus(o.status) || o.status === 'stopping' || o.status === 'finishing' || attempt.retired)
-      return refuse(`not dispatched: run ${o.status}`, { status: 'not_started', disposition: `not_started: run ${o.status}` })
+    if (
+      isTerminalStatus(o.status) ||
+      o.status === 'stopping' ||
+      o.status === 'finishing' ||
+      attempt.retired
+    )
+      return refuse(`not dispatched: run ${o.status}`, {
+        status: 'not_started',
+        disposition: `not_started: run ${o.status}`,
+      })
     // These keep the attempt `created`: it is sent when the condition clears.
     if (o.status === 'paused' || isFenced(sqlite) || teamPausedAt(sqlite) !== null) return undefined
     const attempts = attemptsOf(sqlite, o.id)
-    if (unknownFenceAttempts(o, attempts).length > 0 || cancelFenceAttempts(o, attempts).length > 0) return undefined
+    if (unknownFenceAttempts(o, attempts).length > 0 || cancelFenceAttempts(o, attempts).length > 0)
+      return undefined
     if (agentPausedAt(sqlite, attempt.agent_id) !== null) return undefined
     const incarnation = lifecycleOf(sqlite, attempt.agent_id)?.incarnation_id ?? 'untracked'
     if (incarnation !== attempt.agent_incarnation) {
@@ -929,7 +1027,10 @@ export class Orchestrator {
         this.pauseFor(ctx, o, 'agent_unavailable')
         return undefined
       }
-      return refuse('not dispatched: the agent changed', { status: 'blocked', disposition: 'agent_unavailable: the agent was replaced or removed' })
+      return refuse('not dispatched: the agent changed', {
+        status: 'blocked',
+        disposition: 'agent_unavailable: the agent was replaced or removed',
+      })
     }
     if (!agentAdmits(sqlite, attempt.agent_id)) return undefined
     let capability: string | undefined
@@ -937,17 +1038,34 @@ export class Orchestrator {
     if (attempt.kind === 'lead') {
       capability = mintCapability()
       generation =
-        (sqlite.prepare('SELECT COUNT(*) AS n FROM orc_capabilities WHERE attempt_id = ?').get(attempt.id) as { n: number }).n + 1
+        (
+          sqlite
+            .prepare('SELECT COUNT(*) AS n FROM orc_capabilities WHERE attempt_id = ?')
+            .get(attempt.id) as { n: number }
+        ).n + 1
       // A re-dispatch never reuses an earlier capability: the older generations expire here.
-      sqlite.prepare('UPDATE orc_capabilities SET expired_at = ? WHERE attempt_id = ? AND expired_at IS NULL').run(now, attempt.id)
+      sqlite
+        .prepare(
+          'UPDATE orc_capabilities SET expired_at = ? WHERE attempt_id = ? AND expired_at IS NULL',
+        )
+        .run(now, attempt.id)
       sqlite
         .prepare(
           'INSERT INTO orc_capabilities (hash, attempt_id, generation, agent_id, agent_incarnation, created_at) VALUES (?, ?, ?, ?, ?, ?)',
         )
-        .run(hashCapability(capability), attempt.id, generation, attempt.agent_id, attempt.agent_incarnation, now)
+        .run(
+          hashCapability(capability),
+          attempt.id,
+          generation,
+          attempt.agent_id,
+          attempt.agent_incarnation,
+          now,
+        )
     }
     sqlite
-      .prepare("UPDATE orc_attempts SET state = 'send_started', sent_at = ?, updated_at = ? WHERE id = ?")
+      .prepare(
+        "UPDATE orc_attempts SET state = 'send_started', sent_at = ?, updated_at = ? WHERE id = ?",
+      )
       .run(now, now, attempt.id)
     // Journal first (fsync'd) and last in the transaction: if it cannot be written the whole send is abandoned.
     ctx.journal.append({
@@ -975,7 +1093,9 @@ export class Orchestrator {
     // A Stop (or finish of a non-requesting attempt) that raced the admission: the handle arrived late; stop it now.
     if (['stopping'].includes(o.status) || isTerminalStatus(o.status) || attempt.retired)
       sqlite
-        .prepare('UPDATE orc_attempts SET retired = 1, stop_requested_at = COALESCE(stop_requested_at, ?) WHERE id = ?')
+        .prepare(
+          'UPDATE orc_attempts SET retired = 1, stop_requested_at = COALESCE(stop_requested_at, ?) WHERE id = ?',
+        )
         .run(now, attemptId)
     journalSoft(ctx, () => ctx.journal.append({ kind: 'run_handle', attemptId, runId }))
     touch(ctx, o.id)
@@ -993,23 +1113,50 @@ export class Orchestrator {
       ![408, 409, 429].includes(error.status)
     if (isNotDispatched(error)) {
       // Provably nothing was sent: put the work back and try again after a pause.
-      sqlite.prepare("UPDATE orc_attempts SET state = 'refused', unknown_reason = 'not_dispatched', terminated_at = ?, updated_at = ? WHERE id = ?").run(now, now, attemptId)
-      sqlite.prepare("UPDATE message_runs SET state = 'failed' WHERE turn_id = ? AND state = 'pending'").run(attempt.turn_id)
+      sqlite
+        .prepare(
+          "UPDATE orc_attempts SET state = 'refused', unknown_reason = 'not_dispatched', terminated_at = ?, updated_at = ? WHERE id = ?",
+        )
+        .run(now, now, attemptId)
+      sqlite
+        .prepare("UPDATE message_runs SET state = 'failed' WHERE turn_id = ? AND state = 'pending'")
+        .run(attempt.turn_id)
       if (attempt.kind === 'lead')
         sqlite
-          .prepare('UPDATE orchestrations SET causes_consumed_up_to = ?, lead_turns_used = lead_turns_used - 1 WHERE id = ?')
+          .prepare(
+            'UPDATE orchestrations SET causes_consumed_up_to = ?, lead_turns_used = lead_turns_used - 1 WHERE id = ?',
+          )
           .run(attempt.claim_from ?? 0, o.id)
       else if (attempt.step_id) setStepStatus(sqlite, o.id, attempt.step_id, 'queued', null, now)
-      sqlite.prepare('UPDATE orc_capabilities SET expired_at = ? WHERE attempt_id = ? AND expired_at IS NULL').run(now, attemptId)
+      sqlite
+        .prepare(
+          'UPDATE orc_capabilities SET expired_at = ? WHERE attempt_id = ? AND expired_at IS NULL',
+        )
+        .run(now, attemptId)
       this.cooldown.set(o.id, this.nowMs() + this.retryMs)
     } else if (definite) {
       refuseAttempt(sqlite, attempt, error instanceof HttpError ? error.code : 'refused', now)
-      sqlite.prepare('UPDATE orc_capabilities SET expired_at = ? WHERE attempt_id = ? AND expired_at IS NULL').run(now, attemptId)
+      sqlite
+        .prepare(
+          'UPDATE orc_capabilities SET expired_at = ? WHERE attempt_id = ? AND expired_at IS NULL',
+        )
+        .run(now, attemptId)
       if (attempt.step_id) {
         setStepStatus(sqlite, o.id, attempt.step_id, 'failed', 'admission_refused', now)
-        addCause(sqlite, o.id, 'step_failed', attempt.step_id, now, 'Hermes refused to start the step')
+        addCause(
+          sqlite,
+          o.id,
+          'step_failed',
+          attempt.step_id,
+          now,
+          'Hermes refused to start the step',
+        )
       } else {
-        sqlite.prepare('UPDATE orchestrations SET consecutive_lead_failures = consecutive_lead_failures + 1 WHERE id = ?').run(o.id)
+        sqlite
+          .prepare(
+            'UPDATE orchestrations SET consecutive_lead_failures = consecutive_lead_failures + 1 WHERE id = ?',
+          )
+          .run(o.id)
         addCause(sqlite, o.id, 'lead_failed', attempt.id, now, 'Hermes refused to start the turn')
       }
     } else {
@@ -1022,7 +1169,9 @@ export class Orchestrator {
   // ------------------------------------------------------------------------------------------------ observation
 
   /** What the observed runs say about attempts: termination evidence, late evidence, spend. Pure read. */
-  private plan(sqlite: DatabaseSync): { attempt: AttemptRow; run: RunFacts; spend: ReturnType<SpendReader> }[] {
+  private plan(
+    sqlite: DatabaseSync,
+  ): { attempt: AttemptRow; run: RunFacts; spend: ReturnType<SpendReader> }[] {
     const rows = z
       .array(AttemptRowSchema)
       .parse(
@@ -1072,17 +1221,25 @@ export class Orchestrator {
       touch(ctx, o.id)
       const evidence = run.status === 'completed' || run.status === 'failed'
       const terminalRun = evidence || run.status === 'cancelled' || run.status === 'interrupted'
-      if (!terminalRun || attempt.state === 'terminated') {
+      const ending =
+        terminalRun &&
+        (attempt.state === 'running' ||
+          (evidence && (attempt.state === 'unknown' || attempt.state === 'abandoned')))
+      if (!ending) {
         const settle = attempt.state === 'terminated' && spend.complete
         sqlite
-          .prepare('UPDATE orc_attempts SET spend_usd = COALESCE(?, spend_usd), spend_complete = ?, settled = ?, reserved_usd = CASE WHEN ? = 1 THEN 0 ELSE reserved_usd END, updated_at = ? WHERE id = ?')
+          .prepare(
+            'UPDATE orc_attempts SET spend_usd = COALESCE(?, spend_usd), spend_complete = ?, settled = ?, reserved_usd = CASE WHEN ? = 1 THEN 0 ELSE reserved_usd END, updated_at = ? WHERE id = ?',
+          )
           .run(spend.usd, spend.complete ? 1 : 0, settle ? 1 : 0, settle ? 1 : 0, now, attempt.id)
         continue
       }
       // Late evidence for an abandoned attempt is recorded and never consumed.
       if (attempt.state === 'abandoned') {
         sqlite
-          .prepare('UPDATE orc_attempts SET evidence = ?, terminated_at = ?, updated_at = ? WHERE id = ?')
+          .prepare(
+            'UPDATE orc_attempts SET evidence = ?, terminated_at = ?, updated_at = ? WHERE id = ?',
+          )
           .run(run.status, run.ended_at ?? now, now, attempt.id)
         addHistory(sqlite, o.id, 'late_result', { attemptId: attempt.id, status: run.status }, now)
         continue
@@ -1110,20 +1267,53 @@ export class Orchestrator {
         `UPDATE orc_attempts SET state = 'terminated', evidence = ?, terminated_at = ?, unknown_reason = NULL,
            spend_usd = COALESCE(?, spend_usd), spend_complete = ?, settled = ?, reserved_usd = CASE WHEN ? = 1 THEN 0 ELSE reserved_usd END, updated_at = ? WHERE id = ?`,
       )
-      .run(evidence, run.ended_at ?? now, spend.usd, spend.complete ? 1 : 0, settled ? 1 : 0, settled ? 1 : 0, now, attempt.id)
-    sqlite.prepare('UPDATE orc_capabilities SET expired_at = ? WHERE attempt_id = ? AND expired_at IS NULL').run(now, attempt.id)
+      .run(
+        evidence,
+        run.ended_at ?? now,
+        spend.usd,
+        spend.complete ? 1 : 0,
+        settled ? 1 : 0,
+        settled ? 1 : 0,
+        now,
+        attempt.id,
+      )
+    sqlite
+      .prepare(
+        'UPDATE orc_capabilities SET expired_at = ? WHERE attempt_id = ? AND expired_at IS NULL',
+      )
+      .run(now, attempt.id)
     if (attempt.kind === 'lead') {
       if (evidence === 'failed') {
-        sqlite.prepare('UPDATE orchestrations SET consecutive_lead_failures = consecutive_lead_failures + 1 WHERE id = ?').run(o.id)
-        addCause(sqlite, o.id, 'lead_failed', attempt.id, now, run.error ? redactBounded(run.error, 300) : 'the turn failed')
-      } else sqlite.prepare('UPDATE orchestrations SET consecutive_lead_failures = 0 WHERE id = ?').run(o.id)
+        sqlite
+          .prepare(
+            'UPDATE orchestrations SET consecutive_lead_failures = consecutive_lead_failures + 1 WHERE id = ?',
+          )
+          .run(o.id)
+        addCause(
+          sqlite,
+          o.id,
+          'lead_failed',
+          attempt.id,
+          now,
+          run.error ? redactBounded(run.error, 300) : 'the turn failed',
+        )
+      } else
+        sqlite
+          .prepare('UPDATE orchestrations SET consecutive_lead_failures = 0 WHERE id = ?')
+          .run(o.id)
       return
     }
     const step = stepsOf(sqlite, o.id).find((candidate) => candidate.id === attempt.step_id)
     if (!step) return
     // A step the lead cancelled keeps its cancelled status; whatever it produced is recorded, not consumed.
     if (step.retired) {
-      addHistory(sqlite, o.id, 'late_result', { attemptId: attempt.id, stepId: step.id, status: evidence }, now)
+      addHistory(
+        sqlite,
+        o.id,
+        'late_result',
+        { attemptId: attempt.id, stepId: step.id, status: evidence },
+        now,
+      )
       return
     }
     const message = sqlite
@@ -1144,9 +1334,22 @@ export class Orchestrator {
       .prepare(
         `UPDATE orc_steps SET status = ?, disposition = ?, result = ?, result_revision = result_revision + 1, updated_at = ? WHERE orchestration_id = ? AND id = ?`,
       )
-      .run(evidence === 'completed' ? 'succeeded' : 'failed', evidence === 'failed' ? 'the step run failed' : null, result, now, o.id, step.id)
+      .run(
+        evidence === 'completed' ? 'succeeded' : 'failed',
+        evidence === 'failed' ? 'the step run failed' : null,
+        result,
+        now,
+        o.id,
+        step.id,
+      )
     addStored(sqlite, o.id, Buffer.byteLength(result))
-    addCause(sqlite, o.id, evidence === 'completed' ? 'step_succeeded' : 'step_failed', step.id, now)
+    addCause(
+      sqlite,
+      o.id,
+      evidence === 'completed' ? 'step_succeeded' : 'step_failed',
+      step.id,
+      now,
+    )
   }
 
   // ---------------------------------------------------------------------------------------------------- stops
@@ -1193,15 +1396,25 @@ export class Orchestrator {
     const journal = this.options.fence.journal
     const sqlite = this.db.sqlite
     const compacted = journal.compact((entry) => {
-      if (entry.kind === 'send_started' || entry.kind === 'run_handle' || entry.kind === 'reconciled') {
+      if (
+        entry.kind === 'send_started' ||
+        entry.kind === 'run_handle' ||
+        entry.kind === 'reconciled'
+      ) {
         const attempt = readAttempt(sqlite, entry.attemptId)
-        return attempt !== undefined && (attempt.state === 'terminated' || attempt.state === 'refused')
+        return (
+          attempt !== undefined && (attempt.state === 'terminated' || attempt.state === 'refused')
+        )
       }
       if (entry.kind === 'stop_fence') {
         const o = readOrch(sqlite, entry.orchestrationId)
         if (!o || !isTerminalStatus(o.status)) return false
         const attempts = attemptsOf(sqlite, o.id)
-        return !attempts.some((a) => a.state === 'unknown' || (a.stop_requested_at !== null && a.stop_acknowledged_at === null))
+        return !attempts.some(
+          (a) =>
+            a.state === 'unknown' ||
+            (a.stop_requested_at !== null && a.stop_acknowledged_at === null),
+        )
       }
       return false
     })
@@ -1210,14 +1423,34 @@ export class Orchestrator {
     this.db.tx((tx) => {
       for (const o of listOrchs(tx)) {
         if (!isTerminalStatus(o.status) || (o.ended_at ?? o.updated_at) >= cutoff) continue
-        if (attemptsOf(tx, o.id).some((a) => a.state === 'unknown' || (a.stop_requested_at !== null && a.stop_acknowledged_at === null)))
+        if (
+          attemptsOf(tx, o.id).some(
+            (a) =>
+              a.state === 'unknown' ||
+              (a.stop_requested_at !== null && a.stop_acknowledged_at === null),
+          )
+        )
           continue
-        for (const table of ['orc_commands', 'orc_causes', 'orc_gates', 'orc_inquiries', 'orc_steps'])
+        for (const table of [
+          'orc_commands',
+          'orc_causes',
+          'orc_gates',
+          'orc_inquiries',
+          'orc_steps',
+        ])
           tx.prepare(`DELETE FROM ${table} WHERE orchestration_id = ?`).run(o.id)
-        tx.prepare('DELETE FROM orc_capabilities WHERE attempt_id IN (SELECT id FROM orc_attempts WHERE orchestration_id = ?)').run(o.id)
+        tx.prepare(
+          'DELETE FROM orc_capabilities WHERE attempt_id IN (SELECT id FROM orc_attempts WHERE orchestration_id = ?)',
+        ).run(o.id)
         tx.prepare('DELETE FROM orc_attempts WHERE orchestration_id = ?').run(o.id)
         tx.prepare('DELETE FROM orchestrations WHERE id = ?').run(o.id)
-        addHistory(tx, o.id, 'pruned', { endedAt: o.ended_at, status: o.status }, new Date(this.nowMs()).toISOString())
+        addHistory(
+          tx,
+          o.id,
+          'pruned',
+          { endedAt: o.ended_at, status: o.status },
+          new Date(this.nowMs()).toISOString(),
+        )
         pruned++
       }
     })

@@ -1632,7 +1632,7 @@ export class FakePort implements HermesPort {
     input: string
     turnId: string
     runId: string
-  }) => Promise<{ text?: string } | void>
+  }) => Promise<{ text?: string; hold?: boolean } | void>
 
   startRun(input: Parameters<HermesPort['startRun']>[0]): Promise<{ runId: string }> {
     const req = z
@@ -1715,6 +1715,8 @@ export class FakePort implements HermesPort {
             runId,
           })
           if (this.runs.get(runId)?.status !== 'running') return
+          // `hold`: the run stays running and silent until it is stopped (a stuck agent).
+          if (hooked?.hold) return
           if (hooked && typeof hooked.text === 'string') replyText = hooked.text
         }
         const chunks = replyText.match(/.{1,24}/gs) ?? []

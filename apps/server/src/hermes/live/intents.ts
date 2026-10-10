@@ -54,7 +54,9 @@ export class RunIntents {
         return Promise.reject(new Error('Idempotency key belongs to a different request'))
       return pending.promise
     }
-    const work = startRunIntent(this.deps, safe, turnId, options).finally(() => this.flights.delete(turnId))
+    const work = startRunIntent(this.deps, safe, turnId, options).finally(() =>
+      this.flights.delete(turnId),
+    )
     this.flights.set(turnId, { fingerprint, promise: work })
     return work
   }

@@ -1,5 +1,13 @@
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -28,7 +36,12 @@ function setup() {
   writeFileSync(join(backup, 'note.txt'), 'from the backup')
   mkdirSync(home)
   writeFileSync(join(home, 'score.db'), 'current database')
-  const env = { PATH: process.env.PATH!, HOME: root, SCORE_HOME: home, SCORE_JOURNAL_DIR: journalDir }
+  const env = {
+    PATH: process.env.PATH!,
+    HOME: root,
+    SCORE_HOME: home,
+    SCORE_JOURNAL_DIR: journalDir,
+  }
   return { root, home, backup, journalDir, env }
 }
 
@@ -56,7 +69,9 @@ test('score restore refuses a backup that is not a Score home, a missing folder 
   const empty = join(root, 'empty')
   mkdirSync(empty)
   expect(spawnSync(launcher, ['restore', empty], { env, encoding: 'utf8' }).status).toBe(1)
-  expect(spawnSync(launcher, ['restore', join(root, 'nope')], { env, encoding: 'utf8' }).status).toBe(1)
+  expect(
+    spawnSync(launcher, ['restore', join(root, 'nope')], { env, encoding: 'utf8' }).status,
+  ).toBe(1)
   expect(spawnSync(launcher, ['restore'], { env, encoding: 'utf8' }).status).toBe(1)
   // A live process in the pid file (this test's own pid) blocks the restore.
   writeFileSync(join(home, 'score.pid'), String(process.pid))

@@ -126,15 +126,30 @@ export function cascadeBlocked(sqlite: DatabaseSync, orchId: string, now: string
         (step.status === 'queued' || step.status === 'pending_gate') &&
         step.after_steps.some((id) => {
           const dependency = byId.get(id)
-          return dependency !== undefined && isFinalStep(dependency.status) && dependency.status !== 'succeeded'
+          return (
+            dependency !== undefined &&
+            isFinalStep(dependency.status) &&
+            dependency.status !== 'succeeded'
+          )
         }),
     )
     if (!next) return blocked
     const culprit = next.after_steps.find((id) => {
       const dependency = byId.get(id)
-      return dependency !== undefined && isFinalStep(dependency.status) && dependency.status !== 'succeeded'
+      return (
+        dependency !== undefined &&
+        isFinalStep(dependency.status) &&
+        dependency.status !== 'succeeded'
+      )
     })!
-    setStepStatus(sqlite, orchId, next.id, 'blocked', `dependency ${culprit} is ${byId.get(culprit)!.status}`, now)
+    setStepStatus(
+      sqlite,
+      orchId,
+      next.id,
+      'blocked',
+      `dependency ${culprit} is ${byId.get(culprit)!.status}`,
+      now,
+    )
     withdrawGates(sqlite, orchId, now, next.id)
     addCause(sqlite, orchId, 'step_blocked', next.id, now, `after ${culprit}`)
     blocked.push(next.id)

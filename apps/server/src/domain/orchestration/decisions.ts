@@ -37,9 +37,14 @@ import { cancelFenceAttempts } from './views.ts'
 
 function expectRevision(o: OrchRow, revision: number): void {
   if (o.revision !== revision)
-    throw new HttpError(409, 'conflict', 'This run changed since you looked; reload and try again', {
-      currentRevision: o.revision,
-    })
+    throw new HttpError(
+      409,
+      'conflict',
+      'This run changed since you looked; reload and try again',
+      {
+        currentRevision: o.revision,
+      },
+    )
 }
 
 const mustBeLive = (o: OrchRow): void => {
@@ -66,16 +71,36 @@ export function decideGate(ctx: Ctx, orchId: string, gateId: string, body: GateD
     .run(approve ? 'approved' : 'rejected', body.note ?? null, now, orchId, gateId)
   if (approve) setStepStatus(sqlite, orchId, gate.step_id, 'queued', null, now)
   else {
-    setStepStatus(sqlite, orchId, gate.step_id, 'rejected', body.note ? `rejected: ${body.note}` : 'rejected by the person', now)
-    sqlite.prepare('UPDATE orc_steps SET retired = 1 WHERE orchestration_id = ? AND id = ?').run(orchId, gate.step_id)
+    setStepStatus(
+      sqlite,
+      orchId,
+      gate.step_id,
+      'rejected',
+      body.note ? `rejected: ${body.note}` : 'rejected by the person',
+      now,
+    )
+    sqlite
+      .prepare('UPDATE orc_steps SET retired = 1 WHERE orchestration_id = ? AND id = ?')
+      .run(orchId, gate.step_id)
     addCause(sqlite, orchId, 'gate_rejected', gate.step_id, now, body.note ?? null)
     cascadeBlocked(sqlite, orchId, now)
   }
-  addHistory(sqlite, orchId, approve ? 'gate_approved' : 'gate_rejected', { gateId, stepId: gate.step_id, payloadHash: gate.payload_hash }, now)
+  addHistory(
+    sqlite,
+    orchId,
+    approve ? 'gate_approved' : 'gate_rejected',
+    { gateId, stepId: gate.step_id, payloadHash: gate.payload_hash },
+    now,
+  )
   touch(ctx, orchId)
 }
 
-export function answerInquiry(ctx: Ctx, orchId: string, inquiryId: string, body: InquiryAnswer): void {
+export function answerInquiry(
+  ctx: Ctx,
+  orchId: string,
+  inquiryId: string,
+  body: InquiryAnswer,
+): void {
   const { sqlite, now } = ctx
   const o = requireOrch(sqlite, orchId)
   expectRevision(o, body.orchestrationRevision)
@@ -105,16 +130,25 @@ export function setLimits(ctx: Ctx, orchId: string, body: LimitsDecision): void 
   if (body.deadlineAt !== undefined && body.deadlineAt !== null && body.deadlineAt <= now)
     throw new HttpError(400, 'bad_request', 'The deadline must be in the future')
   if (body.budgetUsd !== undefined)
-    sqlite.prepare('UPDATE orchestrations SET budget_usd = ? WHERE id = ?').run(body.budgetUsd, orchId)
+    sqlite
+      .prepare('UPDATE orchestrations SET budget_usd = ? WHERE id = ?')
+      .run(body.budgetUsd, orchId)
   if (body.deadlineAt !== undefined)
-    sqlite.prepare('UPDATE orchestrations SET deadline_at = ? WHERE id = ?').run(body.deadlineAt, orchId)
+    sqlite
+      .prepare('UPDATE orchestrations SET deadline_at = ? WHERE id = ?')
+      .run(body.deadlineAt, orchId)
   if (body.acceptUnknownSpend !== undefined)
     sqlite
       .prepare('UPDATE orchestrations SET accepted_unknown_spend = ? WHERE id = ?')
       .run(body.acceptUnknownSpend ? 1 : 0, orchId)
   // A pause caused by a limit ends with the decision about that limit; admission re-pauses if it still applies.
-  if (o.status === 'paused' && ['budget', 'unknown_spend', 'deadline'].includes(o.pause_reason ?? ''))
-    sqlite.prepare("UPDATE orchestrations SET status = 'running', pause_reason = NULL WHERE id = ?").run(orchId)
+  if (
+    o.status === 'paused' &&
+    ['budget', 'unknown_spend', 'deadline'].includes(o.pause_reason ?? '')
+  )
+    sqlite
+      .prepare("UPDATE orchestrations SET status = 'running', pause_reason = NULL WHERE id = ?")
+      .run(orchId)
   addHistory(sqlite, orchId, 'limits_changed', { ...body, orchestrationRevision: undefined }, now)
   touch(ctx, orchId)
 }
@@ -152,10 +186,13 @@ export function resumeRun(ctx: Ctx, orchId: string, body: RunControl): void {
 export function stopRun(ctx: Ctx, orchId: string): void {
   const { sqlite, now } = ctx
   const o = requireOrch(sqlite, orchId)
-  if (isTerminalStatus(o.status)) throw new HttpError(409, 'conflict', `The run is already ${o.status}`)
+  if (isTerminalStatus(o.status))
+    throw new HttpError(409, 'conflict', `The run is already ${o.status}`)
   if (o.status === 'stopping') return
   sqlite
-    .prepare("UPDATE orchestrations SET status = 'stopping', pause_reason = NULL, stop_requested_at = ? WHERE id = ?")
+    .prepare(
+      "UPDATE orchestrations SET status = 'stopping', pause_reason = NULL, stop_requested_at = ? WHERE id = ?",
+    )
     .run(now, orchId)
   retireQueued(sqlite, orchId, 'not_started: stopped', now)
   withdrawGates(sqlite, orchId, now)
@@ -163,8 +200,12 @@ export function stopRun(ctx: Ctx, orchId: string): void {
   for (const attempt of attemptsOf(sqlite, orchId)) {
     if (attempt.state === 'created') {
       refuseAttempt(sqlite, attempt, 'not dispatched: stopped', now)
-      if (attempt.step_id) setStepStatus(sqlite, orchId, attempt.step_id, 'not_started', 'not_started: stopped', now)
-    } else if (['send_started', 'running', 'unknown'].includes(attempt.state) && attempt.abandoned_at === null)
+      if (attempt.step_id)
+        setStepStatus(sqlite, orchId, attempt.step_id, 'not_started', 'not_started: stopped', now)
+    } else if (
+      ['send_started', 'running', 'unknown'].includes(attempt.state) &&
+      attempt.abandoned_at === null
+    )
       oweStop(sqlite, attempt, now)
   }
   addHistory(sqlite, orchId, 'stop_requested', {}, now)
@@ -180,7 +221,8 @@ export function grantWaiver(ctx: Ctx, orchId: string, body: WaiverDecision): voi
   expectRevision(o, body.orchestrationRevision)
   mustBeLive(o)
   const fenced = cancelFenceAttempts(o, attemptsOf(sqlite, orchId))
-  if (fenced.length === 0) throw new HttpError(409, 'conflict', 'No cancelled step may still be running')
+  if (fenced.length === 0)
+    throw new HttpError(409, 'conflict', 'No cancelled step may still be running')
   sqlite.prepare('UPDATE orchestrations SET waiver_at = ? WHERE id = ?').run(now, orchId)
   addHistory(sqlite, orchId, 'waiver', { attempts: fenced.map((a) => a.id) }, now)
   touch(ctx, orchId)
@@ -201,7 +243,11 @@ export function abandonAttempts(ctx: Ctx, orchId: string, body: AbandonDecision)
     const attempt = attempts.find((candidate) => candidate.id === id)
     if (!attempt) throw new HttpError(404, 'not_found', `Unknown attempt ${id}`)
     if (attempt.state !== 'unknown')
-      throw new HttpError(409, 'conflict', `${id} is ${attempt.state}; only an attempt that is not confirmed ended can be abandoned`)
+      throw new HttpError(
+        409,
+        'conflict',
+        `${id} is ${attempt.state}; only an attempt that is not confirmed ended can be abandoned`,
+      )
   }
   for (const id of body.attemptIds) {
     const attempt = attempts.find((candidate) => candidate.id === id)!
@@ -221,7 +267,9 @@ export function abandonAttempts(ctx: Ctx, orchId: string, body: AbandonDecision)
   addHistory(sqlite, orchId, 'abandoned', { attempts: body.attemptIds }, now)
   if (o.status === 'running')
     sqlite
-      .prepare("UPDATE orchestrations SET status = 'paused', pause_reason = 'abandonment' WHERE id = ?")
+      .prepare(
+        "UPDATE orchestrations SET status = 'paused', pause_reason = 'abandonment' WHERE id = ?",
+      )
       .run(orchId)
   touch(ctx, orchId)
 }

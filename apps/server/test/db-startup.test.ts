@@ -77,6 +77,8 @@ vi.mock('../src/hermes/index.ts', () => ({
   createScreenshotImporter: mocks.createScreenshotImporter,
   sweepKanbanDenials: mocks.sweepKanbanDenials,
   RewindBroker: class {},
+  FakePort: class {},
+  attachFakeLead: vi.fn(),
   resolveHermesHome: () => '/tmp/score-test-startup/hermes-home',
 }))
 vi.mock('../src/hub/retention.ts', () => ({ pruneEvents: mocks.pruneEvents }))
@@ -90,6 +92,22 @@ vi.mock('../src/knowledge/vault.ts', () => ({
   },
 }))
 vi.mock('../src/app.ts', () => ({ buildApp: mocks.buildApp }))
+// The orchestration executor has its own tests (test/orchestration); startup only needs it to exist.
+vi.mock('../src/domain/orchestration/executor.ts', () => ({
+  Orchestrator: class {
+    start = async () => undefined
+    close = async () => undefined
+  },
+}))
+vi.mock('../src/domain/orchestration/fence.ts', () => ({
+  GlobalFenceStore: class {
+    startupCheck = () => ({ fenced: false, reasons: [] })
+  },
+}))
+vi.mock('../src/domain/orchestration/journal.ts', () => ({
+  ExecutionJournal: class {},
+  journalScope: () => 'scope',
+}))
 vi.mock('../src/auth/sqlite-session-store.ts', () => ({
   SqliteSessionStore: class {
     constructor(db: unknown) {
@@ -154,6 +172,7 @@ test('startup opens and migrates the configured database before building and lis
     port: mocks.port,
     coding: expect.any(Object),
     knowledge: expect.any(Object),
+    orchestrator: expect.any(Object),
     outbox: mocks.outbox,
     media: expect.any(Object),
     sessionStore: expect.any(Object),

@@ -206,7 +206,11 @@ export const stepsOf = (sqlite: DatabaseSync, orchId: string): StepRow[] =>
     .parse(
       sqlite.prepare('SELECT * FROM orc_steps WHERE orchestration_id = ? ORDER BY seq').all(orchId),
     )
-export function readStep(sqlite: DatabaseSync, orchId: string, stepId: string): StepRow | undefined {
+export function readStep(
+  sqlite: DatabaseSync,
+  orchId: string,
+  stepId: string,
+): StepRow | undefined {
   const row = sqlite
     .prepare('SELECT * FROM orc_steps WHERE orchestration_id = ? AND id = ?')
     .get(orchId, stepId)
@@ -232,7 +236,11 @@ export const gatesOf = (sqlite: DatabaseSync, orchId: string): GateRow[] =>
         .prepare('SELECT * FROM orc_gates WHERE orchestration_id = ? ORDER BY rowid')
         .all(orchId),
     )
-export function readGate(sqlite: DatabaseSync, orchId: string, gateId: string): GateRow | undefined {
+export function readGate(
+  sqlite: DatabaseSync,
+  orchId: string,
+  gateId: string,
+): GateRow | undefined {
   const row = sqlite
     .prepare('SELECT * FROM orc_gates WHERE orchestration_id = ? AND id = ?')
     .get(orchId, gateId)
@@ -275,7 +283,9 @@ export function addCause(
   detail: string | null = null,
 ): void {
   sqlite
-    .prepare('INSERT INTO orc_causes (orchestration_id, kind, ref, detail, at) VALUES (?, ?, ?, ?, ?)')
+    .prepare(
+      'INSERT INTO orc_causes (orchestration_id, kind, ref, detail, at) VALUES (?, ?, ?, ?, ?)',
+    )
     .run(orchId, kind, ref, detail, now)
 }
 

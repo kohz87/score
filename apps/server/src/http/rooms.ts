@@ -1,3 +1,4 @@
+import { assertRoomFree } from '../domain/orchestration/ownership.ts'
 import { randomUUID } from 'node:crypto'
 import {
   AgentIdSchema,
@@ -252,6 +253,15 @@ export function registerRoomRoutes(
       source: 'rooms',
       identity: randomUUID(),
       apply({ sqlite, now }) {
+        // Pinning, tags and the project are harmless; renaming, members, archiving and summaries are the run's.
+        if (
+          body.name !== undefined ||
+          body.members !== undefined ||
+          body.leadAgentId !== undefined ||
+          body.archived !== undefined ||
+          body.autoSummary !== undefined
+        )
+          assertRoomFree(sqlite, roomId, 'room.update')
         const row = roomRow(sqlite, roomId)
         const before = readRoom(sqlite, roomId, row.updated_at)
         if (
@@ -332,6 +342,7 @@ export function registerRoomRoutes(
       const { roomId, messageId } = z
         .object({ roomId: ParamsSchema.shape.roomId, messageId: z.string().min(1).max(200) })
         .parse(request.params)
+      db.read((sqlite) => assertRoomFree(sqlite, roomId, 'message.delete'))
       await ingest.submit({
         source: 'rooms',
         identity: randomUUID(),
@@ -391,6 +402,7 @@ export function registerRoomRoutes(
 
   app.post('/api/rooms/:roomId/messages/:messageId/rewind', mutation, async (request) => {
     const { roomId, messageId } = MessageParamsSchema.parse(request.params)
+    db.read((sqlite) => assertRoomFree(sqlite, roomId, 'message.rewind'))
     const body = RewindRequestSchema.strict().parse(request.body)
     const prior = db.read((sqlite) => {
       roomRow(sqlite, roomId)
@@ -492,6 +504,7 @@ export function registerRoomRoutes(
   // its text with the person's own; DELETE removes it (the plain recent window is used again).
   app.post('/api/rooms/:roomId/summary', mutation, async (request, reply) => {
     const { roomId } = ParamsSchema.parse(request.params)
+    db.read((sqlite) => assertRoomFree(sqlite, roomId, 'summary.create'))
     z.object({})
       .strict()
       .parse(request.body ?? {})
@@ -511,6 +524,7 @@ export function registerRoomRoutes(
 
   app.patch('/api/rooms/:roomId/summary', mutation, async (request) => {
     const { roomId } = ParamsSchema.parse(request.params)
+    db.read((sqlite) => assertRoomFree(sqlite, roomId, 'summary.edit'))
     const body = SummaryEditBodySchema.parse(request.body)
     assertNotRewinding(roomId)
     let parts: z.infer<typeof MessagePartSchema>[] = []
@@ -543,6 +557,7 @@ export function registerRoomRoutes(
     { preHandler: [humanGuard(app.pairing)] },
     async (request, reply) => {
       const { roomId } = ParamsSchema.parse(request.params)
+      db.read((sqlite) => assertRoomFree(sqlite, roomId, 'summary.delete'))
       await ingest.submit({
         source: 'rooms',
         identity: randomUUID(),
@@ -579,6 +594,7 @@ export function registerRoomRoutes(
     const { roomId, messageId } = z
       .object({ roomId: ParamsSchema.shape.roomId, messageId: z.string().min(1).max(200) })
       .parse(request.params)
+    db.read((sqlite) => assertRoomFree(sqlite, roomId, 'message.retry'))
     const nonce = randomUUID()
     let replyId = ''
     await ingest.submit({
@@ -599,6 +615,7 @@ export function registerRoomRoutes(
     const { roomId, messageId } = z
       .object({ roomId: ParamsSchema.shape.roomId, messageId: z.string().min(1).max(200) })
       .parse(request.params)
+    db.read((sqlite) => assertRoomFree(sqlite, roomId, 'message.stop'))
     const row = z
       .object({
         run_id: z.string().nullable(),
@@ -623,6 +640,7 @@ export function registerRoomRoutes(
 
   app.post('/api/rooms/:roomId/messages', mutation, async (request) => {
     const { roomId } = ParamsSchema.parse(request.params)
+    db.read((sqlite) => assertRoomFree(sqlite, roomId, 'message.post'))
     assertNotRewinding(roomId)
     const body = MessageBodySchema.parse(request.body)
     // Edit and resend: checked before any side effect (a /assign task) and again inside the transaction below.

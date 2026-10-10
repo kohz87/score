@@ -52,9 +52,7 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
   const accepted = acceptedSet(entries)
   const mismatches: Mismatch[] = []
   const attempt = sqlite.prepare('SELECT state, run_id, sent_at FROM orc_attempts WHERE id = ?')
-  const orchestration = sqlite.prepare(
-    'SELECT stop_requested_at FROM orchestrations WHERE id = ?',
-  )
+  const orchestration = sqlite.prepare('SELECT stop_requested_at FROM orchestrations WHERE id = ?')
   const attemptStop = sqlite.prepare('SELECT stop_requested_at FROM orc_attempts WHERE id = ?')
   const dbSeq = readGlobal(sqlite).fence_seq
   let journalSeq = 0
@@ -115,11 +113,16 @@ export function fenceItems(sqlite: DatabaseSync): FenceItem[] {
     .array(ItemRowSchema)
     .parse(
       sqlite
-        .prepare('SELECT kind, ref, journal_n, detail FROM orc_fence_items WHERE fence_seq = ? ORDER BY id')
+        .prepare(
+          'SELECT kind, ref, journal_n, detail FROM orc_fence_items WHERE fence_seq = ? ORDER BY id',
+        )
         .all(seq),
     )
     .map((row) => ({
-      kind: z.enum(['attempt', 'handle', 'fence', 'journal', 'restore']).catch('journal').parse(row.kind),
+      kind: z
+        .enum(['attempt', 'handle', 'fence', 'journal', 'restore'])
+        .catch('journal')
+        .parse(row.kind),
       ref: row.ref,
       detail: row.detail,
     }))
@@ -149,7 +152,8 @@ export class GlobalFenceStore {
     private readonly db: ScoreDb,
     readonly journal: ExecutionJournal,
     private readonly clock: () => number = Date.now,
-    private readonly onChange: () => void = () => undefined,
+    /** Announces a change (the executor emits `orchestration.fence.updated`). */
+    public onChange: () => void = () => undefined,
   ) {}
 
   view(): GlobalFence {
@@ -160,11 +164,7 @@ export class GlobalFenceStore {
    * Sets the fence. The journal entry comes first (fsync'd), then the database: a crash between leaves the journal
    * ahead of the database, which the next start turns into a fence anyway.
    */
-  set(
-    reason: string,
-    items: Mismatch[],
-    options: { untrustedHistory?: boolean } = {},
-  ): void {
+  set(reason: string, items: Mismatch[], options: { untrustedHistory?: boolean } = {}): void {
     const current = this.db.read((sqlite) => readGlobal(sqlite))
     const fenceSeq = current.fence_seq + 1
     if (this.journalUsable())
@@ -183,7 +183,9 @@ export class GlobalFenceStore {
           .run(reason, seq, now, options.untrustedHistory ? 1 : 0)
       else if (options.untrustedHistory)
         sqlite
-          .prepare('UPDATE orc_global SET untrusted_history = 1, revision = revision + 1 WHERE id = 1')
+          .prepare(
+            'UPDATE orc_global SET untrusted_history = 1, revision = revision + 1 WHERE id = 1',
+          )
           .run()
       // A fence that is still up sees the same doubts again on every start: list each once.
       const insert = sqlite.prepare(
@@ -192,7 +194,9 @@ export class GlobalFenceStore {
       )
       for (const item of items) insert.run(seq, item.kind, item.ref, item.journalN, item.detail)
       sqlite
-        .prepare('INSERT INTO orc_history (orchestration_id, kind, detail, at) VALUES (NULL, ?, ?, ?)')
+        .prepare(
+          'INSERT INTO orc_history (orchestration_id, kind, detail, at) VALUES (NULL, ?, ?, ?)',
+        )
         .run('global_fence_set', JSON.stringify({ reason, items: items.length }), now)
     })
     this.onChange()
@@ -218,7 +222,11 @@ export class GlobalFenceStore {
     const fenceSeq = current.fence_seq + 1
     // A journal that cannot be written must not be "lifted" past: the next effect could not be recorded.
     if (!this.journalUsable())
-      throw new HttpError(409, 'fenced', 'The execution journal is unreadable; restore or repair it first')
+      throw new HttpError(
+        409,
+        'fenced',
+        'The execution journal is unreadable; restore or repair it first',
+      )
     this.journal.append({
       kind: 'global_fence',
       action: 'lift',
@@ -234,7 +242,9 @@ export class GlobalFenceStore {
         )
         .run(fenceSeq, now)
       sqlite
-        .prepare('INSERT INTO orc_history (orchestration_id, kind, detail, at) VALUES (NULL, ?, ?, ?)')
+        .prepare(
+          'INSERT INTO orc_history (orchestration_id, kind, detail, at) VALUES (NULL, ?, ?, ?)',
+        )
         .run('global_fence_lifted', JSON.stringify({ note: note ?? null, accepted }), now)
     })
     this.onChange()

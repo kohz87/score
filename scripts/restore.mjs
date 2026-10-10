@@ -37,22 +37,22 @@ const journalDir = resolve(
 const backup = resolve(backupArg)
 
 if (!existsSync(backup) || !statSync(backup).isDirectory()) fail(`${backup} is not a folder`)
-if (!existsSync(join(backup, 'score.db'))) fail(`${backup} has no score.db: not a Score home backup`)
+if (!existsSync(join(backup, 'score.db')))
+  fail(`${backup} has no score.db: not a Score home backup`)
 if (backup === home || backup.startsWith(`${home}/`)) fail('the backup cannot be inside the home')
 
 // A running server owns the home: the pid file names a live Score process.
 const pidFile = join(home, 'score.pid')
 if (existsSync(pidFile)) {
-  const pid = Number(readFileSync(pidFile, 'utf8').trim())
+  let pid = Number(readFileSync(pidFile, 'utf8').trim())
   if (Number.isInteger(pid) && pid > 0) {
-    let alive = false
     try {
       process.kill(pid, 0)
-      alive = true
-    } catch {
-      alive = false
+    } catch (error) {
+      // No such process: the pid file is stale. Any other error (EPERM) means a process exists.
+      if (error && error.code === 'ESRCH') pid = 0
     }
-    if (alive) fail(`Score is running (pid ${pid}); run \`score stop\` first`)
+    if (pid > 0) fail(`Score is running (pid ${pid}); run \`score stop\` first`)
   }
 }
 
@@ -86,7 +86,9 @@ try {
   for (const name of ['score.pid', 'score.url', 'score.launcher.lock'])
     rmSync(join(home, name), { force: true })
 } catch (error) {
-  fail(`copying the backup failed (${error instanceof Error ? error.message : String(error)}); the previous home is at ${aside ?? 'nowhere (there was none)'}`)
+  fail(
+    `copying the backup failed (${error instanceof Error ? error.message : String(error)}); the previous home is at ${aside ?? 'nowhere (there was none)'}`,
+  )
 }
 
 process.stdout.write(

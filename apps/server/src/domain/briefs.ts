@@ -190,6 +190,22 @@ export function briefTurns(sqlite: DatabaseSync, briefId: string): TurnRow[] {
 }
 
 export function deriveBriefStatus(sqlite: DatabaseSync, row: BriefRow): BriefStatus {
+  // An orchestration's brief takes its status from the run, never from the turns between lead attempts (PLAN 7.5).
+  const run = sqlite.prepare('SELECT status FROM orchestrations WHERE brief_id = ?').get(row.id) as
+    { status: string } | undefined
+  if (run)
+    return (
+      (
+        {
+          running: 'running',
+          stopping: 'running',
+          finishing: 'running',
+          paused: 'paused',
+          succeeded: 'done',
+          stopped: 'done',
+        } as Record<string, BriefStatus>
+      )[run.status] ?? 'failed'
+    )
   if (row.paused_at !== null) return 'paused'
   const turns = briefTurns(sqlite, row.id)
   const tasks = briefTasks(sqlite, row.id)

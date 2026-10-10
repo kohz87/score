@@ -72,7 +72,11 @@ export type JournalRead =
 const checksum = (payload: string): string =>
   createHash('sha256').update(payload).digest('hex').slice(0, 16)
 
-const MarkerSchema = z.object({ scope: z.string().min(1), at: z.iso.datetime(), backup: z.string() })
+const MarkerSchema = z.object({
+  scope: z.string().min(1),
+  at: z.iso.datetime(),
+  backup: z.string(),
+})
 export type RestoreMarker = z.infer<typeof MarkerSchema>
 
 export class ExecutionJournal {
@@ -159,7 +163,8 @@ export class ExecutionJournal {
 
   /** Appends and fsyncs before returning: the caller may perform the effect afterwards. Throws when it cannot. */
   append(body: JournalEntryBody): JournalEntry {
-    if (this.broken !== undefined) throw new Error(`Execution journal is unreadable: ${this.broken}`)
+    if (this.broken !== undefined)
+      throw new Error(`Execution journal is unreadable: ${this.broken}`)
     if (this.nextN === undefined && !this.open()) throw new Error('Execution journal is unreadable')
     const entry = EntrySchema.parse({
       ...body,

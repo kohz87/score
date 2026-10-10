@@ -2,8 +2,16 @@ import { appendFileSync, copyFileSync, readFileSync, writeFileSync } from 'node:
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import type { ScoreDb } from '../../src/db/index.ts'
-import { GlobalFenceStore, readGlobal, verifyJournal } from '../../src/domain/orchestration/fence.ts'
-import { ExecutionJournal, JOURNAL_FILE, RESTORE_MARKER_FILE } from '../../src/domain/orchestration/journal.ts'
+import {
+  GlobalFenceStore,
+  readGlobal,
+  verifyJournal,
+} from '../../src/domain/orchestration/fence.ts'
+import {
+  ExecutionJournal,
+  JOURNAL_FILE,
+  RESTORE_MARKER_FILE,
+} from '../../src/domain/orchestration/journal.ts'
 import { openMigrated, tempDir } from './harness-db.ts'
 
 const AT = '2026-10-10T10:00:00.000Z'
@@ -15,7 +23,12 @@ const clock = () => clockNow
 const journalOf = (scope = 'home-a') => new ExecutionJournal(journalDir, scope, clock)
 
 // A minimal orchestration + attempt, enough for the journal checks.
-function seedAttempt(database: ScoreDb, attemptId: string, sentAt: string | null, runId: string | null) {
+function seedAttempt(
+  database: ScoreDb,
+  attemptId: string,
+  sentAt: string | null,
+  runId: string | null,
+) {
   database.sqlite.exec('PRAGMA foreign_keys = OFF')
   database.tx((sqlite) => {
     sqlite
@@ -51,7 +64,14 @@ afterEach(() => {
 test('appends entries with a checksum and reads them back in order', () => {
   const journal = journalOf()
   expect(journal.open()).toBe(true)
-  journal.append({ kind: 'send_started', attemptId: 'a1', orchestrationId: 'o1', attemptKind: 'step', agentId: 'builder', generation: 0 })
+  journal.append({
+    kind: 'send_started',
+    attemptId: 'a1',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: 0,
+  })
   journal.append({ kind: 'run_handle', attemptId: 'a1', runId: 'run-1' })
   const read = journalOf().readOwn()
   expect(read.ok && read.entries.map((entry) => [entry.n, entry.kind])).toEqual([
@@ -64,7 +84,9 @@ test('a journal shared by two homes keeps their entries apart', () => {
   journalOf('home-a').append({ kind: 'reconciled', attemptId: 'x' })
   journalOf('home-b').append({ kind: 'reconciled', attemptId: 'y' })
   const a = journalOf('home-a').readOwn()
-  expect(a.ok && a.entries.map((entry) => entry.kind === 'reconciled' && entry.attemptId)).toEqual(['x'])
+  expect(a.ok && a.entries.map((entry) => entry.kind === 'reconciled' && entry.attemptId)).toEqual([
+    'x',
+  ])
 })
 
 test('a torn last line is dropped (its effect never started) and appends stay aligned', () => {
@@ -95,8 +117,22 @@ test('a damaged line in the middle makes the journal unreadable', () => {
 
 test('compaction drops only entries the caller marks reconciled and keeps numbering', () => {
   const journal = journalOf()
-  journal.append({ kind: 'send_started', attemptId: 'a1', orchestrationId: 'o1', attemptKind: 'step', agentId: 'b', generation: 0 })
-  journal.append({ kind: 'send_started', attemptId: 'a2', orchestrationId: 'o1', attemptKind: 'step', agentId: 'b', generation: 0 })
+  journal.append({
+    kind: 'send_started',
+    attemptId: 'a1',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'b',
+    generation: 0,
+  })
+  journal.append({
+    kind: 'send_started',
+    attemptId: 'a2',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'b',
+    generation: 0,
+  })
   const result = journal.compact((entry) => 'attemptId' in entry && entry.attemptId === 'a1')
   expect(result).toEqual({ kept: 1, dropped: 1 })
   const next = journal.append({ kind: 'reconciled', attemptId: 'a2' })
@@ -106,7 +142,14 @@ test('compaction drops only entries the caller marks reconciled and keeps number
 test('startup: a database that holds everything the journal says is not fenced', () => {
   seedAttempt(db, 'a1', AT, 'run-1')
   const journal = journalOf()
-  journal.append({ kind: 'send_started', attemptId: 'a1', orchestrationId: 'o1', attemptKind: 'step', agentId: 'builder', generation: 0 })
+  journal.append({
+    kind: 'send_started',
+    attemptId: 'a1',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: 0,
+  })
   journal.append({ kind: 'run_handle', attemptId: 'a1', runId: 'run-1' })
   const result = new GlobalFenceStore(db, journalOf(), clock).startupCheck()
   expect(result).toEqual({ fenced: false, reasons: [] })
@@ -118,7 +161,14 @@ test('database-only restore is detected: journal entries the database lacks fenc
   copyFileSync(join(tmp.dir, 'score.db'), backup)
   seedAttempt(db, 'a1', AT, 'run-1')
   const journal = journalOf()
-  journal.append({ kind: 'send_started', attemptId: 'a1', orchestrationId: 'o1', attemptKind: 'step', agentId: 'builder', generation: 0 })
+  journal.append({
+    kind: 'send_started',
+    attemptId: 'a1',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: 0,
+  })
   journal.append({ kind: 'run_handle', attemptId: 'a1', runId: 'run-1' })
   db.close()
   // Roll the database back to before the admission; the journal (outside the home) is not rolled back.
@@ -138,14 +188,27 @@ test('database-only restore is detected: journal entries the database lacks fenc
 test('restore after a Stop with an unchanged dispatch counter is detected through the Stop fence entry', () => {
   seedAttempt(db, 'a1', AT, 'run-1')
   const journal = journalOf()
-  journal.append({ kind: 'send_started', attemptId: 'a1', orchestrationId: 'o1', attemptKind: 'step', agentId: 'builder', generation: 0 })
+  journal.append({
+    kind: 'send_started',
+    attemptId: 'a1',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: 0,
+  })
   journal.append({ kind: 'run_handle', attemptId: 'a1', runId: 'run-1' })
   // Snapshot of the database taken before Stop: it still holds the admission.
   db.sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)')
   const backup = join(tmp.dir, 'pre-stop.db')
   copyFileSync(join(tmp.dir, 'score.db'), backup)
   journal.append({ kind: 'stop_fence', orchestrationId: 'o1', reason: 'stop' })
-  db.tx((sqlite) => sqlite.prepare("UPDATE orchestrations SET stop_requested_at = ?, status = 'stopping' WHERE id = 'o1'").run(AT))
+  db.tx((sqlite) =>
+    sqlite
+      .prepare(
+        "UPDATE orchestrations SET stop_requested_at = ?, status = 'stopping' WHERE id = 'o1'",
+      )
+      .run(AT),
+  )
   expect(new GlobalFenceStore(db, journalOf(), clock).startupCheck().fenced).toBe(false)
   db.close()
   copyFileSync(backup, join(tmp.dir, 'score.db'))
@@ -192,14 +255,24 @@ test('a restore marker (left by the restore script) fences and marks history unt
   const second = new GlobalFenceStore(db, journalOf(), clock).startupCheck()
   expect(second).toEqual({ fenced: true, reasons: [] })
   // A marker for another home is ignored.
-  writeFileSync(join(journalDir, RESTORE_MARKER_FILE), JSON.stringify({ scope: 'other', at: AT, backup: 'x' }))
+  writeFileSync(
+    join(journalDir, RESTORE_MARKER_FILE),
+    JSON.stringify({ scope: 'other', at: AT, backup: 'x' }),
+  )
   expect(journalOf().readRestoreMarker()).toBeUndefined()
 })
 
 test('lifting needs the current revision, journals the accepted entries and does not re-fence next start', () => {
   seedAttempt(db, 'a1', AT, 'run-1')
   const journal = journalOf()
-  journal.append({ kind: 'send_started', attemptId: 'ghost', orchestrationId: 'o1', attemptKind: 'step', agentId: 'builder', generation: 0 })
+  journal.append({
+    kind: 'send_started',
+    attemptId: 'ghost',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: 0,
+  })
   const store = new GlobalFenceStore(db, journalOf(), clock)
   expect(store.startupCheck().fenced).toBe(true)
   const view = store.view()
@@ -216,7 +289,7 @@ test('lifting needs the current revision, journals the accepted entries and does
 test('a fence the database lost is restored from the journal (lifted journal entry is newer than the database)', () => {
   const store = new GlobalFenceStore(db, journalOf(), clock)
   store.set('journal_mismatch', [{ kind: 'journal', ref: 'x', journalN: null, detail: 'x' }])
-  db.sqlite.exec("UPDATE orc_global SET fenced = 0, fence_seq = 0 WHERE id = 1")
+  db.sqlite.exec('UPDATE orc_global SET fenced = 0, fence_seq = 0 WHERE id = 1')
   const again = new GlobalFenceStore(db, journalOf(), clock)
   expect(again.startupCheck().fenced).toBe(true)
 })

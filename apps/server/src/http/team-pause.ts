@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
+import { ownerOfBrief } from '../domain/orchestration/ownership.ts'
 import { emitBriefChange, listBriefs, taskStatus } from '../domain/briefs.ts'
 import { holdable, recordHolds } from '../domain/holds.ts'
 import { countRunningRuns, setTeamPaused, teamPausedAt } from '../domain/team-pause.ts'
@@ -51,7 +52,9 @@ export function registerTeamPauseRoutes(
           .prepare('UPDATE team_state SET paused_at = ? WHERE id = 1 AND paused_at IS NULL')
           .run(now)
         targets = listBriefs(sqlite, 'active', Date.parse(now))
-          .filter((brief) => brief.status === 'running')
+          // An orchestration's brief is held by its own admission checks (the team hold above); pausing it as a brief
+          // would put a second owner on the run, and Team Resume would then clear the wrong hold.
+          .filter((brief) => brief.status === 'running' && !ownerOfBrief(sqlite, brief.id))
           .map((brief) => brief.id)
         for (const id of targets)
           sqlite.prepare('INSERT OR IGNORE INTO team_paused_briefs (brief_id) VALUES (?)').run(id)
