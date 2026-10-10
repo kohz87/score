@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@fastify/websocket": "11.3.4",
     "@score/contract": "workspace:*",
     "@simplewebauthn/server": "14.0.3",

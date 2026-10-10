@@ -831,6 +831,43 @@ const cases = [
   ['BridgeKnowledgeWriteResponseSchema', { etag: 'e', path: 'a.md' }, { etag: 'e' }],
   ['KnowledgeAgentAccessSchema', { enabled: true }, { enabled: 'yes' }],
   [
+    'McpAccessSchema',
+    {
+      agentId: 'builder',
+      enabled: true,
+      writesEnabled: false,
+      hasToken: true,
+      tokenCreatedAt: '2026-10-09T10:00:00.000Z',
+      available: true,
+      url: 'http://127.0.0.1:8740/bridge/mcp',
+      command:
+        'hermes --profile builder mcp add score --url http://127.0.0.1:8740/bridge/mcp --auth header',
+      postsThisHour: 0,
+      postLimitPerHour: 30,
+    },
+    { agentId: 'builder', enabled: 'yes' },
+  ],
+  ['McpAccessPatchSchema', { enabled: true }, {}],
+  [
+    'McpTokenIssuedSchema',
+    {
+      token: `scm_${'a'.repeat(43)}`,
+      access: {
+        agentId: 'builder',
+        enabled: true,
+        writesEnabled: false,
+        hasToken: true,
+        tokenCreatedAt: null,
+        available: false,
+        url: null,
+        command: null,
+        postsThisHour: 0,
+        postLimitPerHour: 30,
+      },
+    },
+    { token: 'a'.repeat(43), access: {} },
+  ],
+  [
     'KnowledgeAgentUsageSchema',
     { items: [{ agentId: 'builder', writesToday: 2 }] },
     { items: [{ agentId: 'builder', writesToday: -1 }] },

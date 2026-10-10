@@ -15,6 +15,9 @@ import { registerWorkspaceRoutes } from './http/workspace.ts'
 import { createAgentWorkspaces } from './workspace/agent-workspace.ts'
 import { registerKnowledgeRoutes } from './http/knowledge.ts'
 import { registerKnowledgeAgentRoutes } from './http/knowledge-agents.ts'
+import { registerMcpAccessRoutes } from './http/mcp-access.ts'
+import { McpAccessStore } from './mcp/access.ts'
+import { registerMcpCredentialGuard, registerMcpRoutes, type McpRouteDeps } from './mcp/routes.ts'
 import { KnowledgeAgentApi } from './knowledge/agent-api.ts'
 import type { KnowledgeVault } from './knowledge/vault.ts'
 import { registerReportRoutes } from './http/reports.ts'
@@ -167,6 +170,7 @@ export function buildApp({
   })
   app.decorate('pairing', new PairingService(sessionStore, clock, Boolean(config.remote)))
   registerErrorHandlers(app)
+  registerMcpCredentialGuard(app)
   registerRemoteGuard(app, config, new Set(webAssets ? [...webAssets.keys(), '/', '/pair'] : []))
   if (config.remote) registerBridgeCredentialGuard(app)
   registerCsrfGuard(app, config)
@@ -227,6 +231,11 @@ export function buildApp({
     registerKnowledgeRoutes(app, knowledge)
     if (db) registerKnowledgeAgentRoutes(app, new KnowledgeAgentApi(knowledge, db, clock))
   }
+  if (db)
+    registerMcpAccessRoutes(app, {
+      access: new McpAccessStore(db, clock),
+      bridgePort: config.remote?.bridgePort,
+    })
   registerRoutineRoutes(app, port, db, clock)
   registerSettingsRoutes(app, port, db, clock)
   registerCurrencyRoutes(app, db)
@@ -401,6 +410,8 @@ export function buildBridgeApp(
   bridge?: BridgeDeps,
   outbox?: ApprovalOutbox,
   logger: FastifyServerOptions['logger'] = false,
+  /** Score's MCP server for agents (7.4d): served here, on the loopback bridge listener, and nowhere else. */
+  mcp?: McpRouteDeps,
 ): FastifyInstance {
   const app = Fastify({ logger, trustProxy: false, forceCloseConnections: true })
   registerErrorHandlers(app)
@@ -411,5 +422,6 @@ export function buildBridgeApp(
         .send({ error: { code: 'forbidden', message: 'Loopback listener only' } })
   })
   if (bridge) registerBridgeRoutes(app, { ...bridge, ...(outbox ? { outbox } : {}) })
+  if (mcp) registerMcpRoutes(app, mcp)
   return app
 }
