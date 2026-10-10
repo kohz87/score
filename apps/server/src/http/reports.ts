@@ -89,7 +89,19 @@ export function registerReportRoutes(
     const coding = db
       ? db.read((sqlite) => codingSpendInWindow(sqlite, window.from, window.to))
       : []
+    // Coding agents are not in Hermes's facts: one without runs spent nothing (an unknown would blank the whole total).
+    const codingIds: string[] = db
+      ? db.read((sqlite) =>
+          sqlite
+            .prepare('SELECT id FROM coding_agents')
+            .all()
+            .map((row) => String(row.id)),
+        )
+      : []
+    for (const id of codingIds) facts.spendUsd[id] ??= 0
     for (const item of coding) facts.spendUsd[item.agentId] = item.costUsd ?? 0
+    // The Hermes spend trend knows Hermes agents only.
+    const hermesIds = agentIds.filter((id) => !codingIds.includes(id))
     const own: ReturnType<typeof readReportRows> = db
       ? db.read((sqlite) => readReportRows(sqlite, window.from, window.to))
       : { runs: [], approvals: [] }
@@ -137,7 +149,7 @@ export function registerReportRoutes(
               (run) => !removed.has(run.agentId),
             ),
             ...(trendSeeded.trendSpendUsd ? { demoSpendUsd: trendSeeded.trendSpendUsd } : {}),
-            ...(trendCosts ? { costs: trendCosts, agentIds, sqlite } : {}),
+            ...(trendCosts ? { costs: trendCosts, agentIds: hermesIds, sqlite } : {}),
           })
         })
       : computeTrend({
