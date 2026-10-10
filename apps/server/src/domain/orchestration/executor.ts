@@ -90,7 +90,12 @@ interface RunFacts {
   output: string | null
   error: string | null
   ended_at: string | null
+  terminal_source: string | null
 }
+
+/** Only Hermes' own terminal word is evidence; a status rebuilt from session-history text is not (fix-h item 1). */
+const isEvidence = (run: RunFacts): boolean =>
+  (run.status === 'completed' || run.status === 'failed') && run.terminal_source !== 'recovered'
 
 export const ORCHESTRATION_QUOTA_BYTES = 200 * 1024 * 1024
 const SWEEP_MS = 10_000
@@ -1333,12 +1338,12 @@ export class Orchestrator {
     const work: { attempt: AttemptRow; run: RunFacts; spend: ReturnType<SpendReader> }[] = []
     for (const attempt of rows) {
       const run = sqlite
-        .prepare('SELECT status, output, error, ended_at FROM runs WHERE id = ?')
+        .prepare('SELECT status, output, error, ended_at, terminal_source FROM runs WHERE id = ?')
         .get(attempt.run_id!) as RunFacts | undefined
       if (!run) continue
       const spend = this.spend(sqlite, attempt)
       const terminalRun = ['completed', 'failed', 'cancelled', 'interrupted'].includes(run.status)
-      const evidence = run.status === 'completed' || run.status === 'failed'
+      const evidence = isEvidence(run)
       const ends =
         terminalRun &&
         ((attempt.state === 'running' && true) ||
@@ -1368,8 +1373,13 @@ export class Orchestrator {
       if (!o) continue
       changed = true
       touch(ctx, o.id)
-      const evidence = run.status === 'completed' || run.status === 'failed'
-      const terminalRun = evidence || run.status === 'cancelled' || run.status === 'interrupted'
+      const evidence = isEvidence(run)
+      const terminalRun =
+        evidence ||
+        run.status === 'completed' ||
+        run.status === 'failed' ||
+        run.status === 'cancelled' ||
+        run.status === 'interrupted'
       const ending =
         terminalRun &&
         (attempt.state === 'running' ||
@@ -1395,7 +1405,21 @@ export class Orchestrator {
       }
       if (evidence) this.accept(ctx, o, attempt, run.status as 'completed' | 'failed', run)
       // `cancelled` / `interrupted` do not prove the agent loop ended (7.1 v6): the attempt is unknown, not terminated.
-      else this.markUnknown(ctx, o, attempt, `run_${run.status}`)
+      else if (run.terminal_source === 'recovered') {
+        // The text is shown to the person (chat is unchanged) but proves nothing about the agent loop: obligations stay.
+        addHistory(
+          sqlite,
+          o.id,
+          'recovered_text',
+          {
+            attemptId: attempt.id,
+            status: run.status,
+            text: run.output ? redactBounded(run.output, 500) : null,
+          },
+          now,
+        )
+        this.markUnknown(ctx, o, attempt, 'recovered_text_only')
+      } else this.markUnknown(ctx, o, attempt, `run_${run.status}`)
     }
     return changed
   }
