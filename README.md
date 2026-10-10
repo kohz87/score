@@ -207,6 +207,19 @@ against the limits, the budget and your approval choice, and steps can wait for 
 Start one from Chat or from Flow with **New orchestration**: choose the lead, which agents it may hand work to, when
 you want to be asked (before each step, only when the lead asks, or never) and an optional budget or deadline.
 
+### Workflows: draw the steps yourself
+
+![The workflow editor: a drawn graph of steps with problems flagged on the nodes and a node's settings on the right](docs/screenshots/workflow-editor.png)
+
+Where an orchestration lets a lead agent plan, a workflow is a graph you draw: agent steps, gates that wait for your
+approval and branches that choose a path from a step's result. The editor checks the drawing as you go and saves
+versions you can run later.
+
+![A workflow run: a card asking for approval above the live diagram and the run log](docs/screenshots/workflow-run.png)
+
+A run asks for approval only where you placed a gate (or before every step, if you choose), draws itself live on the
+diagram and keeps a plain-language log you can replay.
+
 ### Watch: replay what an agent did
 
 ![Watch: an agent's terminal, an edited file and a browser window replayed with a timeline, and a card asking you to approve a command](docs/screenshots/watch.png)

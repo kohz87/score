@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { expect, test, type Page } from '@playwright/test'
 import { fixtureNow } from '../now-fixture.ts'
 import { orchestrationFixtures } from '../orchestration-fixtures.ts'
+import { okValidation, unfinishedValidation, workflowFixtures } from '../workflow-fixtures.ts'
 import { visualFixtures, visualHello } from '../visual-fixtures.ts'
 import { taskDetailFixture, tasksFixture } from './tasks-fixture.ts'
 import { watchApprovalFixture, watchFixture, watchOverviewFixture } from '../watch-fixture.ts'
@@ -57,6 +58,15 @@ test.beforeEach(async ({ page }) => {
       })
       return
     }
+    if (url.pathname === '/api/workflows/validate') {
+      const body = JSON.parse(route.request().postData() ?? '{}') as {
+        definition?: { name?: string }
+      }
+      await route.fulfill({
+        json: body.definition?.name?.includes('(draft)') ? unfinishedValidation : okValidation,
+      })
+      return
+    }
     url.searchParams.delete('tz')
     if (url.pathname === '/api/orchestrations/preflight') {
       await route.fulfill({ json: preflight })
@@ -64,7 +74,9 @@ test.beforeEach(async ({ page }) => {
     }
     const key = `${url.pathname}${url.search}`
     const fixture =
-      withOrchestration && key in orchestrationFixtures ? orchestrationFixtures[key] : fixtures[key]
+      withOrchestration && key in orchestrationFixtures
+        ? orchestrationFixtures[key]
+        : (workflowFixtures[key] ?? fixtures[key])
     if (fixture === undefined) {
       await route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'none' } } })
       return
@@ -120,6 +132,19 @@ test('new orchestration dialog', async ({ page }) => {
   await dialog.getByRole('heading', { name: 'New orchestration' }).click()
   await expect(dialog.getByRole('list', { name: 'Preflight checks' })).toBeVisible()
   await shot(page, 'new-orchestration')
+})
+
+test('workflow editor', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 })
+  await visit(page, '/now/flow/workflows/wf-draft', '[data-node="build"]')
+  await page.locator('[data-node="build"]').click()
+  await shot(page, 'workflow-editor')
+})
+
+test('workflow run', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1300 })
+  await visit(page, '/now/flow/brief-wfrun-1', '[data-node="approve"]')
+  await shot(page, 'workflow-run')
 })
 
 test('watch', async ({ page }) => {
