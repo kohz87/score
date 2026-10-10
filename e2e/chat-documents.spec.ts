@@ -9,7 +9,8 @@ test('a PDF and a CSV attach, preview, and reach the agent; a workspace file att
   page,
 }) => {
   await pair(page)
-  const room = await makeRoom(page, 'docs')
+  // Led by builder: attachments are saved into the lead's workspace, and the Workspace baseline shows lead's.
+  const room = await makeRoom(page, 'docs', ['builder'], 'builder')
   await openRoom(page, room.label)
   const history = page.getByRole('region', { name: 'Message history' })
   const composer = page.getByRole('combobox', { name: /^Message/ })
@@ -62,7 +63,7 @@ test('a PDF and a CSV attach, preview, and reach the agent; a workspace file att
 
   // The demo workspace is shared by every spec in the run: leave it as it was (the Workspace screenshot shows it).
   const removed = await page.request.delete(
-    '/api/agents/lead/workspace/entries?path=attachments&recursive=1',
+    '/api/agents/builder/workspace/entries?path=attachments&recursive=1',
     {
       headers: { 'X-Score-Client': 'web' },
     },

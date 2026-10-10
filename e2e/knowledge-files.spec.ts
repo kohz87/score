@@ -1,6 +1,7 @@
 import { crc32 } from 'node:zlib'
 import { expect, test } from '@playwright/test'
 import { pair } from './pair.ts'
+import { makeRoom, openRoom } from './rooms.ts'
 
 // Knowledge files (PLAN 6.6) against the fake adapter's temp vault: upload a PDF and a note into a folder, find the
 // PDF by its text, unzip a zip, and save a chat attachment into Knowledge. Names are unique per test.
@@ -155,13 +156,9 @@ test('a zip asks: unzip into a folder', async ({ page }) => {
 
 test('a chat attachment can also be saved to Knowledge', async ({ page }) => {
   const file = `chat-${unique()}.pdf`
-  await page.goto('/chat')
-  await page
-    .getByRole('navigation', { name: 'Conversations' })
-    .getByRole('link', { name: /#activity-feed/ })
-    .click({ timeout: 15_000 })
-  const history = page.getByRole('region', { name: 'Message history' })
-  await expect(history.getByRole('article').first()).toBeVisible({ timeout: 15_000 })
+  // Led by builder: attachments land in the lead's workspace, and the Workspace baseline shows lead's.
+  const room = await makeRoom(page, 'kn', ['builder'], 'builder')
+  await openRoom(page, room.label)
   await page
     .getByTestId('attach-input')
     .setInputFiles({ name: file, mimeType: 'application/pdf', buffer: textPdf('From the chat') })
