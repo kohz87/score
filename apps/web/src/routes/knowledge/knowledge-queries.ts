@@ -15,7 +15,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 import { ApiError, apiFetch } from '../../data/api.ts'
 import { useStream } from '../../data/query-client.ts'
-import { apiNote } from './knowledge-paths.ts'
+import { documentApi, fetchDocument } from './knowledge-files.ts'
+import { apiNote, notePath } from './knowledge-paths.ts'
 
 export const knowledgeKey = ['knowledge'] as const
 export const infoKey = [...knowledgeKey, 'info'] as const
@@ -76,6 +77,17 @@ export function useNote(path: string | null) {
   })
 }
 
+export function useDocument(path: string | null) {
+  return useQuery({
+    queryKey: [...knowledgeKey, 'document', path ?? ''],
+    enabled: path !== null,
+    queryFn: ({ signal }) => fetchDocument(path!, signal),
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  })
+}
+
 export function useHistory(path: string | null, enabled: boolean) {
   return useQuery({
     queryKey: historyKey(path ?? ''),
@@ -125,7 +137,9 @@ export function knowledgeFailure(error: unknown, action: string): string {
   if (error instanceof ApiError) {
     if (error.code === 'not_paired')
       return `Pair this browser using the link in the server terminal to ${action}.`
-    if (error.code === 'exists') return 'A note with that name already exists.'
+    if (error.code === 'exists') return 'Something with that name already exists.'
+    if (error.code === 'not_empty') return 'That folder is not empty.'
+    if (error.code === 'unsupported_type') return error.message
     if (error.code === 'bad_path' || error.code === 'not_a_note') return error.message
     if (error.code === 'payload_too_large') return 'That note is too large (2 MiB at most).'
     if (error.status === 404) return 'That note is no longer there.'
@@ -156,6 +170,20 @@ export function useKnowledgeActions() {
     }),
     remove: useMutation({
       mutationFn: (path: string) => apiFetch(apiNote(path), { method: 'DELETE' }),
+      onSuccess: refresh,
+    }),
+    removeDocument: useMutation({
+      mutationFn: (path: string) => apiFetch(documentApi(path), { method: 'DELETE' }),
+      onSuccess: refresh,
+    }),
+    createFolder: useMutation({
+      mutationFn: (path: string) =>
+        apiFetch('knowledge/folders', { method: 'POST', body: JSON.stringify({ path }) }),
+      onSuccess: refresh,
+    }),
+    removeFolder: useMutation({
+      mutationFn: (path: string) =>
+        apiFetch(`knowledge/folders/${notePath(path)}`, { method: 'DELETE' }),
       onSuccess: refresh,
     }),
     restore: useMutation({
@@ -198,6 +226,7 @@ export function useKnowledgeLive(onChanged?: (event: KnowledgeChanged) => void) 
       void queryClient.invalidateQueries({ queryKey: [...knowledgeKey, 'search'] })
       // The open note's links and backlinks depend on the other notes; its editor text is not touched by this.
       void queryClient.invalidateQueries({ queryKey: [...knowledgeKey, 'note'] })
+      void queryClient.invalidateQueries({ queryKey: [...knowledgeKey, 'document'] })
       handler.current?.(event.data)
     })
     const offControl = stream.onControl(({ resync }) => {

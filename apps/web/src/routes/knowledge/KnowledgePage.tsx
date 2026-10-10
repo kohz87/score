@@ -1,13 +1,18 @@
 import type { KnowledgeChanged } from '@score/contract'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { ResponsiveDrawer } from '../../components/ResponsiveDrawer.tsx'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery } from '../team/team-queries.ts'
-import { DeleteDialog, MoveDialog, NewNoteDialog } from './KnowledgeDialogs.tsx'
+import { DeleteDialog, MoveDialog, NewFolderDialog, NewNoteDialog } from './KnowledgeDialogs.tsx'
+import { DocumentWorkspace } from './DocumentWorkspace.tsx'
+import { FilesView } from './FilesView.tsx'
+import { ACCEPT_FILES, isNotePath, TYPE_LABEL } from './knowledge-files.ts'
+import { summaryText, useUploadFlow } from './UploadFlow.tsx'
 import { KnowledgeTree } from './KnowledgeTree.tsx'
 import { NoteWorkspace } from './NoteWorkspace.tsx'
 import {
+  knowledgeFailure,
   UnsavedDraftError,
   useKnowledgeActions,
   useKnowledgeInfo,
@@ -15,16 +20,26 @@ import {
   useKnowledgeTree,
   useSearch,
 } from './knowledge-queries.ts'
-import { baseName, noteUrl, pathForLinkTarget, timeAgo } from './knowledge-paths.ts'
+import { baseName, folderOf, noteUrl, pathForLinkTarget, timeAgo } from './knowledge-paths.ts'
 import { splitSnippet } from './wikilinks.ts'
 import './knowledge.css'
 
-type Dialog = { kind: 'new'; initial: string } | { kind: 'move' } | { kind: 'delete' } | null
+type Dialog =
+  | { kind: 'new'; initial: string }
+  | { kind: 'move'; path: string }
+  | { kind: 'delete'; path: string }
+  | { kind: 'folder'; parent: string }
+  | null
 
 export function KnowledgePage() {
   const params = useParams()
   const path = params['*'] ? params['*'] : null
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  // `?files=<folder>` shows the file manager for that folder (an empty value is the vault root).
+  const filesFolder = searchParams.has('files') ? (searchParams.get('files') ?? '') : null
+  const uploadInput = useRef<HTMLInputElement>(null)
+  const [dragging, setDragging] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
   const closeNotes = useCallback(() => setNotesOpen(false), [])
   const info = useKnowledgeInfo()
@@ -34,6 +49,10 @@ export function KnowledgePage() {
   const [dialog, setDialog] = useState<Dialog>(null)
   const [dialogError, setDialogError] = useState<unknown>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const flow = useUploadFlow((summary) => {
+    const text = summaryText(summary)
+    if (text) setNotice(text)
+  })
   const [external, setExternal] = useState<{
     forPath: string | null
     event: KnowledgeChanged
@@ -100,10 +119,18 @@ export function KnowledgePage() {
     )
   }
 
-  function move(to: string, updateLinks: boolean) {
-    if (!path) return
+  function upload(files: File[], folder: string) {
+    setDragging(false)
+    if (files.length === 0) return
+    void flow.start(
+      files.map((file) => ({ name: file.name, blob: file })),
+      folder,
+    )
+  }
+
+  function move(from: string, to: string, updateLinks: boolean) {
     actions.move.mutate(
-      { from: path, to, updateLinks },
+      { from, to, updateLinks },
       {
         onSuccess: (response) => {
           setDialog(null)
@@ -112,7 +139,7 @@ export function KnowledgePage() {
               ? `Moved to ${response.path}. Updated links in ${response.updatedNotes} ${response.updatedNotes === 1 ? 'note' : 'notes'}.`
               : `Moved to ${response.path}. Links in other notes were left as they are.`,
           )
-          void navigate(noteUrl(response.path))
+          if (from === path) void navigate(noteUrl(response.path))
         },
         onError: setDialogError,
       },
@@ -121,7 +148,28 @@ export function KnowledgePage() {
 
   const searching = debounced !== '' || query.trim() !== ''
   return (
-    <div className="kn-layout">
+    <div
+      className={`kn-layout${dragging ? ' is-dragging' : ''}`}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes('Files')) return
+        event.preventDefault()
+        setDragging(true)
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false)
+      }}
+      onDrop={(event) => {
+        if (!event.dataTransfer.types.includes('Files')) return
+        event.preventDefault()
+        upload([...event.dataTransfer.files], filesFolder ?? (path ? folderOf(path) : ''))
+      }}
+    >
+      {dragging && (
+        <p className="kn-drop-hint" role="status">
+          Drop to add the files to{' '}
+          <code>{(filesFolder ?? (path ? folderOf(path) : '')) || 'the vault'}</code>
+        </p>
+      )}
       <button
         type="button"
         className="kn-notes-toggle"
@@ -156,6 +204,31 @@ export function KnowledgePage() {
             New note
           </button>
         </div>
+        <div className="kn-left-tools">
+          <Link
+            to="/knowledge?files="
+            className="kn-button"
+            aria-current={filesFolder !== null ? 'page' : undefined}
+          >
+            Files
+          </Link>
+          <input
+            ref={uploadInput}
+            type="file"
+            multiple
+            hidden
+            accept={ACCEPT_FILES}
+            aria-label="Choose files to upload"
+            onChange={(event) => {
+              const files = [...(event.target.files ?? [])]
+              event.target.value = ''
+              upload(files, filesFolder ?? (path ? folderOf(path) : ''))
+            }}
+          />
+          <button type="button" disabled={flow.busy} onClick={() => uploadInput.current?.click()}>
+            {flow.busy ? 'Uploading…' : 'Upload'}
+          </button>
+        </div>
         <label className="kn-search">
           <span className="kn-sr">Search notes</span>
           <input
@@ -177,7 +250,12 @@ export function KnowledgePage() {
               {(search.data ?? []).map((hit) => (
                 <li key={hit.path}>
                   <Link to={noteUrl(hit.path)} onClick={() => setQuery('')}>
-                    <strong>{hit.title || baseName(hit.path)}</strong>
+                    <strong>
+                      {hit.title || baseName(hit.path)}
+                      {hit.kind === 'document' && hit.type && (
+                        <span className="kn-type-badge">{TYPE_LABEL[hit.type]}</span>
+                      )}
+                    </strong>
                     <span className="kn-path">{hit.path}</span>
                     <span className="kn-snippet">
                       {splitSnippet(hit.snippet).map((part, index) =>
@@ -208,7 +286,7 @@ export function KnowledgePage() {
               <h2 id="kn-all">All notes</h2>
               {tree.isPending && <p role="status">Loading notes…</p>}
               {tree.isError && <p role="alert">Could not load the notes.</p>}
-              {tree.data && <KnowledgeTree tree={tree.data} current={path} />}
+              {tree.data && <KnowledgeTree tree={tree.data} current={path} onDropFiles={upload} />}
             </section>
           </>
         )}
@@ -228,7 +306,15 @@ export function KnowledgePage() {
             Git is not available for this vault. Notes still save; history and undo are unavailable.
           </p>
         )}
-        {path ? (
+        {path && !isNotePath(path) ? (
+          <DocumentWorkspace
+            key={path}
+            path={path}
+            agents={agents}
+            onMove={() => openDialog({ kind: 'move', path })}
+            onDelete={() => openDialog({ kind: 'delete', path })}
+          />
+        ) : path ? (
           <NoteWorkspace
             key={path}
             path={path}
@@ -239,15 +325,34 @@ export function KnowledgePage() {
             onCreateLink={(target) =>
               openDialog({ kind: 'new', initial: pathForLinkTarget(target).replace(/\.md$/i, '') })
             }
-            onMove={() => openDialog({ kind: 'move' })}
-            onDelete={() => openDialog({ kind: 'delete' })}
+            onMove={() => openDialog({ kind: 'move', path })}
+            onDelete={() => openDialog({ kind: 'delete', path })}
             registerFlush={registerFlush}
+          />
+        ) : filesFolder !== null && tree.data ? (
+          <FilesView
+            tree={tree.data}
+            folder={filesFolder}
+            agents={agents}
+            busy={flow.busy}
+            onOpenFolder={(folder) => setSearchParams({ files: folder })}
+            onUpload={upload}
+            onNewFolder={(parent) => openDialog({ kind: 'folder', parent })}
+            onMove={(target) => openDialog({ kind: 'move', path: target })}
+            onDelete={(target) => openDialog({ kind: 'delete', path: target })}
+            onDeleteFolder={(folder) =>
+              actions.removeFolder.mutate(folder, {
+                onSuccess: () => setNotice(`Deleted the folder ${folder}.`),
+                onError: (error) => setNotice(knowledgeFailure(error, 'delete the folder')),
+              })
+            }
           />
         ) : (
           <div className="kn-empty">
             <h2>Pick a note</h2>
             <p className="kn-muted">
-              Choose one on the left, search with Ctrl+K, or start a new one with Ctrl+N.
+              Choose one on the left, search with Ctrl+K, or start a new one with Ctrl+N. Drop files
+              anywhere to add them, or open Files to manage them.
               {info.data && (
                 <>
                   {' '}
@@ -269,42 +374,69 @@ export function KnowledgePage() {
           onClose={() => setDialog(null)}
         />
       )}
-      {dialog?.kind === 'move' && path && (
+      {dialog?.kind === 'move' && (
         <MoveDialog
-          from={path}
+          from={dialog.path}
+          document={!isNotePath(dialog.path)}
           busy={actions.move.isPending}
           error={dialogError}
           onClose={() => setDialog(null)}
           onSubmit={(to, updateLinks) => {
+            const from = dialog.path
             // The file moves as it is on disk, so unsaved text is saved first; if that fails nothing moves.
-            void (flushRef.current?.() ?? Promise.resolve(true)).then((saved) => {
+            void (
+              from === path
+                ? (flushRef.current?.() ?? Promise.resolve(true))
+                : Promise.resolve(true)
+            ).then((saved) => {
               if (!saved) {
                 setDialogError(new UnsavedDraftError())
                 return
               }
-              move(to, updateLinks)
+              move(from, to, updateLinks)
             })
           }}
         />
       )}
-      {dialog?.kind === 'delete' && path && (
+      {dialog?.kind === 'delete' && (
         <DeleteDialog
-          path={path}
-          busy={actions.remove.isPending}
+          path={dialog.path}
+          document={!isNotePath(dialog.path)}
+          busy={actions.remove.isPending || actions.removeDocument.isPending}
           error={dialogError}
           onClose={() => setDialog(null)}
-          onConfirm={() =>
-            actions.remove.mutate(path, {
+          onConfirm={() => {
+            const target = dialog.path
+            const mutation = isNotePath(target) ? actions.remove : actions.removeDocument
+            mutation.mutate(target, {
               onSuccess: () => {
                 setDialog(null)
-                setNotice(`Deleted ${path}.`)
-                void navigate('/knowledge')
+                setNotice(`Deleted ${target}.`)
+                if (target === path) void navigate('/knowledge')
+              },
+              onError: setDialogError,
+            })
+          }}
+        />
+      )}
+      {dialog?.kind === 'folder' && (
+        <NewFolderDialog
+          parent={dialog.parent}
+          busy={actions.createFolder.isPending}
+          error={dialogError}
+          onClose={() => setDialog(null)}
+          onSubmit={(folder) =>
+            actions.createFolder.mutate(folder, {
+              onSuccess: () => {
+                setDialog(null)
+                setSearchParams({ files: folder })
               },
               onError: setDialogError,
             })
           }
         />
       )}
+      {flow.dialogs}
     </div>
   )
 }

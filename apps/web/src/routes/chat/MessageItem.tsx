@@ -13,6 +13,7 @@ import { DocumentChip, WorkspaceChip } from './DocumentChips.tsx'
 import { PlanCard } from './PlanCard.tsx'
 import { RewindDialog } from './RewindDialog.tsx'
 import { SummaryCard } from './SummaryCard.tsx'
+import { SaveToKnowledge, saveCandidates } from '../knowledge/SaveToKnowledge.tsx'
 import { approvalsQuery } from './queries.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { MODEL_DIDNT_ANSWER, formatElapsed, isNotProcessedNotice, stalledFor } from './stall.ts'
@@ -181,6 +182,11 @@ const ICONS = {
       <path d="M13.2 2.2 V5 H10.4" />
     </Icon>
   ),
+  save: (
+    <Icon>
+      <path d="M3 2.5 H10.5 L13 5 V13.5 H3 Z M5.5 2.5 V6 H9.5 V2.5 M5.5 13.5 V9.5 H10.5 V13.5" />
+    </Icon>
+  ),
   delete: (
     <Icon>
       <path d="M3 4.5 H13 M6.5 4.5 V3 H9.5 V4.5 M4.5 4.5 L5 13.5 H11 L11.5 4.5" />
@@ -235,6 +241,7 @@ function MessageActions({
   const [retry, setRetry] = useState<'idle' | 'busy' | 'queued'>('idle')
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
+  const [saving, setSaving] = useState(false)
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
   useEffect(() => {
     const pending = timers.current
@@ -290,6 +297,15 @@ function MessageActions({
           onClick={() => void copy()}
         />
       )}
+      {saveCandidates(message, name).length > 0 && (
+        <Action
+          label="Save to Knowledge"
+          name={`Save message from ${name} to Knowledge`}
+          icon="save"
+          title="Keep its attachments or reply in Knowledge"
+          onClick={() => setSaving(true)}
+        />
+      )}
       {!you && !imported && (
         <Action
           label={retry === 'queued' ? 'Retrying' : 'Retry'}
@@ -322,6 +338,9 @@ function MessageActions({
           onDone={() => setConfirming(false)}
           onClose={() => setConfirming(false)}
         />
+      )}
+      {saving && (
+        <SaveToKnowledge message={message} authorName={name} onClose={() => setSaving(false)} />
       )}
       {copied && (
         <span className="chat-sr-only" role="status">
@@ -409,6 +428,7 @@ export function MessageItem({
   agents,
   readOnly = false,
   importedLabel,
+  versionControl,
 }: {
   message: Message
   agents: AgentSummary[]
@@ -416,6 +436,8 @@ export function MessageItem({
   readOnly?: boolean
   /** Where an imported copy came from ("Telegram"); such messages cannot be edited or retried. */
   importedLabel?: string | undefined
+  /** The `‹ 2 / 3 ›` control of an edited message (PLAN 5.35), shown in the action row. */
+  versionControl?: ReactNode
 }) {
   const imported = message.id.startsWith('import:')
   const author = message.author
@@ -424,6 +446,10 @@ export function MessageItem({
   const you = author.kind === 'you'
   const name = you ? 'You' : (agent?.name ?? (author.kind === 'agent' ? author.agentId : 'Agent'))
   const [expansion, setExpansion] = useState<Expansion>({ open: false, version: 0 })
+  const showActions =
+    !message.streaming &&
+    !message.id.startsWith('pending-') &&
+    !message.parts.some((part) => part.kind === 'summary')
   const cards = message.parts.filter((part) => part.kind === 'tool').length
   return (
     <article
@@ -495,12 +521,14 @@ export function MessageItem({
             see the new version
           </button>
         )}
-        {!readOnly &&
-          !message.streaming &&
-          !message.id.startsWith('pending-') &&
-          !message.parts.some((part) => part.kind === 'summary') && (
-            <MessageActions message={message} name={name} agents={agents} imported={imported} />
-          )}
+        {(versionControl || (!readOnly && showActions)) && (
+          <div className="chat-message-foot">
+            {versionControl}
+            {!readOnly && showActions && (
+              <MessageActions message={message} name={name} agents={agents} imported={imported} />
+            )}
+          </div>
+        )}
       </div>
     </article>
   )

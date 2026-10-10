@@ -1,4 +1,5 @@
 import { AgentUsage } from './AgentUsage.tsx'
+import { formatBytes } from './knowledge-files.ts'
 import { knowledgeFailure, useKnowledgeActions, useKnowledgeInfo } from './knowledge-queries.ts'
 
 export function KnowledgeSection() {
@@ -9,7 +10,8 @@ export function KnowledgeSection() {
       <div>
         <h2 id="settings-knowledge">Knowledge</h2>
         <p className="settings-muted-strong">
-          The shared vault of Markdown notes your agents and you can read and write.
+          The shared vault of Markdown notes and uploaded documents that your agents and you can
+          read.
         </p>
       </div>
       {info.isPending && <p role="status">Loading…</p>}
@@ -26,6 +28,13 @@ export function KnowledgeSection() {
             <div>
               <dt>Notes</dt>
               <dd>{info.data.notes}</dd>
+            </div>
+            <div>
+              <dt>Files</dt>
+              <dd>
+                {info.data.documents} {info.data.documents === 1 ? 'file' : 'files'},{' '}
+                {formatBytes(info.data.documentBytes)} (PDF, DOCX, CSV, images and other uploads)
+              </dd>
             </div>
             <div>
               <dt>Git</dt>

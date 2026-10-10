@@ -2,6 +2,7 @@ import type { Room, RoomProject } from '@score/contract'
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { parseTagInput, patchRoom, regenerateSummary } from './conversation-api.ts'
 import { baseName } from './room-groups.ts'
+import { setShowDeleted, useShowDeleted } from './deleted-toggle.ts'
 
 type Panel = 'main' | 'project' | 'tags' | 'summary'
 
@@ -26,6 +27,7 @@ export function RoomMenu({
   const button = useRef<HTMLButtonElement>(null)
   const menuId = useId()
   const label = baseName(room.name)
+  const showDeleted = useShowDeleted(room.id)
   const summary = room.autoSummary ?? { enabled: false, thresholdTokens: 12000 }
 
   useEffect(() => {
@@ -56,7 +58,11 @@ export function RoomMenu({
       return
     }
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
-    const items = [...(root.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+    const items = [
+      ...(root.current?.querySelectorAll<HTMLElement>(
+        '[role="menuitem"], [role="menuitemcheckbox"]',
+      ) ?? []),
+    ]
     if (!items.length) return
     event.preventDefault()
     const at = items.indexOf(document.activeElement as HTMLElement)
@@ -115,6 +121,17 @@ export function RoomMenu({
               </button>
               <button type="button" role="menuitem" onClick={() => setPanel('summary')}>
                 Summaries…
+              </button>
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={showDeleted}
+                onClick={() => {
+                  setShowDeleted(room.id, !showDeleted)
+                  close()
+                }}
+              >
+                {showDeleted ? 'Hide deleted messages' : 'Show deleted messages'}
               </button>
               <a
                 role="menuitem"

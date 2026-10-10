@@ -1,6 +1,7 @@
 import { useMemo, useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router'
 import type { KnowledgeTree as Tree } from '@score/contract'
+import { TYPE_LABEL } from './knowledge-files.ts'
 import { buildTree, folderOf, noteUrl, type TreeNode } from './knowledge-paths.ts'
 
 type Row = { node: TreeNode; depth: number }
@@ -18,7 +19,17 @@ function ancestors(path: string): string[] {
 }
 
 /** An ARIA tree with roving focus: arrows move, Right/Left open and close folders, Enter opens a note. */
-export function KnowledgeTree({ tree, current }: { tree: Tree; current: string | null }) {
+export function KnowledgeTree({
+  tree,
+  current,
+  onDropFiles,
+}: {
+  tree: Tree
+  current: string | null
+  /** Files dropped on a folder row (or on empty space, folder ''). */
+  onDropFiles?: (files: File[], folder: string) => void
+}) {
+  const [dropTarget, setDropTarget] = useState<string | null>(null)
   const navigate = useNavigate()
   const roots = useMemo(() => buildTree(tree), [tree])
   const [closed, setClosed] = useState<Set<string>>(new Set())
@@ -26,6 +37,8 @@ export function KnowledgeTree({ tree, current }: { tree: Tree; current: string |
   const open = useMemo(() => {
     const all = new Set(tree.folders)
     for (const note of tree.notes) for (const folder of ancestors(note.path)) all.add(folder)
+    for (const document of tree.documents)
+      for (const folder of ancestors(document.path)) all.add(folder)
     for (const path of closed) all.delete(path)
     // The open note's folders always show it.
     if (current) for (const folder of ancestors(current)) all.add(folder)
@@ -72,7 +85,9 @@ export function KnowledgeTree({ tree, current }: { tree: Tree; current: string |
   }
 
   if (visible.length === 0)
-    return <p className="kn-muted">No notes yet. Press Ctrl+N to write one.</p>
+    return (
+      <p className="kn-muted">No notes or files yet. Press Ctrl+N to write one, or upload files.</p>
+    )
   return (
     <ul role="tree" aria-label="Notes" className="kn-tree">
       {visible.map((row, index) => {
@@ -86,8 +101,25 @@ export function KnowledgeTree({ tree, current }: { tree: Tree; current: string |
             data-kn-path={node.path}
             aria-level={depth + 1}
             aria-expanded={node.kind === 'folder' ? isOpen : undefined}
-            aria-selected={node.kind === 'note' ? node.path === current : undefined}
-            className={`kn-tree-row${node.path === current ? ' is-current' : ''}`}
+            aria-selected={node.kind !== 'folder' ? node.path === current : undefined}
+            className={`kn-tree-row${node.path === current ? ' is-current' : ''}${dropTarget === node.path ? ' is-drop' : ''}`}
+            onDragOver={(event) => {
+              if (!onDropFiles || !event.dataTransfer.types.includes('Files')) return
+              event.preventDefault()
+              event.stopPropagation()
+              setDropTarget(node.kind === 'folder' ? node.path : folderOf(node.path))
+            }}
+            onDragLeave={() => setDropTarget(null)}
+            onDrop={(event) => {
+              if (!onDropFiles || !event.dataTransfer.types.includes('Files')) return
+              event.preventDefault()
+              event.stopPropagation()
+              setDropTarget(null)
+              onDropFiles(
+                [...event.dataTransfer.files],
+                node.kind === 'folder' ? node.path : folderOf(node.path),
+              )
+            }}
             style={{ paddingLeft: 10 + depth * 16 }}
             onFocus={() => setFocused(node.path)}
             onKeyDown={(event) => onKeyDown(event, row, index)}
@@ -100,6 +132,9 @@ export function KnowledgeTree({ tree, current }: { tree: Tree; current: string |
               {node.kind === 'folder' ? (isOpen ? '▾' : '▸') : '•'}
             </span>
             {node.name}
+            {node.kind === 'document' && (
+              <span className="kn-type-badge">{TYPE_LABEL[node.document.type]}</span>
+            )}
           </li>
         )
       })}

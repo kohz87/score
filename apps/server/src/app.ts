@@ -243,7 +243,7 @@ export function buildApp({
   registerAgentTabRoutes(app, port, ingest, db, clock)
   registerWorkspaceRoutes(app, port, config, undefined, workspaces)
   if (knowledge) {
-    registerKnowledgeRoutes(app, knowledge)
+    registerKnowledgeRoutes(app, knowledge, mediaStore)
     if (db) registerKnowledgeAgentRoutes(app, new KnowledgeAgentApi(knowledge, db, clock))
   }
   if (db)
