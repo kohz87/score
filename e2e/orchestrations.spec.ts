@@ -75,7 +75,12 @@ async function openLive(page: Page) {
   // The room panel is collapsed unless something needs the person.
   const toggle = page.getByRole('button', { name: /Orchestration · / }).first()
   await expect(toggle).toBeVisible()
-  if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click()
+  // The panel also opens itself when something needs the person, so a click decided on a stale reading can collapse it:
+  // read, click, and check again until it is open.
+  await expect(async () => {
+    if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true', { timeout: 2000 })
+  }).toPass({ timeout: 20_000 })
   await page.getByRole('link', { name: 'Open the live diagram' }).first().click()
   await expect(page.locator('[data-node="lead"]')).toBeVisible()
 }
