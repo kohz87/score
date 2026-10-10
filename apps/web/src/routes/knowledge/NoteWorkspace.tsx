@@ -6,7 +6,7 @@ import type {
 } from '@score/contract'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { ApiError } from '../../data/api.ts'
 import { MarkdownEditor } from './MarkdownEditor.tsx'
 import { NotePanels, AuthorLabel, DiffView } from './NotePanels.tsx'
@@ -24,6 +24,8 @@ import {
   useNote,
 } from './knowledge-queries.ts'
 import { noteUrl, timeAgo } from './knowledge-paths.ts'
+import { readMode, useWide, writeMode, type NoteMode } from './note-mode.ts'
+import { resolveTarget } from './wikilinks.ts'
 
 const AUTOSAVE_MS = 1000
 
@@ -125,7 +127,16 @@ function Pane({
   useEffect(() => {
     orphanDrafts.delete(path)
   }, [path])
-  const [mode, setMode] = useState<'edit' | 'preview'>('edit')
+  const [stored, setStored] = useState<NoteMode>(readMode)
+  const wide = useWide()
+  // A remembered Split on a narrow screen shows the editor alone, and comes back when the screen is wide again.
+  const mode: NoteMode = stored === 'split' && !wide ? 'edit' : stored
+  const setMode = (next: NoteMode) => {
+    setStored(next)
+    writeMode(next)
+  }
+  const navigate = useNavigate()
+  const split = useRef<HTMLDivElement>(null)
   const [draft, setDraft] = useState(orphan?.body ?? session.body)
   const [status, setStatus] = useState<Status>(orphan ? 'dirty' : 'saved')
   const [changedElsewhere, setChangedElsewhere] = useState(false)
@@ -309,6 +320,40 @@ function Pane({
     }
   }
 
+  function openWikilink(target: string) {
+    const found = resolveTarget(target, note.links, notesRef.current)
+    if (found) navigate(noteUrl(found))
+    else onCreateLink(target)
+  }
+
+  // Split view: the two panes scroll together, by proportion (the rendered view is taller than the source).
+  useEffect(() => {
+    if (mode !== 'split') return
+    const root = split.current
+    if (!root) return
+    const left = root.querySelector<HTMLElement>('.cm-scroller')
+    const right = root.querySelector<HTMLElement>('.kn-preview')
+    if (!left || !right) return
+    let source: HTMLElement | null = null
+    const follow = (from: HTMLElement, to: HTMLElement) => () => {
+      if (source && source !== from) return
+      source = from
+      const room = from.scrollHeight - from.clientHeight
+      to.scrollTop = room > 0 ? (from.scrollTop / room) * (to.scrollHeight - to.clientHeight) : 0
+      requestAnimationFrame(() => {
+        source = null
+      })
+    }
+    const a = follow(left, right)
+    const b = follow(right, left)
+    left.addEventListener('scroll', a)
+    right.addEventListener('scroll', b)
+    return () => {
+      left.removeEventListener('scroll', a)
+      right.removeEventListener('scroll', b)
+    }
+  }, [mode])
+
   // Agent edits: "edited by builder · 2 min ago" with Undo (= restore the commit before the agent's).
   const agentAuthor =
     note.lastAuthor && typeof note.lastAuthor === 'object' ? note.lastAuthor : null
@@ -326,9 +371,6 @@ function Pane({
           </div>
           <div className="kn-actions">
             <div role="group" aria-label="View" className="kn-toggle">
-              <button type="button" aria-pressed={mode === 'edit'} onClick={() => setMode('edit')}>
-                Edit
-              </button>
               <button
                 type="button"
                 aria-pressed={mode === 'preview'}
@@ -336,6 +378,18 @@ function Pane({
               >
                 Preview
               </button>
+              <button type="button" aria-pressed={mode === 'edit'} onClick={() => setMode('edit')}>
+                Edit
+              </button>
+              {wide && (
+                <button
+                  type="button"
+                  aria-pressed={mode === 'split'}
+                  onClick={() => setMode('split')}
+                >
+                  Split
+                </button>
+              )}
             </div>
             <button type="button" onClick={onMove}>
               Rename or move
@@ -454,17 +508,29 @@ function Pane({
           </div>
         )}
 
-        <div className="kn-edit-area">
-          {mode === 'edit' ? (
-            <MarkdownEditor
-              key={`${path}:${session.version}`}
-              initial={draft}
-              label={`Contents of ${path}`}
-              notes={() => notesRef.current}
-              onChange={onChange}
-            />
-          ) : (
-            <NotePreview body={draft} links={note.links} notes={notes} onCreate={onCreateLink} />
+        <div
+          ref={split}
+          className={mode === 'split' ? 'kn-split' : 'kn-edit-area'}
+          data-mode={mode}
+        >
+          {mode !== 'preview' && (
+            <div className={mode === 'split' ? 'kn-edit-area' : undefined}>
+              <MarkdownEditor
+                key={`${path}:${session.version}`}
+                initial={draft}
+                label={`Contents of ${path}`}
+                notes={() => notesRef.current}
+                onChange={onChange}
+                onOpenWikilink={openWikilink}
+                isMissing={(target) => resolveTarget(target, note.links, notes) === null}
+                refreshKey={`${notes.length}:${note.etag}`}
+              />
+            </div>
+          )}
+          {mode !== 'edit' && (
+            <div className={mode === 'split' ? 'kn-edit-area' : undefined}>
+              <NotePreview body={draft} links={note.links} notes={notes} onCreate={onCreateLink} />
+            </div>
           )}
         </div>
       </section>

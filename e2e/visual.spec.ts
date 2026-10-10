@@ -13,7 +13,7 @@ const destinations = [
   { name: 'journey', path: '/reports?tab=journey', ready: '.journey__row' },
   { name: 'popout', path: '/agents/builder/pop', ready: '.pop-chat textarea' },
   // Last: other tests in this file address destinations by index.
-  { name: 'knowledge', path: '/knowledge/projects/launch-plan.md', ready: '.cm-editor' },
+  { name: 'knowledge', path: '/knowledge/projects/launch-plan.md', ready: '.kn-preview' },
 ]
 
 test.use({ timezoneId: 'UTC', locale: 'en-GB' })
@@ -133,6 +133,40 @@ test('mobile Reports scrolls columns and retains readable chart type', async ({ 
   expect(scale).toBeGreaterThanOrEqual(1)
   await noPageOverflow(page)
 })
+
+// Knowledge editor modes (PLAN 6.5): rendered is the default and has the baselines above.
+for (const [mode, width, scheme] of [
+  ['edit', 1440, 'light'],
+  ['split', 1440, 'light'],
+  ['edit', 390, 'light'],
+  ['edit', 1440, 'dark'],
+  ['split', 1440, 'dark'],
+] as const) {
+  test(`knowledge ${mode} at ${width}px ${scheme}`, async ({ page }) => {
+    await page.addInitScript(
+      ([m, theme]) => {
+        window.localStorage.setItem('score.knowledge.mode', m)
+        if (theme === 'dark') window.localStorage.setItem('score.theme', 'dark')
+      },
+      [mode, scheme],
+    )
+    await page.setViewportSize({ width, height: 1100 })
+    await page.goto('/knowledge/projects/launch-plan.md')
+    await expect(page.locator('.cm-editor')).toBeVisible()
+    await expect(page.locator('.cm-lp-table table')).toBeVisible()
+    if (mode === 'split') await expect(page.locator('.kn-preview')).toBeVisible()
+    await page.evaluate(() => document.fonts.ready)
+    if (width === 390) await noPageOverflow(page)
+    await expect(page).toHaveScreenshot(
+      `knowledge-${mode}-${scheme === 'dark' ? 'dark-' : ''}${width}.png`,
+      {
+        fullPage: true,
+        animations: 'disabled',
+        maxDiffPixelRatio: 0.005,
+      },
+    )
+  })
+}
 
 // Dark theme (Settings › Look): same pages, same fixtures, theme stored in the browser.
 test.describe('dark theme', () => {
