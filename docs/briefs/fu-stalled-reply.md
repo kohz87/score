@@ -5,6 +5,7 @@
 retry status (see `docs/proposals/hermes-run-status-events.md`).
 
 **Do:**
+
 1. Server: track the last progress per streaming reply (delta, tool event, thinking, approval). Expose it in the message
    (e.g. `progressAt` on streaming agent messages, contract §6) or via a stream event; no polling of Hermes beyond what
    exists today.

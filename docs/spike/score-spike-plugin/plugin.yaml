@@ -1,6 +1,6 @@
 name: score-spike
 version: 0.0.1
-description: "Score spike (throwaway): logs hook payloads to ~/.score/spike-hooks.jsonl. Safe to delete."
+description: 'Score spike (throwaway): logs hook payloads to ~/.score/spike-hooks.jsonl. Safe to delete.'
 author: score
 hooks:
   - pre_tool_call

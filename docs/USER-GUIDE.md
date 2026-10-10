@@ -173,8 +173,8 @@ A navigation list on the left, one card per section. Settings for a single agent
 - **Connections.** **Tool servers** your agents can use (**Add a tool server** takes an address or command; sign-in
   and fix-up steps are shown as commands to run) and **Messaging** channels.
 - **Rules and approvals.** What agents may do alone, what they ask you first, and what they never do. Pick **How
-  "Ask me" works**: *Guardian first* (a guardian model reviews risky commands and asks you when unsure), *Always
-  ask me*, or *Never ask* (use with care). Then maintain three lists: **Go ahead** (kinds of commands allowed
+  "Ask me" works**: _Guardian first_ (a guardian model reviews risky commands and asks you when unsure), _Always
+  ask me_, or _Never ask_ (use with care). Then maintain three lists: **Go ahead** (kinds of commands allowed
   without asking), **Ask me**, and **Never** (commands that match some text are always refused). **Review
   changes** shows the difference and **Save for the whole team** applies it. Never rules are guardrails, not a
   security boundary: they match command text and can be bypassed by clever wording, so keep real secrets out of

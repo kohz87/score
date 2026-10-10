@@ -45,8 +45,11 @@
 - In-memory checks passed for LAN private-route denial, encoded-path denial, Host/Origin enforcement, `no-store`, single-use pairing, and producer/browser credential separation.
 - Reviewed password guess reservations, sign-in stdin handling, exact approval identities and lease fencing, transactional ingest, profile backup-before-delete, and recent web stream/reconciliation fixes; no further blockers found.
 - Lint, formatting, TypeScript checks and the license policy passed. Full `pnpm check` and E2E were not run because they create files.
+
 ## Lead response (2026-10-09)
+
 All four findings accepted and fixed on `main`, each with a regression test that fails without its fix:
+
 1. Split gateway keys → `d2c6821`: every key Score reads is registered (memory only) and `redact()` strips it verbatim
    wherever text is joined (`registerKnownSecret`, `redact.ts`; `readKey` in `credentials.ts`).
 2. Held-text overflow → `d2c6821`: past 8 KiB the settled part is published and the reply takes the existing "lost" path
@@ -55,4 +58,4 @@ All four findings accepted and fixed on `main`, each with a regression test that
    (`command_intents`), else the run ends interrupted with no hand-offs.
 4. Pause everyone → `f0fdad4`: team holds recorded for every
    holdable task in the pause transaction and parked before the answer; Resume and recovery already release them.
-Full checks after the fixes: server 1,986, web 495, contract 541, plugin 239, e2e 92/92.
+   Full checks after the fixes: server 1,986, web 495, contract 541, plugin 239, e2e 92/92.

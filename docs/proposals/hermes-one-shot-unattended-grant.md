@@ -4,11 +4,13 @@
 where to propose it (issue or PR on `NousResearch/hermes-agent`).
 
 ## Problem
+
 Unattended contexts (`chat -q` Kanban workers, cron, webhooks) deny dangerous commands instantly (`approvals.
 single_query_mode: deny`). An operator who sees the blocked command in another UI and wants to allow **exactly that
 command, once, in the next attempt** has only two options today: add the pattern to `command_allowlist` (profile-wide,
 permanent), or have a plugin add it to the in-memory permanent set around the call. The second can't be made safe from
 a plugin:
+
 - `_persist_choice` snapshots the **whole** permanent set into `command_allowlist` when anyone chooses "always", so a
   temporary entry can be persisted;
 - `_run_foreground` retries `env.execute()` up to three times beneath the guard, so "once" can mean four executions;
@@ -18,11 +20,12 @@ a plugin:
 - `tool_call_id` is not unique, so nothing identifies which call owns the grant.
 
 ## Proposal 1: opt-in one-shot grants
+
 **Opt-in, off by default.** Nothing changes for installations that don't enable it:
 
 ```yaml
 approvals:
-  unattended_grants: false   # default; true enables stage/consume below for this profile
+  unattended_grants: false # default; true enables stage/consume below for this profile
 ```
 
 With the setting off, `stage_unattended_grant` refuses (raises or returns `None`), and `_unattended_deny` behaves
@@ -43,12 +46,13 @@ def revoke_unattended_grant(grant_id: str) -> bool: ...
   if the terminal tool then retries (the retry loop must not re-consult it, and a grant-allowed execution shouldn't
   retry after a possible launch).
 - Expires; never inherited across `fork()`; exposed to observers via a hook such as `on_unattended_grant_consumed(
-  grant_id, task_id, run_id, tool_call_id, outcome)` so the UI can attribute the execution.
+grant_id, task_id, run_id, tool_call_id, outcome)` so the UI can attribute the execution.
 - Delivery from outside the worker process: a Kanban-level mechanism (e.g. a `task_grants` row created by
   `hermes kanban grant --once --command-sha256 … <task>`, read by the next worker at start), so the operator's tool
   never needs to run code inside the worker.
 
 ## Proposal 2: the request id in approval hooks
+
 `pre_approval_request` / `post_approval_response` don't carry the gateway queue entry's `request_id`
 (`tools/approval_gateway_wait.py`: the payload is built from `approval_data` without it). An observer that wants to
 answer through `resolve_gateway_approval(..., request_id=...)` has to guess the id from `list_gateway_approvals`, which is
@@ -65,6 +69,7 @@ Score would then report exact targets for every gateway prompt and drop its "exa
 (ARCHITECTURE D4.2, known limit).
 
 ## What Score would do with it
+
 "Approve once" on a blocked Kanban card → `hermes kanban grant --once …` + `hermes kanban unblock --reason …`;
 the next worker consumes the grant inside Hermes's own guard (only where the profile opted in). Until then Score
 shows these cards view-only, with Deny and Unblock-with-a-note (ARCHITECTURE D4.3). With proposal 2, gateway approvals

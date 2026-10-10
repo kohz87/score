@@ -28,6 +28,8 @@ export const ORCH_LIMITS = {
   maxAllowedAgents: 8,
   /** Per run: steps × this + lead turns × this + `controlReserveBytes` for Stop and obligation records. */
   storagePerItemBytes: 64 * 1024,
+  /** Per item: receipts, transitions, gates, associations and replay records the item can cause. */
+  recordsPerItemBytes: 8 * 1024,
   controlReserveBytes: 256 * 1024,
 } as const
 
@@ -484,6 +486,8 @@ export const OrchAssignArgsSchema = z.object({
   instruction: bytes(ORCH_LIMITS.instructionBytes),
   after: z.array(z.string().min(1).max(64)).max(ORCH_LIMITS.maxSteps).optional(),
   replaces: z.string().min(1).max(64).optional(),
+  /** Under `lead-asks`: create the approval gate in this same call, so the step cannot start before the answer. */
+  needsApproval: z.boolean().optional(),
 })
 export const OrchCancelArgsSchema = z.object({ ...toolBase, stepId: z.string().min(1).max(64) })
 export const OrchAskArgsSchema = z.object({

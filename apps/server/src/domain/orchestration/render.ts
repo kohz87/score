@@ -61,7 +61,7 @@ export function renderLeadInput(args: LeadInputArgs): string {
     `Capability (pass it as the "capability" argument of every orch.* call this turn; keep it private, never put it in an instruction or note): ${ORC_CAPABILITY_PLACEHOLDER}`,
     'Every orch.* call also needs a "commandId" you choose (1-64 characters of letters, digits and . _ : -), unique within this turn. To repeat a call whose reply you never saw, send it again with the SAME commandId and the same arguments, or ask orch.receipt with that commandId.',
     '',
-    'Tools: orch.plan(entries), orch.assign(agent, instruction, after?, replaces?), orch.requestApproval(stepId) (only under the lead-asks policy), orch.cancel(stepId), orch.ask(question), orch.note(text), orch.finish(outcome, summary), orch.receipt(commandId).',
+    'Tools: orch.plan(entries), orch.assign(agent, instruction, after?, replaces?, needsApproval?) (needsApproval only under the lead-asks policy, in the same call; it cannot be added later), orch.cancel(stepId), orch.ask(question), orch.note(text), orch.finish(outcome, summary), orch.receipt(commandId).',
     `A retry or replacement of a failed or cancelled step must say replaces: <stepId>. A step starts only when every step in "after" has succeeded. At most ${o.max_concurrent_steps} steps run at once.`,
     DATA_NOTICE,
     '',

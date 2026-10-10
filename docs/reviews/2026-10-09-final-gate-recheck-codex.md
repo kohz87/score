@@ -39,13 +39,15 @@
 **Fix:** Clear team-owned brief pause flags atomically with the resume intent, or replay unfinished brief resumes during startup recovery.
 
 All reproductions used synthetic data and in-memory databases. No files were modified.
+
 ## Lead response (2026-10-09)
+
 - **1 (keys before ingestion):** fixed. `registerStoredKeys` runs when the live adapter is built, before the bridge
   listens or the first task poll; new keys are registered when created. Test in `credentials.test.ts`.
 - **2:** closed (confirmed).
 - **3 (repeated input):** Hermes rows carry no run identity (checked `messages` schema and the runs API: no
   platform/message id is set for `/v1/runs`), so exact identity is not available. Recovery now requires the exact
-  input *and* that Hermes stored it within 120 s of the run start; anything else ends interrupted without hand-offs.
+  input _and_ that Hermes stored it within 120 s of the run start; anything else ends interrupted without hand-offs.
   The multipart "extra text part" path is gone. Residual: a by-hand turn with identical text inside 120 s of a run whose
   own message Hermes never stored. Accepted as negligible; a true fix needs Hermes to tag the turn (noted for upstream).
 - **4:** closed (confirmed).

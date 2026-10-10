@@ -97,7 +97,7 @@ const RETENTION_MS = 90 * 24 * 60 * 60 * 1000
 export interface OrchestratorOptions {
   db: ScoreDb
   ingest: Ingest
-  port: Pick<HermesPort, 'mode' | 'startRun' | 'stopRun' | 'listAgents'>
+  port: Pick<HermesPort, 'mode' | 'startRun' | 'stopRun' | 'listAgents' | 'mcpTools'>
   access: McpAccessStore
   fence: GlobalFenceStore
   clock?: () => number
@@ -435,13 +435,37 @@ export class Orchestrator {
         ? 'There is room for another run'
         : 'Orchestration storage is full; remove old runs first',
     )
-    add(
-      'tool_readiness',
-      fake ? 'ok' : 'unknown',
-      fake
-        ? 'Scripted lead'
-        : 'Hermes loads MCP tools per session; Score cannot see whether the lead has the orch.* tools. Each lead turn is a new session, so they appear once the profile has the Score MCP entry.',
-    )
+    // Hermes caches the MCP tool list per connection: the lead's serving process must list every orch.* tool.
+    const required = [
+      'orch.plan',
+      'orch.assign',
+      'orch.cancel',
+      'orch.ask',
+      'orch.requestApproval',
+      'orch.note',
+      'orch.finish',
+      'orch.receipt',
+    ]
+    const listed = leadProblem
+      ? null
+      : ((await port.mcpTools?.(leadAgentId).catch(() => null)) ?? null)
+    if (listed) {
+      const missing = required.filter((name) => !listed.includes(name))
+      add(
+        'tool_readiness',
+        missing.length ? 'fail' : 'ok',
+        missing.length
+          ? `The lead's Hermes does not list ${missing.join(', ')}. Reload MCP (/reload-mcp in that profile, or restart its gateway), then try again.`
+          : 'The lead sees every orch.* tool',
+      )
+    } else
+      add(
+        'tool_readiness',
+        fake ? 'ok' : 'unknown',
+        fake
+          ? 'Scripted lead'
+          : 'Score cannot see which MCP tools the lead has. Hermes caches the tool list per connection, so after Score is upgraded reload MCP (/reload-mcp, or restart the gateway) before starting.',
+      )
     return {
       ok: checks.every((check) => check.status !== 'fail'),
       checks,
@@ -1081,7 +1105,11 @@ export class Orchestrator {
     const journaled = ctx.journal.readOwn()
     if (
       journaled.ok &&
-      journaled.entries.some((e) => e.kind === 'send_started' && e.attemptId === attempt.id)
+      journaled.entries.some(
+        (e) =>
+          (e.kind === 'send_started' || (e.kind === 'tombstone' && e.of === 'send_started')) &&
+          e.attemptId === attempt.id,
+      )
     ) {
       applyJournalEvidence(sqlite, journaled.entries, now)
       touch(ctx, o.id)
@@ -1516,6 +1544,14 @@ export class Orchestrator {
           attempt !== undefined && (attempt.state === 'terminated' || attempt.state === 'refused')
         )
       }
+      if (entry.kind === 'transition') {
+        const o = readOrch(sqlite, entry.orchestrationId)
+        return (
+          o !== undefined &&
+          isTerminalStatus(o.status) &&
+          attemptsOf(sqlite, o.id).every((x) => x.state === 'terminated' || x.state === 'refused')
+        )
+      }
       if (entry.kind === 'stop_fence') {
         // Only fully reconciled work lets a fence go: every attempt it covers is terminated (evidence) or never sent.
         const done = (a: AttemptRow) => a.state === 'terminated' || a.state === 'refused'
@@ -1534,6 +1570,8 @@ export class Orchestrator {
     this.db.tx((tx) => {
       for (const o of listOrchs(tx)) {
         if (!isTerminalStatus(o.status) || (o.ended_at ?? o.updated_at) >= cutoff) continue
+        if (attemptsOf(tx, o.id).some((x) => x.state !== 'terminated' && x.state !== 'refused'))
+          continue
         if (
           attemptsOf(tx, o.id).some(
             (a) =>
