@@ -80,6 +80,23 @@ test('a journaled run handle is attached to the restored attempt so its Stop can
   expect(row.run_id).toBe(lead.runId)
 })
 
+test('an unreadable journal at the send barrier fences instead of sending', async () => {
+  h = await harness()
+  const hold = holdStartRun()
+  const real = h.journal.readOwn.bind(h.journal)
+  // Only the send barrier's read fails, so the run can be created (preflight reads the journal too).
+  vi.spyOn(h.journal, 'readOwn').mockImplementation(() =>
+    new Error().stack?.includes('beginSend')
+      ? { ok: false, reason: 'unreadable: EIO', bytes: 0 }
+      : real(),
+  )
+  const id = await h.create()
+  await h.settle(2000)
+  expect(h.fence.view().fenced).toBe(true)
+  expect(hold.state.calls).toBe(0)
+  expect(attemptOf(h, id, 'lead').every((a) => a.state === 'created')).toBe(true)
+})
+
 test('a journal that cannot be written still leaves the fence in the database (fail closed)', async () => {
   h = await harness()
   vi.spyOn(h.journal, 'append').mockImplementation(() => {

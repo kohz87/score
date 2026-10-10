@@ -1103,8 +1103,9 @@ export class Orchestrator {
     const o = requireOrch(sqlite, attempt.orchestration_id)
     // The journal outlives the database: if it says this attempt was sent, it is never sent again.
     const journaled = ctx.journal.readOwn()
+    // Without a readable journal we can't prove this attempt was never sent: fail closed (the caller fences).
+    if (!journaled.ok) throw new Error(`Execution journal is unreadable: ${journaled.reason}`)
     if (
-      journaled.ok &&
       journaled.entries.some(
         (e) =>
           (e.kind === 'send_started' || (e.kind === 'tombstone' && e.of === 'send_started')) &&
