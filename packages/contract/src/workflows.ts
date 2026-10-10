@@ -471,9 +471,11 @@ export type NodeView = z.infer<typeof NodeViewSchema>
 
 export const TokenViewSchema = z.object({
   id: z.string().min(1),
-  edgeId: NodeIdSchema,
+  /** An edge id, or `start:<node>` for the token a start node gets when the run begins. */
+  edgeId: z.string().min(1).max(80),
   kind: TokenKindSchema,
-  producedBy: NodeIdSchema,
+  /** The producing node, or `__start`. */
+  producedBy: z.string().min(1).max(40),
   /** Logical attempt of the producer (0 for local nodes). */
   producedAttempt: z.int().nonnegative(),
   consumedBy: NodeIdSchema.nullable(),

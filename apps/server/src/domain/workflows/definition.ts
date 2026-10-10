@@ -246,7 +246,7 @@ export function validateDefinition(def: WorkflowDefinition): ValidationResult {
     (id) => (idx.out.get(id) ?? []).map((e) => e.to),
   )
   for (const node of def.nodes)
-    if (!fromRoots.has(node.id) && acyclic)
+    if (!fromRoots.has(node.id))
       add('unreachable_node', `${node.id} cannot be reached from a start`, { nodeId: node.id })
   if (!def.nodes.some((n) => n.kind === 'end')) add('no_end', 'The workflow has no end node')
 

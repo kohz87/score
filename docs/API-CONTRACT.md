@@ -1715,7 +1715,7 @@ routes resolved). The inputs it consumed — including routed failures and templ
 | join   | every input resolved            | token if ≥ 1 input token and no unrouted failure  | —                                                         | `skip` if every input was skipped           |
 | end    | any token                       | records an end token only                         | —                                                         | —                                           |
 
-Token kinds: `ok | failed | rejected | skip | branch`. Roots (no incoming edge) each get one token at start.
+Token kinds: `ok | failed | rejected | skip | branch`. Roots (no incoming edge) each get one token at start (edge id `start:<node>`, produced by `__start`).
 
 **Finish is strict.** Reaching an `end` records its token; the planner issues Finish only when the graph is terminal: no node
 in `waiting|ready|gate_open|running|unresolved`, no queued or admitted step, no planner command without a receipt, and every
