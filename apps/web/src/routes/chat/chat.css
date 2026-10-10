@@ -220,6 +220,10 @@
 .chat-message--you .chat-message-meta {
   justify-content: flex-end;
 }
+.chat-message--you .chat-message-foot {
+  /* Your own message's footer sits under the right-aligned bubble, version arrows outermost (as in ChatGPT). */
+  flex-direction: row-reverse;
+}
 .chat-message--you .chat-text {
   background: var(--ink);
   color: var(--card);
