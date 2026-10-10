@@ -2416,23 +2416,21 @@ export class Orchestrator {
     for (const attempt of tx
       .prepare('SELECT id, message_id FROM orc_attempts WHERE orchestration_id = ?')
       .all(o.id) as { id: string; message_id: string }[]) {
-      // A reply that something outside the run now hangs on (a later room summary) stays, with its references: it is
-      // ordinary room data from here on.
-      const referenced = tx
-        .prepare(
-          `SELECT 1 FROM message_runs WHERE (chain_id = ?1 OR parent_message_id = ?1)
-             AND (orchestration_attempt_id IS NULL OR orchestration_attempt_id NOT IN (SELECT id FROM orc_attempts WHERE orchestration_id = ?2)) LIMIT 1`,
-        )
-        .get(attempt.message_id, o.id)
-      if (referenced === undefined)
-        tx.prepare('DELETE FROM messages WHERE room_id = ? AND id = ?').run(
-          o.room_id,
-          attempt.message_id,
-        )
-      tx.prepare("DELETE FROM messages WHERE room_id = ? AND id LIKE ? ESCAPE '\\'").run(
-        o.room_id,
-        `orc-note:${attempt.id.replace(/[\\%_]/g, '\\$&')}:%`,
+      // A reply or note that something outside the run now hangs on (a later room summary) stays, with its references:
+      // it is ordinary room data from here on, and deleting it would break the foreign key and block maintenance.
+      const referenced = tx.prepare(
+        `SELECT 1 FROM message_runs WHERE (chain_id = ?1 OR parent_message_id = ?1)
+           AND (orchestration_attempt_id IS NULL OR orchestration_attempt_id NOT IN (SELECT id FROM orc_attempts WHERE orchestration_id = ?2)) LIMIT 1`,
       )
+      const drop = (messageId: string) => {
+        if (referenced.get(messageId, o.id) === undefined)
+          tx.prepare('DELETE FROM messages WHERE room_id = ? AND id = ?').run(o.room_id, messageId)
+      }
+      drop(attempt.message_id)
+      const notes = tx
+        .prepare("SELECT id FROM messages WHERE room_id = ? AND id LIKE ? ESCAPE '\\'")
+        .all(o.room_id, `orc-note:${attempt.id.replace(/[\\%_]/g, '\\$&')}:%`) as { id: string }[]
+      for (const note of notes) drop(note.id)
     }
   }
 

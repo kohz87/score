@@ -51,5 +51,9 @@ for (const line of lines) {
   if (directive._sleep) await sleep(directive._sleep)
   else if (directive._hang) await sleep(600_000)
   else if (directive._exit !== undefined) process.exit(directive._exit)
-  else process.stdout.write(`${line}\n`)
+  // `{{PAD:n}}` stands for n filler characters, so a fixture can carry a very large tool result.
+  else
+    process.stdout.write(
+      `${line.replace(/\{\{PAD:(\d+)\}\}/g, (_, count) => 'v'.repeat(Number(count)))}\n`,
+    )
 }
