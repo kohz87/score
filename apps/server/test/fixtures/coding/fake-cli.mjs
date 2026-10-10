@@ -2,7 +2,7 @@
 // Stand-in for the coding CLIs in tests and fake mode (selected by SCORE_CODING_FAKE_CLI, honoured only in fake mode
 // and under test). It never talks to a model: it prints a hand-made fixture selected by `[fixture:NAME]` in the prompt.
 // Usage: node fake-cli.mjs <claude-code|codex|opencode> <the real CLI's arguments…>
-import { appendFileSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -37,9 +37,12 @@ if (log)
   )
 
 const name = /\[fixture:([a-z-]+)\]/.exec(prompt)?.[1] ?? 'basic'
-const lines = readFileSync(join(here, `${fixtureNames[runtime]}-${name}.jsonl`), 'utf8')
-  .split('\n')
-  .filter(Boolean)
+// A resumed turn may have its own fixture (`<name>-resumed`): lets tests make a resume fail.
+const resumed = args.includes('--resume') || args.includes('resume')
+const base = join(here, `${fixtureNames[runtime]}-${name}`)
+const file =
+  resumed && existsSync(`${base}-resumed.jsonl`) ? `${base}-resumed.jsonl` : `${base}.jsonl`
+const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean)
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 process.on('SIGINT', () => process.exit(130))
 for (const line of lines) {

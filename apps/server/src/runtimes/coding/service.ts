@@ -250,6 +250,7 @@ export class CodingRuntime {
     model?: string
   }): Promise<{ runId: string }> {
     const { db, ingest } = this.deps
+    this.assertOpen()
     const agent = getCodingAgent(db.sqlite, req.agentId)
     if (!agent) throw new HttpError(404, 'not_found', 'Unknown coding agent')
     assertAgentAdmits(db.sqlite, agent.id)
@@ -328,11 +329,29 @@ export class CodingRuntime {
       })
       return { runId }
     }
+    // Closed while the turn was being admitted: end it visibly, never spawn it.
+    if (this.closed) {
+      await this.finish(newTranslation(runId, agent.id, room), {
+        status: 'interrupted',
+        error: TERMINAL_NOTE.interrupted,
+        costKind: 'unknown',
+      })
+      throw new HttpError(503, 'shutting_down', 'Score is shutting down')
+    }
     const entry: ActiveRun = { agentId: agent.id, runId, turnId: req.turnId }
     this.active.set(runId, entry)
     // One turn per coding agent at a time: later turns wait their turn (the run shows as queued).
     const previous = this.queues.get(agent.id) ?? Promise.resolve()
-    const mine = previous.then(() => this.execute(entry, agent, payload.input, room))
+    const mine = previous.then(() =>
+      this.execute(entry, agent, payload.input, room).catch((error: unknown) =>
+        // Preparing the turn failed (settings folder, spawn setup…): end the run and the reply, never leave it queued.
+        this.finish(newTranslation(runId, agent.id, room), {
+          status: 'failed',
+          error: `Could not prepare the run: ${oneLine(error instanceof Error ? error.message : String(error), 200)}`,
+          costKind: 'unknown',
+        }).then(() => this.deps.onError?.(error)),
+      ),
+    )
     const tail = mine.catch((error: unknown) => this.deps.onError?.(error))
     this.queues.set(agent.id, tail)
     void tail.finally(() => {
@@ -340,6 +359,10 @@ export class CodingRuntime {
       if (this.queues.get(agent.id) === tail) this.queues.delete(agent.id)
     })
     return { runId }
+  }
+
+  private assertOpen(): void {
+    if (this.closed) throw new HttpError(503, 'shutting_down', 'Score is shutting down')
   }
 
   async stopRun(req: { agentId: string; runId: string }): Promise<void> {
@@ -409,8 +432,9 @@ export class CodingRuntime {
       chmodSync(settingsPath, 0o600)
     }
     let resume = room ? cliSessionFor(db.sqlite, room, agent.id) : null
+    // Event numbers keep counting across attempts: they name the observations, and a fallback's must not collide.
+    let index = 0
     for (let attempt = 0; attempt < 2; attempt++) {
-      let index = 0
       let result: Extract<CodingEvent, { kind: 'result' }> | undefined
       let text = ''
       let worked = false

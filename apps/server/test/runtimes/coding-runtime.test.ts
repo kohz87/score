@@ -5,7 +5,7 @@ import {
   type CodingAgent,
   type Message,
 } from '@score/contract'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -717,4 +717,66 @@ test('recovery never signals a reused pid: a different start time is left alone 
   expect(
     await killRecordedGroup({ pid: process.pid, pgid: process.pid, startTime: '1' }, 100),
   ).toBe(false)
+})
+
+test('shutdown closes admission: nothing is admitted or spawned after close() (review: medium 5)', async () => {
+  await addAgent()
+  // Racing: the turn is mid-admission when the runtime closes.
+  const racing = coding.startRun({ agentId: 'coder', input: 'go', turnId: 'turn-race' })
+  const closing = coding.close()
+  await racing.catch(() => undefined)
+  await closing
+  await ingest.drain()
+  const rows = runs()
+  expect(rows.every((row) => !['queued', 'running'].includes(row.status))).toBe(true)
+  expect(() => readFileSync(log, 'utf8')).toThrow()
+  // And afterwards.
+  await expect(
+    coding.startRun({ agentId: 'coder', input: 'go', turnId: 'turn-late' }),
+  ).rejects.toMatchObject({ status: 503 })
+})
+
+test('a failure while preparing a turn fails the run and the reply instead of leaving it queued (review: medium 6)', async () => {
+  await addAgent()
+  await makeRoom()
+  // The per-agent settings folder cannot be made: a file sits where it must go.
+  writeFileSync(join(home, 'coding'), 'in the way')
+  await say('@coder go')
+  await finished()
+  expect(runs()[0]).toMatchObject({ status: 'failed' })
+  expect(runs()[0]!.error).toMatch(/Could not prepare/)
+  expect(JSON.stringify(replies()[0]!.parts)).toContain('This run failed')
+  // The agent is free again (removal is not blocked by a stuck turn).
+  expect((await request('DELETE', '/api/coding-agents/coder')).statusCode).toBe(204)
+})
+
+test('a failed resume that already emitted events falls back to a fresh session without losing its events (review: medium 7)', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:stale] one')
+  await finished(1)
+  await say('@coder [fixture:stale] two')
+  await finished(2)
+  expect(runs()[1]).toMatchObject({
+    status: 'completed',
+    session_id: '88888888-8888-4888-8888-888888888888',
+  })
+  expect(db.sqlite.prepare('SELECT session_id FROM coding_sessions').all()).toEqual([
+    { session_id: '88888888-8888-4888-8888-888888888888' },
+  ])
+  expect(JSON.stringify(replies()[1]!.parts)).toContain('Fresh start answer.')
+  expect(calls().map((call) => call.args.includes('--resume'))).toEqual([false, true, false])
+})
+
+test('an unused coding agent does not make known spend unknown; the trend stays Hermes-only (review: medium 8)', async () => {
+  await request('GET', '/api/agents') // projects the Hermes agents
+  const before = (await request('GET', '/api/reports?range=7d')).json()
+  expect(before.totals.spendUsd).toBeGreaterThan(0)
+  await addAgent()
+  const after = (await request('GET', '/api/reports?range=7d')).json()
+  expect(after.totals.spendUsd).toBe(before.totals.spendUsd)
+  expect(after.trend).toEqual(before.trend)
+  expect(after.byAgent.find((row: { agentId: string }) => row.agentId === 'coder')).toMatchObject({
+    spendUsd: 0,
+  })
 })
