@@ -30,14 +30,18 @@ process.env.TMPDIR = scratch
 export default defineConfig({
   testDir: './e2e',
   globalTeardown: './e2e/global-teardown.ts',
-  // The README screenshot generator has its own config (`pnpm screenshots`).
-  testIgnore: /e2e\/readme\//,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   reporter: [['list']],
   use: { baseURL, trace: 'on-first-retry' },
   projects: [
-    { name: 'chromium', testIgnore: attemptsSpec, use: { ...devices['Desktop Chrome'] } },
+    // A project's testIgnore replaces the top-level one, so the README screenshot generator (its own config,
+    // `pnpm screenshots`) is excluded here.
+    {
+      name: 'chromium',
+      testIgnore: [attemptsSpec, /e2e\/readme\//],
+      use: { ...devices['Desktop Chrome'] },
+    },
     ...(process.env.SCORE_E2E_DEV
       ? []
       : [
