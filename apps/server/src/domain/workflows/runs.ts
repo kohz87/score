@@ -146,6 +146,9 @@ export function insertWorkflowRun(
       body.rerunOf ?? null,
       now,
     )
+  sqlite
+    .prepare('UPDATE workflow_versions SET used = 1 WHERE workflow_id = ? AND version = ?')
+    .run(version.workflowId, version.version)
   const g = graphOf(def)
   const insertNode = sqlite.prepare(
     "INSERT INTO wf_nodes (orchestration_id, node_id, kind, state, attempts_max) VALUES (?, ?, ?, 'waiting', ?)",

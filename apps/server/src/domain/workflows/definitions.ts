@@ -37,12 +37,15 @@ const VersionRowSchema = z.object({
   created_at: z.string(),
 })
 
+/** Versions any run ever used: the irreversible marker, plus (for older rows) the runs still retained. */
 const usedVersions = (sqlite: DatabaseSync, id: string): Set<number> =>
   new Set(
     (
-      sqlite.prepare('SELECT DISTINCT version FROM wf_runs WHERE workflow_id = ?').all(id) as {
-        version: number
-      }[]
+      sqlite
+        .prepare(
+          'SELECT version FROM workflow_versions WHERE workflow_id = ? AND used = 1 UNION SELECT version FROM wf_runs WHERE workflow_id = ?',
+        )
+        .all(id, id) as { version: number }[]
     ).map((r) => r.version),
   )
 

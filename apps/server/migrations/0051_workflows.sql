@@ -111,6 +111,8 @@ CREATE TABLE workflow_versions (
   definition TEXT NOT NULL CHECK (json_valid(definition)),
   bytes INTEGER NOT NULL,
   created_at TEXT NOT NULL,
+  -- Set when a run starts on this version and never cleared, also after the run is pruned.
+  used INTEGER NOT NULL DEFAULT 0 CHECK (used IN (0, 1)),
   PRIMARY KEY (workflow_id, version)
 ) STRICT;
 

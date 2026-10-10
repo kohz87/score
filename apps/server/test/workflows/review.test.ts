@@ -50,3 +50,16 @@ test('pruning deletes only what the run owned: a message added after release sur
   expect(h.rows('SELECT id FROM messages WHERE id = ?', 'later')).toHaveLength(1)
   expect(h.rows('SELECT 1 FROM messages WHERE id LIKE ?', 'reply:%')).toHaveLength(0)
 })
+
+// medium: pruning must keep "used"
+test('a version stays used after its last run is pruned, so the workflow still cannot be deleted', async () => {
+  h = await wfHarness()
+  const id = await start(h, simple())
+  await h.until(done(id))
+  const wf = h.rows<{ workflow_id: string }>('SELECT workflow_id FROM wf_runs WHERE orchestration_id = ?', id)[0]!.workflow_id
+  aged(id)
+  expect(h.orch.maintenance().pruned).toBe(1)
+  const { getWorkflow, deleteWorkflow } = await import('../../src/domain/workflows/definitions.ts')
+  expect(getWorkflow(h.db.sqlite, wf).versions[0]!.used).toBe(true)
+  expect(() => deleteWorkflow(h!.db.sqlite, wf)).toThrow(/used/i)
+})
