@@ -146,6 +146,7 @@ export async function harness(
 
 import { completeRunMessage } from '../../src/domain/message-runs.ts'
 import { runDraft } from '../../src/hermes/live/translate.ts'
+import { recordRunResult } from '../../src/domain/workflows/verdict.ts'
 
 /** Simulates Hermes ending a run with the given terminal status (the fake adapter only completes or cancels). */
 export async function endRun(
@@ -163,6 +164,7 @@ export async function endRun(
           'UPDATE runs SET status = ?, ended_at = ?, output = ?, error = ?, cost_usd = COALESCE(cost_usd, 0.01), updated_at = ? WHERE id = ?',
         )
         .run(status, now, output, status === 'failed' ? 'boom' : null, now, runId)
+      if (status === 'completed' || status === 'failed') recordRunResult(sqlite, runId, output, now)
       return [
         runDraft(sqlite, runId),
         ...completeRunMessage(sqlite, runId, now, { output, status }),

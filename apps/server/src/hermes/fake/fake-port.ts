@@ -1,3 +1,4 @@
+import { recordRunResult } from '../../domain/workflows/verdict.ts'
 import {
   AgentDetailSchema,
   RewindSkipReasonSchema,
@@ -1771,6 +1772,8 @@ export class FakePort implements HermesPort {
                           'UPDATE runs SET input_tokens = 1200, output_tokens = 240, cost_usd = 0.0042 WHERE id = ?',
                         )
                         .run(runId)
+                      // Workflow steps keep the complete-reply facts (verdict, bounded output), as the live follower does.
+                      recordRunResult(sqlite, runId, replyText, now)
                       if (response.tools.length)
                         sqlite
                           .prepare(

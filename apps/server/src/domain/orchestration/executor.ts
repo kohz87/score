@@ -204,6 +204,32 @@ function inputWithdrawn(
   if (!step) return undefined
   const steps = stepsOf(sqlite, orchId)
   const attempts = attemptsOf(sqlite, orchId)
+  // A workflow step has no `after`: what it consumed is recorded in `wf_consumed` and judged here at send (fix J, 7.1).
+  const consumed = sqlite
+    .prepare(
+      'SELECT producer, producer_step, output_revision, kind, withdrawn FROM wf_consumed WHERE orchestration_id = ? AND step_id = ?',
+    )
+    .all(orchId, step.id) as {
+    producer: string
+    producer_step: string
+    output_revision: number
+    kind: string
+    withdrawn: number
+  }[]
+  for (const c of consumed) {
+    if (c.withdrawn === 1) return `${c.producer}'s result was withdrawn`
+    if (c.kind === 'default') continue
+    const producer = sqlite
+      .prepare('SELECT state, output_revision FROM wf_nodes WHERE orchestration_id = ? AND node_id = ?')
+      .get(orchId, c.producer) as { state: string; output_revision: number } | undefined
+    if (!producer || !['succeeded', 'failed'].includes(producer.state))
+      return `${c.producer} is no longer a resolved result`
+    if (producer.output_revision !== c.output_revision)
+      return `${c.producer} changed after this step's input was built`
+    const producerStep = steps.find((s) => s.id === c.producer_step)
+    if (producerStep && c.kind === 'output' && recoveredOnly(attempts, producerStep.id))
+      return `${c.producer} only ended on recovered text`
+  }
   const frozen = frozenRevisions(sqlite, attempt.id)
   for (const dep of step.after_steps) {
     const current = steps.find((s) => s.id === dep)
@@ -1182,7 +1208,21 @@ export class Orchestrator {
             o.id,
             step.id,
           )
-        const consumers = steps.filter((c) => c.after_steps.includes(step.id))
+        const viaGraph = new Set(
+          (
+            sqlite
+              .prepare(
+                'SELECT DISTINCT step_id FROM wf_consumed WHERE orchestration_id = ? AND producer_step = ?',
+              )
+              .all(o.id, step.id) as { step_id: string }[]
+          ).map((row) => row.step_id),
+        )
+        sqlite
+          .prepare(
+            'UPDATE wf_consumed SET withdrawn = 1 WHERE orchestration_id = ? AND producer_step = ?',
+          )
+          .run(o.id, step.id)
+        const consumers = steps.filter((c) => c.after_steps.includes(step.id) || viaGraph.has(c.id))
         const sentConsumers: { stepId: string; status: string }[] = []
         for (const consumer of consumers) {
           const latest = attemptsOf(sqlite, o.id)
@@ -1269,10 +1309,59 @@ export class Orchestrator {
     return journalDispatches(journaled.entries).get(attemptId)?.state === 'sent'
   }
 
+  /**
+   * v8.1 item 1: a run from before 0049 got its mapping from the agents' current incarnations when that migration ran,
+   * which silently adopted a replacement made earlier. Where a mapping was never remapped and the agent's first attempt
+   * recorded another incarnation, the recorded one is restored (journaled), so the replacement shows up as a Remap.
+   * Idempotent. A run with no attempt keeps the incarnation it got at migration time.
+   */
+  private backfillLegacyMappings(ctx: Ctx): void {
+    const { sqlite, now } = ctx
+    for (const o of listOrchs(sqlite)) {
+      if (isTerminalStatus(o.status)) continue
+      const rows = sqlite
+        .prepare(
+          'SELECT agent_id, incarnation, updated_at FROM orc_agent_map WHERE orchestration_id = ?',
+        )
+        .all(o.id) as { agent_id: string; incarnation: string; updated_at: string }[]
+      for (const row of rows) {
+        if (row.updated_at !== o.created_at) continue
+        const first = sqlite
+          .prepare(
+            'SELECT agent_incarnation FROM orc_attempts WHERE orchestration_id = ? AND agent_id = ? ORDER BY created_at, rowid LIMIT 1',
+          )
+          .get(o.id, row.agent_id) as { agent_incarnation: string } | undefined
+        if (!first || first.agent_incarnation === row.incarnation) continue
+        journalSoft(ctx, () =>
+          ctx.journal.append({
+            kind: 'remap',
+            orchestrationId: o.id,
+            agentId: row.agent_id,
+            incarnation: first.agent_incarnation,
+          }),
+        )
+        sqlite
+          .prepare(
+            'UPDATE orc_agent_map SET incarnation = ? WHERE orchestration_id = ? AND agent_id = ?',
+          )
+          .run(first.agent_incarnation, o.id, row.agent_id)
+        addHistory(
+          sqlite,
+          o.id,
+          'mapping_backfilled',
+          { agentId: row.agent_id, from: row.incarnation, to: first.agent_incarnation },
+          now,
+        )
+        touch(ctx, o.id)
+      }
+    }
+  }
+
   async recover(): Promise<void> {
     await this.mutate((ctx) => {
       const { sqlite, now } = ctx
       this.repairRecoveredResults(ctx)
+      this.backfillLegacyMappings(ctx)
       for (const o of listOrchs(sqlite)) {
         if (isTerminalStatus(o.status)) continue
         for (const attempt of attemptsOf(sqlite, o.id))
@@ -1597,7 +1686,8 @@ export class Orchestrator {
         now,
       )
       setStepStatus(sqlite, o.id, step.id, 'admitted', null, now)
-      addStored(sqlite, o.id, Buffer.byteLength(input))
+      // A workflow step's input also lives in its reply row and its dispatch intent: every retained copy is charged.
+      addStored(sqlite, o.id, Buffer.byteLength(input) * (o.planner === 'workflow' ? 3 : 1))
       counts.perRun.set(o.id, (counts.perRun.get(o.id) ?? 0) + 1)
       counts.perAgent.set(step.agent_id, (counts.perAgent.get(step.agent_id) ?? 0) + 1)
       counts.total++
@@ -2300,6 +2390,33 @@ export class Orchestrator {
 
   // ------------------------------------------------------------------------------------------------- maintenance
 
+  /** Deletes what the run's attempts left outside the orchestration tables: replies, runs, tool rows and intents. */
+  private pruneAssociated(tx: DatabaseSync, o: OrchRow): void {
+    const turns = (
+      tx.prepare('SELECT turn_id FROM orc_attempts WHERE orchestration_id = ?').all(o.id) as {
+        turn_id: string
+      }[]
+    ).map((r) => r.turn_id)
+    tx.prepare(
+      'DELETE FROM wf_results WHERE attempt_id IN (SELECT id FROM orc_attempts WHERE orchestration_id = ?)',
+    ).run(o.id)
+    tx.prepare(
+      'DELETE FROM message_runs WHERE orchestration_attempt_id IN (SELECT id FROM orc_attempts WHERE orchestration_id = ?)',
+    ).run(o.id)
+    for (const turn of turns) {
+      const runs = tx.prepare('SELECT id FROM runs WHERE score_turn_id = ?').all(turn) as {
+        id: string
+      }[]
+      for (const run of runs) {
+        tx.prepare('DELETE FROM tool_calls WHERE run_id = ?').run(run.id)
+        tx.prepare('DELETE FROM run_thinking WHERE run_id = ?').run(run.id)
+        tx.prepare('DELETE FROM runs WHERE id = ?').run(run.id)
+      }
+      tx.prepare('DELETE FROM command_intents WHERE idempotency_key = ?').run(turn)
+    }
+    tx.prepare('DELETE FROM messages WHERE room_id = ? AND id != ?').run(o.room_id, o.brief_id)
+  }
+
   /** Daily: compacts reconciled journal entries and prunes finished, released runs older than the retention. */
   maintenance(): { journal: { kept: number; dropped: number }; pruned: number } {
     const journal = this.options.fence.journal
@@ -2316,6 +2433,10 @@ export class Orchestrator {
           newest.set(`m:${entry.orchestrationId}:${entry.agentId}`, entry.n)
       }
     const compacted = journal.compact((entry) => {
+      if (entry.kind === 'send_refused' || entry.kind === 'witness') {
+        const attempt = readAttempt(sqlite, entry.attemptId)
+        return attempt !== undefined && (attempt.state === 'terminated' || attempt.state === 'refused')
+      }
       if (
         entry.kind === 'send_started' ||
         entry.kind === 'run_handle' ||
@@ -2371,7 +2492,17 @@ export class Orchestrator {
           )
         )
           continue
+        // The covered data goes together (v8.1 item 5): the charge is released only with every associated row. The
+        // run's room and its goal message stay as the tombstone the brief hangs on.
+        this.pruneAssociated(tx, o)
         for (const table of [
+          'wf_consumed',
+          'wf_commands',
+          'wf_gates',
+          'wf_tokens',
+          'wf_steps',
+          'wf_nodes',
+          'wf_runs',
           'orc_agent_map',
           'orc_commands',
           'orc_causes',

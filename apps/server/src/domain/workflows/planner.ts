@@ -146,8 +146,8 @@ function incomingTokens(
   return edgeIds.map((edgeId) => ({ edgeId, token: p.tokens.get(edgeId) }))
 }
 
-function consumeIncoming(p: Pass, nodeId: string): void {
-  p.ctx.sqlite
+function consumeIncoming(p: Pass, nodeId: string): number {
+  const result = p.ctx.sqlite
     .prepare(
       `UPDATE wf_tokens SET consumed_by = ? WHERE orchestration_id = ? AND consumed_by IS NULL AND edge_id IN (${incomingTokens(
         p,
@@ -157,6 +157,7 @@ function consumeIncoming(p: Pass, nodeId: string): void {
         .join(',')})`,
     )
     .run(nodeId, p.o.id, ...incomingTokens(p, nodeId).map((t) => t.edgeId))
+  return Number(result.changes)
 }
 
 const defOf = (p: Pass, nodeId: string): WorkflowNode => p.g.nodes.get(nodeId)!
@@ -332,6 +333,11 @@ function matches(rule: BranchCondition, subject: WfNodeRow | undefined): boolean
 function resolve(p: Pass): boolean {
   let changed = false
   for (const node of p.nodes.values()) {
+    // An end that was reached keeps consuming the tokens that arrive after it (they are produced, so consumed).
+    if (node.state === 'succeeded' && node.kind === 'end' && consumeIncoming(p, node.node_id) > 0) {
+      changed = true
+      continue
+    }
     if (node.state !== 'waiting') continue
     const def = defOf(p, node.node_id)
     const inputs = incomingTokens(p, node.node_id)
@@ -500,6 +506,8 @@ function permanentRefusal(
 
 function assign(p: Pass, node: WfNodeRow): boolean {
   const { sqlite, now } = p.ctx
+  // Several nodes can be assigned in one pass: the step counter is read fresh each time.
+  p.o = readOrch(sqlite, p.o.id) ?? p.o
   const def = defOf(p, node.node_id)
   if (def.kind !== 'agent') return false
   const { attempt, reason } = pendingKind(p, node)

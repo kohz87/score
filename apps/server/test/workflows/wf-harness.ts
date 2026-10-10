@@ -103,3 +103,57 @@ export function runIdOf(h: Harness, id: string, nodeId: string): string | undefi
   const n = node(h, id, nodeId)
   return run(h, id).attempts.find((a) => a.stepId === n.stepId)?.runId ?? undefined
 }
+
+export const A = '11111111-1111-4111-8111-111111111111'
+export const B = '22222222-2222-4222-8222-222222222222'
+export const seedAgent = (h: Harness, agentId: string, incarnation = A): void => {
+  h.db.sqlite
+    .prepare(
+      "INSERT INTO agent_lifecycle (agent_id, incarnation_id, state) VALUES (?, ?, 'ready') ON CONFLICT (agent_id) DO UPDATE SET incarnation_id = excluded.incarnation_id",
+    )
+    .run(agentId, incarnation)
+}
+export const replaceAgent = (h: Harness, agentId: string, incarnation = B): void => {
+  h.db.sqlite
+    .prepare('UPDATE agent_lifecycle SET incarnation_id = ? WHERE agent_id = ?')
+    .run(incarnation, agentId)
+}
+
+/** The node gate (or the assignment gate) that is open for the node, with the revisions a page would send. */
+export function openGate(h: Harness, id: string, nodeId?: string) {
+  const d = run(h, id)
+  const node = d.nodeGates.find((g) => g.status === 'open' && (!nodeId || g.nodeId === nodeId))
+  const assignment = d.assignmentGates.find((g) => g.status === 'open' && (!nodeId || g.nodeId === nodeId))
+  const gate = node ?? assignment
+  if (!gate) throw new Error('no open gate')
+  return { gateId: gate.id, expectedRevision: gate.revision, orchestrationRevision: d.revision }
+}
+export async function decide(
+  h: Harness,
+  id: string,
+  nodeId: string,
+  decision: 'approve' | 'reject',
+): Promise<void> {
+  const g = openGate(h, id, nodeId)
+  await h.orch.wfGateDecision(id, g.gateId, {
+    decision,
+    expectedRevision: g.expectedRevision,
+    orchestrationRevision: g.orchestrationRevision,
+  })
+}
+/** Which node's reply text to use: the payload header names the node as `(<id>: <label>)`. */
+export const nodeOf = (input: string): string | undefined => /\(([a-z0-9_-]+): /.exec(input)?.[1]
+export const replies =
+  (byNode: Record<string, string>) =>
+  (req: { agentId: string; input: string }) => ({
+    text: byNode[nodeOf(req.input) ?? ''] ?? 'The step is done.',
+    tools: [] as string[],
+  })
+export const finishedRun = (h: Harness, id: string, ...statuses: string[]): boolean =>
+  statuses.includes(run(h, id).status)
+export const rawNode = (h: Harness, id: string, nodeId: string) =>
+  h.rows<Record<string, unknown>>(
+    'SELECT * FROM wf_nodes WHERE orchestration_id = ? AND node_id = ?',
+    id,
+    nodeId,
+  )[0]!
