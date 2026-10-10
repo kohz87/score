@@ -409,6 +409,7 @@ export function MessageItem({
   agents,
   readOnly = false,
   importedLabel,
+  versionControl,
 }: {
   message: Message
   agents: AgentSummary[]
@@ -416,6 +417,8 @@ export function MessageItem({
   readOnly?: boolean
   /** Where an imported copy came from ("Telegram"); such messages cannot be edited or retried. */
   importedLabel?: string | undefined
+  /** The `‹ 2 / 3 ›` control of an edited message (PLAN 5.35), shown in the action row. */
+  versionControl?: ReactNode
 }) {
   const imported = message.id.startsWith('import:')
   const author = message.author
@@ -424,6 +427,10 @@ export function MessageItem({
   const you = author.kind === 'you'
   const name = you ? 'You' : (agent?.name ?? (author.kind === 'agent' ? author.agentId : 'Agent'))
   const [expansion, setExpansion] = useState<Expansion>({ open: false, version: 0 })
+  const showActions =
+    !message.streaming &&
+    !message.id.startsWith('pending-') &&
+    !message.parts.some((part) => part.kind === 'summary')
   const cards = message.parts.filter((part) => part.kind === 'tool').length
   return (
     <article
@@ -495,12 +502,14 @@ export function MessageItem({
             see the new version
           </button>
         )}
-        {!readOnly &&
-          !message.streaming &&
-          !message.id.startsWith('pending-') &&
-          !message.parts.some((part) => part.kind === 'summary') && (
-            <MessageActions message={message} name={name} agents={agents} imported={imported} />
-          )}
+        {(versionControl || (!readOnly && showActions)) && (
+          <div className="chat-message-foot">
+            {versionControl}
+            {!readOnly && showActions && (
+              <MessageActions message={message} name={name} agents={agents} imported={imported} />
+            )}
+          </div>
+        )}
       </div>
     </article>
   )

@@ -44,21 +44,25 @@ test('Delete rewinds: your message and the reply become a read-only previous ver
   await dialog.getByRole('button', { name: 'Rewind and delete' }).click()
   await expect(mine).toHaveCount(0)
 
-  const marker = page.getByTestId('version-switcher').filter({ hasText: 'Previous version' })
-  await expect(marker.first()).toBeVisible()
+  // Deleted messages leave no rows in the thread.
+  await expect(page.getByTestId('deleted-messages')).toHaveCount(0)
   await page.reload()
   await expect(history.getByRole('article').first()).toBeVisible({ timeout: 15_000 })
   await expect(mine).toHaveCount(0)
-  const viewer = page.getByTestId('version-switcher').filter({ hasText: 'Previous version' }).last()
-  await viewer.getByRole('button', { name: 'View' }).click()
-  const previous = viewer.getByRole('region', { name: 'Previous version' })
+  // The room's menu shows them dimmed and read-only, in place.
+  await page
+    .getByRole('navigation', { name: 'Conversations' })
+    .getByRole('button', { name: /^Actions for .*activity-feed/ })
+    .click()
+  await page.getByRole('menuitemcheckbox', { name: 'Show deleted messages' }).click()
+  const previous = page.getByTestId('deleted-messages').last()
   const old = previous.getByRole('article', { name: /Message from You/ }).filter({ hasText: text })
   await expect(old).toBeVisible()
   await expect(old.getByRole('button', { name: /^Delete message/ })).toHaveCount(0)
   await expect(old.getByRole('button', { name: /^Edit message/ })).toHaveCount(0)
 })
 
-test('Edit rewinds, then the correction shows "Version 2 of 2" with the original one step back', async ({
+test('Edit rewinds, then the correction shows ‹ 2 / 2 › and the original is one step back', async ({
   page,
 }) => {
   test.setTimeout(120_000)
@@ -80,26 +84,20 @@ test('Edit rewinds, then the correction shows "Version 2 of 2" with the original
     .filter({ hasText: fixed })
   await expect(corrected).toBeVisible()
   await expect(mine).toHaveCount(0)
-  // Earlier edits in the shared demo room have switchers of their own: pin the one just before this correction.
-  const switchers = page.getByTestId('version-switcher')
-  const target = await corrected.elementHandle()
-  const index = await switchers.evaluateAll((elements, message) => {
-    let closest = -1
-    elements.forEach((element, at) => {
-      if (element.compareDocumentPosition(message as Node) & Node.DOCUMENT_POSITION_FOLLOWING)
-        closest = at
-    })
-    return closest
-  }, target)
-  const switcher = switchers.nth(index)
-  await expect(switcher).toContainText('Version 2 of 2')
-  await switcher.getByRole('button', { name: 'Previous version' }).click()
-  await expect(switcher.getByText('Version 1 of 2')).toBeVisible()
+  const control = corrected.getByRole('group', { name: 'Message versions' })
+  await expect(control).toContainText('Version 2 of 2')
+  await control.getByRole('button', { name: 'Previous version' }).click()
+  const branch = history.getByRole('region', { name: 'Version 1 of 2' })
+  await expect(branch).toContainText('Viewing version 1 of 2')
   await expect(
-    switcher.getByRole('article', { name: /Message from You/ }).filter({ hasText: text }),
+    branch.getByRole('article', { name: /Message from You/ }).filter({ hasText: text }),
   ).toBeVisible()
-  await switcher.getByRole('button', { name: 'Next version' }).click()
-  await expect(switcher.getByText('Version 2 of 2')).toBeVisible()
+  await expect(corrected).toHaveCount(0)
+  // Arrow keys step on from the bar's control; the thread returns to the latest branch.
+  await expect(branch.getByRole('button', { name: 'Previous version' })).toBeFocused()
+  await page.keyboard.press('ArrowRight')
+  await expect(branch).toHaveCount(0)
+  await expect(corrected).toBeVisible()
 })
 
 test('An agent that cannot be rewound is named, and Hide in Score only still works', async ({

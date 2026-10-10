@@ -19,7 +19,14 @@ import { usePendingDeletes } from './message-deletion.ts'
 import { MessageItem } from './MessageItem.tsx'
 import { ImportedBanner } from './ImportedBanner.tsx'
 import { messagesQuery, roomQuery, versionsQuery } from './queries.ts'
-import { VersionSwitcher } from './versions.tsx'
+import {
+  BranchView,
+  DeletedBlock,
+  MessageVersionControl,
+  OpenEditNotice,
+  type VersionView,
+} from './versions.tsx'
+import { useShowDeleted } from './deleted-toggle.ts'
 import { roomLabel } from './room-label.ts'
 import { orchestrationsQuery } from '../orchestrations/orchestration-queries.ts'
 import { RoomRunPanel } from '../orchestrations/RoomRunPanel.tsx'
@@ -42,6 +49,8 @@ function MessagePage({
   excluded = [],
   seek = null,
   importedLabel,
+  view,
+  onView,
   onChange,
   onPrepend,
 }: {
@@ -53,6 +62,9 @@ function MessagePage({
   seek?: string | null
   /** Set in an imported room: its copied messages say where they came from. */
   importedLabel?: string | undefined
+  /** An older version of an edited message on screen in place of that message and everything after it (PLAN 5.35). */
+  view: VersionView
+  onView: (view: VersionView) => void
   onChange: () => void
   onPrepend: () => void
 }) {
@@ -85,6 +97,7 @@ function MessagePage({
   const hidden = usePendingDeletes().hidden
   const versionsDefinition = useMemo(() => versionsQuery(roomId), [roomId])
   const versions = useStreamQuery(versionsDefinition).data ?? []
+  const showDeleted = useShowDeleted(roomId)
   const items =
     data?.items.filter((item) => !excluded.includes(item.id) && !hidden.has(item.id)) ?? []
   // A resync can move the latest page boundary; follow its fresh cursor to avoid a gap.
@@ -100,6 +113,8 @@ function MessagePage({
           excluded={[...excluded, ...items.map((item) => item.id)]}
           seek={seek}
           importedLabel={importedLabel}
+          view={view}
+          onView={onView}
           onChange={onChange}
           onPrepend={onPrepend}
         />
@@ -130,10 +145,18 @@ function MessagePage({
         )
         const oldest = sorted[0]?.createdAt
         const newest = sorted.at(-1)?.createdAt
-        // A delete leaves a marker where the message was; an edit's switcher sits above its correction.
+        // Deleted messages only show when asked for; an edit that was never sent keeps a notice with Continue editing.
+        const viewing = view ? items.find((item) => item.id === view.messageId) : undefined
+        const cutoff = (value: { createdAt: string; id: string }) =>
+          viewing !== undefined &&
+          (value.createdAt.localeCompare(viewing.createdAt) ||
+            value.id.localeCompare(viewing.id)) >= 0
         const markers = versions.filter(
           (version) =>
-            (version.mode === 'delete' || version.replacedBy === null) &&
+            ((showDeleted && version.mode === 'delete') ||
+              (version.mode === 'edit' && version.replacedBy === null)) &&
+            // While an older version is on screen, nothing after the edited message shows.
+            !(viewing && version.anchorCreatedAt >= viewing.createdAt) &&
             ((before === null && (!newest || version.anchorCreatedAt > newest)) ||
               (oldest !== undefined &&
                 newest !== undefined &&
@@ -150,35 +173,55 @@ function MessagePage({
           while (pending[0] && (until === null || pending[0].anchorCreatedAt <= until)) {
             const version = pending.shift()!
             nodes.push(
-              <VersionSwitcher
-                key={`v-${version.id}`}
-                version={version}
-                versions={versions}
-                agents={agents}
-              />,
+              version.mode === 'delete' ? (
+                <DeletedBlock
+                  key={`v-${version.id}`}
+                  version={version}
+                  versions={versions}
+                  agents={agents}
+                />
+              ) : (
+                <OpenEditNotice
+                  key={`v-${version.id}`}
+                  version={version}
+                  versions={versions}
+                  agents={agents}
+                />
+              ),
             )
           }
         }
         for (const message of sorted) {
+          if (cutoff(message)) {
+            if (message.id === view?.messageId)
+              nodes.push(
+                <BranchView
+                  key={`branch:${message.id}`}
+                  messageId={message.id}
+                  version={view.version}
+                  versions={versions}
+                  agents={agents}
+                  onSelect={(next) =>
+                    onView(next ? { messageId: message.id, version: next } : null)
+                  }
+                />,
+              )
+            continue
+          }
           flush(message.createdAt)
-          const linked = versions.find(
-            (version) => version.mode === 'edit' && version.replacedBy === message.id,
-          )
-          if (linked)
-            nodes.push(
-              <VersionSwitcher
-                key={`v-${linked.id}`}
-                version={linked}
-                versions={versions}
-                agents={agents}
-              />,
-            )
           nodes.push(
             <MessageItem
               key={message.id}
               message={message}
               agents={agents}
               importedLabel={importedLabel}
+              versionControl={
+                <MessageVersionControl
+                  messageId={message.id}
+                  versions={versions}
+                  onSelect={(version) => onView({ messageId: message.id, version })}
+                />
+              }
             />,
           )
         }
@@ -247,6 +290,15 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
       onChange()
     }
   }, [seek, onChange])
+  // A new rewind changes what the thread shows: leave the older version being viewed.
+  const [view, setView] = useState<VersionView>(null)
+  const versionsDefinition = useMemo(() => versionsQuery(roomId), [roomId])
+  const versionCount = useStreamQuery(versionsDefinition).data?.length
+  const [seenVersions, setSeenVersions] = useState(versionCount)
+  if (seenVersions !== versionCount) {
+    setSeenVersions(versionCount)
+    setView(null)
+  }
   const lead = agents.find((agent) => agent.id === room?.leadAgentId)
   const orchestration = useStreamQuery(orchestrationsQuery).data?.find(
     (item) => item.roomId === roomId,
@@ -299,6 +351,8 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
               agents={agents}
               seek={seek}
               importedLabel={room.importedFrom?.label}
+              view={view}
+              onView={setView}
               onChange={onChange}
               onPrepend={onPrepend}
             />
@@ -317,12 +371,15 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
         </div>
       )}
       {room && !(orchestration && orchestration.ownership !== 'released') && (
-        <Composer
-          roomId={roomId}
-          roomName={room.name}
-          agents={agents}
-          leadAgentId={room.leadAgentId}
-        />
+        // The composer stays mounted (keeping a draft) but is out of reach while an older version is on screen.
+        <div className={view ? undefined : 'chat-composer-slot'} hidden={view !== null}>
+          <Composer
+            roomId={roomId}
+            roomName={room.name}
+            agents={agents}
+            leadAgentId={room.leadAgentId}
+          />
+        </div>
       )}
     </section>
   )

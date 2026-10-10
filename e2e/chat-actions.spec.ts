@@ -52,7 +52,9 @@ test('Edit (replaces), Copy and Retry work from the action row under a message',
   await expect(corrected).toBeVisible()
   // The original and its replies become the previous version.
   await expect(mine).toHaveCount(0)
-  await expect(page.getByTestId('version-switcher')).toContainText('Version 2 of 2')
+  await expect(corrected.getByRole('group', { name: 'Message versions' })).toContainText(
+    'Version 2 of 2',
+  )
   await expect(replyAfter(corrected).first()).toBeVisible({ timeout: 40_000 })
 
   // Retry: the same agent answers again; the first reply stays.

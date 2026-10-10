@@ -962,7 +962,7 @@ test('a blocked rewind explains why and cannot be confirmed', async () => {
       .disabled,
   ).toBe(true)
 })
-test('the version switcher sits above a correction and shows the previous version read-only', async () => {
+test('an edited message carries ‹ 2 / 2 › and switching shows the older version in place, read-only', async () => {
   const correction: Message = {
     ...mine,
     id: 'mine-2',
@@ -970,37 +970,110 @@ test('the version switcher sits above a correction and shows the previous versio
     edits: 'mine',
     parts: [{ kind: 'text', text: 'Ship it today' }],
   }
-  items = [correction]
+  const after: Message = { ...reply, id: 'after', createdAt: '2026-10-08T10:07:00.000Z' }
+  after.parts = [{ kind: 'text', text: 'Later reply' }]
+  items = [correction, after]
   versions = [{ ...editVersion, replacedBy: 'mine-2' }]
   versionItems = [mine, { ...reply, createdAt: '2026-10-08T10:01:00.000Z' }]
   setup()
   await screen.findByText('Ship it today')
-  const switcher = await screen.findByTestId('version-switcher')
-  expect(within(switcher).getByText('Version 2 of 2')).toBeDefined()
-  fireEvent.click(within(switcher).getByRole('button', { name: 'Previous version' }))
-  const previous = await within(switcher).findByRole('region', { name: 'Previous version' })
-  expect(within(switcher).getByText('Version 1 of 2')).toBeDefined()
-  expect(await within(previous).findByText('Ship it')).toBeDefined()
+  // No separate rows: just the control in the message's own action row.
+  expect(screen.queryByTestId('version-switcher')).toBeNull()
+  const control = await screen.findByRole('group', { name: 'Message versions' })
+  expect(within(control).getByText('Version 2 of 2')).toBeDefined()
+  expect(screen.getByText('Later reply')).toBeDefined()
+  fireEvent.click(within(control).getByRole('button', { name: 'Previous version' }))
+  const branch = await screen.findByRole('region', { name: 'Version 1 of 2' })
+  expect(await within(branch).findByText('Ship it')).toBeDefined()
+  expect(within(branch).getByText(/Viewing version 1 of 2 · read-only/)).toBeDefined()
+  // The correction and the messages after it make way for the older branch; the composer is out of reach.
+  expect(screen.queryByText('Ship it today')).toBeNull()
+  expect(screen.queryByText('Later reply')).toBeNull()
+  expect(screen.getByRole('combobox', { hidden: true }).closest('[hidden]')).not.toBeNull()
   // Greyed and read-only: none of the message actions.
-  expect(within(previous).queryByRole('button', { name: /^Edit message/ })).toBeNull()
-  expect(within(previous).queryByRole('button', { name: /^Delete message/ })).toBeNull()
-  fireEvent.click(within(switcher).getByRole('button', { name: 'Next version' }))
-  expect(within(switcher).queryByRole('region', { name: 'Previous version' })).toBeNull()
-  expect(within(switcher).getByText('Version 2 of 2')).toBeDefined()
+  expect(within(branch).queryByRole('button', { name: /^Edit message/ })).toBeNull()
+  expect(within(branch).queryByRole('button', { name: /^Delete message/ })).toBeNull()
+  // The arrow keys step through the versions from the bar's control.
+  const bar = within(branch).getByRole('group', { name: 'Message versions' })
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      within(bar).getByRole('button', { name: 'Previous version' }),
+    ),
+  )
+  expect(
+    within(bar).getByRole('button', { name: 'Previous version' }).getAttribute('aria-disabled'),
+  ).toBe('true')
+  fireEvent.keyDown(bar, { key: 'ArrowRight' })
+  expect(screen.queryByRole('region', { name: 'Version 1 of 2' })).toBeNull()
+  expect(screen.getByText('Ship it today')).toBeDefined()
+  expect(screen.getByText('Later reply')).toBeDefined()
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      within(screen.getByRole('group', { name: 'Message versions' })).getByRole('button', {
+        name: 'Previous version',
+      }),
+    ),
+  )
+  // Back to latest from the bar works too.
+  fireEvent.click(screen.getByRole('button', { name: 'Previous version' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Back to latest' }))
+  expect(screen.getByText('Later reply')).toBeDefined()
 })
-test('a delete leaves a Previous version marker where the message was', async () => {
+test('a chain of three edits steps 1 / 3, 2 / 3, 3 / 3', async () => {
+  const third: Message = {
+    ...mine,
+    id: 'm3',
+    createdAt: '2026-10-08T10:09:00.000Z',
+    parts: [{ kind: 'text', text: 'Third wording' }],
+  }
+  const second: Message = {
+    ...mine,
+    id: 'm2',
+    createdAt: '2026-10-08T10:06:00.000Z',
+    parts: [{ kind: 'text', text: 'Second wording' }],
+  }
+  items = [third]
+  versions = [
+    { ...editVersion, id: 'v2', anchorId: 'm2', replacedBy: 'm3', number: 2, count: 3 },
+    { ...editVersion, id: 'v1', replacedBy: 'm2', number: 1, count: 3 },
+  ]
+  versionItems = [second]
+  fetchMock.mockImplementation(
+    ((impl) => async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith('/versions/m2')) return response({ version: versions[0], items: [second] })
+      if (url.endsWith('/versions/mine')) return response({ version: versions[1], items: [mine] })
+      return impl(input)
+    })(fetchMock.getMockImplementation()!),
+  )
+  setup()
+  await screen.findByText('Third wording')
+  fireEvent.click(screen.getByRole('button', { name: 'Previous version' }))
+  expect(await screen.findByText('Second wording')).toBeDefined()
+  expect(screen.getByText(/Viewing version 2 of 3/)).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'Previous version' }))
+  expect(await screen.findByText('Ship it')).toBeDefined()
+  expect(screen.getByText(/Viewing version 1 of 3/)).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'Next version' }))
+  expect(await screen.findByText('Second wording')).toBeDefined()
+})
+test('a deleted message is not shown until the room menu asks for it', async () => {
   versions = [
     { ...editVersion, mode: 'delete', count: 1, anchorCreatedAt: '2026-10-08T09:59:00.000Z' },
   ]
   versionItems = [mine]
   setup()
   await screen.findByText('Hello team')
-  const switcher = await screen.findByTestId('version-switcher')
-  expect(within(switcher).getByText('Previous version')).toBeDefined()
-  fireEvent.click(within(switcher).getByRole('button', { name: 'View' }))
-  expect(await within(switcher).findByText('Ship it')).toBeDefined()
-  fireEvent.click(within(switcher).getByRole('button', { name: 'Hide' }))
-  expect(within(switcher).queryByText('Ship it')).toBeNull()
+  expect(screen.queryByTestId('deleted-messages')).toBeNull()
+  expect(screen.queryByText('Ship it')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: /^Actions for/ }))
+  fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Show deleted messages' }))
+  const block = await screen.findByTestId('deleted-messages')
+  expect(await within(block).findByText('Ship it')).toBeDefined()
+  expect(within(block).queryByRole('button', { name: /^Delete message/ })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: /^Actions for/ }))
+  fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Hide deleted messages' }))
+  expect(screen.queryByTestId('deleted-messages')).toBeNull()
 })
 // audit4-c 3: an edit whose rewind is done but whose correction was never sent still leaves a marker.
 test('an open edit shows where the original was, with View and Continue editing', async () => {
@@ -1008,22 +1081,21 @@ test('an open edit shows where the original was, with View and Continue editing'
   versionItems = [mine]
   setup()
   await screen.findByText('Hello team')
-  const switcher = await screen.findByTestId('version-switcher')
+  const switcher = await screen.findByTestId('open-edit')
   expect(within(switcher).getByText(/Edit not sent yet/)).toBeDefined()
   fireEvent.click(within(switcher).getByRole('button', { name: 'Continue editing' }))
   expect(await screen.findByText('Editing your message')).toBeDefined()
   expect((screen.getByRole('combobox') as HTMLTextAreaElement).value).toBe('Ship it')
 })
-test('room.version.created adds the marker live', async () => {
+test('room.version.created for a delete adds nothing until deleted messages are shown', async () => {
   setup()
   await screen.findByText('Hello team')
-  expect(screen.queryByTestId('version-switcher')).toBeNull()
   emit(
     'room.version.created',
     { ...editVersion, mode: 'delete', count: 1, anchorCreatedAt: '2026-10-08T09:59:00.000Z' },
     10,
   )
-  expect(await screen.findByTestId('version-switcher')).toBeDefined()
+  expect(screen.queryByTestId('deleted-messages')).toBeNull()
 })
 test('message.updated sets editedBy on the cached original only', () => {
   const data = { items: [mine, reply], nextCursor: null, typing: {} }
