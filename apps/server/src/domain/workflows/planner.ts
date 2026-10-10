@@ -45,6 +45,7 @@ import {
   type WfTokenRow,
 } from './store.ts'
 import { resultFacts } from './verdict.ts'
+import { withdrawGraphEvidence } from './withdraw.ts'
 
 // The graph planner (design v8 "Planner principal and command identity"). A pure-looking pass over durable state: it
 // reads node states, tokens and the executor's steps, and its only effects are rows in the same transaction as the event
@@ -251,6 +252,7 @@ function observe(p: Pass): boolean {
         setState(p, node.node_id, 'unresolved', {
           reason: 'its result was withdrawn: not confirmed ended',
         })
+        withdrawGraphEvidence(p.ctx, p.o.id, node.node_id, 'was withdrawn')
         changed = true
       }
       continue
@@ -620,6 +622,26 @@ function assign(p: Pass, node: WfNodeRow): boolean {
       c.revision,
       c.kind,
     )
+  // Readiness provenance: the results that made this node ready are evidence too, whether or not the text uses them.
+  const provenance = sqlite.prepare(
+    `INSERT OR IGNORE INTO wf_consumed (orchestration_id, step_id, consumer, consumer_attempt, producer, producer_attempt, producer_step, output_revision, kind, withdrawn)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+  )
+  for (const producerId of agentAncestors(p, node.node_id)) {
+    const producer = p.nodes.get(producerId)!
+    if (producer.state !== 'succeeded' && producer.state !== 'failed') continue
+    provenance.run(
+      p.o.id,
+      stepId,
+      node.node_id,
+      attempt,
+      producerId,
+      producer.attempts_used,
+      producer.step_id ?? '',
+      producer.output_revision,
+      producer.state === 'failed' ? 'failure' : 'output',
+    )
+  }
   sqlite
     .prepare(
       `INSERT INTO wf_commands (orchestration_id, node_id, attempt, verb, generation, payload_hash, receipt, outcome, created_at)
@@ -734,6 +756,13 @@ export function planWorkflow(ctx: Ctx, o: OrchRow): boolean {
         if (node.state !== 'ready') continue
         const def = defOf(p, node.node_id)
         if (def.kind === 'gate') {
+          // A gate is shown only evidence that stands: wait while a result it would display is unresolved.
+          if (
+            agentAncestors(p, node.node_id).some(
+              (id) => !['succeeded', 'failed'].includes(p.nodes.get(id)!.state),
+            )
+          )
+            continue
           openNodeGate(p, node)
           progressed = true
         } else if (def.kind === 'agent') progressed = assign(p, node) || progressed

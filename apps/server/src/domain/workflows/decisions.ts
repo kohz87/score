@@ -65,6 +65,21 @@ export function decideNodeGate(ctx: Ctx, orchId: string, gateId: string, body: G
     throw new HttpError(409, 'conflict', 'The node changed since the gate opened', {
       currentRevision: node.revision,
     })
+  // The evidence the gate displayed must still stand: same revisions, still resolved.
+  const byNode = new Map(nodesOf(sqlite, orchId).map((n) => [n.node_id, n]))
+  for (const shown of (
+    JSON.parse(gate.payload) as { consumed: { nodeId: string; outputRevision: number }[] }
+  ).consumed) {
+    const producer = byNode.get(shown.nodeId)
+    if (
+      !producer ||
+      !['succeeded', 'failed'].includes(producer.state) ||
+      producer.output_revision !== shown.outputRevision
+    )
+      throw new HttpError(409, 'conflict', `${shown.nodeId} changed since the gate opened`, {
+        currentRevision: gate.revision,
+      })
+  }
   const approve = body.decision === 'approve'
   sqlite
     .prepare(
