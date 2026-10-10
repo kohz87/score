@@ -18,6 +18,7 @@ import {
   StreamHelloSchema,
   SystemStatusSchema,
   KnowledgeAgentUsageSchema,
+  RoomVersionDetailSchema,
   RoomVersionsSchema,
   KnowledgeInfoSchema,
   KnowledgeNoteSchema,
@@ -40,6 +41,26 @@ const system = SystemStatusSchema.parse(recorded['/api/system'])
 const roomMessages = MessagePageSchema.parse(
   recorded['/api/rooms/room-activity-feed/messages?limit=50'],
 )
+const briefVersion = (anchorId: string, replacedBy: string, number: number) => ({
+  id: `version-${anchorId}`,
+  roomId: 'room-activity-feed',
+  anchorId,
+  anchorCreatedAt: minutesAgo(30 - number),
+  mode: 'edit' as const,
+  replacedBy,
+  number,
+  count: 3,
+  hiddenCount: 1,
+  rewound: [],
+  skipped: [],
+  createdAt: minutesAgo(29 - number),
+})
+// The second wording of the brief: shown read-only when version 2 of 3 is viewed.
+const briefDraft = {
+  ...roomMessages.items.find((item) => item.id === 'message-brief-0')!,
+  id: 'visual-brief-v2',
+  parts: [{ kind: 'text' as const, text: 'Add pagination to the activity feed.' }],
+}
 const formatted = {
   id: 'visual-formatted',
   roomId: 'room-activity-feed',
@@ -226,7 +247,24 @@ export const visualFixtures: Record<string, unknown> = {
     journal: { ok: true, entries: 0, bytes: 0, sizeAlarm: false },
   },
   '/api/knowledge/agent-usage': { items: [] },
-  '/api/rooms/room-activity-feed/versions': RoomVersionsSchema.parse({ asOfSeq: 0, items: [] }),
+  // The brief was edited twice (PLAN 5.35): the live message is version 3 of 3 and carries the ‹ 3 / 3 › control.
+  '/api/rooms/room-activity-feed/versions': RoomVersionsSchema.parse({
+    asOfSeq: 0,
+    items: [
+      briefVersion('visual-brief-v2', 'message-brief-0', 2),
+      briefVersion('visual-brief-v1', 'visual-brief-v2', 1),
+    ],
+  }),
+  '/api/rooms/room-activity-feed/versions/visual-brief-v2': RoomVersionDetailSchema.parse({
+    version: briefVersion('visual-brief-v2', 'message-brief-0', 2),
+    items: [briefDraft],
+  }),
+  '/api/rooms/room-activity-feed/versions/visual-brief-v1': RoomVersionDetailSchema.parse({
+    version: briefVersion('visual-brief-v1', 'visual-brief-v2', 1),
+    items: [
+      { ...briefDraft, id: 'visual-brief-v1', parts: [{ kind: 'text', text: 'Add pagination.' }] },
+    ],
+  }),
   '/api/rooms/room-activity-feed': RoomDetailSnapshotSchema.parse(
     recorded['/api/rooms/room-activity-feed'],
   ),

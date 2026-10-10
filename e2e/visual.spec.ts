@@ -68,6 +68,31 @@ for (const width of [1440, 390]) {
   }
 }
 
+// An edited message viewed at its middle version (PLAN 5.35): ‹ 2 / 3 › in the bar, the older branch read-only.
+for (const width of [1440, 390]) {
+  test(`chat shows version 2 of 3 of an edited message at ${width}px`, async ({ page }) => {
+    await open(page, destinations[1]!, width)
+    // First the latest version, with the control in the message's action row.
+    const brief = page.locator('#message-message-brief-0')
+    await brief.scrollIntoViewIfNeeded()
+    await expect(brief.getByRole('group', { name: 'Message versions' })).toContainText('3 / 3')
+    await expect(page).toHaveScreenshot(`chat-version-3-${width}.png`, {
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.005,
+    })
+    await page.getByRole('button', { name: 'Previous version' }).click()
+    await expect(page.getByText('Viewing version 2 of 3')).toBeVisible()
+    await expect(page.getByText('Add pagination to the activity feed.')).toBeVisible()
+    await page.evaluate(() => document.fonts.ready)
+    if (width === 390) await noPageOverflow(page)
+    await expect(page).toHaveScreenshot(`chat-version-2-${width}.png`, {
+      fullPage: true,
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.005,
+    })
+  })
+}
+
 for (const width of [1440, 1024]) {
   test(`header stays on one line at ${width}px`, async ({ page }) => {
     await open(page, destinations[2]!, width)

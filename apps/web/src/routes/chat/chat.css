@@ -220,6 +220,10 @@
 .chat-message--you .chat-message-meta {
   justify-content: flex-end;
 }
+.chat-message--you .chat-message-foot {
+  /* Your own message's footer sits under the right-aligned bubble, version arrows outermost (as in ChatGPT). */
+  flex-direction: row-reverse;
+}
 .chat-message--you .chat-text {
   background: var(--ink);
   color: var(--card);
@@ -1865,22 +1869,56 @@
   gap: 8px;
   max-width: 100%;
 }
-.chat-version-bar {
-  display: inline-flex;
+.chat-message-foot {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  align-self: flex-start;
-  padding: 2px 8px;
+}
+.chat-version-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  margin-top: 4px;
   border-radius: var(--radius-pill);
   background: var(--subtle);
   font-size: 13px;
   color: var(--ink-muted);
 }
+.chat-version-position {
+  min-width: 3.2em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.chat-version-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--subtle);
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.chat-version-bar .chat-version-control {
+  margin-top: 0;
+  background: var(--card);
+}
+.chat-version-note {
+  flex-basis: 100%;
+}
 .chat-version-step,
 .chat-version-toggle {
   border: 0;
   background: none;
-  padding: 2px 6px;
+  padding: 2px 8px;
+  min-width: 28px;
+  min-height: 28px;
   font: inherit;
   font-weight: 700;
   color: var(--ink);
@@ -1889,9 +1927,27 @@
 .chat-version-toggle {
   text-decoration: underline;
 }
-.chat-version-step:disabled {
+.chat-version-step[aria-disabled='true'] {
   opacity: 0.35;
   cursor: default;
+}
+.chat-version-step {
+  font-size: 18px;
+  line-height: 1;
+}
+.chat-version-step:focus-visible,
+.chat-version-toggle:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-pill);
+}
+.chat-composer-slot {
+  display: contents;
+}
+.chat-branch {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .chat-previous {
   display: flex;
