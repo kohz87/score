@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { pair } from './pair.ts'
+import { makeRoom, openRoom } from './rooms.ts'
 
 // PLAN 5.24: actions under each message (edit and resend, copy, retry, delete).
 test('Edit (replaces), Copy and Retry work from the action row under a message', async ({
@@ -9,13 +10,10 @@ test('Edit (replaces), Copy and Retry work from the action row under a message',
   test.setTimeout(120_000)
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await pair(page)
-  await page.goto('/chat')
-  await page
-    .getByRole('navigation', { name: 'Conversations' })
-    .getByRole('link', { name: /#activity-feed/ })
-    .click({ timeout: 15_000 })
+  // Own room: a rewind is refused while another spec's agent is answering in a shared one.
+  const room = await makeRoom(page, 'act')
+  await openRoom(page, room.label)
   const history = page.getByRole('region', { name: 'Message history' })
-  await expect(history.getByRole('article').first()).toBeVisible({ timeout: 15_000 })
   const composer = page.getByRole('combobox', { name: /^Message/ })
   const stamp = Date.now()
   const first = `Please check the room context ${stamp}`

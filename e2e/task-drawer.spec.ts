@@ -45,10 +45,12 @@ test('approves a pending approval from the task drawer', async ({ page }) => {
       async () => {
         const response = await page.request.get('/api/approvals?status=pending')
         const { items } = (await response.json()) as {
-          items: { id: string; refs: { kind: string; taskId?: string }[] }[]
+          items: { id: string; actionable: boolean; refs: { kind: string; taskId?: string }[] }[]
         }
+        // Only a copy the drawer will offer Approve for: a pending one that is not actionable reads "can only be answered
+        // in Hermes".
         taskId = items
-          .find((item) => item.id.startsWith('approval-docs'))
+          .find((item) => item.id.startsWith('approval-docs') && item.actionable)
           ?.refs.find((ref) => ref.kind === 'task')?.taskId
         return taskId
       },

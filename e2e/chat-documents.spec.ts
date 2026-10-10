@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { pair } from './pair.ts'
+import { makeRoom, openRoom } from './rooms.ts'
 
 // Documents in Chat (PLAN 5.30), against the fake adapter: attach a PDF and a CSV, preview, and see what the agent got.
 const PDF = Buffer.from('%PDF-1.7\n% e2e document\n%%EOF\n')
@@ -8,13 +9,10 @@ test('a PDF and a CSV attach, preview, and reach the agent; a workspace file att
   page,
 }) => {
   await pair(page)
-  await page.goto('/chat')
-  await page
-    .getByRole('navigation', { name: 'Conversations' })
-    .getByRole('link', { name: /#activity-feed/ })
-    .click({ timeout: 15_000 })
+  // Led by builder: attachments are saved into the lead's workspace, and the Workspace baseline shows lead's.
+  const room = await makeRoom(page, 'docs', ['builder'], 'builder')
+  await openRoom(page, room.label)
   const history = page.getByRole('region', { name: 'Message history' })
-  await expect(history.getByRole('article').first()).toBeVisible({ timeout: 15_000 })
   const composer = page.getByRole('combobox', { name: /^Message/ })
 
   await page.getByTestId('attach-input').setInputFiles([
@@ -65,7 +63,7 @@ test('a PDF and a CSV attach, preview, and reach the agent; a workspace file att
 
   // The demo workspace is shared by every spec in the run: leave it as it was (the Workspace screenshot shows it).
   const removed = await page.request.delete(
-    '/api/agents/lead/workspace/entries?path=attachments&recursive=1',
+    '/api/agents/builder/workspace/entries?path=attachments&recursive=1',
     {
       headers: { 'X-Score-Client': 'web' },
     },
