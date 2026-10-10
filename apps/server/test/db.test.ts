@@ -131,6 +131,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'messages',
     'meta',
     'model_visibility',
+    'orc_agent_map',
     'orc_attempts',
     'orc_capabilities',
     'orc_causes',

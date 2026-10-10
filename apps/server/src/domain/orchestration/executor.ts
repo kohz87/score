@@ -1709,6 +1709,7 @@ export class Orchestrator {
         )
           continue
         for (const table of [
+          'orc_agent_map',
           'orc_commands',
           'orc_causes',
           'orc_gates',
