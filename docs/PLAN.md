@@ -359,7 +359,9 @@ and blocked list per the design. Done when the design's tests pass on the fake a
 human approval gates, budgets and deadlines, pause/resume/stop, replay, JSON export/import.
 **7.2 Coding agents as team members** · Claude Code, Codex, OpenCode as room participants next to Hermes agents.
 **7.3 Web terminal** · A terminal on the server in the browser (paired, HTTPS only; security design first).
+**7.5 Orchestrator** · (owner 2026-10-10, before 7.1) A lead agent runs a goal as an agentic workflow through Score tools (hand a step to an agent, wait for its result, ask the person at a gate, check budget, report); Score validates every request against limits, budgets, gates and permissions. Design + security review first.
 **7.4 Backlog** · Long rooms auto-summarise at a token threshold; pop-out window per agent; journey graph (tasks,
 memories, skills over time); Score as an MCP tool server for its agents.
+**6.5 Knowledge editor** · (owner 2026-10-10) Obsidian-style live preview in CodeMirror (Markdown rendered inline except the edited line; files stay byte-exact), notes open rendered by default, split view on wide screens, styled tables/code/quotes/task lists/callouts.
 Not planned (owner): full-screen voice stage; multiple user accounts with roles.
 
