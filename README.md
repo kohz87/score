@@ -8,7 +8,7 @@ gateway API. It never reads your Hermes credential files and never writes Hermes
 
 ![Score's Now page: a timeline of four agents, a thread, an approval card and a message box](docs/screenshots/now.png)
 
-(The screenshot shows the built-in demo team: `lead`, `builder`, `reviewer`, `designer`.)
+(The screenshots show the built-in demo team: `lead`, `builder`, `reviewer`, `designer`.)
 
 ## Requirements
 
@@ -175,24 +175,115 @@ export in `$SCORE_HOME/profile-backups/`. Details: [docs/SETUP.md](docs/SETUP.md
 
 ## What is in the app
 
-Score has six destinations along the top. [docs/USER-GUIDE.md](docs/USER-GUIDE.md) describes each in detail.
+Score has seven destinations along the top: Now, Chat, Tasks, Team, Knowledge, Reports and Settings.
+[docs/USER-GUIDE.md](docs/USER-GUIDE.md) describes the main ones in detail. All pictures below come from the built-in
+demo team (`lead`, `builder`, `reviewer`, `designer`); `pnpm screenshots` regenerates them.
 
-- **Now** shows the team's work as a timeline (Score), a flow graph of one run (Flow) and every routine
-  (Routines). It also holds the latest thread, whatever needs your approval, and a message box. Pause everyone
-  stops all agents at once.
-- **Chat** has rooms and direct conversations with agents. Mention `@agent` to hand work over; slash commands such
-  as `/assign` and `/routine` create tasks and schedules.
-- **Tasks** is a board with five columns (Planned, Working, In review, Needs you, Done), filters, and a drawer with
-  steps, activity and an approval or comment box.
-- **Team** lists your agents; each has a page for personality, model, skills, memory, tools, routines and
-  permissions, and Add agent lives here.
-- **Reports** shows tasks finished per day, where each agent's time goes, approvals, and a CSV export.
-- **Settings** holds models and keys, connections (tool servers, messaging), team-wide rules and approvals,
-  every Hermes setting (Advanced), and remote access.
+### Now: Score, the live timeline
 
-- **Watch** (Now › an agent, or "Watch" on its Team page) replays what an agent did: its terminal, the files it changed
-  and the pages it looked at, with a timeline you can drag back. It is a replay of recorded events, not a remote view of
-  a screen; "Pause <agent>" stops new work and "Open in terminal" copies the command to continue its session yourself.
+![The Now page: a timeline with one row per agent, a thread, an approval waiting for you and what the team made today](docs/screenshots/now.png)
+
+One row per agent, time running left to right. Solid blocks are work in progress, dashed blocks are what the lead
+has planned, and a dark block means an agent is waiting on you. Below it sit the latest thread, any approval that
+needs your decision and a message box. **Pause everyone** stops all agents at once.
+
+### Flow: the graph of one run
+
+![Flow: a run drawn as a graph of steps, hand-offs and a review that sent work back, with a side panel for the selected step](docs/screenshots/flow.png)
+
+A run is one of your messages plus everything it caused. Click a step to see who is doing it, its checklist and any
+approval it is waiting on, and to stop it or pause the whole run.
+
+### Orchestrations: a lead agent runs a goal
+
+![An orchestration's live diagram next to its log, with the plan and the budget below](docs/screenshots/orchestration.png)
+
+Give a lead agent a goal and it plans the steps and hands them to your team. The live diagram shows each step as it
+runs, the log records every request the lead made, and the plan and budget sit below. Score checks each request
+against the limits, the budget and your approval choice, and steps can wait for your approval before they start.
+
+![The New orchestration dialog with a goal, a lead, the agents it may use, an approval setting, a budget and the checks that run before it starts](docs/screenshots/new-orchestration.png)
+
+Start one from Chat or from Flow with **New orchestration**: choose the lead, which agents it may hand work to, when
+you want to be asked (before each step, only when the lead asks, or never) and an optional budget or deadline.
+
+### Watch: replay what an agent did
+
+![Watch: an agent's terminal, an edited file and a browser window replayed with a timeline, and a card asking you to approve a command](docs/screenshots/watch.png)
+
+Watch replays an agent's recorded work: its terminal, the files it changed and the pages it looked at, with a
+timeline you can drag back. It is a replay of events, not a remote view of a screen. From here you can pause the
+agent or copy a command to continue its session in your own terminal.
+
+### Chat: rooms and direct conversations
+
+![Chat in a room: tool cards, a code block and a message box with To and Plan first](docs/screenshots/chat.png)
+
+Rooms and direct chats with your agents. Mention `@agent` to hand work over, use `/assign` and `/routine` to create
+tasks and schedules, and expand tool cards to see what an agent ran. Rooms keep a list of the files in play.
+
+![Chat on a phone at 390 px wide](docs/screenshots/chat-phone.png)
+
+Score is usable on a phone: the same pages reflow to one column.
+
+### Tasks: the board
+
+![The Tasks board with five columns and a task drawer open on the right](docs/screenshots/tasks.png)
+
+Planned, Working, In review, Needs you and Done, with filters by room and agent. Open a card to see its steps and
+activity, and approve or comment right in the drawer.
+
+### Team and agent pages
+
+![The Team page: four agent cards with their status and current activity](docs/screenshots/team.png)
+
+Every agent at a glance. **Add agent** creates a new Hermes profile or imports an existing one.
+
+![An agent's page with personality, model, skills and memory](docs/screenshots/agent.png)
+
+Each agent has a page with tabs for personality, model, skills, memory, tools, plugins, workspace, routines,
+channels, permissions and history.
+
+### Coding agents
+
+![The Add agent dialog set to Coding agent, with the coding CLI, a workspace folder and a permission level](docs/screenshots/coding-agent.png)
+
+Claude Code and Codex CLI can join the team next to your Hermes agents. Pick the CLI, a workspace folder and a
+permission level (read only, workspace write or full access); the agent then works in rooms like any other member.
+They use your own CLI login and plan quota, and the permission level limits what they can change, not what they can
+read.
+
+### Knowledge: your notes
+
+![The Knowledge page with a note open in the live-preview editor, including a table, a task list and a callout](docs/screenshots/knowledge.png)
+
+A folder of Markdown notes that you and your agents share. The editor shows Markdown rendered as you type and keeps
+the file as plain text; notes link to each other, show backlinks, properties and history, and edits made by an agent
+carry its name and can be undone.
+
+### Reports
+
+![Reports: tasks finished per day, where each agent's time goes and the approvals table](docs/screenshots/reports.png)
+
+Tasks finished per day, where each agent's time goes, review pass rate, spend and your approvals, for today, 7 days,
+30 days or a custom range. **Export CSV** saves the numbers.
+
+### Settings
+
+![Settings: Rules and approvals, with Go ahead, Ask me and Never lists](docs/screenshots/settings.png)
+
+Models and keys, connections, rules and approvals (what agents may do alone, what they ask first and what they never
+do), notifications, Knowledge, shares, every Hermes setting under Advanced, backup, logs and remote access.
+
+![Now in dark mode](docs/screenshots/now-dark.png)
+
+Settings › Look switches between light and dark.
+
+### Terminal
+
+Score can also open a terminal on the machine it runs on, in the browser. It is off by default (start Score with `SCORE_TERMINAL=1`) and works only over
+HTTPS in remote mode, with a security password set on the host (`scripts/score password`); open terminals are listed
+and can be closed under Settings. There is no screenshot because it needs a real shell, which the demo does not run.
 
 ## Troubleshooting
 
