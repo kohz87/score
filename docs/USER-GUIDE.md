@@ -299,4 +299,7 @@ open at once, and the open ones are listed and can be closed under Settings.
 
 Below 1024 px wide the top bar turns into a **Menu** button that opens a side drawer with Now (and its Score, Flow and
 Routines views), Chat, Tasks, Team, Knowledge, Reports and Settings, plus Terminal when it is on. Pages reflow to one
-column; in Chat the room list comes first, above the conversation.
+column and each page opens on its content: in Chat an open room fills the screen and **Conversations** opens the room
+list as a drawer (with no room open, the list shows first); Settings has a **Section** picker; Knowledge's note tree is
+behind **All notes**; Tasks shows one board column at a time with column tabs above; the Now timeline scrolls sideways
+with the agent names pinned. Dialogs open as full-screen sheets on a phone.
