@@ -547,7 +547,8 @@ function assign(p: Pass, node: WfNodeRow): boolean {
   const estimate = def.estimateUsd ?? p.o.step_estimate_usd
   const view = budgetView(sqlite, p.o)
   if (!canReserve(view, estimate)) return false
-  const everyStep = p.wf.gate_policy === 'every-step' && reason !== 'remap'
+  // Under every-step a re-created (remapped or retried) step needs its own approval of the new frozen payload.
+  const everyStep = p.wf.gate_policy === 'every-step'
   const payloadHash = hashOf(rendered.text)
   const bytes = utf8Bytes(rendered.text) * (everyStep ? 2 : 1) + 512
   if (bytes > storageRoom(p.o))
