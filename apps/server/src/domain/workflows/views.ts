@@ -328,25 +328,25 @@ export function storageInventory(sqlite: DatabaseSync, o: OrchRow): StorageInven
     one<{ n: number; b: number }>(sqlite, sql, ...args)
   const orc = {
     steps: sum(
-      "SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(instruction) + LENGTH(COALESCE(result, ''))), 0) AS b FROM orc_steps WHERE orchestration_id = ?",
+      "SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(CAST(instruction AS BLOB)) + LENGTH(CAST(COALESCE(result, '') AS BLOB))), 0) AS b FROM orc_steps WHERE orchestration_id = ?",
       id,
     ),
     attempts: sum(
-      'SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(input)), 0) AS b FROM orc_attempts WHERE orchestration_id = ?',
+      'SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(CAST(input AS BLOB))), 0) AS b FROM orc_attempts WHERE orchestration_id = ?',
       id,
     ),
     gates: sum(
-      'SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(payload)), 0) AS b FROM orc_gates WHERE orchestration_id = ?',
+      'SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(CAST(payload AS BLOB))), 0) AS b FROM orc_gates WHERE orchestration_id = ?',
       id,
     ),
   }
   const wfRows = {
     nodes: sum(
-      "SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(COALESCE(output, '')) + LENGTH(COALESCE(reason, ''))), 0) AS b FROM wf_nodes WHERE orchestration_id = ?",
+      "SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(CAST(COALESCE(output, '') AS BLOB)) + LENGTH(CAST(COALESCE(reason, '') AS BLOB))), 0) AS b FROM wf_nodes WHERE orchestration_id = ?",
       id,
     ),
     gates: sum(
-      'SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(payload)), 0) AS b FROM wf_gates WHERE orchestration_id = ?',
+      'SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(CAST(payload AS BLOB))), 0) AS b FROM wf_gates WHERE orchestration_id = ?',
       id,
     ),
     other: sum(
@@ -354,40 +354,40 @@ export function storageInventory(sqlite: DatabaseSync, o: OrchRow): StorageInven
       id,
     ),
     results: sum(
-      `SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(output)), 0) AS b FROM wf_results WHERE attempt_id IN (SELECT id FROM orc_attempts WHERE orchestration_id = ?)`,
+      `SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(CAST(output AS BLOB))), 0) AS b FROM wf_results WHERE attempt_id IN (SELECT id FROM orc_attempts WHERE orchestration_id = ?)`,
       id,
     ),
   }
   const receipts = sum(
-    'SELECT (SELECT COUNT(*) FROM wf_commands WHERE orchestration_id = ?1) + (SELECT COUNT(*) FROM orc_commands WHERE orchestration_id = ?1) AS n, COALESCE((SELECT SUM(LENGTH(receipt)) FROM wf_commands WHERE orchestration_id = ?1), 0) + COALESCE((SELECT SUM(LENGTH(receipt)) FROM orc_commands WHERE orchestration_id = ?1), 0) AS b',
+    'SELECT (SELECT COUNT(*) FROM wf_commands WHERE orchestration_id = ?1) + (SELECT COUNT(*) FROM orc_commands WHERE orchestration_id = ?1) AS n, COALESCE((SELECT SUM(LENGTH(CAST(receipt AS BLOB))) FROM wf_commands WHERE orchestration_id = ?1), 0) + COALESCE((SELECT SUM(LENGTH(CAST(receipt AS BLOB))) FROM orc_commands WHERE orchestration_id = ?1), 0) AS b',
     id,
   )
   const intents = sum(
-    `SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(payload)), 0) AS b FROM command_intents WHERE idempotency_key IN (${marks})`,
+    `SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(CAST(payload AS BLOB))), 0) AS b FROM command_intents WHERE idempotency_key IN (${marks})`,
     ...turnIds,
   )
   const messages = sum(
-    'SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(parts)), 0) AS b FROM messages WHERE room_id = ?',
+    'SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(CAST(parts AS BLOB))), 0) AS b FROM messages WHERE room_id = ?',
     o.room_id,
   )
   const messageRuns = sum(
-    'SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(input)), 0) AS b FROM message_runs WHERE orchestration_attempt_id IN (SELECT id FROM orc_attempts WHERE orchestration_id = ?)',
+    'SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(CAST(input AS BLOB))), 0) AS b FROM message_runs WHERE orchestration_attempt_id IN (SELECT id FROM orc_attempts WHERE orchestration_id = ?)',
     id,
   )
   const runs = sum(
-    `SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(COALESCE(output, ''))), 0) AS b FROM runs WHERE score_turn_id IN (${marks})`,
+    `SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(CAST(COALESCE(output, '') AS BLOB))), 0) AS b FROM runs WHERE score_turn_id IN (${marks})`,
     ...turnIds,
   )
   const tools = sum(
-    `SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(COALESCE(preview, '')) + LENGTH(COALESCE(result_preview, ''))), 0) AS b FROM tool_calls WHERE run_id IN (SELECT id FROM runs WHERE score_turn_id IN (${marks}))`,
+    `SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(CAST(COALESCE(preview, '') AS BLOB)) + LENGTH(CAST(COALESCE(result_preview, '') AS BLOB))), 0) AS b FROM tool_calls WHERE run_id IN (SELECT id FROM runs WHERE score_turn_id IN (${marks}))`,
     ...turnIds,
   )
   const thinking = sum(
-    `SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(text)), 0) AS b FROM run_thinking WHERE run_id IN (SELECT id FROM runs WHERE score_turn_id IN (${marks}))`,
+    `SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(CAST(text AS BLOB))), 0) AS b FROM run_thinking WHERE run_id IN (SELECT id FROM runs WHERE score_turn_id IN (${marks}))`,
     ...turnIds,
   )
   const history = sum(
-    'SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(detail)), 0) AS b FROM orc_history WHERE orchestration_id = ?',
+    'SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(CAST(detail AS BLOB))), 0) AS b FROM orc_history WHERE orchestration_id = ?',
     id,
   )
   const compacted = one<{ detail: string } | undefined>(

@@ -306,7 +306,10 @@ export function translateRunEvent(
       }
       const values: Record<string, SQLInputValue> = { last_seq: seq }
       if (!ignored && known) values.status = 'running'
-      if (started && chargeObservation(sqlite, row.id, 2048 + 256)) {
+      if (
+        started && // The whole bounded row is reserved at the start: preview (2048) and result preview (500 chars, 2000 bytes) and overhead.
+        chargeObservation(sqlite, row.id, 2048 + 2000 + 256)
+      ) {
         sqlite
           .prepare(
             `INSERT INTO tool_calls (run_id, seq, tool, preview, status, started_at) VALUES (?, ?, ?, ?, 'running', ?) ON CONFLICT DO NOTHING`,

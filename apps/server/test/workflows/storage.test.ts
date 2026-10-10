@@ -241,3 +241,31 @@ test('thinking rows are part of the inventory and pruning releases the whole his
   ])
   expect(h.rows('SELECT 1 FROM run_thinking')).toHaveLength(0)
 })
+
+// round 2 (M): the actual translator charges what a tool completion retains
+test('through the live translator, tool starts and completions with multibyte previews are charged for what they retain', async () => {
+  h = await wfHarness()
+  const { translateRunEvent } = await import('../../src/hermes/live/translate.ts')
+  const id = await start(h, definition([agent('a', { instruction: '[fake:hold] A' }), end()], [edge('a', 'done')]))
+  await h.until(() => runIdOf(h!, id, 'a') !== undefined)
+  await h.settle(1500)
+  const runId = runIdOf(h, id, 'a')!
+  h.db.sqlite.prepare('UPDATE runs SET credential_generation = 1 WHERE id = ?').run(runId)
+  const before = stored(id).stored_bytes
+  const context = { profile: 'builder', runId, credentialGeneration: 1 }
+  for (let i = 0; i < 20; i++) {
+    const at = 1_791_290_877 + i
+    await h.ingest.submit(
+      translateRunEvent(context, { event: 'tool.started', run_id: runId, seq: 10 + 2 * i, timestamp: at, tool: 'terminal', preview: '日'.repeat(1500) }, { unknownEvents: 0 }),
+    )
+    await h.ingest.submit(
+      translateRunEvent(context, { event: 'tool.completed', run_id: runId, seq: 11 + 2 * i, timestamp: at + 0.5, tool: 'terminal', duration: 0.1, error: false, preview: '日'.repeat(1500) }, { unknownEvents: 0 }),
+    )
+  }
+  const retained = h.rows<{ n: number }>(
+    'SELECT COALESCE(SUM(LENGTH(CAST(preview AS BLOB)) + LENGTH(CAST(COALESCE(result_preview, \'\') AS BLOB))), 0) AS n FROM tool_calls WHERE run_id = ?',
+    runId,
+  )[0]!.n
+  expect(retained).toBeGreaterThan(20 * 2000)
+  expect(stored(id).stored_bytes - before).toBeGreaterThanOrEqual(retained)
+})
