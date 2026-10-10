@@ -1,6 +1,7 @@
 import type { Room } from '@score/contract'
-import { useContext, useState } from 'react'
+import { useCallback, useContext, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
+import { ResponsiveDrawer } from '../../components/ResponsiveDrawer.tsx'
 import { StreamContext, useStreamQuery } from '../../data/query-client.ts'
 import { ChatThread, QueryError } from './ChatThread.tsx'
 import { RoomPanels } from './RoomPanels.tsx'
@@ -22,22 +23,51 @@ export function ChatPage() {
   const [sharing, setSharing] = useState<Room | null>(null)
   const [starting, setStarting] = useState(false)
   const navigate = useNavigate()
+  const [listOpen, setListOpen] = useState(false)
+  const closeList = useCallback(() => setListOpen(false), [])
   const orchestrationRooms = new Set(
     (useStreamQuery(orchestrationsQuery).data ?? []).map((run) => run.roomId),
   )
   return (
     <div className="chat-layout">
-      <aside className="chat-conversations" aria-label="Conversations">
-        <button className="chat-new" type="button" disabled>
-          ＋ New chat
-        </button>
+      {roomId && (
         <button
-          className="chat-new chat-new--secondary"
+          className="chat-list-toggle"
           type="button"
-          onClick={() => setStarting(true)}
+          aria-haspopup="dialog"
+          aria-expanded={listOpen}
+          onClick={() => setListOpen(true)}
         >
-          ＋ New orchestration
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path
+              d="M2.5 4 H13.5 M2.5 8 H13.5 M2.5 12 H9"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+            />
+          </svg>
+          Conversations
         </button>
+      )}
+      <ResponsiveDrawer
+        label="Conversations"
+        className="chat-conversations"
+        open={listOpen}
+        onClose={closeList}
+        inline={!roomId}
+      >
+        <div className="chat-new-row">
+          <button className="chat-new" type="button" disabled>
+            ＋ New chat
+          </button>
+          <button
+            className="chat-new chat-new--secondary"
+            type="button"
+            onClick={() => setStarting(true)}
+          >
+            ＋ New orchestration
+          </button>
+        </div>
         {rooms.status === 'pending' && !rooms.data && <p role="status">Loading conversations…</p>}
         {rooms.status === 'error' && (
           <QueryError
@@ -77,7 +107,7 @@ export function ChatPage() {
           </div>
           <OutsideSessions agents={agents.data ?? []} />
         </nav>
-      </aside>
+      </ResponsiveDrawer>
       {roomId ? (
         <ChatThread key={`thread:${roomId}`} roomId={roomId} agents={agents.data ?? []} />
       ) : (

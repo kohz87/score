@@ -3,12 +3,21 @@ import { Outlet } from 'react-router'
 import { CommandPalette } from './CommandPalette.tsx'
 import { NotificationBridge } from '../notifications/NotificationBridge.tsx'
 import { UpdateBanner } from '../pwa/UpdateBanner.tsx'
+import { NavDrawer } from './NavDrawer.tsx'
+import { useTerminalAvailable } from './TerminalButton.tsx'
 import { TopBar } from './TopBar.tsx'
 
 export function AppShell() {
   const [commandOpen, setCommandOpen] = useState(false)
   const commandButtonRef = useRef<HTMLButtonElement>(null)
   const wasOpen = useRef(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const menuWasOpen = useRef(false)
+  const terminalOffered = useTerminalAvailable()
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false)
+  }, [])
   const closeCommand = useCallback(() => {
     setCommandOpen(false)
   }, [])
@@ -17,6 +26,10 @@ export function AppShell() {
     if (!commandOpen && wasOpen.current) commandButtonRef.current?.focus()
     wasOpen.current = commandOpen
   }, [commandOpen])
+  useEffect(() => {
+    if (!menuOpen && menuWasOpen.current) menuButtonRef.current?.focus()
+    menuWasOpen.current = menuOpen
+  }, [menuOpen])
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
@@ -29,16 +42,21 @@ export function AppShell() {
   }, [])
   return (
     <div className="app-shell">
-      <div inert={commandOpen} className="shell-content">
+      <div inert={commandOpen || menuOpen} className="shell-content">
         <TopBar
           commandButtonRef={commandButtonRef}
           onOpenCommand={() => setCommandOpen(true)}
           commandOpen={commandOpen}
+          menuButtonRef={menuButtonRef}
+          onToggleMenu={() => setMenuOpen((open) => !open)}
+          menuOpen={menuOpen}
+          terminalOffered={terminalOffered}
         />
         <main className="page-content">
           <Outlet />
         </main>
       </div>
+      <NavDrawer open={menuOpen} onClose={closeMenu} terminalOffered={terminalOffered} />
       <NotificationBridge />
       <UpdateBanner />
       {commandOpen && <CommandPalette onClose={closeCommand} />}

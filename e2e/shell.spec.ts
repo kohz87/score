@@ -81,16 +81,17 @@ test('Ctrl+K opens the palette, traps focus, navigates and returns focus', async
 })
 
 for (const width of [360, 719]) {
-  test(`the ${width}px header scrolls its nav without overflowing the page`, async ({ page }) => {
+  test(`the ${width}px header folds its nav into the menu without overflowing the page`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width, height: 800 })
     await page.goto('/now')
-    const nav = page.getByRole('navigation', { name: 'Main' })
-    expect(await nav.evaluate((element) => getComputedStyle(element).flexWrap)).toBe('nowrap')
-    expect(await nav.evaluate((element) => getComputedStyle(element).overflowX)).toBe('auto')
+    await expect(page.getByRole('navigation', { name: 'Main' })).toBeHidden()
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
       width,
     )
-    await nav.getByRole('link', { name: 'Settings' }).click()
+    await page.getByRole('button', { name: 'Menu', exact: true }).click()
+    await page.getByRole('dialog', { name: 'Menu' }).getByRole('link', { name: 'Settings' }).click()
     await expect(page).toHaveURL('/settings')
     await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible()
   })

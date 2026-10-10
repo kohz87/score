@@ -68,7 +68,7 @@ for (const width of [1440, 390]) {
   }
 }
 
-for (const width of [1440, 1024, 900]) {
+for (const width of [1440, 1024]) {
   test(`header stays on one line at ${width}px`, async ({ page }) => {
     await open(page, destinations[2]!, width)
     const centers = await page

@@ -450,9 +450,123 @@
   color: var(--agent-coral-text);
 }
 
-@media (max-width: 640px) {
+/* Phone and tablet (PLAN 5.34): the member list is a scrolling strip, the band and tabs shrink. */
+@media (width < 1024px) {
+  .team-layout {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .team-members {
+    flex: none;
+    max-width: none;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 16px 2px 0;
+    margin-right: -16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+  .team-members > * {
+    flex-shrink: 0;
+  }
+  .team-members a {
+    padding: 6px 14px 6px 8px;
+    border-radius: var(--radius-pill);
+    border-color: var(--hairline);
+    background: var(--card);
+    white-space: nowrap;
+  }
+  .team-members a.team-all {
+    padding: 4px 16px;
+  }
+  .team-members a[aria-current='page'] {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--card);
+  }
+  .team-members a .agent-glyph {
+    --glyph-tile-size: 28px;
+    --glyph-radius: 9px;
+    --glyph-svg-size: 18px;
+  }
+  .team-add-agent {
+    margin: 0;
+    height: 44px;
+    padding: 0 16px;
+    border-radius: var(--radius-pill);
+    white-space: nowrap;
+  }
+  .team-content {
+    flex: none;
+    gap: 16px;
+  }
+  .team-band {
+    border-radius: var(--radius-card);
+    padding: 22px 24px;
+    gap: 20px;
+    flex-wrap: nowrap;
+  }
+  .team-style {
+    flex: 0 0 88px;
+  }
+  .team-glyph-trigger {
+    width: 88px;
+    height: 88px;
+    border-radius: 28px;
+  }
+  .team-glyph-trigger svg.agent-glyph {
+    width: 48px;
+    height: 48px;
+  }
+  .team-band-copy {
+    flex: 1 1 0;
+    min-width: 0;
+  }
   .team-band h1 {
-    font-size: 48px;
+    font-size: clamp(36px, 8vw, 60px);
+  }
+  .team-band p {
+    font-size: 16px;
+  }
+  .team-tabs {
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    padding-right: 28px;
+  }
+  .team-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  }
+}
+@media (width < 600px) {
+  .team-band {
+    flex-direction: column;
+    align-items: flex-start;
+    border-radius: var(--radius-20);
+    padding: 18px;
+    gap: 14px;
+  }
+  .team-style {
+    flex-basis: auto;
+  }
+  .team-glyph-trigger {
+    width: 64px;
+    height: 64px;
+    border-radius: 20px;
+  }
+  .team-glyph-trigger svg.agent-glyph {
+    width: 36px;
+    height: 36px;
+  }
+  .team-band-copy {
+    flex: none;
+    width: 100%;
+  }
+  .team-card {
+    padding: 18px 16px;
+    border-radius: var(--radius-20);
   }
 }
 

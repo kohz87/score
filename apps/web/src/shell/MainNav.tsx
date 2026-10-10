@@ -4,13 +4,13 @@ import { needsHermesCheck, useSystemStatus } from '../routes/settings/settings-q
 import { useNeedsYou } from './use-needs-you.ts'
 
 // Only mounted where the query client exists (the pairing page renders outside it).
-function HermesCheckDot() {
+export function HermesCheckDot() {
   return needsHermesCheck(useSystemStatus().data) ? (
     <span className="needs-you-dot" role="img" aria-label="Hermes version needs a check" />
   ) : null
 }
 
-function NeedsYouDot() {
+export function NeedsYouDot() {
   return useNeedsYou() ? <span className="needs-you-dot" role="img" aria-label="Needs you" /> : null
 }
 

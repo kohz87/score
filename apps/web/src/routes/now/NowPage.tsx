@@ -49,6 +49,8 @@ export function NowPage() {
           <button
             type="button"
             className="now-pause"
+            // On phones the label is visually hidden (icon only); the tooltip says what it does.
+            title={paused ? 'Resume everyone' : 'Pause everyone'}
             disabled={pause.isPending || !snapshot}
             onClick={() => pause.mutate({ paused: !paused })}
           >

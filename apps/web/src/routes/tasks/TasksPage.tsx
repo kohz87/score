@@ -1,4 +1,5 @@
 import { useContext, useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { NARROW_QUERY, prefersReducedMotion, useMediaQuery } from '../../data/use-media.ts'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { StreamContext, useStreamQuery } from '../../data/query-client.ts'
@@ -85,6 +86,31 @@ export function TasksPage() {
     if (task) cards.current.get(task.id)?.focus()
   }
 
+  const boardScroll = useRef<HTMLDivElement>(null)
+  const [activeColumn, setActiveColumn] = useState(0)
+  const narrow = useMediaQuery(NARROW_QUERY)
+  function onBoardScroll() {
+    const scroller = boardScroll.current
+    if (!scroller || !narrow) return
+    const columnEls = Array.from(scroller.querySelectorAll<HTMLElement>('.task-column'))
+    let best = 0
+    columnEls.forEach((el, index) => {
+      if (
+        Math.abs(el.offsetLeft - scroller.scrollLeft) <
+        Math.abs(columnEls[best]!.offsetLeft - scroller.scrollLeft)
+      )
+        best = index
+    })
+    setActiveColumn(best)
+  }
+  function showColumn(index: number) {
+    const scroller = boardScroll.current
+    const target = scroller?.querySelectorAll<HTMLElement>('.task-column')[index]
+    if (!scroller || !target) return
+    const reduce = prefersReducedMotion()
+    scroller.scrollTo({ left: target.offsetLeft - 12, behavior: reduce ? 'auto' : 'smooth' })
+    setActiveColumn(index)
+  }
   const allTasks = board.data ? taskColumns.flatMap(({ id }) => board.data!.columns[id]) : []
   const selected = allTasks.find((task) => task.id === taskId)
   return (
@@ -92,51 +118,53 @@ export function TasksPage() {
       <section className="tasks-heading" aria-label="Tasks and filters">
         <h1>Tasks</h1>
         <div className="tasks-filters" role="group" aria-label="Filter tasks">
-          <select
-            className={`score-select task-room-filter${!filters.room ? ' score-select--dark' : ''}`}
-            aria-label="Room"
-            value={filters.room}
-            onChange={(event) => setFilter('room', event.target.value)}
-          >
-            <option value="">All rooms</option>
-            {filters.room && !rooms.data?.some((room) => room.id === filters.room) && (
-              <option value={filters.room}>{filters.room}</option>
-            )}
-            {rooms.data?.map((room) => (
-              <option key={room.id} value={room.id}>
-                {room.name}
-              </option>
+          <div className="tasks-chips">
+            <select
+              className={`score-select task-room-filter${!filters.room ? ' score-select--dark' : ''}`}
+              aria-label="Room"
+              value={filters.room}
+              onChange={(event) => setFilter('room', event.target.value)}
+            >
+              <option value="">All rooms</option>
+              {filters.room && !rooms.data?.some((room) => room.id === filters.room) && (
+                <option value={filters.room}>{filters.room}</option>
+              )}
+              {rooms.data?.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className={`task-filter${filters.needsYou ? ' task-filter--selected' : ''}`}
+              aria-pressed={filters.needsYou}
+              onClick={() => setFilter('needsYou', filters.needsYou ? '' : 'true')}
+            >
+              Needs you
+            </button>
+            {agents.data?.map((agent) => (
+              <button
+                key={agent.id}
+                type="button"
+                className={`task-filter task-agent-filter${filters.agent === agent.id ? ' task-filter--selected' : ''}`}
+                aria-pressed={filters.agent === agent.id}
+                onClick={() => setFilter('agent', filters.agent === agent.id ? '' : agent.id)}
+              >
+                <AgentGlyph agent={agent} size="sm" decorative />
+                {agent.name}
+              </button>
             ))}
-          </select>
-          <button
-            type="button"
-            className={`task-filter${filters.needsYou ? ' task-filter--selected' : ''}`}
-            aria-pressed={filters.needsYou}
-            onClick={() => setFilter('needsYou', filters.needsYou ? '' : 'true')}
-          >
-            Needs you
-          </button>
-          {agents.data?.map((agent) => (
-            <button
-              key={agent.id}
-              type="button"
-              className={`task-filter task-agent-filter${filters.agent === agent.id ? ' task-filter--selected' : ''}`}
-              aria-pressed={filters.agent === agent.id}
-              onClick={() => setFilter('agent', filters.agent === agent.id ? '' : agent.id)}
-            >
-              <AgentGlyph agent={agent} size="sm" decorative />
-              {agent.name}
-            </button>
-          ))}
-          {filters.agent && !agents.data?.some((agent) => agent.id === filters.agent) && (
-            <button
-              type="button"
-              className="task-filter task-filter--selected"
-              onClick={() => setFilter('agent', '')}
-            >
-              Clear agent filter: {filters.agent}
-            </button>
-          )}
+            {filters.agent && !agents.data?.some((agent) => agent.id === filters.agent) && (
+              <button
+                type="button"
+                className="task-filter task-filter--selected"
+                onClick={() => setFilter('agent', '')}
+              >
+                Clear agent filter: {filters.agent}
+              </button>
+            )}
+          </div>
           <button
             ref={newTrigger}
             type="button"
@@ -198,7 +226,30 @@ export function TasksPage() {
               ? `Task created: ${created.title}.`
               : board.data?.announcement}
           </p>
-          <div className="tasks-board-scroll" role="region" aria-label="Tasks board" tabIndex={0}>
+          {narrow && (
+            <div className="tasks-column-tabs" role="group" aria-label="Show column">
+              {taskColumns.map(({ id, label }, index) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="tasks-column-tab"
+                  aria-pressed={activeColumn === index}
+                  onClick={() => showColumn(index)}
+                >
+                  {label}
+                  <span>{board.data?.columns[id].length ?? 0}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div
+            ref={boardScroll}
+            className="tasks-board-scroll"
+            role="region"
+            aria-label="Tasks board"
+            tabIndex={0}
+            onScroll={onBoardScroll}
+          >
             <div className="tasks-board">
               {taskColumns.map(({ id, label }, columnIndex) => (
                 <section key={id} className="task-column" aria-label={label}>
