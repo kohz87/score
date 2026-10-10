@@ -168,6 +168,51 @@ for (const [mode, width, scheme] of [
   })
 }
 
+// Knowledge files (PLAN 6.6): the file manager, a document page and the zip question.
+for (const width of [1440, 390]) {
+  test(`knowledge files at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1100 })
+    await page.goto('/knowledge?files=projects')
+    await expect(page.locator('.kn-table')).toBeVisible()
+    await page.evaluate(() => document.fonts.ready)
+    if (width === 390) await noPageOverflow(page)
+    await expect(page).toHaveScreenshot(`knowledge-files-${width}.png`, {
+      fullPage: true,
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.005,
+    })
+  })
+  test(`knowledge document at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1100 })
+    await page.goto('/knowledge/projects/q3-budget.pdf')
+    await expect(page.locator('.kn-doc-text')).toBeVisible()
+    await page.evaluate(() => document.fonts.ready)
+    if (width === 390) await noPageOverflow(page)
+    await expect(page).toHaveScreenshot(`knowledge-document-${width}.png`, {
+      fullPage: true,
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.005,
+    })
+  })
+  test(`knowledge zip question at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1100 })
+    await page.goto('/knowledge?files=projects')
+    await page.getByTestId('kn-upload-input').setInputFiles({
+      name: 'pack.zip',
+      mimeType: 'application/zip',
+      buffer: Buffer.from('PK\x03\x04zip'),
+    })
+    await expect(page.getByRole('dialog', { name: /Zip file/ })).toBeVisible()
+    await page.evaluate(() => document.fonts.ready)
+    if (width === 390) await noPageOverflow(page)
+    await expect(page).toHaveScreenshot(`knowledge-zip-${width}.png`, {
+      fullPage: true,
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.005,
+    })
+  })
+}
+
 // Dark theme (Settings › Look): same pages, same fixtures, theme stored in the browser.
 test.describe('dark theme', () => {
   test.beforeEach(async ({ page }) => {

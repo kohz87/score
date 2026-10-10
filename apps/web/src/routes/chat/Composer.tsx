@@ -46,6 +46,9 @@ import {
   type Attachment,
 } from './attachments.ts'
 import { WorkspacePicker } from './WorkspacePicker.tsx'
+import { ChipSaveOption } from '../knowledge/ChipSaveOption.tsx'
+import { summaryText, useUploadFlow } from '../knowledge/UploadFlow.tsx'
+import { isSupportedName } from '../knowledge/knowledge-files.ts'
 
 type Notice =
   | { kind: 'error'; text: string }
@@ -106,6 +109,12 @@ export function Composer({
   const [closed, setClosed] = useState(false)
   const [pending, setPending] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
+  // "Also save to Knowledge" (PLAN 6.6): mediaId -> folder for attachments the person chose to keep.
+  const [saveTo, setSaveTo] = useState<Record<string, string>>({})
+  const knowledgeFlow = useUploadFlow((summary) => {
+    const text = summaryText(summary)
+    if (text) setNotice({ kind: 'info', text })
+  })
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [uploading, setUploading] = useState(0)
   const [attachMenu, setAttachMenu] = useState(false)
@@ -457,6 +466,7 @@ export function Composer({
       )
       update((data) => withMessage(data, result.message, temporary))
       sendKey.current = null
+      void saveSentToKnowledge(sent)
       if (!mounted.current) {
         // The composer moved to another conversation mid-send: only drop the stored draft if it is still what we sent.
         if (loadDraft(roomId).trim() === body) saveDraft(roomId, '')
@@ -510,6 +520,34 @@ export function Composer({
         textarea.current?.focus()
       }
     }
+  }
+
+  // After the message is sent: the files marked "Also save to Knowledge" go there too, one folder at a time.
+  async function saveSentToKnowledge(sent: Attachment[]) {
+    const wanted = sent.flatMap((item) =>
+      item.kind === 'upload' && saveTo[item.mediaId] !== undefined
+        ? [
+            {
+              name: item.name,
+              mediaId: item.mediaId,
+              folder: saveTo[item.mediaId]!.trim().replace(/\/+$/, ''),
+            },
+          ]
+        : [],
+    )
+    if (wanted.length === 0) return
+    setSaveTo((current) => {
+      const next = { ...current }
+      for (const item of wanted) delete next[item.mediaId]
+      return next
+    })
+    for (const folder of new Set(wanted.map((item) => item.folder)))
+      await knowledgeFlow.start(
+        wanted
+          .filter((item) => item.folder === folder)
+          .map((item) => ({ name: item.name, mediaId: item.mediaId })),
+        folder,
+      )
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -680,7 +718,10 @@ export function Composer({
         {(attachments.length > 0 || uploading > 0) && (
           <ul className="chat-attachments" aria-label="Attachments">
             {attachments.map((item) => (
-              <li key={attachmentKey(item)} className="chat-attachment">
+              <li
+                key={attachmentKey(item)}
+                className={`chat-attachment${item.kind === 'upload' && canSaveToKnowledge(item) ? ' has-save' : ''}`}
+              >
                 {item.kind === 'upload' && isImage(item.contentType) ? (
                   <img src={`/api/media/${encodeURIComponent(item.mediaId)}`} alt="" />
                 ) : (
@@ -700,6 +741,20 @@ export function Composer({
                 >
                   {item.kind === 'workspace' ? item.path : attachmentName(item)}
                 </span>
+                {item.kind === 'upload' && canSaveToKnowledge(item) && (
+                  <ChipSaveOption
+                    name={item.name}
+                    folder={saveTo[item.mediaId] ?? null}
+                    onChange={(folder) =>
+                      setSaveTo((current) => {
+                        const next = { ...current }
+                        if (folder === null) delete next[item.mediaId]
+                        else next[item.mediaId] = folder
+                        return next
+                      })
+                    }
+                  />
+                )}
                 <button
                   type="button"
                   aria-label={`Remove ${attachmentName(item)}`}
@@ -716,6 +771,7 @@ export function Composer({
             {uploading > 0 && <li className="chat-attachment">Uploading…</li>}
           </ul>
         )}
+        {knowledgeFlow.dialogs}
         <div className="chat-composer-row">
           <span className="chat-composer-label">To</span>
           {to.length === 0 && <span className="chat-composer-default">Room lead</span>}
@@ -931,4 +987,9 @@ export function Composer({
       )}
     </div>
   )
+}
+
+/** Images, PDF, DOCX and text files can go to Knowledge; XLSX and anything else cannot. */
+function canSaveToKnowledge(item: { name: string; contentType: string }): boolean {
+  return item.contentType.startsWith('image/') || isSupportedName(item.name)
 }

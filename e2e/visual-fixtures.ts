@@ -22,6 +22,8 @@ import {
   KnowledgeInfoSchema,
   KnowledgeNoteSchema,
   KnowledgeTreeSchema,
+  KnowledgeDocumentSchema,
+  KnowledgeZipPreviewSchema,
   KnowledgeHistorySchema,
   TasksSnapshotSchema,
 } from '../packages/contract/src/index.ts'
@@ -292,6 +294,8 @@ export const visualFixtures: Record<string, unknown> = {
     notes: 4,
     gitAvailable: true,
     agentAccess: true,
+    documents: 4,
+    documentBytes: 1_450_000,
   }),
   '/api/knowledge/agent-usage': KnowledgeAgentUsageSchema.parse({
     items: [
@@ -301,6 +305,44 @@ export const visualFixtures: Record<string, unknown> = {
   }),
   '/api/knowledge/tree': KnowledgeTreeSchema.parse({
     folders: ['projects', 'projects/archive'],
+    documents: [
+      {
+        path: 'projects/q3-budget.pdf',
+        type: 'pdf',
+        size: 482_000,
+        mtime: minutesAgo(45),
+        lastAuthor: 'you',
+        versioned: true,
+        textStatus: 'indexed',
+      },
+      {
+        path: 'projects/signups.csv',
+        type: 'csv',
+        size: 18_400,
+        mtime: minutesAgo(200),
+        lastAuthor: { agentId: 'builder' },
+        versioned: true,
+        textStatus: 'indexed',
+      },
+      {
+        path: 'projects/logo.png',
+        type: 'image',
+        size: 64_000,
+        mtime: minutesAgo(900),
+        lastAuthor: 'you',
+        versioned: true,
+        textStatus: 'none',
+      },
+      {
+        path: 'projects/archive/site-export.zip',
+        type: 'zip',
+        size: 886_000,
+        mtime: minutesAgo(4000),
+        lastAuthor: 'you',
+        versioned: true,
+        textStatus: 'none',
+      },
+    ],
     notes: [
       { path: 'Home.md', title: 'Home', mtime: minutesAgo(600), lastAuthor: 'you' },
       {
@@ -317,6 +359,35 @@ export const visualFixtures: Record<string, unknown> = {
         lastAuthor: 'you',
       },
     ],
+  }),
+  '/api/knowledge/documents/projects/q3-budget.pdf': KnowledgeDocumentSchema.parse({
+    path: 'projects/q3-budget.pdf',
+    type: 'pdf',
+    size: 482_000,
+    mtime: minutesAgo(45),
+    lastAuthor: 'you',
+    versioned: true,
+    textStatus: 'indexed',
+    text: [
+      'Q3 budget review',
+      '',
+      'Launch campaign: 42,000 EUR. Contractors: 18,500 EUR. Tooling and licences: 6,200 EUR.',
+      'The launch date moves to 14 November if the legal review finishes this week.',
+      '',
+      'Open question: should the partner programme be funded from the Q4 reserve?',
+    ].join('\n'),
+    entries: null,
+  }),
+  '/api/knowledge/files/projects/pack.zip?mode=preview': KnowledgeZipPreviewSchema.parse({
+    entries: [
+      { path: 'README.md', size: 1200, action: 'extract', reason: null },
+      { path: 'docs/guide.pdf', size: 220_000, action: 'extract', reason: null },
+      { path: 'data/customers.csv', size: 48_000, action: 'extract', reason: null },
+      { path: 'bin/setup.exe', size: 2_400_000, action: 'skip', reason: 'type not supported' },
+      { path: '.env', size: 80, action: 'skip', reason: 'hidden file' },
+    ],
+    more: false,
+    extractCount: 3,
   }),
   '/api/knowledge/notes/projects/launch-plan.md': KnowledgeNoteSchema.parse({
     path: 'projects/launch-plan.md',

@@ -710,7 +710,7 @@ test('finished messages get an action row below the body, per author; streaming 
   await screen.findByText('Ship it')
   const articles = screen.getAllByRole('article')
   expect(buttons(articles[0]!)).toEqual(['Edit', 'Copy', 'Delete'])
-  expect(buttons(articles[1]!)).toEqual(['Copy', 'Retry', 'Delete'])
+  expect(buttons(articles[1]!)).toEqual(['Copy', 'Save to Knowledge', 'Retry', 'Delete'])
   // A reply being written has Stop, and none of the finished-message actions.
   expect(buttons(articles[2]!)).toEqual(['Stop'])
   // Below the body, never inside the header that holds the timestamp.

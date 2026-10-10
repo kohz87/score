@@ -13,6 +13,7 @@ import { DocumentChip, WorkspaceChip } from './DocumentChips.tsx'
 import { PlanCard } from './PlanCard.tsx'
 import { RewindDialog } from './RewindDialog.tsx'
 import { SummaryCard } from './SummaryCard.tsx'
+import { SaveToKnowledge, saveCandidates } from '../knowledge/SaveToKnowledge.tsx'
 import { approvalsQuery } from './queries.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { MODEL_DIDNT_ANSWER, formatElapsed, isNotProcessedNotice, stalledFor } from './stall.ts'
@@ -181,6 +182,11 @@ const ICONS = {
       <path d="M13.2 2.2 V5 H10.4" />
     </Icon>
   ),
+  save: (
+    <Icon>
+      <path d="M3 2.5 H10.5 L13 5 V13.5 H3 Z M5.5 2.5 V6 H9.5 V2.5 M5.5 13.5 V9.5 H10.5 V13.5" />
+    </Icon>
+  ),
   delete: (
     <Icon>
       <path d="M3 4.5 H13 M6.5 4.5 V3 H9.5 V4.5 M4.5 4.5 L5 13.5 H11 L11.5 4.5" />
@@ -235,6 +241,7 @@ function MessageActions({
   const [retry, setRetry] = useState<'idle' | 'busy' | 'queued'>('idle')
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
+  const [saving, setSaving] = useState(false)
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
   useEffect(() => {
     const pending = timers.current
@@ -290,6 +297,15 @@ function MessageActions({
           onClick={() => void copy()}
         />
       )}
+      {saveCandidates(message, name).length > 0 && (
+        <Action
+          label="Save to Knowledge"
+          name={`Save message from ${name} to Knowledge`}
+          icon="save"
+          title="Keep its attachments or reply in Knowledge"
+          onClick={() => setSaving(true)}
+        />
+      )}
       {!you && !imported && (
         <Action
           label={retry === 'queued' ? 'Retrying' : 'Retry'}
@@ -322,6 +338,9 @@ function MessageActions({
           onDone={() => setConfirming(false)}
           onClose={() => setConfirming(false)}
         />
+      )}
+      {saving && (
+        <SaveToKnowledge message={message} authorName={name} onClose={() => setSaving(false)} />
       )}
       {copied && (
         <span className="chat-sr-only" role="status">
