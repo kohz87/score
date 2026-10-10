@@ -1,13 +1,13 @@
 import { autocompletion, type CompletionContext } from '@codemirror/autocomplete'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { markdown } from '@codemirror/lang-markdown'
-import { syntaxHighlighting } from '@codemirror/language'
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap, placeholder } from '@codemirror/view'
 import { useEffect, useRef } from 'react'
 import type { KnowledgeNoteSummary } from '@score/contract'
-import { scoreHighlight, scoreTheme } from '../../components/code-editor-theme.ts'
+import { scoreTheme } from '../../components/code-editor-theme.ts'
 import { baseName, linkTargetFor } from './knowledge-paths.ts'
+import { livePreview, refreshLive } from './live-preview.ts'
 
 type Props = {
   initial: string
@@ -15,6 +15,12 @@ type Props = {
   /** Latest note list for `[[` completion; read on every completion, so it may change without a remount. */
   notes: () => KnowledgeNoteSummary[]
   onChange: (text: string) => void
+  /** Ctrl/Cmd-click on a `[[wikilink]]`. */
+  onOpenWikilink?: (target: string) => void
+  /** True when no note matches the link target (drawn as missing). */
+  isMissing?: (target: string) => boolean
+  /** Changes when the note list or links changed, so missing/found links are redrawn. */
+  refreshKey?: unknown
 }
 
 // Wikilink autocomplete after `[[` (adapted from the behaviour of the owner's Artemis editor; code written for Score).
@@ -46,12 +52,24 @@ export function wikilinkCompletion(notes: () => KnowledgeNoteSummary[]) {
   }
 }
 
-export function MarkdownEditor({ initial, label, notes, onChange }: Props) {
+export function MarkdownEditor({
+  initial,
+  label,
+  notes,
+  onChange,
+  onOpenWikilink,
+  isMissing,
+  refreshKey,
+}: Props) {
   const host = useRef<HTMLDivElement>(null)
-  const latest = useRef({ notes, onChange })
+  const latest = useRef({ notes, onChange, onOpenWikilink, isMissing })
   useEffect(() => {
-    latest.current = { notes, onChange }
+    latest.current = { notes, onChange, onOpenWikilink, isMissing }
   })
+  const viewRef = useRef<EditorView | null>(null)
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: refreshLive.of(null) })
+  }, [refreshKey])
   useEffect(() => {
     const parent = host.current
     if (!parent) return
@@ -62,8 +80,11 @@ export function MarkdownEditor({ initial, label, notes, onChange }: Props) {
         extensions: [
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
-          markdown(),
-          syntaxHighlighting(scoreHighlight),
+          markdown({ base: markdownLanguage }),
+          livePreview({
+            onOpenWikilink: (target) => latest.current.onOpenWikilink?.(target),
+            isMissing: (target) => latest.current.isMissing?.(target) ?? false,
+          }),
           EditorView.lineWrapping,
           placeholder('Write in Markdown. Type [[ to link another note.'),
           autocompletion({
@@ -82,7 +103,11 @@ export function MarkdownEditor({ initial, label, notes, onChange }: Props) {
         ],
       }),
     })
-    return () => view.destroy()
+    viewRef.current = view
+    return () => {
+      viewRef.current = null
+      view.destroy()
+    }
     // The editor is remounted (key) when a different text must be loaded.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

@@ -294,27 +294,7 @@
 .kn-preview h1,
 .kn-preview h2,
 .kn-preview h3 {
-  font-family: var(--font-heading);
   letter-spacing: -0.02em;
-}
-.kn-preview pre,
-.kn-preview code {
-  font-family: var(--font-code);
-  font-size: 13px;
-}
-.kn-preview pre {
-  padding: 12px 14px;
-  background: var(--subtle);
-  border-radius: var(--radius-14);
-  overflow-x: auto;
-}
-.kn-preview table {
-  border-collapse: collapse;
-}
-.kn-preview th,
-.kn-preview td {
-  border: 1px solid var(--hairline);
-  padding: 4px 10px;
 }
 .kn-preview a,
 .kn-side a {
@@ -495,4 +475,338 @@
   color: var(--ink);
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
+}
+
+/* Rendered notes (PLAN 6.5): the Chat Markdown styles (.chat-md) plus what notes need that replies do not. */
+.kn-preview.chat-md {
+  font-size: 15px;
+  line-height: 1.65;
+}
+.kn-preview.chat-md h1 {
+  font-size: 28px;
+}
+.kn-preview.chat-md h2 {
+  font-size: 22px;
+}
+.kn-preview.chat-md h3 {
+  font-size: 18px;
+}
+.kn-preview ul,
+.kn-preview ol {
+  list-style: revert;
+  padding-left: 24px;
+}
+.kn-preview li > ul,
+.kn-preview li > ol {
+  margin-bottom: 0;
+}
+.kn-preview ul.contains-task-list {
+  list-style: none;
+  padding-left: 4px;
+}
+.kn-preview li.task-list-item input {
+  margin: 0 8px 0 0;
+  accent-color: var(--ink);
+  vertical-align: middle;
+}
+.kn-preview hr {
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  margin: 18px 0;
+}
+.kn-preview.chat-md blockquote {
+  border-left-width: 3px;
+  font-style: italic;
+}
+.kn-preview .chat-md-table {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+}
+.kn-preview .chat-md-table:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.kn-preview .chat-md-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.kn-preview .chat-md-table th,
+.kn-preview .chat-md-table td {
+  border: 0;
+  border-bottom: 1px solid var(--hairline);
+  padding: 8px 12px;
+}
+.kn-preview .chat-md-table tr:last-child td {
+  border-bottom: 0;
+}
+.kn-preview .chat-md-table th {
+  font-weight: 600;
+  background: var(--subtle);
+}
+.kn-preview .chat-md-table tbody tr:nth-child(even) td {
+  background: var(--subtle);
+}
+
+/* Callouts: > [!note] Title */
+.kn-callout {
+  --callout-tint: var(--agent-violet-tint);
+  --callout-ink: var(--agent-violet-text);
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-14);
+  background: var(--callout-tint);
+  border-left: 4px solid var(--callout-ink);
+}
+.kn-callout-tip {
+  --callout-tint: var(--agent-jade-tint);
+  --callout-ink: var(--agent-jade-text);
+}
+.kn-callout-warn {
+  --callout-tint: var(--agent-saffron-tint);
+  --callout-ink: var(--agent-saffron-text);
+}
+.kn-callout-danger {
+  --callout-tint: var(--agent-coral-tint);
+  --callout-ink: var(--agent-coral-text);
+}
+.kn-callout > p:not(.kn-callout-title) {
+  margin: 0;
+}
+.kn-callout-title {
+  margin: 0 0 4px;
+  font-weight: 700;
+  color: var(--callout-ink);
+}
+
+/* Split view */
+.kn-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.kn-split > .kn-edit-area {
+  height: min(72vh, 760px);
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.kn-split .kn-editor-host {
+  flex: 1;
+  min-height: 0;
+}
+.kn-split .kn-editor-host .cm-editor {
+  height: 100%;
+}
+.kn-split .kn-editor-host .cm-scroller {
+  overflow: auto;
+}
+.kn-split .kn-preview {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.kn-note:has(.kn-split) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Live preview editor (PLAN 6.5): prose in the body font, code in the code font; markup shows on the cursor's line. */
+.kn-editor-host .cm-editor .cm-content {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.65;
+}
+.kn-editor-host .cm-editor .cm-scroller {
+  font-family: var(--font-body);
+}
+.cm-lp-h {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.cm-lp-h1 {
+  font-size: 28px;
+  padding-top: 10px !important;
+}
+.cm-lp-h2 {
+  font-size: 22px;
+  padding-top: 8px !important;
+}
+.cm-lp-h3 {
+  font-size: 18px;
+}
+.cm-lp-h4,
+.cm-lp-h5,
+.cm-lp-h6 {
+  font-size: 16px;
+}
+.cm-lp-strong {
+  font-weight: 700;
+}
+.cm-lp-em {
+  font-style: italic;
+}
+.cm-lp-strike {
+  text-decoration: line-through;
+}
+.cm-lp-code-inline,
+.cm-lp-block {
+  font-family: var(--font-code);
+}
+.cm-lp-code-inline {
+  font-size: 0.88em;
+  background: var(--subtle-2);
+  border-radius: 6px;
+  padding: 1px 4px;
+}
+.cm-lp-link,
+.cm-lp-wikilink {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+.cm-lp-wikilink {
+  cursor: pointer;
+}
+.cm-lp-wikilink.is-missing {
+  color: var(--agent-coral-text);
+  text-decoration: underline dashed;
+}
+.cm-lp-quote {
+  border-left: 3px solid var(--hairline);
+  padding-left: 12px !important;
+  color: var(--ink-muted);
+}
+.cm-lp-callout {
+  --callout-tint: var(--agent-violet-tint);
+  --callout-ink: var(--agent-violet-text);
+  background: var(--callout-tint);
+  border-left: 4px solid var(--callout-ink);
+  padding-left: 12px !important;
+}
+.cm-lp-callout-tip {
+  --callout-tint: var(--agent-jade-tint);
+  --callout-ink: var(--agent-jade-text);
+}
+.cm-lp-callout-warn {
+  --callout-tint: var(--agent-saffron-tint);
+  --callout-ink: var(--agent-saffron-text);
+}
+.cm-lp-callout-danger {
+  --callout-tint: var(--agent-coral-tint);
+  --callout-ink: var(--agent-coral-text);
+}
+.cm-lp-callout-first {
+  border-top-right-radius: var(--radius-14);
+  border-top-left-radius: var(--radius-14);
+  padding-top: 6px !important;
+}
+.cm-lp-callout-label {
+  font-weight: 700;
+  color: var(--callout-ink);
+  text-transform: capitalize;
+}
+.cm-lp-bullet {
+  display: inline-block;
+  width: 1.1em;
+  color: var(--ink-muted);
+}
+.cm-lp-check {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  margin-right: 6px;
+  border: 1.5px solid var(--ink);
+  border-radius: 5px;
+  font-size: 12px;
+  line-height: 1;
+  vertical-align: -3px;
+  cursor: pointer;
+}
+.cm-lp-check[aria-checked='true'] {
+  background: var(--ink);
+  color: var(--card);
+}
+.cm-lp-check:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.cm-lp-done {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.cm-lp-hr {
+  display: inline-block;
+  width: 100%;
+  height: 0;
+  border-top: 1px solid var(--hairline);
+  vertical-align: middle;
+}
+.cm-lp-block {
+  background: var(--rules-panel);
+  color: var(--rules-text);
+  font-size: 13px;
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+}
+.cm-lp-fence-first {
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  padding-top: 6px !important;
+}
+.cm-lp-fence-last {
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
+  padding-bottom: 6px !important;
+}
+.cm-lp-lang {
+  color: var(--muted);
+  font-size: 12px;
+}
+.cm-lp-table-source {
+  font-family: var(--font-code);
+  font-size: 13px;
+  background: var(--subtle);
+}
+.cm-lp-table {
+  overflow-x: auto;
+  max-width: 100%;
+  margin: 6px 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  cursor: text;
+}
+.cm-lp-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.cm-lp-table th,
+.cm-lp-table td {
+  border-bottom: 1px solid var(--hairline);
+  padding: 8px 12px;
+  text-align: left;
+}
+.cm-lp-table th {
+  font-weight: 600;
+  background: var(--subtle);
+}
+.cm-lp-table tbody tr:nth-child(even) td {
+  background: var(--subtle);
+}
+.cm-lp-table tr:last-child td {
+  border-bottom: 0;
+}
+.cm-lp-table code {
+  font-family: var(--font-code);
+  font-size: 0.88em;
+  background: var(--subtle-2);
+  border-radius: 6px;
+  padding: 1px 4px;
 }

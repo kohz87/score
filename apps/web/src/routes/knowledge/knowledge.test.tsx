@@ -173,6 +173,7 @@ beforeEach(() => {
   )
 })
 afterEach(() => {
+  localStorage.clear()
   cleanup()
   router.dispose()
   registry.dispose()
@@ -217,6 +218,8 @@ function emit(data: KnowledgeChanged) {
 const editorView = () => EditorView.findFromDOM(document.querySelector<HTMLElement>('.cm-editor')!)!
 async function openEditor(url = '/knowledge/projects/Plan.md') {
   mount(url)
+  // Notes open rendered; the editor tests start from Edit.
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
   await screen.findByLabelText('Contents of projects/Plan.md')
   return editorView()
 }
@@ -263,7 +266,7 @@ test('the folder tree is an ARIA tree with keyboard navigation and recent notes'
   fireEvent.keyDown(items[1]!, { key: 'ArrowRight' })
   const plan = within(tree).getByRole('treeitem', { name: /Plan/ })
   fireEvent.keyDown(plan, { key: 'Enter' })
-  expect(await screen.findByLabelText('Contents of projects/Plan.md')).toBeDefined()
+  expect(await screen.findByLabelText('Preview')).toBeDefined()
   expect(router.state.location.pathname).toBe('/knowledge/projects/Plan.md')
   expect(screen.getByRole('treeitem', { name: /Plan/ }).getAttribute('aria-selected')).toBe('true')
 })
@@ -334,8 +337,7 @@ test('[[ completion offers titles and paths from the tree', () => {
 
 test('Preview renders Markdown, links existing notes and marks missing ones with Create', async () => {
   mount('/knowledge/Home.md')
-  await screen.findByLabelText('Contents of Home.md')
-  fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+  await screen.findByLabelText('Preview')
   const preview = screen.getByLabelText('Preview')
   expect(within(preview).getByRole('heading', { name: 'Home' })).toBeDefined()
   const link = within(preview).getByRole('link', { name: 'Plan' })
@@ -393,7 +395,7 @@ test('Ctrl+K focuses search, results highlight the match and open the note', asy
   expect(within(link).getByText('launch').tagName).toBe('MARK')
   expect(calls.some((c) => c.url === '/api/knowledge/search?q=launch&limit=20')).toBe(true)
   fireEvent.click(link)
-  expect(await screen.findByLabelText('Contents of projects/Plan.md')).toBeDefined()
+  expect(await screen.findByLabelText('Preview')).toBeDefined()
   // From the search box, the same key reaches the command palette.
   search.focus()
   fireEvent.keyDown(search, { key: 'k', ctrlKey: true })
@@ -600,8 +602,7 @@ test('a failed background read keeps the editor and the unsaved text', async () 
 test('malformed percent-encoding in a #wiki: link does not crash Preview', async () => {
   notes.get('Home.md')!.body = 'Bad [broken](#wiki:%E0%A4%A) link'
   mount('/knowledge/Home.md')
-  await screen.findByLabelText('Contents of Home.md')
-  fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+  await screen.findByLabelText('Preview')
   const preview = screen.getByLabelText('Preview')
   expect(within(preview).getByText('broken')).toBeDefined()
   expect(within(preview).queryByRole('link', { name: 'broken' })).toBeNull()
@@ -636,8 +637,7 @@ test('after a stream resync the open note offers Reload when it changed meanwhil
 
 test('Preview links follow notes created or removed elsewhere', async () => {
   mount('/knowledge/Home.md')
-  await screen.findByLabelText('Contents of Home.md')
-  fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+  await screen.findByLabelText('Preview')
   expect(
     within(screen.getByLabelText('Preview')).getByTitle('This note does not exist yet'),
   ).toBeDefined()
@@ -672,4 +672,65 @@ test('text that could not be saved before leaving comes back when the note is op
   await screen.findByLabelText('Contents of projects/Plan.md')
   expect(editorView().state.doc.toString()).toBe('# Plan\n\nGoals\n unsaved')
   expect(await screen.findByTestId('conflict')).toBeDefined()
+})
+
+// PLAN 6.5: notes open rendered; the last mode is remembered per device; Split needs a wide screen.
+test('a note opens rendered, Edit shows the editor, and the mode is remembered', async () => {
+  mount('/knowledge/projects/Plan.md')
+  const preview = await screen.findByLabelText('Preview')
+  expect(within(preview).getByRole('heading', { name: 'Plan' })).toBeDefined()
+  expect(document.querySelector('.cm-editor')).toBeNull()
+  expect(screen.getByRole('button', { name: 'Preview' }).getAttribute('aria-pressed')).toBe('true')
+  expect(screen.queryByRole('button', { name: 'Split' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+  expect(await screen.findByLabelText('Contents of projects/Plan.md')).toBeDefined()
+  expect(localStorage.getItem('score.knowledge.mode')).toBe('edit')
+  cleanup()
+  router.dispose()
+  registry.dispose()
+  mount('/knowledge/projects/Plan.md')
+  expect(await screen.findByLabelText('Contents of projects/Plan.md')).toBeDefined()
+})
+
+test('a blocked localStorage does not break the mode switch', async () => {
+  vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    throw new Error('blocked')
+  })
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new Error('blocked')
+  })
+  mount('/knowledge/projects/Plan.md')
+  await screen.findByLabelText('Preview')
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+  expect(await screen.findByLabelText('Contents of projects/Plan.md')).toBeDefined()
+  vi.restoreAllMocks()
+})
+
+test('Split shows editor and rendered note together on a wide screen only', async () => {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: true,
+    media: query,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }))
+  mount('/knowledge/projects/Plan.md')
+  await screen.findByLabelText('Preview')
+  fireEvent.click(await screen.findByRole('button', { name: 'Split' }))
+  expect(await screen.findByLabelText('Contents of projects/Plan.md')).toBeDefined()
+  const preview = screen.getByLabelText('Preview')
+  expect(within(preview).getByRole('heading', { name: 'Plan' })).toBeDefined()
+  // Typing in the editor shows up in the rendered side.
+  act(() => {
+    editorView().dispatch({
+      changes: { from: editorView().state.doc.length, insert: 'Extra words' },
+    })
+  })
+  await waitFor(() => expect(preview.textContent).toContain('Extra words'))
+})
+
+test('a remembered Split falls back to the editor on a narrow screen', async () => {
+  localStorage.setItem('score.knowledge.mode', 'split')
+  mount('/knowledge/projects/Plan.md')
+  expect(await screen.findByLabelText('Contents of projects/Plan.md')).toBeDefined()
+  expect(screen.queryByLabelText('Preview')).toBeNull()
 })
