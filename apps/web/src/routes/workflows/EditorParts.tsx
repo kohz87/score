@@ -77,7 +77,9 @@ export function Palette({
                 <b>{KIND_LABEL[kind]}</b>
                 <small>{KIND_HELP[kind]}</small>
               </span>
-              <span className="wf-visually-hidden">Add a {KIND_LABEL[kind].toLowerCase()}</span>
+              <span className="wf-visually-hidden">
+                Add {kind === 'end' ? 'an' : 'a'} {KIND_LABEL[kind].toLowerCase()}
+              </span>
             </button>
           </li>
         ))}

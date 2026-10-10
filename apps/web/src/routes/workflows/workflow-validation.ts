@@ -129,8 +129,8 @@ export function shapeIssues(draft: Draft): EditorIssue[] {
     } else field = String(root ?? '') || null
     const tooBig = issue.code === 'too_big'
     const message = tooBig
-      ? `${scope}: ${field ?? 'a field'} is too long. ${issue.message}`
-      : `${scope}: ${fieldPhrase(field)}`
+      ? `${nodeId ? '' : `${scope}: `}${field ?? 'a field'} is too long. ${issue.message}`
+      : `${nodeId ? '' : `${scope}: `}${fieldPhrase(field)}`
     issues.push({
       code: 'incomplete',
       severity: 'error',
