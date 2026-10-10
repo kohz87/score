@@ -13,6 +13,14 @@
   gap: 22px;
   padding: 4px 4px 0;
 }
+.chat-new-row {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.chat-list-toggle {
+  display: none;
+}
 .chat-new {
   height: 48px;
   border-radius: var(--radius-pill);
@@ -2231,4 +2239,64 @@
   border-radius: var(--radius-20);
   background: var(--subtle);
   color: var(--muted);
+}
+
+/* Phone and tablet (PLAN 5.34): the list is a drawer next to an open room; the room gets the full width. */
+@media (width < 1024px) {
+  .chat-layout {
+    gap: 16px;
+  }
+  .chat-list-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 100%;
+    justify-content: center;
+    height: 44px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--hairline);
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .chat-conversations.is-inline {
+    flex-basis: 100%;
+    max-width: none;
+    padding: 0;
+  }
+  .chat-new-row {
+    flex-direction: row;
+    gap: 8px;
+  }
+  .chat-new-row .chat-new {
+    flex: 1;
+    height: 44px;
+    font-size: 14px;
+    padding: 0 8px;
+  }
+  .chat-conversations nav {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 22px;
+  }
+  .chat-room-group {
+    flex: none;
+  }
+  .chat-thread {
+    flex-basis: 100%;
+  }
+}
+@media (width < 600px) {
+  .chat-thread {
+    border-radius: var(--radius-20);
+    height: max(480px, calc(100dvh - 150px));
+  }
+}
+@media (width < 1024px) {
+  /* With the list shown inline there is nothing to add below it. */
+  .chat-welcome {
+    display: none;
+  }
 }
