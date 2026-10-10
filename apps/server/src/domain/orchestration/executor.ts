@@ -346,6 +346,26 @@ export class Orchestrator {
     return this.db.read((sqlite) => summaryOf(sqlite, requireOrch(sqlite, id)))
   }
 
+  /**
+   * Journals a team or agent pause hold (or its lift) before the route changes the database, so a database that later
+   * loses the hold is fenced. A journal that cannot be written fences admission at once (fail closed).
+   */
+  recordHold(
+    target: { kind: 'team' } | { kind: 'agent'; agentId: string },
+    action: 'set' | 'lift',
+  ): void {
+    try {
+      this.options.fence.journal.append({
+        kind: 'hold',
+        target: target.kind,
+        ...(target.kind === 'agent' ? { agentId: target.agentId } : {}),
+        action,
+      })
+    } catch (error) {
+      this.fenceNow('journal_unwritable', error instanceof Error ? error.message : String(error))
+    }
+  }
+
   fenceStore(): GlobalFenceStore {
     return this.options.fence
   }
@@ -1568,6 +1588,15 @@ export class Orchestrator {
   maintenance(): { journal: { kept: number; dropped: number }; pruned: number } {
     const journal = this.options.fence.journal
     const sqlite = this.db.sqlite
+    const holdKey = (e: { target: string; agentId?: string | undefined }) =>
+      e.target === 'team' ? 'h:team' : `h:agent:${e.agentId}`
+    const newest = new Map<string, number>()
+    const own = journal.readOwn()
+    if (own.ok)
+      for (const entry of own.entries) {
+        if (entry.kind === 'authorization') newest.set(`a:${entry.orchestrationId}`, entry.n)
+        if (entry.kind === 'hold') newest.set(holdKey(entry), entry.n)
+      }
     const compacted = journal.compact((entry) => {
       if (
         entry.kind === 'send_started' ||
@@ -1585,6 +1614,13 @@ export class Orchestrator {
           o !== undefined &&
           isTerminalStatus(o.status) &&
           attemptsOf(sqlite, o.id).every((x) => x.state === 'terminated' || x.state === 'refused')
+        )
+      }
+      if (entry.kind === 'authorization' || entry.kind === 'hold') {
+        // Only the newest word per run / per target is needed; the older ones are superseded.
+        return (
+          newest.get(entry.kind === 'hold' ? holdKey(entry) : `a:${entry.orchestrationId}`) !==
+          entry.n
         )
       }
       if (entry.kind === 'stop_fence') {

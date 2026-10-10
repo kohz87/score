@@ -163,7 +163,10 @@ function updateRun(
   values: Record<string, SQLInputValue>,
 ): boolean {
   // Every terminal writer says where its status came from (fix-h item 1); only Hermes' own word is 'runtime'.
-  if (typeof values.status === 'string' && runLifecycle.isTerminal(values.status))
+  if (
+    typeof values.status === 'string' &&
+    runLifecycle.isTerminal(values.status as Parameters<typeof runLifecycle.isTerminal>[0])
+  )
     values = { terminal_source: 'runtime', ...values }
   return (
     guardedUpsert(sqlite, {

@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
+import type { Orchestrator } from '../domain/orchestration/executor.ts'
 import { agentPausedAt } from '../domain/agent-lifecycle.ts'
 import { readAgent, reconcileAgents } from '../domain/agents.ts'
 import { taskStatus } from '../domain/briefs.ts'
@@ -28,9 +29,10 @@ export function registerAgentPauseRoutes(
     holds: TaskHolds
     dispatch?: () => Promise<void>
     clock?: () => number
+    orchestrator?: Pick<Orchestrator, 'recordHold'>
   },
 ): void {
-  const { db, ingest, port, holds, dispatch } = deps
+  const { db, ingest, port, holds, dispatch, orchestrator } = deps
   const receipts = requestIdempotency(db, deps.clock ?? Date.now)
   const mutation = {
     preHandler: [humanGuard(app.pairing), receipts.preHandler],
@@ -51,6 +53,8 @@ export function registerAgentPauseRoutes(
   app.post('/api/agents/:agentId/pause', mutation, async (request) => {
     const { agentId } = ParamsSchema.parse(request.params)
     await refresh(agentId)
+    // Journaled first: an orchestration's admissions depend on this hold (fix-h item 2).
+    orchestrator?.recordHold({ kind: 'agent', agentId }, 'set')
     await ingest.submit({
       source: 'agent-pause',
       identity: randomUUID(),
@@ -91,6 +95,7 @@ export function registerAgentPauseRoutes(
   app.post('/api/agents/:agentId/resume', mutation, async (request) => {
     const { agentId } = ParamsSchema.parse(request.params)
     await refresh(agentId)
+    orchestrator?.recordHold({ kind: 'agent', agentId }, 'lift')
     await ingest.submit({
       source: 'agent-pause',
       identity: randomUUID(),

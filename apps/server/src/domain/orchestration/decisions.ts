@@ -150,6 +150,17 @@ export function setLimits(ctx: Ctx, orchId: string, body: LimitsDecision): void 
       .prepare("UPDATE orchestrations SET status = 'running', pause_reason = NULL WHERE id = ?")
       .run(orchId)
   addHistory(sqlite, orchId, 'limits_changed', { ...body, orchestrationRevision: undefined }, now)
+  // Every change is journaled as the full resulting state, so a database that lost a tightening is detected at start.
+  const after = requireOrch(sqlite, orchId)
+  journalSoft(ctx, () =>
+    ctx.journal.append({
+      kind: 'authorization',
+      orchestrationId: orchId,
+      budgetUsd: after.budget_usd,
+      deadlineAt: after.deadline_at,
+      acceptUnknownSpend: after.accepted_unknown_spend,
+    }),
+  )
   touch(ctx, orchId)
 }
 

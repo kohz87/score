@@ -78,6 +78,17 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
     )
       lastPauseState.set(entry.orchestrationId, { what: entry.what, n: entry.n })
   }
+  // The newest authorization per orchestration and the newest hold per target say what the database must at least hold.
+  const authorization = new Map<string, Extract<JournalEntry, { kind: 'authorization' }>>()
+  const hold = new Map<string, Extract<JournalEntry, { kind: 'hold' }>>()
+  for (const entry of entries) {
+    if (entry.kind === 'authorization') authorization.set(entry.orchestrationId, entry)
+    if (entry.kind === 'hold')
+      hold.set(entry.target === 'team' ? 'team' : `agent:${entry.agentId}`, entry)
+  }
+  const limits = sqlite.prepare(
+    'SELECT budget_usd, deadline_at, accepted_unknown_spend FROM orchestrations WHERE id = ?',
+  )
   for (const entry of entries) {
     if (entry.kind === 'global_fence') journalSeq = Math.max(journalSeq, entry.fenceSeq)
     if (accepted.has(entry.n)) continue
@@ -85,7 +96,53 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
       'orchestrationId' in entry ? (entry.orchestrationId as string) : undefined
     if (orchestrationId && pruned.has(orchestrationId)) continue
     const kind = entry.kind === 'tombstone' ? entry.of : entry.kind
-    if (kind === 'send_started') {
+    if (entry.kind === 'authorization') {
+      if (authorization.get(entry.orchestrationId) !== entry) continue
+      const row = limits.get(entry.orchestrationId) as
+        | {
+            budget_usd: number | null
+            deadline_at: string | null
+            accepted_unknown_spend: number
+          }
+        | undefined
+      const lost: string[] = []
+      if (!row) lost.push('the run')
+      else {
+        if (
+          entry.budgetUsd !== null &&
+          (row.budget_usd === null || row.budget_usd > entry.budgetUsd)
+        )
+          lost.push('a lowered budget')
+        if (
+          entry.deadlineAt !== null &&
+          (row.deadline_at === null || Date.parse(row.deadline_at) > Date.parse(entry.deadlineAt))
+        )
+          lost.push('a shorter deadline')
+        if (!entry.acceptUnknownSpend && row.accepted_unknown_spend === 1)
+          lost.push('a revoked unknown-spend acceptance')
+      }
+      if (lost.length > 0)
+        mismatches.push({
+          kind: 'fence',
+          ref: entry.orchestrationId,
+          journalN: entry.n,
+          detail: `The limits of ${entry.orchestrationId} were tightened (${lost.join(', ')}), but the database does not hold that`,
+        })
+    } else if (entry.kind === 'hold') {
+      const key = entry.target === 'team' ? 'team' : `agent:${entry.agentId}`
+      if (hold.get(key) !== entry || entry.action !== 'set') continue
+      const held =
+        entry.target === 'team'
+          ? sqlite.prepare('SELECT 1 FROM team_state WHERE id = 1 AND paused_at IS NOT NULL').get()
+          : sqlite.prepare('SELECT 1 FROM agent_pauses WHERE agent_id = ?').get(entry.agentId ?? '')
+      if (!held)
+        mismatches.push({
+          kind: 'fence',
+          ref: key,
+          journalN: entry.n,
+          detail: `The pause of ${entry.target === 'team' ? 'the team' : `agent ${entry.agentId}`} was recorded, but the database does not hold it`,
+        })
+    } else if (kind === 'send_started') {
       const id = (entry as { attemptId: string }).attemptId
       const row = attempt.get(id) as { sent_at: string | null } | undefined
       if (!row || row.sent_at === null)
