@@ -834,3 +834,25 @@ test('fix-l: a removed coding agent fails MCP auth even if a stale access row su
   db.sqlite.prepare("UPDATE coding_agents SET removed_at = 'x' WHERE id = 'coder'").run()
   expect(access.agentForToken(token)).toBeUndefined()
 })
+
+test('fix-l: a permission downgrade applies to a turn already waiting in the queue', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:slow] first')
+  await vi.waitFor(() => expect(runs()[0]?.status).toBe('running'), { timeout: 10_000 })
+  const firstRoom = roomId
+  await makeRoom()
+  await say('@coder second')
+  await vi.waitFor(() => expect(runs()).toHaveLength(2), { timeout: 10_000 })
+  expect(runs()[1]!.status).toBe('queued')
+  const lowered = await request('PATCH', '/api/coding-agents/coder', { permission: 'read-only' })
+  expect(lowered.statusCode).toBe(200)
+  const first = db.sqlite
+    .prepare("SELECT message_id FROM message_runs WHERE room_id = ? AND agent_id = 'coder'")
+    .get(firstRoom) as { message_id: string }
+  await request('POST', `/api/rooms/${firstRoom}/messages/${first.message_id}/stop`)
+  await finished(2)
+  const second = calls().find((call) => call.prompt.includes('second'))!
+  expect(second.args).toEqual(expect.arrayContaining(['--permission-mode', 'dontAsk']))
+  expect(second.args).not.toContain('acceptEdits')
+}, 30_000)
