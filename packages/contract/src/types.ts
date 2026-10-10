@@ -32,6 +32,13 @@ export const AgentStatusSchema = z.enum([
 ])
 export type AgentStatus = z.infer<typeof AgentStatusSchema>
 
+/** Which engine runs an agent's turns: a Hermes profile or a coding-agent CLI (PLAN 7.2). Absent = `hermes`. */
+export const RuntimeSchema = z.enum(['hermes', 'claude-code', 'codex', 'opencode'])
+export type Runtime = z.infer<typeof RuntimeSchema>
+/** Where a run's cost came from: the CLI/provider reported it, it is an API-price equivalent, or nothing says. */
+export const CostKindSchema = z.enum(['reported', 'estimated', 'unknown'])
+export type CostKind = z.infer<typeof CostKindSchema>
+
 export const AgentSummarySchema = z.object({
   id: AgentIdSchema,
   name: z.string(),
@@ -41,6 +48,10 @@ export const AgentSummarySchema = z.object({
   activity: z.string().nullable(),
   model: z.object({ id: z.string().min(1), label: z.string() }).nullable(),
   served: z.boolean(),
+  /** Absent = a Hermes profile. Coding agents (PLAN 7.2) carry their CLI here. */
+  runtime: RuntimeSchema.optional(),
+  /** Coding agents: one line for the agent card, e.g. "Claude Code · uses your Claude plan quota". */
+  runtimeNote: z.string().optional(),
   lifecycle: z
     .object({
       state: z.enum(['setting_up', 'ready', 'deleting', 'needs_attention', 'removed']),
@@ -366,6 +377,10 @@ export const RunSummarySchema = z.object({
   toolsUsed: z.array(z.string()),
   tokens: z.object({ input: z.int().nonnegative(), output: z.int().nonnegative() }).nullable(),
   costUsd: z.number().nonnegative().nullable(),
+  /** Absent = `hermes`. */
+  runtime: RuntimeSchema.optional(),
+  /** How to read `costUsd`; absent = `reported`. A coding CLI that gives no cost says `unknown` with `costUsd: null`. */
+  costKind: CostKindSchema.optional(),
   refs: z.array(RefSchema),
   gaps: z.array(
     z.object({ from: z.iso.datetime(), to: z.iso.datetime().nullable(), reason: z.string() }),

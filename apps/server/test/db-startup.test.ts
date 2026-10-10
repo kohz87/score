@@ -77,6 +77,7 @@ vi.mock('../src/hermes/index.ts', () => ({
   createScreenshotImporter: mocks.createScreenshotImporter,
   sweepKanbanDenials: mocks.sweepKanbanDenials,
   RewindBroker: class {},
+  resolveHermesHome: () => '/tmp/score-test-startup/hermes-home',
 }))
 vi.mock('../src/hub/retention.ts', () => ({ pruneEvents: mocks.pruneEvents }))
 vi.mock('../src/db/fts.ts', () => ({ ensureMessageFts: vi.fn() }))
@@ -151,6 +152,7 @@ test('startup opens and migrates the configured database before building and lis
   expect(mocks.buildApp).toHaveBeenCalledWith({
     config: expect.objectContaining({ home: '/tmp/score-test-startup' }),
     port: mocks.port,
+    coding: expect.any(Object),
     knowledge: expect.any(Object),
     outbox: mocks.outbox,
     media: expect.any(Object),

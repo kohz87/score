@@ -28,7 +28,7 @@ const QuerySchema = z.object({
 function latestSession(sqlite: DatabaseSync, agentId: string): string | null {
   const row = sqlite
     .prepare(
-      'SELECT session_id FROM runs WHERE profile = ? AND session_id IS NOT NULL ORDER BY started_at DESC LIMIT 1',
+      "SELECT session_id FROM runs WHERE profile = ? AND runtime = 'hermes' AND session_id IS NOT NULL ORDER BY started_at DESC LIMIT 1",
     )
     .get(agentId)
   return row ? z.object({ session_id: z.string().min(1) }).parse(row).session_id : null

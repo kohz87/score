@@ -859,6 +859,34 @@ a.team-pill-button {
   align-items: center;
   text-decoration: none;
 }
+
+/* Coding agents (PLAN 7.2): radio groups read as rows, not as stacked form fields. */
+.team-add-kind,
+.team-coding-permission {
+  border: 0;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.team-add-kind legend,
+.team-coding-permission legend {
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 4px;
+}
+.team-routine-form .team-coding-permission label,
+.team-add-kind label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+}
+.team-routine-form .team-coding-permission input {
+  width: auto;
+}
+
 .team-popout-link {
   display: inline-flex;
   align-items: center;

@@ -207,7 +207,7 @@ export class LivePort implements HermesPort {
         .parse(
           this.db.sqlite
             .prepare(
-              `SELECT * FROM runs WHERE origin = 'score' AND status IN ('queued','running','waiting_for_approval')`,
+              `SELECT * FROM runs WHERE origin = 'score' AND runtime = 'hermes' AND status IN ('queued','running','waiting_for_approval')`,
             )
             .all(),
         )

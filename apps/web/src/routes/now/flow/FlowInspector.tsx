@@ -1,5 +1,6 @@
 import type { AgentSummary, FlowNodeDetail } from '@score/contract'
 import { Link } from 'react-router'
+import { runtimeLabel } from '../../../components/runtime-label.ts'
 import { AgentGlyph } from '../../../components/AgentGlyph.tsx'
 import { UnattributedGlyph } from '../../../components/UnattributedGlyph.tsx'
 import { ApiError } from '../../../data/api.ts'
@@ -123,6 +124,22 @@ function StepDetail({
         <div className="flow-watch">No desktop open for this step</div>
       )}
       <dl className="flow-inspector__facts">
+        {runtimeLabel(run?.runtime) && (
+          <div>
+            <dt>Runtime</dt>
+            <dd>{runtimeLabel(run?.runtime)}</dd>
+          </div>
+        )}
+        {run?.runtime && run.runtime !== 'hermes' && (
+          <div>
+            <dt>Cost</dt>
+            <dd>
+              {run.costKind === 'unknown' || run.costUsd === null
+                ? 'Not reported by the CLI'
+                : `$${run.costUsd.toFixed(2)} (estimated, API prices)`}
+            </dd>
+          </div>
+        )}
         <div>
           <dt>Model</dt>
           <dd>{detail.model ?? (detail.attempts?.length ? 'Not observed' : '—')}</dd>

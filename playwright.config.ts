@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { defineConfig, devices } from '@playwright/test'
 
 const webPort = process.env.SCORE_WEB_PORT ?? '5173'
@@ -19,6 +19,9 @@ const scoreHome = join(runDir, 'home')
 const attemptsHome = join(runDir, 'attempts-home')
 const scratch = join(runDir, 'tmp')
 for (const dir of [runDir, scratch]) mkdirSync(dir, { recursive: true })
+
+// The coding-agent CLIs are replaced by a script that prints hand-made fixtures (PLAN 7.2); no model is ever called.
+const fakeCodingCli = resolve('apps/server/test/fixtures/coding/fake-cli.mjs')
 
 // Workers inherit this, so specs that need a paired browser can read the pairing link the server logs.
 process.env.SCORE_E2E_HOME = runDir
@@ -55,6 +58,7 @@ export default defineConfig({
             SCORE_HOME: scoreHome,
             TMPDIR: scratch,
             SCORE_MODE: 'fake',
+            SCORE_CODING_FAKE_CLI: fakeCodingCli,
             SCORE_FAKE_REWIND_SKIP: 'reviewer:compressed',
             SCORE_WEB_ORIGIN: baseURL,
             // The specs read the pairing link from dev.log: a non-terminal stdout only gets it on request.
@@ -72,6 +76,7 @@ export default defineConfig({
             SCORE_HOME: scoreHome,
             TMPDIR: scratch,
             SCORE_MODE: 'fake',
+            SCORE_CODING_FAKE_CLI: fakeCodingCli,
             // The fake adapter cannot rewind this agent (PLAN 5.33: "Hide in Score only").
             SCORE_FAKE_REWIND_SKIP: 'reviewer:compressed',
             SCORE_SERVE_WEB: '1',

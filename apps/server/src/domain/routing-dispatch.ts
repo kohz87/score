@@ -12,6 +12,12 @@ import { failMessageRun, MessageRunSchema, roomRunInput } from './message-runs.t
 /** How long a turn waits for an outside session to go quiet before it fails with `session_busy`. */
 export const SESSION_BUSY_WAIT_MS = 10 * 60_000
 
+/** A refusal may carry the sentence the room should show (a coding CLI that is missing or untested). */
+function refusalNotice(error: HttpError): string | undefined {
+  const notice = (error.details as { notice?: unknown } | undefined)?.notice
+  return typeof notice === 'string' ? notice : undefined
+}
+
 /** Durable queue; only one active turn per (room, agent). */
 export class RoutingDispatcher {
   private flight: Promise<void> | undefined
@@ -182,7 +188,8 @@ export class RoutingDispatcher {
           await this.ingest.submit({
             source: 'routing',
             identity: `failed:${job.turn_id}`,
-            apply: ({ sqlite, now }) => failMessageRun(sqlite, job.turn_id, error.code, now),
+            apply: ({ sqlite, now }) =>
+              failMessageRun(sqlite, job.turn_id, error.code, now, refusalNotice(error)),
           })
           continue
         }

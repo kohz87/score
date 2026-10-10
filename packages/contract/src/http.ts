@@ -3,6 +3,8 @@ import { RoomProjectSchema } from './conversations.ts'
 import {
   AgentIdSchema,
   AgentSummarySchema,
+  CostKindSchema,
+  RuntimeSchema,
   ApprovalSchema,
   HandoffSchema,
   LaneBlockSchema,
@@ -190,6 +192,10 @@ export const ReportsSchema = z.object({
     firstPassRate: z.number().min(0).max(1).nullable(),
     medianTaskSec: z.number().nonnegative().nullable(),
     spendUsd: z.number().nonnegative().nullable(),
+    /** True when `spendUsd` includes a coding agent's API-price equivalent (a subscription is not billed per token). */
+    spendEstimated: z.boolean().optional(),
+    /** Coding agents whose CLI gave no cost in the window: left out of `spendUsd` (never counted as zero). */
+    spendExcluded: z.array(AgentIdSchema).optional(),
     /** Cached share of prompt tokens over the agents that report cache tokens; null when none does. */
     cacheHitRate: z.number().min(0).max(1).nullable().default(null),
   }),
@@ -215,6 +221,9 @@ export const ReportsSchema = z.object({
       medianSec: z.number().nonnegative().nullable(),
       firstPassRate: z.number().min(0).max(1).nullable(),
       spendUsd: z.number().nonnegative().nullable(),
+      /** Absent = `reported` (Hermes). `estimated` = coding agent API-price equivalent; `unknown` = no cost given. */
+      spendBasis: CostKindSchema.optional(),
+      runtime: RuntimeSchema.optional(),
       cacheHitRate: z.number().min(0).max(1).nullable().default(null),
     }),
   ),

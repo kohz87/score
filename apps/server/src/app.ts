@@ -6,6 +6,9 @@ import { SecurityPassword } from './auth/security-password.ts'
 import { ApprovalOutbox } from './domain/approval-outbox.ts'
 import { createAgentDirectory, withAgentDirectory } from './http/agent-directory.ts'
 import { registerAgentRoutes } from './http/agents.ts'
+import { registerCodingAgentRoutes } from './http/coding-agents.ts'
+import { withCodingAgents } from './runtimes/coding/port.ts'
+import type { CodingRuntime } from './runtimes/coding/service.ts'
 import { registerProfileRoutes } from './http/profiles.ts'
 import { registerAgentContextRoutes } from './http/agent-context.ts'
 import { registerAgentHistoryRoutes } from './http/agent-history.ts'
@@ -38,6 +41,7 @@ import { teamPausedAt } from './domain/team-pause.ts'
 import { registerTeamPauseRoutes } from './http/team-pause.ts'
 import { registerMediaRoutes } from './http/media.ts'
 import { MediaStore } from './media/store.ts'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { registerNowRoutes } from './http/now.ts'
 import { registerAgentPauseRoutes } from './http/agent-pause.ts'
@@ -103,6 +107,8 @@ interface BuildAppOptions {
   webAssets?: WebAssets
   /** Pairing-management password; defaults to one stored in the Score home when there is a database (a real server). */
   security?: SecurityPassword
+  /** Coding agents (PLAN 7.2): Claude Code / Codex CLI as team members; without it there are none. */
+  coding?: CodingRuntime
   /** Test hooks for the web terminal: a stand-in PTY, a launch description, limits (the origins come from config). */
   terminal?: Pick<TerminalOptions, 'spawn' | 'launch' | 'limits' | 'clock' | 'isSecure'>
 }
@@ -125,9 +131,12 @@ export function buildApp({
   https,
   webAssets,
   security,
+  coding,
   terminal,
 }: BuildAppOptions): FastifyInstance {
   const logging = logger ?? process.env.NODE_ENV !== 'test'
+  // Coding agents join the team under the same port (rooms, Now, Flow and Reports see one list of agents).
+  if (db && ingest && coding) port = withCodingAgents(port, coding)
   // Live Hermes reads cost seconds per profile: pages read agents from Score's projection (5.23).
   if (config.mode === 'live' && db && ingest)
     port = withAgentDirectory(
@@ -347,6 +356,16 @@ export function buildApp({
   // The web terminal (PLAN 7.3): not registered at all unless SCORE_TERMINAL=1. A missing native module (node-pty is
   // built at install time) leaves it off and says why, rather than stopping Score.
   const securityPassword = security ?? (db ? new SecurityPassword(config.home, clock) : undefined)
+  if (db && ingest && coding)
+    registerCodingAgentRoutes(app, {
+      coding,
+      port,
+      db,
+      ingest,
+      security: securityPassword,
+      ...(config.mode === 'fake' ? { workspaceBase: join(tmpdir(), 'score-workspaces') } : {}),
+      ...(clock ? { clock } : {}),
+    })
   let terminalUnavailable: string | null = null
   if (config.terminal && !https) {
     // Plain-HTTP listeners (local mode) never get a shell: a terminal needs a TLS connection.

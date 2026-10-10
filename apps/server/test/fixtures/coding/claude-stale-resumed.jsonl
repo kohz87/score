@@ -1,0 +1,4 @@
+{"_fixture":"hand-made, not recorded: shaped after the CLI's documented stream format"}
+{"type":"system","subtype":"init","session_id":"99999999-9999-4999-8999-999999999999"}
+{"type":"result","subtype":"error_during_execution","is_error":true,"result":"No conversation found with session ID 88888888","session_id":"99999999-9999-4999-8999-999999999999"}
+{"_exit":1}

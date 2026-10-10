@@ -1,0 +1,5 @@
+{"_fixture":"hand-made, not recorded: shaped after the CLI's documented stream format"}
+{"type":"thread.started","thread_id":"0199aaaa-0000-7000-8000-000000000003"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Still thinking…"}}
+{"_hang":true}

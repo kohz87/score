@@ -40,7 +40,11 @@ type AgentSummary = {
   activity: string | null /* "Re-reading the read layer" */
   model: { id: string; label: string } | null
   served: boolean /* gateway serves this profile; false → can't start runs */
+  runtime?: Runtime /* PLAN 7.2; absent = 'hermes' */
+  runtimeNote?: string /* coding agents: "Claude Code · Uses your Claude plan quota …" for the card */
 }
+type Runtime = 'hermes' | 'claude-code' | 'codex' | 'opencode'
+type CostKind = 'reported' | 'estimated' | 'unknown'
 
 type Ref =
   // what an item points at, for "Open in…" links
@@ -192,6 +196,8 @@ type RunSummary = {
   toolsUsed: string[]
   tokens: { input: number; output: number } | null
   costUsd: number | null
+  runtime?: Runtime /* PLAN 7.2; absent = 'hermes' */
+  costKind?: CostKind /* coding agents only: 'estimated' = API-price equivalent (a subscription isn't billed per token); 'unknown' = the CLI gave no cost, costUsd is null */
   refs: Ref[]
   gaps: { from: string; to: string | null; reason: string }[] /* unrecoverable intervals */
 }
@@ -931,6 +937,38 @@ costUsd: number | null; task: { id; title } | null; brief: { id; title } | null;
   a normal finish (completed, review handoff, changes requested) is `completed`, a failure `failed`, a blocked, unknown or no-longer-observed end
   `unknown`. `task`/`brief` are null for an attempt of an earlier copy of the board.
 
+### Coding agents (PLAN 7.2; schemas in `packages/contract/src/coding.ts`; design docs/briefs/7.2-coding-agents.md)
+
+Claude Code and Codex CLI (OpenCode is listed as "not supported yet") join the team next to Hermes agents. A coding agent is
+an `AgentSummary`/`AgentDetail` like any other with `runtime` set, so rooms, @mentions, hand-offs, Stop, Now, Flow, Watch and
+Reports need no new paths. It takes **room work only**: a Kanban task whose `assignee`/`reviewer` is a coding agent is `422
+unsupported`. Hermes-profile endpoints for an agent id that is a coding agent (`/api/agents/:id/skills`, `/memory`, `/files/…`, `/model`,
+`/routines`, …) answer `409 unsupported`. Rewind is not available for them: a room rewind hides the messages in Score and drops that
+room's CLI session (`skipped: no_session`).
+
+- `GET /api/coding-agents/runtimes` → `{ items: CodingRuntimeInfo[] }`: `{ runtime: 'claude-code'|'codex'|'opencode'; label; state:
+  'ready'|'not_installed'|'not_supported'|'untested_version'; version: string|null; testedVersions: string[]; quota: string; message:
+  string|null }`. Read with `<cli> --version` only (never a prompt). `untested_version` = installed, but not one of the tested versions.
+- `GET /api/coding-agents` → `{ items: CodingAgent[] }`: `{ id; name; role; runtime; workspace; permission: 'read-only'|'workspace-write'|'full';
+  model: string|null; style; quota; cli: { state; version; testedVersions; confirmed: boolean }; createdAt }`.
+- **H** `POST /api/coding-agents` `{ id; name; role?; runtime; workspace?; permission?; model?; style; password? }` → `201 CodingAgent`.
+  `id` is a profile-style name (`^[a-z0-9][a-z0-9_-]{0,63}$`), unique among all agents (`409 conflict`). `workspace` defaults to
+  `~/score-workspaces/<id>` (created) and follows the Workspace folder rules (no home folder, `~/.hermes`, `~/.score`, `~/.ssh`;
+  `422 workspace_unavailable`). A CLI that is not installed/supported is `422 cli_not_installed`. `permission: 'full'` needs
+  `password` (the security password; `409 password_not_set`, `403 wrong_password`, `429`).
+- **H** `PATCH /api/coding-agents/:id` `{ name?; role?; permission?; model?: string|null; workspace?; password? }` → `CodingAgent`. Raising to
+  `full` needs the password; lowering never does.
+- **H** `POST /api/coding-agents/:id/confirm-version` `{ version }` → `CodingAgent`: lets an `untested_version` CLI run for this agent. `version`
+  must equal the version Score reads right now (`409 conflict` otherwise).
+- **H** `DELETE /api/coding-agents/:id` → `204` (`409` while a turn runs). Past messages stay; its runs leave Reports.
+- Turns: a mention routes through the normal room queue. One turn per coding agent at a time (others show as `queued`); at most 30 minutes per
+  turn; Stop = SIGINT, SIGTERM after 5 s, SIGKILL after 5 s more. An untested/missing CLI or an unavailable workspace fails the reply with a
+  sentence in the room (`422`, never retried). The CLI's pid, process group and start time are stored right after the spawn; a restart first stops what is left of each recorded group (only when pid and start time still match; SIGTERM, then SIGKILL) and then marks running turns `interrupted` ("Score restarted while this ran"); the CLI session id
+  is kept so the next message resumes it. Runs carry `runtime` and `costKind`; run ids start with `cr_`.
+- Security: the CLI gets an allowlisted environment (no Score variables, nothing named `*_API_KEY`/`*TOKEN*`/`*SECRET*`); the prompt goes on stdin,
+  never in argv; output is redacted before it is stored; Claude Code runs with deny rules for `~/.hermes`, `~/.score`, `~/.ssh` and `.env*`.
+  The sandbox limits what an agent can change, **not what it can read** (Codex has no read rules): the Add agent form says so.
+
 ### Workspace (Team › agent › Workspace)
 The agent's Hermes working folder (`terminal.cwd`), browsed and edited from Score. **Every** workspace endpoint is **H**
 (paired browser), reads included, because the files can hold secrets. `path` is POSIX and relative to the root; the root
@@ -996,6 +1034,8 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
       firstPassRate: number | null
       medianTaskSec: number | null
       spendUsd: number | null
+      spendEstimated?: boolean /* 7.2: includes a coding agent's API-price equivalent */
+      spendExcluded?: AgentId[] /* 7.2: coding agents whose CLI gave no cost; left out, never counted as 0 */
       cacheHitRate: number | null /* 5.29: over the agents that report cache tokens */
     }
     byDay: {
@@ -1017,6 +1057,8 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
       medianSec: number | null
       firstPassRate: number | null /* null = n/a, reviews */
       spendUsd: number | null
+      spendBasis?: CostKind /* 7.2: coding agents only (absent = Hermes, reported) */
+      runtime?: Runtime /* 7.2 */
       cacheHitRate: number | null /* 5.29 */
     }
     ;[]
@@ -1047,6 +1089,10 @@ itself is `''`. Schemas: `Workspace*` in `packages/contract/src/workspace.ts`.
   request, not the task's current assignee, minus time already working or waiting on you. An hour of active run with a human
   approval open the whole hour counts as working only. Spend = Hermes session costs (actual, else estimated);
   null when unknown. `totals.spendUsd` is null when any agent's spend is unknown (never a partial sum).
+  **Coding agents (7.2).** Their spend is the sum of their own runs' `costUsd` in the range: Claude Code reports a cost that is an
+  API-price equivalent, so the row says `spendBasis: 'estimated'` (and `totals.spendEstimated`); Codex reports tokens only, so its row
+  is `spendUsd: null`, `spendBasis: 'unknown'`, and it is listed in `totals.spendExcluded` and left out of the total (not counted as 0).
+  An agent with no run in the range has no `spendBasis`. The 30-day `trend` spend covers Hermes sessions only.
 - **Cache hit rate and trend (5.29).** `cacheHitRate` = cache-read tokens / (uncached input + cache-read + cache-write) of the
   Hermes sessions that *started* in the range (a session's counters are cumulative), read-only from each profile's
   `state.db` through the report-facts adapter. `null` ("—") when no such session exists, a counter is missing, or Hermes

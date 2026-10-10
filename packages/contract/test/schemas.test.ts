@@ -1065,6 +1065,63 @@ const cases = [
     { items: [{}] },
   ],
   ['BridgeCommandResultSchema', { outcome: 'nothing' }, { outcome: 'maybe' }],
+  // PLAN 7.2: coding agents
+  ['RuntimeSchema', 'claude-code', 'cursor'],
+  ['CostKindSchema', 'estimated', 'free'],
+  ['CodingRuntimeSchema', 'codex', 'hermes'],
+  ['CodingPermissionSchema', 'workspace-write', 'root'],
+  ['CliStateSchema', 'untested_version', 'broken'],
+  [
+    'CodingRuntimeInfoSchema',
+    {
+      runtime: 'claude-code',
+      label: 'Claude Code',
+      state: 'ready',
+      version: '2.1.295',
+      testedVersions: ['2.1.295'],
+      quota: 'Uses your Claude plan quota.',
+      message: null,
+    },
+    { runtime: 'claude-code', label: 'Claude Code', state: 'ready' },
+  ],
+  ['CodingRuntimesResponseSchema', { items: [] }, { items: [{ runtime: 'nope' }] }],
+  [
+    'CodingAgentSchema',
+    {
+      id: 'coder',
+      name: 'Coder',
+      role: '',
+      runtime: 'codex',
+      workspace: '/work/coder',
+      permission: 'read-only',
+      model: null,
+      style: { color: '#19C39A', shape: 'hexagon' },
+      quota: 'Uses your ChatGPT plan quota.',
+      cli: { state: 'ready', version: '0.160.1', testedVersions: ['0.160.1'], confirmed: false },
+      createdAt: '2026-10-09T10:00:00.000Z',
+    },
+    { id: 'coder' },
+  ],
+  ['CodingAgentsResponseSchema', { items: [] }, { items: 'none' }],
+  [
+    'CodingAgentCreateSchema',
+    {
+      id: 'coder',
+      name: 'Coder',
+      role: '',
+      runtime: 'claude-code',
+      permission: 'workspace-write',
+      style: { color: '#19C39A', shape: 'hexagon' },
+    },
+    {
+      id: 'Bad Name',
+      name: 'Coder',
+      runtime: 'claude-code',
+      style: { color: '#19C39A', shape: 'hexagon' },
+    },
+  ],
+  ['CodingAgentPatchSchema', { permission: 'read-only' }, { password: 'only a password' }],
+  ['CodingVersionConfirmSchema', { version: '2.1.295' }, { version: '' }],
 ] as const satisfies ReadonlyArray<readonly [keyof typeof contract, unknown, unknown]>
 
 test('every exported schema has valid and invalid fixtures', () => {

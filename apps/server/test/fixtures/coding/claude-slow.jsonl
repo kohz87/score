@@ -1,0 +1,4 @@
+{"_fixture":"hand-made, not recorded: shaped after the CLI's documented stream format"}
+{"type":"system","subtype":"init","session_id":"33333333-3333-4333-8333-333333333333","model":"claude-sonnet-fixture"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Working on it…"}]}}
+{"_hang":true}
