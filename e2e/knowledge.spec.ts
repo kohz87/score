@@ -21,6 +21,8 @@ async function createNote(page: Page, name: string, text: string) {
   await expect(page).toHaveURL(
     new RegExp(`/knowledge/${encodeURIComponent(path).replace(/\./g, '\\.')}$`),
   )
+  // Notes open rendered; the choice of Edit is remembered for the rest of the test.
+  await page.getByRole('button', { name: 'Edit' }).click()
   await editor(page, path).click()
   await page.keyboard.press('Control+a')
   await page.keyboard.insertText(text)
@@ -105,4 +107,51 @@ test('a change behind the editor shows the conflict banner; Reload takes theirs'
   await expect(banner).toBeVisible({ timeout: 10_000 })
   await banner.getByRole('button', { name: 'Reload' }).click()
   await expect(editor(page, path)).toContainText('theirs')
+})
+
+test('a table renders in Preview and in the live editor; clicking it edits the source and saves', async ({
+  page,
+}) => {
+  const name = unique()
+  const path = await createNote(
+    page,
+    name,
+    `# ${name}\n\n| Item | Qty |\n| --- | ---: |\n| Apples | 3 |\n\n- [ ] buy apples\n\nEnd\n`,
+  )
+  await page.getByRole('button', { name: 'Preview' }).click()
+  const preview = page.getByLabel('Preview')
+  await expect(preview.getByRole('columnheader', { name: 'Qty' })).toBeVisible()
+  await expect(preview.getByRole('cell', { name: 'Apples' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Edit' }).click()
+  const table = editor(page, path).locator('.cm-lp-table table')
+  await expect(table.getByRole('cell', { name: 'Apples' })).toBeVisible()
+  // The task checkbox is a named button that edits the source.
+  await editor(page, path).getByRole('checkbox', { name: 'Task: buy apples' }).click()
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+  // Clicking the table swaps it for its source.
+  await table.getByRole('cell', { name: 'Apples' }).click()
+  await expect(editor(page, path).locator('.cm-lp-table')).toHaveCount(0)
+  await expect(editor(page, path)).toContainText('| Apples | 3 |')
+  await page.keyboard.press('End')
+  await page.keyboard.insertText(' ')
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+  const saved = (await (await page.request.get(`/api/knowledge/notes/${path}`)).json()) as {
+    body: string
+  }
+  expect(saved.body).toContain('- [x] buy apples')
+  expect(saved.body).toContain('| Apples | 3 |')
+})
+
+test('Split shows editor and rendered note side by side on a wide screen', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const name = unique()
+  const path = await createNote(page, name, `# ${name}\n\nhello\n`)
+  await page.getByRole('button', { name: 'Split' }).click()
+  await expect(editor(page, path)).toBeVisible()
+  await expect(page.getByLabel('Preview')).toContainText('hello')
+  await editor(page, path).click()
+  await page.keyboard.press('Control+End')
+  await page.keyboard.insertText('typed words')
+  await expect(page.getByLabel('Preview')).toContainText('typed words')
 })

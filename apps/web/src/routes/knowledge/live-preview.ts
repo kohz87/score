@@ -283,12 +283,13 @@ function build(state: EditorState, focused: boolean): DecorationSet {
           const first = doc.lineAt(node.from)
           const callout = CALLOUT.exec(first.text)
           const kind = callout ? calloutKind(callout[2]!) : null
-          for (let n = first.number; n <= doc.lineAt(node.to).number; n += 1) {
+          const last = doc.lineAt(node.to).number
+          for (let n = first.number; n <= last; n += 1) {
             const line = doc.line(n)
             lineDeco(
               line.from,
               kind
-                ? `cm-lp-callout cm-lp-callout-${kind}${n === first.number ? ' cm-lp-callout-first' : ''}`
+                ? `cm-lp-callout cm-lp-callout-${kind}${n === first.number ? ' cm-lp-callout-first' : ''}${n === last ? ' cm-lp-callout-last' : ''}`
                 : 'cm-lp-quote',
             )
           }

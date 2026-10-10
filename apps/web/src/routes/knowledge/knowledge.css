@@ -569,10 +569,10 @@
   --callout-tint: var(--agent-coral-tint);
   --callout-ink: var(--agent-coral-text);
 }
-.kn-callout > p:not(.kn-callout-title) {
+.kn-preview .kn-callout > p:not(.kn-callout-title) {
   margin: 0;
 }
-.kn-callout-title {
+.kn-preview .kn-callout-title {
   margin: 0 0 4px;
   font-weight: 700;
   color: var(--callout-ink);
@@ -703,6 +703,11 @@
   border-top-left-radius: var(--radius-14);
   padding-top: 6px !important;
 }
+.cm-lp-callout-last {
+  border-bottom-right-radius: var(--radius-14);
+  border-bottom-left-radius: var(--radius-14);
+  padding-bottom: 6px !important;
+}
 .cm-lp-callout-label {
   font-weight: 700;
   color: var(--callout-ink);
@@ -713,27 +718,30 @@
   width: 1.1em;
   color: var(--ink-muted);
 }
-.cm-lp-check {
-  all: unset;
+/* Beats the page's `.kn-main button` pill style. */
+.kn-main .cm-lp-check {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 17px;
   height: 17px;
+  padding: 0;
   margin-right: 6px;
   border: 1.5px solid var(--ink);
   border-radius: 5px;
+  background: var(--card);
+  color: var(--card);
   font-size: 12px;
   line-height: 1;
   vertical-align: -3px;
   cursor: pointer;
 }
-.cm-lp-check[aria-checked='true'] {
+.kn-main .cm-lp-check[aria-checked='true'] {
   background: var(--ink);
   color: var(--card);
 }
-.cm-lp-check:focus-visible {
+.kn-main .cm-lp-check:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
@@ -809,4 +817,13 @@
   background: var(--subtle-2);
   border-radius: 6px;
   padding: 1px 4px;
+}
+.kn-preview.chat-md h1 {
+  margin: 4px 0 12px;
+}
+.kn-preview.chat-md h2 {
+  margin: 22px 0 10px;
+}
+.kn-preview.chat-md h3 {
+  margin: 18px 0 8px;
 }
