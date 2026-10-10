@@ -448,10 +448,21 @@ export function LiveDiagram({
                   <AgentGlyph agent={glyph} size="sm" decorative />
                 )}
                 <span className="orch-node__text">
-                  <b>
-                    {isLead ? 'Lead' : title} {!shaped && <i>{glyph.name}</i>}
-                  </b>
-                  <span>{word}</span>
+                  {node.title !== undefined && !shaped ? (
+                    <>
+                      <b>{title}</b>
+                      <span>
+                        {glyph.name} · {word}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <b>
+                        {isLead ? 'Lead' : title} {!shaped && <i>{glyph.name}</i>}
+                      </b>
+                      <span>{word}</span>
+                    </>
+                  )}
                 </span>
                 {visual === 'gate' && <span className="orch-node__flag">Needs you</span>}
                 {visual === 'unknown' && (

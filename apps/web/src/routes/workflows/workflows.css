@@ -733,3 +733,13 @@
 .wf-room-run .orch-link {
   font-size: 13px;
 }
+
+/* A workflow graph is wider than an orchestration's: the diagram gets the full width and the log goes below it. */
+.wf-run .orch-main {
+  grid-template-columns: minmax(0, 1fr);
+}
+.wf-page .wf-button.wf-button--primary {
+  background: var(--ink);
+  color: var(--card);
+  border-color: var(--ink);
+}
