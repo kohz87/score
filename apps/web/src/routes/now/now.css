@@ -778,3 +778,78 @@
 .pop .now-lane-popout {
   display: none;
 }
+
+/* Phone and tablet (PLAN 5.34): one row of controls, a timeline whose agent column stays put while time scrolls. */
+.now-score-grid > .now-axis-spacer,
+.now-score-grid > .now-lane-label {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: var(--card);
+}
+@media (width < 1024px) {
+  .now-page {
+    gap: 16px;
+  }
+  .now-title {
+    padding: 0;
+    gap: 14px;
+  }
+  .now-title h1 {
+    flex: 1 1 100%;
+  }
+  .now-controls {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+  }
+  .now-views {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .now-view {
+    height: 38px;
+    padding: 0 14px;
+    flex-shrink: 0;
+  }
+  .now-pause {
+    height: 46px;
+    padding: 0 16px;
+    flex-shrink: 0;
+  }
+  .now-score {
+    padding: 16px 16px 20px;
+  }
+  .now-score-grid {
+    grid-template-columns: 150px minmax(0, 1fr);
+  }
+}
+@media (width < 600px) {
+  .now-pause {
+    width: 46px;
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
+    gap: 0;
+  }
+  .now-score {
+    border-radius: var(--radius-20);
+    padding: 12px 12px 16px;
+  }
+  .now-score-grid {
+    grid-template-columns: 112px minmax(0, 1fr);
+    min-width: 760px;
+  }
+  .now-lane-label {
+    gap: 8px;
+  }
+  .now-lane-role {
+    display: none;
+  }
+  .now-lane-title {
+    font-size: 15px;
+  }
+}
