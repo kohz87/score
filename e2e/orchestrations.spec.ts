@@ -41,6 +41,36 @@ async function approve(page: Page, step: string) {
   }).toPass({ timeout: 45_000 })
 }
 
+// A dot or a lit node is a short-lived effect that plays right after the event, which can be before a slow run of the
+// test looks for it. Record it from the moment it appears instead of polling for a window that may already be over.
+async function recordSeen(page: Page, selector: string) {
+  await page.evaluate((css) => {
+    const w = window as unknown as { __seen?: Record<string, boolean> }
+    w.__seen = { ...w.__seen, [css]: false }
+    const check = () => {
+      if (document.querySelector(css)) w.__seen![css] = true
+    }
+    new MutationObserver(check).observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+    })
+    check()
+  }, selector)
+}
+async function wasSeen(page: Page, selector: string) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          (css) => (window as unknown as { __seen?: Record<string, boolean> }).__seen?.[css],
+          selector,
+        ),
+      { timeout: 30_000 },
+    )
+    .toBe(true)
+}
+
 async function openLive(page: Page) {
   // The room panel is collapsed unless something needs the person.
   const toggle = page.getByRole('button', { name: /Orchestration · / }).first()
@@ -123,8 +153,9 @@ test('dots travel along the edges for real events', async ({ page }) => {
   await pair(page)
   await start(page, 'Dots e2e-b')
   await openLive(page)
+  await recordSeen(page, '.orch-dot')
   await approve(page, 's1')
-  await expect(page.locator('.orch-dot').first()).toBeAttached({ timeout: 30_000 })
+  await wasSeen(page, '.orch-dot')
   // Let the run finish: approve the second step.
   await approve(page, 's2')
   await expect(page.getByText('Succeeded', { exact: true }).first()).toBeVisible({
@@ -142,9 +173,16 @@ test('reduced motion: no travelling dot, the nodes and the edge light up instead
     await pair(page)
     await start(page, 'Reduced e2e-c')
     await openLive(page)
+    await recordSeen(page, '.orch-node--lit')
+    await recordSeen(page, '.orch-dot')
     await approve(page, 's1')
-    await expect(page.locator('.orch-node--lit').first()).toBeAttached({ timeout: 30_000 })
-    await expect(page.locator('.orch-dot')).toHaveCount(0)
+    await wasSeen(page, '.orch-node--lit')
+    // No dot ever appeared, not merely none right now.
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { __seen: Record<string, boolean> }).__seen['.orch-dot'],
+      ),
+    ).toBe(false)
     await approve(page, 's2')
     await expect(page.getByText('Succeeded', { exact: true }).first()).toBeVisible({
       timeout: 60_000,
