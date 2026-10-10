@@ -77,6 +77,14 @@ const EntrySchema = z.discriminatedUnion('kind', [
     deadlineAt: z.string().nullable(),
     acceptUnknownSpend: z.boolean(),
   }),
+  // The person's decision to use a replacement agent for the rest of the run (fix-h item 3).
+  z.object({
+    ...Base,
+    kind: z.literal('remap'),
+    orchestrationId: z.string().min(1),
+    agentId: z.string().min(1),
+    incarnation: z.string().min(1),
+  }),
   // Team and agent pause holds live outside the orchestration tables but gate its admissions.
   z.object({
     ...Base,
@@ -290,6 +298,7 @@ export class ExecutionJournal {
         'transition',
         'authorization',
         'hold',
+        'remap',
       ].includes(entry.kind)
       if (entry.scope !== this.scope || !compactable || !droppable(entry)) {
         out.push(entry)

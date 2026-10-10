@@ -3,10 +3,12 @@ import type {
   GateDecision,
   InquiryAnswer,
   LimitsDecision,
+  RemapDecision,
   RunControl,
   WaiverDecision,
 } from '@score/contract'
 import { HttpError } from '../../errors.ts'
+import { lifecycleOf } from '../agent-lifecycle.ts'
 import { journalSoft, touch, type Ctx } from './ctx.ts'
 import {
   addStored,
@@ -23,6 +25,7 @@ import {
   addCause,
   addHistory,
   attemptsOf,
+  frozenIncarnation,
   isTerminalStatus,
   readGate,
   requireOrch,
@@ -319,5 +322,62 @@ export function abandonAttempts(ctx: Ctx, orchId: string, body: AbandonDecision)
         "UPDATE orchestrations SET status = 'paused', pause_reason = 'abandonment' WHERE id = ?",
       )
       .run(orchId)
+  touch(ctx, orchId)
+}
+
+/**
+ * "Use the new <agent> for this run": the person's answer to a replaced agent. Paired with the exact frozen and current
+ * incarnations the page showed; anything else is a conflict (the agent was replaced again, or the run was remapped). Steps
+ * assigned under the old mapping stay blocked: the lead assigns again under the new one.
+ */
+export function remapAgent(ctx: Ctx, orchId: string, body: RemapDecision): void {
+  const { sqlite, now } = ctx
+  const o = requireOrch(sqlite, orchId)
+  expectRevision(o, body.orchestrationRevision)
+  mustBeLive(o)
+  const frozen = frozenIncarnation(sqlite, orchId, body.agentId)
+  if (frozen === undefined)
+    throw new HttpError(404, 'not_found', `${body.agentId} is not an agent of this run`)
+  const current = lifecycleOf(sqlite, body.agentId)?.incarnation_id ?? 'untracked'
+  if (
+    frozen !== body.frozenIncarnation ||
+    current !== body.currentIncarnation ||
+    current === 'untracked'
+  )
+    throw new HttpError(409, 'conflict', `${body.agentId} changed again; look at the run again`)
+  if (frozen === current) throw new HttpError(409, 'conflict', `${body.agentId} was not replaced`)
+  // The journal entry comes first: a database that later lacks this remap is detected at start.
+  journalSoft(ctx, () =>
+    ctx.journal.append({
+      kind: 'remap',
+      orchestrationId: orchId,
+      agentId: body.agentId,
+      incarnation: current,
+    }),
+  )
+  sqlite
+    .prepare(
+      'UPDATE orc_agent_map SET incarnation = ?, updated_at = ? WHERE orchestration_id = ? AND agent_id = ?',
+    )
+    .run(current, now, orchId, body.agentId)
+  if (body.agentId === o.lead_agent_id) {
+    sqlite
+      .prepare('UPDATE orchestrations SET lead_incarnation = ? WHERE id = ?')
+      .run(current, orchId)
+    // The pause this replacement caused ends with the decision about it; admission re-pauses if something else applies.
+    if (o.status === 'paused' && o.pause_reason === 'agent_unavailable')
+      sqlite
+        .prepare("UPDATE orchestrations SET status = 'running', pause_reason = NULL WHERE id = ?")
+        .run(orchId)
+  }
+  addHistory(
+    sqlite,
+    orchId,
+    'agent_remapped',
+    { agentId: body.agentId, from: frozen, to: current },
+    now,
+  )
+  // The lead learns of it (an assignment it was refused may now succeed).
+  addCause(sqlite, orchId, 'agent_remapped', body.agentId, now)
   touch(ctx, orchId)
 }

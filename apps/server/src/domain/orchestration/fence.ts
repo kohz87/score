@@ -86,6 +86,9 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
     if (entry.kind === 'hold')
       hold.set(entry.target === 'team' ? 'team' : `agent:${entry.agentId}`, entry)
   }
+  const remap = new Map<string, Extract<JournalEntry, { kind: 'remap' }>>()
+  for (const entry of entries)
+    if (entry.kind === 'remap') remap.set(`${entry.orchestrationId}:${entry.agentId}`, entry)
   const limits = sqlite.prepare(
     'SELECT budget_usd, deadline_at, accepted_unknown_spend FROM orchestrations WHERE id = ?',
   )
@@ -127,6 +130,20 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
           ref: entry.orchestrationId,
           journalN: entry.n,
           detail: `The limits of ${entry.orchestrationId} were tightened (${lost.join(', ')}), but the database does not hold that`,
+        })
+    } else if (entry.kind === 'remap') {
+      if (remap.get(`${entry.orchestrationId}:${entry.agentId}`) !== entry) continue
+      const row = sqlite
+        .prepare(
+          'SELECT incarnation FROM orc_agent_map WHERE orchestration_id = ? AND agent_id = ?',
+        )
+        .get(entry.orchestrationId, entry.agentId) as { incarnation: string } | undefined
+      if (!row || row.incarnation !== entry.incarnation)
+        mismatches.push({
+          kind: 'fence',
+          ref: entry.orchestrationId,
+          journalN: entry.n,
+          detail: `The remap of ${entry.agentId} in ${entry.orchestrationId} was recorded, but the database does not hold it`,
         })
     } else if (entry.kind === 'hold') {
       const key = entry.target === 'team' ? 'team' : `agent:${entry.agentId}`

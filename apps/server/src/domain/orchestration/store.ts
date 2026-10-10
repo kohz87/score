@@ -300,3 +300,15 @@ export function addHistory(
     .prepare('INSERT INTO orc_history (orchestration_id, kind, detail, at) VALUES (?, ?, ?, ?)')
     .run(orchId, kind, JSON.stringify(detail), now)
 }
+
+/** The incarnation the run froze for an agent (the lead and every allowed agent), or undefined for any other agent. */
+export function frozenIncarnation(
+  sqlite: DatabaseSync,
+  orchId: string,
+  agentId: string,
+): string | undefined {
+  const row = sqlite
+    .prepare('SELECT incarnation FROM orc_agent_map WHERE orchestration_id = ? AND agent_id = ?')
+    .get(orchId, agentId) as { incarnation: string } | undefined
+  return row?.incarnation
+}

@@ -32,6 +32,7 @@ import {
 import {
   addHistory,
   attemptsOf,
+  frozenIncarnation,
   gatesOf,
   inquiriesOf,
   isFinalStep,
@@ -309,6 +310,14 @@ const HANDLERS: Record<ToolName, Handler> = {
         `${agent} is not one of the allowed agents (${o.allowed_agents.join(', ')})`,
       )
     const life = lifecycleOf(sqlite, agent)
+    // The run works with the agent it was started with; a replacement waits for the person's remap decision.
+    const frozen = frozenIncarnation(sqlite, o.id, agent)
+    if (frozen !== undefined && frozen !== (life?.incarnation_id ?? 'untracked')) {
+      return refuse(
+        'agent_changed',
+        `${agent} was replaced after this run started; the person has to decide whether to use the new one`,
+      )
+    }
     if (!agentAdmits(sqlite, agent))
       return refuse('agent_unavailable', `${agent} is not ready for new work`)
     if (o.steps_created >= o.max_steps)

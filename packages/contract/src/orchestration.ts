@@ -290,6 +290,16 @@ export const NeedsYouSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('unknown'), attemptId: z.string() }),
   z.object({ kind: z.literal('cancel_fence'), stepId: z.string(), attemptId: z.string() }),
   z.object({ kind: z.literal('fence'), reason: z.string() }),
+  /** An agent was replaced after the run started: the run keeps working with the agent it was started with. */
+  z.object({
+    kind: z.literal('remap'),
+    agentId: AgentIdSchema,
+    role: z.enum(['lead', 'agent']),
+    /** The incarnation the run was started with (or last remapped to). */
+    frozenIncarnation: z.string().min(1),
+    /** The agent's incarnation now; `untracked` when the agent no longer exists (only Stop is possible then). */
+    currentIncarnation: z.string().min(1),
+  }),
 ])
 export type NeedsYou = z.infer<typeof NeedsYouSchema>
 
@@ -435,6 +445,18 @@ export const WaiverDecisionSchema = z
   .object({ orchestrationRevision: revision, acknowledge: z.literal(true) })
   .strict()
 export type WaiverDecision = z.infer<typeof WaiverDecisionSchema>
+
+/** "Use the new <agent> for this run": paired with the exact incarnations the page showed. */
+export const RemapDecisionSchema = z
+  .object({
+    agentId: AgentIdSchema,
+    frozenIncarnation: z.string().min(1),
+    currentIncarnation: z.string().min(1),
+    orchestrationRevision: revision,
+    acknowledge: z.literal(true),
+  })
+  .strict()
+export type RemapDecision = z.infer<typeof RemapDecisionSchema>
 
 export const AbandonDecisionSchema = z
   .object({

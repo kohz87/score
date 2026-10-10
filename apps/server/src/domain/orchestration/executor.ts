@@ -18,6 +18,7 @@ import {
   type PreflightCheck,
   type AbandonDecision,
   type RunControl,
+  type RemapDecision,
   type WaiverDecision,
 } from '@score/contract'
 import { createHash, randomUUID } from 'node:crypto'
@@ -49,6 +50,7 @@ import {
   answerInquiry,
   decideGate,
   grantWaiver,
+  remapAgent,
   pauseRun,
   resumeRun,
   setLimits,
@@ -71,6 +73,7 @@ import {
   addHistory,
   attemptsOf,
   causesAfter,
+  frozenIncarnation,
   gatesOf,
   inquiriesOf,
   isTerminalStatus,
@@ -652,6 +655,19 @@ export class Orchestrator {
         now,
         now,
       )
+    // Freeze who this run was started with: the lead and every allowed agent (fix-h item 3).
+    const freeze = sqlite.prepare(
+      'INSERT INTO orc_agent_map (orchestration_id, agent_id, role, incarnation, updated_at) VALUES (?, ?, ?, ?, ?)',
+    )
+    freeze.run(id, body.leadAgentId, 'lead', lifecycle?.incarnation_id ?? 'untracked', now)
+    for (const agentId of body.allowedAgents)
+      freeze.run(
+        id,
+        agentId,
+        'agent',
+        lifecycleOf(sqlite, agentId)?.incarnation_id ?? 'untracked',
+        now,
+      )
     addCause(sqlite, id, 'started', null, now)
     addHistory(
       sqlite,
@@ -693,6 +709,10 @@ export class Orchestrator {
   stop(id: string) {
     return this.decide(id, (ctx) => stopRun(ctx, id))
   }
+  remap(id: string, body: RemapDecision) {
+    return this.decide(id, (ctx) => remapAgent(ctx, id, body))
+  }
+
   waiver(id: string, body: WaiverDecision) {
     return this.decide(id, (ctx) => grantWaiver(ctx, id, body))
   }
@@ -996,6 +1016,21 @@ export class Orchestrator {
         touch(ctx, o.id)
         continue
       }
+      // The step must also match the mapping the person started (or remapped) the run with.
+      const frozen = frozenIncarnation(sqlite, o.id, step.agent_id)
+      if (frozen !== undefined && frozen !== step.agent_incarnation) {
+        setStepStatus(
+          sqlite,
+          o.id,
+          step.id,
+          'blocked',
+          'agent_changed: not the agent mapping approved for this run',
+          now,
+        )
+        addCause(sqlite, o.id, 'step_blocked', step.id, now, 'agent_changed')
+        touch(ctx, o.id)
+        continue
+      }
       if (!agentAdmits(sqlite, step.agent_id) || agentPausedAt(sqlite, step.agent_id) !== null)
         continue
       if ((counts.perRun.get(o.id) ?? 0) >= o.max_concurrent_steps) continue
@@ -1190,6 +1225,24 @@ export class Orchestrator {
       return refuse('not dispatched: the agent changed', {
         status: 'blocked',
         disposition: 'agent_unavailable: the agent was replaced or removed',
+      })
+    }
+    // Re-checked against the frozen mapping as the last step before Hermes (fix-h item 3).
+    const frozen = frozenIncarnation(sqlite, o.id, attempt.agent_id)
+    if (frozen !== undefined && frozen !== attempt.agent_incarnation) {
+      if (attempt.kind === 'lead') {
+        refuseAttempt(sqlite, attempt, 'not dispatched: the lead agent mapping changed', now)
+        sqlite
+          .prepare(
+            'UPDATE orchestrations SET causes_consumed_up_to = ?, lead_turns_used = lead_turns_used - 1 WHERE id = ?',
+          )
+          .run(attempt.claim_from ?? 0, o.id)
+        this.pauseFor(ctx, o, 'agent_unavailable')
+        return undefined
+      }
+      return refuse('not dispatched: not the approved agent mapping', {
+        status: 'blocked',
+        disposition: 'agent_changed: not the agent mapping approved for this run',
       })
     }
     if (!agentAdmits(sqlite, attempt.agent_id)) return undefined
@@ -1596,6 +1649,8 @@ export class Orchestrator {
       for (const entry of own.entries) {
         if (entry.kind === 'authorization') newest.set(`a:${entry.orchestrationId}`, entry.n)
         if (entry.kind === 'hold') newest.set(holdKey(entry), entry.n)
+        if (entry.kind === 'remap')
+          newest.set(`m:${entry.orchestrationId}:${entry.agentId}`, entry.n)
       }
     const compacted = journal.compact((entry) => {
       if (
@@ -1616,6 +1671,8 @@ export class Orchestrator {
           attemptsOf(sqlite, o.id).every((x) => x.state === 'terminated' || x.state === 'refused')
         )
       }
+      if (entry.kind === 'remap')
+        return newest.get(`m:${entry.orchestrationId}:${entry.agentId}`) !== entry.n
       if (entry.kind === 'authorization' || entry.kind === 'hold') {
         // Only the newest word per run / per target is needed; the older ones are superseded.
         return (

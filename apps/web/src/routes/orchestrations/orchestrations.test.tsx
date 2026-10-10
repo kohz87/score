@@ -314,3 +314,37 @@ test('the start screen shows the acknowledgement, the gate notes, the unknown to
   })
   expect((body.acknowledgement as { text: string }).text).toMatch(/^Score controls the work/)
 })
+
+test('a replaced agent asks for a remap decision paired with the incarnations the page showed', async () => {
+  const snapshot = orchestrationFixtures['/api/orchestrations/orch-1'] as {
+    orchestration: { needsYou: unknown[] }
+  }
+  const original = snapshot.orchestration.needsYou
+  snapshot.orchestration.needsYou = [
+    ...original,
+    {
+      kind: 'remap',
+      agentId: 'builder',
+      role: 'agent',
+      frozenIncarnation: 'inc-a',
+      currentIncarnation: 'inc-b',
+    },
+  ]
+  post = () => json((orchestrationFixtures['/api/orchestrations'] as { items: unknown[] }).items[0])
+  try {
+    mount(<OrchestrationLive orchestrationId="orch-1" />)
+    const card = await screen.findByRole('region', { name: 'Replaced builder' })
+    fireEvent.click(within(card).getByRole('button', { name: 'Use the new builder for this run' }))
+    await waitFor(() => expect(requests.some((r) => r.url.endsWith('/orch-1/remap'))).toBe(true))
+    const request = requests.find((r) => r.url.endsWith('/orch-1/remap'))!
+    expect(JSON.parse(String(request.init?.body))).toEqual({
+      agentId: 'builder',
+      frozenIncarnation: 'inc-a',
+      currentIncarnation: 'inc-b',
+      orchestrationRevision: 9,
+      acknowledge: true,
+    })
+  } finally {
+    snapshot.orchestration.needsYou = original
+  }
+})
