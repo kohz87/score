@@ -13,6 +13,7 @@ import { IssueList, InputsEditor, Outline, Palette } from './EditorParts.tsx'
 import { NodeInspector } from './NodeInspector.tsx'
 import { StartWorkflowDialog } from './StartWorkflowDialog.tsx'
 import { useDraftHistory } from './use-draft-history.ts'
+import { placeNewNode } from './workflow-layout.ts'
 import {
   addNode,
   connect,
@@ -163,6 +164,7 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
       if (kind === 'branch' && source.kind === 'agent')
         next = updateNode(next, result.id, { subject: source.id })
     }
+    next = placeNewNode(next, result.id, new Map(), after)
     commit(next)
     setSelected({ kind: 'node', id: result.id })
     announce(note)
@@ -447,6 +449,7 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
             onDropKind={(payload, onto) => addAfter(payload.kind, payload.agentId, onto)}
             onDeleteNode={deleteNode}
             onDeleteEdge={deleteEdge}
+            onLayout={(next, key) => commit(next, key)}
             announce={announce}
           />
           <IssueList

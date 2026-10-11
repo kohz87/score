@@ -185,3 +185,20 @@ test('ids made from a title are valid, short and unique', () => {
   expect(idFromLabel(draft, 'step1', 'step1')).toBe('step1')
   expect(idFromLabel(draft, 'x'.repeat(60)).length).toBeLessThanOrEqual(32)
 })
+
+// ---- layout (PLAN 7.1c)
+
+test('a node removed or renamed takes its position with it; an emptied layout disappears', () => {
+  const draft: Draft = {
+    ...base(),
+    layout: { nodes: { step1: { x: 16, y: 16 }, end1: { x: 320, y: 16 } } },
+  }
+  expect(removeNode(draft, 'end1').layout).toEqual({ nodes: { step1: { x: 16, y: 16 } } })
+  expect(renameNode(draft, 'end1', 'finish').layout).toEqual({
+    nodes: { step1: { x: 16, y: 16 }, finish: { x: 320, y: 16 } },
+  })
+  const single: Draft = { ...base(), layout: { nodes: { gate1: { x: 0, y: 0 } } } }
+  expect('layout' in removeNode(single, 'gate1')).toBe(false)
+  // Nodes without a position stay without one.
+  expect(removeNode(base(), 'gate1').layout).toBeUndefined()
+})

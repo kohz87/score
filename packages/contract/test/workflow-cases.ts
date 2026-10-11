@@ -296,6 +296,11 @@ export const workflowCases = [
   ['EndNodeSchema', endNode, { ...endNode, kind: 'agent' }],
   ['WorkflowNodeSchema', gateNode, { ...gateNode, kind: 'loop' }],
   ['WorkflowEdgeSchema', edge, { ...edge, to: '' }],
+  [
+    'WorkflowLayoutSchema',
+    { nodes: { a: { x: 16, y: 32 } } },
+    { nodes: { a: { x: Number.NaN, y: 0 } } },
+  ],
   ['WorkflowDefinitionSchema', workflowDefinition, { ...workflowDefinition, nodes: [] }],
   ['ValidationCodeSchema', 'cycle', 'nope'],
   ['ValidationIssueSchema', validation.issues[0], { ...validation.issues[0], severity: 'fatal' }],

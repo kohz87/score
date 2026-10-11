@@ -171,6 +171,12 @@ export function validateDefinition(def: WorkflowDefinition): ValidationResult {
     seenInputs.add(input.name)
   }
   const g = graphOf(def)
+  // Layout is presentation only, but a position for a node that does not exist would be dead data.
+  for (const id of Object.keys(def.layout?.nodes ?? {}))
+    if (!g.nodes.has(id))
+      add('layout_unknown_node', `The layout positions ${id}, which is not a node`, {
+        nodeId: id,
+      })
   const seenEdgeIds = new Set<string>()
   const seenEdges = new Set<string>()
   const validEdges: WorkflowEdge[] = []

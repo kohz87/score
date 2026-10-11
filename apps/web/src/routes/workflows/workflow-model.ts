@@ -192,12 +192,30 @@ export function addNode(
   return { draft: { ...draft, nodes: [...draft.nodes, node] }, id: node.id }
 }
 
+/** Moves, drops or renames one node's saved position; an emptied layout disappears. */
+function relayout(draft: Draft, from: string, to: string | null): Draft['layout'] {
+  const nodes = draft.layout?.nodes
+  if (!nodes || !(from in nodes)) return draft.layout
+  const { [from]: at, ...rest } = nodes
+  const next = to === null ? rest : { ...rest, [to]: at! }
+  return Object.keys(next).length === 0 ? undefined : { nodes: next }
+}
+
+function setLayout(draft: Draft, layout: Draft['layout']): Draft {
+  const { layout: _old, ...rest } = draft
+  void _old
+  return layout ? { ...rest, layout } : rest
+}
+
 export function removeNode(draft: Draft, id: string): Draft {
-  return {
-    ...draft,
-    nodes: draft.nodes.filter((node) => node.id !== id),
-    edges: draft.edges.filter((edge) => edge.from !== id && edge.to !== id),
-  }
+  return setLayout(
+    {
+      ...draft,
+      nodes: draft.nodes.filter((node) => node.id !== id),
+      edges: draft.edges.filter((edge) => edge.from !== id && edge.to !== id),
+    },
+    relayout(draft, id, null),
+  )
 }
 
 export function updateNode(draft: Draft, id: string, patch: Partial<WorkflowNode>): Draft {
@@ -215,23 +233,27 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\
 export function renameNode(draft: Draft, from: string, to: string): Draft {
   if (from === to) return draft
   const ref = new RegExp(`(\\{\\{\\s*nodes\\.)${escapeRegExp(from)}(?=[.\\s|}])`, 'g')
-  return {
-    ...draft,
-    nodes: draft.nodes.map((node) => {
-      const renamed = node.id === from ? { ...node, id: to } : node
-      if (renamed.kind === 'agent')
-        return { ...renamed, instruction: renamed.instruction.replace(ref, `$1${to}`) }
-      if (renamed.kind === 'gate')
-        return { ...renamed, question: renamed.question.replace(ref, `$1${to}`) }
-      if (renamed.kind === 'branch' && renamed.subject === from) return { ...renamed, subject: to }
-      return renamed
-    }),
-    edges: draft.edges.map((edge) => ({
-      ...edge,
-      from: edge.from === from ? to : edge.from,
-      to: edge.to === from ? to : edge.to,
-    })),
-  }
+  return setLayout(
+    {
+      ...draft,
+      nodes: draft.nodes.map((node) => {
+        const renamed = node.id === from ? { ...node, id: to } : node
+        if (renamed.kind === 'agent')
+          return { ...renamed, instruction: renamed.instruction.replace(ref, `$1${to}`) }
+        if (renamed.kind === 'gate')
+          return { ...renamed, question: renamed.question.replace(ref, `$1${to}`) }
+        if (renamed.kind === 'branch' && renamed.subject === from)
+          return { ...renamed, subject: to }
+        return renamed
+      }),
+      edges: draft.edges.map((edge) => ({
+        ...edge,
+        from: edge.from === from ? to : edge.from,
+        to: edge.to === from ? to : edge.to,
+      })),
+    },
+    relayout(draft, from, to),
+  )
 }
 
 // ---------------------------------------------------------------------------------------------------- connections

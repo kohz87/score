@@ -167,6 +167,33 @@ export const unfinishedVersion = WorkflowVersionSchema.parse({
   definition: unfinishedDefinition,
 })
 
+/** The same workflow drawn by hand (PLAN 7.1c): a loop back under itself instead of the automatic columns. Not in the list. */
+export const drawnDefinition: WorkflowDefinition = WorkflowDefinitionSchema.parse({
+  ...releaseDefinition,
+  name: 'Release notes (drawn)',
+  layout: {
+    nodes: {
+      draft: { x: 16, y: 32 },
+      review: { x: 256, y: 32 },
+      approve: { x: 496, y: 32 },
+      passed: { x: 704, y: 144 },
+      publish: { x: 496, y: 256 },
+      repair: { x: 16, y: 256 },
+      repaired: { x: 256, y: 352 },
+    },
+  },
+})
+export const drawnVersion = WorkflowVersionSchema.parse({
+  ...version(drawnDefinition, false),
+  workflowId: 'wf-drawn',
+  definition: drawnDefinition,
+})
+export const drawnDetail = WorkflowDetailSchema.parse({
+  ...summary('wf-drawn', drawnDefinition, false, 0),
+  versions: [version(drawnDefinition, false)],
+  latest: drawnVersion,
+})
+
 export const workflowList = WorkflowListSchema.parse({
   items: [
     summary('wf-release', releaseDefinition, true, 1),
@@ -556,8 +583,10 @@ export const workflowFixtures: Record<string, unknown> = {
   '/api/workflows': workflowList,
   '/api/workflows/wf-release': releaseDetail,
   '/api/workflows/wf-draft': unfinishedDetail,
+  '/api/workflows/wf-drawn': drawnDetail,
   '/api/workflows/wf-release/versions/1': releaseVersion,
   '/api/workflows/wf-draft/versions/1': unfinishedVersion,
+  '/api/workflows/wf-drawn/versions/1': drawnVersion,
   '/api/workflow-runs': WorkflowRunListSchema.parse({ asOfSeq: 52, items: [runSummary] }),
   '/api/workflow-runs/wfrun-1': runSnapshot,
   '/api/workflow-runs/wfrun-1/events': runEvents,
