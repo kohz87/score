@@ -6,7 +6,13 @@ import { taskAgentsQuery, taskRoomsQuery } from '../../tasks/task-queries.ts'
 import { FlowInspector } from './FlowInspector.tsx'
 import { FlowLog, FlowStats } from './FlowLog.tsx'
 import { FlowCanvas } from './FlowCanvas.tsx'
-import { useBriefFlow, useBriefLists, useBriefRunControl } from './flow-queries.ts'
+import {
+  useBriefFlow,
+  useBriefLists,
+  useBriefRunControl,
+  useBriefToolCalls,
+} from './flow-queries.ts'
+import { RunLine } from './RunLine.tsx'
 import { NewOrchestrationDialog } from '../../orchestrations/NewOrchestrationDialog.tsx'
 import { OrchestrationLive } from '../../orchestrations/OrchestrationLive.tsx'
 import { orchestrationsQuery } from '../../orchestrations/orchestration-queries.ts'
@@ -107,6 +113,7 @@ function RunsView({ onSelect }: FlowViewProps) {
   )
   const briefId = routeBriefId ?? activeItems[0]?.id ?? recentItems[0]?.id
   const flow = useBriefFlow(briefId)
+  const toolCalls = useBriefToolCalls(briefId ?? '')
   const orchestration = orchestrations.find((item) => item.briefId === briefId)
   const workflowRun = (useStreamQuery(workflowRunsQuery).data ?? []).find(
     (item) => item.briefId === briefId,
@@ -173,6 +180,9 @@ function RunsView({ onSelect }: FlowViewProps) {
             </span>
           )}
           <h2>{brief?.title ?? 'Flow'}</h2>
+          {flow.data && !orchestration && !workflowRun && (
+            <RunLine flow={flow.data} agents={agents.data ?? []} toolCalls={toolCalls} />
+          )}
           {flow.data?.notice && <p className="flow-notice">{flow.data.notice}</p>}
         </div>
         <div className="flow-heading__controls">
@@ -277,7 +287,7 @@ function RunsView({ onSelect }: FlowViewProps) {
       {flow.data && !orchestration && !workflowRun && (
         <div className="flow-bottom">
           <FlowLog key={briefId} briefId={briefId} agents={agents.data ?? []} />
-          <FlowStats stats={flow.data.stats} />
+          <FlowStats stats={flow.data.stats} toolCalls={toolCalls} />
         </div>
       )}
     </div>

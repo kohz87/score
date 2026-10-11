@@ -64,7 +64,11 @@ test('a failed tool says so, and a running one only counts as running while the 
 test('thinking is collapsed and labelled by the reply state', () => {
   const parts: MessagePart[] = [{ kind: 'thinking', text: 'first the tests' }]
   const { rerender } = render(<MessageItem message={make(parts, true)} agents={[]} />)
-  expect(screen.getByText('Thinking…').closest('details')!.open).toBe(false)
+  // The status line says it as well, under the reply.
+  expect(screen.getAllByText('Thinking…')).toHaveLength(2)
+  expect(screen.getByText('Thinking…', { selector: 'summary' }).closest('details')!.open).toBe(
+    false,
+  )
   rerender(<MessageItem message={make(parts)} agents={[]} />)
   expect(screen.getByText('Thought process')).toBeTruthy()
 })
@@ -89,4 +93,26 @@ test('a streaming reply has a Stop button that posts to the stop route', async (
   cleanup()
   render(<MessageItem message={make([{ kind: 'text', text: 'done' }])} agents={[]} />)
   expect(screen.queryByRole('button', { name: /^Stop reply/ })).toBeNull()
+})
+
+test('a reply being written says what the agent is doing right now, and nothing once it is finished', () => {
+  const { rerender } = render(
+    <MessageItem message={make([tool('search_changelog', 'running')], true)} agents={[]} />,
+  )
+  const status = screen.getByText(
+    (_, element) => element?.tagName === 'P' && element.className.includes('live-status'),
+  )
+  expect(status.textContent).toBe('Calling search_changelog()…')
+  expect(status.querySelector('code')?.textContent).toBe('search_changelog()')
+  rerender(
+    <MessageItem
+      message={make([tool('search_changelog'), { kind: 'text', text: 'Found two entries' }], true)}
+      agents={[]}
+    />,
+  )
+  expect(screen.getByText('Writing the reply…')).toBeTruthy()
+  rerender(
+    <MessageItem message={make([{ kind: 'text', text: 'Found two entries' }])} agents={[]} />,
+  )
+  expect(screen.queryByText('Writing the reply…')).toBeNull()
 })

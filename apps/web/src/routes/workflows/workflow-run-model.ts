@@ -89,6 +89,7 @@ export const edgeLabelOf = (
 export function buildWorkflowGraph(
   definition: Pick<WorkflowDefinition, 'nodes' | 'edges'>,
   captions: ReadonlyMap<string, string> = new Map(),
+  statuses: ReadonlyMap<string, string> = new Map(),
 ): { nodes: GraphNode[]; edges: GraphEdge[] } {
   const byId = new Map(definition.nodes.map((node) => [node.id, node]))
   return {
@@ -100,6 +101,7 @@ export function buildWorkflowGraph(
       title: node.label,
       shape: node.kind,
       ...(captions.has(node.id) ? { caption: captions.get(node.id)! } : {}),
+      ...(statuses.has(node.id) ? { status: statuses.get(node.id)! } : {}),
     })),
     edges: definition.edges.map((edge) => ({
       id: edge.id,

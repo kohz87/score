@@ -65,6 +65,11 @@
   --panel-ink: #12131a;
   --panel-card: #ffffff;
   --radius-pill: 999px;
+  /* PLAN 5.39: the soft halo of a step that is running, in the agent's own colour. */
+  --halo-ring: 4px;
+  --halo-glow: 20px;
+  --halo-ring-tint: 26%;
+  --halo-glow-tint: 38%;
   --radius-card: 28px;
   --radius-20: 20px;
   --radius-16: 16px;
@@ -117,6 +122,8 @@
   --track-2: #353946;
   --link-hover: #a595ff;
   --panel-ink: #242733;
+  --halo-ring-tint: 34%;
+  --halo-glow-tint: 55%;
   --panel-card: #ffffff;
 }
 @media (prefers-color-scheme: dark) {
@@ -160,6 +167,8 @@
     --track-2: #353946;
     --link-hover: #a595ff;
     --panel-ink: #242733;
+    --halo-ring-tint: 34%;
+    --halo-glow-tint: 55%;
     --panel-card: #ffffff;
   }
 }

@@ -164,7 +164,7 @@ test('selects the waiting node and renders its checklist, approval, facts, Chat 
   expect(within(stats).getByText('—')).toBeTruthy()
   expect(await within(inspector).findByRole('button', { name: 'Approve' })).toBeTruthy()
   fireEvent.click(within(inspector).getByRole('button', { name: 'Approve' }))
-  expect(await within(inspector).findByText('You approved')).toBeTruthy()
+  expect(await within(inspector).findByText('Approved by you')).toBeTruthy()
   const decision = requests.find((request) => request.url.endsWith('/decision'))!
   expect(new Headers(decision.init?.headers).get('Idempotency-Key')).toBeTruthy()
 })

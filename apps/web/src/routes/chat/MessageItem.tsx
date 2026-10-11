@@ -15,6 +15,8 @@ import { RewindDialog } from './RewindDialog.tsx'
 import { SummaryCard } from './SummaryCard.tsx'
 import { SaveToKnowledge, saveCandidates } from '../knowledge/SaveToKnowledge.tsx'
 import { approvalsQuery } from './queries.ts'
+import { StatusLine } from '../../live/StatusLine.tsx'
+import { useStatusLine } from '../../live/use-activity.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { MODEL_DIDNT_ANSWER, formatElapsed, isNotProcessedNotice, stalledFor } from './stall.ts'
 
@@ -460,6 +462,11 @@ export function MessageItem({
     !message.id.startsWith('pending-') &&
     !message.parts.some((part) => part.kind === 'summary')
   const cards = message.parts.filter((part) => part.kind === 'tool').length
+  const writing = message.streaming && !you && !readOnly && !message.id.startsWith('pending-')
+  const status = useStatusLine(author.kind === 'agent' ? author.agentId : null, {
+    working: writing,
+    parts: message.parts,
+  })
   return (
     <article
       id={`message-${message.id}`}
@@ -477,7 +484,6 @@ export function MessageItem({
               minute: '2-digit',
             })}
           </time>
-          {message.streaming && <span className="chat-streaming">Writing…</span>}
           {message.editedBy && <span className="chat-edited">edited</span>}
           {imported && importedLabel && (
             <span className="chat-imported-chip">from {importedLabel}</span>
@@ -514,6 +520,7 @@ export function MessageItem({
             />
           ))}
         </div>
+        {writing && <StatusLine line={status} live />}
         {!readOnly && message.streaming && !you && !message.id.startsWith('pending-') && (
           <StopReply message={message} name={name} />
         )}

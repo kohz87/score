@@ -1,0 +1,91 @@
+/* PLAN 5.39: status line, check chips, run summary and the soft halo of the step that is running. */
+.live-status {
+  margin: 0;
+  min-height: 1.5em;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.live-status code {
+  font-family: var(--font-code);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.live-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--subtle-2);
+  color: var(--ink-muted);
+}
+.live-chip svg {
+  flex: none;
+}
+.live-chip--ok {
+  background: var(--agent-jade-tint);
+  color: var(--agent-jade-text);
+}
+.live-chip--no {
+  background: var(--agent-coral-tint);
+  color: var(--agent-coral-text);
+}
+.live-chip time {
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.live-summary {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.live-summary::before {
+  content: '✓ ';
+  color: var(--agent-jade-text);
+  font-weight: 700;
+}
+.live-summary--failed::before {
+  content: '✗ ';
+  color: var(--agent-coral-text);
+}
+
+/* On the dark "needs you" panels the chips use the panel's own colours. */
+.now-asking .live-chip,
+.chat-approval:not(.chat-approval--done) .live-chip {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.now-asking .live-chip--ok {
+  color: var(--rules-go);
+}
+.now-asking .live-chip--no {
+  color: var(--rules-never);
+}
+.now-asking .live-chip--neutral {
+  color: var(--rules-muted);
+}
+
+.live-resolved {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.live-resolved li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ink-muted);
+}

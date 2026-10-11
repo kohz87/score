@@ -129,7 +129,7 @@ test('an actionable approval shows its details and posts the chosen decision wit
     },
     2,
   )
-  await screen.findByText('You approved')
+  await screen.findByText('Approved by you')
 })
 
 test('deny and the More menu send their own choices', async () => {
@@ -188,7 +188,7 @@ test.each<[string, Partial<Approval>, string]>([
       status: 'denied',
       decision: { choice: 'deny', by: 'you', at: base.createdAt },
     },
-    'You denied',
+    'Rejected',
   ],
   [
     'applied session',
@@ -197,7 +197,7 @@ test.each<[string, Partial<Approval>, string]>([
       actionable: false,
       decision: { choice: 'session', by: 'you', at: base.createdAt },
     },
-    'You approved for this session',
+    'Approved for this session',
   ],
   [
     'decided elsewhere',
@@ -277,7 +277,7 @@ test('an approval outside the list is read by id and follows approval.updated', 
     },
     2,
   )
-  await screen.findByText('You approved')
+  await screen.findByText('Approved by you')
 })
 
 test('outcome is null while an approval is open', () => {

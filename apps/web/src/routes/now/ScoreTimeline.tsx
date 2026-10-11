@@ -5,6 +5,8 @@ import { Link, useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { runtimeLabel } from '../../components/runtime-label.ts'
 import { UnattributedGlyph } from '../../components/UnattributedGlyph.tsx'
+import { StatusLine } from '../../live/StatusLine.tsx'
+import { useStatusLines } from '../../live/use-activity.ts'
 import { useTimelineArrivals } from './use-timeline-arrivals.ts'
 import {
   axisTicks,
@@ -184,6 +186,11 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
       agent: null,
       blocks: snapshot.unattributed.blocks,
     })
+  const statusLines = useStatusLines(
+    owners.flatMap(({ agent }) =>
+      agent ? [{ id: agent.id, working: agent.status === 'working' }] : [],
+    ),
+  )
   const blockIds = useMemo(
     () =>
       owners.flatMap((owner) =>
@@ -240,6 +247,7 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
                   {runtimeLabel(agent?.runtime) && (
                     <span className="now-lane-role">{runtimeLabel(agent?.runtime)}</span>
                   )}
+                  {agent && <StatusLine line={statusLines.get(agent.id) ?? null} />}
                 </div>
               </div>
             ))}

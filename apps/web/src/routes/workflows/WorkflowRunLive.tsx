@@ -6,7 +6,9 @@ import { LiveDiagram } from '../orchestrations/LiveDiagram.tsx'
 import { LiveLog } from '../orchestrations/LiveLog.tsx'
 import { isRunOver, replayDelayMs, statusLabel } from '../orchestrations/orch-model.ts'
 import { ReplayBar } from '../orchestrations/ReplayBar.tsx'
-import { BudgetBlock, RunControls } from '../orchestrations/RunPanel.tsx'
+import { BudgetBlock, EndSummary, RunControls, RunSpend } from '../orchestrations/RunPanel.tsx'
+import { LiveCount } from '../../live/LiveCount.tsx'
+import { useStatusLines } from '../../live/use-activity.ts'
 import { useRunPlayback } from '../orchestrations/use-run-playback.ts'
 import { AgentChip } from '../orchestrations/RunDecisions.tsx'
 import { taskAgentsQuery } from '../tasks/task-queries.ts'
@@ -72,10 +74,27 @@ export function WorkflowRunLive({
     () => workflowReplayAt(events, count, nodeIds, tokenKinds),
     [events, count, nodeIds, tokenKinds],
   )
-  const graph = useMemo(
-    () => (detail ? buildWorkflowGraph(detail.definition, captionsOf(detail)) : null),
-    [detail],
-  )
+  // The agents of the steps that are running: what each is doing now becomes the step's caption.
+  const runningAgents = useMemo(() => {
+    if (!detail || isRunOver(detail.status)) return []
+    const running = new Set(
+      detail.nodeStates.filter((node) => node.state === 'running').map((node) => node.nodeId),
+    )
+    return detail.definition.nodes.flatMap((node) =>
+      node.kind === 'agent' && running.has(node.id) ? [{ id: node.agentId, working: true }] : [],
+    )
+  }, [detail])
+  const lines = useStatusLines(runningAgents)
+  const graph = useMemo(() => {
+    if (!detail) return null
+    const statuses = new Map<string, string>()
+    for (const node of detail.definition.nodes) {
+      const line = node.kind === 'agent' ? lines.get(node.agentId) : undefined
+      const state = detail.nodeStates.find((item) => item.nodeId === node.id)
+      if (line && state?.state === 'running') statuses.set(node.id, line)
+    }
+    return buildWorkflowGraph(detail.definition, captionsOf(detail), statuses)
+  }, [detail, lines])
   const replayGraph = useMemo(
     () => (detail ? buildWorkflowGraph(detail.definition) : null),
     [detail],
@@ -133,10 +152,20 @@ export function WorkflowRunLive({
               <span>Paused: {detail.pauseReason.replaceAll('_', ' ')}</span>
             )}
             <span className="orch-muted">
-              {detail.nodes.succeeded} of {detail.nodes.total} steps done
+              <LiveCount value={detail.nodes.succeeded} /> of {detail.nodes.total} steps done
               {detail.nodes.skipped > 0 ? `, ${detail.nodes.skipped} skipped` : ''}
             </span>
+            <RunSpend budget={detail.budget} />
           </div>
+          <EndSummary
+            run={detail}
+            steps={detail.nodes.succeeded}
+            approvals={
+              [...detail.nodeGates, ...detail.assignmentGates].filter(
+                (gate) => gate.decidedAt !== null,
+              ).length
+            }
+          />
           {note && <p className="wf-outcome-note">{note}</p>}
           {detail.endReason && <p className="orch-muted">{detail.endReason}</p>}
         </div>

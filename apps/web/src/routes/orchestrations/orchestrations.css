@@ -458,6 +458,10 @@ button.orch-primary,
   font-size: 12px;
   color: var(--ink-muted);
 }
+.orch-node__text code {
+  font-family: var(--font-code);
+  font-size: 11.5px;
+}
 .orch-node__flag {
   position: absolute;
   top: -9px;
@@ -490,7 +494,11 @@ button.orch-primary,
 .orch-node--running,
 .orch-node--lead-working {
   border: 2px solid var(--node-agent);
-  animation: orch-pulse 1.6s ease-in-out infinite;
+  /* PLAN 5.39: a soft halo in the agent's colour that breathes slowly while the step runs. */
+  box-shadow:
+    0 0 0 var(--halo-ring) color-mix(in srgb, var(--node-agent) var(--halo-ring-tint), transparent),
+    0 0 var(--halo-glow) color-mix(in srgb, var(--node-agent) var(--halo-glow-tint), transparent);
+  animation: orch-halo 3.6s ease-in-out infinite;
 }
 .orch-node--succeeded {
   border: 2px solid var(--ink);
@@ -524,6 +532,16 @@ button.orch-primary,
     0 0 0 3px var(--card),
     0 0 0 5px var(--ink);
 }
+.orch-node--selected.orch-node--running,
+.orch-node--selected.orch-node--admitting,
+.orch-node--selected.orch-node--lead-working {
+  animation: none;
+  box-shadow:
+    0 0 0 3px var(--card),
+    0 0 0 5px var(--ink),
+    0 0 var(--halo-glow) 4px
+      color-mix(in srgb, var(--node-agent) var(--halo-glow-tint), transparent);
+}
 .orch-node--lit {
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--ink) 30%, transparent);
 }
@@ -534,13 +552,19 @@ button.orch-primary,
 .orch-node--lit.orch-tone--fail {
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--agent-coral) 70%, transparent);
 }
-@keyframes orch-pulse {
+@keyframes orch-halo {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--node-agent) 55%, transparent);
+    box-shadow:
+      0 0 0 var(--halo-ring)
+        color-mix(in srgb, var(--node-agent) var(--halo-ring-tint), transparent),
+      0 0 14px color-mix(in srgb, var(--node-agent) var(--halo-glow-tint), transparent);
   }
   50% {
-    box-shadow: 0 0 0 7px color-mix(in srgb, var(--node-agent) 0%, transparent);
+    box-shadow:
+      0 0 0 var(--halo-ring)
+        color-mix(in srgb, var(--node-agent) var(--halo-ring-tint), transparent),
+      0 0 var(--halo-glow) color-mix(in srgb, var(--node-agent) var(--halo-glow-tint), transparent);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -548,7 +572,6 @@ button.orch-primary,
   .orch-node--running,
   .orch-node--lead-working {
     animation: none;
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--node-agent) 40%, transparent);
   }
   .orch-node {
     transition: none;
@@ -903,4 +926,9 @@ button.orch-primary,
   stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* PLAN 5.39: the summary of an ended run has a line of its own, kept free while the run is going. */
+.orch-summary-slot {
+  min-height: 1.6em;
 }

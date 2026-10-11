@@ -1,6 +1,7 @@
 import type { AgentSummary } from '@score/contract'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { statusSegments } from '../../live/status-line.ts'
 import { MOTION, loadAnime, playMotion, usePrefersReducedMotion } from '../../motion/motion.ts'
 import { layoutFlow, type Point } from '../now/flow/layout.ts'
 import { withPositions, type PositionMap } from '../now/flow/free-layout.ts'
@@ -99,6 +100,20 @@ export function useEffectPlayer(reducedMotion: boolean, gapMs = EFFECT_GAP_MS) {
 }
 
 const toneClass = (tone: EffectTone) => `orch-tone--${tone}`
+
+/** A node's second line; a tool name in a status line is shown in code style. */
+function Caption({ text }: { text: string }) {
+  return (
+    <>
+      {statusSegments(text).map((segment, index) =>
+        index % 2 === 1 ? <code key={index}>{segment}</code> : segment,
+      )}
+    </>
+  )
+}
+
+const named = (word: string, status?: string) =>
+  status ? `${word}: ${status.replaceAll('`', '')}` : word
 
 const SHAPE_NAME = { gate: 'Gate', branch: 'Branch', join: 'Join', end: 'End' } as const
 
@@ -557,6 +572,8 @@ export function LiveDiagram({
                 : shaped
                   ? shapedWord(node.shape!, visual!)
                   : visualLabel[visual!])
+            // The status line replaces the state word on screen; the accessible name keeps both.
+            const shown = node.status ?? word
             const what = isLead
               ? 'Lead'
               : shaped
@@ -579,8 +596,8 @@ export function LiveDiagram({
                 aria-pressed={selected === node.id}
                 aria-label={
                   shaped
-                    ? `${what} ${title}, ${word}`
-                    : `${isLead ? 'Lead' : `${what} ${title}`}, ${glyph.name}, ${word}`
+                    ? `${what} ${title}, ${named(word, node.status)}`
+                    : `${isLead ? 'Lead' : `${what} ${title}`}, ${glyph.name}, ${named(word, node.status)}`
                 }
                 onClick={() => onSelect(selected === node.id ? null : node.id)}
               >
@@ -594,7 +611,7 @@ export function LiveDiagram({
                     <>
                       <b>{title}</b>
                       <span>
-                        {glyph.name} · {word}
+                        {glyph.name} · <Caption text={shown} />
                       </span>
                     </>
                   ) : (
@@ -602,7 +619,9 @@ export function LiveDiagram({
                       <b>
                         {isLead ? 'Lead' : title} {!shaped && <i>{glyph.name}</i>}
                       </b>
-                      <span>{word}</span>
+                      <span>
+                        <Caption text={shown} />
+                      </span>
                     </>
                   )}
                 </span>

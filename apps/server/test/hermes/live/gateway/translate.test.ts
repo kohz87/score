@@ -760,6 +760,62 @@ test('reasoning and tool calls become redacted, bounded cards on the finished re
   if (tool?.kind === 'tool') expect(tool.result!.length).toBeLessThanOrEqual(500)
 })
 
+test('a tool call shows on the reply while it is written: running, then done, in front of the text (PLAN 5.39)', async () => {
+  const context = await admittedMessage()
+  const base = { run_id: context.runId, timestamp: 1 }
+  const updates = () =>
+    (
+      env.db.sqlite
+        .prepare("SELECT data FROM events WHERE type = 'message.updated' ORDER BY seq")
+        .all() as { data: string }[]
+    ).map(
+      (row) =>
+        JSON.parse(row.data) as { messageId: string; parts: { kind: string; status?: string }[] },
+    )
+  await env.ingest.submit(
+    translateRunEvent(
+      context,
+      { ...base, event: 'message.delta', seq: 1, delta: 'Looking. ' },
+      { unknownEvents: 0 },
+    ),
+  )
+  expect(updates()).toEqual([])
+  await env.ingest.submit(
+    translateRunEvent(
+      context,
+      { ...base, event: 'tool.started', seq: 2, tool: 'search_changelog', preview: 'q' },
+      { unknownEvents: 0 },
+    ),
+  )
+  const reply = replyMessage()
+  expect(updates().map((u) => u.parts.map((p) => `${p.kind}:${p.status ?? ''}`))).toEqual([
+    ['tool:running', 'text:'],
+  ])
+  expect(updates()[0]!.messageId).toBe(reply.id)
+  // Nothing is stored yet: the final parts are written when the reply ends.
+  expect(reply.parts.map((part) => part.kind)).toEqual(['text'])
+  await env.ingest.submit(
+    translateRunEvent(
+      context,
+      {
+        ...base,
+        event: 'tool.completed',
+        seq: 3,
+        tool: 'search_changelog',
+        preview: 'two',
+        duration: 0.1,
+        error: false,
+      },
+      { unknownEvents: 0 },
+    ),
+  )
+  expect(
+    updates()
+      .at(-1)!
+      .parts.map((p) => `${p.kind}:${p.status ?? ''}`),
+  ).toEqual(['tool:ok', 'text:'])
+})
+
 test('more than 30 tool calls keep the compact summary after the first 30 cards (PLAN 5.25)', async () => {
   const context = await admittedMessage()
   const base = { run_id: context.runId, timestamp: 1 }

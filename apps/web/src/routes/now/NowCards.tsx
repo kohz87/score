@@ -14,8 +14,10 @@ import { TodoItems, todoProgress, useAgentTodos } from '../../components/TodoLis
 import '../../components/todo.css'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentTextColor } from '../chat/agent-text-color.ts'
-import { approvalOutcome, choiceText, useApprovalDecision } from '../chat/ApprovalCard.tsx'
+import { approvalOutcome, useApprovalDecision } from '../chat/ApprovalCard.tsx'
 import { Composer } from '../chat/Composer.tsx'
+import { approvalChip, type Chip } from '../../live/resolved.ts'
+import { ResolvedChip } from '../../live/ResolvedChip.tsx'
 import { roomsQuery } from '../chat/queries.ts'
 
 const time = (iso: string) =>
@@ -121,21 +123,23 @@ function AskingBody({
 }: {
   approval: Approval
   agent: AgentSummary | undefined
-  onDecided: (approval: Approval, text: string) => void
+  onDecided: (approval: Approval, chip: Chip) => void
 }) {
   const { posted, busy, error, decide } = useApprovalDecision(approval.id)
   const current = posted && approval.delivery === 'none' ? posted : approval
   const outcome = approvalOutcome(current)
+  const chip = approvalChip(current)
   const open = current.actionable && outcome === null && !busy
   const retry = current.actionable && current.delivery === 'failed'
   async function choose(choice: ApprovalChoice) {
     const result = await decide(choice)
     if (!result) return
     // Only a confirmed delivery by you counts as "approved"/"denied"; a queued one is just queued.
-    if (result.delivery === 'applied' && result.decision?.by === 'you')
-      onDecided(result, choiceText[result.decision.choice])
+    const chip = approvalChip(result)
+    if (result.delivery === 'applied' && result.decision?.by === 'you' && chip)
+      onDecided(result, chip)
     else if (result.delivery === 'intent' || result.delivery === 'delivering')
-      onDecided(result, 'Decision queued')
+      onDecided(result, { tone: 'neutral', text: 'Decision queued', at: null })
   }
   const name = agent?.name ?? approval.agentId
   const task = approval.refs.find((ref) => ref.kind === 'task')
@@ -173,7 +177,7 @@ function AskingBody({
       <span className="now-grow" />
       {outcome !== null || busy ? (
         <p className="now-asking-outcome" role="status">
-          {busy ? 'Sending…' : outcome}
+          {busy ? 'Sending…' : chip ? <ResolvedChip chip={chip} /> : outcome}
         </p>
       ) : null}
       {error && (
@@ -215,7 +219,7 @@ export function AskingCard({
 }) {
   // The refreshed snapshot drops an approval once it is answered, and the next one may take its place at once;
   // keep a line saying what was decided for a moment.
-  const [decided, setDecided] = useState<{ approval: Approval; text: string } | null>(null)
+  const [decided, setDecided] = useState<{ approval: Approval; chip: Chip } | null>(null)
   useEffect(() => {
     if (!decided) return
     const timer = setTimeout(() => setDecided(null), 5000)
@@ -226,14 +230,18 @@ export function AskingCard({
   return (
     <section ref={card} className="now-card now-asking" aria-label="Needs you">
       <p className="now-asking-notice" role="status">
-        {decided ? `${decided.text}: ${decided.approval.title}` : ''}
+        {decided && (
+          <>
+            <ResolvedChip chip={decided.chip} /> <span>{decided.approval.title}</span>
+          </>
+        )}
       </p>
       {approval ? (
         <AskingBody
           key={approval.id}
           approval={approval}
           agent={agents.find((item) => item.id === approval.agentId)}
-          onDecided={(approval, text) => setDecided({ approval, text })}
+          onDecided={(approval, chip) => setDecided({ approval, chip })}
         />
       ) : (
         <>

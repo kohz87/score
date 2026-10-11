@@ -4,9 +4,13 @@ import type { Approval, Message } from '@score/contract'
 import { MessageItem } from './MessageItem.tsx'
 
 let approvals: Approval[] = []
-vi.mock('../../data/query-client.ts', () => ({
-  useStreamQuery: () => ({ data: approvals, status: 'ready' }),
-}))
+vi.mock('../../data/query-client.ts', async () => {
+  const { createContext } = await import('react')
+  return {
+    useStreamQuery: () => ({ data: approvals, status: 'ready' }),
+    StreamContext: createContext(null),
+  }
+})
 
 const START = Date.parse('2026-10-09T10:00:00.000Z')
 const reply = (over: Partial<Message> = {}): Message => ({

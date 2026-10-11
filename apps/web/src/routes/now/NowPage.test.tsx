@@ -340,7 +340,7 @@ test('Approve posts the decision once with an idempotency key and shows the outc
   renderNow()
   const asking = await screen.findByRole('region', { name: 'Needs you' })
   fireEvent.click(within(asking).getByRole('button', { name: 'Approve' }))
-  expect((await within(asking).findAllByText(/You approved/)).length).toBeGreaterThan(0)
+  expect((await within(asking).findAllByText(/Approved by you/)).length).toBeGreaterThan(0)
   const decisions = calls.filter((call) => call.url === '/api/approvals/ap1/decision')
   expect(decisions).toHaveLength(1)
   expect(decisions[0]).toMatchObject({ method: 'POST', body: JSON.stringify({ choice: 'once' }) })
@@ -353,7 +353,7 @@ test('a queued approval is not announced as approved', async () => {
   const asking = await screen.findByRole('region', { name: 'Needs you' })
   fireEvent.click(within(asking).getByRole('button', { name: 'Approve' }))
   expect(await within(asking).findByText(/Decision queued/)).toBeTruthy()
-  expect(within(asking).queryByText(/You approved/)).toBeNull()
+  expect(within(asking).queryByText(/Approved by you/)).toBeNull()
 })
 
 test('with nothing to decide the card says so', async () => {

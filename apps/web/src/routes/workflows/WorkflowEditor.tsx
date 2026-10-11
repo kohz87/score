@@ -12,6 +12,9 @@ import { ExportDialog } from './ExportDialog.tsx'
 import { IssueList, InputsEditor, Outline, Palette } from './EditorParts.tsx'
 import { NodeInspector } from './NodeInspector.tsx'
 import { StartWorkflowDialog } from './StartWorkflowDialog.tsx'
+import { WorkflowPreview } from './PreviewRun.tsx'
+import { useLiveOverlay } from './use-live-overlay.ts'
+import { clock } from '../../live/resolved.ts'
 import { useDraftHistory } from './use-draft-history.ts'
 import { placeNewNode } from './workflow-layout.ts'
 import {
@@ -94,6 +97,8 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
   const [starting, setStarting] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [conflict, setConflict] = useState<number | null>(null)
+  // The draft as it was when Preview was pressed; null when no preview is playing.
+  const [previewing, setPreviewing] = useState<Draft | null>(null)
   const [justSaved, setJustSaved] = useState<number | null>(
     () => (location.state as { savedVersion?: number } | null)?.savedVersion ?? null,
   )
@@ -219,6 +224,14 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
   }
 
   const headline = summaryLine(index, checking)
+  // A run of the version on screen that is going now: its states are drawn on the canvas; the draft is never touched.
+  const overlay = useLiveOverlay(saved.workflowId, saved.version, !dirty && previewing === null)
+  const previewBlocked =
+    shape.length > 0 || index.errors > 0
+      ? 'Fix the problems first: a preview needs a workflow without errors.'
+      : checking
+        ? 'Score is still checking the workflow.'
+        : null
   const versions = latest.data?.versions ?? detail?.versions ?? []
   const inspector = selectedNode ? (
     <NodeInspector
@@ -269,6 +282,23 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
           <button type="button" disabled={!history.canRedo} onClick={history.redo}>
             Redo
           </button>
+          <button
+            type="button"
+            disabled={previewing !== null || previewBlocked !== null}
+            aria-describedby={previewBlocked ? 'wf-preview-why' : undefined}
+            title={previewBlocked ?? 'Play the workflow through without running anything'}
+            onClick={() => {
+              setPreviewing(draft)
+              setSelected(null)
+            }}
+          >
+            Preview
+          </button>
+          {previewBlocked && (
+            <span id="wf-preview-why" className="wf-visually-hidden">
+              {previewBlocked}
+            </span>
+          )}
           <button
             type="button"
             className="orch-primary"
@@ -429,29 +459,49 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
               </button>
             )}
           </div>
-          <EditorCanvas
-            draft={draft}
-            agents={agents}
-            issues={index}
-            selected={selected}
-            onSelect={(next) => {
-              setSelected(next)
-              if (next?.kind === 'node' && narrow) setInspectorOpen(false)
-            }}
-            onConnect={(from, port, to) => {
-              const result = connect(draft, from, port, to)
-              if ('error' in result) return result.error
-              commit(result.draft)
-              const names = (id: string) => draft.nodes.find((node) => node.id === id)?.label ?? id
-              announce(`Connected ${names(from)} to ${names(to)}.`)
-              return null
-            }}
-            onDropKind={(payload, onto) => addAfter(payload.kind, payload.agentId, onto)}
-            onDeleteNode={deleteNode}
-            onDeleteEdge={deleteEdge}
-            onLayout={(next, key) => commit(next, key)}
-            announce={announce}
-          />
+          {overlay && previewing === null && (
+            <p className="wf-live" role="status">
+              <span className="wf-live__dot" aria-hidden="true" />
+              Live: run started {clock(overlay.run.createdAt)}{' '}
+              <Link to={`/now/flow/${encodeURIComponent(overlay.run.briefId)}`}>
+                Open the run ›
+              </Link>
+            </p>
+          )}
+          {previewing !== null ? (
+            <WorkflowPreview
+              key="preview"
+              draft={previewing}
+              agents={agents}
+              onStop={() => setPreviewing(null)}
+            />
+          ) : (
+            <EditorCanvas
+              overlay={overlay}
+              draft={draft}
+              agents={agents}
+              issues={index}
+              selected={selected}
+              onSelect={(next) => {
+                setSelected(next)
+                if (next?.kind === 'node' && narrow) setInspectorOpen(false)
+              }}
+              onConnect={(from, port, to) => {
+                const result = connect(draft, from, port, to)
+                if ('error' in result) return result.error
+                commit(result.draft)
+                const names = (id: string) =>
+                  draft.nodes.find((node) => node.id === id)?.label ?? id
+                announce(`Connected ${names(from)} to ${names(to)}.`)
+                return null
+              }}
+              onDropKind={(payload, onto) => addAfter(payload.kind, payload.agentId, onto)}
+              onDeleteNode={deleteNode}
+              onDeleteEdge={deleteEdge}
+              onLayout={(next, key) => commit(next, key)}
+              announce={announce}
+            />
+          )}
           <IssueList
             issues={issues}
             draft={draft}
