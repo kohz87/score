@@ -246,15 +246,17 @@ test('ownership: ordinary actions on the run room and brief are rejected while t
     expect(res.json().error.details).toMatchObject({ orchestrationId: id, state: 'owned', action })
   }
   owned(await post(`/api/rooms/${room}/messages`, { text: 'hello @builder' }), 'message.post')
-  owned(
-    await app.inject({
-      method: 'PATCH',
-      url: `/api/rooms/${room}`,
-      headers,
-      payload: { name: 'renamed' },
-    }),
-    'room.update',
-  )
+  // Renaming is an organising action (5.36): allowed while the run owns the room.
+  expect(
+    (
+      await app.inject({
+        method: 'PATCH',
+        url: `/api/rooms/${room}`,
+        headers,
+        payload: { name: 'renamed' },
+      })
+    ).statusCode,
+  ).toBe(200)
   owned(
     await app.inject({
       method: 'PATCH',
