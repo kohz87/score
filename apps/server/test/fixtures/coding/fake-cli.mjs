@@ -8,19 +8,24 @@ import { fileURLToPath } from 'node:url'
 
 const [runtime, ...args] = process.argv.slice(2)
 const here = dirname(fileURLToPath(import.meta.url))
-const fixtureNames = { 'claude-code': 'claude', codex: 'codex' }
+const fixtureNames = { 'claude-code': 'claude', codex: 'codex', antigravity: 'antigravity' }
 
 if (args.includes('--version')) {
   const version = process.env.SCORE_CODING_FAKE_VERSION
   if (runtime === 'claude-code') console.log(`${version ?? '2.1.295'} (Claude Code)`)
   else if (runtime === 'codex') console.log(`codex-cli ${version ?? '0.160.1'}`)
+  else if (runtime === 'antigravity') console.log(`${version ?? '1.3.3'}`)
   else process.exit(127)
   process.exit(0)
 }
 
+// Antigravity takes the prompt as the value of -p; the others read it from stdin.
 let prompt = ''
-process.stdin.setEncoding('utf8')
-for await (const chunk of process.stdin) prompt += chunk
+if (runtime === 'antigravity') prompt = args[args.indexOf('-p') + 1] ?? ''
+else {
+  process.stdin.setEncoding('utf8')
+  for await (const chunk of process.stdin) prompt += chunk
+}
 
 const log = process.env.SCORE_CODING_FAKE_LOG
 if (log)
@@ -36,9 +41,16 @@ if (log)
     })}\n`,
   )
 
+if (runtime === 'antigravity' && prompt === '/usage') {
+  const usage = JSON.parse(readFileSync(join(here, 'antigravity-usage.json'), 'utf8'))
+  delete usage._fixture
+  process.stdout.write(`${JSON.stringify(usage)}\n`)
+  process.exit(0)
+}
+
 const name = /\[fixture:([a-z-]+)\]/.exec(prompt)?.[1] ?? 'basic'
 // A resumed turn may have its own fixture (`<name>-resumed`): lets tests make a resume fail.
-const resumed = args.includes('--resume') || args.includes('resume')
+const resumed = args.includes('--resume') || args.includes('resume') || args.includes('--conversation')
 const base = join(here, `${fixtureNames[runtime]}-${name}`)
 const file =
   resumed && existsSync(`${base}-resumed.jsonl`) ? `${base}-resumed.jsonl` : `${base}.jsonl`

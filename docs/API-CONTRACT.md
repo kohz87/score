@@ -43,7 +43,7 @@ type AgentSummary = {
   runtime?: Runtime /* PLAN 7.2; absent = 'hermes' */
   runtimeNote?: string /* coding agents: "Claude Code · Uses your Claude plan quota …" for the card */
 }
-type Runtime = 'hermes' | 'claude-code' | 'codex' | 'opencode'
+type Runtime = 'hermes' | 'claude-code' | 'codex' | 'antigravity' | 'opencode'
 type CostKind = 'reported' | 'estimated' | 'unknown'
 
 type Ref =
@@ -986,19 +986,19 @@ costUsd: number | null; task: { id; title } | null; brief: { id; title } | null;
 
 ### Coding agents (PLAN 7.2; schemas in `packages/contract/src/coding.ts`; design docs/briefs/7.2-coding-agents.md)
 
-Claude Code and Codex CLI (OpenCode is listed as "not supported yet") join the team next to Hermes agents. A coding agent is
+Claude Code, Codex CLI and Antigravity (`agy`, PLAN 7.6; design docs/briefs/7.6-antigravity-agent.md) (OpenCode is listed as "not supported yet") join the team next to Hermes agents. A coding agent is
 an `AgentSummary`/`AgentDetail` like any other with `runtime` set, so rooms, @mentions, hand-offs, Stop, Now, Flow, Watch and
 Reports need no new paths. It takes **room work only**: a Kanban task whose `assignee`/`reviewer` is a coding agent is `422
 unsupported`. Hermes-profile endpoints for an agent id that is a coding agent (`/api/agents/:id/skills`, `/memory`, `/files/…`, `/model`,
 `/routines`, …) answer `409 unsupported`. Rewind is not available for them: a room rewind hides the messages in Score and drops that
 room's CLI session (`skipped: no_session`).
 
-- `GET /api/coding-agents/runtimes` → `{ items: CodingRuntimeInfo[] }`: `{ runtime: 'claude-code'|'codex'|'opencode'; label; state:
+- `GET /api/coding-agents/runtimes` → `{ items: CodingRuntimeInfo[] }`: `{ runtime: 'claude-code'|'codex'|'antigravity'|'opencode'; label; state:
   'ready'|'not_installed'|'not_supported'|'untested_version'; version: string|null; testedVersions: string[]; quota: string; message:
-  string|null }`. Read with `<cli> --version` only (never a prompt). `untested_version` = installed, but not one of the tested versions.
+  string|null; unverifiedPermissions: ('read-only'|'workspace-write'|'full')[]; warning: string|null }`. Read with `<cli> --version` only (never a prompt). `untested_version` = installed, but not one of the tested versions.
 - `GET /api/coding-agents` → `{ items: CodingAgent[] }`: `{ id; name; role; runtime; workspace; permission: 'read-only'|'workspace-write'|'full';
   model: string|null; style; quota; cli: { state; version; testedVersions; confirmed: boolean }; createdAt }`.
-- **H** `POST /api/coding-agents` `{ id; name; role?; runtime; workspace?; permission?; model?; style; password?; acknowledgeReads? }` → `201 CodingAgent`. A Codex agent needs `acknowledgeReads: true` (`400 acknowledgement_required`): Codex can read every file the owner's user can (live-checked 2026-10-10).
+- **H** `POST /api/coding-agents` `{ id; name; role?; runtime; workspace?; permission?; model?; style; password?; acknowledgeReads? }` → `201 CodingAgent`. A Codex or Antigravity agent needs `acknowledgeReads: true` (`400 acknowledgement_required`): Codex can read every file the owner's user can (live-checked 2026-10-10), and Antigravity is treated the same. A `permission` listed in the runtime's `unverifiedPermissions` is `422 permission_unverified` (also on PATCH).
   `id` is a profile-style name (`^[a-z0-9][a-z0-9_-]{0,63}$`), unique among all agents (`409 conflict`). `workspace` defaults to
   `~/score-workspaces/<id>` (created) and follows the Workspace folder rules (no home folder, `~/.hermes`, `~/.score`, `~/.ssh`;
   `422 workspace_unavailable`). A CLI that is not installed/supported is `422 cli_not_installed`. `permission: 'full'` needs
@@ -1007,13 +1007,23 @@ room's CLI session (`skipped: no_session`).
   `full` needs the password; lowering never does.
 - **H** `POST /api/coding-agents/:id/confirm-version` `{ version }` → `CodingAgent`: lets an `untested_version` CLI run for this agent. `version`
   must equal the version Score reads right now (`409 conflict` otherwise).
+- `GET /api/coding-agents/runtimes/:runtime/usage` → `CodingUsage` `{ runtime; fetchedAt; groups: { name; fiveHourRemainingPercent: number|null;
+  fiveHourResets: string|null; weeklyRemainingPercent: number|null; weeklyResets: string|null }[]; text }`: Antigravity's quota (`agy -p /usage`, no model
+  turn), cached for 60 s; `text` is the redacted table as printed, the fallback when a group could not be read. Other runtimes: `409 unsupported`;
+  CLI missing or untested: `422 cli_not_installed` / `422 untested_cli_version`; the CLI failing or printing nothing readable: `502 usage_unavailable`.
 - **H** `DELETE /api/coding-agents/:id` → `204` (`409` while a turn runs). Past messages stay; its runs leave Reports.
 - Turns: a mention routes through the normal room queue. One turn per coding agent at a time (others show as `queued`); at most 30 minutes per
   turn; Stop = SIGINT, SIGTERM after 5 s, SIGKILL after 5 s more. An untested/missing CLI or an unavailable workspace fails the reply with a
   sentence in the room (`422`, never retried). The CLI's pid, process group and start time are stored right after the spawn; a restart first stops what is left of each recorded group (only when pid and start time still match; SIGTERM, then SIGKILL) and then marks running turns `interrupted` ("Score restarted while this ran"); the CLI session id
   is kept so the next message resumes it. Runs carry `runtime` and `costKind`; run ids start with `cr_`.
+- Antigravity (PLAN 7.6): `agy -p <prompt> --output-format stream-json …` takes the prompt **in argv** (visible to the owner's own user in `ps`,
+  at most 100 000 bytes; a longer turn fails with a sentence). Permission levels: read-only = `--mode plan --sandbox`, workspace-write =
+  `--mode accept-edits --sandbox`, full = `--dangerously-skip-permissions`. Actions the level refuses come back as `denied_actions` and show as a
+  tool card "Antigravity refused: …" (the turn still completes). The installed version is read before every turn (agy updates itself): a version
+  other than the tested one pauses the agent until the person confirms it. Cost is unknown (tokens only). It can also browse, generate images and
+  run sub-agents; the Add agent form says so.
 - Security: the CLI gets an allowlisted environment (no Score variables, nothing named `*_API_KEY`/`*TOKEN*`/`*SECRET*`); the prompt goes on stdin,
-  never in argv; output is redacted before it is stored; Claude Code runs with deny rules for `~/.hermes`, `~/.score`, `~/.ssh` and `.env*`.
+  never in argv (except Antigravity, above); output is redacted before it is stored; Claude Code runs with deny rules for `~/.hermes`, `~/.score`, `~/.ssh` and `.env*`.
   The sandbox limits what an agent can change, **not what it can read** (Codex has no read rules): the Add agent form says so.
 
 ### Workspace (Team › agent › Workspace)

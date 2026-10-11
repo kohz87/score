@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import type { CliState, CodingRuntimeInfo } from '@score/contract'
+import type { CliState, CodingPermission, CodingRuntimeInfo } from '@score/contract'
 import { DRIVERS, isTestedVersion } from './drivers.ts'
 import { buildChildEnv } from './env.ts'
 import type { CodingDriver } from './types.ts'
@@ -42,6 +42,20 @@ export class CliLocator {
 
   childEnv(): Record<string, string> {
     return buildChildEnv(this.options.env ?? process.env, { fake: this.fake })
+  }
+
+  /**
+   * The levels offered for a driver. The driver lists what has been live-verified; the owner's environment can widen it
+   * (`SCORE_CODING_VERIFIED_ANTIGRAVITY=read-only,workspace-write`) while a level is being verified, and in fake mode
+   * with a fake CLI nothing real can run, so tests and e2e use the override too.
+   */
+  verifiedPermissions(driver: CodingDriver): CodingPermission[] {
+    const raw = (this.options.env ?? process.env)[
+      `SCORE_CODING_VERIFIED_${driver.runtime.replace(/-/g, '_').toUpperCase()}`
+    ]
+    if (raw === undefined) return [...driver.verifiedPermissions]
+    const wanted = new Set(raw.split(',').map((item) => item.trim()))
+    return (['read-only', 'workspace-write', 'full'] as const).filter((level) => wanted.has(level))
   }
 
   invalidate(): void {
@@ -117,6 +131,10 @@ export class CliLocator {
           testedVersions: [...driver.testedVersions],
           quota: driver.quota,
           message: detected.message,
+          unverifiedPermissions: (['read-only', 'workspace-write', 'full'] as const).filter(
+            (level) => !this.verifiedPermissions(driver).includes(level),
+          ),
+          warning: driver.warning,
         }
       }),
     )

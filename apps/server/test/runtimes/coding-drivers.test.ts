@@ -4,6 +4,11 @@ import {
   createClaudeParser,
   claudeDenyRules,
 } from '../../src/runtimes/coding/claude.ts'
+import {
+  antigravityDriver,
+  createAntigravityParser,
+  parseAntigravityUsage,
+} from '../../src/runtimes/coding/antigravity.ts'
 import { codexDriver, createCodexParser } from '../../src/runtimes/coding/codex.ts'
 import { opencodeDriver } from '../../src/runtimes/coding/opencode.ts'
 import { isTestedVersion } from '../../src/runtimes/coding/drivers.ts'
@@ -116,6 +121,7 @@ test('codex: a failed turn carries the CLI’s message; stray error events are n
 const deny = ['/home/u/.hermes', '/home/u/.score', '/home/u/.ssh']
 const base = {
   workspace: '/ws',
+  prompt: '',
   model: null,
   sessionId: null,
   settingsPath: null,
@@ -259,6 +265,7 @@ test('fake mode never starts a real CLI, whatever the environment says (review: 
   expect((await fakeMode.info()).map((item) => item.state)).toEqual([
     'not_installed',
     'not_installed',
+    'not_installed',
     'not_supported',
   ])
   expect(() => fakeMode.command(codex)).toThrow(/fake mode/)
@@ -271,4 +278,121 @@ test('fake mode never starts a real CLI, whatever the environment says (review: 
   // A live server ignores the override (outside tests).
   const live = locatorForMode('live', { SCORE_CODING_FAKE_CLI: '/x/fake.mjs' })
   expect(live.command(codex)).toEqual({ file: 'codex', args: [] })
+})
+
+test('antigravity fixtures (recorded): a text turn becomes session, text and usage without cost', () => {
+  const parser = createAntigravityParser('/work')
+  const events = parseAll(parser, 'antigravity-text')
+  expect(events.map((event) => event.kind)).toEqual(['session', 'text', 'text', 'usage', 'result'])
+  expect(events[0]).toMatchObject({ sessionId: 'aaaaaaaa-1111-4111-8111-000000000001' })
+  // The closing DONE step carries the trailing newline: the reply is exactly the streamed deltas.
+  expect(events.filter((e) => e.kind === 'text').map((e) => (e as { text: string }).text)).toEqual([
+    'AGY-OK',
+    '\n',
+  ])
+  expect(events[3]).toEqual({ kind: 'usage', inputTokens: 12624, outputTokens: 1567 })
+  expect(events[4]).toEqual({ kind: 'result', ok: true })
+  expect(parser.stats).toEqual({ unknown: 0, malformed: 0 })
+})
+
+test('antigravity fixtures (recorded): a refused command is a tool card plus a "refused" card, and the turn still completes', () => {
+  const parser = createAntigravityParser('/work')
+  const events = parseAll(parser, 'antigravity-denied')
+  expect(events.map((event) => event.kind)).toEqual([
+    'session',
+    'tool_start',
+    'tool_end',
+    'usage',
+    'tool_start',
+    'tool_end',
+    'result',
+  ])
+  expect(events[1]).toMatchObject({
+    tool: 'run_command',
+    preview: 'ls -la',
+    detail: { type: 'command', command: 'ls -la', cwd: '/work' },
+  })
+  expect(events[4]).toMatchObject({ tool: 'Antigravity refused', preview: 'RunCommand' })
+  expect(events[5]).toMatchObject({ ok: false })
+  expect(events[6]).toMatchObject({ kind: 'result', ok: true })
+  expect((events[6] as { text: string }).text).toContain('Antigravity refused: RunCommand')
+  expect(parser.stats).toEqual({ unknown: 0, malformed: 0 })
+})
+
+test('antigravity: file, browser and plain tools map to frame details; unknown shapes are counted', () => {
+  const events = parseAll(createAntigravityParser('/work'), 'antigravity-basic')
+  const starts = events.filter((e) => e.kind === 'tool_start')
+  expect(starts.map((e) => (e as { detail?: unknown }).detail)).toEqual([
+    { type: 'command', command: 'ls -la', cwd: '/work' },
+    { type: 'file', path: '/work/notes.txt', change: 'update' },
+    { type: 'browser', url: 'https://example.test/docs?token=abc#frag' },
+    undefined,
+  ])
+  expect(starts[3]).toMatchObject({ tool: 'view_file', preview: '/work/notes.txt' })
+  const parser = createAntigravityParser()
+  const lines = ['this is not json', ...fixtureLines('antigravity-unknown')]
+  const unknown = lines.flatMap((line) => parser.parse(line))
+  expect(unknown.map((event) => event.kind)).toEqual(['session', 'text', 'result'])
+  expect(parser.stats).toEqual({ unknown: 2, malformed: 2 })
+})
+
+test('antigravity: a failed result carries the CLI’s words, an unknown status is still a failure', () => {
+  const events = parseAll(createAntigravityParser(), 'antigravity-error')
+  expect(events.at(-1)).toEqual({ kind: 'result', ok: false, error: 'The model request failed' })
+})
+
+test('antigravity argv per permission level; the prompt is in argv, bare slash/dash prompts are wrapped', () => {
+  const args = (permission: 'read-only' | 'workspace-write' | 'full', extra = {}) =>
+    antigravityDriver.buildArgs({ ...base, prompt: 'hello', permission, ...extra })
+  expect(args('read-only')).toEqual([
+    '-p', 'hello', '--output-format', 'stream-json', '--mode', 'plan', '--sandbox',
+  ])
+  expect(args('workspace-write')).toEqual([
+    '-p', 'hello', '--output-format', 'stream-json', '--mode', 'accept-edits', '--sandbox',
+  ])
+  expect(args('full')).toEqual([
+    '-p', 'hello', '--output-format', 'stream-json', '--dangerously-skip-permissions',
+  ])
+  expect(args('read-only', { sessionId: 'abc', model: 'm1' }).slice(-4)).toEqual([
+    '--conversation', 'abc', '--model', 'm1',
+  ])
+  expect(args('read-only', { prompt: '/usage' })[1]).toBe('Message: /usage')
+  expect(args('read-only', { prompt: '--dangerously-skip-permissions' })[1]).toBe(
+    'Message: --dangerously-skip-permissions',
+  )
+  expect(() => args('read-only', { prompt: 'x'.repeat(100_001) })).toThrow(/too long/)
+  expect(antigravityDriver.promptVia).toBe('argv')
+})
+
+test('antigravity version parsing and the exact tested version', () => {
+  expect(antigravityDriver.parseVersion('1.3.3\n')).toBe('1.3.3')
+  expect(antigravityDriver.parseVersion('agy version 1.3.3')).toBe('1.3.3')
+  expect(antigravityDriver.parseVersion('no version here')).toBeNull()
+  expect(isTestedVersion(antigravityDriver, '1.3.3')).toBe(true)
+  expect(isTestedVersion(antigravityDriver, '1.3.4')).toBe(false)
+})
+
+test('antigravity usage: a tab table is read into groups; anything else keeps the text', () => {
+  const table =
+    'Model group\t5-hour\tWeekly\nGemini Pro\t82% (resets in 3h)\t64% (resets in 4d)\nClaude\t100%\t91%\n'
+  const reading = parseAntigravityUsage(JSON.stringify({ command: { data: table } }))
+  expect(reading.groups).toEqual([
+    {
+      name: 'Gemini Pro',
+      fiveHourRemainingPercent: 82,
+      fiveHourResets: 'resets in 3h',
+      weeklyRemainingPercent: 64,
+      weeklyResets: 'resets in 4d',
+    },
+    {
+      name: 'Claude',
+      fiveHourRemainingPercent: 100,
+      fiveHourResets: null,
+      weeklyRemainingPercent: 91,
+      weeklyResets: null,
+    },
+  ])
+  const odd = parseAntigravityUsage('plain words, no table')
+  expect(odd.groups).toEqual([])
+  expect(odd.text).toBe('plain words, no table')
 })

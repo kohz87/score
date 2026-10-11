@@ -1,7 +1,8 @@
+import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { chmodSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import type { AgentDetail, CodingAgent } from '@score/contract'
+import type { AgentDetail, CodingAgent, CodingUsage, CodingRuntime as RuntimeId } from '@score/contract'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
@@ -183,6 +184,48 @@ export class CodingRuntime {
     )
   }
 
+  private readonly usageCache = new Map<string, { at: number; value: CodingUsage }>()
+
+  /**
+   * The CLI's own quota (Antigravity `/usage`): one short process, no model turn, cached for a minute. The tested
+   * version is required, like for a turn.
+   */
+  async usage(runtime: RuntimeId): Promise<CodingUsage> {
+    const driver = driverFor(runtime)
+    if (!driver.usage) throw new HttpError(409, 'unsupported', `${driver.label} has no quota reading`)
+    const cached = this.usageCache.get(runtime)
+    if (cached && Date.now() - cached.at < 60_000) return cached.value
+    const cli = await this.deps.locator.detect(driver, { fresh: true })
+    if (cli.state === 'not_installed' || cli.state === 'not_supported')
+      throw new HttpError(422, 'cli_not_installed', cli.message ?? 'The CLI is not available')
+    if (cli.state === 'untested_version')
+      throw new HttpError(422, 'untested_cli_version', cli.message ?? 'Untested CLI version')
+    const { file, args } = this.deps.locator.command(driver)
+    const cwd = join(this.deps.home, 'coding')
+    mkdirSync(cwd, { recursive: true, mode: 0o700 })
+    const output = await new Promise<string>((done, fail) =>
+      execFile(
+        file,
+        [...args, ...driver.usage!.args],
+        { cwd, env: this.deps.locator.childEnv(), timeout: 20_000, maxBuffer: 256 * 1024 },
+        (error, stdout) => (error ? fail(error) : done(stdout)),
+      ),
+    ).catch(() => {
+      throw new HttpError(502, 'usage_unavailable', `${driver.label} did not report its quota`)
+    })
+    const reading = driver.usage.parse(output)
+    if (!reading.text)
+      throw new HttpError(502, 'usage_unavailable', `${driver.label} did not report its quota`)
+    const value: CodingUsage = {
+      runtime,
+      fetchedAt: new Date().toISOString(),
+      groups: reading.groups,
+      text: redactBounded(reading.text, 8000),
+    }
+    this.usageCache.set(runtime, { at: Date.now(), value })
+    return value
+  }
+
   /** The room's Hermes-style session key is `score-<room>-<agent>`: forget that room's CLI session. */
   forgetRoomSession(sessionKey: string, agentId: string): void {
     const suffix = `-${agentId}`
@@ -202,6 +245,12 @@ export class CodingRuntime {
         code: 'cli_not_installed',
         message: cli.message ?? 'The CLI is not available',
         notice: `${driver.label} can't run: ${cli.message ?? 'not available'}`,
+      }
+    if (!this.deps.locator.verifiedPermissions(driver).includes(agent.permission))
+      return {
+        code: 'permission_unverified',
+        message: `${driver.label} is not verified for ${agent.permission} access yet`,
+        notice: `${driver.label} is not verified for ${agent.permission} access yet. Open this agent in Team and pick a verified level.`,
       }
     if (cli.state === 'untested_version' && agent.confirmedVersion !== cli.version)
       return {
@@ -457,6 +506,7 @@ export class CodingRuntime {
           ...args,
           ...driver.buildArgs({
             workspace: checked.real,
+            prompt: input,
             permission: agent.permission,
             model: agent.model,
             sessionId: resume,
@@ -468,7 +518,7 @@ export class CodingRuntime {
         cwd: checked.real,
         env: locator.childEnv(),
         onSpawn: (pid) => this.recordProcess(entry.runId, pid),
-        stdin: input,
+        stdin: driver.promptVia === 'stdin' ? input : '',
         parser,
         maxMs: this.deps.maxTurnMs ?? 30 * 60_000,
         graceMs: this.deps.graceMs ?? 5_000,

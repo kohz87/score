@@ -8,7 +8,9 @@ import {
   CodingAgentSchema,
   AgentSummarySchema,
   CodingAgentsResponseSchema,
+  CodingRuntimeSchema,
   CodingRuntimesResponseSchema,
+  CodingUsageSchema,
   CodingVersionConfirmSchema,
   type CodingPermission,
 } from '@score/contract'
@@ -77,6 +79,15 @@ export function registerCodingAgentRoutes(
     return checked.real
   }
 
+  function assertVerified(driver: ReturnType<typeof driverFor>, permission: CodingPermission): void {
+    if (!coding.locator.verifiedPermissions(driver).includes(permission))
+      throw new HttpError(
+        422,
+        'permission_unverified',
+        `${driver.label} is not verified for ${permission} access yet`,
+      )
+  }
+
   app.get('/api/coding-agents', async () =>
     CodingAgentsResponseSchema.parse({
       items: await Promise.all(coding.agents().map((agent) => coding.view(agent))),
@@ -85,6 +96,11 @@ export function registerCodingAgentRoutes(
   app.get('/api/coding-agents/runtimes', async () =>
     CodingRuntimesResponseSchema.parse({ items: await coding.locator.info() }),
   )
+
+  app.get('/api/coding-agents/runtimes/:runtime/usage', async (request) => {
+    const { runtime } = z.object({ runtime: CodingRuntimeSchema }).parse(request.params)
+    return CodingUsageSchema.parse(await coding.usage(runtime))
+  })
 
   app.post('/api/coding-agents', guard, async (request, reply) => {
     const body = CodingAgentCreateSchema.parse(request.body)
@@ -97,12 +113,13 @@ export function registerCodingAgentRoutes(
     const cli = await coding.locator.detect(driver)
     if (cli.state === 'not_supported' || cli.state === 'not_installed')
       throw new HttpError(422, 'cli_not_installed', cli.message ?? 'The CLI is not available')
-    if (body.runtime === 'codex' && body.acknowledgeReads !== true)
+    if (driver.requiresReadAck && body.acknowledgeReads !== true)
       throw new HttpError(
         400,
         'acknowledgement_required',
-        'A Codex agent can read every file your user can (secrets outside its workspace too); confirm that to add it',
+        `A ${driver.label} agent can read every file your user can (secrets outside its workspace too); confirm that to add it`,
       )
+    assertVerified(driver, body.permission)
     if (body.permission === 'full') await requirePassword(request, body.password)
     const workspace = await workspaceFor(body.id, body.workspace)
     const createdAt = new Date(clock()).toISOString()
@@ -129,6 +146,8 @@ export function registerCodingAgentRoutes(
     const body = CodingAgentPatchSchema.parse(request.body)
     const agent = getCodingAgent(db.sqlite, agentId)
     if (!agent) throw new HttpError(404, 'not_found', 'Unknown coding agent')
+    if (body.permission && body.permission !== agent.permission)
+      assertVerified(driverFor(agent.runtime), body.permission)
     // Raising the access level is the sensitive change; lowering it never needs the password.
     const order: CodingPermission[] = ['read-only', 'workspace-write', 'full']
     if (

@@ -1,4 +1,5 @@
 import type { CodingRuntime } from '@score/contract'
+import { antigravityDriver } from './antigravity.ts'
 import { claudeDriver } from './claude.ts'
 import { codexDriver } from './codex.ts'
 import { opencodeDriver } from './opencode.ts'
@@ -7,6 +8,7 @@ import type { CodingDriver } from './types.ts'
 export const DRIVERS: Record<CodingRuntime, CodingDriver> = {
   'claude-code': claudeDriver,
   codex: codexDriver,
+  antigravity: antigravityDriver,
   opencode: opencodeDriver,
 }
 export const driverFor = (runtime: CodingRuntime): CodingDriver => DRIVERS[runtime]

@@ -2,9 +2,9 @@ import { z } from 'zod'
 import { AgentIdSchema, AgentStyleSchema } from './types.ts'
 import { ProfileNameSchema } from './profiles.ts'
 
-// §8 Coding agents (PLAN 7.2): Claude Code, Codex CLI and OpenCode as team members.
+// §8 Coding agents (PLAN 7.2, 7.6): Claude Code, Codex CLI and Antigravity (agy) as team members; OpenCode is listed only.
 
-export const CodingRuntimeSchema = z.enum(['claude-code', 'codex', 'opencode'])
+export const CodingRuntimeSchema = z.enum(['claude-code', 'codex', 'antigravity', 'opencode'])
 export type CodingRuntime = z.infer<typeof CodingRuntimeSchema>
 
 /** `read-only` reads; `workspace-write` (default) edits inside the workspace; `full` needs the security password. */
@@ -32,6 +32,10 @@ export const CodingRuntimeInfoSchema = z.object({
   quota: z.string(),
   /** Why it cannot run, when it cannot. */
   message: z.string().nullable(),
+  /** Permission levels Score has not verified for this CLI yet: shown disabled and refused on create/patch. */
+  unverifiedPermissions: z.array(CodingPermissionSchema).default([]),
+  /** A warning to show where the CLI is chosen (what it can do beyond editing files), or null. */
+  warning: z.string().nullable().default(null),
 })
 export type CodingRuntimeInfo = z.infer<typeof CodingRuntimeInfoSchema>
 export const CodingRuntimesResponseSchema = z.object({ items: z.array(CodingRuntimeInfoSchema) })
@@ -86,7 +90,8 @@ export const CodingAgentCreateSchema = z
     password: z.string().max(1024).optional(),
     /**
      * Codex can read every file the owner's user can (its sandbox limits writes and commands, not reads; live-checked
-     * 2026-10-10). Creating a Codex agent requires this acknowledgement (owner decision: allow with a clear warning).
+     * 2026-10-10), and so can Antigravity. Creating either needs this acknowledgement (owner decision: allow with a
+     * clear warning).
      */
     acknowledgeReads: z.literal(true).optional(),
   })
@@ -107,3 +112,22 @@ export const CodingAgentPatchSchema = z
 export type CodingAgentPatch = z.infer<typeof CodingAgentPatchSchema>
 
 export const CodingVersionConfirmSchema = z.object({ version: z.string().min(1).max(100) }).strict()
+
+/**
+ * Antigravity's own quota (`agy -p /usage`, PLAN 7.6): per model group the 5-hour and weekly share still available.
+ * A group's numbers are null when the CLI's table did not carry them; `text` is always the (redacted) table as printed.
+ */
+export const CodingUsageGroupSchema = z.object({
+  name: z.string(),
+  fiveHourRemainingPercent: z.number().min(0).max(100).nullable(),
+  fiveHourResets: z.string().nullable(),
+  weeklyRemainingPercent: z.number().min(0).max(100).nullable(),
+  weeklyResets: z.string().nullable(),
+})
+export const CodingUsageSchema = z.object({
+  runtime: CodingRuntimeSchema,
+  fetchedAt: z.iso.datetime(),
+  groups: z.array(CodingUsageGroupSchema),
+  text: z.string(),
+})
+export type CodingUsage = z.infer<typeof CodingUsageSchema>

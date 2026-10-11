@@ -130,6 +130,18 @@ function framesFor(
       caption: `${verb} ${detail.path}`,
     })
   }
+  if (detail.type === 'browser') {
+    if (phase.hook === 'pre') return []
+    return framesForTool({
+      hook: 'post',
+      tool: detail.url ? 'browser_navigate' : 'browser_snapshot',
+      args: { url: detail.url ?? '' },
+      result: {},
+      status: phase.ok ? 'ok' : 'error',
+      watch: null,
+      lastBrowser: null,
+    }).flatMap((draft) => frameDrafts(sqlite, translation, callId, at, draft))
+  }
   if (phase.hook === 'pre') return []
   if (!phase.ok) return []
   const tool = detail.type === 'write' ? 'write_file' : 'patch'

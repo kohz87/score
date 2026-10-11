@@ -1,0 +1,1 @@
+{"_fixture":"hand-made: the layout of `agy -p /usage` was not captured; the parser reads it defensively and keeps the text","command":{"name":"usage","data":{"title":"Usage"}},"output":"Model group\t5-hour limit remaining\tWeekly limit remaining\nGemini Pro\t82% (resets in 3h 10m)\t64% (resets in 4d 2h)\nClaude\t100%\t91% (resets in 6d)\n"}
