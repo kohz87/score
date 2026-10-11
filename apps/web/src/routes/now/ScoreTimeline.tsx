@@ -1,10 +1,11 @@
 import type { AgentSummary, LaneBlock, NowSnapshot } from '@score/contract'
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { PopOutButton } from '../pop/PopOutButton.tsx'
 import { Link, useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { runtimeLabel } from '../../components/runtime-label.ts'
 import { UnattributedGlyph } from '../../components/UnattributedGlyph.tsx'
+import { useTimelineArrivals } from './use-timeline-arrivals.ts'
 import {
   axisTicks,
   clockLabel,
@@ -74,6 +75,7 @@ type LaneOwner = { key: string; name: string; role: string | null; agent: AgentS
 
 /** A group of crowded task blocks: one counted block that opens a small list (Escape or a click elsewhere closes it). */
 function BlockGroup({
+  arriveId,
   owner,
   blocks,
   state,
@@ -82,6 +84,7 @@ function BlockGroup({
   onToggle,
   onClose,
 }: {
+  arriveId: string
   owner: LaneOwner
   blocks: LaneBlock[]
   state: LaneBlock['state']
@@ -104,6 +107,7 @@ function BlockGroup({
   return (
     <div
       ref={root}
+      data-arrive-block={arriveId}
       className="now-group"
       style={style}
       onKeyDown={(event) => {
@@ -180,6 +184,15 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
       agent: null,
       blocks: snapshot.unattributed.blocks,
     })
+  const blockIds = useMemo(
+    () =>
+      owners.flatMap((owner) =>
+        laneItems(window, owner.blocks, plotWidth).map((item) => item.layout.block.id),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `owners` is derived from the snapshot
+    [snapshot, plotWidth],
+  )
+  useTimelineArrivals(plotRef, blockIds, links, plotWidth)
   const hasChat = owners.some((lane) => lane.blocks.some((block) => block.kind === 'chat'))
   const hasUnobserved = owners.some((lane) => lane.blocks.some((block) => block.observationEndedAt))
   const height = Math.max(owners.length, 1) * LANE_HEIGHT
@@ -263,6 +276,7 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
                 {links.map((link) => (
                   <path
                     key={link.id}
+                    data-arrive-link={link.id}
                     className={`now-connector now-connector--${link.kind}`}
                     d={link.d}
                   />
@@ -271,6 +285,7 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
               {links.map((link) => (
                 <span
                   key={link.id}
+                  data-arrive-label={link.id}
                   className="now-connector-label"
                   aria-hidden="true"
                   style={{ left: `${link.labelLeft}%`, top: link.labelTop }}
@@ -302,6 +317,7 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
                         return (
                           <span
                             key={block.id}
+                            data-arrive-block={block.id}
                             className="now-chat-band"
                             style={style}
                             role="img"
@@ -313,6 +329,7 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
                         return (
                           <BlockGroup
                             key={block.id}
+                            arriveId={block.id}
                             owner={owner}
                             blocks={item.blocks}
                             state={block.state}
@@ -335,6 +352,7 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
                       return (
                         <button
                           key={block.id}
+                          data-arrive-block={block.id}
                           type="button"
                           className={`now-block now-block--${unobserved ? 'done' : block.state}${unobserved ? ' now-block--unobserved' : ''}`}
                           style={style}
