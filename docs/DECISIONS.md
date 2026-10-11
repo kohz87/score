@@ -56,3 +56,5 @@ rejects is reverted or changed then.
 | 45 | Context rings moved left of Send and grouped with it; on phones the pair wraps together | your request | — |
 | 46 | anime.js 4.5.0 (MIT, no dependencies) added to the web app for 5.37; loaded only on the pages that animate; everything off with reduced motion | your request | remove the package; CSS fallbacks stay |
 | 47 | v1.0.0 = everything through 5.37 (motion) and 7.1c (free workflow layout), per your request; tagged after both merge | — | — |
+| 48 | Motion pass accepted with +3.3 KB gzip on the main bundle (motion code for pages already in it; anime.js itself is a separate 17.7 KB chunk loaded on first motion); node "done" ripple made thin and soft after review | under 1 %; not worth splitting further now | move motion bodies into the lazy chunk later |
+| 49 | Incident (mine, no damage): a `git stash pop` during the merge applied an old unrelated stash from an audit branch onto main's working tree; I restored the three files to the merged commit before anything was committed; the old stash entry is still kept | — | — |
