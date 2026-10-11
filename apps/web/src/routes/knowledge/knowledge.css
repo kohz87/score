@@ -1105,7 +1105,8 @@
 .kn-folder-input {
   width: 100%;
 }
-.kn-table td:first-child {
+.kn-table td:first-child:not(.kn-select),
+.kn-table td.kn-select + td {
   min-width: 160px;
 }
 .kn-dialog label.kn-radio input,
@@ -1117,5 +1118,16 @@
   padding: 0;
   border: 0;
   flex: none;
+  accent-color: var(--ink);
+}
+
+.kn-table th.kn-select,
+.kn-table td.kn-select {
+  width: 36px;
+  padding-right: 0;
+}
+.kn-select input {
+  width: 18px;
+  height: 18px;
   accent-color: var(--ink);
 }

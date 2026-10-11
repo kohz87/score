@@ -98,6 +98,15 @@ function respond(input: string, init: RequestInit = {}): Response {
     })
   }
   if (p.startsWith('/documents/') && method === 'DELETE') return new Response(null, { status: 204 })
+  if (p === '/export/summary' && method === 'POST')
+    return json({ files: 7, bytes: 5 * 1024 * 1024, label: 'vault' })
+  if (p === '/export' && method === 'POST')
+    return new Response(new Uint8Array([0x50, 0x4b, 5, 6]), {
+      headers: {
+        'content-type': 'application/zip',
+        'content-disposition': 'attachment; filename="knowledge-vault-2026-10-10.zip"',
+      },
+    })
   if (p === '/folders' && method === 'POST') return json({ path: 'x' }, 201)
   if (p === '/move' && method === 'POST')
     return json({ path: 'inbox/renamed.pdf', updatedNotes: 0 })
@@ -411,4 +420,64 @@ test('Settings › Knowledge shows how much the files take', async () => {
   )
   expect(await screen.findByText(/4 files, 3\.0 MB/)).toBeDefined()
   void act
+})
+
+function stubDownload() {
+  const createObjectURL = vi.fn(() => 'blob:x')
+  vi.stubGlobal('URL', Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }))
+  const names: string[] = []
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+    this: HTMLAnchorElement,
+  ) {
+    names.push(this.download)
+  })
+  return names
+}
+
+test('selected files and a folder are exported as zips', async () => {
+  const names = stubDownload()
+  mount('/knowledge?files=inbox')
+  const region = await screen.findByRole(
+    'region',
+    { name: 'Files in this folder' },
+    { timeout: 10_000 },
+  )
+  expect(screen.queryByRole('button', { name: /Download selected/ })).toBeNull()
+  fireEvent.click(within(region).getByRole('checkbox', { name: 'Select spec.pdf' }))
+  fireEvent.click(within(region).getByRole('checkbox', { name: 'Select scan.pdf' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Download selected (2)' }))
+  await waitFor(() => expect(names).toEqual(['knowledge-vault-2026-10-10.zip']))
+  expect(calls.find((c) => c.url === '/api/knowledge/export')?.body).toEqual({
+    paths: ['inbox/scan.pdf', 'inbox/spec.pdf'],
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Export this folder' }))
+  await waitFor(() => expect(names).toHaveLength(2))
+  expect(calls.filter((c) => c.url === '/api/knowledge/export').at(-1)?.body).toEqual({
+    folder: 'inbox',
+  })
+})
+
+test('exporting the whole vault shows the file count and size first', async () => {
+  const names = stubDownload()
+  mount('/knowledge')
+  fireEvent.click(await screen.findByRole('button', { name: 'Export vault' }, { timeout: 10_000 }))
+  const dialog = await screen.findByRole('dialog', { name: 'Export the whole vault' })
+  await within(dialog).findByText(/7 files, 5\.0 MB before compression/)
+  expect(names).toHaveLength(0)
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Download zip' }))
+  await waitFor(() => expect(names).toHaveLength(1))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(calls.find((c) => c.url === '/api/knowledge/export')?.body).toEqual({ all: true })
+})
+
+test('a note has a Download link to its raw Markdown', async () => {
+  mount('/knowledge?files=')
+  const region = await screen.findByRole(
+    'region',
+    { name: 'Files in this folder' },
+    { timeout: 10_000 },
+  )
+  expect(within(region).getByRole('link', { name: 'Download Home.md' }).getAttribute('href')).toBe(
+    '/api/knowledge/notes/Home.md?download=1',
+  )
 })

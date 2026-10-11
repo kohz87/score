@@ -253,3 +253,25 @@ export const KnowledgeAgentUsageSchema = z.object({
   items: z.array(z.object({ agentId: z.string(), writesToday: z.int().nonnegative() })),
 })
 export type KnowledgeAgentUsage = z.infer<typeof KnowledgeAgentUsageSchema>
+
+/** Exactly one of `paths`, `folder`, `all` (PLAN 6.7). */
+export const KnowledgeExportRequestSchema = z
+  .object({
+    paths: z.array(z.string().min(1).max(1024)).min(1).max(10_000).optional(),
+    folder: z.string().min(1).max(1024).optional(),
+    all: z.literal(true).optional(),
+  })
+  .refine(
+    (value) =>
+      [value.paths !== undefined, value.folder !== undefined, value.all !== undefined].filter(
+        Boolean,
+      ).length === 1,
+    { message: 'Give exactly one of paths, folder or all' },
+  )
+export type KnowledgeExportRequest = z.infer<typeof KnowledgeExportRequestSchema>
+export const KnowledgeExportSummarySchema = z.object({
+  files: z.number().int().nonnegative(),
+  bytes: z.number().int().nonnegative(),
+  label: z.enum(['folder', 'selection', 'vault']),
+})
+export type KnowledgeExportSummary = z.infer<typeof KnowledgeExportSummarySchema>

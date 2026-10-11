@@ -1,8 +1,10 @@
 import type { AgentSummary, KnowledgeTree } from '@score/contract'
+import type { KnowledgeExportRequest } from '@score/contract'
 import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { AuthorLabel } from './NotePanels.tsx'
 import { fileHref, formatBytes, TYPE_LABEL, ACCEPT_FILES } from './knowledge-files.ts'
+import { noteDownloadHref } from './knowledge-export.ts'
 import { baseName, folderOf, noteUrl, timeAgo } from './knowledge-paths.ts'
 
 type Row =
@@ -30,6 +32,8 @@ export function FilesView({
   onMove,
   onDelete,
   onDeleteFolder,
+  exporting,
+  onExport,
 }: {
   tree: KnowledgeTree
   folder: string
@@ -41,9 +45,15 @@ export function FilesView({
   onMove: (path: string) => void
   onDelete: (path: string) => void
   onDeleteFolder: (path: string) => void
+  exporting: boolean
+  onExport: (request: KnowledgeExportRequest) => void
 }) {
   const input = useRef<HTMLInputElement>(null)
   const [over, setOver] = useState<string | null>(null)
+  const [pick, setPick] = useState<{ folder: string; paths: Set<string> }>({
+    folder,
+    paths: new Set(),
+  })
   const rows = useMemo<Row[]>(() => {
     const folders = tree.folders
       .filter((path) => folderOf(path) === folder)
@@ -76,6 +86,17 @@ export function FilesView({
       a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
     return [...folders.sort(byName), ...[...notes, ...documents].sort(byName)]
   }, [tree, folder])
+  // A selection belongs to the folder it was made in.
+  const picked = pick.folder === folder ? pick.paths : new Set<string>()
+  // Files can disappear (an agent moves one); only paths still listed stay selected.
+  const files = rows.filter((row) => row.kind !== 'folder')
+  const selected = files.filter((row) => picked.has(row.path))
+  const toggle = (path: string) =>
+    setPick(() => {
+      const next = new Set(picked)
+      if (!next.delete(path)) next.add(path)
+      return { folder, paths: next }
+    })
   const crumbs = folder === '' ? [] : folder.split('/')
   const occupied = (path: string) =>
     tree.notes.some((note) => note.path.startsWith(`${path}/`)) ||
@@ -155,6 +176,22 @@ export function FilesView({
           <button type="button" onClick={() => onNewFolder(folder)}>
             New folder
           </button>
+          {selected.length > 0 && (
+            <button
+              type="button"
+              disabled={exporting}
+              onClick={() => onExport({ paths: selected.map((row) => row.path) })}
+            >
+              {exporting ? 'Preparing…' : `Download selected (${selected.length})`}
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={exporting}
+            onClick={() => onExport(folder === '' ? { all: true } : { folder })}
+          >
+            {exporting ? 'Preparing…' : folder === '' ? 'Export all files' : 'Export this folder'}
+          </button>
         </div>
       </header>
       <p className="kn-muted">
@@ -168,6 +205,22 @@ export function FilesView({
           <table className="kn-table">
             <thead>
               <tr>
+                <th scope="col" className="kn-select">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all files in this folder"
+                    checked={files.length > 0 && selected.length === files.length}
+                    disabled={files.length === 0}
+                    onChange={(event) =>
+                      setPick({
+                        folder,
+                        paths: event.target.checked
+                          ? new Set(files.map((row) => row.path))
+                          : new Set(),
+                      })
+                    }
+                  />
+                </th>
                 <th scope="col">Name</th>
                 <th scope="col">Type</th>
                 <th scope="col">Size</th>
@@ -191,6 +244,7 @@ export function FilesView({
                       setOver(row.path)
                     }}
                   >
+                    <td className="kn-select" />
                     <td>
                       <button
                         type="button"
@@ -215,6 +269,14 @@ export function FilesView({
                   </tr>
                 ) : (
                   <tr key={`${row.kind}:${row.path}`}>
+                    <td className="kn-select">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${row.name}`}
+                        checked={picked.has(row.path)}
+                        onChange={() => toggle(row.path)}
+                      />
+                    </td>
                     <td>
                       <Link to={noteUrl(row.path)}>
                         {row.kind === 'note' ? baseName(row.path) : row.name}
@@ -234,16 +296,18 @@ export function FilesView({
                       <AuthorLabel author={row.lastAuthor} agents={agents} />
                     </td>
                     <td className="kn-row-actions">
-                      {row.kind === 'document' && (
-                        <a
-                          className="kn-button"
-                          href={fileHref(row.path, true)}
-                          download
-                          aria-label={`Download ${row.name}`}
-                        >
-                          Download
-                        </a>
-                      )}
+                      <a
+                        className="kn-button"
+                        href={
+                          row.kind === 'document'
+                            ? fileHref(row.path, true)
+                            : noteDownloadHref(row.path)
+                        }
+                        download
+                        aria-label={`Download ${row.name}`}
+                      >
+                        Download
+                      </a>
                       <button
                         type="button"
                         onClick={() => onMove(row.path)}

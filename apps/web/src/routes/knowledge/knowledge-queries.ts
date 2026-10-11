@@ -139,7 +139,7 @@ export function knowledgeFailure(error: unknown, action: string): string {
       return `Pair this browser using the link in the server terminal to ${action}.`
     if (error.code === 'exists') return 'Something with that name already exists.'
     if (error.code === 'not_empty') return 'That folder is not empty.'
-    if (error.code === 'unsupported_type') return error.message
+    if (error.code === 'unsupported_type' || error.code === 'export_too_large') return error.message
     if (error.code === 'bad_path' || error.code === 'not_a_note') return error.message
     if (error.code === 'payload_too_large') return 'That note is too large (2 MiB at most).'
     if (error.status === 404) return 'That note is no longer there.'
