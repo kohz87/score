@@ -44,12 +44,13 @@ import {
   type Attachment,
 } from './attachments.ts'
 import { WorkspacePicker } from './WorkspacePicker.tsx'
+import { ReleaseHeld } from '../team/ReleaseHeld.tsx'
 import { ChipSaveOption } from '../knowledge/ChipSaveOption.tsx'
 import { summaryText, useUploadFlow } from '../knowledge/UploadFlow.tsx'
 import { isSupportedName } from '../knowledge/knowledge-files.ts'
 
 type Notice =
-  | { kind: 'error'; text: string }
+  | { kind: 'error'; text: string; heldAgent?: string }
   | { kind: 'info'; text: string }
   | { kind: 'result'; command: CommandResult | null }
 type Snapshot = { asOfSeq: number; data: MessagePageData }
@@ -507,7 +508,15 @@ export function Composer({
       )
     } catch (error) {
       update((data) => withoutMessage(data, temporary))
-      setNotice({ kind: 'error', text: errorText(error) })
+      const held =
+        error instanceof ApiError && error.code === 'agent_still_stopping'
+          ? (error.details as { agentId?: unknown } | undefined)?.agentId
+          : undefined
+      setNotice({
+        kind: 'error',
+        text: errorText(error),
+        ...(typeof held === 'string' ? { heldAgent: held } : {}),
+      })
     } finally {
       if (mounted.current) {
         setPending(false)
@@ -587,6 +596,9 @@ export function Composer({
             <CommandNotice command={notice.command} />
           ) : (
             <span className="chat-usage-card">{notice.text}</span>
+          )}
+          {notice.kind === 'error' && notice.heldAgent && (
+            <ReleaseHeld agentId={notice.heldAgent} />
           )}
         </div>
       )}

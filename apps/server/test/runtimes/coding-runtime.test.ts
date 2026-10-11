@@ -1476,6 +1476,109 @@ test('W3: a turn whose tools survive every signal still ends, but unconfirmed, w
   }
 })
 
+test('X4: Stop on a running turn is `stopped` only once the group is proven gone, `unconfirmed` while a survivor lives', async () => {
+  // Group signals never arrive, so the turn's process keeps running after Stop.
+  spawnExtra = {
+    kill: (pid, name) => (pid < 0 ? undefined : process.kill(pid, name)),
+    reapSlackMs: 100,
+  }
+  await rebootWith({ graceMs: 50, stopObserveMs: 700, reapRetryMs: 20 })
+  try {
+    await addAgent()
+    await makeRoom()
+    await say('@coder [fixture:slow] hold')
+    await vi.waitFor(() => expect(spawned.length).toBe(1), { timeout: 15_000 })
+    const runId = runs()[0]!.id
+    // The survivor is still alive when Stop's observation window ends.
+    expect(await coding.stopRun({ agentId: 'coder', runId })).toBe('unconfirmed')
+    expect(pidAlive(-spawned[0]!)).toBe(true)
+    // The next turn is held back until the group is really gone.
+    // Now it dies (our own child): the same question is answered with proof.
+    setTimeout(() => process.kill(-spawned[0]!, 'SIGKILL'), 150)
+    expect(await coding.stopRun({ agentId: 'coder', runId })).toBe('stopped')
+    expect(pidAlive(-spawned[0]!)).toBe(false)
+  } finally {
+    try {
+      process.kill(-spawned[0]!, 'SIGKILL')
+    } catch {
+      // gone
+    }
+  }
+}, 60_000)
+
+test('X4: Stop on a turn that has not started anything is stopped at once and nothing launches', async () => {
+  await addAgent()
+  await makeRoom()
+  await coding.startRun({ agentId: 'coder', input: '[fixture:slow] hold', turnId: 't-x4-first' })
+  const second = await coding.startRun({ agentId: 'coder', input: 'go', turnId: 't-x4-second' })
+  expect(await coding.stopRun({ agentId: 'coder', runId: second.runId })).toBe('stopped')
+  await coding.stopRun({ agentId: 'coder', runId: runs()[0]!.id })
+  await vi.waitFor(() => expect(runRow(second.runId).status).toBe('cancelled'), {
+    timeout: 20_000,
+  })
+  expect(launchedTurns('go')).toEqual([])
+})
+
+test('X2: unobservable records are marked releasable; Release deletes them, never signals, and leaves an audit row', async () => {
+  let outcome: 'alive' | 'unobservable' = 'unobservable'
+  await rebootWith({ reapRetryMs: 20, killGroup: async () => outcome })
+  await addAgent()
+  await makeRoom()
+  const signalled: unknown[] = []
+  const realKill = process.kill
+  vi.spyOn(process, 'kill').mockImplementation(((pid: number, sig?: string | number) => {
+    if (sig !== 0 && sig !== undefined) signalled.push([pid, sig])
+    return realKill(pid, sig as NodeJS.Signals)
+  }) as typeof process.kill)
+  seedCrashedRun('cr_unclear', { pid: 4_000_011, start: '5' })
+  await coding.recover()
+  const held = async () =>
+    ((await request('GET', '/api/coding-agents')).json() as { items: CodingAgent[] }).items[0]!
+      .heldGroups
+  expect(await held()).toEqual([{ runId: 'cr_unclear', pgid: 4_000_011, canRelease: true }])
+  // Nothing to release while the cause is not "can't tell whose": a group that is merely still alive.
+  outcome = 'alive'
+  await vi.waitFor(async () => expect((await held())[0]!.canRelease).toBe(false), { timeout: 5000 })
+  expect((await request('POST', '/api/coding-agents/coder/release', {})).statusCode).toBe(409)
+  outcome = 'unobservable'
+  await vi.waitFor(async () => expect((await held())[0]!.canRelease).toBe(true), { timeout: 5000 })
+  // Release needs a paired browser.
+  const anonymous = await app.inject({
+    method: 'POST',
+    url: '/api/coding-agents/coder/release',
+    headers: { 'x-score-client': 'web' },
+    payload: {},
+  })
+  expect(anonymous.statusCode).toBe(401)
+  const released = await request('POST', '/api/coding-agents/coder/release', {})
+  expect(released.statusCode, released.body).toBe(200)
+  expect((released.json() as CodingAgent).heldGroups).toEqual([])
+  expect(processRows()).toEqual([])
+  expect(signalled).toEqual([])
+  const audit = db.sqlite.prepare('SELECT * FROM coding_releases').all() as {
+    agent_id: string
+    run_id: string
+    pgid: number
+    released_by: string
+    released_at: string
+  }[]
+  expect(audit).toHaveLength(1)
+  expect(audit[0]).toMatchObject({ agent_id: 'coder', run_id: 'cr_unclear', pgid: 4_000_011 })
+  expect(audit[0]!.released_by).toMatch(/^[0-9a-f]{16}/)
+  expect(Date.parse(audit[0]!.released_at)).not.toBeNaN()
+  // A release is not termination evidence: the run stays unconfirmed. The agent takes turns again.
+  expect(runRow('cr_unclear').terminal_source).toBe('unconfirmed')
+  const { runId } = await coding.startRun({
+    agentId: 'coder',
+    input: 'go',
+    turnId: 't-after-release',
+  })
+  await vi.waitFor(() => expect(runRow(runId).status).toBe('completed'), { timeout: 15_000 })
+  // Nothing left to release.
+  expect((await request('POST', '/api/coding-agents/coder/release', {})).statusCode).toBe(409)
+  expect((await request('POST', '/api/coding-agents/nobody/release', {})).statusCode).toBe(404)
+})
+
 test('W3: the process record goes with the terminal result and never before it', async () => {
   await addAgent()
   await makeRoom()
@@ -1511,7 +1614,7 @@ test('W3: a saved result releases the record in the same step', async () => {
 
 test('W3: when recording the process fails the error waits for the proven end of the group', async () => {
   const { SpawnRecordError } = await import('../../src/runtimes/coding/process.ts')
-  const { groupMembers, processStart: startOf } = await import('../../src/runtimes/coding/proc.ts')
+  const { scanGroup, processStart: startOf } = await import('../../src/runtimes/coding/proc.ts')
   let pid = 0
   const boom = new Error('cannot record')
   let thrown: unknown
@@ -1536,7 +1639,7 @@ test('W3: when recording the process fails the error waits for the proven end of
   expect((thrown as InstanceType<typeof SpawnRecordError>).original).toBe(boom)
   // The caller can wait for the proof; once it settles the whole group is gone.
   expect(await (thrown as InstanceType<typeof SpawnRecordError>).terminated).toBe(true)
-  expect(pidAlive(pid) && startOf(pid) !== null && groupMembers(pid, 0).length > 0).toBe(false)
+  expect(pidAlive(pid) && startOf(pid) !== null && scanGroup(pid).members.length > 0).toBe(false)
 })
 
 test('W4: Stop on a run this process no longer holds says what really happened', async () => {

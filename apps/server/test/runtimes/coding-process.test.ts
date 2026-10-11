@@ -199,3 +199,33 @@ test('S2-005: a leader that exits cleanly with a worker running gets the grace p
     if (alive(pid)) process.kill(pid, 'SIGKILL')
   }
 }, 60_000)
+
+test('N4: the identity of a worker that outlives its leader is reported while the group is supervised', async () => {
+  const { leader, pidFile } = leaderAndWorker('ignore')
+  const reported: { pid: number; startTime: string }[] = []
+  const run = spawnCli({
+    ...baseOptions([leader]),
+    graceMs: 300,
+    onMembers: (members) => reported.push(...members),
+  })
+  const pid = await workerPid(pidFile)
+  try {
+    await run.done
+    expect(reported.map((member) => member.pid)).toContain(pid)
+    expect(reported.every((member) => member.startTime.length > 0)).toBe(true)
+  } finally {
+    if (alive(pid)) process.kill(pid, 'SIGKILL')
+  }
+}, 60_000)
+
+test('N5: an empty listing never overrides the kernel: while it says the group exists, the group is not gone', async () => {
+  const run = spawnCli({
+    ...baseOptions(['-e', 'process.exit(0)']),
+    graceMs: 50,
+    reapSlackMs: 200,
+    // Every process of the group has really ended; only the (faked) kernel answer says one is left.
+    groupExists: () => 'exists',
+  })
+  const outcome = await run.done
+  expect(outcome.groupGone).toBe(false)
+}, 30_000)

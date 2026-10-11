@@ -1,14 +1,35 @@
 import { readdirSync, readFileSync } from 'node:fs'
 
-/** /proc/<pid>/stat after the command name: [state, ppid, pgrp, session, …]. null when the process is gone or /proc is missing. */
+/** Fields up to the start time (index 19) must be there for a stat line to mean anything. */
+const MIN_FIELDS = 20
+
+/**
+ * /proc/<pid>/stat after the command name: [state, ppid, pgrp, session, …]. null only when there is no such process
+ * (ENOENT/ESRCH). Anything else (EACCES, EIO, a malformed line, no /proc at all) throws: an unreadable process is not
+ * an absent one (N5).
+ */
+function readStat(pid: number): string[] | null {
+  let stat: string
+  try {
+    stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT' || code === 'ESRCH') return null
+    throw error
+  }
+  // The command name is in parentheses and may contain spaces or parentheses itself.
+  const fields = stat
+    .slice(stat.lastIndexOf(')') + 2)
+    .trim()
+    .split(' ')
+  if (fields.length < MIN_FIELDS) throw new Error(`malformed /proc/${pid}/stat`)
+  return fields
+}
+
+/** Lenient reader for callers that only want a best-effort answer: null when gone or unreadable. */
 function statFields(pid: number): string[] | null {
   try {
-    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
-    // The command name is in parentheses and may contain spaces or parentheses itself.
-    return stat
-      .slice(stat.lastIndexOf(')') + 2)
-      .trim()
-      .split(' ')
+    return readStat(pid)
   } catch {
     return null
   }
@@ -41,15 +62,32 @@ export function bootId(): string | null {
 
 /** What recovery needs from the OS. Injectable so tests can fake survivors, a reused pid or another boot. */
 export interface ProcEnv {
-  /** Fields of /proc/<pid>/stat after the command name, or null when there is no such process. */
+  /** Fields of /proc/<pid>/stat after the command name; null = there is no such process; throws when unreadable. */
   stat(pid: number): string[] | null
   /** Every pid in the process table, or null when it can't be listed (no /proc). */
   pids(): number[] | null
+  /**
+   * Whether any process (a zombie counts) has this PGID, asked of the kernel (`kill(-pgid, 0)`). The only proof of
+   * absence: 'none' is ESRCH, anything we can't read is 'unknown'.
+   */
+  groupExists(pgid: number): 'exists' | 'none' | 'unknown'
   kill(pid: number, signal: NodeJS.Signals): void
   bootId(): string | null
 }
+export function kernelGroupExists(pgid: number): 'exists' | 'none' | 'unknown' {
+  if (!Number.isInteger(pgid) || pgid <= 1) return 'unknown'
+  try {
+    process.kill(-pgid, 0)
+    return 'exists'
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    // EPERM: a member exists that we may not signal.
+    if (code === 'EPERM') return 'exists'
+    return code === 'ESRCH' ? 'none' : 'unknown'
+  }
+}
 export const realProcEnv: ProcEnv = {
-  stat: statFields,
+  stat: readStat,
   pids() {
     try {
       return readdirSync('/proc')
@@ -59,19 +97,65 @@ export const realProcEnv: ProcEnv = {
       return null
     }
   },
+  groupExists: kernelGroupExists,
   kill: (pid, signal) => process.kill(pid, signal),
   bootId,
 }
 
-/** Live processes of group `pgid` that started no earlier than `since` ticks (the leader's own start). */
-export function groupMembers(pgid: number, since: number): number[] {
-  const members: number[] = []
-  for (const pid of realProcEnv.pids() ?? []) {
-    const fields = statFields(pid)
-    if (!fields || fields[0] === 'Z') continue
-    if (Number(fields[2]) === pgid && Number(fields[19]) >= since) members.push(pid)
+/** One process, named for good by its pid and start time. */
+export interface MemberIdentity {
+  pid: number
+  startTime: string
+}
+
+interface Row {
+  pid: number
+  ppid: number
+  pgrp: number
+  state: string
+  start: string
+}
+/** The process table, or null when any of it can't be read: an incomplete scan never establishes anything (N5). */
+function scanTable(env: ProcEnv): Map<number, Row> | null {
+  const all = env.pids()
+  if (all === null) return null
+  const table = new Map<number, Row>()
+  for (const pid of all) {
+    let fields: string[] | null
+    try {
+      fields = env.stat(pid)
+    } catch {
+      return null
+    }
+    if (fields === null) continue // ended since the listing
+    const ppid = Number(fields[1])
+    const pgrp = Number(fields[2])
+    if (
+      fields.length < MIN_FIELDS ||
+      !Number.isInteger(ppid) ||
+      !Number.isInteger(pgrp) ||
+      !fields[19]
+    )
+      return null
+    table.set(pid, { pid, ppid, pgrp, state: fields[0]!, start: fields[19] })
   }
-  return members
+  return table
+}
+
+/**
+ * The live members of group `pgid` as identities, for recording while Score supervises the group. `complete` is false
+ * when the table couldn't be read in full (what is returned is then only a part). Never proves absence.
+ */
+export function scanGroup(
+  pgid: number,
+  env: ProcEnv = realProcEnv,
+): { members: MemberIdentity[]; complete: boolean } {
+  const table = scanTable(env)
+  if (table === null) return { members: [], complete: false }
+  const members = [...table.values()]
+    .filter((row) => row.pgrp === pgid && row.state !== 'Z')
+    .map((row) => ({ pid: row.pid, startTime: row.start }))
+  return { members, complete: true }
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -82,14 +166,32 @@ export interface RecordedGroup {
   startTime: string | null
   /** The boot the process was recorded in; null for rows written before boots were recorded. */
   bootId: string | null
+  /** Identities recorded while Score supervised the group (the continuity that lets a leaderless group be ours). */
+  members?: MemberIdentity[]
+  /** Called with identities newly proven ours, so they can be recorded. */
+  onMembers?(members: MemberIdentity[]): void
 }
 /** `gone` is the only proof that the work ended. */
 export type GroupOutcome = 'gone' | 'alive' | 'unobservable'
 
+interface Target {
+  pid: number
+  start: string
+}
 type Inspection =
   | { state: 'gone' }
   | { state: 'unobservable' }
-  | { state: 'ours'; leader: boolean; members: number[] }
+  | {
+      state: 'ours'
+      /** The recorded leader still holds its pid (alive or zombie): the group number is provably ours. */
+      leader: boolean
+      /** Live processes proven ours that may be signalled one by one (when the leader no longer vouches for the group). */
+      targets: Target[]
+      /** The kernel says some process still has this PGID. */
+      exists: boolean
+      /** A live member of the group matches nothing recorded: it may belong to a replacement group. Never signalled. */
+      foreign: boolean
+    }
 
 /**
  * What is left of a recorded group, and whether it is provably ours. The pgid number alone is never enough: once a
@@ -99,37 +201,82 @@ type Inspection =
  *    still holds the pid, so the group number can't have been reused either). A different process holding that pid
  *    means our group emptied before the number was reused (Linux never allocates a pid equal to a live pgid): ours is
  *    gone and the newcomer is not ours to signal.
- *  - No process holds the pid: members still in the pgid are ours, for the same reason.
+ *  - No process holds the pid (N4): a member in the pgid may belong to a replacement group that reused the number and
+ *    whose leader has exited. It is ours only through continuity: its pid and start time were recorded while Score
+ *    supervised the run, or it descends from one that was. Anything else is `foreign`.
+ *  - Absence is the kernel's word (`groupExists` = none), never a /proc listing's (N5).
  */
-function inspect(record: RecordedGroup, env: ProcEnv): Inspection {
+function inspect(record: RecordedGroup, env: ProcEnv, known: Map<number, string>): Inspection {
   const current = env.bootId()
   if (record.bootId !== null) {
     if (current === null) return { state: 'unobservable' }
     if (current !== record.bootId) return { state: 'gone' }
   }
-  const all = env.pids()
-  if (all === null) return { state: 'unobservable' }
-  const holder = env.stat(record.pid)
-  const members = () => {
-    const found: number[] = []
-    for (const pid of all) {
-      const fields = env.stat(pid)
-      if (fields && fields[0] !== 'Z' && Number(fields[2]) === record.pgid) found.push(pid)
-    }
-    return found
-  }
+  const table = scanTable(env)
+  const holder = table?.get(record.pid)
   if (holder) {
     if (record.startTime === null) return { state: 'unobservable' }
-    if (holder[19] !== record.startTime) return { state: 'gone' }
-    const live = holder[0] !== 'Z'
-    return { state: 'ours', leader: live, members: members() }
+    if (holder.start !== record.startTime) return { state: 'gone' }
   }
-  // Nobody holds the pid. Without a recorded boot id a surviving member can't be tied to this record: if there is
-  // one we can't tell, otherwise there is nothing.
-  const found = members()
-  if (found.length === 0) return { state: 'gone' }
-  if (record.bootId === null) return { state: 'unobservable' }
-  return { state: 'ours', leader: false, members: found }
+  const exists = env.groupExists(record.pgid)
+  if (holder && table) {
+    // `holder` matched the recorded start: the leader (alive or zombie) vouches for the whole group.
+    const live = [...table.values()].filter((row) => row.pgrp === record.pgid && row.state !== 'Z')
+    const found: MemberIdentity[] = []
+    for (const row of live)
+      if (known.get(row.pid) !== row.start) {
+        known.set(row.pid, row.start)
+        found.push({ pid: row.pid, startTime: row.start })
+      }
+    if (found.length) record.onMembers?.(found)
+    if (exists === 'unknown') return { state: 'unobservable' }
+    return {
+      state: 'ours',
+      leader: true,
+      targets: live.map((row) => ({ pid: row.pid, start: row.start })),
+      exists: exists === 'exists',
+      foreign: false,
+    }
+  }
+  // The leader is gone (or the table is unreadable).
+  if (exists === 'none') return { state: 'gone' }
+  if (exists === 'unknown' || table === null) return { state: 'unobservable' }
+  const live = [...table.values()].filter((row) => row.pgrp === record.pgid && row.state !== 'Z')
+  const owned: Row[] = []
+  let foreign = false
+  for (const row of live) {
+    if (descendsFromKnown(row, table, known)) owned.push(row)
+    else foreign = true
+  }
+  const found: MemberIdentity[] = []
+  for (const row of owned)
+    if (known.get(row.pid) !== row.start) {
+      known.set(row.pid, row.start)
+      found.push({ pid: row.pid, startTime: row.start })
+    }
+  if (found.length) record.onMembers?.(found)
+  // The kernel says the group exists but nothing readable is in it (a fork we missed, or only zombies): not ours to
+  // judge by the listing alone.
+  if (live.length === 0 && ![...table.values()].some((row) => row.pgrp === record.pgid))
+    return { state: 'unobservable' }
+  return {
+    state: 'ours',
+    leader: false,
+    targets: owned.map((row) => ({ pid: row.pid, start: row.start })),
+    exists: true,
+    foreign,
+  }
+}
+
+/** The process itself, or an ancestor within reach, is a recorded identity that still matches. */
+function descendsFromKnown(row: Row, table: Map<number, Row>, known: Map<number, string>): boolean {
+  let at: Row | undefined = row
+  for (let depth = 0; at && depth < 64; depth++) {
+    if (known.get(at.pid) === at.start) return true
+    if (at.ppid <= 1) return false
+    at = table.get(at.ppid)
+  }
+  return false
 }
 
 /**
@@ -141,13 +288,19 @@ export async function killRecordedGroup(
   graceMs = 3000,
   env: ProcEnv = realProcEnv,
 ): Promise<GroupOutcome> {
+  // pid -> start time of every identity proven ours so far (the recorded ones to begin with).
+  const known = new Map<number, string>()
+  for (const member of record.members ?? []) known.set(member.pid, member.startTime)
+  if (record.startTime !== null) known.set(record.pid, record.startTime)
+  // Still worth waiting for: something of ours may yet end. A group holding only foreign members offers nothing to do.
   const alive = (found: Inspection) =>
-    found.state === 'ours' && (found.leader || found.members.length > 0)
-  let found = inspect(record, env)
+    found.state === 'ours' && found.exists && !(found.foreign && found.targets.length === 0)
+  let found = inspect(record, env, known)
   if (found.state !== 'ours') return found.state
-  if (!alive(found)) return 'gone'
+  if (!found.exists) return 'gone'
+  if (!alive(found)) return 'unobservable'
   const signal = (name: NodeJS.Signals) => {
-    const now = inspect(record, env)
+    const now = inspect(record, env, known)
     if (now.state !== 'ours') return
     if (now.leader) {
       try {
@@ -155,23 +308,27 @@ export async function killRecordedGroup(
       } catch {
         // gone meanwhile, or not ours to signal: the next inspection says which
       }
+      return
     }
-    for (const pid of now.members) {
+    for (const target of now.targets) {
+      // The pid was read during the scan: signal it only if it still is the same process (X3).
       try {
-        env.kill(pid, name)
+        const fields = env.stat(target.pid)
+        if (!fields || fields[0] === 'Z' || fields[19] !== target.start) continue
+        env.kill(target.pid, name)
       } catch {
-        // gone meanwhile
+        // gone meanwhile, or unreadable: not signalled
       }
     }
   }
   const settle = async (ms: number) => {
     const until = Date.now() + ms
     do {
-      found = inspect(record, env)
+      found = inspect(record, env, known)
       if (!alive(found)) return
       await sleep(50)
     } while (Date.now() < until)
-    found = inspect(record, env)
+    found = inspect(record, env, known)
   }
   signal('SIGTERM')
   await settle(graceMs)
@@ -181,6 +338,8 @@ export async function killRecordedGroup(
   }
   // `found` is reassigned inside `settle`, which flow analysis can't see.
   const last = found as Inspection
+  if (last.state === 'gone') return 'gone'
   if (last.state === 'unobservable') return 'unobservable'
-  return alive(last) ? 'alive' : 'gone'
+  if (!last.exists) return 'gone'
+  return last.foreign ? 'unobservable' : 'alive'
 }

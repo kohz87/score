@@ -1,3 +1,5 @@
+import { DatabaseSync } from 'node:sqlite'
+import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
 
@@ -158,6 +160,58 @@ test('Antigravity: warning, quota, unverified level disabled, a turn with tool c
   await expect(page.getByText(/Ran ls -la/).first()).toBeVisible({ timeout: 15_000 })
 
   await page.goto(`/team/${encodeURIComponent(id)}`)
+  page.once('dialog', (confirm) => void confirm.accept())
+  await page.getByRole('button', { name: 'Remove agent' }).click()
+  await expect(page).toHaveURL(/\/team$/)
+})
+
+test('Release: a coding agent held for programs Score can’t attribute is released on its page, with an audit row and nothing signalled', async ({
+  page,
+}) => {
+  test.setTimeout(90_000)
+  const id = `held-${Date.now().toString(36)}`
+  await pair(page)
+  await page.goto('/team')
+  await page.getByRole('button', { name: 'Add agent' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('radio', { name: /Coding agent/ }).check()
+  await dialog.getByLabel(/Agent name/).fill(id)
+  await dialog.getByRole('button', { name: 'Add coding agent' }).click()
+  await expect(dialog.getByText(`${id} joined the team.`)).toBeVisible()
+  await dialog.getByRole('link', { name: 'View agent' }).click()
+  const card = page.getByRole('region', { name: 'Coding agent' })
+  await expect(card).toContainText('Ready')
+  await expect(card.getByRole('button', { name: 'Release agent' })).toHaveCount(0)
+
+  // What a restart leaves behind when leftover programs can't be tied to the run: a held record, marked unclear.
+  // The pid is far beyond any real one and is never signalled (Release only deletes the record).
+  const home = process.env['SCORE_E2E_HOME']
+  if (!home) throw new Error('SCORE_E2E_HOME is not set')
+  const db = new DatabaseSync(join(home, 'home', 'score.db'))
+  db.exec('PRAGMA busy_timeout = 5000')
+  const now = new Date().toISOString()
+  db.prepare(
+    `INSERT INTO runs (id, profile, origin, score_turn_id, status, started_at, updated_at, runtime)
+     VALUES (?, ?, 'score', ?, 'interrupted', ?, ?, 'claude-code')`,
+  ).run(`cr_${id}`, id, `turn-${id}`, now, now)
+  db.prepare(
+    `INSERT INTO coding_processes (run_id, pid, pgid, start_time, boot_id, created_at, unresolved, unobservable)
+     VALUES (?, 2147483000, 2147483000, '5', 'b', ?, 1, 1)`,
+  ).run(`cr_${id}`, now)
+  await page.reload()
+  const release = card.getByRole('button', { name: 'Release agent' })
+  await expect(release).toBeVisible({ timeout: 15_000 })
+  await expect(card).toContainText('Score can’t tell whether these programs are its own')
+  await expect(card).toContainText('ps -o pid,pgid,args -g 2147483000')
+  await release.click()
+  await expect(release).toHaveCount(0, { timeout: 15_000 })
+  const rows = db.prepare('SELECT agent_id, run_id, pgid FROM coding_releases').all()
+  expect(rows).toContainEqual({ agent_id: id, run_id: `cr_${id}`, pgid: 2147483000 })
+  expect(db.prepare('SELECT 1 FROM coding_processes WHERE run_id = ?').get(`cr_${id}`)).toBe(
+    undefined,
+  )
+  db.close()
+
   page.once('dialog', (confirm) => void confirm.accept())
   await page.getByRole('button', { name: 'Remove agent' }).click()
   await expect(page).toHaveURL(/\/team$/)

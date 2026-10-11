@@ -186,6 +186,43 @@ test('late evidence for an abandoned attempt is recorded, never consumed', async
   expect(detail(id).attempts.find((a) => a.id === s1.id)!.state).toBe('abandoned')
 })
 
+test('X4: an `unconfirmed` Stop outcome is not acknowledged; a later `stopped` one is', async () => {
+  h = await harness({
+    lead: {
+      script: byTurn({
+        1: async (t) => {
+          await t.call('orch.assign', { agent: 'builder', instruction: '[fake:hold]' })
+        },
+      }),
+    },
+  })
+  let outcome: 'unconfirmed' | 'stopped' = 'unconfirmed'
+  const asked: string[] = []
+  const original = h.port.stopRun.bind(h.port)
+  // The fake port stops for real but answers like a coding runtime that has not yet proven the end.
+  h.port.stopRun = (async (req: { agentId: string; runId: string }) => {
+    asked.push(req.runId)
+    await original(req)
+    return outcome
+  }) as unknown as typeof h.port.stopRun
+  const id = await h.create({ gatePolicy: 'none' })
+  await h.until(() => attemptOf(h, id, 'step', 's1').some((a) => a.state === 'running'))
+  const s1 = attemptOf(h, id, 'step', 's1')[0]!
+  await endRun(h, s1.runId!, 'cancelled')
+  await h.until(() => detail(id).stepsList[0]!.status === 'unknown')
+  await h.orch.abandon(id, {
+    attemptIds: [s1.id],
+    orchestrationRevision: detail(id).revision,
+    acknowledge: true,
+  })
+  await h.until(() => asked.length > 0)
+  await h.settle(3000)
+  expect(asked.length).toBeGreaterThan(0)
+  expect(attemptOf(h, id, 'step', 's1')[0]!.stopAcknowledgedAt).toBeNull()
+  outcome = 'stopped'
+  await h.until(() => attemptOf(h, id, 'step', 's1')[0]!.stopAcknowledgedAt !== null)
+})
+
 test('restart: an admission that was started but whose handle was never recorded becomes unknown and is never replayed', async () => {
   h = await harness()
   const hold = holdStartRun()

@@ -318,9 +318,10 @@ export function terminalObservation(
     source: `coding:${agentId}`,
     identity: `coding:${runId}:${key}`,
     apply({ sqlite, now }) {
-      if (info.group === 'released')
+      if (info.group === 'released') {
         sqlite.prepare('DELETE FROM coding_processes WHERE run_id = ?').run(runId)
-      else if (info.group === 'unconfirmed')
+        sqlite.prepare('DELETE FROM coding_process_members WHERE run_id = ?').run(runId)
+      } else if (info.group === 'unconfirmed')
         sqlite.prepare('UPDATE coding_processes SET unresolved = 1 WHERE run_id = ?').run(runId)
       const row = readRun(sqlite, runId)
       if (runLifecycle.isTerminal(row.status)) return []

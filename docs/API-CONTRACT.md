@@ -1003,7 +1003,7 @@ room's CLI session (`skipped: no_session`).
   'ready'|'not_installed'|'not_supported'|'untested_version'; version: string|null; testedVersions: string[]; quota: string; message:
   string|null; unverifiedPermissions: ('read-only'|'workspace-write'|'full')[]; warning: string|null }`. Read with `<cli> --version` only (never a prompt). `untested_version` = installed, but not one of the tested versions.
 - `GET /api/coding-agents` → `{ items: CodingAgent[] }`: `{ id; name; role; runtime; workspace; permission: 'read-only'|'workspace-write'|'full';
-  model: string|null; style; quota; cli: { state; version; testedVersions; confirmed: boolean }; createdAt }`.
+  model: string|null; style; quota; cli: { state; version; testedVersions; confirmed: boolean }; heldGroups: { runId; pgid: number; canRelease: boolean }[]; createdAt }`. `heldGroups` lists process groups of this agent that Score could not prove ended (the agent takes no new turn while there are any); `canRelease` is true when the cause is that Score cannot tell whether the processes are its own.
 - **H** `POST /api/coding-agents` `{ id; name; role?; runtime; workspace?; permission?; model?; style; password?; acknowledgeReads? }` → `201 CodingAgent`. A Codex or Antigravity agent needs `acknowledgeReads: true` (`400 acknowledgement_required`): Codex can read every file the owner's user can (live-checked 2026-10-10), and Antigravity is treated the same. A `permission` listed in the runtime's `unverifiedPermissions` is `422 permission_unverified` (also on PATCH).
   `id` is a profile-style name (`^[a-z0-9][a-z0-9_-]{0,63}$`), unique among all agents (`409 conflict`). `workspace` defaults to
   `~/score-workspaces/<id>` (created) and follows the Workspace folder rules (no home folder, `~/.hermes`, `~/.score`, `~/.ssh`;
@@ -1013,13 +1013,18 @@ room's CLI session (`skipped: no_session`).
   `full` needs the password; lowering never does.
 - **H** `POST /api/coding-agents/:id/confirm-version` `{ version }` → `CodingAgent`: lets an `untested_version` CLI run for this agent. `version`
   must equal the version Score reads right now (`409 conflict` otherwise).
+- **H** `POST /api/coding-agents/:id/release` `{}` → `CodingAgent`: the deliberate way out of a held group Score cannot attribute (fix batch X). Only for groups with `canRelease: true`; none ⇒ `409 conflict`
+  ("Nothing to release"), unknown agent ⇒ `404`. Releasing **never signals anything**: it deletes the held process records (and the member identities recorded for them), writes an audit
+  row (agent, run, pid, pgid, the releasing paired browser's session hash, time) and lets the agent take new turns. The runs involved stay `unconfirmed` (a release is not termination evidence).
+  A group is held (and `canRelease`) when members of it survive that match no identity Score recorded while it supervised the run (a replacement group may have reused the number), when `/proc`
+  cannot be read, or when another boot's table cannot be told apart. Absence is proven only by the kernel (`kill(-pgid, 0)` fails with `ESRCH`) or by another boot, never by a `/proc` listing.
 - `GET /api/coding-agents/runtimes/:runtime/usage` → `CodingUsage` `{ runtime; fetchedAt; groups: { name; fiveHourRemainingPercent: number|null;
   fiveHourResets: string|null; weeklyRemainingPercent: number|null; weeklyResets: string|null }[]; text }`: Antigravity's quota (`agy -p /usage`, no model
   turn), cached for 60 s; `text` is the redacted table as printed, the fallback when a group could not be read. Other runtimes: `409 unsupported`;
   CLI missing or untested: `422 cli_not_installed` / `422 untested_cli_version`; the CLI failing or printing nothing readable: `502 usage_unavailable`.
 - **H** `DELETE /api/coding-agents/:id` → `204` (`409` while a turn runs). Past messages stay; its runs leave Reports.
 - Turns: a mention routes through the normal room queue. One turn per coding agent at a time (others show as `queued`); at most 30 minutes per
-  turn; Stop = SIGINT, SIGTERM after 5 s, SIGKILL after 5 s more. An untested/missing CLI or an unavailable workspace fails the reply with a
+  turn; Stop = SIGINT, SIGTERM after 5 s, SIGKILL after 5 s more; Stop answers `stopped` only once the process group is proven gone within about a second, otherwise `unconfirmed` (the stop goes on in the background). An untested/missing CLI or an unavailable workspace fails the reply with a
   sentence in the room (`422`, never retried). The CLI's pid, process group and start time are stored right after the spawn; a restart first stops what is left of each recorded group (only when pid and start time still match; SIGTERM, then SIGKILL) and then marks running turns `interrupted` ("Score restarted while this ran"); the CLI session id
   is kept so the next message resumes it. Runs carry `runtime` and `costKind`; run ids start with `cr_`.
 - Antigravity (PLAN 7.6): `agy -p <prompt> --output-format stream-json …` takes the prompt **in argv** (visible to the owner's own user in `ps`,

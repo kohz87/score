@@ -188,6 +188,20 @@ export function registerCodingAgentRoutes(
     return CodingAgentSchema.parse(await coding.view(getCodingAgent(db.sqlite, agentId)!))
   })
 
+  // The deliberate way out of a held group Score can't attribute (fix batch X). Never signals anything.
+  app.post('/api/coding-agents/:agentId/release', guard, async (request) => {
+    const { agentId } = Params.parse(request.params)
+    z.object({})
+      .strict()
+      .parse(request.body ?? {})
+    if (!getCodingAgent(db.sqlite, agentId))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that coding agent.')
+    // The paired browser is named by the hash of its session, never the secret.
+    coding.release(agentId, sessionKey(request.headers.cookie).slice(0, 16))
+    await publish(agentId)
+    return CodingAgentSchema.parse(await coding.view(getCodingAgent(db.sqlite, agentId)!))
+  })
+
   app.delete('/api/coding-agents/:agentId', guard, async (request, reply) => {
     const { agentId } = Params.parse(request.params)
     if (!getCodingAgent(db.sqlite, agentId))

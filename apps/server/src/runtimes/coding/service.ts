@@ -19,7 +19,13 @@ import { redact, redactBounded } from '../../redact.ts'
 import { checkRoot, type RootPolicy } from '../../workspace/policy.ts'
 import { CliLocator } from './cli.ts'
 import { driverFor } from './drivers.ts'
-import { bootId, killRecordedGroup, processStart, type GroupOutcome } from './proc.ts'
+import {
+  bootId,
+  killRecordedGroup,
+  processStart,
+  type GroupOutcome,
+  type MemberIdentity,
+} from './proc.ts'
 import { spawnCli, SpawnRecordError, type CliRun, type StopReason } from './process.ts'
 import {
   cliSessionFor,
@@ -69,6 +75,13 @@ interface ActiveRun {
   process?: CliRun
   /** Stop asked while the turn was still waiting for the agent's previous turn. */
   stopBeforeStart?: StopReason
+  /** A process was started for this run: Stop must then wait for proof that its group ended. */
+  launched?: boolean
+  /** Some group of this run was not proven gone. */
+  unproven?: boolean
+  /** Settles when the run has ended: true when every group it started is proven gone. */
+  ended: Promise<boolean>
+  settle(): void
 }
 
 const IntentRow = z.object({
@@ -90,7 +103,9 @@ const ProcessRow = z.object({
   start_time: z.string().nullable(),
   boot_id: z.string().nullable(),
   unresolved: z.int(),
+  unobservable: z.int(),
 })
+const MemberRow = z.object({ pid: z.int(), start_time: z.string() })
 const KIND = 'start_coding_run'
 const UNRESOLVED_NOTE =
   'Some of its tools may still be running. Score keeps trying to stop them and will let this agent take new messages once they have ended.'
@@ -150,6 +165,7 @@ export class CodingRuntime {
         testedVersions: [...driver.testedVersions],
         confirmed: cli.version !== null && agent.confirmedVersion === cli.version,
       },
+      heldGroups: this.heldGroups(agent.id),
       createdAt: agent.createdAt,
     }
   }
@@ -342,7 +358,10 @@ export class CodingRuntime {
     if (!agent) throw new HttpError(404, 'not_found', 'Couldn’t find that coding agent.')
     assertAgentAdmits(db.sqlite, agent.id)
     if (this.hasUnresolvedGroup(agent.id))
-      throw new HttpError(422, 'agent_still_stopping', UNRESOLVED_NOTE, { notice: UNRESOLVED_NOTE })
+      throw new HttpError(422, 'agent_still_stopping', UNRESOLVED_NOTE, {
+        notice: UNRESOLVED_NOTE,
+        agentId: agent.id,
+      })
     const driver = driverFor(agent.runtime)
     const existing = db.sqlite
       .prepare('SELECT * FROM command_intents WHERE idempotency_key = ?')
@@ -431,7 +450,16 @@ export class CodingRuntime {
         'Score is shutting down. Try again once it has restarted.',
       )
     }
-    const entry: ActiveRun = { agentId: agent.id, runId, turnId: req.turnId }
+    let settleEnded = (): void => undefined
+    const entry: ActiveRun = {
+      agentId: agent.id,
+      runId,
+      turnId: req.turnId,
+      ended: new Promise<boolean>((resolve) => {
+        settleEnded = () => resolve(!entry.unproven)
+      }),
+      settle: () => settleEnded(),
+    }
     this.active.set(runId, entry)
     // One turn per coding agent at a time: later turns wait their turn (the run shows as queued).
     const previous = this.queues.get(agent.id) ?? Promise.resolve()
@@ -445,7 +473,9 @@ export class CodingRuntime {
         }).then(() => this.deps.onError?.(error)),
       ),
     )
-    const tail = mine.catch((error: unknown) => this.deps.onError?.(error))
+    const tail = mine
+      .catch((error: unknown) => this.deps.onError?.(error))
+      .finally(() => entry.settle())
     this.queues.set(agent.id, tail)
     void tail.finally(() => {
       this.active.delete(runId)
@@ -474,7 +504,16 @@ export class CodingRuntime {
     if (entry) {
       if (entry.agentId !== req.agentId) return 'not_running'
       this.requestStop(entry, 'user')
-      return 'stopped'
+      // Nothing was ever started (still queued behind another turn, or stopped before launch): there is nothing to
+      // prove, and nothing will launch.
+      if (!entry.launched) return 'stopped'
+      // `stopped` is a proof: the group is gone (X4). The stop goes on in the background if it takes longer.
+      return Promise.race([
+        entry.ended.then((gone) => (gone ? ('stopped' as const) : ('unconfirmed' as const))),
+        new Promise<'unconfirmed'>((resolve) =>
+          setTimeout(resolve, this.deps.stopObserveMs ?? 1000, 'unconfirmed').unref(),
+        ),
+      ])
     }
     const { sqlite } = this.deps.db
     const run = sqlite
@@ -666,7 +705,11 @@ export class CodingRuntime {
         ],
         cwd: checked.real,
         env: locator.childEnv(),
-        onSpawn: (pid) => this.recordProcess(entry.runId, pid),
+        onSpawn: (pid) => {
+          this.recordProcess(entry.runId, pid)
+          entry.launched = true
+        },
+        onMembers: (members) => this.recordMembers(entry.runId, members),
         stdin: driver.promptVia === 'stdin' ? input : '',
         parser,
         maxMs: Math.max(1, deadline - Date.now()),
@@ -695,6 +738,7 @@ export class CodingRuntime {
       if (entry.stopBeforeStart) run.stop(entry.stopBeforeStart)
       const outcome = await run.done
       entry.process = undefined
+      if (!outcome.groupGone) entry.unproven = true
       const stderr = oneLine(outcome.stderr, 400)
       // A resumed session the CLI refused before doing anything: start fresh once, and forget the dead id. Only with
       // proof that nothing ran: the first group is gone, no output or tool call was seen, and the CLI itself said the
@@ -777,7 +821,26 @@ export class CodingRuntime {
       .run(runId, pid, pid, processStart(pid), bootId(), new Date().toISOString())
   }
   private forgetProcess(runId: string): void {
-    this.deps.db.sqlite.prepare('DELETE FROM coding_processes WHERE run_id = ?').run(runId)
+    const { sqlite } = this.deps.db
+    sqlite.prepare('DELETE FROM coding_processes WHERE run_id = ?').run(runId)
+    sqlite.prepare('DELETE FROM coding_process_members WHERE run_id = ?').run(runId)
+  }
+
+  /** Identities of the group's members, recorded while Score supervises it (N4). */
+  private recordMembers(runId: string, members: MemberIdentity[]): void {
+    const boot = bootId()
+    const now = new Date().toISOString()
+    const insert = this.deps.db.sqlite.prepare(
+      'INSERT OR IGNORE INTO coding_process_members (run_id, pid, start_time, boot_id, seen_at) VALUES (?, ?, ?, ?, ?)',
+    )
+    for (const member of members) insert.run(runId, member.pid, member.startTime, boot, now)
+  }
+  private membersOf(runId: string): MemberIdentity[] {
+    return this.deps.db.sqlite
+      .prepare('SELECT pid, start_time FROM coding_process_members WHERE run_id = ?')
+      .all(runId)
+      .map((row) => MemberRow.parse(row))
+      .map((row) => ({ pid: row.pid, startTime: row.start_time }))
   }
 
   private recordOf(runId: string) {
@@ -835,6 +898,7 @@ export class CodingRuntime {
           this.forgetProcess(runId)
           return true
         }
+        this.markUnobservable(runId, outcome === 'unobservable')
         if (this.closed) return false
       }
     })()
@@ -847,13 +911,69 @@ export class CodingRuntime {
     return loop
   }
 
+  private markUnobservable(runId: string, value: boolean): void {
+    this.deps.db.sqlite
+      .prepare('UPDATE coding_processes SET unobservable = ? WHERE run_id = ?')
+      .run(value ? 1 : 0, runId)
+  }
+
   private stopGroup(record: z.infer<typeof ProcessRow>): Promise<GroupOutcome> {
     return (this.deps.killGroup ?? killRecordedGroup)({
       pid: record.pid,
       pgid: record.pgid,
       startTime: record.start_time,
       bootId: record.boot_id,
+      members: this.membersOf(record.run_id),
+      onMembers: (members) => this.recordMembers(record.run_id, members),
     })
+  }
+
+  /** Groups of this agent that were not proven gone; `canRelease` = Score can't tell whether they are its own. */
+  heldGroups(agentId: string): { runId: string; pgid: number; canRelease: boolean }[] {
+    return this.deps.db.sqlite
+      .prepare(
+        `SELECT cp.run_id, cp.pgid, cp.unobservable FROM coding_processes cp JOIN runs r ON r.id = cp.run_id
+         WHERE r.profile = ? AND cp.unresolved = 1 ORDER BY cp.created_at`,
+      )
+      .all(agentId)
+      .map((row) =>
+        z.object({ run_id: z.string(), pgid: z.int(), unobservable: z.int() }).parse(row),
+      )
+      .map((row) => ({ runId: row.run_id, pgid: row.pgid, canRelease: row.unobservable === 1 }))
+  }
+
+  /**
+   * The person's deliberate way out of a group Score can't attribute: the records go, the agent may take turns again,
+   * and an audit row names who and when. Nothing is ever signalled. Returns how many groups were released.
+   */
+  release(agentId: string, by: string): number {
+    const { db } = this.deps
+    const rows = db.sqlite
+      .prepare(
+        `SELECT cp.run_id, cp.pid, cp.pgid FROM coding_processes cp JOIN runs r ON r.id = cp.run_id
+         WHERE r.profile = ? AND cp.unresolved = 1 AND cp.unobservable = 1`,
+      )
+      .all(agentId)
+      .map((row) => z.object({ run_id: z.string(), pid: z.int(), pgid: z.int() }).parse(row))
+    if (rows.length === 0)
+      throw new HttpError(
+        409,
+        'conflict',
+        'Nothing to release: Score has no unclear processes for this agent.',
+      )
+    const at = new Date().toISOString()
+    db.tx((sqlite) => {
+      for (const row of rows) {
+        sqlite
+          .prepare(
+            'INSERT INTO coding_releases (agent_id, run_id, pid, pgid, released_by, released_at) VALUES (?, ?, ?, ?, ?, ?)',
+          )
+          .run(agentId, row.run_id, row.pid, row.pgid, by, at)
+        sqlite.prepare('DELETE FROM coding_processes WHERE run_id = ?').run(row.run_id)
+        sqlite.prepare('DELETE FROM coding_process_members WHERE run_id = ?').run(row.run_id)
+      }
+    })
+    return rows.length
   }
 
   async recover(): Promise<number> {
@@ -872,8 +992,8 @@ export class CodingRuntime {
       else {
         unresolved.add(record.run_id)
         db.sqlite
-          .prepare('UPDATE coding_processes SET unresolved = 1 WHERE run_id = ?')
-          .run(record.run_id)
+          .prepare('UPDATE coding_processes SET unresolved = 1, unobservable = ? WHERE run_id = ?')
+          .run(outcome === 'unobservable' ? 1 : 0, record.run_id)
         void this.reapInBackground(record.run_id)
       }
     }

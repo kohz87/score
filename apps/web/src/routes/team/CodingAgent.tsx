@@ -16,6 +16,7 @@ import { Link, useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { runtimeLabel } from '../../components/runtime-label.ts'
+import { ReleaseHeld } from './ReleaseHeld.tsx'
 
 const permissionLabels: Record<CodingPermission, string> = {
   'read-only': 'Read only: looks at files, changes nothing',
@@ -395,7 +396,7 @@ export function CodingOverview({ agent }: { agent: AgentDetail }) {
     )
   return (
     <CodingSettings
-      key={`${coding.permission}:${coding.model}:${coding.cli.confirmed}`}
+      key={`${coding.permission}:${coding.model}:${coding.cli.confirmed}:${coding.heldGroups.length}`}
       coding={coding}
       onChanged={() => {
         void queryClient.invalidateQueries({ queryKey: ['coding'] })
@@ -493,6 +494,15 @@ function CodingSettings({
           </dd>
         </div>
       </dl>
+      {coding.heldGroups.length > 0 && (
+        <div role="alert">
+          <p className="team-muted-strong">
+            Some programs this agent started couldn’t be proven ended. Score keeps trying to stop
+            them, and the agent takes no new messages until they have ended.
+          </p>
+          <ReleaseHeld agentId={coding.id} />
+        </div>
+      )}
       {coding.cli.state === 'untested_version' && !coding.cli.confirmed && (
         <div role="alert">
           <p className="team-muted-strong">
