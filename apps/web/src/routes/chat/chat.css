@@ -1279,6 +1279,7 @@
   color: var(--card);
 }
 .chat-meter {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1289,7 +1290,6 @@
 }
 /* Context ring and popover (PLAN 5.36) */
 .chat-ctx {
-  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1352,10 +1352,10 @@
 }
 .chat-ctx-panel {
   position: absolute;
-  left: 0;
-  bottom: calc(100% + 6px);
+  left: 24px;
+  bottom: calc(100% + 2px);
   z-index: 3;
-  width: min(380px, calc(100vw - 48px));
+  width: min(380px, calc(100% - 48px));
   padding: 16px 18px;
   border: 1px solid var(--hairline);
   border-radius: 22px;

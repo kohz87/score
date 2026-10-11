@@ -6,6 +6,14 @@ import { makeRoom, openRoom } from './rooms.ts'
 // finished orchestration's), and compact an agent's context from the ring or with /compress.
 const conversations = (page: Page) => page.getByRole('navigation', { name: 'Conversations' })
 
+// A room's menu closes when the list re-renders under it (stream updates): open it again until the item shows.
+async function openMenuItem(page: Page, button: RegExp | string, item: string) {
+  await expect(async () => {
+    await conversations(page).getByRole('button', { name: button }).first().click()
+    await page.getByRole('menuitem', { name: item }).click({ timeout: 3000 })
+  }).toPass({ timeout: 30_000 })
+}
+
 test('rename: click the title, Enter saves, Escape cancels, a bad name stays open', async ({
   page,
 }) => {
@@ -28,7 +36,7 @@ test('rename: click the title, Enter saves, Escape cancels, a bad name stays ope
   await expect(page.getByRole('textbox', { name: 'Room name' })).toHaveCount(0)
   // The room menu renames as well.
   await conversations(page)
-    .getByRole('button', { name: `Actions for ${renamed}` })
+    .getByRole('button', { name: `Actions for #${renamed}` })
     .click()
   await page.getByRole('menuitem', { name: 'Rename…' }).click()
   await page.getByRole('menu').getByRole('textbox', { name: 'Room name' }).fill(`${renamed}-b`)
@@ -79,14 +87,8 @@ test('a finished orchestration room can be deleted too', async ({ page }) => {
   await start.getByRole('button', { name: 'Start orchestration' }).click()
   await expect(start).toBeHidden()
   // While the run owns the room it can't be deleted.
-  const heading = page.getByRole('heading', { level: 1 })
-  await expect(heading).toContainText('#')
-  const title = (await heading.innerText()).replace(/\s*\(rename\)$/, '').trim()
-  const name = title.replace(/^#/, '')
-  await conversations(page)
-    .getByRole('button', { name: `Actions for ${name}` })
-    .click()
-  await page.getByRole('menuitem', { name: 'Delete room…' }).click()
+  const name = `orch-${Date.now().toString(36)}`
+  await openMenuItem(page, /^Actions for #?Orchestration/, 'Delete room…')
   const dialog = page.getByRole('dialog', { name: /^Delete Orchestration.*\?$/ })
   await expect(dialog.getByRole('alert')).toContainText('still owns this room')
   await dialog.getByRole('button', { name: 'Cancel' }).click()
@@ -95,26 +97,22 @@ test('a finished orchestration room can be deleted too', async ({ page }) => {
   await page.getByRole('textbox', { name: 'Room name' }).fill(name)
   await page.getByRole('textbox', { name: 'Room name' }).press('Enter')
   await expect(page.getByRole('heading', { level: 1, name: `#${name}` })).toBeVisible()
-  // Approve both steps (every-step gates) and let the run finish.
-  for (const step of ['s1', 's2']) {
-    const gate = page.getByRole('region', { name: `Approve ${step}` })
-    await expect(gate).toBeVisible({ timeout: 60_000 })
-    await expect(async () => {
-      if (await gate.isVisible())
-        await gate.getByRole('button', { name: `Approve ${step}` }).click()
-      await expect(gate).toBeHidden({ timeout: 4000 })
-    }).toPass({ timeout: 45_000 })
-  }
-  await expect(page.getByText('Succeeded', { exact: true }).first()).toBeVisible({
-    timeout: 60_000,
-  })
-  await conversations(page)
-    .getByRole('button', { name: `Actions for ${name}` })
-    .click()
-  await page.getByRole('menuitem', { name: 'Delete room…' }).click()
-  const second = page.getByRole('dialog', { name: `Delete ${name}?` })
+  // No gates: the run finishes by itself and releases the room.
+  await expect
+    .poll(
+      async () => {
+        const list = (await (await page.request.get('/api/orchestrations')).json()) as {
+          items: { status: string }[]
+        }
+        return list.items.map((item) => item.status)
+      },
+      { timeout: 90_000 },
+    )
+    .toContain('succeeded')
+  await openMenuItem(page, `Actions for #${name}`, 'Delete room…')
+  const second = page.getByRole('dialog', { name: `Delete #${name}?` })
   await expect(second.getByRole('button', { name: 'Delete room' })).toBeDisabled()
-  await second.getByRole('textbox').fill(`${name}`)
+  await second.getByRole('textbox').fill(`#${name}`)
   await expect(second.getByRole('alert')).toHaveCount(0)
   await second.getByRole('button', { name: 'Delete room' }).click()
   await expect(page).toHaveURL(/\/chat$/)

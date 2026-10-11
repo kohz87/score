@@ -108,7 +108,9 @@ export function DeleteRoomDialog({
           )}
           {!data.blocked && (
             <label className="chat-delete-confirm">
-              Type <strong>{room.name}</strong> to confirm
+              <span>
+                Type <strong>{room.name}</strong> to confirm
+              </span>
               <input
                 value={typed}
                 autoComplete="off"
