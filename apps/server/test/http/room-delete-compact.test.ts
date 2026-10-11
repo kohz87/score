@@ -306,3 +306,21 @@ test('session context: Hermes breakdown when the bridge answers, the totals othe
       .statusCode,
   ).toBe(404)
 })
+
+test('an imported room that continues a Hermes session compacts that session', async () => {
+  const room = await createRoom()
+  db.sqlite
+    .prepare(
+      `INSERT INTO room_sessions (room_id, agent_id, session_id, mode, summary_sent) VALUES (?, 'builder', 'hermes-original', 'same_session', 0)`,
+    )
+    .run(room.id)
+  const url = (session: string) => `/api/agents/builder/sessions/${session}/compact`
+  expect((await send('POST', url(`score-${room.id}-builder`), {})).statusCode).toBe(202)
+  await vi.waitFor(() => expect(events('session.compacted')).toHaveLength(1))
+  expect(fake().compactions).toEqual([{ agentId: 'builder', sessionId: 'hermes-original' }])
+  // The event names the id the client asked about.
+  expect(events('session.compacted')[0]!.data).toMatchObject({
+    sessionId: `score-${room.id}-builder`,
+  })
+  expect((await send('POST', url('hermes-original'), {})).statusCode).toBe(202)
+})

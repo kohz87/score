@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { bumpAdmission } from './ops.ts'
-import { addHistory, attemptsOf, type OrchRow } from './store.ts'
+import { addHistory, type OrchRow } from './store.ts'
 
 /** Deletes what the run's attempts left outside the orchestration tables: replies, runs, tool rows and intents. */
 function pruneAssociated(tx: DatabaseSync, o: OrchRow): void {

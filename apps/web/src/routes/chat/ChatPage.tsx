@@ -1,5 +1,5 @@
 import type { Room } from '@score/contract'
-import { useCallback, useContext, useState } from 'react'
+import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { ResponsiveDrawer } from '../../components/ResponsiveDrawer.tsx'
 import { StreamContext, useStreamQuery } from '../../data/query-client.ts'
@@ -7,6 +7,7 @@ import { ChatThread, QueryError } from './ChatThread.tsx'
 import { RoomPanels } from './RoomPanels.tsx'
 import { agentsQuery, roomsQuery } from './queries.ts'
 import { ConversationSearch } from './ConversationSearch.tsx'
+import { DeleteRoomDialog } from './DeleteRoomDialog.tsx'
 import { ShareDialog } from './ShareDialog.tsx'
 import { OutsideSessions } from './OutsideSessions.tsx'
 import { RoomLink } from './RoomLink.tsx'
@@ -22,10 +23,20 @@ export function ChatPage() {
   const agents = useStreamQuery(agentsQuery)
   const context = useContext(StreamContext)!
   const [sharing, setSharing] = useState<Room | null>(null)
+  const [deleting, setDeleting] = useState<Room | null>(null)
   const [starting, setStarting] = useState(false)
   const navigate = useNavigate()
   const [listOpen, setListOpen] = useState(false)
   const closeList = useCallback(() => setListOpen(false), [])
+  // A room that disappears from the list (deleted here or in another tab) takes its page with it.
+  const seen = useRef(new Set<string>())
+  useEffect(() => {
+    if (!rooms.data) return
+    const listed = new Set([...rooms.data.rooms, ...rooms.data.directs].map((room) => room.id))
+    if (roomId && seen.current.has(roomId) && !listed.has(roomId))
+      void navigate('/chat', { replace: true })
+    listed.forEach((id) => seen.current.add(id))
+  }, [rooms.data, roomId, navigate])
   const orchestrationRoomList = useStreamQuery(orchestrationsQuery).data
   const workflowRoomList = useStreamQuery(workflowRunsQuery).data
   const workflowRooms = new Set((workflowRoomList ?? []).map((run) => run.roomId))
@@ -100,6 +111,7 @@ export function ChatPage() {
               orchestrationRooms={orchestrationRooms}
               workflowRooms={workflowRooms}
               onShare={setSharing}
+              onDelete={setDeleting}
             />
           )}
           <div className="chat-room-group">
@@ -123,6 +135,16 @@ export function ChatPage() {
         </section>
       )}
       {roomId && <RoomPanels key={`panels:${roomId}`} roomId={roomId} agents={agents.data ?? []} />}
+      {deleting && (
+        <DeleteRoomDialog
+          room={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => {
+            setDeleting(null)
+            if (roomId === deleting.id) void navigate('/chat', { replace: true })
+          }}
+        />
+      )}
       {sharing && <ShareDialog room={sharing} close={() => setSharing(null)} />}
       {starting && (
         <NewOrchestrationDialog

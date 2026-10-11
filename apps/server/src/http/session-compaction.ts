@@ -163,7 +163,7 @@ export function registerSessionCompactionRoutes(
       try {
         const result = await compact({
           agentId,
-          sessionId,
+          sessionId: hermesSession,
           ...(body.keepRecent === undefined ? {} : { keepRecent: body.keepRecent }),
         })
         event =

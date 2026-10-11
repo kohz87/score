@@ -1280,23 +1280,186 @@
 }
 .chat-meter {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   padding: 6px 24px 0;
   font-size: 12px;
   color: var(--ink-muted);
 }
-.chat-meter-bar {
-  flex: 0 0 120px;
-  height: 6px;
-  border-radius: 3px;
+/* Context ring and popover (PLAN 5.36) */
+.chat-ctx {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chat-ctx-ring {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.chat-ctx-ring svg {
+  position: absolute;
+  inset: 4px;
+}
+.chat-ctx-track {
+  fill: none;
+  stroke: var(--hairline);
+  stroke-width: 3;
+}
+.chat-ctx-fill {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.chat-ctx-ring--warn .chat-ctx-fill {
+  stroke: var(--agent-saffron);
+}
+.chat-ctx-ring--high .chat-ctx-fill {
+  stroke: var(--agent-coral);
+}
+.chat-ctx-text {
+  position: relative;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.chat-ctx-ring--warn .chat-ctx-text {
+  color: var(--agent-saffron-text);
+}
+.chat-ctx-ring--high .chat-ctx-text {
+  color: var(--agent-coral-text);
+}
+.chat-ctx-ring:focus-visible,
+.chat-ctx-panel button:focus-visible,
+.chat-ctx-panel input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.chat-ctx-status {
+  color: var(--ink-muted);
+}
+.chat-ctx-panel {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 3;
+  width: min(380px, calc(100vw - 48px));
+  padding: 16px 18px;
+  border: 1px solid var(--hairline);
+  border-radius: 22px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 18px 48px rgba(18, 19, 26, 0.14);
+  font-size: 13px;
+}
+.chat-ctx-panel h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.chat-ctx-panel h4 {
+  margin: 12px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.chat-ctx-panel p {
+  margin: 4px 0;
+}
+.chat-ctx-meta,
+.chat-ctx-note {
+  color: var(--ink-muted);
+}
+.chat-ctx-summary {
+  font-weight: 600;
+}
+.chat-ctx-bar {
+  display: flex;
+  height: 8px;
+  margin-top: 10px;
+  border-radius: 4px;
   background: var(--hairline);
   overflow: hidden;
 }
-.chat-meter-bar > span {
-  display: block;
-  height: 100%;
+.chat-ctx-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.chat-ctx-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chat-ctx-swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.chat-ctx-part {
+  flex: 1;
+  min-width: 0;
+}
+.chat-ctx-tokens {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+.chat-ctx-result {
+  padding: 8px 12px;
+  border-radius: var(--radius-14);
+  background: var(--subtle);
+}
+.chat-ctx-confirm input {
+  width: 4.5ch;
+  padding: 2px 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  font: inherit;
+}
+.chat-ctx-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.chat-ctx-actions button {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chat-ctx-actions .chat-ctx-primary {
+  border-color: var(--ink);
   background: var(--ink);
+  color: var(--card);
+}
+.chat-ctx-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 .chat-usage-card {
   white-space: pre-wrap;
@@ -2422,4 +2585,59 @@
   color: var(--ink);
   font: inherit;
   font-size: 13px;
+}
+
+/* Rename and delete a room (PLAN 5.36) */
+.chat-rename input {
+  width: min(420px, 100%);
+  padding: 6px 12px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-14);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+.chat-rename--title input {
+  font-family: var(--font-heading);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.chat-rename-error {
+  margin: 4px 0 0;
+  color: var(--agent-coral-text);
+  font-size: 13px;
+}
+.chat-title-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: text;
+}
+.chat-title-button:hover {
+  text-decoration: underline dotted;
+  text-underline-offset: 4px;
+}
+.chat-title-button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+.chat-delete-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.chat-delete-confirm input {
+  padding: 8px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  font: inherit;
+}
+.chat-delete-confirm input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }

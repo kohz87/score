@@ -20,14 +20,12 @@ import {
   type SlashCommand,
 } from './composer-model.ts'
 import {
-  agentContextKey,
   fetchAgentContext,
   LOCAL_COMMAND_MENU,
-  meterFraction,
-  meterText,
   parseLocalCommand,
   usageSummary,
 } from './context-meter.ts'
+import { ContextMeter } from './ContextMeter.tsx'
 import { messagesQuery, type MessagePageData } from './queries.ts'
 import { useVoiceInput } from './voice.ts'
 import { newId } from '../../data/ids.ts'
@@ -228,12 +226,10 @@ export function Composer({
     (leadAgentId && agents.some((agent) => agent.id === leadAgentId) ? leadAgentId : null)
   const subjectAgent = agents.find((agent) => agent.id === subject)
   const finishedReplies = (items ?? []).filter((item) => !item.streaming).length
-  const meter = useQuery({
-    queryKey: [...agentContextKey(subject ?? ''), finishedReplies],
-    queryFn: subject ? () => fetchAgentContext(subject) : skipToken,
-    staleTime: 15_000,
-    retry: false,
-  })
+  // One ring per addressed agent (PLAN 5.36), or the subject when nobody is addressed.
+  const meterAgents = [...new Set(to.length ? to : subject ? [subject] : [])].slice(0, 4)
+  const [compactSignal, setCompactSignal] = useState(0)
+  const [compactSubject, setCompactSubject] = useState<string | null>(null)
 
   // Voice input: interim words replace each other in the draft until the utterance settles.
   const voiceBase = useRef('')
@@ -384,11 +380,9 @@ export function Composer({
     setCaret(0)
     try {
       if (command.kind === 'compress') {
-        // Hermes only compacts a session from its own CLI or a messaging chat; its API has no call for it.
-        setNotice({
-          kind: 'info',
-          text: `Hermes can’t compact ${name}’s session through its API yet, so /compress isn’t available here. Run /compress in the Hermes CLI for this profile.`,
-        })
+        // The ring's details open on the compaction confirmation (PLAN 5.36).
+        setCompactSubject(subject)
+        setCompactSignal((value) => value + 1)
       } else if (command.kind === 'usage') {
         setNotice({ kind: 'info', text: usageSummary(name, await fetchAgentContext(subject)) })
       } else {
@@ -973,16 +967,18 @@ export function Composer({
           </p>
         )}
       </form>
-      {subject && meter.data && meterText(meter.data) && (
-        <div className="chat-meter" aria-label={`${subjectAgent?.name ?? subject} context use`}>
-          {meterFraction(meter.data) !== null && (
-            <span className="chat-meter-bar" aria-hidden="true">
-              <span style={{ width: `${Math.round(meterFraction(meter.data)! * 100)}%` }} />
-            </span>
-          )}
-          <span>
-            {subjectAgent?.name ?? subject}: {meterText(meter.data)}
-          </span>
+      {meterAgents.length > 0 && (
+        <div className="chat-meter" role="group" aria-label="Context use">
+          {meterAgents.map((id) => (
+            <ContextMeter
+              key={id}
+              roomId={roomId}
+              agentId={id}
+              name={agents.find((agent) => agent.id === id)?.name ?? id}
+              finishedReplies={finishedReplies}
+              confirmSignal={id === compactSubject ? compactSignal : undefined}
+            />
+          ))}
         </div>
       )}
     </div>

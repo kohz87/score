@@ -18,6 +18,7 @@ import { DeleteToast } from './DeleteToast.tsx'
 import { usePendingDeletes } from './message-deletion.ts'
 import { MessageItem } from './MessageItem.tsx'
 import { ImportedBanner } from './ImportedBanner.tsx'
+import { RenameRoom } from './RenameRoom.tsx'
 import { messagesQuery, roomQuery, versionsQuery } from './queries.ts'
 import {
   BranchView,
@@ -301,6 +302,7 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
     setSeenVersions(versionCount)
     setView(null)
   }
+  const [renaming, setRenaming] = useState(false)
   const lead = agents.find((agent) => agent.id === room?.leadAgentId)
   const orchestration = useStreamQuery(orchestrationsQuery).data?.find(
     (item) => item.roomId === roomId,
@@ -313,7 +315,32 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
     <section className="chat-thread" aria-label="Conversation">
       <header className="chat-thread-header">
         <div>
-          <h1>{room ? roomLabel(room) : 'Chat'}</h1>
+          {room && renaming ? (
+            <RenameRoom
+              room={room}
+              className="chat-rename--title"
+              onDone={() => setRenaming(false)}
+              onCancel={() => setRenaming(false)}
+            />
+          ) : (
+            <h1>
+              {room?.kind === 'room' ? (
+                <button
+                  type="button"
+                  className="chat-title-button"
+                  title="Rename this room"
+                  aria-label={`${roomLabel(room)} (rename)`}
+                  onClick={() => setRenaming(true)}
+                >
+                  {roomLabel(room)}
+                </button>
+              ) : room ? (
+                roomLabel(room)
+              ) : (
+                'Chat'
+              )}
+            </h1>
+          )}
           {room?.leadAgentId && <p>Unaddressed messages go to {lead?.name ?? room.leadAgentId}</p>}
         </div>
         <Link className="chat-score-link" to="/now">

@@ -37,7 +37,8 @@ export async function compactSession(
 ): Promise<CompactSessionResult> {
   const tip = sessionTip({ profile: req.agentId, sessionId: req.sessionId }, deps.hermesHome)
   if (tip === null) return { status: 'failed', reason: 'no_session' }
-  if (!deps.broker?.available(req.agentId)) return { status: 'failed', reason: 'bridge_unavailable' }
+  if (!deps.broker?.available(req.agentId))
+    return { status: 'failed', reason: 'bridge_unavailable' }
   const outcome = await deps.broker.ask(
     req.agentId,
     {

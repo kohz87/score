@@ -10,6 +10,7 @@ import {
   type LaneBlock,
   type Message,
   type RewindPlan,
+  type RoomDeletePlan,
   type Room,
   type RoomVersion,
   type StreamEvent,
@@ -97,6 +98,8 @@ let plan: RewindPlan
 let rewindResponse: () => Response
 let searchHits: unknown[] = []
 let rooms: Room[]
+let roomCalls: [string, string, unknown][]
+let deletePlan: RoomDeletePlan
 let filesInPlay: string[]
 let learned: { text: string; savedTo: string[]; at: string }[]
 function response(payload: unknown, status = 200) {
@@ -142,8 +145,20 @@ beforeEach(() => {
   shares = []
   filesInPlay = []
   learned = []
-  fetchMock = vi.fn(async (input) => {
+  roomCalls = []
+  deletePlan = { name: 'general', messages: 12, files: 2, runs: 3, briefs: 1, blocked: null }
+  fetchMock = vi.fn(async (input, init) => {
     const url = String(input)
+    if (
+      (init?.method === 'PATCH' || init?.method === 'DELETE') &&
+      init.body &&
+      url === '/api/rooms/general'
+    )
+      roomCalls.push([init.method, url, JSON.parse(String(init.body))])
+    if (url.endsWith('/delete-plan')) return response(deletePlan)
+    if (init?.method === 'DELETE' && url === '/api/rooms/general')
+      return new Response(null, { status: 204 })
+    if (init?.method === 'PATCH' && url === '/api/rooms/general') return response(room)
     if (url.startsWith('/api/approvals?'))
       return response({ asOfSeq: 1, items: [pendingApproval], nextCursor: null })
     if (url.startsWith('/api/search/messages')) return response({ items: searchHits })
@@ -1200,4 +1215,87 @@ test('your own message arriving on the stream replaces its "sending" copy, so it
     'm-stored',
     'pending-def',
   ])
+})
+
+test('PLAN 5.36: clicking the room name renames it inline: Enter saves, Escape cancels, a bad name stays open', async () => {
+  setup()
+  fireEvent.click(await screen.findByRole('button', { name: '#general (rename)' }))
+  const input = screen.getByRole('textbox', { name: 'Room name' }) as HTMLInputElement
+  expect(document.activeElement).toBe(input)
+  fireEvent.change(input, { target: { value: 'Not Valid!' } })
+  fireEvent.keyDown(input, { key: 'Enter' })
+  expect((await screen.findByRole('alert')).textContent).toContain('lowercase')
+  expect(roomCalls).toEqual([])
+  fireEvent.change(input, { target: { value: 'launch #q4' } })
+  fireEvent.keyDown(input, { key: 'Enter' })
+  await waitFor(() =>
+    expect(roomCalls).toEqual([['PATCH', '/api/rooms/general', { name: 'launch #q4' }]]),
+  )
+  await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Room name' })).toBeNull())
+  fireEvent.click(screen.getByRole('button', { name: '#general (rename)' }))
+  fireEvent.keyDown(screen.getByRole('textbox', { name: 'Room name' }), { key: 'Escape' })
+  expect(screen.queryByRole('textbox', { name: 'Room name' })).toBeNull()
+  expect(roomCalls).toHaveLength(1)
+})
+
+test('PLAN 5.36: the room menu renames too', async () => {
+  setup()
+  fireEvent.click(await screen.findByRole('button', { name: 'Actions for general' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Rename…' }))
+  const menu = screen.getByRole('menu')
+  fireEvent.change(within(menu).getByRole('textbox', { name: 'Room name' }), {
+    target: { value: 'ops' },
+  })
+  fireEvent.keyDown(within(menu).getByRole('textbox', { name: 'Room name' }), { key: 'Enter' })
+  await waitFor(() => expect(roomCalls).toEqual([['PATCH', '/api/rooms/general', { name: 'ops' }]]))
+})
+
+test('PLAN 5.36: deleting a room lists what goes, needs the typed name, then leaves for Chat home', async () => {
+  setup()
+  fireEvent.click(await screen.findByRole('button', { name: 'Actions for general' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Delete room…' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Delete general?', hidden: true })
+  await within(dialog).findByText(
+    /12 messages, 2 attached files, 3 run records and 1 brief/,
+    undefined,
+    {
+      timeout: 3000,
+    },
+  )
+  expect(within(dialog).getByText(/Hermes sessions are/)).toBeDefined()
+  expect(within(dialog).getByRole('link', { name: 'Export as Markdown' })).toBeDefined()
+  const confirm = within(dialog).getByRole('button', { name: 'Delete room' })
+  expect(confirm.hasAttribute('disabled')).toBe(true)
+  const field = within(dialog).getByRole('textbox')
+  fireEvent.change(field, { target: { value: 'genera' } })
+  expect(confirm.hasAttribute('disabled')).toBe(true)
+  fireEvent.change(field, { target: { value: 'general' } })
+  expect(confirm.hasAttribute('disabled')).toBe(false)
+  fireEvent.click(confirm)
+  await waitFor(() =>
+    expect(roomCalls).toEqual([['DELETE', '/api/rooms/general', { confirm: 'general' }]]),
+  )
+  await screen.findByText('Choose a conversation to see its messages.')
+})
+
+test('PLAN 5.36: a blocked room explains why and cannot be deleted', async () => {
+  deletePlan = { ...deletePlan, blocked: 'orchestration_owned' }
+  setup()
+  fireEvent.click(await screen.findByRole('button', { name: 'Actions for general' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Delete room…' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Delete general?', hidden: true })
+  expect((await within(dialog).findByRole('alert')).textContent).toContain('still owns this room')
+  expect(within(dialog).queryByRole('textbox')).toBeNull()
+  expect(within(dialog).getByRole('button', { name: 'Delete room' }).hasAttribute('disabled')).toBe(
+    true,
+  )
+})
+
+test('PLAN 5.36: room.deleted from another tab removes the room and leaves its page', async () => {
+  const { router } = setup()
+  await screen.findByRole('button', { name: '#general (rename)' })
+  emit('room.deleted', { id: 'general' }, 5)
+  await screen.findByText('Choose a conversation to see its messages.')
+  expect(router.state.location.pathname).toBe('/chat')
+  expect(screen.queryByRole('link', { name: /general/ })).toBeNull()
 })

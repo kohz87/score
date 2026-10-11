@@ -22,7 +22,7 @@ export const roomsQuery = defineStreamQuery({
     const { asOfSeq, ...data } = RoomsSnapshotSchema.parse(await apiFetch('rooms'))
     return { asOfSeq, data }
   },
-  types: ['room.upserted', 'room-project.upserted', 'room-project.deleted'],
+  types: ['room.upserted', 'room.deleted', 'room-project.upserted', 'room-project.deleted'],
   reduce(data, event) {
     const sort = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)
     if (event.type === 'room-project.upserted')
@@ -34,6 +34,12 @@ export const roomsQuery = defineStreamQuery({
       }
     if (event.type === 'room-project.deleted')
       return { ...data, projects: data.projects.filter((item) => item.id !== event.data.id) }
+    if (event.type === 'room.deleted')
+      return {
+        ...data,
+        rooms: data.rooms.filter((room) => room.id !== event.data.id),
+        directs: data.directs.filter((room) => room.id !== event.data.id),
+      }
     if (event.type !== 'room.upserted') return data
     const rooms = data.rooms.filter((room) => room.id !== event.data.id)
     const directs = data.directs.filter((room) => room.id !== event.data.id)
