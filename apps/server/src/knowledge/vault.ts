@@ -14,6 +14,7 @@ import type {
   KnowledgeTree,
   KnowledgeWriteRequest,
 } from '@score/contract'
+import { KnowledgeAuthorSchema } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import { HttpError } from '../errors.ts'
@@ -79,6 +80,24 @@ const LinkRowSchema = z.object({
   to_path: z.string().nullable(),
 })
 
+const MovePlanSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  author: KnowledgeAuthorSchema,
+  items: z.array(
+    z.object({
+      path: z.string(),
+      baseHash: z.string(),
+      newHash: z.string(),
+      content: z.string(),
+      done: z.boolean(),
+      skipped: z.boolean(),
+    }),
+  ),
+})
+type MovePlan = z.infer<typeof MovePlanSchema>
+
+const READ_CHUNK_BYTES = 256 * 1024
 const MAX_FILES = 100_000
 const MAX_DEPTH = 32
 const MAX_EVENTS_PER_SCAN = 200
@@ -99,6 +118,9 @@ export class KnowledgeVault {
   private debounce: NodeJS.Timeout | undefined
   private interval: NodeJS.Timeout | undefined
   private closed = false
+  /** Paths the watcher reported since the last scan. */
+  private dirty = new Set<string>()
+  private verifyNext = false
 
   constructor(private readonly options: VaultOptions) {
     this.root = path.resolve(options.vault)
@@ -149,6 +171,7 @@ export class KnowledgeVault {
       .catch(() => false)
     await this.git.init(hasGitDir)
     await this.serial(async () => {
+      await this.recoverMove()
       const entries = (await fs.readdir(this.root)).filter((name) => name !== '.git')
       const fresh = entries.length === 0
       if (fresh) {
@@ -170,7 +193,10 @@ export class KnowledgeVault {
     })
     if (this.options.watch !== false) this.startWatching()
     this.interval = setInterval(
-      () => void this.serial(() => this.scan(true)).catch((error: unknown) => this.logScan(error)),
+      () =>
+        void this.serial(() => this.scan(true, true)).catch((error: unknown) =>
+          this.logScan(error),
+        ),
       this.options.scanIntervalMs ?? 5 * 60_000,
     )
     this.interval.unref()
@@ -192,6 +218,8 @@ export class KnowledgeVault {
             .some((part) => part.startsWith('.'))
         )
           return
+        if (filename) this.dirty.add(String(filename).split(path.sep).join('/'))
+        else this.verifyNext = true
         clearTimeout(this.debounce)
         this.debounce = setTimeout(
           () =>
@@ -284,12 +312,39 @@ export class KnowledgeVault {
             etag: now === null ? null : etagOf(now),
           })
       }
-      await fs.rename(temp, abs)
+      if (expect?.hash === null) await this.moveNoReplace(temp, abs)
+      else await fs.rename(temp, abs)
       await this.assertParent(parent)
     } catch (error) {
       await fs.rm(temp, { force: true })
       throw error
     }
+  }
+
+  /**
+   * Moves `source` to `dest`, failing with 409 instead of replacing anything that appears there: the file is
+   * hard-linked (which never replaces) and only then is the old name removed. Where hard links are unsupported
+   * it falls back to a check followed by a rename.
+   */
+  async moveNoReplace(source: string, dest: string): Promise<void> {
+    try {
+      await fs.link(source, dest)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'EEXIST')
+        throw new HttpError(409, 'exists', 'A file with that name already exists')
+      if (code !== 'EPERM' && code !== 'ENOSYS' && code !== 'EOPNOTSUPP') throw error
+      if (
+        await fs.lstat(dest).then(
+          () => true,
+          () => false,
+        )
+      )
+        throw new HttpError(409, 'exists', 'A file with that name already exists')
+      await fs.rename(source, dest)
+      return
+    }
+    await fs.unlink(source)
   }
 
   /**
@@ -301,7 +356,8 @@ export class KnowledgeVault {
     return (await this.readContainedBuffer(abs)).toString('utf8')
   }
 
-  async readContainedBuffer(abs: string): Promise<Buffer> {
+  /** `maxBytes` is checked on the open descriptor and while reading, so a file that grows after the size check cannot be slurped whole. */
+  async readContainedBuffer(abs: string, maxBytes = MAX_NOTE_BYTES): Promise<Buffer> {
     const handle = await fs.open(abs, C.O_RDONLY | C.O_NOFOLLOW)
     try {
       if (process.platform === 'linux') {
@@ -309,7 +365,20 @@ export class KnowledgeVault {
         if (actual !== abs)
           throw new HttpError(400, 'bad_path', 'The note moved while it was being read')
       }
-      return await handle.readFile()
+      const tooLarge = () =>
+        new HttpError(413, 'payload_too_large', 'That file is too large to open')
+      if ((await handle.stat()).size > maxBytes) throw tooLarge()
+      const chunks: Buffer[] = []
+      let total = 0
+      for (;;) {
+        const chunk = Buffer.allocUnsafe(Math.min(READ_CHUNK_BYTES, maxBytes + 1 - total))
+        const { bytesRead } = await handle.read(chunk, 0, chunk.length, null)
+        if (bytesRead === 0) break
+        total += bytesRead
+        if (total > maxBytes) throw tooLarge()
+        chunks.push(chunk.subarray(0, bytesRead))
+      }
+      return Buffer.concat(chunks, total)
     } finally {
       await handle.close()
     }
@@ -417,7 +486,10 @@ export class KnowledgeVault {
   }
 
   /** Indexes one file after a Score write (caller holds the lock). */
-  private async indexFile(rel: string, author: KnowledgeAuthor): Promise<string> {
+  private async indexFile(
+    rel: string,
+    author: KnowledgeAuthor,
+  ): Promise<{ hash: string; raw: string; mtimeMs: number }> {
     const { abs, stat } = await this.lookup(rel.split('/'))
     if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Unknown note')
     if (stat.size > MAX_NOTE_BYTES)
@@ -428,23 +500,30 @@ export class KnowledgeVault {
       this.upsert(sqlite, rel, { mtimeMs: stat.mtimeMs, size: stat.size, hash }, raw, author)
       this.relink(sqlite)
     })
-    return hash
+    return { hash, raw, mtimeMs: stat.mtimeMs }
   }
 
   private async walk(): Promise<{
     files: Map<string, { mtimeMs: number; size: number }>
     documents: Map<string, { mtimeMs: number; size: number }>
     folders: string[]
+    /** Folders (relative; '' = the whole vault) whose contents could not be fully listed. */
+    incomplete: Set<string>
   }> {
+    const incomplete = new Set<string>()
     const files = new Map<string, { mtimeMs: number; size: number }>()
     const documents = new Map<string, { mtimeMs: number; size: number }>()
     const folders: string[] = []
     const visit = async (dir: string, rel: string, depth: number): Promise<void> => {
-      if (depth > MAX_DEPTH) return
+      if (depth > MAX_DEPTH) {
+        incomplete.add(rel)
+        return
+      }
       let entries
       try {
         entries = await fs.readdir(dir, { withFileTypes: true })
       } catch {
+        incomplete.add(rel)
         return
       }
       for (const entry of entries) {
@@ -453,14 +532,22 @@ export class KnowledgeVault {
         if (entry.isDirectory()) {
           folders.push(childRel)
           await visit(path.join(dir, entry.name), childRel, depth + 1)
-        } else if (entry.isFile() && /\.md$/i.test(entry.name) && files.size < MAX_FILES) {
+        } else if (entry.isFile() && /\.md$/i.test(entry.name)) {
+          if (files.size >= MAX_FILES) {
+            incomplete.add('')
+            continue
+          }
           try {
             const stat = await fs.lstat(path.join(dir, entry.name))
             files.set(childRel, { mtimeMs: stat.mtimeMs, size: stat.size })
           } catch {
             // vanished between readdir and stat
           }
-        } else if (entry.isFile() && isDocumentPath(entry.name) && documents.size < MAX_FILES) {
+        } else if (entry.isFile() && isDocumentPath(entry.name)) {
+          if (documents.size >= MAX_FILES) {
+            incomplete.add('')
+            continue
+          }
           try {
             const stat = await fs.lstat(path.join(dir, entry.name))
             documents.set(childRel, { mtimeMs: stat.mtimeMs, size: stat.size })
@@ -471,22 +558,36 @@ export class KnowledgeVault {
       }
     }
     await visit(this.root, '', 0)
-    return { files, documents, folders: folders.sort() }
+    return { files, documents, folders: folders.sort(), incomplete }
   }
 
   /**
    * Brings the index in line with the files: new and changed by `(mtime, size)` then hash, removed dropped.
    * With `announce`, each change is published as made by "outside" (an edit Score did not make).
    */
-  private async scan(announce: boolean): Promise<string[]> {
+  private async scan(announce: boolean, verifyAll = false): Promise<string[]> {
     if (this.closed) return []
-    const { files, documents } = await this.walk()
+    // Paths the watcher reported are hashed even when (mtime, size) look unchanged: an edit can keep both.
+    const dirty = this.dirty
+    this.dirty = new Set()
+    const everything = verifyAll || this.verifyNext
+    this.verifyNext = false
+    const verify = (rel: string): boolean => everything || dirty.has(rel)
+    const { files, documents, incomplete } = await this.walk()
+    // A folder that could not be listed proves nothing about what is in it: its notes stay indexed.
+    const covered = (rel: string): boolean =>
+      ![...incomplete].some((dir) => dir === '' || rel === dir || rel.startsWith(`${dir}/`))
+    if (incomplete.size > 0)
+      this.options.log?.warn(
+        { folders: [...incomplete].slice(0, 20) },
+        'Some vault folders could not be listed; their notes were left as they are',
+      )
     const known = new Map(
       this.options.db.read((sqlite) => this.noteRows(sqlite)).map((row) => [row.path, row]),
     )
     const removed = [...known.keys()].filter((rel) => {
       const file = files.get(rel)
-      return !file || file.size > MAX_NOTE_BYTES
+      return file ? file.size > MAX_NOTE_BYTES : covered(rel)
     })
     const touched: Array<{
       rel: string
@@ -496,7 +597,13 @@ export class KnowledgeVault {
     for (const [rel, stat] of files) {
       if (stat.size > MAX_NOTE_BYTES) continue
       const row = known.get(rel)
-      if (row && Math.trunc(stat.mtimeMs) === row.mtime_ms && stat.size === row.size) continue
+      if (
+        row &&
+        !verify(rel) &&
+        Math.trunc(stat.mtimeMs) === row.mtime_ms &&
+        stat.size === row.size
+      )
+        continue
       let raw: string
       try {
         raw = await this.readContained(path.join(this.root, rel))
@@ -528,7 +635,7 @@ export class KnowledgeVault {
       }
       if (changed.length > 0) this.relink(sqlite)
     })
-    changed.push(...(await this.docs.scan(documents, announce)))
+    changed.push(...(await this.docs.scan(documents, announce, verify, covered)))
     if (announce)
       for (const rel of changed
         .filter((item) => !isDocumentPath(item))
@@ -570,7 +677,8 @@ export class KnowledgeVault {
 
   /** Runs one scan now (the watcher and the timer do this too). */
   scanNow(announce = true): Promise<string[]> {
-    return this.serial(() => this.scan(announce))
+    // An explicit scan checks content, not just (mtime, size).
+    return this.serial(() => this.scan(announce, true))
   }
 
   // ---- reads -------------------------------------------------------------------------------------------------
@@ -628,15 +736,19 @@ export class KnowledgeVault {
     const rel = parseNotePath(input)
     const { abs, stat } = await this.lookup(rel.split('/'))
     if (!stat) throw new HttpError(404, 'not_found', 'Unknown note')
-    const raw = await this.readRaw(abs, stat)
-    const hash = hashContent(raw)
+    let raw = await this.readRaw(abs, stat)
+    let hash = hashContent(raw)
+    let mtimeMs = stat.mtimeMs
     let row = this.options.db.read((sqlite) => this.noteRow(sqlite, rel))
     if (row?.hash !== hash) {
-      // The file changed (or appeared) behind the scanner's back: index it now.
-      await this.serial(async () => {
-        await this.indexFile(rel, 'outside')
+      // The file changed (or appeared) behind the scanner's back: index it now, and answer from the very version
+      // that was indexed, so body, etag, title, links and author always belong together.
+      const indexed = await this.serial(async () => {
+        const result = await this.indexFile(rel, 'outside')
         await this.publish({ path: rel, kind: 'written', to: null, by: 'outside' })
+        return result
       })
+      ;({ raw, hash, mtimeMs } = indexed)
       row = this.options.db.read((sqlite) => this.noteRow(sqlite, rel))
     }
     if (!row) throw new HttpError(404, 'not_found', 'Unknown note')
@@ -665,7 +777,7 @@ export class KnowledgeVault {
       frontmatter: parsed.frontmatter,
       body: parsed.body,
       etag: etagOf(hash),
-      mtime: new Date(stat.mtimeMs).toISOString(),
+      mtime: new Date(mtimeMs).toISOString(),
       links,
       backlinks,
       lastAuthor: authorFromColumn(row.last_author),
@@ -840,6 +952,7 @@ export class KnowledgeVault {
     const from = parseNotePath(fromInput)
     const to = parseNotePath(toInput)
     return this.serial(async () => {
+      await this.recoverMove()
       const source = await this.lookup(from.split('/'))
       if (!source.stat?.isFile()) throw new HttpError(404, 'not_found', 'Unknown note')
       if (from === to) throw new HttpError(409, 'exists', 'A note with that name already exists')
@@ -861,11 +974,12 @@ export class KnowledgeVault {
         : []
       // Work out every rewrite first: a result over the size limit must refuse the whole move, not leave a note
       // that opens with 413 behind.
-      const plan: Array<{ now: string; content: string }> = []
+      const plan: Array<{ now: string; content: string; baseHash: string }> = []
       for (const old of linking) {
         const file = await this.lookup(old.split('/'))
         if (!file.stat?.isFile()) continue
-        const parsed = parseNote(await this.readRaw(file.abs, file.stat))
+        const raw = await this.readRaw(file.abs, file.stat)
+        const parsed = parseNote(raw)
         const result = rewriteLinks(parsed.body, old, from, to, before, after)
         if (result.count === 0) continue
         const content = parsed.prefix + result.text
@@ -875,30 +989,151 @@ export class KnowledgeVault {
             'payload_too_large',
             `Updating the links in ${old} would make that note too large; nothing was moved`,
           )
-        plan.push({ now: old === from ? to : old, content })
+        plan.push({ now: old === from ? to : old, content, baseHash: hashContent(raw) })
       }
       const abs = await this.prepareParent(to)
-      await fs.rename(source.abs, abs)
-      await this.assertParent(path.dirname(abs))
+      const movePlan: MovePlan = {
+        from,
+        to,
+        author,
+        items: plan.map((item) => ({
+          path: item.now,
+          baseHash: item.baseHash,
+          newHash: hashContent(item.content),
+          content: item.content,
+          done: false,
+          skipped: false,
+        })),
+      }
+      // Written before anything moves: if Score stops half way, the next start finishes (or drops) the rewrites.
+      await this.savePlan(movePlan)
+      try {
+        await this.moveNoReplace(source.abs, abs)
+        await this.assertParent(path.dirname(abs))
+      } catch (error) {
+        await this.clearPlan()
+        throw error
+      }
       // The rename gets a commit of its own: with the link edits in the same commit a short note can look like a
       // delete plus a create to git, and its earlier versions would no longer be found.
       await this.commit([from, to], `Move ${from} to ${to}`, author)
-      const rewritten: string[] = []
-      for (const item of plan) {
-        const file = await this.lookup(item.now.split('/'))
-        await this.atomicWrite(file.abs, item.content)
-        rewritten.push(item.now)
-      }
-      if (rewritten.length > 0)
-        await this.commit([...new Set(rewritten)], `Update links after moving ${from}`, author)
-      this.options.db.tx((sqlite) => this.remove(sqlite, from))
-      await this.indexFile(to, author)
-      for (const rel of rewritten) if (rel !== to) await this.indexFile(rel, author)
-      await this.publish({ path: from, kind: 'moved', to, by: author })
-      for (const rel of rewritten)
-        if (rel !== to) await this.publish({ path: rel, kind: 'written', to: null, by: author })
-      return { path: to, updatedNotes: rewritten.filter((rel) => rel !== to).length }
+      return { path: to, updatedNotes: await this.finishMove(movePlan) }
     })
+  }
+
+  // ---- move plan (roll-forward recovery) ---------------------------------------------------------------------
+
+  /** Inside `.git`, so it is never swept into a commit or walked as a note. Null when the vault has no `.git`. */
+  private planFile(): string {
+    return path.join(this.root, '.git', 'score-move-plan.json')
+  }
+
+  private async savePlan(plan: MovePlan): Promise<void> {
+    const file = this.planFile()
+    const temp = `${file}.${randomUUID()}.tmp`
+    try {
+      await fs.writeFile(temp, JSON.stringify(plan), { mode: 0o600 })
+      await fs.rename(temp, file)
+    } catch (error) {
+      await fs.rm(temp, { force: true })
+      // Without a `.git` folder (git unavailable) there is nowhere to keep the plan; the move still proceeds.
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+  }
+
+  private async clearPlan(): Promise<void> {
+    await fs.rm(this.planFile(), { force: true })
+  }
+
+  /** Writes one planned rewrite if the note is still the planned version. */
+  private async applyMoveItem(item: MovePlan['items'][number]): Promise<'written' | 'conflict'> {
+    const file = await this.lookup(item.path.split('/'))
+    const current = file.stat?.isFile()
+      ? await this.readContained(file.abs).then(hashContent, () => null)
+      : null
+    if (current === item.newHash) return 'written'
+    if (current !== item.baseHash) return 'conflict'
+    try {
+      await this.atomicWrite(file.abs, item.content, { hash: item.baseHash })
+    } catch (error) {
+      if (error instanceof HttpError && error.status === 412) return 'conflict'
+      throw error
+    }
+    return 'written'
+  }
+
+  /**
+   * The part of a move after the rename: applies the planned link rewrites (a note edited since is left alone),
+   * commits, indexes and announces. A failure keeps the plan on disk for `recoverMove`.
+   */
+  private async finishMove(plan: MovePlan): Promise<number> {
+    const { from, to, author } = plan
+    let failure: unknown
+    try {
+      for (const item of plan.items) {
+        if (item.done) continue
+        if ((await this.applyMoveItem(item)) === 'conflict') {
+          this.options.log?.warn(
+            { path: item.path },
+            'A note changed while its links were being updated; its links were left as they are',
+          )
+          item.skipped = true
+        }
+        item.done = true
+        await this.savePlan(plan)
+      }
+    } catch (error) {
+      failure = error
+    }
+    const rewritten = plan.items
+      .filter((item) => item.done && !item.skipped)
+      .map((item) => item.path)
+    if (rewritten.length > 0)
+      await this.commit([...new Set(rewritten)], `Update links after moving ${from}`, author)
+    this.options.db.tx((sqlite) => this.remove(sqlite, from))
+    await this.indexFile(to, author)
+    for (const rel of rewritten) if (rel !== to) await this.indexFile(rel, author)
+    await this.publish({ path: from, kind: 'moved', to, by: author })
+    for (const rel of rewritten)
+      if (rel !== to) await this.publish({ path: rel, kind: 'written', to: null, by: author })
+    if (failure !== undefined) {
+      this.options.log?.warn({ err: failure }, 'Updating links after a move failed; it will resume')
+      throw new HttpError(
+        500,
+        'move_incomplete',
+        `The note was moved, but some links in other notes could not be updated yet. Score finishes this on its next start or move.`,
+      )
+    }
+    await this.clearPlan()
+    return rewritten.filter((rel) => rel !== to).length
+  }
+
+  /** Finishes a move that was interrupted after its plan was saved (caller holds the lock). */
+  private async recoverMove(): Promise<void> {
+    let plan: MovePlan
+    try {
+      plan = MovePlanSchema.parse(JSON.parse(await fs.readFile(this.planFile(), 'utf8')))
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+      this.options.log?.warn({ err: error }, 'Ignored an unreadable move plan')
+      await this.clearPlan()
+      return
+    }
+    const source = await this.lookup(plan.from.split('/'))
+    const target = await this.lookup(plan.to.split('/'))
+    if (source.stat && target.stat) {
+      // Linked but not yet unlinked: the same file under both names finishes the move; anything else is not ours.
+      if (source.stat.ino !== target.stat.ino || source.stat.dev !== target.stat.dev) {
+        await this.clearPlan()
+        return
+      }
+      await fs.unlink(source.abs)
+    } else if (!target.stat) {
+      await this.clearPlan() // the move never happened
+      return
+    }
+    await this.commit([plan.from, plan.to], `Move ${plan.from} to ${plan.to}`, plan.author)
+    await this.finishMove(plan)
   }
 
   /** A new, empty folder (git does not track empty folders; the tree lists it from the disk). */
@@ -964,7 +1199,7 @@ export class KnowledgeVault {
       const abs = await this.prepareParent(rel)
       await this.atomicWrite(abs, raw)
       await this.commit([rel], `Restore ${rel} to ${commit.slice(0, 7)}`, author)
-      const hash = await this.indexFile(rel, author)
+      const { hash } = await this.indexFile(rel, author)
       await this.publish({ path: rel, kind: 'restored', to: null, by: author })
       return { etag: etagOf(hash), path: rel }
     })

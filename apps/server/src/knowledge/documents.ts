@@ -275,7 +275,7 @@ export class KnowledgeDocuments {
     if (stat.size > MAX_FILE_BYTES)
       throw new HttpError(413, 'payload_too_large', 'That file is too large')
     return {
-      bytes: await this.vault.readContainedBuffer(abs),
+      bytes: await this.vault.readContainedBuffer(abs, MAX_FILE_BYTES),
       type: documentTypeOfPath(rel)!,
       name: path.posix.basename(rel),
     }
@@ -546,7 +546,7 @@ export class KnowledgeDocuments {
       await this.vault.commitOutside()
       const row = this.db.read((sqlite) => this.row(sqlite, from))
       const abs = await this.vault.prepareParent(to)
-      await fs.rename(source.abs, abs)
+      await this.vault.moveNoReplace(source.abs, abs)
       if (row === undefined || row.versioned === 1)
         await this.vault.commitPaths([from, to], `Move ${from} to ${to}`, author)
       this.db.tx((sqlite) => {
@@ -575,7 +575,7 @@ export class KnowledgeDocuments {
       this.db.tx((sqlite) => this.removeIndex(sqlite, rel))
       return false
     }
-    const bytes = await this.vault.readContainedBuffer(abs)
+    const bytes = await this.vault.readContainedBuffer(abs, MAX_FILE_BYTES)
     const hash = hashContent(bytes)
     const known = this.db.read((sqlite) => this.row(sqlite, rel))
     if (known?.hash === hash) {
@@ -613,17 +613,25 @@ export class KnowledgeDocuments {
   async scan(
     files: Map<string, { mtimeMs: number; size: number }>,
     announce: boolean,
+    verify: (rel: string) => boolean = () => false,
+    covered: (rel: string) => boolean = () => true,
   ): Promise<string[]> {
     const known = new Map(this.db.read((sqlite) => this.rows(sqlite)).map((row) => [row.path, row]))
     const changed: string[] = []
     for (const rel of known.keys())
-      if (!files.has(rel)) {
+      if (!files.has(rel) && covered(rel)) {
         this.db.tx((sqlite) => this.removeIndex(sqlite, rel))
         changed.push(rel)
       }
     for (const [rel, stat] of files) {
       const row = known.get(rel)
-      if (row && Math.trunc(stat.mtimeMs) === row.mtime_ms && stat.size === row.size) continue
+      if (
+        row &&
+        !verify(rel) &&
+        Math.trunc(stat.mtimeMs) === row.mtime_ms &&
+        stat.size === row.size
+      )
+        continue
       try {
         if (await this.ingestExisting(rel, announce || row ? 'outside' : null)) changed.push(rel)
       } catch {
