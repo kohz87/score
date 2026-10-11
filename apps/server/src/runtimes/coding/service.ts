@@ -49,6 +49,10 @@ export interface CodingRuntimeDeps {
   onError?: (error: unknown) => void
   maxTurnMs?: number
   graceMs?: number
+  /** First wait before a failed terminal result is saved again (doubles each time). */
+  terminalRetryMs?: number
+  /** Test seam: the process launcher. */
+  spawn?: typeof spawnCli
 }
 
 interface ActiveRun {
@@ -408,7 +412,7 @@ export class CodingRuntime {
     // One turn per coding agent at a time: later turns wait their turn (the run shows as queued).
     const previous = this.queues.get(agent.id) ?? Promise.resolve()
     const mine = previous.then(() =>
-      this.execute(entry, agent, payload.input, room).catch((error: unknown) =>
+      this.execute(entry, agent, payload.input, room, payload.model).catch((error: unknown) =>
         // Preparing the turn failed (settings folder, spawn setup…): end the run and the reply, never leave it queued.
         this.finish(newTranslation(runId, agent.id, room), {
           status: 'failed',
@@ -446,9 +450,41 @@ export class CodingRuntime {
     else entry.stopBeforeStart ??= reason
   }
 
-  private finish(translation: RunTranslation, info: TerminalInfo): Promise<unknown> {
-    return this.deps.ingest
-      .submit(terminalObservation(translation, info))
+  /**
+   * Saves the terminal result. A failed save is tried again (bounded backoff) without touching the process; if the budget
+   * runs out the run is ended with a plain note instead of being left running, and only then is the failure reported.
+   */
+  private async finish(translation: RunTranslation, info: TerminalInfo): Promise<unknown> {
+    const { ingest } = this.deps
+    const tries = 5
+    let delay = this.deps.terminalRetryMs ?? 250
+    let last: unknown
+    for (let attempt = 0; attempt < tries; attempt++) {
+      try {
+        return await ingest.submit(terminalObservation(translation, info))
+      } catch (error) {
+        last = error
+        if (attempt < tries - 1) {
+          await new Promise((r) => setTimeout(r, delay))
+          delay *= 2
+        }
+      }
+    }
+    this.deps.onError?.(last)
+    // Degraded end: no output, no usage, a different key so it isn't mistaken for the observation that failed.
+    return ingest
+      .submit(
+        terminalObservation(
+          translation,
+          {
+            status: 'failed',
+            error:
+              'Score couldn’t save this run’s result. The agent has finished; send the message again if you need it.',
+            costKind: info.costKind,
+          },
+          'terminal-degraded',
+        ),
+      )
       .catch((error: unknown) => this.deps.onError?.(error))
   }
 
@@ -457,6 +493,8 @@ export class CodingRuntime {
     admitted: StoredCodingAgent,
     input: string,
     room: string | null,
+    /** The model admitted with the turn (`req.model ?? agent.model` at admission): what the row says is what runs. */
+    model: string | null,
   ): Promise<void> {
     const { db, ingest, locator } = this.deps
     // A queued turn starts long after admission: permission, workspace and the rest are read as they are now.
@@ -500,6 +538,9 @@ export class CodingRuntime {
         error: `The workspace is unavailable: ${checked.reason}`,
         costKind,
       }))
+    // The final check before launching: a Stop or shutdown that arrived during the awaits above ends the turn unlaunched.
+    if (entry.stopBeforeStart)
+      return void (await this.finish(translation, stopped(entry.stopBeforeStart)))
     let settingsPath: string | null = null
     const settings = driver.settingsFile?.(this.denyPaths(), this.denyFiles())
     if (settings) {
@@ -516,12 +557,20 @@ export class CodingRuntime {
       let result: Extract<CodingEvent, { kind: 'result' }> | undefined
       let text = ''
       let worked = false
+      // Between fallback attempts too: nothing launches once Stop or shutdown has been asked for.
+      if (entry.stopBeforeStart)
+        return void (await this.finish(translation, stopped(entry.stopBeforeStart)))
       const parser = driver.createParser({ cwd: checked.real })
       const { file, args } = locator.command(driver)
+      // Not a visible queued -> running step for a turn that has been stopped already.
+      if (entry.stopBeforeStart)
+        return void (await this.finish(translation, stopped(entry.stopBeforeStart)))
       await ingest
         .submit(runningObservation(translation))
         .catch((error: unknown) => this.deps.onError?.(error))
-      const run = spawnCli({
+      if (entry.stopBeforeStart)
+        return void (await this.finish(translation, stopped(entry.stopBeforeStart)))
+      const run = (this.deps.spawn ?? spawnCli)({
         file,
         args: [
           ...args,
@@ -529,7 +578,7 @@ export class CodingRuntime {
             workspace: checked.real,
             prompt: input,
             permission: agent.permission,
-            model: agent.model,
+            model,
             sessionId: resume,
             settingsPath,
             denyPaths: this.denyPaths(),
@@ -556,7 +605,8 @@ export class CodingRuntime {
       if (entry.stopBeforeStart) run.stop(entry.stopBeforeStart)
       const outcome = await run.done
       entry.process = undefined
-      this.forgetProcess(entry.runId)
+      // The durable record stays while anything of the group may still be running (recovery looks for it).
+      if (outcome.groupGone) this.forgetProcess(entry.runId)
       const stderr = oneLine(outcome.stderr, 400)
       // A resumed session the CLI no longer has: start fresh once, and forget the dead id.
       if (
@@ -601,6 +651,12 @@ export class CodingRuntime {
           }${stderr ? `: ${stderr}` : ''}`,
           costKind,
         }
+      if (outcome.leftovers && info.status === 'completed')
+        info.output =
+          `${info.output ?? ''}\n\nSome programs the agent started were still running when it finished, so Score stopped them.`.trim()
+      if (!outcome.groupGone)
+        info.error =
+          `${info.error ?? ''} Some programs the agent started couldn’t be stopped. Score will try again when it restarts.`.trim()
       if (info.error) info.error = redact(info.error)
       await this.finish(translation, info)
       return

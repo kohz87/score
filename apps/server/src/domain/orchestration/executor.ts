@@ -85,6 +85,7 @@ import { finalizeGraph, planWorkflow } from '../workflows/planner.ts'
 import { workflowDetailOf, workflowEventsOf, workflowSummaryOf } from '../workflows/views.ts'
 import { readVersion } from '../workflows/definitions.ts'
 import { validateDefinition } from '../workflows/definition.ts'
+import { assertHermesOnly } from './supported-agents.ts'
 import {
   agentIdsOf,
   insertWorkflowRun,
@@ -568,14 +569,16 @@ export class Orchestrator {
   async preflight(
     leadAgentId: string,
     allowedAgents: string[],
-    agents?: Pick<AgentSummary, 'id' | 'served'>[],
+    agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
   ): Promise<Preflight> {
     const { port, access } = this.options
     const fake = port.mode === 'fake'
     const checks: PreflightCheck[] = []
     const add = (id: PreflightCheck['id'], status: PreflightCheck['status'], message: string) =>
       checks.push({ id, status, message })
-    const known = new Map((agents ?? (await port.listAgents())).map((agent) => [agent.id, agent]))
+    const team = agents ?? (await port.listAgents())
+    assertHermesOnly([leadAgentId, ...allowedAgents], team)
+    const known = new Map(team.map((agent) => [agent.id, agent]))
     const ready = (id: string): string | undefined => {
       const agent = known.get(id)
       if (!agent) return `${id} is not a team member`
@@ -731,7 +734,7 @@ export class Orchestrator {
 
   async create(
     body: OrchestrationCreate,
-    agents?: Pick<AgentSummary, 'id' | 'served'>[],
+    agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
   ): Promise<OrchestrationCreated> {
     const preflight = await this.preflight(body.leadAgentId, body.allowedAgents, agents)
     if (new Set(body.allowedAgents).size !== body.allowedAgents.length)
@@ -979,7 +982,7 @@ export class Orchestrator {
   async workflowPreflight(
     workflowId: string,
     version: number,
-    agents?: Pick<AgentSummary, 'id' | 'served'>[],
+    agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
   ): Promise<WorkflowPreflight> {
     const { port } = this.options
     const fake = port.mode === 'fake'
@@ -998,8 +1001,10 @@ export class Orchestrator {
         ? 'The workflow is valid'
         : `${validation.issues.length} problems in the workflow`,
     )
-    const known = new Map((agents ?? (await port.listAgents())).map((agent) => [agent.id, agent]))
+    const team = agents ?? (await port.listAgents())
     const ids = agentIdsOf(found)
+    assertHermesOnly(ids, team)
+    const known = new Map(team.map((agent) => [agent.id, agent]))
     const problems = ids.flatMap((id) => {
       const agent = known.get(id)
       if (!agent) return [`${id} is not a team member`]
@@ -1071,7 +1076,7 @@ export class Orchestrator {
 
   async createWorkflowRun(
     body: WorkflowRunCreate,
-    agents?: Pick<AgentSummary, 'id' | 'served'>[],
+    agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
   ): Promise<WorkflowRunCreated> {
     const found = this.db.read((sqlite) => readVersion(sqlite, body.workflowId, body.version))
     validateInputs(found, body.inputs)

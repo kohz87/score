@@ -26,6 +26,7 @@ import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { McpAccessStore } from '../../src/mcp/access.ts'
 import { CliLocator } from '../../src/runtimes/coding/cli.ts'
+import { spawnCli } from '../../src/runtimes/coding/process.ts'
 import { CodingRuntime } from '../../src/runtimes/coding/service.ts'
 import { SecurityPassword } from '../../src/auth/security-password.ts'
 import { defaultRootPolicy } from '../../src/workspace/policy.ts'
@@ -55,7 +56,16 @@ function setEnv(name: string, value: string | undefined) {
   else process.env[name] = value
 }
 
-async function boot(options: { version?: string; maxTurnMs?: number; graceMs?: number } = {}) {
+const spawned: number[] = []
+let launches = 0
+async function boot(
+  options: {
+    version?: string
+    maxTurnMs?: number
+    graceMs?: number
+    terminalRetryMs?: number
+  } = {},
+) {
   setEnv('SCORE_CODING_FAKE_LOG', log)
   setEnv('SCORE_CODING_FAKE_VERSION', options.version)
   coding = new CodingRuntime({
@@ -66,6 +76,18 @@ async function boot(options: { version?: string; maxTurnMs?: number; graceMs?: n
     policy: defaultRootPolicy([home]),
     ...(options.maxTurnMs ? { maxTurnMs: options.maxTurnMs } : {}),
     ...(options.graceMs ? { graceMs: options.graceMs } : {}),
+    terminalRetryMs: options.terminalRetryMs ?? 10,
+    // Counts launches and keeps the pids, so a test can prove nothing started or that a child is gone.
+    spawn: (spawnOptions) => {
+      launches++
+      return spawnCli({
+        ...spawnOptions,
+        onSpawn: (pid) => {
+          spawned.push(pid)
+          spawnOptions.onSpawn?.(pid)
+        },
+      })
+    },
   })
   app = buildApp({
     config: loadConfig({ SCORE_MODE: 'fake', SCORE_HOME: home }),
@@ -89,6 +111,8 @@ async function boot(options: { version?: string; maxTurnMs?: number; graceMs?: n
 }
 
 beforeEach(async () => {
+  launches = 0
+  spawned.length = 0
   dir = mkdtempSync(join(tmpdir(), 'score-coding-'))
   home = join(dir, 'home')
   workspace = join(dir, 'ws')
@@ -1143,4 +1167,162 @@ test('0052 widens the runtime list and keeps every coding agent row', () => {
     { id: 'c1', runtime: 'codex', confirmed_version: '0.1.0', removed_at: at },
   ])
   old.close()
+})
+
+// The fake CLI logs every start; a version probe has an empty prompt, a launched turn has its prompt.
+const launchedTurns = (prompt: string) => {
+  try {
+    return calls().filter((call) => call.prompt === prompt)
+  } catch {
+    return []
+  }
+}
+const pidAlive = (pid: number) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+test('S2-006: the admitted model reaches the CLI and the run row, even if the default changes while queued', async () => {
+  await addAgent({ model: 'model-a' })
+  await makeRoom()
+  await coding.startRun({ agentId: 'coder', input: '[fixture:slow] hold', turnId: 't-first' })
+  const second = await coding.startRun({
+    agentId: 'coder',
+    input: 'go',
+    turnId: 't-second',
+    model: 'model-b',
+  })
+  expect(
+    (await request('PATCH', '/api/coding-agents/coder', { model: 'model-c' })).statusCode,
+  ).toBe(200)
+  const row = () =>
+    db.sqlite.prepare('SELECT model, status FROM runs WHERE id = ?').get(second.runId) as {
+      model: string
+      status: string
+    }
+  expect(row()).toMatchObject({ model: 'model-b', status: 'queued' })
+  await coding.stopRun({ agentId: 'coder', runId: runs()[0]!.id })
+  await vi.waitFor(() => expect(row().status).toBe('completed'), { timeout: 20_000 })
+  const argv = calls().map((call) => call.args)
+  const flagged = argv.filter((args) => args.includes('--model'))
+  // The first turn ran with the default at its time, the second with what was admitted.
+  expect(flagged.map((args) => args[args.indexOf('--model') + 1])).toEqual(['model-a', 'model-b'])
+  // (The CLI's own init event later reports the model it really used, so the row is checked while queued.)
+})
+
+test('S2-007: Stop while the CLI check is awaited never launches the turn', async () => {
+  await addAgent()
+  const realDetect = coding.locator.detect.bind(coding.locator)
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  let held = false
+  vi.spyOn(coding.locator, 'detect').mockImplementation(async (driver, options) => {
+    // The fresh read right before a launch is the one held.
+    if (options?.fresh && !held) {
+      held = true
+      await gate
+    }
+    return realDetect(driver, options)
+  })
+  const { runId } = await coding.startRun({ agentId: 'coder', input: 'go', turnId: 't-stop-1' })
+  await vi.waitFor(() => expect(held).toBe(true))
+  await coding.stopRun({ agentId: 'coder', runId })
+  release()
+  await vi.waitFor(
+    () =>
+      expect(
+        (db.sqlite.prepare('SELECT status FROM runs WHERE id = ?').get(runId) as { status: string })
+          .status,
+      ).toBe('cancelled'),
+    { timeout: 10_000 },
+  )
+  expect(launches).toBe(0)
+  expect(launchedTurns('go')).toEqual([])
+})
+
+test('S2-007: Stop while the running observation is awaited never launches the turn', async () => {
+  await addAgent()
+  const realSubmit = ingest.submit.bind(ingest)
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  let held = false
+  vi.spyOn(ingest, 'submit').mockImplementation(async (observation) => {
+    if (observation.identity.includes(':running') && !held) {
+      held = true
+      await gate
+    }
+    return realSubmit(observation)
+  })
+  const { runId } = await coding.startRun({ agentId: 'coder', input: 'go', turnId: 't-stop-2' })
+  await vi.waitFor(() => expect(held).toBe(true))
+  await coding.stopRun({ agentId: 'coder', runId })
+  release()
+  await vi.waitFor(
+    () =>
+      expect(
+        (db.sqlite.prepare('SELECT status FROM runs WHERE id = ?').get(runId) as { status: string })
+          .status,
+      ).toBe('cancelled'),
+    { timeout: 10_000 },
+  )
+  expect(launches).toBe(0)
+  expect(launchedTurns('go')).toEqual([])
+})
+
+test('S2-008: a failed terminal save is retried without launching the CLI again', async () => {
+  await addAgent()
+  await makeRoom()
+  const realSubmit = ingest.submit.bind(ingest)
+  let rejected = 0
+  vi.spyOn(ingest, 'submit').mockImplementation(async (observation) => {
+    if (observation.identity.endsWith(':terminal') && rejected < 2) {
+      rejected++
+      throw new Error('database is busy')
+    }
+    return realSubmit(observation)
+  })
+  await say('@coder go')
+  await finished()
+  expect(rejected).toBe(2)
+  expect(launches).toBe(1)
+  expect(runs()[0]).toMatchObject({ status: 'completed' })
+  expect(replies()[0]!.streaming).toBe(false)
+})
+
+test('S2-008: when the terminal save keeps failing the run ends with a plain failure, never a silent success', async () => {
+  await addAgent()
+  await makeRoom()
+  const realSubmit = ingest.submit.bind(ingest)
+  const errors: unknown[] = []
+  ;(coding as unknown as { deps: { onError?: (e: unknown) => void } }).deps.onError = (e) =>
+    errors.push(e)
+  vi.spyOn(ingest, 'submit').mockImplementation(async (observation) => {
+    if (observation.identity.endsWith(':terminal')) throw new Error('database is busy')
+    return realSubmit(observation)
+  })
+  await say('@coder go')
+  await finished()
+  expect(launches).toBe(1)
+  expect(runs()[0]).toMatchObject({ status: 'failed' })
+  expect(runs()[0]!.error).toMatch(/couldn’t save this run’s result/)
+  expect(replies()[0]!.streaming).toBe(false)
+  expect(errors.length).toBeGreaterThan(0)
+})
+
+test('S2-004: when recording the process fails, the child is killed and the run ends visibly', async () => {
+  await addAgent()
+  await makeRoom()
+  // A real database failure: the table the process record goes into is gone.
+  db.sqlite.exec('DROP TABLE coding_processes')
+  await say('@coder [fixture:slow] go')
+  await finished()
+  expect(runs()[0]).toMatchObject({ status: 'failed' })
+  expect(runs()[0]!.error).toMatch(/Could not prepare the run/)
+  expect(spawned).toHaveLength(1)
+  await vi.waitFor(() => expect(pidAlive(spawned[0]!)).toBe(false), { timeout: 10_000 })
+  expect(replies()[0]!.streaming).toBe(false)
 })

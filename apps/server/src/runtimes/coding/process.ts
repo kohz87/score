@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { groupMembers, processStart, procAvailable } from './proc.ts'
 import { CODING_LIMITS, type CodingEvent, type LineParser } from './types.ts'
 
 export type StopReason = 'user' | 'timeout' | 'output_limit' | 'shutdown'
@@ -11,6 +12,13 @@ export interface CliOutcome {
   stderr: string
   /** The process could not be started at all. */
   spawnError: string | null
+  /**
+   * The CLI's own process ended, but tools it started were still running; they were given the grace period and then
+   * stopped (S2-005).
+   */
+  leftovers: boolean
+  /** The whole process group is empty. False only when something survived SIGKILL: the durable record must stay. */
+  groupGone: boolean
   /** Whether the CLI printed any line we understood. */
   sawEvents: boolean
   stats: LineParser['stats']
@@ -32,7 +40,10 @@ export interface SpawnOptions {
   parser: LineParser
   /** Called in order, one at a time; a rejection is the caller's to handle (the run goes on). */
   onEvent(event: CodingEvent): Promise<void>
-  /** Called synchronously right after the spawn, before any output is read (records the process durably). */
+  /**
+   * Called synchronously right after the spawn (records the process durably). Supervision is installed first; if this
+   * throws, the whole group is killed and the error propagates (S2-004).
+   */
   onSpawn?(pid: number): void
   maxMs?: number
   graceMs?: number
@@ -63,21 +74,50 @@ export function spawnCli(options: SpawnOptions): CliRun {
     // Own process group, so Stop reaches the tools the CLI started too.
     detached: true,
   })
-  if (child.pid !== undefined) options.onSpawn?.(child.pid)
+  // A process group id is only ours to signal while we created it and have not seen it empty: once the last member is
+  // gone the kernel may hand the same number to an unrelated group, so `groupEmpty` ends all signalling.
+  let groupEmpty = false
+  let leaderExited = false
+  let leftovers = false
+  const leaderStart = child.pid === undefined ? null : processStart(child.pid)
   const signal = (name: NodeJS.Signals) => {
-    if (child.pid === undefined) return
+    if (child.pid === undefined || groupEmpty) return
     try {
       process.kill(-child.pid, name)
     } catch {
-      try {
-        child.kill(name)
-      } catch {
-        // already gone
+      if (!leaderExited) {
+        try {
+          child.kill(name)
+        } catch {
+          // already gone
+        }
       }
     }
   }
+  const groupAlive = (): boolean => {
+    if (child.pid === undefined || groupEmpty) return false
+    try {
+      process.kill(-child.pid, 0)
+    } catch (error) {
+      // EPERM means a member exists that we can't signal: still there.
+      if ((error as NodeJS.ErrnoException).code !== 'EPERM') {
+        groupEmpty = true
+        return false
+      }
+    }
+    // Zombies waiting for a reaper still answer signal 0: only live members count.
+    if (leaderExited && procAvailable() && leaderStart !== null) {
+      if (groupMembers(child.pid, Number(leaderStart)).length === 0) {
+        groupEmpty = true
+        return false
+      }
+    }
+    return true
+  }
   function stop(reason: StopReason = 'user'): void {
-    if (stopped !== null || child.exitCode !== null || child.signalCode !== null) return
+    if (stopped !== null) return
+    // After the leader has gone Stop still acts, as long as a member of the group lives.
+    if (leaderExited && !groupAlive()) return
     stopped = reason
     signal('SIGINT')
     const term = setTimeout(() => signal('SIGTERM'), graceMs)
@@ -121,48 +161,57 @@ export function spawnCli(options: SpawnOptions): CliRun {
       options.parser.stats.malformed++
     }
   })
+  child.stdout.on('error', () => undefined)
   child.stderr.setEncoding('utf8')
   child.stderr.on('data', (chunk: string) => {
     stderr = (stderr + chunk).slice(-CODING_LIMITS.stderrBytes)
   })
+  child.stderr.on('error', () => undefined)
   // The CLI may exit without reading all of stdin.
   child.stdin.on('error', () => undefined)
   child.stdin.end(options.stdin)
 
-  const groupAlive = (): boolean => {
-    if (child.pid === undefined) return false
-    try {
-      process.kill(-child.pid, 0)
-      return true
-    } catch (error) {
-      // EPERM means a member exists that we can't signal: still there.
-      return (error as NodeJS.ErrnoException).code === 'EPERM'
+  const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
+  // The turn is over when the leader has ended AND nothing of its group is left. A tool that ignores the signals
+  // gets SIGKILL; a leader that ended cleanly while tools run on gets the grace period, then SIGTERM, then SIGKILL.
+  const reapOnce = async (): Promise<boolean> => {
+    if (child.pid === undefined) return true
+    const exitedAt = Date.now()
+    const hardMs = graceMs * 2 + 10_000
+    const deadline = exitedAt + hardMs
+    let terminated = false
+    while (groupAlive()) {
+      const now = Date.now()
+      if (stopped === null && !terminated && now - exitedAt >= graceMs) {
+        leftovers = true
+        terminated = true
+        signal('SIGTERM')
+      }
+      if (now >= exitedAt + graceMs * 2) signal('SIGKILL')
+      if (now >= deadline) return false
+      await pause(25)
     }
+    return true
   }
-  // After a Stop the CLI may exit while a tool it started ignores the signals: keep escalating until the group is empty.
-  const groupGone = async (): Promise<void> => {
-    if (stopped === null) return
-    const deadline = Date.now() + graceMs * 2 + 10_000
-    while (groupAlive() && Date.now() < deadline) {
-      if (Date.now() >= deadline - 10_000) signal('SIGKILL')
-      await new Promise((r) => setTimeout(r, 25))
-    }
-  }
+
+  let reaped: Promise<boolean> | null = null
+  const reapGroup = () => (reaped ??= reapOnce())
 
   const done = new Promise<CliOutcome>((resolve) => {
     let settled = false
-    const finish = (exitCode: number | null, exitSignal: NodeJS.Signals | null) => {
-      if (settled) return
+    let exitCode: number | null = null
+    let exitSignal: NodeJS.Signals | null = null
+    let closed = false
+    const settle = () => {
+      if (settled || !closed || !leaderExited) return
       settled = true
-      for (const timer of timers) clearTimeout(timer)
       if (!skipping && buffered.trim() && Buffer.byteLength(buffered) <= CODING_LIMITS.maxLineBytes)
         handleLine(buffered)
       void queue
-        .then(groupGone)
-        .then(() => {
+        .then(() => reapGroup())
+        .then((gone) => {
+          for (const timer of timers) clearTimeout(timer)
           for (const timer of escalation) clearTimeout(timer)
-        })
-        .then(() =>
           resolve({
             exitCode,
             signal: exitSignal,
@@ -171,14 +220,52 @@ export function spawnCli(options: SpawnOptions): CliRun {
             spawnError,
             sawEvents,
             stats: options.parser.stats,
-          }),
-        )
+            leftovers,
+            groupGone: gone,
+          })
+        })
     }
     child.on('error', (error) => {
       spawnError = (error as NodeJS.ErrnoException).code ?? 'spawn_failed'
-      finish(null, null)
+      leaderExited = true
+      groupEmpty = true
+      closed = true
+      settle()
     })
-    child.on('close', finish)
+    child.on('exit', (code, sig) => {
+      exitCode = code
+      exitSignal = sig
+      leaderExited = true
+      // Output may stay open for good when a descendant holds the pipes: supervise the group now, not at close.
+      void (async () => {
+        const gone = await reapGroup()
+        if (gone) {
+          // Everything is dead, so the pipes close on their own; don't wait for ever if they don't.
+          await pause(1000)
+          if (!closed) {
+            child.stdout.destroy()
+            child.stderr.destroy()
+            closed = true
+            settle()
+          }
+        }
+      })()
+    })
+    child.on('close', () => {
+      closed = true
+      settle()
+    })
   })
+
+  if (child.pid !== undefined && options.onSpawn) {
+    try {
+      options.onSpawn(child.pid)
+    } catch (error) {
+      // Nothing was returned to the caller, so nothing else will ever stop this group: end it here.
+      if (stopped === null) stopped = 'shutdown'
+      signal('SIGKILL')
+      throw error
+    }
+  }
   return { stop, pid: child.pid, done }
 }

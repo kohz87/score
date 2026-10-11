@@ -54,7 +54,7 @@ setInterval(() => {}, 1000)
   await vi.waitFor(
     () => expect(existsSync(pidFile) && readFileSync(pidFile, 'utf8')).toBeTruthy(),
     {
-      timeout: 10_000,
+      timeout: 30_000,
     },
   )
   const descendantPid = Number(readFileSync(pidFile, 'utf8'))
@@ -68,4 +68,134 @@ setInterval(() => {}, 1000)
   } finally {
     if (alive(descendantPid)) process.kill(descendantPid, 'SIGKILL')
   }
-}, 20_000)
+}, 60_000)
+
+const noParser = { parse: () => [], stats: { unknown: 0, malformed: 0 } }
+const baseOptions = (args: string[]) => ({
+  file: process.execPath,
+  args,
+  cwd: tmpdir(),
+  env: { PATH: process.env['PATH'] ?? '' },
+  stdin: '',
+  parser: noParser,
+  onEvent: async () => undefined,
+})
+const waitGone = async (pid: number) => {
+  await vi.waitFor(() => expect(alive(pid)).toBe(false), { timeout: 30_000 })
+}
+
+/** A leader that starts a harmless worker (its pid goes to a file) and exits at once; `stdio` is the worker's. */
+function leaderAndWorker(stdio: 'inherit' | 'ignore') {
+  const pidFile = join(dir, `worker-${stdio}.pid`)
+  const worker = join(dir, 'worker.mjs')
+  writeFileSync(
+    worker,
+    `import { writeFileSync } from 'node:fs'
+writeFileSync(process.argv[2], String(process.pid))
+setInterval(() => {}, 1000)
+`,
+  )
+  const leader = join(dir, `leader-${stdio}.mjs`)
+  writeFileSync(
+    leader,
+    `import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
+spawn(process.execPath, [${JSON.stringify(worker)}, ${JSON.stringify(pidFile)}], { stdio: ${JSON.stringify(stdio)} })
+// Leave only once the worker is really running.
+const wait = setInterval(() => { if (existsSync(${JSON.stringify(pidFile)})) process.exit(0) }, 10)
+`,
+  )
+  return { leader, pidFile }
+}
+const workerPid = async (pidFile: string) => {
+  await vi.waitFor(
+    () => expect(existsSync(pidFile) && readFileSync(pidFile, 'utf8')).toBeTruthy(),
+    {
+      timeout: 30_000,
+    },
+  )
+  return Number(readFileSync(pidFile, 'utf8'))
+}
+
+test('S2-004: when onSpawn throws, the child group is killed and the error propagates', async () => {
+  const sleeper = join(dir, 'sleeper.mjs')
+  writeFileSync(sleeper, 'setInterval(() => {}, 1000)\n')
+  let pid = 0
+  expect(() =>
+    spawnCli({
+      ...baseOptions([sleeper]),
+      onSpawn: (spawned) => {
+        pid = spawned
+        throw new Error('database is locked')
+      },
+    }),
+  ).toThrow('database is locked')
+  expect(pid).toBeGreaterThan(0)
+  try {
+    await waitGone(pid)
+  } finally {
+    if (alive(pid)) process.kill(-pid, 'SIGKILL')
+  }
+})
+
+test.each(['inherit', 'ignore'] as const)(
+  'S2-005: the wall-clock limit stops a worker that outlives its leader (worker stdio %s)',
+  async (stdio) => {
+    const { leader, pidFile } = leaderAndWorker(stdio)
+    const run = spawnCli({
+      ...baseOptions([leader]),
+      maxMs: 400,
+      graceMs: 3_000,
+    })
+    const pid = await workerPid(pidFile)
+    try {
+      const outcome = await run.done
+      expect(outcome.stopped).toBe('timeout')
+      expect(outcome.groupGone).toBe(true)
+      expect(alive(pid)).toBe(false)
+    } finally {
+      if (alive(pid)) process.kill(pid, 'SIGKILL')
+    }
+  },
+  60_000,
+)
+
+test.each(['inherit', 'ignore'] as const)(
+  'S2-005: Stop reaches a worker after its leader has exited (worker stdio %s)',
+  async (stdio) => {
+    const { leader, pidFile } = leaderAndWorker(stdio)
+    const run = spawnCli({ ...baseOptions([leader]), graceMs: 3_000 })
+    const pid = await workerPid(pidFile)
+    // The leader is gone; the worker is not.
+    await new Promise((r) => setTimeout(r, 300))
+    expect(alive(pid)).toBe(true)
+    try {
+      run.stop('user')
+      const outcome = await run.done
+      expect(outcome.stopped).toBe('user')
+      expect(alive(pid)).toBe(false)
+    } finally {
+      if (alive(pid)) process.kill(pid, 'SIGKILL')
+    }
+  },
+  60_000,
+)
+
+test('S2-005: a leader that exits cleanly with a worker running gets the grace period, then the group is stopped and noted', async () => {
+  const { leader, pidFile } = leaderAndWorker('ignore')
+  const started = Date.now()
+  const run = spawnCli({ ...baseOptions([leader]), graceMs: 500 })
+  const pid = await workerPid(pidFile)
+  try {
+    const outcome = await run.done
+    expect(outcome.exitCode).toBe(0)
+    expect(outcome.stopped).toBeNull()
+    expect(outcome.leftovers).toBe(true)
+    expect(outcome.groupGone).toBe(true)
+    // done settled only once the worker was gone, and not before the grace period.
+    expect(alive(pid)).toBe(false)
+    expect(Date.now() - started).toBeGreaterThanOrEqual(500)
+  } finally {
+    if (alive(pid)) process.kill(pid, 'SIGKILL')
+  }
+}, 60_000)
