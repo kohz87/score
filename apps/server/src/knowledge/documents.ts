@@ -546,7 +546,7 @@ export class KnowledgeDocuments {
       await this.vault.commitOutside()
       const row = this.db.read((sqlite) => this.row(sqlite, from))
       const abs = await this.vault.prepareParent(to)
-      await fs.rename(source.abs, abs)
+      await this.vault.moveNoReplace(source.abs, abs)
       if (row === undefined || row.versioned === 1)
         await this.vault.commitPaths([from, to], `Move ${from} to ${to}`, author)
       this.db.tx((sqlite) => {

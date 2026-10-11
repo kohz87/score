@@ -284,12 +284,39 @@ export class KnowledgeVault {
             etag: now === null ? null : etagOf(now),
           })
       }
-      await fs.rename(temp, abs)
+      if (expect?.hash === null) await this.moveNoReplace(temp, abs)
+      else await fs.rename(temp, abs)
       await this.assertParent(parent)
     } catch (error) {
       await fs.rm(temp, { force: true })
       throw error
     }
+  }
+
+  /**
+   * Moves `source` to `dest`, failing with 409 instead of replacing anything that appears there: the file is
+   * hard-linked (which never replaces) and only then is the old name removed. Where hard links are unsupported
+   * it falls back to a check followed by a rename.
+   */
+  async moveNoReplace(source: string, dest: string): Promise<void> {
+    try {
+      await fs.link(source, dest)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'EEXIST')
+        throw new HttpError(409, 'exists', 'A file with that name already exists')
+      if (code !== 'EPERM' && code !== 'ENOSYS' && code !== 'EOPNOTSUPP') throw error
+      if (
+        await fs.lstat(dest).then(
+          () => true,
+          () => false,
+        )
+      )
+        throw new HttpError(409, 'exists', 'A file with that name already exists')
+      await fs.rename(source, dest)
+      return
+    }
+    await fs.unlink(source)
   }
 
   /**
@@ -878,7 +905,7 @@ export class KnowledgeVault {
         plan.push({ now: old === from ? to : old, content })
       }
       const abs = await this.prepareParent(to)
-      await fs.rename(source.abs, abs)
+      await this.moveNoReplace(source.abs, abs)
       await this.assertParent(path.dirname(abs))
       // The rename gets a commit of its own: with the link edits in the same commit a short note can look like a
       // delete plus a create to git, and its earlier versions would no longer be found.
