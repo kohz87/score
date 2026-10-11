@@ -1,3 +1,4 @@
+import { assertHermesOnly } from '../domain/orchestration/supported-agents.ts'
 import {
   AbandonDecisionSchema,
   GateDecisionSchema,
@@ -73,11 +74,13 @@ export function registerWorkflowRoutes(
   })
   app.post('/api/workflows', mutation, async (request, reply) => {
     const body = WorkflowCreateSchema.parse(request.body)
+    assertHermesOnly(agentIdsInDefinition(body.definition), await deps.port.listAgents())
     return reply.code(201).send(db.tx((sqlite) => createWorkflow(sqlite, body.definition, now())))
   })
   app.post('/api/workflows/:id/versions', mutation, async (request, reply) => {
     const { id } = IdParams.parse(request.params)
     const body = WorkflowVersionCreateSchema.parse(request.body)
+    assertHermesOnly(agentIdsInDefinition(body.definition), await deps.port.listAgents())
     return reply
       .code(201)
       .send(db.tx((sqlite) => addVersion(sqlite, id, body.baseVersion, body.definition, now())))
@@ -170,3 +173,8 @@ export function registerWorkflowRoutes(
     return orchestrator.wfTryAgain(id, nodeId, WorkflowTryAgainDecisionSchema.parse(request.body))
   })
 }
+
+const agentIdsInDefinition = (definition: {
+  nodes: { kind: string; agentId?: string }[]
+}): string[] =>
+  definition.nodes.flatMap((node) => (node.kind === 'agent' && node.agentId ? [node.agentId] : []))

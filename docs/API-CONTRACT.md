@@ -1557,6 +1557,9 @@ Controls and accounting cover observed, Score-started work only.
 
 ### Browser API
 
+- **Hermes agents only (interim, until PLAN 7.7).** Preflight, create (orchestrations) and workflow save/start answer `422
+  unsupported_agent` when the lead or a step agent is a coding agent ("Coding agents can’t take orchestration or workflow
+  steps yet …"). PLAN 7.7 lifts this.
 - `GET /api/orchestrations/preflight?leadAgentId=&allowedAgents=a,b` → `Preflight` (`checks[]`: listener, lead ready, lead
   MCP access, lead MCP token, allowed agents, global fence, journal, capacity, quota, tool readiness (`unknown`: Hermes loads
   MCP tools per session, which Score cannot see), plus `gatePolicyNotes`, the acknowledgement text and the defaults).
@@ -1802,7 +1805,8 @@ message }`; only `error`s block. Codes: limits (`too_many_nodes`, `too_many_edge
 - **H** `POST /api/workflows` `WorkflowCreate` → `201 WorkflowVersion` (version 1). **H** `POST /api/workflows/:id/versions`
   `WorkflowVersionCreate { baseVersion, definition }` → `201 WorkflowVersion`; `baseVersion` must be the latest (`409
   conflict`, `details.latestVersion`). An invalid definition → `422 invalid_definition` `{ result: ValidationResult }`; limits
-  (200 definitions, 20 versions each) → `409 quota_exhausted`.
+  (200 definitions, 20 versions each) → `409 quota_exhausted`; an agent node that is a coding agent → `422 unsupported_agent`
+  (also on `POST /api/workflow-runs` and its preflight).
 - **H** `DELETE /api/workflows/:id` → `204`; `409 workflow_used` when any run ever used a version.
 - `POST /api/workflows/:id/versions/:version/export` `WorkflowExportRequest` → `WorkflowExport` (format
   `score.workflow/1`): every free-text field passes `redact()`, `changes` lists every difference, `removePaths` drops fields

@@ -31,7 +31,7 @@ export function isSameProcess(pid: number, startTime: string | null): boolean {
 }
 
 /** Live processes of group `pgid` that started no earlier than `since` ticks (the leader's own start). */
-function groupMembers(pgid: number, since: number): number[] {
+export function groupMembers(pgid: number, since: number): number[] {
   const members: number[] = []
   let names: string[]
   try {
