@@ -398,7 +398,7 @@ export class KnowledgeDocuments {
     const finalPath = [...dir, cls.name].join('/')
     if (cls.kind === 'note') {
       if (bytes.length > MAX_NOTE_BYTES)
-        throw new HttpError(413, 'payload_too_large', 'Notes can be at most 2 MiB')
+        throw new HttpError(413, 'payload_too_large', 'Notes can be at most 8 MiB')
       if (!isPlainText(bytes))
         throw new HttpError(415, 'unsupported_type', 'That file is not plain text')
       return { kind: 'note', path: finalPath, bytes }

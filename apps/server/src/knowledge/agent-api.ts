@@ -4,6 +4,7 @@ import type { ScoreDb } from '../db/index.ts'
 import { HttpError } from '../errors.ts'
 import { redact } from '../redact.ts'
 import { isDocumentPath } from './doc-types.ts'
+import { hasNoteImages, restoreImages, withPlaceholders } from './note-images.ts'
 import type { KnowledgeVault } from './vault.ts'
 
 export const AGENT_WRITE_BYTES = 256 * 1024
@@ -121,6 +122,16 @@ export class KnowledgeAgentApi {
       )
   }
 
+  /** Agents may not add images: they are large, and an agent cannot see them anyway. */
+  private refuseImages(text: string): void {
+    if (hasNoteImages(text))
+      throw new HttpError(
+        400,
+        'images_not_allowed',
+        'Agents cannot add embedded images to a note. Keep the [image: ...] placeholders as they are, or leave them out.',
+      )
+  }
+
   search(agentId: string, query: string, limit: number): { items: KnowledgeSearchHit[] } {
     this.gate(agentId)
     return { items: this.vault.search(query, Math.min(limit, 20)).slice(0, AGENT_LIST_ITEMS) }
@@ -143,7 +154,8 @@ export class KnowledgeAgentApi {
       }
     }
     const note = await this.vault.readNote(path)
-    let body = note.body
+    // Agents see `[image: alt, 240 KB]`, never the base64 (PLAN 6.8).
+    let body = withPlaceholders(note.body)
     let truncated = false
     if (Buffer.byteLength(body) > AGENT_READ_BYTES) {
       // Cut on a character boundary: decoding a byte slice drops the partial trailing sequence.
@@ -195,13 +207,14 @@ export class KnowledgeAgentApi {
   async write(agentId: string, path: string, body: string, expectedEtag: string | null) {
     this.gate(agentId)
     this.checkSize(body)
+    this.refuseImages(body)
     const release = this.reserve(agentId)
     try {
-      return await this.vault.writeNote(
-        path,
-        { body: redact(body), etag: expectedEtag },
-        { agentId },
-      )
+      // Placeholders the agent kept stand for the images it read; they go back in (the etag check still applies).
+      const current =
+        expectedEtag === null ? null : await this.vault.readNote(path).catch(() => null)
+      const text = current ? restoreImages(redact(body), current.body) : redact(body)
+      return await this.vault.writeNote(path, { body: text, etag: expectedEtag }, { agentId })
     } catch (error) {
       release()
       throw await this.conflict(error, path)
@@ -211,6 +224,7 @@ export class KnowledgeAgentApi {
   async append(agentId: string, path: string, text: string) {
     this.gate(agentId)
     this.checkSize(text)
+    this.refuseImages(text)
     const release = this.reserve(agentId)
     const addition = redact(text)
     try {

@@ -1231,7 +1231,7 @@ tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
   is overwritten), and a save whose note changed on disk meanwhile gets `412` with the new etag. Agent `write`/`append`
   from an observe-only producer (`isolation: 'unknown'`) → `403 observe_only`.
 - **H** `POST /api/knowledge/move` `{ from; to; updateLinks }` → `{ path; updatedNotes }` (two commits: the pure rename, then the link edits, so
-  git follows the file; `409 exists`; `413` and nothing moved when a link rewrite would push a note over 2 MiB; links added
+  git follows the file; `409 exists`; `413` and nothing moved when a link rewrite would push a note over 8 MiB; links added
   outside Score since the last scan are included).
 - **H** `DELETE /api/knowledge/notes/*path` → `204` (owner only; agents have no delete).
 - `GET /api/knowledge/search?q=&limit=` (limit ≤ 50, default 20) → `{ items: { path; title; snippet }[] }`: FTS5-ranked;
@@ -1296,8 +1296,22 @@ the bytes (magic numbers), never the extension or declared type alone. Names: no
   anything is sent (`413 export_too_large`, `details: { files; bytes }`); an empty selection -> `400 bad_request`. Files are
   streamed from disk (bounded memory) and a file that changes while it is read is still sent as read; the export aborts
   after 10 minutes. Agents get no export tool.
+**Editor and embedded images (PLAN 6.8).** A note opens in one live editor (formatted everywhere, raw Markdown only on the
+active line; a Source toggle shows plain Markdown). No new endpoints; the note rules change:
+- A note may be **8 MiB** (was 2 MiB; `KNOWLEDGE_NOTE_MAX_BYTES`), for `PUT`, uploads of `.md`, restore and move rewrites.
+- Images live inside the note as `![alt](data:image/<type>;base64,...)`, made in the browser (downscaled to 1600 px on the
+  longest side). On every write the server checks each such image outside code: type `png`, `jpeg`, `gif` or `webp` (SVG and
+  any other type -> `415 unsupported_type`), well-formed base64, decoded size <= 1.5 MiB (`413 payload_too_large`), and
+  magic bytes that match the declared type (`415 unsupported_type`). Export keeps the bytes as stored.
+- Agents never see the base64: `knowledge_read` (bridge and MCP `knowledge.read`) replaces each embedded image with
+  `[image: <alt>, <size>]` (e.g. `[image: diagram, 240 KB]`); the 256 KiB read cut applies after that. FTS indexing and
+  snippets skip data URIs. `knowledge_write` and `knowledge_append` refuse a body that contains an embedded image
+  (`400 images_not_allowed`); on `knowledge_write` over an existing note, a placeholder the agent kept (same text, in order) is
+  turned back into the original image, so an edit by an agent does not delete the images it could not see; a placeholder it
+  removed deletes that image.
+- The web CSP already allows `img-src data:`; scripts and objects from data URIs stay blocked.
 - Errors: path outside the vault, `..`, NUL, absolute, `.git` → `400 bad_path`; not a `.md` note where one is needed →
-  `400 not_a_note`; too large (note > 2 MiB) → `413 payload_too_large`; missing → `404 not_found`.
+  `400 not_a_note`; too large (note > 8 MiB) → `413 payload_too_large`; missing → `404 not_found`.
 
 ## 11. Internal: bridge plugin ↔ server (not for the front end)
 

@@ -183,15 +183,15 @@ describe('writes', () => {
     })
   })
 
-  test('validation and size: bad bodies 400, a note over 2 MiB 413, near 2 MiB works', async () => {
+  test('validation and size: bad bodies 400, a note over 8 MiB 413, near 8 MiB works', async () => {
     expect((await call('PUT', `${N}a.md`, { body: 1, etag: null })).statusCode).toBe(400)
     expect((await call('PUT', `${N}a.md`, { body: 'x' })).statusCode).toBe(400)
     const big = await call('PUT', `${N}big.md`, {
-      body: 'a'.repeat(2 * 1024 * 1024 + 1),
+      body: 'a'.repeat(8 * 1024 * 1024 + 1),
       etag: null,
     })
     expect(big.statusCode).toBe(413)
-    const ok = await call('PUT', `${N}ok.md`, { body: 'a'.repeat(2 * 1024 * 1024), etag: null })
+    const ok = await call('PUT', `${N}ok.md`, { body: 'a'.repeat(8 * 1024 * 1024), etag: null })
     expect(ok.statusCode).toBe(200)
     expect((await call('PUT', `${N}..%2Fx.md`, { body: 'x', etag: null })).statusCode).toBe(400)
     expect((await call('PUT', `${N}x.txt`, { body: 'x', etag: null })).json()).toMatchObject({

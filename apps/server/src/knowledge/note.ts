@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import matter from 'gray-matter'
-import type { KnowledgeAuthor } from '@score/contract'
+import { KNOWLEDGE_NOTE_MAX_BYTES, type KnowledgeAuthor } from '@score/contract'
 import { HttpError } from '../errors.ts'
 import { parseRelativePath } from '../workspace/policy.ts'
 import { codeRanges } from './links.ts'
 
-export const MAX_NOTE_BYTES = 2 * 1024 * 1024
+export const MAX_NOTE_BYTES = KNOWLEDGE_NOTE_MAX_BYTES
 
 // Path rules (contract §12, design 6.0 review item 1): POSIX, relative to the vault, no `..`, NUL or absolute
 // paths, nothing under `.git`; notes end in `.md`; attachments live under `attachments/`.
