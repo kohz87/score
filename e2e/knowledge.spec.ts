@@ -195,7 +195,7 @@ test('the toolbar formats text, and a table inserted from the size grid survives
     body: string
   }
   expect(saved.body).toContain('| Item | Qty | Column 3 |\n| --- | --- | --- |')
-  expect(saved.body.match(/^\|  \|  \|  \|$/gm)).toHaveLength(3)
+  expect(saved.body.match(/^\|\s{2}\|\s{2}\|\s{2}\|$/gm)).toHaveLength(3)
 
   await page.reload()
   await expect(editor(page, path)).toBeVisible()

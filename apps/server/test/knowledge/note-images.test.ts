@@ -70,7 +70,10 @@ describe('embedded images in notes', () => {
   })
 
   test('search skips the base64: snippets and indexed text never contain it', async () => {
-    await h.vault.writeNote('s.md', { body: `# Diagram\n\nwhiteboard ${png('sketch')}\n`, etag: null })
+    await h.vault.writeNote('s.md', {
+      body: `# Diagram\n\nwhiteboard ${png('sketch')}\n`,
+      etag: null,
+    })
     const hits = h.vault.search('whiteboard', 5)
     expect(hits).toHaveLength(1)
     expect(hits[0]!.snippet).not.toContain('base64')
