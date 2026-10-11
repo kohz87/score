@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { gitOut, makeVault, type Harness } from './helpers.ts'
+import { makeVault, type Harness } from './helpers.ts'
 
 let h: Harness
 afterEach(async () => {
@@ -76,7 +76,6 @@ describe('SCORE-002 no-replace publication', () => {
     expect(fired()).toBe(true)
     expect(read('a.csv')).toBe('x,y\n1,2')
     expect(read('b.csv')).toBe('concurrent')
-    void gitOut
   })
 })
 
@@ -100,5 +99,49 @@ describe('SCORE-003 link rewriting keeps outside edits', () => {
     expect(read('c.md')).toBe('also [[z]]')
     expect(result.updatedNotes).toBe(1)
     expect(fs.existsSync(path.join(h.vaultDir, 'z.md'))).toBe(true)
+  })
+})
+
+describe('SCORE-034 a failed multi-file move resumes', () => {
+  test('a failed second backlink write is finished on restart, keeping unrelated outside edits', async () => {
+    const files = {
+      'a.md': 'target',
+      'b.md': 'one [[a]]',
+      'c.md': 'two [[a]]',
+      'd.md': 'three [[a]]',
+    }
+    h = await makeVault({ files })
+    const real = h.vault.atomicWrite.bind(h.vault)
+    let writes = 0
+    vi.spyOn(h.vault, 'atomicWrite').mockImplementation(async (...args) => {
+      if (String(args[0]).endsWith('.md') && ++writes === 2) throw new Error('disk trouble')
+      return real(...args)
+    })
+    await expect(h.vault.moveNote('a.md', 'z.md', true)).rejects.toMatchObject({
+      code: 'move_incomplete',
+    })
+    vi.restoreAllMocks()
+    expect(read('z.md')).toBe('target')
+    const rewritten = ['b.md', 'c.md', 'd.md'].filter((name) => read(name).includes('[[z]]'))
+    expect(rewritten).toHaveLength(1)
+    // An unrelated outside edit to one of the pending notes while Score is down.
+    const pending = ['b.md', 'c.md', 'd.md'].filter((name) => !rewritten.includes(name))
+    fs.writeFileSync(path.join(h.vaultDir, pending[0]!), 'my own edit')
+    // Restart: a new vault object on the same files and database.
+    await h.vault.close()
+    const { KnowledgeVault } = await import('../../src/knowledge/vault.ts')
+    const second = new KnowledgeVault({
+      watch: false,
+      vault: h.vaultDir,
+      db: h.db,
+      emit: () => undefined,
+    })
+    await second.start()
+    expect(read(pending[0]!)).toBe('my own edit')
+    expect(read(pending[1]!)).toContain('[[z]]')
+    expect(read(pending[1]!)).not.toContain('[[a]]')
+    expect(fs.existsSync(path.join(h.vaultDir, '.git', 'score-move-plan.json'))).toBe(false)
+    expect((await second.readNote('z.md')).backlinks.map((item) => item.path)).toContain(pending[1])
+    await second.close()
   })
 })

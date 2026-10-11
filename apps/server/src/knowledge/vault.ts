@@ -14,6 +14,7 @@ import type {
   KnowledgeTree,
   KnowledgeWriteRequest,
 } from '@score/contract'
+import { KnowledgeAuthorSchema } from '@score/contract'
 import type { ScoreDb } from '../db/index.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import { HttpError } from '../errors.ts'
@@ -78,6 +79,23 @@ const LinkRowSchema = z.object({
   to_target: z.string(),
   to_path: z.string().nullable(),
 })
+
+const MovePlanSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  author: KnowledgeAuthorSchema,
+  items: z.array(
+    z.object({
+      path: z.string(),
+      baseHash: z.string(),
+      newHash: z.string(),
+      content: z.string(),
+      done: z.boolean(),
+      skipped: z.boolean(),
+    }),
+  ),
+})
+type MovePlan = z.infer<typeof MovePlanSchema>
 
 const MAX_FILES = 100_000
 const MAX_DEPTH = 32
@@ -149,6 +167,7 @@ export class KnowledgeVault {
       .catch(() => false)
     await this.git.init(hasGitDir)
     await this.serial(async () => {
+      await this.recoverMove()
       const entries = (await fs.readdir(this.root)).filter((name) => name !== '.git')
       const fresh = entries.length === 0
       if (fresh) {
@@ -867,6 +886,7 @@ export class KnowledgeVault {
     const from = parseNotePath(fromInput)
     const to = parseNotePath(toInput)
     return this.serial(async () => {
+      await this.recoverMove()
       const source = await this.lookup(from.split('/'))
       if (!source.stat?.isFile()) throw new HttpError(404, 'not_found', 'Unknown note')
       if (from === to) throw new HttpError(409, 'exists', 'A note with that name already exists')
@@ -906,39 +926,148 @@ export class KnowledgeVault {
         plan.push({ now: old === from ? to : old, content, baseHash: hashContent(raw) })
       }
       const abs = await this.prepareParent(to)
-      await this.moveNoReplace(source.abs, abs)
-      await this.assertParent(path.dirname(abs))
+      const movePlan: MovePlan = {
+        from,
+        to,
+        author,
+        items: plan.map((item) => ({
+          path: item.now,
+          baseHash: item.baseHash,
+          newHash: hashContent(item.content),
+          content: item.content,
+          done: false,
+          skipped: false,
+        })),
+      }
+      // Written before anything moves: if Score stops half way, the next start finishes (or drops) the rewrites.
+      await this.savePlan(movePlan)
+      try {
+        await this.moveNoReplace(source.abs, abs)
+        await this.assertParent(path.dirname(abs))
+      } catch (error) {
+        await this.clearPlan()
+        throw error
+      }
       // The rename gets a commit of its own: with the link edits in the same commit a short note can look like a
       // delete plus a create to git, and its earlier versions would no longer be found.
       await this.commit([from, to], `Move ${from} to ${to}`, author)
-      const rewritten: string[] = []
-      for (const item of plan) {
-        const file = await this.lookup(item.now.split('/'))
-        try {
-          // Only the version that was planned may be replaced: a note edited since keeps its edit.
-          await this.atomicWrite(file.abs, item.content, { hash: item.baseHash })
-        } catch (error) {
-          if (error instanceof HttpError && error.status === 412) {
-            this.options.log?.warn(
-              { path: item.now },
-              'A note changed while its links were being updated; its links were left as they are',
-            )
-            continue
-          }
-          throw error
-        }
-        rewritten.push(item.now)
-      }
-      if (rewritten.length > 0)
-        await this.commit([...new Set(rewritten)], `Update links after moving ${from}`, author)
-      this.options.db.tx((sqlite) => this.remove(sqlite, from))
-      await this.indexFile(to, author)
-      for (const rel of rewritten) if (rel !== to) await this.indexFile(rel, author)
-      await this.publish({ path: from, kind: 'moved', to, by: author })
-      for (const rel of rewritten)
-        if (rel !== to) await this.publish({ path: rel, kind: 'written', to: null, by: author })
-      return { path: to, updatedNotes: rewritten.filter((rel) => rel !== to).length }
+      return { path: to, updatedNotes: await this.finishMove(movePlan) }
     })
+  }
+
+  // ---- move plan (roll-forward recovery) ---------------------------------------------------------------------
+
+  /** Inside `.git`, so it is never swept into a commit or walked as a note. Null when the vault has no `.git`. */
+  private planFile(): string {
+    return path.join(this.root, '.git', 'score-move-plan.json')
+  }
+
+  private async savePlan(plan: MovePlan): Promise<void> {
+    const file = this.planFile()
+    const temp = `${file}.${randomUUID()}.tmp`
+    try {
+      await fs.writeFile(temp, JSON.stringify(plan), { mode: 0o600 })
+      await fs.rename(temp, file)
+    } catch (error) {
+      await fs.rm(temp, { force: true })
+      // Without a `.git` folder (git unavailable) there is nowhere to keep the plan; the move still proceeds.
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+  }
+
+  private async clearPlan(): Promise<void> {
+    await fs.rm(this.planFile(), { force: true })
+  }
+
+  /** Writes one planned rewrite if the note is still the planned version. */
+  private async applyMoveItem(item: MovePlan['items'][number]): Promise<'written' | 'conflict'> {
+    const file = await this.lookup(item.path.split('/'))
+    const current = file.stat?.isFile()
+      ? await this.readContained(file.abs).then(hashContent, () => null)
+      : null
+    if (current === item.newHash) return 'written'
+    if (current !== item.baseHash) return 'conflict'
+    try {
+      await this.atomicWrite(file.abs, item.content, { hash: item.baseHash })
+    } catch (error) {
+      if (error instanceof HttpError && error.status === 412) return 'conflict'
+      throw error
+    }
+    return 'written'
+  }
+
+  /**
+   * The part of a move after the rename: applies the planned link rewrites (a note edited since is left alone),
+   * commits, indexes and announces. A failure keeps the plan on disk for `recoverMove`.
+   */
+  private async finishMove(plan: MovePlan): Promise<number> {
+    const { from, to, author } = plan
+    let failure: unknown
+    try {
+      for (const item of plan.items) {
+        if (item.done) continue
+        if ((await this.applyMoveItem(item)) === 'conflict') {
+          this.options.log?.warn(
+            { path: item.path },
+            'A note changed while its links were being updated; its links were left as they are',
+          )
+          item.skipped = true
+        }
+        item.done = true
+        await this.savePlan(plan)
+      }
+    } catch (error) {
+      failure = error
+    }
+    const rewritten = plan.items
+      .filter((item) => item.done && !item.skipped)
+      .map((item) => item.path)
+    if (rewritten.length > 0)
+      await this.commit([...new Set(rewritten)], `Update links after moving ${from}`, author)
+    this.options.db.tx((sqlite) => this.remove(sqlite, from))
+    await this.indexFile(to, author)
+    for (const rel of rewritten) if (rel !== to) await this.indexFile(rel, author)
+    await this.publish({ path: from, kind: 'moved', to, by: author })
+    for (const rel of rewritten)
+      if (rel !== to) await this.publish({ path: rel, kind: 'written', to: null, by: author })
+    if (failure !== undefined) {
+      this.options.log?.warn({ err: failure }, 'Updating links after a move failed; it will resume')
+      throw new HttpError(
+        500,
+        'move_incomplete',
+        `The note was moved, but some links in other notes could not be updated yet. Score finishes this on its next start or move.`,
+      )
+    }
+    await this.clearPlan()
+    return rewritten.filter((rel) => rel !== to).length
+  }
+
+  /** Finishes a move that was interrupted after its plan was saved (caller holds the lock). */
+  private async recoverMove(): Promise<void> {
+    let plan: MovePlan
+    try {
+      plan = MovePlanSchema.parse(JSON.parse(await fs.readFile(this.planFile(), 'utf8')))
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+      this.options.log?.warn({ err: error }, 'Ignored an unreadable move plan')
+      await this.clearPlan()
+      return
+    }
+    const source = await this.lookup(plan.from.split('/'))
+    const target = await this.lookup(plan.to.split('/'))
+    if (source.stat && target.stat) {
+      // Linked but not yet unlinked: the same file under both names finishes the move; anything else is not ours.
+      if (source.stat.ino !== target.stat.ino || source.stat.dev !== target.stat.dev) {
+        await this.clearPlan()
+        return
+      }
+      await fs.unlink(source.abs)
+    } else if (!target.stat) {
+      await this.clearPlan() // the move never happened
+      return
+    }
+    await this.commit([plan.from, plan.to], `Move ${plan.from} to ${plan.to}`, plan.author)
+    await this.finishMove(plan)
   }
 
   /** A new, empty folder (git does not track empty folders; the tree lists it from the disk). */
