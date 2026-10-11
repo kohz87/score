@@ -284,36 +284,14 @@
 .kn-editor-host {
   min-height: 300px;
 }
-
-/* Preview */
-.kn-preview {
-  font-size: 15px;
-  line-height: 1.65;
-  overflow-wrap: anywhere;
-}
-.kn-preview h1,
-.kn-preview h2,
-.kn-preview h3 {
-  letter-spacing: -0.02em;
-}
-.kn-preview a,
 .kn-side a {
   color: var(--ink);
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
-.kn-wikilink.is-missing,
 .kn-missing {
   color: var(--agent-coral-text);
   text-decoration: underline dashed;
-}
-.kn-wikilink.is-missing button {
-  height: 24px;
-  margin-left: 4px;
-}
-.kn-missing-tag {
-  font-size: 12px;
-  color: var(--muted);
 }
 
 /* Side panels */
@@ -501,147 +479,20 @@
   text-underline-offset: 3px;
 }
 
-/* Rendered notes (PLAN 6.5): the Chat Markdown styles (.chat-md) plus what notes need that replies do not. */
-.kn-preview.chat-md {
-  font-size: 15px;
-  line-height: 1.65;
-}
-.kn-preview.chat-md h1 {
-  font-size: 28px;
-}
-.kn-preview.chat-md h2 {
-  font-size: 22px;
-}
-.kn-preview.chat-md h3 {
-  font-size: 18px;
-}
-.kn-preview ul,
-.kn-preview ol {
-  list-style: revert;
-  padding-left: 24px;
-}
-.kn-preview li > ul,
-.kn-preview li > ol {
-  margin-bottom: 0;
-}
-.kn-preview ul.contains-task-list {
-  list-style: none;
-  padding-left: 4px;
-}
-.kn-preview li.task-list-item input {
-  margin: 0 8px 0 0;
-  accent-color: var(--ink);
-  vertical-align: middle;
-}
-.kn-preview hr {
-  border: 0;
-  border-top: 1px solid var(--hairline);
-  margin: 18px 0;
-}
-.kn-preview.chat-md blockquote {
-  border-left-width: 3px;
-  font-style: italic;
-}
-.kn-preview .chat-md-table {
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-14);
-}
-.kn-preview .chat-md-table:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
-}
-.kn-preview .chat-md-table table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.kn-preview .chat-md-table th,
-.kn-preview .chat-md-table td {
-  border: 0;
-  border-bottom: 1px solid var(--hairline);
-  padding: 8px 12px;
-}
-.kn-preview .chat-md-table tr:last-child td {
-  border-bottom: 0;
-}
-.kn-preview .chat-md-table th {
-  font-weight: 600;
-  background: var(--subtle);
-}
-.kn-preview .chat-md-table tbody tr:nth-child(even) td {
-  background: var(--subtle);
-}
-
-/* Callouts: > [!note] Title */
-.kn-callout {
-  --callout-tint: var(--agent-violet-tint);
-  --callout-ink: var(--agent-violet-text);
-  margin: 0 0 12px;
-  padding: 10px 14px;
-  border-radius: var(--radius-14);
-  background: var(--callout-tint);
-  border-left: 4px solid var(--callout-ink);
-}
-.kn-callout-tip {
-  --callout-tint: var(--agent-jade-tint);
-  --callout-ink: var(--agent-jade-text);
-}
-.kn-callout-warn {
-  --callout-tint: var(--agent-saffron-tint);
-  --callout-ink: var(--agent-saffron-text);
-}
-.kn-callout-danger {
-  --callout-tint: var(--agent-coral-tint);
-  --callout-ink: var(--agent-coral-text);
-}
-.kn-preview .kn-callout > p:not(.kn-callout-title) {
-  margin: 0;
-}
-.kn-preview .kn-callout-title {
-  margin: 0 0 4px;
-  font-weight: 700;
-  color: var(--callout-ink);
-}
-
-/* Split view */
-.kn-split {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-}
-.kn-split > .kn-edit-area {
-  height: min(72vh, 760px);
-  min-height: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.kn-split .kn-editor-host {
-  flex: 1;
-  min-height: 0;
-}
-.kn-split .kn-editor-host .cm-editor {
-  height: 100%;
-}
-.kn-split .kn-editor-host .cm-scroller {
-  overflow: auto;
-}
-.kn-split .kn-preview {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
-.kn-note:has(.kn-split) {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 /* Live preview editor (PLAN 6.5): prose in the body font, code in the code font; markup shows on the cursor's line. */
-.kn-editor-host .cm-editor .cm-content {
+.kn-editor-host .cm-editor:not(.cm-source) .cm-content {
   font-family: var(--font-body);
   font-size: 15px;
   line-height: 1.65;
 }
-.kn-editor-host .cm-editor .cm-scroller {
+.kn-editor-host .cm-editor:not(.cm-source) .cm-scroller {
   font-family: var(--font-body);
+}
+/* Source mode (PLAN 6.8): plain Markdown in the code font. */
+.kn-editor-host .cm-editor.cm-source .cm-content,
+.kn-editor-host .cm-editor.cm-source .cm-scroller {
+  font-family: var(--font-code);
+  font-size: 13.5px;
 }
 .cm-lp-h {
   font-family: var(--font-heading);
@@ -841,15 +692,6 @@
   background: var(--subtle-2);
   border-radius: 6px;
   padding: 1px 4px;
-}
-.kn-preview.chat-md h1 {
-  margin: 4px 0 12px;
-}
-.kn-preview.chat-md h2 {
-  margin: 22px 0 10px;
-}
-.kn-preview.chat-md h3 {
-  margin: 18px 0 8px;
 }
 
 /* Files (PLAN 6.6): file manager, document page, upload dialogs */
@@ -1130,4 +972,281 @@
   width: 18px;
   height: 18px;
   accent-color: var(--ink);
+}
+
+/* Header toggles (Source) */
+.kn-actions button[aria-pressed='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--card);
+}
+
+/* Editor toolbar (PLAN 6.8): sticky above the note, one scrolling strip, panels open inline below it */
+.kn-toolbar {
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-16);
+  background: var(--card);
+  min-width: 0;
+}
+.kn-tb-strip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  min-width: 0;
+}
+.kn-main .kn-tb-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.kn-main .kn-tb-btn:hover:not(:disabled) {
+  background: var(--subtle);
+}
+.kn-main .kn-tb-btn[aria-pressed='true'],
+.kn-main .kn-tb-btn[aria-expanded='true'] {
+  background: var(--ink);
+  color: var(--card);
+}
+.kn-main .kn-tb-btn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+.kn-main .kn-tb-btn[aria-pressed='true']:focus-visible,
+.kn-main .kn-tb-btn[aria-expanded='true']:focus-visible {
+  outline-color: var(--card);
+  outline-offset: -4px;
+}
+.kn-tb-text {
+  font-size: 12px;
+}
+.kn-tb-sep {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--hairline);
+}
+.kn-tb-label {
+  flex: none;
+  padding: 0 8px 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.kn-tb-table {
+  border-top: 1px solid var(--hairline);
+  padding-top: 4px;
+}
+.kn-tb-panel {
+  padding: 8px;
+  border-top: 1px solid var(--hairline);
+}
+.kn-tb-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.kn-tb-choices button[aria-pressed='true'],
+.kn-tb-choices button[aria-checked='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--card);
+}
+.kn-tb-code {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.kn-tb-inline,
+.kn-tb-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+.kn-tb-link .kn-tb-choices {
+  flex-basis: 100%;
+}
+.kn-tb-inline label,
+.kn-tb-link label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.kn-tb-inline input,
+.kn-tb-link input {
+  height: 32px;
+  min-width: 180px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-8);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+.kn-tb-link input[aria-invalid='true'] {
+  border-color: var(--agent-coral-text);
+}
+.kn-tb-error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--agent-coral-text);
+}
+.kn-tb-table-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kn-tb-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 22px);
+  gap: 3px;
+}
+.kn-main .kn-tb-grid button {
+  width: 22px;
+  height: 22px;
+  min-width: 0;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid var(--hairline);
+  background: var(--card);
+}
+.kn-main .kn-tb-grid button.is-on {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.kn-tb-grid-label {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.kn-tb-notice {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-14);
+  background: var(--agent-saffron-tint);
+  color: var(--ink);
+  font-size: 13px;
+}
+@media (pointer: coarse), (width < 600px) {
+  .kn-main .kn-tb-btn {
+    height: 40px;
+    min-width: 40px;
+  }
+  .kn-tb-grid {
+    grid-template-columns: repeat(8, 28px);
+  }
+  .kn-main .kn-tb-grid button {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+/* Embedded images (PLAN 6.8): the picture replaces the Markdown; Source shows a chip */
+.cm-lp-image {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 100%;
+  margin: 6px 0;
+  vertical-align: top;
+}
+.cm-lp-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 520px;
+  width: auto;
+  height: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+}
+.cm-lp-image-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.kn-main .cm-lp-image-alt {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-8);
+  background: transparent;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 12px;
+}
+.kn-main .cm-lp-image-alt:hover,
+.kn-main .cm-lp-image-alt:focus {
+  border-color: var(--hairline);
+  background: var(--card);
+  color: var(--ink);
+}
+.kn-main .cm-lp-image-remove {
+  flex: none;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  opacity: 0;
+}
+.cm-lp-image:hover .cm-lp-image-remove,
+.cm-lp-image:focus-within .cm-lp-image-remove {
+  opacity: 1;
+}
+@media (hover: none) {
+  .kn-main .cm-lp-image-remove {
+    opacity: 1;
+  }
+}
+.kn-main .cm-lp-image-chip {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--subtle);
+  color: var(--ink-muted);
+  font-family: var(--font-code);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.kn-version-body {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-14);
+  padding: 4px 10px;
+}
+.kn-version-body .kn-editor-host,
+.kn-version-body .kn-editor-host .cm-editor {
+  min-height: 0;
 }

@@ -10,6 +10,7 @@ import {
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
 import type { SyntaxNode } from '@lezer/common'
 import { tags } from '@lezer/highlight'
+import { imageExtension } from './live-images.ts'
 import { parseTable, renderInline } from './live-table.ts'
 
 /**
@@ -224,7 +225,7 @@ function build(state: EditorState, focused: boolean): DecorationSet {
   }
   const protectedRanges: [number, number][] = []
 
-  const tree = ensureSyntaxTree(state, doc.length, 100)
+  const tree = ensureSyntaxTree(state, doc.length, 300)
   if (!tree) return Decoration.none
 
   tree.iterate({
@@ -481,6 +482,8 @@ export function livePreview(opts: LivePreviewOptions): Extension {
     syntaxHighlighting(markupStyle),
     options.of(opts),
     liveField,
+    imageExtension('widget'),
+    EditorView.editorAttributes.of({ class: 'cm-live' }),
     EditorView.focusChangeEffect.of((_state, focusing) => setLiveFocus.of(focusing)),
     EditorView.domEventHandlers({
       mousedown(event, view) {
@@ -492,4 +495,9 @@ export function livePreview(opts: LivePreviewOptions): Extension {
       },
     }),
   ]
+}
+
+/** Source mode (PLAN 6.8): plain Markdown, no formatting; embedded images collapse to a chip. */
+export function sourceMode(): Extension {
+  return [imageExtension('chip'), EditorView.editorAttributes.of({ class: 'cm-source' })]
 }

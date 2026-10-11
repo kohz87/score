@@ -141,7 +141,8 @@ export function knowledgeFailure(error: unknown, action: string): string {
     if (error.code === 'not_empty') return 'That folder is not empty.'
     if (error.code === 'unsupported_type' || error.code === 'export_too_large') return error.message
     if (error.code === 'bad_path' || error.code === 'not_a_note') return error.message
-    if (error.code === 'payload_too_large') return 'That note is too large (2 MiB at most).'
+    if (error.code === 'payload_too_large')
+      return 'That note is too large (8 MiB at most; one image 1.5 MB).'
     if (error.status === 404) return 'That note is no longer there.'
   }
   return `Could not ${action}. Please try again.`

@@ -1,6 +1,6 @@
 export type DiffLine = { kind: 'same' | 'added' | 'removed'; text: string }
 
-/** A simple LCS line diff, from `before` to `after`. Notes are small (≤ 2 MiB); past 4000 lines per side we fall back
+/** A simple LCS line diff, from `before` to `after`. Notes are at most 8 MiB; past 4000 lines per side we fall back
  *  to "all removed, all added" rather than build a quadratic table. */
 export function lineDiff(before: string, after: string): DiffLine[] {
   const a = before === '' ? [] : before.split('\n')
