@@ -251,5 +251,5 @@ test('Settings › Backup repeats that a restore outside scripts/score restore c
   await page.goto('/settings')
   const backup = page.locator('#backup')
   await expect(backup).toContainText('scripts/score restore')
-  await expect(backup).toContainText("can't be detected")
+  await expect(backup).toContainText('can’t detect a restore done any other way')
 })

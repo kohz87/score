@@ -8,6 +8,7 @@ import { RoomPanels } from './RoomPanels.tsx'
 import { agentsQuery, roomsQuery } from './queries.ts'
 import { ConversationSearch } from './ConversationSearch.tsx'
 import { DeleteRoomDialog } from './DeleteRoomDialog.tsx'
+import { NewRoomDialog } from './NewRoomDialog.tsx'
 import { ShareDialog } from './ShareDialog.tsx'
 import { OutsideSessions } from './OutsideSessions.tsx'
 import { RoomLink } from './RoomLink.tsx'
@@ -25,6 +26,7 @@ export function ChatPage() {
   const [sharing, setSharing] = useState<Room | null>(null)
   const [deleting, setDeleting] = useState<Room | null>(null)
   const [starting, setStarting] = useState(false)
+  const [creatingRoom, setCreatingRoom] = useState(false)
   const navigate = useNavigate()
   const [listOpen, setListOpen] = useState(false)
   const closeList = useCallback(() => setListOpen(false), [])
@@ -73,7 +75,7 @@ export function ChatPage() {
         inline={!roomId}
       >
         <div className="chat-new-row">
-          <button className="chat-new" type="button" disabled>
+          <button className="chat-new" type="button" onClick={() => setCreatingRoom(true)}>
             ＋ New room
           </button>
           <button
@@ -146,6 +148,17 @@ export function ChatPage() {
         />
       )}
       {sharing && <ShareDialog room={sharing} close={() => setSharing(null)} />}
+      {creatingRoom && (
+        <NewRoomDialog
+          agents={agents.data ?? []}
+          close={() => setCreatingRoom(false)}
+          created={(room) => {
+            setCreatingRoom(false)
+            closeList()
+            void navigate(`/chat/${encodeURIComponent(room.id)}`)
+          }}
+        />
+      )}
       {starting && (
         <NewOrchestrationDialog
           agents={agents.data ?? []}
