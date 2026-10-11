@@ -14,6 +14,8 @@ import {
   evidenceLabel,
 } from '../../attempts/attempt-format.ts'
 import { useFlowNode, useStopFlowNode } from './flow-queries.ts'
+import { StatusLine } from '../../../live/StatusLine.tsx'
+import { useStatusLines } from '../../../live/use-activity.ts'
 import '../../chat/chat.css'
 
 const clockText = (iso: string) =>
@@ -49,6 +51,16 @@ function StepDetail({
   const { node, run, approval } = detail
   const agent = agents.find((item) => item.id === node.agentId)
   const stop = useStopFlowNode(briefId, node.id)
+  const lines = useStatusLines(
+    node.agentId ? [{ id: node.agentId, working: node.state === 'working' }] : [],
+  )
+  const active = node.state === 'working' || node.state === 'needs_you'
+  const statusText =
+    node.state === 'needs_you'
+      ? 'Waiting for your approval'
+      : node.state === 'working' && node.agentId
+        ? (lines.get(node.agentId) ?? null)
+        : null
   const stoppable = run && ['queued', 'running', 'waiting_for_approval'].includes(run.status)
   const runningSec = run
     ? Math.max(
@@ -85,6 +97,7 @@ function StepDetail({
           ? `Waiting on you for ${duration(Math.max(0, (now - Date.parse(approval.createdAt)) / 1000))}`
           : stateText[node.state]}
       </p>
+      {active && <StatusLine line={statusText} />}
       {detail.description && <p className="flow-inspector__description">{detail.description}</p>}
       {detail.steps.length > 0 && (
         <ul className="flow-steps" aria-label="Steps">

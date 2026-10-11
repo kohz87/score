@@ -165,8 +165,9 @@ export function useFlowNode(briefId: string, nodeId: string | null) {
   })
 }
 
-export function useBriefLog(briefId: string, filter: string) {
+export function useBriefLog(briefId: string, filter: string, enabled = true) {
   return useInfiniteQuery({
+    enabled: enabled && briefId !== '',
     queryKey: [...briefFlowKey(briefId), 'log', filter],
     initialPageParam: null as string | null,
     queryFn: async ({ signal, pageParam }) => {
@@ -195,4 +196,14 @@ export function useStopFlowNode(briefId: string, nodeId: string) {
       ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: briefFlowKey(briefId) }),
   })
+}
+
+/**
+ * How many tool calls the run made, when Score has the whole list. Null while loading, and when the list is longer than
+ * its first page: a partial count would understate the run.
+ */
+export function useBriefToolCalls(briefId: string): number | null {
+  const log = useBriefLog(briefId, 'tool', briefId !== '')
+  if (!log.isSuccess || log.hasNextPage) return null
+  return log.data.pages.reduce((total, page) => total + page.items.length, 0)
 }

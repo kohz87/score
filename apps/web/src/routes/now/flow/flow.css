@@ -320,6 +320,10 @@
 .flow-node--working {
   background: var(--agent-saffron-tint);
   border: 2px solid var(--agent-saffron);
+  /* PLAN 5.39: a soft halo in the agent's colour (the saffron fill stays the state colour). */
+  box-shadow:
+    0 0 0 var(--halo-ring) color-mix(in srgb, var(--node-agent) var(--halo-ring-tint), transparent),
+    0 0 var(--halo-glow) color-mix(in srgb, var(--node-agent) var(--halo-glow-tint), transparent);
 }
 .flow-node--working .flow-node__subtitle {
   color: var(--agent-saffron-text);
@@ -344,6 +348,13 @@
   box-shadow:
     0 0 0 3px var(--card),
     0 0 0 5px var(--ink);
+}
+.flow-node--working.flow-node--selected {
+  box-shadow:
+    0 0 0 3px var(--card),
+    0 0 0 5px var(--ink),
+    0 0 var(--halo-glow) 4px
+      color-mix(in srgb, var(--node-agent) var(--halo-glow-tint), transparent);
 }
 .flow-node__pill {
   font-size: 12px;
@@ -736,4 +747,29 @@ a.flow-run-button {
   display: inline-flex;
   align-items: center;
   text-decoration: none;
+}
+
+/* PLAN 5.39: the line under the run's title keeps its height whether it shows a status or a summary. */
+.flow-run-line {
+  min-height: 1.6em;
+  margin-top: 4px;
+}
+.flow-run-line ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 18px;
+}
+.flow-run-line li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 13px;
+}
+.flow-run-line .live-summary {
+  margin: 0;
 }

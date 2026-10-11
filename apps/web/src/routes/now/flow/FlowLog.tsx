@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { AgentSummary, BriefFlow } from '@score/contract'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../../components/AgentGlyph.tsx'
 import { agentTextColor } from '../../chat/agent-text-color.ts'
 import { duration } from './FlowInspector.tsx'
 import { useBriefLog } from './flow-queries.ts'
+import { LiveCount } from '../../../live/LiveCount.tsx'
 
 export function FlowLog({ briefId, agents }: { briefId: string; agents: AgentSummary[] }) {
   const [filter, setFilter] = useState('all')
@@ -94,25 +95,40 @@ export function FlowLog({ briefId, agents }: { briefId: string; agents: AgentSum
   )
 }
 
-export function FlowStats({ stats }: { stats: BriefFlow['stats'] }) {
+const money = (value: number) => `$${value.toFixed(2)}`
+
+export function FlowStats({
+  stats,
+  toolCalls = null,
+}: {
+  stats: BriefFlow['stats']
+  /** Tool calls of the run when Score has counted all of them. */
+  toolCalls?: number | null
+}) {
+  const tiles: [ReactNode, string][] = [
+    [duration(stats.runningSec), 'running'],
+    [<LiveCount key="steps" value={stats.steps} />, 'steps taken'],
+    [<LiveCount key="handoffs" value={stats.handoffs} />, 'hand-offs'],
+    ...(toolCalls !== null && toolCalls > 0
+      ? [[<LiveCount key="tools" value={toolCalls} />, 'tool calls'] as [ReactNode, string]]
+      : []),
+    [
+      stats.spendUsd !== null ? (
+        <LiveCount key="spend" value={stats.spendUsd} format={money} />
+      ) : // Kanban attempts record no cost, so the total would understate what was spent.
+      (stats.attempts ?? 0) > 0 ? (
+        'partial'
+      ) : (
+        '—'
+      ),
+      'model spend',
+    ],
+  ]
   return (
     <section className="flow-stats" aria-label="This run so far">
       <h2>This run so far</h2>
       <dl>
-        {[
-          [duration(stats.runningSec), 'running'],
-          [stats.steps, 'steps taken'],
-          [stats.handoffs, 'hand-offs'],
-          [
-            stats.spendUsd !== null
-              ? `$${stats.spendUsd.toFixed(2)}`
-              : // Kanban attempts record no cost, so the total would understate what was spent.
-                (stats.attempts ?? 0) > 0
-                ? 'partial'
-                : '—',
-            'model spend',
-          ],
-        ].map(([value, label]) => (
+        {tiles.map(([value, label]) => (
           <div key={label}>
             <dd>{value}</dd>
             <dt>{label}</dt>

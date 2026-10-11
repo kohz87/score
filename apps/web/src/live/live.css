@@ -53,6 +53,10 @@
   color: var(--agent-jade-text);
   font-weight: 700;
 }
+.live-summary--failed::before {
+  content: '✗ ';
+  color: var(--agent-coral-text);
+}
 
 /* On the dark "needs you" panels the chips use the panel's own colours. */
 .now-asking .live-chip,
