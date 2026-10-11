@@ -256,6 +256,10 @@ export const claudeDriver: CodingDriver = {
   testedVersions: ['2.1.295'],
   supported: true,
   quota: 'Uses your Claude plan quota (the CLI’s own login).',
+  promptVia: 'stdin',
+  verifiedPermissions: ['read-only', 'workspace-write', 'full'],
+  warning: null,
+  requiresReadAck: false,
   parseVersion(output) {
     return /^(\d+\.\d+\.\d+)\b.*Claude Code/m.exec(output.trim())?.[1] ?? null
   },

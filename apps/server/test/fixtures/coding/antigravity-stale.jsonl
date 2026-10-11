@@ -1,0 +1,4 @@
+{"_fixture":"hand-made, not recorded: shaped after the events recorded from agy 1.3.3"}
+{"event":"init","conversation_id":"aaaaaaaa-8888-4888-8888-000000000008","init":{"cwd":"/work","tools":["run_command","view_file","write_to_file","replace_file_content","open_browser_url"],"permission_mode":"request-review","expanded_commands":[{"name":"plan","type":"system"}]}}
+{"event":"step_update","step_update":{"conversation_id":"aaaaaaaa-8888-4888-8888-000000000008","step_index":1,"state":"ACTIVE","step_type":"agent_response","text_delta":"Fresh start answer."}}
+{"event":"result","result":{"conversation_id":"aaaaaaaa-8888-4888-8888-000000000008","status":"SUCCESS","response":"Fresh start answer.","duration_seconds":1.5,"num_turns":1,"usage":{"input_tokens":1,"output_tokens":1}}}

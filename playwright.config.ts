@@ -65,6 +65,8 @@ export default defineConfig({
             TMPDIR: scratch,
             SCORE_MODE: 'fake',
             SCORE_CODING_FAKE_CLI: fakeCodingCli,
+            // Antigravity levels the specs may use; 'full' stays unverified so the disabled state is covered.
+            SCORE_CODING_VERIFIED_ANTIGRAVITY: 'read-only,workspace-write',
             SCORE_FAKE_REWIND_SKIP: 'reviewer:compressed',
             SCORE_WEB_ORIGIN: baseURL,
             // The specs read the pairing link from dev.log: a non-terminal stdout only gets it on request.
@@ -83,6 +85,8 @@ export default defineConfig({
             TMPDIR: scratch,
             SCORE_MODE: 'fake',
             SCORE_CODING_FAKE_CLI: fakeCodingCli,
+            // Antigravity levels the specs may use; 'full' stays unverified so the disabled state is covered.
+            SCORE_CODING_VERIFIED_ANTIGRAVITY: 'read-only,workspace-write',
             // The fake adapter cannot rewind this agent (PLAN 5.33: "Hide in Score only").
             SCORE_FAKE_REWIND_SKIP: 'reviewer:compressed',
             SCORE_SERVE_WEB: '1',

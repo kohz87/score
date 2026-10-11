@@ -27,6 +27,19 @@ export type ToolDetail =
   | { type: 'write'; path: string; content: string }
   | { type: 'replace'; path: string; oldString: string; newString: string }
   | { type: 'file'; path: string; change: 'add' | 'update' | 'delete' }
+  /** Browser or web tools (Antigravity): a generic browser frame, with the URL when the call named one. */
+  | { type: 'browser'; url: string | null }
+
+export interface UsageReading {
+  groups: {
+    name: string
+    fiveHourRemainingPercent: number | null
+    fiveHourResets: string | null
+    weeklyRemainingPercent: number | null
+    weeklyResets: string | null
+  }[]
+  text: string
+}
 
 export interface LineParser {
   /** One non-empty stdout line. Unknown or malformed lines yield nothing and are counted. */
@@ -36,6 +49,8 @@ export interface LineParser {
 
 export interface DriverRunOptions {
   workspace: string
+  /** The turn's prompt. Drivers with `promptVia: 'argv'` put it in the argument vector; the rest ignore it (stdin). */
+  prompt: string
   permission: CodingPermission
   model: string | null
   /** The CLI's own session id from an earlier turn, to resume. */
@@ -57,6 +72,16 @@ export interface CodingDriver {
   /** Whether Score can run this CLI at all. */
   readonly supported: boolean
   readonly quota: string
+  /** Where the prompt goes. stdin is the rule; Antigravity's `-p` takes it as an argument (contract §8). */
+  readonly promptVia: 'stdin' | 'argv'
+  /** Permission levels live-verified for this CLI. Others are shown disabled and refused (PLAN 7.6). */
+  readonly verifiedPermissions: readonly CodingPermission[]
+  /** Extra warning where the CLI is chosen (what it can do beyond editing files). */
+  readonly warning: string | null
+  /** Creating an agent needs the "it can read every file you can" acknowledgement. */
+  readonly requiresReadAck: boolean
+  /** Whether the CLI can print its own quota, and how (never a model turn). */
+  readonly usage?: { args: readonly string[]; parse(output: string): UsageReading }
   /** `--version` output to a bare version string, or null when it doesn't look like this CLI. */
   parseVersion(output: string): string | null
   /** Argument vector after the executable. The prompt is never in it: it goes to stdin. */

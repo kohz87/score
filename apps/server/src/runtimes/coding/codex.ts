@@ -212,6 +212,10 @@ export const codexDriver: CodingDriver = {
   testedVersions: ['0.160.1'],
   supported: true,
   quota: 'Uses your ChatGPT plan quota, shared with other Codex work on that account.',
+  promptVia: 'stdin',
+  verifiedPermissions: ['read-only', 'workspace-write', 'full'],
+  warning: null,
+  requiresReadAck: true,
   parseVersion(output) {
     return /codex-cli\s+(\d+\.\d+\.\d+)/.exec(output)?.[1] ?? null
   },

@@ -1364,8 +1364,31 @@ const cases = [
       testedVersions: ['2.1.295'],
       quota: 'Uses your Claude plan quota.',
       message: null,
+      unverifiedPermissions: [],
+      warning: null,
     },
     { runtime: 'claude-code', label: 'Claude Code', state: 'ready' },
+  ],
+  [
+    'CodingUsageGroupSchema',
+    {
+      name: 'Gemini Pro',
+      fiveHourRemainingPercent: 82,
+      fiveHourResets: 'resets in 3h',
+      weeklyRemainingPercent: null,
+      weeklyResets: null,
+    },
+    { name: 'Gemini Pro', fiveHourRemainingPercent: 120 },
+  ],
+  [
+    'CodingUsageSchema',
+    {
+      runtime: 'antigravity',
+      fetchedAt: '2026-10-11T00:00:00.000Z',
+      groups: [],
+      text: 'table',
+    },
+    { runtime: 'nope', fetchedAt: 'yesterday', groups: [], text: 'x' },
   ],
   ['CodingRuntimesResponseSchema', { items: [] }, { items: [{ runtime: 'nope' }] }],
   [

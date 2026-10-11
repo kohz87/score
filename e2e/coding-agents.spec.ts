@@ -93,3 +93,69 @@ test('add a coding agent, give it work in a room, stop one turn, see it in Repor
   await page.getByRole('button', { name: 'Remove agent' }).click()
   await expect(page).toHaveURL(/\/team$/)
 })
+
+test('Antigravity: warning, quota, unverified level disabled, a turn with tool cards and a refusal card', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(120_000)
+  const suffix = Date.now().toString(36)
+  const id = `agy-${suffix}`
+  const roomName = `antigravity-room-${suffix}`
+  await pair(page)
+  await page.goto('/team')
+  await page.getByRole('button', { name: 'Add agent' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('radio', { name: /Coding agent/ }).check()
+  await dialog.getByLabel('Coding CLI').selectOption('antigravity')
+  await expect(dialog).toContainText('browse the web, generate images')
+  await expect(dialog.getByRole('group', { name: 'Antigravity quota' })).toContainText(
+    'Gemini Models: 87% left in the 5-hour window',
+  )
+  await expect(dialog.getByRole('radio', { name: /Full access/ })).toBeDisabled()
+  await expect(dialog).toContainText('not verified for agy yet')
+  await dialog.getByLabel(/Agent name/).fill(id)
+  await dialog.getByRole('radio', { name: /Read only/ }).check()
+  const add = dialog.getByRole('button', { name: 'Add coding agent' })
+  await expect(add).toBeDisabled()
+  await dialog.getByRole('checkbox', { name: /can read every file/ }).check()
+  await dialog.screenshot({ path: testInfo.outputPath('agy-add.png') })
+  await dialog.getByLabel('Coding CLI').scrollIntoViewIfNeeded()
+  await dialog.screenshot({ path: testInfo.outputPath('agy-add-top.png') })
+  await add.click()
+  await expect(dialog.getByText(`${id} joined the team.`)).toBeVisible()
+  await dialog.getByRole('link', { name: 'View agent' }).click()
+  const card = page.getByRole('region', { name: 'Coding agent' })
+  await expect(card).toContainText('Antigravity 1.3.3 · Ready')
+  await expect(card).toContainText('Gemini Models')
+  await page.screenshot({ path: testInfo.outputPath('agy-overview.png') })
+
+  await api(page, 'rooms', { name: roomName, leadAgentId: 'lead' })
+  await page.goto('/chat')
+  await page
+    .getByRole('navigation', { name: 'Conversations' })
+    .getByRole('link', { name: new RegExp(roomName) })
+    .click({ timeout: 15_000 })
+  const history = page.getByRole('region', { name: 'Message history' })
+  const composer = page.getByRole('combobox', { name: /^Message/ })
+  await composer.fill(`@${id} [fixture:denied] list the files`)
+  await composer.press('Enter')
+  const refused = history.getByRole('article').filter({ hasText: 'Antigravity refused' })
+  await expect(refused).toBeVisible({ timeout: 30_000 })
+  await expect(refused).toContainText('RunCommand')
+  await composer.fill(`@${id} [fixture:basic] please update the notes`)
+  await composer.press('Enter')
+  const reply = history
+    .getByRole('article')
+    .filter({ hasText: 'Updated notes.txt and checked the docs.' })
+  await expect(reply).toBeVisible({ timeout: 30_000 })
+  await expect(reply).toContainText('ls -la')
+  await page.screenshot({ path: testInfo.outputPath('agy-room.png') })
+
+  await page.goto(`/now/watch/${encodeURIComponent(id)}`)
+  await expect(page.getByText(/Ran ls -la/).first()).toBeVisible({ timeout: 15_000 })
+
+  await page.goto(`/team/${encodeURIComponent(id)}`)
+  page.once('dialog', (confirm) => void confirm.accept())
+  await page.getByRole('button', { name: 'Remove agent' }).click()
+  await expect(page).toHaveURL(/\/team$/)
+})

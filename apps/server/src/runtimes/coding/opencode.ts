@@ -9,6 +9,10 @@ export const opencodeDriver: CodingDriver = {
   testedVersions: [],
   supported: false,
   quota: 'Uses whichever provider OpenCode is signed in to.',
+  promptVia: 'stdin',
+  verifiedPermissions: ['read-only', 'workspace-write', 'full'],
+  warning: null,
+  requiresReadAck: false,
   parseVersion: () => null,
   buildArgs() {
     throw new Error('OpenCode is not supported yet')

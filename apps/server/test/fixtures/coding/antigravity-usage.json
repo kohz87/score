@@ -1,0 +1,16 @@
+{
+  "_fixture": "shape observed live on agy 1.3.3 (2026-10-11), values made up",
+  "conversation_id": "",
+  "status": "SUCCESS",
+  "response": "Gemini Models\tWeekly Limit Remaining\t75%\t2026-10-14T02:29:49Z\nGemini Models\tFive Hour Limit Remaining\t87%\t2026-10-11T04:43:48Z\nClaude and GPT models\tWeekly Limit Remaining\t100%\t2026-10-14T05:00:00Z\nClaude and GPT models\tFive Hour Limit Remaining\t100%\t2026-10-11T06:00:00Z\n",
+  "duration_seconds": 0,
+  "num_turns": 0,
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "thinking_tokens": 0,
+    "cache_read_tokens": 0,
+    "total_tokens": 0
+  },
+  "command": { "name": "usage", "data": { "description": "Show usage limits" } }
+}
