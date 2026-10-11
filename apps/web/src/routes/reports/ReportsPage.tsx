@@ -77,7 +77,7 @@ function Totals({ totals, money }: { totals: Reports['totals']; money: Money }) 
 function TimeSplit({ report, agents }: { report: Reports; agents: AgentSummary[] }) {
   return (
     <section className="reports-card reports-split" aria-labelledby="reports-split-title">
-      <h2 id="reports-split-title">Where each agent&apos;s time goes</h2>
+      <h2 id="reports-split-title">Where each agent’s time goes</h2>
       {report.timeSplit.length === 0 && <p className="reports-empty">No agents yet.</p>}
       {report.timeSplit.map((row) => {
         const agent = agentFor(agents, row.agentId)
@@ -189,7 +189,7 @@ function ByAgent({
                   </td>
                   <td className="reports-table__right reports-table__spend">
                     {row.spendBasis === 'unknown' ? (
-                      <span aria-label="This coding agent's CLI gave no cost">unknown</span>
+                      <span aria-label="This coding agent’s CLI gave no cost">unknown</span>
                     ) : row.spendBasis === 'estimated' ? (
                       <>
                         {money(row.spendUsd)} <span className="reports-estimated">estimated</span>
@@ -224,9 +224,9 @@ function ByAgent({
       </div>
       {report.unattributed && (
         <p className="reports-note">
-          Unattributed: Kanban attempts with no known agent, so no spend or reviews are counted for
-          them. Working time {formatDuration(report.unattributed.workingSec)} counts attempts with
-          proven evidence only.
+          Unattributed: task runs with no known agent, so no spend or reviews are counted for them.
+          Working time {formatDuration(report.unattributed.workingSec)} counts only the runs Score
+          could confirm.
         </p>
       )}
     </section>
@@ -447,7 +447,7 @@ export function ReportsPage() {
         <div className="reports-hero__text">
           <h1>Reports</h1>
           <p className="reports-hero__summary" aria-live="polite">
-            {report?.summary ?? (reports.isError ? 'Reports could not be loaded.' : 'Loading…')}
+            {report?.summary ?? (reports.isError ? 'Couldn’t load reports.' : 'Loading…')}
           </p>
         </div>
         <div className="reports-hero__actions">
@@ -498,7 +498,7 @@ export function ReportsPage() {
       </section>
       {reports.isError && (
         <p role="alert" className="reports-error">
-          Reports could not be loaded.{' '}
+          Couldn’t load reports.{' '}
           <button type="button" onClick={() => void reports.refetch()}>
             Try again
           </button>
@@ -515,7 +515,7 @@ export function ReportsPage() {
             <JourneyChart journey={journey.data} agents={agents} />
           ) : journey.isError ? (
             <p role="alert" className="reports-error">
-              The journey could not be loaded.{' '}
+              Couldn’t load the journey.{' '}
               <button type="button" onClick={() => void journey.refetch()}>
                 Try again
               </button>

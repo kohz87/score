@@ -74,8 +74,8 @@ export function PairPage() {
         {status === 'consent' && (
           <>
             <p>
-              Pairing grants this browser access to every conversation and profile in Score. It can
-              send instructions, change settings, and approve commands.
+              Pairing grants this browser access to every room and agent in Score. It can send
+              messages, change settings and approve commands.
             </p>
             <button
               type="button"

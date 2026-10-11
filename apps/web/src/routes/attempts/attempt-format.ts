@@ -1,7 +1,7 @@
 import type { AgentSummary, AttemptStatus, AttemptSummary } from '@score/contract'
 
 /** The one line for a legacy Kanban run link that no attempt could be proven for. */
-export const EARLIER_ATTEMPT_TEXT = 'An earlier attempt (details not kept)'
+export const EARLIER_ATTEMPT_TEXT = 'An earlier run (details not kept)'
 
 export const attemptStatusLabel: Record<AttemptStatus, string> = {
   running: 'Running',

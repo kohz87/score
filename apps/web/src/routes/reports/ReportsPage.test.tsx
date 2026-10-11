@@ -387,7 +387,7 @@ test('an Unattributed row counts attempts with no known agent and says what its 
   const last = rows.at(-1)!
   expect(within(last).getByText('Unattributed')).toBeDefined()
   expect(within(last).getByText('3')).toBeDefined()
-  expect(screen.getByText(/counts attempts with proven evidence only/)).toBeDefined()
+  expect(screen.getByText(/counts only the runs Score could confirm/)).toBeDefined()
   expect(screen.getByText(/10 min/)).toBeDefined()
 })
 

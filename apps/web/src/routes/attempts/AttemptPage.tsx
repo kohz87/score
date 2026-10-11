@@ -44,13 +44,13 @@ export function AttemptPage() {
       <p className="attempt-back">
         <Link to="/tasks">Back to Tasks</Link>
       </p>
-      {attempt.isPending && <p role="status">Loading attempt…</p>}
+      {attempt.isPending && <p role="status">Loading run…</p>}
       {attempt.isError && (
         <div role="alert">
           <p>
             {attempt.error instanceof ApiError && attempt.error.status === 404
-              ? 'This attempt is not available.'
-              : 'The attempt could not load.'}
+              ? 'This run isn’t available.'
+              : 'Couldn’t load this run.'}
           </p>
           {!(attempt.error instanceof ApiError && attempt.error.status === 404) && (
             <button type="button" onClick={() => void attempt.refetch()}>
@@ -65,9 +65,9 @@ export function AttemptPage() {
             {detail.agentId === null ? <UnattributedGlyph /> : null}
             <div>
               <h1 id="attempt-heading">
-                Attempt by{' '}
+                Task run by{' '}
                 {detail.agentId === null ? (
-                  'an unattributed agent'
+                  'an unknown agent'
                 ) : (
                   <AgentsLookup agentId={detail.agentId} />
                 )}
@@ -77,13 +77,13 @@ export function AttemptPage() {
           </header>
           {!detail.task.current && (
             <p className="attempt-note">
-              From an earlier copy of the board. This page is read-only: the task it belonged to is
-              not on the board Score follows now.
+              This run is from an earlier version of the board. It is read-only because its task is
+              no longer on the board Score follows.
             </p>
           )}
           {detail.task.current && (
             <p className="attempt-note">
-              This attempt belongs to a task on the current board.{' '}
+              This run belongs to a task on the current board.{' '}
               <Link to={`/tasks/${encodeURIComponent(detail.task.taskId)}`}>Open the task</Link>
             </p>
           )}
@@ -96,7 +96,7 @@ export function AttemptPage() {
                 <Row label="Assignee">{detail.taskSnapshot.assignee ?? 'None'}</Row>
               </dl>
             ) : (
-              <p className="attempt-muted">The task was not kept.</p>
+              <p className="attempt-muted">Score didn’t keep this task.</p>
             )}
           </section>
           <section aria-labelledby="attempt-facts-heading" className="attempt-section">
@@ -123,8 +123,8 @@ export function AttemptPage() {
               {detail.refusedUpdates > 0 && (
                 <Row label="Refused updates">{detail.refusedUpdates}</Row>
               )}
-              <Row label="Tools, session and model">Not observed</Row>
-              <Row label="Watch">Not observed</Row>
+              <Row label="Tools and model">Not recorded</Row>
+              <Row label="Replay in Watch">Not recorded</Row>
             </dl>
           </section>
         </article>
