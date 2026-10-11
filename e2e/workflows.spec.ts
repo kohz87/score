@@ -61,7 +61,7 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
 
   // Step 1: the draft, by builder. The instruction reads the input through the autocomplete.
   await node(page, 'step1').click()
-  const inspector = page.getByRole('complementary', { name: 'Node settings' })
+  const inspector = page.getByRole('complementary', { name: 'Step settings' })
   await inspector.getByLabel('Title').fill('Draft')
   await inspector.getByLabel('Agent').selectOption({ label: 'builder' })
   const instruction = inspector.getByRole('combobox', { name: 'Instruction' })
@@ -141,7 +141,7 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
   await expect(page.getByText('Succeeded', { exact: true }).first()).toBeVisible({
     timeout: 60_000,
   })
-  await expect(page.getByText('Graph reached the end').first()).toBeVisible()
+  await expect(page.getByText('Workflow reached its end').first()).toBeVisible()
   await expect(node(page, 'step2')).toHaveAttribute('data-state', 'skipped')
   await expect(node(page, 'end1')).toHaveAttribute('data-state', 'succeeded')
   await expect(node(page, 'end2')).toHaveAttribute('data-state', 'skipped')
@@ -151,7 +151,7 @@ test('build a workflow with a gate and a branch in the editor, save it, run it, 
 
   // Clicking a node filters the log to it and shows what it read and its verdict.
   await node(page, 'step1').click()
-  const panel = page.getByRole('region', { name: 'Selected node' })
+  const panel = page.getByRole('region', { name: 'Selected step' })
   await expect(panel).toContainText('Verdict: passed')
   await node(page, 'branch1').click()
   await expect(panel).toContainText('Branch')
@@ -211,7 +211,7 @@ test('a failing step is routed to a repair step, and the run still reaches its e
   await expect(node(page, 'fix')).toHaveAttribute('data-state', 'succeeded', { timeout: 60_000 })
   await expect(node(page, 'good')).toHaveAttribute('data-state', 'skipped')
   await expect(node(page, 'fixed')).toHaveAttribute('data-state', 'succeeded')
-  await expect(page.getByText('Graph reached the end').first()).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText('Workflow reached its end').first()).toBeVisible({ timeout: 30_000 })
   // The failure route is drawn as such, with its words on the edge.
   await expect(page.locator('[data-edge="e2"]')).toHaveClass(/orch-edge--failed/)
   await expect(page.locator('.orch-edge-label', { hasText: 'if it fails' })).toBeVisible()
@@ -242,11 +242,11 @@ test('an attempt that is not confirmed ended is abandoned, the step is retried, 
   })
   await startFromList(page, name)
   // The fake Hermes reports the first run cancelled, which is not termination evidence.
-  const unknown = page.getByRole('region', { name: 'Attempt not confirmed ended' })
+  const unknown = page.getByRole('region', { name: 'Not confirmed as ended' })
   await expect(unknown).toContainText('Not confirmed ended: Flaky step', { timeout: 60_000 })
   await expect(node(page, 'flaky')).toHaveAttribute('data-state', 'running')
   await unknown.getByRole('checkbox').first().check()
-  await unknown.getByRole('button', { name: 'Abandon this attempt' }).click()
+  await unknown.getByRole('button', { name: 'Stop waiting for this' }).click()
   // Abandoning pauses the run; the step is unresolved and offers Retry once the run is resumed.
   await expect(page.getByText(/Paused/).first()).toBeVisible({ timeout: 30_000 })
   await expect(node(page, 'flaky')).toHaveAttribute('data-state', 'abandoned')
@@ -264,13 +264,13 @@ test('an attempt that is not confirmed ended is abandoned, the step is retried, 
   await expect(page.getByText('Finished, not everything confirmed')).toBeVisible({
     timeout: 60_000,
   })
-  await expect(page.getByText('Graph reached the end', { exact: true })).toBeVisible()
+  await expect(page.getByText('Workflow reached its end', { exact: true })).toBeVisible()
   await expect(
     page.getByText('Graph reached the end — 1 abandoned attempt not confirmed ended'),
   ).toBeVisible()
   // The retried attempt is the second of two logical attempts.
   await node(page, 'flaky').click()
-  await expect(page.getByRole('region', { name: 'Selected node' })).toContainText('2 of 2 used')
+  await expect(page.getByRole('region', { name: 'Selected step' })).toContainText('2 of 2 used')
 })
 
 test('drag a node, save, reload: it is where it was left, and the run view draws the same arrangement', async ({
@@ -340,7 +340,7 @@ test('drag a node, save, reload: it is where it was left, and the run view draws
 
   // A run of this version draws the nodes at the same coordinates.
   await startFromList(page, name)
-  await expect(page.getByText('Graph reached the end').first()).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByText('Workflow reached its end').first()).toBeVisible({ timeout: 60_000 })
   const inRun = (nodeId: string) =>
     node(page, nodeId).evaluate((el) => {
       const wrapper = el.closest<HTMLElement>('[style*="left"]')!

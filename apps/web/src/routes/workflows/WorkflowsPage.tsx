@@ -58,8 +58,8 @@ export function WorkflowsPage() {
     } catch (error) {
       setNotice(
         error instanceof ApiError && error.code === 'quota_exhausted'
-          ? 'There are already as many workflows as Score keeps. Delete one you do not use first.'
-          : 'Could not duplicate that workflow. Please try again.',
+          ? 'There are already as many workflows as Score keeps. Delete one you don’t use first.'
+          : 'Couldn’t duplicate that workflow. Try again.',
       )
     }
   }
@@ -87,7 +87,7 @@ export function WorkflowsPage() {
       {list.isPending && <p role="status">Loading workflows…</p>}
       {list.isError && (
         <p role="alert" className="orch-error">
-          Workflows could not load.{' '}
+          Couldn’t load workflows.{' '}
           <button type="button" onClick={() => void list.refetch()}>
             Try again
           </button>
@@ -191,7 +191,7 @@ export function WorkflowsPage() {
                               setNotice(
                                 error instanceof ApiError && error.code === 'workflow_used'
                                   ? 'A run has used this workflow, so it stays. Runs keep their own copy of what they ran.'
-                                  : 'Could not delete that workflow. Please try again.',
+                                  : 'Couldn’t delete that workflow. Try again.',
                               )
                             },
                           })
@@ -209,7 +209,7 @@ export function WorkflowsPage() {
                       disabled={workflow.used}
                       title={
                         workflow.used
-                          ? 'Runs have used this workflow, so it can not be deleted'
+                          ? 'Runs have used this workflow, so it can’t be deleted'
                           : undefined
                       }
                       onClick={() => setDeleting(workflow.id)}

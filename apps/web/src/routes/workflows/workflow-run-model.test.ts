@@ -197,10 +197,12 @@ test('the outcome is two statements: the graph, and the note that qualifies it',
       outcomeNote: 'Graph reached the end — 1 abandoned attempt not confirmed ended',
     }),
   ).toEqual({
-    graph: 'Graph reached the end',
+    graph: 'Workflow reached its end',
     note: 'Graph reached the end — 1 abandoned attempt not confirmed ended',
   })
-  expect(outcomeLines({ graphOutcome: 'stopped', outcomeNote: null }).graph).toBe('Graph stopped')
+  expect(outcomeLines({ graphOutcome: 'stopped', outcomeNote: null }).graph).toBe(
+    'Workflow stopped',
+  )
 })
 
 test('the log speaks in titles and plain words, never ids, states or internal summaries', () => {

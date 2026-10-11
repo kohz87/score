@@ -187,7 +187,7 @@ export function addNode(
   agentId = '',
 ): { draft: Draft; id: string } | { error: string } {
   if (draft.nodes.length >= WORKFLOW_LIMITS.maxNodes)
-    return { error: `A workflow can have at most ${WORKFLOW_LIMITS.maxNodes} nodes.` }
+    return { error: `A workflow can have at most ${WORKFLOW_LIMITS.maxNodes} steps.` }
   const node = blankNode(draft, kind, agentId)
   return { draft: { ...draft, nodes: [...draft.nodes, node] }, id: node.id }
 }
@@ -268,7 +268,7 @@ export function connect(draft: Draft, from: string, port: string, to: string): C
   if (source.kind === 'end') return { error: 'An end has nothing after it.' }
   if (!portsOf(source).some((p) => p.id === port))
     return { error: `${source.label} has no "${port}" connection.` }
-  if (from === to) return { error: 'A step cannot lead back to itself.' }
+  if (from === to) return { error: 'A step can’t lead back to itself.' }
   if (draft.edges.some((e) => e.from === from && e.port === port && e.to === to))
     return { error: 'Those two are already connected that way.' }
   if (draft.edges.length >= WORKFLOW_LIMITS.maxEdges)

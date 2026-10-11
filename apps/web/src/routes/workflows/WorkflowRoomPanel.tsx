@@ -50,7 +50,7 @@ export function WorkflowRoomPanel({
         <>
           {run.isError && (
             <p role="alert" className="orch-error">
-              The run could not load.{' '}
+              Couldn’t load this run.{' '}
               <button type="button" onClick={() => void run.refetch()}>
                 Try again
               </button>
@@ -61,14 +61,14 @@ export function WorkflowRoomPanel({
             <div className="orch-room-body">
               {note && <p className="wf-outcome-note">{note}</p>}
               <p className="orch-muted">
-                {detail.workflowName}, version {detail.version}. The room is the run&apos;s own; use
+                {detail.workflowName}, version {detail.version}. This room belongs to the run. Use
                 the run controls instead of the composer while it runs.{' '}
                 <Link to={`/now/flow/${encodeURIComponent(detail.briefId)}`}>
                   Open the live diagram
                 </Link>
               </p>
               <WorkflowNeeds run={detail} agents={agents} actions={actions} />
-              <h3>Nodes</h3>
+              <h3>Steps</h3>
               <div className="orch-steps">
                 {detail.nodeStates.map((node) => {
                   const def = detail.definition.nodes.find((item) => item.id === node.nodeId)

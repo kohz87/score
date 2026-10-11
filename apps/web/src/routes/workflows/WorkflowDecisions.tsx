@@ -70,7 +70,7 @@ export function NodeGateCard({
               <details>
                 <summary>
                   {labelOf(run, item.nodeId)}{' '}
-                  <span className="orch-muted">result v{item.outputRevision}</span>
+                  <span className="orch-muted">result version {item.outputRevision}</span>
                   {item.truncated ? <span className="orch-muted"> (shortened)</span> : null}
                 </summary>
                 <pre className="orch-pre">{item.output}</pre>
@@ -98,7 +98,7 @@ export function NodeGateCard({
         <span className="orch-muted">
           {rejectStops
             ? 'Rejecting stops the run.'
-            : 'Rejecting sends the run down the "rejected" path.'}
+            : 'Rejecting sends the run down the “rejected” path.'}
         </span>
       </div>
       <ErrorLine error={actions.gate.error} />
@@ -106,7 +106,7 @@ export function NodeGateCard({
   )
 }
 
-/** A node that was abandoned: Retry it (attempts left), or stop the run. */
+/** A step that was given up on: Retry it (tries left), or stop the run. */
 export function RetryCard({
   run,
   nodeId,
@@ -127,10 +127,10 @@ export function RetryCard({
       className="orch-decision"
       aria-label={`Retry ${label}`}
     >
-      <h3>{label} was abandoned</h3>
+      <h3>You stopped waiting for {label}</h3>
       <p>
-        You abandoned its attempt, so the step has no result and nothing after it can start. Retry
-        runs it again as a new attempt ({attemptsLeft} {attemptsLeft === 1 ? 'attempt' : 'attempts'}{' '}
+        You stopped waiting for its try, so the step has no result and nothing after it can start.
+        Retry runs it again as a new try ({attemptsLeft} {attemptsLeft === 1 ? 'try' : 'tries'}{' '}
         left), or stop the run.
       </p>
       {attemptsLeft > 0 ? (
@@ -140,11 +140,11 @@ export function RetryCard({
             checked={sure}
             onChange={(event) => setSure(event.target.checked)}
           />
-          The abandoned attempt may still be running. Score keeps trying to stop it and ignores its
-          late result.
+          The earlier try may still be running. Score keeps trying to stop it and ignores its late
+          result.
         </label>
       ) : (
-        <p className="orch-muted">No attempts are left for this step.</p>
+        <p className="orch-muted">No tries are left for this step.</p>
       )}
       <div className="orch-actions">
         {attemptsLeft > 0 && view && (
@@ -201,8 +201,9 @@ export function RefusalCard({
     >
       <h3>Hermes has refused this step {refusals} times</h3>
       <p>
-        {label} has not started: Hermes turned the request away each time, so nothing ran. Score
-        stopped asking. Try again keeps the same step and asks Hermes once more, or stop the run.
+        {label} hasn’t started: Hermes turned the request away each time, so nothing ran. Score
+        stopped asking. Try again keeps the same step and asks Hermes once more, or you can stop the
+        run.
       </p>
       <div className="orch-actions">
         {view && (
@@ -261,7 +262,7 @@ export function WorkflowRemapCard({
       </h3>
       <p>
         {gone
-          ? 'This agent no longer exists, so its steps can not run. You can stop the run.'
+          ? 'This agent no longer exists, so its steps can’t run. You can stop the run.'
           : 'This run was started with the earlier agent. Its steps stay blocked until you decide.'}
       </p>
       <dl className="orch-facts">
@@ -269,9 +270,9 @@ export function WorkflowRemapCard({
         <dd>{item.nodeIds.map((id) => labelOf(run, id)).join(', ') || 'None yet'}</dd>
         {!gone && (
           <>
-            <dt>Started with</dt>
+            <dt>Agent at start</dt>
             <dd className="orch-mono">{item.frozenIncarnation}</dd>
-            <dt>Now</dt>
+            <dt>Agent now</dt>
             <dd className="orch-mono">{item.currentIncarnation}</dd>
           </>
         )}
@@ -279,10 +280,10 @@ export function WorkflowRemapCard({
       {!gone && item.plan.length > 0 && (
         <>
           <p>
-            Steps that were never sent are cancelled and created again for the new agent, with
-            exactly this text.{' '}
+            Steps that were never sent are dropped and created again for the new agent, with exactly
+            this text.{' '}
             {everyStep ? 'Each one asks you again.' : 'Your decision here is the approval.'} Work
-            that may already have been sent keeps going; the change applies to later work.
+            that may already have been sent keeps going. The change applies to later work.
           </p>
           <ul className="wf-evidence" aria-label="What would be created again">
             {item.plan.map((entry) => (
@@ -463,8 +464,8 @@ export function WorkflowNeeds({
                 className="orch-decision"
                 aria-label="Blocked"
               >
-                <h3>Starting work is blocked until you review a reconciliation list</h3>
-                <p>Open the reconciliation list on Now to review it.</p>
+                <h3>Starting work is blocked until you review a list</h3>
+                <p>Review the list on Now to lift the block.</p>
               </Arrival>
             )
         }

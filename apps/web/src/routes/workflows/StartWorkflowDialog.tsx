@@ -135,7 +135,7 @@ export function StartWorkflowDialog({
       )}
       {(detail.isError || versionQuery.isError) && (
         <p role="alert" className="orch-error">
-          This workflow could not load.
+          Couldn’t load this workflow.
         </p>
       )}
       <form onSubmit={submit} className="orch-form">
@@ -203,7 +203,7 @@ export function StartWorkflowDialog({
         </div>
 
         <fieldset className="orch-field">
-          <legend>When Hermes does not say what a step cost</legend>
+          <legend>When Hermes doesn’t say what a step cost</legend>
           <label className="orch-check">
             <input
               type="radio"
@@ -269,7 +269,7 @@ export function StartWorkflowDialog({
               {data.mapping.map((entry) => (
                 <li key={entry.agentId}>
                   <AgentChip agentId={entry.agentId} agents={agents} />{' '}
-                  <span className="orch-mono" title="The exact agent, by its incarnation">
+                  <span className="orch-mono" title="Identifies the exact version of the agent">
                     {entry.incarnation}
                   </span>
                 </li>
@@ -286,18 +286,17 @@ export function StartWorkflowDialog({
           </p>
         </section>
 
-        <section aria-label="Preflight">
+        <section aria-label="Before it starts">
           <h3>Before it starts</h3>
           {preflight.isPending && chosen !== undefined && <p role="status">Checking…</p>}
           {preflight.isError && (
             <p role="alert" className="orch-error">
-              Could not run the checks.
+              Couldn’t run the checks.
             </p>
           )}
           {data && <PreflightList checks={data.checks} />}
           <p className="orch-muted">
-            Watch shows these runs mixed with the agent&apos;s other work; it is not scoped to a
-            single run.
+            Watch also shows the agent’s other work; it can’t show a single run on its own.
           </p>
         </section>
 
@@ -337,7 +336,7 @@ export function StartWorkflowDialog({
 function describeStartError(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === 'conflict')
-      return 'An agent changed while this screen was open. The list above now shows the current ones; check it and start again.'
+      return 'An agent changed while this screen was open. The list above now shows the current ones. Check it and start again.'
     if (error.code === 'invalid_inputs') return error.message
   }
   return describeCreateError(error)

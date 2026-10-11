@@ -267,14 +267,14 @@ export function filterWorkflowLog<T extends { nodeId: string | null }>(
 // ------------------------------------------------------------------------------------------------------- status
 
 export const graphOutcomeLabel: Record<GraphOutcome, string> = {
-  reached_end: 'Graph reached the end',
-  failed: 'Graph failed',
-  stopped: 'Graph stopped',
+  reached_end: 'Workflow reached its end',
+  failed: 'Workflow failed',
+  stopped: 'Workflow stopped',
 }
 
 /**
  * Two statements, never one: the executor's status and what the graph did. "Finished, not everything confirmed" next to
- * "Graph reached the end" is how an abandoned attempt that was retried reads; the server's note says so in words.
+ * “Workflow reached its end” is how an abandoned attempt that was retried reads; the server's note says so in words.
  */
 export function outcomeLines(run: Pick<WorkflowRunSummary, 'graphOutcome' | 'outcomeNote'>): {
   graph: string | null
@@ -304,13 +304,13 @@ export function workflowNeedsText(
     case 'paused':
       return 'The run is paused'
     case 'unknown':
-      return 'An attempt is not confirmed ended'
+      return 'Some work isn’t confirmed as ended'
     case 'cancel_fence':
-      return `Cancelled ${item.stepId} may still be running`
+      return `Stopped ${item.stepId} may still be running`
     case 'fence':
-      return 'Starting work is blocked until you review a reconciliation list'
+      return 'Starting work is blocked until you review a list'
     case 'retry':
-      return `${nodeLabel(item.nodeId)} was abandoned: retry or stop`
+      return `You stopped waiting for ${nodeLabel(item.nodeId)}: retry or stop`
     case 'remap':
       return `${item.agentId} was replaced: decide whether this run uses the new one`
     case 'refusal_limit':
@@ -343,7 +343,7 @@ export function describeWorkflowEvents(
   const nodes = new Map(run.definition.nodes.map((node) => [node.id, node]))
   const edges = new Map(run.definition.edges.map((edge) => [edge.id, edge]))
   const tokenKinds = new Map(run.tokens.map((token) => [token.edgeId, token.kind]))
-  const title = (id: string | null) => (id ? (nodes.get(id)?.label ?? id) : 'a node')
+  const title = (id: string | null) => (id ? (nodes.get(id)?.label ?? id) : 'a step')
   const line = (event: WorkflowEvent, summary: string | null): WorkflowLogLine[] =>
     summary === null
       ? []
@@ -377,9 +377,9 @@ export function describeWorkflowEvents(
           case 'skipped':
             return line(event, `${name} was skipped`)
           case 'cancelled':
-            return line(event, `${name} was cancelled`)
+            return line(event, `${name} was stopped`)
           case 'unresolved':
-            return line(event, `${name} was abandoned: retry it or stop the run`)
+            return line(event, `You stopped waiting for ${name}: retry it or stop the run`)
           default:
             return []
         }
@@ -416,7 +416,7 @@ export function describeWorkflowEvents(
           return line(event, `${name} is being sent to Hermes again`)
         return line(
           event,
-          `${name} could not start${reasonOf(event.summary) ? `: ${reasonOf(event.summary)}` : ''}`,
+          `${name} couldn’t start${reasonOf(event.summary) ? `: ${reasonOf(event.summary)}` : ''}`,
         )
       }
       case 'graph_end':
@@ -432,9 +432,9 @@ export function describeWorkflowEvents(
               : s.startsWith('limits')
                 ? 'The budget or deadline was changed'
                 : s.startsWith('abandoned')
-                  ? 'You abandoned an attempt that was not confirmed ended'
+                  ? 'You stopped waiting for work that wasn’t confirmed as ended'
                   : s.startsWith('waiver')
-                    ? 'You chose to continue while a cancelled step may still run'
+                    ? 'You chose to continue while a stopped step may still run'
                     : s.startsWith('agent remapped')
                       ? 'The run now uses a replaced agent'
                       : s.startsWith('ended')
