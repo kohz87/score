@@ -19,8 +19,10 @@ import {
 import { useRun, useRunActions } from './orchestration-queries.ts'
 import { ReplayBar } from './ReplayBar.tsx'
 import { useRunPlayback } from './use-run-playback.ts'
+import { useStatusLines } from '../../live/use-activity.ts'
 import {
   BudgetBlock,
+  EndSummary,
   FinishBlock,
   PlanList,
   RunControls,
@@ -82,7 +84,34 @@ export function OrchestrationLive({ orchestrationId }: { orchestrationId: string
   })
 
   const replay = useMemo(() => replayAt(events, count), [events, count])
-  const graph = useMemo(() => (detail ? buildGraph(detail) : { nodes: [], edges: [] }), [detail])
+  // What the working agents are doing, as the caption of their step (live only: a replay shows recorded events).
+  const workingNow = useMemo(() => {
+    if (!detail || isRunOver(detail.status)) return []
+    const running = liveVisuals(detail)
+    return [
+      ...(liveLead(detail) === 'working' ? [{ id: detail.leadAgentId, working: true }] : []),
+      ...detail.stepsList
+        .filter((step) => running.get(step.id) === 'running')
+        .map((step) => ({ id: step.agentId, working: true })),
+    ]
+  }, [detail])
+  const lines = useStatusLines(workingNow)
+  const graph = useMemo(() => {
+    if (!detail) return { nodes: [], edges: [] }
+    const built = buildGraph(detail)
+    if (replaying || lines.size === 0) return built
+    const running = liveVisuals(detail)
+    return {
+      ...built,
+      nodes: built.nodes.map((node) => {
+        const agentId = node.kind === 'lead' ? detail.leadAgentId : node.agentId
+        const live =
+          node.kind === 'lead' ? liveLead(detail) === 'working' : running.get(node.id) === 'running'
+        const line = live ? lines.get(agentId) : undefined
+        return line ? { ...node, status: line } : node
+      }),
+    }
+  }, [detail, lines, replaying])
   if (run.isError)
     return (
       <p role="alert" className="orch-error">
@@ -109,6 +138,11 @@ export function OrchestrationLive({ orchestrationId }: { orchestrationId: string
           <h3 className="orch-title">{detail.title}</h3>
           <p className="orch-goal">{detail.goal}</p>
           <RunStatus run={detail} />
+          <EndSummary
+            run={detail}
+            steps={detail.steps.succeeded}
+            approvals={detail.gates.filter((gate) => gate.decidedAt !== null).length}
+          />
         </div>
         <div className="orch-head-actions">
           <RunControls run={detail} actions={actions} />

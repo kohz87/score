@@ -1,4 +1,7 @@
 import { Arrival } from '../../motion/Arrival.tsx'
+import { gateChip } from '../../live/resolved.ts'
+import { ResolvedList } from '../../live/ResolvedList.tsx'
+import { useRecentlyResolved } from '../../live/use-recently-resolved.ts'
 import type { AgentSummary, NeedsYou, OrchestrationDetail } from '@score/contract'
 import { useState } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
@@ -465,7 +468,16 @@ export function RunNeeds({
   agents: AgentSummary[]
   actions: RunActions
 }) {
-  if (run.needsYou.length === 0) return null
+  const openGates = new Set(
+    run.needsYou.flatMap((item) => (item.kind === 'gate' ? [item.gateId] : [])),
+  )
+  // A decided gate stays where it was, as a chip, for a moment.
+  const decided = useRecentlyResolved(openGates, (id) => {
+    const gate = run.gates.find((item) => item.id === id)
+    const chip = gate ? gateChip(gate) : null
+    return gate && chip ? { label: gate.stepId, chip } : null
+  })
+  if (run.needsYou.length === 0 && decided.length === 0) return null
   // A cancelled step whose attempt is also not confirmed ended is one card with both actions.
   const unknownIds = new Set(
     run.needsYou.flatMap((item) => (item.kind === 'unknown' ? [item.attemptId] : [])),
@@ -478,6 +490,7 @@ export function RunNeeds({
   }
   return (
     <div className="orch-needs" aria-label="Needs you">
+      <ResolvedList items={decided} />
       {run.needsYou.map((item) => {
         switch (item.kind) {
           case 'gate':

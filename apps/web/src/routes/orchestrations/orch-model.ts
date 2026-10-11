@@ -96,6 +96,8 @@ export interface GraphNode {
   title?: string
   /** Replaces the state word on the second line (for example the branch's rule count). */
   caption?: string
+  /** What the agent is doing now (PLAN 5.39): shown on the second line while the step runs; the state word stays in the accessible name. */
+  status?: string
 }
 export interface GraphEdge {
   id: string

@@ -11,6 +11,9 @@ import {
   UnknownCard,
 } from '../orchestrations/RunDecisions.tsx'
 import type { WorkflowRunActions } from './workflow-queries.ts'
+import { gateChip } from '../../live/resolved.ts'
+import { ResolvedList } from '../../live/ResolvedList.tsx'
+import { useRecentlyResolved } from '../../live/use-recently-resolved.ts'
 
 // The decisions a workflow run asks of the person (contract §15). Each one carries the revision the page showed: the
 // run's, plus the node's or gate's own where it names one. A stale page is answered with `409 conflict` and the run is
@@ -355,7 +358,19 @@ export function WorkflowNeeds({
     (item) =>
       deciding || item.kind === 'unknown' || item.kind === 'cancel_fence' || item.kind === 'fence',
   )
-  if (items.length === 0) return null
+  const openGates = new Set(
+    items.flatMap((item) => (item.kind === 'gate' ? [`${item.gateKind}:${item.gateId}`] : [])),
+  )
+  // A decided gate stays where it was, as a chip, for a moment.
+  const decided = useRecentlyResolved(openGates, (key) => {
+    const [kind, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)]
+    const gate = (kind === 'node' ? run.nodeGates : run.assignmentGates).find(
+      (item) => item.id === id,
+    )
+    const chip = gate ? gateChip(gate) : null
+    return gate && chip ? { label: labelOf(run, gate.nodeId), chip } : null
+  })
+  if (items.length === 0 && decided.length === 0) return null
   const unknownIds = new Set(
     items.flatMap((item) => (item.kind === 'unknown' ? [item.attemptId] : [])),
   )
@@ -365,6 +380,7 @@ export function WorkflowNeeds({
   }
   return (
     <div className="orch-needs" aria-label="Needs you">
+      <ResolvedList items={decided} />
       {items.map((item) => {
         switch (item.kind) {
           case 'gate':
