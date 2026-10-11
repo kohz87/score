@@ -32,6 +32,10 @@ test('flow canvas renders the brief, zooms, fits and moves focus across nodes', 
 
   const level = page.getByRole('status', { name: 'Zoom level' })
   const world = page.getByTestId('flow-world')
+  // Other specs on this shared server can add steps to this brief, and then the canvas opens fitted (below 100%);
+  // zoom in until it shows 100% so the rest of the test starts from the same place.
+  for (let i = 0; i < 4 && (await level.textContent()) !== '100%'; i++)
+    await page.getByRole('button', { name: 'Zoom in' }).click()
   await expect(level).toHaveText('100%')
   const before = await world.boundingBox()
   await page.getByRole('button', { name: 'Zoom in' }).click()

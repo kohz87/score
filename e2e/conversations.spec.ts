@@ -44,6 +44,8 @@ test('pin, archive, project and tags organise the room list', async ({ page }) =
   // Keyboard: the menu opens on Enter, moves with the arrow keys and closes with Escape.
   await rowMenu(page, room.label).focus()
   await page.keyboard.press('Enter')
+  await expect(page.getByRole('menuitem', { name: 'Rename…' })).toBeFocused()
+  await page.keyboard.press('ArrowDown')
   await expect(page.getByRole('menuitem', { name: 'Unpin' })).toBeFocused()
   await page.keyboard.press('ArrowDown')
   await expect(page.getByRole('menuitem', { name: 'Archive' })).toBeFocused()
