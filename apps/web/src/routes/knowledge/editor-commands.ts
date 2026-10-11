@@ -2,6 +2,7 @@ import { ensureSyntaxTree, syntaxTree } from '@codemirror/language'
 import { EditorSelection, type ChangeSpec, type EditorState } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
 import type { SyntaxNode } from '@lezer/common'
+import { commitCellEdit, requestCellFocus } from './table-widget.ts'
 import {
   applyOp,
   canApply,
@@ -418,12 +419,15 @@ export function insertImages(view: EditorView, markdown: string[], pos?: number)
 
 // ---- tables ------------------------------------------------------------------------------------------------------
 
+const isLive = (view: EditorView) => view.dom.classList.contains('cm-live')
+
 export function insertTable(view: EditorView, columns: number, rows: number): boolean {
   const model = newTable(columns, rows)
   const text = serializeTable(model)
   const firstCell = cellStarts(model)[0]![0]!
   const header = model.header[0]!
-  insertBlock(view, text, { from: firstCell, to: firstCell + header.length })
+  const start = insertBlock(view, text, { from: firstCell, to: firstCell + header.length })
+  if (isLive(view)) requestCellFocus(view, start, 0, 0, true)
   return true
 }
 
@@ -456,6 +460,7 @@ export function canApplyTableOp(state: EditorState, op: TableOp): boolean {
 }
 
 export function applyTableOp(view: EditorView, op: TableOp): boolean {
+  commitCellEdit(view)
   const info = tableAt(view.state)
   if (!info || !canApply(info.model, info.cell, op)) return false
   const result = applyOp(info.model, info.cell, op)
@@ -468,7 +473,9 @@ export function applyTableOp(view: EditorView, op: TableOp): boolean {
     selection: { anchor: info.from + starts[row]![column]! },
     scrollIntoView: true,
   })
-  view.focus()
+  // In the live editor the table is a grid: the cell the action ended on gets the focus.
+  if (isLive(view)) requestCellFocus(view, info.from, row, column)
+  else view.focus()
   return true
 }
 
@@ -477,6 +484,7 @@ export function alignColumn(view: EditorView, align: Align): boolean {
 }
 
 export function deleteTable(view: EditorView): boolean {
+  commitCellEdit(view)
   const info = tableAt(view.state)
   if (!info) return false
   const { doc } = view.state

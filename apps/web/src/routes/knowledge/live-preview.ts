@@ -11,7 +11,7 @@ import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemir
 import type { SyntaxNode } from '@lezer/common'
 import { tags } from '@lezer/highlight'
 import { imageExtension } from './live-images.ts'
-import { parseTable, renderInline } from './live-table.ts'
+import { TableWidget } from './table-widget.ts'
 
 /**
  * Obsidian-style live preview (PLAN 6.5): CodeMirror decorations and widgets over the Markdown syntax tree. Markup
@@ -108,62 +108,6 @@ export function toggleTask(view: EditorView, pos: number): boolean {
   if (!/^\[[ xX]\]$/.test(marker)) return false
   view.dispatch({ changes: { from: pos + 1, to: pos + 2, insert: marker[1] === ' ' ? 'x' : ' ' } })
   return true
-}
-
-class TableWidget extends WidgetType {
-  constructor(private readonly source: string) {
-    super()
-  }
-  override eq(other: TableWidget) {
-    return other.source === this.source
-  }
-  override toDOM(view: EditorView) {
-    const parsed = parseTable(this.source)
-    const wrap = document.createElement('div')
-    wrap.className = 'cm-lp-table'
-    if (!parsed) {
-      wrap.textContent = this.source
-      return wrap
-    }
-    const opts = view.state.facet(options)
-    const table = document.createElement('table')
-    const head = table.createTHead().insertRow()
-    parsed.header.forEach((cell, index) => {
-      const th = document.createElement('th')
-      th.scope = 'col'
-      if (parsed.align[index]) th.style.textAlign = parsed.align[index]!
-      renderInline(th, cell, opts)
-      head.append(th)
-    })
-    const body = table.createTBody()
-    for (const row of parsed.rows) {
-      const tr = body.insertRow()
-      parsed.header.forEach((_cell, index) => {
-        const td = tr.insertCell()
-        if (parsed.align[index]) td.style.textAlign = parsed.align[index]!
-        renderInline(td, row[index] ?? '', opts)
-      })
-    }
-    wrap.append(table)
-    // A click anywhere else on the table moves the caret into it, which swaps the widget for the editable source.
-    wrap.addEventListener('mousedown', (event) => {
-      const target = event.target as HTMLElement
-      const link = target.closest<HTMLElement>('[data-wikilink]')
-      if (link) {
-        event.preventDefault()
-        opts.onOpenWikilink(link.dataset.wikilink!)
-        return
-      }
-      if (target.closest('a')) return
-      event.preventDefault()
-      view.dispatch({ selection: { anchor: view.posAtDOM(wrap) }, scrollIntoView: true })
-      view.focus()
-    })
-    return wrap
-  }
-  override ignoreEvent() {
-    return true
-  }
 }
 
 const CALLOUT_KIND: Record<string, string> = {
@@ -379,17 +323,13 @@ function build(state: EditorState, focused: boolean): DecorationSet {
           return false
         case 'Table': {
           if (node.parent?.name !== 'Document') return false
-          if (!touches(node.from, node.to)) {
-            out.push(
-              Decoration.replace({
-                widget: new TableWidget(doc.sliceString(node.from, node.to)),
-                block: true,
-              }).range(node.from, node.to),
-            )
-          } else {
-            for (let n = doc.lineAt(node.from).number; n <= doc.lineAt(node.to).number; n += 1)
-              lineDeco(doc.line(n).from, 'cm-lp-table-source')
-          }
+          // Always the rendered grid, also while the caret is in it: cells are edited in place (PLAN 6.8).
+          out.push(
+            Decoration.replace({
+              widget: new TableWidget(doc.sliceString(node.from, node.to), state.facet(options)),
+              block: true,
+            }).range(node.from, node.to),
+          )
           protectedRanges.push([node.from, node.to])
           return false
         }

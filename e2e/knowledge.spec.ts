@@ -134,7 +134,7 @@ test('a change behind the editor shows the conflict banner; Reload takes theirs'
   await expect(editor(page, path)).toContainText('theirs')
 })
 
-test('a table renders in the live editor; clicking it edits the source and saves', async ({
+test('a table stays a grid while editing: click a cell, type, Enter; the Markdown stays canonical', async ({
   page,
 }) => {
   const name = unique()
@@ -149,20 +149,29 @@ test('a table renders in the live editor; clicking it edits the source and saves
   // The task checkbox is a named button that edits the source.
   await editor(page, path).getByRole('checkbox', { name: 'Task: buy apples' }).click()
   await expect(page.getByText('Saved', { exact: true })).toBeVisible()
-  // Clicking the table swaps it for its source.
+  // Clicking a cell opens an input in it; the grid never turns into raw pipes.
   await table.getByRole('cell', { name: 'Apples' }).click()
-  await expect(editor(page, path).locator('.cm-lp-table')).toHaveCount(0)
-  await expect(editor(page, path)).toContainText('| Apples | 3 |')
+  const field = table.getByRole('textbox', { name: 'Item, row 1' })
+  await expect(field).toBeFocused()
+  await expect(editor(page, path).locator('.cm-lp-table')).toHaveCount(1)
+  await expect(editor(page, path)).not.toContainText('| Apples |')
   // With the caret in the table, its tools show in the toolbar.
   await expect(page.getByRole('toolbar', { name: 'Table' })).toBeVisible()
-  await page.keyboard.press('End')
-  await page.keyboard.insertText(' ')
+  await field.fill('**Pears** | ripe')
+  await page.keyboard.press('Enter')
+  await expect(table.getByRole('cell', { name: 'Pears | ripe' })).toBeVisible()
+  await expect(table.locator('td strong')).toHaveText('Pears')
   await expect(page.getByText('Saved', { exact: true })).toBeVisible()
   const saved = (await (await page.request.get(`/api/knowledge/notes/${path}`)).json()) as {
     body: string
   }
   expect(saved.body).toContain('- [x] buy apples')
-  expect(saved.body).toContain('| Apples | 3 |')
+  expect(saved.body).toContain('| **Pears** \\| ripe | 3 |')
+  expect(saved.body).toContain('| --- | ---: |')
+  // Source mode is where the raw Markdown shows.
+  await page.getByRole('button', { name: 'Source' }).click()
+  await expect(editor(page, path)).toContainText('| **Pears** \\| ripe | 3 |')
+  await expect(editor(page, path).locator('.cm-lp-table')).toHaveCount(0)
 })
 
 test('the toolbar formats text, and a table inserted from the size grid survives a reload', async ({
@@ -184,11 +193,11 @@ test('the toolbar formats text, and a table inserted from the size grid survives
   await page.keyboard.press('Enter')
   await page.getByRole('button', { name: 'Table' }).click()
   await page.getByRole('button', { name: '3 columns by 3 rows' }).click()
-  // The caret is in the new table: the table tools appear, and Tab moves between cells.
+  // The first header cell is open for typing; Tab goes to the next cell; the table tools act on the cell with focus.
   await expect(page.getByRole('toolbar', { name: 'Table' })).toBeVisible()
-  await page.keyboard.insertText('Item')
+  await area.locator('.cm-lp-cell-input').fill('Item')
   await page.keyboard.press('Tab')
-  await page.keyboard.insertText('Qty')
+  await area.locator('.cm-lp-cell-input').fill('Qty')
   await page.getByRole('button', { name: 'Add row below' }).click()
   await expect(page.getByText('Saved', { exact: true })).toBeVisible()
   const saved = (await (await page.request.get(`/api/knowledge/notes/${path}`)).json()) as {
@@ -202,6 +211,18 @@ test('the toolbar formats text, and a table inserted from the size grid survives
   const table = editor(page, path).locator('.cm-lp-table table')
   await expect(table.getByRole('columnheader', { name: 'Qty' })).toBeVisible()
   await expect(table.locator('tbody tr')).toHaveCount(3)
+})
+
+test('the focused editor shows a quiet ring, not the ink of primary actions', async ({ page }) => {
+  const name = unique()
+  const path = await createNote(page, name, `# ${name}\n`)
+  await editor(page, path).click()
+  const ring = await page.locator('.cm-editor.cm-focused').evaluate((el) => ({
+    style: getComputedStyle(el).outlineStyle,
+    color: getComputedStyle(el).outlineColor,
+  }))
+  expect(ring.style).toBe('solid')
+  expect(ring.color).not.toBe('rgb(18, 19, 26)')
 })
 
 test('the toolbar stays in view while a long note scrolls', async ({ page }) => {
