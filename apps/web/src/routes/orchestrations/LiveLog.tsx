@@ -84,7 +84,7 @@ export function LiveLog({
             </button>
           </span>
         ) : (
-          <span className="orch-muted">Everything. Click a node to filter.</span>
+          <span className="orch-muted">Everything. Select a step in the diagram to filter.</span>
         )}
       </header>
       <div

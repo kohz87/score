@@ -53,7 +53,7 @@ function WorkflowNeedsOf({ summary }: { summary: WorkflowRunSummary }) {
   )
 }
 
-/** Gates, questions, budget pauses, unknown attempts and the reconciliation list, as typed "Needs you" items. */
+/** Gates, questions, budget pauses, unconfirmed work and the review list, as typed "Needs you" items. */
 export function OrchestrationNow() {
   const runs = useStreamQuery(orchestrationsQuery).data ?? []
   const workflowRuns = useStreamQuery(workflowRunsQuery).data ?? []

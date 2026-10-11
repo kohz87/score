@@ -19,9 +19,9 @@ const POLICIES: { id: GatePolicy; label: string }[] = [
 ]
 
 const checkWord: Record<PreflightCheck['status'], string> = {
-  ok: 'OK',
+  ok: 'Ready',
   fail: 'Missing',
-  unknown: "Can't be checked",
+  unknown: 'Can’t be checked',
 }
 
 export function PreflightList({
@@ -30,7 +30,7 @@ export function PreflightList({
   checks: (Pick<PreflightCheck, 'status' | 'message'> & { id: string })[]
 }) {
   return (
-    <ul className="orch-checks" aria-label="Preflight checks">
+    <ul className="orch-checks" aria-label="Checks before starting">
       {checks.map((check) => (
         <li key={check.id} className={`orch-check-item orch-check-item--${check.status}`}>
           <strong>{checkWord[check.status]}</strong>
@@ -169,7 +169,7 @@ export function NewOrchestrationDialog({
                 </label>
               ))}
           </div>
-          <small className="orch-muted">The lead itself is not on the list.</small>
+          <small className="orch-muted">The lead itself isn’t on the list.</small>
         </fieldset>
         <fieldset className="orch-field">
           <legend>Approvals</legend>
@@ -256,18 +256,17 @@ export function NewOrchestrationDialog({
           </div>
         </details>
 
-        <section aria-label="Preflight">
+        <section aria-label="Before it starts">
           <h3>Before it starts</h3>
           {preflight.isPending && lead !== '' && <p role="status">Checking…</p>}
           {preflight.isError && (
             <p role="alert" className="orch-error">
-              Could not run the checks.
+              Couldn’t run the checks.
             </p>
           )}
           {preflight.data && <PreflightList checks={preflight.data.checks} />}
           <p className="orch-muted">
-            Watch shows these runs mixed with the agent&apos;s other work; it is not yet scoped to a
-            single run.
+            Watch also shows the agent’s other work; it can’t show a single run on its own.
           </p>
         </section>
 
@@ -304,9 +303,8 @@ export function describeCreateError(error: unknown): string {
     if (error.code === 'preflight_failed') return 'Something it needs is missing:'
     if (error.code === 'capacity')
       return 'Score is already running as many orchestrations or steps as it allows. Try again when one has finished.'
-    if (error.code === 'quota_exhausted') return 'There is not enough storage left for another run.'
-    if (error.code === 'fenced')
-      return 'Starting work is blocked until you review the reconciliation list on Now.'
+    if (error.code === 'quota_exhausted') return 'There isn’t enough storage left for another run.'
+    if (error.code === 'fenced') return 'Starting work is blocked until you review the list on Now.'
   }
   return describeOrchError(error)
 }

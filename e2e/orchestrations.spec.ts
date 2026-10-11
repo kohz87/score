@@ -126,7 +126,7 @@ test('start with every-step gates, approve each step, watch the diagram reach su
   await page.locator('[data-node="s2"]').click()
   await expect(page.getByText('Showing s2')).toBeVisible()
   await expect(log).not.toContainText('Assigned s1')
-  await expect(page.getByRole('region', { name: 'Selected node' })).toContainText('Result')
+  await expect(page.getByRole('region', { name: 'Selected step' })).toContainText('Result')
   await page.getByRole('button', { name: 'Show everything' }).click()
 
   // Replay: the scrubber starts at the beginning and the diagram and log follow it.
@@ -231,12 +231,12 @@ test('Stop: the run is Stopping and its attempts are not confirmed ended until t
   })
   await expect(page.getByRole('region', { name: 'Finish' })).toContainText('Not confirmed ended')
   // Abandoning is a separate, acknowledged human decision.
-  const card = page.getByRole('region', { name: 'Attempt not confirmed ended' })
+  const card = page.getByRole('region', { name: 'Not confirmed as ended' })
   await expect(async () => {
     const before = await card.count()
     if (before > 0) {
       await card.first().getByRole('checkbox').first().check()
-      await card.first().getByRole('button', { name: 'Abandon this attempt' }).click()
+      await card.first().getByRole('button', { name: 'Stop waiting for this' }).click()
       await expect(card).toHaveCount(before - 1, { timeout: 4000 })
     }
     expect(await card.count()).toBe(0)

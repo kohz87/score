@@ -77,8 +77,8 @@ export function GateCard({
         <small>{gate.requestedBy === 'lead' ? 'The lead asked' : 'Your gate policy asks'}</small>
       </h3>
       <p className="orch-gate-lead">
-        Approving lets exactly this assignment start. It is frozen; if the lead changes its mind it
-        has to ask again.
+        Approving lets exactly this assignment start. If the lead changes its mind, it has to ask
+        again.
       </p>
       <dl className="orch-facts">
         <dt>Agent</dt>
@@ -86,7 +86,7 @@ export function GateCard({
           <AgentChip agentId={gate.payload.agentId} agents={agents} />{' '}
           <span
             className="orch-mono"
-            title="The agent as it is now; a changed agent blocks the step"
+            title="Identifies the agent’s current set-up. If the agent changes, the step is blocked."
           >
             {gate.payload.agentIncarnation.slice(0, 12)}
           </span>
@@ -102,7 +102,7 @@ export function GateCard({
             : gate.payload.after
                 .map(
                   (id) =>
-                    `${id} (result v${gate.payload.dependencyRevisions[id] ?? 0}, ${run.stepsList.find((step) => step.id === id)?.status ?? 'unknown'})`,
+                    `${id} (result version ${gate.payload.dependencyRevisions[id] ?? 0}, ${run.stepsList.find((step) => step.id === id)?.status ?? 'unknown'})`,
                 )
                 .join(', ')}
         </dd>
@@ -114,7 +114,8 @@ export function GateCard({
               {replaced
                 ? ` (${replaced.status}${replaced.disposition ? `: ${replaced.disposition}` : ''})`
                 : ''}
-              . If it was admitted, the new step may only start once the old one has ended.
+              . If the old step was already accepted to run, the new one starts only once it has
+              ended.
             </dd>
           </>
         )}
@@ -164,7 +165,9 @@ export function InquiryCard({
       <h3>The lead asks</h3>
       <p className="orch-quote">{inquiry.question}</p>
       <label className="orch-field">
-        <span>Your answer (the lead reads it as data; it never changes permissions)</span>
+        <span>
+          Your answer (the lead reads it as information only; it never changes permissions)
+        </span>
         <textarea
           rows={3}
           value={answer}
@@ -298,17 +301,16 @@ export function UnknownCard({
     <Arrival
       arrivalId={`unknown-${attemptId}`}
       className="orch-decision"
-      aria-label="Attempt not confirmed ended"
+      aria-label="Not confirmed as ended"
     >
-      <h3>Not confirmed ended: {label ?? attempt.stepId ?? 'lead turn'}</h3>
+      <h3>Not confirmed as ended: {label ?? attempt.stepId ?? 'lead turn'}</h3>
       <p>
-        Hermes has not said this run finished ({attempt.unknownReason ?? 'no reason recorded'}).
+        Hermes hasn’t said this work finished ({attempt.unknownReason ?? 'no reason recorded'}).
         Score keeps trying to stop it. Until it ends, nothing new starts.
       </p>
       <label className="orch-check">
         <input type="checkbox" checked={sure} onChange={(event) => setSure(event.target.checked)} />
-        These may still be running; Score will keep trying to stop them and will ignore their late
-        results.
+        This may still be running. Score keeps trying to stop it and ignores any late results.
       </label>
       <div className="orch-actions">
         <button
@@ -322,15 +324,15 @@ export function UnknownCard({
             })
           }
         >
-          Abandon this attempt
+          Stop waiting for this
         </button>
       </div>
       <ErrorLine error={actions.abandon.error} />
       {fenceStepId && (
         <>
           <p>
-            It is also the cancelled step {fenceStepId}: nothing new starts until it has ended. You
-            can instead continue while it may still run; that is recorded and is not proof that it
+            It is also the stopped step {fenceStepId}: nothing new starts until it has ended. You
+            can continue while it may still run instead. That is recorded; it doesn’t prove that it
             stopped.
           </p>
           <label className="orch-check">
@@ -339,7 +341,7 @@ export function UnknownCard({
               checked={waive}
               onChange={(event) => setWaive(event.target.checked)}
             />
-            Continue while the cancelled step may still run.
+            Continue while the stopped step may still run.
           </label>
           <div className="orch-actions">
             <button
@@ -373,16 +375,16 @@ export function CancelFenceCard({
     <Arrival
       arrivalId={`cancel-${stepId}`}
       className="orch-decision"
-      aria-label="Cancelled step may still run"
+      aria-label="Stopped step may still run"
     >
-      <h3>Cancelled {stepId} may still be running</h3>
+      <h3>Stopped {stepId} may still be running</h3>
       <p>
-        Nothing new starts until it has ended. You can also continue while it may still run; that is
-        recorded and is not proof that it stopped.
+        Nothing new starts until it has ended. You can also continue while it may still run. That is
+        recorded; it doesn’t prove that it stopped.
       </p>
       <label className="orch-check">
         <input type="checkbox" checked={sure} onChange={(event) => setSure(event.target.checked)} />
-        Continue while the cancelled step may still run.
+        Continue while the stopped step may still run.
       </label>
       <div className="orch-actions">
         <button
@@ -425,7 +427,7 @@ export function RemapCard({
       </h3>
       <p>
         {gone
-          ? 'This agent no longer exists, so the run cannot use it. You can stop the run.'
+          ? 'This agent no longer exists, so the run can’t use it. You can stop the run.'
           : `This run was started with the earlier ${item.agentId}. Nothing is assigned to the new one until you decide. Steps already given to the earlier one stay blocked, and the lead assigns them again.`}
       </p>
       <div className="orch-actions">
@@ -555,7 +557,7 @@ export function RunNeeds({
                 aria-label="Blocked"
               >
                 <h3>{needsYouText(item)}</h3>
-                <p>Open the reconciliation list on Now to review it.</p>
+                <p>Review the list on Now to lift the block.</p>
               </Arrival>
             )
         }
