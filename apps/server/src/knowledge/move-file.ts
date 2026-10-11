@@ -48,12 +48,16 @@ export async function restoreParked(parked: string, source: string): Promise<str
   return null
 }
 
-/** Removes `source` only if it is still the file `st` describes; a newer file there goes back (see top comment). */
+/**
+ * Removes `source` only if it is still the file `st` describes; a newer file there goes back (see top comment).
+ * `removed`: it was ours and is gone; `gone`: someone else removed it first; `changed`: a newer file was there and was
+ * put back (or kept as a visible copy).
+ */
 export async function removeOldName(
   source: string,
   parked: string,
   st: { dev: number; ino: number },
-): Promise<void> {
+): Promise<'removed' | 'gone' | 'changed'> {
   const parkedStat = await fs.rename(source, parked).then(
     () => fs.lstat(parked),
     // Removed by someone else meanwhile: the move has happened.
@@ -62,11 +66,14 @@ export async function removeOldName(
       throw error
     },
   )
-  if (parkedStat !== null) {
-    if (parkedStat.dev === st.dev && parkedStat.ino === st.ino) await fs.unlink(parked)
-    // A newer file took the old name's place after the link: it goes back (or is kept as a visible copy).
-    else await restoreParked(parked, source)
+  if (parkedStat === null) return 'gone'
+  if (parkedStat.dev === st.dev && parkedStat.ino === st.ino) {
+    await fs.unlink(parked)
+    return 'removed'
   }
+  // A newer file took the old name's place after the link: it goes back (or is kept as a visible copy).
+  await restoreParked(parked, source)
+  return 'changed'
 }
 
 const exists = () => new HttpError(409, 'exists', 'A file with that name already exists.')
@@ -81,7 +88,7 @@ export async function moveNoReplace(
   dest: string,
   parked: string = parkedNameFor(source),
 ): Promise<void> {
-  const st = await fs.lstat(source).catch((error: NodeJS.ErrnoException) => {
+  await fs.lstat(source).catch((error: NodeJS.ErrnoException) => {
     if (error.code === 'ENOENT') throw new HttpError(404, 'not_found', 'Couldn’t find that file.')
     throw error
   })
@@ -98,7 +105,21 @@ export async function moveNoReplace(
       )
     throw error
   }
-  await removeOldName(source, parked, st)
+  // What was linked is what is at `dest` now (the source may have been replaced between the lstat and the link).
+  const linked = await fs.lstat(dest)
+  const outcome = await removeOldName(source, parked, linked)
+  if (outcome === 'changed') {
+    // The file was saved again while it moved: the newer version is back at the old name, so the older copy at the
+    // new name is withdrawn (only if it is still ours) and nothing claims a move of the newer file.
+    await removeOldName(dest, parkedNameFor(dest), linked)
+    await syncDir(path.dirname(source))
+    await syncDir(path.dirname(dest))
+    throw new HttpError(
+      409,
+      'conflict',
+      'The file changed while it was being moved, so it stayed where it was. Try again.',
+    )
+  }
   await syncDir(path.dirname(source))
   await syncDir(path.dirname(dest))
 }

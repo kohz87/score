@@ -38,13 +38,29 @@ function externalReplace(file: string, content: string) {
 }
 
 describe('S2-001 a move never deletes a file that replaced its source', () => {
+  test('a source replaced between the check and the link is moved whole, never left under two names', async () => {
+    const dir = tmp()
+    fs.writeFileSync(path.join(dir, 'a.md'), 'original')
+    const realLink = fs.promises.link.bind(fs.promises)
+    vi.spyOn(fs.promises, 'link').mockImplementationOnce(async (a, b) => {
+      externalReplace(path.join(dir, 'a.md'), 'saved just before the link')
+      await realLink(a, b)
+    })
+    await moveNoReplace(path.join(dir, 'a.md'), path.join(dir, 'b.md'))
+    vi.restoreAllMocks()
+    expect(fs.existsSync(path.join(dir, 'a.md'))).toBe(false)
+    expect(fs.readFileSync(path.join(dir, 'b.md'), 'utf8')).toBe('saved just before the link')
+    expect(fs.statSync(path.join(dir, 'b.md')).nlink).toBe(1)
+  })
+
   test('note: an external atomic save right after the link survives', async () => {
     h = await makeVault({ files: { 'a.md': 'original' } })
     afterLink('a.md', 'b.md', () => externalReplace(path.join(h!.vaultDir, 'a.md'), 'new edit'))
-    await h.vault.moveNote('a.md', 'b.md', false)
+    await expect(h.vault.moveNote('a.md', 'b.md', false)).rejects.toMatchObject({ status: 409 })
     vi.restoreAllMocks()
     expect(read('a.md')).toBe('new edit')
-    expect(read('b.md')).toBe('original')
+    // The older copy isn't presented as the moved file.
+    expect(fs.existsSync(path.join(h.vaultDir, 'b.md'))).toBe(false)
     expect(fs.readdirSync(h.vaultDir).filter((name) => name.startsWith('.score-move'))).toEqual([])
   })
 
@@ -54,10 +70,10 @@ describe('S2-001 a move never deletes a file that replaced its source', () => {
     afterLink('d.pdf', 'e.pdf', () =>
       externalReplace(path.join(h!.vaultDir, 'd.pdf'), 'new external edit'),
     )
-    await h.vault.docs.move('d.pdf', 'e.pdf')
+    await expect(h.vault.docs.move('d.pdf', 'e.pdf')).rejects.toMatchObject({ status: 409 })
     vi.restoreAllMocks()
     expect(read('d.pdf')).toBe('new external edit')
-    expect(fs.readFileSync(path.join(h.vaultDir, 'e.pdf')).includes('original')).toBe(true)
+    expect(fs.existsSync(path.join(h.vaultDir, 'e.pdf'))).toBe(false)
   })
 
   test('a file that is put back keeps a visible copy when the old name was taken again', async () => {
@@ -70,9 +86,13 @@ describe('S2-001 a move never deletes a file that replaced its source', () => {
       await real(a, b)
       fs.writeFileSync(path.join(dir, 'a.md'), 'newest')
     })
-    await moveNoReplace(path.join(dir, 'a.md'), path.join(dir, 'b.md'))
+    await expect(
+      moveNoReplace(path.join(dir, 'a.md'), path.join(dir, 'b.md')),
+    ).rejects.toMatchObject({
+      status: 409,
+    })
     vi.restoreAllMocks()
-    expect(fs.readFileSync(path.join(dir, 'b.md'), 'utf8')).toBe('original')
+    expect(fs.existsSync(path.join(dir, 'b.md'))).toBe(false)
     expect(fs.readFileSync(path.join(dir, 'a.md'), 'utf8')).toBe('newest')
     const copies = fs.readdirSync(dir).filter((name) => name.includes('conflict copy'))
     expect(copies).toHaveLength(1)
