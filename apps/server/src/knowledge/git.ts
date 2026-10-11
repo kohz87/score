@@ -226,6 +226,17 @@ export class VaultGit {
     }
   }
 
+  /** Paths git tracks (HEAD's index), or null when git is off or cannot say. One call per rebuild. */
+  async trackedPaths(): Promise<Set<string> | null> {
+    if (!this.available) return null
+    try {
+      const out = await this.git(['ls-files', '-z'])
+      return new Set(out.split('\0').filter((name) => name !== ''))
+    } catch {
+      return null
+    }
+  }
+
   /** `path -> author column` for the newest commit that touched each path (bounded history walk). */
   async lastAuthors(limit = 2000): Promise<Map<string, string>> {
     const result = new Map<string, string>()

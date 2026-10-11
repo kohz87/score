@@ -118,6 +118,12 @@ Notes shared by you and your agents. Plain Markdown files with optional frontmat
 Every save is a git commit, so nothing is ever lost.
 `
 
+/** A stat that failed because the path is genuinely gone (anything else is "couldn't verify"). */
+function isNotFound(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code
+  return code === 'ENOENT' || code === 'ENOTDIR'
+}
+
 export class KnowledgeVault {
   readonly git: VaultGit
   /** Uploaded documents (PLAN 6.6); share this vault's lock, git and index. */
@@ -521,7 +527,7 @@ export class KnowledgeVault {
     files: Map<string, { mtimeMs: number; size: number }>
     documents: Map<string, { mtimeMs: number; size: number }>
     folders: string[]
-    /** Folders (relative; '' = the whole vault) whose contents could not be fully listed. */
+    /** Folders (relative; '' = the whole vault) or single files whose state could not be verified. */
     incomplete: Set<string>
   }> {
     const incomplete = new Set<string>()
@@ -554,8 +560,9 @@ export class KnowledgeVault {
           try {
             const stat = await fs.lstat(path.join(dir, entry.name))
             files.set(childRel, { mtimeMs: stat.mtimeMs, size: stat.size })
-          } catch {
-            // vanished between readdir and stat
+          } catch (error) {
+            // ENOENT: vanished between readdir and stat. Anything else proves nothing about this file.
+            if (!isNotFound(error)) incomplete.add(childRel)
           }
         } else if (entry.isFile() && isDocumentPath(entry.name)) {
           if (documents.size >= MAX_FILES) {
@@ -565,8 +572,9 @@ export class KnowledgeVault {
           try {
             const stat = await fs.lstat(path.join(dir, entry.name))
             documents.set(childRel, { mtimeMs: stat.mtimeMs, size: stat.size })
-          } catch {
-            // vanished between readdir and stat
+          } catch (error) {
+            // ENOENT: vanished between readdir and stat. Anything else proves nothing about this file.
+            if (!isNotFound(error)) incomplete.add(childRel)
           }
         }
       }
@@ -684,7 +692,13 @@ export class KnowledgeVault {
           'DELETE FROM knowledge_fts; DELETE FROM knowledge_links; DELETE FROM knowledge_notes; DELETE FROM knowledge_doc_fts; DELETE FROM knowledge_documents;',
         )
       })
-      await this.scan(false)
+      // Whether a document is versioned is git's to say, not the first-upload size policy.
+      this.docs.trackedHint = await this.git.trackedPaths()
+      try {
+        await this.scan(false)
+      } finally {
+        this.docs.trackedHint = null
+      }
       await this.fillAuthors()
     })
   }

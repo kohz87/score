@@ -110,7 +110,12 @@ function cleanSegments(input: string): string[] {
  * Uploaded documents in the vault (PLAN 6.6): PDF, DOCX, CSV, JSON, HTML, images and zips next to the Markdown notes.
  * The files are the truth; the DB rows and the FTS text are an index. All changes run through the vault's lock.
  */
+type IngestOutcome = 'unchanged' | 'upserted' | 'removed' | 'unreadable'
+
 export class KnowledgeDocuments {
+  /** Paths git tracks, set only while the vault rebuilds the index; null otherwise. */
+  trackedHint: Set<string> | null = null
+
   constructor(
     private readonly vault: KnowledgeVault,
     private readonly db: ScoreDb,
@@ -259,8 +264,13 @@ export class KnowledgeDocuments {
     if (row && Math.trunc(stat.mtimeMs) === row.mtime_ms && stat.size === row.size) return row
     await this.vault.runLocked(async () => {
       const result = await this.ingestExisting(rel, 'outside')
-      if (result)
-        await this.vault.publishChange({ path: rel, kind: 'written', to: null, by: 'outside' })
+      if (result === 'upserted' || result === 'removed')
+        await this.vault.publishChange({
+          path: rel,
+          kind: result === 'removed' ? 'deleted' : 'written',
+          to: null,
+          by: 'outside',
+        })
     })
     const fresh = this.db.read((sqlite) => this.row(sqlite, rel))
     if (!fresh) throw new HttpError(404, 'not_found', 'Couldn’t find that document.')
@@ -605,13 +615,13 @@ export class KnowledgeDocuments {
   // ---- scanning --------------------------------------------------------------------------------------------
 
   /** Indexes the file at `rel` from disk (caller holds the lock). Null when it is not a valid document. */
-  private async ingestExisting(rel: string, author: KnowledgeAuthor | null): Promise<boolean> {
+  private async ingestExisting(
+    rel: string,
+    author: KnowledgeAuthor | null,
+  ): Promise<IngestOutcome> {
     const type = documentTypeOfPath(rel)
     const { abs, stat } = await this.vault.lookup(rel.split('/'))
-    if (!type || !stat?.isFile() || stat.size > MAX_FILE_BYTES) {
-      this.db.tx((sqlite) => this.removeIndex(sqlite, rel))
-      return false
-    }
+    if (!type || !stat?.isFile() || stat.size > MAX_FILE_BYTES) return this.dropIndex(rel)
     const bytes = await this.vault.readContainedBuffer(abs, MAX_FILE_BYTES)
     const hash = hashContent(bytes)
     const known = this.db.read((sqlite) => this.row(sqlite, rel))
@@ -621,14 +631,11 @@ export class KnowledgeDocuments {
           .prepare('UPDATE knowledge_documents SET mtime_ms = ?, size = ? WHERE path = ?')
           .run(Math.trunc(stat.mtimeMs), stat.size, rel),
       )
-      return false
+      return 'unchanged'
     }
     // A file whose bytes don't match its extension is left alone (and unlisted), not indexed as something it isn't.
     const facts = bytesMatch(type, bytes) ? await this.documentFacts(rel, type, bytes) : null
-    if (!facts) {
-      this.db.tx((sqlite) => this.removeIndex(sqlite, rel))
-      return false
-    }
+    if (!facts) return this.dropIndex(rel)
     this.db.tx((sqlite) =>
       this.writeIndex(
         sqlite,
@@ -637,13 +644,24 @@ export class KnowledgeDocuments {
           mtimeMs: stat.mtimeMs,
           size: stat.size,
           hash,
-          versioned: stat.size <= MAX_VERSIONED_BYTES || known?.versioned === 1,
+          // A rebuild has no rows to remember, so git's tracking stands in for them.
+          versioned:
+            stat.size <= MAX_VERSIONED_BYTES ||
+            known?.versioned === 1 ||
+            this.trackedHint?.has(rel) === true,
         },
         facts,
         author,
       ),
     )
-    return true
+    return 'upserted'
+  }
+
+  /** Drops the row for a file that is no longer an indexable document; says whether there was one. */
+  private dropIndex(rel: string): IngestOutcome {
+    const had = this.db.read((sqlite) => this.row(sqlite, rel)) !== undefined
+    if (had) this.db.tx((sqlite) => this.removeIndex(sqlite, rel))
+    return had ? 'removed' : 'unchanged'
   }
 
   /** Brings the document index in line with the files found by the vault's walk (caller holds the lock). */
@@ -655,6 +673,7 @@ export class KnowledgeDocuments {
   ): Promise<string[]> {
     const known = new Map(this.db.read((sqlite) => this.rows(sqlite)).map((row) => [row.path, row]))
     const changed: string[] = []
+    const dropped = new Set<string>()
     for (const rel of known.keys())
       if (!files.has(rel) && covered(rel)) {
         this.db.tx((sqlite) => this.removeIndex(sqlite, rel))
@@ -670,16 +689,21 @@ export class KnowledgeDocuments {
       )
         continue
       try {
-        if (await this.ingestExisting(rel, announce || row ? 'outside' : null)) changed.push(rel)
+        const outcome = await this.ingestExisting(rel, announce || row ? 'outside' : null)
+        if (outcome === 'upserted') changed.push(rel)
+        else if (outcome === 'removed') {
+          changed.push(rel)
+          dropped.add(rel)
+        }
       } catch {
-        // vanished, or no longer a plain file inside the vault
+        // 'unreadable' (vanished, or not a plain file inside the vault): the index keeps what it has
       }
     }
     if (announce)
       for (const rel of changed.slice(0, MAX_EVENTS))
         await this.vault.publishChange({
           path: rel,
-          kind: files.has(rel) ? 'written' : 'deleted',
+          kind: files.has(rel) && !dropped.has(rel) ? 'written' : 'deleted',
           to: null,
           by: 'outside',
         })

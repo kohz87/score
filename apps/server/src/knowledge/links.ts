@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { fromMarkdown } from 'mdast-util-from-markdown'
 
 // Wikilinks (contract §12): extraction, Obsidian-style resolution and rewriting. Pure; no I/O.
 // Resolution ideas follow the owner's Artemis vault server (packages/vault-server), reimplemented.
@@ -14,140 +15,56 @@ export interface ParsedLink {
 
 type Range = [number, number]
 
-const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})(.*)$/
-const LIST_MARKER = /^ {0,3}(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/
+const LINE_PREFIX = /^[ \t>]*(?:(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$)[ \t>]*)*/
+const MARKER_ONLY = /^[*_\-=\s]*$/
+const DEFINITION = /^\[[^\]]*\]:/
 
-/** Leading columns of a line (a tab counts to the next multiple of four). */
-function indentOf(line: string): number {
-  let columns = 0
-  for (const char of line) {
-    if (char === ' ') columns++
-    else if (char === '\t') columns += 4 - (columns % 4)
-    else break
-  }
-  return columns
+/**
+ * The parser's emphasis and link resolution is super-linear on long runs of `*`, `_`, `!`, brackets, `&` and `<`, and neither
+ * changes where code is (code spans bind tighter, and block structure comes first). So those characters are
+ * (and `&`, `<` inside a line) swapped for a same-length letter in line content, keeping offsets, container prefixes (list markers, `>`),
+ * marker-only lines (thematic breaks, setext underlines) and link reference definitions as they are.
+ */
+function neutraliseInline(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => {
+      const prefix = LINE_PREFIX.exec(line)![0]
+      const rest = line.slice(prefix.length)
+      if (MARKER_ONLY.test(rest) || (rest.length < 1000 && DEFINITION.test(rest))) return line
+      // A `<` opening the line may start an HTML block, which does change what is code.
+      const head = rest.startsWith('<') ? '<' : ''
+      return prefix + head + rest.slice(head.length).replace(/[*_!&<[\]]/g, 'x')
+    })
+    .join('\n')
 }
 
 /**
- * Block-level literals (CommonMark): fenced code (opened by 3+ backticks or tildes, indented up to 3 spaces; closed
- * by the same character, at least as long, nothing else on the line; an unclosed fence runs to the end) and indented
- * code (4+ columns after a blank line or at the start; it cannot interrupt a paragraph, and inside a list the
- * indentation continues the item instead).
+ * Ranges (sorted, disjoint) of fenced and indented code blocks and inline code spans, which never contain links.
+ * They come from the CommonMark parse tree (containers such as lists and blockquotes included), so indexing,
+ * headings, images and rewrites all share one reading of where code is.
  */
-function blockCodeRanges(text: string): Range[] {
-  const ranges: Range[] = []
-  let offset = 0
-  let fence: { char: string; length: number; start: number } | null = null
-  let previousBlank = true
-  let inList = false
-  let indented: { start: number; end: number } | null = null
-  const flushIndented = () => {
-    if (indented) ranges.push([indented.start, indented.end])
-    indented = null
-  }
-  for (const line of text.split('\n')) {
-    const lineStart = offset
-    const lineEnd = offset + line.length
-    offset = lineEnd + 1
-    if (fence) {
-      const close = new RegExp(`^ {0,3}${fence.char}{${fence.length},}[ \\t]*\\r?$`).test(line)
-      if (close) {
-        ranges.push([fence.start, lineEnd])
-        fence = null
-        previousBlank = false
-      }
-      continue
-    }
-    const blank = line.trim() === ''
-    if (blank) {
-      previousBlank = true
-      continue
-    }
-    const open = FENCE_OPEN.exec(line)
-    if (open && !(open[1]![0] === '`' && open[2]!.includes('`'))) {
-      flushIndented()
-      fence = { char: open[1]![0]!, length: open[1]!.length, start: lineStart }
-      previousBlank = false
-      continue
-    }
-    if (indentOf(line) >= 4 && (previousBlank || indented) && !inList) {
-      indented ??= { start: lineStart, end: lineEnd }
-      indented.end = lineEnd
-      previousBlank = false
-      continue
-    }
-    flushIndented()
-    if (LIST_MARKER.test(line)) inList = true
-    else if (previousBlank && indentOf(line) === 0) inList = false
-    previousBlank = false
-  }
-  if (fence) ranges.push([fence.start, text.length])
-  flushIndented()
-  return ranges
-}
-
-interface BacktickRun {
-  start: number
-  length: number
-  /** An odd number of backslashes directly before it: its first backtick is literal outside code. */
-  escaped: boolean
-}
-
-/** Ranges (sorted, disjoint) of fenced and indented code blocks and inline code spans, which never contain links. */
 export function codeRanges(text: string): Array<[number, number]> {
-  const blocks = blockCodeRanges(text)
-  const inBlock = (position: number): boolean => inRanges(blocks, position)
-  // Inline code: a run of N backticks closes at the next run of exactly N in the same paragraph. A backslash
-  // before the opening backtick makes it literal (backslashes do not escape inside code).
-  const runs: BacktickRun[] = []
-  for (let index = 0; index < text.length; index++) {
-    if (text[index] !== '`') continue
-    if (inBlock(index)) continue
-    let end = index
-    while (text[end] === '`') end++
-    let slashes = 0
-    while (index - slashes - 1 >= 0 && text[index - slashes - 1] === '\\') slashes++
-    runs.push({ start: index, length: end - index, escaped: slashes % 2 === 1 })
-    index = end - 1
-  }
-  const byLength = new Map<number, number[]>()
-  runs.forEach((run, position) => {
-    byLength.set(run.length, [...(byLength.get(run.length) ?? []), position])
-  })
-  const breaks: number[] = []
-  for (const match of text.matchAll(/\n[ \t]*\r?\n/g)) breaks.push(match.index)
-  const paragraphOf = (position: number): number => {
-    let low = 0
-    let high = breaks.length
-    while (low < high) {
-      const mid = (low + high) >> 1
-      if (breaks[mid]! < position) low = mid + 1
-      else high = mid
+  // No backtick, tilde, tab or four spaces: nothing can be code, so skip the parser (most notes).
+  if (!/[`~\t]| {4}/.test(text)) return []
+  const found: Range[] = []
+  // Iterative walk: a deeply nested document must not overflow the call stack.
+  const stack: Array<
+    ReturnType<typeof fromMarkdown> | ReturnType<typeof fromMarkdown>['children'][number]
+  > = [fromMarkdown(neutraliseInline(text))]
+  while (stack.length > 0) {
+    const node = stack.pop()!
+    if (node.type === 'code' || node.type === 'inlineCode') {
+      const start = node.position?.start.offset
+      const end = node.position?.end.offset
+      if (start !== undefined && end !== undefined) found.push([start, end])
+      continue
     }
-    return low
+    if ('children' in node) for (const child of node.children) stack.push(child)
   }
-  const spans: Range[] = []
-  for (let k = 0; k < runs.length; k++) {
-    const opener = runs[k]!
-    const length = opener.escaped ? opener.length - 1 : opener.length
-    if (length === 0) continue
-    const start = opener.escaped ? opener.start + 1 : opener.start
-    const candidates = byLength.get(length) ?? []
-    // First same-length run after the opener (binary search over positions).
-    let low = 0
-    let high = candidates.length
-    while (low < high) {
-      const mid = (low + high) >> 1
-      if (candidates[mid]! <= k) low = mid + 1
-      else high = mid
-    }
-    const closer = candidates[low] === undefined ? undefined : runs[candidates[low]!]
-    if (closer === undefined || paragraphOf(closer.start) !== paragraphOf(start)) continue
-    spans.push([start, closer.start + closer.length])
-    k = candidates[low]!
-  }
+  found.sort((a, b) => a[0] - b[0])
   const merged: Range[] = []
-  for (const range of [...blocks, ...spans].sort((a, b) => a[0] - b[0])) {
+  for (const range of found) {
     const last = merged[merged.length - 1]
     if (last && range[0] <= last[1]) last[1] = Math.max(last[1], range[1])
     else merged.push([range[0], range[1]])
@@ -214,6 +131,13 @@ export interface NoteIndex {
   bySuffix: Map<string, string[]>
 }
 
+/** Appends in place: copying the bucket per note made common basenames quadratic. */
+function pushTo(map: Map<string, string[]>, key: string, value: string): void {
+  const bucket = map.get(key)
+  if (bucket === undefined) map.set(key, [value])
+  else bucket.push(value)
+}
+
 export function buildNoteIndex(paths: Iterable<string>): NoteIndex {
   const all = new Set<string>()
   const byLowerPath = new Map<string, string[]>()
@@ -221,11 +145,11 @@ export function buildNoteIndex(paths: Iterable<string>): NoteIndex {
   for (const notePath of paths) {
     all.add(notePath)
     const lower = notePath.toLowerCase()
-    byLowerPath.set(lower, [...(byLowerPath.get(lower) ?? []), notePath])
+    pushTo(byLowerPath, lower, notePath)
     const segments = lower.split('/')
     for (let index = 0; index < segments.length; index++) {
       const suffix = segments.slice(index).join('/')
-      bySuffix.set(suffix, [...(bySuffix.get(suffix) ?? []), notePath])
+      pushTo(bySuffix, suffix, notePath)
     }
   }
   return { has: (candidate) => all.has(candidate), byLowerPath, bySuffix }
