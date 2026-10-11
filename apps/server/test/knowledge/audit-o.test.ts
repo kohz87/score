@@ -244,10 +244,14 @@ describe('SCORE-018 same-size, same-mtime edits', () => {
   test('a scan refreshes a note whose content changed but whose size and mtime did not', async () => {
     h = await makeVault({ files: { 'a.md': 'alpha [[b]]', 'b.md': 'target', 'c.md': 'gamma' } })
     const file = path.join(h.vaultDir, 'a.md')
-    const before = fs.statSync(file)
+    // A whole-second timestamp survives utimes exactly (fractional milliseconds can round by one), so the
+    // index and the edited file really share size and mtime.
+    const stamp = new Date(Math.floor(Date.now() / 1000) * 1000 - 60_000)
+    fs.utimesSync(file, stamp, stamp)
+    await h.vault.scanNow()
     fs.writeFileSync(file, 'omega [[c]]')
-    fs.utimesSync(file, before.atime, before.mtime)
-    expect(Math.trunc(fs.statSync(file).mtimeMs)).toBe(Math.trunc(before.mtimeMs))
+    fs.utimesSync(file, stamp, stamp)
+    expect(fs.statSync(file).mtimeMs).toBe(stamp.getTime())
     expect(await h.vault.scanNow()).toEqual(['a.md'])
     expect(h.vault.search('omega', 5).map((x) => x.path)).toEqual(['a.md'])
     expect((await h.vault.readNote('c.md')).backlinks.map((b) => b.path)).toEqual(['a.md'])
