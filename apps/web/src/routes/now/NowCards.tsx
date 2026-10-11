@@ -43,10 +43,10 @@ export function ThreadCard({
   agents: AgentSummary[]
 }) {
   return (
-    <section className="now-card now-thread" aria-label="Thread">
+    <section className="now-card now-thread" aria-label="Room">
       <div className="now-card-head">
-        <h2>Thread</h2>
-        <span className="now-card-sub">Latest from the room</span>
+        <h2>Room</h2>
+        <span className="now-card-sub">Latest messages</span>
         <span className="now-grow" />
         {thread && <Link to={`/chat/${encodeURIComponent(thread.roomId)}`}>Open in Chat</Link>}
       </div>
@@ -197,7 +197,7 @@ function AskingBody({
           </div>
           {current.choices.includes('always') && (
             <button type="button" className="now-always" onClick={() => void choose('always')}>
-              Always allow this for {name}
+              Always approve this for {name}
             </button>
           )}
         </>
@@ -238,7 +238,7 @@ export function AskingCard({
       ) : (
         <>
           <h2>Nothing needs you</h2>
-          <p className="now-asking-note">When an agent asks for approval, it shows up here.</p>
+          <p className="now-asking-note">When an agent needs your approval, it appears here.</p>
         </>
       )}
     </section>
@@ -263,10 +263,10 @@ export function MadeTodayCard({
       <div className="now-card-head">
         <h2>Made today</h2>
         <span className="now-grow" />
-        <Link to="/tasks">All work</Link>
+        <Link to="/tasks">All tasks</Link>
       </div>
       {items.length === 0 ? (
-        <p className="now-empty">Nothing finished yet today.</p>
+        <p className="now-empty">Nothing finished today yet.</p>
       ) : (
         <ul className="now-made-list">
           {items.map((item, index) => {

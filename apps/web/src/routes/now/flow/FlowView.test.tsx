@@ -61,7 +61,7 @@ beforeEach(() => {
         if (pauseFails) {
           fixture.flow.brief.status = 'paused'
           return response(
-            { error: { code: 'upstream_failed', message: '1 task could not be held.' } },
+            { error: { code: 'upstream_failed', message: '1 task couldn’t be held.' } },
             502,
           )
         }
@@ -265,7 +265,7 @@ test('a partial pause shows the server error and keeps a retry for the failed ac
   pauseFails = true
   setup()
   fireEvent.click(await screen.findByRole('button', { name: 'Pause run' }))
-  expect((await screen.findByRole('alert')).textContent).toBe('1 task could not be held.')
+  expect((await screen.findByRole('alert')).textContent).toBe('1 task couldn’t be held.')
   // The brief is now paused, yet the failed action stays retryable.
   await screen.findByText('Paused')
   expect(screen.getByRole('button', { name: 'Try pause again' })).toBeTruthy()
@@ -275,7 +275,7 @@ test('a partial pause shows the server error and keeps a retry for the failed ac
 test('continuous unrelated events do not cancel a slow flow read', async () => {
   flowDelayMs = 400
   setup()
-  await screen.findByText('Loading the flow...')
+  await screen.findByText('Loading the flow…')
   let seq = 10
   const deltas = setInterval(() => {
     Source.current.dispatchEvent(
@@ -291,7 +291,7 @@ test('continuous unrelated events do not cancel a slow flow read', async () => {
     )
   }, 50)
   try {
-    await waitFor(() => expect(screen.queryByText('Loading the flow...')).toBeNull(), {
+    await waitFor(() => expect(screen.queryByText('Loading the flow…')).toBeNull(), {
       timeout: 3000,
     })
   } finally {
@@ -347,20 +347,20 @@ test('a step worked on by attempts lists them, reads tools as not observed and s
   fixture.flow.stats = { ...fixture.flow.stats, spendUsd: null, attempts: 2 }
   setup()
   const inspector = await screen.findByRole('complementary', { name: 'Selected step' })
-  const attempts = await within(inspector).findByRole('region', { name: 'Attempts' })
+  const attempts = await within(inspector).findByRole('region', { name: 'Runs on this task' })
   const rows = within(attempts).getAllByRole('listitem')
   expect(rows).toHaveLength(2)
   expect(rows[0]!.textContent).toContain('builder')
   expect(rows[1]!.textContent).toContain('Unattributed')
-  expect(rows[1]!.textContent).toContain('no longer observed since')
-  expect(rows[1]!.textContent).toContain('Provenance unknown')
+  expect(rows[1]!.textContent).toContain('no longer seen since')
+  expect(rows[1]!.textContent).toContain('Source unclear')
   expect(within(rows[0]!).getByRole('link', { name: 'Completed' }).getAttribute('href')).toBe(
     '/tasks/t1',
   )
   expect(within(rows[1]!).getByRole('link', { name: 'Ended (unknown)' }).getAttribute('href')).toBe(
     '/attempts/kr_2',
   )
-  expect(within(inspector).getAllByText('Not observed')).toHaveLength(2)
+  expect(within(inspector).getAllByText('Not recorded')).toHaveLength(2)
   const stats = screen.getByRole('region', { name: 'This run so far' })
   expect(within(stats).getByText('partial')).toBeTruthy()
 })

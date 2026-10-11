@@ -66,8 +66,8 @@ function blockPath(block: LaneBlock): string | null {
 function blockNotes(block: LaneBlock): string[] {
   const notes: string[] = []
   if (block.observationEndedAt)
-    notes.push(`no longer observed since ${clockLabel(Date.parse(block.observationEndedAt))}`)
-  if (block.provenance === 'partial') notes.push('provenance unknown')
+    notes.push(`no longer seen since ${clockLabel(Date.parse(block.observationEndedAt))}`)
+  if (block.provenance === 'partial') notes.push('source unclear')
   return notes
 }
 
@@ -416,7 +416,7 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
         {hasUnobserved && (
           <span>
             <span className="now-legend-swatch now-legend-swatch--unobserved" />
-            No longer observed
+            No longer seen
           </span>
         )}
         <span>

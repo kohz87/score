@@ -72,7 +72,7 @@ export function NowPage() {
       </section>
       {pause.isError && (
         <p className="now-error" role="alert">
-          Could not {paused ? 'resume' : 'pause'} the team. Please try again.
+          Couldn’t {paused ? 'resume' : 'pause'} the team. Try again.
         </p>
       )}
       {view === 'score' && <OrchestrationNow />}
@@ -109,7 +109,7 @@ export function NowPage() {
           </>
         ) : now.isError ? (
           <p className="now-error" role="alert">
-            Could not load the score.{' '}
+            Couldn’t load the score.{' '}
             <button type="button" onClick={() => void now.refetch()}>
               Try again
             </button>

@@ -11,7 +11,7 @@ function AgentRoutines({ agent }: { agent: AgentSummary }) {
         <AgentGlyph agent={agent} size="sm" />
         <h2>{agent.name}</h2>
         <span className="now-grow" />
-        <Link to={`/team/${encodeURIComponent(agent.id)}`}>Manage on Team page</Link>
+        <Link to={`/team/${encodeURIComponent(agent.id)}`}>Manage on the Team page</Link>
       </div>
       {routines.isPending ? (
         <p className="now-empty" role="status">
@@ -19,10 +19,10 @@ function AgentRoutines({ agent }: { agent: AgentSummary }) {
         </p>
       ) : routines.isError ? (
         <p className="now-error" role="alert">
-          Could not load routines.
+          Couldn’t load routines.
         </p>
       ) : routines.data.length === 0 ? (
-        <p className="now-empty">No routines.</p>
+        <p className="now-empty">No routines yet. Add one on the agent’s Team page.</p>
       ) : (
         <ul className="now-routine-list">
           {routines.data.map((routine) => (

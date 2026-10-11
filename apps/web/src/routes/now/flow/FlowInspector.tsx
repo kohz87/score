@@ -101,7 +101,7 @@ function StepDetail({
       )}
       {run && run.gaps.length > 0 && (
         <p className="flow-inspector__state" role="status">
-          Some events from this step were not recorded ({run.gaps.length} gap
+          Score missed some events from this step ({run.gaps.length} gap
           {run.gaps.length === 1 ? '' : 's'}).
         </p>
       )}
@@ -126,7 +126,7 @@ function StepDetail({
       <dl className="flow-inspector__facts">
         {runtimeLabel(run?.runtime) && (
           <div>
-            <dt>Runtime</dt>
+            <dt>Coding agent</dt>
             <dd>{runtimeLabel(run?.runtime)}</dd>
           </div>
         )}
@@ -135,14 +135,14 @@ function StepDetail({
             <dt>Cost</dt>
             <dd>
               {run.costKind === 'unknown' || run.costUsd === null
-                ? 'Not reported by the CLI'
-                : `$${run.costUsd.toFixed(2)} (estimated, API prices)`}
+                ? 'Not reported by the coding agent'
+                : `$${run.costUsd.toFixed(2)} (estimated from API prices)`}
             </dd>
           </div>
         )}
         <div>
           <dt>Model</dt>
-          <dd>{detail.model ?? (detail.attempts?.length ? 'Not observed' : '—')}</dd>
+          <dd>{detail.model ?? (detail.attempts?.length ? 'Not recorded' : '—')}</dd>
         </div>
         <div>
           <dt>Running for</dt>
@@ -150,12 +150,12 @@ function StepDetail({
         </div>
         <div>
           <dt>Tools used</dt>
-          <dd>{detail.tools === null ? 'Not observed' : detail.tools.join(', ') || '—'}</dd>
+          <dd>{detail.tools === null ? 'Not recorded' : detail.tools.join(', ') || '—'}</dd>
         </div>
       </dl>
       {detail.attempts && detail.attempts.length > 0 && (
-        <section className="flow-attempts" aria-label="Attempts">
-          <h3>Attempts</h3>
+        <section className="flow-attempts" aria-label="Runs on this task">
+          <h3>Runs on this task</h3>
           <ul>
             {detail.attempts.map((attempt) => (
               <li key={attempt.id}>
@@ -196,7 +196,7 @@ function StepDetail({
         <p role="alert">
           {stop.error instanceof ApiError
             ? stop.error.message
-            : 'Could not stop this step. Try again.'}
+            : 'Couldn’t stop this step. Try again.'}
         </p>
       )}
     </>
@@ -226,7 +226,7 @@ export function FlowInspector({
         <p>Select a step to see its details.</p>
       ) : detail.isError ? (
         <p role="alert">
-          This step could not load.{' '}
+          Couldn’t load this step.{' '}
           <button type="button" onClick={() => void detail.refetch()}>
             Try again
           </button>
