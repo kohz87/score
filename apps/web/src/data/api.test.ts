@@ -93,3 +93,11 @@ test.each(['not JSON', '{}', '{"error":null}', '{"error":{"code":42,"message":[]
     })
   },
 )
+
+test('passes an AbortSignal through to fetch', async () => {
+  const fetch = vi.fn().mockResolvedValue(new Response('{}'))
+  vi.stubGlobal('fetch', fetch)
+  const controller = new AbortController()
+  await apiFetch('rooms', { signal: controller.signal })
+  expect(fetch.mock.calls[0]![1].signal).toBe(controller.signal)
+})
