@@ -888,11 +888,12 @@ export class KnowledgeVault {
         : []
       // Work out every rewrite first: a result over the size limit must refuse the whole move, not leave a note
       // that opens with 413 behind.
-      const plan: Array<{ now: string; content: string }> = []
+      const plan: Array<{ now: string; content: string; baseHash: string }> = []
       for (const old of linking) {
         const file = await this.lookup(old.split('/'))
         if (!file.stat?.isFile()) continue
-        const parsed = parseNote(await this.readRaw(file.abs, file.stat))
+        const raw = await this.readRaw(file.abs, file.stat)
+        const parsed = parseNote(raw)
         const result = rewriteLinks(parsed.body, old, from, to, before, after)
         if (result.count === 0) continue
         const content = parsed.prefix + result.text
@@ -902,7 +903,7 @@ export class KnowledgeVault {
             'payload_too_large',
             `Updating the links in ${old} would make that note too large; nothing was moved`,
           )
-        plan.push({ now: old === from ? to : old, content })
+        plan.push({ now: old === from ? to : old, content, baseHash: hashContent(raw) })
       }
       const abs = await this.prepareParent(to)
       await this.moveNoReplace(source.abs, abs)
@@ -913,7 +914,19 @@ export class KnowledgeVault {
       const rewritten: string[] = []
       for (const item of plan) {
         const file = await this.lookup(item.now.split('/'))
-        await this.atomicWrite(file.abs, item.content)
+        try {
+          // Only the version that was planned may be replaced: a note edited since keeps its edit.
+          await this.atomicWrite(file.abs, item.content, { hash: item.baseHash })
+        } catch (error) {
+          if (error instanceof HttpError && error.status === 412) {
+            this.options.log?.warn(
+              { path: item.now },
+              'A note changed while its links were being updated; its links were left as they are',
+            )
+            continue
+          }
+          throw error
+        }
         rewritten.push(item.now)
       }
       if (rewritten.length > 0)

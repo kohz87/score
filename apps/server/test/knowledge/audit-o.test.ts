@@ -79,3 +79,26 @@ describe('SCORE-002 no-replace publication', () => {
     void gitOut
   })
 })
+
+describe('SCORE-003 link rewriting keeps outside edits', () => {
+  test('an outside edit to a referring note between planning and applying survives the move', async () => {
+    h = await makeVault({
+      files: { 'a.md': 'target', 'b.md': 'see [[a]]', 'c.md': 'also [[a]]' },
+    })
+    const original = h.vault.git.commit.bind(h.vault.git)
+    let edited = false
+    vi.spyOn(h.vault.git, 'commit').mockImplementation(async (...args) => {
+      if (!edited) {
+        edited = true
+        fs.writeFileSync(path.join(h.vaultDir, 'b.md'), 'see [[a]] plus my outside edit')
+      }
+      return original(...args)
+    })
+    const result = await h.vault.moveNote('a.md', 'z.md', true)
+    expect(edited).toBe(true)
+    expect(read('b.md')).toBe('see [[a]] plus my outside edit')
+    expect(read('c.md')).toBe('also [[z]]')
+    expect(result.updatedNotes).toBe(1)
+    expect(fs.existsSync(path.join(h.vaultDir, 'z.md'))).toBe(true)
+  })
+})
