@@ -387,7 +387,7 @@ test('the view switch links to Score, Flow and Routines; Routines lists every ag
   await waitFor(() => expect(screen.getAllByText('Nightly check')).toHaveLength(3))
   expect(
     screen
-      .getAllByRole('link', { name: 'Manage on the Team page' })
+      .getAllByRole('link', { name: 'Manage in Team' })
       .map((link) => link.getAttribute('href')),
   ).toEqual(['/team/lead', '/team/builder', '/team/reviewer'])
 })

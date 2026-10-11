@@ -95,7 +95,7 @@ export function WorkflowRoomPanel({
                       )}
                       {node.output && (
                         <details>
-                          <summary>Output (result v{node.outputRevision})</summary>
+                          <summary>Output (result version {node.outputRevision})</summary>
                           <pre className="orch-pre">{node.output}</pre>
                         </details>
                       )}

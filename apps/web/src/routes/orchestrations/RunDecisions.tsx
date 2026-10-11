@@ -305,8 +305,9 @@ export function UnknownCard({
     >
       <h3>Not confirmed as ended: {label ?? attempt.stepId ?? 'lead turn'}</h3>
       <p>
-        Hermes hasn’t said this work finished ({attempt.unknownReason ?? 'no reason recorded'}).
-        Score keeps trying to stop it. Until it ends, nothing new starts.
+        Hermes hasn’t said this work finished (
+        {attempt.unknownReason?.replaceAll('_', ' ') ?? 'no reason recorded'}). Score keeps trying
+        to stop it. Until it ends, nothing new starts.
       </p>
       <label className="orch-check">
         <input type="checkbox" checked={sure} onChange={(event) => setSure(event.target.checked)} />

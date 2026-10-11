@@ -197,7 +197,7 @@ function AskingBody({
           </div>
           {current.choices.includes('always') && (
             <button type="button" className="now-always" onClick={() => void choose('always')}>
-              Always approve this for {name}
+              Always allow this for {name}
             </button>
           )}
         </>

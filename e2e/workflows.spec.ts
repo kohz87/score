@@ -25,7 +25,7 @@ async function startFromList(page: Page, name: string, inputs: Record<string, st
   const dialog = page.getByRole('dialog', { name: new RegExp(`Start ${name}`) })
   for (const [label, value] of Object.entries(inputs))
     await dialog.getByLabel(new RegExp(`^${label}`)).fill(value)
-  await expect(dialog.getByRole('list', { name: 'Preflight checks' })).toBeVisible()
+  await expect(dialog.getByRole('list', { name: 'Checks before starting' })).toBeVisible()
   await expect(dialog.getByRole('list', { name: 'Agent mapping' })).toContainText('builder')
   await dialog.getByRole('checkbox', { name: /Score controls the work it starts/ }).check()
   const start = dialog.getByRole('button', { name: 'Start the run' })
@@ -243,7 +243,7 @@ test('an attempt that is not confirmed ended is abandoned, the step is retried, 
   await startFromList(page, name)
   // The fake Hermes reports the first run cancelled, which is not termination evidence.
   const unknown = page.getByRole('region', { name: 'Not confirmed as ended' })
-  await expect(unknown).toContainText('Not confirmed ended: Flaky step', { timeout: 60_000 })
+  await expect(unknown).toContainText('Not confirmed as ended: Flaky step', { timeout: 60_000 })
   await expect(node(page, 'flaky')).toHaveAttribute('data-state', 'running')
   await unknown.getByRole('checkbox').first().check()
   await unknown.getByRole('button', { name: 'Stop waiting for this' }).click()

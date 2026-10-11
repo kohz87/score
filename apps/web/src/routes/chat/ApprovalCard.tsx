@@ -15,7 +15,7 @@ function idempotencyKey() {
 export const choiceText: Record<ApprovalChoice, string> = {
   once: 'You approved',
   session: 'You approved for this session',
-  always: 'You always approve this',
+  always: 'You always allow this',
   deny: 'You denied',
 }
 
@@ -220,7 +220,7 @@ export function ApprovalCard({ approvalId }: { approvalId: string }) {
                   {approval.choices.includes('always') && (
                     <li role="none">
                       <button type="button" role="menuitem" onClick={() => void decide('always')}>
-                        Always approve this
+                        Always allow this
                       </button>
                     </li>
                   )}

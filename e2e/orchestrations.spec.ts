@@ -17,7 +17,7 @@ async function start(page: Page, goal: string, policy?: string) {
   if (policy) await dialog.getByRole('radio', { name: policy }).check()
   // The acknowledgement, the estimates note and the preflight are on the start screen.
   await expect(dialog.getByText(/Score controls the work it starts/).first()).toBeVisible()
-  await expect(dialog.getByRole('list', { name: 'Preflight checks' })).toContainText(
+  await expect(dialog.getByRole('list', { name: 'Checks before starting' })).toContainText(
     'The lead has an MCP token',
   )
   await expect(dialog.getByText(/per lead turn and per step/)).toBeAttached()
@@ -229,7 +229,7 @@ test('Stop: the run is Stopping and its attempts are not confirmed ended until t
   await expect(page.locator('[data-node="s1"]')).toHaveAttribute('data-state', 'unknown', {
     timeout: 30_000,
   })
-  await expect(page.getByRole('region', { name: 'Finish' })).toContainText('Not confirmed ended')
+  await expect(page.getByRole('region', { name: 'Finish' })).toContainText('Not confirmed as ended')
   // Abandoning is a separate, acknowledged human decision.
   const card = page.getByRole('region', { name: 'Not confirmed as ended' })
   await expect(async () => {

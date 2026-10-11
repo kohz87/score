@@ -11,7 +11,7 @@ function AgentRoutines({ agent }: { agent: AgentSummary }) {
         <AgentGlyph agent={agent} size="sm" />
         <h2>{agent.name}</h2>
         <span className="now-grow" />
-        <Link to={`/team/${encodeURIComponent(agent.id)}`}>Manage on the Team page</Link>
+        <Link to={`/team/${encodeURIComponent(agent.id)}`}>Manage in Team</Link>
       </div>
       {routines.isPending ? (
         <p className="now-empty" role="status">

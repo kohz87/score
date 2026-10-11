@@ -196,7 +196,7 @@ export function AttemptLine({ attempt }: { attempt: AttemptView }) {
     : attempt.state === 'abandoned'
       ? 'you stopped waiting for it'
       : attempt.state === 'unknown'
-        ? `not confirmed as ended${attempt.unknownReason ? `: ${attempt.unknownReason}` : ''}`
+        ? `not confirmed as ended${attempt.unknownReason ? `: ${attempt.unknownReason.replaceAll('_', ' ')}` : ''}`
         : attempt.state.replace('_', ' ')
   const owed =
     attempt.stopRequestedAt && !attempt.stopAcknowledgedAt && !attempt.evidence

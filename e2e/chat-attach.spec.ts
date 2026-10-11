@@ -27,9 +27,7 @@ test('the composer attaches an image, rejects a non-image, and the sent message 
     mimeType: 'image/png',
     buffer: Buffer.from('<html><script>alert(1)</script></html>'),
   })
-  await expect(page.getByRole('alert')).toContainText(
-    'notes.png is not a type that can be attached',
-  )
+  await expect(page.getByRole('alert')).toContainText('notes.png isn’t a type that can be attached')
 
   await page
     .getByTestId('attach-input')

@@ -38,7 +38,7 @@ test('Delete rewinds: your message and the reply become a read-only previous ver
   await mine.getByRole('button', { name: 'Delete message from You' }).click()
   const dialog = page.getByRole('dialog', { name: 'Delete this message?' })
   await expect(dialog.getByText(/Agents rewound:.*lead −\d+ exchanges?/)).toBeVisible()
-  await expect(dialog.getByText(/Long-term memory .* is not rewound/)).toBeVisible()
+  await expect(dialog.getByText(/Long-term memory .* isn’t rewound/)).toBeVisible()
   await dialog.getByRole('button', { name: 'Rewind and delete' }).click()
   await expect(mine).toHaveCount(0)
 
@@ -124,7 +124,7 @@ test('An agent that cannot be rewound is named, and Hide in Score only still wor
   await mine.last().hover()
   await mine.last().getByRole('button', { name: 'Delete message from You' }).click()
   const dialog = page.getByRole('dialog', { name: 'Delete this message?' })
-  await expect(dialog.getByText(/These agents cannot be rewound/)).toBeVisible()
+  await expect(dialog.getByText(/These agents can’t be rewound/)).toBeVisible()
   await expect(dialog.getByRole('button', { name: 'Rewind and delete' })).toBeDisabled()
   await dialog.getByRole('button', { name: 'Hide in Score only' }).click()
   await expect(dialog).toHaveCount(0)
