@@ -20,7 +20,7 @@ def hermes_private(monkeypatch):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     for name in ("gateway_session_store", "compact_session", "context_breakdown", "CommandExpired", "CompactLockHeld", "SessionBusy",
-                 "CompactUnsupported"):
+                 "CompactUnsupported", "CompactNotPersisted"):
         monkeypatch.setattr(stub, name, getattr(module, name), raising=False)
     CURRENT.append(module)
     return module
@@ -35,13 +35,29 @@ class FakeDb:
                      for i in range(count)]
         self.reads = []
         self.session_row = session_row
+        self.published = set()  # child ids written by Hermes's atomic publish
+        self.replaced = []
+        self.replace_error = None
 
     def get_messages_as_conversation(self, session_id, include_row_ids=False, **_):
         self.reads.append((session_id, include_row_ids))
         return list(self.rows)
 
     def get_session(self, session_id):
+        if session_id in self.published:
+            return {"id": session_id, "parent_session_id": "score-room-builder"}
         return self.session_row
+
+    def _is_compression_child_row(self, child):
+        return child.get("parent_session_id") is not None
+
+    def get_active_message_watermark(self, session_id):
+        return 5 if session_id in self.published else 0
+
+    def replace_messages(self, session_id, messages, active_only=False, **_):
+        if self.replace_error:
+            raise self.replace_error
+        self.replaced.append((session_id, list(messages), active_only))
 
 
 class FakeStore:
@@ -68,12 +84,14 @@ class FakeStore:
 class Rig:
     """Everything compact_session reaches for, as modules in sys.modules."""
 
-    def __init__(self, monkeypatch, db=None, status="compressed", runtime=None, multiplex=False):
+    def __init__(self, monkeypatch, db=None, status="compressed", runtime=None, multiplex=False,
+                 mode="rotated"):
         # _lookup caches Hermes callables per module: a second rig in one test must not see the first one's.
         CURRENT[-1]._lookup.cache_clear()
         CURRENT[-1]._lookup_attr.cache_clear()
         self.db, self.store = db or FakeDb(), FakeStore()
         self.status, self.events, self.agents, self.compress_calls = status, [], [], []
+        self.mode = mode  # rotated (published child), rotated_bare, inplace, unchanged
         self.released, self.acquired, self.scopes = [], [], []
         self.depth_seen = []
         self.running = {}
@@ -109,6 +127,7 @@ class Rig:
         class Agent:
             def __init__(self, **kwargs):
                 self.kwargs = kwargs
+                self.session_id = kwargs["session_id"]
                 self.closed = False
                 rig.agents.append(self)
 
@@ -130,6 +149,15 @@ class Rig:
             rig.depth_seen.append(rig.store.depth)
             rig.compress_calls.append((agent, messages, request, kwargs))
             if rig.status == "compressed":
+                if rig.mode in ("rotated", "rotated_bare"):
+                    agent.session_id = "child-1"
+                    if rig.mode == "rotated":
+                        rig.db.published.add("child-1")
+                elif rig.mode == "inplace":
+                    agent._last_compaction_in_place = True
+                if rig.mode == "noop":
+                    return types.SimpleNamespace(status="compressed", before_messages=messages,
+                                                 after_messages=list(messages), before_tokens=5, after_tokens=5)
                 kept = messages[-request.keep_last * 2:] if request.partial else messages[-2:]
                 return types.SimpleNamespace(status="compressed", before_messages=messages,
                                              after_messages=[{"role": "user", "content": "summary"}, *kept],
@@ -172,7 +200,8 @@ def command(**extra):
 def test_compacts_the_profiles_own_session_under_the_transcript_lock(monkeypatch, hermes_private):
     rig = Rig(monkeypatch)
     result = hermes_private.compact_session("score-room-builder", 3, "scoretesta", expires_at=time.time() + 60)
-    assert result == {"before": {"messages": 12, "tokens": 54000}, "after": {"messages": 7, "tokens": 9000}}
+    assert result == {"before": {"messages": 12, "tokens": 54000}, "after": {"messages": 7, "tokens": 9000},
+                      "rotated": True, "newSessionId": "child-1"}
     # Worked in the profile's own store, under the transcript lock, and released the handle.
     assert rig.acquired == [Path("/hermes/profiles/scoretesta/state.db")] and rig.released == [rig.db]
     assert rig.depth_seen == [1]
@@ -183,6 +212,12 @@ def test_compacts_the_profiles_own_session_under_the_transcript_lock(monkeypatch
     assert agent.kwargs["reasoning_config"] == {"effort": "low"} and agent.kwargs["gateway_session_key"]
     assert agent.platform == "hygiene" and agent._end_session_on_close is False and agent.closed
     assert ("finalize", True) in rig.events and ("finalize", False) not in rig.events
+
+
+def test_nothing_changed_is_reported_as_nothing(monkeypatch, hermes_private):
+    rig = Rig(monkeypatch, mode="noop")
+    assert hermes_private.compact_session("s", None, "p") is None
+    assert ("finalize", True) not in rig.events and rig.db.replaced == []
 
 
 def test_without_keep_recent_hermes_compresses_in_full(monkeypatch, hermes_private):
@@ -284,7 +319,7 @@ def test_round_trip_reports_counts_only_and_runs_once(monkeypatch, hermes_privat
     command_poller.process_once()
     assert len(rig.compress_calls) == 1
     expected = {"outcome": "done", "before": {"messages": 12, "tokens": 54000},
-                "after": {"messages": 7, "tokens": 9000}}
+                "after": {"messages": 7, "tokens": 9000}}  # rotated/newSessionId stay in the plugin
     assert [body for _, body in transport.results] == [expected, expected]
     assert "text 1" not in repr(transport.results)
 
@@ -295,6 +330,13 @@ def test_failures_use_fixed_error_codes(monkeypatch, hermes_private, status, err
     command_poller, transport = poller([command()])
     command_poller.process_once()
     assert transport.results[0][1] == {"outcome": "failed", "error": error}
+
+
+def test_an_unpersisted_compaction_is_reported_with_a_fixed_code(monkeypatch, hermes_private):
+    Rig(monkeypatch, mode="unchanged")
+    command_poller, transport = poller([command(commandId="np")])
+    command_poller.process_once()
+    assert transport.results[0][1] == {"outcome": "failed", "error": "not_persisted"}
 
 
 def test_unexpected_errors_never_leak_hermes_text(monkeypatch, hermes_private):

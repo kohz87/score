@@ -64,6 +64,8 @@ def run_compact(item, profile: str | None = None) -> dict:
         return {"outcome": "failed", "error": "lock_held"}
     except hermes_private.SessionBusy:
         return {"outcome": "failed", "error": "session_busy"}
+    except hermes_private.CompactNotPersisted:
+        return {"outcome": "failed", "error": "not_persisted"}
     except Exception:
         return {"outcome": "failed", "error": "compact_failed"}
     if result is None:

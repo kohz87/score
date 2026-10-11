@@ -353,6 +353,36 @@ class CompactUnsupported(Exception):
     """The session's runtime cannot be compacted by a throwaway agent (codex_app_server, no provider credentials)."""
 
 
+class CompactNotPersisted(Exception):
+    """Hermes's compressor returned a result but the session did not rotate or compact in place: nothing was stored."""
+
+
+def _persist_compression(db, agent, session_id: str, result) -> tuple[bool, str] | None:
+    """Commit a manual compression the way the gateway does (``_persist_manual_compression`` in hermes-agent
+    gateway/slash_commands_session.py, MIT, see THIRD_PARTY_NOTICES.md), against the profile's own store: the gateway's
+    session store only routes the sessions in its index, not Score's API-server rooms.
+
+    Rotation (a new continuation id): the child is durable when Hermes published it atomically
+    (``persist_rotated_compression_child``: ``is_published_compression_child`` probe); otherwise the compressed rows are
+    written into it, active rows only so nothing archived is dropped. In-place compaction was committed by Hermes
+    itself. An unchanged id without in-place means rotation failed: raise, leaving the original transcript alone.
+    Returns ``(rotated, session id that now holds the conversation)``, or None when nothing changed at all.
+    """
+    new_id = getattr(agent, "session_id", None)
+    if type(new_id) is str and new_id and new_id != session_id:
+        child = db.get_session(new_id)
+        published = bool(child and child.get("parent_session_id") == session_id
+                         and db._is_compression_child_row(child) and db.get_active_message_watermark(new_id) > 0)
+        if not published:
+            db.replace_messages(new_id, result.after_messages, active_only=True)
+        return True, new_id
+    if getattr(agent, "_last_compaction_in_place", False) is True:
+        return False, session_id
+    if list(result.after_messages) == list(result.before_messages):
+        return None
+    raise CompactNotPersisted()
+
+
 def _gateway_runner():
     module = sys.modules.get("gateway.run")
     ref = getattr(module, "_gateway_runner_ref", None)
@@ -409,10 +439,10 @@ def compact_session(session_id: str, keep_recent: int | None = None, profile: st
 
     Works in ``profile``'s own store (Score's room sessions are API-server sessions the gateway's routing index does
     not know) under the transcript lock that rewind takes, so an ``/undo`` can't move the history under it.
-    ``compress_now`` runs ``_compress_context(force=True)`` on the throwaway agent and Hermes commits the result itself
-    (in place or as a compression continuation). Returns ``{"before": {...}, "after": {...}}`` (message count and
-    Hermes's request-token estimate), or None when the session is too short to compact. Raises ``CompactLockHeld``,
-    ``SessionBusy``, ``CompactUnsupported``, ``CommandExpired`` or whatever Hermes raised.
+    ``compress_now`` runs ``_compress_context(force=True)`` on the throwaway agent; the result is then persisted by
+    ``_persist_compression`` (rotation vs in place). Returns ``{"before": {...}, "after": {...}, "rotated", "newSessionId"}``
+    (message count and Hermes's request-token estimate), or None when the session is too short to compact. Raises ``CompactLockHeld``,
+    ``SessionBusy``, ``CompactUnsupported``, ``CompactNotPersisted``, ``CommandExpired`` or whatever Hermes raised.
     """
     store = gateway_session_store()
     runner = _gateway_runner()
@@ -462,10 +492,16 @@ def compact_session(session_id: str, keep_recent: int | None = None, profile: st
                 raise CompactLockHeld()
             if result.status != "compressed":
                 raise RuntimeError("compression did not run")
+            # Persist before anything is reported or repointed, as the gateway does: a failed write is fatal and the
+            # old history stays reachable. Still inside the transcript lock.
+            persisted = _persist_compression(db, agent, session_id, result)
+            if persisted is None:
+                return None
             notify.finalize_context_engine_compression_notification(agent, committed=True)
             committed = True
             return {"before": {"messages": len(result.before_messages), "tokens": int(result.before_tokens)},
-                    "after": {"messages": len(result.after_messages), "tokens": int(result.after_tokens)}}
+                    "after": {"messages": len(result.after_messages), "tokens": int(result.after_tokens)},
+                    "rotated": persisted[0], "newSessionId": persisted[1]}
     finally:
         if agent is not None:
             if not committed:

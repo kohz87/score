@@ -88,6 +88,10 @@ test('refusals map to the contract reasons', async () => {
       { outcome: 'failed', error: 'compact_failed' },
       { status: 'failed', reason: 'compact_failed' },
     ],
+    [
+      { outcome: 'failed', error: 'not_persisted' },
+      { status: 'failed', reason: 'compact_failed' },
+    ],
     [{ outcome: 'expired' }, { status: 'failed', reason: 'no_answer' }],
     [{ outcome: 'done' }, { status: 'failed', reason: 'compact_failed' }],
   ] as const) {
