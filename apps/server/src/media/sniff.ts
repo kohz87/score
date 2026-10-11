@@ -45,14 +45,20 @@ export function sniffImage(bytes: Uint8Array): (typeof IMAGE_TYPES)[number] | nu
 function zipEntryNames(bytes: Uint8Array): Set<string> | null {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   if (!startsWith(bytes, 0, [0x50, 0x4b, 0x03, 0x04])) return null
-  let eocd = -1
-  for (let at = bytes.length - 22; at >= Math.max(0, bytes.length - 22 - 0xffff); at -= 1) {
-    if (view.getUint32(at, true) === 0x06054b50) {
-      eocd = at
-      break
-    }
+  // The scan runs backwards and keeps going past candidates that do not describe a coherent archive: a signature
+  // inside the archive comment is not the real record.
+  for (let eocd = bytes.length - 22; eocd >= Math.max(0, bytes.length - 22 - 0xffff); eocd -= 1) {
+    if (view.getUint32(eocd, true) !== 0x06054b50) continue
+    const directoryEnd = view.getUint32(eocd + 16, true) + view.getUint32(eocd + 12, true)
+    if (eocd + 22 + view.getUint16(eocd + 20, true) !== bytes.length || directoryEnd > eocd)
+      continue
+    const names = readDirectory(bytes, view, eocd)
+    if (names && names.size > 0) return names
   }
-  if (eocd < 0) return null
+  return null
+}
+
+function readDirectory(bytes: Uint8Array, view: DataView, eocd: number): Set<string> | null {
   const count = view.getUint16(eocd + 10, true)
   let at = view.getUint32(eocd + 16, true)
   const names = new Set<string>()
@@ -102,7 +108,12 @@ export function sniffMedia(
   const image = sniffImage(bytes)
   if (image) return image
   if (startsWith(bytes, 0, ascii('%PDF-'))) return 'application/pdf'
-  if (startsWith(bytes, 0, [0x50, 0x4b])) {
+  // Only a full ZIP signature makes it an archive; "PK report" is just text.
+  if (
+    startsWith(bytes, 0, [0x50, 0x4b, 0x03, 0x04]) ||
+    startsWith(bytes, 0, [0x50, 0x4b, 0x05, 0x06]) ||
+    startsWith(bytes, 0, [0x50, 0x4b, 0x07, 0x08])
+  ) {
     const names = zipEntryNames(bytes)
     if (!names) return null
     if (names.has('[Content_Types].xml') && names.has('word/document.xml')) return DOCX_TYPE

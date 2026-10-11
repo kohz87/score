@@ -40,7 +40,12 @@ export function isBlockedName(name: string): boolean {
   return BLOCKED_PATTERNS.some((pattern) => pattern.test(name))
 }
 
-function isGitName(name: string): boolean {
+/** Names a recursive delete must never remove, at any depth: blocked names and any case of `.git`. */
+export function isProtectedName(name: string): boolean {
+  return isGitName(name) || isBlockedName(name)
+}
+
+export function isGitName(name: string): boolean {
   return name.toLowerCase() === '.git'
 }
 
@@ -116,7 +121,8 @@ export function defaultRootPolicy(extraForbidden: Array<string | undefined> = []
 
 export function isInside(parent: string, child: string): boolean {
   const rel = path.relative(parent, child)
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
+  // A child may be named "..backup"; only a real ".." segment leaves the parent.
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel))
 }
 
 async function realOrSelf(target: string): Promise<string> {
