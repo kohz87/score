@@ -42,7 +42,7 @@ application, make sure they are coherent."
 | gate | an approval point in a workflow | node gate |
 | approval | something waiting for your yes/no | request, permission prompt |
 | needs you | the label for items waiting on the person | action required |
-| pause / resume / stop | pause = hold new work; stop = end it | cancel (except form dialogs), kill, abort |
+| pause / resume / stop | pause = hold new work; stop = end it | cancel (allowed only to back out of a form, dialog or an in-progress canvas gesture), kill, abort |
 | Knowledge, note, document | the vault; a Markdown note; an uploaded file | vault (only in setup), doc |
 | workspace | an agent's working folder | cwd, directory (in UI) |
 | context | what fills an agent's model window | tokens window |
@@ -51,6 +51,18 @@ application, make sure they are coherent."
 | security password | the host-set password for sensitive actions | admin password, master password |
 | spend | money used (with "not settled" when unknown) | cost (fine in tables), bill |
 | the lead | the room's or orchestration's lead agent | coordinator |
+| exchange | one message and its reply inside an agent's Hermes session (what Hermes calls a turn) | turn |
+| lead turn | one round of an orchestration's lead thinking and handing out work | — (kept; it is visible in the log) |
+| run (Kanban) | one time an agent worked on a task | attempt |
+| try | one go at a workflow or orchestration step; retries make more tries | attempt |
+| stop waiting for | giving up on work Hermes hasn't confirmed as ended | abandon |
+| not confirmed as ended | Score can't prove the work stopped | unknown, unconfirmed |
+| block / review list | Score holding all new orchestration and workflow work until you review what may be missing after a restore | fence, reconciliation |
+| source: confirmed / source unclear | whether Score can prove which agent did something | proven, provenance |
+| unknown agent | work Score can't tie to an agent | unattributed |
+| agent version | the exact set-up of an agent a step was planned for | incarnation |
+| reference name | a workflow step's short id used in references | id |
+| Score (the view) | the timeline on Now; say "the Score timeline" where it could mean the app | — |
 
 ## Where it applies
 All user-facing text in `apps/web/src` (JSX text, `aria-label`, `title`, `placeholder`, alt text, toasts, errors mapped
