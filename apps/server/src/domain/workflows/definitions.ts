@@ -316,6 +316,7 @@ export function exportVersion(
       }
     }),
     edges: def.edges,
+    ...(def.layout === undefined ? {} : { layout: def.layout }),
   }
   // Revalidate the scrubbed graph with stand-in agent ids (the descriptors carry no local identity).
   const stand: WorkflowDefinition = {
@@ -323,6 +324,7 @@ export function exportVersion(
     ...(portable.description === undefined ? {} : { description: portable.description }),
     inputs: portable.inputs,
     edges: portable.edges,
+    ...(portable.layout === undefined ? {} : { layout: portable.layout }),
     nodes: portable.nodes.map((node) => {
       if (!('agent' in node)) return node
       const { agent, ...rest } = node

@@ -272,3 +272,80 @@ test('an attempt that is not confirmed ended is abandoned, the step is retried, 
   await node(page, 'flaky').click()
   await expect(page.getByRole('region', { name: 'Selected node' })).toContainText('2 of 2 used')
 })
+
+test('drag a node, save, reload: it is where it was left, and the run view draws the same arrangement', async ({
+  page,
+}) => {
+  test.setTimeout(180_000)
+  await pair(page)
+  const name = `Free layout ${Date.now().toString(36)}`
+  const id = await createWorkflow(page, {
+    name,
+    inputs: [],
+    nodes: [
+      {
+        id: 'one',
+        kind: 'agent',
+        label: 'First',
+        agentId: 'builder',
+        instruction: 'Say hello',
+        retries: 0,
+        onFailure: 'fail_run',
+      },
+      { id: 'finish', kind: 'end', label: 'Finish' },
+    ],
+    edges: [{ id: 'e1', from: 'one', port: 'ok', to: 'finish' }],
+  })
+  await page.goto(`/now/flow/workflows/${id}`)
+  const box = (nodeId: string) => page.locator(`.wf-node[data-wf-node="${nodeId}"]`)
+  const place = async (nodeId: string) => ({
+    left: await box(nodeId).evaluate((el) => (el as HTMLElement).style.left),
+    top: await box(nodeId).evaluate((el) => (el as HTMLElement).style.top),
+  })
+  await expect(node(page, 'one')).toBeVisible()
+  const auto = await place('finish')
+
+  // Drag the end well below and to the right; it snaps to the 16 px grid and the connection follows.
+  const target = await node(page, 'finish').boundingBox()
+  await page.mouse.move(target!.x + 20, target!.y + 10)
+  await page.mouse.down()
+  await page.mouse.move(target!.x + 20 + 40, target!.y + 10 + 150, { steps: 6 })
+  await page.mouse.up()
+  const moved = await place('finish')
+  expect(moved).not.toEqual(auto)
+  expect(Number.parseFloat(moved.left) % 16).toBe(0)
+  expect(Number.parseFloat(moved.top) % 16).toBe(0)
+  await expect(page.getByText('unsaved changes')).toBeVisible()
+  await page.getByRole('button', { name: 'Save as new version' }).click()
+  await expect(page.getByText('Saved as version 2.').first()).toBeVisible()
+
+  // Reload: same place. The first node was pinned by the first move, so it did not shift either.
+  await page.reload()
+  await expect(node(page, 'finish')).toBeVisible()
+  expect(await place('finish')).toEqual(moved)
+
+  // The keyboard way: M, arrows, Escape; then Arrange automatically puts it back.
+  await node(page, 'finish').focus()
+  await page.keyboard.press('m')
+  await page.keyboard.press('ArrowRight')
+  await page.keyboard.press('Escape')
+  expect(Number.parseFloat((await place('finish')).left)).toBe(Number.parseFloat(moved.left) + 16)
+  await page.getByRole('button', { name: 'Arrange automatically' }).click()
+  expect(await place('finish')).toEqual(auto)
+  await page.getByRole('button', { name: 'Undo' }).click()
+  expect(Number.parseFloat((await place('finish')).left)).toBe(Number.parseFloat(moved.left) + 16)
+  await page.getByRole('button', { name: 'Undo' }).click()
+  expect(await place('finish')).toEqual(moved)
+  const editorFirst = await place('one')
+
+  // A run of this version draws the nodes at the same coordinates.
+  await startFromList(page, name)
+  await expect(page.getByText('Graph reached the end').first()).toBeVisible({ timeout: 60_000 })
+  const inRun = (nodeId: string) =>
+    node(page, nodeId).evaluate((el) => {
+      const wrapper = el.closest<HTMLElement>('[style*="left"]')!
+      return { left: wrapper.style.left, top: wrapper.style.top }
+    })
+  expect(await inRun('finish')).toEqual(moved)
+  expect(await inRun('one')).toEqual(editorFirst)
+})

@@ -1757,7 +1757,7 @@ Differences a client must know:
 
 ### Definitions
 
-`WorkflowDefinition { name, description?, inputs[], nodes[], edges[] }`, ≤ 30 nodes, ≤ 100 edges, ≤ 10 inputs (name, label,
+`WorkflowDefinition { name, description?, inputs[], nodes[], edges[], layout? }`, ≤ 30 nodes, ≤ 100 edges, ≤ 10 inputs (name, label,
 `required`, `maxChars` ≤ 4 KiB), ≤ 256 KiB in total, agent `instruction` template ≤ 32 KiB UTF-8, gate `question` ≤ 2 KiB.
 Node ids are `[a-z][a-z0-9_-]{0,31}`.
 
@@ -1775,6 +1775,14 @@ are plain substitution: `{{inputs.<name>}}`, `{{nodes.<id>.output}}`, `{{nodes.<
 `|default:"…"`. DAG only; several edges may leave one port (fan-out, one token per target). Per-node deadlines do not exist
 (run deadline only). Versions are immutable once saved; editing saves a new version. Node `agentId`s are local ids.
 
+**Layout (PLAN 7.1c).** `layout?: { nodes: { [nodeId]: { x, y } } }` records where the editor drew each node (top-left
+corner in canvas pixels, finite, within ±100 000, ≤ 30 entries). It is optional and may be partial: a node without a position
+is placed automatically, and a definition without `layout` opens auto-arranged. It is presentation only: it never affects
+graph validation, the planner or a run's behaviour. It **is** part of the stored definition, so it is covered by the version
+`hash` and `bytes`; saving a layout change creates a new version like any other edit, and a run freezes the version with its
+layout (the run view draws the nodes where the editor put them). A position for an id that is not a node is the validation
+error `layout_unknown_node` (`nodeId` = that id). Export includes `layout` unchanged (numbers only; nothing to scrub).
+
 **Validation** is one function used by the editor, save and start. Issues are `{ code, severity, nodeId, edgeId, field,
 message }`; only `error`s block. Codes: limits (`too_many_nodes`, `too_many_edges`, `definition_too_large`,
 `steps_over_limit` = Σ nodes × (retries + 1) > 30), structure (`duplicate_node_id`, `duplicate_edge_id`, `duplicate_edge`,
@@ -1785,7 +1793,7 @@ message }`; only `error`s block. Codes: limits (`too_many_nodes`, `too_many_edge
 (`join_needs_inputs`, `join_deadlock` = inputs from mutually exclusive branches without a `default` path), templates
 (`template_syntax`, `template_unknown_input`, `template_unknown_node`, `template_self_reference`,
 `template_forward_reference`, `template_not_ancestor`, `template_needs_default` = a conditional ancestor needs a default,
-`template_field_unavailable`) and `agent_missing`.
+`template_field_unavailable`), `agent_missing` and `layout_unknown_node`.
 
 - **S** `GET /api/workflows` → `WorkflowList` (summaries + retained-inventory counts).
 - **S** `GET /api/workflows/:id` → `WorkflowDetail` (version list + latest). `GET /api/workflows/:id/versions/:version` →

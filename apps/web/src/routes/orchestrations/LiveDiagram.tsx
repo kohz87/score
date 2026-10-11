@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { MOTION, loadAnime, playMotion, usePrefersReducedMotion } from '../../motion/motion.ts'
 import { layoutFlow, type Point } from '../now/flow/layout.ts'
+import { withPositions, type PositionMap } from '../now/flow/free-layout.ts'
 import {
   EffectQueue,
   visualLabel,
@@ -348,6 +349,8 @@ export interface DiagramProps {
   ariaLabel?: string
   /** Room between columns; workflow edges carry labels, so they get more. */
   columnGap?: number
+  /** Workflow runs (7.1c): where the editor drew the nodes; unlisted nodes are placed automatically. */
+  positions?: PositionMap
 }
 
 const unknownStyle: AgentSummary['style'] = { color: '#8a909b', shape: 'circle-dot' }
@@ -367,6 +370,7 @@ export function LiveDiagram({
   noun = 'Step',
   ariaLabel = 'Live diagram of the run. The log next to it says the same in words.',
   columnGap = 56,
+  positions,
 }: DiagramProps) {
   const viewport = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(1)
@@ -374,7 +378,7 @@ export function LiveDiagram({
   useEffect(() => {
     if (!reducedMotion) void loadAnime().catch(() => {})
   }, [reducedMotion])
-  const layout = useMemo(
+  const auto = useMemo(
     () =>
       layoutFlow(
         {
@@ -387,6 +391,23 @@ export function LiveDiagram({
         { columnGap, rowGap: 28, marginX: 14, marginY: 18 },
       ),
     [nodes, edges, columnGap],
+  )
+  const layout = useMemo(
+    () =>
+      positions && positions.size > 0
+        ? withPositions(
+            auto,
+            nodes.map((node) => ({
+              id: node.id,
+              width: nodeSize(node).w,
+              height: nodeSize(node).h,
+            })),
+            edges,
+            positions,
+            { marginX: 14, marginY: 18 },
+          )
+        : auto,
+    [auto, nodes, edges, positions],
   )
   const position = useMemo(() => new Map(layout.nodes.map((n) => [n.id, n])), [layout.nodes])
   const routed = useMemo(() => new Map(layout.edges.map((e) => [e.id, e.points])), [layout.edges])

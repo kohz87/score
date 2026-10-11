@@ -179,6 +179,30 @@ export const WorkflowEdgeSchema = z
   .strict()
 export type WorkflowEdge = z.infer<typeof WorkflowEdgeSchema>
 
+/** Canvas coordinates are presentation only; this bounds them so a stored layout can never become a layout bomb. */
+export const WORKFLOW_LAYOUT_LIMIT = 100_000
+
+/**
+ * Where the editor drew each node (top-left corner, canvas pixels). Optional and partial: a node without a position is
+ * placed automatically. It is part of the saved version (a version reopens as drawn) and therefore of its hash.
+ */
+export const WorkflowLayoutSchema = z
+  .object({
+    nodes: z
+      .record(
+        NodeIdSchema,
+        z
+          .object({
+            x: z.number().min(-WORKFLOW_LAYOUT_LIMIT).max(WORKFLOW_LAYOUT_LIMIT),
+            y: z.number().min(-WORKFLOW_LAYOUT_LIMIT).max(WORKFLOW_LAYOUT_LIMIT),
+          })
+          .strict(),
+      )
+      .refine((v) => Object.keys(v).length <= WORKFLOW_LIMITS.maxNodes, 'too many positions'),
+  })
+  .strict()
+export type WorkflowLayout = z.infer<typeof WorkflowLayoutSchema>
+
 /** Shape and limits only; graph rules (DAG, routing, templates, joins) are reported by validation as `ValidationIssue`s. */
 export const WorkflowDefinitionSchema = z
   .object({
@@ -187,6 +211,7 @@ export const WorkflowDefinitionSchema = z
     inputs: z.array(WorkflowInputSchema).max(WORKFLOW_LIMITS.maxInputs),
     nodes: z.array(WorkflowNodeSchema).min(1).max(WORKFLOW_LIMITS.maxNodes),
     edges: z.array(WorkflowEdgeSchema).max(WORKFLOW_LIMITS.maxEdges),
+    layout: WorkflowLayoutSchema.optional(),
   })
   .strict()
   .refine(
@@ -235,6 +260,7 @@ export const ValidationCodeSchema = z.enum([
   'template_needs_default',
   'template_field_unavailable',
   'agent_missing',
+  'layout_unknown_node',
 ])
 export type ValidationCode = z.infer<typeof ValidationCodeSchema>
 
@@ -367,6 +393,7 @@ export const WorkflowExportSchema = z.object({
     inputs: z.array(WorkflowInputSchema),
     nodes: z.array(PortableNodeSchema),
     edges: z.array(WorkflowEdgeSchema),
+    layout: WorkflowLayoutSchema.optional(),
   }),
   /** Every free-text field `redact()` changed, with the complete before and after. */
   changes: z.array(z.object({ path: z.string(), before: z.string(), after: z.string() })),

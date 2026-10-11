@@ -318,3 +318,43 @@ describe('every rule has a counterexample', () => {
     )
   })
 })
+
+describe('layout is presentation only (7.1c)', () => {
+  // One graph: edge ids come from a counter, so a second call would differ for reasons that are not the layout.
+  const graph = definition([agent('a'), end()], [e('a', 'done')])
+  const base = () => graph
+  const withLayout = (nodes: Record<string, { x: number; y: number }>): WorkflowDefinition => ({
+    ...base(),
+    layout: { nodes },
+  })
+
+  test('positions never change whether a graph is valid, and a partial layout is fine', () => {
+    ok(withLayout({ a: { x: 0, y: 0 } }))
+    ok(withLayout({ a: { x: 500, y: 20 }, done: { x: 16, y: 400 } }))
+    expect(validateDefinition(withLayout({ a: { x: 1, y: 1 } })).stats).toMatchObject({
+      nodes: 2,
+      edges: 1,
+    })
+  })
+
+  test('a position for a node that does not exist is layout_unknown_node on that id', () => {
+    const result = validateDefinition(withLayout({ ghost: { x: 0, y: 0 } }))
+    expect(result.ok).toBe(false)
+    expect(result.issues).toEqual([
+      expect.objectContaining({ code: 'layout_unknown_node', nodeId: 'ghost', severity: 'error' }),
+    ])
+  })
+
+  test('the layout is part of the hash: moving a node is a different version, the same layout is not', () => {
+    const a = withLayout({ a: { x: 16, y: 16 } })
+    expect(definitionHash(a)).not.toBe(definitionHash(base()))
+    expect(definitionHash(a)).not.toBe(definitionHash(withLayout({ a: { x: 32, y: 16 } })))
+    expect(definitionHash(a)).toBe(
+      definitionHash(JSON.parse(JSON.stringify(a)) as WorkflowDefinition),
+    )
+    // Key order does not matter.
+    expect(definitionHash(withLayout({ a: { x: 1, y: 2 }, done: { x: 3, y: 4 } }))).toBe(
+      definitionHash(withLayout({ done: { y: 4, x: 3 }, a: { y: 2, x: 1 } })),
+    )
+  })
+})

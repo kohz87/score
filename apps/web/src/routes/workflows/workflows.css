@@ -408,6 +408,21 @@
 }
 .orch-node--edit {
   font-size: 13px;
+  cursor: grab;
+  /* Dragging a node must not scroll the page on touch screens. */
+  touch-action: none;
+}
+.orch-node--dragging {
+  cursor: grabbing;
+  box-shadow: 0 10px 28px rgb(18 19 26 / 0.22);
+  z-index: 3;
+}
+.orch-node--moving {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+.wf-arrange {
+  padding: 2px 12px;
 }
 .wf-node--error > .orch-node:not(.orch-node--shaped) {
   border: 2px dashed var(--agent-coral-text);

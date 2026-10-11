@@ -54,6 +54,8 @@ export function WorkflowRunLive({
     () => new Map((detail?.tokens ?? []).map((token) => [token.edgeId, token.kind] as const)),
     [detail],
   )
+  const layoutNodes = detail?.definition.layout?.nodes
+  const positions = useMemo(() => new Map(Object.entries(layoutNodes ?? {})), [layoutNodes])
   const nodeIds = useMemo(() => detail?.definition.nodes.map((node) => node.id) ?? [], [detail])
   const nodeSet = useMemo(() => new Set(nodeIds), [nodeIds])
   const playback = useRunPlayback({
@@ -187,6 +189,7 @@ export function WorkflowRunLive({
             active={player.active}
             reducedMotion={quiet}
             edgeStates={edgeStates}
+            positions={positions}
             noun="Step"
             ariaLabel="Diagram of the workflow run. The log next to it says the same in words."
             columnGap={84}

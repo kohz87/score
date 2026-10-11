@@ -74,6 +74,7 @@ export const CODE_HELP: Record<ValidationCode, string> = {
     'That step may be skipped, so there might be nothing to read. Add a fallback: {{nodes.id.output|default:"…"}}.',
   template_field_unavailable: 'Only agent steps have an output or a verdict.',
   agent_missing: 'Choose the agent for this step.',
+  layout_unknown_node: 'The drawing positions a step that no longer exists.',
 }
 
 export const ALL_CODES: readonly ValidationCode[] = ValidationCodeSchema.options

@@ -49,6 +49,12 @@ const pages = [
     select: '[data-node="build"]',
   },
   {
+    name: 'workflow-editor-drawn',
+    path: '/now/flow/workflows/wf-drawn',
+    ready: '[data-node="draft"]',
+    widths: [1440, 390],
+  },
+  {
     name: 'workflow-run',
     path: '/now/flow/brief-wfrun-1',
     ready: '[data-node="approve"]',

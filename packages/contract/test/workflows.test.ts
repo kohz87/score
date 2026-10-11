@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import {
   ORCH_ACKNOWLEDGEMENT_TEXT,
+  WORKFLOW_LAYOUT_LIMIT,
   WORKFLOW_LIMITS,
   WorkflowDefinitionSchema,
   GateDecisionSchema,
@@ -369,5 +370,40 @@ describe('planner command identities', () => {
     expect(plannerCommandId(id)).toBe('wf:r1:draft:2:assign:3')
     expect(plannerCommandId({ ...id })).toBe(plannerCommandId(id))
     expect(plannerCommandId({ ...id, generation: 4 })).not.toBe(plannerCommandId(id))
+  })
+})
+
+describe('workflow layout (7.1c)', () => {
+  const withLayout = (layout: unknown) => ({ ...definition, layout })
+
+  test('is optional, partial and survives a parse unchanged', () => {
+    expect(WorkflowDefinitionSchema.parse(definition).layout).toBeUndefined()
+    const layout = { nodes: { draft: { x: 16, y: 32 }, done: { x: -4.5, y: 0 } } }
+    expect(WorkflowDefinitionSchema.parse(withLayout(layout)).layout).toEqual(layout)
+    expect(WorkflowDefinitionSchema.parse(withLayout({ nodes: {} })).layout).toEqual({ nodes: {} })
+  })
+
+  test('refuses non-finite and out-of-bounds numbers, bad ids, extra keys and too many entries', () => {
+    const bad = (nodes: unknown) =>
+      expect(() => WorkflowDefinitionSchema.parse(withLayout({ nodes }))).toThrow()
+    bad({ draft: { x: Number.NaN, y: 0 } })
+    bad({ draft: { x: Number.POSITIVE_INFINITY, y: 0 } })
+    bad({ draft: { x: WORKFLOW_LAYOUT_LIMIT + 1, y: 0 } })
+    bad({ draft: { x: 0, y: -WORKFLOW_LAYOUT_LIMIT - 1 } })
+    bad({ draft: { x: '1', y: 0 } })
+    bad({ draft: { x: 0, y: 0, z: 1 } })
+    bad({ 'Bad Id': { x: 0, y: 0 } })
+    bad(
+      Object.fromEntries(
+        Array.from({ length: WORKFLOW_LIMITS.maxNodes + 1 }, (_, i) => [`n${i}`, { x: 0, y: 0 }]),
+      ),
+    )
+    expect(() => WorkflowDefinitionSchema.parse(withLayout({ nodes: {}, extra: 1 }))).toThrow()
+    // The bounds themselves are fine.
+    expect(() =>
+      WorkflowDefinitionSchema.parse(
+        withLayout({ nodes: { draft: { x: WORKFLOW_LAYOUT_LIMIT, y: -WORKFLOW_LAYOUT_LIMIT } } }),
+      ),
+    ).not.toThrow()
   })
 })

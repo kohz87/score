@@ -10,31 +10,35 @@ import {
   type PointerEvent,
 } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
-import { nodeSize, NodeShape } from '../orchestrations/LiveDiagram.tsx'
+import { NodeShape } from '../orchestrations/LiveDiagram.tsx'
 import { layoutFlow, type Point } from '../now/flow/layout.ts'
+import { withPositions } from '../now/flow/free-layout.ts'
 import { KIND_LABEL, portsOf, type Draft } from './workflow-model.ts'
+import {
+  BIG_STEP,
+  STEP,
+  clampCoord,
+  editSize,
+  layoutOf,
+  moveNode,
+  snap,
+  withLayout,
+} from './workflow-layout.ts'
 import { issuesForNode, worstSeverity, type IssueIndex } from './workflow-validation.ts'
 import { edgeLabelOf } from './workflow-run-model.ts'
 import '../orchestrations/orchestrations.css'
 
-// The editor's canvas (PLAN 7.1b): the Flow canvas in edit mode. Nodes are placed automatically (the definition has no
-// coordinates), so "placing" means adding a node and connecting it. Dragging from a port to a node connects them;
-// clicking a port and then a node does the same, and so does the inspector's "Connect to…". Every node and connection
-// is also listed in the outline, which is the canvas's text equivalent.
+// The editor's canvas (PLAN 7.1b, free placement 7.1c): the Flow canvas in edit mode. A definition without a layout is
+// arranged automatically; dragging a node (or moving it with the keyboard: M, then the arrow keys) pins every node where
+// it is drawn and saves the positions in the definition. Dragging from a port to a node connects them; clicking a port
+// and then a node does the same, and so does the inspector's "Connect to…". Every node and connection is also listed in
+// the outline, which is the canvas's text equivalent.
 
 export type Selection = { kind: 'node' | 'edge'; id: string } | null
 export const PALETTE_MIME = 'application/x-score-workflow-node'
 
-const PORT_PITCH = 24
 const unknownStyle: AgentSummary['style'] = { color: '#8a909b', shape: 'circle-dot' }
 const ZOOMS = [0.6, 0.75, 1, 1.25, 1.5]
-
-/** Editor sizes: a branch grows with its rules so every port has room. */
-function editSize(node: WorkflowNode): { w: number; h: number } {
-  const base = nodeSize({ shape: node.kind })
-  const ports = portsOf(node).length
-  return { w: base.w, h: Math.max(base.h, PORT_PITCH * ports + 14) }
-}
 
 /** Where on the right edge of a node each of its ports sits. */
 function portY(node: WorkflowNode, at: { y: number }, height: number, port: string): number {
@@ -56,6 +60,7 @@ export function EditorCanvas({
   onDropKind,
   onDeleteNode,
   onDeleteEdge,
+  onLayout,
   announce,
 }: {
   draft: Draft
@@ -71,6 +76,8 @@ export function EditorCanvas({
   ) => void
   onDeleteNode: (id: string) => void
   onDeleteEdge: (id: string) => void
+  /** Positions changed (a drag, a keyboard move, "Arrange automatically"); `coalesce` merges a run of key presses. */
+  onLayout: (next: Draft, coalesce?: string) => void
   announce: (message: string) => void
 }) {
   const viewport = useRef<HTMLDivElement>(null)
@@ -83,13 +90,25 @@ export function EditorCanvas({
   const [dropOn, setDropOn] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null)
+  // A node being dragged: where it is shown while the pointer is down (committed once, on release).
+  const [dragging, setDragging] = useState<{ id: string; x: number; y: number } | null>(null)
+  const move = useRef<{
+    id: string
+    dx: number
+    dy: number
+    pointer: { clientX: number; clientY: number; alt: boolean }
+    moved: boolean
+  } | null>(null)
+  const suppressClick = useRef(false)
+  // Keyboard move mode: arrows move the node instead of changing the focus.
+  const [moving, setMoving] = useState<string | null>(null)
   const scale = fit * zoom
 
   const sizes = useMemo(
     () => new Map(draft.nodes.map((node) => [node.id, editSize(node)])),
     [draft.nodes],
   )
-  const layout = useMemo(
+  const auto = useMemo(
     () =>
       layoutFlow(
         {
@@ -104,7 +123,41 @@ export function EditorCanvas({
       ),
     [draft.nodes, draft.edges, sizes],
   )
+  const arranged = Boolean(draft.layout)
+  const busy = dragging !== null
+  const placed = useMemo(() => {
+    const map = new Map(Object.entries(layoutOf(draft)))
+    if (dragging) map.set(dragging.id, { x: dragging.x, y: dragging.y })
+    return map
+  }, [draft, dragging])
+  const layout = useMemo(
+    () =>
+      withPositions(
+        auto,
+        draft.nodes.map((node) => ({
+          id: node.id,
+          width: sizes.get(node.id)!.w,
+          height: sizes.get(node.id)!.h,
+        })),
+        draft.edges.map(({ id, from, to }) => ({ id, from, to, kind: 'flow' })),
+        placed,
+        {
+          marginX: 18,
+          marginY: 22,
+          // Room to drag into once the drawing is the person's own.
+          ...(arranged ? { slack: { x: 160, y: 120 } } : {}),
+          startY: (edgeId, rect) => {
+            const edge = draft.edges.find((e) => e.id === edgeId)
+            const from = edge && draft.nodes.find((n) => n.id === edge.from)
+            return from && edge ? portY(from, rect, rect.h, edge.port) : rect.y + rect.h / 2
+          },
+        },
+      ),
+    [auto, draft.nodes, draft.edges, sizes, placed, arranged],
+  )
   const position = useMemo(() => new Map(layout.nodes.map((n) => [n.id, n])), [layout.nodes])
+  // Where nodes are drawn when nothing is pinned yet (the first move pins them all there).
+  const placedBase = useMemo(() => new Map(auto.nodes.map((n) => [n.id, n])), [auto.nodes])
   const nodeById = useMemo(() => new Map(draft.nodes.map((n) => [n.id, n])), [draft.nodes])
   const byId = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
   const ordered = useMemo(
@@ -122,17 +175,20 @@ export function EditorCanvas({
   useLayoutEffect(() => {
     const el = viewport.current
     if (!el || typeof ResizeObserver === 'undefined') return
-    const update = () =>
+    // The scale stays put while a node is dragged, so the node does not slip away from the pointer.
+    const update = () => {
+      if (busy) return
       setFit(
         el.clientWidth > 0 && layout.width > el.clientWidth
           ? Math.max(0.75, el.clientWidth / layout.width)
           : 1,
       )
+    }
     update()
     const observer = new ResizeObserver(update)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [layout.width])
+  }, [layout.width, busy])
 
   // The route of an edge, starting at the port it leaves from.
   const routes = useMemo(() => {
@@ -195,6 +251,97 @@ export function EditorCanvas({
     }
   }
 
+  // ---- Free placement: drag with the pointer (snaps to the grid; Alt switches snapping off).
+  function dragTo(id: string, pointer: { clientX: number; clientY: number; alt: boolean }) {
+    const grab = move.current
+    if (!grab) return
+    const at = worldPoint(pointer)
+    setDragging({
+      id,
+      x: clampCoord(snap(at.x - grab.dx, pointer.alt)),
+      y: clampCoord(snap(at.y - grab.dy, pointer.alt)),
+    })
+  }
+  function startMove(event: PointerEvent<HTMLButtonElement>, id: string) {
+    if (event.button !== 0 || connecting) return
+    const at = position.get(id)
+    if (!at) return
+    const point = worldPoint(event)
+    move.current = {
+      id,
+      dx: point.x - at.x,
+      dy: point.y - at.y,
+      pointer: { clientX: event.clientX, clientY: event.clientY, alt: event.altKey },
+      moved: false,
+    }
+    drag.current = { x: event.clientX, y: event.clientY, moved: false }
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+  function moveMove(event: PointerEvent<HTMLButtonElement>, id: string) {
+    const grab = move.current
+    const start = drag.current
+    if (!grab || !start || grab.id !== id) return
+    if (!grab.moved && Math.hypot(event.clientX - start.x, event.clientY - start.y) <= 4) return
+    grab.moved = true
+    grab.pointer = { clientX: event.clientX, clientY: event.clientY, alt: event.altKey }
+    dragTo(id, grab.pointer)
+  }
+  function endMove(event: PointerEvent<HTMLButtonElement>, id: string) {
+    const grab = move.current
+    move.current = null
+    drag.current = null
+    if (!grab || grab.id !== id || !grab.moved) {
+      setDragging(null)
+      return
+    }
+    // The click that follows a drag must not select or connect.
+    suppressClick.current = true
+    window.setTimeout(() => {
+      suppressClick.current = false
+    }, 0)
+    const at = worldPoint(event)
+    const x = clampCoord(snap(at.x - grab.dx, event.altKey))
+    const y = clampCoord(snap(at.y - grab.dy, event.altKey))
+    setDragging(null)
+    onLayout(moveNode(draft, placedBase, id, { x, y }))
+    announce(`Moved ${nodeById.get(id)?.label ?? id}.`)
+  }
+  // Pan while dragging near the edge of the canvas.
+  useEffect(() => {
+    if (!dragging) return
+    const timer = window.setInterval(() => {
+      const el = viewport.current
+      const grab = move.current
+      if (!el || !grab) return
+      const rect = el.getBoundingClientRect()
+      const edge = 36
+      const { clientX, clientY } = grab.pointer
+      const dx = clientX > rect.right - edge ? 18 : clientX < rect.left + edge ? -18 : 0
+      const dy = clientY > rect.bottom - edge ? 18 : clientY < rect.top + edge ? -18 : 0
+      if (dx === 0 && dy === 0) return
+      const before = { x: el.scrollLeft, y: el.scrollTop }
+      el.scrollBy?.(dx, dy)
+      if (el.scrollLeft !== before.x || el.scrollTop !== before.y) dragTo(grab.id, grab.pointer)
+    }, 40)
+    return () => window.clearInterval(timer)
+    // dragTo reads refs and the latest scale through the closure of the render that started the interval.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragging !== null, scale])
+
+  // ---- Keyboard move: M, then the arrow keys (Shift = bigger steps), Enter or Escape to finish.
+  function nudge(id: string, key: string, big: boolean) {
+    const at = position.get(id)
+    if (!at) return
+    const step = big ? BIG_STEP : STEP
+    const to = {
+      x: key === 'ArrowLeft' ? at.x - step : key === 'ArrowRight' ? at.x + step : at.x,
+      y: key === 'ArrowUp' ? at.y - step : key === 'ArrowDown' ? at.y + step : at.y,
+    }
+    const next = { x: clampCoord(snap(to.x)), y: clampCoord(snap(to.y)) }
+    onLayout(moveNode(draft, placedBase, id, next), `move:${id}`)
+    announce(`${nodeById.get(id)?.label ?? id} at ${next.x}, ${next.y}.`)
+  }
+
   function focusNode(id: string) {
     setActiveId(id)
     const button = nodeRefs.current.get(id)
@@ -204,6 +351,33 @@ export function EditorCanvas({
 
   function onNodeKeyDown(event: KeyboardEvent<HTMLButtonElement>, id: string) {
     const here = position.get(id)!
+    if (moving === id) {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+        event.preventDefault()
+        event.stopPropagation()
+        nudge(id, event.key, event.shiftKey)
+      } else if (['Enter', 'Escape', 'm', 'M', ' '].includes(event.key)) {
+        event.preventDefault()
+        event.stopPropagation()
+        setMoving(null)
+        announce(`Stopped moving ${nodeById.get(id)?.label ?? id}.`)
+      }
+      return
+    }
+    if (
+      (event.key === 'm' || event.key === 'M') &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey
+    ) {
+      event.preventDefault()
+      event.stopPropagation()
+      setMoving(id)
+      announce(
+        `Moving ${nodeById.get(id)?.label ?? id}. Arrow keys move it, Shift for bigger steps, Enter or Escape to finish.`,
+      )
+      return
+    }
     if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault()
       onDeleteNode(id)
@@ -278,7 +452,23 @@ export function EditorCanvas({
   return (
     <div className="wf-canvas">
       <div className="wf-canvas__bar">
-        <span className="orch-muted">Nodes are arranged for you.</span>
+        <span className="orch-muted">
+          {arranged
+            ? 'Drag a node to move it. Hold Alt to skip the grid.'
+            : 'Nodes are arranged for you until you move one.'}
+        </span>
+        <button
+          type="button"
+          className="wf-arrange"
+          disabled={!arranged}
+          title={arranged ? undefined : 'Already arranged automatically'}
+          onClick={() => {
+            onLayout(withLayout(draft, undefined))
+            announce('Arranged automatically.')
+          }}
+        >
+          Arrange automatically
+        </button>
         <div className="wf-zoom" role="group" aria-label="Zoom">
           <button
             type="button"
@@ -327,7 +517,7 @@ export function EditorCanvas({
         ref={viewport}
         className="orch-canvas wf-canvas__viewport"
         role="group"
-        aria-label="Workflow canvas. Arrow keys move between nodes, Enter selects one, Delete removes it. The outline below lists the same nodes and connections."
+        aria-label="Workflow canvas. Arrow keys move between nodes, Enter selects one, M then the arrow keys moves the focused node, Delete removes it. Drag a node to place it. The outline below lists the same nodes and connections."
         onClick={(event) => {
           if (
             event.target === event.currentTarget ||
@@ -456,7 +646,7 @@ export function EditorCanvas({
                       else nodeRefs.current.delete(node.id)
                     }}
                     type="button"
-                    className={`orch-node orch-node--edit${shaped ? ` orch-node--shaped orch-node--shape-${node.kind}` : ''}${isOn ? ' orch-node--selected' : ''}`}
+                    className={`orch-node orch-node--edit${shaped ? ` orch-node--shaped orch-node--shape-${node.kind}` : ''}${isOn ? ' orch-node--selected' : ''}${moving === node.id ? ' orch-node--moving' : ''}${dragging?.id === node.id ? ' orch-node--dragging' : ''}`}
                     style={{
                       width: size.w,
                       height: size.h,
@@ -465,11 +655,22 @@ export function EditorCanvas({
                     data-node={node.id}
                     data-kind={node.kind}
                     aria-pressed={isOn}
+                    aria-keyshortcuts="M"
                     aria-label={`${KIND_LABEL[node.kind]} ${node.label || node.id}${node.kind === 'agent' ? `, ${glyph.name}` : ''}${mine.length > 0 ? `, ${mine.length} ${mine.length === 1 ? 'problem' : 'problems'}` : ''}`}
                     tabIndex={node.id === focusId ? 0 : -1}
                     onFocus={() => setActiveId(node.id)}
+                    onBlur={() => setMoving((current) => (current === node.id ? null : current))}
+                    onPointerDown={(event) => startMove(event, node.id)}
+                    onPointerMove={(event) => moveMove(event, node.id)}
+                    onPointerUp={(event) => endMove(event, node.id)}
+                    onPointerCancel={() => {
+                      move.current = null
+                      drag.current = null
+                      setDragging(null)
+                    }}
                     onClick={(event) => {
                       event.stopPropagation()
+                      if (suppressClick.current) return
                       if (connecting && connecting.from !== node.id) finishConnect(node.id)
                       else onSelect({ kind: 'node', id: node.id })
                     }}

@@ -6,6 +6,7 @@ import {
   okValidation,
   runEvents,
   runSnapshot,
+  releaseDefinition,
   runSummary,
   unfinishedValidation,
   workflowFixtures,
@@ -512,4 +513,169 @@ test('the outline is the canvas as text, and the inspector connects with a selec
   expect(
     (within(inspector).getByRole('radio', { name: /Route a failure/ }) as HTMLInputElement).checked,
   ).toBe(true)
+})
+
+// ---- Free placement (PLAN 7.1c)
+
+const nodeBox = (id: string) =>
+  document.querySelector<HTMLElement>(`.wf-node[data-wf-node="${id}"]`)!
+const at = (id: string) => ({
+  x: Number.parseFloat(nodeBox(id).style.left),
+  y: Number.parseFloat(nodeBox(id).style.top),
+})
+const drawnNode = (name: RegExp) => screen.findByRole('button', { name })
+function drag(
+  el: HTMLElement,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  alt = false,
+) {
+  fireEvent.pointerDown(el, { clientX: from.x, clientY: from.y, button: 0, pointerId: 1 })
+  fireEvent.pointerMove(el, { clientX: to.x, clientY: to.y, altKey: alt, pointerId: 1 })
+  fireEvent.pointerUp(el, { clientX: to.x, clientY: to.y, altKey: alt, pointerId: 1 })
+}
+
+test('dragging a node moves it on a 16 px grid, marks the draft unsaved and keeps the others where they were', async () => {
+  mountEditor('/now/flow/workflows/wf-release')
+  const node = await drawnNode(/Agent step Draft the notes/)
+  const before = { draft: at('draft'), review: at('review'), publish: at('publish') }
+  const start = { x: before.draft.x + 20, y: before.draft.y + 10 }
+  drag(node, start, { x: start.x + 53, y: start.y + 37 })
+  expect(at('draft')).toEqual({
+    x: Math.round((before.draft.x + 53) / 16) * 16,
+    y: Math.round((before.draft.y + 37) / 16) * 16,
+  })
+  // Pinning on the first move: nobody else jumps.
+  expect(at('review')).toEqual(before.review)
+  expect(at('publish')).toEqual(before.publish)
+  expect(screen.getByText(/unsaved changes/)).toBeTruthy()
+  // The drag did not select the node.
+  expect(screen.getByRole('complementary', { name: 'Node settings' }).textContent).toMatch(
+    /Nothing selected/,
+  )
+})
+
+test('holding Alt places the node exactly under the pointer, and a node never goes off the top left', async () => {
+  mountEditor('/now/flow/workflows/wf-release')
+  const node = await drawnNode(/Agent step Draft the notes/)
+  const p = at('draft')
+  drag(node, { x: p.x + 5, y: p.y + 5 }, { x: p.x + 5 + 53, y: p.y + 5 + 37 }, true)
+  expect(at('draft')).toEqual({ x: p.x + 53, y: p.y + 37 })
+  drag(node, { x: 500, y: 500 }, { x: -900, y: -900 })
+  expect(at('draft')).toEqual({ x: 0, y: 0 })
+})
+
+test('the keyboard moves a node: M, arrows (Shift for big steps), Escape; one undo step per run of presses', async () => {
+  mountEditor('/now/flow/workflows/wf-release')
+  const node = await drawnNode(/Agent step Draft the notes/)
+  node.focus()
+  const p = at('draft')
+  // Before M, the arrows move the focus, not the node.
+  fireEvent.keyDown(node, { key: 'ArrowRight' })
+  expect(at('draft')).toEqual(p)
+  fireEvent.keyDown(node, { key: 'm' })
+  fireEvent.keyDown(node, { key: 'ArrowRight' })
+  fireEvent.keyDown(node, { key: 'ArrowRight' })
+  fireEvent.keyDown(node, { key: 'ArrowDown', shiftKey: true })
+  expect(at('draft')).toEqual({
+    x: Math.round((p.x + 32) / 16) * 16,
+    y: Math.round((p.y + 80) / 16) * 16,
+  })
+  expect(
+    screen.getByText(/draft at|Draft the notes at/, { selector: '[role="status"]' }),
+  ).toBeTruthy()
+  fireEvent.keyDown(node, { key: 'Escape' })
+  fireEvent.keyDown(node, { key: 'ArrowRight' })
+  expect(at('draft').x).toBeLessThan(p.x + 33 + 16)
+  // The three presses are one history step.
+  fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+  expect(at('draft')).toEqual(p)
+  expect(screen.queryByText(/unsaved changes/)).toBeNull()
+})
+
+test('Arrange automatically is one undoable step that drops the saved positions', async () => {
+  mountEditor('/now/flow/workflows/wf-release')
+  const node = await drawnNode(/Agent step Draft the notes/)
+  const arrange = screen.getByRole('button', { name: 'Arrange automatically' }) as HTMLButtonElement
+  expect(arrange.disabled).toBe(true)
+  const auto = at('draft')
+  drag(node, { x: auto.x + 5, y: auto.y + 5 }, { x: auto.x + 205, y: auto.y + 165 })
+  const dragged = at('draft')
+  expect(dragged).not.toEqual(auto)
+  expect(arrange.disabled).toBe(false)
+  fireEvent.click(arrange)
+  expect(at('draft')).toEqual(auto)
+  expect(arrange.disabled).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+  expect(at('draft')).toEqual(dragged)
+})
+
+test('saving sends the layout with the definition; a moved node is the only change', async () => {
+  post = (url) =>
+    url === '/api/workflows/wf-release/versions'
+      ? json({ error: { code: 'conflict', message: 'stale', details: { latestVersion: 2 } } }, 409)
+      : undefined
+  mountEditor('/now/flow/workflows/wf-release')
+  const node = await drawnNode(/Agent step Draft the notes/)
+  const save = screen.getByRole('button', { name: 'Save as new version' }) as HTMLButtonElement
+  expect(save.disabled).toBe(true)
+  const p = at('draft')
+  drag(node, { x: p.x + 5, y: p.y + 5 }, { x: p.x + 69, y: p.y + 5 })
+  await waitFor(() => expect(save.disabled).toBe(false))
+  fireEvent.click(save)
+  await screen.findByRole('alert', { name: 'Someone saved first' })
+  const sent = JSON.parse(
+    String(requests.find((r) => r.url === '/api/workflows/wf-release/versions')!.init?.body),
+  ) as {
+    definition: { layout: { nodes: Record<string, { x: number; y: number }> }; nodes: unknown[] }
+  }
+  expect(Object.keys(sent.definition.layout.nodes).sort()).toEqual(
+    releaseDefinition.nodes.map((n) => n.id).sort(),
+  )
+  expect(sent.definition.layout.nodes.draft).toEqual(at('draft'))
+  expect(sent.definition.nodes).toEqual(releaseDefinition.nodes)
+})
+
+test('deleting a node drops its position, and a saved layout is what the editor draws', async () => {
+  const drawn = structuredClone(workflowFixtures['/api/workflows/wf-release']) as {
+    latest: { definition: { layout?: unknown } }
+  }
+  drawn.latest.definition.layout = {
+    nodes: { draft: { x: 320, y: 160 }, review: { x: 640, y: 48 } },
+  }
+  const original = workflowFixtures['/api/workflows/wf-release']
+  workflowFixtures['/api/workflows/wf-release'] = drawn
+  dispose.push(() => {
+    workflowFixtures['/api/workflows/wf-release'] = original
+  })
+  mountEditor('/now/flow/workflows/wf-release')
+  await drawnNode(/Agent step Draft the notes/)
+  expect(at('draft')).toEqual({ x: 320, y: 160 })
+  expect(at('review')).toEqual({ x: 640, y: 48 })
+  // A node without a position is placed automatically.
+  expect(at('publish').x).toBeGreaterThan(0)
+  expect(
+    (screen.getByRole('button', { name: 'Arrange automatically' }) as HTMLButtonElement).disabled,
+  ).toBe(false)
+})
+
+test('the run view draws the nodes where the saved version put them, and the edges follow', async () => {
+  snapshot = revisionOf((run) => {
+    ;(run.definition as { layout?: unknown }).layout = {
+      nodes: { draft: { x: 48, y: 400 }, review: { x: 480, y: 16 } },
+    }
+  })
+  mount(<WorkflowRunLive runId="wfrun-1" onStarted={started} />)
+  await screen.findByRole('log', { name: 'Events' })
+  const box = (name: RegExp) =>
+    screen.getByRole('button', { name }).closest<HTMLElement>('[style*="left"]')!
+  expect(box(/^Step Draft the notes/).style.left).toBe('48px')
+  expect(box(/^Step Draft the notes/).style.top).toBe('400px')
+  expect(box(/^Step Review the draft/).style.left).toBe('480px')
+  // The edge between them starts at the right side of the first and ends at the left side of the second.
+  const d = document.querySelector('[data-edge="e1"]')!.getAttribute('d')!
+  const first = d.split(' L ')[0]!.replace('M ', '').split(' ').map(Number)
+  const last = d.split(' L ').at(-1)!.split(' ').map(Number)
+  expect(first[0]).toBeGreaterThan(48)
+  expect(last[0]).toBe(480)
 })
