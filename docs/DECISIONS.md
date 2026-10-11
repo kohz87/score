@@ -52,3 +52,6 @@ rejects is reverted or changed then.
 | 41 | Antigravity agents are blocked from `~/.gemini` (agy's sign-in folder), like Claude's and Codex's credential folders | credentials must never be readable by an agent | — |
 | 42 | Antigravity live: one real turn through Score (read-only) replied, a decoy outside the workspace was refused, Stop left no processes, the test agent was deleted. DB backed up before migration 0052: `~/.score/backups/score-pre-0052-2026-10-11.db` | — | delete the backups when happy |
 | 43 | Claude Code shows "untested version" (it self-updated to 2.1.296; Score tested 2.1.295) — I didn't confirm it for you; use "Run with 2.1.296 anyway" on the Team page if you want it | version confirmations are yours | — |
+| 44 | Setup wizard dropped (your call); README now has one clean numbered setup guide instead | — | — |
+| 45 | Context rings moved left of Send and grouped with it; on phones the pair wraps together | your request | — |
+| 46 | anime.js 4.5.0 (MIT, no dependencies) added to the web app for 5.37; loaded only on the pages that animate; everything off with reduced motion | your request | remove the package; CSS fallbacks stay |
