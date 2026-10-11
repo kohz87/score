@@ -3,6 +3,37 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.1] — 2026-10-11
+
+Fixes from an external audit of 1.0.0 (34 findings; report in `docs/reviews/2026-10-11-external-audit.md`). Every fix has
+a regression test that failed before it.
+
+### Fixed — data safety
+- Media: storage cleanup can no longer delete the file behind a just-uploaded attachment that shares its bytes with an
+  evicted one; reads verify the content hash and a sweep re-checks stored files.
+- Knowledge: creating or moving a note never replaces a file that appeared meanwhile; link updates during a move apply only
+  to the version they were planned from (outside edits are kept); an interrupted move finishes after a restart.
+- Workspace: moving a file never deletes a newer version that replaced the original mid-move.
+
+### Fixed — security
+- Security password: concurrent changes and host resets are detected (compare-and-swap, re-check after hashing); a
+  damaged or unreadable password store fails closed instead of looking unset; failed writes no longer block retries.
+- Passkeys are created as discoverable credentials so sign-in can always find them.
+- Local mode checks the Host header on every request; workspace path checks treat `.git` in any letter case as protected
+  and accept names that merely start with `..`.
+
+### Fixed — reliability
+- Live data in the browser: resets while a page is closed, failed first loads, slow or stuck snapshots and long-kept
+  handles now recover correctly with bounded buffering and request timeouts.
+- Knowledge index: same-size, same-time outside edits are picked up; unreadable folders no longer look like deletions;
+  note responses are built from one version; reads are bounded; links inside code examples are left alone.
+- Orchestration caches are only updated after a successful save; MCP concurrency slots are held until tools finish;
+  shutdown waits for background work before closing the database.
+- Bridge outbox: recovery tells a reused process id apart from the original producer, unchanged files are no longer
+  rewritten on every append, and directory changes are synced to disk.
+- Uploads: text files starting with "PK" are accepted; Office files with unusual ZIP comments are detected; long Unicode
+  download names no longer cause an error; files with a NUL byte after the first 8 KB are treated consistently.
+
 ## [1.0.0] — 2026-10-11
 
 The first release: a local-first web app for running a team of [Hermes Agent](https://github.com/NousResearch/hermes-agent)
@@ -67,4 +98,5 @@ profiles. Tested with Hermes v0.21.x on Linux.
   app version.
 - Licensed under PolyForm Noncommercial 1.0.0; commercial licences on request ([COMMERCIAL.md](COMMERCIAL.md)).
 
+[1.0.1]: https://github.com/kohz87/score/releases/tag/v1.0.1
 [1.0.0]: https://github.com/kohz87/score/releases/tag/v1.0.0
