@@ -43,6 +43,55 @@ export const SessionCompactedSchema = z.object({
 })
 export type SessionCompacted = z.infer<typeof SessionCompactedSchema>
 
+export const ContextPartKindSchema = z.enum([
+  'system_prompt',
+  'tool_definitions',
+  'rules',
+  'skills',
+  'mcp',
+  'subagent_definitions',
+  'memory',
+  'conversation',
+])
+export const ContextPartSchema = z.object({
+  kind: ContextPartKindSchema,
+  label: z.string().min(1).max(60),
+  tokens: z.int().nonnegative(),
+})
+export type ContextPart = z.infer<typeof ContextPartSchema>
+export const ReadingSourceSchema = z.enum([
+  'provider_usage',
+  'provider_usage_plus_estimate',
+  'local_estimate',
+])
+export type ReadingSource = z.infer<typeof ReadingSourceSchema>
+
+/** The plugin's answer to a `context_breakdown` query (contract §11). */
+export const SessionContextReadingSchema = z.object({
+  window: z.int().nonnegative(),
+  used: z.int().nonnegative(),
+  model: z.string().max(200),
+  source: ReadingSourceSchema,
+  autoCompactAt: z.int().positive().nullable(),
+  parts: z.array(ContextPartSchema).max(16),
+})
+export type SessionContextReading = z.infer<typeof SessionContextReadingSchema>
+
+/** `GET /api/agents/:agentId/sessions/:sessionId/context`: the context meter's data. */
+export const SessionContextSchema = z.object({
+  window: z.int().positive().nullable(),
+  used: z.int().nonnegative().nullable(),
+  measuredAt: z.iso.datetime().nullable(),
+  model: z.string().nullable(),
+  source: ReadingSourceSchema.nullable(),
+  /** Null = Hermes's breakdown is not available (the totals are Score's own). */
+  parts: z.array(ContextPartSchema).nullable(),
+  autoCompactAt: z.int().positive().nullable(),
+  /** Compactions of this session Score has seen answered. */
+  compactions: z.int().nonnegative(),
+})
+export type SessionContext = z.infer<typeof SessionContextSchema>
+
 export const RoomDeleteRequestSchema = z.object({ confirm: z.string().min(1).max(200) }).strict()
 export type RoomDeleteRequest = z.infer<typeof RoomDeleteRequestSchema>
 

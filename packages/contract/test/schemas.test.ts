@@ -1293,6 +1293,32 @@ const cases = [
     },
     { commandId: 'c1', agentId: 'builder', sessionId: 's', status: 'maybe' },
   ],
+  ['ContextPartKindSchema', 'mcp', 'other'],
+  [
+    'ContextPartSchema',
+    { kind: 'skills', label: 'Skills', tokens: 10 },
+    { kind: 'skills', label: '', tokens: 10 },
+  ],
+  ['ReadingSourceSchema', 'local_estimate', 'guess'],
+  [
+    'SessionContextReadingSchema',
+    { window: 1000, used: 10, model: 'm', source: 'provider_usage', autoCompactAt: null, parts: [] },
+    { window: 1000, used: 10, model: 'm', source: 'x', autoCompactAt: null, parts: [] },
+  ],
+  [
+    'SessionContextSchema',
+    {
+      window: null,
+      used: null,
+      measuredAt: null,
+      model: null,
+      source: null,
+      parts: null,
+      autoCompactAt: null,
+      compactions: 0,
+    },
+    { window: 0 },
+  ],
   ['RoomDeleteRequestSchema', { confirm: '#launch' }, { confirm: '' }],
   [
     'RoomDeletePlanSchema',

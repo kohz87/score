@@ -39,3 +39,19 @@ private.CommandExpired = CommandExpired
 def _no_gateway(session_id, turns, *_, **__):
     raise RuntimeError("no gateway session store")
 private.rewind_session = _no_gateway
+
+class CompactLockHeld(Exception):
+    pass
+
+class SessionBusy(Exception):
+    pass
+
+private.CompactLockHeld = CompactLockHeld
+private.SessionBusy = SessionBusy
+def _no_compact(*_, **__):
+    raise RuntimeError("no gateway session store")
+private.compact_session = _no_compact
+
+def _no_context(*_, **__):
+    raise RuntimeError("no gateway session store")
+private.context_breakdown = _no_context

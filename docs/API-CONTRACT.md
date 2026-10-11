@@ -598,6 +598,15 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 - **S** `GET /api/agents/:agentId/context` → `AgentContext` `{ model: string | null; tokens: { input; output } | null;
   costUsd: number | null; contextLength: number | null }` (PLAN 5.25): usage of the agent's latest finished or running run
   with usage and the model's context window when Hermes's model options carry one (else `null`). `404` unknown agent.
+- **S** `GET /api/agents/:agentId/sessions/:sessionId/context` → `SessionContext` `{ window: number | null; used: number | null;
+  measuredAt: string | null; model: string | null; source: ReadingSource | null; parts: { kind; label; tokens }[] | null;
+  autoCompactAt: number | null; compactions: number }` (PLAN 5.36): what the context meter and its popover show for one room
+  session. With the plugin's `context_breakdown` answer, `parts` lists what uses the window (Hermes's categories: system prompt,
+  tool definitions, rules, skills, MCP tools, subagent definitions, memory, conversation messages; compressed summaries and
+  files are inside the conversation and are not separated) and `used` is Hermes's own figure. When the plugin can't answer
+  (old plugin, no running gateway, coding agent, empty session) the response falls back to the totals of `GET
+  /api/agents/:agentId/context` with `parts: null`. Cached up to 30 s per session; the cache is dropped when a run of that agent
+  in that room finishes and after a compaction. `404` as for compact.
 - **H** `POST /api/agents/:agentId/sessions/:sessionId/compact` `{ keepRecent?: int 1-20 }` → `202 { commandId }` (PLAN 5.36;
   schemas in `packages/contract/src/compaction.ts`). Asks Hermes to compact (summarise the older turns of) one of the agent's
   room sessions (`score-<roomId>-<agentId>`, or the session an imported room continues; the tip of its compression lineage is
@@ -1404,7 +1413,7 @@ sessionKey; requestId; choice: ApprovalChoice; reason: string | null }[] }`. Onl
 **Commands** (PLAN 5.33, server → plugin). A sibling long poll next to the decisions one, served only to a producer
 whose `isolation` is not `unknown`; the plugin polls only while it runs inside a gateway (it needs Hermes's session store).
 
-- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: ({ commandId; kind: 'rewind'; sessionId; turns; since?; expiresAt } | { commandId; kind: 'compact'; sessionId; keepRecent?; expiresAt })[] }` (`expiresAt` = epoch seconds, issued + the 60 s answer
+- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: ({ commandId; kind: 'rewind'; sessionId; turns; since?; expiresAt } | { commandId; kind: 'compact'; sessionId; keepRecent?; expiresAt } | { commandId; kind: 'context_breakdown'; sessionId; expiresAt })[] }` (`expiresAt` = epoch seconds, issued + the 60 s answer
   time; the plugin refuses the command (`expired`) when it is past, checked under the transcript lock immediately before it mutates, so a
   command Score gave up on can't rewind later work; `since` = epoch seconds of the rewound message; the plugin then
   computes the number of turns itself, as every user turn of Hermes's alternation-repaired projection from the first one at or after
@@ -1413,7 +1422,7 @@ whose `isolation` is not `unknown`; the plugin polls only while it runs inside a
   can't move the target; a target that changed is `failed`), and checks afterwards that no active user row from `since` remains, else `failed`). A
   command is handed to one polling producer of the profile once and is not redelivered.
 - `POST /bridge/v1/commands/:commandId/result` `{ outcome: 'done' | 'nothing' | 'failed' | 'expired'; turnsUndone?; rewoundCount?;
-  before?: { messages; tokens }; after?: { messages; tokens }; error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what
+  before?: { messages; tokens }; after?: { messages; tokens }; context?: SessionContextReading; error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what
   `/undo` uses; soft-deletes the rows, the next turn rebuilds from the active ones) from `hermes_private.py` and reports
   Hermes's `turns_undone` / `rewound_count`; `nothing` = Hermes had nothing to rewind. A command with no result within
   60 s is reported to the person as `no_answer`, and Score keeps the room's rewind hold (persisted in `rewind_holds`, restored after a
@@ -1430,6 +1439,14 @@ whose `isolation` is not `unknown`; the plugin polls only while it runs inside a
   minimum, `failed` (`error`: `lock_held` while Hermes holds its compression lock for that session, `compact_failed`
   otherwise; never Hermes text) and `done` with Hermes's before/after message and token estimates. A command is run at most once
   per `commandId`; a repeated one returns the remembered result.
+
+  **`context_breakdown`** (PLAN 5.36): a read-only query, answer window 20 s. The plugin (`hermes_private.context_breakdown`)
+  asks Hermes's own context accounting for the session (`agent.context_breakdown.compute_session_context_breakdown`, what the
+  `/context` command reports; no model call; a throwaway agent is built only to read its prompt, tool schemas and compressor)
+  and answers `done` with `context: SessionContextReading` `{ window; used; model; source: 'provider_usage' |
+  'provider_usage_plus_estimate' | 'local_estimate'; autoCompactAt: number | null; parts: { kind: 'system_prompt' |
+  'tool_definitions' | 'rules' | 'skills' | 'mcp' | 'subagent_definitions' | 'memory' | 'conversation'; label; tokens }[] }`,
+  or `nothing` for a session without rows, or `failed` (`context_failed`).
 
 **Kanban denials** (D4.3, revised 2026-10-07): there are **no** grant endpoints. A Kanban worker's `post_tool_call`
 event may carry `kanbanDenial: { patternKey: string; commandDigest: string; taskId: string; runId: number | null }`

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { SessionContextReadingSchema } from './compaction.ts'
 import { AgentIdSchema, MessageSchema } from './types.ts'
 
 /** Edit or delete of the person's own message X: X and everything after it becomes a previous version. */
@@ -113,9 +114,17 @@ const CompactCommandSchema = z.object({
   keepRecent: z.int().min(1).max(20).optional(),
   expiresAt: z.number().positive(),
 })
+/** Server → bridge plugin: a read-only query for what uses a session's context window (PLAN 5.36). */
+const ContextBreakdownCommandSchema = z.object({
+  commandId: z.string().min(1).max(128),
+  kind: z.literal('context_breakdown'),
+  sessionId: z.string().min(1).max(256),
+  expiresAt: z.number().positive(),
+})
 export const BridgeCommandSchema = z.discriminatedUnion('kind', [
   RewindCommandSchema,
   CompactCommandSchema,
+  ContextBreakdownCommandSchema,
 ])
 export type BridgeCommand = z.infer<typeof BridgeCommandSchema>
 export const BridgeCommandsResponseSchema = z.object({ items: z.array(BridgeCommandSchema) })
@@ -130,6 +139,7 @@ export const BridgeCommandResultSchema = z.object({
   rewoundCount: z.int().nonnegative().optional(),
   before: CommandSizeSchema.optional(),
   after: CommandSizeSchema.optional(),
+  context: SessionContextReadingSchema.optional(),
   error: z.string().max(200).optional(),
 })
 export type BridgeCommandResult = z.infer<typeof BridgeCommandResultSchema>

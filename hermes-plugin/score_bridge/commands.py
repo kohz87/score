@@ -1,4 +1,4 @@
-"""Server -> plugin commands (contract section 11): rewinding a Hermes session, run inside the gateway."""
+"""Server -> plugin commands (contract section 11): rewinding or compacting a Hermes session, run inside the gateway."""
 from __future__ import annotations
 
 import threading
@@ -15,15 +15,24 @@ _REMEMBERED = 256
 def validate_command(item):
     if type(item) is not dict:
         raise ProtocolError("invalid command")
-    command_id, session_id, turns = item.get("commandId"), item.get("sessionId"), item.get("turns")
+    command_id, session_id = item.get("commandId"), item.get("sessionId")
     if type(command_id) is not str or not 0 < len(command_id) <= 128:
         raise ProtocolError("invalid command")
-    if item.get("kind") != "rewind" or type(session_id) is not str or not 0 < len(session_id) <= 256:
-        raise ProtocolError("invalid command")
-    if type(turns) is not int or not 0 < turns <= 1000:
+    kind = item.get("kind")
+    if kind not in ("rewind", "compact", "context_breakdown") or type(session_id) is not str or not 0 < len(session_id) <= 256:
         raise ProtocolError("invalid command")
     expires = item.get("expiresAt")
     if type(expires) not in (int, float) or not 0 < expires < 1e12:
+        raise ProtocolError("invalid command")
+    if kind == "context_breakdown":
+        return
+    if kind == "compact":
+        keep = item.get("keepRecent")
+        if keep is not None and (type(keep) is not int or not 0 < keep <= 20):
+            raise ProtocolError("invalid command")
+        return
+    turns = item.get("turns")
+    if type(turns) is not int or not 0 < turns <= 1000:
         raise ProtocolError("invalid command")
     since = item.get("since")
     if since is not None and (type(since) not in (int, float) or not 0 < since < 1e12):
@@ -44,8 +53,45 @@ def run_rewind(item, profile: str | None = None) -> dict:
     return {"outcome": "done", "turnsUndone": result["turns_undone"], "rewoundCount": result["rewound_count"]}
 
 
+def run_compact(item, profile: str | None = None) -> dict:
+    """Ask Hermes to compact; the result carries counts and a fixed error code, never Hermes text."""
+    try:
+        result = hermes_private.compact_session(item["sessionId"], item.get("keepRecent"), profile,
+                                                expires_at=item["expiresAt"])
+    except hermes_private.CommandExpired:
+        return {"outcome": "expired"}
+    except hermes_private.CompactLockHeld:
+        return {"outcome": "failed", "error": "lock_held"}
+    except hermes_private.SessionBusy:
+        return {"outcome": "failed", "error": "session_busy"}
+    except Exception:
+        return {"outcome": "failed", "error": "compact_failed"}
+    if result is None:
+        return {"outcome": "nothing"}
+    return {"outcome": "done", "before": result["before"], "after": result["after"]}
+
+
+def run_context(item, profile: str | None = None) -> dict:
+    """A read-only query: Hermes's own context accounting for the session, no model call."""
+    try:
+        result = hermes_private.context_breakdown(item["sessionId"], profile)
+    except Exception:
+        return {"outcome": "failed", "error": "context_failed"}
+    if result is None:
+        return {"outcome": "nothing"}
+    return {"outcome": "done", "context": result}
+
+
+def run_command(item, profile: str | None = None) -> dict:
+    if time.time() >= item["expiresAt"]:
+        return {"outcome": "expired"}
+    if item["kind"] == "context_breakdown":
+        return run_context(item, profile)
+    return run_compact(item, profile) if item["kind"] == "compact" else run_rewind(item, profile)
+
+
 class CommandPoller:
-    """Polls only while this process hosts a gateway; remembers results so a repeated command never rewinds twice."""
+    """Polls only while this process hosts a gateway; remembers results so a repeated command never runs twice."""
 
     def __init__(self, client):
         self.client = client
@@ -72,7 +118,7 @@ class CommandPoller:
             command_id = item["commandId"]
             result = self._results.get(command_id)
             if result is None:
-                result = run_rewind(item, getattr(self.client, "profile", None))
+                result = run_command(item, getattr(self.client, "profile", None))
                 self._results[command_id] = result
                 while len(self._results) > _REMEMBERED:
                     self._results.popitem(last=False)
