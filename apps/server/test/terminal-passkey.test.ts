@@ -171,3 +171,29 @@ test('a passkey counts only while the security password was set on the host', as
   expect(refused.statusCode).toBe(403)
   expect(refused.json().error.code).toBe('second_factor_not_enrolled')
 })
+
+test('SCORE-011: enrollment requires a discoverable credential and login offers the enrolled ones', async () => {
+  const setup = makeApp(true)
+  const { app } = setup
+  const { cookie, device } = await pairWithPasskey(setup)
+  const registration = (
+    await post(
+      app,
+      '/api/session/passkeys/registration-options',
+      { password: PASSWORD, label: 'Second' },
+      cookie,
+    )
+  ).json()
+  expect(registration.authenticatorSelection).toMatchObject({
+    residentKey: 'required',
+    requireResidentKey: true,
+  })
+  // A passkey enrolled before this change (possibly not discoverable) must still be offered to the paired browser;
+  // the public sign-in lists nothing.
+  const anonymous = (await post(app, '/api/session/passkey/authentication-options', {})).json()
+  expect(anonymous.allowCredentials ?? []).toEqual([])
+  const options = (
+    await post(app, '/api/session/passkey/authentication-options', {}, cookie)
+  ).json()
+  expect(options.allowCredentials).toEqual([expect.objectContaining({ id: device.id })])
+})

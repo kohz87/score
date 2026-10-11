@@ -962,3 +962,24 @@ test('old unsubscribe handles do not remove a later registration of the same cal
   await ingest.flushListeners()
   expect(listener).toHaveBeenCalledOnce()
 })
+
+test('SCORE-033: close waits for a committed listener held at an await', async () => {
+  let release!: () => void
+  const held = new Promise<void>((resolve) => (release = resolve))
+  const log: string[] = []
+  let entered!: () => void
+  const inside = new Promise<void>((resolve) => (entered = resolve))
+  ingest.onCommitted(async () => {
+    entered()
+    await held
+    log.push('listener done')
+  })
+  await ingest.submit(observation('one'))
+  await inside
+  const closed = ingest.close().then(() => log.push('closed'))
+  for (let turn = 0; turn < 5; turn++) await new Promise((resolve) => setImmediate(resolve))
+  expect(log).toEqual([])
+  release()
+  await closed
+  expect(log).toEqual(['listener done', 'closed'])
+})

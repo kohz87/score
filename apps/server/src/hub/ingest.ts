@@ -332,6 +332,9 @@ export function createIngest(
       accepting = false
       closing ??= (async () => {
         await hub.drain()
+        // Listeners holding a batch finish before the owner closes the database under them. Nothing new is accepted
+        // (submit rejects), so what they start from here fails instead of reaching a closing database.
+        await hub.flushListeners()
         for (const entry of listeners.values()) entry.active = false
         listeners.clear()
         owners.delete(db)

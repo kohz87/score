@@ -32,6 +32,14 @@ let now: number
 const clock = () => now
 const comments: { taskId: string; text?: string | undefined; author?: string | undefined }[] = []
 let failTaskAction = false
+// A barrier inside the Hermes call the comment tool awaits: lets a test hold tools open and count the ones running.
+const hermes = {
+  hold: undefined as Promise<void> | undefined,
+  active: 0,
+  peak: 0,
+  started: 0,
+  waiters: [] as (() => void)[],
+}
 const closers: (() => Promise<unknown>)[] = []
 const AT = '2026-10-09T10:00:00.000Z'
 
@@ -63,6 +71,7 @@ beforeEach(async () => {
   now = Date.parse(AT)
   comments.length = 0
   failTaskAction = false
+  Object.assign(hermes, { hold: undefined, active: 0, peak: 0, started: 0, waiters: [] })
   dir = mkdtempSync(join(tmpdir(), 'score-mcp-'))
   db = openDatabase(join(dir, 'score.db'))
   migrate(db, fileURLToPath(new URL('../../migrations/', import.meta.url)))
@@ -94,6 +103,15 @@ beforeEach(async () => {
   })
   const port = {
     taskAction: vi.fn(async (req: { taskId: string; text?: string; author?: string }) => {
+      hermes.active++
+      hermes.started++
+      hermes.peak = Math.max(hermes.peak, hermes.active)
+      for (const wake of hermes.waiters.splice(0)) wake()
+      try {
+        await hermes.hold
+      } finally {
+        hermes.active--
+      }
       if (failTaskAction) throw new Error('hermes down')
       comments.push(req)
       return { hermesStatus: 'running' }
@@ -620,4 +638,48 @@ test('a rewind that starts while a post waits in the queue stops the post', asyn
   } finally {
     rewindingRooms.delete('r1')
   }
+})
+
+test('SCORE-024: permits are released when the tools finish, not when the client disconnects', async () => {
+  const token = enable('builder', true)
+  let release!: () => void
+  hermes.hold = new Promise<void>((resolve) => (release = resolve))
+  const arrived = (n: number) =>
+    new Promise<void>((resolve) => {
+      const check = () => (hermes.started >= n ? resolve() : void hermes.waiters.push(check))
+      check()
+    })
+  const comment = (id: number, signal?: AbortSignal) =>
+    fetch(url, {
+      method: 'POST',
+      ...(signal ? { signal } : {}),
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id,
+        method: 'tools/call',
+        params: { name: 'tasks.comment', arguments: { taskId: 't1', text: `c${id}` } },
+      }),
+    })
+  const aborts = [1, 2, 3, 4].map(() => new AbortController())
+  const first = aborts.map((abort, i) => comment(i + 1, abort.signal).catch(() => undefined))
+  await arrived(4)
+  for (const abort of aborts) abort.abort()
+  await Promise.all(first)
+  // Wait until the server has seen every connection go away (its response-close handlers have run).
+  while ((await new Promise<number>((r) => bridge.server.getConnections((_e, n) => r(n)))) > 0)
+    await new Promise((r) => setImmediate(r))
+  // The four clients are gone but their tools still run: a fifth call must still be refused, not started.
+  const outcome = await Promise.race([
+    comment(5).then((res) => res.status),
+    arrived(5).then(() => 'started'),
+  ])
+  expect(outcome).toBe(429)
+  expect(hermes.peak).toBeLessThanOrEqual(4)
+  expect(hermes.active).toBe(4)
+  release()
 })

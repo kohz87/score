@@ -137,7 +137,8 @@ test('registration needs a paired browser and the security password', async () =
   const options = ok.json()
   expect(options.rp).toEqual({ name: 'Score', id: rpId })
   expect(options.authenticatorSelection).toMatchObject({
-    residentKey: 'preferred',
+    residentKey: 'required',
+    requireResidentKey: true,
     userVerification: 'required',
   })
   expect(options.pubKeyCredParams.map((param: { alg: number }) => param.alg)).toEqual([-7, -257])

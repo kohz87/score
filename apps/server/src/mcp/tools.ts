@@ -64,12 +64,19 @@ const failure = (message: string): CallToolResult => ({
  * value: no tool takes an agent argument, so a prompt-injected agent cannot act as another one. Every call re-checks the
  * switches, so turning access off takes effect on the next call.
  */
-export function createMcpServer(agentId: string, deps: McpToolDeps): McpServer {
+export function createMcpServer(
+  agentId: string,
+  deps: McpToolDeps,
+  /** Brackets each tool run so the route can hold its concurrency permit until the work is done; `undefined` = refused. */
+  begin: () => (() => void) | undefined = () => () => undefined,
+): McpServer {
   const { db, access, ingest, port, knowledge, orchestrator, clock = Date.now } = deps
   const server = new McpServer({ name: 'score', version: '1' })
 
   function guarded<A>(write: boolean, run: (args: A) => Promise<unknown> | unknown) {
     return async (args: A): Promise<CallToolResult> => {
+      const end = begin()
+      if (!end) return failure('aborted: the MCP request ended before this tool could start')
       try {
         const state = access.get(agentId)
         if (!state.enabled)
@@ -84,6 +91,8 @@ export function createMcpServer(agentId: string, deps: McpToolDeps): McpServer {
       } catch (error) {
         if (error instanceof HttpError) return failure(`${error.code}: ${error.message}`)
         throw error
+      } finally {
+        end()
       }
     }
   }

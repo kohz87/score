@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
-  test: { setupFiles: ['./test/helpers/tmp-root.ts'] },
+  test: { setupFiles: ['./test/helpers/tmp-root.ts', './test/helpers/default-host.ts'] },
 })

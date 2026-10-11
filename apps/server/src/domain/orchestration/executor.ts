@@ -400,6 +400,9 @@ export class Orchestrator {
   private async mutate<T>(fn: (ctx: Ctx) => T): Promise<T> {
     let result!: T
     let failure: string | undefined
+    // Cache updates are staged and published only once the transaction has committed; a rollback must not leave
+    // "already seen" marks behind for projections that were never stored.
+    const staged = { fingerprints: new Map<string, string>(), ownership: new Map<string, string>() }
     await this.ingest.submit({
       source: 'orchestration',
       identity: randomUUID(),
@@ -412,11 +415,13 @@ export class Orchestrator {
           events: [],
         }
         result = fn(ctx)
-        const events = [...ctx.events, ...this.finalize(ctx)]
+        const events = [...ctx.events, ...this.finalize(ctx, staged)]
         failure = ctx.journalFailure
         return events
       },
     })
+    for (const [id, value] of staged.fingerprints) this.fingerprints.set(id, value)
+    for (const [id, value] of staged.ownership) this.ownershipSeen.set(id, value)
     if (failure !== undefined) this.fenceNow('journal_unwritable', failure)
     return result
   }
@@ -430,7 +435,10 @@ export class Orchestrator {
   }
 
   /** Settles each touched run, bumps its revision when anything changed and emits its summary. */
-  private finalize(ctx: Ctx): DomainEventDraft[] {
+  private finalize(
+    ctx: Ctx,
+    staged: { fingerprints: Map<string, string>; ownership: Map<string, string> },
+  ): DomainEventDraft[] {
     const { sqlite, now } = ctx
     const events: DomainEventDraft[] = []
     for (let pass = 0; pass < 4; pass++) {
@@ -456,12 +464,12 @@ export class Orchestrator {
           }),
         )
         .digest('hex')
-      if (this.fingerprints.get(id) === fingerprint) continue
-      this.fingerprints.set(id, fingerprint)
+      if ((staged.fingerprints.get(id) ?? this.fingerprints.get(id)) === fingerprint) continue
+      staged.fingerprints.set(id, fingerprint)
       // Ownership transitions (owned, draining, released) are part of the recorded history.
       const ownership = ownershipOf(o, attemptsOf(sqlite, o.id))
-      if (this.ownershipSeen.get(id) !== ownership) {
-        this.ownershipSeen.set(id, ownership)
+      if ((staged.ownership.get(id) ?? this.ownershipSeen.get(id)) !== ownership) {
+        staged.ownership.set(id, ownership)
         addHistory(sqlite, id, 'ownership', { state: ownership }, now)
       }
       compactControlHistory(sqlite, id)

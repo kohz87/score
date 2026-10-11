@@ -50,8 +50,10 @@ const mocks = vi.hoisted(() => {
     sweepKanbanDenials: vi.fn(async () => undefined),
     retireIngestKeys: vi.fn(),
     loadBridgeBootstrap: vi.fn(() => Buffer.alloc(32)),
+    snapshotSessionCosts: vi.fn(async (): Promise<void> => undefined),
   }
 })
+vi.mock('../src/domain/spend.ts', () => ({ snapshotSessionCosts: mocks.snapshotSessionCosts }))
 
 vi.mock('../src/domain/approval-outbox.ts', () => ({
   ApprovalOutbox: class {
@@ -470,4 +472,26 @@ test('fake mode never opens Hermes for denial sweeps', async () => {
   await import('../src/index.ts')
   await vi.advanceTimersByTimeAsync(10000)
   expect(mocks.sweepKanbanDenials).not.toHaveBeenCalled()
+})
+
+test('SCORE-033: shutdown waits for a spend sample held at an await before closing ingest and the database', async () => {
+  let release!: () => void
+  const held = new Promise<void>((resolve) => (release = resolve))
+  let entered!: () => void
+  const inside = new Promise<void>((resolve) => (entered = resolve))
+  mocks.snapshotSessionCosts.mockImplementationOnce(async () => {
+    entered()
+    await held
+  })
+  await import('../src/index.ts')
+  await inside // the first sample starts at boot
+  signals.get('SIGTERM')?.()
+  await vi.waitFor(() => expect(mocks.app.close).toHaveBeenCalledTimes(1))
+  for (let turn = 0; turn < 10; turn++) await new Promise((resolve) => setImmediate(resolve))
+  expect(mocks.ingest.close).not.toHaveBeenCalled()
+  expect(mocks.db.close).not.toHaveBeenCalled()
+  release()
+  await vi.waitFor(() => expect(mocks.release).toHaveBeenCalledOnce())
+  expect(mocks.ingest.close).toHaveBeenCalledOnce()
+  expect(mocks.db.close).toHaveBeenCalledOnce()
 })

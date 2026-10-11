@@ -72,14 +72,34 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpRouteDeps): voi
         },
       )
     inFlight.set(identity.agentId, running + 1)
+    // The permit covers the tool work, not the connection: tools cannot be cancelled, so a client that disconnects
+    // must not free its slot while they still run. Released once the response is closed, the transport has handed
+    // the request over and no tool is left running (a tool that would start after that is refused).
     let released = false
+    let closed = false
+    let handed = false
+    let tools = 0
     const release = () => {
       if (released) return
       released = true
       inFlight.set(identity.agentId, (inFlight.get(identity.agentId) ?? 1) - 1)
     }
+    const maybeRelease = () => {
+      if (closed && handed && tools === 0) release()
+    }
+    const begin = () => {
+      if (released) return undefined
+      tools++
+      let ended = false
+      return () => {
+        if (ended) return
+        ended = true
+        tools--
+        maybeRelease()
+      }
+    }
 
-    const server = createMcpServer(identity.agentId, deps)
+    const server = createMcpServer(identity.agentId, deps, begin)
     const transport = new StreamableHTTPServerTransport({
       // Stateless: no session id, and JSON instead of an event stream.
       sessionIdGenerator: undefined,
@@ -87,14 +107,19 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpRouteDeps): voi
     })
     reply.hijack()
     reply.raw.on('close', () => {
-      release()
+      closed = true
+      maybeRelease()
       void transport.close()
       void server.close()
     })
     try {
       await server.connect(transport)
       await transport.handleRequest(request.raw, reply.raw, request.body)
+      handed = true
+      maybeRelease()
     } catch (error) {
+      handed = true
+      maybeRelease()
       request.log.error({ err: error }, 'mcp request failed')
       if (!reply.raw.headersSent) {
         reply.raw.writeHead(500, { 'content-type': 'application/json' })

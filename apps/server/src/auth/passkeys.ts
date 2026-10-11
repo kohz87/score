@@ -180,7 +180,12 @@ export class PasskeyService {
           id: row.id,
           transports: TransportsSchema.catch([]).parse(JSON.parse(row.transports)),
         })),
-      authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' },
+      // Discoverable credentials only: new passkeys must be findable by the browser even without a descriptor list.
+      authenticatorSelection: {
+        residentKey: 'required',
+        requireResidentKey: true,
+        userVerification: 'required',
+      },
       supportedAlgorithmIDs: [ES256, RS256],
     })
     this.issue(options.challenge, {
@@ -252,11 +257,24 @@ export class PasskeyService {
     }
   }
 
-  async authenticationOptions(input: { origin: string | undefined; peer: string }) {
+  async authenticationOptions(input: {
+    origin: string | undefined
+    peer: string
+    listCredentials?: boolean
+  }) {
     const { origin, rpId } = this.ceremonyOrigin(input.origin)
-    // No allowCredentials: the passkeys are discoverable, so the browser offers the ones it holds for this domain.
+    // Enrolled descriptors are offered only to a paired browser, so passkeys enrolled earlier as non-discoverable keep
+    // working as its second factor; the public sign-in lists nothing and relies on discoverable credentials.
     const options = await generateAuthenticationOptions({
       rpID: rpId,
+      allowCredentials: input.listCredentials
+        ? this.rows()
+            .filter((row) => row.rp_id === rpId)
+            .map((row) => ({
+              id: row.id,
+              transports: TransportsSchema.catch([]).parse(JSON.parse(row.transports)),
+            }))
+        : [],
       userVerification: 'required',
     })
     this.issue(options.challenge, {
