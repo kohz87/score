@@ -96,3 +96,17 @@ test('a workspace:// link with no known agent is plain text; other schemes stay 
   expect(screen.getByText('x')).toBeTruthy()
   expect(screen.getByText('y').getAttribute('href')).toBeFalsy()
 })
+
+test('a reply written with • bullets shows as a nested list, not one paragraph', () => {
+  const { container } = render(
+    <Markdown
+      text={
+        'Minutes:\n• Lock the tiles.\n• Clarify Rift:\n  • 3 of each.\n  • About 3 cards.\n• Resolve the counter.'
+      }
+    />,
+  )
+  const top = container.querySelector('.chat-md > ul')
+  expect(top?.children.length).toBe(3)
+  expect(top?.querySelectorAll(':scope > li > ul > li').length).toBe(2)
+  expect(container.querySelector('p')?.textContent).toBe('Minutes:')
+})
