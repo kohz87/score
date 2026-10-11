@@ -194,7 +194,13 @@ export function registerSessionRoutes(
     app.post('/api/session/passkey/authentication-options', async (request) => {
       if (!optionsLimiter.allow(request.ip))
         throw new HttpError(429, 'pairing_limited', 'Wait a minute before signing in again')
-      return needed().authenticationOptions({ origin: originOf(request), peer: request.ip })
+      return needed().authenticationOptions({
+        origin: originOf(request),
+        peer: request.ip,
+        // Only an already paired browser (the terminal's second factor) is told which credentials exist; the public
+        // sign-in stays discoverable-only and reveals nothing.
+        listCredentials: pairing.pairedSession(request.headers.cookie) !== undefined,
+      })
     })
 
     app.post('/api/session/passkey/authentication', async (request, reply) => {

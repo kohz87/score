@@ -188,7 +188,10 @@ test('SCORE-011: enrollment requires a discoverable credential and login offers 
     residentKey: 'required',
     requireResidentKey: true,
   })
-  // A passkey enrolled before this change (possibly not discoverable) must still be offered at login.
+  // A passkey enrolled before this change (possibly not discoverable) must still be offered to the paired browser;
+  // the public sign-in lists nothing.
+  const anonymous = (await post(app, '/api/session/passkey/authentication-options', {})).json()
+  expect(anonymous.allowCredentials ?? []).toEqual([])
   const options = (
     await post(app, '/api/session/passkey/authentication-options', {}, cookie)
   ).json()

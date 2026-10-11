@@ -257,17 +257,24 @@ export class PasskeyService {
     }
   }
 
-  async authenticationOptions(input: { origin: string | undefined; peer: string }) {
+  async authenticationOptions(input: {
+    origin: string | undefined
+    peer: string
+    listCredentials?: boolean
+  }) {
     const { origin, rpId } = this.ceremonyOrigin(input.origin)
-    // The enrolled descriptors are offered too, so passkeys enrolled earlier as non-discoverable still work.
+    // Enrolled descriptors are offered only to a paired browser, so passkeys enrolled earlier as non-discoverable keep
+    // working as its second factor; the public sign-in lists nothing and relies on discoverable credentials.
     const options = await generateAuthenticationOptions({
       rpID: rpId,
-      allowCredentials: this.rows()
-        .filter((row) => row.rp_id === rpId)
-        .map((row) => ({
-          id: row.id,
-          transports: TransportsSchema.catch([]).parse(JSON.parse(row.transports)),
-        })),
+      allowCredentials: input.listCredentials
+        ? this.rows()
+            .filter((row) => row.rp_id === rpId)
+            .map((row) => ({
+              id: row.id,
+              transports: TransportsSchema.catch([]).parse(JSON.parse(row.transports)),
+            }))
+        : [],
       userVerification: 'required',
     })
     this.issue(options.challenge, {
