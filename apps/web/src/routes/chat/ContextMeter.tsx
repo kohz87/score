@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ApiError } from '../../data/api.ts'
+import { MOTION, playMotion } from '../../motion/motion.ts'
+import { useValueTween } from '../../motion/use-value-tween.ts'
 import { StreamContext, useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
 import { compact } from './context-meter.ts'
 import {
@@ -34,6 +36,74 @@ export function ringLevel(fraction: number | null): 'normal' | 'warn' | 'high' {
 }
 
 const percent = (fraction: number) => Math.min(100, Math.round(fraction * 100))
+
+/** The ring and its figure. A new reading moves the stroke and counts the percentage to it (PLAN 5.37). */
+function RingFace({ fraction, used }: { fraction: number | null; used: number | null }) {
+  const fill = useRef<SVGCircleElement>(null)
+  const text = useRef<HTMLSpanElement>(null)
+  useValueTween(fraction, (value) => {
+    fill.current?.setAttribute('stroke-dasharray', `${CIRCUMFERENCE * value} ${CIRCUMFERENCE}`)
+    if (text.current) text.current.textContent = `${percent(value)}%`
+  })
+  return (
+    <>
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
+        <circle className="chat-ctx-track" cx="14" cy="14" r={RADIUS} />
+        {fraction !== null && (
+          <circle
+            ref={fill}
+            className="chat-ctx-fill"
+            cx="14"
+            cy="14"
+            r={RADIUS}
+            strokeDasharray={`${CIRCUMFERENCE * fraction} ${CIRCUMFERENCE}`}
+            transform="rotate(-90 14 14)"
+          />
+        )}
+      </svg>
+      <span ref={text} className="chat-ctx-text">
+        {fraction !== null ? `${percent(fraction)}%` : compact(used ?? 0)}
+      </span>
+    </>
+  )
+}
+
+/**
+ * The token figure of a compaction result: counts down from the size before to the size after. Only a result that
+ * arrives while the meter is already on screen (`seen`) counts; one that was there at the start just shows.
+ */
+function CountDown({
+  from,
+  to,
+  seen,
+}: {
+  from: number
+  to: number
+  seen: React.RefObject<boolean>
+}) {
+  const text = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (!seen.current) return
+    const write = (value: number) => {
+      if (text.current) text.current.textContent = compact(Math.round(value))
+    }
+    return playMotion(({ animate }) => {
+      const state = { value: from }
+      const animation = animate(state, {
+        value: to,
+        duration: MOTION.slow,
+        ease: MOTION.ease,
+        onUpdate: () => write(state.value),
+        onComplete: () => write(to),
+      })
+      return () => {
+        animation.cancel()
+        write(to)
+      }
+    })
+  }, [from, to, seen])
+  return <span ref={text}>{compact(to)}</span>
+}
 
 interface MeterProps {
   roomId: string
@@ -138,6 +208,10 @@ function MeterView({
     setError(null)
   }, [confirmSignal])
 
+  const dataSeen = useRef(false)
+  useEffect(() => {
+    if (data) dataSeen.current = true
+  }, [data])
   if (!data) return null
   const { context } = data
   const used = context.used
@@ -212,22 +286,7 @@ function MeterView({
         title={label}
         onClick={() => setOpen((value) => !value)}
       >
-        <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
-          <circle className="chat-ctx-track" cx="14" cy="14" r={RADIUS} />
-          {fraction !== null && (
-            <circle
-              className="chat-ctx-fill"
-              cx="14"
-              cy="14"
-              r={RADIUS}
-              strokeDasharray={`${CIRCUMFERENCE * fraction} ${CIRCUMFERENCE}`}
-              transform="rotate(-90 14 14)"
-            />
-          )}
-        </svg>
-        <span className="chat-ctx-text">
-          {fraction !== null ? `${percent(fraction)}%` : compact(used ?? 0)}
-        </span>
+        <RingFace fraction={fraction} used={used} />
       </button>
       {busy && (
         <span className="chat-ctx-status" role="status">
@@ -237,7 +296,13 @@ function MeterView({
       {!busy && compaction && compaction.status === 'compacted' && compaction.before && (
         <span className="chat-ctx-status" role="status">
           {name} compacted: {compact(compaction.before.tokens)} →{' '}
-          {compact(compaction.after!.tokens)} tokens
+          <CountDown
+            key={answeredId}
+            from={compaction.before.tokens}
+            to={compaction.after!.tokens}
+            seen={dataSeen}
+          />{' '}
+          tokens
         </span>
       )}
       {open && (
