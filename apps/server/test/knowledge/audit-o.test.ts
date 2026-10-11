@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
+import { MAX_NOTE_BYTES } from '../../src/knowledge/note.ts'
 import { makeVault, type Harness } from './helpers.ts'
 
 let h: Harness
@@ -143,5 +144,50 @@ describe('SCORE-034 a failed multi-file move resumes', () => {
     expect(fs.existsSync(path.join(h.vaultDir, '.git', 'score-move-plan.json'))).toBe(false)
     expect((await second.readNote('z.md')).backlinks.map((item) => item.path)).toContain(pending[1])
     await second.close()
+  })
+})
+
+describe('SCORE-029 bounded reads', () => {
+  test('a note swapped for an oversized file between the size check and the open is refused', async () => {
+    h = await makeVault({ files: { 'a.md': 'small' } })
+    const real = fs.promises.open
+    let swapped = false
+    vi.spyOn(fs.promises, 'open').mockImplementation(async (...args) => {
+      if (!swapped && String(args[0]).endsWith('a.md')) {
+        swapped = true
+        fs.writeFileSync(path.join(h.vaultDir, 'a.md'), 'x'.repeat(MAX_NOTE_BYTES + 10))
+      }
+      return real(...(args as Parameters<typeof real>))
+    })
+    await expect(h.vault.readContainedBuffer(path.join(h.vaultDir, 'a.md'))).rejects.toMatchObject({
+      status: 413,
+    })
+    expect(swapped).toBe(true)
+  })
+
+  test('a file that keeps growing while it is read stops at the limit without reading it all', async () => {
+    h = await makeVault({ files: { 'a.md': 'small' } })
+    const real = fs.promises.open
+    let served = 0
+    vi.spyOn(fs.promises, 'open').mockImplementation((async (...args: Parameters<typeof real>) => {
+      const handle = await real(...args)
+      return {
+        fd: handle.fd,
+        stat: async () => ({ size: 5, isFile: () => true }),
+        read: async (buffer: Buffer) => {
+          buffer.fill(97)
+          served += buffer.length
+          return { bytesRead: buffer.length, buffer }
+        },
+        readFile: async () => {
+          throw new Error('unbounded readFile')
+        },
+        close: () => handle.close(),
+      }
+    }) as unknown as typeof fs.promises.open)
+    await expect(h.vault.readContainedBuffer(path.join(h.vaultDir, 'a.md'))).rejects.toMatchObject({
+      status: 413,
+    })
+    expect(served).toBeLessThan(MAX_NOTE_BYTES + 1024 * 1024)
   })
 })

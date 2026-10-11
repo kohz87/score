@@ -275,7 +275,7 @@ export class KnowledgeDocuments {
     if (stat.size > MAX_FILE_BYTES)
       throw new HttpError(413, 'payload_too_large', 'That file is too large')
     return {
-      bytes: await this.vault.readContainedBuffer(abs),
+      bytes: await this.vault.readContainedBuffer(abs, MAX_FILE_BYTES),
       type: documentTypeOfPath(rel)!,
       name: path.posix.basename(rel),
     }
@@ -575,7 +575,7 @@ export class KnowledgeDocuments {
       this.db.tx((sqlite) => this.removeIndex(sqlite, rel))
       return false
     }
-    const bytes = await this.vault.readContainedBuffer(abs)
+    const bytes = await this.vault.readContainedBuffer(abs, MAX_FILE_BYTES)
     const hash = hashContent(bytes)
     const known = this.db.read((sqlite) => this.row(sqlite, rel))
     if (known?.hash === hash) {

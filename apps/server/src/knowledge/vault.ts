@@ -97,6 +97,7 @@ const MovePlanSchema = z.object({
 })
 type MovePlan = z.infer<typeof MovePlanSchema>
 
+const READ_CHUNK_BYTES = 256 * 1024
 const MAX_FILES = 100_000
 const MAX_DEPTH = 32
 const MAX_EVENTS_PER_SCAN = 200
@@ -347,7 +348,8 @@ export class KnowledgeVault {
     return (await this.readContainedBuffer(abs)).toString('utf8')
   }
 
-  async readContainedBuffer(abs: string): Promise<Buffer> {
+  /** `maxBytes` is checked on the open descriptor and while reading, so a file that grows after the size check cannot be slurped whole. */
+  async readContainedBuffer(abs: string, maxBytes = MAX_NOTE_BYTES): Promise<Buffer> {
     const handle = await fs.open(abs, C.O_RDONLY | C.O_NOFOLLOW)
     try {
       if (process.platform === 'linux') {
@@ -355,7 +357,20 @@ export class KnowledgeVault {
         if (actual !== abs)
           throw new HttpError(400, 'bad_path', 'The note moved while it was being read')
       }
-      return await handle.readFile()
+      const tooLarge = () =>
+        new HttpError(413, 'payload_too_large', 'That file is too large to open')
+      if ((await handle.stat()).size > maxBytes) throw tooLarge()
+      const chunks: Buffer[] = []
+      let total = 0
+      for (;;) {
+        const chunk = Buffer.allocUnsafe(Math.min(READ_CHUNK_BYTES, maxBytes + 1 - total))
+        const { bytesRead } = await handle.read(chunk, 0, chunk.length, null)
+        if (bytesRead === 0) break
+        total += bytesRead
+        if (total > maxBytes) throw tooLarge()
+        chunks.push(chunk.subarray(0, bytesRead))
+      }
+      return Buffer.concat(chunks, total)
     } finally {
       await handle.close()
     }
