@@ -180,7 +180,12 @@ export class PasskeyService {
           id: row.id,
           transports: TransportsSchema.catch([]).parse(JSON.parse(row.transports)),
         })),
-      authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' },
+      // Discoverable credentials only: new passkeys must be findable by the browser even without a descriptor list.
+      authenticatorSelection: {
+        residentKey: 'required',
+        requireResidentKey: true,
+        userVerification: 'required',
+      },
       supportedAlgorithmIDs: [ES256, RS256],
     })
     this.issue(options.challenge, {
@@ -254,9 +259,15 @@ export class PasskeyService {
 
   async authenticationOptions(input: { origin: string | undefined; peer: string }) {
     const { origin, rpId } = this.ceremonyOrigin(input.origin)
-    // No allowCredentials: the passkeys are discoverable, so the browser offers the ones it holds for this domain.
+    // The enrolled descriptors are offered too, so passkeys enrolled earlier as non-discoverable still work.
     const options = await generateAuthenticationOptions({
       rpID: rpId,
+      allowCredentials: this.rows()
+        .filter((row) => row.rp_id === rpId)
+        .map((row) => ({
+          id: row.id,
+          transports: TransportsSchema.catch([]).parse(JSON.parse(row.transports)),
+        })),
       userVerification: 'required',
     })
     this.issue(options.challenge, {
