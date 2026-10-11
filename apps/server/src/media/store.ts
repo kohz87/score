@@ -26,6 +26,7 @@ export const MAX_MEDIA_BYTES = 25 * 1024 * 1024
 export const MAX_ATTACHMENTS = 10
 export const DEFAULT_MEDIA_QUOTA_BYTES = 512 * 1024 * 1024
 const UNUSED_TTL_MS = 30 * 24 * 60 * 60 * 1000
+const SWEEP_HASH_BUDGET_BYTES = 256 * 1024 * 1024
 const ORPHAN_GRACE_MS = 10 * 60 * 1000
 
 const RowSchema = z.object({
@@ -101,9 +102,10 @@ export class MediaStore {
   }
 
   // The stored blob must still be the exact bytes the row describes (a crash can leave it short or empty).
-  private intact(sha256: string, size: number): boolean {
+  private intact(sha256: string, size: number, verify = false): boolean {
     try {
-      return statSync(this.path(sha256)).size === size
+      if (statSync(this.path(sha256)).size !== size) return false
+      return !verify || sha256Of(readFileSync(this.path(sha256))) === sha256
     } catch {
       return false
     }
@@ -139,7 +141,7 @@ export class MediaStore {
           this.writeFile(sha256, bytes)
         return { mediaId: row.id, contentType: row.content_type, size: row.size }
       }
-      evicted = evictFor(sqlite, this.quotaBytes, bytes.length)
+      evicted = evictFor(sqlite, this.quotaBytes, bytes.length, true, sha256)
       const id = randomUUID()
       sqlite
         .prepare(
@@ -149,7 +151,9 @@ export class MediaStore {
       this.writeFile(sha256, bytes)
       return { mediaId: id, contentType: type, size: bytes.length }
     })
-    for (const victim of evicted) removeFile(this.path(victim))
+    // Recheck after commit: a row inserted since the decision (this upload included) keeps its blob.
+    for (const victim of evicted)
+      if (!blobShared(this.db.sqlite, victim)) removeFile(this.path(victim))
     return result
   }
 
@@ -165,7 +169,7 @@ export class MediaStore {
     } catch {
       return null
     }
-    if (bytes.length !== row.size) return null
+    if (bytes.length !== row.size || sha256Of(bytes) !== row.sha256) return null
     this.db.sqlite
       .prepare('UPDATE media SET last_used_at = ? WHERE id = ?')
       .run(new Date(this.clock()).toISOString(), id)
@@ -206,10 +210,14 @@ export class MediaStore {
     const cutoff = new Date(nowMs - UNUSED_TTL_MS).toISOString()
     const removed: string[] = []
     let missing = 0
+    let hashBudget = SWEEP_HASH_BUDGET_BYTES
     this.db.tx((sqlite) => {
       for (const raw of sqlite.prepare('SELECT * FROM media').all()) {
         const row = RowSchema.parse(raw)
-        if (!this.intact(row.sha256, row.size)) {
+        // Content is re-hashed within a per-sweep byte budget; the rest is covered by later sweeps and by reads.
+        const verify = hashBudget >= row.size
+        if (verify) hashBudget -= row.size
+        if (!this.intact(row.sha256, row.size, verify)) {
           // A referenced row keeps its id (a message still points at it; a re-upload repairs the blob).
           if (row.refs === 0) {
             sqlite.prepare('DELETE FROM media WHERE id = ?').run(row.id)
@@ -222,7 +230,7 @@ export class MediaStore {
       }
       removed.push(...evictFor(sqlite, this.quotaBytes, 0, false))
     })
-    for (const sha of removed) removeFile(this.path(sha))
+    for (const sha of removed) if (!blobShared(this.db.sqlite, sha)) removeFile(this.path(sha))
     return { removed: removed.length, missing, orphans: this.sweepOrphans(nowMs) }
   }
 
@@ -250,6 +258,8 @@ export class MediaStore {
   }
 }
 
+const sha256Of = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
+
 function totalOf(sqlite: DatabaseSync): number {
   return TotalSchema.parse(
     sqlite.prepare('SELECT COALESCE(SUM(size), 0) AS total FROM media').get(),
@@ -258,7 +268,13 @@ function totalOf(sqlite: DatabaseSync): number {
 
 // Deletes least-recently-used unreferenced rows until `incoming` more bytes fit; returns the freed shas so the
 // caller unlinks them after commit. Throws (strict) when referenced items alone leave no room.
-function evictFor(sqlite: DatabaseSync, quota: number, incoming: number, strict = true): string[] {
+function evictFor(
+  sqlite: DatabaseSync,
+  quota: number,
+  incoming: number,
+  strict = true,
+  protect?: string,
+): string[] {
   const victims: string[] = []
   let total = totalOf(sqlite)
   if (total + incoming <= quota) return victims
@@ -272,7 +288,7 @@ function evictFor(sqlite: DatabaseSync, quota: number, incoming: number, strict 
   for (const row of candidates) {
     if (total + incoming <= quota) break
     sqlite.prepare('DELETE FROM media WHERE id = ?').run(row.id)
-    if (!blobShared(sqlite, row.sha256)) victims.push(row.sha256)
+    if (row.sha256 !== protect && !blobShared(sqlite, row.sha256)) victims.push(row.sha256)
     total -= row.size
   }
   if (strict && total + incoming > quota)

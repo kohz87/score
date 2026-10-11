@@ -227,3 +227,25 @@ test('identical text bytes keep a separate document type per upload name and sha
   store.sweep()
   expect(store.read(csv.mediaId)?.bytes.equals(bytes)).toBe(true)
 })
+
+// SCORE-001: the same bytes under two text types share one blob; evicting the old row must not delete it.
+test('quota eviction keeps the blob the incoming upload shares with the evicted row', () => {
+  const tiny = make(18, 1000)
+  const bytes = Buffer.from('a,b\n1,2\n3,4\n5,6\n')
+  const first = tiny.store(bytes, undefined, 'data.txt')
+  const second = tiny.store(bytes, undefined, 'data.csv')
+  expect(second.mediaId).not.toBe(first.mediaId)
+  expect(tiny.read(second.mediaId)?.bytes.equals(bytes)).toBe(true)
+  tiny.sweep()
+  expect(tiny.read(second.mediaId)?.bytes.equals(bytes)).toBe(true)
+})
+
+// SCORE-032
+test('a same-length corruption of a blob is detected on read and by the sweep', () => {
+  const stored = store.store(Buffer.from('hello world'), undefined, 'a.txt')
+  const file = join(dir, 'media', sha(Buffer.from('hello world')))
+  writeFileSync(file, 'jello world')
+  expect(store.read(stored.mediaId)).toBeNull()
+  expect(store.sweep().missing).toBe(1)
+  expect(store.has(stored.mediaId)).toBe(false)
+})
