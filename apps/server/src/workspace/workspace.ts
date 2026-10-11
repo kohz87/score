@@ -6,8 +6,8 @@ import { withKeyedLock } from '../keyed-lock.ts'
 import {
   assertAllowedSegments,
   checkRoot,
-  isBlockedName,
   isInside,
+  isProtectedName,
   parseRelativePath,
   validateEntryName,
   WorkspaceError,
@@ -422,9 +422,31 @@ export class Workspace {
         throw new WorkspaceError(409, 'exists', 'Something with that name already exists')
       if (st.isDirectory()) await fs.rename(source, target)
       else {
-        // link + unlink never replaces an existing target, unlike rename.
+        // link never replaces an existing target, unlike rename. Removing the source by pathname could delete a file
+        // that replaced it after the link, so the source is first renamed (atomically, whatever is there) to a
+        // private name, and only unlinked if it is still the inode that was linked.
         await fs.link(source, target)
-        await fs.unlink(source)
+        const parked = `${sourceDir.base}/.score-move-${randomBytes(8).toString('hex')}`
+        const parkedStat = await fs.rename(source, parked).then(
+          () => fs.lstat(parked),
+          // Removed by someone else meanwhile: the move has happened.
+          (error: NodeJS.ErrnoException) => {
+            if (error.code === 'ENOENT') return null
+            throw error
+          },
+        )
+        if (parkedStat === null) {
+          // nothing left to remove
+        } else if (parkedStat.dev === st.dev && parkedStat.ino === st.ino) await fs.unlink(parked)
+        else {
+          // A newer file took the source's place: put it back. The name is free for a moment only after the rename
+          // above, so the restore uses link (no replace) and, if a third file claimed the name meanwhile, keeps the
+          // parked copy rather than losing data. Remaining window: the source name is briefly absent.
+          await fs.link(parked, source).then(
+            () => fs.unlink(parked),
+            () => undefined,
+          )
+        }
       }
       await sourceDir.sync()
       await targetDir.sync()
@@ -504,7 +526,8 @@ async function readBytes(file: string, limit: number): Promise<Buffer> {
 }
 
 function decodeText(bytes: Buffer): string | null {
-  if (bytes.subarray(0, 8192).includes(0)) return null
+  // The same rule as write(): a NUL anywhere makes the file binary.
+  if (bytes.includes(0)) return null
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
   } catch {
@@ -525,7 +548,7 @@ async function assertNothingProtected(
     for (const child of await fs.readdir(base)) {
       if (++budget.count > MAX_DELETE_ENTRIES)
         throw new WorkspaceError(400, 'too_large', 'The folder has too many entries')
-      if (child === '.git' || isBlockedName(child))
+      if (isProtectedName(child))
         throw new WorkspaceError(
           409,
           'protected_inside',
@@ -552,7 +575,7 @@ async function removeTree(
       if (++budget.count > MAX_DELETE_ENTRIES)
         throw new WorkspaceError(400, 'too_large', 'The folder has too many entries')
       // Checked again here: something protected may have appeared since the scan.
-      if (child === '.git' || isBlockedName(child))
+      if (isProtectedName(child))
         throw new WorkspaceError(409, 'protected_inside', 'The folder holds protected files')
       const childPath = `${base}/${child}`
       const st = await fs.lstat(childPath)
