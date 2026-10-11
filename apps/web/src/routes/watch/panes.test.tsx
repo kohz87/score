@@ -168,7 +168,7 @@ test('the surface of the current frame comes to the front, and a tab brings anot
 
 test('the banner says you are watching while live and names the moment while replaying', () => {
   const { rerender } = stage()
-  expect(screen.getByText("You're watching. builder is in control.")).toBeTruthy()
+  expect(screen.getByText('You’re watching. builder is in control.')).toBeTruthy()
   rerender(
     <WatchStage
       agent={agent}
@@ -180,7 +180,7 @@ test('the banner says you are watching while live and names the moment while rep
       live
     />,
   )
-  expect(screen.queryByText(/You're watching/)).toBeNull()
+  expect(screen.queryByText(/You’re watching/)).toBeNull()
   expect(screen.getByRole('status').textContent).toMatch(/^Replaying \d\d:\d\d$/)
   // A question that is open now does not belong on a replayed moment.
   expect(screen.queryByRole('group', { name: 'Approval needed' })).toBeNull()

@@ -121,7 +121,7 @@ function WatchView({ agentId }: { agentId: string }) {
       <div className="watch-page">
         {watch.status === 'error' ? (
           <p className="watch-state" role="alert">
-            {missing ? 'That agent does not exist.' : 'Could not load this screen.'}{' '}
+            {missing ? 'That agent doesn’t exist.' : 'Couldn’t load this screen.'}{' '}
             <Link to="/now">Back to the run</Link>
           </p>
         ) : (
@@ -220,7 +220,7 @@ function WatchView({ agentId }: { agentId: string }) {
       </section>
       {pause.isError && (
         <p className="watch-state" role="alert">
-          Could not {paused ? 'resume' : 'pause'} {agent.name}. Please try again.
+          Couldn’t {paused ? 'resume' : 'pause'} {agent.name}. Try again.
         </p>
       )}
       {from !== null && markers.length > 0 && from < markers[0]!.seq && (
@@ -231,8 +231,8 @@ function WatchView({ agentId }: { agentId: string }) {
       )}
       {data.gaps.length > 0 && (
         <p className="watch-state" role="status">
-          Some events were not recorded ({data.gaps.length} gap{data.gaps.length === 1 ? '' : 's'}),
-          so this replay may have holes.
+          Score missed some events ({data.gaps.length} gap{data.gaps.length === 1 ? '' : 's'}), so
+          this replay may have holes.
         </p>
       )}
       {terminal && (
@@ -280,7 +280,7 @@ function WatchView({ agentId }: { agentId: string }) {
           />
           <OtherScreens items={overview.items} currentAgentId={agentId} failed={overview.isError} />
           <p className="watch-note">
-            Pausing {agent.name} stops new work after the current step; Open in terminal lets you
+            Pausing {agent.name} stops new work after the current step. Open in terminal lets you
             continue the same session yourself.
           </p>
         </aside>

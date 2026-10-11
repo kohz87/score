@@ -76,7 +76,7 @@ export function WhatTheyAreDoing({
 function Miniature({ item }: { item: WatchOverviewItem }) {
   if (item.thumbnail)
     return (
-      <img className="watch-mini__img" src={item.thumbnail} alt={`${item.agent.name}'s screen`} />
+      <img className="watch-mini__img" src={item.thumbnail} alt={`${item.agent.name}’s screen`} />
     )
   if (!item.live && item.surface === null)
     return <span className="watch-mini__empty">No desktop open</span>
@@ -117,7 +117,7 @@ export function OtherScreens({
       <h2 id="watch-others">Other screens</h2>
       {items === undefined && (
         <p className="watch-panel__empty" role={failed ? 'alert' : 'status'}>
-          {failed ? 'Could not load the other screens.' : 'Loading the other screens…'}
+          {failed ? 'Couldn’t load the other screens.' : 'Loading the other screens…'}
         </p>
       )}
       {items && others.length === 0 && (

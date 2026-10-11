@@ -138,5 +138,5 @@ test('Routines lists every agent and links to the Team page', async ({ page }) =
   await page.goto('/now')
   await page.getByRole('link', { name: 'Routines' }).click()
   await expect(page).toHaveURL(/\/now\/routines$/)
-  await expect(page.getByRole('link', { name: 'Manage on Team page' }).first()).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Manage on the Team page' }).first()).toBeVisible()
 })

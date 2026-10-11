@@ -95,7 +95,7 @@ function emit(event: Omit<StreamEvent, 'seq' | 'ts'>, seq: number) {
 test('the page shows the live stage, the approval bar, the timeline and both side panels', async () => {
   setup()
   expect(await screen.findByRole('heading', { name: 'Watching builder', level: 1 })).toBeTruthy()
-  expect(screen.getByText("You're watching. builder is in control.")).toBeTruthy()
+  expect(screen.getByText('You’re watching. builder is in control.')).toBeTruthy()
   expect(screen.getByRole('group', { name: 'Terminal' }).getAttribute('data-front')).toBe('true')
   expect(screen.getByRole('group', { name: 'Approval needed' }).textContent).toContain(
     'npm install ws@8',
@@ -110,7 +110,7 @@ test('the page shows the live stage, the approval bar, the timeline and both sid
   expect(screen.getByRole('button', { name: 'Pause builder' })).toBeTruthy()
   expect(
     screen.getByText(
-      'Pausing builder stops new work after the current step; Open in terminal lets you continue the same session yourself.',
+      'Pausing builder stops new work after the current step. Open in terminal lets you continue the same session yourself.',
     ),
   ).toBeTruthy()
 })
@@ -125,7 +125,7 @@ test('scrubbing back replays that moment and Live snaps back', async () => {
   expect(screen.queryByRole('group', { name: 'Browser' })).toBeNull()
   expect(screen.queryByRole('group', { name: 'Approval needed' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Back to live' }))
-  expect(screen.getByText("You're watching. builder is in control.")).toBeTruthy()
+  expect(screen.getByText('You’re watching. builder is in control.')).toBeTruthy()
   expect(screen.getByRole('group', { name: 'Approval needed' })).toBeTruthy()
 })
 
@@ -146,7 +146,7 @@ test('playing a replay steps forward and lands back on live', async () => {
   vi.useFakeTimers()
   fireEvent.click(screen.getByRole('button', { name: 'Play' }))
   for (let step = 0; step < 3; step += 1) act(() => void vi.advanceTimersByTime(1000))
-  expect(screen.getByText("You're watching. builder is in control.")).toBeTruthy()
+  expect(screen.getByText('You’re watching. builder is in control.')).toBeTruthy()
 })
 
 test('a frozen replay stays on its moment when a live event shifts the marker list', async () => {
@@ -266,7 +266,7 @@ test('one run ending does not mark the agent idle; the agent update decides', as
     } as StreamEvent,
     3,
   )
-  expect(await screen.findByText(/Some events were not recorded \(1 gap\)/)).toBeTruthy()
+  expect(await screen.findByText(/Score missed some events \(1 gap\)/)).toBeTruthy()
 })
 
 test('open in terminal copies the resume command and confirms it', async () => {
@@ -286,7 +286,7 @@ test('open in terminal copies the resume command and confirms it', async () => {
 
 test('an unknown agent says so', async () => {
   setup('nobody')
-  expect((await screen.findByRole('alert')).textContent).toContain('That agent does not exist')
+  expect((await screen.findByRole('alert')).textContent).toContain('That agent doesn’t exist')
 })
 
 test('an outstanding approval shows even when the shared newest-approvals list no longer holds it', async () => {

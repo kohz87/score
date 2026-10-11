@@ -120,7 +120,7 @@ test('other screens skip this agent and link each of the others to its own watch
   expect(designer.textContent).toContain('idle')
   expect(
     within(screen.getByRole('link', { name: /lead/ }))
-      .getByRole('img', { name: "lead's screen" })
+      .getByRole('img', { name: 'lead’s screen' })
       .getAttribute('src'),
   ).toBe('/api/media/t1')
 })
@@ -137,7 +137,7 @@ test('other screens say when they are loading, failed or alone', () => {
       <OtherScreens items={undefined} currentAgentId="builder" failed />
     </MemoryRouter>,
   )
-  expect(screen.getByRole('alert').textContent).toContain('Could not load')
+  expect(screen.getByRole('alert').textContent).toContain('Couldn’t load')
   rerender(
     <MemoryRouter>
       <OtherScreens items={[overview[0]!]} currentAgentId="builder" failed={false} />
