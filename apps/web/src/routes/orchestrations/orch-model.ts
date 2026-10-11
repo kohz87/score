@@ -40,7 +40,7 @@ export const visualLabel: Record<NodeVisual, string> = {
   failed: 'failed',
   cancelled: 'stopped',
   unknown: 'not confirmed as ended',
-  abandoned: 'given up on',
+  abandoned: 'stopped waiting',
   blocked: 'blocked',
   rejected: 'rejected',
   not_started: 'not started',

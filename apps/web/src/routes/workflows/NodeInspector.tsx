@@ -58,7 +58,7 @@ function IdField({ draft, node, commit }: { draft: Draft; node: WorkflowNode; co
         'Use lowercase letters, digits, - and _, starting with a letter (32 at most).',
       )
     if (draft.nodes.some((other) => other.id === text))
-      return setError('Another step has that name.')
+      return setError('Another step has that reference name.')
     setError(null)
     commit(renameNode(draft, node.id, text))
   }
