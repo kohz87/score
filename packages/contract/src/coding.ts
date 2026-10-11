@@ -33,9 +33,9 @@ export const CodingRuntimeInfoSchema = z.object({
   /** Why it cannot run, when it cannot. */
   message: z.string().nullable(),
   /** Permission levels Score has not verified for this CLI yet: shown disabled and refused on create/patch. */
-  unverifiedPermissions: z.array(CodingPermissionSchema).default([]),
+  unverifiedPermissions: z.array(CodingPermissionSchema),
   /** A warning to show where the CLI is chosen (what it can do beyond editing files), or null. */
-  warning: z.string().nullable().default(null),
+  warning: z.string().nullable(),
 })
 export type CodingRuntimeInfo = z.infer<typeof CodingRuntimeInfoSchema>
 export const CodingRuntimesResponseSchema = z.object({ items: z.array(CodingRuntimeInfoSchema) })
