@@ -391,27 +391,52 @@ test('antigravity version parsing and the exact tested version', () => {
   expect(isTestedVersion(antigravityDriver, '1.3.4')).toBe(false)
 })
 
-test('antigravity usage: a tab table is read into groups; anything else keeps the text', () => {
-  const table =
-    'Model group\t5-hour\tWeekly\nGemini Pro\t82% (resets in 3h)\t64% (resets in 4d)\nClaude\t100%\t91%\n'
-  const reading = parseAntigravityUsage(JSON.stringify({ command: { data: table } }))
+test('antigravity usage: the live `/usage` response lines become groups; anything else keeps the text', () => {
+  const response =
+    'Gemini Models\tWeekly Limit Remaining\t75%\t2026-10-14T02:29:49Z\nGemini Models\tFive Hour Limit Remaining\t87%\t2026-10-11T04:43:48Z\nClaude and GPT models\tFive Hour Limit Remaining\t100%\t2026-10-11T06:00:00Z\n'
+  const reading = parseAntigravityUsage(JSON.stringify({ status: 'SUCCESS', response }))
   expect(reading.groups).toEqual([
     {
-      name: 'Gemini Pro',
-      fiveHourRemainingPercent: 82,
-      fiveHourResets: 'resets in 3h',
-      weeklyRemainingPercent: 64,
-      weeklyResets: 'resets in 4d',
+      name: 'Gemini Models',
+      fiveHourRemainingPercent: 87,
+      fiveHourResets: '2026-10-11T04:43:48Z',
+      weeklyRemainingPercent: 75,
+      weeklyResets: '2026-10-14T02:29:49Z',
     },
     {
-      name: 'Claude',
+      name: 'Claude and GPT models',
       fiveHourRemainingPercent: 100,
-      fiveHourResets: null,
-      weeklyRemainingPercent: 91,
+      fiveHourResets: '2026-10-11T06:00:00Z',
+      weeklyRemainingPercent: null,
       weeklyResets: null,
     },
   ])
+  expect(reading.text).toContain('Gemini Models')
   const odd = parseAntigravityUsage('plain words, no table')
   expect(odd.groups).toEqual([])
   expect(odd.text).toBe('plain words, no table')
+})
+
+test('antigravity: the file tools name their path by TargetFile / AbsolutePath', () => {
+  const parser = createAntigravityParser('/work')
+  let index = 0
+  const line = (tool: string, parameters: object) =>
+    JSON.stringify({
+      event: 'step_update',
+      step_update: {
+        step_index: ++index,
+        state: 'ACTIVE',
+        step_type: 'tool',
+        tool_name: tool,
+        tool_info: { name: tool, parameters },
+      },
+    })
+  expect(
+    parser.parse(line('write_to_file', { TargetFile: '/work/a.txt', CodeContent: 'secret' }))[0],
+  ).toMatchObject({
+    detail: { type: 'file', path: '/work/a.txt' },
+  })
+  expect(parser.parse(line('view_file', { AbsolutePath: '/work/b.txt' }))[0]).toMatchObject({
+    preview: '/work/b.txt',
+  })
 })

@@ -87,6 +87,12 @@ function PermissionPicker({
           )}
         </label>
       ))}
+      {runtime === 'antigravity' && value === 'workspace-write' && (
+        <p className="team-muted-strong">
+          Antigravity can’t run shell commands at this level (no tests or builds); use Full access
+          for that.
+        </p>
+      )}
       {value === 'full' && (
         <p role="alert" className="team-muted-strong">
           Full access turns the CLI’s own sandbox off. Anything it is told to do runs as your user.
@@ -95,6 +101,13 @@ function PermissionPicker({
       )}
     </fieldset>
   )
+}
+
+function resetText(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 /** Antigravity's own quota (`/usage`): the 5-hour and weekly share left per model group. */
@@ -121,9 +134,9 @@ function AntigravityQuota() {
           {groups.map((group) => (
             <li key={group.name}>
               {group.name}: {group.fiveHourRemainingPercent ?? '?'}% left in the 5-hour window
-              {group.fiveHourResets ? ` (${group.fiveHourResets})` : ''}
+              {group.fiveHourResets ? ` (resets ${resetText(group.fiveHourResets)})` : ''}
               {group.weeklyRemainingPercent !== null
-                ? `, ${group.weeklyRemainingPercent}% left this week${group.weeklyResets ? ` (${group.weeklyResets})` : ''}`
+                ? `, ${group.weeklyRemainingPercent}% left this week${group.weeklyResets ? ` (resets ${resetText(group.weeklyResets)})` : ''}`
                 : ''}
             </li>
           ))}

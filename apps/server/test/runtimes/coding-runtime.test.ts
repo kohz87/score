@@ -895,6 +895,11 @@ const agy = (over: Record<string, unknown> = {}) =>
   })
 
 test('antigravity: levels are offered only once verified; create and patch refuse the rest', async () => {
+  const defaults = (await request('GET', '/api/coding-agents/runtimes'))
+    .json()
+    .items.find((item: { runtime: string }) => item.runtime === 'antigravity')
+  expect(defaults.unverifiedPermissions).toEqual([])
+  setEnv('SCORE_CODING_VERIFIED_ANTIGRAVITY', '')
   const info = (await request('GET', '/api/coding-agents/runtimes'))
     .json()
     .items.find((item: { runtime: string }) => item.runtime === 'antigravity')
@@ -1077,11 +1082,11 @@ test('antigravity: the quota reading comes from /usage, is cached, and other CLI
   expect(response.statusCode, response.body).toBe(200)
   const usage = response.json()
   expect(usage.groups[0]).toMatchObject({
-    name: 'Gemini Pro',
-    fiveHourRemainingPercent: 82,
-    weeklyRemainingPercent: 64,
+    name: 'Gemini Models',
+    fiveHourRemainingPercent: 87,
+    weeklyRemainingPercent: 75,
   })
-  expect(usage.text).toContain('Gemini Pro')
+  expect(usage.text).toContain('Gemini Models')
   expect(usage.runtime).toBe('antigravity')
   expect((await request('GET', '/api/coding-agents/runtimes/codex/usage')).statusCode).toBe(409)
   setEnv('SCORE_CODING_FAKE_VERSION', '9.9.9')

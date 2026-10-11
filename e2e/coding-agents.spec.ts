@@ -109,7 +109,7 @@ test('Antigravity: warning, quota, unverified level disabled, a turn with tool c
   await dialog.getByLabel('Coding CLI').selectOption('antigravity')
   await expect(dialog).toContainText('browse the web, generate images')
   await expect(dialog.getByRole('group', { name: 'Antigravity quota' })).toContainText(
-    'Gemini Pro: 82% left in the 5-hour window',
+    'Gemini Models: 87% left in the 5-hour window',
   )
   await expect(dialog.getByRole('radio', { name: /Full access/ })).toBeDisabled()
   await expect(dialog).toContainText('not verified for agy yet')
@@ -126,7 +126,7 @@ test('Antigravity: warning, quota, unverified level disabled, a turn with tool c
   await dialog.getByRole('link', { name: 'View agent' }).click()
   const card = page.getByRole('region', { name: 'Coding agent' })
   await expect(card).toContainText('Antigravity 1.3.3 · Ready')
-  await expect(card).toContainText('Gemini Pro')
+  await expect(card).toContainText('Gemini Models')
   await page.screenshot({ path: testInfo.outputPath('agy-overview.png') })
 
   await api(page, 'rooms', { name: roomName, leadAgentId: 'lead' })

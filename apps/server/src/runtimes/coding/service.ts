@@ -270,7 +270,13 @@ export class CodingRuntime {
   /** The CLIs' own login files: an agent has no business reading them. */
   private denyFiles(): string[] {
     const home = this.deps.policy.home
-    return [join(home, '.claude', '.credentials*'), join(home, '.codex', 'auth*')]
+    return [
+      join(home, '.claude', '.credentials*'),
+      join(home, '.codex', 'auth*'),
+      // Antigravity's sign-in and config live under ~/.gemini (no deny rules in agy itself: its sandbox is the barrier).
+      join(home, '.gemini', 'antigravity-cli', '**'),
+      join(home, '.gemini', '**'),
+    ]
   }
 
   /** Folders the policy keeps off limits, in lexical and resolved form. */

@@ -89,7 +89,8 @@ function toolDetail(
     }
   }
   if (FILE_EDIT_TOOLS.has(tool)) {
-    const path = param(params, /(?:path|file|target|uri)/i)
+    const path =
+      param(params, /^(?:TargetFile|AbsolutePath)$/i) ?? param(params, /(?:path|file|target|uri)/i)
     // File content never goes into a frame: only that the file changed (the argument names are not recorded).
     return path
       ? { preview: path, detail: { type: 'file', path, change: 'update' } }
@@ -99,7 +100,12 @@ function toolDetail(
     const url = param(params, /url/i)
     return { preview: url ?? '', detail: { type: 'browser', url } }
   }
-  return { preview: param(params, /(?:path|file|query|pattern|url|dir)/i) ?? '' }
+  return {
+    preview:
+      param(params, /^(?:AbsolutePath|TargetFile)$/i) ??
+      param(params, /(?:path|file|query|pattern|url|dir)/i) ??
+      '',
+  }
 }
 
 export function createAntigravityParser(cwd?: string): LineParser {
@@ -221,57 +227,43 @@ export function createAntigravityParser(cwd?: string): LineParser {
 }
 
 /**
- * `agy -p /usage --output-format json`: a JSON wrapper around a tab-separated table (per model group, the 5-hour and
- * weekly "limit remaining" with reset times). The exact layout is read defensively; `text` always keeps the table.
+ * `agy -p /usage --output-format json` (1.3.3): `{ status, response, command: {...}, usage: zeros }` where `response` is
+ * lines `<group>\t<limit name>\t<NN%>\t<ISO reset time>` (one per group and limit: "Five Hour Limit Remaining",
+ * "Weekly Limit Remaining"). `text` is the response as printed (the raw fallback).
  */
 export function parseAntigravityUsage(output: string): UsageReading {
-  const strings: string[] = []
-  const collect = (value: unknown, depth: number): void => {
-    if (depth > 6) return
-    if (typeof value === 'string') strings.push(value)
-    else if (Array.isArray(value)) for (const item of value) collect(item, depth + 1)
-    else if (value && typeof value === 'object')
-      for (const item of Object.values(value)) collect(item, depth + 1)
-  }
+  let text = output
   try {
-    collect(JSON.parse(output), 0)
+    const json: unknown = JSON.parse(output)
+    if (json && typeof json === 'object' && 'response' in json && typeof json.response === 'string')
+      text = json.response
   } catch {
-    strings.push(output)
+    // not JSON: read the output as the table itself
   }
-  const text = strings.join('\n').trim().slice(0, 8000)
-  const groups: UsageReading['groups'] = []
+  text = text.trim().slice(0, 8000)
+  const byGroup = new Map<string, UsageReading['groups'][number]>()
   for (const line of text.split('\n')) {
-    const cells = line
-      .split(/\t+| {2,}/)
-      .map((cell) => cell.trim())
-      .filter(Boolean)
-    const percents = cells.flatMap((cell) => {
-      const match = /(\d{1,3}(?:\.\d+)?)\s*%/.exec(cell)
-      return match ? [{ cell, value: Math.min(100, Number(match[1])) }] : []
-    })
-    const name = cells.find(
-      (cell) => !/%/.test(cell) && /[A-Za-z]/.test(cell) && !/^reset/i.test(cell),
-    )
-    if (!name || percents.length === 0) continue
-    // A reset time is either its own cell or what is left of the percent cell once the percentage is cut out.
-    const resets = [
-      ...percents.map((p) =>
-        p.cell
-          .replace(/\d{1,3}(?:\.\d+)?\s*%/, '')
-          .replace(/[()·|,-]/g, ' ')
-          .trim(),
-      ),
-      ...cells.filter((cell) => !/%/.test(cell) && cell !== name && /\d/.test(cell)),
-    ].filter(Boolean)
-    groups.push({
+    const [name, limit, percent, reset] = line.split('\t').map((cell) => cell.trim())
+    const match = /^(\d{1,3}(?:\.\d+)?)\s*%$/.exec(percent ?? '')
+    if (!name || !limit || !match) continue
+    const value = Math.min(100, Number(match[1]))
+    const group = byGroup.get(name) ?? {
       name,
-      fiveHourRemainingPercent: percents[0]?.value ?? null,
-      fiveHourResets: resets[0] ?? null,
-      weeklyRemainingPercent: percents[1]?.value ?? null,
-      weeklyResets: resets[1] ?? null,
-    })
+      fiveHourRemainingPercent: null,
+      fiveHourResets: null,
+      weeklyRemainingPercent: null,
+      weeklyResets: null,
+    }
+    if (/five\s*hour/i.test(limit)) {
+      group.fiveHourRemainingPercent = value
+      group.fiveHourResets = reset || null
+    } else if (/week/i.test(limit)) {
+      group.weeklyRemainingPercent = value
+      group.weeklyResets = reset || null
+    } else continue
+    byGroup.set(name, group)
   }
-  return { groups, text }
+  return { groups: [...byGroup.values()], text }
 }
 
 export const antigravityDriver: CodingDriver = {
@@ -282,8 +274,8 @@ export const antigravityDriver: CodingDriver = {
   supported: true,
   quota: 'Uses your Google Antigravity plan quota (5-hour and weekly limits).',
   promptVia: 'argv',
-  // Flipped by the lead after each level is live-verified (decoy-file read/write probes); see SCORE_CODING_VERIFIED_ANTIGRAVITY.
-  verifiedPermissions: [],
+  // Live-verified on 1.3.3 with decoy-file probes (2026-10-11); SCORE_CODING_VERIFIED_ANTIGRAVITY can narrow it.
+  verifiedPermissions: ['read-only', 'workspace-write', 'full'],
   warning:
     'Antigravity can also browse the web, generate images, schedule work and run sub-agents, beyond editing files.',
   requiresReadAck: true,
