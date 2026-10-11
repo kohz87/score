@@ -2,12 +2,14 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { etagOf, hashContent, MAX_NOTE_BYTES } from '../../src/knowledge/note.ts'
+import { buildNoteIndex, parseWikilinks, rewriteLinks } from '../../src/knowledge/links.ts'
 import { makeVault, type Harness } from './helpers.ts'
 
 let h: Harness
 afterEach(async () => {
   vi.restoreAllMocks()
   await h?.cleanup()
+  h = undefined as unknown as Harness
 })
 
 const read = (rel: string) => fs.readFileSync(path.join(h.vaultDir, rel), 'utf8')
@@ -251,4 +253,52 @@ describe('SCORE-018 same-size, same-mtime edits', () => {
     expect((await h.vault.readNote('c.md')).backlinks.map((b) => b.path)).toEqual(['a.md'])
     expect((await h.vault.readNote('b.md')).backlinks).toEqual([])
   })
+})
+
+describe('SCORE-021 link rewriting follows Markdown literals', () => {
+  const rewrite = (text: string) => {
+    const before = buildNoteIndex(['a.md', 'n.md'])
+    const after = buildNoteIndex(['z.md', 'n.md'])
+    return rewriteLinks(text, 'n.md', 'a.md', 'z.md', before, after)
+  }
+  const literal: Array<[string, string]> = [
+    ['indented code', 'intro\n\n    [[a]] in code\n\nend'],
+    ['tab-indented code', 'intro\n\n\t[[a]] in code\n\nend'],
+    ['indented code with blank lines inside', 'intro\n\n    one\n\n    [[a]]\n\nend'],
+    ['longer outer backtick fence', '````md\n```\n[[a]]\n```\n[[a]]\n````\nend'],
+    ['tilde fence holding backticks', '~~~~\n```\n[[a]]\n~~~\n[[a]]\n~~~~\nend'],
+    ['fence indented by three spaces', '   ```\n[[a]]\n   ```\nend'],
+    ['unclosed fence runs to the end', 'x\n```\n[[a]]\nstill code [[a]]'],
+    ['inline code with a backtick inside', 'x ``code ` [[a]] more`` y'],
+    ['inline triple backticks', 'x ```[[a]]``` y'],
+    ['inline code across a line break', 'x `one\n[[a]] two` y'],
+    ['escaped opening brackets', 'literal \\[[a]] here'],
+    ['escaped brackets after an escaped backslash pair is live', ''],
+  ]
+  for (const [name, text] of literal) {
+    if (text === '') continue
+    test(`${name} stays byte for byte`, () => {
+      const result = rewrite(text)
+      expect(result.text).toBe(text)
+      expect(result.count).toBe(0)
+      expect(parseWikilinks(text)).toEqual([])
+    })
+  }
+
+  const live: Array<[string, string, string]> = [
+    ['after a closed fence', '```\ncode\n```\n[[a]]', '```\ncode\n```\n[[z]]'],
+    ['after an indented block', 'p\n\n    code\n\n[[a]]', 'p\n\n    code\n\n[[z]]'],
+    ['indented continuation of a paragraph', 'text\n    [[a]]', 'text\n    [[z]]'],
+    ['indented continuation inside a list item', '- item\n\n    [[a]]', '- item\n\n    [[z]]'],
+    ['unmatched backtick', 'x `[[a]] y', 'x `[[z]] y'],
+    ['escaped backslash before the link', 'x \\\\[[a]]', 'x \\\\[[z]]'],
+    ['single-backtick span does not close on a double run', 'x `a``b` [[a]]', 'x `a``b` [[z]]'],
+    ['code span in another paragraph', 'x `open\n\n[[a]] `close`', 'x `open\n\n[[z]] `close`'],
+  ]
+  for (const [name, text, expected] of live)
+    test(`${name} is still rewritten`, () => {
+      const result = rewrite(text)
+      expect(result.text).toBe(expected)
+      expect(result.count).toBe(1)
+    })
 })
