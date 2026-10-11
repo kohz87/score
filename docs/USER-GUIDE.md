@@ -77,14 +77,14 @@ A workflow is a **fixed graph** you draw yourself, instead of a lead agent plann
 Workflows** (the **Runs | Workflows** switch at the top of Flow) to see your saved workflows; **a new one** starts an
 empty drawing.
 
-- **Editor.** Click an item in the left panel to add it after the selected node (or drag it onto the canvas); dropping
-  on a node connects the new one after it. Items are your **agents** (an agent step does work from an instruction) and
-  the flow controls below. Select a node to edit it on the right: title, agent, instruction, retries and what happens on
-  failure. An instruction can read earlier results with `{{nodes.<id>.output}}`, `{{nodes.<id>.verdict}}` or a run
-  input with `{{inputs.<name>}}`. Nodes are arranged for you; the outline under the canvas lists the same graph as
+- **Editor.** Click an item in the left panel to add it after the selected step (or drag it onto the canvas); dropping
+  on a step connects the new one after it. Items are your **agents** (an agent step does work from an instruction) and
+  the flow controls below. Select a step to edit it on the right: title, reference name, agent, instruction, retries and what
+  happens on failure. An instruction can read earlier results with `{{nodes.<id>.output}}`, `{{nodes.<id>.verdict}}` or a run
+  input with `{{inputs.<name>}}` (`<id>` is the step’s reference name). Steps are arranged for you until you move one; the outline under the canvas lists the same graph as
   text. **Undo** and **Redo** work as you expect.
 - **Live checking.** A badge above the canvas says "Looks good" or "n problems to fix", the **Problems** list explains
-  each one in plain words and clicking it selects the node, and a node with a problem is marked on the canvas. Only
+  each one in plain words and clicking it selects the step, and a step with a problem is marked on the canvas. Only
   errors block saving or running.
 - **Gates.** A **Gate** stops the run until you approve or reject. Approving follows its approved path; rejecting
   follows a rejection path if you drew one, otherwise stops the run.
@@ -103,9 +103,9 @@ empty drawing.
   will use. It also shows the checks that run first and the same acknowledgement as an orchestration, which you tick to
   start. Running needs a saved version.
 - **The run.** The run page is the live diagram (diamond: a gate that waits for you; hexagon: a branch), a log in plain
-  words and, below, the budget and limits. Click a node to filter the log and see its details. When it needs you there
+  words and, below, the budget and limits. Click a step to filter the log and see its details. When it needs you there
   is a card at the top: a **gate** (with the exact text and the Approve and Reject buttons); **Retry** for a step you
-  abandoned, which runs it again while attempts are left; **Try again** when Hermes has refused a step 20 times, which
+  stopped waiting for, which runs it again while tries are left; **Try again** when Hermes has refused a step 20 times, which
   asks Hermes once more (or stop the run); and **Remap** when an agent the run used has been replaced, which keeps
   its steps blocked until you choose to continue with the new agent (the card lists the steps it will affect). A run
   can also be paused or stopped, and finished runs replay on the same diagram.
@@ -135,7 +135,7 @@ view of a screen.
 
 ## Chat
 
-Conversations with your team. The list on the left has **Rooms** (several agents together) and **Direct**
+Rooms with your team. The list on the left has **Rooms** (several agents together) and **Direct rooms**
 (one-to-one with an agent); a badge counts unread messages.
 
 - **Writing.** Type in the box at the bottom. Mention an agent with `@name` to hand work to them; the "To" row
@@ -215,7 +215,7 @@ Click an agent to open its page. It has an appearance picker (color and shape) a
 
 ### Coding agents
 
-**Add agent** also offers **Coding agent**: Claude Code, Codex CLI or Antigravity (`agy`) joins the team next to your Hermes agents, using
+**Add agent** also offers **Coding agent**: Claude Code, Codex or Antigravity (`agy`) joins the team next to your Hermes agents, using
 your own CLI login and plan quota. Choose the CLI (the form shows whether it is installed and whether its version is
 one Score has tested; an untested version needs your confirmation before it runs), a name, a workspace folder (default
 `~/score-workspaces/<name>`) and a permission level:
@@ -239,7 +239,7 @@ minutes, and **Stop** works as for other agents.
 
 ## Knowledge
 
-A shared folder (the vault, default `~/score-vault`) of Markdown notes and files that you and your agents use. Notes
+A shared folder (the Knowledge folder, default `~/score-vault`) of Markdown notes and files that you and your agents use. Notes
 link to each other (`[[Note]]`), show backlinks, properties and history, and an agent's edits carry its name.
 
 - **Upload.** **Upload** (or **Upload files** in the **Files** view) takes files of up to 25 MB, or drag them onto
@@ -304,7 +304,7 @@ open at once, and the open ones are listed and can be closed under Settings.
 
 Below 1024 px wide the top bar turns into a **Menu** button that opens a side drawer with Now (and its Score, Flow and
 Routines views), Chat, Tasks, Team, Knowledge, Reports and Settings, plus Terminal when it is on. Pages reflow to one
-column and each page opens on its content: in Chat an open room fills the screen and **Conversations** opens the room
+column and each page opens on its content: in Chat an open room fills the screen and **Rooms** opens the room
 list as a drawer (with no room open, the list shows first); Settings has a **Section** picker; Knowledge's note tree is
 behind **All notes**; Tasks shows one board column at a time with column tabs above; the Now timeline scrolls sideways
 with the agent names pinned. Dialogs open as full-screen sheets on a phone.

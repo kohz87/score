@@ -129,7 +129,7 @@ it). With **Tailscale** you can skip that: `scripts/score tailscale` fetches a r
   [Claude Code](https://docs.claude.com/claude-code), [Codex CLI](https://github.com/openai/codex) or
   [Antigravity `agy`](https://antigravity.google/docs/cli/install/) yourself; Score uses your own login and quota.
 - **Web terminal**: start Score with `SCORE_TERMINAL=1` in remote mode and set a password with `scripts/score password`.
-- **Knowledge vault**: notes live in `~/score-vault` (a git repository Score creates); set `SCORE_VAULT` to move it.
+- **Knowledge folder**: notes live in `~/score-vault` (a git repository Score creates); set `SCORE_VAULT` to move it.
 
 ### Upgrading
 
@@ -204,7 +204,7 @@ you want to be asked (before each step, only when the lead asks, or never) and a
 
 ### Workflows: draw the steps yourself
 
-![The workflow editor: a drawn graph of steps with problems flagged on the nodes and a node's settings on the right](docs/screenshots/workflow-editor.png)
+![The workflow editor: a drawn graph of steps with problems flagged on the steps and a step's settings on the right](docs/screenshots/workflow-editor.png)
 
 Where an orchestration lets a lead agent plan, a workflow is a graph you draw: agent steps, gates that wait for your
 approval and branches that choose a path from a step's result. The editor checks the drawing as you go and saves
@@ -256,7 +256,7 @@ channels, permissions and history.
 
 ![The Add agent dialog set to Coding agent, with the coding CLI, a workspace folder and a permission level](docs/screenshots/coding-agent.png)
 
-Claude Code, Codex CLI and Antigravity (`agy`) can join the team next to your Hermes agents. Pick the CLI, a
+Claude Code, Codex and Antigravity (`agy`) can join the team next to your Hermes agents. Pick the CLI, a
 workspace folder and a permission level (read only, workspace write or full access); the agent then works in rooms like
 any other member. They use your own CLI login and plan quota (Codex and Antigravity show the limits left). For Claude
 Code and Codex the permission level limits what they can change, not what they can read; Antigravity's sandbox also keeps
