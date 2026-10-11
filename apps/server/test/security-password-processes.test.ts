@@ -90,3 +90,21 @@ test('a lock left by a process that is gone is recovered; a live holder blocks u
   fs.writeFileSync(lock, `${process.pid} 1\n`)
   await expect(withPasswordLock(home, () => 'ran')).resolves.toBe('ran')
 })
+
+test('a lock file it cannot read makes the setter wait and give up, never spin', async () => {
+  if (process.getuid?.() === 0) return // root reads everything
+  const home = fs.mkdtempSync(join(tmpdir(), 'score-pw-unreadable-'))
+  const lock = join(home, 'security-password.lock')
+  fs.writeFileSync(lock, '1 1\n', { mode: 0o000 })
+  let ticks = 0
+  const timer = setInterval(() => ticks++, 10)
+  try {
+    await expect(withPasswordLock(home, () => 'ran', 300)).rejects.toBeInstanceOf(PasswordLockError)
+    expect(ticks).toBeGreaterThan(5)
+    expect(fs.existsSync(lock)).toBe(true)
+  } finally {
+    clearInterval(timer)
+    fs.chmodSync(lock, 0o600)
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})

@@ -170,8 +170,13 @@ export async function withPasswordLock<T>(
     try {
       content = fs.readFileSync(path, 'utf8')
       age = Date.now() - fs.statSync(path).mtimeMs
-    } catch {
-      continue // released in between: take it
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue // released in between: take it
+      // A lock we can't read (another user's, e.g. a host command run with sudo) is never ours to break: wait, then
+      // give up, instead of spinning without yielding.
+      if (Date.now() >= deadline) throw new PasswordLockError()
+      await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_MS))
+      continue
     }
     const alive = holderAlive(content)
     if (alive === false || (alive === null && age > LOCK_UNREADABLE_MS)) breakStale(path, content)
