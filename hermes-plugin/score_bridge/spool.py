@@ -159,6 +159,9 @@ class Spool:
             self._high_water = {p: v for p, v in self._high_water.items() if p in present}
             self._starts = {p: v for p, v in self._starts.items() if p in present}
             self._verified = {p: v for p, v in self._verified.items() if p in present}
+            for marker in self.directory.glob("*.retired"):
+                if not marker.with_suffix(".jsonl").exists():
+                    marker.unlink(missing_ok=True)
             stale = list(self.directory.glob(".outbox-*"))
             for temporary in stale:
                 temporary.unlink(missing_ok=True)
@@ -168,6 +171,20 @@ class Spool:
         finally:
             _OPEN_FDS.discard(fd)
             os.close(fd)
+
+    @property
+    def _retired_marker(self):
+        return self.path.with_suffix(".retired")
+
+    def retire(self):
+        """Record that this incarnation's sender is finished. A retired outbox is recoverable by whichever sender runs
+        next even though its hosting process (a gateway that only reloaded the plugin) is still alive."""
+        if not self.path.exists():
+            return
+        with self._locked():
+            if self.path.exists():
+                self._retired_marker.touch(mode=0o600)
+                self._fsync_directory(self.directory)
 
     def _fsync_directory(self, directory):
         # A rename or unlink is only durable once the parent directory entry is flushed.
@@ -263,6 +280,7 @@ class Spool:
         self._check_deadline()
         if not records:
             path.unlink(missing_ok=True)
+            path.with_suffix(".retired").unlink(missing_ok=True)
             self._verified.pop(path, None)
             self._fsync_directory(self.directory)
             return
@@ -421,7 +439,9 @@ class Spool:
                 producer = self._identities.get(path)
                 if not records or producer is None:
                     continue
-                if not self._producer_alive(producer["pid"], self._starts.get(path)):
+                # A retired incarnation has no sender any more, whatever its hosting process is doing.
+                if path.with_suffix(".retired").exists() or not self._producer_alive(
+                        producer["pid"], self._starts.get(path)):
                     identities.append((records[0]["events"][0]["at"], producer))
             return [p for _, p in sorted(identities, key=lambda entry: entry[0])]
 
@@ -478,6 +498,7 @@ class Spool:
             directory.mkdir(mode=0o700, exist_ok=True)
             self._safe_directory(directory)
             if self.path.exists():
+                self._retired_marker.unlink(missing_ok=True)  # made durable by the fsyncs below
                 os.replace(self.path, directory / self.path.name)
                 self._fsync_directory(directory)
                 self._fsync_directory(self.directory)

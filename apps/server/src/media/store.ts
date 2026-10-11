@@ -26,7 +26,7 @@ export const MAX_MEDIA_BYTES = 25 * 1024 * 1024
 export const MAX_ATTACHMENTS = 10
 export const DEFAULT_MEDIA_QUOTA_BYTES = 512 * 1024 * 1024
 const UNUSED_TTL_MS = 30 * 24 * 60 * 60 * 1000
-const SWEEP_HASH_BUDGET_BYTES = 256 * 1024 * 1024
+export const SWEEP_HASH_BUDGET_BYTES = 256 * 1024 * 1024
 const ORPHAN_GRACE_MS = 10 * 60 * 1000
 
 const RowSchema = z.object({
@@ -37,6 +37,7 @@ const RowSchema = z.object({
   created_at: z.string(),
   last_used_at: z.string(),
   refs: z.int().nonnegative(),
+  verified_at: z.string().nullable(),
 })
 const TotalSchema = z.object({ total: z.int().nonnegative() })
 const SHA_FILE = /^[0-9a-f]{64}$/
@@ -51,6 +52,7 @@ export interface MediaStoreOptions {
   quotaBytes?: number
   maxItemBytes?: number
   clock?: () => number
+  sweepHashBudgetBytes?: number
 }
 
 // File names are always the server-computed sha256, and ids are looked up in the index first, so no request
@@ -59,6 +61,7 @@ export class MediaStore {
   readonly quotaBytes: number
   readonly maxItemBytes: number
   private readonly clock: () => number
+  private readonly sweepHashBudget: number
 
   constructor(
     private readonly db: ScoreDb,
@@ -68,6 +71,7 @@ export class MediaStore {
     this.quotaBytes = options.quotaBytes ?? DEFAULT_MEDIA_QUOTA_BYTES
     this.maxItemBytes = options.maxItemBytes ?? MAX_MEDIA_BYTES
     this.clock = options.clock ?? Date.now
+    this.sweepHashBudget = options.sweepHashBudgetBytes ?? SWEEP_HASH_BUDGET_BYTES
   }
 
   private path(sha256: string): string {
@@ -211,13 +215,28 @@ export class MediaStore {
     const cutoff = new Date(nowMs - UNUSED_TTL_MS).toISOString()
     const removed: string[] = []
     let missing = 0
-    let hashBudget = SWEEP_HASH_BUDGET_BYTES
+    let hashBudget = this.sweepHashBudget
+    const nowIso = new Date(nowMs).toISOString()
+    // Rows sharing one blob (different document types) are hashed once per sweep and spend the budget once.
+    const hashed = new Map<string, boolean>()
     this.db.tx((sqlite) => {
-      for (const raw of sqlite.prepare('SELECT * FROM media').all()) {
+      // Least recently verified first (never verified = first), so every row gets its turn over several sweeps.
+      const rows = sqlite
+        .prepare(
+          'SELECT * FROM media ORDER BY verified_at IS NOT NULL, verified_at, created_at, id',
+        )
+        .all()
+      for (const raw of rows) {
         const row = RowSchema.parse(raw)
         // Content is re-hashed within a per-sweep byte budget; the rest is covered by later sweeps and by reads.
-        const verify = hashBudget >= row.size
-        if (verify) hashBudget -= row.size
+        let verify = hashed.get(row.sha256)
+        if (verify === undefined) {
+          verify = hashBudget >= row.size
+          if (verify) hashBudget -= row.size
+          hashed.set(row.sha256, verify)
+        }
+        if (verify)
+          sqlite.prepare('UPDATE media SET verified_at = ? WHERE id = ?').run(nowIso, row.id)
         if (!this.intact(row.sha256, row.size, verify)) {
           // A referenced row keeps its id (a message still points at it; a re-upload repairs the blob).
           if (row.refs === 0) {
