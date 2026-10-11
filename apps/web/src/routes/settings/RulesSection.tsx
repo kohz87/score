@@ -31,9 +31,9 @@ function failure(error: unknown, action: string): string {
     if (error.status === 400)
       return 'Those rules were not accepted. Check the wording and try again.'
     if (error.status === 409)
-      return 'Hermes changed these settings while Score was saving. Nothing was lost; try again.'
+      return 'Hermes changed these settings while Score was saving. Nothing was lost. Try again.'
   }
-  return `Could not ${action}. Please try again.`
+  return `Couldn’t ${action}. Try again.`
 }
 
 interface Draft {
@@ -126,7 +126,7 @@ export function RulesSection({ agents }: { agents: AgentSummary[] }) {
         }
         setNotice(
           result.failed.length
-            ? `Saved, but ${result.failed.join(', ')} could not be updated. They are listed below.`
+            ? `Saved, but ${result.failed.join(', ')} couldn’t be updated. They are listed below.`
             : 'Saved for the whole team.',
         )
       },
@@ -148,7 +148,7 @@ export function RulesSection({ agents }: { agents: AgentSummary[] }) {
       </div>
       {rules.status === 'pending' && <p role="status">Loading rules…</p>}
       {rules.status === 'error' && (
-        <p role="alert">Could not load the rules. Check that the Score server is running.</p>
+        <p role="alert">Couldn’t load the rules. Check that the Score server is running.</p>
       )}
       {current && data && (
         <>

@@ -146,7 +146,7 @@ function CurrencyCard() {
         {save.isPending ? 'Saving…' : 'Save'}
       </button>
       {save.isSuccess && <p role="status">Saved.</p>}
-      {save.isError && <p role="alert">Could not save. Is this browser paired?</p>}
+      {save.isError && <p role="alert">Couldn’t save. Is this browser paired?</p>}
     </form>
   )
 }

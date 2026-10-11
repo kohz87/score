@@ -11,7 +11,7 @@ function message(error: unknown): string {
     return 'Pair this browser using the link in the server terminal to save these.'
   if (code === 'bad_request')
     return 'Check the fields: a required one is empty or has an invalid value.'
-  return 'Hermes did not accept these settings. Please try again.'
+  return 'Hermes did not accept these settings. Try again.'
 }
 
 function FieldInput({
@@ -106,8 +106,7 @@ export function MessagingSetup({
   }
 
   if (fields.isPending) return <p role="status">Loading the {label} setup…</p>
-  if (fields.isError)
-    return <p role="alert">Could not load the {label} setup. Please try again later.</p>
+  if (fields.isError) return <p role="alert">Couldn’t load the {label} setup. Try again later.</p>
   if (!fields.data.browserSetup)
     return (
       <div>

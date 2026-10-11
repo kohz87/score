@@ -43,8 +43,8 @@ export function NotificationsSection() {
       </div>
       {permission === 'unsupported' && (
         <p role="status">
-          This browser can&apos;t show notifications. On an iPhone or iPad, add Score to the Home
-          Screen first (Share, then Add to Home Screen) and open it from there.
+          This browser can’t show notifications. On an iPhone or iPad, add Score to the Home Screen
+          first (Share, then Add to Home Screen) and open it from there.
         </p>
       )}
       {permission !== 'unsupported' && !on && (
@@ -66,7 +66,7 @@ export function NotificationsSection() {
         </button>
       )}
       {permission === 'denied' && !notice && (
-        <p role="status">Notifications are blocked for Score in this browser&apos;s settings.</p>
+        <p role="status">Notifications are blocked for Score in this browser’s settings.</p>
       )}
       {notice && <p role="alert">{notice}</p>}
       <fieldset className="settings-origins" disabled={!on}>

@@ -46,8 +46,7 @@ export function LogsSection() {
       <div>
         <h2 id="settings-logs">Logs</h2>
         <p className="settings-muted-strong">
-          Score&apos;s own log, newest first. Secrets are removed on the server before anything is
-          shown.
+          Score’s own log, newest first. Secrets are removed on the server before anything is shown.
         </p>
       </div>
       <div className="logs-controls">
@@ -83,7 +82,7 @@ export function LogsSection() {
           Download
         </button>
       </div>
-      {logs.isError && <p role="alert">Could not load the log. Is this browser paired?</p>}
+      {logs.isError && <p role="alert">Couldn’t load the log. Is this browser paired?</p>}
       {logs.data && !logs.data.available && (
         <p className="settings-muted">
           This Score was not started with a log file (<code>scripts/score start</code> sets one).

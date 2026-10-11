@@ -39,7 +39,7 @@ export function ConnectionsSection({ agents }: { agents: AgentSummary[] }) {
       </div>
       {connections.status === 'pending' && <p role="status">Loading connections…</p>}
       {connections.status === 'error' && (
-        <p role="alert">Could not load connections. Check that the Score server is running.</p>
+        <p role="alert">Couldn’t load connections. Check that the Score server is running.</p>
       )}
       {connections.data && (
         <div className="settings-columns">

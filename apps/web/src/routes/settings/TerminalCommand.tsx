@@ -38,5 +38,5 @@ export function failure(error: unknown, action: string): string {
   if (code === 'not_paired')
     return `Pair this browser using the link in the server terminal to ${action}.`
   if (code === 'conflict') return 'That name is already in use.'
-  return `Could not ${action}. Please try again.`
+  return `Couldn’t ${action}. Try again.`
 }

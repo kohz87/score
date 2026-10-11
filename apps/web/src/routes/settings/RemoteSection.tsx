@@ -31,8 +31,8 @@ function failure(error: unknown, action: string): string {
   if (code === 'too_many_attempts')
     return 'Too many wrong passwords. Wait 15 minutes and try again.'
   if (code === 'password_not_set') return 'Set a security password first.'
-  if (code === 'bad_request') return 'Use 8 to 256 characters for the security password.'
-  return `Could not ${action}. Please try again.`
+  if (code === 'bad_request') return 'Use 8–256 characters for the security password.'
+  return `Couldn’t ${action}. Try again.`
 }
 
 function SetPassword({ change, onDone }: { change: boolean; onDone: () => void }) {
@@ -44,7 +44,7 @@ function SetPassword({ change, onDone }: { change: boolean; onDone: () => void }
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (next !== again) {
-      setError('The two entries differ.')
+      setError('The two passwords don’t match.')
       return
     }
     setBusy(true)
@@ -83,7 +83,7 @@ function SetPassword({ change, onDone }: { change: boolean; onDone: () => void }
         </label>
       )}
       <label>
-        New password (8+ characters)
+        New password (at least 8 characters)
         <input
           type="password"
           autoComplete="new-password"
@@ -148,7 +148,7 @@ export function RemoteSection() {
   const revoke = useMutation({
     mutationFn: (id: string) => apiFetch(`session/browsers/${id}/revoke`, withPassword()),
     onSuccess: () => {
-      setNotice('Pairing terminated.')
+      setNotice('Pairing ended.')
       return refresh()
     },
   })
@@ -158,9 +158,7 @@ export function RemoteSection() {
         await apiFetch('session/browsers/revoke-others', withPassword()),
       ),
     onSuccess: ({ revoked }) => {
-      setNotice(
-        revoked === 1 ? 'Terminated 1 other pairing.' : `Terminated ${revoked} other pairings.`,
-      )
+      setNotice(revoked === 1 ? 'Ended 1 other pairing.' : `Ended ${revoked} other pairings.`)
       return refresh()
     },
   })
@@ -211,8 +209,8 @@ export function RemoteSection() {
   const passwordSet = security.data?.passwordSet === true
   const ready = passwordSet && password.length >= 8
   const actionError =
-    (revoke.error && failure(revoke.error, 'terminate the pairing')) ||
-    (revokeOthers.error && failure(revokeOthers.error, 'terminate the pairings')) ||
+    (revoke.error && failure(revoke.error, 'end the pairing')) ||
+    (revokeOthers.error && failure(revokeOthers.error, 'end the pairings')) ||
     (renew.error && failure(renew.error, 'renew the pairing')) ||
     (invite.error && failure(invite.error, 'create a pairing link')) ||
     ''
@@ -222,7 +220,7 @@ export function RemoteSection() {
       <h2 id="settings-remote-access">Remote access</h2>
       <p>
         Paired browsers can read all conversations and control Score. Pair only browsers you trust.
-        Revoking access cannot erase data already downloaded.
+        Ending access can’t erase data already downloaded.
       </p>
       <h3>TLS setup</h3>
       <p>
@@ -235,9 +233,9 @@ export function RemoteSection() {
 
       <h3>Security password</h3>
       <p>
-        Pairing another device, renewing and terminating pairings need this password, so a lost or
-        compromised device can&apos;t invite others or lock you out. If you forget it, reset it on
-        the Score machine with <code>scripts/score password</code>.
+        Pairing another device, renewing and ending pairings need this password, so a lost or
+        compromised device can’t invite others or lock you out. If you forget it, reset it on the
+        Score machine with <code>scripts/score password</code>.
       </p>
       {security.isSuccess && !passwordSet && (
         <SetPassword
@@ -391,11 +389,11 @@ export function RemoteSection() {
               <button
                 className="settings-pill"
                 type="button"
-                aria-label={`Terminate ${browser.label.slice(0, 60)}`}
+                aria-label={`End ${browser.label.slice(0, 60)}`}
                 disabled={!ready || busy}
                 onClick={() => revoke.mutate(browser.id)}
               >
-                Terminate
+                End
               </button>
             )}
           </li>
@@ -408,7 +406,7 @@ export function RemoteSection() {
           disabled={!ready || busy}
           onClick={() => revokeOthers.mutate()}
         >
-          Terminate all other pairings
+          End all other pairings
         </button>
       )}
       {security.isSuccess && !passwordSet && (
@@ -419,7 +417,7 @@ export function RemoteSection() {
       )}
       {actionError && <p role="alert">{actionError}</p>}
       {notice && !actionError && <p role="status">{notice}</p>}
-      {browsers.isError && <p role="alert">Could not load paired browsers.</p>}
+      {browsers.isError && <p role="alert">Couldn’t load paired browsers.</p>}
 
       <h3>Web terminal</h3>
       <p>
@@ -445,7 +443,7 @@ export function RemoteSection() {
             await apiFetch('session', { method: 'DELETE' })
             announceLogout()
           } catch {
-            setError('Could not log out. Try again.')
+            setError('Couldn’t log out. Try again.')
             setPending(false)
           }
         }}

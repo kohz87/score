@@ -16,7 +16,7 @@ function failure(error: unknown, action: string): string {
   // The browser refuses a ceremony the person cancelled or timed out.
   if (error instanceof Error && error.name === 'NotAllowedError')
     return 'The passkey was cancelled or timed out.'
-  return `Could not ${action}. Please try again.`
+  return `Couldn’t ${action}. Try again.`
 }
 
 /** Settings › Remote access › Passkeys. `password` is the security password the person typed above. */
@@ -65,12 +65,12 @@ export function PasskeysPanel({
       <h3>Passkeys</h3>
       <p>
         A passkey signs a browser in with your fingerprint, face or device PIN, with no pairing
-        link. Adding or removing one needs the security password. Terminating other pairings does
-        not remove passkeys: remove a passkey here to stop it signing in.
+        link. Adding or removing one needs the security password. Ending other pairings does not
+        remove passkeys: remove a passkey here to stop it signing in.
       </p>
       {list.data && !list.data.available && (
         <p role="status">
-          Passkeys need a domain name, so they don&apos;t work on a LAN IP address.{' '}
+          Passkeys need a domain name, so they don’t work on a LAN IP address.{' '}
           {elsewhere ? (
             <>
               Open Score at <a href={`${elsewhere}/settings`}>{elsewhere}</a> to add one.
@@ -116,7 +116,7 @@ export function PasskeysPanel({
             {passkey.lastUsedAt
               ? `last used ${new Date(passkey.lastUsedAt).toLocaleString()}`
               : 'never used'}
-            {passkey.flagged ? ' (blocked: its sign-in counter went backwards)' : ''}{' '}
+            {passkey.flagged ? ' (blocked: this passkey may have been copied)' : ''}{' '}
             <button
               className="settings-pill"
               type="button"
@@ -140,7 +140,7 @@ export function PasskeysPanel({
       )}
       {error && <p role="alert">{error}</p>}
       {notice && !error && <p role="status">{notice}</p>}
-      {list.isError && <p className="settings-muted">Could not load passkeys.</p>}
+      {list.isError && <p className="settings-muted">Couldn’t load passkeys.</p>}
     </>
   )
 }

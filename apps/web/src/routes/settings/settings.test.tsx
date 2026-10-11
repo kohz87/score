@@ -183,7 +183,7 @@ test('an unpaired browser gets a pairing hint, and a failed load shows an alert'
           ? json({ asOfSeq: 0, items: [] })
           : json(connections)
   mount()
-  expect(await screen.findByText(/Could not load providers/)).toBeDefined()
+  expect(await screen.findByText(/Couldn’t load providers/)).toBeDefined()
 })
 
 const slackFields = {
@@ -289,7 +289,7 @@ async function stageTurns() {
   fireEvent.change(within(advanced).getByLabelText('New value for agent.max_turns'), {
     target: { value: '30' },
   })
-  fireEvent.click(within(advanced).getByRole('button', { name: 'Stage change' }))
+  fireEvent.click(within(advanced).getByRole('button', { name: 'Add change' }))
   return advanced
 }
 
@@ -402,7 +402,7 @@ test('advanced: a change staged while an apply is in flight stays pending after 
   fireEvent.change(within(advanced).getByLabelText('New value for display.language'), {
     target: { value: 'fr' },
   })
-  fireEvent.click(within(advanced).getByRole('button', { name: 'Stage change' }))
+  fireEvent.click(within(advanced).getByRole('button', { name: 'Add change' }))
   release()
   await within(advanced).findByText(/Saved\./)
   const tray = within(advanced).getByRole('group', { name: 'Pending changes' })
