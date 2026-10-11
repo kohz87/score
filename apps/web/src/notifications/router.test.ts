@@ -163,7 +163,7 @@ test('a failed attempt of an earlier copy of the board opens the attempt page', 
     ),
   )!
   expect(payload.url).toBe('/attempts/kr_2')
-  expect(payload.title).toBe('An attempt failed')
+  expect(payload.title).toBe('A task run failed')
 })
 
 test('attempts that did not fail say nothing', () => {

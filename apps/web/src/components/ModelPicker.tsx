@@ -117,7 +117,7 @@ export function ModelPicker({ label, value, onChange, required, maxLength = 256,
   const providerName =
     value.provider === null ? null : (providerLabel ?? selected?.providerLabel ?? value.provider)
   const note = models.isError
-    ? 'Models could not be loaded. You can still type a model name.'
+    ? 'Couldn’t load models. You can still type a model name.'
     : models.isPending
       ? 'Loading models…'
       : items.length
