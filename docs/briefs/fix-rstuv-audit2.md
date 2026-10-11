@@ -36,9 +36,11 @@ never close a cross-process, cancellation or durability finding with a simplifie
   spawns and ends as stopped, without a visible queued→running transition.
 - S2-008: a failed terminal observation is retried (bounded backoff) without relaunching; the active entry stays until
   it is persisted; after the retry budget the run shows a plain degraded state, never a silent success.
-- S2-009: **decision: orchestrations and workflows run Hermes agents only.** Preflight and create (orchestrations) and
+- S2-009: **decision (interim, owner asked 2026-10-11): until PLAN 7.7 adds coding agents as workers, orchestrations and
+  workflows run Hermes agents only** (today a coding worker's step reaches Hermes and fails, so nothing that works is lost). Preflight and create (orchestrations) and
   save/start (workflows) reject coding agents with a clear error (`422 unsupported_agent`, message per WRITING.md). Add
-  the error code to the contract doc. The executor stays Hermes-only.
+  the error code to the contract doc. The executor stays Hermes-only for now. The error message says coding agents can't take orchestration or workflow
+  steps yet. Keep the check in one place (one function) so 7.7 can lift it cleanly.
 
 ## Batch S: Knowledge moves and publication (S2-001, 002, 003, 013, 014, 022, 027, 018, 019); e2e port 5451
 - S2-001/002: replace `link`+unconditional `unlink` with the workspace's parked-identity approach (see
