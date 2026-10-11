@@ -2,6 +2,7 @@ import { Worker } from 'node:worker_threads'
 import { HttpError } from '../errors.ts'
 import type { WorkerRequest, WorkerResult, ZipLimits } from './extract-types.ts'
 import { MAX_TEXT_BYTES } from './doc-types.ts'
+import { MAX_NOTE_BYTES } from './note.ts'
 
 export const TEXT_TIMEOUT_MS = 20_000
 export const ZIP_TIMEOUT_MS = 90_000
@@ -11,7 +12,7 @@ export const WORKER_HEAP_MB = 512
 export const ZIP_LIMITS: ZipLimits = {
   maxEntries: 1000,
   maxTotalBytes: 200 * 1024 * 1024,
-  maxNoteBytes: 2 * 1024 * 1024,
+  maxNoteBytes: MAX_NOTE_BYTES,
   maxRatio: 100,
   ratioFloorBytes: 64 * 1024,
 }

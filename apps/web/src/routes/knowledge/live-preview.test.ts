@@ -1,9 +1,18 @@
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
-import { afterEach, expect, test } from 'vitest'
+import { afterEach, beforeAll, expect, test } from 'vitest'
+import { history, undo } from '@codemirror/commands'
+import { applyTableOp } from './editor-commands.ts'
 import { livePreview, setLiveFocus } from './live-preview.ts'
 import { parseTable, splitRow } from './live-table.ts'
+
+// jsdom has no layout: CodeMirror's measuring needs these to exist.
+beforeAll(() => {
+  const none = { length: 0, item: () => null, [Symbol.iterator]: [][Symbol.iterator] }
+  Range.prototype.getClientRects = () => none as unknown as DOMRectList
+  Range.prototype.getBoundingClientRect = () => new DOMRect()
+})
 
 let view: EditorView | null = null
 afterEach(() => {
@@ -20,6 +29,7 @@ function open(doc: string, missing: string[] = []) {
     state: EditorState.create({
       doc,
       extensions: [
+        history(),
         markdown({ base: markdownLanguage }),
         livePreview({ onOpenWikilink: () => undefined, isMissing: (t) => missing.includes(t) }),
       ],
@@ -31,7 +41,7 @@ const focus = (v: EditorView, anchor: number) =>
   v.dispatch({ selection: { anchor }, effects: setLiveFocus.of(true) })
 const TABLE = '| Name | Qty |\n| --- | ---: |\n| Apples | 3 |\n| `Pears` | **4** |\n'
 
-test('a table renders as a widget until the cursor enters it, then shows its source', () => {
+test('a table is a rendered grid, also while the caret is in it: no raw pipes', () => {
   const v = open(`Intro\n\n${TABLE}\nAfter\n`)
   const table = v.dom.querySelector('.cm-lp-table table')!
   expect(table).not.toBeNull()
@@ -40,12 +50,100 @@ test('a table renders as a widget until the cursor enters it, then shows its sou
   expect(table.querySelector('td strong')?.textContent).toBe('4')
   expect((table.querySelectorAll('th')[1] as HTMLElement).style.textAlign).toBe('right')
 
-  focus(v, 0)
-  expect(v.dom.querySelector('.cm-lp-table')).not.toBeNull()
   focus(v, v.state.doc.toString().indexOf('Apples'))
-  expect(v.dom.querySelector('.cm-lp-table')).toBeNull()
-  expect(v.contentDOM.textContent).toContain('| Apples | 3 |')
-  focus(v, v.state.doc.length)
+  expect(v.dom.querySelector('.cm-lp-table')).not.toBeNull()
+  expect(v.contentDOM.textContent).not.toContain('| Apples')
+})
+
+// Table cells are edited in place (PLAN 6.8).
+const cell = (v: EditorView, row: number, column: number) =>
+  v.dom.querySelector<HTMLElement>(`.cm-lp-cell[data-row="${row}"][data-column="${column}"]`)!
+const key = (el: Element, k: string, init: KeyboardEventInit = {}) =>
+  el.dispatchEvent(
+    new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...init }),
+  )
+const click = (el: Element) =>
+  el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+const input = (v: EditorView) => v.dom.querySelector<HTMLInputElement>('.cm-lp-cell-input')!
+const settle = () => new Promise((resolve) => setTimeout(resolve, 40))
+const SMALL = '| A | B |\n| --- | --- |\n| 1 | 2 |'
+
+test('clicking a cell opens a labelled single-line input holding its Markdown; the caret follows the cell', () => {
+  const v = open(`${TABLE}`)
+  click(cell(v, 2, 0))
+  const field = input(v)
+  expect(field.getAttribute('aria-label')).toBe('Name, row 2')
+  expect(field.value).toBe('`Pears`')
+  expect(document.activeElement).toBe(field)
+  const caret = v.state.selection.main.head
+  expect(v.state.doc.sliceString(caret, caret + 7)).toBe('`Pears`')
+})
+
+test('Enter saves the cell as one undoable transaction of canonical GFM and edits the cell below', async () => {
+  const v = open('| A | B |\n| :-- | --: |\n| 1 | 2 |\n| 3 | 4 |')
+  click(cell(v, 1, 0))
+  input(v).value = 'x | **y**'
+  key(input(v), 'Enter')
+  expect(v.state.doc.toString()).toBe('| A | B |\n| :--- | ---: |\n| x \\| **y** | 2 |\n| 3 | 4 |')
+  await settle()
+  expect(input(v).value).toBe('3')
+  expect(cell(v, 1, 0).querySelector('strong')?.textContent).toBe('y')
+  undo(v)
+  expect(v.state.doc.toString()).toBe('| A | B |\n| :-- | --: |\n| 1 | 2 |\n| 3 | 4 |')
+})
+
+test('an unchanged cell rewrites nothing; Escape cancels an edit', () => {
+  const doc = '| A | B |\n|---|---|\n| 1 | 2 |'
+  const v = open(doc)
+  click(cell(v, 1, 1))
+  key(input(v), 'Enter')
+  expect(v.state.doc.toString()).toBe(doc)
+  click(cell(v, 1, 0))
+  input(v).value = 'changed'
+  key(input(v), 'Escape')
+  expect(v.state.doc.toString()).toBe(doc)
+  expect(cell(v, 1, 0).textContent).toBe('1')
+})
+
+test('Tab and Shift+Tab move between cells; Tab on the last cell adds a row', async () => {
+  const v = open(SMALL)
+  click(cell(v, 0, 0))
+  key(input(v), 'Tab')
+  await settle()
+  expect(input(v).value).toBe('B')
+  expect(document.activeElement).toBe(input(v))
+  expect(input(v).closest('th')).toBe(cell(v, 0, 1))
+  key(input(v), 'Tab')
+  await settle()
+  expect(input(v).value).toBe('1')
+  key(input(v), 'Tab', { shiftKey: true })
+  expect(input(v).closest('th')).toBe(cell(v, 0, 1))
+  click(cell(v, 1, 1))
+  key(input(v), 'Tab')
+  await settle()
+  expect(v.state.doc.toString()).toBe('| A | B |\n| --- | --- |\n| 1 | 2 |\n|  |  |')
+  expect(input(v).closest('td')).toBe(cell(v, 2, 0))
+})
+
+test('arrow keys move over the grid; typing on a focused cell starts editing it; blur keeps the text', async () => {
+  const v = open(SMALL)
+  cell(v, 1, 0).focus()
+  key(cell(v, 1, 0), 'ArrowRight')
+  expect(document.activeElement).toBe(cell(v, 1, 1))
+  key(cell(v, 1, 1), 'ArrowUp')
+  expect(document.activeElement).toBe(cell(v, 0, 1))
+  key(cell(v, 0, 1), 'z')
+  expect(input(v).value).toBe('z')
+  input(v).dispatchEvent(new FocusEvent('blur'))
+  expect(v.state.doc.toString()).toBe('| A | z |\n| --- | --- |\n| 1 | 2 |')
+})
+
+test('the toolbar actions work on the focused cell and keep the grid', async () => {
+  const v = open(SMALL)
+  click(cell(v, 1, 1))
+  applyTableOp(v, { kind: 'column', where: 'left' })
+  await settle()
+  expect(v.state.doc.toString()).toBe('| A | Column 3 | B |\n| --- | --- | --- |\n| 1 |  | 2 |')
   expect(v.dom.querySelector('.cm-lp-table')).not.toBeNull()
 })
 
@@ -115,4 +213,12 @@ test('table parsing handles escaped pipes, code and alignment', () => {
   expect(parsed.align).toEqual(['center', 'right'])
   expect(parsed.rows).toEqual([['1', '2']])
   expect(parseTable('just text\nmore text')).toBeNull()
+})
+
+test('a toolbar action saves the text being typed first, then acts on that cell', () => {
+  const v = open(SMALL)
+  click(cell(v, 0, 1))
+  input(v).value = 'Q'
+  applyTableOp(v, { kind: 'row', where: 'below' })
+  expect(v.state.doc.toString()).toBe('| A | Q |\n| --- | --- |\n|  |  |\n| 1 | 2 |')
 })

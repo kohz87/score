@@ -18,6 +18,7 @@ import type { ScoreDb } from '../db/index.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import { HttpError } from '../errors.ts'
 import { VaultGit } from './git.ts'
+import { forIndex, validateNoteImages } from './note-images.ts'
 import { buildNoteIndex, parseWikilinks, resolveLink, rewriteLinks } from './links.ts'
 import {
   authorFromColumn,
@@ -381,7 +382,7 @@ export class KnowledgeVault {
     sqlite.prepare('DELETE FROM knowledge_fts WHERE rowid = ?').run(id)
     sqlite
       .prepare('INSERT INTO knowledge_fts (rowid, path, title, body) VALUES (?, ?, ?, ?)')
-      .run(id, rel, title, parsed.body)
+      .run(id, rel, title, forIndex(parsed.body))
     sqlite.prepare('DELETE FROM knowledge_links WHERE from_path = ?').run(rel)
     const seen = new Set<string>()
     for (const link of parseWikilinks(parsed.body)) {
@@ -816,6 +817,7 @@ export class KnowledgeVault {
           : serialiseNote(request.body, request.frontmatter)
       if (Buffer.byteLength(content) > MAX_NOTE_BYTES)
         throw new HttpError(413, 'payload_too_large', 'That note is too large')
+      validateNoteImages(content)
       const hash = hashContent(content)
       if (hash === currentHash) return { etag: etagOf(hash), path: rel }
       await this.commitOutside()

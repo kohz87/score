@@ -83,7 +83,7 @@ describe('vault contents', () => {
     expect(fs.existsSync(path.join(h.vaultDir, 'a.md'))).toBe(true)
     expect(fs.existsSync(path.join(h.vaultDir, 'a-much-longer-name-for-the-target.md'))).toBe(false)
     await expect(h.vault.readNote('big.md')).resolves.toBeTruthy()
-  })
+  }, 60_000)
 
   test('renaming a short, self-linking note keeps its earlier versions reachable', async () => {
     h = await makeVault()

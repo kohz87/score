@@ -122,8 +122,14 @@ export const KnowledgeNoteSchema = z.object({
   backlinks: z.array(z.object({ path: z.string(), title: z.string() })),
   lastAuthor: KnowledgeAuthorSchema.nullable(),
 })
+/** A note may be 8 MiB (PLAN 6.8: images are embedded as data URIs); the server counts bytes and answers 413. */
+export const KNOWLEDGE_NOTE_MAX_BYTES = 8 * 1024 * 1024
+/** One embedded image, after the browser downscaled it. */
+export const KNOWLEDGE_IMAGE_MAX_BYTES = 1.5 * 1024 * 1024
+/** Image types allowed inside a note as `![alt](data:<type>;base64,...)`. SVG is not one of them. */
+export const KNOWLEDGE_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const
 export const KnowledgeWriteRequestSchema = z.object({
-  body: z.string().max(2 * 1024 * 1024),
+  body: z.string().max(KNOWLEDGE_NOTE_MAX_BYTES),
   /** Replaces the frontmatter when present; omitted keeps the current one. */
   frontmatter: z.record(z.string(), z.unknown()).optional(),
   /** The etag the editor loaded; null creates the note and refuses an existing one. */
