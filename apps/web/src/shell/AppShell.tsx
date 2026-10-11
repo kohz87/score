@@ -6,8 +6,11 @@ import { UpdateBanner } from '../pwa/UpdateBanner.tsx'
 import { NavDrawer } from './NavDrawer.tsx'
 import { useTerminalAvailable } from './TerminalButton.tsx'
 import { TopBar } from './TopBar.tsx'
+import { useActivityFeed } from '../live/use-activity.ts'
 
 export function AppShell() {
+  // Listens from the start, so the status lines know what is going on even on a page opened later.
+  useActivityFeed()
   const [commandOpen, setCommandOpen] = useState(false)
   const commandButtonRef = useRef<HTMLButtonElement>(null)
   const wasOpen = useRef(false)

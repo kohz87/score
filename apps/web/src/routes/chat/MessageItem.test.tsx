@@ -64,7 +64,11 @@ test('a failed tool says so, and a running one only counts as running while the 
 test('thinking is collapsed and labelled by the reply state', () => {
   const parts: MessagePart[] = [{ kind: 'thinking', text: 'first the tests' }]
   const { rerender } = render(<MessageItem message={make(parts, true)} agents={[]} />)
-  expect(screen.getByText('Thinking…').closest('details')!.open).toBe(false)
+  // The status line says it as well, under the reply.
+  expect(screen.getAllByText('Thinking…')).toHaveLength(2)
+  expect(screen.getByText('Thinking…', { selector: 'summary' }).closest('details')!.open).toBe(
+    false,
+  )
   rerender(<MessageItem message={make(parts)} agents={[]} />)
   expect(screen.getByText('Thought process')).toBeTruthy()
 })

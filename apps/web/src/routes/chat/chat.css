@@ -194,8 +194,7 @@
   align-items: baseline;
   margin-bottom: 10px;
 }
-.chat-message-meta time,
-.chat-streaming {
+.chat-message-meta time {
   font-size: 13px;
   color: var(--muted);
 }
@@ -2653,4 +2652,36 @@
 .chat-delete-confirm input:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
+}
+
+/* The status line under a reply that is being written, and the working agents in the room header. */
+.chat-message-body > .live-status {
+  margin-top: 6px;
+}
+.chat-room-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  min-height: 1.5em;
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.chat-room-status > li {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.chat-room-status .live-status {
+  min-height: 0;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.chat-room-status strong {
+  color: var(--ink);
+  font-weight: 600;
 }

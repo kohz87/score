@@ -857,3 +857,9 @@
     font-size: 15px;
   }
 }
+
+/* The lane label keeps a line for what the agent is doing now, so a line appearing moves nothing. */
+.now-lane-name .live-status {
+  max-width: 100%;
+  font-size: 12.5px;
+}

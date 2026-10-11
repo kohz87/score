@@ -5,6 +5,7 @@ import { MOTION, playMotion } from '../../motion/motion.ts'
 import { useValueTween } from '../../motion/use-value-tween.ts'
 import { StreamContext, useStreamQuery, useStreamQueryRefetch } from '../../data/query-client.ts'
 import { compact } from './context-meter.ts'
+import { useCompactionMark } from '../../live/use-activity.ts'
 import {
   COMPACT_FAILURE_TEXT,
   fetchSessionContext,
@@ -181,6 +182,13 @@ function MeterView({
     if (!answeredId) return
     refetch()
   }, [answeredId]) // eslint-disable-line react-hooks/exhaustive-deps -- only a new answer refreshes it
+  // The status line says "Compacting context…" for as long as the wait lasts.
+  const markCompacting = useCompactionMark()
+  const waiting = running !== null && !finished.has(running)
+  useEffect(() => {
+    markCompacting(agentId, waiting)
+    return () => markCompacting(agentId, false)
+  }, [agentId, waiting, markCompacting])
   useEffect(() => {
     if (!open) return
     const outside = (event: globalThis.PointerEvent) => {
