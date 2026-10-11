@@ -11,6 +11,7 @@ export type {
   ObservationSink,
   ProviderBase,
   Scheduler,
+  StopOutcome,
 } from './port.ts'
 export type {
   OutsideSessionFact,
