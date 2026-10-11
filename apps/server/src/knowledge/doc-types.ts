@@ -32,13 +32,13 @@ export type FileClass =
 const extensionOf = (name: string): string =>
   /\.([A-Za-z0-9]{1,8})$/.exec(name)?.[1]?.toLowerCase() ?? ''
 
-/** Decides what a file name stands for; `.txt` becomes a `.md` note. Null when the type is not accepted. */
+/** Decides what a file name stands for; `.txt`, `.markdown` and `.MD` (any case) become a `.md` note. Null when the type is not accepted. */
 export function classifyName(name: string): FileClass | null {
   const extension = extensionOf(name)
   if (NOTE_EXTENSIONS.has(extension)) {
     const stem = name.slice(0, name.length - extension.length - 1)
     if (stem === '') return null
-    return { kind: 'note', name: extension === 'txt' ? `${stem}.md` : name }
+    return { kind: 'note', name: `${stem}.md` }
   }
   const type = DOCUMENT_EXTENSIONS[extension]
   if (!type || name.length === extension.length + 1) return null

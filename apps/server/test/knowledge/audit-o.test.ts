@@ -138,12 +138,13 @@ describe('SCORE-034 a failed multi-file move resumes', () => {
       vault: h.vaultDir,
       db: h.db,
       emit: () => undefined,
+      stateDir: path.join(h.dir, 'home', 'knowledge'),
     })
     await second.start()
     expect(read(pending[0]!)).toBe('my own edit')
     expect(read(pending[1]!)).toContain('[[z]]')
     expect(read(pending[1]!)).not.toContain('[[a]]')
-    expect(fs.existsSync(path.join(h.vaultDir, '.git', 'score-move-plan.json'))).toBe(false)
+    expect(fs.existsSync(second.planFile())).toBe(false)
     expect((await second.readNote('z.md')).backlinks.map((item) => item.path)).toContain(pending[1])
     await second.close()
   })

@@ -138,9 +138,13 @@ export function KnowledgePage() {
       {
         onSuccess: (response) => {
           setDialog(null)
+          const left =
+            response.skipped.length > 0
+              ? ` Couldn’t update the links in ${response.skipped.map((item) => item.path).join(', ')}. They still link to the old name.`
+              : ''
           setNotice(
             updateLinks
-              ? `Moved to ${response.path}. Updated links in ${response.updatedNotes} ${response.updatedNotes === 1 ? 'note' : 'notes'}.`
+              ? `Moved to ${response.path}. Updated links in ${response.updatedNotes} ${response.updatedNotes === 1 ? 'note' : 'notes'}.${left}`
               : `Moved to ${response.path}. Links in other notes were left as they are.`,
           )
           if (from === path) void navigate(noteUrl(response.path))

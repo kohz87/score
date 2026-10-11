@@ -174,7 +174,7 @@ describe('document routes', () => {
       to: 'm/b.png',
       updateLinks: true,
     })
-    expect(moved.json()).toEqual({ path: 'm/b.png', updatedNotes: 0 })
+    expect(moved.json()).toEqual({ path: 'm/b.png', updatedNotes: 0, skipped: [] })
     const unpaired = await app.inject({
       method: 'DELETE',
       url: `/api/knowledge/documents/${enc('m/b.png')}`,

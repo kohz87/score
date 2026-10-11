@@ -146,6 +146,8 @@ export const KnowledgeMoveResponseSchema = z.object({
   path: z.string(),
   /** How many other notes had links rewritten. */
   updatedNotes: z.number().int().nonnegative(),
+  /** Notes whose links to the moved note were left as they are, with a short plain reason each. */
+  skipped: z.array(z.object({ path: z.string(), reason: z.string() })).default([]),
 })
 export const KnowledgeSearchHitSchema = z.object({
   path: z.string(),

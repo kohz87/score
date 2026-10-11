@@ -16,6 +16,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { ScoreDb } from '../db/index.ts'
 import { HttpError } from '../errors.ts'
 import { isPlainText } from '../media/sniff.ts'
+import { prepareNoteContent } from './note-images.ts'
 import { redact } from '../redact.ts'
 import {
   bytesMatch,
@@ -401,6 +402,8 @@ export class KnowledgeDocuments {
         throw new HttpError(413, 'payload_too_large', 'Notes can be at most 8 MB.')
       if (!isPlainText(bytes))
         throw new HttpError(415, 'unsupported_type', 'That file isn’t plain text.')
+      // The same checks as an ordinary save, so an upload or zip import can't make a note that can't be saved again.
+      prepareNoteContent(bytes.toString('utf8'))
       return { kind: 'note', path: finalPath, bytes }
     }
     if (!bytesMatch(cls.type, bytes))
@@ -421,6 +424,13 @@ export class KnowledgeDocuments {
     const { stat } = await this.vault.lookup(rel.split('/'))
     if (!stat) return null
     return { path: rel, mtime: new Date(stat.mtimeMs).toISOString(), size: stat.size }
+  }
+
+  /** The content hash of the file at `rel` right now (null when there is none or it can't be read). */
+  private async versionOf(rel: string): Promise<string | null> {
+    const { abs, stat } = await this.vault.lookup(rel.split('/'))
+    if (!stat?.isFile()) return null
+    return this.vault.readContainedBuffer(abs, MAX_FILE_BYTES).then(hashContent, () => null)
   }
 
   /** A free name next to `rel`: not on disk and not among `reserved` (lower-cased names other incoming files take). */
@@ -449,12 +459,33 @@ export class KnowledgeDocuments {
     const prepared = await this.prepare(input, bytes)
     let target = prepared.path
     let replace = false
+    // What the person chose to replace: publishing checks the file is still this version (null: nothing there).
+    let expectHash: string | null = null
     const clash = await this.existing(target)
     if (clash) {
       if (onConflict === 'ask') throw this.exists([clash])
       if (onConflict === 'keep') target = await this.freeName(target)
-      else replace = true
+      else {
+        replace = true
+        expectHash = await this.versionOf(target)
+      }
     }
+    try {
+      return await this.publishUpload(prepared, target, replace, expectHash, author)
+    } catch (error) {
+      // Something took the name after the check: with ask or keep that is the same "already exists" the check gives.
+      if (!replace && error instanceof HttpError && error.status === 412) throw this.exists([])
+      throw error
+    }
+  }
+
+  private async publishUpload(
+    prepared: Prepared,
+    target: string,
+    replace: boolean,
+    expectHash: string | null,
+    author: KnowledgeAuthor,
+  ): Promise<KnowledgeUploadResult> {
     if (prepared.kind === 'note') {
       const raw = prepared.bytes.toString('utf8')
       const current = replace ? await this.vault.readNote(target).catch(() => null) : null
@@ -473,7 +504,7 @@ export class KnowledgeDocuments {
         const { stat } = await this.vault.lookup(target.split('/'))
         if (!stat?.isFile()) throw new HttpError(400, 'bad_path', 'A folder has that name.')
       }
-      await this.place({ ...prepared, path: target }, author, again !== null)
+      await this.place({ ...prepared, path: target }, author, { hash: expectHash })
       return { path: target, kind: 'document' as const, replaced: again !== null }
     })
   }
@@ -482,15 +513,16 @@ export class KnowledgeDocuments {
   private async place(
     document: PreparedDocument,
     author: KnowledgeAuthor,
-    existed: boolean,
+    expect: { hash: string | null },
     batch?: string[],
   ): Promise<boolean> {
+    const existed = expect.hash !== null
     const rel = document.path
     const previous = this.db.read((sqlite) => this.row(sqlite, rel))
     // A batch snapshots outside changes once, before its first file; later files are Score's own.
     if (!batch) await this.vault.commitOutside()
     const abs = await this.vault.prepareParent(rel)
-    await this.vault.atomicWrite(abs, document.bytes)
+    await this.vault.atomicWrite(abs, document.bytes, expect)
     const stat = await fs.lstat(abs)
     const versioned = document.bytes.length <= MAX_VERSIONED_BYTES || previous?.versioned === 1
     this.db.tx((sqlite) =>
@@ -533,7 +565,11 @@ export class KnowledgeDocuments {
     fromInput: string,
     toInput: string,
     author: KnowledgeAuthor = 'you',
-  ): Promise<{ path: string; updatedNotes: number }> {
+  ): Promise<{
+    path: string
+    updatedNotes: number
+    skipped: Array<{ path: string; reason: string }>
+  }> {
     const from = this.knownPath(fromInput)
     const to = cleanSegments(toInput).join('/')
     if (documentTypeOfPath(to) !== documentTypeOfPath(from))
@@ -562,7 +598,7 @@ export class KnowledgeDocuments {
         }
       })
       await this.vault.publishChange({ path: from, kind: 'moved', to, by: author })
-      return { path: to, updatedNotes: 0 }
+      return { path: to, updatedNotes: 0, skipped: [] }
     })
   }
 
@@ -723,6 +759,10 @@ export class KnowledgeDocuments {
           if (clash) clashes.push(clash)
         }
         if (clashes.length > 0 && onConflict === 'ask') throw this.exists(clashes)
+        // What replace was chosen over: each file is published only while it still has this version.
+        const replacing = new Map<string, string | null>()
+        if (onConflict === 'replace')
+          for (const clash of clashes) replacing.set(clash.path, await this.versionOf(clash.path))
         if (clashes.length > 0 && onConflict === 'keep') {
           // Renamed files must also avoid every other incoming name and each other.
           const reserved = new Set(prepared.map((item) => item.path.toLowerCase()))
@@ -742,13 +782,26 @@ export class KnowledgeDocuments {
             skipped.push({ path: item.path, reason: 'a folder has that name' })
             continue
           }
-          if (item.kind === 'document') {
-            await this.place(item, author, stat !== null, committed)
-          } else {
-            const abs = await this.vault.prepareParent(item.path)
-            await this.vault.atomicWrite(abs, item.bytes.toString('utf8'))
-            await this.vault.indexNote(item.path, author)
-            committed.push(item.path)
+          const expect = { hash: replacing.get(item.path) ?? null }
+          try {
+            if (item.kind === 'document') {
+              await this.place(item, author, expect, committed)
+            } else {
+              const abs = await this.vault.prepareParent(item.path)
+              await this.vault.atomicWrite(abs, item.bytes.toString('utf8'), expect)
+              await this.vault.indexNote(item.path, author)
+              committed.push(item.path)
+            }
+          } catch (error) {
+            // Something else took or changed the name after the check: it stays as it is, the rest carries on.
+            if (error instanceof HttpError && (error.status === 409 || error.status === 412)) {
+              skipped.push({
+                path: item.path,
+                reason: 'it changed while the files were being added',
+              })
+              continue
+            }
+            throw error
           }
           done.push(item)
         }
