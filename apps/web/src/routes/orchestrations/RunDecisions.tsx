@@ -1,3 +1,4 @@
+import { Arrival } from '../../motion/Arrival.tsx'
 import type { AgentSummary, NeedsYou, OrchestrationDetail } from '@score/contract'
 import { useState } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
@@ -66,7 +67,11 @@ export function GateCard({
       },
     })
   return (
-    <section className="orch-decision orch-decision--gate" aria-label={`Approve ${name}`}>
+    <Arrival
+      arrivalId={`gate-${gateId}`}
+      className="orch-decision orch-decision--gate"
+      aria-label={`Approve ${name}`}
+    >
       <h3>
         Approve {name}?{' '}
         <small>{gate.requestedBy === 'lead' ? 'The lead asked' : 'Your gate policy asks'}</small>
@@ -134,7 +139,7 @@ export function GateCard({
         </button>
       </div>
       <ErrorLine error={actions.gate.error} />
-    </section>
+    </Arrival>
   )
 }
 
@@ -151,7 +156,11 @@ export function InquiryCard({
   const [answer, setAnswer] = useState('')
   if (!inquiry) return null
   return (
-    <section className="orch-decision orch-decision--inquiry" aria-label="Question from the lead">
+    <Arrival
+      arrivalId={`inquiry-${inquiryId}`}
+      className="orch-decision orch-decision--inquiry"
+      aria-label="Question from the lead"
+    >
       <h3>The lead asks</h3>
       <p className="orch-quote">{inquiry.question}</p>
       <label className="orch-field">
@@ -183,7 +192,7 @@ export function InquiryCard({
         </button>
       </div>
       <ErrorLine error={actions.inquiry.error} />
-    </section>
+    </Arrival>
   )
 }
 
@@ -207,7 +216,11 @@ export function LimitsCard({
     })
   }
   return (
-    <section className="orch-decision" aria-label="Budget or deadline">
+    <Arrival
+      arrivalId={`limits-${reason}`}
+      className="orch-decision"
+      aria-label="Budget or deadline"
+    >
       <h3>{needsYouText({ kind: 'budget', reason })}</h3>
       <p>
         Budget {run.budget.limitUsd === null ? 'not set' : usd(run.budget.limitUsd)}; settled{' '}
@@ -258,7 +271,7 @@ export function LimitsCard({
         )}
       </div>
       <ErrorLine error={actions.limits.error} />
-    </section>
+    </Arrival>
   )
 }
 
@@ -282,7 +295,11 @@ export function UnknownCard({
   const [waive, setWaive] = useState(false)
   if (!attempt) return null
   return (
-    <section className="orch-decision" aria-label="Attempt not confirmed ended">
+    <Arrival
+      arrivalId={`unknown-${attemptId}`}
+      className="orch-decision"
+      aria-label="Attempt not confirmed ended"
+    >
       <h3>Not confirmed ended: {label ?? attempt.stepId ?? 'lead turn'}</h3>
       <p>
         Hermes has not said this run finished ({attempt.unknownReason ?? 'no reason recorded'}).
@@ -338,7 +355,7 @@ export function UnknownCard({
           <ErrorLine error={actions.waiver.error} />
         </>
       )}
-    </section>
+    </Arrival>
   )
 }
 
@@ -353,7 +370,11 @@ export function CancelFenceCard({
 }) {
   const [sure, setSure] = useState(false)
   return (
-    <section className="orch-decision" aria-label="Cancelled step may still run">
+    <Arrival
+      arrivalId={`cancel-${stepId}`}
+      className="orch-decision"
+      aria-label="Cancelled step may still run"
+    >
       <h3>Cancelled {stepId} may still be running</h3>
       <p>
         Nothing new starts until it has ended. You can also continue while it may still run; that is
@@ -375,7 +396,7 @@ export function CancelFenceCard({
         </button>
       </div>
       <ErrorLine error={actions.waiver.error} />
-    </section>
+    </Arrival>
   )
 }
 
@@ -393,7 +414,11 @@ export function RemapCard({
 }) {
   const gone = item.currentIncarnation === 'untracked'
   return (
-    <section className="orch-decision" aria-label={`Replaced ${item.agentId}`}>
+    <Arrival
+      arrivalId={`remap-${item.agentId}`}
+      className="orch-decision"
+      aria-label={`Replaced ${item.agentId}`}
+    >
       <h3>
         <AgentChip agentId={item.agentId} agents={agents} /> was replaced
         <small>{item.role === 'lead' ? ' The lead of this run' : ' An agent of this run'}</small>
@@ -423,7 +448,7 @@ export function RemapCard({
         )}
       </div>
       <ErrorLine error={actions.remap.error} />
-    </section>
+    </Arrival>
   )
 }
 
@@ -512,16 +537,26 @@ export function RunNeeds({
             )
           case 'paused':
             return (
-              <section key={`p${item.reason}`} className="orch-decision" aria-label="Paused">
+              <Arrival
+                arrivalId={`paused-${item.reason}`}
+                key={`p${item.reason}`}
+                className="orch-decision"
+                aria-label="Paused"
+              >
                 <h3>{needsYouText(item)}</h3>
-              </section>
+              </Arrival>
             )
           case 'fence':
             return (
-              <section key="fence" className="orch-decision" aria-label="Blocked">
+              <Arrival
+                arrivalId={'fence'}
+                key="fence"
+                className="orch-decision"
+                aria-label="Blocked"
+              >
                 <h3>{needsYouText(item)}</h3>
                 <p>Open the reconciliation list on Now to review it.</p>
-              </section>
+              </Arrival>
             )
         }
       })}

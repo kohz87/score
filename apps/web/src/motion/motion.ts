@@ -43,7 +43,12 @@ export function playMotion(play: (anime: Anime) => (() => void) | void): () => v
   void loadAnime().then(
     (anime) => {
       if (cancelled || prefersReducedMotion()) return
-      cleanup = play(anime)
+      // Motion never breaks the page (an environment without the Web Animations API, say): no motion, final state.
+      try {
+        cleanup = play(anime)
+      } catch {
+        cleanup = undefined
+      }
     },
     () => {}, // no library, no motion: the final state is already on screen
   )
