@@ -1,5 +1,5 @@
 import { useLayoutEffect, type RefObject } from 'react'
-import { MOTION, playMotion, prefersReducedMotion } from '../../motion/motion.ts'
+import { MOTION, markMotionBusy, playMotion, prefersReducedMotion } from '../../motion/motion.ts'
 
 // PLAN 5.37: Reports charts draw in once. Elements opt in with data attributes:
 //   data-grow   a bar or stack that grows up from its own baseline (CSS: transform-box view-box + origin set inline)
@@ -21,7 +21,11 @@ export function useChartDraw(ref: RefObject<SVGSVGElement | null>, name: string)
     if (hide.length === 0) return
     // Everything starts hidden so the finished chart does not flash before it draws.
     svg.style.visibility = 'hidden'
-    const show = () => svg.style.removeProperty('visibility')
+    const settled = markMotionBusy()
+    const show = () => {
+      svg.style.removeProperty('visibility')
+      settled()
+    }
     const safety = window.setTimeout(show, 1500)
     const stop = playMotion(({ waapi }) => {
       drawn.add(name)

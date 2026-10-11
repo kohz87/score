@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type HTMLAttributes } from 'react'
-import { MOTION, playMotion, prefersReducedMotion } from './motion.ts'
+import { MOTION, markMotionBusy, playMotion, prefersReducedMotion } from './motion.ts'
 
 // A card that needs the person arrives once: it fades in with an 8 px rise and gives one soft attention pulse. Never
 // looping, and never again for the same card in this tab (a re-render, or coming back to the page, shows it as is).
@@ -19,7 +19,11 @@ export function useArrival(ref: React.RefObject<HTMLElement | null>, arrivalId: 
     if (!element || arrivalId === null || arrived.has(arrivalId) || prefersReducedMotion()) return
     // Hidden until the animation owns the opacity, so the card does not flash in full before it fades in.
     element.style.opacity = '0'
-    const reveal = () => element.style.removeProperty('opacity')
+    const settled = markMotionBusy()
+    const reveal = () => {
+      element.style.removeProperty('opacity')
+      settled()
+    }
     const safety = window.setTimeout(reveal, 1500)
     const stop = playMotion(({ waapi }) => {
       arrived.add(arrivalId)
