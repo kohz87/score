@@ -183,6 +183,22 @@ describe('writes', () => {
     })
   })
 
+  test('embedded images: PNG accepted, SVG and a lying type refused, an oversized image 413', async () => {
+    const png =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+    const put = (name: string, body: string) => call('PUT', `${N}${name}.md`, { body, etag: null })
+    expect((await put('img-ok', `![a](data:image/png;base64,${png})`)).statusCode).toBe(200)
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>').toString('base64')
+    const refused = await put('img-svg', `![a](data:image/svg+xml;base64,${svg})`)
+    expect(refused.statusCode).toBe(415)
+    expect(refused.json()).toMatchObject({ error: { code: 'unsupported_type' } })
+    const jpegAsPng = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0]).toString('base64')
+    expect((await put('img-lie', `![a](data:image/png;base64,${jpegAsPng})`)).statusCode).toBe(415)
+    const header = Buffer.from(png, 'base64').subarray(0, 8)
+    const big = Buffer.concat([header, Buffer.alloc(1.6 * 1024 * 1024)]).toString('base64')
+    expect((await put('img-big', `![a](data:image/png;base64,${big})`)).statusCode).toBe(413)
+  })
+
   test('validation and size: bad bodies 400, a note over 8 MiB 413, near 8 MiB works', async () => {
     expect((await call('PUT', `${N}a.md`, { body: 1, etag: null })).statusCode).toBe(400)
     expect((await call('PUT', `${N}a.md`, { body: 'x' })).statusCode).toBe(400)

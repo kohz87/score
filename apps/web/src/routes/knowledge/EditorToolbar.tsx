@@ -351,7 +351,6 @@ export function EditorToolbar({ view, state, notes, notice, onNotice, linkReques
           pressed={(active?.heading ?? 0) > 0 ? true : undefined}
           expanded={panel === 'heading'}
           controls={'kn-tb-panel'}
-          text={active && active.heading > 0 ? `H${Math.min(active.heading, 3)}` : undefined}
           disabled={!ready}
         />
         <Tool

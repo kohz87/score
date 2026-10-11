@@ -174,3 +174,24 @@ def test_garbage_error_body_still_gives_a_message(bridge):
     bridge.reply = reply
     out = run(handlers(bridge)["knowledge_read"], path="a.md")
     assert out["error"] == "Score answered HTTP 502" and out["status"] == 502
+
+
+def test_tool_descriptions_explain_image_placeholders():
+    # PLAN 6.8: notes may hold embedded images; agents only ever see [image: alt, size] placeholders.
+    assert "[image: alt, size]" in knowledge.SCHEMAS["knowledge_read"]["description"]
+    assert "[image: alt, size]" in knowledge.SCHEMAS["knowledge_write"]["description"]
+    assert "cannot add images" in knowledge.SCHEMAS["knowledge_write"]["description"]
+
+
+def test_read_passes_placeholders_through_and_a_refused_image_write_explains_itself(bridge):
+    h = handlers(bridge)
+    bridge.reply = lambda op, body: {"path": "a.md", "title": "A", "etag": "e", "truncated": False,
+                                     "kind": "note", "notice": None,
+                                     "body": "# A\n[image: whiteboard, 240 KB]\n"}
+    out = run(h["knowledge_read"], path="a.md")
+    assert out["body"] == "# A\n[image: whiteboard, 240 KB]\n"
+    bridge.reply = lambda op, body: (400, {"error": {"code": "images_not_allowed",
+                                                      "message": "Agents cannot add embedded images to a note."}})
+    refused = run(h["knowledge_write"], path="a.md", body="![x](data:image/png;base64,AAAA)", expected_etag="e")
+    assert refused["success"] is False and refused["code"] == "images_not_allowed"
+    assert "embedded images" in refused["error"]

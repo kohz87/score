@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { samplePng } from './png.ts'
 import { flowFixture } from './flow-fixture.ts'
 import {
   AgentDetailSchema,
@@ -478,6 +479,38 @@ export const visualFixtures: Record<string, unknown> = {
       },
       { commit: 'def5678', at: minutesAgo(300), author: 'you', message: 'Update launch-plan.md' },
     ],
+  }),
+  // A note with a picture and a table (PLAN 6.8): the editor toolbar, image and table baselines open this one.
+  '/api/knowledge/notes/projects/ideas.md': KnowledgeNoteSchema.parse({
+    path: 'projects/ideas.md',
+    title: 'Ideas',
+    frontmatter: {},
+    body: [
+      '# Ideas',
+      '',
+      'A sketch of the new onboarding flow, pasted from the whiteboard.',
+      '',
+      `![Onboarding whiteboard sketch](data:image/png;base64,${samplePng(360, 200).toString('base64')})`,
+      '',
+      '## Candidates',
+      '',
+      '| Idea | Effort | Impact |',
+      '| --- | :-: | ---: |',
+      '| Guided setup | M | **High** |',
+      '| Sample project | S | Medium |',
+      '| Weekly digest | L | Low |',
+      '',
+      'Next step: pick one in [[launch-plan]].',
+      '',
+    ].join('\n'),
+    etag: 'visual-ideas-etag',
+    mtime: minutesAgo(300),
+    links: [{ target: 'launch-plan', path: 'projects/launch-plan.md' }],
+    backlinks: [{ path: 'projects/launch-plan.md', title: 'Launch plan' }],
+    lastAuthor: 'you',
+  }),
+  '/api/knowledge/notes/projects/ideas.md/history': KnowledgeHistorySchema.parse({
+    items: [{ commit: 'aaa1111', at: minutesAgo(300), author: 'you', message: 'Update ideas.md' }],
   }),
   '/api/settings/rules': RulesResponseSchema.parse(recorded['/api/settings/rules']),
   '/api/settings/config?q=': ConfigSearchResponseSchema.parse(recorded['/api/settings/config?q=']),

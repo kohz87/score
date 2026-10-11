@@ -1060,6 +1060,13 @@
   border-top: 1px solid var(--hairline);
   padding-top: 4px;
 }
+/* Wide screens show every table tool; phones scroll the strip. */
+@media (width >= 600px) {
+  .kn-tb-table {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+}
 .kn-tb-panel {
   padding: 8px;
   border-top: 1px solid var(--hairline);

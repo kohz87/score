@@ -40,15 +40,24 @@ const HEADING = /^(#{1,6})\s+/
 
 // ---- what is under the caret -------------------------------------------------------------------------------------
 
-function ancestorNamed(state: EditorState, pos: number, names: string[]): SyntaxNode | null {
+function ancestorNamed(
+  state: EditorState,
+  pos: number,
+  names: string[],
+  side: -1 | 1 = -1,
+): SyntaxNode | null {
   const tree = ensureSyntaxTree(state, state.doc.length, 50) ?? syntaxTree(state)
-  let node: SyntaxNode | null = tree.resolveInner(pos, -1)
+  let node: SyntaxNode | null = tree.resolveInner(pos, side)
   while (node) {
     if (names.includes(node.name)) return node
     node = node.parent
   }
   return null
 }
+
+/** A block (table, code) that contains the caret, also when the caret is right at its first character. */
+const blockNamed = (state: EditorState, pos: number, names: string[]) =>
+  ancestorNamed(state, pos, names) ?? ancestorNamed(state, pos, names, 1)
 
 export type Active = {
   bold: boolean
@@ -90,7 +99,7 @@ export function activeFormats(state: EditorState): Active {
     numbered: NUMBERED.test(line),
     quote,
     link: ancestorNamed(state, head, ['Link']) !== null,
-    codeBlock: ancestorNamed(state, head, ['FencedCode', 'CodeBlock']) !== null,
+    codeBlock: blockNamed(state, head, ['FencedCode', 'CodeBlock']) !== null,
     callout: quote && calloutHeaderAbove(state, state.doc.lineAt(head).number) !== null,
     table: tableAt(state) !== null,
   }
@@ -281,7 +290,7 @@ export function insertRule(view: EditorView): boolean {
 
 export function toggleCodeBlock(view: EditorView, language = ''): boolean {
   const state = view.state
-  const fenced = ancestorNamed(state, state.selection.main.head, ['FencedCode'])
+  const fenced = blockNamed(state, state.selection.main.head, ['FencedCode'])
   if (fenced) {
     const first = state.doc.lineAt(fenced.from)
     const last = state.doc.lineAt(fenced.to)
@@ -423,7 +432,7 @@ export type TableInfo = { from: number; to: number; cell: Cell; model: TableMode
 /** The table the caret is in (the whole block), with the caret's cell. */
 export function tableAt(state: EditorState): TableInfo | null {
   const head = state.selection.main.head
-  const node = ancestorNamed(state, head, ['Table'])
+  const node = blockNamed(state, head, ['Table'])
   if (!node) return null
   const source = state.sliceDoc(node.from, node.to)
   const model = modelOf(source)

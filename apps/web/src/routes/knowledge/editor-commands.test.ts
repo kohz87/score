@@ -270,6 +270,12 @@ describe('tables', () => {
     expect(tableAt(view!.state)!.cell).toEqual({ row: 3, column: 0 })
   })
 
+  test('a caret on the very first character of a table (where a click on the rendered table puts it) is in the table', () => {
+    make(`intro\n\n${base}\n\nafter`, 'intro\n\n'.length)
+    expect(tableAt(view!.state)).not.toBeNull()
+    expect(activeFormats(view!.state).table).toBe(true)
+  })
+
   test('outside a table nothing happens', () => {
     make('plain')
     expect(tableTab(view!, false)).toBe(false)

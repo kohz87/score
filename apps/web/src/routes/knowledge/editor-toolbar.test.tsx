@@ -148,7 +148,7 @@ describe('formatting buttons', () => {
     const bar = await screen.findByRole('toolbar', { name: 'Formatting' })
     const stops = within(bar)
       .getAllByRole('button')
-      .filter((b) => !b.disabled && b.tabIndex === 0)
+      .filter((b) => !(b as HTMLButtonElement).disabled && b.tabIndex === 0)
     expect(stops).toHaveLength(1)
     stops[0]!.focus()
     fireEvent.keyDown(stops[0]!, { key: 'ArrowRight' })

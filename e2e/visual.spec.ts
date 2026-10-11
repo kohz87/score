@@ -13,7 +13,7 @@ const destinations = [
   { name: 'journey', path: '/reports?tab=journey', ready: '.journey__row' },
   { name: 'popout', path: '/agents/builder/pop', ready: '.pop-chat textarea' },
   // Last: other tests in this file address destinations by index.
-  { name: 'knowledge', path: '/knowledge/projects/launch-plan.md', ready: '.kn-preview' },
+  { name: 'knowledge', path: '/knowledge/projects/launch-plan.md', ready: '.cm-editor' },
 ]
 
 test.use({ timezoneId: 'UTC', locale: 'en-GB' })
@@ -159,39 +159,66 @@ test('mobile Reports scrolls columns and retains readable chart type', async ({ 
   await noPageOverflow(page)
 })
 
-// Knowledge editor modes (PLAN 6.5): rendered is the default and has the baselines above.
-for (const [mode, width, scheme] of [
-  ['edit', 1440, 'light'],
-  ['split', 1440, 'light'],
-  ['edit', 390, 'light'],
-  ['edit', 1440, 'dark'],
-  ['split', 1440, 'dark'],
-] as const) {
-  test(`knowledge ${mode} at ${width}px ${scheme}`, async ({ page }) => {
+// Knowledge editor (PLAN 6.8): one live editor with a toolbar. The default look is the `knowledge-*` baselines above;
+// these cover Source, an embedded picture, the table tools and the table size picker.
+const shot = (name: string) =>
+  [name, { fullPage: true, animations: 'disabled' as const, maxDiffPixelRatio: 0.005 }] as const
+const editorLooks = [
+  [1440, 'light'],
+  [390, 'light'],
+  [1440, 'dark'],
+] as const
+for (const [width, scheme] of editorLooks) {
+  const suffix = `${scheme === 'dark' ? 'dark-' : ''}${width}`
+  const prepare = async (page: Page, path: string, source = false) => {
     await page.addInitScript(
-      ([m, theme]) => {
-        window.localStorage.setItem('score.knowledge.mode', m)
+      ([theme, src]) => {
         if (theme === 'dark') window.localStorage.setItem('score.theme', 'dark')
+        if (src) window.localStorage.setItem('score.knowledge.source', '1')
       },
-      [mode, scheme],
+      [scheme, source] as const,
     )
     await page.setViewportSize({ width, height: 1100 })
-    await page.goto('/knowledge/projects/launch-plan.md')
+    await page.goto(path)
     await expect(page.locator('.cm-editor')).toBeVisible()
-    await expect(page.locator('.cm-lp-table table')).toBeVisible()
-    if (mode === 'split') await expect(page.locator('.kn-preview')).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
+  }
+  test(`knowledge source at ${width}px ${scheme}`, async ({ page }) => {
+    await prepare(page, '/knowledge/projects/launch-plan.md', true)
+    await expect(page.locator('.cm-editor.cm-source')).toBeVisible()
     if (width === 390) await noPageOverflow(page)
-    await expect(page).toHaveScreenshot(
-      `knowledge-${mode}-${scheme === 'dark' ? 'dark-' : ''}${width}.png`,
-      {
-        fullPage: true,
-        animations: 'disabled',
-        maxDiffPixelRatio: 0.005,
-      },
-    )
+    await expect(page).toHaveScreenshot(...shot(`knowledge-source-${suffix}.png`))
+  })
+  test(`knowledge image at ${width}px ${scheme}`, async ({ page }) => {
+    await prepare(page, '/knowledge/projects/ideas.md')
+    const picture = page.locator('.cm-lp-image img')
+    await expect(picture).toBeVisible()
+    await expect
+      .poll(() => picture.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth))
+      .toBe(360)
+    // The data never shows in the editor.
+    expect(await page.locator('.cm-content').textContent()).not.toContain('base64')
+    if (width === 390) await noPageOverflow(page)
+    await expect(page).toHaveScreenshot(...shot(`knowledge-image-${suffix}.png`))
+  })
+  test(`knowledge table tools at ${width}px ${scheme}`, async ({ page }) => {
+    await prepare(page, '/knowledge/projects/ideas.md')
+    await page.locator('.cm-lp-table').getByRole('cell', { name: 'Sample project' }).click()
+    await expect(page.getByRole('toolbar', { name: 'Table' })).toBeVisible()
+    if (width === 390) await noPageOverflow(page)
+    await expect(page).toHaveScreenshot(...shot(`knowledge-table-${suffix}.png`))
   })
 }
+test('knowledge table size picker at 1440px', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 })
+  await page.goto('/knowledge/projects/ideas.md')
+  await expect(page.locator('.cm-editor')).toBeVisible()
+  await page.getByRole('button', { name: 'Table', exact: true }).click()
+  await page.getByRole('button', { name: '4 columns by 3 rows' }).hover()
+  await expect(page.getByText('4 × 3')).toBeVisible()
+  await page.evaluate(() => document.fonts.ready)
+  await expect(page).toHaveScreenshot(...shot('knowledge-picker-1440.png'))
+})
 
 // Knowledge files (PLAN 6.6): the file manager, a document page and the zip question.
 for (const width of [1440, 390]) {
