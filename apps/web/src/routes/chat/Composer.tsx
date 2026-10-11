@@ -942,24 +942,42 @@ export function Composer({
               </svg>
             </button>
           )}
-          {writing.length > 0 && !text.trim() && !editing ? (
-            <button
-              type="button"
-              className="chat-send chat-send--stop"
-              disabled={stopping}
-              onClick={() => void stopReplies()}
-            >
-              {stopping ? 'Stopping…' : 'Stop'}
-            </button>
-          ) : (
-            <button
-              type="submit"
-              className="chat-send"
-              disabled={!text.trim() || pending || uploading > 0}
-            >
-              {editing ? 'Send correction' : 'Send'}
-            </button>
-          )}
+          {/* The context rings and Send stay together (owner request: rings just left of Send). */}
+          <span className="chat-send-group">
+            {/* Context rings sit just left of Send (owner request): one per addressed agent. */}
+            {meterAgents.length > 0 && (
+              <div className="chat-meter" role="group" aria-label="Context use">
+                {meterAgents.map((id) => (
+                  <ContextMeter
+                    key={id}
+                    roomId={roomId}
+                    agentId={id}
+                    name={agents.find((agent) => agent.id === id)?.name ?? id}
+                    finishedReplies={finishedReplies}
+                    confirmSignal={id === compactSubject ? compactSignal : undefined}
+                  />
+                ))}
+              </div>
+            )}
+            {writing.length > 0 && !text.trim() && !editing ? (
+              <button
+                type="button"
+                className="chat-send chat-send--stop"
+                disabled={stopping}
+                onClick={() => void stopReplies()}
+              >
+                {stopping ? 'Stopping…' : 'Stop'}
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="chat-send"
+                disabled={!text.trim() || pending || uploading > 0}
+              >
+                {editing ? 'Send correction' : 'Send'}
+              </button>
+            )}
+          </span>
         </div>
         {voice.error && (
           <p className="chat-composer-notice chat-composer-notice--error" role="alert">
@@ -967,20 +985,6 @@ export function Composer({
           </p>
         )}
       </form>
-      {meterAgents.length > 0 && (
-        <div className="chat-meter" role="group" aria-label="Context use">
-          {meterAgents.map((id) => (
-            <ContextMeter
-              key={id}
-              roomId={roomId}
-              agentId={id}
-              name={agents.find((agent) => agent.id === id)?.name ?? id}
-              finishedReplies={finishedReplies}
-              confirmSignal={id === compactSubject ? compactSignal : undefined}
-            />
-          ))}
-        </div>
-      )}
     </div>
   )
 }
