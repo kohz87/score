@@ -59,11 +59,15 @@ test('flow canvas renders the brief, zooms, fits and moves focus across nodes', 
   await expect(level).not.toHaveText('75%')
 
   // Ctrl+wheel zooms too.
+  // More content above the canvas (a live run line, a longer brief) can push it below the window: bring it in first,
+  // or the pointer lands outside the page.
+  await viewport.scrollIntoViewIfNeeded()
   const box = (await viewport.boundingBox())!
-  await page.mouse.move(box.x + 100, box.y + 100)
+  // The canvas centre, never an overlay near its edge; zooming out always has room after "fit".
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   const fitted = await level.textContent()
   await page.keyboard.down('Control')
-  await page.mouse.wheel(0, -200)
+  await page.mouse.wheel(0, 200)
   await page.keyboard.up('Control')
   await expect(level).not.toHaveText(fitted!)
 

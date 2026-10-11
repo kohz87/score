@@ -12,7 +12,7 @@ test('New room creates a room with the chosen lead and members and opens it', as
   await expect(dialog.getByText(/Use lowercase letters, numbers and dashes/)).toBeVisible()
   await expect(dialog.getByRole('button', { name: 'Create room' })).toBeDisabled()
   await dialog.getByLabel('Name', { exact: true }).fill(name)
-  await dialog.getByLabel('Lead', { exact: true }).selectOption('lead')
+  await dialog.getByRole('combobox', { name: 'Lead' }).selectOption('lead')
   await dialog.getByRole('checkbox', { name: /builder/i }).check()
   await dialog.getByRole('button', { name: 'Create room' }).click()
   await expect(dialog).toBeHidden()

@@ -117,30 +117,48 @@ export function FlowCanvas({ nodes, edges, agents, selectedId = null, onSelect }
   }, [layout.width, layout.height])
 
   // Mounted once per brief (FlowView keys it): start at 100%, or fitted when the graph is wider than the canvas.
+  // Ctrl/⌘+wheel zooms around the pointer. The listener follows the viewport element itself (attached in
+  // `attachViewport`), so a canvas that appears after a loading state, or is re-created by a live update, still zooms.
+  const setZoomRef = useRef(setZoom)
+  useEffect(() => {
+    setZoomRef.current = setZoom
+  }, [setZoom])
+  const wheelTarget = useRef<{ el: HTMLDivElement; onWheel: (event: WheelEvent) => void } | null>(
+    null,
+  )
+  useEffect(
+    () => () => {
+      const target = wheelTarget.current
+      target?.el.removeEventListener('wheel', target.onWheel)
+    },
+    [],
+  )
+
   const initialised = useRef(false)
   const attachViewport = (el: HTMLDivElement | null) => {
     viewport.current = el
+    if (wheelTarget.current?.el !== el) {
+      wheelTarget.current?.el.removeEventListener('wheel', wheelTarget.current.onWheel)
+      wheelTarget.current = null
+      if (el) {
+        const onWheel = (event: WheelEvent) => {
+          if (!event.ctrlKey && !event.metaKey) return
+          event.preventDefault()
+          const box = el.getBoundingClientRect()
+          setZoomRef.current(zoomRef.current * Math.exp(-event.deltaY * 0.002), {
+            x: event.clientX - box.left,
+            y: event.clientY - box.top,
+          })
+        }
+        el.addEventListener('wheel', onWheel, { passive: false })
+        wheelTarget.current = { el, onWheel }
+      }
+    }
     if (!el || initialised.current) return
     initialised.current = true
     if (el.clientWidth > 0 && (layout.width > el.clientWidth || layout.height > el.clientHeight))
       fit()
   }
-
-  useEffect(() => {
-    const el = viewport.current
-    if (!el) return
-    const onWheel = (event: WheelEvent) => {
-      if (!event.ctrlKey && !event.metaKey) return
-      event.preventDefault()
-      const box = el.getBoundingClientRect()
-      setZoom(zoomRef.current * Math.exp(-event.deltaY * 0.002), {
-        x: event.clientX - box.left,
-        y: event.clientY - box.top,
-      })
-    }
-    el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [setZoom])
 
   const step = (direction: 1 | -1) => {
     const current = zoomRef.current
