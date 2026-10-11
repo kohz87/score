@@ -10,85 +10,138 @@ gateway API. It never reads your Hermes credential files and never writes Hermes
 
 (The screenshots show the built-in demo team: `lead`, `builder`, `reviewer`, `designer`.)
 
-## Requirements
+## Setup
 
-- Linux (tested on Ubuntu 26.04, x86_64). Other systems are untested.
-- Node.js 24 (22.22.2 or newer also works), git, and pnpm 12 through corepack. The exact setup, including a
-  Node install that needs no sudo, is in [docs/SETUP.md](docs/SETUP.md) section 1.
-- A running Hermes Agent (v0.21.x) only for live mode. The demo needs no Hermes at all.
+Score runs on Linux (tested on Ubuntu 26.04, x86_64). Every step below installs into your home folder unless it says
+**sudo**. Steps 1–2 give you the demo (no Hermes, no model calls); steps 3–6 connect your real Hermes agents.
 
-## Install and try the demo
+### 1. Prerequisites
+
+You need `git`, `curl`, `tar` and `xz`, plus **Node.js 24** and **pnpm 12**. Node without sudo:
 
 ```bash
-git clone <repo-url> score && cd score
-export COREPACK_ENABLE_DOWNLOAD_PROMPT=0   # skips corepack's one-time download question
+V=v24.21.0; D=node-$V-linux-x64
+mkdir -p ~/.cache ~/.local/opt ~/.local/bin && cd ~/.cache
+curl -fsSLO https://nodejs.org/dist/$V/$D.tar.xz
+curl -fsSL https://nodejs.org/dist/$V/SHASUMS256.txt | grep " $D.tar.xz\$" | sha256sum -c -
+tar -xJf $D.tar.xz -C ~/.local/opt && rm $D.tar.xz
+for b in node npm npx corepack; do ln -sf ~/.local/opt/$D/bin/$b ~/.local/bin/$b; done
+corepack enable --install-directory ~/.local/bin
+export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+node -v && pnpm -v          # v24.21.0 and 12.9.1
+```
+
+`~/.local/bin` must be on your `PATH` (it is on Ubuntu once the folder exists; log out and in if `node` isn't found).
+nvm, fnm or mise work too (the repo has a `.node-version`). Optional extras:
+
+- **uv** (only to run the bridge plugin's tests): [docs/SETUP.md](docs/SETUP.md) §1c.
+- **Web terminal**: needs a C++ toolchain, **sudo** `apt install build-essential python3`, then `pnpm rebuild node-pty`.
+
+### 2. Get Score and try the demo
+
+```bash
+git clone <repo-url> ~/score && cd ~/score
 pnpm install
-pnpm dev
-```
-
-`pnpm dev` starts the server with a built-in fake team (`SCORE_MODE=fake` is the default, so no Hermes is needed
-and no model is called) and the web app:
-
-- Web app: <http://127.0.0.1:5173>
-- Server: <http://127.0.0.1:8740> (`curl http://127.0.0.1:8740/api/health` answers `{"ok":true,"contract":1}`)
-
-The server prints a pairing link in its terminal:
-
-```
-Pair this browser: http://127.0.0.1:5173/pair#<one-time token>
-```
-
-Open that link once. Until a browser is paired you can look around, but anything that changes something (approve,
-pause, edit, send) is refused with a "pair this browser" message. See [Pairing](#pairing) below.
-
-The demo plays a short scripted run (a plan, a hand-off, a review that sends work back, an approval waiting for
-you) and then repeats it. Two switches change the pace: `SCORE_FAKE_SPEED=2` runs it twice as fast, and
-`SCORE_FAKE_LOOP=false` plays it once.
-
-`pnpm dev` is for development. For everyday use run the built app (next section).
-
-## Everyday use
-
-Build once, then serve the web app and the API from a single port:
-
-```bash
 pnpm build
-pnpm start          # http://127.0.0.1:8740, runs in this terminal, Ctrl+C stops it
+pnpm start                  # http://127.0.0.1:8740 with a built-in demo team; Ctrl+C stops it
 ```
 
-The default mode is still the demo. Add `SCORE_MODE=live` to use your real Hermes (see
-[Connect your Hermes](#connect-your-hermes)):
+The terminal prints a one-time **pairing link** (`Pair this browser: …/pair#…`). Open it once in your browser; until a
+browser is paired you can look around but not change anything (see [Pairing](#pairing)). `pnpm dev` runs the same
+demo with live reload for development (web on port 5173).
+
+### 3. Install Hermes Agent
+
+Skip this if Hermes already runs on this machine. Install it with Hermes's own installer, then run its setup wizard
+(model provider, keys) and start its gateway:
 
 ```bash
-SCORE_MODE=live pnpm start
+curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+hermes setup
+hermes gateway start
 ```
 
-To keep Score running in the background, use the launcher. It writes `score.pid` and `score.log` in `$SCORE_HOME`
-(default `~/.score`):
+Score is tested with Hermes **v0.21.x**. More in the [Hermes Agent README](https://github.com/NousResearch/hermes-agent).
+
+### 4. Connect Score to Hermes
+
+1. **Give Score an API key for each Hermes profile** (Score keeps its copies in `~/.score/hermes-keys/`, mode 0600). These
+   commands change Hermes's config and restart its gateway — read them first:
+
+   ```bash
+   umask 077; mkdir -p ~/.score/hermes-keys
+   python3 -I -c 'import secrets;print(secrets.token_urlsafe(32))' > ~/.score/hermes-keys/default
+   hermes config set API_SERVER_KEY "$(cat ~/.score/hermes-keys/default)"
+   hermes gateway restart
+   # every other profile Score should drive (replace <profile>):
+   python3 -I -c 'import secrets;print(secrets.token_urlsafe(32))' > ~/.score/hermes-keys/<profile>
+   hermes -p <profile> config set API_SERVER_KEY "$(cat ~/.score/hermes-keys/<profile>)"
+   ```
+
+2. **Install the Score bridge plugin** into each profile (it reports activity to Score and powers approvals, rewind,
+   compact and the context meter):
+
+   ```bash
+   ln -s ~/score/hermes-plugin/score_bridge "<profile home>/plugins/score-bridge"   # default profile home: ~/.hermes
+   hermes -p <profile> plugins enable score-bridge
+   hermes gateway restart
+   ```
+
+3. **To create agents from Score** (Team › Add agent), tell Score where to install the plugin from, pinned to a commit:
+
+   ```bash
+   export SCORE_BRIDGE_INSTALL_URL="file://$HOME/score#hermes-plugin/score_bridge"
+   export SCORE_BRIDGE_INSTALL_REF="$(git -C ~/score rev-parse HEAD)"
+   ```
+
+### 5. Run Score with your agents
 
 ```bash
-scripts/score start     # start in the background and print the first pairing link
-scripts/score status    # running? which pid and URL
-scripts/score pair      # print a fresh pairing link for another browser
-scripts/score password  # set or reset the security password for managing paired devices
-scripts/score logs -f   # follow the log (without -f: the last 100 lines)
+SCORE_MODE=live scripts/score start    # runs in the background and prints a pairing link
+scripts/score status                   # is it running, which URL
+curl -s http://127.0.0.1:8740/api/system   # "reachable": true means Score sees Hermes
+```
+
+Other launcher commands: `scripts/score pair` (a fresh pairing link), `password` (security password for managing
+devices and the terminal), `logs -f`, `stop`, `restore <backup>`. To start Score with the machine, use the systemd user
+unit in [docs/SETUP.md](docs/SETUP.md) §9.
+
+### 6. Use Score from your phone or another computer (HTTPS)
+
+Score listens only on `127.0.0.1` by default. The quickest safe way in from another computer is an SSH tunnel:
+`ssh -N -L 8740:127.0.0.1:8740 <user>@<host>`, then open `http://127.0.0.1:8740`.
+
+For phones and day-to-day use, turn on **remote mode** (always HTTPS). With Score's own certificate (replace the
+address with this machine's):
+
+```bash
+SCORE_HOST=192.168.1.20 SCORE_PUBLIC_ORIGINS=https://192.168.1.20:8741 scripts/score tls
+SCORE_MODE=live SCORE_REMOTE=1 SCORE_HOST=192.168.1.20 scripts/score start   # https://192.168.1.20:8741
+```
+
+Install `~/.score/tls/ca.crt` on each device once (the page at `https://<host>:8741/setup/https` walks you through
+it). With **Tailscale** you can skip that: `scripts/score tailscale` fetches a real certificate for the machine's
+`ts.net` name. Details, including both at once: [docs/SETUP.md](docs/SETUP.md) §6b.
+
+### Optional extras
+
+- **Coding agents** (Team › Add agent › Coding agent): install and sign in to
+  [Claude Code](https://docs.claude.com/claude-code), [Codex CLI](https://github.com/openai/codex) or
+  [Antigravity `agy`](https://antigravity.google/docs/cli/install/) yourself; Score uses your own login and quota.
+- **Web terminal**: start Score with `SCORE_TERMINAL=1` in remote mode and set a password with `scripts/score password`.
+- **Knowledge vault**: notes live in `~/score-vault` (a git repository Score creates); set `SCORE_VAULT` to move it.
+
+### Upgrading
+
+```bash
 scripts/score stop
+cp -a ~/.score ~/.score-backup-$(date +%F)        # database, media, keys
+git -C ~/score pull && pnpm install && pnpm build
+SCORE_MODE=live scripts/score start               # migrations run automatically at start
 ```
 
-Environment variables you give `scripts/score start` (such as `SCORE_MODE=live`) are passed to the server. To run
-`score` from anywhere: `ln -s "$PWD/scripts/score" ~/.local/bin/score`. A systemd user service example and the
-upgrade steps are in [docs/SETUP.md](docs/SETUP.md) section 9.
-
-Settings you may want to change (all optional):
-
-| Variable           | Default                 | What it does                                                                |
-| ------------------ | ----------------------- | --------------------------------------------------------------------------- |
-| `SCORE_MODE`       | `fake`                  | `fake` is the demo team, `live` talks to Hermes                             |
-| `SCORE_PORT`       | `8740`                  | server port (the built app and the API share it)                            |
-| `SCORE_HOME`       | `~/.score`              | where Score keeps its database, media and launcher files                    |
-| `SCORE_HOST`       | `127.0.0.1`             | bind address; anything but loopback needs remote mode                       |
-| `SCORE_WEB_PORT`   | `5173`                  | Vite's port in `pnpm dev` only                                              |
-| `SCORE_WEB_ORIGIN` | follows `SCORE_WEB_PORT` | web origin in `pnpm dev`; only needed for a non-default host              |
+If you use the bridge plugin by copy instead of symlink, copy `hermes-plugin/score_bridge` again and restart the
+gateway. All settings (`SCORE_PORT`, `SCORE_HOME`, …) are listed in [docs/SETUP.md](docs/SETUP.md).
 
 ## Pairing
 
@@ -97,66 +150,8 @@ someone with access to the server's terminal (or `$SCORE_HOME`) can get.
 
 - The link is printed at startup, is valid for 15 minutes and works once. A newer link replaces an older one.
 - From a browser that is already paired: Settings › Remote access › **Pair another device** (needs the security
-  password). Or run `scripts/score pair` (if you started Score with the launcher), restart the server, or, in
-  remote mode, type `pair` in the server terminal.
+  password). Or run `scripts/score pair`.
 - A paired browser stays paired for up to 30 days (7 days without use). Clearing cookies unpairs it.
-
-## Connect your Hermes
-
-Live mode needs three things: an API key per Hermes profile so Score can drive it, the Score bridge plugin in
-each profile you want Score to watch, and `SCORE_MODE=live`.
-
-1. Follow [docs/SETUP.md](docs/SETUP.md) section 7. It writes Hermes config (`API_SERVER_KEY`) and restarts the
-   gateway, so read the commands before you run them.
-2. Install the bridge plugin into every profile: [hermes-plugin/README.md](hermes-plugin/README.md).
-3. Start Score with `SCORE_MODE=live` (`SCORE_MODE=live pnpm start`, or `SCORE_MODE=live scripts/score start`).
-
-To check the connection, ask the server how it sees Hermes (this endpoint needs no pairing):
-
-```bash
-curl -s http://127.0.0.1:8740/api/system
-```
-
-`"reachable": true` means Score reaches the Hermes gateway; `"degraded"` lists in plain words what is not
-working, such as "Gateway unreachable" or a profile whose key is missing.
-
-## Use Score from another machine
-
-Score listens on `127.0.0.1` only, which is the safest choice. Two ways to reach it from elsewhere:
-
-**SSH tunnel (simplest, nothing to configure).** On the machine you are sitting at:
-
-```bash
-ssh -N -L 8740:127.0.0.1:8740 <user>@<host>     # built app (pnpm start)
-# or, for pnpm dev:  ssh -N -L 5173:127.0.0.1:5173 <user>@<host>
-```
-
-Then open `http://127.0.0.1:8740` locally. Use the pairing link the same way, with the local port.
-
-**Remote mode.** Score itself listens on a network address, with pairing required for every request. Run
-`pnpm build` first (remote mode serves the built app). Remote mode needs `SCORE_REMOTE=1`, a numeric
-`SCORE_HOST`, and `SCORE_PUBLIC_ORIGINS` (the exact addresses your browsers will use). It uses `SCORE_PORT` 8741 by
-default and a second, loopback-only port (`SCORE_BRIDGE_PORT`, default 8740) for the Hermes bridge plugin.
-
-- With TLS (recommended), using your own certificate (for example one made by `tailscale cert`):
-
-  ```bash
-  SCORE_REMOTE=1 SCORE_HOST=100.x.y.z SCORE_PORT=8741 \
-  SCORE_TLS_CERT=$PWD/myhost.tailnet.ts.net.crt SCORE_TLS_KEY=$PWD/myhost.tailnet.ts.net.key \
-  SCORE_PUBLIC_ORIGINS=https://myhost.tailnet.ts.net:8741 pnpm start
-  ```
-
-- Plain HTTP on a network you trust. Anyone on that network can read and control Score, and the app shows a
-  permanent warning banner. You must acknowledge this explicitly:
-
-  ```bash
-  SCORE_REMOTE=1 SCORE_REMOTE_INSECURE_HTTP=accept SCORE_HOST=192.168.1.20 \
-  SCORE_PUBLIC_ORIGINS=http://192.168.1.20:8741 pnpm start
-  ```
-
-Wildcard addresses (`0.0.0.0`, `::`) also need `SCORE_REMOTE_ANY=1`. In remote mode type `pair` in the server
-terminal for another pairing link, and revoke browsers under Settings, Remote access. Full details:
-[docs/SETUP.md](docs/SETUP.md) section 6b.
 
 ## Create and manage agents
 
