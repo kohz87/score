@@ -151,7 +151,10 @@ test('a running step in the live diagram: status line as its caption and a halo 
       await startOrchestration(page, `Hold [fake:hold] e2e-b${reduced ? 'r' : ''}`, 'Never ask')
       const step = page.locator('[data-node="s1"]')
       await expect(step).toHaveAttribute('data-state', 'running', { timeout: 60_000 })
-      await expect(step).toContainText('Thinking…')
+      // What the agent is doing now, whichever moment the fake run is at.
+      await expect(step).toContainText(
+        /Thinking…|Writing the reply…|Waiting for your approval|Calling /,
+      )
       const style = await step.evaluate((el) => {
         const css = getComputedStyle(el)
         return { animation: css.animationName, shadow: css.boxShadow }
@@ -165,6 +168,22 @@ test('a running step in the live diagram: status line as its caption and a halo 
       // Stop it so the run doesn't linger.
       await page.getByRole('button', { name: 'Stop', exact: true }).click()
       await page.getByRole('button', { name: 'Stop the run' }).click()
+      // The fake Hermes answers a Stop with a run that is not confirmed ended: stop waiting for it, so the agent is
+      // free for the specs that follow.
+      await expect(step).toHaveAttribute('data-state', 'unknown', { timeout: 30_000 })
+      const card = page.getByRole('region', { name: 'Not confirmed as ended' })
+      await expect(async () => {
+        const before = await card.count()
+        if (before > 0) {
+          await card.first().getByRole('checkbox').first().check()
+          await card.first().getByRole('button', { name: 'Stop waiting for this' }).click()
+          await expect(card).toHaveCount(before - 1, { timeout: 4000 })
+        }
+        expect(await card.count()).toBe(0)
+      }).toPass({ timeout: 45_000 })
+      await expect(page.getByText('Stopped', { exact: true }).first()).toBeVisible({
+        timeout: 60_000,
+      })
     } finally {
       await context.close()
     }
@@ -215,7 +234,10 @@ test('the workflow editor previews a gate and a branch without calling the serve
   await expect(page.locator('[data-node="repair"]')).toHaveAttribute('data-state', 'succeeded')
   await expect(page.locator('[data-node="publish"]')).toHaveAttribute('data-state', 'skipped')
 
-  await page.getByRole('button', { name: 'Stop' }).click()
+  await page
+    .getByRole('region', { name: 'Preview' })
+    .getByRole('button', { name: 'Stop', exact: true })
+    .click()
   await expect(page.getByText('Preview: nothing runs, no tokens')).toHaveCount(0)
   await expect(page.locator('[data-wf-node="draft"]')).toBeVisible()
   expect(posts).toEqual([])
