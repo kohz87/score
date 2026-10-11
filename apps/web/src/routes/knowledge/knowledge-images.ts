@@ -102,7 +102,10 @@ export function altFromName(name: string): string {
 }
 
 export function escapeAlt(alt: string): string {
-  return alt.replace(/[[\]\r\n]+/g, ' ').trim()
+  return alt
+    .replace(/[[\]\r\n]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 export interface PreparedImage {

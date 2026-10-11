@@ -106,7 +106,7 @@ export function applyOp(
     }
     case 'column': {
       const at = op.where === 'left' ? cell.column : cell.column + 1
-      next.header.splice(at, 0, `Column ${at + 1}`)
+      next.header.splice(at, 0, `Column ${width + 1}`)
       next.align.splice(at, 0, null)
       for (const row of next.rows) row.splice(at, 0, '')
       return { model: next, cell: { row: cell.row, column: at } }

@@ -374,6 +374,8 @@ test('history: view a version, diff it against the current text, and restore it'
   fireEvent.click(await within(panel).findByRole('button', { name: 'Create Plan' }))
   const region = await within(panel).findByRole('region', { name: 'Version bbbbbbb' })
   expect(await within(region).findByText(/Old goals/)).toBeDefined()
+  // The version opens in the same editor, read-only.
+  expect(region.querySelector('.cm-content')?.getAttribute('contenteditable')).toBe('false')
   fireEvent.click(within(region).getByRole('button', { name: 'Diff with current' }))
   const diff = within(region).getByLabelText('Differences')
   expect(diff.textContent).toContain('Old goals')
@@ -706,4 +708,22 @@ test('a blocked localStorage does not break the Source switch', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Source' }))
   expect(document.querySelector('.cm-editor.cm-source')).not.toBeNull()
   vi.restoreAllMocks()
+})
+
+test('a note with an embedded image shows the picture, never the data, and saves it unchanged', async () => {
+  const data =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+  const image = `![chart](data:image/png;base64,${data})`
+  notes.get('projects/Plan.md')!.body = `# Plan\n\n${image}\n`
+  const view = await openEditor()
+  const dom = document.querySelector<HTMLElement>('.cm-editor')!
+  expect(dom.querySelector('.cm-lp-image img')).not.toBeNull()
+  expect(dom.textContent).not.toContain('base64')
+  type(view, 'More')
+  await waitFor(() => expect(puts()).toHaveLength(1), { timeout: 3000 })
+  expect(puts()[0]!.body).toEqual({ body: `# Plan\n\n${image}\nMore`, etag: 'p1' })
+  // Source collapses it to a chip.
+  fireEvent.click(screen.getByRole('button', { name: 'Source' }))
+  expect(dom.querySelector('.cm-lp-image-chip')?.textContent).toBe('data:image/png · 70 B')
+  expect(dom.textContent).not.toContain('base64')
 })
