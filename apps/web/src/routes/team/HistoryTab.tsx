@@ -17,7 +17,7 @@ const outcomeLabels: Record<HistoryOutcome, string> = {
   interrupted: 'Interrupted',
   waiting: 'Waiting',
   running: 'Running',
-  unknown: 'Ended (unknown)',
+  unknown: 'Not confirmed as ended',
 }
 
 export function HistoryTab({ agentId, agentName }: { agentId: string; agentName: string }) {
@@ -91,7 +91,7 @@ export function HistoryTab({ agentId, agentName }: { agentId: string; agentName:
                 <p className="team-muted">
                   Task run · {attemptEndText(run.attempt, (iso) => new Date(iso).toLocaleString())}
                   {run.attempt.evidence === 'partial' && ` · ${evidenceLabel.partial}`} · tools and
-                  model not observed
+                  model not recorded
                 </p>
               )}
               <p className="team-muted">

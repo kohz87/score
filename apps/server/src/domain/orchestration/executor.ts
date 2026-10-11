@@ -1269,7 +1269,7 @@ export class Orchestrator {
           )
           .run(
             abandoned ? 'failed' : 'unknown',
-            abandoned ? 'abandoned: not confirmed ended' : 'recovered_text_only',
+            abandoned ? 'stopped waiting: not confirmed as ended' : 'recovered_text_only',
             now,
             o.id,
             step.id,

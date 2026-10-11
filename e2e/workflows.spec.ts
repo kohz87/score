@@ -266,7 +266,7 @@ test('an attempt that is not confirmed ended is abandoned, the step is retried, 
   })
   await expect(page.getByText('Graph reached the end', { exact: true })).toBeVisible()
   await expect(
-    page.getByText('Graph reached the end — 1 abandoned attempt not confirmed ended'),
+    page.getByText('Workflow reached its end — 1 step run not confirmed as ended'),
   ).toBeVisible()
   // The retried attempt is the second of two logical attempts.
   await node(page, 'flaky').click()

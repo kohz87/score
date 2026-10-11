@@ -288,7 +288,7 @@ test('a finished run says both what the executor did and what the graph did', as
     Object.assign(run, {
       status: 'finished_with_unresolved',
       graphOutcome: 'reached_end',
-      outcomeNote: 'Graph reached the end — 1 abandoned attempt not confirmed ended',
+      outcomeNote: 'Workflow reached its end — 1 step run not confirmed as ended',
       needsYou: [],
       endedAt: '2026-10-10T10:00:00.000Z',
     })
@@ -298,7 +298,7 @@ test('a finished run says both what the executor did and what the graph did', as
   expect(screen.getByText('Finished, not everything confirmed')).toBeTruthy()
   expect(screen.getAllByText('Graph reached the end').length).toBeGreaterThan(0)
   expect(
-    screen.getByText('Graph reached the end — 1 abandoned attempt not confirmed ended'),
+    screen.getByText('Workflow reached its end — 1 step run not confirmed as ended'),
   ).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Replay this run' })).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Run again…' })).toBeTruthy()

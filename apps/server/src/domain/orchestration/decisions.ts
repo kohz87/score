@@ -322,7 +322,7 @@ export function abandonAttempts(ctx: Ctx, orchId: string, body: AbandonDecision)
       throw new HttpError(
         409,
         'conflict',
-        `${id} is ${attempt.state}. Only a step run not confirmed as ended can be abandoned.`,
+        `${id} is ${attempt.state}. Only a step run not confirmed as ended can be stopped waiting for.`,
       )
   }
   for (const id of body.attemptIds) {
@@ -340,7 +340,14 @@ export function abandonAttempts(ctx: Ctx, orchId: string, body: AbandonDecision)
       (step.status === 'unknown' ||
         (step.status === 'succeeded' && attempt.unknown_reason === 'recovered_text_only'))
     ) {
-      setStepStatus(sqlite, orchId, step.id, 'failed', 'abandoned: not confirmed ended', now)
+      setStepStatus(
+        sqlite,
+        orchId,
+        step.id,
+        'failed',
+        'stopped waiting: not confirmed as ended',
+        now,
+      )
       addCause(sqlite, orchId, 'step_abandoned', step.id, now)
     }
   }

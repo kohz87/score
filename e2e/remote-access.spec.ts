@@ -140,7 +140,9 @@ test('remote pairing over HTTPS requires consent, protects reads, serves the gui
     await page.getByRole('link', { name: 'Settings', exact: true }).click()
     // Pair another device: set the security password, then the one-time link comes with a QR code.
     const setPassword = page.getByRole('form', { name: 'Set a security password' })
-    await setPassword.getByLabel('New password (8+ characters)').fill('correct horse battery')
+    await setPassword
+      .getByLabel('New password (at least 8 characters)')
+      .fill('correct horse battery')
     await setPassword.getByLabel('New password again').fill('correct horse battery')
     await setPassword.getByRole('button', { name: 'Set password' }).click()
     await page.getByLabel('Security password', { exact: true }).fill('correct horse battery')

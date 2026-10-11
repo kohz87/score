@@ -195,7 +195,7 @@ describe('workflow runs', () => {
       ...f.workflowRunSummary,
       status: 'finished_with_unresolved',
       graphOutcome: 'reached_end',
-      outcomeNote: 'Graph reached the end — 1 abandoned attempt not confirmed ended',
+      outcomeNote: 'Workflow reached its end — 1 step run not confirmed as ended',
       unconfirmed: 1,
     }
     expect(WorkflowRunSummarySchema.parse(abandoned)).toEqual(abandoned)

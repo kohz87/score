@@ -10,7 +10,7 @@ test('reports show the numbers, switch range and export the table as CSV', async
   await expect(totals.getByText('tasks finished')).toBeVisible()
   await expect(totals.getByText('model spend')).toBeVisible()
   await expect(page.getByRole('region', { name: 'Tasks finished, by day' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: "Where each agent's time goes" })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Where each agent’s time goes' })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Your approvals' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Last 30 days: spend and runs' })).toBeVisible()
   await expect(page.getByRole('table', { name: /Runs and spend per day/ })).toHaveCount(1)

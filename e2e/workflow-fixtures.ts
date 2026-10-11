@@ -235,7 +235,7 @@ export const workflowPreflight = WorkflowPreflightSchema.parse({
     'every-step': 'Every agent step also waits for your approval before it starts.',
   },
   acknowledgementText:
-    "Score controls the work it starts (turns and steps) and can stop those runs; agents may still use other tools and start background work Score can't see or stop.",
+    "Score controls the work it starts (exchanges and steps) and can stop those runs; agents may still use other tools and start background work Score can't see or stop.",
   spendNote:
     'Hermes reports tokens, often not dollars; unknown spend is shown as unknown, never zero.',
   maxSteps: 5,

@@ -53,7 +53,7 @@ const preflight = {
     none: 'Steps start at once.',
   },
   acknowledgementText:
-    "Score controls the work it starts (turns and steps) and can stop those runs; agents may still use other tools and start background work Score can't see or stop.",
+    "Score controls the work it starts (exchanges and steps) and can stop those runs; agents may still use other tools and start background work Score can't see or stop.",
   defaults: {
     maxSteps: 12,
     maxLeadTurns: 20,

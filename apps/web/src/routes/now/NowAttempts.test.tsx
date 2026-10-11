@@ -131,7 +131,7 @@ test('draws an Unattributed lane under the agents with a neutral glyph and no Wa
   const timeline = await screen.findByRole('region', { name: /^Score:/ })
   const lane = within(timeline).getByRole('group', { name: 'Unattributed, No known agent' })
   expect(within(lane).getByRole('button', { name: /Unattributed: Mystery job, done/ })).toBeTruthy()
-  expect(within(timeline).getByRole('img', { name: 'Unattributed' })).toBeTruthy()
+  expect(within(timeline).getByRole('img', { name: 'Unknown agent' })).toBeTruthy()
   expect(within(timeline).getByText('Unattributed').closest('a')).toBeNull()
   const groups = within(timeline).getAllByRole('group')
   expect(groups.map((group) => group.getAttribute('aria-label'))).toEqual([

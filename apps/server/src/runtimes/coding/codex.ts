@@ -207,7 +207,7 @@ const SANDBOX = {
 
 export const codexDriver: CodingDriver = {
   runtime: 'codex',
-  label: 'Codex CLI',
+  label: 'Codex',
   executable: 'codex',
   testedVersions: ['0.160.1'],
   supported: true,

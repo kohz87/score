@@ -192,7 +192,7 @@ test('pairing management stays locked until the security password is entered, th
     target: { value: 'correct horse battery' },
   })
   fireEvent.click(screen.getByRole('button', { name: 'End Old phone' }))
-  await screen.findByText('Pairing terminated.')
+  await screen.findByText('Pairing ended.')
   const call = fetch.mock.calls.find(([url]) => String(url).endsWith('/revoke'))!
   expect(call[0]).toBe('/api/session/browsers/22222222-2222-4222-8222-222222222222/revoke')
   expect(JSON.parse(String(call[1]!.body))).toEqual({ password: 'correct horse battery' })

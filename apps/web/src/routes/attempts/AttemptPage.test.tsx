@@ -91,11 +91,11 @@ test('shows the frozen task read-only, from an earlier copy of the board, with n
   expect(screen.getByText(/This run is from an earlier version of the board/)).toBeTruthy()
   const task = screen.getByRole('region', { name: 'Task as last observed' })
   expect(within(task).getByText('Port the importer')).toBeTruthy()
-  expect(screen.getByText(/No longer observed since/)).toBeTruthy()
-  expect(screen.getByText('Provenance unknown')).toBeTruthy()
+  expect(screen.getByText(/No longer seen since/)).toBeTruthy()
+  expect(screen.getByText('Source unclear')).toBeTruthy()
   expect(screen.queryAllByRole('button')).toHaveLength(0)
   expect(screen.queryAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['/tasks'])
-  expect(screen.getByText('Watch').nextSibling?.textContent).toBe('Not observed')
+  expect(screen.getByText('Replay in Watch').nextSibling?.textContent).toBe('Not recorded')
 })
 
 test('an unknown attempt says it is not available', async () => {

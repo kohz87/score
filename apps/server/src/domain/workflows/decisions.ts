@@ -161,7 +161,7 @@ export function retryNode(
     state: 'ready',
     step_id: null,
     ended_at: null,
-    reason: 'retrying after the abandoned attempt',
+    reason: 'retrying after the step run we stopped waiting for',
   })
   addHistory(sqlite, orchId, 'node_retried', { nodeId, state: 'ready' }, now)
   bumpAdmission(sqlite)

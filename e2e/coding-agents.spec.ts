@@ -31,7 +31,7 @@ test('add a coding agent, give it work in a room, stop one turn, see it in Repor
   await page.getByRole('button', { name: 'Add agent' }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByRole('radio', { name: /Coding agent/ }).check()
-  await expect(dialog.getByLabel('Coding CLI')).toHaveValue('claude-code')
+  await expect(dialog.getByLabel('Kind of coding agent')).toHaveValue('claude-code')
   await expect(dialog).toContainText('Uses your Claude plan quota')
   await expect(dialog.getByRole('note')).toContainText(
     'Score blocks your Hermes, Score and SSH folders',
@@ -108,7 +108,7 @@ test('Antigravity: warning, quota, unverified level disabled, a turn with tool c
   await page.getByRole('button', { name: 'Add agent' }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByRole('radio', { name: /Coding agent/ }).check()
-  await dialog.getByLabel('Coding CLI').selectOption('antigravity')
+  await dialog.getByLabel('Kind of coding agent').selectOption('antigravity')
   await expect(dialog).toContainText('browse the web, generate images')
   await expect(dialog.getByRole('group', { name: 'Antigravity quota' })).toContainText(
     'Gemini Models: 87% left in the 5-hour window',
@@ -122,7 +122,7 @@ test('Antigravity: warning, quota, unverified level disabled, a turn with tool c
   await expect(add).toBeEnabled()
   await expect(dialog.getByRole('checkbox', { name: /can read any file/ })).toHaveCount(0)
   await dialog.screenshot({ path: testInfo.outputPath('agy-add.png') })
-  await dialog.getByLabel('Coding CLI').scrollIntoViewIfNeeded()
+  await dialog.getByLabel('Kind of coding agent').scrollIntoViewIfNeeded()
   await dialog.screenshot({ path: testInfo.outputPath('agy-add-top.png') })
   await add.click()
   await expect(dialog.getByText(`${id} joined the team.`)).toBeVisible()

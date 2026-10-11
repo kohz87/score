@@ -670,7 +670,7 @@ export const WorkflowRunSummarySchema = z.object({
   pauseReason: PauseReasonSchema.nullable(),
   /** What the graph did, separately from `status`; `null` until the graph is terminal. */
   graphOutcome: GraphOutcomeSchema.nullable(),
-  /** One line combining both ("Graph reached the end — 1 abandoned attempt not confirmed ended"). */
+  /** One line combining both ("Workflow reached its end — 1 step run not confirmed as ended"). */
   outcomeNote: z.string().max(300).nullable(),
   gatePolicy: WorkflowGatePolicySchema,
   roomId: z.string().min(1),

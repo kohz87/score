@@ -219,7 +219,7 @@ test.describe('passkeys over HTTPS', () => {
       await expect(page.getByText('This browser is paired')).toBeVisible()
       await page.goto(`${origin}/settings`)
       const setPassword = page.getByRole('form', { name: 'Set a security password' })
-      await setPassword.getByLabel('New password (8+ characters)').fill(PASSWORD)
+      await setPassword.getByLabel('New password (at least 8 characters)').fill(PASSWORD)
       await setPassword.getByLabel('New password again').fill(PASSWORD)
       await setPassword.getByRole('button', { name: 'Set password' }).click()
       await page.getByLabel('Security password', { exact: true }).fill(PASSWORD)

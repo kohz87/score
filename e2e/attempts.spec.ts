@@ -45,23 +45,23 @@ test('Now draws the Unattributed lane, a dashed no-longer-observed tail and open
   await expect(score.locator('a[href*="/now/watch/unattributed"]')).toHaveCount(0)
   await score.getByRole('button', { name: /designer: .*Old board job/ }).click()
   await expect(page).toHaveURL(/\/attempts\/kr_/)
-  await expect(page.getByText(/From an earlier copy of the board/)).toBeVisible()
+  await expect(page.getByText(/This run is from an earlier version of the board/)).toBeVisible()
   await expect(page.getByRole('region', { name: 'Task as last observed' })).toContainText(
     'Old board job',
   )
   await expect(page.locator('a[href*="/now/watch/"]')).toHaveCount(0)
 })
 
-test('Reports counts Unattributed work and Team history lists the attempts', async () => {
+test('Reports counts Unknown-agent work and Team history lists the attempts', async () => {
   await page.goto('/reports')
   const table = page.getByRole('table', { name: 'By agent', exact: true })
-  await expect(table.locator('tbody th', { hasText: 'Unattributed' })).toBeVisible()
-  await expect(page.getByText(/counts attempts with proven evidence only/)).toBeVisible()
+  await expect(table.locator('tbody th', { hasText: 'Unknown agent' })).toBeVisible()
+  await expect(page.getByText(/counts only the runs Score could confirm/)).toBeVisible()
   await page.goto('/team/designer')
   await page.getByRole('tab', { name: 'History' }).click()
   const panel = page.getByRole('tabpanel')
   await expect(panel.locator('.team-channel-state', { hasText: 'Failed' })).toBeVisible()
-  await expect(panel.getByRole('link', { name: /Open the attempt/ })).toBeVisible()
+  await expect(panel.getByRole('link', { name: /Open this run/ })).toBeVisible()
   await expect(panel.getByRole('link', { name: /Replay/ })).toHaveCount(0)
 })
 

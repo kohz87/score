@@ -41,12 +41,12 @@ const CONTROL_TEXT: Record<string, string> = {
   finish_requested: 'The lead asked to finish',
   ended: 'Run ended',
   late_result: 'A late result arrived and was recorded, not used',
-  recovered_unknown: 'After a restart an attempt is not confirmed ended',
+  recovered_unknown: 'After a restart a step run is not confirmed as ended',
 }
 
 const CAUSE_TEXT: Record<string, string> = {
   step_blocked: 'blocked',
-  step_unknown: 'not confirmed ended',
+  step_unknown: 'not confirmed as ended',
   step_abandoned: 'abandoned',
 }
 
@@ -96,7 +96,7 @@ export function timelineOf(sqlite: DatabaseSync, o: OrchRow): OrchEvent[] {
           attemptId: a.id,
           verdict: 'unknown',
           summary: clip(
-            `Lead turn ${a.n} is not confirmed ended: ${a.unknown_reason ?? 'no evidence'}`,
+            `Lead turn ${a.n} is not confirmed as ended: ${a.unknown_reason ?? 'no evidence'}`,
           ),
         })
       continue
@@ -109,7 +109,7 @@ export function timelineOf(sqlite: DatabaseSync, o: OrchRow): OrchEvent[] {
         kind: 'step_admitted',
         stepId,
         attemptId: a.id,
-        summary: `${stepId} started by ${a.agent_id} (attempt ${a.n})`,
+        summary: `${stepId} started by ${a.agent_id} (try ${a.n})`,
       })
     if (a.terminated_at) {
       const step = stepId ? stepById.get(stepId) : undefined
@@ -138,7 +138,7 @@ export function timelineOf(sqlite: DatabaseSync, o: OrchRow): OrchEvent[] {
         stepId,
         attemptId: a.id,
         verdict: 'unknown',
-        summary: clip(`${stepId} is not confirmed ended: ${a.unknown_reason ?? 'no evidence'}`),
+        summary: clip(`${stepId} is not confirmed as ended: ${a.unknown_reason ?? 'no evidence'}`),
       })
   }
 

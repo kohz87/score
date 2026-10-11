@@ -208,7 +208,7 @@ function ByAgent({
                     <span className="reports-glyph reports-glyph--26">
                       <UnattributedGlyph size="sm" decorative />
                     </span>
-                    Unattributed
+                    Unknown agent
                   </span>
                 </th>
                 <td>—</td>
@@ -224,7 +224,7 @@ function ByAgent({
       </div>
       {report.unattributed && (
         <p className="reports-note">
-          Unattributed: task runs with no known agent, so no spend or reviews are counted for them.
+          Unknown agent: task runs with no known agent, so no spend or reviews are counted for them.
           Working time {formatDuration(report.unattributed.workingSec)} counts only the runs Score
           could confirm.
         </p>

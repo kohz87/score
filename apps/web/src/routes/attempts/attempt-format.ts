@@ -10,19 +10,19 @@ export const attemptStatusLabel: Record<AttemptStatus, string> = {
   blocked: 'Blocked',
   review_handoff: 'Handed to review',
   changes_requested: 'Changes requested',
-  ended_unknown: 'Ended (unknown)',
+  ended_unknown: 'Not confirmed as ended',
 }
 
 export const evidenceLabel: Record<AttemptSummary['evidence'], string> = {
-  proven: 'Proven',
-  partial: 'Provenance unknown',
+  proven: 'Confirmed',
+  partial: 'Source unclear',
 }
 
 export function attemptAgentName(
   attempt: Pick<AttemptSummary, 'agentId'>,
   agents: Pick<AgentSummary, 'id' | 'name'>[] | undefined,
 ): string {
-  if (attempt.agentId === null) return 'Unattributed'
+  if (attempt.agentId === null) return 'Unknown agent'
   return agents?.find((agent) => agent.id === attempt.agentId)?.name ?? attempt.agentId
 }
 
@@ -43,6 +43,6 @@ export function attemptEndText(
 ): string {
   if (attempt.endedAt) return `ended ${format(attempt.endedAt)}`
   if (attempt.observationEndedAt)
-    return `no longer observed since ${format(attempt.observationEndedAt)}`
+    return `no longer seen since ${format(attempt.observationEndedAt)}`
   return 'still running'
 }

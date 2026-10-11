@@ -80,8 +80,8 @@ test('export a folder and a selection, and download a single note', async ({ pag
 
 test('the whole vault shows its size first', async ({ page }) => {
   await page.goto('/knowledge')
-  await page.getByRole('button', { name: 'Export vault' }).click({ timeout: 15_000 })
-  const dialog = page.getByRole('dialog', { name: 'Export the whole vault' })
+  await page.getByRole('button', { name: 'Export Knowledge' }).click({ timeout: 15_000 })
+  const dialog = page.getByRole('dialog', { name: 'Export all of Knowledge' })
   await expect(dialog.getByText(/\d+ files?, .* before compression/)).toBeVisible()
   const download = page.waitForEvent('download')
   await dialog.getByRole('button', { name: 'Download zip' }).click()

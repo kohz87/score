@@ -3,7 +3,7 @@ import type { Runtime } from '@score/contract'
 const labels: Record<Runtime, string> = {
   hermes: 'Hermes',
   'claude-code': 'Claude Code',
-  codex: 'Codex CLI',
+  codex: 'Codex',
   antigravity: 'Antigravity',
   opencode: 'OpenCode',
 }

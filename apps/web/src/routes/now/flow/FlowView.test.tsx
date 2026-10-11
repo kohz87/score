@@ -351,15 +351,15 @@ test('a step worked on by attempts lists them, reads tools as not observed and s
   const rows = within(attempts).getAllByRole('listitem')
   expect(rows).toHaveLength(2)
   expect(rows[0]!.textContent).toContain('builder')
-  expect(rows[1]!.textContent).toContain('Unattributed')
-  expect(rows[1]!.textContent).toContain('no longer observed since')
-  expect(rows[1]!.textContent).toContain('Provenance unknown')
+  expect(rows[1]!.textContent).toContain('Unknown agent')
+  expect(rows[1]!.textContent).toContain('no longer seen since')
+  expect(rows[1]!.textContent).toContain('Source unclear')
   expect(within(rows[0]!).getByRole('link', { name: 'Completed' }).getAttribute('href')).toBe(
     '/tasks/t1',
   )
-  expect(within(rows[1]!).getByRole('link', { name: 'Ended (unknown)' }).getAttribute('href')).toBe(
-    '/attempts/kr_2',
-  )
+  expect(
+    within(rows[1]!).getByRole('link', { name: 'Not confirmed as ended' }).getAttribute('href'),
+  ).toBe('/attempts/kr_2')
   expect(within(inspector).getAllByText('Not observed')).toHaveLength(2)
   const stats = screen.getByRole('region', { name: 'This run so far' })
   expect(within(stats).getByText('partial')).toBeTruthy()

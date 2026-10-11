@@ -104,7 +104,7 @@ export function AttemptPage() {
             <dl className="attempt-rows">
               <Row label="Agent">
                 {detail.agentId === null ? (
-                  'Unattributed'
+                  'Unknown agent'
                 ) : (
                   <AgentsLookup agentId={detail.agentId} />
                 )}
@@ -115,11 +115,11 @@ export function AttemptPage() {
                 {detail.endedAt
                   ? when(detail.endedAt)
                   : detail.observationEndedAt
-                    ? `No longer observed since ${when(detail.observationEndedAt)}`
+                    ? `No longer seen since ${when(detail.observationEndedAt)}`
                     : 'Still running'}
               </Row>
               {detail.closureReason && <Row label="Closed because">{detail.closureReason}</Row>}
-              <Row label="Evidence">{evidenceLabel[detail.evidence]}</Row>
+              <Row label="Source">{evidenceLabel[detail.evidence]}</Row>
               {detail.refusedUpdates > 0 && (
                 <Row label="Refused updates">{detail.refusedUpdates}</Row>
               )}

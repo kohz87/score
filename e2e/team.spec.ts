@@ -30,7 +30,7 @@ test('team list opens an agent profile with tabs and a style popover', async ({ 
     const builder = agents.items.find((item: { id: string }) => item.id === 'builder')
     await route.fulfill({ json: { ...builder, style: body } })
   })
-  await page.getByRole('button', { name: /Change .* color and shape/ }).click()
+  await page.getByRole('button', { name: /Change .* colour and shape/ }).click()
   const dialog = page.getByRole('dialog', { name: 'Agent appearance' })
   await dialog.getByLabel('Shape').selectOption('star')
   await dialog.getByRole('button', { name: 'Save appearance' }).click()
