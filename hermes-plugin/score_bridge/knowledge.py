@@ -1,4 +1,4 @@
-"""Knowledge tools: model-callable access to Score's Markdown vault over the authenticated bridge.
+"""Knowledge tools: model-callable access to Score's Knowledge over the authenticated bridge.
 
 Registered through Hermes's public ``ctx.register_tool``. The agent is identified by the bridge producer token (the
 profile Hermes runs as), never by a tool argument. Every handler returns a JSON string and never raises.
@@ -16,8 +16,8 @@ TOOLSET = "score_knowledge"
 TIMEOUT = 20.0
 
 _VAULT = (
-    "Score's shared knowledge vault: a folder of Markdown notes (with [[wikilinks]]) that you, your teammates and the "
-    "user all read and write, plus documents the user uploaded (PDF, DOCX, CSV, JSON, HTML; read-only for you). Use it "
+    "Score's shared Knowledge: Markdown notes (with [[wikilinks]]) that you, your teammates and the user all read and "
+    "write, plus documents the user uploaded (PDF, DOCX, CSV, JSON, HTML; read-only for you). Use it "
     "for durable facts, decisions, plans and how-tos worth keeping, and to look things up in the user's documents. "
 )
 _SEARCH_FIRST = "Search (knowledge_search) before writing so you extend an existing note instead of duplicating it. "
@@ -36,11 +36,11 @@ SCHEMAS = {
         },
     },
     "knowledge_read": {
-        "description": _VAULT + "Read one note. Returns its body (embedded images appear as [image: alt, size]) and an etag; pass the etag to knowledge_write to update it. Given a document path (e.g. reports/q3.pdf) it returns the extracted text with kind \"document\" and a notice if the text is missing or cut; documents cannot be written.",
+        "description": _VAULT + "Read one note. Returns its body (embedded images appear as [image: alt, size]) and an etag; pass the etag to knowledge_write to update it. Given a document path (e.g. reports/q3.pdf) it returns the extracted text with kind \"document\" and a notice if the text is missing or cut; documents can't be written.",
         "parameters": {
             "type": "object",
             "properties": {"path": {"type": "string", "minLength": 1, "maxLength": 1024,
-                                    "description": "Vault-relative path, e.g. projects/launch.md (or reports/q3.pdf for an uploaded document)"}},
+                                    "description": "Path inside Knowledge, e.g. projects/launch.md (or reports/q3.pdf for an uploaded document)"}},
             "required": ["path"],
             "additionalProperties": False,
         },
@@ -50,7 +50,7 @@ SCHEMAS = {
         "parameters": {
             "type": "object",
             "properties": {"folder": {"type": "string", "maxLength": 1024,
-                                      "description": "Vault-relative folder; omit for the whole vault."}},
+                                      "description": "Folder inside Knowledge; omit for all of Knowledge."}},
             "additionalProperties": False,
         },
     },
@@ -58,12 +58,12 @@ SCHEMAS = {
         "description": (
             _VAULT + _SEARCH_FIRST + "Create or replace a note's Markdown body. To create, pass expected_etag null "
             "(fails if the note exists). To update, read the note first and pass its etag; on a conflict you get the "
-            "current etag back: re-read, merge and retry. Max 256 KiB. Images in a note appear as [image: alt, size] placeholders: keep them where they are to keep the images; you cannot add images. Every write is versioned and can be undone by the user."
+            "current etag back: re-read, merge and retry. Max 256 KB. Images in a note appear as [image: alt, size] placeholders: keep them where they are to keep the images; you can't add images. Every write is versioned and can be undone by the user."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "minLength": 1, "maxLength": 1024, "description": "Vault-relative path ending in .md"},
+                "path": {"type": "string", "minLength": 1, "maxLength": 1024, "description": "Path inside Knowledge, ending in .md"},
                 "body": {"type": "string", "description": "The full Markdown body."},
                 "expected_etag": {"type": ["string", "null"], "description": "Etag from knowledge_read, or null to create."},
             },
@@ -74,12 +74,12 @@ SCHEMAS = {
     "knowledge_append": {
         "description": (
             _VAULT + _SEARCH_FIRST + "Add text to the end of a note (creates it if missing). No etag needed; use this "
-            "for logs and running lists. Max 256 KiB."
+            "for logs and running lists. Max 256 KB."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "minLength": 1, "maxLength": 1024, "description": "Vault-relative path ending in .md"},
+                "path": {"type": "string", "minLength": 1, "maxLength": 1024, "description": "Path inside Knowledge, ending in .md"},
                 "text": {"type": "string", "minLength": 1, "description": "Markdown to append."},
             },
             "required": ["path", "text"],
@@ -89,11 +89,11 @@ SCHEMAS = {
 }
 
 DESCRIPTIONS = {
-    "knowledge_search": "Search Score's shared knowledge vault (notes and uploaded documents).",
-    "knowledge_read": "Read a note (embedded images show as [image: alt, size]), or the extracted text of an uploaded document, from Score's shared knowledge vault.",
-    "knowledge_list": "List notes in Score's shared knowledge vault.",
-    "knowledge_write": "Create or update a note in Score's shared knowledge vault.",
-    "knowledge_append": "Append text to a note in Score's shared knowledge vault.",
+    "knowledge_search": "Search Score's shared Knowledge (notes and uploaded documents).",
+    "knowledge_read": "Read a note (embedded images show as [image: alt, size]), or the extracted text of an uploaded document, from Score's shared Knowledge.",
+    "knowledge_list": "List notes in Score's shared Knowledge.",
+    "knowledge_write": "Create or update a note in Score's shared Knowledge.",
+    "knowledge_append": "Append text to a note in Score's shared Knowledge.",
 }
 
 _TYPES = {"string": str, "integer": int, "null": type(None)}
@@ -205,9 +205,9 @@ def _run(name: str, args, build, client=None) -> str:
     except HTTPError as exc:
         return _http_error(exc)
     except NotReady:
-        return error("Score is not set up on this machine yet, so the knowledge vault is unavailable.")
+        return error("Score is not set up on this machine yet, so Knowledge is unavailable.")
     except Exception:
-        return error("Score is not reachable right now; the knowledge vault is unavailable. Try again later.")
+        return error("Score is not reachable right now; Knowledge is unavailable. Try again later.")
 
 
 def make_handlers(client=None):
