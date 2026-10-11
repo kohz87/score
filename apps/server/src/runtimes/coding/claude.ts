@@ -251,6 +251,7 @@ const WORKSPACE_ALLOWED = [
 
 export const claudeDriver: CodingDriver = {
   runtime: 'claude-code',
+  resumeRefusal: /^No conversation found with session ID\b/i,
   label: 'Claude Code',
   executable: 'claude',
   testedVersions: ['2.1.295'],

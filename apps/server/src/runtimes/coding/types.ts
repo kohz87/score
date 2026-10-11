@@ -86,6 +86,11 @@ export interface CodingDriver {
   readonly usage?: { args: readonly string[]; parse(output: string): UsageReading }
   /** `--version` output to a bare version string, or null when it doesn't look like this CLI. */
   parseVersion(output: string): string | null
+  /**
+   * The CLI's own message when asked to resume a session it doesn't have, matched against the whole trimmed message
+   * from the start. Only this (before any output or tool call) allows a fresh launch; absent = never.
+   */
+  readonly resumeRefusal?: RegExp
   /** Argument vector after the executable. The prompt is never in it: it goes to stdin. */
   buildArgs(options: DriverRunOptions): string[]
   createParser(options: { cwd: string }): LineParser

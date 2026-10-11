@@ -1,0 +1,4 @@
+{"_fixture":"hand-made, not recorded: shaped after the CLI's documented stream format"}
+{"type":"system","subtype":"init","session_id":"77777777-7777-4777-8777-777777777777","model":"claude-sonnet-fixture"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"First answer."}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"First answer.","session_id":"77777777-7777-4777-8777-777777777777","total_cost_usd":0.001,"usage":{"input_tokens":1,"output_tokens":1}}

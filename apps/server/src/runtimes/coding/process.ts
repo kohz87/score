@@ -24,6 +24,19 @@ export interface CliOutcome {
   stats: LineParser['stats']
 }
 
+/**
+ * `onSpawn` threw. The group has been sent SIGKILL; `terminated` settles (true = the whole group is gone) so the
+ * caller can wait for the proof before it reports anything.
+ */
+export class SpawnRecordError extends Error {
+  constructor(
+    readonly original: unknown,
+    readonly terminated: Promise<boolean>,
+  ) {
+    super(original instanceof Error ? original.message : String(original), { cause: original })
+  }
+}
+
 export interface CliRun {
   /** SIGINT, then SIGTERM, then SIGKILL, a few seconds apart. Safe to call more than once. */
   stop(reason?: StopReason): void
@@ -47,6 +60,10 @@ export interface SpawnOptions {
   onSpawn?(pid: number): void
   maxMs?: number
   graceMs?: number
+  /** Test seam: how signals are sent (to fake a survivor that ignores them). */
+  kill?: (pid: number, signal: NodeJS.Signals) => void
+  /** Test seam: how long past the second grace the reaper keeps trying before it gives up (default 10 s). */
+  reapSlackMs?: number
 }
 
 /**
@@ -55,6 +72,8 @@ export interface SpawnOptions {
  */
 export function spawnCli(options: SpawnOptions): CliRun {
   const { maxMs = CODING_LIMITS.maxTurnMs, graceMs = CODING_LIMITS.stopGraceMs } = options
+  const sendSignal =
+    options.kill ?? ((pid: number, name: NodeJS.Signals) => process.kill(pid, name))
   let stopped: StopReason | null = null
   let spawnError: string | null = null
   let sawEvents = false
@@ -83,7 +102,7 @@ export function spawnCli(options: SpawnOptions): CliRun {
   const signal = (name: NodeJS.Signals) => {
     if (child.pid === undefined || groupEmpty) return
     try {
-      process.kill(-child.pid, name)
+      sendSignal(-child.pid, name)
     } catch {
       if (!leaderExited) {
         try {
@@ -177,7 +196,7 @@ export function spawnCli(options: SpawnOptions): CliRun {
   const reapOnce = async (): Promise<boolean> => {
     if (child.pid === undefined) return true
     const exitedAt = Date.now()
-    const hardMs = graceMs * 2 + 10_000
+    const hardMs = graceMs * 2 + (options.reapSlackMs ?? 10_000)
     const deadline = exitedAt + hardMs
     let terminated = false
     while (groupAlive()) {
@@ -239,15 +258,15 @@ export function spawnCli(options: SpawnOptions): CliRun {
       // Output may stay open for good when a descendant holds the pipes: supervise the group now, not at close.
       void (async () => {
         const gone = await reapGroup()
-        if (gone) {
-          // Everything is dead, so the pipes close on their own; don't wait for ever if they don't.
-          await pause(1000)
-          if (!closed) {
-            child.stdout.destroy()
-            child.stderr.destroy()
-            closed = true
-            settle()
-          }
+        // Everything is dead, so the pipes close on their own; don't wait for ever if they don't. A survivor that
+        // ignores SIGKILL may hold them open for good: the turn still ends, with groupGone false (never "completed
+        // and clean").
+        if (gone) await pause(1000)
+        if (!closed) {
+          child.stdout.destroy()
+          child.stderr.destroy()
+          closed = true
+          settle()
         }
       })()
     })
@@ -264,7 +283,10 @@ export function spawnCli(options: SpawnOptions): CliRun {
       // Nothing was returned to the caller, so nothing else will ever stop this group: end it here.
       if (stopped === null) stopped = 'shutdown'
       signal('SIGKILL')
-      throw error
+      throw new SpawnRecordError(
+        error,
+        done.then((outcome) => outcome.groupGone),
+      )
     }
   }
   return { stop, pid: child.pid, done }

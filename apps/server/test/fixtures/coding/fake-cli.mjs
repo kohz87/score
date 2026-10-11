@@ -2,6 +2,7 @@
 // Stand-in for the coding CLIs in tests and fake mode (selected by SCORE_CODING_FAKE_CLI, honoured only in fake mode
 // and under test). It never talks to a model: it prints a hand-made fixture selected by `[fixture:NAME]` in the prompt.
 // Usage: node fake-cli.mjs <claude-code|codex|opencode> <the real CLI's arguments…>
+import { spawn } from 'node:child_process'
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -63,6 +64,11 @@ for (const line of lines) {
   if (directive._fixture) continue
   if (directive._sleep) await sleep(directive._sleep)
   else if (directive._hang) await sleep(600_000)
+  // A tool the CLI started and left running (same process group), for this many ms.
+  else if (directive._orphan)
+    spawn(process.execPath, ['-e', `setTimeout(() => {}, ${directive._orphan})`], {
+      stdio: 'ignore',
+    }).unref()
   else if (directive._exit !== undefined) process.exit(directive._exit)
   // `{{PAD:n}}` stands for n filler characters, so a fixture can carry a very large tool result.
   else

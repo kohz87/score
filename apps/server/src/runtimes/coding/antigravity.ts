@@ -268,6 +268,7 @@ export function parseAntigravityUsage(output: string): UsageReading {
 
 export const antigravityDriver: CodingDriver = {
   runtime: 'antigravity',
+  resumeRefusal: /^conversation \S+ not found\b/i,
   label: 'Antigravity (agy)',
   executable: 'agy',
   testedVersions: ['1.3.3'],
