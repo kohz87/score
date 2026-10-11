@@ -94,3 +94,25 @@ test('a streaming reply has a Stop button that posts to the stop route', async (
   render(<MessageItem message={make([{ kind: 'text', text: 'done' }])} agents={[]} />)
   expect(screen.queryByRole('button', { name: /^Stop reply/ })).toBeNull()
 })
+
+test('a reply being written says what the agent is doing right now, and nothing once it is finished', () => {
+  const { rerender } = render(
+    <MessageItem message={make([tool('search_changelog', 'running')], true)} agents={[]} />,
+  )
+  const status = screen.getByText(
+    (_, element) => element?.tagName === 'P' && element.className.includes('live-status'),
+  )
+  expect(status.textContent).toBe('Calling search_changelog()…')
+  expect(status.querySelector('code')?.textContent).toBe('search_changelog()')
+  rerender(
+    <MessageItem
+      message={make([tool('search_changelog'), { kind: 'text', text: 'Found two entries' }], true)}
+      agents={[]}
+    />,
+  )
+  expect(screen.getByText('Writing the reply…')).toBeTruthy()
+  rerender(
+    <MessageItem message={make([{ kind: 'text', text: 'Found two entries' }])} agents={[]} />,
+  )
+  expect(screen.queryByText('Writing the reply…')).toBeNull()
+})
