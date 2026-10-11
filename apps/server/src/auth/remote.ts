@@ -24,7 +24,10 @@ export function registerRemoteGuard(
   config: Config,
   assets: ReadonlySet<string>,
 ): void {
-  if (!config.remote) return
+  if (!config.remote) {
+    registerLocalHostGuard(app, config)
+    return
+  }
   const authorities = new Set(config.remote.origins.map((origin) => new URL(origin).host))
   // Handlers may set their own cache policy (media: private, 1 h); remote responses must never outlive the session.
   app.addHook('onSend', async (_request, reply, payload) => {
@@ -54,6 +57,33 @@ export function registerRemoteGuard(
       if (maxAge !== undefined && id)
         reply.header('set-cookie', sessionCookie(id, maxAge, Boolean(config.remote?.tlsCert)))
     }
+  })
+}
+
+const loopbackOn = (host: string, port: number): boolean =>
+  ['127.0.0.1', 'localhost', '[::1]'].some((name) => host === `${name}:${port}`)
+
+// Local mode answers only requests addressed to a loopback name on one of its own ports (the server's, and the dev web
+// server's that proxies to it), reads included: a page reaching this port through DNS rebinding carries its own name.
+function registerLocalHostGuard(app: FastifyInstance, config: Config): void {
+  const web = new URL(config.webOrigin)
+  const ports = new Set([
+    String(config.port),
+    web.port || (web.protocol === 'https:' ? '443' : '80'),
+  ])
+  const authorities = new Set<string>([web.host])
+  for (const name of ['127.0.0.1', 'localhost', '[::1]'])
+    for (const port of ports) authorities.add(`${name}:${port}`)
+  if (!['0.0.0.0', '::', ''].includes(config.host))
+    authorities.add(
+      `${config.host.includes(':') ? `[${config.host}]` : config.host}:${config.port}`,
+    )
+  app.addHook('onRequest', async (request) => {
+    const host = (request.headers.host ?? '').toLowerCase()
+    // The socket's own port counts too: whatever port this listener really bound is, by definition, its own.
+    const bound = request.socket.localPort
+    if (!authorities.has(host) && !(bound !== undefined && loopbackOn(host, bound)))
+      throw new HttpError(403, 'forbidden', 'Request host is not allowed')
   })
 }
 
