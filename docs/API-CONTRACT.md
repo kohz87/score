@@ -598,7 +598,7 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 - **S** `GET /api/agents/:agentId/context` → `AgentContext` `{ model: string | null; tokens: { input; output } | null;
   costUsd: number | null; contextLength: number | null }` (PLAN 5.25): usage of the agent's latest finished or running run
   with usage and the model's context window when Hermes's model options carry one (else `null`). `404` unknown agent.
-- **S** `GET /api/agents/:agentId/sessions/:sessionId/context` → `SessionContext` `{ window: number | null; used: number | null;
+- **S** `GET /api/agents/:agentId/sessions/:sessionId/context` → `SessionContext` + `asOfSeq` (a stream-query snapshot) `{ window: number | null; used: number | null;
   measuredAt: string | null; model: string | null; source: ReadingSource | null; parts: { kind; label; tokens }[] | null;
   autoCompactAt: number | null; compactions: number }` (PLAN 5.36): what the context meter and its popover show for one room
   session. With the plugin's `context_breakdown` answer, `parts` lists what uses the window (Hermes's categories: system prompt,
@@ -609,8 +609,8 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   in that room finishes and after a compaction. `404` as for compact.
 - **H** `POST /api/agents/:agentId/sessions/:sessionId/compact` `{ keepRecent?: int 1-20 }` → `202 { commandId }` (PLAN 5.36;
   schemas in `packages/contract/src/compaction.ts`). Asks Hermes to compact (summarise the older turns of) one of the agent's
-  room sessions (`score-<roomId>-<agentId>`, or the session an imported room continues; the tip of its compression lineage is
-  compacted). The API server ignores `/compress`, so Score asks the agent's gateway through the bridge (`compact` command,
+  room sessions (`score-<roomId>-<agentId>`, which in an imported room that continues a Hermes session stands for that session;
+  the tip of its compression lineage is compacted). The API server ignores `/compress`, so Score asks the agent's gateway through the bridge (`compact` command,
   §11). The request returns at once; the answer is the stream event `session.compacted`
   `{ commandId; agentId; sessionId; roomId: string | null; status: 'compacted' | 'nothing' | 'failed'; reason: CompactFailureReason
   | null; keepRecent: number | null; before: { messages; tokens } | null; after: { messages; tokens } | null }`

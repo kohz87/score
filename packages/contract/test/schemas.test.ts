@@ -1319,6 +1319,21 @@ const cases = [
     },
     { window: 0 },
   ],
+  [
+    'SessionContextSnapshotSchema',
+    {
+      asOfSeq: 3,
+      window: null,
+      used: null,
+      measuredAt: null,
+      model: null,
+      source: null,
+      parts: null,
+      autoCompactAt: null,
+      compactions: 0,
+    },
+    { window: null },
+  ],
   ['RoomDeleteRequestSchema', { confirm: '#launch' }, { confirm: '' }],
   [
     'RoomDeletePlanSchema',

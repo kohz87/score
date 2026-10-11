@@ -15,6 +15,7 @@ import { compactingKey, compactingSessions, rewindingRooms } from '../domain/roo
 import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
+import { headSeq } from '../hub/snapshot.ts'
 import { readAgentContext } from './agent-context.ts'
 
 const ParamsSchema = z.object({
@@ -50,17 +51,28 @@ export function registerSessionCompactionRoutes(
     const agents = z.array(AgentSummarySchema).parse(await port.listAgents())
     const agent = agents.find((item) => item.id === agentId)
     if (!agent) throw new HttpError(404, 'not_found', 'Agent not found')
-    const roomId = db.read((sqlite) => {
+    // `score-<roomId>-<agentId>` names the room's session of that agent; in an imported room that continues a Hermes
+    // session it stands for that session. The continued session's own id is accepted too.
+    const found = db.read((sqlite) => {
       const continued = sqlite
-        .prepare('SELECT room_id FROM room_sessions WHERE agent_id = ? AND session_id = ?')
-        .get(agentId, sessionId) as { room_id: string } | undefined
-      if (continued) return continued.room_id
+        .prepare(
+          'SELECT room_id, session_id FROM room_sessions WHERE agent_id = ? AND session_id = ?',
+        )
+        .get(agentId, sessionId) as { room_id: string; session_id: string } | undefined
+      if (continued) return { roomId: continued.room_id, hermesSession: continued.session_id }
       if (!sessionId.startsWith('score-') || !sessionId.endsWith(`-${agentId}`)) return null
       const id = sessionId.slice('score-'.length, sessionId.length - agentId.length - 1)
-      return sqlite.prepare('SELECT id FROM rooms WHERE id = ?').get(id) ? id : null
+      if (!sqlite.prepare('SELECT id FROM rooms WHERE id = ?').get(id)) return null
+      const same = sqlite
+        .prepare(
+          "SELECT session_id FROM room_sessions WHERE room_id = ? AND agent_id = ? AND mode = 'same_session'",
+        )
+        .get(id, agentId) as { session_id: string } | undefined
+      return { roomId: id, hermesSession: same?.session_id ?? sessionId }
     })
-    if (roomId === null) throw new HttpError(404, 'not_found', 'Unknown session')
-    return { agent, roomId }
+    if (found === null) throw new HttpError(404, 'not_found', 'Unknown session')
+    const { roomId, hermesSession } = found
+    return { agent, roomId, hermesSession }
   }
 
   function busy(roomId: string, agentId: string): boolean {
@@ -76,7 +88,7 @@ export function registerSessionCompactionRoutes(
 
   app.get('/api/agents/:agentId/sessions/:sessionId/context', async (request) => {
     const { agentId, sessionId } = ParamsSchema.parse(request.params)
-    const { agent, roomId } = await resolve(agentId, sessionId)
+    const { agent, roomId, hermesSession } = await resolve(agentId, sessionId)
     // Re-read after every finished turn of this agent in this room and after a compaction.
     const stamp = db.read((sqlite) => {
       const row = sqlite
@@ -86,12 +98,15 @@ export function registerSessionCompactionRoutes(
         .get(roomId, agentId) as { n: number }
       return `${row.n}:${compactions.get(sessionId) ?? 0}`
     })
+    // Read before the value: an event after it is applied on top by the client.
+    const asOfSeq = db.read((sqlite) => headSeq(sqlite))
     const cached = cache.get(sessionId)
-    if (cached && cached.stamp === stamp && clock() - cached.at < CACHE_MS) return cached.value
+    if (cached && cached.stamp === stamp && clock() - cached.at < CACHE_MS)
+      return { asOfSeq, ...cached.value }
     const totals = await readAgentContext({ port, db }, agentId)
     let reading = null
     if (agent.runtime === undefined && port.sessionContext)
-      reading = await port.sessionContext({ agentId, sessionId }).catch(() => null)
+      reading = await port.sessionContext({ agentId, sessionId: hermesSession }).catch(() => null)
     const at = new Date(clock()).toISOString()
     const value = SessionContextSchema.parse(
       reading
@@ -117,13 +132,13 @@ export function registerSessionCompactionRoutes(
           },
     )
     cache.set(sessionId, { at: clock(), stamp, value })
-    return value
+    return { asOfSeq, ...value }
   })
 
   app.post('/api/agents/:agentId/sessions/:sessionId/compact', mutation, async (request, reply) => {
     const { agentId, sessionId } = ParamsSchema.parse(request.params)
     const body = CompactRequestSchema.parse(request.body ?? {})
-    const { agent, roomId } = await resolve(agentId, sessionId)
+    const { agent, roomId, hermesSession } = await resolve(agentId, sessionId)
     if (agent.runtime !== undefined || !port.compactSession)
       throw new HttpError(409, 'unsupported', 'This agent’s session cannot be compacted from Score')
     db.read((sqlite) => assertRoomFree(sqlite, roomId, 'session.compact'))

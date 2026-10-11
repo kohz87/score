@@ -1,3 +1,4 @@
+import type { SessionContextReading } from '@score/contract'
 import { mkdirSync } from 'node:fs'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { RewindBroker } from '../../../src/hermes/bridge/rewind-broker.ts'
@@ -102,14 +103,14 @@ test('refusals map to the contract reasons', async () => {
 })
 
 test('the context query returns the plugin reading and null when it fails', async () => {
-  const reading = {
+  const reading: SessionContextReading = {
     window: 1000,
     used: 10,
     model: 'm',
     source: 'local_estimate',
     autoCompactAt: null,
     parts: [],
-  } as const
+  }
   let { broker } = brokerAnswering({ outcome: 'done', context: reading })
   await new Promise((resolve) => setTimeout(resolve, 20))
   expect(

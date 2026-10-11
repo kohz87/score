@@ -1,7 +1,7 @@
 import {
   RoomDeletePlanSchema,
   RoomSchema,
-  SessionContextSchema,
+  SessionContextSnapshotSchema,
   StreamEventSchema,
 } from '@score/contract'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -270,7 +270,7 @@ test('session context: Hermes breakdown when the bridge answers, the totals othe
   const room = await createRoom()
   const sessionId = `score-${room.id}-builder`
   const read = async () =>
-    SessionContextSchema.parse(
+    SessionContextSnapshotSchema.parse(
       (
         await app.inject({
           method: 'GET',

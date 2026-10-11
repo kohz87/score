@@ -92,6 +92,10 @@ export const SessionContextSchema = z.object({
   compactions: z.int().nonnegative(),
 })
 export type SessionContext = z.infer<typeof SessionContextSchema>
+export const SessionContextSnapshotSchema = SessionContextSchema.extend({
+  asOfSeq: z.int().nonnegative(),
+})
+export type SessionContextSnapshot = z.infer<typeof SessionContextSnapshotSchema>
 
 export const RoomDeleteRequestSchema = z.object({ confirm: z.string().min(1).max(200) }).strict()
 export type RoomDeleteRequest = z.infer<typeof RoomDeleteRequestSchema>
