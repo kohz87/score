@@ -57,6 +57,15 @@ export const CodingAgentSchema = z.object({
     /** The person confirmed the installed (untested) version for this agent. */
     confirmed: z.boolean(),
   }),
+  /** Process groups Score could not prove ended: the agent takes no new turn while any is held. */
+  heldGroups: z.array(
+    z.object({
+      runId: z.string(),
+      pgid: z.int(),
+      /** True when Score can't tell whether the processes are its own: the person may release the agent. */
+      canRelease: z.boolean(),
+    }),
+  ),
   createdAt: z.iso.datetime(),
 })
 export type CodingAgent = z.infer<typeof CodingAgentSchema>

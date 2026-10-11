@@ -1404,6 +1404,7 @@ const cases = [
       style: { color: '#19C39A', shape: 'hexagon' },
       quota: 'Uses your ChatGPT plan quota.',
       cli: { state: 'ready', version: '0.160.1', testedVersions: ['0.160.1'], confirmed: false },
+      heldGroups: [{ runId: 'cr_1', pgid: 4242, canRelease: true }],
       createdAt: '2026-10-09T10:00:00.000Z',
     },
     { id: 'coder' },

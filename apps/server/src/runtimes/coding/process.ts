@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { groupMembers, processStart, procAvailable } from './proc.ts'
+import { kernelGroupExists, procAvailable, scanGroup, type MemberIdentity } from './proc.ts'
 import { CODING_LIMITS, type CodingEvent, type LineParser } from './types.ts'
 
 export type StopReason = 'user' | 'timeout' | 'output_limit' | 'shutdown'
@@ -58,6 +58,16 @@ export interface SpawnOptions {
    * throws, the whole group is killed and the error propagates (S2-004).
    */
   onSpawn?(pid: number): void
+  /**
+   * Called with the identities (pid + start time) of group members not reported before: while the leader runs, when it
+   * exits with survivors, and while the group is reaped. They are the continuity that lets a leaderless group be
+   * recognised as ours after a restart (N4). A throw is ignored: recording is best effort, never a reason to fail.
+   */
+  onMembers?(members: MemberIdentity[]): void
+  /** Test seam: the kernel's answer to "does any process have this PGID" (default `kill(-pgid, 0)`). */
+  groupExists?: typeof kernelGroupExists
+  /** How often members are noted while the leader runs (default 2 s). */
+  memberScanMs?: number
   maxMs?: number
   graceMs?: number
   /** Test seam: how signals are sent (to fake a survivor that ignores them). */
@@ -98,7 +108,6 @@ export function spawnCli(options: SpawnOptions): CliRun {
   let groupEmpty = false
   let leaderExited = false
   let leftovers = false
-  const leaderStart = child.pid === undefined ? null : processStart(child.pid)
   const signal = (name: NodeJS.Signals) => {
     if (child.pid === undefined || groupEmpty) return
     try {
@@ -113,23 +122,35 @@ export function spawnCli(options: SpawnOptions): CliRun {
       }
     }
   }
+  // Identities already reported, so each is recorded once.
+  const noted = new Set<string>()
+  let lastNoted = 0
+  const noteMembers = (force = false) => {
+    if (child.pid === undefined || !options.onMembers || !procAvailable()) return
+    const now = Date.now()
+    if (!force && now - lastNoted < 200) return
+    lastNoted = now
+    const fresh = scanGroup(child.pid).members.filter((member) => {
+      const key = `${member.pid}:${member.startTime}`
+      if (noted.has(key)) return false
+      noted.add(key)
+      return true
+    })
+    if (fresh.length === 0) return
+    try {
+      options.onMembers(fresh)
+    } catch {
+      // best effort
+    }
+  }
+  // "The group is gone" is the kernel's word alone (ESRCH from kill(-pgid, 0)): a /proc listing can miss a child that
+  // forked after it was read (N5), so it never overrides a positive answer. A zombie waiting for its reaper still
+  // counts: the group is not gone until it is.
   const groupAlive = (): boolean => {
     if (child.pid === undefined || groupEmpty) return false
-    try {
-      process.kill(-child.pid, 0)
-    } catch (error) {
-      // EPERM means a member exists that we can't signal: still there.
-      if ((error as NodeJS.ErrnoException).code !== 'EPERM') {
-        groupEmpty = true
-        return false
-      }
-    }
-    // Zombies waiting for a reaper still answer signal 0: only live members count.
-    if (leaderExited && procAvailable() && leaderStart !== null) {
-      if (groupMembers(child.pid, Number(leaderStart)).length === 0) {
-        groupEmpty = true
-        return false
-      }
+    if ((options.groupExists ?? kernelGroupExists)(child.pid) === 'none') {
+      groupEmpty = true
+      return false
     }
     return true
   }
@@ -145,6 +166,10 @@ export function spawnCli(options: SpawnOptions): CliRun {
     kill.unref()
     escalation.push(term, kill)
   }
+  const scanner = setInterval(() => {
+    if (!leaderExited) noteMembers()
+  }, options.memberScanMs ?? 2000)
+  scanner.unref()
   const wall = setTimeout(() => stop('timeout'), maxMs)
   wall.unref()
   timers.push(wall)
@@ -200,6 +225,7 @@ export function spawnCli(options: SpawnOptions): CliRun {
     const deadline = exitedAt + hardMs
     let terminated = false
     while (groupAlive()) {
+      noteMembers()
       const now = Date.now()
       if (stopped === null && !terminated && now - exitedAt >= graceMs) {
         leftovers = true
@@ -230,6 +256,7 @@ export function spawnCli(options: SpawnOptions): CliRun {
         .then(() => reapGroup())
         .then((gone) => {
           for (const timer of timers) clearTimeout(timer)
+          clearInterval(scanner)
           for (const timer of escalation) clearTimeout(timer)
           resolve({
             exitCode,
@@ -255,6 +282,8 @@ export function spawnCli(options: SpawnOptions): CliRun {
       exitCode = code
       exitSignal = sig
       leaderExited = true
+      // Survivors are recorded before anything is signalled: from here on only continuity can vouch for them.
+      noteMembers(true)
       // Output may stay open for good when a descendant holds the pipes: supervise the group now, not at close.
       void (async () => {
         const gone = await reapGroup()
