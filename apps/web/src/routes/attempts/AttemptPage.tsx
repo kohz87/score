@@ -44,13 +44,13 @@ export function AttemptPage() {
       <p className="attempt-back">
         <Link to="/tasks">Back to Tasks</Link>
       </p>
-      {attempt.isPending && <p role="status">Loading attempt…</p>}
+      {attempt.isPending && <p role="status">Loading run…</p>}
       {attempt.isError && (
         <div role="alert">
           <p>
             {attempt.error instanceof ApiError && attempt.error.status === 404
-              ? 'This attempt is not available.'
-              : 'The attempt could not load.'}
+              ? 'This run isn’t available.'
+              : 'Couldn’t load this run.'}
           </p>
           {!(attempt.error instanceof ApiError && attempt.error.status === 404) && (
             <button type="button" onClick={() => void attempt.refetch()}>
@@ -65,9 +65,9 @@ export function AttemptPage() {
             {detail.agentId === null ? <UnattributedGlyph /> : null}
             <div>
               <h1 id="attempt-heading">
-                Attempt by{' '}
+                Run by{' '}
                 {detail.agentId === null ? (
-                  'an unattributed agent'
+                  'an unknown agent'
                 ) : (
                   <AgentsLookup agentId={detail.agentId} />
                 )}
@@ -77,18 +77,18 @@ export function AttemptPage() {
           </header>
           {!detail.task.current && (
             <p className="attempt-note">
-              From an earlier copy of the board. This page is read-only: the task it belonged to is
-              not on the board Score follows now.
+              From an earlier copy of the board. This page is read-only, because the task it
+              belonged to is not on the board Score follows now.
             </p>
           )}
           {detail.task.current && (
             <p className="attempt-note">
-              This attempt belongs to a task on the current board.{' '}
+              This run belongs to a task on the current board.{' '}
               <Link to={`/tasks/${encodeURIComponent(detail.task.taskId)}`}>Open the task</Link>
             </p>
           )}
           <section aria-labelledby="attempt-task-heading" className="attempt-section">
-            <h2 id="attempt-task-heading">Task as last observed</h2>
+            <h2 id="attempt-task-heading">Task as last seen</h2>
             {detail.taskSnapshot ? (
               <dl className="attempt-rows">
                 <Row label="Title">{detail.taskSnapshot.title}</Row>
@@ -96,11 +96,11 @@ export function AttemptPage() {
                 <Row label="Assignee">{detail.taskSnapshot.assignee ?? 'None'}</Row>
               </dl>
             ) : (
-              <p className="attempt-muted">The task was not kept.</p>
+              <p className="attempt-muted">Score didn’t keep this task.</p>
             )}
           </section>
           <section aria-labelledby="attempt-facts-heading" className="attempt-section">
-            <h2 id="attempt-facts-heading">What was observed</h2>
+            <h2 id="attempt-facts-heading">What Score saw</h2>
             <dl className="attempt-rows">
               <Row label="Agent">
                 {detail.agentId === null ? (
@@ -115,16 +115,16 @@ export function AttemptPage() {
                 {detail.endedAt
                   ? when(detail.endedAt)
                   : detail.observationEndedAt
-                    ? `No longer observed since ${when(detail.observationEndedAt)}`
+                    ? `No longer seen since ${when(detail.observationEndedAt)}`
                     : 'Still running'}
               </Row>
               {detail.closureReason && <Row label="Closed because">{detail.closureReason}</Row>}
-              <Row label="Evidence">{evidenceLabel[detail.evidence]}</Row>
+              <Row label="Source">{evidenceLabel[detail.evidence]}</Row>
               {detail.refusedUpdates > 0 && (
-                <Row label="Refused updates">{detail.refusedUpdates}</Row>
+                <Row label="Updates refused">{detail.refusedUpdates}</Row>
               )}
-              <Row label="Tools, session and model">Not observed</Row>
-              <Row label="Watch">Not observed</Row>
+              <Row label="Tools, session and model">Not recorded</Row>
+              <Row label="Watch">Not recorded</Row>
             </dl>
           </section>
         </article>

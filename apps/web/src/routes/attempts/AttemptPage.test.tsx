@@ -87,7 +87,7 @@ function renderPage() {
 
 test('shows the frozen task read-only, from an earlier copy of the board, with no Watch link', async () => {
   renderPage()
-  await screen.findByRole('heading', { level: 1, name: /Attempt by an unattributed agent/ })
+  await screen.findByRole('heading', { level: 1, name: /Run by an unknown agent/ })
   expect(screen.getByText(/From an earlier copy of the board/)).toBeTruthy()
   const task = screen.getByRole('region', { name: 'Task as last observed' })
   expect(within(task).getByText('Port the importer')).toBeTruthy()
@@ -98,9 +98,9 @@ test('shows the frozen task read-only, from an earlier copy of the board, with n
   expect(screen.getByText('Watch').nextSibling?.textContent).toBe('Not observed')
 })
 
-test('an unknown attempt says it is not available', async () => {
+test('an unknown run says it is not available', async () => {
   status = 404
   body = { error: { code: 'not_found', message: 'no' } }
   renderPage()
-  expect(await screen.findByText('This attempt is not available.')).toBeTruthy()
+  expect(await screen.findByText('This run isn’t available.')).toBeTruthy()
 })

@@ -246,7 +246,7 @@ test('legacy run links no attempt could be proven for read as one earlier-attemp
   setup()
   const panel = await drawer()
   await within(panel).findByRole('heading', { name: 'Event stream for the feed' })
-  expect(within(panel).getAllByText('An earlier attempt (details not kept)')).toHaveLength(2)
+  expect(within(panel).getAllByText('An earlier run (details not kept)')).toHaveLength(2)
 })
 
 test('without attempts the drawer has no earlier-attempts section', async () => {

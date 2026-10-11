@@ -1155,8 +1155,8 @@ test('the History tab shows Kanban attempts with their status and no replay', as
   const panel = within(screen.getByRole('tabpanel'))
   expect(await panel.findByText('Changes requested')).toBeDefined()
   expect(panel.getAllByText('Ended (unknown)').length).toBeGreaterThan(1)
-  expect(panel.getByText(/no longer observed since/)).toBeDefined()
-  expect(panel.getByText(/Provenance unknown/)).toBeDefined()
+  expect(panel.getByText(/no longer seen since/)).toBeDefined()
+  expect(panel.getByText(/Source unclear/)).toBeDefined()
   expect(panel.getByRole('link', { name: /Task: Wire the stream/ })).toBeDefined()
   expect(panel.getByRole('link', { name: /Open the attempt/ }).getAttribute('href')).toBe(
     '/attempts/kr_b',
