@@ -1273,6 +1273,33 @@ const cases = [
     { items: [{}] },
   ],
   ['BridgeCommandResultSchema', { outcome: 'nothing' }, { outcome: 'maybe' }],
+  // PLAN 5.36: compaction and room deletion
+  ['CompactRequestSchema', { keepRecent: 3 }, { keepRecent: 0 }],
+  ['CompactAcceptedSchema', { commandId: 'c1' }, { commandId: '' }],
+  ['SessionSizeSchema', { messages: 4, tokens: 900 }, { messages: -1, tokens: 900 }],
+  ['CompactFailureReasonSchema', 'no_answer', 'x'],
+  [
+    'SessionCompactedSchema',
+    {
+      commandId: 'c1',
+      agentId: 'builder',
+      sessionId: 'score-r-builder',
+      roomId: 'r',
+      status: 'nothing',
+      reason: null,
+      keepRecent: null,
+      before: null,
+      after: null,
+    },
+    { commandId: 'c1', agentId: 'builder', sessionId: 's', status: 'maybe' },
+  ],
+  ['RoomDeleteRequestSchema', { confirm: '#launch' }, { confirm: '' }],
+  [
+    'RoomDeletePlanSchema',
+    { name: '#launch', messages: 3, files: 1, runs: 2, briefs: 0, blocked: null },
+    { name: '#launch', messages: 3 },
+  ],
+  ['RoomDeletedSchema', { id: 'r' }, { id: '' }],
   // PLAN 7.2: coding agents
   ['RuntimeSchema', 'claude-code', 'cursor'],
   ['CostKindSchema', 'estimated', 'free'],

@@ -94,7 +94,7 @@ export const REWIND_COMMAND_TTL_MS = 60_000
 export const REWIND_HOLD_SKEW_MS = 5_000
 
 /** Server → bridge plugin: rewind one Hermes session by `turns` user turns (contract §11). */
-export const BridgeCommandSchema = z.object({
+const RewindCommandSchema = z.object({
   commandId: z.string().min(1).max(128),
   kind: z.literal('rewind'),
   sessionId: z.string().min(1).max(256),
@@ -104,13 +104,32 @@ export const BridgeCommandSchema = z.object({
   /** Epoch seconds after which the plugin must not act (checked immediately before it mutates): `expired`. */
   expiresAt: z.number().positive(),
 })
+/** Server → bridge plugin: compact (summarise the older turns of) one Hermes session (PLAN 5.36, contract §11). */
+const CompactCommandSchema = z.object({
+  commandId: z.string().min(1).max(128),
+  kind: z.literal('compact'),
+  sessionId: z.string().min(1).max(256),
+  /** Recent exchanges kept word for word; absent = Hermes's full compression. */
+  keepRecent: z.int().min(1).max(20).optional(),
+  expiresAt: z.number().positive(),
+})
+export const BridgeCommandSchema = z.discriminatedUnion('kind', [
+  RewindCommandSchema,
+  CompactCommandSchema,
+])
 export type BridgeCommand = z.infer<typeof BridgeCommandSchema>
 export const BridgeCommandsResponseSchema = z.object({ items: z.array(BridgeCommandSchema) })
 
+const CommandSizeSchema = z.object({
+  messages: z.int().nonnegative(),
+  tokens: z.int().nonnegative(),
+})
 export const BridgeCommandResultSchema = z.object({
   outcome: z.enum(['done', 'nothing', 'failed', 'expired']),
   turnsUndone: z.int().nonnegative().optional(),
   rewoundCount: z.int().nonnegative().optional(),
+  before: CommandSizeSchema.optional(),
+  after: CommandSizeSchema.optional(),
   error: z.string().max(200).optional(),
 })
 export type BridgeCommandResult = z.infer<typeof BridgeCommandResultSchema>
