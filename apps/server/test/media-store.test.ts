@@ -249,3 +249,43 @@ test('a same-length corruption of a blob is detected on read and by the sweep', 
   expect(store.sweep().missing).toBe(1)
   expect(store.has(stored.mediaId)).toBe(false)
 })
+
+// S2-023
+test('the sweep hash budget rotates, so damage in a later row is found over several sweeps', () => {
+  const small = new MediaStore(db, join(dir, 'media'), {
+    quotaBytes: 100_000,
+    clock: () => now,
+    sweepHashBudgetBytes: 25,
+  })
+  const items = ['a'.repeat(10), 'b'.repeat(10), 'c'.repeat(10), 'd'.repeat(10), 'e'.repeat(10)].map(
+    (text, index) => {
+      now += 1000
+      return small.store(Buffer.from(text), undefined, `${index}.txt`)
+    },
+  )
+  const last = 'e'.repeat(10)
+  writeFileSync(join(dir, 'media', sha(Buffer.from(last))), 'f'.repeat(10))
+  let missing = 0
+  for (let sweep = 0; sweep < 4 && missing === 0; sweep++) {
+    now += 1000
+    missing += small.sweep().missing
+  }
+  expect(missing).toBe(1)
+  expect(small.has(items[4]!.mediaId)).toBe(false)
+  for (const item of items.slice(0, 4)) expect(small.has(item.mediaId)).toBe(true)
+})
+
+test('rows that share one blob spend the sweep hash budget once', () => {
+  const small = new MediaStore(db, join(dir, 'media'), {
+    quotaBytes: 100_000,
+    clock: () => now,
+    sweepHashBudgetBytes: 12,
+  })
+  const text = Buffer.from('shared text')
+  const a = small.store(text, 'text/plain', 'a.txt')
+  const b = small.store(text, 'text/markdown', 'a.md')
+  expect(a.mediaId).not.toBe(b.mediaId)
+  writeFileSync(join(dir, 'media', sha(text)), 'damaged tex')
+  // One 11-byte hash covers both rows; with per-row spending the second would be skipped.
+  expect(small.sweep().missing).toBe(2)
+})
