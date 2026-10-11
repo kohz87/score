@@ -3,6 +3,45 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.2] — 2026-10-11
+
+Fixes from a second external audit of 1.0.1 (27 findings; `docs/reviews/2026-10-11-external-audit-2.md`), each with a
+regression test that failed before it, plus the owner's requests since 1.0.1.
+
+### Added
+- **New room** works: pick a name, a lead and other agents (it was a placeholder).
+- One writing standard for every word in Score (`docs/WRITING.md`): plain, consistent wording across the app, server
+  messages and the tools agents read; British spelling; "step", "room", "try", "Knowledge", "access key" throughout.
+
+### Changed
+- Agent replies written with "•" bullets show as real, nested lists.
+- Adding a coding agent shows a short note about what that CLI can read; Antigravity asks for the read acknowledgement
+  only at full access (its sandbox keeps it in its workspace below that).
+- Orchestrations and workflows refuse coding agents with a clear message for now (their steps couldn't reach them);
+  coding agents as orchestration workers are planned next.
+
+### Fixed — coding agents
+- A child process is supervised before anything is recorded, and is stopped if recording fails.
+- Stop and the time limit reach tools a CLI left running after it exited; a run ends only when all of them have.
+- The model you chose for a turn is the one the CLI runs; Stop before launch means it never starts; a result that
+  couldn't be saved is retried instead of left "running".
+
+### Fixed — Knowledge
+- Moves, uploads and ZIP imports never replace or delete a file another program wrote meanwhile; a file saved mid-move
+  stays where it was; filesystems without hard links are refused instead of risking it.
+- Linked Git worktrees work; an interrupted move always finishes on restart, durably recorded first; the move tells you
+  which notes still link to the old name.
+- ZIP notes get the same checks as saved notes; `.markdown` files become `.md`; an unreadable file is never shown as
+  deleted; removed documents are announced; a rebuild keeps Git-tracked documents versioned.
+- Links inside code in lists and quotes are left alone, and finding code is linear (large notes no longer stall Score).
+
+### Fixed — everything else
+- Workflow step and input names like `constructor` work everywhere.
+- The context meter no longer shows "Compacting" forever after a compaction from another browser; page data requests are
+  really cancelled when replaced or no longer needed.
+- The media check covers the whole store over time; the browser and `scripts/score password` share one lock; a reloaded
+  bridge plugin sends what its previous instance had queued; shutdown waits for task-hold recovery.
+
 ## [1.0.1] — 2026-10-11
 
 Fixes from an external audit of 1.0.0 (34 findings; report in `docs/reviews/2026-10-11-external-audit.md`). Every fix has
@@ -98,5 +137,6 @@ profiles. Tested with Hermes v0.21.x on Linux.
   app version.
 - Licensed under PolyForm Noncommercial 1.0.0; commercial licences on request ([COMMERCIAL.md](COMMERCIAL.md)).
 
+[1.0.2]: https://github.com/kohz87/score/releases/tag/v1.0.2
 [1.0.1]: https://github.com/kohz87/score/releases/tag/v1.0.1
 [1.0.0]: https://github.com/kohz87/score/releases/tag/v1.0.0
