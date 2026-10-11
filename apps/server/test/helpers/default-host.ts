@@ -7,8 +7,8 @@ const AUTHORITY = '127.0.0.1:8740'
 
 vi.mock('fastify', async (importOriginal) => {
   const real = await importOriginal<typeof import('fastify')>()
-  const create = ((...args: Parameters<typeof real.default>) => {
-    const app = real.default(...args)
+  const create = ((...args: unknown[]) => {
+    const app = (real.default as (...a: unknown[]) => ReturnType<typeof real.default>)(...args)
     const inject = app.inject.bind(app) as (options?: unknown, callback?: unknown) => unknown
     ;(app as { inject: unknown }).inject = (options?: unknown, callback?: unknown) => {
       if (options === undefined) return inject()
