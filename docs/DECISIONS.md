@@ -55,3 +55,4 @@ rejects is reverted or changed then.
 | 44 | Setup wizard dropped (your call); README now has one clean numbered setup guide instead | — | — |
 | 45 | Context rings moved left of Send and grouped with it; on phones the pair wraps together | your request | — |
 | 46 | anime.js 4.5.0 (MIT, no dependencies) added to the web app for 5.37; loaded only on the pages that animate; everything off with reduced motion | your request | remove the package; CSS fallbacks stay |
+| 47 | v1.0.0 = everything through 5.37 (motion) and 7.1c (free workflow layout), per your request; tagged after both merge | — | — |
