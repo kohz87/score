@@ -53,6 +53,7 @@ export const ContextPartKindSchema = z.enum([
   'memory',
   'conversation',
 ])
+export type ContextPartKind = z.infer<typeof ContextPartKindSchema>
 export const ContextPartSchema = z.object({
   kind: ContextPartKindSchema,
   label: z.string().min(1).max(60),

@@ -5,7 +5,7 @@ import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { HttpError } from '../errors.ts'
 import { requestSummary, shouldAutoSummarise } from './room-summaries.ts'
-import { rewindingRooms } from './room-rewinding.ts'
+import { compactingKey, compactingSessions, rewindingRooms } from './room-rewinding.ts'
 import { continuationFor, markSummarySent } from './outside-sessions.ts'
 import { failMessageRun, MessageRunSchema, roomRunInput } from './message-runs.ts'
 
@@ -104,7 +104,10 @@ export class RoutingDispatcher {
         ),
       )
       const job = pending.find(
-        (row) => !attempted.has(row.turn_id) && !rewindingRooms.has(row.room_id),
+        (row) =>
+          !attempted.has(row.turn_id) &&
+          !rewindingRooms.has(row.room_id) &&
+          !compactingSessions.has(compactingKey(row.room_id, row.agent_id)),
       )
       if (!job) break
       attempted.add(job.turn_id)

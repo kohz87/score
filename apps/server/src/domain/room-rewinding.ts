@@ -58,3 +58,10 @@ export function restoreRoomHolds(sqlite: DatabaseSync, nowMs: number): void {
   }[]
   for (const row of rows) holdRoomUntil(sqlite, row.room_id, row.until_ms)
 }
+
+/**
+ * `roomId\0agentId` pairs whose Hermes session is being compacted (PLAN 5.36). A new turn of that agent in that room
+ * waits (it stays `pending`) until the compaction answers, so it can't run in a session Hermes is rewriting.
+ */
+export const compactingSessions = new Set<string>()
+export const compactingKey = (roomId: string, agentId: string): string => `${roomId}\0${agentId}`

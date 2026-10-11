@@ -1,13 +1,31 @@
-import type { BridgeCommand, BridgeCommandResult } from '@score/contract'
+import type {
+  BridgeCommand,
+  BridgeCommandResult,
+  SessionContextReading,
+  SessionSize,
+} from '@score/contract'
 import { randomUUID } from 'node:crypto'
 
 /** A producer that polled this recently is taken to be listening. */
 const LISTENING_MS = 45_000
 
+/** What a command asks for, without the id and expiry the broker adds. */
+export type CommandRequest =
+  | { kind: 'rewind'; sessionId: string; turns: number; since?: number }
+  | { kind: 'compact'; sessionId: string; keepRecent?: number }
+  | { kind: 'context_breakdown'; sessionId: string }
+
 export type RewindOutcome =
-  | { status: 'done'; turnsUndone: number; rewoundCount: number }
+  | {
+      status: 'done'
+      turnsUndone: number
+      rewoundCount: number
+      before?: SessionSize
+      after?: SessionSize
+      context?: SessionContextReading
+    }
   | { status: 'nothing' }
-  | { status: 'failed' }
+  | { status: 'failed'; error?: string }
   | { status: 'expired' }
   | { status: 'unavailable' }
   | { status: 'no_answer' }
@@ -38,19 +56,23 @@ export class RewindBroker {
     return at !== undefined && this.clock() - at < LISTENING_MS
   }
 
-  async request(
+  request(
     profile: string,
     req: { sessionId: string; turns: number; since?: number },
     timeoutMs: number,
   ): Promise<RewindOutcome> {
+    return this.ask(profile, { kind: 'rewind', ...req }, timeoutMs)
+  }
+
+  /** Hands one command to the profile's polling producer and waits for its answer. */
+  async ask(profile: string, req: CommandRequest, timeoutMs: number): Promise<RewindOutcome> {
     if (!this.available(profile)) return { status: 'unavailable' }
-    const command: BridgeCommand = {
+    const command = {
       commandId: randomUUID(),
-      kind: 'rewind',
       ...req,
       // The plugin refuses to act on it after this, so a command abandoned by a timeout can't run on later work.
       expiresAt: this.clock() / 1000 + timeoutMs / 1000,
-    }
+    } as BridgeCommand
     return new Promise<RewindOutcome>((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(command.commandId)
@@ -107,8 +129,13 @@ export class RewindBroker {
             status: 'done',
             turnsUndone: result.turnsUndone ?? 0,
             rewoundCount: result.rewoundCount ?? 0,
+            ...(result.before ? { before: result.before } : {}),
+            ...(result.after ? { after: result.after } : {}),
+            ...(result.context ? { context: result.context } : {}),
           }
-        : { status: result.outcome },
+        : result.outcome === 'failed'
+          ? { status: 'failed', ...(result.error ? { error: result.error } : {}) }
+          : { status: result.outcome },
     )
     return true
   }
