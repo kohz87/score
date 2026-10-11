@@ -10,17 +10,16 @@ export function KnowledgeSection() {
       <div>
         <h2 id="settings-knowledge">Knowledge</h2>
         <p className="settings-muted-strong">
-          The shared vault of Markdown notes and uploaded documents that your agents and you can
-          read.
+          Markdown notes and uploaded documents that you and your agents can read.
         </p>
       </div>
       {info.isPending && <p role="status">Loading…</p>}
-      {info.isError && <p role="alert">Could not load the knowledge settings.</p>}
+      {info.isError && <p role="alert">Couldn’t load the Knowledge settings.</p>}
       {info.data && (
         <>
           <dl className="kn-settings">
             <div>
-              <dt>Vault folder</dt>
+              <dt>Knowledge folder</dt>
               <dd>
                 <code>{info.data.vault}</code>
               </dd>
@@ -53,11 +52,11 @@ export function KnowledgeSection() {
               disabled={actions.setAgentAccess.isPending}
               onChange={(event) => actions.setAgentAccess.mutate(event.target.checked)}
             />
-            Agents can use knowledge
+            Agents can use Knowledge
           </label>
           <p className="settings-muted-strong">
-            When off, agents cannot search, read or write notes. Files with names like .env or keys
-            are never served, but Score cannot recognise every secret: do not store secrets in
+            When off, agents can’t search, read or write notes. Files with names like .env or keys
+            are never served, but Score can’t recognise every secret, so don’t store secrets in
             notes.
           </p>
           <AgentUsage />

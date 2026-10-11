@@ -639,10 +639,10 @@ export function EditorToolbar({ view, state, notes, notice, onNotice, linkReques
           />
           <Tool
             id={'align-center'}
-            label={'Align column center'}
+            label={'Align column centre'}
             icon={null}
             onRun={() => run((v) => alignColumn(v, 'center'))}
-            text={'Center'}
+            text={'Centre'}
             disabled={!ready}
           />
           <Tool
@@ -715,7 +715,7 @@ function CodeLanguage({
       </form>
       {inBlock && (
         <p className="kn-muted">
-          The caret is in a code block: choosing a language removes the block.
+          The cursor is in a code block. Choosing a language removes the block.
         </p>
       )}
     </div>

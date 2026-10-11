@@ -88,7 +88,7 @@ export function NewNoteDialog({
     <Modal title="New note" onClose={onClose}>
       <form onSubmit={submit}>
         <label>
-          Path in the vault
+          Path in Knowledge
           <input
             value={value}
             maxLength={500}
@@ -203,8 +203,8 @@ export function DeleteDialog({
     <Modal title={`Delete ${document ? path.split('/').pop() : baseName(path)}?`} onClose={onClose}>
       <p>
         {document
-          ? 'The file is removed from the vault. If it is versioned in git (files up to 10 MB), its history keeps the last version; larger files are gone for good.'
-          : 'The note is removed from the vault. If git is available, its history keeps every earlier version.'}
+          ? 'The file is removed from Knowledge. If it is versioned in git (files up to 10 MB), its history keeps the last version; larger files are gone for good.'
+          : 'The note is removed from Knowledge. If git is available, its history keeps every earlier version.'}
       </p>
       {error != null && (
         <p role="alert">

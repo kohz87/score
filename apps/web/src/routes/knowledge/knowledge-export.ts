@@ -37,7 +37,7 @@ export async function downloadExport(request: KnowledgeExportRequest): Promise<v
     throw new ApiError(
       response.status,
       parsed.success ? parsed.data.error.code : 'request_failed',
-      parsed.success ? parsed.data.error.message : 'The export failed. Please try again.',
+      parsed.success ? parsed.data.error.message : 'The export failed. Try again.',
       parsed.success ? parsed.data.error.details : undefined,
     )
   }

@@ -8,9 +8,9 @@ import { timeAgo } from './knowledge-paths.ts'
 
 const NO_TEXT: Record<string, string> = {
   unavailable:
-    'Text is not available for this file (it may be scanned, encrypted, damaged or empty). It is stored and can be downloaded, but agents and search cannot read it.',
+    'Text is not available for this file (it may be scanned, encrypted, damaged or empty). It is stored and can be downloaded, but agents and search can’t read it.',
   none: '',
-  truncated: 'The text was cut at 2 MiB. Search and agents see the first part only.',
+  truncated: 'The text was cut at 2 MB. Search and agents see the first part only.',
 }
 
 function Body({ doc }: { doc: KnowledgeDocument }) {
@@ -42,8 +42,8 @@ function Body({ doc }: { doc: KnowledgeDocument }) {
           </ul>
         )}
         <p className="kn-muted">
-          Zips are stored and downloadable; their contents are not searched. Upload it again and
-          choose “Unzip into a folder” to add the files.
+          Score stores zips for download but doesn’t search them. To add the files inside, upload
+          the zip again and choose “Unzip into a folder”.
         </p>
       </section>
     )
@@ -85,7 +85,7 @@ export function DocumentWorkspace({
     const missing = query.error instanceof ApiError && query.error.status === 404
     return (
       <div className="kn-empty" role="alert">
-        <h2>{missing ? 'This file does not exist' : 'Could not open this file'}</h2>
+        <h2>{missing ? 'This file doesn’t exist' : 'Couldn’t open this file'}</h2>
         <p className="kn-muted">
           {missing
             ? 'It may have been moved or deleted.'
@@ -139,7 +139,7 @@ export function DocumentWorkspace({
           <dt>Versions</dt>
           <dd>
             {doc.versioned
-              ? 'In the vault history (git)'
+              ? 'In Knowledge history (git)'
               : 'Not versioned: files over 10 MB are stored without history'}
           </dd>
         </div>

@@ -201,7 +201,7 @@ describe('tables', () => {
     expect(doc().trim().split('\n')).toHaveLength(5)
     fireEvent.click(within(strip).getByRole('button', { name: 'Add column right' }))
     expect(doc().split('\n')[0]).toBe('| Column 1 | Column 3 | Column 2 |')
-    fireEvent.click(within(strip).getByRole('button', { name: 'Align column center' }))
+    fireEvent.click(within(strip).getByRole('button', { name: 'Align column centre' }))
     expect(doc().split('\n')[1]).toBe(
       '| --- | :---: | --- |'.replace('--- | :---: |', '--- | :---: |'),
     )

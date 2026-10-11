@@ -171,7 +171,7 @@ export function KnowledgePage() {
       {dragging && (
         <p className="kn-drop-hint" role="status">
           Drop to add the files to{' '}
-          <code>{(filesFolder ?? (path ? folderOf(path) : '')) || 'the vault'}</code>
+          <code>{(filesFolder ?? (path ? folderOf(path) : '')) || 'Knowledge'}</code>
         </p>
       )}
       <button
@@ -233,7 +233,7 @@ export function KnowledgePage() {
             {flow.busy ? 'Uploading…' : 'Upload'}
           </button>
           <button type="button" onClick={() => openDialog({ kind: 'export-vault' })}>
-            Export vault
+            Export Knowledge
           </button>
         </div>
         <label className="kn-search">
@@ -249,7 +249,7 @@ export function KnowledgePage() {
         {searching ? (
           <section aria-label="Search results">
             {search.isPending && debounced !== '' && <p role="status">Searching…</p>}
-            {search.isError && <p role="alert">Search is not available right now.</p>}
+            {search.isError && <p role="alert">Couldn’t search Knowledge. Try again.</p>}
             {search.data && search.data.length === 0 && (
               <p className="kn-muted">Nothing matches “{debounced}”.</p>
             )}
@@ -292,7 +292,7 @@ export function KnowledgePage() {
             <section aria-labelledby="kn-all">
               <h2 id="kn-all">All notes</h2>
               {tree.isPending && <p role="status">Loading notes…</p>}
-              {tree.isError && <p role="alert">Could not load the notes.</p>}
+              {tree.isError && <p role="alert">Couldn’t load the notes.</p>}
               {tree.data && <KnowledgeTree tree={tree.data} current={path} onDropFiles={upload} />}
             </section>
           </>
@@ -310,7 +310,7 @@ export function KnowledgePage() {
         )}
         {info.data && !info.data.gitAvailable && (
           <p className="kn-banner is-warn">
-            Git is not available for this vault. Notes still save; history and undo are unavailable.
+            Git isn’t available for Knowledge. Notes still save; history and undo are unavailable.
           </p>
         )}
         {path && !isNotePath(path) ? (
@@ -376,7 +376,7 @@ export function KnowledgePage() {
 
       {dialog?.kind === 'export-vault' && (
         <ExportDialog
-          heading="Export the whole vault"
+          heading="Export all of Knowledge"
           request={{ all: true }}
           busy={exporter.busy}
           onClose={() => setDialog(null)}

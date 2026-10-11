@@ -189,7 +189,7 @@ test('documents appear in the tree with a type badge and open on their own page'
   expect(await screen.findByText('Quarterly budget extracted text')).toBeDefined()
   const download = screen.getByRole('link', { name: 'Download' })
   expect(download.getAttribute('href')).toBe('/api/knowledge/files/inbox/spec.pdf?download=1')
-  expect(screen.getByText('In the vault history (git)')).toBeDefined()
+  expect(screen.getByText('In Knowledge history (git)')).toBeDefined()
 })
 
 test('a PDF without text says so; an unversioned image says it has no history', async () => {
@@ -245,8 +245,8 @@ test('uploading puts the raw file and reports it', async () => {
   expect(puts()).toHaveLength(1)
   expect(puts()[0]!.url).toBe('/api/knowledge/files/inbox/notes.pdf?onConflict=ask')
   const banner = screen.getByText(/Not added:/).textContent!
-  expect(banner).toContain('virus.exe: this type is not supported')
-  expect(banner).toContain('big.csv: larger than 25 MB')
+  expect(banner).toContain('virus.exe: this file type isn’t supported')
+  expect(banner).toContain('big.csv: larger than the 25 MB limit')
 })
 
 test('a name that exists asks keep both or replace, once for the whole batch if ticked', async () => {
@@ -460,8 +460,10 @@ test('selected files and a folder are exported as zips', async () => {
 test('exporting the whole vault shows the file count and size first', async () => {
   const names = stubDownload()
   mount('/knowledge')
-  fireEvent.click(await screen.findByRole('button', { name: 'Export vault' }, { timeout: 10_000 }))
-  const dialog = await screen.findByRole('dialog', { name: 'Export the whole vault' })
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Export Knowledge' }, { timeout: 10_000 }),
+  )
+  const dialog = await screen.findByRole('dialog', { name: 'Export all of Knowledge' })
   await within(dialog).findByText(/7 files, 5\.0 MB before compression/)
   expect(names).toHaveLength(0)
   fireEvent.click(within(dialog).getByRole('button', { name: 'Download zip' }))

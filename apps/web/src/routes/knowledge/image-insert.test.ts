@@ -29,12 +29,12 @@ function stubView(length: number) {
   return { view: view as unknown as EditorView, dispatch }
 }
 
-test('a note that would pass 8 MiB is refused with a message and nothing is inserted', async () => {
+test('a note that would pass 8 MB is refused with a message and nothing is inserted', async () => {
   const { view, dispatch } = stubView(8 * 1024 * 1024 - 10)
   const report = vi.fn()
   await addImageFiles(view, [png('a.png')], report, { open })
   expect(dispatch).not.toHaveBeenCalled()
-  expect(report).toHaveBeenLastCalledWith(expect.stringMatching(/8 MiB/))
+  expect(report).toHaveBeenLastCalledWith(expect.stringMatching(/8 MB/))
 })
 
 test('files that cannot be used are skipped and named; the others are still added', async () => {

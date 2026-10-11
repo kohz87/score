@@ -40,9 +40,9 @@ export const isSupportedName = (name: string) => SUPPORTED.has(extensionOf(name)
 /** Why a file will not be uploaded, or null. */
 export function uploadProblem(file: { name: string; size: number }): string | null {
   if (!isSupportedName(file.name))
-    return `${file.name}: this type is not supported (notes, PDF, DOCX, CSV, JSON, HTML, images and zip files are)`
+    return `${file.name}: this file type isn’t supported. Use notes, PDF, DOCX, CSV, JSON, HTML, images or zip files`
   if (file.size === 0) return `${file.name}: the file is empty`
-  if (file.size > MAX_UPLOAD_BYTES) return `${file.name}: larger than 25 MB`
+  if (file.size > MAX_UPLOAD_BYTES) return `${file.name}: larger than the 25 MB limit`
   return null
 }
 

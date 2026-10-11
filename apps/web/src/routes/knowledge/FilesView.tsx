@@ -132,7 +132,7 @@ export function FilesView({
               onClick={() => onOpenFolder('')}
               aria-current={folder === '' ? 'page' : undefined}
             >
-              Vault
+              Knowledge
             </button>
             {crumbs.map((name, index) => {
               const path = crumbs.slice(0, index + 1).join('/')
@@ -195,7 +195,7 @@ export function FilesView({
         </div>
       </header>
       <p className="kn-muted">
-        Drop files here to add them to {folder === '' ? 'the vault' : <code>{folder}</code>}. Notes
+        Drop files here to add them to {folder === '' ? 'Knowledge' : <code>{folder}</code>}. Notes
         (.md, .txt), PDF, DOCX, CSV, JSON, HTML, images and zip files, up to 25 MB each.
       </p>
       {rows.length === 0 ? (
