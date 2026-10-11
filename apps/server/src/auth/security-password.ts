@@ -1,9 +1,19 @@
-import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
+import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
 import fs from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { z } from 'zod'
 import { HttpError } from '../errors.ts'
+import {
+  ORIGIN_FILE,
+  PASSWORD_FILE,
+  PasswordLockError,
+  passwordDigest,
+  publishPassword,
+  STORED_PATTERN,
+  writeCredentialFile,
+  withPasswordLock,
+} from './password-store.ts'
 
 // The owner's security password guards pairing management (pair another device, renew, terminate), so a compromised
 // paired browser can't invite others, keep itself alive or lock the owner out. Only a salted scrypt hash is stored,
@@ -16,11 +26,8 @@ const scrypt = promisify(scryptCallback) as (
 ) => Promise<Buffer>
 const PARAMS = { N: 2 ** 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }
 const KEY_LENGTH = 32
-const FILE = 'security-password'
-// Who set the current password: `scripts/score password` on the host writes `host <sha256 of the stored line>`, a browser
-// writes `browser`. The terminal trusts only a password the host issued, so a stolen cookie can't enrol its own.
-const ORIGIN_FILE = 'security-password.origin'
-const StoredSchema = z.string().regex(/^scrypt\$15\$8\$1\$[A-Za-z0-9_-]{22}\$[A-Za-z0-9_-]{43}$/)
+const FILE = PASSWORD_FILE
+const StoredSchema = z.string().regex(STORED_PATTERN)
 export const PasswordSchema = z.string().min(8).max(256)
 
 const WINDOW_MS = 15 * 60 * 1000
@@ -43,21 +50,8 @@ export async function hashPassword(password: string): Promise<string> {
   return `scrypt$15$8$1$${salt.toString('base64url')}$${key.toString('base64url')}`
 }
 
-export function writePasswordFile(home: string, stored: string): void {
-  const path = join(home, FILE)
-  // Unique per call: a failed earlier replacement (or a concurrent one) must not leave a name that blocks this one.
-  const temp = `${path}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`
-  try {
-    fs.writeFileSync(temp, `${StoredSchema.parse(stored)}\n`, { mode: 0o600, flag: 'wx' })
-    fs.renameSync(temp, path)
-  } finally {
-    fs.rmSync(temp, { force: true })
-  }
-}
-
-export function passwordDigest(stored: string): string {
-  return createHash('sha256').update(stored).digest('hex')
-}
+export const writePasswordFile = writeCredentialFile
+export { passwordDigest }
 
 export class SecurityPassword {
   #failures: { at: number; session: string }[] = []
@@ -66,6 +60,8 @@ export class SecurityPassword {
   constructor(
     private readonly home: string | undefined,
     private readonly clock: () => number = Date.now,
+    /** Test seam: runs under the lock after the final comparison, right before the files are written. */
+    private readonly beforePublish?: () => Promise<void>,
   ) {}
 
   /**
@@ -163,11 +159,24 @@ export class SecurityPassword {
     const before = this.stored()
     if (before !== undefined) await this.verify(current, session)
     const hashed = await hashPassword(next.data)
-    // Compare-and-swap on the persisted credential (no await between check and write), so two setters, or a setter
-    // and `score password` on the host, can't overwrite one another unseen.
-    if (this.stored() !== before)
-      throw new HttpError(409, 'password_changed', 'The security password changed. Try again.')
-    writePasswordFile(this.home, hashed)
-    fs.writeFileSync(join(this.home, ORIGIN_FILE), 'browser\n', { mode: 0o600 })
+    // Compare-and-swap under the lock every writer takes (this server and `scripts/score password`, which is
+    // another process): the stored credential is checked again once we hold it, so a competing change is rejected,
+    // never overwritten unseen.
+    try {
+      await withPasswordLock(this.home, async () => {
+        if (this.stored() !== before)
+          throw new HttpError(409, 'password_changed', 'The security password changed. Try again.')
+        await this.beforePublish?.()
+        publishPassword(this.home!, hashed, 'browser')
+      })
+    } catch (error) {
+      if (error instanceof PasswordLockError)
+        throw new HttpError(
+          409,
+          'password_changed',
+          'The security password is being changed. Try again.',
+        )
+      throw error
+    }
   }
 }

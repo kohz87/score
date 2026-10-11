@@ -1,9 +1,8 @@
 // Sets (or resets) Score's security password from the host terminal: `scripts/score password`.
 // Same format as apps/server/src/auth/security-password.ts (salted scrypt, N=2^15, r=8, p=1, 32-byte key).
-import { createHash, randomBytes, scryptSync } from 'node:crypto'
-import { renameSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { applyHostPassword } from '../apps/server/src/auth/password-store.ts'
 
 const home = process.env.SCORE_HOME || join(homedir(), '.score')
 
@@ -46,20 +45,12 @@ if ((await ask('Again: ')) !== password) {
   console.error('The two entries differ. Nothing changed.')
   process.exit(1)
 }
-const salt = randomBytes(16)
-const key = scryptSync(password, salt, 32, { N: 2 ** 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 })
-const path = join(home, 'security-password')
-const temp = `${path}.${process.pid}.tmp`
-writeFileSync(temp, `scrypt$15$8$1$${salt.toString('base64url')}$${key.toString('base64url')}\n`, {
-  mode: 0o600,
-  flag: 'wx',
-})
-const line = `scrypt$15$8$1$${salt.toString('base64url')}$${key.toString('base64url')}`
-// Marks the password as host-issued (the web terminal trusts only those); the digest ties the mark to this exact hash.
-writeFileSync(
-  join(home, 'security-password.origin'),
-  `host ${createHash('sha256').update(line).digest('hex')}\n`,
-  { mode: 0o600 },
-)
-renameSync(temp, path)
-console.log(`Security password set (${path}). It applies at once; no restart needed.`)
+// Hash, then publish under the lock the server's setter takes too (a browser change can be in flight), provenance
+// first and credential second: see apps/server/src/auth/password-store.ts.
+try {
+  const path = await applyHostPassword(home, password)
+  console.log(`Security password set (${path}). It applies at once; no restart needed.`)
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exit(1)
+}
