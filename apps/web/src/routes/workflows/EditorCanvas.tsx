@@ -10,7 +10,6 @@ import {
   type PointerEvent,
 } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
-import { NodeShape } from '../orchestrations/LiveDiagram.tsx'
 import { layoutFlow, type Point } from '../now/flow/layout.ts'
 import { withPositions } from '../now/flow/free-layout.ts'
 import { KIND_LABEL, portsOf, type Draft } from './workflow-model.ts'
@@ -26,6 +25,10 @@ import {
 } from './workflow-layout.ts'
 import { issuesForNode, worstSeverity, type IssueIndex } from './workflow-validation.ts'
 import { edgeLabelOf } from './workflow-run-model.ts'
+import type { LiveOverlay } from './use-live-overlay.ts'
+import { NodeShape, shapedWord } from '../orchestrations/LiveDiagram.tsx'
+import { statusSegments } from '../../live/status-line.ts'
+import { visualLabel } from '../orchestrations/orch-model.ts'
 import '../orchestrations/orchestrations.css'
 
 // The editor's canvas (PLAN 7.1b, free placement 7.1c): the Flow canvas in edit mode. A definition without a layout is
@@ -62,6 +65,7 @@ export function EditorCanvas({
   onDeleteEdge,
   onLayout,
   announce,
+  overlay = null,
 }: {
   draft: Draft
   agents: AgentSummary[]
@@ -79,6 +83,8 @@ export function EditorCanvas({
   /** Positions changed (a drag, a keyboard move, "Arrange automatically"); `coalesce` merges a run of key presses. */
   onLayout: (next: Draft, coalesce?: string) => void
   announce: (message: string) => void
+  /** The states of a run going now, drawn over the nodes (PLAN 5.39); the draft is not touched. */
+  overlay?: LiveOverlay | null
 }) {
   const viewport = useRef<HTMLDivElement>(null)
   const world = useRef<HTMLDivElement>(null)
@@ -569,12 +575,14 @@ export function EditorCanvas({
                 const b = points[2]
                 const bad = issues.byEdge.get(edge.id)
                 const on = selected?.kind === 'edge' && selected.id === edge.id
+                const taken = overlay?.edges.get(edge.id)
                 return (
                   <g key={edge.id} data-edge-id={edge.id}>
                     <path
                       d={d}
                       data-edge={edge.id}
-                      className={`orch-edge orch-edge--${edge.port === 'failed' ? 'failed' : edge.port === 'rejected' ? 'rejected' : 'ok'}${on ? ' wf-edge--selected' : ''}${bad ? ' wf-edge--bad' : ''}`}
+                      {...(taken ? { 'data-edge-state': taken } : {})}
+                      className={`orch-edge orch-edge--${edge.port === 'failed' ? 'failed' : edge.port === 'rejected' ? 'rejected' : 'ok'}${taken ? ` orch-edge--${taken}` : ''}${on ? ' wf-edge--selected' : ''}${bad ? ' wf-edge--bad' : ''}`}
                       markerEnd="url(#wf-edit-arrow)"
                     />
                     <path
@@ -615,16 +623,20 @@ export function EditorCanvas({
               const shaped = node.kind !== 'agent'
               const isOn = selected?.kind === 'node' && selected.id === node.id
               const ports = portsOf(node)
+              const live = overlay?.nodes.get(node.id)
               const second =
-                node.kind === 'agent'
-                  ? glyph.name
-                  : node.kind === 'branch'
-                    ? `${node.rules.length} ${node.rules.length === 1 ? 'rule' : 'rules'} and otherwise`
-                    : node.kind === 'gate'
-                      ? 'waits for you'
-                      : node.kind === 'join'
-                        ? 'waits for all'
-                        : 'finishes the run'
+                live?.status ??
+                (live
+                  ? shapedWord(node.kind, live.visual)
+                  : node.kind === 'agent'
+                    ? glyph.name
+                    : node.kind === 'branch'
+                      ? `${node.rules.length} ${node.rules.length === 1 ? 'rule' : 'rules'} and otherwise`
+                      : node.kind === 'gate'
+                        ? 'waits for you'
+                        : node.kind === 'join'
+                          ? 'waits for all'
+                          : 'finishes the run')
               return (
                 <div
                   key={node.id}
@@ -646,7 +658,7 @@ export function EditorCanvas({
                       else nodeRefs.current.delete(node.id)
                     }}
                     type="button"
-                    className={`orch-node orch-node--edit${shaped ? ` orch-node--shaped orch-node--shape-${node.kind}` : ''}${isOn ? ' orch-node--selected' : ''}${moving === node.id ? ' orch-node--moving' : ''}${dragging?.id === node.id ? ' orch-node--dragging' : ''}`}
+                    className={`orch-node orch-node--edit${live ? ` orch-node--${live.visual}` : ''}${shaped ? ` orch-node--shaped orch-node--shape-${node.kind}` : ''}${isOn ? ' orch-node--selected' : ''}${moving === node.id ? ' orch-node--moving' : ''}${dragging?.id === node.id ? ' orch-node--dragging' : ''}`}
                     style={{
                       width: size.w,
                       height: size.h,
@@ -656,7 +668,7 @@ export function EditorCanvas({
                     data-kind={node.kind}
                     aria-pressed={isOn}
                     aria-keyshortcuts="M"
-                    aria-label={`${KIND_LABEL[node.kind]} ${node.label || node.id}${node.kind === 'agent' ? `, ${glyph.name}` : ''}${mine.length > 0 ? `, ${mine.length} ${mine.length === 1 ? 'problem' : 'problems'}` : ''}`}
+                    aria-label={`${KIND_LABEL[node.kind]} ${node.label || node.id}${node.kind === 'agent' ? `, ${glyph.name}` : ''}${live ? `, ${visualLabel[live.visual]}${live.status ? `: ${live.status.replaceAll('`', '')}` : ''}` : ''}${mine.length > 0 ? `, ${mine.length} ${mine.length === 1 ? 'problem' : 'problems'}` : ''}`}
                     tabIndex={node.id === focusId ? 0 : -1}
                     onFocus={() => setActiveId(node.id)}
                     onBlur={() => setMoving((current) => (current === node.id ? null : current))}
@@ -683,8 +695,13 @@ export function EditorCanvas({
                     )}
                     <span className="orch-node__text">
                       <b>{node.label || node.id}</b>
-                      <span>{second}</span>
+                      <span>
+                        {statusSegments(second).map((segment, i) =>
+                          i % 2 === 1 ? <code key={i}>{segment}</code> : segment,
+                        )}
+                      </span>
                     </span>
+                    {live?.visual === 'gate' && <span className="orch-node__flag">Needs you</span>}
                   </button>
                   {mine.length > 0 && (
                     <span className={`wf-node__flag wf-node__flag--${worst}`} aria-hidden="true">

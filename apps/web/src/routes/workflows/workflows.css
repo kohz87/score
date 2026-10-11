@@ -764,3 +764,75 @@
   cursor: help;
   font-size: 13px;
 }
+
+/* PLAN 5.39: live overlay line and the preview. */
+.wf-live {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--agent-jade-text);
+}
+.wf-live a {
+  color: var(--ink);
+}
+.wf-live__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--agent-jade);
+}
+.wf-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.wf-preview__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.wf-preview__label {
+  border-radius: var(--radius-pill);
+  padding: 4px 14px;
+  background: var(--agent-saffron-tint);
+  color: var(--agent-saffron-text);
+  font-size: 14px;
+}
+.wf-preview__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.wf-preview__speed {
+  display: inline-flex;
+  gap: 4px;
+}
+.wf-preview__speed button[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--card);
+}
+.wf-preview__ask {
+  min-height: 1.6em;
+}
+.wf-preview__card {
+  display: grid;
+  gap: 10px;
+}
+.wf-preview__options {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.wf-preview__done {
+  margin: 0;
+  color: var(--ink-muted);
+}
