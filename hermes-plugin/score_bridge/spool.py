@@ -29,10 +29,31 @@ def close_inherited_descriptors():
     _OPEN_FDS.clear()
 
 
-def encode(events, producer=None, last_counter=0, *, pending_gap=False, history_evicted=False):
+def process_start(pid):
+    """Boot id plus the kernel start time of ``pid``: what makes a recycled pid distinguishable.
+
+    None where /proc is unavailable or the process is gone; callers then fall back to the pid alone."""
+    try:
+        boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        raw = Path(f"/proc/{int(pid)}/stat").read_text()
+        # comm may contain spaces and parentheses; the fields after the last ")" are fixed.
+        start = int(raw[raw.rindex(")") + 2:].split()[19])
+    except (OSError, ValueError, IndexError):
+        return None
+    return {"boot": boot, "start": start} if boot else None
+
+
+def _valid_start(start):
+    return (isinstance(start, dict) and set(start) == {"boot", "start"}
+            and isinstance(start["boot"], str) and type(start["start"]) is int)
+
+
+def encode(events, producer=None, last_counter=0, *, pending_gap=False, history_evicted=False, start=None):
     record = {"events": events, "lastCounter": last_counter}
     if producer is not None:
         record["producer"] = producer
+    if start is not None:
+        record["start"] = start
     if pending_gap:
         record["pendingGap"] = True
     if history_evicted:
@@ -104,6 +125,8 @@ class Spool:
         self.dropped = self.corrupt = self.refused = self.quarantined = 0
         self.producer = None
         self._identities = {}
+        self._starts = {}
+        self._verified = {}
         self._high_water = {}
         self.deadline = None
 
@@ -134,12 +157,29 @@ class Spool:
             present = set(self.directory.glob("*.jsonl"))
             self._identities = {p: v for p, v in self._identities.items() if p in present}
             self._high_water = {p: v for p, v in self._high_water.items() if p in present}
-            for temporary in self.directory.glob(".outbox-*"):
+            self._starts = {p: v for p, v in self._starts.items() if p in present}
+            self._verified = {p: v for p, v in self._verified.items() if p in present}
+            stale = list(self.directory.glob(".outbox-*"))
+            for temporary in stale:
                 temporary.unlink(missing_ok=True)
+            if stale:
+                self._fsync_directory(self.directory)
             yield
         finally:
             _OPEN_FDS.discard(fd)
             os.close(fd)
+
+    def _fsync_directory(self, directory):
+        # A rename or unlink is only durable once the parent directory entry is flushed.
+        fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+    def _signature(self, path):
+        info = path.stat()
+        return (info.st_mtime_ns, info.st_size, info.st_ino)
 
     def _safe_directory(self, path):
         info = path.lstat()
@@ -182,8 +222,13 @@ class Spool:
                         or type(record.get("producerHistoryEvicted", False)) is not bool
                         or record.get("pendingGap") and (len(batch) != 1 or batch[0]["hook"] != "bridge.gap")):
                     raise ValueError()
+                start = record.get("start")
+                if start is not None and not _valid_start(start):
+                    raise ValueError()
                 if producer is not None:
                     self._identities[path] = producer
+                if start is not None:
+                    self._starts[path] = start
                 self._high_water[path] = max(self._high_water.get(path, 0), high, batch[-1]["counter"])
                 records.append({"events": batch, "pendingGap": record.get("pendingGap", False),
                                 "producerHistoryEvicted": record.get("producerHistoryEvicted", False)})
@@ -208,7 +253,8 @@ class Spool:
     def _encoded(self, path, record):
         return encode(record["events"], self._identities.get(path), self._high_water.get(path, 0),
                       pending_gap=record.get("pendingGap", False),
-                      history_evicted=record.get("producerHistoryEvicted", False))
+                      history_evicted=record.get("producerHistoryEvicted", False),
+                      start=self._starts.get(path))
 
     def _size(self, path, records):
         return sum(len(self._encoded(path, record)) for record in records)
@@ -217,6 +263,8 @@ class Spool:
         self._check_deadline()
         if not records:
             path.unlink(missing_ok=True)
+            self._verified.pop(path, None)
+            self._fsync_directory(self.directory)
             return
         fd, temporary = tempfile.mkstemp(prefix=".outbox-", dir=self.directory)
         _OPEN_FDS.add(fd)
@@ -230,9 +278,13 @@ class Spool:
                 os.fsync(fd)
             _OPEN_FDS.discard(fd)
             os.replace(temporary, path)
+            temporary = None
+            self._fsync_directory(self.directory)
+            self._verified[path] = self._signature(path)
         finally:
             _OPEN_FDS.discard(fd)
-            Path(temporary).unlink(missing_ok=True)
+            if temporary is not None:
+                Path(temporary).unlink(missing_ok=True)
 
     def _merge_marker(self, records, marker, *, history=False):
         ordinary = []
@@ -276,6 +328,9 @@ class Spool:
         with self._locked():
             if self.producer is not None:
                 self._identities[self.path] = self.producer
+                start = process_start(self.producer["pid"])
+                if start is not None:
+                    self._starts[self.path] = start
             records = self._read(self.path)
             self._high_water[self.path] = max(self._high_water.get(self.path, 0), events[-1]["counter"])
             if reported_gap:
@@ -287,15 +342,19 @@ class Spool:
             self._enforce_directory()
 
     def _enforce_directory(self):
-        files = {}
-        for path in self.directory.glob("*.jsonl"):
-            if not path.is_symlink():
-                records = self._read(path)
-                self._fit_file(path, records)
-                # Whitespace and corruption also count physically; normalize foreign files.
+        paths = [p for p in self.directory.glob("*.jsonl") if not p.is_symlink()]
+        for path in paths:
+            # Only files that changed since this process last saw them are re-read; and a re-read file is
+            # rewritten only when its bytes are not already what the loss-aware encoding would produce.
+            if self._verified.get(path) == self._signature(path):
+                continue
+            records = self._read(path)
+            self._fit_file(path, records)
+            if not records or self._size(path, records) != path.stat().st_size:
                 self._write(path, records)
-                if records:
-                    files[path] = records
+            else:
+                self._verified[path] = self._signature(path)
+        files = {}
         quarantine = self.directory / "quarantine"
         quarantined = []
         if quarantine.exists():
@@ -304,12 +363,23 @@ class Spool:
         for path in tuple(quarantined):
             if path.stat().st_size > self.file_cap:
                 path.unlink()
+                self._fsync_directory(quarantine)
                 quarantined.remove(path)
                 self.dropped += 1
-        while sum(p.stat().st_size for p in files) + sum(p.stat().st_size for p in quarantined) > self.directory_cap:
+        def total():
+            return (sum(p.stat().st_size for p in paths if p.exists())
+                    + sum(p.stat().st_size for p in quarantined))
+        if total() > self.directory_cap:
+            # Eviction needs the records; load them only when the directory is actually over its cap.
+            for path in paths:
+                records = self._read(path) if path.exists() else []
+                if records:
+                    files[path] = records
+        while total() > self.directory_cap:
             self._check_deadline()
             if quarantined:
                 quarantined.pop(0).unlink()
+                self._fsync_directory(quarantine)
                 self.dropped += 1
                 continue
             candidates = [p for p, records in files.items() if any(not r.get("pendingGap") for r in records)]
@@ -328,6 +398,18 @@ class Spool:
                     files[retained][0]["producerHistoryEvicted"] = True
                     self._write(retained, files[retained])
 
+    @staticmethod
+    def _producer_alive(pid, recorded):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            pass  # exists, but owned by someone else: judged by its start identity below
+        current = process_start(pid) if recorded is not None else None
+        # The pid is held by a different process (recycled, or after a reboot): the producer is gone.
+        return current is None or current == recorded
+
     def recoverable(self):
         with self._locked():
             self._enforce_directory()
@@ -339,12 +421,8 @@ class Spool:
                 producer = self._identities.get(path)
                 if not records or producer is None:
                     continue
-                try:
-                    os.kill(producer["pid"], 0)
-                except ProcessLookupError:
+                if not self._producer_alive(producer["pid"], self._starts.get(path)):
                     identities.append((records[0]["events"][0]["at"], producer))
-                except PermissionError:
-                    continue
             return [p for _, p in sorted(identities, key=lambda entry: entry[0])]
 
     def peek(self, after=0):
@@ -401,6 +479,9 @@ class Spool:
             self._safe_directory(directory)
             if self.path.exists():
                 os.replace(self.path, directory / self.path.name)
+                self._fsync_directory(directory)
+                self._fsync_directory(self.directory)
+                self._verified.pop(self.path, None)
                 self.quarantined += 1
             # Quarantine shares the directory quota with healthy producer histories.
             self._enforce_directory()

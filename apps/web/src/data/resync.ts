@@ -5,7 +5,8 @@ import type { StreamSource } from './stream.ts'
 export type StreamSnapshot<T> = { asOfSeq: number; data: T }
 export type StreamQueryDefinition<T> = {
   key: QueryKey
-  fetch: () => Promise<StreamSnapshot<T>>
+  // `signal` aborts on a newer request, on idle/dispose and at the snapshot deadline.
+  fetch: (signal?: AbortSignal) => Promise<StreamSnapshot<T>>
   types: StreamEvent['type'][]
   reduce: (data: T, event: StreamEvent) => T
 }
@@ -36,8 +37,15 @@ const RETRY_BASE_MS = 1000
 const RETRY_MAX_MS = 30_000
 // Events held behind a fence beyond this restart the snapshot instead of growing without bound.
 const MAX_BUFFERED_EVENTS = 2000
+// A snapshot request that takes longer than this is abandoned and handled like any other failure.
+const SNAPSHOT_TIMEOUT_MS = 30_000
 
-export type RegistryOptions = { idleEvictMs?: number; retryBaseMs?: number; maxBuffered?: number }
+export type RegistryOptions = {
+  idleEvictMs?: number
+  retryBaseMs?: number
+  maxBuffered?: number
+  snapshotTimeoutMs?: number
+}
 
 // Calls `run` once, on the next animation frame. Hidden tabs never get frames, so they use a short
 // timer instead, and a backstop timer covers a tab that is hidden after the frame was requested.
@@ -81,6 +89,7 @@ export function createStreamQueryRegistry(
   const idleEvictMs = options.idleEvictMs ?? IDLE_EVICT_MS
   const retryBaseMs = options.retryBaseMs ?? RETRY_BASE_MS
   const maxBuffered = options.maxBuffered ?? MAX_BUFFERED_EVENTS
+  const snapshotTimeoutMs = options.snapshotTimeoutMs ?? SNAPSHOT_TIMEOUT_MS
   const entries = new Map<string, Entry>()
   // Entries with queued events share one frame callback; each entry applies its queue in one write.
   const dirty = new Set<Entry>()
@@ -124,6 +133,9 @@ export function createStreamQueryRegistry(
     let generation = 0
     let fetching = false
     let fenced = false
+    // Events were dropped while a snapshot was in flight, so that snapshot cannot be trusted.
+    let overflowed = false
+    let controller: AbortController | undefined
     let buffer: StreamEvent[] = []
     // Events that arrived while the cache was settled; applied together on the next frame.
     let pending: StreamEvent[] = []
@@ -155,28 +167,44 @@ export function createStreamQueryRegistry(
           }
     }
     async function refetch(fence = false) {
-      if (!observers || disposed) return
+      if (disposed) return
+      // The fence is recorded even while nobody observes: an idle cache may predate the epoch/reset
+      // and must not be trusted when the next observer arrives.
+      if (fence) {
+        fenced = true
+        pending = []
+      }
+      if (!observers) return
       // Settled-state events keep their order ahead of anything buffered during this fetch. A fence
       // drops them, like it drops the buffer: the client may have missed events around them.
-      if (fence) pending = []
-      else flush()
+      if (!fence) flush()
+      // One snapshot request per entry: a newer one cancels the older.
+      controller?.abort()
+      const ctl = (controller = new AbortController())
+      const timeout = setTimeout(
+        () => ctl.abort(new Error('The snapshot request timed out.')),
+        snapshotTimeoutMs,
+      )
       const request = ++generation
       fetching = true
-      if (fence) {
-        buffer = []
-        fenced = true
-      }
+      overflowed = false
+      if (fence) buffer = []
       publish('pending', null)
       // Separate request keys prevent TanStack's in-flight deduplication from merging generations.
       const requestKey = ['score-stream-snapshot', hash, request]
       try {
         const snapshot = await queryClient.fetchQuery({
           queryKey: requestKey,
-          queryFn: definition.fetch,
+          queryFn: () => abortable(definition.fetch(ctl.signal), ctl.signal),
           staleTime: 0,
           retry: false,
         })
         if (disposed || request !== generation || !observers) return
+        if (overflowed) {
+          // Events were dropped while this was in flight; one follow-up replaces it.
+          void refetch(true)
+          return
+        }
         const next = buffer.sort((a, b) => a.seq - b.seq).reduce(apply, snapshot)
         buffer = []
         fetching = false
@@ -197,18 +225,21 @@ export function createStreamQueryRegistry(
           }
           publish('error', error)
           // The fence stays until a snapshot succeeds, so keep trying rather than buffering forever.
-          if (fenced) {
+          if (fenced || !previous) {
             clearTimeout(retryTimer)
             const delay = Math.min(retryBaseMs * 2 ** failures++, RETRY_MAX_MS)
             retryTimer = setTimeout(() => void recover(), delay)
           }
         }
       } finally {
+        clearTimeout(timeout)
+        if (controller === ctl) controller = undefined
         queryClient.removeQueries({ queryKey: requestKey, exact: true })
       }
     }
     function recover() {
-      if (fenced && !fetching && observers > 0 && !disposed) void refetch(true)
+      // A cacheless failure needs the same retry as a fenced one: nothing else would fetch it again.
+      if ((fenced || !cached()) && !fetching && observers > 0 && !disposed) void refetch(fenced)
     }
     function flush() {
       dirty.delete(entry)
@@ -230,9 +261,15 @@ export function createStreamQueryRegistry(
       event(event) {
         if (!observers || !definition.types.includes(event.type)) return
         if (fetching || fenced || !cached()) {
+          if (overflowed) return
           buffer.push(event)
-          // Restart the snapshot instead of holding an unbounded backlog; it covers everything buffered.
-          if (fenced && buffer.length > maxBuffered) void refetch(true)
+          // Never hold an unbounded backlog, in any buffering state. Dropped events make the cache
+          // untrustworthy (fence) and a snapshot in flight unusable (one follow-up replaces it).
+          if (buffer.length > maxBuffered) {
+            buffer = []
+            fenced = true
+            if (fetching) overflowed = true
+          }
         } else {
           pending.push(event)
           markDirty(entry)
@@ -244,6 +281,7 @@ export function createStreamQueryRegistry(
         disposed = true
         clearTimeout(retryTimer)
         clearTimeout(idleTimer)
+        controller?.abort()
         generation++
         buffer = []
         pending = []
@@ -255,8 +293,11 @@ export function createStreamQueryRegistry(
     }
     entries.set(hash, entry)
     const handle: StreamQueryHandle<T> = {
-      getSnapshot: () => state,
-      refetch,
+      // After eviction this handle forwards everything to the current registration, not just subscribe.
+      getSnapshot: () =>
+        (evicted ? (handles.get(hash)?.getSnapshot() ?? state) : state) as StreamQueryState<T>,
+      refetch: (): Promise<void> =>
+        evicted ? (handles.get(hash)?.refetch() ?? Promise.resolve()) : refetch(),
       subscribe(listener) {
         // The registration was evicted while idle: register again and subscribe to the fresh one.
         if (evicted) return register(definition).subscribe(listener)
@@ -277,8 +318,10 @@ export function createStreamQueryRegistry(
             releaseObserver?.()
             releaseObserver = undefined
             flush()
+            controller?.abort()
             generation++
             fetching = false
+            overflowed = false
             buffer = []
             clearTimeout(retryTimer)
             idleTimer = setTimeout(() => {
@@ -316,3 +359,11 @@ export type StreamQueryHandle<T> = {
   refetch: () => Promise<void>
 }
 export type StreamQueryRegistry = ReturnType<typeof createStreamQueryRegistry>
+
+function abortable<V>(promise: Promise<V>, signal: AbortSignal): Promise<V> {
+  return new Promise<V>((resolve, reject) => {
+    if (signal.aborted) return reject(signal.reason)
+    signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+    promise.then(resolve, reject)
+  })
+}
