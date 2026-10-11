@@ -97,7 +97,7 @@ function StepDetail({
           ? `Waiting on you for ${duration(Math.max(0, (now - Date.parse(approval.createdAt)) / 1000))}`
           : stateText[node.state]}
       </p>
-      {active && <StatusLine line={statusText} />}
+      {active && !approval && <StatusLine line={statusText} />}
       {detail.description && <p className="flow-inspector__description">{detail.description}</p>}
       {detail.steps.length > 0 && (
         <ul className="flow-steps" aria-label="Steps">

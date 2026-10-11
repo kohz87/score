@@ -191,9 +191,9 @@ export function OrchestrationLive({ orchestrationId }: { orchestrationId: string
             {...(hidden ? { hidden } : {})}
           />
           <p className="orch-legend orch-muted">
-            Dashed outline: queued. Amber with a diamond: needs you. Pulsing ring in the agent
-            colour: running. Tick: succeeded. Cross: failed or blocked. Question mark: not confirmed
-            as ended. Dashed line: a replacement.
+            Dashed outline: queued. Amber with a diamond: needs you. Soft glow in the agent colour:
+            running. Tick: succeeded. Cross: failed or blocked. Question mark: not confirmed as
+            ended. Dashed line: a replacement.
           </p>
         </div>
         <LiveLog
