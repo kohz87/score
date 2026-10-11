@@ -12,7 +12,7 @@ export const opencodeDriver: CodingDriver = {
   promptVia: 'stdin',
   verifiedPermissions: ['read-only', 'workspace-write', 'full'],
   warning: null,
-  requiresReadAck: false,
+  requiresReadAck: () => false,
   parseVersion: () => null,
   buildArgs() {
     throw new Error('OpenCode is not supported yet')

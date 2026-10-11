@@ -116,7 +116,7 @@ export function registerCodingAgentRoutes(
     const cli = await coding.locator.detect(driver)
     if (cli.state === 'not_supported' || cli.state === 'not_installed')
       throw new HttpError(422, 'cli_not_installed', cli.message ?? 'The CLI is not available')
-    if (driver.requiresReadAck && body.acknowledgeReads !== true)
+    if (driver.requiresReadAck(body.permission) && body.acknowledgeReads !== true)
       throw new HttpError(
         400,
         'acknowledgement_required',

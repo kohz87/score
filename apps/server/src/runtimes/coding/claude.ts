@@ -259,7 +259,7 @@ export const claudeDriver: CodingDriver = {
   promptVia: 'stdin',
   verifiedPermissions: ['read-only', 'workspace-write', 'full'],
   warning: null,
-  requiresReadAck: false,
+  requiresReadAck: () => false,
   parseVersion(output) {
     return /^(\d+\.\d+\.\d+)\b.*Claude Code/m.exec(output.trim())?.[1] ?? null
   },

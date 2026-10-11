@@ -278,7 +278,7 @@ export const antigravityDriver: CodingDriver = {
   verifiedPermissions: ['read-only', 'workspace-write', 'full'],
   warning:
     'Antigravity can also browse the web, generate images, schedule work and run sub-agents, beyond editing files.',
-  requiresReadAck: true,
+  requiresReadAck: (permission) => permission === 'full',
   usage: { args: ['-p', '/usage', '--output-format', 'json'], parse: parseAntigravityUsage },
   parseVersion(output) {
     return output.length > 400 ? null : (/\b(\d+\.\d+\.\d+)\b/.exec(output)?.[1] ?? null)

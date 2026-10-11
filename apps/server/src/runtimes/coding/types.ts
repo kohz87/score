@@ -79,7 +79,9 @@ export interface CodingDriver {
   /** Extra warning where the CLI is chosen (what it can do beyond editing files). */
   readonly warning: string | null
   /** Creating an agent needs the "it can read every file you can" acknowledgement. */
-  readonly requiresReadAck: boolean
+  /** True when the agent can read files outside its workspace at this level, so adding it needs the person's
+   *  acknowledgement (Codex always; Antigravity only at full access, where its sandbox is off). */
+  readonly requiresReadAck: (permission: CodingPermission) => boolean
   /** Whether the CLI can print its own quota, and how (never a model turn). */
   readonly usage?: { args: readonly string[]; parse(output: string): UsageReading }
   /** `--version` output to a bare version string, or null when it doesn't look like this CLI. */

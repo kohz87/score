@@ -55,7 +55,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-test('Antigravity: warning, quota, unverified level disabled, acknowledgement required, argv-free request', async () => {
+test('Antigravity: warning, quota, unverified level disabled, no read acknowledgement inside the sandbox, argv-free request', async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
@@ -76,15 +76,13 @@ test('Antigravity: warning, quota, unverified level disabled, acknowledgement re
   expect((full as HTMLInputElement).disabled).toBe(true)
   expect(screen.getByText(/not verified for agy yet/)).toBeDefined()
   fireEvent.change(screen.getByLabelText(/Agent name/), { target: { value: 'agy1' } })
+  // Below full access the sandbox keeps Antigravity inside its workspace: the box says so and no acknowledgement is asked.
+  expect(screen.getByText(/sandbox keeps it inside its workspace/)).toBeDefined()
+  expect(screen.queryByRole('checkbox', { name: /can read any file/ })).toBeNull()
   const submit = screen.getByRole('button', { name: 'Add coding agent' }) as HTMLButtonElement
-  expect(submit.disabled).toBe(true)
-  fireEvent.click(screen.getByRole('checkbox', { name: /can read every file/ }))
   expect(submit.disabled).toBe(false)
   fireEvent.click(submit)
   await waitFor(() => expect(posted.length).toBe(1))
-  expect(posted[0]).toMatchObject({
-    runtime: 'antigravity',
-    permission: 'workspace-write',
-    acknowledgeReads: true,
-  })
+  expect(posted[0]).toMatchObject({ runtime: 'antigravity', permission: 'workspace-write' })
+  expect(posted[0]).not.toHaveProperty('acknowledgeReads')
 })

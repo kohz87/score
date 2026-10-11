@@ -928,8 +928,8 @@ test('antigravity: levels are offered only once verified; create and patch refus
   })
   expect(patch.statusCode).toBe(422)
   expect(patch.json().error.code).toBe('permission_unverified')
-  // The read acknowledgement is required like for Codex.
-  const noAck = await request('POST', '/api/coding-agents', {
+  // Inside the sandbox (below full access) no read acknowledgement is needed; at full access it is, like Codex.
+  const sandboxed = await request('POST', '/api/coding-agents', {
     id: 'agy2',
     name: 'Agy',
     runtime: 'antigravity',
@@ -937,7 +937,18 @@ test('antigravity: levels are offered only once verified; create and patch refus
     workspace,
     style,
   })
-  expect(noAck.json().error.code).toBe('acknowledgement_required')
+  expect(sandboxed.json().error?.code).not.toBe('acknowledgement_required')
+  setEnv('SCORE_CODING_VERIFIED_ANTIGRAVITY', 'read-only,workspace-write,full')
+  const fullNoAck = await request('POST', '/api/coding-agents', {
+    id: 'agy3',
+    name: 'Agy',
+    runtime: 'antigravity',
+    permission: 'full',
+    password: 'x',
+    workspace,
+    style,
+  })
+  expect(fullNoAck.json().error.code).toBe('acknowledgement_required')
 })
 
 test('antigravity: a turn spawns by argv with the level flags, shows tool cards and Watch frames, tokens without cost', async () => {

@@ -33,7 +33,9 @@ test('add a coding agent, give it work in a room, stop one turn, see it in Repor
   await dialog.getByRole('radio', { name: /Coding agent/ }).check()
   await expect(dialog.getByLabel('Coding CLI')).toHaveValue('claude-code')
   await expect(dialog).toContainText('Uses your Claude plan quota')
-  await expect(dialog.getByRole('note')).toContainText('not what it can read')
+  await expect(dialog.getByRole('note')).toContainText(
+    'Score blocks your Hermes, Score and SSH folders',
+  )
   await dialog.getByLabel(/Agent name/).fill(id)
   await dialog.getByRole('radio', { name: /Full access/ }).check()
   await expect(dialog.getByText(/turns the CLI’s own sandbox off/)).toBeVisible()
@@ -116,8 +118,9 @@ test('Antigravity: warning, quota, unverified level disabled, a turn with tool c
   await dialog.getByLabel(/Agent name/).fill(id)
   await dialog.getByRole('radio', { name: /Read only/ }).check()
   const add = dialog.getByRole('button', { name: 'Add coding agent' })
-  await expect(add).toBeDisabled()
-  await dialog.getByRole('checkbox', { name: /can read every file/ }).check()
+  // Read only keeps Antigravity in its sandbox: no read acknowledgement is asked, so Add is ready at once.
+  await expect(add).toBeEnabled()
+  await expect(dialog.getByRole('checkbox', { name: /can read any file/ })).toHaveCount(0)
   await dialog.screenshot({ path: testInfo.outputPath('agy-add.png') })
   await dialog.getByLabel('Coding CLI').scrollIntoViewIfNeeded()
   await dialog.screenshot({ path: testInfo.outputPath('agy-add-top.png') })

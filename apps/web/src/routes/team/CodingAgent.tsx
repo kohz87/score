@@ -23,16 +23,42 @@ const permissionLabels: Record<CodingPermission, string> = {
   full: 'Full access: no sandbox, runs anything as you',
 }
 
-/** The read-access limit, stated where the person chooses (review 2026-10-09, 7.2 #1a). */
-export function ReadAccessWarning() {
+/** Whether this CLI can read files outside its workspace at this level (then adding it needs an acknowledgement). */
+export function readsOutsideWorkspace(
+  runtime: CodingRuntime,
+  permission: CodingPermission,
+): boolean {
+  if (runtime === 'codex') return true
+  if (runtime === 'antigravity') return permission === 'full'
+  return false
+}
+
+/** What the chosen CLI can read, in two short lines, stated where the person chooses (7.2 review #1a; owner 2026-10-11). */
+export function ReadAccessWarning({
+  runtime,
+  permission,
+}: {
+  runtime: CodingRuntime
+  permission: CodingPermission
+}) {
+  const reach =
+    runtime === 'claude-code'
+      ? 'Claude Code can read files outside its workspace, but Score blocks your Hermes, Score and SSH folders and .env files.'
+      : runtime === 'codex'
+        ? 'Codex can read every file your user can, including Hermes settings and keys. Score can’t block that.'
+        : runtime === 'antigravity'
+          ? permission === 'full'
+            ? 'With full access, Antigravity can read and change every file your user can.'
+            : 'Antigravity’s sandbox keeps it inside its workspace: it can’t read or change files elsewhere.'
+          : 'This agent runs as your user.'
   return (
-    <p className="team-muted-strong" role="note">
-      The permission level limits what a coding agent can <em>change</em>, not what it can{' '}
-      <em>read</em>. It runs as your user, so text it is tricked into following could make it read
-      files such as your Hermes settings and post them in a room. Score keeps Hermes, Score and SSH
-      folders and .env files off limits for Claude Code, but Codex and Antigravity have no such
-      rule. Only give it workspaces and rooms you trust.
-    </p>
+    <div className="team-muted-strong coding-reach" role="note">
+      <p>{reach}</p>
+      <p>
+        Coding agents follow instructions they find in files and messages, so connect only
+        workspaces and rooms you trust.
+      </p>
+    </div>
   )
 }
 
@@ -49,8 +75,6 @@ const codingAgentsQuery = {
 
 /** The short name used in "not verified for agy yet". */
 const shortNames: Partial<Record<CodingRuntime, string>> = { antigravity: 'agy' }
-/** Runtimes whose agents can read every file the person's user can: creating one needs a tick. */
-const readsEverything: readonly CodingRuntime[] = ['codex', 'antigravity']
 
 function PermissionPicker({
   value,
@@ -161,7 +185,7 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
   const info = runtimes.data?.find((item) => item.runtime === runtime)
   const usable = info?.state === 'ready' || info?.state === 'untested_version'
   const unverified = info?.unverifiedPermissions ?? []
-  const needsAck = readsEverything.includes(runtime)
+  const needsAck = readsOutsideWorkspace(runtime, permission)
   const create = useMutation({
     mutationFn: async () =>
       CodingAgentSchema.parse(
@@ -292,8 +316,8 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
             checked={acknowledged}
             onChange={(event) => setAcknowledged(event.target.checked)}
           />
-          I understand this {info?.label ?? 'coding'} agent can read every file my user can,
-          including secrets outside its workspace (it limits what it changes, not what it reads).
+          I understand {info?.label ?? 'this agent'} can read any file my user can, including
+          secrets outside its workspace.
         </label>
       )}
       {permission === 'full' && (
@@ -337,7 +361,7 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
           </select>
         </label>
       </div>
-      <ReadAccessWarning />
+      <ReadAccessWarning runtime={runtime} permission={permission} />
       {create.error && <p role="alert">{create.error.message}</p>}
       <div className="team-file-actions">
         <button
@@ -520,7 +544,7 @@ function CodingSettings({
             />
           </label>
         )}
-        <ReadAccessWarning />
+        <ReadAccessWarning runtime={coding.runtime} permission={permission} />
         {(save.error || confirm.error || remove.error) && (
           <p role="alert">{(save.error ?? confirm.error ?? remove.error)?.message}</p>
         )}

@@ -215,7 +215,7 @@ export const codexDriver: CodingDriver = {
   promptVia: 'stdin',
   verifiedPermissions: ['read-only', 'workspace-write', 'full'],
   warning: null,
-  requiresReadAck: true,
+  requiresReadAck: () => true,
   parseVersion(output) {
     return /codex-cli\s+(\d+\.\d+\.\d+)/.exec(output)?.[1] ?? null
   },
