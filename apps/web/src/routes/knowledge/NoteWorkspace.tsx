@@ -8,9 +8,11 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { ApiError } from '../../data/api.ts'
+import type { EditorState } from '@codemirror/state'
+import type { EditorView } from '@codemirror/view'
+import { EditorToolbar } from './EditorToolbar.tsx'
 import { MarkdownEditor } from './MarkdownEditor.tsx'
 import { NotePanels, AuthorLabel, DiffView } from './NotePanels.tsx'
-import { NotePreview } from './NotePreview.tsx'
 import {
   conflictOf,
   fetchNote,
@@ -25,7 +27,7 @@ import {
 } from './knowledge-queries.ts'
 import { noteDownloadHref } from './knowledge-export.ts'
 import { noteUrl, timeAgo } from './knowledge-paths.ts'
-import { readMode, useWide, writeMode, type NoteMode } from './note-mode.ts'
+import { readSource, writeSource } from './note-mode.ts'
 import { resolveTarget } from './wikilinks.ts'
 
 const AUTOSAVE_MS = 1000
@@ -128,16 +130,17 @@ function Pane({
   useEffect(() => {
     orphanDrafts.delete(path)
   }, [path])
-  const [stored, setStored] = useState<NoteMode>(readMode)
-  const wide = useWide()
-  // A remembered Split on a narrow screen shows the editor alone, and comes back when the screen is wide again.
-  const mode: NoteMode = stored === 'split' && !wide ? 'edit' : stored
-  const setMode = (next: NoteMode) => {
-    setStored(next)
-    writeMode(next)
+  // One editor: formatted everywhere, raw Markdown on the caret's line. Source shows plain Markdown instead.
+  const [source, setSource] = useState(readSource)
+  const toggleSource = () => {
+    setSource(!source)
+    writeSource(!source)
   }
   const navigate = useNavigate()
-  const split = useRef<HTMLDivElement>(null)
+  const [editor, setEditor] = useState<EditorView | null>(null)
+  const [editorState, setEditorState] = useState<EditorState | null>(null)
+  const [imageNotice, setImageNotice] = useState<string | null>(null)
+  const [linkRequest, setLinkRequest] = useState(0)
   const [draft, setDraft] = useState(orphan?.body ?? session.body)
   const [status, setStatus] = useState<Status>(orphan ? 'dirty' : 'saved')
   const [changedElsewhere, setChangedElsewhere] = useState(false)
@@ -327,34 +330,6 @@ function Pane({
     else onCreateLink(target)
   }
 
-  // Split view: the two panes scroll together, by proportion (the rendered view is taller than the source).
-  useEffect(() => {
-    if (mode !== 'split') return
-    const root = split.current
-    if (!root) return
-    const left = root.querySelector<HTMLElement>('.cm-scroller')
-    const right = root.querySelector<HTMLElement>('.kn-preview')
-    if (!left || !right) return
-    let source: HTMLElement | null = null
-    const follow = (from: HTMLElement, to: HTMLElement) => () => {
-      if (source && source !== from) return
-      source = from
-      const room = from.scrollHeight - from.clientHeight
-      to.scrollTop = room > 0 ? (from.scrollTop / room) * (to.scrollHeight - to.clientHeight) : 0
-      requestAnimationFrame(() => {
-        source = null
-      })
-    }
-    const a = follow(left, right)
-    const b = follow(right, left)
-    left.addEventListener('scroll', a)
-    right.addEventListener('scroll', b)
-    return () => {
-      left.removeEventListener('scroll', a)
-      right.removeEventListener('scroll', b)
-    }
-  }, [mode])
-
   // Agent edits: "edited by builder · 2 min ago" with Undo (= restore the commit before the agent's).
   const agentAuthor =
     note.lastAuthor && typeof note.lastAuthor === 'object' ? note.lastAuthor : null
@@ -371,27 +346,9 @@ function Pane({
             <p className="kn-path">{path}</p>
           </div>
           <div className="kn-actions">
-            <div role="group" aria-label="View" className="kn-toggle">
-              <button
-                type="button"
-                aria-pressed={mode === 'preview'}
-                onClick={() => setMode('preview')}
-              >
-                Preview
-              </button>
-              <button type="button" aria-pressed={mode === 'edit'} onClick={() => setMode('edit')}>
-                Edit
-              </button>
-              {wide && (
-                <button
-                  type="button"
-                  aria-pressed={mode === 'split'}
-                  onClick={() => setMode('split')}
-                >
-                  Split
-                </button>
-              )}
-            </div>
+            <button type="button" aria-pressed={source} onClick={toggleSource}>
+              Source
+            </button>
             <a className="kn-button" href={noteDownloadHref(path)} download>
               Download
             </a>
@@ -512,30 +469,30 @@ function Pane({
           </div>
         )}
 
-        <div
-          ref={split}
-          className={mode === 'split' ? 'kn-split' : 'kn-edit-area'}
-          data-mode={mode}
-        >
-          {mode !== 'preview' && (
-            <div className={mode === 'split' ? 'kn-edit-area' : undefined}>
-              <MarkdownEditor
-                key={`${path}:${session.version}`}
-                initial={draft}
-                label={`Contents of ${path}`}
-                notes={() => notesRef.current}
-                onChange={onChange}
-                onOpenWikilink={openWikilink}
-                isMissing={(target) => resolveTarget(target, note.links, notes) === null}
-                refreshKey={`${notes.length}:${note.etag}`}
-              />
-            </div>
-          )}
-          {mode !== 'edit' && (
-            <div className={mode === 'split' ? 'kn-edit-area' : undefined}>
-              <NotePreview body={draft} links={note.links} notes={notes} onCreate={onCreateLink} />
-            </div>
-          )}
+        <EditorToolbar
+          view={editor}
+          state={editorState}
+          notes={notes}
+          notice={imageNotice}
+          onNotice={setImageNotice}
+          linkRequest={linkRequest}
+        />
+        <div className="kn-edit-area" data-source={source ? 'true' : undefined}>
+          <MarkdownEditor
+            key={`${path}:${session.version}`}
+            initial={draft}
+            label={`Contents of ${path}`}
+            notes={() => notesRef.current}
+            onChange={onChange}
+            onOpenWikilink={openWikilink}
+            isMissing={(target) => resolveTarget(target, note.links, notes) === null}
+            refreshKey={`${notes.length}:${note.etag}`}
+            source={source}
+            onView={setEditor}
+            onState={setEditorState}
+            onNotice={setImageNotice}
+            onShortcut={() => setLinkRequest((n) => n + 1)}
+          />
         </div>
       </section>
 

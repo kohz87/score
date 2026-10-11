@@ -2,6 +2,8 @@ import type { KnowledgeAuthor, KnowledgeNote, AgentSummary } from '@score/contra
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { MarkdownEditor } from './MarkdownEditor.tsx'
+import { collapseDataUris } from './knowledge-images.ts'
 import { lineDiff } from './line-diff.ts'
 import {
   knowledgeFailure,
@@ -122,7 +124,17 @@ function History({
               {showDiff ? (
                 <DiffView before={version.data.body} after={currentBody} />
               ) : (
-                <pre className="kn-version-body">{version.data.body}</pre>
+                // The saved version in the same editor, read-only: formatted, images shown, nothing to type in.
+                <div className="kn-version-body">
+                  <MarkdownEditor
+                    key={commit}
+                    initial={version.data.body}
+                    label={`Version ${commit.slice(0, 7)} of ${path}`}
+                    notes={() => []}
+                    onChange={() => undefined}
+                    readOnly
+                  />
+                </div>
               )}
             </>
           )}
@@ -146,7 +158,7 @@ export function DiffView({ before, after }: { before: string; after: string }) {
           <span className="kn-sr">
             {line.kind === 'added' ? 'Added: ' : line.kind === 'removed' ? 'Removed: ' : ''}
           </span>
-          {line.text || ' '}
+          {collapseDataUris(line.text) || ' '}
         </div>
       ))}
     </pre>

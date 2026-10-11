@@ -228,3 +228,39 @@ test('an observe-only producer (isolation unknown) can read and search but not w
   }
   expect(readFileSync(join(h.vault.vault, 'seed.md'), 'utf8')).toBe('# Seed\nhello world\n')
 })
+
+// PLAN 6.8: embedded images reach agents only as placeholders, over the same bridge route the plugin calls.
+test('read answers [image: alt, size] instead of base64; write refuses a new image but keeps the old ones', async () => {
+  const tok = await token('builder')
+  const png =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+  const image = `![whiteboard](data:image/png;base64,${png})`
+  const created = await h.vault.writeNote('pics.md', { body: `# Pics\n${image}\n`, etag: null })
+  const read = (await call(tok, 'read', { path: 'pics.md' })).json() as {
+    body: string
+    etag: string
+  }
+  expect(read.body).toBe('# Pics\n[image: whiteboard, 70 B]\n')
+  expect(read.body).not.toContain('base64')
+  expect(read.etag).toBe(created.etag)
+
+  const refused = await call(tok, 'write', {
+    path: 'pics.md',
+    body: `${read.body}${image}`,
+    expectedEtag: read.etag,
+  })
+  expect(refused.statusCode).toBe(400)
+  expect(refused.json()).toMatchObject({ error: { code: 'images_not_allowed' } })
+
+  const ok = await call(tok, 'write', {
+    path: 'pics.md',
+    body: `${read.body}more words\n`,
+    expectedEtag: read.etag,
+  })
+  expect(ok.statusCode).toBe(200)
+  expect((await h.vault.readNote('pics.md')).body).toBe(`# Pics\n${image}\nmore words\n`)
+  const hits = (await call(tok, 'search', { query: 'whiteboard' })).json() as {
+    items: { snippet: string }[]
+  }
+  expect(hits.items[0]!.snippet).not.toContain('base64')
+})

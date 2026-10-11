@@ -324,7 +324,7 @@ export function createMcpServer(agentId: string, deps: McpToolDeps): McpServer {
       'knowledge.read',
       {
         description:
-          'Read one note from the Score knowledge vault by path. Returns its etag, needed to update it. For an uploaded document (e.g. .pdf, .docx, .csv) it returns the extracted text, read-only, with a notice when the text is missing or was cut.',
+          'Read one note from the Score knowledge vault by path. Returns its etag, needed to update it. Embedded images appear as [image: alt, size] placeholders. For an uploaded document (e.g. .pdf, .docx, .csv) it returns the extracted text, read-only, with a notice when the text is missing or was cut.',
         inputSchema: { path: z.string().min(1).max(1024) },
       },
       guarded(false, ({ path }: { path: string }) => knowledge.read(agentId, path)),
@@ -333,7 +333,7 @@ export function createMcpServer(agentId: string, deps: McpToolDeps): McpServer {
       'knowledge.write',
       {
         description:
-          'Create or replace a note in the Score knowledge vault. Pass expectedEtag from knowledge.read to replace a note, or null to create a new one.',
+          'Create or replace a note in the Score knowledge vault. Pass expectedEtag from knowledge.read to replace a note, or null to create a new one. Keep any [image: alt, size] placeholder in place to keep that image; you cannot add images.',
         inputSchema: {
           path: z.string().min(1).max(1024),
           body: z.string().max(256 * 1024),

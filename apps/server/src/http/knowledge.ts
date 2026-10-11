@@ -62,7 +62,7 @@ export function registerKnowledgeRoutes(
   media?: MediaStore,
 ): void {
   const guard = { preHandler: [humanGuard(app.pairing)] }
-  // A note may be 2 MiB; the JSON envelope and escaping need headroom over Fastify's 1 MiB default.
+  // A note may be 8 MiB; the JSON envelope and escaping need headroom over Fastify's 1 MiB default.
   const write = { ...guard, bodyLimit: MAX_NOTE_BYTES * 2 + 64 * 1024 }
   const rest = (request: { params: unknown }) => WildcardSchema.parse(request.params)['*']
 

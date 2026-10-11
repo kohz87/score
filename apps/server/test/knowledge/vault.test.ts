@@ -108,12 +108,12 @@ describe('write', () => {
     expect(note.body).toContain('body')
   })
 
-  test('notes over 2 MiB are refused (413) and not indexed when found on disk', async () => {
+  test('notes over 8 MiB are refused (413) and not indexed when found on disk', async () => {
     h = await makeVault()
     await expect(
-      h.vault.writeNote('big.md', { body: 'a'.repeat(2 * 1024 * 1024 + 1), etag: null }),
+      h.vault.writeNote('big.md', { body: 'a'.repeat(8 * 1024 * 1024 + 1), etag: null }),
     ).rejects.toMatchObject({ status: 413, code: 'payload_too_large' })
-    fs.writeFileSync(path.join(h.vaultDir, 'huge.md'), 'b'.repeat(2 * 1024 * 1024 + 1))
+    fs.writeFileSync(path.join(h.vaultDir, 'huge.md'), 'b'.repeat(8 * 1024 * 1024 + 1))
     await h.vault.scanNow()
     expect((await h.vault.tree()).notes.map((n) => n.path)).not.toContain('huge.md')
     await expect(h.vault.readNote('huge.md')).rejects.toMatchObject({ status: 413 })
