@@ -52,13 +52,13 @@ export function matchesFilters(task: TaskSummary, filters: TaskFilters) {
 export function tasksQuery(filters: TaskFilters) {
   return defineStreamQuery<TaskBoard>({
     key: ['tasks', 'board', filters],
-    async fetch() {
+    async fetch(signal) {
       const params = new URLSearchParams()
       if (filters.agent) params.set('agent', filters.agent)
       if (filters.room) params.set('room', filters.room)
       if (filters.needsYou) params.set('needsYou', 'true')
       const { fields, asOfSeq } = snapshot(
-        await apiFetch(`tasks${params.size ? `?${params}` : ''}`),
+        await apiFetch(`tasks${params.size ? `?${params}` : ''}`, { signal }),
       )
       const rawColumns = record(fields.columns)
       const columns = Object.fromEntries(
@@ -102,8 +102,8 @@ export function tasksQuery(filters: TaskFilters) {
 
 export const taskAgentsQuery = defineStreamQuery({
   key: ['tasks', 'agents'],
-  async fetch() {
-    const { fields, asOfSeq } = snapshot(await apiFetch('agents'))
+  async fetch(signal) {
+    const { fields, asOfSeq } = snapshot(await apiFetch('agents', { signal }))
     return { asOfSeq, data: AgentSummarySchema.array().parse(fields.items) }
   },
   types: ['agent.updated'],
@@ -117,8 +117,8 @@ export const taskAgentsQuery = defineStreamQuery({
 
 export const taskRoomsQuery = defineStreamQuery({
   key: ['tasks', 'rooms'],
-  async fetch() {
-    const { fields, asOfSeq } = snapshot(await apiFetch('rooms'))
+  async fetch(signal) {
+    const { fields, asOfSeq } = snapshot(await apiFetch('rooms', { signal }))
     return {
       asOfSeq,
       data: [

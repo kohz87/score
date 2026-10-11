@@ -200,3 +200,54 @@ test('a failed compaction explains why, and a refusal from the server is shown',
   fireEvent.click(screen.getByRole('button', { name: 'Compact now' }))
   expect((await screen.findByRole('alert')).textContent).toContain('busy in this room')
 })
+
+const compacted = (seq: number, commandId: string) =>
+  ({
+    type: 'session.compacted',
+    seq,
+    ts: '2026-10-11T10:01:00.000Z',
+    data: {
+      commandId,
+      agentId: 'builder',
+      sessionId: 'score-r-builder',
+      roomId: 'r',
+      status: 'compacted',
+      reason: null,
+      keepRecent: 2,
+      before: { messages: 40, tokens: 54_000 },
+      after: { messages: 8, tokens: 9000 },
+    },
+  }) as StreamEvent
+
+test('a later compaction from another browser does not reopen a finished wait (S2-011)', async () => {
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: /Builder context/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Compact' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Compact now' }))
+  expect((await screen.findAllByText('Compacting Builder…')).length).toBeGreaterThan(0)
+  act(() => Source.current.emit(compacted(7, 'cmd-1')))
+  await waitFor(() => expect(screen.queryAllByText('Compacting Builder…')).toHaveLength(0))
+  act(() => Source.current.emit(compacted(8, 'cmd-other')))
+  await screen.findAllByText(/Compacted: 40 → 8 messages/)
+  expect(screen.queryAllByText('Compacting Builder…')).toHaveLength(0)
+  expect(screen.getByRole('button', { name: 'Compact' }).hasAttribute('disabled')).toBe(false)
+})
+
+test('a result that arrives before the POST resolves ends the wait', async () => {
+  let release: (response: Response) => void = () => {}
+  fetchMock.mockImplementation(async (_input, init) =>
+    init?.method === 'POST'
+      ? new Promise<Response>((resolve) => (release = resolve))
+      : json(reading),
+  )
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: /Builder context/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Compact' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Compact now' }))
+  await waitFor(() => expect(fetchMock.mock.calls.some(([, i]) => i?.method === 'POST')).toBe(true))
+  act(() => Source.current.emit(compacted(7, 'cmd-1')))
+  await screen.findAllByText(/Compacted: 40 → 8 messages/)
+  await act(async () => release(json({ commandId: 'cmd-1' }, 202)))
+  expect(screen.queryAllByText('Compacting Builder…')).toHaveLength(0)
+  expect(screen.getByRole('button', { name: 'Compact' }).hasAttribute('disabled')).toBe(false)
+})

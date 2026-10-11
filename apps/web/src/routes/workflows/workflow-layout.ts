@@ -35,6 +35,11 @@ export function layoutOf(draft: Draft): Positions {
   return draft.layout?.nodes ?? {}
 }
 
+/** Own entries only: a node may be called `constructor` or `toString` (S2-010). */
+export function positionOf(positions: Positions, id: string): { x: number; y: number } | undefined {
+  return Object.hasOwn(positions, id) ? positions[id] : undefined
+}
+
 /**
  * Moves one node. The first move pins every node where it is drawn now (`current`), so the saved version reopens exactly
  * as it looked and later edits cannot shuffle the rest.
@@ -47,7 +52,7 @@ export function moveNode(
 ): Draft {
   const nodes: Positions = { ...layoutOf(draft) }
   for (const node of draft.nodes) {
-    const at = nodes[node.id] ?? current.get(node.id)
+    const at = positionOf(nodes, node.id) ?? current.get(node.id)
     if (at) nodes[node.id] = { x: at.x, y: at.y }
   }
   nodes[id] = { x: clampCoord(to.x), y: clampCoord(to.y) }
@@ -74,11 +79,13 @@ export function placeNewNode(
   const others = draft.nodes
     .filter((n) => n.id !== id)
     .flatMap((n) => {
-      const at = layoutOf(draft)[n.id] ?? current.get(n.id)
+      const at = positionOf(layoutOf(draft), n.id) ?? current.get(n.id)
       return at ? [{ ...at, w: editSize(n).w, h: editSize(n).h }] : []
     })
   const source = after ? draft.nodes.find((n) => n.id === after) : undefined
-  const sourceAt = source ? (layoutOf(draft)[source.id] ?? current.get(source.id)) : undefined
+  const sourceAt = source
+    ? (positionOf(layoutOf(draft), source.id) ?? current.get(source.id))
+    : undefined
   let x = GRID
   let y = Math.max(0, ...others.map((o) => o.y + o.h)) + GRID * 2
   if (source && sourceAt) {

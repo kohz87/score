@@ -68,9 +68,9 @@ export function sessionContextQuery(agentId: string, sessionId: string) {
   let latest: SessionCompacted | null = null
   return defineStreamQuery<SessionContextState>({
     key: ['chat', 'session-context', agentId, sessionId],
-    async fetch() {
+    async fetch(signal) {
       const { asOfSeq, ...context } = SessionContextSnapshotSchema.parse(
-        await apiFetch(`${sessionPath(agentId, sessionId)}/context`),
+        await apiFetch(`${sessionPath(agentId, sessionId)}/context`, { signal }),
       )
       return { asOfSeq, data: { context, compaction: latest } }
     },

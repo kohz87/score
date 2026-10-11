@@ -91,7 +91,8 @@ const FIELD_WORDS: Record<string, string> = {
 }
 
 function fieldPhrase(field: string | null): string {
-  return (field && FIELD_WORDS[field.split('.').pop() ?? '']) || 'Check this field.'
+  const last = field?.split('.').pop() ?? ''
+  return (Object.hasOwn(FIELD_WORDS, last) && FIELD_WORDS[last]) || 'Check this field.'
 }
 
 export function fromServer(issue: ValidationIssue): EditorIssue {

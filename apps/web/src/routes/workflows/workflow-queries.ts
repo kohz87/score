@@ -163,8 +163,8 @@ export function useExportWorkflow() {
 /** Every workflow run, newest first; `workflow.run.upserted` replaces a run's summary. */
 export const workflowRunsQuery = defineStreamQuery<WorkflowRunSummary[]>({
   key: ['workflow-runs', 'list'],
-  async fetch() {
-    const list = WorkflowRunListSchema.parse(await apiFetch('workflow-runs'))
+  async fetch(signal) {
+    const list = WorkflowRunListSchema.parse(await apiFetch('workflow-runs', { signal }))
     return { asOfSeq: list.asOfSeq, data: list.items }
   },
   types: ['workflow.run.upserted'],

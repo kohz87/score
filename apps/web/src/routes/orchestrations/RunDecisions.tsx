@@ -102,7 +102,7 @@ export function GateCard({
             : gate.payload.after
                 .map(
                   (id) =>
-                    `${id} (result version ${gate.payload.dependencyRevisions[id] ?? 0}, ${run.stepsList.find((step) => step.id === id)?.status ?? 'unknown'})`,
+                    `${id} (result version ${Object.hasOwn(gate.payload.dependencyRevisions, id) ? gate.payload.dependencyRevisions[id] : 0}, ${run.stepsList.find((step) => step.id === id)?.status ?? 'unknown'})`,
                 )
                 .join(', ')}
         </dd>

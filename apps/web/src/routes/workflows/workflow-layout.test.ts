@@ -69,3 +69,35 @@ test('connecting keeps the layout', () => {
   const result = connect(added.draft, 'step1', 'failed', added.id)
   expect('draft' in result && result.draft.layout).toEqual(moved.layout)
 })
+
+test('S2-010: a step called constructor keeps its drawn position and the layout stays valid', async () => {
+  const { WorkflowLayoutSchema } = await import('@score/contract')
+  const base = starterDraft('builder')
+  const names = ['constructor', 'valueof', 'tostring']
+  const draft: Draft = {
+    ...base,
+    nodes: [
+      ...base.nodes,
+      ...names.map((id) => ({ ...base.nodes[0]!, id, label: id }) as Draft['nodes'][number]),
+    ],
+  }
+  const current = new Map([
+    ['step1', { x: 16, y: 16 }],
+    ...names.map((id, index) => [id, { x: 100 + index * 50, y: 200 }] as const),
+  ])
+  const moved = moveNode(draft, current, 'step1', { x: 48, y: 64 })
+  const text = JSON.stringify(moved.layout)
+  expect(JSON.parse(text).nodes.constructor).toEqual({ x: 100, y: 200 })
+  expect(WorkflowLayoutSchema.safeParse(JSON.parse(text)).success).toBe(true)
+  // A saved position for it is also used, not replaced by the drawn one.
+  const pinned = moveNode(moved, new Map(), 'constructor', { x: 160, y: 320 })
+  expect(pinned.layout?.nodes.constructor).toEqual({ x: 160, y: 320 })
+  expect(pinned.layout?.nodes.valueof).toEqual({ x: 150, y: 200 })
+  // A new node placed after it starts from its real position.
+  const withStep2: Draft = {
+    ...pinned,
+    nodes: [...pinned.nodes, { ...base.nodes[0]!, id: 'step2' } as Draft['nodes'][number]],
+  }
+  const added = placeNewNode(withStep2, 'step2', current, 'constructor')
+  expect(added.layout?.nodes.step2?.x).toBeGreaterThan(160)
+})
