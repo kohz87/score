@@ -566,3 +566,46 @@ atexit.register(sender.shutdown)
     assert len(saved) == 1
     assert "opaque-exit-secret" not in saved[0].read_text()
     assert json.loads(saved[0].read_text())["events"][0]["payload"]["result"] == "password=[redacted]"
+
+
+def test_s2_025_reregistered_plugin_adopts_the_outbox_of_the_sender_it_retired(tmp_path, monkeypatch):
+    """A reload inside a live gateway keeps the pid and start time: the retired sender's unsent history must still drain."""
+    monkeypatch.setenv("SCORE_HOME", str(tmp_path / "home"))
+    token = tmp_path / "token"
+    token.write_text("bootstrap")
+    transport = FakeTransport()
+    transport.down = True
+    monkeypatch.setattr(atexit, "register", lambda callback: None)
+    monkeypatch.setattr(atexit, "unregister", lambda callback: None)
+    monkeypatch.setattr(score_bridge, "_sender", None)
+    monkeypatch.setattr(score_bridge, "_exit_callback", None)
+    import score_bridge.client as client_module
+    class Bound(ScoreClient):
+        def __init__(self, base_url=None, token_path=token, transport_=None, **kwargs):
+            super().__init__(base_url, token_path, transport_ or transport, **kwargs)
+    monkeypatch.setattr(client_module, "ScoreClient", Bound)
+    class Context:
+        def __init__(self):
+            self.hooks = {}
+        def register_hook(self, name, wrapper):
+            self.hooks[name] = wrapper
+    first = Context()
+    score_bridge.register(first)
+    old = score_bridge._sender
+    first.hooks["pre_tool_call"](command="echo offline history")
+    old.process_once()  # persisted to the outbox, not deliverable
+    assert old.spool.path.exists() and transport.acked == []
+    second = Context()
+    score_bridge.register(second)  # same process: the first sender is shut down and retired
+    current = score_bridge._sender
+    assert current is not old and old._closed
+    transport.down = False
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and not transport.acked:
+        current.process_once()
+        time.sleep(0.05)
+    try:
+        assert [e["payload"].get("command") for e in transport.acked] == ["echo offline history"]
+        assert not old.spool.path.exists()
+    finally:
+        current.shutdown(0.5)

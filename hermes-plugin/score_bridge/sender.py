@@ -488,6 +488,16 @@ class Sender:
             self.dropped += len(self.queue.queue)
         if self._thread is not None and self._thread is not threading.current_thread():
             self._thread.join(max(0, deadline - time.monotonic()))
+        # Nothing of ours will send these outboxes again; say so, so a replacement sender in this same process
+        # (plugin reload) adopts them instead of waiting for the hosting process to exit.
+        for _, spool in list(self._producers.values()):
+            spool.deadline = deadline
+            try:
+                spool.retire()
+            except Exception:
+                self.record_error("retire")
+            finally:
+                spool.deadline = None
         for client in clients:
             if client._poller is not None:
                 client._poller.join(deadline)
