@@ -93,7 +93,7 @@ test.each(['ready', 'running', 'triage', 'archived'])(
     await expect(taskAction({ taskId: 't_test', action: 'unblock' }, deps)).rejects.toMatchObject({
       status: 409,
       code: 'conflict',
-      message: 'Task state changed',
+      message: 'The task changed. Reload and try again.',
       details: { hermesStatus: status },
     })
   },

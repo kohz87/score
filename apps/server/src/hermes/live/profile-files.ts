@@ -21,7 +21,7 @@ interface Snapshot {
   mode: number | null
 }
 const refuse = (what: string) =>
-  new HttpError(409, 'conflict', `Refusing to use a linked or unexpected ${what}`)
+  new HttpError(409, 'conflict', `Score won’t use a linked or unexpected ${what}.`)
 
 function resolveFile(home: string, file: AgentFileName): { dir: string; path: string } {
   const name = AgentFileNameSchema.parse(file)
@@ -31,7 +31,7 @@ function resolveFile(home: string, file: AgentFileName): { dir: string; path: st
     dir = fs.realpathSync(home)
   } catch (error) {
     if (error instanceof HttpError) throw error
-    throw new HttpError(404, 'not_found', 'Profile directory not found')
+    throw new HttpError(404, 'not_found', 'Couldn’t find this agent’s Hermes folder.')
   }
   const path = join(dir, name)
   if (path !== join(dir, 'SOUL.md') && path !== join(dir, 'AGENTS.md')) throw refuse('file')
@@ -49,13 +49,13 @@ function snapshot(path: string): Snapshot {
   }
   if (!stat.isFile()) throw refuse('file')
   if (stat.size > MAX_AGENT_FILE_BYTES)
-    throw new HttpError(413, 'payload_too_large', 'File is larger than 256 KB')
+    throw new HttpError(413, 'payload_too_large', 'The file is larger than 256 KB.')
   const fd = fs.openSync(path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW)
   try {
     const buffer = Buffer.alloc(MAX_AGENT_FILE_BYTES + 1)
     const length = fs.readSync(fd, buffer, 0, buffer.length, 0)
     if (length > MAX_AGENT_FILE_BYTES)
-      throw new HttpError(413, 'payload_too_large', 'File is larger than 256 KB')
+      throw new HttpError(413, 'payload_too_large', 'The file is larger than 256 KB.')
     return { bytes: buffer.subarray(0, length), mode: fs.fstatSync(fd).mode & 0o777 }
   } finally {
     fs.closeSync(fd)

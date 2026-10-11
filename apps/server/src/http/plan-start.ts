@@ -56,14 +56,14 @@ export function createPlanStarter(deps: {
   async function execute(run: PlanRun): Promise<PlanStartResponse> {
     const taskIds = [...run.task_ids]
     const brief = db.read((sqlite) => readBriefRow(sqlite, run.brief_id))
-    if (!brief) throw new HttpError(404, 'not_found', 'Unknown brief')
+    if (!brief) throw new HttpError(404, 'not_found', 'Couldn’t find that run.')
     for (const step of run.steps.slice(taskIds.length)) {
       // Pause may land between steps (or while Hermes creates one): no further tasks for a paused brief.
       if (db.read((sqlite) => readBriefRow(sqlite, run.brief_id))?.paused_at)
         throw new HttpError(
           409,
           'conflict',
-          'The brief was paused; resume it and start the plan again',
+          'This run is paused. Resume it, then start the plan again.',
         )
       const task = await port.createTask(
         {
@@ -150,21 +150,23 @@ export function createPlanStarter(deps: {
           const row = sqlite
             .prepare('SELECT * FROM messages WHERE id = ? AND room_id = ?')
             .get(messageId, roomId)
-          if (row === undefined) throw new HttpError(404, 'not_found', 'Unknown message')
+          if (row === undefined)
+            throw new HttpError(404, 'not_found', 'Couldn’t find that message.')
           const message = messageFromRow(row)
           const part = message.parts.find((item) => item.kind === 'plan')
-          if (!part) throw new HttpError(400, 'bad_request', 'This message has no plan')
+          if (!part) throw new HttpError(400, 'bad_request', 'This message has no plan.')
           if (message.streaming)
-            throw new HttpError(409, 'conflict', 'The plan is still being written')
+            throw new HttpError(409, 'conflict', 'The plan is still being written.')
           const brief = readBriefRow(sqlite, part.briefId)
-          if (!brief) throw new HttpError(404, 'not_found', 'Unknown brief')
+          if (!brief) throw new HttpError(404, 'not_found', 'Couldn’t find that run.')
           // New tasks would run while the brief claims to be paused, and Pause only holds tasks that exist.
           if (brief.paused_at !== null)
-            throw new HttpError(409, 'conflict', 'Resume the brief before starting its plan')
+            throw new HttpError(409, 'conflict', 'Resume the run before starting its plan.')
           return { part, brief }
         })
         const steps = orderedPlanSteps(found.part)
-        if (!steps.length) throw new HttpError(400, 'bad_request', 'The plan has no steps to start')
+        if (!steps.length)
+          throw new HttpError(400, 'bad_request', 'The plan has no steps to start.')
         await ingest.submit({
           source: 'briefs',
           identity: randomUUID(),

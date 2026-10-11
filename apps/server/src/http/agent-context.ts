@@ -33,7 +33,7 @@ export async function readAgentContext(
   const { port, db } = deps
   const agents = z.array(AgentSummarySchema).parse(await port.listAgents())
   const agent = agents.find((item) => item.id === agentId)
-  if (!agent) throw new HttpError(404, 'not_found', 'Agent not found')
+  if (!agent) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
   const row = RowSchema.nullish().parse(
     db.sqlite
       .prepare(

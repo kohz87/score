@@ -66,7 +66,7 @@ export async function planExport(
   } else if (request.folder !== undefined) {
     label = 'folder'
     const folder = parseVaultPath(request.folder).join('/')
-    if (hasDotSegment(folder)) throw new HttpError(400, 'bad_path', 'That folder is not available')
+    if (hasDotSegment(folder)) throw new HttpError(400, 'bad_path', 'That folder isn’t available.')
     name = folder.split('/').pop()!
     chosen = candidates
       .filter((rel) => rel.startsWith(`${folder}/`))
@@ -76,7 +76,7 @@ export async function planExport(
         .lstat(path.join(root, ...folder.split('/')))
         .then((stat) => stat.isDirectory())
         .catch(() => false)
-      if (!exists) throw new HttpError(404, 'not_found', 'Unknown folder')
+      if (!exists) throw new HttpError(404, 'not_found', 'Couldn’t find that folder.')
     }
   } else {
     label = 'selection'
@@ -86,14 +86,14 @@ export async function planExport(
     chosen = []
     for (const input of request.paths ?? []) {
       const rel = parseVaultPath(input).join('/')
-      if (!known.has(rel)) throw new HttpError(404, 'not_found', `Unknown file: ${rel}`)
+      if (!known.has(rel)) throw new HttpError(404, 'not_found', `Couldn’t find the file ${rel}.`)
       if (seen.has(rel)) continue
       seen.add(rel)
       chosen.push({ path: rel, entry: rel })
     }
   }
   if (chosen.length > MAX_EXPORT_FILES)
-    throw new HttpError(413, 'export_too_large', 'That is too many files to export at once', {
+    throw new HttpError(413, 'export_too_large', 'That is too many files to export at once.', {
       files: chosen.length,
       bytes: 0,
     })
@@ -105,9 +105,9 @@ export async function planExport(
     files.push({ ...item, size })
     bytes += size
   }
-  if (files.length === 0) throw new HttpError(400, 'bad_request', 'There is nothing to export')
+  if (files.length === 0) throw new HttpError(400, 'bad_request', 'There is nothing to export.')
   if (bytes > MAX_EXPORT_BYTES)
-    throw new HttpError(413, 'export_too_large', 'That is too large to export at once (1 GB)', {
+    throw new HttpError(413, 'export_too_large', 'That is too large to export at once (1 GB).', {
       files: files.length,
       bytes,
     })

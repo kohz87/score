@@ -67,7 +67,7 @@ export function createBriefControl(deps: {
         throw new HttpError(
           502,
           'hermes_unavailable',
-          'Paused, but some tasks could not be held. Try Pause again.',
+          'Paused, but some tasks couldn’t be held. Try Pause again.',
           { taskIds: failed },
         )
     },
@@ -88,7 +88,7 @@ export function createBriefControl(deps: {
         throw new HttpError(
           502,
           'hermes_unavailable',
-          'Resumed, but some tasks could not be unblocked. Try Resume again.',
+          'Resumed, but some tasks couldn’t be unblocked. Try Resume again.',
           { taskIds: failed },
         )
     },

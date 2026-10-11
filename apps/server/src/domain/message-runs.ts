@@ -105,7 +105,7 @@ export function retryReply(
   const found = sqlite
     .prepare('SELECT streaming FROM messages WHERE id = ? AND room_id = ? AND deleted_at IS NULL')
     .get(messageId, roomId)
-  if (!found) throw new HttpError(404, 'not_found', 'Unknown message')
+  if (!found) throw new HttpError(404, 'not_found', 'Couldn’t find that message.')
   const reply = sqlite
     .prepare('SELECT * FROM message_runs WHERE message_id = ? AND room_id = ?')
     .get(messageId, roomId)
@@ -117,21 +117,22 @@ export function retryReply(
     parsed.purpose ||
     parsed.orchestration_attempt_id
   )
-    throw new HttpError(409, 'conflict', 'Only an answer to your own message can be retried')
+    throw new HttpError(409, 'conflict', 'Only a reply to your own message can be retried.')
   if (parsed.state === 'pending' || parsed.state === 'active')
-    throw new HttpError(409, 'conflict', 'This reply is still being written')
+    throw new HttpError(409, 'conflict', 'This reply is still being written.')
   const parent = sqlite
     .prepare(
       "SELECT 1 FROM messages WHERE id = ? AND room_id = ? AND author_kind = 'you' AND deleted_at IS NULL",
     )
     .get(parsed.parent_message_id, roomId)
-  if (!parent) throw new HttpError(409, 'conflict', 'The message this answered is gone')
+  if (!parent)
+    throw new HttpError(409, 'conflict', 'The message this reply answered no longer exists.')
   const busy = sqlite
     .prepare(
       `SELECT 1 FROM message_runs WHERE parent_message_id = ? AND agent_id = ? AND state IN ('pending', 'active')`,
     )
     .get(parsed.parent_message_id, parsed.agent_id)
-  if (busy) throw new HttpError(409, 'conflict', 'This agent is already answering that message')
+  if (busy) throw new HttpError(409, 'conflict', 'This agent is already answering that message.')
   const paused = sqlite
     .prepare(
       `SELECT 1 FROM team_state WHERE paused_at IS NOT NULL
@@ -139,7 +140,7 @@ export function retryReply(
        UNION ALL SELECT 1 FROM briefs WHERE id = ? AND paused_at IS NOT NULL`,
     )
     .get(parsed.agent_id, parsed.chain_id)
-  if (paused) throw new HttpError(409, 'conflict', 'Resume the work before retrying')
+  if (paused) throw new HttpError(409, 'conflict', 'Resume the work before retrying.')
   return reserveMessageRun(
     sqlite,
     {

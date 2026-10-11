@@ -33,7 +33,7 @@ function storeError(): HttpError {
   return new HttpError(
     503,
     'security_store_unavailable',
-    'The security password store is unreadable or damaged; recover it on the Score machine with `scripts/score password`',
+    'Can’t read the saved security password. Reset it on the Score machine with `scripts/score password`.',
   )
 }
 
@@ -120,7 +120,7 @@ export class SecurityPassword {
   async verify(password: unknown, session = ''): Promise<void> {
     const stored = this.stored()
     if (!stored)
-      throw new HttpError(409, 'password_not_set', 'Set a security password in Settings first')
+      throw new HttpError(409, 'password_not_set', 'Set a security password in Settings first.')
     if (stored !== this.#against) {
       this.#failures = []
       this.#against = stored
@@ -129,7 +129,11 @@ export class SecurityPassword {
     this.#failures = this.#failures.filter((failure) => now - failure.at < WINDOW_MS)
     const mine = this.#failures.filter((failure) => failure.session === session).length
     if (mine >= MAX_FAILURES_PER_SESSION || this.#failures.length >= MAX_FAILURES)
-      throw new HttpError(429, 'too_many_attempts', 'Too many wrong passwords. Try again later.')
+      throw new HttpError(
+        429,
+        'too_many_attempts',
+        'Too many wrong passwords. Wait 15 minutes and try again.',
+      )
     // Counted before the slow hash starts, so parallel guesses can't all pass the check; a match gives it back.
     const attempt = { at: now, session }
     this.#failures.push(attempt)
@@ -140,28 +144,29 @@ export class SecurityPassword {
       ? await scrypt(candidate.data, Buffer.from(salt!, 'base64url'), KEY_LENGTH, PARAMS)
       : Buffer.alloc(KEY_LENGTH)
     if (!candidate.success || !timingSafeEqual(actual, expected)) {
-      throw new HttpError(403, 'wrong_password', 'That is not the security password')
+      throw new HttpError(403, 'wrong_password', 'That isn’t the security password.')
     }
     // The credential may have been replaced (e.g. reset on the host) while the hash ran: a match against the old one
     // no longer proves anything.
     if (this.stored() !== stored)
-      throw new HttpError(409, 'password_changed', 'The security password changed; try again')
+      throw new HttpError(409, 'password_changed', 'The security password changed. Try again.')
     this.#failures = this.#failures.filter((failure) => failure !== attempt)
   }
 
   /** First time: no current password needed. After that, changing it needs the current one. */
   async set(password: unknown, current: unknown, session = ''): Promise<void> {
-    if (!this.home) throw new HttpError(501, 'unsupported', 'No Score home to store the password')
+    if (!this.home)
+      throw new HttpError(501, 'unsupported', 'Score has nowhere to store the password here.')
     const next = PasswordSchema.safeParse(password)
     if (!next.success)
-      throw new HttpError(400, 'bad_request', 'Use 8 to 256 characters for the security password')
+      throw new HttpError(400, 'bad_request', 'Use 8–256 characters for the security password.')
     const before = this.stored()
     if (before !== undefined) await this.verify(current, session)
     const hashed = await hashPassword(next.data)
     // Compare-and-swap on the persisted credential (no await between check and write), so two setters, or a setter
     // and `score password` on the host, can't overwrite one another unseen.
     if (this.stored() !== before)
-      throw new HttpError(409, 'password_changed', 'The security password changed; try again')
+      throw new HttpError(409, 'password_changed', 'The security password changed. Try again.')
     writePasswordFile(this.home, hashed)
     fs.writeFileSync(join(this.home, ORIGIN_FILE), 'browser\n', { mode: 0o600 })
   }

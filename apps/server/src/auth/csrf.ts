@@ -35,7 +35,7 @@ export function registerCsrfGuard(app: FastifyInstance, config: Config): void {
       (config.remote && origin === undefined) ||
       (origin !== undefined && !allowedOrigins.has(origin))
     ) {
-      throw new HttpError(403, 'forbidden', 'Request origin or client is not allowed')
+      throw new HttpError(403, 'forbidden', 'Score doesn’t accept requests from this origin.')
     }
   })
 }

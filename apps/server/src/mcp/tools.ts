@@ -46,7 +46,8 @@ const VIA = '[via MCP]'
 
 // Zod's max() counts UTF-16 units; the documented limits are bytes.
 function checkText(value: string, bytes: number): void {
-  if (value.includes('\0')) throw new HttpError(400, 'bad_request', 'Text may not contain NUL')
+  if (value.includes('\0'))
+    throw new HttpError(400, 'bad_request', 'Text can’t contain null bytes.')
   if (Buffer.byteLength(value, 'utf8') > bytes)
     throw new HttpError(413, 'payload_too_large', `Text may be at most ${bytes} bytes`)
 }
@@ -85,7 +86,7 @@ export function createMcpServer(
           throw new HttpError(
             403,
             'mcp_writes_off',
-            'Writing through MCP is turned off for this agent in Score (read tools still work)',
+            'Writing through MCP is turned off for this agent in Score. Read tools still work.',
           )
         return text(await run(args))
       } catch (error) {
@@ -100,7 +101,8 @@ export function createMcpServer(
   const memberRoom = (sqlite: Parameters<Parameters<ScoreDb['read']>[0]>[0], roomId: string) => {
     const room = readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at)
     // Unknown rooms and rooms the agent is not in look the same.
-    if (!room.members.includes(agentId)) throw new HttpError(404, 'not_found', 'Unknown room')
+    if (!room.members.includes(agentId))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that room.')
     return room
   }
 
@@ -108,7 +110,7 @@ export function createMcpServer(
     'rooms.list',
     {
       description:
-        'List the Score chat rooms you are a member of, with a short preview of the latest message.',
+        'List the Score rooms you are in, with a short preview of the latest message in each.',
     },
     guarded(false, () =>
       db.read((sqlite) => ({
@@ -148,7 +150,7 @@ export function createMcpServer(
     'rooms.post',
     {
       description:
-        'Post a note into a Score room you are a member of. It appears as written by you, tagged "via MCP". It does not wake other agents and @mentions in it are not routed.',
+        'Post a message into a Score room you are in. It appears as written by you, tagged "via MCP". It does not wake other agents, and @mentions in it are not routed.',
       inputSchema: {
         roomId: z.string().min(1).max(200),
         text: z.string().min(1).max(POST_BYTES),
@@ -162,7 +164,7 @@ export function createMcpServer(
         assertAgentAdmits(sqlite, agentId)
       })
       if (rewindingRooms.has(roomId))
-        throw new HttpError(409, 'conflict', 'This room is being rewound; try again in a moment')
+        throw new HttpError(409, 'conflict', 'This room is being rewound. Try again in a moment.')
       const release = access.reservePost(agentId, 'rooms.post')
       const id = randomUUID()
       try {
@@ -179,7 +181,7 @@ export function createMcpServer(
               throw new HttpError(
                 409,
                 'conflict',
-                'This room is being rewound; try again in a moment',
+                'This room is being rewound. Try again in a moment.',
               )
             const message: Message = {
               id,
@@ -236,7 +238,7 @@ export function createMcpServer(
           (task) => task.id === taskId && (task.assignee === agentId || task.reviewer === agentId),
         )
       })
-      if (!mine) throw new HttpError(404, 'not_found', 'Unknown task')
+      if (!mine) throw new HttpError(404, 'not_found', 'Couldn’t find that task.')
       const release = access.reservePost(agentId, 'tasks.comment')
       try {
         // Hermes records the comment's author as Score, so the tag names the agent.
@@ -279,12 +281,12 @@ export function createMcpServer(
     )
     orch(
       'orch.assign',
-      'Queue a step for a team agent. Score validates it against the run limits, budget and gates; the step starts when its "after" steps succeeded. Use replaces to retry or replace a failed or cancelled step.',
+      'Queue a step for a team agent. Score validates it against the run limits, budget and gates; the step starts when its "after" steps succeeded. Use replaces to retry or replace a failed or stopped step.',
       withoutBase(OrchAssignArgsSchema.shape),
     )
     orch(
       'orch.cancel',
-      'Cancel a step. If it already started, Score stops it and admits nothing new in the run until it has ended or the person decides otherwise.',
+      'Stop a step. If it has already started, Score stops it and starts nothing new in the run until it has ended or the person decides otherwise.',
       withoutBase(OrchCancelArgsSchema.shape),
     )
     orch(
@@ -319,7 +321,7 @@ export function createMcpServer(
       'knowledge.search',
       {
         description:
-          'Search the shared Score knowledge vault: Markdown notes and the text of uploaded documents (PDF, DOCX, CSV, JSON, HTML). Hits say whether they are a note or a document.',
+          'Search the shared Knowledge in Score: Markdown notes and the text of uploaded documents (PDF, DOCX, CSV, JSON, HTML). Hits say whether they are a note or a document.',
         inputSchema: {
           query: z.string().min(1).max(500),
           limit: z.int().min(1).max(20).optional(),
@@ -333,7 +335,7 @@ export function createMcpServer(
       'knowledge.read',
       {
         description:
-          'Read one note from the Score knowledge vault by path. Returns its etag, needed to update it. Embedded images appear as [image: alt, size] placeholders. For an uploaded document (e.g. .pdf, .docx, .csv) it returns the extracted text, read-only, with a notice when the text is missing or was cut.',
+          'Read one note from Score’s Knowledge by path. Returns its etag, needed to update it. Embedded images appear as [image: alt, size] placeholders. For an uploaded document (e.g. .pdf, .docx, .csv) it returns the extracted text, read-only, with a notice when the text is missing or was cut.',
         inputSchema: { path: z.string().min(1).max(1024) },
       },
       guarded(false, ({ path }: { path: string }) => knowledge.read(agentId, path)),
@@ -342,7 +344,7 @@ export function createMcpServer(
       'knowledge.write',
       {
         description:
-          'Create or replace a note in the Score knowledge vault. Pass expectedEtag from knowledge.read to replace a note, or null to create a new one. Keep any [image: alt, size] placeholder in place to keep that image; you cannot add images.',
+          'Create or replace a note in Score’s Knowledge. Pass expectedEtag from knowledge.read to replace a note, or null to create a new one. Keep any [image: alt, size] placeholder in place to keep that image; you can’t add images.',
         inputSchema: {
           path: z.string().min(1).max(1024),
           body: z.string().max(256 * 1024),

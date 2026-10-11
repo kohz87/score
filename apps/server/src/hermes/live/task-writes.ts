@@ -27,7 +27,7 @@ async function execute(args: string[], deps: WriteDeps) {
     throw new HttpError(
       result.exitCode < 0 ? 502 : 409,
       result.exitCode < 0 ? 'hermes_unavailable' : 'conflict',
-      'Hermes rejected the task mutation',
+      'Hermes didn’t accept the task change.',
     )
   return result
 }
@@ -55,13 +55,13 @@ async function createTaskUnlocked(
     throw new HttpError(
       501,
       'not_implemented',
-      'Creating tasks with a reviewer is not supported by Hermes',
+      'Hermes doesn’t support creating tasks with a reviewer.',
     )
   if (
     req.roomId !== undefined &&
     !deps.db.sqlite.prepare('SELECT 1 FROM rooms WHERE id = ?').get(req.roomId)
   )
-    throw new HttpError(400, 'bad_request', 'Unknown room')
+    throw new HttpError(400, 'bad_request', 'Couldn’t find that room.')
   if (req.assignee) ProfileNameSchema.parse(req.assignee)
   for (const parent of req.dependsOn ?? []) TaskIdSchema.parse(parent)
   const body =
@@ -104,7 +104,7 @@ async function createTaskUnlocked(
       throw new HttpError(
         409,
         'idempotency_conflict',
-        'Idempotency key belongs to a different task',
+        'That request was already used for a different task.',
       )
     if (row.state === 'accepted' && row.result) return deps.getTask(TaskIdSchema.parse(row.result))
     // Not accepted: the earlier attempt timed out, failed or died mid-way, and Hermes may or may not have created
@@ -129,7 +129,11 @@ async function createTaskUnlocked(
     try {
       id = z.object({ id: TaskIdSchema }).parse(JSON.parse(result.stdout ?? '')).id
     } catch {
-      throw new HttpError(502, 'hermes_unavailable', 'Task creation returned invalid output')
+      throw new HttpError(
+        502,
+        'hermes_unavailable',
+        'Hermes returned something Score couldn’t read after creating the task.',
+      )
     }
     deps.db.tx((sqlite) => {
       const at = new Date().toISOString()
@@ -171,13 +175,17 @@ export async function patchTask(
   TaskIdSchema.parse(id)
   await deps.getTask(id)
   if (req.reviewer !== undefined)
-    throw new HttpError(501, 'not_implemented', 'Editing reviewer is not supported by the CLI')
+    throw new HttpError(
+      501,
+      'not_implemented',
+      'The Hermes command line doesn’t support changing a task’s reviewer.',
+    )
   if (req.assignee) ProfileNameSchema.parse(req.assignee)
   let body = req.body
   if (req.steps !== undefined) {
     // Edit the original body, never the redacted projection: toggling a step must preserve other bytes.
     const original = taskReader(deps.hermesHome)(id)
-    if (!original) throw new HttpError(404, 'not_found', 'Unknown task')
+    if (!original) throw new HttpError(404, 'not_found', 'Couldn’t find that task.')
     const originalBody = req.body ?? original.body ?? ''
     const originalSteps = parseSteps(originalBody)
     const steps = req.steps.map((step) => {

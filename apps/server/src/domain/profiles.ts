@@ -97,7 +97,7 @@ export class ProfileOperations {
 
   get(id: string): AgentOperation {
     const row = this.db.sqlite.prepare('SELECT * FROM profile_operations WHERE id = ?').get(id)
-    if (!row) throw new HttpError(404, 'not_found', 'Operation not found')
+    if (!row) throw new HttpError(404, 'not_found', 'Couldn’t find that operation.')
     return AgentOperationSchema.parse(JSON.parse(OperationRow.parse(row).operation))
   }
   private pending(name: string) {
@@ -210,7 +210,7 @@ export class ProfileOperations {
       throw new HttpError(409, 'conflict', 'The preview changed. Preview again before confirming.')
     if (preview.blockers.length) throw new HttpError(409, 'conflict', preview.blockers.join(' '))
     if (request.kind === 'create' && request.cloneFrom && !confirm)
-      throw new HttpError(400, 'bad_request', 'Confirm the inherited data and capabilities first')
+      throw new HttpError(400, 'bad_request', 'Confirm what the new agent inherits first.')
     const id = randomUUID()
     const now = new Date(this.clock()).toISOString()
     const input =
@@ -263,14 +263,18 @@ export class ProfileOperations {
             )
             .get(preview.targetName)
         )
-          throw new HttpError(409, 'conflict', 'An operation already holds this agent')
+          throw new HttpError(409, 'conflict', 'Another change to this agent is still in progress.')
         // Admission freezes and the busy recheck share the writer transaction with the journal.
         const busy = this.pending(preview.targetName)
         if (
           request.kind === 'delete' &&
           (busy.activeRuns || busy.queuedTurns || busy.pendingApprovals || busy.assignments)
         )
-          throw new HttpError(409, 'conflict', 'Agent has pending work')
+          throw new HttpError(
+            409,
+            'conflict',
+            'This agent still has unfinished work. Finish or stop it first.',
+          )
         sqlite
           .prepare(
             'INSERT INTO profile_operations (id, target_name, operation, request, target_identity, state) VALUES (?, ?, ?, ?, ?, ?)',
@@ -418,7 +422,7 @@ export class ProfileOperations {
       throw new HttpError(
         409,
         'conflict',
-        'This step cannot be retried from Score. Check the profile locally first.',
+        'This step can’t be retried from Score. Check the profile on the Hermes machine first.',
       )
     step.state = 'pending'
     operation.state = 'running'
@@ -445,7 +449,7 @@ export class ProfileOperations {
       step.name !== stepName ||
       step.state !== 'running'
     )
-      throw new HttpError(409, 'conflict', 'This step cannot be confirmed from Score.')
+      throw new HttpError(409, 'conflict', 'This step can’t be confirmed from Score.')
     let identity: string | null | undefined
     if (
       step.name === 'create_profile' ||
@@ -456,7 +460,7 @@ export class ProfileOperations {
         await this.port.profileInventory(operation.targetName),
       )
       if (step.name !== 'delete_profile' && !inventory.exists)
-        throw new HttpError(409, 'conflict', 'The profile does not exist, so it was not created.')
+        throw new HttpError(409, 'conflict', 'The profile doesn’t exist, so it was not created.')
       if (step.name === 'delete_profile' && inventory.exists)
         throw new HttpError(409, 'conflict', 'The profile still exists, so it was not deleted.')
       if (step.name !== 'delete_profile') identity = inventory.identity
@@ -541,7 +545,7 @@ export class ProfileOperations {
             throw new HttpError(
               409,
               'conflict',
-              'Work appeared after admissions were frozen. Finish it before the next step.',
+              'New work arrived while Score was preparing. Finish it before the next step.',
             )
         }
         if (operation.kind !== 'delete' && step.name === 'verify_ready')
@@ -576,13 +580,17 @@ export class ProfileOperations {
           await this.port.profileInventory(operation.targetName),
         )
         if (inventory.identity !== identity)
-          throw new HttpError(409, 'conflict', 'Profile identity changed before activation')
+          throw new HttpError(
+            409,
+            'conflict',
+            'The profile changed before Score finished setting it up.',
+          )
         await this.rebaseline(operation, stored, identity)
         if (JSON.stringify(readBaseline(this.db.sqlite)) !== JSON.stringify(stored.baseline))
           throw new HttpError(
             409,
             'conflict',
-            'Team rules changed during provisioning. Reapply the current team rules before activation.',
+            'The team rules changed while the agent was being set up. Apply the current team rules again.',
           )
         await this.port.profileStep('verify_ready', {
           operationId: id,
@@ -599,7 +607,7 @@ export class ProfileOperations {
         throw new HttpError(
           409,
           'conflict',
-          'A replacement profile appeared before retirement. Inspect its identity locally.',
+          'Another profile appeared with this name before the agent was removed. Check it on the Hermes machine.',
         )
       }
       operation.state = 'completed'

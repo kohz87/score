@@ -50,7 +50,7 @@ export function registerSessionCompactionRoutes(
   async function resolve(agentId: string, sessionId: string) {
     const agents = z.array(AgentSummarySchema).parse(await port.listAgents())
     const agent = agents.find((item) => item.id === agentId)
-    if (!agent) throw new HttpError(404, 'not_found', 'Agent not found')
+    if (!agent) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     // `score-<roomId>-<agentId>` names the room's session of that agent; in an imported room that continues a Hermes
     // session it stands for that session. The continued session's own id is accepted too.
     const found = db.read((sqlite) => {
@@ -70,7 +70,7 @@ export function registerSessionCompactionRoutes(
         .get(id, agentId) as { session_id: string } | undefined
       return { roomId: id, hermesSession: same?.session_id ?? sessionId }
     })
-    if (found === null) throw new HttpError(404, 'not_found', 'Unknown session')
+    if (found === null) throw new HttpError(404, 'not_found', 'Couldn’t find that conversation.')
     const { roomId, hermesSession } = found
     return { agent, roomId, hermesSession }
   }
@@ -140,12 +140,12 @@ export function registerSessionCompactionRoutes(
     const body = CompactRequestSchema.parse(request.body ?? {})
     const { agent, roomId, hermesSession } = await resolve(agentId, sessionId)
     if (agent.runtime !== undefined || !port.compactSession)
-      throw new HttpError(409, 'unsupported', 'This agent’s session cannot be compacted from Score')
+      throw new HttpError(409, 'unsupported', 'Score can’t compact this agent’s context.')
     db.read((sqlite) => assertRoomFree(sqlite, roomId, 'session.compact'))
     if (inflight.has(sessionId))
-      throw new HttpError(409, 'conflict', 'This session is already being compacted')
+      throw new HttpError(409, 'conflict', 'This agent’s context is already being compacted.')
     if (busy(roomId, agentId))
-      throw new HttpError(409, 'session_busy', `${agent.name} is busy in this room; stop it first`)
+      throw new HttpError(409, 'session_busy', `${agent.name} is busy in this room. Stop it first.`)
     const commandId = randomUUID()
     const key = compactingKey(roomId, agentId)
     inflight.set(sessionId, commandId)

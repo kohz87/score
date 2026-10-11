@@ -65,7 +65,7 @@ def test_registers_five_tools_with_public_register_tool():
         assert s["toolset"] == "score_knowledge" and callable(s["handler"])
         assert s["schema"]["parameters"]["type"] == "object"
         assert s["schema"]["parameters"]["additionalProperties"] is False
-        assert "vault" in s["schema"]["description"]
+        assert "Knowledge" in s["schema"]["description"]
     assert "Search" in seen[3]["schema"]["description"] and "etag" in seen[3]["schema"]["description"]
 
 
@@ -180,7 +180,7 @@ def test_tool_descriptions_explain_image_placeholders():
     # PLAN 6.8: notes may hold embedded images; agents only ever see [image: alt, size] placeholders.
     assert "[image: alt, size]" in knowledge.SCHEMAS["knowledge_read"]["description"]
     assert "[image: alt, size]" in knowledge.SCHEMAS["knowledge_write"]["description"]
-    assert "cannot add images" in knowledge.SCHEMAS["knowledge_write"]["description"]
+    assert "can't add images" in knowledge.SCHEMAS["knowledge_write"]["description"]
 
 
 def test_read_passes_placeholders_through_and_a_refused_image_write_explains_itself(bridge):

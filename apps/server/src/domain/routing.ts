@@ -19,7 +19,7 @@ export function routeMessage(
       usage: command.usage,
     })
   if (command && ['remember', 'skill'].includes(command.kind))
-    throw new HttpError(501, 'not_implemented', 'Command is not implemented', {
+    throw new HttpError(501, 'not_implemented', 'That command isn’t available yet.', {
       usage: COMMANDS.find((item) => item.name === command.kind)!.usage,
     })
   if (command?.kind === 'assign' || command?.kind === 'routine')
@@ -30,7 +30,8 @@ export function routeMessage(
   const routedTo = [...new Set([...to, ...mentions])]
   if (!routedTo.length && room.leadAgentId && agents.includes(room.leadAgentId))
     routedTo.push(room.leadAgentId)
-  if (!routedTo.length) throw new HttpError(400, 'no_recipient', 'This room has no recipient')
+  if (!routedTo.length)
+    throw new HttpError(400, 'no_recipient', 'This room has no agent to receive messages.')
   return { parsed, routedTo, input, model: command?.kind === 'model' ? command.model : undefined }
 }
 

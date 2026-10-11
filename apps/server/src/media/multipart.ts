@@ -1,6 +1,6 @@
 import { HttpError } from '../errors.ts'
 
-const bad = () => new HttpError(400, 'bad_request', 'Malformed upload')
+const bad = () => new HttpError(400, 'bad_request', 'Couldn’t read that upload. Try again.')
 const CRLF = Buffer.from('\r\n')
 
 // Just enough multipart/form-data for one image field: the composer sends a single file part named "file".

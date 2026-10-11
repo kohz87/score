@@ -203,7 +203,7 @@ export function readOrch(sqlite: DatabaseSync, id: string): OrchRow | undefined 
 }
 export function requireOrch(sqlite: DatabaseSync, id: string): OrchRow {
   const row = readOrch(sqlite, id)
-  if (!row) throw new HttpError(404, 'not_found', 'Unknown orchestration')
+  if (!row) throw new HttpError(404, 'not_found', 'Couldn’t find that orchestration.')
   return row
 }
 /** Every run, whatever plans it (the executor serves both kinds). */

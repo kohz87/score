@@ -69,7 +69,8 @@ export function readVersion(sqlite: DatabaseSync, id: string, version: number): 
   const row = sqlite
     .prepare('SELECT * FROM workflow_versions WHERE workflow_id = ? AND version = ?')
     .get(id, version)
-  if (row === undefined) throw new HttpError(404, 'not_found', 'Unknown workflow version')
+  if (row === undefined)
+    throw new HttpError(404, 'not_found', 'Couldn’t find that workflow version.')
   const parsed = VersionRowSchema.parse(row)
   return {
     ...versionSummary(parsed, usedVersions(sqlite, id)),
@@ -130,7 +131,7 @@ export function listWorkflows(sqlite: DatabaseSync): WorkflowList {
 
 export function getWorkflow(sqlite: DatabaseSync, id: string): WorkflowDetail {
   const header = sqlite.prepare('SELECT * FROM workflow_definitions WHERE id = ?').get(id)
-  if (header === undefined) throw new HttpError(404, 'not_found', 'Unknown workflow')
+  if (header === undefined) throw new HttpError(404, 'not_found', 'Couldn’t find that workflow.')
   const parsed = HeaderSchema.parse(header)
   const used = usedVersions(sqlite, id)
   const rows = z
@@ -150,7 +151,12 @@ export function getWorkflow(sqlite: DatabaseSync, id: string): WorkflowDetail {
 function requireValid(def: WorkflowDefinition): { hash: string; bytes: number } {
   const result = validateDefinition(def)
   if (!result.ok)
-    throw new HttpError(422, 'invalid_definition', 'The workflow has errors', { result })
+    throw new HttpError(
+      422,
+      'invalid_definition',
+      'The workflow has errors. Fix them and save again.',
+      { result },
+    )
   return { hash: definitionHash(def), bytes: bytesOf(JSON.stringify(def)) }
 }
 
@@ -163,7 +169,7 @@ function checkInventory(sqlite: DatabaseSync, newDefinition: boolean, id: string
       throw new HttpError(
         409,
         'quota_exhausted',
-        `At most ${WORKFLOW_LIMITS.maxDefinitions} workflows are kept`,
+        `At most ${WORKFLOW_LIMITS.maxDefinitions} workflows are kept.`,
       )
   } else {
     const n = (
@@ -175,7 +181,7 @@ function checkInventory(sqlite: DatabaseSync, newDefinition: boolean, id: string
       throw new HttpError(
         409,
         'quota_exhausted',
-        `At most ${WORKFLOW_LIMITS.maxVersionsPerDefinition} versions of a workflow are kept`,
+        `At most ${WORKFLOW_LIMITS.maxVersionsPerDefinition} versions of a workflow are kept.`,
       )
   }
 }
@@ -209,16 +215,21 @@ export function addVersion(
   now: string,
 ): WorkflowVersion {
   const header = sqlite.prepare('SELECT 1 FROM workflow_definitions WHERE id = ?').get(id)
-  if (header === undefined) throw new HttpError(404, 'not_found', 'Unknown workflow')
+  if (header === undefined) throw new HttpError(404, 'not_found', 'Couldn’t find that workflow.')
   const latest = (
     sqlite
       .prepare('SELECT MAX(version) AS v FROM workflow_versions WHERE workflow_id = ?')
       .get(id) as { v: number }
   ).v
   if (latest !== baseVersion)
-    throw new HttpError(409, 'conflict', 'The workflow has a newer version; reload it first', {
-      latestVersion: latest,
-    })
+    throw new HttpError(
+      409,
+      'conflict',
+      'A newer version of this workflow was saved. Reload it first.',
+      {
+        latestVersion: latest,
+      },
+    )
   const { hash, bytes } = requireValid(def)
   checkInventory(sqlite, false, id)
   sqlite
@@ -236,9 +247,9 @@ export function addVersion(
 
 export function deleteWorkflow(sqlite: DatabaseSync, id: string): void {
   if (sqlite.prepare('SELECT 1 FROM workflow_definitions WHERE id = ?').get(id) === undefined)
-    throw new HttpError(404, 'not_found', 'Unknown workflow')
+    throw new HttpError(404, 'not_found', 'Couldn’t find that workflow.')
   if (usedVersions(sqlite, id).size > 0)
-    throw new HttpError(409, 'workflow_used', 'A run used this workflow; it cannot be deleted')
+    throw new HttpError(409, 'workflow_used', 'This workflow has runs, so it can’t be deleted.')
   sqlite.prepare('DELETE FROM workflow_versions WHERE workflow_id = ?').run(id)
   sqlite.prepare('DELETE FROM workflow_definitions WHERE id = ?').run(id)
 }

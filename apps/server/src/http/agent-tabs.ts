@@ -50,12 +50,13 @@ export function registerAgentTabRoutes(
     onSend: receipts.onSend,
   }
   async function announce(agentId: string) {
-    if (!ingest) throw new HttpError(503, 'hermes_unavailable', 'Agent storage is unavailable')
+    if (!ingest)
+      throw new HttpError(503, 'hermes_unavailable', 'Couldn’t read the agent data. Try again.')
     const detail = z
       .array(AgentDetailSchema)
       .parse(await port.listAgentDetails())
       .find((agent) => agent.id === agentId)
-    if (!detail) throw new HttpError(404, 'not_found', 'Agent not found')
+    if (!detail) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     let stored = detail
     await ingest.submit({
       source: 'agent-tabs',

@@ -66,7 +66,7 @@ function ensurePrivateDirectory(path: string) {
   if (!stat(path)) privateDirectory(path)
   const value = lstatSync(path)
   if (!value.isDirectory() || value.uid !== process.getuid?.() || (value.mode & 0o077) !== 0)
-    throw failure('Score storage must be an owner-only directory without symlinks.')
+    throw failure('Score’s home folder must be private to your user and contain no symbolic links.')
 }
 
 /** Verify gzip CRC, tar headers, entry bounds and the profile root without extracting or logging contents. */
@@ -80,7 +80,7 @@ export function verifyProfileArchive(path: string, name: string): void {
       (value.mode & 0o077) !== 0 ||
       value.size > 256 * 1024 * 1024
     )
-      throw failure('The private export could not be verified.')
+      throw failure('Couldn’t verify the private export.')
     const data = gunzipSync(readFileSync(fd), { maxOutputLength: 512 * 1024 * 1024 })
     let entries = 0
     // GNU tar (what Hermes writes) puts names over 100 bytes in a ././@LongLink record ("L") before the entry.
@@ -134,7 +134,7 @@ export function verifyProfileArchive(path: string, name: string): void {
           entry.split('/').includes('..') ||
           entry.startsWith('/'))
       )
-        throw failure('The export archive has an unexpected root.')
+        throw failure('The export archive has an unexpected layout.')
       entries++
       offset += 512 + Math.ceil(size / 512) * 512
     }
@@ -168,7 +168,9 @@ export class LiveProfileManagement implements ProfileManagementPort {
       !stat(this.options.hermesHome)?.isDirectory() ||
       (stat(parent) && !stat(parent)?.isDirectory())
     )
-      throw failure('The profile parent must be a directory without symlinks.')
+      throw failure(
+        'The folder that holds Hermes profiles must be a plain folder with no symbolic links.',
+      )
     return join(this.options.hermesHome, 'profiles', ProfileNameSchema.parse(name))
   }
   async profileInventory(name: string, cloneFrom?: string): Promise<ProfileInventory> {
@@ -265,7 +267,7 @@ export class LiveProfileManagement implements ProfileManagementPort {
     }).catch(() => ({ exitCode: -1 }))
     if (result.exitCode !== 0)
       throw failure(
-        'The CLI refused or did not confirm this step. Inspect the profile locally; no fallback was attempted.',
+        'The CLI refused or didn’t confirm this step. Inspect the profile locally; no fallback was attempted.',
       )
   }
   async describeProfile(name: string, description: string) {
@@ -283,7 +285,7 @@ export class LiveProfileManagement implements ProfileManagementPort {
       status: 'offline',
       activity: null,
     })
-    if (detail.role !== redact(text)) throw failure('Description readback did not match.')
+    if (detail.role !== redact(text)) throw failure('Hermes didn’t keep the description.')
   }
   async profileStep(step: ProfileStepName, context: ProfileStepContext) {
     const { targetName: name, input } = context
@@ -298,10 +300,12 @@ export class LiveProfileManagement implements ProfileManagementPort {
       !absentStep &&
       (!context.targetIdentity || actual !== context.targetIdentity)
     )
-      throw failure('The profile identity changed. Score will not act on a replacement profile.')
+      throw failure(
+        'The profile changed. Score won’t act on a different profile with the same name.',
+      )
     const db = this.options.db
     const gateway = () => {
-      if (!db) throw failure('Score storage is unavailable.')
+      if (!db) throw failure('Score’s storage isn’t available.')
       return new GatewayClient({
         scoreHome: this.options.scoreHome,
         db,
@@ -310,7 +314,8 @@ export class LiveProfileManagement implements ProfileManagementPort {
       })
     }
     if (step === 'create_profile') {
-      if (stat(home) || !input) throw failure('The target path exists. Score will not adopt it.')
+      if (stat(home) || !input)
+        throw failure('A folder already exists at that location. Score won’t take it over.')
       await this.cli([
         '-p',
         'default',
@@ -323,35 +328,35 @@ export class LiveProfileManagement implements ProfileManagementPort {
         '--no-alias',
       ])
       const created = identity(home)
-      if (!created) throw failure('Profile creation was not verified.')
+      if (!created) throw failure('Couldn’t confirm the profile was created.')
       return { identity: created }
     }
     if (step === 'import_profile') {
       const archive = context.importArchive
       if (stat(home) || !archive || !input)
-        throw failure('The target path exists. Score will not adopt it.')
+        throw failure('A folder already exists at that location. Score won’t take it over.')
       const directory = join(resolve(this.options.scoreHome), 'profile-imports')
       // Only Score's own private upload directory; the path never comes from a request.
       if (dirname(resolve(archive)) !== directory)
-        throw failure('The import archive is not in Score storage.')
+        throw failure('The imported archive isn’t in Score’s storage.')
       const file = lstatSync(archive)
       if (!file.isFile() || (file.mode & 0o077) !== 0)
-        throw failure('The import archive is not a private regular file.')
+        throw failure('The imported archive isn’t a private file.')
       // Hermes extracts into a staging directory, refuses links and unsafe paths, and never overwrites a profile.
       await this.cli(['-p', 'default', 'profile', 'import', archive, '--name', name])
       const created = identity(home)
-      if (!created) throw failure('Profile import was not verified.')
+      if (!created) throw failure('Couldn’t confirm the profile was imported.')
       return { identity: created }
     }
     if (step === 'describe_profile') {
-      if (!input) throw failure('Import input is missing.')
+      if (!input) throw failure('The import details are missing.')
       await this.describeProfile(name, input.role)
     } else if (step === 'preserve_key') {
       ensurePrivateDirectory(resolve(this.options.scoreHome))
       const directory = join(resolve(this.options.scoreHome), 'hermes-keys')
       ensurePrivateDirectory(directory)
       const path = join(directory, name)
-      if (stat(path)) throw failure('A key already exists. Score will not rotate or replace it.')
+      if (stat(path)) throw failure('An access key already exists. Score won’t replace it.')
       const temporary = join(directory, `.key-${randomUUID()}`)
       const fd = openSync(
         temporary,
@@ -376,14 +381,14 @@ export class LiveProfileManagement implements ProfileManagementPort {
         closeSync(dirFd)
       }
       const key = readKey(this.options.scoreHome, name)
-      if (!db) throw failure('Score storage is unavailable.')
+      if (!db) throw failure('Score’s storage isn’t available.')
       ensureGeneration(db, name, key.keySha256)
     } else if (step === 'configure_key') {
       const key = readKey(this.options.scoreHome, name)
       await this.cli(['-p', name, 'config', 'set', 'API_SERVER_KEY', key.key], true)
       await gateway().capabilities(name)
     } else if (step === 'model') {
-      if (!input) throw failure('Create input is missing.')
+      if (!input) throw failure('The new agent’s details are missing.')
       await this.options.port.setAgentModel(name, {
         model: input.model,
         ...(input.provider ? { provider: input.provider } : {}),
@@ -393,7 +398,7 @@ export class LiveProfileManagement implements ProfileManagementPort {
         status: 'idle',
         activity: null,
       })
-      if (detail.model?.id !== input.model) throw failure('Model readback did not match.')
+      if (detail.model?.id !== input.model) throw failure('Hermes didn’t keep the model.')
     } else if (step === 'permissions') {
       await this.options.port.updateApprovals(name, (current) =>
         expectedConfig(
@@ -410,10 +415,10 @@ export class LiveProfileManagement implements ProfileManagementPort {
           expectedConfig(config, context.baseline, { withoutGoAhead: [], extraNever: [] }),
         )
       )
-        throw failure('Team permission readback did not match.')
+        throw failure('Hermes didn’t keep the team rules.')
     } else if (step === 'install_bridge') {
       if (!this.options.bridgeInstallUrl || !this.options.bridgeInstallRef)
-        throw failure('Configure a pinned bridge installation URL first.')
+        throw failure('Set where to install Score’s plugin from first.')
       await this.cli([
         '-p',
         name,
@@ -435,7 +440,7 @@ export class LiveProfileManagement implements ProfileManagementPort {
           stat(join(home, 'plugins', dir, 'plugin.yaml'))?.isFile(),
         )
       )
-        throw failure('Bridge installation was not verified.')
+        throw failure('Couldn’t confirm that Score’s plugin was installed.')
       const provenance = z
         .record(z.string(), z.unknown())
         .parse(JSON.parse(readFileSync(join(home, 'plugins', '.install-metadata.json'), 'utf8')))
@@ -450,7 +455,7 @@ export class LiveProfileManagement implements ProfileManagementPort {
           )
         })
       )
-        throw failure('The installed bridge revision is not the configured pin.')
+        throw failure('The installed plugin isn’t the version Score expects.')
     } else if (step === 'enable_bridge') {
       await this.cli(['-p', name, 'plugins', 'enable', 'score-bridge'])
       const result = await (this.options.runner ?? runHermes)(
@@ -459,7 +464,7 @@ export class LiveProfileManagement implements ProfileManagementPort {
       )
       const enabled = z.array(z.string()).parse(JSON.parse(result.stdout ?? 'null'))
       if (!enabled.some((key) => ['score-bridge', 'score_bridge'].includes(key)))
-        throw failure('Bridge enablement was not verified.')
+        throw failure('Couldn’t confirm that Score’s plugin is on.')
     } else if (step === 'verify_ready') {
       await gateway().capabilities(name)
       this.options.profiles.invalidate(name)
@@ -486,12 +491,12 @@ export class LiveProfileManagement implements ProfileManagementPort {
       ensurePrivateDirectory(directory)
       const path = context.exportPath
       if (!path || dirname(resolve(path)) !== directory)
-        throw failure('The export path is unsafe or already exists.')
+        throw failure('The export location is unsafe or already in use.')
       // The path is unique to this operation, so a file there is our own earlier attempt: a retry reuses it (it is
       // verified before anything is deleted) instead of failing forever. Anything but a plain file is refused.
       const earlier = stat(path)
       if (earlier && (!earlier.isFile() || earlier.isSymbolicLink()))
-        throw failure('The export path is unsafe or already exists.')
+        throw failure('The export location is unsafe or already in use.')
       if (!earlier) await this.cli(['-p', 'default', 'profile', 'export', name, '-o', path])
       if (!stat(path)?.isFile()) throw failure('The export is missing.')
       const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
@@ -513,16 +518,16 @@ export class LiveProfileManagement implements ProfileManagementPort {
       } catch (error) {
         if (stat(home)) throw error
       }
-      if (stat(home)) throw failure('The profile directory still exists.')
+      if (stat(home)) throw failure('The profile folder still exists.')
     } else if (step === 'purge_identity') {
-      if (stat(home))
-        throw failure('A profile exists at this name. Score will not purge a replacement identity.')
+      if (stat(home)) throw failure('A different profile has this name. Score won’t clean it up.')
       await this.cli(['-p', 'default', 'profile', 'purge-identity', name])
       // The profile and its .env are gone; Score's copy of its API key must not outlive them.
       const key = join(resolve(this.options.scoreHome), 'hermes-keys', name)
       const existing = stat(key)
       if (existing?.isFile()) unlinkSync(key)
-      else if (existing) throw failure('The saved key path is not a plain file; remove it locally.')
+      else if (existing)
+        throw failure('The saved key isn’t a plain file. Remove it on the Score machine.')
     }
     return { identity: context.targetIdentity }
   }

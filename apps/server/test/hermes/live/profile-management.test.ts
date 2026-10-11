@@ -288,7 +288,7 @@ test('clone uses only --clone-from, and an existing directory is never adopted',
     '--no-alias',
   ])
   const before = calls.length
-  await expect(step('create_profile')).rejects.toThrow(/will not adopt/)
+  await expect(step('create_profile')).rejects.toThrow(/take it over/)
   expect(calls).toHaveLength(before)
 })
 test("import hands Hermes only Score's private upload with argv, never adopts, and reinstalls the pinned bridge", async () => {
@@ -298,15 +298,15 @@ test("import hands Hermes only Score's private upload with argv, never adopts, a
   writeFileSync(file, archive('helper'), { mode: 0o600 })
   // Outside the upload directory, or readable by others: refused before any process runs.
   context.importArchive = join(env.home, 'elsewhere.tar.gz')
-  await expect(step('import_profile')).rejects.toThrow(/not in Score storage/)
+  await expect(step('import_profile')).rejects.toThrow(/isn’t in Score’s storage/)
   context.importArchive = file
   chmodSync(file, 0o644)
-  await expect(step('import_profile')).rejects.toThrow(/private regular file/)
+  await expect(step('import_profile')).rejects.toThrow(/private file/)
   chmodSync(file, 0o600)
   expect(calls).toEqual([])
   await step('import_profile')
   expect(calls).toEqual([['-p', 'default', 'profile', 'import', file, '--name', 'helper']])
-  await expect(step('import_profile')).rejects.toThrow(/will not adopt/)
+  await expect(step('import_profile')).rejects.toThrow(/take it over/)
   await step('install_bridge')
   expect(calls.at(-1)).toEqual([
     '-p',
@@ -387,15 +387,15 @@ test('corrupt export and replaced profile identity stop deletion', async () => {
   await expect(step('delete_profile')).rejects.toThrow()
   expect(calls.some((args) => args.includes('delete'))).toBe(false)
   context.targetIdentity = 'unrelated-identity'
-  await expect(step('configure_key')).rejects.toThrow(/identity changed/)
+  await expect(step('configure_key')).rejects.toThrow(/The profile changed/)
 })
 test('key preservation refuses an existing key and backups refuse symlink directories', async () => {
   await step('create_profile')
   await step('preserve_key')
-  await expect(step('preserve_key')).rejects.toThrow(/will not rotate/)
+  await expect(step('preserve_key')).rejects.toThrow(/won’t replace/)
   symlinkSync(upstream, join(env.home, 'profile-backups'))
   context.exportPath = adapter.profileExportPath('helper', 'fixture')
-  await expect(step('export')).rejects.toThrow(/owner-only directory/)
+  await expect(step('export')).rejects.toThrow(/private to your user/)
 })
 test('plugin refusal stops without file-copy or enable fallbacks', async () => {
   await step('create_profile')
@@ -406,7 +406,7 @@ test('plugin refusal stops without file-copy or enable fallbacks', async () => {
 test('archive verifier rejects wrong root, truncation and checksum corruption', () => {
   const path = join(env.home, 'archive.tar.gz')
   writeFileSync(path, archive('other'), { mode: 0o600 })
-  expect(() => verifyProfileArchive(path, 'helper')).toThrow(/unexpected root/)
+  expect(() => verifyProfileArchive(path, 'helper')).toThrow(/unexpected layout/)
   writeFileSync(path, archive('helper').subarray(0, 30))
   expect(() => verifyProfileArchive(path, 'helper')).toThrow()
 })
@@ -416,9 +416,9 @@ test('archive verifier reads GNU long names (as Hermes exports them) and still c
   writeFileSync(path, gnuArchive(deep), { mode: 0o600 })
   expect(() => verifyProfileArchive(path, 'helper')).not.toThrow()
   writeFileSync(path, gnuArchive(`other/${'nested-directory/'.repeat(8)}x`), { mode: 0o600 })
-  expect(() => verifyProfileArchive(path, 'helper')).toThrow(/unexpected root/)
+  expect(() => verifyProfileArchive(path, 'helper')).toThrow(/unexpected layout/)
   writeFileSync(path, gnuArchive(`helper/${'../'.repeat(40)}etc/passwd`), { mode: 0o600 })
-  expect(() => verifyProfileArchive(path, 'helper')).toThrow(/unexpected root/)
+  expect(() => verifyProfileArchive(path, 'helper')).toThrow(/unexpected layout/)
 })
 test('credential-bearing CLI exceptions and output never reach logs or captures', async () => {
   const logs = [vi.spyOn(console, 'error'), vi.spyOn(console, 'log'), vi.spyOn(console, 'warn')]
@@ -452,7 +452,7 @@ test('a retried export reuses its own earlier file instead of failing, but never
   expect(calls.filter((args) => args.includes('export'))).toHaveLength(exports)
   rmSync(context.exportPath)
   symlinkSync(join(env.home, 'elsewhere'), context.exportPath)
-  await expect(step('export')).rejects.toThrow(/unsafe or already exists/)
+  await expect(step('export')).rejects.toThrow(/unsafe or already in use/)
 })
 
 test('a rebaseline removes the Never rules Score applied before, and keeps Hermes-owned ones', async () => {

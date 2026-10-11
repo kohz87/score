@@ -708,10 +708,10 @@ export class FakePort implements HermesPort {
       !['purge_identity', 'retire'].includes(step) &&
       current !== context.targetIdentity
     )
-      throw new HttpError(409, 'conflict', 'Profile identity changed')
+      throw new HttpError(409, 'conflict', 'The profile changed.')
     if (step === 'create_profile') {
       if (this.agents.has(name) || !input)
-        throw new HttpError(409, 'conflict', 'Profile already exists')
+        throw new HttpError(409, 'conflict', 'A profile with that name already exists.')
       // A small observable provisioning interval keeps fake mode faithful to the asynchronous operation UI.
       await new Promise<void>((resolve) => setTimeout(resolve, 150))
       const source = input.cloneFrom ? this.agentOrThrow(input.cloneFrom) : null
@@ -734,7 +734,7 @@ export class FakePort implements HermesPort {
       this.profileIdentities.set(name, current)
     } else if (step === 'import_profile') {
       if (this.agents.has(name) || !input || !context.importArchive)
-        throw new HttpError(409, 'conflict', 'Profile already exists')
+        throw new HttpError(409, 'conflict', 'A profile with that name already exists.')
       await new Promise<void>((resolve) => setTimeout(resolve, 150))
       this.agents.set(name, {
         ...exampleAgents()[0]!,
@@ -763,7 +763,7 @@ export class FakePort implements HermesPort {
       }))
     } else if (step === 'delete_profile') {
       if (!this.profileSteps.get(name)?.has('export'))
-        throw new HttpError(409, 'conflict', 'No verified export')
+        throw new HttpError(409, 'conflict', 'There is no verified export.')
       this.agents.delete(name)
       this.profileIdentities.delete(name)
     } else if (step === 'verify_ready') {
@@ -778,7 +778,7 @@ export class FakePort implements HermesPort {
           'enable_bridge',
         ].every((key) => steps?.has(key as ProfileStepName))
       )
-        throw new HttpError(409, 'conflict', 'Provisioning checks failed')
+        throw new HttpError(409, 'conflict', 'The checks after setting up the agent failed.')
     }
     const steps = this.profileSteps.get(name) ?? new Set<ProfileStepName>()
     steps.add(step)
@@ -956,7 +956,7 @@ export class FakePort implements HermesPort {
   }
   private agentOrThrow(agentId: string): AgentSummary {
     const agent = this.agents.get(agentId)
-    if (!agent) throw new HttpError(404, 'not_found', 'Agent not found')
+    if (!agent) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     return agent
   }
   async setAgentModel(agentId: string, input: Parameters<HermesPort['setAgentModel']>[1]) {
@@ -1020,7 +1020,7 @@ export class FakePort implements HermesPort {
   async setSkillEnabled(agentId: string, name: string, enabled: boolean): Promise<SkillItem> {
     this.agentOrThrow(agentId)
     const skill = this.skills.get(agentId)?.find((candidate) => candidate.name === name)
-    if (!skill) throw new HttpError(404, 'not_found', 'Skill not found')
+    if (!skill) throw new HttpError(404, 'not_found', 'Couldn’t find that skill.')
     skill.enabled = enabled
     return structuredClone(skill)
   }
@@ -1077,7 +1077,7 @@ export class FakePort implements HermesPort {
     this.agentOrThrow(agentId)
     const items = this.memory.get(agentId) ?? []
     if (!items.some((item) => item.id === id))
-      throw new HttpError(404, 'not_found', 'Memory not found')
+      throw new HttpError(404, 'not_found', 'Couldn’t find that memory entry.')
     this.memory.set(
       agentId,
       items.filter((item) => item.id !== id),
@@ -1099,9 +1099,9 @@ export class FakePort implements HermesPort {
   async setToolEnabled(agentId: string, toolId: string, enabled: boolean): Promise<AgentTool> {
     this.agentOrThrow(agentId)
     const tool = this.tools.get(agentId)?.find((candidate) => candidate.id === toolId)
-    if (!tool) throw new HttpError(404, 'not_found', 'Tool not found')
+    if (!tool) throw new HttpError(404, 'not_found', 'Couldn’t find that tool.')
     if (tool.kind === 'mcp')
-      throw new HttpError(501, 'not_implemented', 'MCP servers are shown read-only')
+      throw new HttpError(501, 'not_implemented', 'MCP servers are shown read-only.')
     tool.enabled = enabled
     return structuredClone(tool)
   }
@@ -1132,12 +1132,12 @@ export class FakePort implements HermesPort {
   }
   async setPluginEnabled(agentId: string, id: string, enabled: boolean): Promise<PluginItem> {
     const plugin = this.pluginsOf(agentId).find((candidate) => candidate.id === id)
-    if (!plugin) throw new HttpError(404, 'not_found', 'Plugin not found')
+    if (!plugin) throw new HttpError(404, 'not_found', 'Couldn’t find that plugin.')
     if (plugin.locked)
       throw new HttpError(
         409,
         'conflict',
-        'The Score bridge stays on: Score needs it to see Hermes',
+        'Score’s plugin stays on: Score needs it to see what this agent does.',
       )
     plugin.enabled = enabled
     return structuredClone(plugin)
@@ -1150,11 +1150,12 @@ export class FakePort implements HermesPort {
   }
   private routine(id: string): RoutineSummary {
     const routine = this.routines.get(id)
-    if (!routine) throw new HttpError(404, 'not_found', 'Unknown routine')
+    if (!routine) throw new HttpError(404, 'not_found', 'Couldn’t find that routine.')
     return routine
   }
   async listRoutines(agentId: string): Promise<RoutineSummary[]> {
-    if (!this.agents.has(agentId)) throw new HttpError(404, 'not_found', 'Agent not found')
+    if (!this.agents.has(agentId))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     return this.routinesOf(agentId)
   }
   async createRoutine(
@@ -1163,7 +1164,8 @@ export class FakePort implements HermesPort {
     key: string,
   ): Promise<RoutineSummary> {
     const req = CreateRoutineSchema.parse(input)
-    if (!this.agents.has(agentId)) throw new HttpError(404, 'not_found', 'Agent not found')
+    if (!this.agents.has(agentId))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     const intent = `${agentId}:${key}`
     const known = this.routineKeys.get(intent)
     if (known) return structuredClone(this.routine(known))
@@ -1297,7 +1299,7 @@ export class FakePort implements HermesPort {
   }
   async connectProvider(id: string): Promise<ConnectResult> {
     const provider = this.fakeProviders.find((candidate) => candidate.id === id)
-    if (!provider) throw new HttpError(404, 'not_found', 'Unknown provider')
+    if (!provider) throw new HttpError(404, 'not_found', 'Couldn’t find that provider.')
     const command = `hermes auth add ${id}`
     if (provider.signIn !== 'device_code') return { next: 'run_in_terminal', command }
     let entry = [...this.fakeSignIns.values()].find(
@@ -1330,7 +1332,7 @@ export class FakePort implements HermesPort {
   }
   private fakeSignIn(id: string) {
     const entry = this.fakeSignIns.get(id)
-    if (!entry) throw new HttpError(404, 'not_found', 'Unknown sign-in')
+    if (!entry) throw new HttpError(404, 'not_found', 'Couldn’t find that sign-in.')
     return entry
   }
   async getSignIn(id: string): Promise<SignIn> {
@@ -1350,9 +1352,13 @@ export class FakePort implements HermesPort {
   }
   async addProviderKey(id: string): Promise<ProviderBase> {
     const provider = this.fakeProviders.find((candidate) => candidate.id === id)
-    if (!provider) throw new HttpError(404, 'not_found', 'Unknown provider')
+    if (!provider) throw new HttpError(404, 'not_found', 'Couldn’t find that provider.')
     if (provider.signIn !== 'api_key')
-      throw new HttpError(409, 'not_supported', 'This provider does not take a pasted key')
+      throw new HttpError(
+        409,
+        'not_supported',
+        'This provider doesn’t take a pasted key. Use its sign-in instead.',
+      )
     // The fake keeps no key, just like the live adapter.
     Object.assign(provider, { status: 'connected', detail: 'API key (1)' })
     return structuredClone(provider)
@@ -1362,9 +1368,14 @@ export class FakePort implements HermesPort {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
-    if (!id) throw new HttpError(400, 'bad_request', 'Invalid request')
+    if (!id)
+      throw new HttpError(
+        400,
+        'bad_request',
+        'Couldn’t read that request. Check what you entered and try again.',
+      )
     if (this.fakeProviders.some((provider) => provider.id === id))
-      throw new HttpError(409, 'conflict', 'A provider with that name already exists')
+      throw new HttpError(409, 'conflict', 'A provider with that name already exists.')
     const provider: ProviderBase = {
       id,
       label: req.label,
@@ -1400,13 +1411,13 @@ export class FakePort implements HermesPort {
   }
   async connectMessaging(platform: string): Promise<ConnectResult> {
     if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(platform))
-      throw new HttpError(404, 'not_found', 'Unknown platform')
+      throw new HttpError(404, 'not_found', 'Couldn’t find that messaging platform.')
     if (messagingFields(platform).browserSetup) return { next: 'form' }
     return { next: 'run_in_terminal', command: 'hermes gateway setup' }
   }
   async messagingFields(platform: string): Promise<MessagingFieldsResponse> {
     if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(platform))
-      throw new HttpError(404, 'not_found', 'Unknown platform')
+      throw new HttpError(404, 'not_found', 'Couldn’t find that messaging platform.')
     return messagingFields(platform)
   }
   // Nothing is written in fake mode; the platform reads as connected afterwards so the UI path can be exercised.
@@ -1437,7 +1448,8 @@ export class FakePort implements HermesPort {
     return this.config.apply(req)
   }
   async readAgentFile(agentId: string, file: AgentFileName): Promise<AgentFile> {
-    if (!this.agents.has(agentId)) throw new HttpError(404, 'not_found', 'Agent not found')
+    if (!this.agents.has(agentId))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     const content = this.files.get(`${agentId}/${file}`) ?? ''
     return { content, etag: etagOf(content) }
   }
@@ -1478,7 +1490,8 @@ export class FakePort implements HermesPort {
   }
 
   private requireSink(): ObservationSink {
-    if (!this.sink) throw new HttpError(503, 'hermes_unavailable', 'Fake adapter is not started')
+    if (!this.sink)
+      throw new HttpError(503, 'hermes_unavailable', 'The test adapter isn’t started.')
     return this.sink
   }
 
@@ -1557,7 +1570,7 @@ export class FakePort implements HermesPort {
   }
   async getTask(id: string): Promise<TaskDetail> {
     const task = this.tasks.get(id)
-    if (!task) throw new HttpError(404, 'not_found', 'Unknown task')
+    if (!task) throw new HttpError(404, 'not_found', 'Couldn’t find that task.')
     return this.viewTask(task)
   }
   createTask(input: Parameters<HermesPort['createTask']>[0], key: string): Promise<TaskDetail> {
@@ -1569,7 +1582,7 @@ export class FakePort implements HermesPort {
         throw new HttpError(
           501,
           'not_implemented',
-          'Creating tasks with a reviewer is not supported by Hermes',
+          'Hermes doesn’t support creating tasks with a reviewer.',
         )
       const id = `fake-task:${key}`
       if (this.tasks.has(id)) return this.getTask(id)
@@ -1612,9 +1625,13 @@ export class FakePort implements HermesPort {
       this.requireSink()
       const req = PatchTaskSchema.parse(input)
       if (req.reviewer !== undefined)
-        throw new HttpError(501, 'not_implemented', 'Editing reviewer is not supported by Hermes')
+        throw new HttpError(
+          501,
+          'not_implemented',
+          'Hermes doesn’t support changing a task’s reviewer.',
+        )
       const old = this.tasks.get(id)
-      if (!old) throw new HttpError(404, 'not_found', 'Unknown task')
+      if (!old) throw new HttpError(404, 'not_found', 'Couldn’t find that task.')
       const body =
         req.steps === undefined
           ? (req.body ?? old.body)
@@ -1663,12 +1680,12 @@ export class FakePort implements HermesPort {
           const seen = (this.refusals.get(req.turnId) ?? 0) + 1
           this.refusals.set(req.turnId, seen)
           if (seen <= Number(refuse[1] ?? 1))
-            throw new HttpError(503, 'hermes_unavailable', 'The fake Hermes is unavailable')
+            throw new HttpError(503, 'hermes_unavailable', 'The test Hermes is unavailable.')
         }
         if (this.db) assertAgentAdmits(this.db.sqlite, input.agentId)
         this.requireSink()
         if (!this.turns.has(req.turnId) && !this.agents.has(req.agentId))
-          throw new HttpError(404, 'not_found', 'Unknown agent')
+          throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
       } catch (error) {
         throw notDispatched(error)
       }
@@ -2047,7 +2064,7 @@ export class FakePort implements HermesPort {
       this.requireSink()
       const req = TaskActionRequestSchema.parse(request)
       const task = this.tasks.get(req.taskId)
-      if (!task) throw new HttpError(404, 'not_found', 'Unknown task')
+      if (!task) throw new HttpError(404, 'not_found', 'Couldn’t find that task.')
       const oldIds =
         req.action !== 'unblock'
           ? []
@@ -2063,7 +2080,7 @@ export class FakePort implements HermesPort {
                 .map((approval) => approval.id)
       if (req.action === 'unblock') {
         if (task.hermesStatus !== 'blocked' && task.hermesStatus !== 'scheduled')
-          throw new HttpError(409, 'conflict', 'Task is not blocked', {
+          throw new HttpError(409, 'conflict', 'This task isn’t blocked.', {
             hermesStatus: task.hermesStatus,
           })
         await this.emit({
@@ -2080,7 +2097,7 @@ export class FakePort implements HermesPort {
         this.taskOverrides.set(task.id, 'ready')
       } else if (req.action !== 'comment') {
         if (req.action === 'schedule' && !['ready', 'todo'].includes(task.hermesStatus))
-          throw new HttpError(409, 'conflict', 'Task is not waiting to start', {
+          throw new HttpError(409, 'conflict', 'This task isn’t waiting to start.', {
             hermesStatus: task.hermesStatus,
           })
         const status = {
@@ -2093,7 +2110,7 @@ export class FakePort implements HermesPort {
           archive: 'archived',
         }[req.action]
         if (task.hermesStatus === 'archived')
-          throw new HttpError(409, 'conflict', 'Task is archived')
+          throw new HttpError(409, 'conflict', 'This task is archived.')
         const column =
           status === 'ready' || status === 'scheduled'
             ? 'planned'

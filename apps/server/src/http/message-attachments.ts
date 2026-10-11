@@ -37,7 +37,8 @@ export async function resolveAttachments(
     if ('mediaId' in item) {
       if (result.mediaIds.includes(item.mediaId)) continue
       const stored = media?.info(item.mediaId)
-      if (!media || !stored) throw new HttpError(400, 'bad_request', 'Unknown attachment')
+      if (!media || !stored)
+        throw new HttpError(400, 'bad_request', 'Couldn’t find that attachment.')
       result.mediaIds.push(item.mediaId)
       if (isImageType(stored.contentType)) {
         result.parts.push({ kind: 'image', mediaId: item.mediaId })
@@ -65,13 +66,14 @@ export async function resolveAttachments(
       continue
     }
     const { agentId } = item.workspace
-    if (!knownAgents.includes(agentId)) throw new HttpError(400, 'bad_request', 'Unknown agent')
+    if (!knownAgents.includes(agentId))
+      throw new HttpError(400, 'bad_request', 'Couldn’t find that agent.')
     if (!workspaces)
-      throw new HttpError(409, 'workspace_unavailable', 'Workspaces are not available')
+      throw new HttpError(409, 'workspace_unavailable', 'Workspaces aren’t available.')
     let segments: string[]
     try {
       segments = parseRelativePath(item.workspace.path)
-      if (segments.length === 0) throw new WorkspaceError(400, 'bad_path', 'That path is a folder')
+      if (segments.length === 0) throw new WorkspaceError(400, 'bad_path', 'That path is a folder.')
       assertAllowedSegments(segments, 'read')
       const expectedRoot = item.workspace.root
       const workspace = await workspaces.open(agentId, undefined, (current) => {
@@ -79,7 +81,7 @@ export async function resolveAttachments(
           throw new WorkspaceError(
             409,
             'workspace_changed',
-            "This agent's workspace changed since it was shown: pick the file again",
+            'This agent’s workspace changed since it was shown: pick the file again.',
             { root: current },
           )
       })
@@ -87,7 +89,7 @@ export async function resolveAttachments(
         (candidate) => candidate.name === segments[segments.length - 1],
       )
       if (entry?.kind !== 'file')
-        throw new WorkspaceError(404, 'not_found', 'That workspace file does not exist')
+        throw new WorkspaceError(404, 'not_found', 'That workspace file doesn’t exist.')
     } catch (error) {
       if (error instanceof WorkspaceError)
         throw new HttpError(error.status, error.code, error.message, error.details)

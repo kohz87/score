@@ -34,7 +34,7 @@ export function registerNowRoutes(
     const to = query.to ?? new Date(now + HOUR).toISOString()
     const span = Date.parse(to) - Date.parse(from)
     if (span <= 0 || span > MAX_SPAN)
-      throw new HttpError(400, 'bad_request', 'The window must be between 0 and 7 days')
+      throw new HttpError(400, 'bad_request', 'Use a window of 0–7 days.')
     const details = z.array(AgentDetailSchema).parse(await port.listAgentDetails())
     await reconcileAgents(ingest, details)
     // Not `snapshot()`: that guard caps nesting at 8 and a plan message's lanes go deeper.

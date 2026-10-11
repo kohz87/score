@@ -186,5 +186,9 @@ export function evaluateCompatibility(
 
 export function assertFeature(status: Pick<SystemStatus, 'compatibility'>, feature: string): void {
   if (status.compatibility.disabled.includes(feature))
-    throw new HttpError(403, 'feature_disabled', `${feature} is disabled by the compatibility gate`)
+    throw new HttpError(
+      403,
+      'feature_disabled',
+      `${feature} is turned off because this Hermes version isn’t compatible.`,
+    )
 }

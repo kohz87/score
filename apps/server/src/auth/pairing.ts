@@ -46,7 +46,11 @@ export class PairingService {
     if (this.remote) this.limitAttempts(peer)
     const matches = timingSafeEqual(hashSecret(token), this.#tokenHash ?? Buffer.alloc(32))
     if (!this.#tokenHash || this.clock() >= this.#tokenExpiresAt || !matches) {
-      throw new HttpError(401, 'pairing_failed', 'Pairing token is invalid or expired')
+      throw new HttpError(
+        401,
+        'pairing_failed',
+        'This pairing link is invalid or has expired. Get a new one in the server terminal.',
+      )
     }
     this.#tokenHash = undefined
     return this.createSession(peer, label)
@@ -136,13 +140,14 @@ export class PairingService {
 
   /** Gives one paired browser a fresh lifetime (Settings › Remote access › Renew). Remote mode only. */
   renewBrowser(id: string) {
-    if (!this.remote) throw new HttpError(404, 'not_found', 'Paired browser not found')
+    if (!this.remote)
+      throw new HttpError(404, 'not_found', 'That paired browser is no longer listed.')
     const session = this.sessions.listRemote().find((candidate) => candidate.id === id)
     if (
       !session ||
       this.clock() >= Math.min(session.expiresAt, session.lastSeenAt + SESSION_IDLE_MS)
     )
-      throw new HttpError(404, 'not_found', 'Paired browser not found')
+      throw new HttpError(404, 'not_found', 'That paired browser is no longer listed.')
     this.sessions.renewRemote(session.hash, this.clock(), this.clock() + SESSION_ABSOLUTE_MS)
     // That browser's cookie still has its old Max-Age: re-send it on its next request.
     this.#cookieSentAt.delete(session.hash)
@@ -283,12 +288,20 @@ export class PairingService {
     let attempt = this.#attempts.get(peer)
     if (!attempt) {
       if (this.#attempts.size >= 1024)
-        throw new HttpError(429, 'pairing_limited', 'Wait a minute before pairing again')
+        throw new HttpError(
+          429,
+          'pairing_limited',
+          'Too many pairing attempts. Wait a minute and try again.',
+        )
       attempt = { count: 0, until: 0, window: now }
       this.#attempts.set(peer, attempt)
     }
     if (this.#global.count >= 60 || now < attempt.until)
-      throw new HttpError(429, 'pairing_limited', 'Wait a minute before pairing again')
+      throw new HttpError(
+        429,
+        'pairing_limited',
+        'Too many pairing attempts. Wait a minute and try again.',
+      )
     this.#global.count++
     attempt.count++
     if (attempt.count >= 5)

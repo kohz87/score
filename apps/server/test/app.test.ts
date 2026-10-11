@@ -27,7 +27,12 @@ test('zod validation errors return the contract 400 shape', async () => {
     payload: { token: 42 },
   })
   expect(response.statusCode).toBe(400)
-  expect(response.json()).toEqual({ error: { code: 'bad_request', message: 'Invalid request' } })
+  expect(response.json()).toEqual({
+    error: {
+      code: 'bad_request',
+      message: 'Couldn’t read that request. Check what you entered and try again.',
+    },
+  })
 })
 
 test('malformed JSON returns the contract 400 shape', async () => {
@@ -38,7 +43,12 @@ test('malformed JSON returns the contract 400 shape', async () => {
     payload: '{"token":',
   })
   expect(response.statusCode).toBe(400)
-  expect(response.json()).toEqual({ error: { code: 'bad_request', message: 'Invalid request' } })
+  expect(response.json()).toEqual({
+    error: {
+      code: 'bad_request',
+      message: 'Couldn’t read that request. Check what you entered and try again.',
+    },
+  })
 })
 
 test('Fastify schema validation returns the contract 400 shape', async () => {
@@ -58,13 +68,20 @@ test('Fastify schema validation returns the contract 400 shape', async () => {
   )
   const response = await app.inject('/test/schema')
   expect(response.statusCode).toBe(400)
-  expect(response.json()).toEqual({ error: { code: 'bad_request', message: 'Invalid request' } })
+  expect(response.json()).toEqual({
+    error: {
+      code: 'bad_request',
+      message: 'Couldn’t read that request. Check what you entered and try again.',
+    },
+  })
 })
 
 test('unknown routes return the contract 404 shape', async () => {
   const response = await createApp().inject('/api/unknown')
   expect(response.statusCode).toBe(404)
-  expect(response.json()).toEqual({ error: { code: 'not_found', message: 'Route not found' } })
+  expect(response.json()).toEqual({
+    error: { code: 'not_found', message: 'Couldn’t find that address.' },
+  })
 })
 
 test('unexpected errors return a sanitized 500 shape', async () => {
@@ -74,7 +91,9 @@ test('unexpected errors return a sanitized 500 shape', async () => {
   })
   const response = await app.inject('/test/error')
   expect(response.statusCode).toBe(500)
-  expect(response.json()).toEqual({ error: { code: 'internal', message: 'Internal server error' } })
+  expect(response.json()).toEqual({
+    error: { code: 'internal', message: 'Something went wrong inside Score. Try again.' },
+  })
   expect(response.body).not.toContain('sensitive')
   expect(response.body).not.toContain('stack')
 })
@@ -104,7 +123,7 @@ test.each(['POST', 'PUT', 'PATCH', 'DELETE'] as const)(
     })
     expect(response.statusCode).toBe(403)
     expect(response.json()).toEqual({
-      error: { code: 'forbidden', message: 'Request origin or client is not allowed' },
+      error: { code: 'forbidden', message: 'Score doesn’t accept requests from this origin.' },
     })
   },
 )
@@ -164,7 +183,10 @@ test('human guard requires pairing and runs after CSRF', async () => {
   })
   expect(response.statusCode).toBe(401)
   expect(response.json()).toEqual({
-    error: { code: 'not_paired', message: 'Pair this browser to make human decisions' },
+    error: {
+      code: 'not_paired',
+      message: 'Pair this browser first. Open the pairing link shown in the server terminal.',
+    },
   })
 })
 

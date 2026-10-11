@@ -38,7 +38,11 @@ export function taskColumn(status: string): TaskColumn | null {
     case 'archived':
       return null
     default:
-      throw new HttpError(502, 'hermes_unavailable', 'Unknown task status')
+      throw new HttpError(
+        502,
+        'hermes_unavailable',
+        'Hermes reported a task status Score doesn’t know.',
+      )
   }
 }
 
@@ -70,7 +74,8 @@ export function readTaskDetails(
   runIdsOf?: (taskId: string) => string[],
 ): TaskDetail[] {
   const tasks = readTaskBoard(db)
-  if (tasks.malformed) throw new HttpError(502, 'hermes_unavailable', 'Task data unavailable')
+  if (tasks.malformed)
+    throw new HttpError(502, 'hermes_unavailable', 'Couldn’t read the tasks from Hermes.')
   return tasks.rows.map((task) => {
     const input = { taskIds: [task.id] }
     const links = readTaskLinks(db, input)
@@ -78,7 +83,7 @@ export function readTaskDetails(
     const comments = readTaskComments(db, input)
     const events = readTaskEvents(db, task.id)
     if ([links, runs, comments, events].some((batch) => batch?.malformed))
-      throw new HttpError(502, 'hermes_unavailable', 'Task detail unavailable')
+      throw new HttpError(502, 'hermes_unavailable', 'Couldn’t read this task from Hermes.')
     const body = redact(task.body ?? '')
     const steps = parseSteps(task.body ?? '').map((step) => ({ ...step, text: redact(step.text) }))
     const column = taskColumn(task.status) ?? 'done'

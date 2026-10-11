@@ -156,7 +156,7 @@ export function registerAgentHistoryRoutes(
       .prepare('SELECT 1 FROM agent_lifecycle WHERE agent_id = ?')
       .get(agentId)
     if (!retained && !known.some((agent) => agent.id === agentId))
-      throw new HttpError(404, 'not_found', 'Agent not found')
+      throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     const filters: string[] = []
     const args: (string | number)[] = [agentId]
     if (query.outcome) {

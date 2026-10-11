@@ -271,7 +271,7 @@ class TarScanner {
     // size; the inspector can't mirror either exactly, so such archives are refused rather than misreported.
     if (type === 'g' || type === 'S')
       throw refuse(
-        'The archive uses tar features (global headers or sparse files) Score will not import.',
+        'The archive uses tar features (global headers or sparse files) Score won’t import.',
       )
     if (type === 'K') {
       if (size > MAX_META_BYTES) throw refuse('The archive is corrupt.')
@@ -364,7 +364,7 @@ class TarScanner {
         const key = eq < 0 ? record : record.slice(0, eq)
         if (key.startsWith('GNU.sparse.') || key === 'size')
           throw refuse(
-            'The archive uses tar features (global headers or sparse files) Score will not import.',
+            'The archive uses tar features (global headers or sparse files) Score won’t import.',
           )
         if (key === 'path') this.paxPath = record.slice(eq + 1)
       }
@@ -417,7 +417,7 @@ export async function inspectProfileArchive(path: string, maxBytes: number): Pro
       }
     } catch (error) {
       if (error instanceof HttpError) throw error
-      throw refuse('The file is not a valid .tar.gz archive.')
+      throw refuse('The file isn’t a valid .tar.gz archive.')
     } finally {
       source.destroy()
       gunzip.destroy()

@@ -80,7 +80,7 @@ async function dispatch(
     assertAgentAdmits(db.sqlite, payload.profile)
     // Typed so routing fails the turn instead of replaying this refusal forever.
     if (row.state === 'failed')
-      throw new HttpError(422, 'admission_refused', 'Hermes refused this run earlier')
+      throw new HttpError(422, 'admission_refused', 'Hermes refused this run earlier.')
     if (
       ['sent', 'unknown'].includes(row.state) &&
       (row.first_sent_at === null ||

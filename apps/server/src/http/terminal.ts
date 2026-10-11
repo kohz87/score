@@ -74,19 +74,19 @@ export function registerTerminalRoutes(
   const hostEnrolled = options.hostEnrolled ?? (() => false)
   const requireTls = (request: { raw: { socket: unknown } }) => {
     if (!isSecure(request))
-      throw new HttpError(426, 'https_required', 'The terminal works only over HTTPS')
+      throw new HttpError(426, 'https_required', 'The terminal works only over HTTPS.')
   }
   const guarded = { preHandler: humanGuard(app.pairing) }
   const mintLimit = new RateLimiter(10, 60_000, clock)
   const originOf = (request: { headers: { origin?: string | undefined } }) => {
     const origin = request.headers.origin
     if (origin === undefined || !options.origins.has(origin))
-      throw new HttpError(403, 'forbidden', 'Request origin is not allowed')
+      throw new HttpError(403, 'forbidden', 'Score doesn’t accept requests from this origin.')
     return origin
   }
   const sessionOf = (cookie: string | undefined) => {
     const session = app.pairing.pairedSession(cookie)
-    if (session === undefined) throw new HttpError(401, 'not_paired', 'Pair this browser first')
+    if (session === undefined) throw new HttpError(401, 'not_paired', 'Pair this browser first.')
     return session
   }
 
@@ -99,25 +99,38 @@ export function registerTerminalRoutes(
     const origin = originOf(request)
     const session = sessionOf(request.headers.cookie)
     if (!mintLimit.allow(session))
-      throw new HttpError(429, 'too_many_attempts', 'Wait a minute before opening another terminal')
+      throw new HttpError(
+        429,
+        'too_many_attempts',
+        'Too many terminals opened. Wait a minute and try again.',
+      )
     if (manager.full)
-      throw new HttpError(429, 'too_many_terminals', 'Two terminals are already open')
+      throw new HttpError(
+        429,
+        'too_many_terminals',
+        'Two terminals are already open. Close one first.',
+      )
     // A password set from a browser proves nothing a stolen cookie couldn't also do: it must come from the host.
     if (!hostEnrolled())
       throw new HttpError(
         403,
         'second_factor_not_enrolled',
-        'Set the security password on the Score machine with scripts/score password first',
+        'Set the security password on the Score machine with scripts/score password first.',
       )
     // Taken (and used up) before anything is minted: one password or passkey check opens one terminal.
     if (!app.pairing.takeFresh(session, FRESH_AUTH_MS))
       throw new HttpError(
         403,
         'fresh_auth_required',
-        'Confirm your security password or passkey first',
+        'Confirm your security password or passkey first.',
       )
     const minted = tickets.mint(session, origin)
-    if (!minted) throw new HttpError(429, 'too_many_attempts', 'Wait a minute before trying again')
+    if (!minted)
+      throw new HttpError(
+        429,
+        'too_many_attempts',
+        'Too many attempts. Wait a minute and try again.',
+      )
     return TerminalTicketSchema.parse({
       ticket: minted.ticket,
       expiresAt: new Date(minted.expiresAt).toISOString(),
@@ -131,7 +144,7 @@ export function registerTerminalRoutes(
   app.delete('/api/terminal/sessions/:id', guarded, async (request, reply) => {
     const { id } = z.object({ id: z.uuid() }).parse(request.params)
     if (!manager.list().some((terminal) => terminal.id === id))
-      throw new HttpError(404, 'not_found', 'Terminal not found')
+      throw new HttpError(404, 'not_found', 'Couldn’t find that terminal.')
     manager.close(id, 'closed')
     return reply.code(204).send()
   })
@@ -149,11 +162,19 @@ export function registerTerminalRoutes(
           const origin = originOf(request)
           // Same Host rule as remote mode applies to every request; local mode has no other host check.
           if (request.headers.host !== new URL(origin).host)
-            throw new HttpError(403, 'forbidden', 'Request host is not allowed')
+            throw new HttpError(
+              403,
+              'forbidden',
+              'Score doesn’t accept requests for this host name.',
+            )
           const session = sessionOf(request.headers.cookie)
           const parsed = QuerySchema.safeParse(request.query)
           if (!parsed.success || !tickets.redeem(parsed.data.ticket, session, origin))
-            throw new HttpError(403, 'ticket_invalid', 'The terminal ticket is invalid or expired')
+            throw new HttpError(
+              403,
+              'ticket_invalid',
+              'The terminal link is invalid or has expired. Open the terminal again.',
+            )
           ;(request as unknown as { terminalSession: string }).terminalSession = session
         },
       },

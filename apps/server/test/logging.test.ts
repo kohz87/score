@@ -39,7 +39,7 @@ test('logs redact cookies and authorization and never include pairing tokens', a
     const failure = await app.inject(`/test/error?token=${token}`)
     expect(failure.statusCode).toBe(500)
     expect(failure.json()).toEqual({
-      error: { code: 'internal', message: 'Internal server error' },
+      error: { code: 'internal', message: 'Something went wrong inside Score. Try again.' },
     })
     const credentialFailure = await app.inject({
       url: '/test/credentials',
@@ -47,7 +47,7 @@ test('logs redact cookies and authorization and never include pairing tokens', a
     })
     expect(credentialFailure.statusCode).toBe(500)
     expect(credentialFailure.json()).toEqual({
-      error: { code: 'internal', message: 'Internal server error' },
+      error: { code: 'internal', message: 'Something went wrong inside Score. Try again.' },
     })
     await app.inject(`/unknown/${token}`)
     await app.inject({

@@ -62,5 +62,9 @@ export function agentAdmits(sqlite: DatabaseSync, id: string): boolean {
 }
 export function assertAgentAdmits(sqlite: DatabaseSync, id: string): void {
   if (!agentAdmits(sqlite, id))
-    throw new HttpError(409, 'conflict', 'Agent is not ready for new work')
+    throw new HttpError(
+      409,
+      'conflict',
+      'This agent isn’t ready for new work yet. Wait a moment and try again.',
+    )
 }

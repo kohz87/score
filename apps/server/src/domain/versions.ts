@@ -117,19 +117,19 @@ export function rewindableMessage(
   const value = sqlite
     .prepare('SELECT * FROM messages WHERE id = ? AND room_id = ? AND deleted_at IS NULL')
     .get(messageId, roomId)
-  if (!value) throw new HttpError(404, 'not_found', 'Unknown message')
+  if (!value) throw new HttpError(404, 'not_found', 'Couldn’t find that message.')
   assertNotImported(messageId)
   const message = messageFromRow(value)
   if (message.author.kind !== 'you' || message.streaming)
-    throw new HttpError(400, 'bad_request', 'Only your own finished message can be rewound')
-  if (message.editedBy) throw new HttpError(409, 'conflict', 'This message was already edited')
+    throw new HttpError(400, 'bad_request', 'Only your own finished message can be rewound.')
+  if (message.editedBy) throw new HttpError(409, 'conflict', 'This message was already edited.')
   return message
 }
 
 /** Copies of messages from outside sessions are a record of what happened elsewhere: never corrected or rewound here. */
 function assertNotImported(messageId: string): void {
   if (messageId.startsWith(IMPORTED_ID_PREFIX))
-    throw new HttpError(400, 'bad_request', 'An imported message cannot be edited or rewound')
+    throw new HttpError(400, 'bad_request', 'An imported message can’t be edited or rewound.')
 }
 
 export interface RewindTurns {
@@ -169,9 +169,9 @@ export function rewindScope(sqlite: DatabaseSync, roomId: string, anchor: Messag
   )
   let blocked: string | null = null
   if (open.held > 0)
-    blocked = "The room's work is paused with queued turns; resume it or stop them first"
+    blocked = 'This room’s work is paused with queued messages. Resume it or stop them first.'
   else if (hidden.streaming > 0 || open.count > 0)
-    blocked = 'An agent is still answering or has queued work in this room; stop it first'
+    blocked = 'An agent is still answering or has queued work in this room. Stop it first.'
   // A run counts from the moment its reply started (a retry or a queued turn can start after its message).
   const rows = z.array(z.object({ agent_id: AgentIdSchema, turns: z.int().positive() })).parse(
     sqlite
@@ -327,18 +327,19 @@ export function linkCorrection(
  */
 export function editableMessage(sqlite: DatabaseSync, roomId: string, messageId: string): Message {
   const value = sqlite.prepare('SELECT * FROM messages WHERE id = ?').get(messageId)
-  if (!value) throw new HttpError(404, 'not_found', 'Unknown message')
+  if (!value) throw new HttpError(404, 'not_found', 'Couldn’t find that message.')
   const row = MessageRowSchema.parse(value)
   assertNotImported(messageId)
   const rewound = row.room_id === roomId && openEditVersion(sqlite, roomId, messageId) !== null
-  if (row.deleted_at && !rewound) throw new HttpError(404, 'not_found', 'Unknown message')
+  if (row.deleted_at && !rewound)
+    throw new HttpError(404, 'not_found', 'Couldn’t find that message.')
   if (row.room_id !== roomId || row.author_kind !== 'you' || row.streaming === 1)
     throw new HttpError(
       400,
       'bad_request',
-      'Only your own finished message in this room can be edited',
+      'Only your own finished message in this room can be edited.',
     )
-  if (row.edited_by) throw new HttpError(409, 'conflict', 'This message was already edited')
+  if (row.edited_by) throw new HttpError(409, 'conflict', 'This message was already edited.')
   if (!rewound) {
     // Without a rewind the edit hides the original and everything after it in Score only: nothing may be running.
     const answering = sqlite
@@ -351,7 +352,7 @@ export function editableMessage(sqlite: DatabaseSync, roomId: string, messageId:
       throw new HttpError(
         409,
         'conflict',
-        'An agent is still answering this message; stop it first',
+        'An agent is still answering this message. Stop it first.',
       )
     const scope = rewindScope(sqlite, roomId, messageFromRow(value))
     if (scope.blocked) throw new HttpError(409, 'conflict', scope.blocked)

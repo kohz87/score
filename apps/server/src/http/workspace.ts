@@ -54,7 +54,7 @@ export function registerWorkspaceRoutes(
       throw new HttpError(
         409,
         'workspace_changed',
-        "This agent's workspace changed since it was shown: reload it",
+        'This agent’s workspace changed after it was shown. Reload it.',
         { root: current },
       )
   }
@@ -91,7 +91,11 @@ export function registerWorkspaceRoutes(
     // onRequest: before any body is read, so an unpaired caller can't make the server buffer megabytes.
     scope.addHook('onRequest', async (request) => {
       if (!app.pairing.isPaired(request.headers.cookie))
-        throw new HttpError(401, 'not_paired', 'Pair this browser to make human decisions')
+        throw new HttpError(
+          401,
+          'not_paired',
+          'Pair this browser first. Open the pairing link shown in the server terminal.',
+        )
     })
     const base = '/api/agents/:agentId/workspace'
 
@@ -111,7 +115,11 @@ export function registerWorkspaceRoutes(
         const { path } = WorkspaceRootRequestSchema.parse(request.body)
         const current = await port.readWorkspaceConfig(agentId)
         if (current.backend !== null && current.backend.trim().toLowerCase() !== 'local')
-          throw new HttpError(409, 'workspace_unavailable', 'This agent works on a remote terminal')
+          throw new HttpError(
+            409,
+            'workspace_unavailable',
+            'This agent works on a remote terminal.',
+          )
         const checked = await checkRoot(path, policy)
         if (!checked.ok) throw new HttpError(409, 'workspace_unavailable', checked.reason)
         await port.setWorkspaceCwd(agentId, checked.real)
@@ -250,7 +258,7 @@ export function registerWorkspaceRoutes(
         const { agentId } = AgentParams.parse(request.params)
         const { path } = PathQuery.parse(request.query)
         if (!Buffer.isBuffer(request.body))
-          throw new HttpError(400, 'bad_request', 'Send the file as application/octet-stream')
+          throw new HttpError(400, 'bad_request', 'Send the file as application/octet-stream.')
         const workspace = await open(request, agentId)
         const { size } = await workspace.upload(path, request.body)
         return reply.code(201).send({ path, size })

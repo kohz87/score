@@ -53,7 +53,7 @@ export function readBriefRow(sqlite: DatabaseSync, id: string): BriefRow | undef
 
 export function requireBrief(sqlite: DatabaseSync, id: string): BriefRow {
   const row = readBriefRow(sqlite, id)
-  if (!row) throw new HttpError(404, 'not_found', 'Unknown brief')
+  if (!row) throw new HttpError(404, 'not_found', 'Couldn’t find that run.')
   return row
 }
 

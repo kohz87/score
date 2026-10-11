@@ -70,7 +70,7 @@ export class LiveAgentTabs {
   private profile(agentId: string): { profile: string; home: string } {
     const parsed = ProfileNameSchema.safeParse(agentId)
     const home = parsed.success ? this.homeOf(parsed.data) : null
-    if (!parsed.success || !home) throw new HttpError(404, 'not_found', 'Agent not found')
+    if (!parsed.success || !home) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     return { profile: parsed.data, home }
   }
   private async mutate(profile: string, args: string[], timeoutMs = 15000): Promise<void> {
@@ -83,7 +83,7 @@ export class LiveAgentTabs {
       throw new HttpError(
         result.exitCode < 0 ? 502 : 409,
         result.exitCode < 0 ? 'hermes_unavailable' : 'conflict',
-        'Hermes rejected the change',
+        'Hermes didn’t accept the change.',
       )
   }
 
@@ -95,7 +95,7 @@ export class LiveAgentTabs {
     try {
       return await readTerminalConfig(this.runner, this.hermesHome, profile)
     } catch {
-      throw new HttpError(502, 'hermes_unavailable', 'Hermes could not be read')
+      throw new HttpError(502, 'hermes_unavailable', 'Couldn’t read this agent from Hermes.')
     }
   }
   async setWorkspaceCwd(agentId: string, cwd: string): Promise<void> {
@@ -118,7 +118,7 @@ export class LiveAgentTabs {
             throw new HttpError(
               409,
               'conflict',
-              'That local provider is not configured on this agent; add it to the agent profile first',
+              'That local provider isn’t set up for this agent. Add it to the agent’s Hermes profile first.',
             )
         }
       }
@@ -128,7 +128,7 @@ export class LiveAgentTabs {
         throw new HttpError(
           502,
           'hermes_unavailable',
-          "The agent's current model could not be read, so it was not changed",
+          'Couldn’t read the agent’s current model, so nothing was changed.',
         )
       let wroteModel = false
       let wroteProvider = false
@@ -223,10 +223,14 @@ export class LiveAgentTabs {
     return this.serial(profile, async () => {
       const skills = await this.listSkills(agentId)
       if (!skills.some((skill) => skill.name === name))
-        throw new HttpError(404, 'not_found', 'Skill not found')
+        throw new HttpError(404, 'not_found', 'Couldn’t find that skill.')
       const current = await readDisabledSkills(this.runner, this.hermesHome, profile)
       if (current === null)
-        throw new HttpError(502, 'hermes_unavailable', 'Skill settings unavailable')
+        throw new HttpError(
+          502,
+          'hermes_unavailable',
+          'Couldn’t read the skill settings from Hermes.',
+        )
       const next = new Set(current)
       if (enabled) next.delete(name)
       else next.add(name)
@@ -248,13 +252,21 @@ export class LiveAgentTabs {
       { timeoutMs: 30000, hermesHome: this.hermesHome, captureRead: true },
     ).catch(() => ({ exitCode: -1 }) as { exitCode: number; stdout?: string })
     if (result.exitCode !== 0 || !result.stdout)
-      throw new HttpError(502, 'hermes_unavailable', 'Skill search unavailable')
+      throw new HttpError(
+        502,
+        'hermes_unavailable',
+        'Couldn’t search skills. Check that Hermes is reachable.',
+      )
     let rows: z.infer<typeof HubRowsSchema>
     try {
       const text = result.stdout
       rows = HubRowsSchema.parse(JSON.parse(text.slice(Math.max(0, text.indexOf('[')))))
     } catch {
-      throw new HttpError(502, 'hermes_unavailable', 'Skill search unavailable')
+      throw new HttpError(
+        502,
+        'hermes_unavailable',
+        'Couldn’t search skills. Check that Hermes is reachable.',
+      )
     }
     return rows.slice(0, HUB_LIMIT).map((row) =>
       HubSkillSchema.parse({
@@ -279,7 +291,7 @@ export class LiveAgentTabs {
     throw new HttpError(
       501,
       'not_implemented',
-      'Hermes has no way to add or remove a single memory entry; memory is read-only in Score',
+      'Hermes has no way to add or remove a single memory entry, so memory is read-only in Score.',
     )
   }
 
@@ -292,12 +304,12 @@ export class LiveAgentTabs {
     const { profile } = this.profile(agentId)
     return this.serial(profile, async () => {
       const tool = (await this.tools(agentId)).find((candidate) => candidate.id === toolId)
-      if (!tool) throw new HttpError(404, 'not_found', 'Tool not found')
+      if (!tool) throw new HttpError(404, 'not_found', 'Couldn’t find that tool.')
       if (tool.kind === 'mcp')
         throw new HttpError(
           501,
           'not_implemented',
-          'MCP servers are toggled per tool in Hermes; Score shows them read-only',
+          'MCP servers are switched on or off per tool in Hermes. Score shows them read-only.',
         )
       if (tool.enabled !== enabled) {
         const verb = enabled ? 'enable' : 'disable'
@@ -315,7 +327,7 @@ export class LiveAgentTabs {
       }
       const after = (await this.tools(agentId)).find((candidate) => candidate.id === toolId)
       if (!after || after.enabled !== enabled)
-        throw new HttpError(409, 'conflict', 'Hermes did not apply the change')
+        throw new HttpError(409, 'conflict', 'Hermes didn’t apply the change.')
       return { ...after, label: redact(after.label) }
     })
   }
@@ -323,7 +335,8 @@ export class LiveAgentTabs {
   async listPlugins(agentId: string): Promise<PluginItem[]> {
     const { profile } = this.profile(agentId)
     const plugins = await readPlugins(this.runner, this.hermesHome, profile)
-    if (!plugins) throw new HttpError(502, 'hermes_unavailable', 'Hermes could not list plugins')
+    if (!plugins)
+      throw new HttpError(502, 'hermes_unavailable', 'Couldn’t list the plugins from Hermes.')
     return plugins
   }
   /** `plugins enable|disable <name>`, then a re-read to verify. The Score bridge is never touched. */
@@ -334,16 +347,16 @@ export class LiveAgentTabs {
       throw new HttpError(
         409,
         'conflict',
-        'The Score bridge stays on: Score needs it to see Hermes',
+        'Score’s plugin stays on: Score needs it to see what this agent does.',
       )
     return this.serial(profile, async () => {
       const before = (await this.listPlugins(agentId)).find((plugin) => plugin.id === id)
-      if (!before) throw new HttpError(404, 'not_found', 'Plugin not found')
+      if (!before) throw new HttpError(404, 'not_found', 'Couldn’t find that plugin.')
       if (before.enabled !== enabled)
         await this.mutate(profile, ['plugins', enabled ? 'enable' : 'disable', id])
       const after = (await this.listPlugins(agentId)).find((plugin) => plugin.id === id)
       if (!after || after.enabled !== enabled)
-        throw new HttpError(409, 'conflict', 'Hermes did not apply the change')
+        throw new HttpError(409, 'conflict', 'Hermes didn’t apply the change.')
       return after
     })
   }

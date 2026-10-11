@@ -47,7 +47,7 @@ test.each([
   expect(taskColumn(status)).toBe(column)
 })
 test('unknown upstream statuses fail visibly', () => {
-  expect(() => taskColumn('new-upstream-status')).toThrow('Unknown task status')
+  expect(() => taskColumn('new-upstream-status')).toThrow('task status Score doesn’t know')
 })
 
 test.each(['dependency', 'needs_input', 'capability', 'transient', null])(

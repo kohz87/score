@@ -67,7 +67,7 @@ export class KnowledgeAgentApi {
 
   private gate(agentId: string): void {
     if (!this.vault.agentAccess() || !this.agentEnabled(agentId))
-      throw new HttpError(403, 'knowledge_off', 'Knowledge is turned off for agents')
+      throw new HttpError(403, 'knowledge_off', 'Knowledge is turned off for agents.')
   }
 
   /** Reserves a write slot before the write (so concurrent calls can't overshoot) and returns its undo. */
@@ -118,7 +118,7 @@ export class KnowledgeAgentApi {
       throw new HttpError(
         413,
         'payload_too_large',
-        `That is too large: an agent write may be at most ${AGENT_WRITE_BYTES / 1024} KiB.`,
+        `That is too large: an agent write may be at most ${AGENT_WRITE_BYTES / 1024} KB.`,
       )
   }
 
@@ -184,7 +184,7 @@ export class KnowledgeAgentApi {
     this.gate(agentId)
     const prefix = (folder ?? '').replace(/^\/+|\/+$/g, '')
     if (prefix.split('/').some((part) => part === '..' || part === '.git'))
-      throw new HttpError(400, 'bad_path', 'That folder is not in the vault')
+      throw new HttpError(400, 'bad_path', 'That folder isn’t in Knowledge.')
     const tree = await this.vault.tree()
     const inside = (path: string) =>
       prefix === '' || path === prefix || path.startsWith(`${prefix}/`)

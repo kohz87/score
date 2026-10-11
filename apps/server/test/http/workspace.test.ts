@@ -93,7 +93,7 @@ describe('state and root', () => {
     expect(state.available).toBe(false)
     expect(state.reason).toMatch(/home folder/)
     await port.setWorkspaceCwd('builder', '.')
-    expect((await call('GET', W)).json().reason).toMatch(/No working folder/)
+    expect((await call('GET', W)).json().reason).toMatch(/No workspace folder/)
   })
   test('set folder: refuses dangerous or missing folders, accepts an existing one', async () => {
     for (const bad of [

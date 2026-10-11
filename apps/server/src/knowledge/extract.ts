@@ -83,5 +83,5 @@ export async function extractDocumentText(
 export function zipFailure(result: { ok: false; limit: boolean; message: string }): HttpError {
   return result.limit
     ? new HttpError(413, 'zip_limits', result.message)
-    : new HttpError(415, 'unsupported_type', 'That zip file could not be read')
+    : new HttpError(415, 'unsupported_type', 'Couldn’t read that zip file.')
 }

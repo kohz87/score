@@ -158,7 +158,7 @@ export function setContinuation(
   now: string,
 ): DomainEventDraft[] {
   const row = roomRow(sqlite, roomId)
-  if (!row.imported_from) throw new HttpError(409, 'conflict', 'This room was not imported')
+  if (!row.imported_from) throw new HttpError(409, 'conflict', 'This room was not imported.')
   const from = RoomImportSchema.pick({ agentId: true, sessionId: true }).parse(
     JSON.parse(row.imported_from),
   )

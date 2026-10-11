@@ -47,7 +47,7 @@ const BatchSchema = BridgeEventsRequestSchema.refine(
     events.length <= 200 &&
     events.every((event, index) => index === 0 || event.counter > events[index - 1]!.counter),
 )
-const unauthorized = () => new HttpError(401, 'unauthorized', 'Invalid bridge token')
+const unauthorized = () => new HttpError(401, 'unauthorized', 'Invalid plugin key.')
 
 function bearerHash(value: unknown): Buffer {
   const parsed = BearerSchema.safeParse(value)
@@ -123,11 +123,7 @@ export function registerBridgeRoutes(app: FastifyInstance, deps: BridgeDeps): vo
             previous.pid !== hello.pid ||
             previous.kanban_task_id !== hello.kanbanTaskId)
         ) {
-          throw new HttpError(
-            409,
-            'conflict',
-            'Producer incarnation belongs to a different identity',
-          )
+          throw new HttpError(409, 'conflict', 'This plugin session belongs to a different agent.')
         }
         sqlite
           .prepare(

@@ -101,7 +101,7 @@ function suffixed(rel: string, n: number): string {
 function cleanSegments(input: string): string[] {
   const segments = parseVaultPath(input)
   if (segments.some((segment) => segment.startsWith('.')))
-    throw new HttpError(400, 'bad_path', 'Hidden files and folders are not part of the vault')
+    throw new HttpError(400, 'bad_path', 'Hidden files and folders are not part of Knowledge.')
   return segments
 }
 
@@ -246,7 +246,7 @@ export class KnowledgeDocuments {
     const segments = cleanSegments(input)
     const rel = segments.join('/')
     if (documentTypeOfPath(rel) === null)
-      throw new HttpError(400, 'not_a_document', 'That is not a document')
+      throw new HttpError(400, 'not_a_document', 'That isn’t a document.')
     return rel
   }
 
@@ -254,7 +254,7 @@ export class KnowledgeDocuments {
   private async reconcile(rel: string): Promise<DocRow> {
     const { stat } = await this.vault.lookup(rel.split('/'))
     const row = this.db.read((sqlite) => this.row(sqlite, rel))
-    if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Unknown document')
+    if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Couldn’t find that document.')
     if (row && Math.trunc(stat.mtimeMs) === row.mtime_ms && stat.size === row.size) return row
     await this.vault.runLocked(async () => {
       const result = await this.ingestExisting(rel, 'outside')
@@ -262,7 +262,7 @@ export class KnowledgeDocuments {
         await this.vault.publishChange({ path: rel, kind: 'written', to: null, by: 'outside' })
     })
     const fresh = this.db.read((sqlite) => this.row(sqlite, rel))
-    if (!fresh) throw new HttpError(404, 'not_found', 'Unknown document')
+    if (!fresh) throw new HttpError(404, 'not_found', 'Couldn’t find that document.')
     return fresh
   }
 
@@ -271,9 +271,9 @@ export class KnowledgeDocuments {
   ): Promise<{ bytes: Buffer; type: KnowledgeDocumentType; name: string }> {
     const rel = this.knownPath(input)
     const { abs, stat } = await this.vault.lookup(rel.split('/'))
-    if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Unknown document')
+    if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Couldn’t find that document.')
     if (stat.size > MAX_FILE_BYTES)
-      throw new HttpError(413, 'payload_too_large', 'That file is too large')
+      throw new HttpError(413, 'payload_too_large', 'That file is too large.')
     return {
       bytes: await this.vault.readContainedBuffer(abs, MAX_FILE_BYTES),
       type: documentTypeOfPath(rel)!,
@@ -390,24 +390,24 @@ export class KnowledgeDocuments {
       throw new HttpError(
         415,
         'unsupported_type',
-        'That file type is not supported (notes, PDF, DOCX, CSV, JSON, HTML, images and zip files are)',
+        'This file type isn’t supported. Use notes, PDF, DOCX, CSV, JSON, HTML, images or zip files.',
       )
-    if (bytes.length === 0) throw new HttpError(400, 'bad_request', 'That file is empty')
+    if (bytes.length === 0) throw new HttpError(400, 'bad_request', 'That file is empty.')
     if (bytes.length > MAX_FILE_BYTES)
-      throw new HttpError(413, 'payload_too_large', 'Files can be at most 25 MB')
+      throw new HttpError(413, 'payload_too_large', 'Files can be at most 25 MB.')
     const finalPath = [...dir, cls.name].join('/')
     if (cls.kind === 'note') {
       if (bytes.length > MAX_NOTE_BYTES)
-        throw new HttpError(413, 'payload_too_large', 'Notes can be at most 8 MiB')
+        throw new HttpError(413, 'payload_too_large', 'Notes can be at most 8 MB.')
       if (!isPlainText(bytes))
-        throw new HttpError(415, 'unsupported_type', 'That file is not plain text')
+        throw new HttpError(415, 'unsupported_type', 'That file isn’t plain text.')
       return { kind: 'note', path: finalPath, bytes }
     }
     if (!bytesMatch(cls.type, bytes))
       throw new HttpError(
         415,
         'unsupported_type',
-        `That file is not a real ${cls.type.toUpperCase()} file`,
+        `That file isn’t a real ${cls.type.toUpperCase()} file.`,
       )
     return this.documentFacts(finalPath, cls.type, bytes)
   }
@@ -430,11 +430,11 @@ export class KnowledgeDocuments {
       if (!reserved.has(candidate.toLowerCase()) && !(await this.existing(candidate)))
         return candidate
     }
-    throw new HttpError(409, 'exists', 'Too many files with that name')
+    throw new HttpError(409, 'exists', 'Too many files with that name.')
   }
 
   private exists(found: { path: string; mtime: string; size: number }[]): HttpError {
-    return new HttpError(409, 'exists', 'A file with that name already exists', {
+    return new HttpError(409, 'exists', 'A file with that name already exists.', {
       existing: found.slice(0, 50),
     })
   }
@@ -471,7 +471,7 @@ export class KnowledgeDocuments {
       if (again && !replace) throw this.exists([again])
       if (again) {
         const { stat } = await this.vault.lookup(target.split('/'))
-        if (!stat?.isFile()) throw new HttpError(400, 'bad_path', 'A folder has that name')
+        if (!stat?.isFile()) throw new HttpError(400, 'bad_path', 'A folder has that name.')
       }
       await this.place({ ...prepared, path: target }, author, again !== null)
       return { path: target, kind: 'document' as const, replaced: again !== null }
@@ -518,7 +518,7 @@ export class KnowledgeDocuments {
     const rel = this.knownPath(input)
     return this.vault.runLocked(async () => {
       const { abs, stat } = await this.vault.lookup(rel.split('/'))
-      if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Unknown document')
+      if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Couldn’t find that document.')
       const row = this.db.read((sqlite) => this.row(sqlite, rel))
       await this.vault.commitOutside()
       await fs.unlink(abs)
@@ -537,12 +537,13 @@ export class KnowledgeDocuments {
     const from = this.knownPath(fromInput)
     const to = cleanSegments(toInput).join('/')
     if (documentTypeOfPath(to) !== documentTypeOfPath(from))
-      throw new HttpError(400, 'bad_path', 'A document keeps its file type when it is renamed')
+      throw new HttpError(400, 'bad_path', 'A document keeps its file type when it is renamed.')
     return this.vault.runLocked(async () => {
       const source = await this.vault.lookup(from.split('/'))
-      if (!source.stat?.isFile()) throw new HttpError(404, 'not_found', 'Unknown document')
+      if (!source.stat?.isFile())
+        throw new HttpError(404, 'not_found', 'Couldn’t find that document.')
       if (from === to || (await this.existing(to)))
-        throw new HttpError(409, 'exists', 'A file with that name already exists')
+        throw new HttpError(409, 'exists', 'A file with that name already exists.')
       await this.vault.commitOutside()
       const row = this.db.read((sqlite) => this.row(sqlite, from))
       const abs = await this.vault.prepareParent(to)
@@ -662,11 +663,11 @@ export class KnowledgeDocuments {
 
   async zipPreview(bytes: Buffer): Promise<KnowledgeZipPreview> {
     if (!bytesMatch('zip', bytes))
-      throw new HttpError(415, 'unsupported_type', 'That is not a zip file')
+      throw new HttpError(415, 'unsupported_type', 'That isn’t a zip file.')
     const listed = await runWorker({ op: 'zip-list', bytes, limits: ZIP_LIMITS }, ZIP_TIMEOUT_MS)
     if (!listed.ok) throw zipFailure(listed)
     if (!('entries' in listed))
-      throw new HttpError(415, 'unsupported_type', 'That zip file could not be read')
+      throw new HttpError(415, 'unsupported_type', 'Couldn’t read that zip file.')
     return {
       entries: listed.entries,
       more: listed.more,
@@ -683,7 +684,7 @@ export class KnowledgeDocuments {
     author: KnowledgeAuthor = 'you',
   ): Promise<KnowledgeUnzipResult> {
     if (!bytesMatch('zip', zipBytes))
-      throw new HttpError(415, 'unsupported_type', 'That is not a zip file')
+      throw new HttpError(415, 'unsupported_type', 'That isn’t a zip file.')
     const folder = cleanSegments(folderInput).join('/')
     const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'score-unzip-'))
     try {
@@ -693,7 +694,7 @@ export class KnowledgeDocuments {
       )
       if (!out.ok) throw zipFailure(out)
       if (!('files' in out))
-        throw new HttpError(415, 'unsupported_type', 'That zip file could not be read')
+        throw new HttpError(415, 'unsupported_type', 'Couldn’t read that zip file.')
       const skipped = [...out.skipped]
       const prepared: Prepared[] = []
       const taken = new Set<string>()

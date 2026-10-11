@@ -37,7 +37,7 @@ export function registerRemoteGuard(
   app.addHook('onRequest', async (request, reply) => {
     reply.header('cache-control', 'no-store')
     if (!request.headers.host || !authorities.has(request.headers.host))
-      throw new HttpError(403, 'forbidden', 'Request host is not allowed')
+      throw new HttpError(403, 'forbidden', 'Score doesn’t accept requests for this host name.')
     const path = request.url.split('?', 1)[0]!
     // Match raw paths exactly: encoded aliases and Fastify's automatic HEAD routes are private.
     if (
@@ -47,7 +47,11 @@ export function registerRemoteGuard(
     )
       return
     if (!app.pairing.isPaired(request.headers.cookie))
-      throw new HttpError(401, 'not_paired', 'Pair this browser to access Score')
+      throw new HttpError(
+        401,
+        'not_paired',
+        'Pair this browser to use Score. Open the pairing link shown in the server terminal.',
+      )
     if (path !== '/api/stream') app.pairing.touch(request.headers.cookie, request.ip)
     // Session routes set their own cookie (sign out clears it); everything else keeps the cookie as long as the session.
     // The stream hijacks its response and never sends this header, so it must not consume the refresh.
@@ -83,7 +87,7 @@ function registerLocalHostGuard(app: FastifyInstance, config: Config): void {
     // The socket's own port counts too: whatever port this listener really bound is, by definition, its own.
     const bound = request.socket.localPort
     if (!authorities.has(host) && !(bound !== undefined && loopbackOn(host, bound)))
-      throw new HttpError(403, 'forbidden', 'Request host is not allowed')
+      throw new HttpError(403, 'forbidden', 'Score doesn’t accept requests for this host name.')
   })
 }
 

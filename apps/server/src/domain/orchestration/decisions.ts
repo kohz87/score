@@ -44,7 +44,7 @@ function expectRevision(o: OrchRow, revision: number): void {
     throw new HttpError(
       409,
       'conflict',
-      'This run changed since you looked; reload and try again',
+      'This run changed while you were looking. Reload and try again.',
       {
         currentRevision: o.revision,
       },
@@ -53,7 +53,7 @@ function expectRevision(o: OrchRow, revision: number): void {
 
 const mustBeLive = (o: OrchRow): void => {
   if (isTerminalStatus(o.status) || o.status === 'stopping' || o.status === 'finishing')
-    throw new HttpError(409, 'conflict', `The run is ${o.status}`)
+    throw new HttpError(409, 'conflict', `This run is ${o.status}.`)
 }
 
 export function decideGate(ctx: Ctx, orchId: string, gateId: string, body: GateDecision): void {
@@ -62,9 +62,9 @@ export function decideGate(ctx: Ctx, orchId: string, gateId: string, body: GateD
   expectRevision(o, body.orchestrationRevision)
   mustBeLive(o)
   const gate = readGate(sqlite, orchId, gateId)
-  if (!gate) throw new HttpError(404, 'not_found', 'Unknown gate')
+  if (!gate) throw new HttpError(404, 'not_found', 'Couldn’t find that gate.')
   if (gate.status !== 'open' || gate.revision !== body.expectedRevision)
-    throw new HttpError(409, 'conflict', 'This gate was already decided or changed', {
+    throw new HttpError(409, 'conflict', 'This gate was already decided or has changed.', {
       currentRevision: gate.revision,
     })
   const approve = body.decision === 'approve'
@@ -110,9 +110,9 @@ export function answerInquiry(
   expectRevision(o, body.orchestrationRevision)
   mustBeLive(o)
   const inquiry = inquiriesOf(sqlite, orchId).find((candidate) => candidate.id === inquiryId)
-  if (!inquiry) throw new HttpError(404, 'not_found', 'Unknown question')
+  if (!inquiry) throw new HttpError(404, 'not_found', 'Couldn’t find that question.')
   if (inquiry.status !== 'open' || inquiry.revision !== body.expectedRevision)
-    throw new HttpError(409, 'conflict', 'This question was already answered or changed', {
+    throw new HttpError(409, 'conflict', 'This question was already answered or has changed.', {
       currentRevision: inquiry.revision,
     })
   sqlite
@@ -130,9 +130,9 @@ export function setLimits(ctx: Ctx, orchId: string, body: LimitsDecision): void 
   const { sqlite, now } = ctx
   const o = requireOrch(sqlite, orchId)
   expectRevision(o, body.orchestrationRevision)
-  if (isTerminalStatus(o.status)) throw new HttpError(409, 'conflict', `The run is ${o.status}`)
+  if (isTerminalStatus(o.status)) throw new HttpError(409, 'conflict', `This run is ${o.status}.`)
   if (body.deadlineAt !== undefined && body.deadlineAt !== null && body.deadlineAt <= now)
-    throw new HttpError(400, 'bad_request', 'The deadline must be in the future')
+    throw new HttpError(400, 'bad_request', 'The deadline must be in the future.')
   if (body.budgetUsd !== undefined)
     sqlite
       .prepare('UPDATE orchestrations SET budget_usd = ? WHERE id = ?')
@@ -179,7 +179,7 @@ export function pauseRun(ctx: Ctx, orchId: string, body: RunControl): void {
   expectRevision(o, body.orchestrationRevision)
   if (o.status === 'paused' && o.manual_paused_at !== null) return
   if (o.status !== 'running' && o.status !== 'paused')
-    throw new HttpError(409, 'conflict', `The run is ${o.status}`)
+    throw new HttpError(409, 'conflict', `This run is ${o.status}.`)
   // The manual hold is its own fact. Pausing a run that a budget (or any other condition) already paused keeps that
   // condition's reason; the hold outlives it (fix-h item 5).
   ctx.sqlite
@@ -201,7 +201,7 @@ export function resumeRun(ctx: Ctx, orchId: string, body: RunControl): void {
   const o = requireOrch(ctx.sqlite, orchId)
   expectRevision(o, body.orchestrationRevision)
   if (o.status === 'running') return
-  if (o.status !== 'paused') throw new HttpError(409, 'conflict', `The run is ${o.status}`)
+  if (o.status !== 'paused') throw new HttpError(409, 'conflict', `This run is ${o.status}.`)
   // Resume ends the manual hold. A budget / unknown-spend / deadline pause is that condition's own and stays until the
   // limits decision (or, without a manual hold, is simply re-evaluated by admission as before).
   const limitPause = ['budget', 'unknown_spend', 'deadline'].includes(o.pause_reason ?? '')
@@ -241,7 +241,7 @@ export function stopRun(
       (a) =>
         ['send_started', 'running', 'unknown'].includes(a.state) && a.stop_requested_at === null,
     )
-    if (open.length === 0) throw new HttpError(409, 'conflict', `The run is already ${o.status}`)
+    if (open.length === 0) throw new HttpError(409, 'conflict', `This run is already ${o.status}.`)
     for (const attempt of open) oweStop(sqlite, attempt, now)
     addHistory(
       sqlite,
@@ -290,7 +290,11 @@ export function grantWaiver(ctx: Ctx, orchId: string, body: WaiverDecision): voi
   mustBeLive(o)
   const fenced = cancelFenceAttempts(o, attemptsOf(sqlite, orchId))
   if (fenced.length === 0)
-    throw new HttpError(409, 'conflict', 'No cancelled step may still be running')
+    throw new HttpError(
+      409,
+      'conflict',
+      'No stopped step may still be running, so there is nothing to confirm.',
+    )
   sqlite.prepare('UPDATE orchestrations SET waiver_at = ? WHERE id = ?').run(now, orchId)
   addHistory(sqlite, orchId, 'waiver', { attempts: fenced.map((a) => a.id) }, now)
   bumpAdmission(sqlite)
@@ -313,12 +317,12 @@ export function abandonAttempts(ctx: Ctx, orchId: string, body: AbandonDecision)
   const steps = stepsOf(sqlite, orchId)
   for (const id of body.attemptIds) {
     const attempt = attempts.find((candidate) => candidate.id === id)
-    if (!attempt) throw new HttpError(404, 'not_found', `Unknown attempt ${id}`)
+    if (!attempt) throw new HttpError(404, 'not_found', `Couldn’t find step run ${id}.`)
     if (attempt.state !== 'unknown')
       throw new HttpError(
         409,
         'conflict',
-        `${id} is ${attempt.state}; only an attempt that is not confirmed ended can be abandoned`,
+        `${id} is ${attempt.state}. Only a step run not confirmed as ended can be abandoned.`,
       )
   }
   for (const id of body.attemptIds) {
@@ -372,15 +376,15 @@ export function remapAgent(ctx: Ctx, orchId: string, body: RemapDecision): void 
   mustBeLive(o)
   const frozen = frozenIncarnation(sqlite, orchId, body.agentId)
   if (frozen === undefined)
-    throw new HttpError(404, 'not_found', `${body.agentId} is not an agent of this run`)
+    throw new HttpError(404, 'not_found', `${body.agentId} is not an agent of this run.`)
   const current = lifecycleOf(sqlite, body.agentId)?.incarnation_id ?? 'untracked'
   if (
     frozen !== body.frozenIncarnation ||
     current !== body.currentIncarnation ||
     current === 'untracked'
   )
-    throw new HttpError(409, 'conflict', `${body.agentId} changed again; look at the run again`)
-  if (frozen === current) throw new HttpError(409, 'conflict', `${body.agentId} was not replaced`)
+    throw new HttpError(409, 'conflict', `${body.agentId} changed again. Look at the run again.`)
+  if (frozen === current) throw new HttpError(409, 'conflict', `${body.agentId} was not replaced.`)
   // The journal entry comes first: a database that later lacks this remap is detected at start.
   journalSoft(ctx, () =>
     ctx.journal.append({

@@ -58,9 +58,9 @@ export function registerOutsideSessionRoutes(
   app.post('/api/outside-sessions/import', guard, async (request) => {
     const body = ImportSessionRequestSchema.parse(request.body)
     if (!(await agentIds()).includes(body.agentId))
-      throw new HttpError(404, 'not_found', 'Unknown agent')
+      throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     const history = await port.readOutsideSession(body.agentId, body.sessionId)
-    if (!history) throw new HttpError(404, 'not_found', 'That session is no longer available')
+    if (!history) throw new HttpError(404, 'not_found', 'That conversation is no longer available.')
     let result: { roomId: string; imported: number } | undefined
     await ingest.submit({
       source: 'rooms',
@@ -77,23 +77,23 @@ export function registerOutsideSessionRoutes(
   app.post('/api/rooms/:roomId/continue-session', guard, async (request) => {
     const { roomId } = RoomParams.parse(request.params)
     const row = db.read((sqlite) => roomRow(sqlite, roomId))
-    if (!row.imported_from) throw new HttpError(409, 'conflict', 'This room was not imported')
+    if (!row.imported_from) throw new HttpError(409, 'conflict', 'This room was not imported.')
     const from = ImportedFromSchema.parse(JSON.parse(row.imported_from))
     const history = await port.readOutsideSession(from.agentId, from.sessionId)
-    if (!history) throw new HttpError(404, 'not_found', 'That session is no longer available')
+    if (!history) throw new HttpError(404, 'not_found', 'That conversation is no longer available.')
     // Never run inside a session another surface may be writing to right now.
     if (history.session.busy)
       throw new HttpError(
         409,
         'session_busy',
-        `This session is still active on ${from.label}. Try again when it has been quiet for a few minutes.`,
+        `This conversation is still active on ${from.label}. Try again when it has been quiet for a few minutes.`,
       )
     const mode = port.sessionContinuation()
     if (mode === 'unknown')
       throw new HttpError(
         503,
         'hermes_unavailable',
-        'Hermes is not reachable yet, so Score cannot tell whether this conversation can continue. Try again in a moment.',
+        'Hermes isn’t reachable yet, so Score can’t tell whether this conversation can continue. Try again in a moment.',
       )
     await ingest.submit({
       source: 'rooms',

@@ -135,7 +135,7 @@ test('global and per-agent switches turn every tool off', async () => {
     const response = await call(tok, op, payload)
     expect(response.statusCode).toBe(403)
     expect((response.json() as { error: { message: string } }).error.message).toBe(
-      'Knowledge is turned off for agents',
+      'Knowledge is turned off for agents.',
     )
   }
   h.vault.setAgentAccess(true)

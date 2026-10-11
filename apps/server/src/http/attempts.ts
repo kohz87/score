@@ -13,9 +13,10 @@ export function registerAttemptRoutes(app: FastifyInstance, deps: { db: ScoreDb 
       .object({ attemptId: z.string().regex(/^kr_[A-Za-z0-9-]{1,64}$/) })
       .parse(request.params)
     // With attempts off the route does not exist as far as clients can tell.
-    if (!kanbanAttemptsEnabled()) throw new HttpError(404, 'not_found', 'Unknown attempt')
+    if (!kanbanAttemptsEnabled())
+      throw new HttpError(404, 'not_found', 'Couldn’t find that task run.')
     const attempt = db.read((sqlite) => attemptsByIds(sqlite, [attemptId])[0])
-    if (!attempt) throw new HttpError(404, 'not_found', 'Unknown attempt')
+    if (!attempt) throw new HttpError(404, 'not_found', 'Couldn’t find that task run.')
     return AttemptDetailSchema.parse(attemptDetail(attempt))
   })
 }

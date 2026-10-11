@@ -64,7 +64,7 @@ function readJobs(home: string): Job[] {
     }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
-    throw new HttpError(502, 'hermes_unavailable', 'Routine data unavailable')
+    throw new HttpError(502, 'hermes_unavailable', 'Couldn’t read the routines from Hermes.')
   }
   try {
     const parsed = JobsFileSchema.parse(
@@ -76,7 +76,7 @@ function readJobs(home: string): Job[] {
       return job.success ? [job.data] : []
     })
   } catch {
-    throw new HttpError(502, 'hermes_unavailable', 'Routine data unavailable')
+    throw new HttpError(502, 'hermes_unavailable', 'Couldn’t read the routines from Hermes.')
   }
 }
 function scheduleText(job: Job): string {
@@ -111,7 +111,7 @@ export function readRoutines(hermesHome: string, profile: string): RoutineSummar
 
 export function splitRoutineId(id: string): { profile: string; jobId: string } {
   const parsed = RoutineIdSchema.safeParse(id)
-  if (!parsed.success) throw new HttpError(404, 'not_found', 'Unknown routine')
+  if (!parsed.success) throw new HttpError(404, 'not_found', 'Couldn’t find that routine.')
   const [profile, jobId] = parsed.data.split(':') as [string, string]
   return { profile, jobId }
 }
@@ -141,7 +141,7 @@ export class LiveRoutines {
   }
   private home(profile: string): string {
     const home = profileHome(this.hermesHome, profile)
-    if (!home) throw new HttpError(404, 'not_found', 'Unknown agent')
+    if (!home) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     return home
   }
   private jobs(profile: string): Job[] {
@@ -150,7 +150,7 @@ export class LiveRoutines {
   private find(id: string): { profile: string; job: Job } {
     const { profile, jobId } = splitRoutineId(id)
     const job = this.jobs(profile).find((candidate) => candidate.id === jobId)
-    if (!job) throw new HttpError(404, 'not_found', 'Unknown routine')
+    if (!job) throw new HttpError(404, 'not_found', 'Couldn’t find that routine.')
     return { profile, job }
   }
   private async cron(profile: string, args: string[]): Promise<number> {
@@ -166,13 +166,13 @@ export class LiveRoutines {
       throw new HttpError(
         exitCode < 0 ? 502 : 409,
         exitCode < 0 ? 'hermes_unavailable' : 'conflict',
-        'Hermes rejected the routine mutation',
+        'Hermes didn’t accept the routine change.',
       )
   }
 
   list(agentId: string): RoutineSummary[] {
     const profile = ProfileNameSchema.safeParse(agentId)
-    if (!profile.success) throw new HttpError(404, 'not_found', 'Agent not found')
+    if (!profile.success) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     return this.jobs(profile.data).map((job) => summary(profile.data, job))
   }
 
@@ -187,7 +187,7 @@ export class LiveRoutines {
       .regex(/^[\x21-\x7e]{1,256}$/)
       .parse(key)
     const profile = ProfileNameSchema.safeParse(agentId)
-    if (!profile.success) throw new HttpError(404, 'not_found', 'Agent not found')
+    if (!profile.success) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     return this.serial(() => this.createLocked(profile.data, req, key, db))
   }
   private async createLocked(
@@ -225,16 +225,20 @@ export class LiveRoutines {
         throw new HttpError(
           409,
           'idempotency_conflict',
-          'Idempotency key belongs to a different routine',
+          'That request was already used for a different routine.',
         )
       if (intent.state === 'accepted' && intent.result) {
         const job = this.jobs(profile).find((candidate) => candidate.id === intent.result)
         if (!job)
-          throw new HttpError(409, 'conflict', 'The routine created for this key was removed')
+          throw new HttpError(
+            409,
+            'conflict',
+            'The routine created by that request has since been removed.',
+          )
         return summary(profile, job)
       }
       if (intent.state === 'failed')
-        throw new HttpError(409, 'conflict', 'Hermes rejected this routine earlier')
+        throw new HttpError(409, 'conflict', 'Hermes rejected this routine earlier.')
       const existing = this.jobs(profile).find((job) => fresh(job, payload.before))
       if (existing) {
         accept(existing.id)
@@ -272,11 +276,14 @@ export class LiveRoutines {
         )
         .run(exitCode > 0 ? 'failed' : 'unknown', new Date().toISOString(), intentId),
     )
-    if (exitCode > 0) throw new HttpError(409, 'conflict', 'Hermes rejected the routine mutation')
+    if (exitCode > 0)
+      throw new HttpError(409, 'conflict', 'Hermes didn’t accept the routine change.')
     throw new HttpError(
       502,
       'hermes_unavailable',
-      exitCode === 0 ? 'Routine creation could not be confirmed' : 'Hermes is unavailable',
+      exitCode === 0
+        ? 'Couldn’t confirm that Hermes created the routine.'
+        : 'Hermes isn’t reachable. Try again in a moment.',
     )
   }
 

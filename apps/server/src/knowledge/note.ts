@@ -18,12 +18,12 @@ export function parseVaultPath(input: string): string[] {
     throw new HttpError(
       400,
       'bad_path',
-      error instanceof Error ? error.message : 'The path is invalid',
+      error instanceof Error ? error.message : 'The path is invalid.',
     )
   }
-  if (segments.length === 0) throw new HttpError(400, 'bad_path', 'The path is empty')
+  if (segments.length === 0) throw new HttpError(400, 'bad_path', 'The path is empty.')
   if (segments.some((segment) => segment.toLowerCase() === '.git'))
-    throw new HttpError(400, 'bad_path', 'That path is not available')
+    throw new HttpError(400, 'bad_path', 'That path isn’t available.')
   return segments
 }
 
@@ -31,9 +31,9 @@ export function parseVaultPath(input: string): string[] {
 export function parseNotePath(input: string): string {
   const segments = parseVaultPath(input)
   if (!/\.md$/i.test(segments.at(-1)!) || segments.at(-1)!.toLowerCase() === '.md')
-    throw new HttpError(400, 'not_a_note', 'Only Markdown notes (.md) can be used here')
+    throw new HttpError(400, 'not_a_note', 'Only Markdown notes (.md) can be used here.')
   if (segments.some((segment) => segment.startsWith('.')))
-    throw new HttpError(400, 'bad_path', 'Hidden files and folders are not part of the vault')
+    throw new HttpError(400, 'bad_path', 'Hidden files and folders are not part of Knowledge.')
   return segments.join('/')
 }
 

@@ -76,7 +76,7 @@ test('a version stays used after its last run is pruned, so the workflow still c
   expect(h.orch.maintenance().pruned).toBe(1)
   const { getWorkflow, deleteWorkflow } = await import('../../src/domain/workflows/definitions.ts')
   expect(getWorkflow(h.db.sqlite, wf).versions[0]!.used).toBe(true)
-  expect(() => deleteWorkflow(h!.db.sqlite, wf)).toThrow(/used/i)
+  expect(() => deleteWorkflow(h!.db.sqlite, wf)).toThrow(/has runs/i)
 })
 
 // medium: gate-only workflow

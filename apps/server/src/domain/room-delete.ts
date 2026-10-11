@@ -70,17 +70,17 @@ export function deleteRoom(
 ): DomainEventDraft[] {
   const room = roomRow(sqlite, roomId)
   if (confirm !== room.name)
-    throw new HttpError(400, 'bad_request', 'Type the room’s name to delete it')
+    throw new HttpError(400, 'bad_request', 'Type the room’s name to delete it.')
   const blocked = blockedBy(sqlite, roomId, room.kind)
   if (blocked === 'direct')
-    throw new HttpError(409, 'conflict', 'A direct room is the agent’s home and can’t be deleted')
+    throw new HttpError(409, 'conflict', 'A direct room is the agent’s home and can’t be deleted.')
   if (blocked === 'orchestration_owned') {
     // The owner's details come with the standard refusal.
     const owner = ownerOfRoom(sqlite, roomId)!
     throw new HttpError(
       409,
       'orchestration_owned',
-      'This belongs to an orchestration run; use the run controls instead',
+      'This belongs to an orchestration run. Use the run controls instead.',
       {
         orchestrationId: owner.orchestration.id,
         state: owner.state,
@@ -90,7 +90,7 @@ export function deleteRoom(
     )
   }
   if (blocked === 'room_busy')
-    throw new HttpError(409, 'room_busy', 'An agent is working in this room; stop it first')
+    throw new HttpError(409, 'room_busy', 'An agent is working in this room; stop it first.')
   const orchestration = sqlite
     .prepare('SELECT id FROM orchestrations WHERE room_id = ?')
     .get(roomId) as { id: string } | undefined

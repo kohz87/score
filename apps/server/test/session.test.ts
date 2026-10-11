@@ -73,7 +73,10 @@ test('a consumed token cannot be reused, including concurrent requests', async (
   const replay = await pair(app, token)
   expect(replay.statusCode).toBe(401)
   expect(replay.json()).toEqual({
-    error: { code: 'pairing_failed', message: 'Pairing token is invalid or expired' },
+    error: {
+      code: 'pairing_failed',
+      message: 'This pairing link is invalid or has expired. Get a new one in the server terminal.',
+    },
   })
   expect(replay.headers['set-cookie']).toBeUndefined()
 })

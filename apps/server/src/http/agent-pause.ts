@@ -45,7 +45,7 @@ export function registerAgentPauseRoutes(
     const details = z.array(AgentDetailSchema).parse(await port.listAgentDetails())
     await reconcileAgents(ingest, details)
     const agent = db.read((sqlite) => readAgent(sqlite, agentId))
-    if (!agent) throw new HttpError(404, 'not_found', 'Agent not found')
+    if (!agent) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     return AgentSummarySchema.parse(agent)
   }
 
@@ -87,7 +87,7 @@ export function registerAgentPauseRoutes(
       throw new HttpError(
         502,
         'hermes_unavailable',
-        'Paused, but some tasks could not be held. Try Pause again.',
+        'Paused, but some tasks couldn’t be held. Try Pause again.',
         { taskIds: failed },
       )
     return agent
@@ -113,7 +113,7 @@ export function registerAgentPauseRoutes(
       throw new HttpError(
         502,
         'hermes_unavailable',
-        'Resumed, but some tasks could not be unblocked. Try Resume again.',
+        'Resumed, but some tasks couldn’t be unblocked. Try Resume again.',
         { taskIds: failed },
       )
     return agent

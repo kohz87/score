@@ -45,7 +45,7 @@ export function registerProfileRoutes(
       throw new HttpError(
         403,
         'feature_disabled',
-        'Managing agents needs Score on this machine or a TLS connection (SCORE_TLS_CERT)',
+        'Managing agents needs Score on this machine or an HTTPS connection (SCORE_TLS_CERT).',
       )
   }
   const mutation = {
@@ -101,7 +101,11 @@ export function registerProfileRoutes(
     // Before any body is read: an unpaired or remote-plain-HTTP caller can't make the server buffer 200 MiB.
     const gate = async (request: { headers: { cookie?: string | undefined } }) => {
       if (!app.pairing.isPaired(request.headers.cookie))
-        throw new HttpError(401, 'not_paired', 'Pair this browser to make human decisions')
+        throw new HttpError(
+          401,
+          'not_paired',
+          'Pair this browser first. Open the pairing link shown in the server terminal.',
+        )
       await localOnly()
     }
     scope.post(
@@ -109,7 +113,7 @@ export function registerProfileRoutes(
       { bodyLimit: PROFILE_IMPORT_MAX_BYTES, onRequest: gate },
       async (request, reply) => {
         if (!Buffer.isBuffer(request.body))
-          throw new HttpError(400, 'bad_request', 'Send the archive as application/octet-stream')
+          throw new HttpError(400, 'bad_request', 'Send the archive as application/octet-stream.')
         operations.sweepImports()
         const uploadId = imports.save(request.body)
         try {
@@ -151,7 +155,7 @@ export function registerProfileRoutes(
     const { agentId } = Params.parse(request.params)
     const body = AgentDeleteRequestSchema.parse(request.body)
     if (body.typedName !== agentId)
-      throw new HttpError(400, 'bad_request', 'Type the exact profile name to delete it')
+      throw new HttpError(400, 'bad_request', 'Type the agent’s exact profile name to delete it.')
     await port.listTasks()
     return reply
       .code(202)
@@ -178,7 +182,8 @@ export function registerProfileRoutes(
     const { agentId } = Params.parse(request.params)
     const body = AgentPatchRequestSchema.parse(request.body)
     await reconcileAgents(ingest, await port.listAgentDetails())
-    if (!readAgent(db.sqlite, agentId)) throw new HttpError(404, 'not_found', 'Agent not found')
+    if (!readAgent(db.sqlite, agentId))
+      throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     assertAgentAdmits(db.sqlite, agentId)
     // The form sends both fields; a description that did not change costs no Hermes process.
     if (body.role && body.role !== readAgent(db.sqlite, agentId)?.role) {

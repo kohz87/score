@@ -21,7 +21,7 @@ export class HttpError extends Error {
 
 export function registerErrorHandlers(app: FastifyInstance): void {
   app.setNotFoundHandler(() => {
-    throw new HttpError(404, 'not_found', 'Route not found')
+    throw new HttpError(404, 'not_found', 'Couldn’t find that address.')
   })
 
   app.setErrorHandler((error, request, reply) => {
@@ -34,14 +34,22 @@ export function registerErrorHandlers(app: FastifyInstance): void {
       error instanceof ZodError ||
       (frameworkError.success && frameworkError.data.validation)
     ) {
-      response = new HttpError(400, 'bad_request', 'Invalid request')
+      response = new HttpError(
+        400,
+        'bad_request',
+        'Couldn’t read that request. Check what you entered and try again.',
+      )
     } else if (status === 413) {
-      response = new HttpError(413, 'payload_too_large', 'The request body is too large')
+      response = new HttpError(413, 'payload_too_large', 'That request is too large to send.')
     } else if (status && status >= 400 && status < 500) {
-      response = new HttpError(status, 'bad_request', 'Invalid request')
+      response = new HttpError(
+        status,
+        'bad_request',
+        'Couldn’t read that request. Check what you entered and try again.',
+      )
     } else {
       request.log.error({ err: redactLogError(error, request.headers) }, 'Internal server error')
-      response = new HttpError(500, 'internal', 'Internal server error')
+      response = new HttpError(500, 'internal', 'Something went wrong inside Score. Try again.')
     }
 
     return reply.code(response.status).send({

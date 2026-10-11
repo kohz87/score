@@ -450,7 +450,7 @@ function unlinkedWorkNotice(
 export function briefOfNode(sqlite: DatabaseSync, nodeId: string): string {
   const [kind, ...rest] = nodeId.split(':')
   const id = rest.join(':')
-  const notFound = () => new HttpError(404, 'not_found', 'Unknown flow node')
+  const notFound = () => new HttpError(404, 'not_found', 'Couldn’t find that step.')
   if (!id) throw notFound()
   let row: unknown
   if (kind === 'brief')
@@ -585,7 +585,7 @@ export function readFlowNode(sqlite: DatabaseSync, nodeId: string, nowMs: number
   const briefId = briefOfNode(sqlite, nodeId)
   const flow = readBriefFlow(sqlite, briefId, nowMs)
   const node = flow.nodes.find((item) => item.id === nodeId)
-  if (!node) throw new HttpError(404, 'not_found', 'Unknown flow node')
+  if (!node) throw new HttpError(404, 'not_found', 'Couldn’t find that step.')
   const empty = { steps: [], approval: null, run: null, model: null, tools: [], watch: null }
   if (nodeId.startsWith('turn:')) {
     const turn = briefTurns(sqlite, briefId).find((item) => `turn:${item.message_id}` === nodeId)
@@ -651,7 +651,7 @@ export interface StoppableRun {
 
 /** The active run behind a step, or a 409 when nothing is running. */
 export const KANBAN_ATTEMPT_STOP_MESSAGE =
-  'Stop is not available for Kanban attempts: Hermes has no stop that targets one attempt. Stop it in Hermes.'
+  'Score can’t stop a single task run: Hermes has no stop for one run. Stop it in Hermes.'
 
 /** A run id that names a Kanban attempt (`kr_...`): never stoppable, answered before any profile lookup. */
 export function assertNotKanbanAttempt(runId: string): void {
@@ -661,7 +661,7 @@ export function assertNotKanbanAttempt(runId: string): void {
 export function activeRunOfNode(sqlite: DatabaseSync, nodeId: string): StoppableRun {
   const briefId = briefOfNode(sqlite, nodeId)
   if (nodeId.startsWith('brief:') || nodeId.startsWith('plan:'))
-    throw new HttpError(400, 'bad_request', 'Stop a step, not the whole brief')
+    throw new HttpError(400, 'bad_request', 'Stop a single step, not the whole run.')
   // A step whose task has an attempt Score still observes running cannot be stopped from Score (5.17a-1).
   if (kanbanAttemptsEnabled() && (nodeId.startsWith('task:') || nodeId.startsWith('review:'))) {
     const taskId = nodeId.slice(nodeId.indexOf(':') + 1)
@@ -694,11 +694,11 @@ export function activeRunOfNode(sqlite: DatabaseSync, nodeId: string): Stoppable
       throw new HttpError(
         501,
         'unsupported',
-        'Stop is not available for this run: it was not started by Score. Stop it in Hermes.',
+        'Can’t stop this run from Score because Score didn’t start it. Stop it in Hermes.',
       )
     return { agentId: run.profile, runId }
   }
-  throw new HttpError(409, 'conflict', 'Nothing is running in this step')
+  throw new HttpError(409, 'conflict', 'Nothing is running in this step.')
 }
 
 const LOG_PAGE = 100
@@ -845,10 +845,19 @@ export function readBriefLog(
 const encodeLogCursor = (at: string, id: string) =>
   Buffer.from(`${at}|${id}`, 'utf8').toString('base64url')
 function decodeLogCursor(cursor: string): string[] {
-  if (!/^[A-Za-z0-9_-]+$/.test(cursor)) throw new HttpError(400, 'bad_request', 'Invalid cursor')
+  if (!/^[A-Za-z0-9_-]+$/.test(cursor))
+    throw new HttpError(
+      400,
+      'bad_request',
+      'Couldn’t continue the list from there. Reload and try again.',
+    )
   const text = Buffer.from(cursor, 'base64url').toString('utf8')
   const parts = text.split('|')
   if (parts.length < 2 || !z.iso.datetime().safeParse(parts[0]).success)
-    throw new HttpError(400, 'bad_request', 'Invalid cursor')
+    throw new HttpError(
+      400,
+      'bad_request',
+      'Couldn’t continue the list from there. Reload and try again.',
+    )
   return parts
 }

@@ -249,7 +249,8 @@ function inputWithdrawn(
 /** A lead-planned run; a workflow run id answers 404 here (its routes are /api/workflow-runs). */
 function requireLeadOrch(sqlite: DatabaseSync, id: string): OrchRow {
   const o = requireOrch(sqlite, id)
-  if (o.planner !== 'lead') throw new HttpError(404, 'not_found', 'Unknown orchestration')
+  if (o.planner !== 'lead')
+    throw new HttpError(404, 'not_found', 'Couldn’t find that orchestration.')
   return o
 }
 
@@ -647,7 +648,7 @@ export class Orchestrator {
       running < ORCH_CAPACITY.runningOrchestrations ? 'ok' : 'fail',
       running < ORCH_CAPACITY.runningOrchestrations
         ? `${running} of ${ORCH_CAPACITY.runningOrchestrations} orchestrations are running`
-        : `${ORCH_CAPACITY.runningOrchestrations} orchestrations are already running`,
+        : `${ORCH_CAPACITY.runningOrchestrations} orchestrations are already running.`,
     )
     const reserve = reserveFor(12, 20)
     const fits = this.db.read((sqlite) => this.quotaUsed(sqlite) + reserve <= this.quotaBytes)
@@ -734,22 +735,28 @@ export class Orchestrator {
   ): Promise<OrchestrationCreated> {
     const preflight = await this.preflight(body.leadAgentId, body.allowedAgents, agents)
     if (new Set(body.allowedAgents).size !== body.allowedAgents.length)
-      throw new HttpError(400, 'bad_request', 'allowedAgents lists an agent twice')
+      throw new HttpError(400, 'bad_request', 'An agent is listed twice in the allowed agents.')
     if (!preflight.ok) {
       const failed = (id: string) =>
         preflight.checks.some((check) => check.id === id && check.status === 'fail')
       const details = { checks: preflight.checks }
-      if (failed('global_fence')) throw new HttpError(409, 'fenced', 'Admission is fenced', details)
+      if (failed('global_fence'))
+        throw new HttpError(
+          409,
+          'fenced',
+          'New runs can’t start until you review the runs that need checking on Now.',
+          details,
+        )
       if (failed('capacity'))
-        throw new HttpError(429, 'capacity', 'Too many orchestrations are running', details)
+        throw new HttpError(429, 'capacity', 'Too many orchestrations are running.', details)
       if (failed('quota'))
         throw new HttpError(
           409,
           'quota_exhausted',
-          'There is not enough orchestration storage left',
+          'Score has no storage left for orchestrations.',
           details,
         )
-      throw new HttpError(409, 'preflight_failed', 'The preflight failed', details)
+      throw new HttpError(409, 'preflight_failed', 'The check before the run failed.', details)
     }
     const id = `orc-${randomUUID().slice(0, 8)}`
     await this.mutate((ctx) => this.insert(ctx, id, body, preflight))
@@ -759,23 +766,28 @@ export class Orchestrator {
 
   private insert(ctx: Ctx, id: string, body: OrchestrationCreate, preflight: Preflight): void {
     const { sqlite, now } = ctx
-    if (isFenced(sqlite)) throw new HttpError(409, 'fenced', 'Admission is fenced')
+    if (isFenced(sqlite))
+      throw new HttpError(
+        409,
+        'fenced',
+        'New runs can’t start until you review the runs that need checking on Now.',
+      )
     const live = this.capacityUsed(sqlite)
     if (live >= ORCH_CAPACITY.runningOrchestrations)
       throw new HttpError(
         429,
         'capacity',
-        `${ORCH_CAPACITY.runningOrchestrations} orchestrations are already running`,
+        `${ORCH_CAPACITY.runningOrchestrations} orchestrations are already running.`,
       )
     const reserve = reserveFor(body.maxSteps, body.maxLeadTurns)
     if (this.quotaUsed(sqlite) + reserve > this.quotaBytes)
       throw new HttpError(
         409,
         'quota_exhausted',
-        'There is not enough orchestration storage left for this run',
+        'Score has no storage left for this orchestration.',
       )
     if (body.deadlineAt !== undefined && body.deadlineAt <= now)
-      throw new HttpError(400, 'bad_request', 'The deadline must be in the future')
+      throw new HttpError(400, 'bad_request', 'The deadline must be in the future.')
     const title = body.title ?? briefTitle(body.goal)
     const roomId = `room-${id}`
     const messageId = `orc-goal:${id}`
@@ -923,7 +935,7 @@ export class Orchestrator {
 
   private requireWorkflowOrch(sqlite: DatabaseSync, id: string): OrchRow {
     const o = requireOrch(sqlite, id)
-    if (o.planner !== 'workflow') throw new HttpError(404, 'not_found', 'Unknown workflow run')
+    if (o.planner !== 'workflow') throw new HttpError(404, 'not_found', 'Couldn’t find that run.')
     return o
   }
 
@@ -1068,27 +1080,34 @@ export class Orchestrator {
       const failed = (id: string) =>
         preflight.checks.some((check) => check.id === id && check.status === 'fail')
       const details = { checks: preflight.checks }
-      if (failed('global_fence')) throw new HttpError(409, 'fenced', 'Admission is fenced', details)
+      if (failed('global_fence'))
+        throw new HttpError(
+          409,
+          'fenced',
+          'New runs can’t start until you review the runs that need checking on Now.',
+          details,
+        )
       if (failed('capacity'))
-        throw new HttpError(429, 'capacity', 'Too many runs are using capacity', details)
+        throw new HttpError(429, 'capacity', 'Too many runs are using capacity.', details)
       if (failed('quota'))
-        throw new HttpError(409, 'quota_exhausted', 'There is not enough run storage left', details)
-      throw new HttpError(409, 'preflight_failed', 'The preflight failed', details)
+        throw new HttpError(409, 'quota_exhausted', 'Score has no storage left for runs.', details)
+      throw new HttpError(409, 'preflight_failed', 'The check before the run failed.', details)
     }
     const id = `orc-${randomUUID().slice(0, 8)}`
     await this.mutate((ctx) => {
       const { sqlite, now } = ctx
-      if (isFenced(sqlite)) throw new HttpError(409, 'fenced', 'Admission is fenced')
-      if (this.capacityUsed(sqlite) >= ORCH_CAPACITY.runningOrchestrations)
-        throw new HttpError(429, 'capacity', 'Too many runs are using capacity')
-      if (this.quotaUsed(sqlite) + workflowReserve(stepBudgetOf(found)) > this.quotaBytes)
+      if (isFenced(sqlite))
         throw new HttpError(
           409,
-          'quota_exhausted',
-          'There is not enough run storage left for this run',
+          'fenced',
+          'New runs can’t start until you review the runs that need checking on Now.',
         )
+      if (this.capacityUsed(sqlite) >= ORCH_CAPACITY.runningOrchestrations)
+        throw new HttpError(429, 'capacity', 'Too many runs are using capacity.')
+      if (this.quotaUsed(sqlite) + workflowReserve(stepBudgetOf(found)) > this.quotaBytes)
+        throw new HttpError(409, 'quota_exhausted', 'Score has no storage left for this run.')
       if (body.deadlineAt !== undefined && body.deadlineAt <= now)
-        throw new HttpError(400, 'bad_request', 'The deadline must be in the future')
+        throw new HttpError(400, 'bad_request', 'The deadline must be in the future.')
       // The person must have seen the incarnations the run will be bound to.
       const shown = new Map(body.agentMap.map((entry) => [entry.agentId, entry.incarnation]))
       for (const entry of preflight.mapping) {
@@ -1097,7 +1116,7 @@ export class Orchestrator {
           throw new HttpError(
             409,
             'conflict',
-            `${entry.agentId} changed; look at the start screen again`,
+            `${entry.agentId} changed. Look at the start screen again.`,
           )
       }
       insertWorkflowRun(ctx, id, body, found, preflight)

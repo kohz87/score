@@ -44,7 +44,7 @@ export async function readRawSettings(
   KEYS.forEach((key, index) => {
     const read = reads[index]!
     if (read.state === 'unavailable')
-      throw new HttpError(502, 'hermes_unavailable', 'Hermes could not be read')
+      throw new HttpError(502, 'hermes_unavailable', 'Couldn’t read this agent from Hermes.')
     raw[key] = read.state === 'ok' ? read.value : undefined
   })
   return raw as unknown as RawSettings
@@ -157,7 +157,7 @@ export function planWrites(raw: RawSettings, update: ModelSettingsUpdate): Op[] 
       update.fallbacks.every((ref, index) => sameRef(ref, prior.fallbacks[index]!))
     if (!same) {
       if (!prior.fallbacksEditable)
-        throw conflict('This fallback chain has custom endpoints; change it in Hermes directly')
+        throw conflict('This fallback chain has custom endpoints. Change it in Hermes directly.')
       ops.push({ kind: 'set', key: 'fallback_providers', value: JSON.stringify(update.fallbacks) })
       // The legacy key would otherwise keep running after the person cleared or replaced the chain.
       if (raw.fallback_model !== undefined && raw.fallback_model !== null)
@@ -176,7 +176,7 @@ export function planWrites(raw: RawSettings, update: ModelSettingsUpdate): Op[] 
       ops.push({ kind: 'unset', key: 'stt.provider' })
     if (model !== undefined && model !== leaf(stt, next, sttModelKey(next ?? ''))) {
       if (!next || !STT_PROVIDERS.find((item) => item.id === next)?.model)
-        throw conflict('Choose a speech-to-text provider with a model setting first')
+        throw conflict('Choose a speech-to-text provider with a model setting first.')
       ops.push({ kind: 'set', key: `stt.${next}.${sttModelKey(next)}`, value: model })
     }
   }
@@ -187,11 +187,13 @@ export function planWrites(raw: RawSettings, update: ModelSettingsUpdate): Op[] 
     if (provider && provider !== prior.speech.tts.provider)
       ops.push({ kind: 'set', key: 'tts.provider', value: provider })
     if (model !== undefined && model !== leaf(tts, next, ttsModelKey(next ?? ''))) {
-      if (!next || !info?.model) throw conflict('That text-to-speech provider has no model setting')
+      if (!next || !info?.model)
+        throw conflict('That text-to-speech provider has no model setting.')
       ops.push({ kind: 'set', key: `tts.${next}.${ttsModelKey(next)}`, value: model })
     }
     if (voice !== undefined && voice !== leaf(tts, next, ttsVoiceKey(next ?? ''))) {
-      if (!next || !info?.voice) throw conflict('That text-to-speech provider has no voice setting')
+      if (!next || !info?.voice)
+        throw conflict('That text-to-speech provider has no voice setting.')
       ops.push({ kind: 'set', key: `tts.${next}.${ttsVoiceKey(next)}`, value: voice })
     }
   }

@@ -150,5 +150,9 @@ export async function updateApprovalConfig(
     const after = await io.read()
     if (verifies(current, next, after)) return after
   }
-  throw new HttpError(409, 'conflict', 'Hermes approval settings kept changing while saving')
+  throw new HttpError(
+    409,
+    'conflict',
+    'Hermes kept changing the approval settings while Score was saving. Try again.',
+  )
 }

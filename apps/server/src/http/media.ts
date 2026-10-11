@@ -38,12 +38,16 @@ export function registerMediaRoutes(app: FastifyInstance, store: MediaStore): vo
         // Before the body is read, so an unpaired caller can't make the server buffer megabytes.
         onRequest: async (request) => {
           if (!app.pairing.isPaired(request.headers.cookie))
-            throw new HttpError(401, 'not_paired', 'Pair this browser to make human decisions')
+            throw new HttpError(
+              401,
+              'not_paired',
+              'Pair this browser first. Open the pairing link shown in the server terminal.',
+            )
         },
       },
       async (request, reply) => {
         if (!Buffer.isBuffer(request.body))
-          throw new HttpError(400, 'bad_request', 'Malformed upload')
+          throw new HttpError(400, 'bad_request', 'Couldn’t read that upload. Try again.')
         const file = parseSingleFile(request.body, request.headers['content-type'])
         const stored = store.store(file.bytes, file.contentType, file.filename)
         return reply.code(201).send({
@@ -58,7 +62,7 @@ export function registerMediaRoutes(app: FastifyInstance, store: MediaStore): vo
       const { mediaId } = ParamsSchema.parse(request.params)
       const query = QuerySchema.parse(request.query)
       const media = store.read(mediaId)
-      if (!media) throw new HttpError(404, 'not_found', 'Media not found')
+      if (!media) throw new HttpError(404, 'not_found', 'Couldn’t find that attachment.')
       void reply
         .header('X-Content-Type-Options', 'nosniff')
         .header('Cache-Control', 'private, max-age=3600')

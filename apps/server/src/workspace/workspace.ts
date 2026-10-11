@@ -101,10 +101,10 @@ export class Workspace {
 
   private assertReachable(real: string): void {
     if (!isInside(this.root, real))
-      throw new WorkspaceError(403, 'outside_workspace', 'That path is outside the workspace')
+      throw new WorkspaceError(403, 'outside_workspace', 'That path is outside the workspace.')
     for (const blocked of this.forbidden)
       if (isInside(blocked, real))
-        throw new WorkspaceError(403, 'blocked', 'That path is not available')
+        throw new WorkspaceError(403, 'blocked', 'That path isn’t available.')
   }
 
   private segmentsOf(real: string): string[] {
@@ -126,7 +126,7 @@ export class Workspace {
         // fd then names a different directory than the one that was checked.
         const actual = await fs.realpath(base)
         if (actual !== real)
-          throw new WorkspaceError(409, 'changed', 'The folder changed while it was being read')
+          throw new WorkspaceError(409, 'changed', 'The folder changed while it was being read.')
       }
       return {
         base,
@@ -150,7 +150,7 @@ export class Workspace {
       throw mapFsError(error)
     }
     if (real !== lexical)
-      throw new WorkspaceError(403, 'symlink', 'Symbolic links are not changed from here')
+      throw new WorkspaceError(403, 'symlink', 'Score doesn’t change symbolic links.')
     this.assertReachable(real)
     return this.acquireDir(real)
   }
@@ -208,7 +208,7 @@ export class Workspace {
 
   async read(input: string, options: { download?: boolean } = {}): Promise<ReadResult> {
     const segments = parseRelativePath(input)
-    if (segments.length === 0) throw new WorkspaceError(400, 'bad_path', 'That path is a folder')
+    if (segments.length === 0) throw new WorkspaceError(400, 'bad_path', 'That path is a folder.')
     const real = await this.resolveForRead(segments, 'read')
     const name = path.basename(real)
     const dir = await this.acquireDir(path.dirname(real))
@@ -219,8 +219,8 @@ export class Workspace {
       })
       // The resolved path has no symlink in it; one appearing now is a race.
       if (lst.isSymbolicLink())
-        throw new WorkspaceError(409, 'changed', 'The file changed while it was being read')
-      if (!lst.isFile()) throw new WorkspaceError(400, 'not_a_file', 'That path is not a file')
+        throw new WorkspaceError(409, 'changed', 'The file changed while it was being read.')
+      if (!lst.isFile()) throw new WorkspaceError(400, 'not_a_file', 'That path isn’t a file.')
       const ext = path.extname(name).toLowerCase()
       const raw = RAW_TYPES[ext]
       const limit = options.download ? MAX_UPLOAD_BYTES : raw ? MAX_RAW_BYTES : MAX_TEXT_BYTES
@@ -229,7 +229,7 @@ export class Workspace {
           throw new WorkspaceError(
             413,
             'payload_too_large',
-            'The file is too large to download here',
+            'The file is too large to download here.',
           )
         return { kind: 'binary', size: lst.size, reason: 'too_large' }
       }
@@ -259,21 +259,21 @@ export class Workspace {
   ): Promise<{ etag: string; size: number }> {
     const bytes = Buffer.from(content, 'utf8')
     if (bytes.length > MAX_TEXT_BYTES)
-      throw new WorkspaceError(413, 'payload_too_large', 'The file is too large to edit here')
+      throw new WorkspaceError(413, 'payload_too_large', 'The file is too large to edit here.')
     if (bytes.includes(0))
-      throw new WorkspaceError(400, 'bad_content', 'Text files cannot contain NUL characters')
+      throw new WorkspaceError(400, 'bad_content', 'Text files can’t contain null characters.')
     return this.commit(this.targetSegments(input), bytes, etag, 'write')
   }
 
   async upload(input: string, bytes: Buffer): Promise<{ etag: string; size: number }> {
     if (bytes.length > MAX_UPLOAD_BYTES)
-      throw new WorkspaceError(413, 'payload_too_large', 'The upload is too large')
+      throw new WorkspaceError(413, 'payload_too_large', 'The upload is too large.')
     return this.commit(this.targetSegments(input), bytes, null, 'upload')
   }
 
   private targetSegments(input: string): string[] {
     const segments = parseRelativePath(input)
-    if (segments.length === 0) throw new WorkspaceError(400, 'bad_path', 'A path is required')
+    if (segments.length === 0) throw new WorkspaceError(400, 'bad_path', 'A path is required.')
     validateEntryName(segments[segments.length - 1]!)
     assertAllowedSegments(segments, 'mutate')
     return segments
@@ -297,21 +297,25 @@ export class Workspace {
           throw mapFsError(error)
         })
         if (existing?.isSymbolicLink())
-          throw new WorkspaceError(403, 'symlink', 'Symbolic links are not changed from here')
+          throw new WorkspaceError(403, 'symlink', 'Score doesn’t change symbolic links.')
         if (existing && !existing.isFile())
-          throw new WorkspaceError(400, 'not_a_file', 'That path is not a file')
+          throw new WorkspaceError(400, 'not_a_file', 'That path isn’t a file.')
         if (existing) {
           if (etag === null)
-            throw new WorkspaceError(409, 'exists', 'A file with that name already exists')
+            throw new WorkspaceError(409, 'exists', 'A file with that name already exists.')
           if (existing.size > MAX_TEXT_BYTES)
-            throw new WorkspaceError(413, 'payload_too_large', 'The file is too large to edit here')
+            throw new WorkspaceError(
+              413,
+              'payload_too_large',
+              'The file is too large to edit here.',
+            )
           const current = etagOf(await readBytes(target, MAX_TEXT_BYTES))
           if (current !== etag)
-            throw new WorkspaceError(412, 'precondition_failed', 'The file changed on disk', {
+            throw new WorkspaceError(412, 'precondition_failed', 'The file changed on disk.', {
               etag: current,
             })
         } else if (etag !== null) {
-          throw new WorkspaceError(412, 'precondition_failed', 'The file was removed from disk', {
+          throw new WorkspaceError(412, 'precondition_failed', 'The file was removed from disk.', {
             etag: null,
           })
         }
@@ -342,7 +346,7 @@ export class Workspace {
             now.mtimeMs === existing.mtimeMs &&
             etagOf(await readBytes(target, MAX_TEXT_BYTES)) === etag
           if (!unchanged)
-            throw new WorkspaceError(412, 'precondition_failed', 'The file changed on disk', {
+            throw new WorkspaceError(412, 'precondition_failed', 'The file changed on disk.', {
               etag: now?.isFile() ? etagOf(await readBytes(target, MAX_TEXT_BYTES)) : null,
             })
           await fs.rename(temp, target)
@@ -390,7 +394,7 @@ export class Workspace {
     const from = this.targetSegments(fromInput)
     const to = this.targetSegments(toInput)
     if (to.length > from.length && from.every((segment, index) => to[index] === segment))
-      throw new WorkspaceError(400, 'bad_path', 'A folder cannot be moved into itself')
+      throw new WorkspaceError(400, 'bad_path', 'A folder can’t be moved into itself.')
     const keys = [from, to].map((segments) => `ws:${path.join(this.root, ...segments)}`).sort()
     return withKeyedLock(keys[0]!, () =>
       keys[1] === keys[0]
@@ -410,16 +414,16 @@ export class Workspace {
         throw mapFsError(error)
       })
       if (st.isSymbolicLink())
-        throw new WorkspaceError(403, 'symlink', 'Symbolic links are not changed from here')
+        throw new WorkspaceError(403, 'symlink', 'Score doesn’t change symbolic links.')
       if (!st.isFile() && !st.isDirectory())
-        throw new WorkspaceError(400, 'not_a_file', 'That entry cannot be moved')
+        throw new WorkspaceError(400, 'not_a_file', 'That entry can’t be moved.')
       if (
         await fs.lstat(target).then(
           () => true,
           () => false,
         )
       )
-        throw new WorkspaceError(409, 'exists', 'Something with that name already exists')
+        throw new WorkspaceError(409, 'exists', 'Something with that name already exists.')
       if (st.isDirectory()) await fs.rename(source, target)
       else {
         // link never replaces an existing target, unlike rename. Removing the source by pathname could delete a file
@@ -470,7 +474,7 @@ export class Workspace {
           throw mapFsError(error)
         })
         if (st.isSymbolicLink())
-          throw new WorkspaceError(403, 'symlink', 'Symbolic links are not changed from here')
+          throw new WorkspaceError(403, 'symlink', 'Score doesn’t change symbolic links.')
         if (st.isDirectory()) {
           if (recursive) {
             // The tree hides protected files (keys, .env) and the browser can't open .git, so a folder holding either
@@ -479,7 +483,7 @@ export class Workspace {
             await removeTree(target, { count: 0 }, 0)
           } else await fs.rmdir(target)
         } else if (st.isFile()) await fs.unlink(target)
-        else throw new WorkspaceError(400, 'not_a_file', 'That entry cannot be deleted')
+        else throw new WorkspaceError(400, 'not_a_file', 'That entry can’t be deleted.')
         await dir.sync()
         this.onWrite({ op: 'delete', path: segments.join('/') })
       } catch (error) {
@@ -510,8 +514,9 @@ async function readBytes(file: string, limit: number): Promise<Buffer> {
   }
   try {
     const st: Stats = await fh.stat()
-    if (!st.isFile()) throw new WorkspaceError(400, 'not_a_file', 'That path is not a file')
-    if (st.size > limit) throw new WorkspaceError(413, 'payload_too_large', 'The file is too large')
+    if (!st.isFile()) throw new WorkspaceError(400, 'not_a_file', 'That path isn’t a file.')
+    if (st.size > limit)
+      throw new WorkspaceError(413, 'payload_too_large', 'The file is too large.')
     const buffer = Buffer.alloc(st.size)
     let offset = 0
     while (offset < buffer.length) {
@@ -541,18 +546,18 @@ async function assertNothingProtected(
   budget: { count: number },
   depth: number,
 ): Promise<void> {
-  if (depth > 64) throw new WorkspaceError(400, 'too_deep', 'The folder is nested too deeply')
+  if (depth > 64) throw new WorkspaceError(400, 'too_deep', 'The folder is nested too deeply.')
   const fh = await fs.open(dirPath, C.O_RDONLY | C.O_DIRECTORY | C.O_NOFOLLOW)
   try {
     const base = LINUX ? `/proc/self/fd/${fh.fd}` : dirPath
     for (const child of await fs.readdir(base)) {
       if (++budget.count > MAX_DELETE_ENTRIES)
-        throw new WorkspaceError(400, 'too_large', 'The folder has too many entries')
+        throw new WorkspaceError(400, 'too_large', 'The folder has too many entries.')
       if (isProtectedName(child))
         throw new WorkspaceError(
           409,
           'protected_inside',
-          'The folder holds protected files (keys, .env or a git repository); delete it on the machine itself',
+          'The folder holds protected files (keys, .env or a git repository); delete it on the machine itself.',
         )
       const st = await fs.lstat(`${base}/${child}`)
       if (st.isDirectory()) await assertNothingProtected(`${base}/${child}`, budget, depth + 1)
@@ -567,16 +572,16 @@ async function removeTree(
   budget: { count: number },
   depth: number,
 ): Promise<void> {
-  if (depth > 64) throw new WorkspaceError(400, 'too_deep', 'The folder is nested too deeply')
+  if (depth > 64) throw new WorkspaceError(400, 'too_deep', 'The folder is nested too deeply.')
   const fh = await fs.open(dirPath, C.O_RDONLY | C.O_DIRECTORY | C.O_NOFOLLOW)
   try {
     const base = LINUX ? `/proc/self/fd/${fh.fd}` : dirPath
     for (const child of await fs.readdir(base)) {
       if (++budget.count > MAX_DELETE_ENTRIES)
-        throw new WorkspaceError(400, 'too_large', 'The folder has too many entries')
+        throw new WorkspaceError(400, 'too_large', 'The folder has too many entries.')
       // Checked again here: something protected may have appeared since the scan.
       if (isProtectedName(child))
-        throw new WorkspaceError(409, 'protected_inside', 'The folder holds protected files')
+        throw new WorkspaceError(409, 'protected_inside', 'The folder holds protected files.')
       const childPath = `${base}/${child}`
       const st = await fs.lstat(childPath)
       if (st.isDirectory()) await removeTree(childPath, budget, depth + 1)
@@ -594,20 +599,20 @@ function mapFsError(error: unknown): unknown {
   switch (code) {
     case 'ENOENT':
     case 'ENOTDIR':
-      return new WorkspaceError(404, 'not_found', 'Not found')
+      return new WorkspaceError(404, 'not_found', 'Not found.')
     case 'ELOOP':
-      return new WorkspaceError(403, 'symlink', 'Symbolic links are not followed here')
+      return new WorkspaceError(403, 'symlink', 'Score doesn’t follow symbolic links.')
     case 'EEXIST':
-      return new WorkspaceError(409, 'exists', 'Something with that name already exists')
+      return new WorkspaceError(409, 'exists', 'Something with that name already exists.')
     case 'ENOTEMPTY':
-      return new WorkspaceError(409, 'not_empty', 'The folder is not empty')
+      return new WorkspaceError(409, 'not_empty', 'The folder isn’t empty.')
     case 'EACCES':
     case 'EPERM':
-      return new WorkspaceError(403, 'forbidden', 'The operating system denied access')
+      return new WorkspaceError(403, 'forbidden', 'The operating system denied access.')
     case 'ENOSPC':
-      return new WorkspaceError(507, 'no_space', 'The disk is full')
+      return new WorkspaceError(507, 'no_space', 'The disk is full.')
     case 'EXDEV':
-      return new WorkspaceError(409, 'conflict', 'That move crosses file systems')
+      return new WorkspaceError(409, 'conflict', 'That move crosses file systems.')
     default:
       return error
   }
