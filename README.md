@@ -261,10 +261,11 @@ channels, permissions and history.
 
 ![The Add agent dialog set to Coding agent, with the coding CLI, a workspace folder and a permission level](docs/screenshots/coding-agent.png)
 
-Claude Code and Codex CLI can join the team next to your Hermes agents. Pick the CLI, a workspace folder and a
-permission level (read only, workspace write or full access); the agent then works in rooms like any other member.
-They use your own CLI login and plan quota, and the permission level limits what they can change, not what they can
-read.
+Claude Code, Codex CLI and Antigravity (`agy`) can join the team next to your Hermes agents. Pick the CLI, a
+workspace folder and a permission level (read only, workspace write or full access); the agent then works in rooms like
+any other member. They use your own CLI login and plan quota (Codex and Antigravity show the limits left). For Claude
+Code and Codex the permission level limits what they can change, not what they can read; Antigravity's sandbox also keeps
+reads inside the workspace below full access.
 
 ### Knowledge: your notes
 

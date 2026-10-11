@@ -215,7 +215,7 @@ Click an agent to open its page. It has an appearance picker (color and shape) a
 
 ### Coding agents
 
-**Add agent** also offers **Coding agent**: Claude Code or Codex CLI joins the team next to your Hermes agents, using
+**Add agent** also offers **Coding agent**: Claude Code, Codex CLI or Antigravity (`agy`) joins the team next to your Hermes agents, using
 your own CLI login and plan quota. Choose the CLI (the form shows whether it is installed and whether its version is
 one Score has tested; an untested version needs your confirmation before it runs), a name, a workspace folder (default
 `~/score-workspaces/<name>`) and a permission level:
@@ -224,6 +224,11 @@ one Score has tested; an untested version needs your confirmation before it runs
 - **Workspace write**: edits files in its workspace (the default);
 - **Full access**: no sandbox, anything it is told runs as your user. Choosing it needs the security password, and
   so does raising an agent to it later (lowering never does).
+
+Antigravity notes: below full access its sandbox keeps reads and writes inside the workspace, and it can't run shell
+commands at all at read only or workspace write (no tests or builds); when it refuses an action the reply says
+"Antigravity refused: …". Its 5-hour and weekly limits per model group show on the agent card. `agy` updates itself, so
+after an update Score asks you to confirm the new version before the next turn.
 
 The level limits what the agent can **change**, not what it can **read**. For Codex the form says so and you must tick
 "I understand this Codex agent can read every file my user can, including secrets outside its workspace" before it
