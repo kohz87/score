@@ -1,6 +1,7 @@
 import type { AgentSummary, Shape } from '@score/contract'
-import { useId } from 'react'
+import { useId, useRef } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { useChartDraw } from './chart-motion.ts'
 import './tasks-by-day-chart.css'
 
 export type TasksByDayChartProps = {
@@ -101,6 +102,8 @@ type Series = {
 
 export function TasksByDayChart({ byDay, agents }: TasksByDayChartProps) {
   const uid = useId().replace(/:/g, '')
+  const svgRef = useRef<SVGSVGElement>(null)
+  useChartDraw(svgRef, 'tasks-by-day')
   const series: Series[] = agents.map((agent) => ({
     id: agent.id,
     name: agent.name,
@@ -158,6 +161,7 @@ export function TasksByDayChart({ byDay, agents }: TasksByDayChartProps) {
         tabIndex={0}
       >
         <svg
+          ref={svgRef}
           className="tasks-by-day__svg"
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           role="img"
@@ -194,39 +198,48 @@ export function TasksByDayChart({ byDay, agents }: TasksByDayChartProps) {
             let y = baseline
             return (
               <g key={`${day.date}-${index}`} data-day={day.date}>
-                {series.map((s) => {
-                  const n = count(day, s.id)
-                  if (n === 0) return null
-                  const height = Math.max(2, n * unit - SEGMENT_GAP)
-                  y -= n * unit
-                  const top = y + SEGMENT_GAP
-                  const rx = Math.min(8, barWidth / 2, height / 2)
-                  return (
-                    <g key={s.id} data-agent={s.id} data-count={n}>
-                      <rect
-                        data-part="fill"
-                        x={x}
-                        y={top}
-                        width={barWidth}
-                        height={height}
-                        rx={rx}
-                        fill={s.color}
-                      />
-                      <rect
-                        data-part="pattern"
-                        data-pattern={s.pattern}
-                        x={x}
-                        y={top}
-                        width={barWidth}
-                        height={height}
-                        rx={rx}
-                        fill={`url(#${patternId(s.pattern)})`}
-                      />
-                    </g>
-                  )
-                })}
+                <g
+                  data-grow
+                  style={{
+                    transformBox: 'view-box',
+                    transformOrigin: `${x + barWidth / 2}px ${baseline}px`,
+                  }}
+                >
+                  {series.map((s) => {
+                    const n = count(day, s.id)
+                    if (n === 0) return null
+                    const height = Math.max(2, n * unit - SEGMENT_GAP)
+                    y -= n * unit
+                    const top = y + SEGMENT_GAP
+                    const rx = Math.min(8, barWidth / 2, height / 2)
+                    return (
+                      <g key={s.id} data-agent={s.id} data-count={n}>
+                        <rect
+                          data-part="fill"
+                          x={x}
+                          y={top}
+                          width={barWidth}
+                          height={height}
+                          rx={rx}
+                          fill={s.color}
+                        />
+                        <rect
+                          data-part="pattern"
+                          data-pattern={s.pattern}
+                          x={x}
+                          y={top}
+                          width={barWidth}
+                          height={height}
+                          rx={rx}
+                          fill={`url(#${patternId(s.pattern)})`}
+                        />
+                      </g>
+                    )
+                  })}
+                </g>
                 {byDay.length <= MAX_TOTAL_LABELS && (
                   <text
+                    data-fade
                     className="tasks-by-day__total"
                     x={x + barWidth / 2}
                     y={baseline - totals[index]! * unit - 8}

@@ -46,6 +46,8 @@ async function open(page: Page, destination: (typeof destinations)[number], widt
   await expect(page.locator(destination.ready).first()).toBeVisible()
   await expect(page.getByText(/^Loading/)).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
+  // Script-driven motion (count-ups, an entrance that waits for its library) marks the page until it has landed.
+  await expect(page.locator('html[data-motion]')).toHaveCount(0)
 }
 
 async function noPageOverflow(page: Page) {

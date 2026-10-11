@@ -879,3 +879,28 @@ button.orch-primary,
 .orch-node--shaped.orch-node--lit.orch-tone--refused .orch-node__shape :is(polygon, rect) {
   stroke: var(--agent-coral);
 }
+
+/* PLAN 5.37: transient pieces made by LiveDiagram's node transitions (anime.js); they remove themselves. */
+.orch-node__ring {
+  /* A quiet ripple, not an outline: thin, soft colour, fades out as it grows. */
+  position: absolute;
+  inset: -2px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+}
+.orch-node__check {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  margin-top: -11px;
+  pointer-events: none;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

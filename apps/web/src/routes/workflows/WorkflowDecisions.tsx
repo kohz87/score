@@ -1,3 +1,4 @@
+import { Arrival } from '../../motion/Arrival.tsx'
 import type { AgentSummary, WorkflowNeedsYou, WorkflowRunDetail } from '@score/contract'
 import { useMemo, useState } from 'react'
 import { pauseReasonText } from '../orchestrations/orch-model.ts'
@@ -47,7 +48,11 @@ export function NodeGateCard({
       },
     })
   return (
-    <section className="orch-decision orch-decision--gate" aria-label={`Decide on ${label}`}>
+    <Arrival
+      arrivalId={`gate-${gateId}`}
+      className="orch-decision orch-decision--gate"
+      aria-label={`Decide on ${label}`}
+    >
       <h3>
         {label}
         <small> The run is waiting for you</small>
@@ -97,7 +102,7 @@ export function NodeGateCard({
         </span>
       </div>
       <ErrorLine error={actions.gate.error} />
-    </section>
+    </Arrival>
   )
 }
 
@@ -117,7 +122,11 @@ export function RetryCard({
   const view = run.nodeStates.find((item) => item.nodeId === nodeId)
   const label = labelOf(run, nodeId)
   return (
-    <section className="orch-decision" aria-label={`Retry ${label}`}>
+    <Arrival
+      arrivalId={`retry-${nodeId}-${attemptsLeft}`}
+      className="orch-decision"
+      aria-label={`Retry ${label}`}
+    >
       <h3>{label} was abandoned</h3>
       <p>
         You abandoned its attempt, so the step has no result and nothing after it can start. Retry
@@ -166,7 +175,7 @@ export function RetryCard({
         </button>
       </div>
       <ErrorLine error={actions.retry.error ?? actions.stop.error} />
-    </section>
+    </Arrival>
   )
 }
 
@@ -185,7 +194,11 @@ export function RefusalCard({
   const view = run.nodeStates.find((item) => item.nodeId === nodeId)
   const label = labelOf(run, nodeId)
   return (
-    <section className="orch-decision" aria-label={`Hermes refused ${label}`}>
+    <Arrival
+      arrivalId={`refused-${nodeId}-${refusals}`}
+      className="orch-decision"
+      aria-label={`Hermes refused ${label}`}
+    >
       <h3>Hermes has refused this step {refusals} times</h3>
       <p>
         {label} has not started: Hermes turned the request away each time, so nothing ran. Score
@@ -219,7 +232,7 @@ export function RefusalCard({
         </button>
       </div>
       <ErrorLine error={actions.tryAgain.error ?? actions.stop.error} />
-    </section>
+    </Arrival>
   )
 }
 
@@ -238,7 +251,11 @@ export function WorkflowRemapCard({
   const gone = item.currentIncarnation === 'untracked'
   const everyStep = run.gatePolicy === 'every-step'
   return (
-    <section className="orch-decision" aria-label={`Replaced ${item.agentId}`}>
+    <Arrival
+      arrivalId={`remap-${item.agentId}`}
+      className="orch-decision"
+      aria-label={`Replaced ${item.agentId}`}
+    >
       <h3>
         <AgentChip agentId={item.agentId} agents={agents} /> was replaced
       </h3>
@@ -311,7 +328,7 @@ export function WorkflowRemapCard({
         </button>
       </div>
       <ErrorLine error={actions.remap.error ?? actions.stop.error} />
-    </section>
+    </Arrival>
   )
 }
 
@@ -429,16 +446,26 @@ export function WorkflowNeeds({
             )
           case 'paused':
             return (
-              <section key={`p${item.reason}`} className="orch-decision" aria-label="Paused">
+              <Arrival
+                arrivalId={`paused-${item.reason}`}
+                key={`p${item.reason}`}
+                className="orch-decision"
+                aria-label="Paused"
+              >
                 <h3>{pauseReasonText(item.reason)}</h3>
-              </section>
+              </Arrival>
             )
           case 'fence':
             return (
-              <section key="fence" className="orch-decision" aria-label="Blocked">
+              <Arrival
+                arrivalId={'fence'}
+                key="fence"
+                className="orch-decision"
+                aria-label="Blocked"
+              >
                 <h3>Starting work is blocked until you review a reconciliation list</h3>
                 <p>Open the reconciliation list on Now to review it.</p>
-              </section>
+              </Arrival>
             )
         }
       })}

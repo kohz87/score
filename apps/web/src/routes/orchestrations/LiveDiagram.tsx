@@ -1,6 +1,7 @@
 import type { AgentSummary } from '@score/contract'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { MOTION, loadAnime, playMotion, usePrefersReducedMotion } from '../../motion/motion.ts'
 import { layoutFlow, type Point } from '../now/flow/layout.ts'
 import {
   EffectQueue,
@@ -36,21 +37,7 @@ export const EFFECT_GAP_MS = 300
 const DOT_MS = 800
 const PULSE_MS = 900
 
-export function usePrefersReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(() =>
-    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      : false,
-  )
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const update = () => setReduced(query.matches)
-    query.addEventListener('change', update)
-    return () => query.removeEventListener('change', update)
-  }, [])
-  return reduced
-}
+export { usePrefersReducedMotion }
 
 export type ActiveEffect = { key: number; effect: Effect; durationMs: number }
 
@@ -166,41 +153,65 @@ export function NodeShape({
   )
 }
 
-function polylineLength(points: Point[]): number {
-  let total = 0
-  for (let i = 1; i < points.length; i++)
-    total += Math.hypot(points[i]!.x - points[i - 1]!.x, points[i]!.y - points[i - 1]!.y)
-  return total
+interface DotRoute {
+  points: Point[]
+  /** The drawn edge this dot rides on, when there is one; `reverse` when the hand-off goes against its direction. */
+  edge: string | null
+  reverse: boolean
 }
 
+/**
+ * A dot rides the real SVG edge path (anime.js motion path), so it follows the routed corners exactly. Without a drawn
+ * edge (a straight fallback) it rides a hidden path of the same points. Not rendered at all with reduced motion.
+ */
 function Dot({
-  points,
+  route: given,
   durationMs,
   tone,
 }: {
-  points: Point[]
+  route: DotRoute
   durationMs: number
   tone: EffectTone
 }) {
   const ref = useRef<SVGCircleElement>(null)
+  // Fixed at mount: a re-render of the diagram must not restart a dot that is already travelling.
+  const [route] = useState(given)
   useLayoutEffect(() => {
-    const element = ref.current
-    if (!element || typeof element.animate !== 'function') return
-    const total = polylineLength(points) || 1
-    let walked = 0
-    const frames = points.map((point, index) => {
-      if (index > 0)
-        walked += Math.hypot(point.x - points[index - 1]!.x, point.y - points[index - 1]!.y)
-      return { transform: `translate(${point.x}px, ${point.y}px)`, offset: walked / total }
+    const circle = ref.current
+    const svgRoot = circle?.ownerSVGElement
+    if (!circle || !svgRoot) return
+    let temp: SVGPathElement | null = null
+    const stop = playMotion(({ animate, svg }) => {
+      let path: SVGPathElement | null = route.edge
+        ? svgRoot.querySelector<SVGPathElement>(`path[data-edge="${CSS.escape(route.edge)}"]`)
+        : null
+      if (!path) {
+        const ordered = route.reverse ? [...route.points].reverse() : route.points
+        temp = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+        temp.setAttribute('d', ordered.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' '))
+        temp.setAttribute('fill', 'none')
+        svgRoot.appendChild(temp)
+        path = temp
+      }
+      if (typeof path.getTotalLength !== 'function') return
+      const reversed = path === temp ? false : route.reverse
+      circle.style.opacity = '1'
+      const animation = animate(circle, {
+        ...svg.createMotionPath(path),
+        rotate: 0,
+        duration: durationMs,
+        ease: 'inOutQuad',
+        reversed,
+      })
+      return () => {
+        animation.cancel()
+      }
     })
-    const animation = element.animate(frames, {
-      duration: durationMs,
-      easing: 'ease-in-out',
-      fill: 'forwards',
-    })
-    return () => animation.cancel()
-  }, [points, durationMs])
-  const start = points[0]!
+    return () => {
+      stop()
+      temp?.remove()
+    }
+  }, [route, durationMs])
   return (
     <circle
       ref={ref}
@@ -208,9 +219,114 @@ function Dot({
       r="6"
       cx="0"
       cy="0"
-      style={{ transform: `translate(${start.x}px, ${start.y}px)` }}
+      style={{ opacity: 0 }}
     />
   )
+}
+
+const CHECK_PATH = 'M4 11 L9 16 L18 5'
+
+/**
+ * Node state changes (queued → running → done / failed): a short settle of the node, a ring that flows out of it and,
+ * for done, a check that draws itself. Several nodes changing at once start in a short stagger. The first render, and
+ * nodes that merely appear, do not animate; neither does a quiet diagram (reduced motion, fast replay).
+ */
+function useNodeTransitions(
+  root: React.RefObject<HTMLDivElement | null>,
+  visuals: ReadonlyMap<string, NodeVisual>,
+  quiet: boolean,
+) {
+  const previous = useRef<Map<string, NodeVisual> | null>(null)
+  const running = useRef(new Set<() => void>())
+  useEffect(() => {
+    const before = previous.current
+    previous.current = new Map(visuals)
+    if (!before || quiet || !root.current) return
+    const changed: Array<{ id: string; to: NodeVisual }> = []
+    for (const [id, to] of visuals) {
+      const was = before.get(id)
+      if (was !== undefined && was !== to) changed.push({ id, to })
+    }
+    if (changed.length === 0) return
+    const container = root.current
+    const stop = playMotion(({ animate, svg }) => {
+      const cleanups: Array<() => void> = []
+      const nodes = changed.flatMap(({ id, to }) => {
+        const node = container.querySelector<HTMLElement>(`[data-node="${CSS.escape(id)}"]`)
+        return node ? [{ node, to }] : []
+      })
+      nodes.forEach(({ node, to }, index) => {
+        const start = index * MOTION.stagger
+        const ring = document.createElement('span')
+        ring.className = 'orch-node__ring'
+        ring.setAttribute('aria-hidden', 'true')
+        node.appendChild(ring)
+        const settle = animate(node, {
+          scale: [
+            { to: 1.045, duration: 160 },
+            { to: 1, duration: 300 },
+          ],
+          delay: start,
+          ease: MOTION.ease,
+          onComplete: () => node.style.removeProperty('transform'),
+        })
+        const flow = animate(ring, {
+          opacity: [0.45, 0],
+          scale: [1, 1.12],
+          duration: MOTION.slow,
+          delay: start,
+          ease: MOTION.ease,
+          onComplete: () => ring.remove(),
+        })
+        cleanups.push(() => {
+          settle.cancel()
+          flow.cancel()
+          node.style.removeProperty('transform')
+          ring.remove()
+        })
+        if (to === 'succeeded') {
+          const mark = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+          mark.setAttribute('class', 'orch-node__check')
+          mark.setAttribute('viewBox', '0 0 22 22')
+          mark.setAttribute('aria-hidden', 'true')
+          const tick = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+          tick.setAttribute('d', CHECK_PATH)
+          mark.appendChild(tick)
+          node.appendChild(mark)
+          const [drawable] = svg.createDrawable(tick)
+          const draw = animate(drawable!, {
+            draw: ['0 0', '0 1'],
+            duration: MOTION.base,
+            delay: start + 120,
+            ease: MOTION.ease,
+          })
+          const fade = animate(mark, {
+            opacity: [1, 0],
+            duration: MOTION.fast,
+            delay: start + 120 + MOTION.base + 500,
+            ease: 'linear',
+            onComplete: () => mark.remove(),
+          })
+          cleanups.push(() => {
+            draw.cancel()
+            fade.cancel()
+            mark.remove()
+          })
+        }
+      })
+      const all = () => cleanups.forEach((fn) => fn())
+      running.current.add(all)
+      window.setTimeout(() => running.current.delete(all), 3000)
+    })
+    running.current.add(stop)
+  }, [visuals, quiet, root])
+  useEffect(() => {
+    const live = running.current
+    return () => {
+      live.forEach((fn) => fn())
+      live.clear()
+    }
+  }, [])
 }
 
 export interface DiagramProps {
@@ -254,6 +370,10 @@ export function LiveDiagram({
 }: DiagramProps) {
   const viewport = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(1)
+  useNodeTransitions(viewport, visuals, reducedMotion)
+  useEffect(() => {
+    if (!reducedMotion) void loadAnime().catch(() => {})
+  }, [reducedMotion])
   const layout = useMemo(
     () =>
       layoutFlow(
@@ -291,17 +411,18 @@ export function LiveDiagram({
     return () => observer.disconnect()
   }, [layout.width])
 
-  const pathFor = (effect: Effect): Point[] | null => {
+  const routeFor = (effect: Effect): DotRoute | null => {
     const named = effect.edge ? routed.get(effect.edge) : undefined
-    if (named) return named
-    const forward = routed.get(`${effect.from}>${effect.to}`)
-    if (forward) return forward
-    const reverse = [...edges].find((e) => e.from === effect.to && e.to === effect.from)
+    if (named) return { points: named, edge: effect.edge!, reverse: false }
+    const forward = edges.find((e) => e.id === `${effect.from}>${effect.to}`)
+    const forwardPoints = forward ? routed.get(forward.id) : undefined
+    if (forward && forwardPoints) return { points: forwardPoints, edge: forward.id, reverse: false }
+    const reverse = edges.find((e) => e.from === effect.to && e.to === effect.from)
     const back = reverse ? routed.get(reverse.id) : undefined
-    if (back) return [...back].reverse()
+    if (reverse && back) return { points: back, edge: reverse.id, reverse: true }
     const a = center(effect.from)
     const b = center(effect.to)
-    return a && b ? [a, b] : null
+    return a && b ? { points: [a, b], edge: null, reverse: false } : null
   }
 
   const litNodes = new Map<string, EffectTone>()
@@ -383,9 +504,9 @@ export function LiveDiagram({
             {!reducedMotion &&
               active.map(({ key, effect, durationMs }) => {
                 if (effect.kind !== 'dot') return null
-                const points = pathFor(effect)
-                return points ? (
-                  <Dot key={key} points={points} durationMs={durationMs} tone={effect.tone} />
+                const route = routeFor(effect)
+                return route ? (
+                  <Dot key={key} route={route} durationMs={durationMs} tone={effect.tone} />
                 ) : null
               })}
           </svg>

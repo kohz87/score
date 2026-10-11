@@ -1,9 +1,14 @@
 import type { AgentSummary, Shape } from '@score/contract'
 import { cleanup, render, screen, within } from '@testing-library/react'
-import { afterEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { stubReducedMotion } from '../../motion/test-support.ts'
 import { TasksByDayChart } from './TasksByDayChart.tsx'
 
-afterEach(cleanup)
+beforeEach(() => stubReducedMotion())
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 function agent(id: string, color: string, shape: Shape): AgentSummary {
   return {

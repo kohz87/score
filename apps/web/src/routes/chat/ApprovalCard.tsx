@@ -1,8 +1,9 @@
 import { ApprovalSchema, type Approval, type ApprovalChoice } from '@score/contract'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { ApiError, apiFetch } from '../../data/api.ts'
+import { useArrival } from '../../motion/Arrival.tsx'
 import { useStream, useStreamQuery } from '../../data/query-client.ts'
 import { approvalsQuery } from './queries.ts'
 import { newId } from '../../data/ids.ts'
@@ -119,6 +120,14 @@ export function ApprovalCard({ approvalId }: { approvalId: string }) {
   const known = listed ?? byId.data
   // The POST response is fresher than the list until the stream catches up.
   const approval = posted && (!known || known.delivery === 'none') ? posted : known
+  const card = useRef<HTMLDivElement>(null)
+  // Only a question that still waits for the person arrives with motion; a decided one in the history just sits.
+  useArrival(
+    card,
+    approval && approval.actionable && approvalOutcome(approval) === null
+      ? `approval-${approval.id}`
+      : null,
+  )
   if (!approval) {
     const loading = status === 'pending' || byId.isLoading
     const notFound = byId.error instanceof ApiError && byId.error.status === 404
@@ -144,6 +153,7 @@ export function ApprovalCard({ approvalId }: { approvalId: string }) {
   const showButtons = approval.actionable && (outcome === null || retrying)
   return (
     <div
+      ref={card}
       className={`chat-approval${showButtons || busy ? '' : ' chat-approval--done'}`}
       role="group"
       aria-label={`Approval: ${approval.title}`}

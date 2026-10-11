@@ -6,9 +6,10 @@ import type {
   NowSnapshot,
   Ref,
 } from '@score/contract'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { useArrival } from '../../motion/Arrival.tsx'
 import { TodoItems, todoProgress, useAgentTodos } from '../../components/TodoList.tsx'
 import '../../components/todo.css'
 import { useStreamQuery } from '../../data/query-client.ts'
@@ -220,8 +221,10 @@ export function AskingCard({
     const timer = setTimeout(() => setDecided(null), 5000)
     return () => clearTimeout(timer)
   }, [decided])
+  const card = useRef<HTMLElement>(null)
+  useArrival(card, approval ? `approval-${approval.id}` : null)
   return (
-    <section className="now-card now-asking" aria-label="Needs you">
+    <section ref={card} className="now-card now-asking" aria-label="Needs you">
       <p className="now-asking-notice" role="status">
         {decided ? `${decided.text}: ${decided.approval.title}` : ''}
       </p>
