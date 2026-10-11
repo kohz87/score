@@ -136,9 +136,11 @@ interface RunFacts {
   terminal_source: string | null
 }
 
-/** Only Hermes' own terminal word is evidence; a status rebuilt from session-history text is not (fix-h item 1). */
+/** Only a runtime's own, confirmed terminal word is evidence; text rebuilt from history, or a run whose process group was never proven gone, is not (fix-h item 1, fix-w). */
 const isEvidence = (run: RunFacts): boolean =>
-  (run.status === 'completed' || run.status === 'failed') && run.terminal_source !== 'recovered'
+  (run.status === 'completed' || run.status === 'failed') &&
+  run.terminal_source !== 'recovered' &&
+  run.terminal_source !== 'unconfirmed'
 
 export const ORCHESTRATION_QUOTA_BYTES = 200 * 1024 * 1024
 const SWEEP_MS = 10_000
@@ -2402,7 +2404,12 @@ export class Orchestrator {
       if (this.nowMs() - last < this.retryMs && last !== 0) continue
       this.stopTried.set(attempt.id, this.nowMs())
       try {
-        await this.options.port.stopRun({ agentId: attempt.agent_id, runId: attempt.run_id! })
+        const outcome = await this.options.port.stopRun({
+          agentId: attempt.agent_id,
+          runId: attempt.run_id!,
+        })
+        // Not proven ended: the obligation stays owed and is asked again.
+        if (outcome === 'unconfirmed') continue
       } catch (error) {
         this.err(error)
         continue

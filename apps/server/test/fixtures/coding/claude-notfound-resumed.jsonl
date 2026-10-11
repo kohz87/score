@@ -1,0 +1,4 @@
+{"_fixture":"hand-made, not recorded: shaped after the CLI's documented stream format"}
+{"type":"system","subtype":"init","session_id":"77777777-7777-4777-8777-777777777777"}
+{"type":"result","subtype":"error_during_execution","is_error":true,"result":"File not found: config.yml","session_id":"77777777-7777-4777-8777-777777777777"}
+{"_exit":1}

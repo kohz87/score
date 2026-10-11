@@ -207,6 +207,7 @@ const SANDBOX = {
 
 export const codexDriver: CodingDriver = {
   runtime: 'codex',
+  resumeRefusal: /^(?:thread\/resume failed: )?no rollout found for thread id\b/i,
   label: 'Codex',
   executable: 'codex',
   testedVersions: ['0.160.1'],

@@ -326,7 +326,11 @@ export interface HermesPort extends ProfileManagementPort {
      */
     render?: (stored: string) => string
   }): Promise<{ runId: string }>
-  stopRun(req: { agentId: string; runId: string }): Promise<void>
+  /**
+   * `unconfirmed` (coding agents only) = Stop was asked but the work is not proven ended; callers must not record the
+   * Stop as acknowledged and should ask again. Hermes returns nothing.
+   */
+  stopRun(req: { agentId: string; runId: string }): Promise<StopOutcome | void>
   /**
    * The MCP tool names the agent's serving Hermes process currently lists for the Score server (PLAN 7.5 v3.2: Hermes
    * caches the list per connection, so a freshly deployed `orch.*` needs a reload). `null` = cannot be established.
@@ -424,3 +428,6 @@ export function isNotDispatched(error: unknown): boolean {
     (error.details as { notDispatched?: unknown }).notDispatched === true
   )
 }
+
+/** What a Stop request found: delivered to a live run, nothing to stop, or not proven ended yet. */
+export type StopOutcome = 'stopped' | 'not_running' | 'unconfirmed'

@@ -630,6 +630,12 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   res: { message: Message; routedTo: AgentId[]; command: CommandResult | null; notices?: string[] }
   ```
 
+  A coding agent whose earlier tools were not proven stopped (its process group survived, or could not be checked) takes no
+  new message: the reply fails with the notice "Some of its tools may still be running…" (`422 agent_still_stopping`
+  inside the dispatcher) while Score keeps stopping them in the background. `POST …/messages/:id/stop` and the
+  orchestrator's Stop return an outcome internally (`stopped` | `not_running` | `unconfirmed`); `unconfirmed` is never
+  recorded as an acknowledged Stop.
+
   `edits` (PLAN 5.24) must name a finished, undeleted message of the person in the same room that has not been edited
   yet: `404` unknown (or already replaced) message, `400` not the person's own, streaming or in another room, `409`
   already edited or an agent is still answering it. The new message is an ordinary turn (it carries `edits`); the

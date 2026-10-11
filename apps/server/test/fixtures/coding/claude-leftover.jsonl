@@ -1,0 +1,5 @@
+{"_fixture":"hand-made, not recorded: shaped after the CLI's documented stream format"}
+{"type":"system","subtype":"init","session_id":"55555555-5555-4555-8555-555555555555","model":"claude-sonnet-fixture"}
+{"_orphan":120000}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Started a server."}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"Started a server.","session_id":"55555555-5555-4555-8555-555555555555","total_cost_usd":0.001,"usage":{"input_tokens":1,"output_tokens":1}}

@@ -299,6 +299,12 @@ export interface TerminalInfo {
   error?: string | null
   /** Claude Code's cost is an API-price equivalent (a subscription is not billed per token); Codex gives none. */
   costKind: 'estimated' | 'unknown'
+  /**
+   * The process record, settled in the same transaction as the result: `released` = the group is proven gone, so the
+   * row goes with it (never before: a crash in between must not lose a result); `unconfirmed` = it is not, so the row
+   * stays, marked unresolved, and the run is not termination evidence.
+   */
+  group?: 'released' | 'unconfirmed'
 }
 
 /** The run ended: record it and finish the room reply (hand-offs only after a clean finish). */
@@ -312,12 +318,17 @@ export function terminalObservation(
     source: `coding:${agentId}`,
     identity: `coding:${runId}:${key}`,
     apply({ sqlite, now }) {
+      if (info.group === 'released')
+        sqlite.prepare('DELETE FROM coding_processes WHERE run_id = ?').run(runId)
+      else if (info.group === 'unconfirmed')
+        sqlite.prepare('UPDATE coding_processes SET unresolved = 1 WHERE run_id = ?').run(runId)
       const row = readRun(sqlite, runId)
       if (runLifecycle.isTerminal(row.status)) return []
       const usage = translation.usage
       const changed = setRun(sqlite, runId, now, {
         status: info.status,
         ended_at: now,
+        ...(info.group === 'unconfirmed' ? { terminal_source: 'unconfirmed' } : {}),
         output: info.output == null ? null : redactBounded(info.output, 8192),
         error: info.error == null ? null : redactBounded(info.error, 2048),
         cost_kind: usage?.costUsd != null ? info.costKind : 'unknown',
@@ -333,7 +344,7 @@ export function terminalObservation(
         ...(changed ? [runDraft(sqlite, runId)] : []),
         ...completeRunMessage(sqlite, runId, now, {
           output: info.output ?? null,
-          handoffs: info.status === 'completed',
+          handoffs: info.status === 'completed' && info.group !== 'unconfirmed',
           status: info.status,
           error: info.error ?? null,
         }),

@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from 'vitest'
 import { byTurn } from '../../src/hermes/fake/fake-lead.ts'
+import { runDraft } from '../../src/hermes/index.ts'
 import { runRecoveredObservation } from '../../src/hermes/live/translate.ts'
 import { attemptOf, harness, type Harness } from './harness.ts'
 
@@ -55,6 +56,39 @@ test('fix-h 1: a run recovered from session text (404 + matching reply) shows it
   expect(
     h.rows<{ output: string }>('SELECT output FROM runs WHERE id = ?', attempt.runId!)[0]!.output,
   ).toBe('Recovered answer text')
+})
+
+test('fix-w 3: a completed run whose process group was never proven gone is not termination evidence', async () => {
+  h = await harness({
+    lead: {
+      script: byTurn({
+        1: async (t) => {
+          await t.call('orch.assign', { agent: 'builder', instruction: '[fake:hold] write it' })
+          await t.call('orch.assign', { agent: 'reviewer', instruction: 'check it', after: ['s1'] })
+        },
+      }),
+    },
+  })
+  const id = await h.create({ gatePolicy: 'none' })
+  await h.until(() => attemptOf(h, id, 'step', 's1').some((a) => a.state === 'running'))
+  const attempt = attemptOf(h, id, 'step', 's1')[0]!
+  await h.ingest.submit({
+    source: 'test',
+    identity: `unconfirmed:${attempt.runId}`,
+    apply({ sqlite, now }) {
+      sqlite
+        .prepare(
+          "UPDATE runs SET status = 'completed', terminal_source = 'unconfirmed', output = 'Done', ended_at = ?, version = version + 1 WHERE id = ?",
+        )
+        .run(now, attempt.runId!)
+      return [runDraft(sqlite, attempt.runId!)]
+    },
+  })
+  await h.settle(5000)
+  const after = attemptOf(h, id, 'step', 's1')[0]!
+  expect(after.state).toBe('unknown')
+  expect(attemptOf(h, id, 'step', 's2')).toHaveLength(0)
+  expect(status(id)).not.toBe('succeeded')
 })
 
 // ---------------------------------------------------------------------------------- item 2: journaled authorization
