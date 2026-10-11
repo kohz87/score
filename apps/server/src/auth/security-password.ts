@@ -29,6 +29,14 @@ const WINDOW_MS = 15 * 60 * 1000
 const MAX_FAILURES_PER_SESSION = 5
 const MAX_FAILURES = 20
 
+function storeError(): HttpError {
+  return new HttpError(
+    503,
+    'security_store_unavailable',
+    'The security password store is unreadable or damaged; recover it on the Score machine with `scripts/score password`',
+  )
+}
+
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16)
   const key = await scrypt(PasswordSchema.parse(password), salt, KEY_LENGTH, PARAMS)
@@ -37,9 +45,14 @@ export async function hashPassword(password: string): Promise<string> {
 
 export function writePasswordFile(home: string, stored: string): void {
   const path = join(home, FILE)
-  const temp = `${path}.${process.pid}.tmp`
-  fs.writeFileSync(temp, `${StoredSchema.parse(stored)}\n`, { mode: 0o600, flag: 'wx' })
-  fs.renameSync(temp, path)
+  // Unique per call: a failed earlier replacement (or a concurrent one) must not leave a name that blocks this one.
+  const temp = `${path}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`
+  try {
+    fs.writeFileSync(temp, `${StoredSchema.parse(stored)}\n`, { mode: 0o600, flag: 'wx' })
+    fs.renameSync(temp, path)
+  } finally {
+    fs.rmSync(temp, { force: true })
+  }
 }
 
 export function passwordDigest(stored: string): string {
@@ -55,23 +68,40 @@ export class SecurityPassword {
     private readonly clock: () => number = Date.now,
   ) {}
 
+  /**
+   * The stored hash, `undefined` only when the file is absent (the intentional bootstrap state). Corrupt or unreadable
+   * storage throws, so a damaged store can't be mistaken for "no password yet" and re-enrolled without the old one.
+   */
   private stored(): string | undefined {
     if (!this.home) return undefined
+    let raw: string
     try {
-      const parsed = StoredSchema.safeParse(fs.readFileSync(join(this.home, FILE), 'utf8').trim())
-      return parsed.success ? parsed.data : undefined
-    } catch {
-      return undefined
+      raw = fs.readFileSync(join(this.home, FILE), 'utf8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+      throw storeError()
     }
+    const parsed = StoredSchema.safeParse(raw.trim())
+    if (!parsed.success) throw storeError()
+    return parsed.data
   }
 
   isSet(): boolean {
-    return this.stored() !== undefined
+    try {
+      return this.stored() !== undefined
+    } catch {
+      return true // damaged: treated as set (closed); verify/set report the recovery message
+    }
   }
 
   /** True only if the current password was set on the Score machine itself (`scripts/score password`). */
   hostIssued(): boolean {
-    const stored = this.stored()
+    let stored: string | undefined
+    try {
+      stored = this.stored()
+    } catch {
+      return false
+    }
     if (!stored || !this.home) return false
     try {
       return (
@@ -112,6 +142,10 @@ export class SecurityPassword {
     if (!candidate.success || !timingSafeEqual(actual, expected)) {
       throw new HttpError(403, 'wrong_password', 'That is not the security password')
     }
+    // The credential may have been replaced (e.g. reset on the host) while the hash ran: a match against the old one
+    // no longer proves anything.
+    if (this.stored() !== stored)
+      throw new HttpError(409, 'password_changed', 'The security password changed; try again')
     this.#failures = this.#failures.filter((failure) => failure !== attempt)
   }
 
@@ -121,8 +155,14 @@ export class SecurityPassword {
     const next = PasswordSchema.safeParse(password)
     if (!next.success)
       throw new HttpError(400, 'bad_request', 'Use 8 to 256 characters for the security password')
-    if (this.isSet()) await this.verify(current, session)
-    writePasswordFile(this.home, await hashPassword(next.data))
+    const before = this.stored()
+    if (before !== undefined) await this.verify(current, session)
+    const hashed = await hashPassword(next.data)
+    // Compare-and-swap on the persisted credential (no await between check and write), so two setters, or a setter
+    // and `score password` on the host, can't overwrite one another unseen.
+    if (this.stored() !== before)
+      throw new HttpError(409, 'password_changed', 'The security password changed; try again')
+    writePasswordFile(this.home, hashed)
     fs.writeFileSync(join(this.home, ORIGIN_FILE), 'browser\n', { mode: 0o600 })
   }
 }
