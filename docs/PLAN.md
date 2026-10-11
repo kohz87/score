@@ -336,6 +336,13 @@ previews in chat and workspace, attach workspace files to a message.
 previous version (switcher to view), and rewinds each agent's Hermes session to before it through the bridge plugin
 (Hermes's own session rewind, as /undo). Refuses while agents are answering; memory is not rewound (docs/briefs/5.33.md).
 
+**5.38 Writing pass** · (owner 2026-10-11) One writing guide (docs/WRITING.md) applied to every string, server error and agent tool text. Done.
+
+**5.39 Live feel** · (owner 2026-10-11, inspired by an "agent loop" explainer video) A live status line on working agents,
+a soft glow on the active step, counters that tick up live, approvals that turn into a green check in place, a short
+summary when a run ends; in the workflow editor, the live state of a running run on the canvas and a **Preview** that
+plays the drawn workflow with no agents and no tokens (docs/briefs/5.39-live-feel.md).
+
 ---
 
 ## First five tasks
@@ -360,6 +367,9 @@ human approval gates, budgets and deadlines, pause/resume/stop, replay, JSON exp
 **7.2 Coding agents as team members** · Claude Code, Codex, OpenCode as room participants next to Hermes agents.
 **7.3 Web terminal** · A terminal on the server in the browser (paired, HTTPS only; security design first).
 **7.5 Orchestrator** · (owner 2026-10-10, before 7.1) A lead agent runs a goal as an agentic workflow through Score tools (hand a step to an agent, wait for its result, ask the person at a gate, check budget, report); Score validates every request against limits, budgets, gates and permissions. Design + security review first.
+**7.7 Coding agents as orchestration and workflow workers** · (owner 2026-10-11) Claude Code, Codex and Antigravity take
+steps handed out by a Hermes lead or drawn in a workflow; design and adversarial review first (orchestrator journal,
+stop, recovery and spend semantics for coding runs). Until then orchestrations and workflows refuse coding agents.
 **7.4 Backlog** · Long rooms auto-summarise at a token threshold; pop-out window per agent; journey graph (tasks,
 memories, skills over time); Score as an MCP tool server for its agents.
 **6.5 Knowledge editor** · (owner 2026-10-10) Obsidian-style live preview in CodeMirror (Markdown rendered inline except the edited line; files stay byte-exact), notes open rendered by default, split view on wide screens, styled tables/code/quotes/task lists/callouts.
