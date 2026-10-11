@@ -9,8 +9,8 @@ const AgentsSchema = AgentsSnapshotSchema
 
 export const agentsQuery = defineStreamQuery({
   key: ['team', 'agents'],
-  async fetch() {
-    const snapshot = AgentsSchema.parse(await apiFetch('agents'))
+  async fetch(signal) {
+    const snapshot = AgentsSchema.parse(await apiFetch('agents', { signal }))
     return { asOfSeq: snapshot.asOfSeq, data: snapshot.items }
   },
   types: ['agent.updated'],

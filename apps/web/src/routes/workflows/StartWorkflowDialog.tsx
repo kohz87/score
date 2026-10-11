@@ -15,6 +15,7 @@ import {
   useWorkflowPreflight,
   useWorkflowVersion,
 } from './workflow-queries.ts'
+import { ownText } from './workflow-model.ts'
 import '../orchestrations/orchestrations.css'
 import './workflows.css'
 
@@ -67,7 +68,7 @@ export function StartWorkflowDialog({
 
   const data: WorkflowPreflight | undefined = preflight.data
   const missing = (definition?.inputs ?? []).filter(
-    (input) => input.required && (inputs[input.name] ?? '').trim() === '',
+    (input) => input.required && ownText(inputs, input.name).trim() === '',
   )
   const blocked = data ? !data.ok : false
   const failedChecks =
@@ -84,7 +85,7 @@ export function StartWorkflowDialog({
         version: chosen,
         inputs: Object.fromEntries(
           definition.inputs.flatMap((input) => {
-            const value = (inputs[input.name] ?? '').trim()
+            const value = ownText(inputs, input.name).trim()
             return value === '' ? [] : [[input.name, value] as const]
           }),
         ),
@@ -150,7 +151,7 @@ export function StartWorkflowDialog({
                 </span>
                 <textarea
                   rows={input.maxChars > 200 ? 3 : 1}
-                  value={inputs[input.name] ?? ''}
+                  value={ownText(inputs, input.name)}
                   maxLength={input.maxChars}
                   required={input.required}
                   onChange={(event) =>
@@ -158,7 +159,7 @@ export function StartWorkflowDialog({
                   }
                 />
                 <small className="orch-muted">
-                  {(inputs[input.name] ?? '').length} of {input.maxChars} characters
+                  {ownText(inputs, input.name).length} of {input.maxChars} characters
                 </small>
               </label>
             ))}

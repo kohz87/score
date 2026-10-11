@@ -46,7 +46,7 @@ export function validateInputs(version: WorkflowVersion, inputs: Record<string, 
   for (const name of Object.keys(inputs))
     if (!declared.has(name)) problems.push(`${name} is not an input of this workflow`)
   for (const input of declared.values()) {
-    const value = inputs[input.name]
+    const value = Object.hasOwn(inputs, input.name) ? inputs[input.name] : undefined
     if (input.required && (value === undefined || value.trim() === ''))
       problems.push(`${input.label} is required`)
     if (value !== undefined && [...value].length > input.maxChars)

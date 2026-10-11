@@ -163,6 +163,9 @@ function MeterView({
   const [confirming, setConfirming] = useState(false)
   const [keepRecent, setKeepRecent] = useState(KEEP_RECENT)
   const [running, setRunning] = useState<string | null>(null)
+  // Commands whose result this view has seen. A result can arrive before the POST that started it resolves, and a
+  // later compaction from another browser must not reopen a wait that already ended (S2-011).
+  const [finished, setFinished] = useState<ReadonlySet<string>>(() => new Set())
   const [error, setError] = useState<string | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const button = useRef<HTMLButtonElement>(null)
@@ -173,6 +176,7 @@ function MeterView({
   }, [finishedReplies]) // eslint-disable-line react-hooks/exhaustive-deps -- only a finished reply refreshes it
   const compaction = data?.compaction ?? null
   const answeredId = compaction?.commandId
+  if (answeredId && !finished.has(answeredId)) setFinished(new Set(finished).add(answeredId))
   useEffect(() => {
     if (!answeredId) return
     refetch()
@@ -222,8 +226,8 @@ function MeterView({
     fraction !== null
       ? `${name} context: ${percent(fraction)} % of ${compact(context.window!)}`
       : `${name} context: ${compact(used ?? 0)} tokens`
-  // The answer to the command we started ends the wait.
-  const busy = running !== null && running !== answeredId
+  // The answer to the command we started ends the wait, whenever it arrives.
+  const busy = running !== null && !finished.has(running)
 
   function close(restore = true) {
     setOpen(false)

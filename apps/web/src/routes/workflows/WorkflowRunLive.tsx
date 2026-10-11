@@ -26,6 +26,7 @@ import {
   workflowEventEffect,
   workflowReplayAt,
 } from './workflow-run-model.ts'
+import { ownText } from './workflow-model.ts'
 import '../orchestrations/orchestrations.css'
 import './workflows.css'
 
@@ -223,7 +224,7 @@ export function WorkflowRunLive({
                   {detail.definition.inputs.map((input) => (
                     <li key={input.name}>
                       <strong>{input.label}:</strong>{' '}
-                      <span className="wf-input-value">{detail.inputs[input.name] ?? ''}</span>
+                      <span className="wf-input-value">{ownText(detail.inputs, input.name)}</span>
                     </li>
                   ))}
                 </ul>

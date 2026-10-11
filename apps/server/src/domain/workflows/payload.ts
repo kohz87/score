@@ -40,7 +40,7 @@ export function renderAgentPayload(args: {
       continue
     }
     if (part.kind === 'input') {
-      const value = args.inputs[part.name]
+      const value = Object.hasOwn(args.inputs, part.name) ? args.inputs[part.name] : undefined
       if (value !== undefined && value !== '') body += quote(`INPUT ${part.name}`, value)
       else body += part.fallback ?? ''
       continue

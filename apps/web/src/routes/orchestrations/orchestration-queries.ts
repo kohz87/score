@@ -34,8 +34,8 @@ const REFRESH_MS = 250
 /** Every run, newest first; `orchestration.upserted` replaces a run's summary. */
 export const orchestrationsQuery = defineStreamQuery<OrchestrationSummary[]>({
   key: ['orchestrations', 'list'],
-  async fetch() {
-    const list = OrchestrationListSchema.parse(await apiFetch('orchestrations'))
+  async fetch(signal) {
+    const list = OrchestrationListSchema.parse(await apiFetch('orchestrations', { signal }))
     return { asOfSeq: list.asOfSeq, data: list.items }
   },
   types: ['orchestration.upserted'],

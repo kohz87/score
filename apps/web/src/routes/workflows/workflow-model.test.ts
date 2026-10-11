@@ -202,3 +202,10 @@ test('a node removed or renamed takes its position with it; an emptied layout di
   // Nodes without a position stay without one.
   expect(removeNode(base(), 'gate1').layout).toBeUndefined()
 })
+
+test('S2-010: ownText reads own entries only', async () => {
+  const { ownText } = await import('./workflow-model.ts')
+  expect(ownText({}, 'constructor')).toBe('')
+  expect(ownText({ constructor: 'x' }, 'constructor')).toBe('x')
+  expect(ownText({ topic: 'a' }, 'topic')).toBe('a')
+})

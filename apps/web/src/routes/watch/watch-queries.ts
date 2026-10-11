@@ -23,10 +23,11 @@ const ACTIVE_RUN = ['queued', 'running', 'waiting_for_approval']
 export function watchQuery(agentId: string, from: number | null = null) {
   return defineStreamQuery<WatchData>({
     key: ['watch', agentId, from],
-    async fetch() {
+    async fetch(signal) {
       const { asOfSeq, ...data } = WatchResponseSchema.parse(
         await apiFetch(
           `agents/${encodeURIComponent(agentId)}/watch?limit=500${from === null ? '' : `&from=${from}`}`,
+          { signal },
         ),
       )
       return { asOfSeq, data }
@@ -139,14 +140,14 @@ export function useAgentPause(agentId: string) {
 export function pendingApprovalsQuery(agentId: string) {
   return defineStreamQuery<Approval[]>({
     key: ['watch', 'pending-approvals', agentId],
-    async fetch() {
+    async fetch(signal) {
       const items: Approval[] = []
       let cursor: string | null = null
       let asOfSeq = 0
       for (let page = 0; page < 20; page++) {
         const params = new URLSearchParams({ status: 'pending', agent: agentId })
         if (cursor) params.set('cursor', cursor)
-        const result = ApprovalsPageSchema.parse(await apiFetch(`approvals?${params}`))
+        const result = ApprovalsPageSchema.parse(await apiFetch(`approvals?${params}`, { signal }))
         // The first page fixes the snapshot point; later events replay on top of it.
         if (page === 0) asOfSeq = result.asOfSeq
         items.push(...result.items)

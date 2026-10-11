@@ -18,8 +18,8 @@ const MessagesSnapshotSchema = MessagePageSchema
 
 export const roomsQuery = defineStreamQuery({
   key: ['chat', 'rooms'],
-  async fetch() {
-    const { asOfSeq, ...data } = RoomsSnapshotSchema.parse(await apiFetch('rooms'))
+  async fetch(signal) {
+    const { asOfSeq, ...data } = RoomsSnapshotSchema.parse(await apiFetch('rooms', { signal }))
     return { asOfSeq, data }
   },
   types: ['room.upserted', 'room.deleted', 'room-project.upserted', 'room-project.deleted'],
@@ -50,8 +50,8 @@ export const roomsQuery = defineStreamQuery({
 })
 export const agentsQuery = defineStreamQuery({
   key: ['chat', 'agents'],
-  async fetch() {
-    const { asOfSeq, items } = AgentsSnapshotSchema.parse(await apiFetch('agents'))
+  async fetch(signal) {
+    const { asOfSeq, items } = AgentsSnapshotSchema.parse(await apiFetch('agents', { signal }))
     return { asOfSeq, data: items }
   },
   types: ['agent.updated'],
@@ -63,9 +63,9 @@ export const agentsQuery = defineStreamQuery({
 export function roomQuery(roomId: string) {
   return defineStreamQuery({
     key: ['chat', 'room', roomId],
-    async fetch() {
+    async fetch(signal) {
       const { asOfSeq, room } = RoomSnapshotSchema.parse(
-        await apiFetch(`rooms/${encodeURIComponent(roomId)}`),
+        await apiFetch(`rooms/${encodeURIComponent(roomId)}`, { signal }),
       )
       return { asOfSeq, data: room }
     },
@@ -193,11 +193,11 @@ export function reduceMessages(
 export function messagesQuery(roomId: string, before: string | null = null) {
   return defineStreamQuery<MessagePageData>({
     key: ['chat', 'messages', roomId, before],
-    async fetch() {
+    async fetch(signal) {
       const params = new URLSearchParams({ limit: '50' })
       if (before !== null) params.set('before', before)
       const { asOfSeq, ...page } = MessagesSnapshotSchema.parse(
-        await apiFetch(`rooms/${encodeURIComponent(roomId)}/messages?${params}`),
+        await apiFetch(`rooms/${encodeURIComponent(roomId)}/messages?${params}`, { signal }),
       )
       return { asOfSeq, data: { ...page, typing: {} } }
     },
@@ -218,8 +218,10 @@ export function messagesQuery(roomId: string, before: string | null = null) {
 // All approvals, newest first, kept live by the stream; cards look theirs up by id.
 export const approvalsQuery = defineStreamQuery<Approval[]>({
   key: ['chat', 'approvals'],
-  async fetch() {
-    const { asOfSeq, items } = ApprovalsPageSchema.parse(await apiFetch('approvals?status=all'))
+  async fetch(signal) {
+    const { asOfSeq, items } = ApprovalsPageSchema.parse(
+      await apiFetch('approvals?status=all', { signal }),
+    )
     return { asOfSeq, data: items }
   },
   types: ['approval.requested', 'approval.updated'],
@@ -235,9 +237,9 @@ export const approvalsQuery = defineStreamQuery<Approval[]>({
 export function roomPanelsQuery(roomId: string) {
   return defineStreamQuery({
     key: ['chat', 'room-panels', roomId],
-    async fetch() {
+    async fetch(signal) {
       const { asOfSeq, filesInPlay, learned } = RoomSnapshotSchema.parse(
-        await apiFetch(`rooms/${encodeURIComponent(roomId)}`),
+        await apiFetch(`rooms/${encodeURIComponent(roomId)}`, { signal }),
       )
       return { asOfSeq, data: { filesInPlay, learned } }
     },
@@ -251,9 +253,9 @@ export function roomPanelsQuery(roomId: string) {
 export function versionsQuery(roomId: string) {
   return defineStreamQuery<RoomVersion[]>({
     key: ['chat', 'versions', roomId],
-    async fetch() {
+    async fetch(signal) {
       const { asOfSeq, items } = RoomVersionsSchema.parse(
-        await apiFetch(`rooms/${encodeURIComponent(roomId)}/versions`),
+        await apiFetch(`rooms/${encodeURIComponent(roomId)}/versions`, { signal }),
       )
       return { asOfSeq, data: items }
     },

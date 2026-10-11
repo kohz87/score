@@ -195,7 +195,7 @@ export function addNode(
 /** Moves, drops or renames one node's saved position; an emptied layout disappears. */
 function relayout(draft: Draft, from: string, to: string | null): Draft['layout'] {
   const nodes = draft.layout?.nodes
-  if (!nodes || !(from in nodes)) return draft.layout
+  if (!nodes || !Object.hasOwn(nodes, from)) return draft.layout
   const { [from]: at, ...rest } = nodes
   const next = to === null ? rest : { ...rest, [to]: at! }
   return Object.keys(next).length === 0 ? undefined : { nodes: next }
@@ -434,4 +434,9 @@ export function outlineOf(draft: Draft): OutlineItem[] {
 /** The draft is the same graph, text and settings as `saved` (what Save would change nothing about). */
 export function sameDraft(a: Draft, b: Draft): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
+}
+
+/** A value by a name people chose: own entries only, so `constructor` reads as empty, not as a function (S2-010). */
+export function ownText(values: Readonly<Record<string, string>>, name: string): string {
+  return Object.hasOwn(values, name) ? (values[name] ?? '') : ''
 }

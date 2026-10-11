@@ -221,3 +221,23 @@ test('template syntax: defaults, escapes and the references a definition may use
   expect(parseTemplate('{{inputs.x.output}}').errors).toHaveLength(1)
   expect(validateDefinition(definition([agent('a'), end()], [edge('a', 'done')])).ok).toBe(true)
 })
+
+// ------------------------------------------------------------------ names people choose are not inherited properties
+
+test('S2-010: an input named constructor starts when omitted, and is read from the run when given', async () => {
+  h = await wfHarness()
+  const def = definition(
+    [agent('a', { instruction: 'Note: {{inputs.constructor|default:"none"}}' }), end()],
+    [edge('a', 'done')],
+    [{ name: 'constructor', label: 'Constructor', required: false, maxChars: 20 }],
+  )
+  const omitted = await start(h, def, { gatePolicy: 'every-step', inputs: {} })
+  await h.until(() => node(h!, omitted, 'a').state === 'gate_open')
+  expect(run(h, omitted).assignmentGates[0]!.payload.instruction).toContain('none')
+  const empty = await start(h, def, { gatePolicy: 'every-step', inputs: { constructor: '' } })
+  await h.until(() => node(h!, empty, 'a').state === 'gate_open')
+  expect(run(h, empty).assignmentGates[0]!.payload.instruction).toContain('none')
+  const given = await start(h, def, { gatePolicy: 'every-step', inputs: { constructor: 'hello' } })
+  await h.until(() => node(h!, given, 'a').state === 'gate_open')
+  expect(run(h, given).assignmentGates[0]!.payload.instruction).toContain('hello')
+})
