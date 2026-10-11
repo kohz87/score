@@ -1,3 +1,4 @@
+import os
 import stat
 from concurrent.futures import ThreadPoolExecutor
 
@@ -210,3 +211,131 @@ def test_gap_materialization_is_atomic_across_recovering_processes(tmp_path):
     assert results.count(True) == 1
     assert initial.peek()[0]["counter"] == 2
     assert initial.pending_gap() is None
+
+
+# --- SCORE-022 / 023 / 031 (external audit 2026-10-11) ---
+
+def _abandoned(tmp_path, monkeypatch, recorded_start, pid=None):
+    """A spool written by a process that later died, whose pid is (still or again) held by a live process."""
+    from score_bridge import spool as spool_module
+    client = ScoreClient(transport=FakeTransport())
+    identity = client.identity()
+    identity["pid"] = pid or os.getpid()
+    old = Spool(client.incarnation, tmp_path)
+    old.producer = identity
+    monkeypatch.setattr(spool_module, "process_start", lambda _pid: recorded_start)
+    old.append([event(1)])
+    return old, identity
+
+
+def test_score022_live_unrelated_process_on_recorded_pid_does_not_block_recovery(tmp_path, monkeypatch):
+    from score_bridge import spool as spool_module
+    old, identity = _abandoned(tmp_path, monkeypatch, {"boot": "boot-1", "start": 100})
+    other = Spool("other", tmp_path)
+    # Same pid, but it now belongs to a process that started later (pid reuse): the producer is gone.
+    monkeypatch.setattr(spool_module, "process_start", lambda _pid: {"boot": "boot-1", "start": 999})
+    assert [p["incarnation"] for p in other.recoverable()] == [identity["incarnation"]]
+    # A different boot also means the recorded process is gone, even with an identical start time.
+    monkeypatch.setattr(spool_module, "process_start", lambda _pid: {"boot": "boot-2", "start": 100})
+    assert [p["incarnation"] for p in other.recoverable()] == [identity["incarnation"]]
+
+
+def test_score022_same_process_is_not_recovered(tmp_path, monkeypatch):
+    from score_bridge import spool as spool_module
+    _abandoned(tmp_path, monkeypatch, {"boot": "boot-1", "start": 100})
+    monkeypatch.setattr(spool_module, "process_start", lambda _pid: {"boot": "boot-1", "start": 100})
+    assert Spool("other", tmp_path).recoverable() == []
+
+
+def test_score022_process_start_identifies_this_process():
+    from score_bridge.spool import process_start
+    first = process_start(os.getpid())
+    assert first is not None and first == process_start(os.getpid())
+    assert process_start(2 ** 22 + 123456) is None
+
+
+def test_score023_append_does_not_rewrite_unchanged_outboxes(tmp_path, monkeypatch):
+    spools = [Spool(f"producer-{n}", tmp_path) for n in range(6)]
+    for index, spool in enumerate(spools):
+        spool.append([event(1, at=f"2026-10-07T00:00:0{index}.000Z")])
+    spools[0].append([event(2)])  # warm: every file is now verified
+    writes, file_fsyncs = [], []
+    real_write, real_fsync = Spool._write, os.fsync
+
+    def counting_write(self, path, records):
+        writes.append(path.name)
+        return real_write(self, path, records)
+
+    def counting_fsync(fd):
+        if stat.S_ISREG(os.fstat(fd).st_mode):
+            file_fsyncs.append(fd)
+        return real_fsync(fd)
+
+    monkeypatch.setattr(Spool, "_write", counting_write)
+    monkeypatch.setattr(os, "fsync", counting_fsync)
+    spools[1].append([event(2)])
+    assert writes == ["producer-1.jsonl"]
+    assert len(file_fsyncs) == 1
+
+
+def test_score023_externally_changed_file_is_checked_again(tmp_path):
+    spools = [Spool(f"producer-{n}", tmp_path) for n in range(2)]
+    for spool in spools:
+        spool.append([event(1)])
+    spools[0].append([event(2)])
+    with open(spools[1].path, "ab") as stream:
+        stream.write(b"\n\nnot json\n")
+    spools[0].append([event(3)])
+    assert spools[1].pending_gap()["payload"]["corrupt_records"] >= 1
+
+
+def _recording_fs(monkeypatch):
+    calls = []
+    real_replace, real_unlink, real_fsync = os.replace, os.unlink, os.fsync
+
+    def replace(src, dst, *a, **k):
+        calls.append(("change", "replace"))
+        return real_replace(src, dst, *a, **k)
+
+    def unlink(path, *a, **k):
+        calls.append(("change", "unlink"))
+        return real_unlink(path, *a, **k)
+
+    def fsync(fd):
+        calls.append(("fsync", "dir" if stat.S_ISDIR(os.fstat(fd).st_mode) else "file"))
+        return real_fsync(fd)
+
+    monkeypatch.setattr(os, "replace", replace)
+    monkeypatch.setattr(os, "unlink", unlink)
+    monkeypatch.setattr(os, "fsync", fsync)
+    return calls
+
+
+def _every_change_is_followed_by_directory_fsync(calls):
+    changes = [i for i, c in enumerate(calls) if c[0] == "change"]
+    assert changes
+    for index in changes:
+        assert ("fsync", "dir") in calls[index + 1:], calls
+    assert calls[-1] == ("fsync", "dir")
+
+
+def test_score031_append_and_acknowledge_fsync_the_directory(tmp_path, monkeypatch):
+    spool = Spool("producer", tmp_path)
+    calls = _recording_fs(monkeypatch)
+    spool.append([event(1), event(2)])
+    _every_change_is_followed_by_directory_fsync(calls)
+    calls.clear()
+    spool.acknowledge(2)  # the file is deleted
+    assert not spool.path.exists()
+    assert ("change", "unlink") in calls
+    _every_change_is_followed_by_directory_fsync(calls)
+
+
+def test_score031_quarantine_fsyncs_both_directories(tmp_path, monkeypatch):
+    spool = Spool("producer", tmp_path)
+    spool.append([event(1)])
+    calls = _recording_fs(monkeypatch)
+    spool.quarantine()
+    assert spool.quarantined == 1
+    assert calls.count(("fsync", "dir")) >= 2
+    _every_change_is_followed_by_directory_fsync(calls)
