@@ -2,7 +2,12 @@ import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { chmodSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import type { AgentDetail, CodingAgent, CodingUsage, CodingRuntime as RuntimeId } from '@score/contract'
+import type {
+  AgentDetail,
+  CodingAgent,
+  CodingUsage,
+  CodingRuntime as RuntimeId,
+} from '@score/contract'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
@@ -192,7 +197,8 @@ export class CodingRuntime {
    */
   async usage(runtime: RuntimeId): Promise<CodingUsage> {
     const driver = driverFor(runtime)
-    if (!driver.usage) throw new HttpError(409, 'unsupported', `${driver.label} has no quota reading`)
+    if (!driver.usage)
+      throw new HttpError(409, 'unsupported', `${driver.label} has no quota reading`)
     const cached = this.usageCache.get(runtime)
     if (cached && Date.now() - cached.at < 60_000) return cached.value
     const cli = await this.deps.locator.detect(driver, { fresh: true })

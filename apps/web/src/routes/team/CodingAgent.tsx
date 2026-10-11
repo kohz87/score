@@ -2,6 +2,7 @@ import {
   CodingAgentSchema,
   CodingAgentsResponseSchema,
   CodingRuntimesResponseSchema,
+  CodingUsageSchema,
   ShapeSchema,
   type AgentDetail,
   type CodingAgent,
@@ -14,6 +15,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch } from '../../data/api.ts'
+import { runtimeLabel } from '../../components/runtime-label.ts'
 
 const permissionLabels: Record<CodingPermission, string> = {
   'read-only': 'Read only: looks at files, changes nothing',
@@ -28,8 +30,8 @@ export function ReadAccessWarning() {
       The permission level limits what a coding agent can <em>change</em>, not what it can{' '}
       <em>read</em>. It runs as your user, so text it is tricked into following could make it read
       files such as your Hermes settings and post them in a room. Score keeps Hermes, Score and SSH
-      folders and .env files off limits for Claude Code, but Codex has no such rule. Only give it
-      workspaces and rooms you trust.
+      folders and .env files off limits for Claude Code, but Codex and Antigravity have no such
+      rule. Only give it workspaces and rooms you trust.
     </p>
   )
 }
@@ -45,14 +47,24 @@ const codingAgentsQuery = {
     CodingAgentsResponseSchema.parse(await apiFetch('coding-agents', { signal })).items,
 }
 
+/** The short name used in "not verified for agy yet". */
+const shortNames: Partial<Record<CodingRuntime, string>> = { antigravity: 'agy' }
+/** Runtimes whose agents can read every file the person's user can: creating one needs a tick. */
+const readsEverything: readonly CodingRuntime[] = ['codex', 'antigravity']
+
 function PermissionPicker({
   value,
   onChange,
   name,
+  runtime,
+  unverified,
 }: {
   value: CodingPermission
   onChange: (value: CodingPermission) => void
   name: string
+  runtime: CodingRuntime
+  /** Levels Score has not live-verified for this CLI: shown, but not selectable. */
+  unverified: readonly CodingPermission[]
 }) {
   return (
     <fieldset className="team-coding-permission">
@@ -63,9 +75,16 @@ function PermissionPicker({
             type="radio"
             name={name}
             checked={value === level}
+            disabled={unverified.includes(level) && value !== level}
             onChange={() => onChange(level)}
           />{' '}
           {permissionLabels[level]}
+          {unverified.includes(level) && (
+            <span className="team-muted">
+              {' '}
+              (not verified for {shortNames[runtime] ?? runtime} yet)
+            </span>
+          )}
         </label>
       ))}
       {value === 'full' && (
@@ -75,6 +94,42 @@ function PermissionPicker({
         </p>
       )}
     </fieldset>
+  )
+}
+
+/** Antigravity's own quota (`/usage`): the 5-hour and weekly share left per model group. */
+function AntigravityQuota() {
+  const usage = useQuery({
+    queryKey: ['coding', 'usage', 'antigravity'],
+    queryFn: async ({ signal }) =>
+      CodingUsageSchema.parse(
+        await apiFetch('coding-agents/runtimes/antigravity/usage', { signal }),
+      ),
+    retry: false,
+    staleTime: 60_000,
+  })
+  if (usage.isPending) return <p className="team-muted">Reading the Antigravity quota…</p>
+  if (usage.error)
+    return <p className="team-muted">Antigravity quota unavailable: {usage.error.message}</p>
+  const { groups, text } = usage.data
+  return (
+    <div aria-label="Antigravity quota" role="group">
+      {groups.length === 0 ? (
+        <pre className="team-muted">{text}</pre>
+      ) : (
+        <ul className="team-muted team-coding-quota">
+          {groups.map((group) => (
+            <li key={group.name}>
+              {group.name}: {group.fiveHourRemainingPercent ?? '?'}% left in the 5-hour window
+              {group.fiveHourResets ? ` (${group.fiveHourResets})` : ''}
+              {group.weeklyRemainingPercent !== null
+                ? `, ${group.weeklyRemainingPercent}% left this week${group.weeklyResets ? ` (${group.weeklyResets})` : ''}`
+                : ''}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
@@ -92,6 +147,8 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
   const [style, setStyle] = useState<AgentStyle>({ color: '#6B4EFF', shape: 'hexagon' })
   const info = runtimes.data?.find((item) => item.runtime === runtime)
   const usable = info?.state === 'ready' || info?.state === 'untested_version'
+  const unverified = info?.unverifiedPermissions ?? []
+  const needsAck = readsEverything.includes(runtime)
   const create = useMutation({
     mutationFn: async () =>
       CodingAgentSchema.parse(
@@ -106,7 +163,7 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
             ...(workspace.trim() ? { workspace: workspace.trim() } : {}),
             ...(model.trim() ? { model: model.trim() } : {}),
             ...(permission === 'full' ? { password } : {}),
-            ...(runtime === 'codex' ? { acknowledgeReads: true } : {}),
+            ...(needsAck ? { acknowledgeReads: true } : {}),
           }),
         }),
       ),
@@ -137,7 +194,19 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
         <select
           aria-label="Coding CLI"
           value={runtime}
-          onChange={(event) => setRuntime(event.target.value as CodingRuntime)}
+          onChange={(event) => {
+            const next = event.target.value as CodingRuntime
+            setRuntime(next)
+            // A level that is not verified for the new CLI is never kept selected.
+            const blocked =
+              runtimes.data?.find((item) => item.runtime === next)?.unverifiedPermissions ?? []
+            if (blocked.includes(permission))
+              setPermission(
+                (['read-only', 'workspace-write', 'full'] as const).find(
+                  (level) => !blocked.includes(level),
+                ) ?? permission,
+              )
+          }}
         >
           {runtimes.data?.map((item) => (
             <option key={item.runtime} value={item.runtime}>
@@ -159,6 +228,12 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
           {info.quota}
         </p>
       )}
+      {info?.warning && (
+        <p className="team-muted-strong" role="note">
+          {info.warning}
+        </p>
+      )}
+      {runtime === 'antigravity' && usable && <AntigravityQuota />}
       <label>
         Agent name (letters, digits, - and _)
         <input
@@ -189,8 +264,14 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
           onChange={(event) => setModel(event.target.value)}
         />
       </label>
-      <PermissionPicker value={permission} onChange={setPermission} name="coding-permission" />
-      {runtime === 'codex' && (
+      <PermissionPicker
+        value={permission}
+        onChange={setPermission}
+        name="coding-permission"
+        runtime={runtime}
+        unverified={unverified}
+      />
+      {needsAck && (
         <label className="coding-acknowledge">
           <input
             type="checkbox"
@@ -198,8 +279,8 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
             checked={acknowledged}
             onChange={(event) => setAcknowledged(event.target.checked)}
           />
-          I understand this Codex agent can read every file my user can, including secrets outside
-          its workspace (Codex limits what it changes, not what it reads).
+          I understand this {info?.label ?? 'coding'} agent can read every file my user can,
+          including secrets outside its workspace (it limits what it changes, not what it reads).
         </label>
       )}
       {permission === 'full' && (
@@ -248,7 +329,13 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
       <div className="team-file-actions">
         <button
           className="team-primary"
-          disabled={create.isPending || !usable || !id || (runtime === 'codex' && !acknowledged)}
+          disabled={
+            create.isPending ||
+            !usable ||
+            !id ||
+            (needsAck && !acknowledged) ||
+            unverified.includes(permission)
+          }
         >
           {create.isPending ? 'Adding…' : 'Add coding agent'}
         </button>
@@ -305,6 +392,9 @@ function CodingSettings({
   const [permission, setPermission] = useState(coding.permission)
   const [model, setModel] = useState(coding.model ?? '')
   const [password, setPassword] = useState('')
+  const runtimes = useQuery(codingRuntimesQuery)
+  const unverified =
+    runtimes.data?.find((item) => item.runtime === coding.runtime)?.unverifiedPermissions ?? []
   const needsPassword = permission === 'full' && coding.permission !== 'full'
   const save = useMutation({
     mutationFn: async () =>
@@ -340,8 +430,8 @@ function CodingSettings({
         <div>
           <dt>CLI</dt>
           <dd>
-            {coding.runtime === 'claude-code' ? 'Claude Code' : coding.runtime}{' '}
-            {coding.cli.version ?? ''} · {cliStates[coding.cli.state]}
+            {runtimeLabel(coding.runtime) ?? coding.runtime} {coding.cli.version ?? ''} ·{' '}
+            {cliStates[coding.cli.state]}
             {coding.cli.state === 'untested_version' &&
               coding.cli.confirmed &&
               ' (you confirmed it)'}
@@ -351,6 +441,14 @@ function CodingSettings({
           <dt>Quota</dt>
           <dd>{coding.quota}</dd>
         </div>
+        {coding.runtime === 'antigravity' && (
+          <div>
+            <dt>Limits left</dt>
+            <dd>
+              <AntigravityQuota />
+            </dd>
+          </div>
+        )}
         <div>
           <dt>Workspace</dt>
           <dd>
@@ -394,6 +492,8 @@ function CodingSettings({
           value={permission}
           onChange={setPermission}
           name="coding-permission-edit"
+          runtime={coding.runtime}
+          unverified={unverified}
         />
         {needsPassword && (
           <label>
@@ -412,7 +512,13 @@ function CodingSettings({
           <p role="alert">{(save.error ?? confirm.error ?? remove.error)?.message}</p>
         )}
         <div className="team-file-actions">
-          <button className="team-primary" disabled={save.isPending}>
+          <button
+            className="team-primary"
+            disabled={
+              save.isPending ||
+              (permission !== coding.permission && unverified.includes(permission))
+            }
+          >
             Save
           </button>
           <button

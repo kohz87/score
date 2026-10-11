@@ -5,7 +5,15 @@ import {
   type CodingAgent,
   type Message,
 } from '@score/contract'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -946,7 +954,11 @@ test('antigravity: a turn spawns by argv with the level flags, shows tool cards 
   expect(call!.args[0]).toBe('-p')
   expect(call!.args).toEqual(
     expect.arrayContaining([
-      '--output-format', 'stream-json', '--mode', 'accept-edits', '--sandbox',
+      '--output-format',
+      'stream-json',
+      '--mode',
+      'accept-edits',
+      '--sandbox',
     ]),
   )
   expect(call!.prompt).toContain('please update the notes')
@@ -1074,5 +1086,45 @@ test('antigravity: the quota reading comes from /usage, is cached, and other CLI
   expect((await request('GET', '/api/coding-agents/runtimes/codex/usage')).statusCode).toBe(409)
   setEnv('SCORE_CODING_FAKE_VERSION', '9.9.9')
   // Cached for a minute, so the version change is not noticed yet.
-  expect((await request('GET', '/api/coding-agents/runtimes/antigravity/usage')).statusCode).toBe(200)
+  expect((await request('GET', '/api/coding-agents/runtimes/antigravity/usage')).statusCode).toBe(
+    200,
+  )
+})
+
+test('0052 widens the runtime list and keeps every coding agent row', () => {
+  const migrations = fileURLToPath(new URL('../../migrations/', import.meta.url))
+  const before = join(dir, 'before-0052')
+  mkdirSync(before)
+  for (const name of readdirSync(migrations))
+    if (Number(name.slice(0, 4)) < 52) copyFileSync(join(migrations, name), join(before, name))
+  const old = openDatabase(join(dir, 'old.db'))
+  migrate(old, before)
+  const at = '2026-10-10T10:00:00.000Z'
+  old.sqlite
+    .prepare(
+      "INSERT INTO coding_agents (id, name, runtime, workspace, permission, color, shape, confirmed_version, created_at, removed_at) VALUES ('c1', 'C', 'codex', '/w', 'read-only', '#000000', 'hexagon', '0.1.0', ?, ?)",
+    )
+    .run(at, at)
+  expect(() =>
+    old.sqlite
+      .prepare(
+        "INSERT INTO coding_agents (id, name, runtime, workspace, permission, color, shape, created_at) VALUES ('a1', 'A', 'antigravity', '/w', 'read-only', '#000000', 'hexagon', ?)",
+      )
+      .run(at),
+  ).toThrow()
+  migrate(old, migrations)
+  old.sqlite
+    .prepare(
+      "INSERT INTO coding_agents (id, name, runtime, workspace, permission, color, shape, created_at) VALUES ('a1', 'A', 'antigravity', '/w', 'read-only', '#000000', 'hexagon', ?)",
+    )
+    .run(at)
+  expect(
+    old.sqlite
+      .prepare('SELECT id, runtime, confirmed_version, removed_at FROM coding_agents ORDER BY id')
+      .all(),
+  ).toEqual([
+    { id: 'a1', runtime: 'antigravity', confirmed_version: null, removed_at: null },
+    { id: 'c1', runtime: 'codex', confirmed_version: '0.1.0', removed_at: at },
+  ])
+  old.close()
 })

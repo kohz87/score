@@ -345,16 +345,35 @@ test('antigravity argv per permission level; the prompt is in argv, bare slash/d
   const args = (permission: 'read-only' | 'workspace-write' | 'full', extra = {}) =>
     antigravityDriver.buildArgs({ ...base, prompt: 'hello', permission, ...extra })
   expect(args('read-only')).toEqual([
-    '-p', 'hello', '--output-format', 'stream-json', '--mode', 'plan', '--sandbox',
+    '-p',
+    'hello',
+    '--output-format',
+    'stream-json',
+    '--mode',
+    'plan',
+    '--sandbox',
   ])
   expect(args('workspace-write')).toEqual([
-    '-p', 'hello', '--output-format', 'stream-json', '--mode', 'accept-edits', '--sandbox',
+    '-p',
+    'hello',
+    '--output-format',
+    'stream-json',
+    '--mode',
+    'accept-edits',
+    '--sandbox',
   ])
   expect(args('full')).toEqual([
-    '-p', 'hello', '--output-format', 'stream-json', '--dangerously-skip-permissions',
+    '-p',
+    'hello',
+    '--output-format',
+    'stream-json',
+    '--dangerously-skip-permissions',
   ])
   expect(args('read-only', { sessionId: 'abc', model: 'm1' }).slice(-4)).toEqual([
-    '--conversation', 'abc', '--model', 'm1',
+    '--conversation',
+    'abc',
+    '--model',
+    'm1',
   ])
   expect(args('read-only', { prompt: '/usage' })[1]).toBe('Message: /usage')
   expect(args('read-only', { prompt: '--dangerously-skip-permissions' })[1]).toBe(

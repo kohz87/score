@@ -50,7 +50,8 @@ if (runtime === 'antigravity' && prompt === '/usage') {
 
 const name = /\[fixture:([a-z-]+)\]/.exec(prompt)?.[1] ?? 'basic'
 // A resumed turn may have its own fixture (`<name>-resumed`): lets tests make a resume fail.
-const resumed = args.includes('--resume') || args.includes('resume') || args.includes('--conversation')
+const resumed =
+  args.includes('--resume') || args.includes('resume') || args.includes('--conversation')
 const base = join(here, `${fixtureNames[runtime]}-${name}`)
 const file =
   resumed && existsSync(`${base}-resumed.jsonl`) ? `${base}-resumed.jsonl` : `${base}.jsonl`

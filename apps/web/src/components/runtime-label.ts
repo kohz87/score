@@ -4,6 +4,7 @@ const labels: Record<Runtime, string> = {
   hermes: 'Hermes',
   'claude-code': 'Claude Code',
   codex: 'Codex CLI',
+  antigravity: 'Antigravity',
   opencode: 'OpenCode',
 }
 

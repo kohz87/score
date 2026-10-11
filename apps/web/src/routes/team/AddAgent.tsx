@@ -131,7 +131,7 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
               checked={kind === 'coding'}
               onChange={() => setKind('coding')}
             />{' '}
-            Coding agent (Claude Code, Codex)
+            Coding agent (Claude Code, Codex, Antigravity)
           </label>
         </fieldset>
       )}

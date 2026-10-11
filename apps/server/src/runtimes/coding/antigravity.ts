@@ -187,7 +187,12 @@ export function createAntigravityParser(cwd?: string): LineParser {
         denied.forEach((action, index) => {
           const name = action.display_name ?? action.action ?? 'an action'
           events.push(
-            { kind: 'tool_start', callId: `denied-${index}`, tool: 'Antigravity refused', preview: name },
+            {
+              kind: 'tool_start',
+              callId: `denied-${index}`,
+              tool: 'Antigravity refused',
+              preview: name,
+            },
             { kind: 'tool_end', callId: `denied-${index}`, ok: false, preview: `Refused: ${name}` },
           )
         })
@@ -244,11 +249,18 @@ export function parseAntigravityUsage(output: string): UsageReading {
       const match = /(\d{1,3}(?:\.\d+)?)\s*%/.exec(cell)
       return match ? [{ cell, value: Math.min(100, Number(match[1])) }] : []
     })
-    const name = cells.find((cell) => !/%/.test(cell) && /[A-Za-z]/.test(cell) && !/^reset/i.test(cell))
+    const name = cells.find(
+      (cell) => !/%/.test(cell) && /[A-Za-z]/.test(cell) && !/^reset/i.test(cell),
+    )
     if (!name || percents.length === 0) continue
     // A reset time is either its own cell or what is left of the percent cell once the percentage is cut out.
     const resets = [
-      ...percents.map((p) => p.cell.replace(/\d{1,3}(?:\.\d+)?\s*%/, '').replace(/[()·|,-]/g, ' ').trim()),
+      ...percents.map((p) =>
+        p.cell
+          .replace(/\d{1,3}(?:\.\d+)?\s*%/, '')
+          .replace(/[()·|,-]/g, ' ')
+          .trim(),
+      ),
       ...cells.filter((cell) => !/%/.test(cell) && cell !== name && /\d/.test(cell)),
     ].filter(Boolean)
     groups.push({

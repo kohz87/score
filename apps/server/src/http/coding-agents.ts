@@ -79,7 +79,10 @@ export function registerCodingAgentRoutes(
     return checked.real
   }
 
-  function assertVerified(driver: ReturnType<typeof driverFor>, permission: CodingPermission): void {
+  function assertVerified(
+    driver: ReturnType<typeof driverFor>,
+    permission: CodingPermission,
+  ): void {
     if (!coding.locator.verifiedPermissions(driver).includes(permission))
       throw new HttpError(
         422,

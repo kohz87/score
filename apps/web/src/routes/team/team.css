@@ -1050,3 +1050,10 @@ a.team-pill-button {
   font-weight: 600;
   cursor: pointer;
 }
+
+/* Antigravity's limits left: one plain line per model group, no bullets (the facts column is right-aligned). */
+.team-coding-quota {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
