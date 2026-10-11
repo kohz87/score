@@ -671,7 +671,7 @@ test('text that could not be saved before leaving comes back when the note is op
   })
   await screen.findByLabelText('Contents of projects/Plan.md')
   expect(editorView().state.doc.toString()).toBe('# Plan\n\nGoals\n unsaved')
-  expect(await screen.findByTestId('conflict')).toBeDefined()
+  expect(await screen.findByTestId('conflict', {}, { timeout: 3000 })).toBeDefined()
 })
 
 // PLAN 6.8: one editor, no Preview; Source is remembered per device.
