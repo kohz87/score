@@ -15,7 +15,8 @@ function attachment(name: string | undefined): string {
   const base = (name ?? '').split(/[\\/]/).pop() ?? ''
   // eslint-disable-next-line no-control-regex -- stripping control characters is the point
   const cleaned = base.replace(/[\u0000-\u001f\u007f]/g, '')
-  const safe = cleaned.trim().slice(0, 120) || 'download'
+  // Code points, not UTF-16 units: a cut surrogate pair makes encodeURIComponent throw.
+  const safe = [...cleaned.trim()].slice(0, 120).join('') || 'download'
   return `attachment; filename*=UTF-8''${encodeURIComponent(safe)}`
 }
 

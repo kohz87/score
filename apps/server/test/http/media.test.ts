@@ -368,3 +368,15 @@ test('deleting a message releases its media references; a rewind keeps them for 
   expect(rewound.statusCode, rewound.body).toBe(200)
   expect(refs(second)).toBe(1)
 })
+
+// SCORE-027: truncation must not split a surrogate pair (encodeURIComponent throws on a lone surrogate).
+test('a long download name ending in an emoji does not break the response', async () => {
+  const stored = await upload(pdf(), { filename: 'a.pdf', type: 'application/pdf' })
+  const res = await app.inject({
+    method: 'GET',
+    url: `/api/media/${stored.json().mediaId}?name=${encodeURIComponent(`${'a'.repeat(119)}😀.pdf`)}`,
+    headers,
+  })
+  expect(res.statusCode).toBe(200)
+  expect(res.headers['content-disposition']).toMatch(/^attachment; filename\*=UTF-8''a{119}/)
+})
