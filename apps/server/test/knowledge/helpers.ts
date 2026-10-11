@@ -36,6 +36,7 @@ export async function makeVault(
   delete (rest as { files?: unknown }).files
   const vault = new KnowledgeVault({
     watch: false,
+    stateDir: path.join(dir, 'home', 'knowledge'),
     ...rest,
     vault: vaultDir,
     db,

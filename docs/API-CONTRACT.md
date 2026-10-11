@@ -1286,7 +1286,7 @@ tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
   commits outside edits as "Outside changes"; if that snapshot fails the operation is refused `503 git_unavailable` (nothing
   is overwritten), and a save whose note changed on disk meanwhile gets `412` with the new etag. Agent `write`/`append`
   from an observe-only producer (`isolation: 'unknown'`) → `403 observe_only`.
-- **H** `POST /api/knowledge/move` `{ from; to; updateLinks }` → `{ path; updatedNotes }` (two commits: the pure rename, then the link edits, so
+- **H** `POST /api/knowledge/move` `{ from; to; updateLinks }` → `{ path; updatedNotes; skipped: { path; reason }[] }` (`skipped` lists notes whose links were left as they are because they changed or were removed meanwhile; two commits: the pure rename, then the link edits, so
   git follows the file; `409 exists`; `413` and nothing moved when a link rewrite would push a note over 8 MiB; links added
   outside Score since the last scan are included).
 - **H** `DELETE /api/knowledge/notes/*path` → `204` (owner only; agents have no delete).
@@ -1302,8 +1302,9 @@ tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
   (Settings › Knowledge).
 - Stream `knowledge.changed` after every change (Score's, an agent's, or an outside edit the watcher saw).
 **Documents and zips (PLAN 6.6).** Files that are not Markdown notes live in the same vault and tree: `.pdf`, `.docx`,
-`.csv`, `.json`, `.html`/`.htm`, images (png, jpeg, gif, webp) and `.zip`. `.md`/`.markdown` uploads and `.txt`
-(stored as `<name>.md`) become notes. Limits: 25 MB per file; documents up to 10 MB are committed to the vault's git,
+`.csv`, `.json`, `.html`/`.htm`, images (png, jpeg, gif, webp) and `.zip`. `.md`/`.markdown` (any case) uploads and `.txt`
+(all stored as `<name>.md`) become notes, with the same checks as an ordinary save. A file never replaces one that appeared meanwhile: with `ask` or `keep` a name that was taken after the check is a `409`
+(a zip entry is skipped); `replace` publishes only over the version it saw (`412` otherwise). Limits: 25 MB per file; documents up to 10 MB are committed to the vault's git,
 larger ones are stored but not versioned (`versioned: false`); extracted text is redacted (D6), cut at 2 MiB
 (`textStatus: 'truncated'`) and indexed in its own FTS table. Text of PDF (`unpdf`) and DOCX (`mammoth`) is extracted in a
 worker thread (20 s, 512 MB heap); a failure keeps the file with `textStatus: 'unavailable'`. Types are decided from

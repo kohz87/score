@@ -221,7 +221,7 @@ describe('writes', () => {
       to: 'Reference/Terms.md',
       updateLinks: true,
     })
-    expect(moved.json()).toEqual({ path: 'Reference/Terms.md', updatedNotes: 3 })
+    expect(moved.json()).toEqual({ path: 'Reference/Terms.md', updatedNotes: 3, skipped: [] })
     const roadmap = (await call('GET', `${N}${enc('Projects/Roadmap.md')}`)).json()
     expect(roadmap.body).toContain('[[Terms#Handoff|glossary]]')
     expect(roadmap.links).toContainEqual({ target: 'Terms#Handoff', path: 'Reference/Terms.md' })

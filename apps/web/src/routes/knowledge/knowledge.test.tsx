@@ -92,7 +92,13 @@ function respond(input: string, init: RequestInit = {}): Response {
     const move = body as { from: string; to: string }
     notes.set(move.to, notes.get(move.from)!)
     notes.delete(move.from)
-    return json({ path: move.to, updatedNotes: 3 })
+    return json({
+      path: move.to,
+      updatedNotes: 3,
+      skipped: move.to.includes('Skipped')
+        ? [{ path: 'projects/Launch.md', reason: 'it changed while the links were being updated' }]
+        : [],
+    })
   }
   const m = /^\/notes\/(.+?)(\/history|\/restore|\/versions\/([0-9a-f]+))?$/.exec(p)
   if (!m) return json({ error: { code: 'not_found', message: 'no' } }, 404)
@@ -432,6 +438,23 @@ test('creating over an existing note shows the error', async () => {
   fireEvent.click(within(dialog).getByRole('button', { name: 'Create note' }))
   expect(await within(dialog).findByRole('alert')).toBeDefined()
   expect(within(dialog).getByRole('alert').textContent).toContain('already exists')
+})
+
+test('a move says which notes still link to the old name', async () => {
+  await openEditor()
+  fireEvent.click(screen.getByRole('button', { name: 'Rename or move' }))
+  const dialog = screen.getByRole('dialog', { name: /Rename or move/ })
+  fireEvent.change(within(dialog).getByLabelText('New path'), {
+    target: { value: 'archive/Skipped' },
+  })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Move' }))
+  expect(
+    await screen.findByText(
+      /Couldn’t update the links in projects\/Launch\.md\. They still link to the old name\./,
+      undefined,
+      { timeout: 5000 },
+    ),
+  ).toBeDefined()
 })
 
 test('rename with update links shows the count; delete asks first', async () => {

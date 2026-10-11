@@ -221,6 +221,7 @@ describe('move and delete', () => {
     expect(await h.vault.docs.move('a/old.pdf', 'b/new.pdf')).toEqual({
       path: 'b/new.pdf',
       updatedNotes: 0,
+      skipped: [],
     })
     expect(h.vault.search('mulberry', 5)[0]?.path).toBe('b/new.pdf')
     expect(fs.existsSync(path.join(h.vaultDir, 'a/old.pdf'))).toBe(false)

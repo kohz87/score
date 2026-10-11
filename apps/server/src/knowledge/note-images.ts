@@ -1,5 +1,6 @@
 import { KNOWLEDGE_IMAGE_MAX_BYTES, KNOWLEDGE_IMAGE_TYPES } from '@score/contract'
 import { HttpError } from '../errors.ts'
+import { MAX_NOTE_BYTES } from './note.ts'
 import { sniffImage } from '../media/sniff.ts'
 import { codeRanges } from './links.ts'
 
@@ -127,4 +128,11 @@ export function restoreImages(agentText: string, current: string): string {
 export function forIndex(text: string): string {
   if (!text.includes('data:')) return text
   return withPlaceholders(text).replace(LOOSE, '')
+}
+
+/** The checks every way of putting a note on disk shares (saves, uploads, zip imports): size, then embedded images. */
+export function prepareNoteContent(content: string): void {
+  if (Buffer.byteLength(content) > MAX_NOTE_BYTES)
+    throw new HttpError(413, 'payload_too_large', 'That note is too large.')
+  validateNoteImages(content)
 }

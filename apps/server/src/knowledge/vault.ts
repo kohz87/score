@@ -1,5 +1,6 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { constants as C } from 'node:fs'
+import os from 'node:os'
 import { watch, type FSWatcher, type Stats } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -19,7 +20,8 @@ import type { ScoreDb } from '../db/index.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import { HttpError } from '../errors.ts'
 import { VaultGit } from './git.ts'
-import { forIndex, validateNoteImages } from './note-images.ts'
+import { forIndex, prepareNoteContent } from './note-images.ts'
+import { moveNoReplace, parkedNameFor, removeOldName, restoreParked, syncDir } from './move-file.ts'
 import { buildNoteIndex, parseWikilinks, resolveLink, rewriteLinks } from './links.ts'
 import {
   authorFromColumn,
@@ -34,7 +36,7 @@ import {
   serialiseNote,
 } from './note.ts'
 import { SEED_NOTES } from './seed.ts'
-import { isDocumentPath } from './doc-types.ts'
+import { isDocumentPath, MAX_FILE_BYTES } from './doc-types.ts'
 import { KnowledgeDocuments } from './documents.ts'
 
 // The central vault (contract §12, design 6.0 § 6.2). Files are the source of truth; the DB only indexes them.
@@ -60,6 +62,8 @@ export interface VaultOptions {
   seed?: boolean
   /** Tests: do not use fs.watch. */
   watch?: boolean
+  /** Score's own state for Knowledge (`$SCORE_HOME/knowledge`): the move plan lives here, never in the vault. */
+  stateDir?: string
 }
 
 const NoteRowSchema = z.object({
@@ -92,10 +96,17 @@ const MovePlanSchema = z.object({
       content: z.string(),
       done: z.boolean(),
       skipped: z.boolean(),
+      reason: z.string().optional(),
     }),
   ),
+  /** Where the old name is parked while a move removes it, so an interrupted move can finish or undo that. */
+  parked: z.string().optional(),
 })
 type MovePlan = z.infer<typeof MovePlanSchema>
+export interface MoveSkipped {
+  path: string
+  reason: string
+}
 
 const READ_CHUNK_BYTES = 256 * 1024
 const MAX_FILES = 100_000
@@ -171,6 +182,9 @@ export class KnowledgeVault {
       .catch(() => false)
     await this.git.init(hasGitDir)
     await this.serial(async () => {
+      await this.migrateLegacyPlan().catch((error: unknown) =>
+        this.options.log?.warn({ err: error }, 'Couldn’t move an old move plan'),
+      )
       await this.recoverMove()
       const entries = (await fs.readdir(this.root)).filter((name) => name !== '.git')
       const fresh = entries.length === 0
@@ -294,26 +308,47 @@ export class KnowledgeVault {
       throw new HttpError(400, 'bad_path', 'That folder points outside Knowledge.')
   }
 
-  /** `expect`: the content hash the target must still have (null = must not exist) right before it is replaced. */
+  /**
+   * `expect`: the content hash the target must still have (null = must not exist) right before it is replaced.
+   * A new target is published with `link`, which never replaces; an existing one is replaced only while it still
+   * has the expected hash. Without `expect` the target is replaced unconditionally (restores, seeds).
+   * `durable`: the new content and the folder entry are flushed to disk before returning.
+   */
   async atomicWrite(
     abs: string,
     content: string | Uint8Array,
     expect?: { hash: string | null },
+    durable = false,
   ): Promise<void> {
     const parent = path.dirname(abs)
     const temp = path.join(parent, `.score-${randomUUID()}.tmp`)
     try {
-      await fs.writeFile(temp, content, { flag: 'wx', mode: 0o644 })
+      const handle = await fs.open(temp, 'wx', 0o644)
+      try {
+        await handle.writeFile(content)
+        if (durable) await handle.sync()
+      } finally {
+        await handle.close()
+      }
       await this.assertParent(parent)
       if (expect) {
-        const now = await this.readContained(abs).then(hashContent, () => null)
-        if (now !== expect.hash)
+        const now: Array<string | null> = await this.readContainedBuffer(abs, MAX_FILE_BYTES).then(
+          (bytes) => [hashContent(bytes), hashContent(bytes.toString('utf8'))],
+          () => [null],
+        )
+        if (!now.includes(expect.hash)) {
+          const first = now[0] ?? null
           throw new HttpError(412, 'precondition_failed', 'The note changed after you opened it.', {
-            etag: now === null ? null : etagOf(now),
+            etag: first === null ? null : etagOf(first),
           })
+        }
       }
-      if (expect?.hash === null) await this.moveNoReplace(temp, abs)
-      else await fs.rename(temp, abs)
+      if (expect?.hash === null) {
+        await this.moveNoReplace(temp, abs)
+      } else {
+        await fs.rename(temp, abs)
+        if (durable) await syncDir(parent)
+      }
       await this.assertParent(parent)
     } catch (error) {
       await fs.rm(temp, { force: true })
@@ -321,30 +356,9 @@ export class KnowledgeVault {
     }
   }
 
-  /**
-   * Moves `source` to `dest`, failing with 409 instead of replacing anything that appears there: the file is
-   * hard-linked (which never replaces) and only then is the old name removed. Where hard links are unsupported
-   * it falls back to a check followed by a rename.
-   */
-  async moveNoReplace(source: string, dest: string): Promise<void> {
-    try {
-      await fs.link(source, dest)
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code
-      if (code === 'EEXIST')
-        throw new HttpError(409, 'exists', 'A file with that name already exists.')
-      if (code !== 'EPERM' && code !== 'ENOSYS' && code !== 'EOPNOTSUPP') throw error
-      if (
-        await fs.lstat(dest).then(
-          () => true,
-          () => false,
-        )
-      )
-        throw new HttpError(409, 'exists', 'A file with that name already exists.')
-      await fs.rename(source, dest)
-      return
-    }
-    await fs.unlink(source)
+  /** Moves `source` to `dest`, failing with 409 instead of replacing anything there (see move-file.ts). */
+  async moveNoReplace(source: string, dest: string, parked?: string): Promise<void> {
+    await moveNoReplace(source, dest, parked)
   }
 
   /**
@@ -927,9 +941,7 @@ export class KnowledgeVault {
         : request.frontmatter === undefined
           ? (current?.prefix ?? '') + request.body
           : serialiseNote(request.body, request.frontmatter)
-      if (Buffer.byteLength(content) > MAX_NOTE_BYTES)
-        throw new HttpError(413, 'payload_too_large', 'That note is too large.')
-      validateNoteImages(content)
+      prepareNoteContent(content)
       const hash = hashContent(content)
       if (hash === currentHash) return { etag: etagOf(hash), path: rel }
       await this.commitOutside()
@@ -948,7 +960,7 @@ export class KnowledgeVault {
     toInput: string,
     updateLinks: boolean,
     author: KnowledgeAuthor = 'you',
-  ): Promise<{ path: string; updatedNotes: number }> {
+  ): Promise<{ path: string; updatedNotes: number; skipped: MoveSkipped[] }> {
     const from = parseNotePath(fromInput)
     const to = parseNotePath(toInput)
     return this.serial(async () => {
@@ -992,10 +1004,12 @@ export class KnowledgeVault {
         plan.push({ now: old === from ? to : old, content, baseHash: hashContent(raw) })
       }
       const abs = await this.prepareParent(to)
+      const parked = parkedNameFor(source.abs)
       const movePlan: MovePlan = {
         from,
         to,
         author,
+        parked: path.relative(this.root, parked).split(path.sep).join('/'),
         items: plan.map((item) => ({
           path: item.now,
           baseHash: item.baseHash,
@@ -1008,7 +1022,7 @@ export class KnowledgeVault {
       // Written before anything moves: if Score stops half way, the next start finishes (or drops) the rewrites.
       await this.savePlan(movePlan)
       try {
-        await this.moveNoReplace(source.abs, abs)
+        await this.moveNoReplace(source.abs, abs, parked)
         await this.assertParent(path.dirname(abs))
       } catch (error) {
         await this.clearPlan()
@@ -1017,32 +1031,95 @@ export class KnowledgeVault {
       // The rename gets a commit of its own: with the link edits in the same commit a short note can look like a
       // delete plus a create to git, and its earlier versions would no longer be found.
       await this.commit([from, to], `Move ${from} to ${to}`, author)
-      return { path: to, updatedNotes: await this.finishMove(movePlan) }
+      const done = await this.finishMove(movePlan)
+      return { path: to, updatedNotes: done.updated, skipped: done.skipped }
     })
   }
 
   // ---- move plan (roll-forward recovery) ---------------------------------------------------------------------
 
-  /** Inside `.git`, so it is never swept into a commit or walked as a note. Null when the vault has no `.git`. */
-  private planFile(): string {
-    return path.join(this.root, '.git', 'score-move-plan.json')
+  /**
+   * In Score's own state, keyed by the vault's real path: never inside the vault, so it is not swept into a commit or
+   * walked as a note, and it works whatever the vault's layout (a linked Git worktree's `.git` is a file).
+   */
+  private stateRoot(): string {
+    return this.options.stateDir ?? path.join(os.tmpdir(), 'score-knowledge-state')
   }
 
-  private async savePlan(plan: MovePlan): Promise<void> {
+  planFile(): string {
+    const key = createHash('sha256').update(this.root).digest('hex').slice(0, 16)
+    return path.join(this.stateRoot(), `move-plan-${key}.json`)
+  }
+
+  /** Reads the plan; null when there is none. Anything unreadable is reported to the caller as an error. */
+  private async readPlan(file: string): Promise<MovePlan | null> {
+    let raw: string
+    try {
+      raw = await fs.readFile(file, 'utf8')
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ENOENT' || code === 'ENOTDIR') return null
+      throw error
+    }
+    return MovePlanSchema.parse(JSON.parse(raw))
+  }
+
+  /** Moves a plan an older version kept under `.git` into Score's state, once. */
+  private async migrateLegacyPlan(): Promise<void> {
+    const legacy = path.join(this.root, '.git', 'score-move-plan.json')
+    let raw: string
+    try {
+      raw = await fs.readFile(legacy, 'utf8')
+    } catch {
+      return // none, or `.git` is a file (linked worktree): nothing to migrate
+    }
+    const target = this.planFile()
+    const hasNew = await fs.lstat(target).then(
+      () => true,
+      () => false,
+    )
+    if (!hasNew) {
+      try {
+        await this.writePlanFile(MovePlanSchema.parse(JSON.parse(raw)))
+      } catch (error) {
+        this.options.log?.warn({ err: error }, 'Ignored an unreadable move plan')
+      }
+    }
+    await fs.rm(legacy, { force: true })
+  }
+
+  /**
+   * Written and flushed (file, then folder) before the caller changes anything in the vault, and again after each
+   * step, so a plan on disk is never behind the files. Where the platform can't flush a folder, the file still is.
+   */
+  private async writePlanFile(plan: MovePlan): Promise<void> {
+    const dir = this.stateRoot()
+    await fs.mkdir(dir, { recursive: true, mode: 0o700 })
     const file = this.planFile()
     const temp = `${file}.${randomUUID()}.tmp`
     try {
-      await fs.writeFile(temp, JSON.stringify(plan), { mode: 0o600 })
+      const handle = await fs.open(temp, 'wx', 0o600)
+      try {
+        await handle.writeFile(JSON.stringify(plan))
+        await handle.sync()
+      } finally {
+        await handle.close()
+      }
       await fs.rename(temp, file)
     } catch (error) {
       await fs.rm(temp, { force: true })
-      // Without a `.git` folder (git unavailable) there is nowhere to keep the plan; the move still proceeds.
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      throw error
     }
+    await syncDir(dir)
+  }
+
+  private async savePlan(plan: MovePlan): Promise<void> {
+    await this.writePlanFile(plan)
   }
 
   private async clearPlan(): Promise<void> {
     await fs.rm(this.planFile(), { force: true })
+    await syncDir(this.stateRoot()).catch(() => undefined)
   }
 
   /** Writes one planned rewrite if the note is still the planned version. */
@@ -1054,7 +1131,7 @@ export class KnowledgeVault {
     if (current === item.newHash) return 'written'
     if (current !== item.baseHash) return 'conflict'
     try {
-      await this.atomicWrite(file.abs, item.content, { hash: item.baseHash })
+      await this.atomicWrite(file.abs, item.content, { hash: item.baseHash }, true)
     } catch (error) {
       if (error instanceof HttpError && error.status === 412) return 'conflict'
       throw error
@@ -1064,9 +1141,11 @@ export class KnowledgeVault {
 
   /**
    * The part of a move after the rename: applies the planned link rewrites (a note edited since is left alone),
-   * commits, indexes and announces. A failure keeps the plan on disk for `recoverMove`.
+   * commits, indexes and announces. A failure keeps the plan on disk for `recoverMove`. Every rewrite that was
+   * recorded as done is checked again first: a note deleted or edited since (while Score was down, say) becomes a
+   * skipped item, never a reason to fail.
    */
-  private async finishMove(plan: MovePlan): Promise<number> {
+  private async finishMove(plan: MovePlan): Promise<{ updated: number; skipped: MoveSkipped[] }> {
     const { from, to, author } = plan
     let failure: unknown
     try {
@@ -1078,6 +1157,7 @@ export class KnowledgeVault {
             'A note changed while its links were being updated; its links were left as they are',
           )
           item.skipped = true
+          item.reason = 'it changed while the links were being updated'
         }
         item.done = true
         await this.savePlan(plan)
@@ -1085,13 +1165,26 @@ export class KnowledgeVault {
     } catch (error) {
       failure = error
     }
+    for (const item of plan.items) {
+      if (!item.done || item.skipped) continue
+      const file = await this.lookup(item.path.split('/')).catch(() => null)
+      const current = file?.stat?.isFile()
+        ? await this.readContained(file.abs).then(hashContent, () => null)
+        : null
+      if (current === item.newHash) continue
+      item.skipped = true
+      item.reason = current === null ? 'it was removed' : 'it changed since the links were updated'
+    }
     const rewritten = plan.items
       .filter((item) => item.done && !item.skipped)
       .map((item) => item.path)
     if (rewritten.length > 0)
       await this.commit([...new Set(rewritten)], `Update links after moving ${from}`, author)
     this.options.db.tx((sqlite) => this.remove(sqlite, from))
-    await this.indexFile(to, author)
+    await this.indexFile(to, author).catch((error: unknown) => {
+      // The moved note was removed or replaced by something that isn't a note since; the next scan sorts it out.
+      this.options.log?.warn({ err: error, path: to }, 'Couldn’t index a moved note')
+    })
     for (const rel of rewritten) if (rel !== to) await this.indexFile(rel, author)
     await this.publish({ path: from, kind: 'moved', to, by: author })
     for (const rel of rewritten)
@@ -1105,30 +1198,60 @@ export class KnowledgeVault {
       )
     }
     await this.clearPlan()
-    return rewritten.filter((rel) => rel !== to).length
+    return {
+      updated: rewritten.filter((rel) => rel !== to).length,
+      skipped: plan.items
+        .filter((item) => item.skipped)
+        .map((item) => ({ path: item.path, reason: item.reason ?? 'it changed' })),
+    }
   }
 
-  /** Finishes a move that was interrupted after its plan was saved (caller holds the lock). */
+  /**
+   * Finishes a move that was interrupted after its plan was saved (caller holds the lock). Never throws: whatever
+   * can't be finished is logged, and the plan always ends (a later start must not meet the same problem again).
+   */
   private async recoverMove(): Promise<void> {
-    let plan: MovePlan
     try {
-      plan = MovePlanSchema.parse(JSON.parse(await fs.readFile(this.planFile(), 'utf8')))
+      await this.recoverMoveUnsafe()
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+      this.options.log?.warn({ err: error }, 'Couldn’t finish an interrupted move; it was dropped')
+      await this.clearPlan().catch(() => undefined)
+    }
+  }
+
+  private async recoverMoveUnsafe(): Promise<void> {
+    let plan: MovePlan | null
+    try {
+      plan = await this.readPlan(this.planFile())
+    } catch (error) {
       this.options.log?.warn({ err: error }, 'Ignored an unreadable move plan')
       await this.clearPlan()
       return
     }
+    if (plan === null) return
     const source = await this.lookup(plan.from.split('/'))
     const target = await this.lookup(plan.to.split('/'))
-    if (source.stat && target.stat) {
+    // A move that stopped while the old name was parked: the parked file is either the moved one (finish removing
+    // it) or a newer file that took the old name's place (put it back).
+    if (plan.parked !== undefined) {
+      const parked = path.join(this.root, ...plan.parked.split('/'))
+      const parkedStat = await fs.lstat(parked).catch(() => null)
+      if (parkedStat?.isFile()) {
+        if (target.stat && parkedStat.ino === target.stat.ino && parkedStat.dev === target.stat.dev)
+          await fs.unlink(parked)
+        else await restoreParked(parked, source.abs)
+      }
+    }
+    const nowSource = await this.lookup(plan.from.split('/'))
+    const nowTarget = await this.lookup(plan.to.split('/'))
+    if (nowSource.stat && nowTarget.stat) {
       // Linked but not yet unlinked: the same file under both names finishes the move; anything else is not ours.
-      if (source.stat.ino !== target.stat.ino || source.stat.dev !== target.stat.dev) {
+      if (nowSource.stat.ino !== nowTarget.stat.ino || nowSource.stat.dev !== nowTarget.stat.dev) {
         await this.clearPlan()
         return
       }
-      await fs.unlink(source.abs)
-    } else if (!target.stat) {
+      await removeOldName(nowSource.abs, parkedNameFor(nowSource.abs), nowSource.stat)
+    } else if (!nowTarget.stat) {
       await this.clearPlan() // the move never happened
       return
     }

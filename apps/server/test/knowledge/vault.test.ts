@@ -228,7 +228,7 @@ describe('links and move', () => {
     await h.vault.writeNote('two.md', { body: 'nothing', etag: null })
     h.events.length = 0
     const moved = await h.vault.moveNote('Old name.md', 'Folder/New name.md', true)
-    expect(moved).toEqual({ path: 'Folder/New name.md', updatedNotes: 1 })
+    expect(moved).toEqual({ path: 'Folder/New name.md', updatedNotes: 1, skipped: [] })
     const one = fs.readFileSync(path.join(h.vaultDir, 'one.md'), 'utf8')
     expect(one).toContain('---\ntitle: One\n---')
     expect(one).toContain(

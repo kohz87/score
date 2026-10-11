@@ -984,8 +984,8 @@ const cases = [
   ],
   [
     'KnowledgeMoveResponseSchema',
-    { path: 'b.md', updatedNotes: 2 },
-    { path: 'b.md', updatedNotes: -1 },
+    { path: 'b.md', updatedNotes: 2, skipped: [{ path: 'c.md', reason: 'it changed' }] },
+    { path: 'b.md', updatedNotes: 2, skipped: [{ path: 'c.md' }] },
   ],
   [
     'KnowledgeSearchHitSchema',

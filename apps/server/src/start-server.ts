@@ -329,6 +329,7 @@ export async function startServer(
         }),
       log: { warn: (object, message) => app?.log.warn(object, message) },
       seed: fakeVaultDir !== undefined,
+      stateDir: join(config.home, 'knowledge'),
     })
     try {
       await knowledge.start()
