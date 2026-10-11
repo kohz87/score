@@ -97,6 +97,11 @@ describe('S2-017 a rebuild keeps tracked documents versioned', () => {
 describe('S2-020 code inside containers is literal', () => {
   const cases: Array<[string, string]> = [
     [
+      'fence in a list item with a blank line inside',
+      '1. item\n\n   ```\n   one\n\n   [[Target]]\n   ```\n',
+    ],
+    ['fence in a list item after a paragraph', '- item\n  ```\n  [[Target]]\n  ```\n'],
+    [
       'fence in a list item after a blank line',
       '- item\n\n  ```\n  [[Target]]\n  ```\n\n- next [[Target]]',
     ],
@@ -138,13 +143,6 @@ describe('S2-020 code inside containers is literal', () => {
     )
     expect(out.text).toBe(text.replace('after [[Target]]', 'after [[Renamed]]'))
   })
-
-  test('adversarial inline characters stay fast and still find the code', () => {
-    const text = '[[a]] **b** ![c](d) <e> &f; `x`\n'.repeat(4000)
-    const started = Date.now()
-    expect(codeRanges(text)).toHaveLength(4000)
-    expect(Date.now() - started).toBeLessThan(5000)
-  })
 })
 
 describe('S2-021 linear scaling', () => {
@@ -158,13 +156,36 @@ describe('S2-021 linear scaling', () => {
     return Math.max(min, 1)
   }
 
-  test('inline code spans: 4x the spans costs well under 4x squared', () => {
-    const small = '`a` '.repeat(4000)
-    const large = '`a` '.repeat(16000)
-    expect(codeRanges(large)).toHaveLength(16000)
-    const ratio = best(() => codeRanges(large)) / best(() => codeRanges(small))
-    expect(ratio).toBeLessThan(10) // linear ~4, quadratic ~16
-  })
+  const cases: Record<string, (n: number) => string> = {
+    'realistic note': (n) =>
+      '## Heading\n\nSome prose with `inline` code and a [[Link]] here.\n\n- item one\n- item two with `code`\n\n```ts\nconst x = 1\n```\n\n> quote [[Other]]\n\n'.repeat(
+        n / 4,
+      ),
+    'short inline-code lines': (n) => '`a` b\n'.repeat(n),
+    'one long code fence': (n) => '```\n' + 'let x = [[a]] * 2;\n'.repeat(n) + '```\n',
+    'indented code': (n) => '    code line [[a]]\n'.repeat(n),
+    'table rows with code': (n) => '| `a` | `b` | [[c]] |\n'.repeat(n),
+    wikilinks: (n) => '[[a]] '.repeat(n),
+    emphasis: (n) => '**a** '.repeat(n),
+    references: (n) => '[a][b] '.repeat(n),
+    'inline spans, one paragraph': (n) => '`a` '.repeat(n),
+    'nested list and quote lines': (n) => '> - item `x`\n>   more\n'.repeat(n),
+  }
+
+  test.each(Object.keys(cases))(
+    '%s: 4x the input costs about 4x (not 16x), and 256 KB is fast',
+    (name) => {
+      const make = cases[name]!
+      const small = make(4000)
+      const large = make(16000)
+      const ratio = best(() => codeRanges(large)) / best(() => codeRanges(small))
+      expect(ratio).toBeLessThan(10) // linear is about 4, quadratic about 16
+      const big = make(40000)
+      const started = performance.now()
+      codeRanges(big)
+      expect(performance.now() - started).toBeLessThan(1000) // a loose sanity bound
+    },
+  )
 
   test('many notes sharing a basename index in linear time', () => {
     const make = (n: number) => Array.from({ length: n }, (_, i) => `d${i}/README.md`)

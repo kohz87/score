@@ -19,11 +19,11 @@
     "gray-matter": "4.0.3",
     "jszip": "3.10.2",
     "mammoth": "1.13.0",
-    "mdast-util-from-markdown": "2.1.0",
     "unpdf": "1.8.1",
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "mdast-util-from-markdown": "2.1.0",
     "tsx": "4.23.15"
   },
   "optionalDependencies": {
