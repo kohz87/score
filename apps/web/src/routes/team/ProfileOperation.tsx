@@ -7,17 +7,17 @@ const stepLabels: Record<string, string> = {
   create_profile: 'Create profile',
   import_profile: 'Import profile',
   describe_profile: 'Set description',
-  preserve_key: 'Preserve private key',
+  preserve_key: 'Create access key',
   configure_key: 'Connect profile',
   model: 'Set model',
   permissions: 'Apply team rules',
-  install_bridge: 'Install bridge',
-  enable_bridge: 'Enable bridge',
-  verify_ready: 'Verify readiness',
+  install_bridge: 'Install Score’s plugin in Hermes',
+  enable_bridge: 'Turn on Score’s plugin',
+  verify_ready: 'Check the agent is ready',
   export: 'Keep private export',
   delete_profile: 'Delete profile',
-  purge_identity: 'Reconcile identity',
-  retire: 'Retire agent',
+  purge_identity: 'Clean up leftovers',
+  retire: 'Remove agent',
 }
 export function useProfileOperation(id: string | null) {
   return useQuery({
@@ -101,7 +101,7 @@ export function ProfileOperation({ operation }: { operation: AgentOperation }) {
         </button>
       )}
       {retry.isError && (
-        <p role="alert">Score could not retry this step. Check the profile locally.</p>
+        <p role="alert">Couldn’t retry this step. Check the profile on the Hermes machine.</p>
       )}
       {operation.state === 'needs_attention' && operation.confirmable && (
         <div className="team-operation-confirm">
@@ -129,7 +129,7 @@ export function ProfileOperation({ operation }: { operation: AgentOperation }) {
         <p role="alert">
           {confirm.error instanceof Error && confirm.error.message
             ? confirm.error.message
-            : 'Score could not continue.'}
+            : 'Couldn’t continue. Try again.'}
         </p>
       )}
       {operation.exportPath && (

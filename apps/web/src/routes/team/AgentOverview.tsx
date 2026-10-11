@@ -67,7 +67,7 @@ export function AgentOverview({
       {todos && todos.todos.length > 0 && (
         <section className="team-card" aria-labelledby="team-todo">
           <div className="team-card-heading">
-            <h2 id="team-todo">Todo</h2>
+            <h2 id="team-todo">To do</h2>
             <span className="team-muted">{todoProgress(todos.todos)}</span>
           </div>
           <TodoItems todos={todos.todos} />
@@ -80,7 +80,7 @@ export function AgentOverview({
           <p className="team-muted-strong">
             {agent.model.via ? `Through ${agent.model.via}.` : 'Provider unavailable.'}
             {agent.model.fallback
-              ? ` Falls back to ${agent.model.fallback} if it's unavailable.`
+              ? ` Falls back to ${agent.model.fallback} if it’s unavailable.`
               : ' No fallback configured.'}
           </p>
         )}
@@ -144,7 +144,7 @@ export function AgentOverview({
             </li>
           ))}
           <li>
-            <span>Helpers they can spawn</span>
+            <span>Helpers they can start</span>
             <strong>{agent.helpersMax === null ? 'Not set' : `Up to ${agent.helpersMax}`}</strong>
           </li>
         </ul>

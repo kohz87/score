@@ -49,7 +49,7 @@ export function AgentStylePicker({ agent }: { agent: AgentSummary }) {
         className="team-glyph-trigger"
         ref={trigger}
         type="button"
-        aria-label={`Change ${agent.name}'s color and shape`}
+        aria-label={`Change ${agent.name}’s colour and shape`}
         aria-expanded={open}
         aria-controls="agent-style-picker"
         onClick={() => {
@@ -85,7 +85,7 @@ export function AgentStylePicker({ agent }: { agent: AgentSummary }) {
           >
             <h2>Agent appearance</h2>
             <label>
-              Color
+              Colour
               <input
                 ref={colorInput}
                 type="color"
@@ -116,7 +116,7 @@ export function AgentStylePicker({ agent }: { agent: AgentSummary }) {
               <p role="alert">
                 {mutation.error instanceof ApiError && mutation.error.code === 'not_paired'
                   ? 'Pair this browser using the link in the server terminal to change agent appearance.'
-                  : 'Could not save appearance. Please try again.'}
+                  : 'Couldn’t save appearance. Try again.'}
               </p>
             )}
             <div className="team-style-actions">

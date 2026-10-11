@@ -68,7 +68,7 @@ function AgentProfile({ agentId }: { agentId: string }) {
     return (
       <section className="team-card" role="alert">
         <h1>Agent unavailable</h1>
-        <p>Could not load this agent. Check the address or try again.</p>
+        <p>Couldn’t load this agent. Check the address or try again.</p>
         <button onClick={() => void detail.refetch()}>Try again</button>
       </section>
     )
@@ -138,11 +138,11 @@ function AgentProfile({ agentId }: { agentId: string }) {
       </header>
       {detail.isError && (
         <p role="alert">
-          Could not refresh agent details.{' '}
+          Couldn’t refresh agent details.{' '}
           <button onClick={() => void detail.refetch()}>Try again</button>
         </p>
       )}
-      <div className="team-tabs" role="tablist" aria-label={`${agent.name}'s settings`}>
+      <div className="team-tabs" role="tablist" aria-label={`${agent.name}’s settings`}>
         {tabs.map((name, index) => (
           <button
             type="button"

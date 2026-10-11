@@ -406,7 +406,7 @@ test(
       await client.refetchQueries({ queryKey: ['team', 'workspace', 'builder', 'file'] })
     })
     await waitFor(() => expect(reads()).toBeGreaterThan(before))
-    expect((await screen.findByRole('alert')).textContent).toMatch(/Could not/)
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Couldn’t/)
     expect(view().state.doc.toString()).toBe('unsaved work')
     // Retrying after the connection is back refreshes without replacing the draft.
     failFileReads = false

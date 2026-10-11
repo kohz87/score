@@ -22,7 +22,7 @@ export function SkillsTab({ agentId, agentName }: { agentId: string; agentName: 
         {skills.isPending && <p role="status">Loading skills…</p>}
         {skills.isError && (
           <p role="alert">
-            Could not load skills. <button onClick={() => void skills.refetch()}>Try again</button>
+            Couldn’t load skills. <button onClick={() => void skills.refetch()}>Try again</button>
           </p>
         )}
         {skills.isSuccess && !items.length && (
@@ -75,7 +75,7 @@ export function SkillsTab({ agentId, agentName }: { agentId: string; agentName: 
           {notice}
         </p>
         {hub.isFetching && <p role="status">Searching…</p>}
-        {hub.isError && <p role="alert">Could not search the skills hub. Please try again.</p>}
+        {hub.isError && <p role="alert">Couldn’t search the skills hub. Try again.</p>}
         {hub.isSuccess && !hub.data.length && (
           <p className="team-muted-strong">No skills found for “{query}”.</p>
         )}

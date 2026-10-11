@@ -11,13 +11,13 @@ function PluginList({ agent }: { agent: Pick<AgentDetail, 'id' | 'name'> }) {
     toggle.error instanceof ApiError
       ? toggle.error.message
       : toggle.error
-        ? 'Could not change the plugin.'
+        ? 'Couldn’t change the plugin.'
         : null
   return (
     <>
       {plugins.status === 'pending' && <p role="status">Loading plugins…</p>}
       {plugins.status === 'error' && (
-        <p role="alert">Could not load plugins for {agent.name}. Check that Hermes is reachable.</p>
+        <p role="alert">Couldn’t load plugins for {agent.name}. Check that Hermes is reachable.</p>
       )}
       {error && <p role="alert">{error}</p>}
       {plugins.data && plugins.data.length === 0 && (
@@ -30,8 +30,8 @@ function PluginList({ agent }: { agent: Pick<AgentDetail, 'id' | 'name'> }) {
               <span className="plugins-card-name">{plugin.label}</span>
               {plugin.locked ? (
                 <span className="team-muted" id={`plugin-note-${plugin.id}`}>
-                  Always on: Score needs this plugin to see what {agent.name} does, so it can&apos;t
-                  be turned off here.
+                  Always on: Score needs this plugin to see what {agent.name} does, so it can’t be
+                  turned off here.
                 </span>
               ) : (
                 plugin.description && <span className="team-muted">{plugin.description}</span>

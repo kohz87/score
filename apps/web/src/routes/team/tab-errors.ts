@@ -8,5 +8,5 @@ export function tabFailure(error: unknown, action: string): string {
     if (error.status === 501) return `Hermes does not support this yet: ${error.message}`
     if (error.status === 409) return `Hermes rejected the change, so nothing was changed.`
   }
-  return `Could not ${action}. Please try again.`
+  return `Couldn’t ${action}. Try again.`
 }

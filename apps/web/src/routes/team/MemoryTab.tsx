@@ -43,7 +43,7 @@ export function MemoryTab({ agentId, agentName }: { agentId: string; agentName: 
         <input
           type="search"
           aria-label="Search memory"
-          placeholder={`Search ${agentName}'s memory`}
+          placeholder={`Search ${agentName}’s memory`}
           maxLength={200}
           value={draft}
           onChange={(event) => {
@@ -85,7 +85,7 @@ export function MemoryTab({ agentId, agentName }: { agentId: string; agentName: 
       {memory.isPending && <p role="status">Loading memory…</p>}
       {memory.isError && (
         <p role="alert">
-          Could not load memory. <button onClick={() => void memory.refetch()}>Try again</button>
+          Couldn’t load memory. <button onClick={() => void memory.refetch()}>Try again</button>
         </p>
       )}
       {memory.isSuccess && !items.length && (

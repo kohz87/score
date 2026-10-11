@@ -65,7 +65,9 @@ test('Antigravity: warning, quota, unverified level disabled, no read acknowledg
     </QueryClientProvider>,
   )
   await screen.findByRole('option', { name: 'Antigravity (agy)' }, { timeout: 10_000 })
-  fireEvent.change(screen.getByLabelText('Coding CLI'), { target: { value: 'antigravity' } })
+  fireEvent.change(screen.getByLabelText('Kind of coding agent'), {
+    target: { value: 'antigravity' },
+  })
   expect(
     await screen.findByText(/browse the web, generate images/, {}, { timeout: 10_000 }),
   ).toBeDefined()

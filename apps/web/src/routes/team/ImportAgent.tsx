@@ -18,7 +18,7 @@ import { ProfileOperation, useProfileOperation } from './ProfileOperation.tsx'
 
 const MiB = 1024 * 1024
 const size = (bytes: number) =>
-  bytes >= MiB ? `${(bytes / MiB).toFixed(1)} MiB` : `${Math.max(1, Math.round(bytes / 1024))} KiB`
+  bytes >= MiB ? `${(bytes / MiB).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
 const ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/
 
 export function ImportAgent({ agents }: { agents: AgentSummary[] }) {
@@ -69,7 +69,7 @@ function ImportAgentDialog({ agents, close }: { agents: AgentSummary[]; close: (
   const upload = useMutation({
     mutationFn: async (file: File) => {
       if (file.size > PROFILE_IMPORT_MAX_BYTES)
-        throw new Error('The archive is larger than 200 MiB.')
+        throw new Error('The archive is larger than 200 MB.')
       return ImportInspectionSchema.parse(
         await apiFetch('agents/imports', {
           method: 'POST',
@@ -137,7 +137,7 @@ function ImportAgentDialog({ agents, close }: { agents: AgentSummary[]; close: (
           <ProfileOperation operation={operation} />
           {status.isError && (
             <p role="alert">
-              Could not refresh progress.{' '}
+              Couldn’t refresh progress.{' '}
               <button onClick={() => void status.refetch()}>Try again</button>
             </p>
           )}
@@ -150,7 +150,7 @@ function ImportAgentDialog({ agents, close }: { agents: AgentSummary[]; close: (
       ) : !inspection ? (
         <div className="team-routine-form">
           <p>
-            Choose an archive made by <code>hermes profile export</code> (a .tar.gz, up to 200 MiB).
+            Choose an archive made by <code>hermes profile export</code> (a .tar.gz, up to 200 MB).
             Score reads what is inside without unpacking it into your Hermes profiles.
           </p>
           <label>
@@ -237,7 +237,7 @@ function ImportAgentDialog({ agents, close }: { agents: AgentSummary[]; close: (
             </p>
           )}
           <label>
-            Role / description
+            Role or description
             <textarea
               required
               maxLength={2000}
@@ -252,7 +252,7 @@ function ImportAgentDialog({ agents, close }: { agents: AgentSummary[]; close: (
               contrast="high"
             />
             <label>
-              Color
+              Colour
               <input
                 type="color"
                 value={style.color}
