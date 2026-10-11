@@ -46,6 +46,10 @@ class CompactLockHeld(Exception):
 class SessionBusy(Exception):
     pass
 
+class CompactNotPersisted(Exception):
+    pass
+private.CompactNotPersisted = CompactNotPersisted
+
 private.CompactLockHeld = CompactLockHeld
 private.SessionBusy = SessionBusy
 def _no_compact(*_, **__):
