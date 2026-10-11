@@ -318,7 +318,7 @@ test('stream appends once, completes messages and clears typing and unread via r
   emit('typing', { roomId: 'general', agentId: 'lead', text: null }, 4)
   expect(screen.queryByText('Lead is reviewing')).toBeNull()
   emit('message.completed', { roomId: 'general', messageId: message.id }, 5)
-  expect(screen.queryByText('Writing…')).toBeNull()
+  expect(screen.queryByText('Writing the reply…')).toBeNull()
   emit('room.upserted', { ...room, unread: 0 }, 6)
   expect(screen.queryByLabelText('2 unread messages')).toBeNull()
   emit(

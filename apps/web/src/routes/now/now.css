@@ -556,8 +556,12 @@
 .now-asking-notice {
   margin: 0;
   font-size: 14px;
-  font-weight: 700;
-  color: var(--rules-go);
+  font-weight: 600;
+  color: var(--rules-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 .now-asking-notice:empty {
   display: none;

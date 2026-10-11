@@ -31,7 +31,7 @@ test('a run that asks for approval shows a card in the room and approving it res
   expect(id).toBeTruthy()
 
   await card.getByRole('button', { name: 'Approve' }).click()
-  await expect(card.getByText('You approved')).toBeVisible({ timeout: 15_000 })
+  await expect(card.getByText('Approved by you')).toBeVisible({ timeout: 15_000 })
 
   const ledger = await page.evaluate(async () => {
     const response = await fetch('/api/approvals?status=all')

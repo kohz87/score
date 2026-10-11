@@ -7,36 +7,19 @@ import { useArrival } from '../../motion/Arrival.tsx'
 import { useStream, useStreamQuery } from '../../data/query-client.ts'
 import { approvalsQuery } from './queries.ts'
 import { newId } from '../../data/ids.ts'
+import { approvalChip, YOUR_CHOICE } from '../../live/resolved.ts'
+import { ResolvedChip } from '../../live/ResolvedChip.tsx'
 
 function idempotencyKey() {
   return newId()
 }
 
-export const choiceText: Record<ApprovalChoice, string> = {
-  once: 'You approved',
-  session: 'You approved for this session',
-  always: 'You always allow this',
-  deny: 'You denied',
-}
+export const choiceText = YOUR_CHOICE
 
 // The one line that says how this approval ended up, or null while it is still open.
 export function approvalOutcome(approval: Approval): string | null {
-  if (approval.delivery === 'not_pending') return 'Answered elsewhere'
-  if (approval.delivery === 'unknown') return 'May have been answered'
   if (approval.delivery === 'intent' || approval.delivery === 'delivering') return 'Sending…'
-  const { decision } = approval
-  if (decision) {
-    const verb = decision.choice === 'deny' ? 'denied' : 'approved'
-    if (decision.by === 'you') return choiceText[decision.choice]
-    if (decision.by === 'guardian') return `Guardian ${verb} this`
-    if (decision.by === 'rule') return `A rule ${verb} this`
-    if (decision.by === 'timeout') return 'Timed out'
-    return `Answered elsewhere (${verb})`
-  }
-  if (approval.status === 'expired') return 'Expired'
-  if (approval.status === 'withdrawn') return 'Withdrawn'
-  if (approval.status === 'unknown') return 'May have been answered'
-  return null
+  return approvalChip(approval)?.text ?? null
 }
 
 function whereToAnswer(approval: Approval) {
@@ -144,6 +127,7 @@ export function ApprovalCard({ approvalId }: { approvalId: string }) {
     )
   }
   const outcome = approvalOutcome(approval)
+  const chip = approvalChip(approval)
   const open = approval.actionable && outcome === null && !busy
   const retrying = approval.actionable && approval.delivery === 'failed'
   async function decide(choice: ApprovalChoice) {
@@ -167,7 +151,7 @@ export function ApprovalCard({ approvalId }: { approvalId: string }) {
         {!approval.actionable && outcome === null && whereToAnswer(approval)}
         {(outcome !== null || busy) && (
           <span className="chat-approval-outcome" role="status">
-            {busy ? 'Sending…' : outcome}
+            {!busy && chip ? <ResolvedChip chip={chip} /> : busy ? 'Sending…' : outcome}
           </span>
         )}
         {retrying && (
