@@ -882,9 +882,10 @@ button.orch-primary,
 
 /* PLAN 5.37: transient pieces made by LiveDiagram's node transitions (anime.js); they remove themselves. */
 .orch-node__ring {
+  /* A quiet ripple, not an outline: thin, soft colour, fades out as it grows. */
   position: absolute;
-  inset: -3px;
-  border: 2px solid var(--ink);
+  inset: -2px;
+  border: 1.5px solid var(--line-strong);
   border-radius: inherit;
   pointer-events: none;
   opacity: 0;

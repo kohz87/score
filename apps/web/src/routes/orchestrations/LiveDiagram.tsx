@@ -260,7 +260,6 @@ function useNodeTransitions(
         const ring = document.createElement('span')
         ring.className = 'orch-node__ring'
         ring.setAttribute('aria-hidden', 'true')
-        ring.style.borderColor = getComputedStyle(node).borderTopColor
         node.appendChild(ring)
         const settle = animate(node, {
           scale: [
@@ -272,7 +271,7 @@ function useNodeTransitions(
           onComplete: () => node.style.removeProperty('transform'),
         })
         const flow = animate(ring, {
-          opacity: [0.7, 0],
+          opacity: [0.45, 0],
           scale: [1, 1.12],
           duration: MOTION.slow,
           delay: start,
