@@ -135,10 +135,26 @@ export async function startServer(
   let knowledge: KnowledgeVault | undefined
   let fakeVaultDir: string | undefined
   let closing: Promise<void> | undefined
+  // Background jobs that touch the database or the adapter after an await (samplers, sweeps). Shutdown stops new ones,
+  // waits for these, and only then closes ingest and SQLite.
+  let stopping = false
+  const jobs = new Set<Promise<unknown>>()
+  function track(job: Promise<unknown>): void {
+    const settled = job.then(
+      () => undefined,
+      () => undefined,
+    )
+    jobs.add(settled)
+    void settled.then(() => jobs.delete(settled))
+  }
+  async function drainJobs(): Promise<void> {
+    while (jobs.size > 0) await Promise.all([...jobs])
+  }
   let dualServer: Awaited<ReturnType<typeof listenDual>> | undefined
   let guideApp: FastifyInstance | undefined
 
   async function closeResources(): Promise<void> {
+    stopping = true
     clearInterval(retention)
     clearInterval(logRotation)
     certificateRenewal?.stop()
@@ -184,7 +200,9 @@ export async function startServer(
         }
       } finally {
         try {
+          await drainJobs()
           await ingest?.close()
+          await drainJobs()
         } finally {
           closeDatabase()
         }
@@ -396,6 +414,7 @@ export async function startServer(
     await outbox.start()
     const observations = ingest
     deliverySweep = setInterval(() => {
+      if (stopping) return
       if (config.mode === 'live' && !denialSweep) {
         denialSweep = sweepKanbanDenials(database, observations, config)
           .catch(() => app?.log.error('Kanban denial sweep failed'))
@@ -403,13 +422,16 @@ export async function startServer(
             denialSweep = undefined
           })
       }
-      void dispatcher
-        .sweep()
-        .catch((error: unknown) => app?.log.error({ err: error }, 'Delivery sweep failed'))
+      track(
+        dispatcher
+          .sweep()
+          .catch((error: unknown) => app?.log.error({ err: error }, 'Delivery sweep failed')),
+      )
     }, 10_000)
     deliverySweep.unref()
     retention = setInterval(
       () => {
+        if (stopping) return
         try {
           pruneEvents(database)
         } catch (error) {
@@ -438,8 +460,10 @@ export async function startServer(
         try {
           pruneBridge(database)
           if (ingest)
-            void sweepExpiredApprovals(database, ingest).catch((error: unknown) =>
-              app?.log.error({ err: error }, 'Approval expiry failed'),
+            track(
+              sweepExpiredApprovals(database, ingest).catch((error: unknown) =>
+                app?.log.error({ err: error }, 'Approval expiry failed'),
+              ),
             )
         } catch (error) {
           app?.log.error({ err: error }, 'Bridge retention prune failed')
@@ -449,10 +473,14 @@ export async function startServer(
     )
     retention.unref()
     const sampler = port
-    const sampleSpend = () =>
-      void snapshotSessionCosts(database, sampler, Date.now()).catch((error: unknown) =>
-        app?.log.error({ err: error }, 'Spend snapshot failed'),
+    const sampleSpend = () => {
+      if (stopping) return
+      track(
+        snapshotSessionCosts(database, sampler, Date.now()).catch((error: unknown) =>
+          app?.log.error({ err: error }, 'Spend snapshot failed'),
+        ),
       )
+    }
     spendSnapshots = setInterval(sampleSpend, 10 * 60 * 1000)
     spendSnapshots.unref()
     sampleSpend()
