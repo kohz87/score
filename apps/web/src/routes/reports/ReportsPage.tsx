@@ -1,3 +1,4 @@
+import { CountUp } from './CountUp.tsx'
 import { UnattributedGlyph } from '../../components/UnattributedGlyph.tsx'
 import type { AgentSummary, Reports } from '@score/contract'
 import { ReportRangeSchema } from '@score/contract'
@@ -56,7 +57,7 @@ function Totals({ totals, money }: { totals: Reports['totals']; money: Money }) 
     <section className="reports-card reports-totals" aria-label="In numbers">
       {items.map(([value, label]) => (
         <div key={label} className="reports-stat">
-          <span className="reports-stat__value">{value}</span>
+          <CountUp className="reports-stat__value" text={value} />
           <span className="reports-stat__label">{label}</span>
         </div>
       ))}

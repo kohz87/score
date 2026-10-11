@@ -1,4 +1,6 @@
 import type { Reports } from '@score/contract'
+import { useRef } from 'react'
+import { useChartDraw } from './chart-motion.ts'
 import './trend-chart.css'
 
 const WIDTH = 700
@@ -12,6 +14,8 @@ type Props = { trend: Reports['trend']; money: (usd: number | null) => string }
 /** 30 days of runs (bars, left scale) and model spend (line with round markers, right scale). Days without a cost
  * reading break the line: unknown is not zero. A table below gives the same numbers to screen readers. */
 export function TrendChart({ trend, money }: Props) {
+  const svgRef = useRef<SVGSVGElement>(null)
+  useChartDraw(svgRef, 'trend')
   const maxRuns = Math.max(1, ...trend.map((day) => day.runs))
   const maxSpend = Math.max(0.01, ...trend.map((day) => day.spendUsd ?? 0))
   const slot = trend.length > 0 ? WIDTH / trend.length : WIDTH
@@ -58,6 +62,7 @@ export function TrendChart({ trend, money }: Props) {
         tabIndex={0}
       >
         <svg
+          ref={svgRef}
           className="trend__svg"
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           role="img"
@@ -79,6 +84,11 @@ export function TrendChart({ trend, money }: Props) {
               <g key={day.date} data-trend-day={day.date}>
                 {day.runs > 0 && (
                   <rect
+                    data-grow
+                    style={{
+                      transformBox: 'view-box',
+                      transformOrigin: `${centre(index)}px ${baseline}px`,
+                    }}
                     className="trend__bar"
                     x={centre(index) - barWidth / 2}
                     y={baseline - height}
@@ -98,13 +108,22 @@ export function TrendChart({ trend, money }: Props) {
               points.length > 1 && (
                 <polyline
                   key={index}
+                  data-draw
+                  pathLength={1}
                   className="trend__line"
                   points={points.map((point) => `${point.x},${point.y}`).join(' ')}
                 />
               ),
           )}
           {segments.flat().map((point) => (
-            <circle key={point.x} className="trend__dot" cx={point.x} cy={point.y} r={3.5} />
+            <circle
+              key={point.x}
+              data-fade
+              className="trend__dot"
+              cx={point.x}
+              cy={point.y}
+              r={3.5}
+            />
           ))}
         </svg>
       </div>

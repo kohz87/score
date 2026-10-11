@@ -60,3 +60,21 @@ export function playMotion(play: (anime: Anime) => (() => void) | void): () => v
 
 /** The motion rhythm: calm, 300–600 ms. */
 export const MOTION = { fast: 320, base: 450, slow: 600, stagger: 90, ease: 'outQuad' } as const
+
+let busy = 0
+/**
+ * Marks the page while a script-driven change of text or layout is under way (a count-up). Tests and screenshots wait
+ * for `html[data-motion]` to go away so they read the final state. Returns the function that ends the mark.
+ */
+export function markMotionBusy(): () => void {
+  if (typeof document === 'undefined') return () => {}
+  busy++
+  document.documentElement.dataset.motion = 'busy'
+  let done = false
+  return () => {
+    if (done) return
+    done = true
+    busy--
+    if (busy === 0) delete document.documentElement.dataset.motion
+  }
+}

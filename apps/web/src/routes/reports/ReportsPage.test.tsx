@@ -4,6 +4,7 @@ import { createMemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { AgentSummary, Reports } from '@score/contract'
 import { App, appRoutes } from '../../App.tsx'
+import { stubReducedMotion } from '../../motion/test-support.ts'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry } from '../../data/resync.ts'
 import { createStreamClient } from '../../data/stream.ts'
@@ -86,6 +87,7 @@ let calls: string[]
 let respond: (path: string) => Response
 
 beforeEach(() => {
+  stubReducedMotion()
   calls = []
   respond = (path) => {
     if (path === '/api/agents') return json({ asOfSeq: 0, items: agents })
