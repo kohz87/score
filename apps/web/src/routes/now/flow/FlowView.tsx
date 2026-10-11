@@ -46,9 +46,7 @@ function RunControl({ brief }: { brief: BriefSummary }) {
       </button>
       {control.isError && (
         <p role="alert" className="flow-notice">
-          {control.error instanceof Error
-            ? control.error.message
-            : 'That did not work. Please try again.'}
+          {control.error instanceof Error ? control.error.message : 'Couldn’t do that. Try again.'}
         </p>
       )}
     </>
@@ -139,10 +137,10 @@ function RunsView({ onSelect }: FlowViewProps) {
       <div className="flow-view">
         <h2>Flow</h2>
         {listsLoading ? (
-          <p role="status">Loading runs...</p>
+          <p role="status">Loading runs…</p>
         ) : (
           <p className="flow-empty">
-            No runs yet. Send a message to a room and the work it causes shows up here.
+            No runs yet. Send a message in a room and the work it causes appears here.
           </p>
         )}
         <button type="button" className="flow-run-button" onClick={() => setStarting(true)}>
@@ -245,14 +243,14 @@ function RunsView({ onSelect }: FlowViewProps) {
         <OrchestrationLive key={orchestration.id} orchestrationId={orchestration.id} />
       ) : flow.isError ? (
         <p role="alert" className="flow-empty">
-          This run could not load.{' '}
+          Couldn’t load this run.{' '}
           <button type="button" onClick={() => void flow.refetch()}>
             Try again
           </button>
         </p>
       ) : !flow.data ? (
         <p role="status" className="flow-empty">
-          Loading the flow...
+          Loading the flow…
         </p>
       ) : (
         <div className="flow-main">

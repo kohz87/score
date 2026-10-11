@@ -11,7 +11,7 @@ const BLOCKED: Record<'room_busy' | 'orchestration_owned' | 'direct', string> = 
   room_busy: 'An agent is working in this room. Stop it first, then delete the room.',
   orchestration_owned:
     'An orchestration or workflow run still owns this room. Stop the run, or wait until it finishes.',
-  direct: 'A direct conversation is the agent’s home and can’t be deleted.',
+  direct: 'A direct room is the agent’s home and can’t be deleted.',
 }
 
 /**
@@ -56,7 +56,7 @@ export function DeleteRoomDialog({
       setError(
         failure instanceof ApiError && failure.status === 409
           ? failure.message
-          : 'Could not delete the room. Please try again.',
+          : 'Couldn’t delete the room. Try again.',
       )
     }
   }
@@ -74,7 +74,7 @@ export function DeleteRoomDialog({
       <h2 id="delete-room-title">Delete {room.name}?</h2>
       {plan.isPending && <p role="status">Checking what this removes…</p>}
       {plan.isError && (
-        <p role="alert">Could not check what this removes. Close this and try again.</p>
+        <p role="alert">Couldn’t check what this removes. Close this and try again.</p>
       )}
       {data && (
         <>
@@ -83,12 +83,12 @@ export function DeleteRoomDialog({
               {plural(data.messages, 'message', 'messages')}
               {data.files > 0 ? `, ${plural(data.files, 'attached file', 'attached files')}` : ''}
               {data.runs > 0 ? `, ${plural(data.runs, 'run record', 'run records')}` : ''}
-              {data.briefs > 0 ? ` and ${plural(data.briefs, 'brief', 'briefs')}` : ''} will be
-              removed from Score for good.
+              {data.briefs > 0 ? ` and ${plural(data.briefs, 'Flow run', 'Flow runs')}` : ''} will
+              be removed from Score for good.
             </li>
             <li>
               The agents’ Hermes sessions are <strong>not</strong> touched: they still remember this
-              conversation. Reports and Watch history stay.
+              room. Reports and Watch history stay.
             </li>
             <li>
               <a href={`/api/rooms/${encodeURIComponent(room.id)}/export.md`} download>

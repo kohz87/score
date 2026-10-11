@@ -85,9 +85,9 @@ export function ShareDialog({ room, close }: { room: Room; close: () => void }) 
         </button>
       </div>
       <p>
-        This makes a link to a frozen, read-only copy of the room&apos;s messages as they are now.
-        Only the text is shared (secrets are hidden); tool output, files, plans and reasoning are
-        left out. Anyone who has the link <strong>and can reach this Score</strong> (your LAN or
+        This makes a link to a frozen, read-only copy of the room’s messages as they are now. Only
+        the text is shared (secrets are hidden); tool output, files, plans and reasoning are left
+        out. Anyone who has the link <strong>and can reach this Score</strong> (your LAN or
         Tailscale) can read it until it expires or you revoke it.
       </p>
       <form className="share-form" onSubmit={submit}>
@@ -161,8 +161,8 @@ export function ShareDialog({ room, close }: { room: Room; close: () => void }) 
       {shares.data && shares.data.length > 0 && (
         <ShareList items={shares.data} onRevoke={(share) => revoke.mutate(share.id)} />
       )}
-      {shares.isError && <p role="alert">Could not load the active links.</p>}
-      {revoke.isError && <p role="alert">Could not revoke that link.</p>}
+      {shares.isError && <p role="alert">Couldn’t load the active links.</p>}
+      {revoke.isError && <p role="alert">Couldn’t revoke that link.</p>}
     </dialog>
   )
 }

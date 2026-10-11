@@ -43,7 +43,7 @@ export function requestDelete(roomId: string, messageId: string): void {
         confirmed.add(messageId)
       } catch {
         // The message comes back; the person is told once.
-        failed = 'Could not delete the message. It is back in the conversation.'
+        failed = 'Couldn’t delete the message. It is back in the room.'
       }
       sending.delete(messageId)
       publish()

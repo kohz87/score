@@ -51,7 +51,7 @@ export function WorkflowEditorRoute() {
   if (detail.isError)
     return (
       <p role="alert" className="orch-error">
-        This workflow could not load. <Link to="/now/flow/workflows">Back to the workflows</Link>
+        Couldn’t load this workflow. <Link to="/now/flow/workflows">Back to the workflows</Link>
       </p>
     )
   if (!detail.data) return <p role="status">Loading the workflow…</p>
@@ -214,7 +214,7 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
       commit(loaded.definition)
       announce(`Loaded version ${version} into the draft. Saving makes it a new version.`)
     } catch {
-      announce(`Could not load version ${version}.`)
+      announce(`Couldn’t load version ${version}.`)
     }
   }
 
@@ -234,7 +234,7 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
     <div className="wf-inspector wf-inspector--empty">
       <h3>Nothing selected</h3>
       <p className="orch-muted">
-        Select a node on the canvas, in the outline or in the list of problems to edit it here.
+        Select a step on the canvas, in the outline or in the list of problems to edit it here.
       </p>
     </div>
   )
@@ -357,10 +357,10 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
       {save.isError && !(save.error instanceof ApiError && save.error.code === 'conflict') && (
         <p role="alert" className="orch-error">
           {save.error instanceof ApiError && save.error.code === 'quota_exhausted'
-            ? 'This workflow already has as many saved versions as Score keeps (or there are too many workflows). Delete one you do not use.'
+            ? 'This workflow already has as many saved versions as Score keeps (or there are too many workflows). Delete one you don’t use.'
             : save.error instanceof ApiError && save.error.code === 'invalid_definition'
-              ? 'The server found a problem with this workflow. The list of problems shows what.'
-              : 'That did not save. Please try again.'}
+              ? 'Score found a problem with this workflow. The list of problems shows what.'
+              : 'Couldn’t save. Try again.'}
         </p>
       )}
 
@@ -402,7 +402,7 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
                   {[...versions].reverse().map((v) => (
                     <option key={v.version} value={v.version}>
                       Version {v.version}
-                      {v.used ? ' (used by runs)' : ''}, {v.nodes} nodes
+                      {v.used ? ' (used by runs)' : ''}, {v.nodes} steps
                     </option>
                   ))}
                 </select>
@@ -425,7 +425,7 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
             </span>
             {narrow && (
               <button type="button" disabled={!selectedNode} onClick={() => setInspectorOpen(true)}>
-                {selectedNode ? `Edit ${selectedNode.label}` : 'Select a node to edit it'}
+                {selectedNode ? `Edit ${selectedNode.label}` : 'Select a step to edit it'}
               </button>
             )}
           </div>
@@ -463,7 +463,7 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
         </main>
 
         <ResponsiveDrawer
-          label="Node settings"
+          label="Step settings"
           className="wf-side wf-side--right"
           open={inspectorOpen}
           onClose={() => setInspectorOpen(false)}

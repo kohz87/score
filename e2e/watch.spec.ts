@@ -61,7 +61,7 @@ async function open(page: Page, width = 1440) {
 
 test('the watch page matches the design layout', async ({ page }) => {
   await open(page)
-  await expect(page.getByText("You're watching. builder is in control.")).toBeVisible()
+  await expect(page.getByText('You’re watching. builder is in control.')).toBeVisible()
   await expect(page.getByRole('group', { name: 'Approval needed' })).toContainText(
     'npm install ws@8',
   )
@@ -110,7 +110,7 @@ test('scrub back to an earlier moment, replay it, and snap back to live', async 
   await page.keyboard.press('ArrowLeft')
   await expect(page.getByRole('group', { name: 'Editor' })).toHaveAttribute('data-front', 'true')
   await page.keyboard.press('End')
-  await expect(page.getByText("You're watching. builder is in control.")).toBeVisible()
+  await expect(page.getByText('You’re watching. builder is in control.')).toBeVisible()
   await expect(page.getByRole('group', { name: 'Approval needed' })).toBeVisible()
 
   // Dragging along the track replays too, and the Live button snaps back.
@@ -121,7 +121,7 @@ test('scrub back to an earlier moment, replay it, and snap back to live', async 
   await page.mouse.up()
   await expect(page.getByText(/^Replaying /)).toBeVisible()
   await page.getByRole('button', { name: 'Back to live' }).click()
-  await expect(page.getByText("You're watching. builder is in control.")).toBeVisible()
+  await expect(page.getByText('You’re watching. builder is in control.')).toBeVisible()
 
   // Back 30 seconds, then pick an item from "What builder is doing".
   await page.getByRole('button', { name: 'Back 30 seconds' }).click()

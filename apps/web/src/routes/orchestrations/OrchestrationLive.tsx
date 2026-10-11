@@ -86,7 +86,7 @@ export function OrchestrationLive({ orchestrationId }: { orchestrationId: string
   if (run.isError)
     return (
       <p role="alert" className="orch-error">
-        This run could not load.{' '}
+        Couldn’t load this run.{' '}
         <button type="button" onClick={() => void run.refetch()}>
           Try again
         </button>
@@ -138,7 +138,7 @@ export function OrchestrationLive({ orchestrationId }: { orchestrationId: string
       {replaying && (
         <p className="orch-muted">
           Replay is drawn from the recorded events, not from video. 1× keeps the recorded pace (long
-          waits shortened to 3 s); 4× and 16× show highlights instead of travelling dots.
+          waits shortened to 3 seconds); 4× and 16× show highlights instead of travelling dots.
         </p>
       )}
 
@@ -158,8 +158,8 @@ export function OrchestrationLive({ orchestrationId }: { orchestrationId: string
           />
           <p className="orch-legend orch-muted">
             Dashed outline: queued. Amber with a diamond: needs you. Pulsing ring in the agent
-            colour: running. Check: succeeded. Cross: failed or blocked. Question mark: not
-            confirmed ended. Dashed line: a replacement.
+            colour: running. Tick: succeeded. Cross: failed or blocked. Question mark: not confirmed
+            as ended. Dashed line: a replacement.
           </p>
         </div>
         <LiveLog
@@ -171,7 +171,7 @@ export function OrchestrationLive({ orchestrationId }: { orchestrationId: string
       </div>
 
       {selected && (
-        <section className="orch-selected" aria-label="Selected node">
+        <section className="orch-selected" aria-label="Selected step">
           {selected === LEAD_NODE ? (
             <>
               <h3>Lead</h3>

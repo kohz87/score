@@ -229,7 +229,7 @@ test.each<[string, Partial<Approval>, string]>([
 test('a failed delivery that can be retried offers the buttons again', async () => {
   current = [{ ...base, delivery: 'failed' }]
   renderCard()
-  await screen.findByText('Delivery failed. You can try again.')
+  await screen.findByText('Couldn’t deliver your answer. Try again.')
   expect(screen.getByRole('button', { name: 'Approve' })).toBeDefined()
 })
 
@@ -246,7 +246,7 @@ test('non-actionable approvals explain where to answer', async () => {
     },
   ]
   renderCard('g')
-  await screen.findByText('Answer in the gateway chat.')
+  await screen.findByText('Answer it in the chat app the agent asked in.')
   cleanup()
   renderCard('k')
   const link = await screen.findByRole('link', { name: 'Open the task' })

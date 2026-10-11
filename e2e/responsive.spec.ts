@@ -164,14 +164,14 @@ test('Chat: on a phone the conversation list opens as a drawer next to a room', 
     routes.find((r) => r.name === 'chat-room')!,
     390,
   )
-  const list = page.getByRole('navigation', { name: 'Conversations' })
+  const list = page.getByRole('navigation', { name: 'Rooms' })
   await expect(list).toBeHidden()
-  await page.getByRole('button', { name: 'Conversations' }).click()
-  await expect(page.getByRole('dialog', { name: 'Conversations' })).toBeVisible()
+  await page.getByRole('button', { name: 'Rooms' }).click()
+  await expect(page.getByRole('dialog', { name: 'Rooms' })).toBeVisible()
   await expect(list).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(list).toBeHidden()
-  await expect(page.getByRole('button', { name: 'Conversations' })).toBeFocused()
+  await expect(page.getByRole('button', { name: 'Rooms' })).toBeFocused()
 })
 
 test('Tasks: on a phone the board shows one column at a time, switched by tabs with counts', async ({

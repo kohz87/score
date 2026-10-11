@@ -70,7 +70,7 @@ function ProjectForm({ project, onDone }: { project?: RoomProject; onDone: () =>
       else await createProject({ name: name.trim(), color })
       onDone()
     } catch {
-      setError('Could not save the project. The name may already exist.')
+      setError('Couldn’t save the project. The name may already exist.')
     }
   }
   return (
@@ -113,7 +113,9 @@ function ProjectForm({ project, onDone }: { project?: RoomProject; onDone: () =>
           <button
             type="button"
             onClick={() => {
-              void deleteProject(project.id).then(onDone, () => setError('Could not delete it.'))
+              void deleteProject(project.id).then(onDone, () =>
+                setError('Couldn’t delete the project.'),
+              )
             }}
           >
             Delete project

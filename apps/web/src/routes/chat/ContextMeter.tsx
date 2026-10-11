@@ -246,7 +246,7 @@ function MeterView({
       setError(
         failure instanceof ApiError && failure.status === 409
           ? failure.message
-          : 'Could not start the compaction. Please try again.',
+          : 'Couldn’t start compacting. Try again.',
       )
     }
   }
@@ -362,14 +362,14 @@ function MeterView({
                 ))}
               </ul>
               <p className="chat-ctx-note">
-                Hermes’s own estimate. Older turns Hermes already summarised and files read into the
-                conversation count under Messages.
+                Hermes’s own estimate. Older exchanges Hermes already summarised and files read into
+                the conversation count under Messages.
               </p>
             </>
           ) : (
             <p className="chat-ctx-note">
-              The breakdown of what uses the context isn’t available for this agent (its Score
-              bridge can’t answer). The totals come from its latest reply.
+              The breakdown of what uses the context isn’t available for this agent (Score’s plugin
+              in Hermes can’t answer for it). The totals come from its latest reply.
             </p>
           )}
           {compaction && !busy && (
@@ -390,7 +390,7 @@ function MeterView({
           {confirming ? (
             <div className="chat-ctx-confirm">
               <p>
-                Hermes will summarise {name}’s older turns to free up context. The most recent{' '}
+                Hermes will summarise {name}’s older exchanges to free up context. The most recent{' '}
                 <input
                   type="number"
                   aria-label="Exchanges kept word for word"

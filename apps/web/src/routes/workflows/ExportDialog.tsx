@@ -81,8 +81,8 @@ export function ExportDialog({
       </div>
       <p className="orch-muted">
         Version {version} as JSON, without any run data. Agents are described by name and role, not
-        by id. The export is scrubbed, which is not a promise that it holds no secret: read it
-        before you share it.
+        by id. Score removes anything that looks like a secret but can’t promise the file holds
+        none, so read it before you share it.
       </p>
       {exported.isPending && <p role="status">Preparing the export…</p>}
       {exported.isError && (
@@ -92,8 +92,8 @@ export function ExportDialog({
       )}
       {data && (
         <>
-          <section aria-label="What the scrubber changed">
-            <h3>What the scrubber changed</h3>
+          <section aria-label="What Score changed">
+            <h3>What Score changed</h3>
             {data.changes.length === 0 ? (
               <p className="orch-muted">Nothing looked like a secret, so nothing was changed.</p>
             ) : (
@@ -119,8 +119,8 @@ export function ExportDialog({
           <section aria-label="Leave fields out">
             <h3>Leave fields out</h3>
             <p className="orch-muted">
-              Tick anything you do not want in the file, then update the preview. The result is
-              checked again.
+              Tick anything you don’t want in the file, then update the preview. Score checks the
+              result again.
             </p>
             <ul className="wf-leave" aria-label="Fields">
               {fields.map((field) => (

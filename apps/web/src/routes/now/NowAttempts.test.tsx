@@ -160,10 +160,10 @@ test('an attempt that stopped being observed has a text alternative and no state
   })
   renderNow()
   const block = await screen.findByRole('button', { name: /builder: Lost track/ })
-  expect(block.getAttribute('aria-label')).toMatch(/no longer observed since 21:11/)
+  expect(block.getAttribute('aria-label')).toMatch(/no longer seen since 21:11/)
   expect(block.getAttribute('aria-label')).not.toMatch(/working now/)
   expect(block.className).toContain('now-block--unobserved')
-  expect(screen.getByText('No longer observed')).toBeTruthy()
+  expect(screen.getByText('No longer seen')).toBeTruthy()
 })
 
 test('partial provenance says so, and blocks sort by order, not by id', async () => {
@@ -194,8 +194,8 @@ test('partial provenance says so, and blocks sort by order, not by id', async ()
   renderNow()
   const buttons = await screen.findAllByRole('button', { name: /^builder: (First|Second)/ })
   expect(buttons.map((button) => button.textContent)).toEqual(['First', 'Second'])
-  expect(buttons[1]!.getAttribute('aria-label')).toMatch(/provenance unknown/)
-  expect(buttons[1]!.getAttribute('title')).toMatch(/provenance unknown/)
+  expect(buttons[1]!.getAttribute('aria-label')).toMatch(/source unclear/)
+  expect(buttons[1]!.getAttribute('title')).toMatch(/source unclear/)
 })
 
 test('a hand-off to the Unattributed lane is listed', async () => {

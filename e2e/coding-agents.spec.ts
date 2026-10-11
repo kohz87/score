@@ -53,7 +53,7 @@ test('add a coding agent, give it work in a room, stop one turn, see it in Repor
   await api(page, 'rooms', { name: roomName, leadAgentId: 'lead' })
   await page.goto('/chat')
   await page
-    .getByRole('navigation', { name: 'Conversations' })
+    .getByRole('navigation', { name: 'Rooms' })
     .getByRole('link', { name: new RegExp(roomName) })
     .click({ timeout: 15_000 })
   const history = page.getByRole('region', { name: 'Message history' })
@@ -135,7 +135,7 @@ test('Antigravity: warning, quota, unverified level disabled, a turn with tool c
   await api(page, 'rooms', { name: roomName, leadAgentId: 'lead' })
   await page.goto('/chat')
   await page
-    .getByRole('navigation', { name: 'Conversations' })
+    .getByRole('navigation', { name: 'Rooms' })
     .getByRole('link', { name: new RegExp(roomName) })
     .click({ timeout: 15_000 })
   const history = page.getByRole('region', { name: 'Message history' })

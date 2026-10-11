@@ -41,7 +41,7 @@ test('adding is refused past the node limit with a plain sentence', () => {
     draft = added.draft
   }
   expect(draft.nodes).toHaveLength(30)
-  expect(addNode(draft, 'end')).toEqual({ error: 'A workflow can have at most 30 nodes.' })
+  expect(addNode(draft, 'end')).toEqual({ error: 'A workflow can have at most 30 steps.' })
 })
 
 test('connect allows fan-out but not a duplicate, a self loop, or a way out of an end', () => {
@@ -55,7 +55,7 @@ test('connect allows fan-out but not a duplicate, a self loop, or a way out of a
     error: 'Those two are already connected that way.',
   })
   expect(connect(draft, 'gate1', 'ok', 'gate1')).toEqual({
-    error: 'A step cannot lead back to itself.',
+    error: 'A step can’t lead back to itself.',
   })
   expect(connect(draft, 'end1', 'ok', 'gate1')).toEqual({ error: 'An end has nothing after it.' })
   expect(connect(draft, 'gate1', 'failed', 'end1')).toMatchObject({ error: expect.any(String) })

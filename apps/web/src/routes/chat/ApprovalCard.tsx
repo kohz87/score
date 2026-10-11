@@ -15,7 +15,7 @@ function idempotencyKey() {
 export const choiceText: Record<ApprovalChoice, string> = {
   once: 'You approved',
   session: 'You approved for this session',
-  always: 'You approved always',
+  always: 'You always allow this',
   deny: 'You denied',
 }
 
@@ -49,7 +49,7 @@ function whereToAnswer(approval: Approval) {
       </p>
     )
   if (approval.origin === 'gateway')
-    return <p className="chat-approval-note">Answer in the gateway chat.</p>
+    return <p className="chat-approval-note">Answer it in the chat app the agent asked in.</p>
   return <p className="chat-approval-note">This approval can only be answered in Hermes.</p>
 }
 
@@ -101,7 +101,7 @@ export function useApprovalDecision(approvalId: string) {
       return result
     } catch (caught) {
       setError(
-        caught instanceof ApiError ? caught.message : 'The request failed. Please try again.',
+        caught instanceof ApiError ? caught.message : 'Couldn’t send your answer. Try again.',
       )
       return null
     } finally {
@@ -137,7 +137,7 @@ export function ApprovalCard({ approvalId }: { approvalId: string }) {
           {loading
             ? 'Loading approval…'
             : status === 'error' || (byId.isError && !notFound)
-              ? 'Could not load this approval.'
+              ? 'Couldn’t load this approval.'
               : 'This approval is no longer available.'}
         </span>
       </div>
@@ -171,7 +171,7 @@ export function ApprovalCard({ approvalId }: { approvalId: string }) {
           </span>
         )}
         {retrying && (
-          <span className="chat-approval-note">Delivery failed. You can try again.</span>
+          <span className="chat-approval-note">Couldn’t deliver your answer. Try again.</span>
         )}
         {error && (
           <span className="chat-approval-note" role="alert">
@@ -220,7 +220,7 @@ export function ApprovalCard({ approvalId }: { approvalId: string }) {
                   {approval.choices.includes('always') && (
                     <li role="none">
                       <button type="button" role="menuitem" onClick={() => void decide('always')}>
-                        Always approve
+                        Always allow this
                       </button>
                     </li>
                   )}

@@ -454,8 +454,8 @@ export function EditorCanvas({
       <div className="wf-canvas__bar">
         <span className="orch-muted">
           {arranged
-            ? 'Drag a node to move it. Hold Alt to skip the grid.'
-            : 'Nodes are arranged for you until you move one.'}
+            ? 'Drag a step to move it. Hold Alt to skip the grid.'
+            : 'Steps are arranged for you until you move one.'}
         </span>
         <button
           type="button"
@@ -497,10 +497,10 @@ export function EditorCanvas({
       {connecting && connectingFrom && (
         <p className="wf-banner" role="status">
           Connecting {connectingFrom.label} (
-          {portsOf(connectingFrom).find((p) => p.id === connecting.port)?.label}). Choose the node
+          {portsOf(connectingFrom).find((p) => p.id === connecting.port)?.label}). Choose the step
           it leads to, or press Escape.
           <button type="button" className="wf-link" onClick={() => setConnecting(null)}>
-            Cancel
+            Stop connecting
           </button>
         </p>
       )}
@@ -517,7 +517,7 @@ export function EditorCanvas({
         ref={viewport}
         className="orch-canvas wf-canvas__viewport"
         role="group"
-        aria-label="Workflow canvas. Arrow keys move between nodes, Enter selects one, M then the arrow keys moves the focused node, Delete removes it. Drag a node to place it. The outline below lists the same nodes and connections."
+        aria-label="Workflow canvas. Arrow keys move between steps, Enter selects one, M then the arrow keys moves the focused step, Delete removes it. Drag a step to place it. The outline below lists the same steps and connections."
         onClick={(event) => {
           if (
             event.target === event.currentTarget ||

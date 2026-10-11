@@ -83,7 +83,7 @@ export function WorkflowRunLive({
   if (run.isError)
     return (
       <p role="alert" className="orch-error">
-        This run could not load.{' '}
+        Couldn’t load this run.{' '}
         <button type="button" onClick={() => void run.refetch()}>
           Try again
         </button>
@@ -132,7 +132,7 @@ export function WorkflowRunLive({
               <span>Paused: {detail.pauseReason.replaceAll('_', ' ')}</span>
             )}
             <span className="orch-muted">
-              {detail.nodes.succeeded} of {detail.nodes.total} nodes done
+              {detail.nodes.succeeded} of {detail.nodes.total} steps done
               {detail.nodes.skipped > 0 ? `, ${detail.nodes.skipped} skipped` : ''}
             </span>
           </div>
@@ -172,7 +172,7 @@ export function WorkflowRunLive({
       {replaying && (
         <p className="orch-muted">
           Replay is drawn from the recorded events, not from video. 1× keeps the recorded pace (long
-          waits shortened to 3 s); 4× and 16× show highlights instead of travelling dots.
+          waits shortened to 3 seconds); 4× and 16× show highlights instead of travelling dots.
         </p>
       )}
 
@@ -240,7 +240,7 @@ export function WorkflowRunLive({
                       role="img"
                       tabIndex={0}
                       title={`The exact agent this run uses (${entry.incarnation})`}
-                      aria-label={`Incarnation ${entry.incarnation}`}
+                      aria-label={`Agent version ${entry.incarnation}`}
                     >
                       ⓘ
                     </span>{' '}

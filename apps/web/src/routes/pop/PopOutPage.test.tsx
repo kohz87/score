@@ -108,14 +108,14 @@ test(
 
 test('an agent with no run says so and the message box still works', async () => {
   mount('lead')
-  expect(await screen.findByText(/lead is not in a run right now/)).toBeTruthy()
+  expect(await screen.findByText(/lead isn’t in a run right now/)).toBeTruthy()
   expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
 })
 
 test('an agent without a direct conversation points to Chat', async () => {
   directs = []
   mount('builder')
-  expect(await screen.findByText(/No direct conversation with builder yet/)).toBeTruthy()
+  expect(await screen.findByText(/No direct room with builder yet/)).toBeTruthy()
 })
 
 test('an unknown agent is a plain message, not a crash', async () => {

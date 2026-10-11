@@ -53,7 +53,7 @@ export function RoomRunPanel({
         <>
           {run.isError && (
             <p role="alert" className="orch-error">
-              The run could not load.{' '}
+              Couldn’t load this run.{' '}
               <button type="button" onClick={() => void run.refetch()}>
                 Try again
               </button>
@@ -65,8 +65,8 @@ export function RoomRunPanel({
               <p className="orch-goal">{detail.goal}</p>
               <RunStatus run={detail} badge={false} />
               <p className="orch-muted">
-                The room is the run&apos;s own; use the run controls instead of the composer while
-                it runs.{' '}
+                This room belongs to the run. Use the run controls instead of the composer while it
+                runs.{' '}
                 <Link to={`/now/flow/${encodeURIComponent(detail.briefId)}`}>
                   Open the live diagram
                 </Link>

@@ -186,7 +186,7 @@ test("a workspace:// link in chat opens the file in the agent's Workspace tab", 
   test.setTimeout(90_000)
   await page.goto('/chat')
   await page
-    .getByRole('navigation', { name: 'Conversations' })
+    .getByRole('navigation', { name: 'Rooms' })
     .getByRole('link', { name: /#activity-feed/ })
     .click({ timeout: 15_000 })
   const history = page.getByRole('region', { name: 'Message history' })

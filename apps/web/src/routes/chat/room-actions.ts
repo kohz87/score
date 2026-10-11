@@ -90,12 +90,12 @@ export function sessionContextQuery(agentId: string, sessionId: string) {
 
 export const COMPACT_FAILURE_TEXT: Record<CompactFailureReason, string> = {
   bridge_unavailable:
-    'Score’s bridge is not running in this agent’s gateway, so Hermes could not be asked.',
-  no_answer: 'Hermes did not answer in time. It may or may not have compacted the session.',
+    'Score’s plugin isn’t running in this agent’s gateway, so Hermes couldn’t be asked.',
+  no_answer: 'Hermes didn’t answer in time. It may or may not have compacted the session.',
   session_busy: 'Hermes is using this session right now. Try again in a moment.',
   lock_held: 'Hermes is already compacting this session. Try again in a moment.',
   no_session: 'Hermes has no session for this agent in this room yet.',
-  compact_failed: 'Hermes could not compact this session.',
+  compact_failed: 'Hermes couldn’t compact this session.',
 }
 
 // Same rule as the API (PLAN 5.26): "#launch" or "launch", optionally followed by #tag words.

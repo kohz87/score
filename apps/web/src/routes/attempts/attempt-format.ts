@@ -1,7 +1,7 @@
 import type { AgentSummary, AttemptStatus, AttemptSummary } from '@score/contract'
 
 /** The one line for a legacy Kanban run link that no attempt could be proven for. */
-export const EARLIER_ATTEMPT_TEXT = 'An earlier attempt (details not kept)'
+export const EARLIER_ATTEMPT_TEXT = 'An earlier run (details not kept)'
 
 export const attemptStatusLabel: Record<AttemptStatus, string> = {
   running: 'Running',
@@ -14,8 +14,8 @@ export const attemptStatusLabel: Record<AttemptStatus, string> = {
 }
 
 export const evidenceLabel: Record<AttemptSummary['evidence'], string> = {
-  proven: 'Proven',
-  partial: 'Provenance unknown',
+  proven: 'Confirmed',
+  partial: 'Source unclear',
 }
 
 export function attemptAgentName(
@@ -43,6 +43,6 @@ export function attemptEndText(
 ): string {
   if (attempt.endedAt) return `ended ${format(attempt.endedAt)}`
   if (attempt.observationEndedAt)
-    return `no longer observed since ${format(attempt.observationEndedAt)}`
+    return `no longer seen since ${format(attempt.observationEndedAt)}`
   return 'still running'
 }

@@ -36,7 +36,7 @@ function StopButton({ briefId, nodeId }: { briefId: string; nodeId: string }) {
         <p role="alert" className="pop-error">
           {stop.error instanceof ApiError
             ? stop.error.message
-            : 'Could not stop this step. Try again.'}
+            : 'Couldn’t stop this step. Try again.'}
         </p>
       )}
     </>
@@ -66,7 +66,7 @@ export function PopOutPage() {
     return (
       <main className="pop" aria-label="Agent window">
         <p role="alert">
-          There is no agent called {agentId}. <Link to="/team">Open Team</Link>
+          There is no agent called {agentId}. <Link to="/team">Open the Team page</Link>
         </p>
       </main>
     )
@@ -94,9 +94,9 @@ export function PopOutPage() {
             snapshot={{ ...now.data, lanes: [lane], handoffs: [], unattributed: undefined }}
           />
         ) : now.isError ? (
-          <p role="alert">Could not load the score.</p>
+          <p role="alert">Couldn’t load the score.</p>
         ) : (
-          <p role="status">Loading the lane…</p>
+          <p role="status">Loading…</p>
         )}
       </section>
 
@@ -113,9 +113,7 @@ export function PopOutPage() {
           />
         ) : (
           <p className="pop-empty" role="status">
-            {loading
-              ? 'Looking for a run…'
-              : `${agent?.name ?? agentId} is not in a run right now.`}
+            {loading ? 'Looking for a run…' : `${agent?.name ?? agentId} isn’t in a run right now.`}
           </p>
         )}
       </section>
@@ -132,7 +130,7 @@ export function PopOutPage() {
         ) : (
           <p className="pop-empty" role="status">
             {rooms.data
-              ? `No direct conversation with ${agent?.name ?? agentId} yet. Open one in Chat.`
+              ? `No direct room with ${agent?.name ?? agentId} yet. Open one in Chat.`
               : 'Loading…'}
           </p>
         )}

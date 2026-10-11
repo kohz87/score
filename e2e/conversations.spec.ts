@@ -23,7 +23,7 @@ async function say(page: Page, roomId: string, text: string) {
   })
   expect(response.ok()).toBe(true)
 }
-const conversations = (page: Page) => page.getByRole('navigation', { name: 'Conversations' })
+const conversations = (page: Page) => page.getByRole('navigation', { name: 'Rooms' })
 const rowMenu = (page: Page, label: string) =>
   page.getByRole('button', { name: `Actions for ${label}` })
 

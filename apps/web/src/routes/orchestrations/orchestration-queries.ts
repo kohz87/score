@@ -199,17 +199,17 @@ export function useCreateOrchestration() {
 
 /** A stale page (409 conflict) shows what changed and lets the person decide again; everything else is plain. */
 export function describeOrchError(error: unknown): string {
-  if (!(error instanceof ApiError)) return 'That did not work. Please try again.'
+  if (!(error instanceof ApiError)) return 'Couldn’t do that. Try again.'
   if (error.code === 'conflict')
-    return 'This changed while you were looking. The page now shows the latest; check it and decide again.'
+    return 'This changed while you were looking. The page now shows the latest. Check it and decide again.'
   if (error.code === 'orchestration_owned')
     return 'This room belongs to a running orchestration. Use the run controls instead.'
   if (error.code === 'stale_plan')
-    return 'What would be re-created changed while you were looking. The page now shows the new plan; check it and decide again.'
+    return 'What would be re-created changed while you were looking. The page now shows the new plan. Check it and decide again.'
   if (error.code === 'not_retryable')
-    return 'This step can not be retried any more (no attempts left, or it moved on). The page now shows where it is.'
+    return 'This step can’t be retried any more (no tries left, or it moved on). The page now shows where it is.'
   if (error.code === 'not_open')
-    return 'That is not waiting for a decision any more. The page now shows where the run is.'
+    return 'That isn’t waiting for a decision any more. The page now shows where the run is.'
   return error.message
 }
 

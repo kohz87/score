@@ -105,7 +105,7 @@ export function useVoiceInput({
       rearm()
     } catch {
       recognizer.current = null
-      setError('Voice input could not start.')
+      setError('Couldn’t start voice input.')
     }
   }, [])
 

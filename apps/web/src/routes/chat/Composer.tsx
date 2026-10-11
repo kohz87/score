@@ -55,7 +55,7 @@ type Notice =
 type Snapshot = { asOfSeq: number; data: MessagePageData }
 
 function errorText(error: unknown): string {
-  if (!(error instanceof ApiError)) return 'Could not send the message. Please try again.'
+  if (!(error instanceof ApiError)) return 'Couldn’t send the message. Try again.'
   const details =
     typeof error.details === 'object' && error.details !== null
       ? (error.details as { error?: unknown; usage?: unknown })
@@ -65,7 +65,7 @@ function errorText(error: unknown): string {
   if (error.status === 409 && error.code === 'orchestration_owned')
     return 'This room belongs to a running orchestration. Use the run controls above instead.'
   if (error.status === 501)
-    return ['That command is not available yet.', usage].filter(Boolean).join(' ')
+    return ['That command isn’t available yet.', usage].filter(Boolean).join(' ')
   if (reason || usage) return [reason, usage].filter(Boolean).join(' ')
   return error.message
 }
@@ -211,7 +211,7 @@ export function Composer({
         ),
       )
     } catch {
-      setNotice({ kind: 'error', text: 'Could not stop the reply. It may have just finished.' })
+      setNotice({ kind: 'error', text: 'Couldn’t stop the reply. It may have just finished.' })
     } finally {
       // The reply's own completion event ends the Stop state; this only guards a response that never comes.
       stopTimer.current = setTimeout(() => setStopping(false), 3000)
@@ -337,8 +337,8 @@ export function Composer({
           error instanceof ApiError && error.status === 413
             ? 'is too large (images up to 8 MB, other files up to 25 MB)'
             : error instanceof ApiError && error.status === 415
-              ? 'is not a type that can be attached (images, PDF, DOCX, XLSX, TXT, Markdown, CSV, JSON, HTML)'
-              : 'could not be uploaded'
+              ? 'isn’t a type that can be attached (images, PDF, DOCX, XLSX, TXT, Markdown, CSV, JSON, HTML)'
+              : 'couldn’t be uploaded'
         setNotice({ kind: 'error', text: `${file.name} ${reason}.` })
       } finally {
         uploadsInFlight.current -= 1
@@ -400,7 +400,7 @@ export function Composer({
         text:
           error instanceof ApiError && error.status === 400
             ? `${command.kind === 'model' ? command.model : 'That'} isn’t available for ${name}.`
-            : 'That command failed. Please try again.',
+            : 'That command failed. Try again.',
       })
     }
   }

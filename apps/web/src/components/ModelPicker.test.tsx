@@ -144,7 +144,7 @@ test('says so when the models could not be loaded and still takes free text', as
   failing = true
   const input = mount()
   fireEvent.focus(input)
-  expect(await screen.findByText(/Models could not be loaded/)).toBeTruthy()
+  expect(await screen.findByText(/Couldn’t load models/)).toBeTruthy()
   fireEvent.change(input, { target: { value: 'x' } })
   expect(latest.model).toBe('x')
 })

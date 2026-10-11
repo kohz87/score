@@ -34,19 +34,17 @@ test('Now draws the Unattributed lane, a dashed no-longer-observed tail and open
   const score = page.getByRole('region', { name: /^Score:/ })
   const lane = score.getByRole('group', { name: 'Unattributed, No known agent' })
   await expect(lane).toBeVisible()
-  await expect(
-    lane.getByRole('button', { name: /Unattributed: .*provenance unknown/ }),
-  ).toBeVisible()
-  const lost = score.getByRole('button', { name: /reviewer: .*no longer observed since/ })
+  await expect(lane.getByRole('button', { name: /Unattributed: .*source unclear/ })).toBeVisible()
+  const lost = score.getByRole('button', { name: /reviewer: .*no longer seen since/ })
   await expect(lost).toBeVisible()
   await expect(lost).toHaveClass(/now-block--unobserved/)
-  await expect(score.getByText('No longer observed')).toBeVisible()
+  await expect(score.getByText('No longer seen')).toBeVisible()
   // Attempts have no session: nothing in the Unattributed lane links to Watch.
   await expect(score.locator('a[href*="/now/watch/unattributed"]')).toHaveCount(0)
   await score.getByRole('button', { name: /designer: .*Old board job/ }).click()
   await expect(page).toHaveURL(/\/attempts\/kr_/)
   await expect(page.getByText(/From an earlier copy of the board/)).toBeVisible()
-  await expect(page.getByRole('region', { name: 'Task as last observed' })).toContainText(
+  await expect(page.getByRole('region', { name: 'Task as last seen' })).toContainText(
     'Old board job',
   )
   await expect(page.locator('a[href*="/now/watch/"]')).toHaveCount(0)

@@ -16,15 +16,15 @@ export function ImportedBanner({ room, agents }: { room: Room; agents: AgentSumm
         ? proceed.error.message
         : proceed.error.status === 404
           ? 'That session is no longer in Hermes.'
-          : 'Could not continue the session. Please try again.'
+          : 'Couldn’t continue the session. Try again.'
       : proceed.error
-        ? 'Could not continue the session. Please try again.'
+        ? 'Couldn’t continue the session. Try again.'
         : null
   return (
     <div className="chat-imported" role="region" aria-label="Imported conversation">
       <p>
-        <strong>Imported from {from.label}.</strong> These are read-only copies of {agent}&apos;s
-        messages; Hermes was not changed.
+        <strong>Imported from {from.label}.</strong> These are read-only copies of {agent}’s
+        messages; Hermes wasn’t changed.
       </p>
       {mode === 'same_session' && (
         <p role="status">
@@ -34,8 +34,8 @@ export function ImportedBanner({ room, agents }: { room: Room; agents: AgentSumm
       )}
       {mode === 'new_session' && (
         <p role="status">
-          This session cannot be reopened. New messages start a new Hermes session that begins with
-          a short summary of the imported conversation.
+          This session can’t be reopened. New messages start a new Hermes session that begins with a
+          short summary of the imported conversation.
         </p>
       )}
       {mode === null && (

@@ -85,7 +85,7 @@ export function PlanCard({
         )}
         {start.isError && (
           <span role="alert">
-            {start.error instanceof Error ? start.error.message : 'Could not start the plan.'}
+            {start.error instanceof Error ? start.error.message : 'Couldn’t start the plan.'}
           </span>
         )}
       </div>

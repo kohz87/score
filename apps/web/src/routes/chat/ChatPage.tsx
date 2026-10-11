@@ -62,11 +62,11 @@ export function ChatPage() {
               strokeLinecap="round"
             />
           </svg>
-          Conversations
+          Rooms
         </button>
       )}
       <ResponsiveDrawer
-        label="Conversations"
+        label="Rooms"
         className="chat-conversations"
         open={listOpen}
         onClose={closeList}
@@ -74,7 +74,7 @@ export function ChatPage() {
       >
         <div className="chat-new-row">
           <button className="chat-new" type="button" disabled>
-            ＋ New chat
+            ＋ New room
           </button>
           <button
             className="chat-new chat-new--secondary"
@@ -84,16 +84,16 @@ export function ChatPage() {
             ＋ New orchestration
           </button>
         </div>
-        {rooms.status === 'pending' && !rooms.data && <p role="status">Loading conversations…</p>}
+        {rooms.status === 'pending' && !rooms.data && <p role="status">Loading rooms…</p>}
         {rooms.status === 'error' && (
           <QueryError
-            text="Could not load conversations."
+            text="Couldn’t load rooms."
             retry={() => void context.queries.register(roomsQuery).refetch()}
           />
         )}
         {agents.status === 'error' && (
           <QueryError
-            text="Could not load agents."
+            text="Couldn’t load agents."
             retry={() => void context.queries.register(agentsQuery).refetch()}
           />
         )}
@@ -101,7 +101,7 @@ export function ChatPage() {
           rooms={[...(rooms.data?.rooms ?? []), ...(rooms.data?.directs ?? [])]}
           agents={agents.data ?? []}
         />
-        <nav aria-label="Conversations">
+        <nav aria-label="Rooms">
           {rooms.data && (
             <RoomList
               rooms={rooms.data.rooms}
@@ -115,12 +115,12 @@ export function ChatPage() {
             />
           )}
           <div className="chat-room-group">
-            <h2>Direct</h2>
+            <h2>Direct rooms</h2>
             {rooms.data?.directs.map((room) => (
               <RoomLink key={room.id} room={room} selected={roomId} agents={agents.data ?? []} />
             ))}
             {rooms.data && !rooms.data.directs.length && (
-              <p className="chat-list-empty">No direct conversations yet.</p>
+              <p className="chat-list-empty">No direct rooms yet.</p>
             )}
           </div>
           <OutsideSessions agents={agents.data ?? []} />
@@ -129,9 +129,9 @@ export function ChatPage() {
       {roomId ? (
         <ChatThread key={`thread:${roomId}`} roomId={roomId} agents={agents.data ?? []} />
       ) : (
-        <section className="chat-thread chat-welcome" aria-label="Conversation">
+        <section className="chat-thread chat-welcome" aria-label="Room">
           <h1>Chat</h1>
-          <p>Choose a conversation to see its messages.</p>
+          <p>Choose a room to see its messages.</p>
         </section>
       )}
       {roomId && <RoomPanels key={`panels:${roomId}`} roomId={roomId} agents={agents.data ?? []} />}

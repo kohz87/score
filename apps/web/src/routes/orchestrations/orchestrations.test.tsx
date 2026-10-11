@@ -137,11 +137,11 @@ test('the live page shows each step in its state, the gate with its frozen assig
   expect(screen.getByRole('button', { name: /Step s3, designer, needs you/ })).toBeTruthy()
   const gate = screen.getByRole('region', { name: 'Approve s3' })
   expect(within(gate).getByText('Design a announcement image for the release.')).toBeTruthy()
-  expect(within(gate).getByText(/s1 \(result v1, succeeded\)/)).toBeTruthy()
+  expect(within(gate).getByText(/s1 \(result version 1, succeeded\)/)).toBeTruthy()
   // Score's verdict on a refused call is in the log.
   expect(within(screen.getByRole('log')).getByText(/agent_not_allowed/)).toBeTruthy()
   // Budget fields: settled, provisional, reserved, completeness; estimates are per turn and per step.
-  expect(screen.getByText(/some attempts are not settled yet/)).toBeTruthy()
+  expect(screen.getByText(/some spend isn’t settled yet/)).toBeTruthy()
   expect(screen.getByText(/per lead turn/)).toBeTruthy()
 })
 
@@ -186,7 +186,7 @@ test('clicking a node filters the log to it and opens its output', async () => {
   fireEvent.click(screen.getByRole('button', { name: /Step s1, builder/ }))
   expect(within(log).queryByText(/Lead turn 1 started/)).toBeNull()
   expect(within(log).getByText(/s1 succeeded/)).toBeTruthy()
-  const selected = screen.getByRole('region', { name: 'Selected node' })
+  const selected = screen.getByRole('region', { name: 'Selected step' })
   expect(within(selected).getAllByText(/Draft ready: 14 changes/).length).toBeGreaterThan(0)
   fireEvent.click(screen.getByRole('button', { name: 'Show everything' }))
   expect(within(log).getByText(/Lead turn 1 started/)).toBeTruthy()
@@ -290,7 +290,7 @@ test('the start screen shows the acknowledgement, the gate notes, the unknown to
   mount(<NewOrchestrationDialog agents={agents as never} close={() => {}} created={created} />)
   const dialog = await screen.findByRole('dialog', { name: 'New orchestration' })
   expect(await within(dialog).findByText('Every step waits for you.')).toBeTruthy()
-  expect(within(dialog).getByText(/Can't be checked/)).toBeTruthy()
+  expect(within(dialog).getByText(/Can’t be checked/)).toBeTruthy()
   expect(within(dialog).getByText(/per lead turn and per step/)).toBeTruthy()
   const start = within(dialog).getByRole('button', { name: 'Start orchestration' })
   expect((start as HTMLButtonElement).disabled).toBe(true)

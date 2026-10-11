@@ -279,7 +279,7 @@ function MessageActions({
       setError(
         failure instanceof ApiError && failure.status === 409
           ? 'Can’t retry right now: it is already being answered, or work is paused.'
-          : 'Could not retry. Please try again.',
+          : 'Couldn’t retry. Try again.',
       )
     }
   }
@@ -425,7 +425,7 @@ function StopReply({ message, name }: { message: Message; name: string }) {
       </button>
       {state === 'failed' && (
         <span className="chat-action-error" role="alert">
-          Could not stop it. It may have just finished.
+          Couldn’t stop it. It may have just finished.
         </span>
       )}
     </div>

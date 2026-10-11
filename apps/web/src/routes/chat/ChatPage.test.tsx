@@ -200,7 +200,7 @@ afterEach(() => {
 test('shows loading states while snapshots are pending', () => {
   fetchMock.mockImplementation(() => new Promise(() => {}))
   setup()
-  expect(screen.getByText('Loading conversations…')).toBeDefined()
+  expect(screen.getByText('Loading rooms…')).toBeDefined()
   expect(screen.getByText('Loading room…')).toBeDefined()
 })
 test('index invites room selection and handles an empty rooms list', async () => {
@@ -208,7 +208,7 @@ test('index invites room selection and handles an empty rooms list', async () =>
   setup('/chat')
   expect(screen.getByRole('heading', { level: 1, name: 'Chat' })).toBeDefined()
   await screen.findByText('No rooms yet.')
-  expect(screen.getByText('Choose a conversation to see its messages.')).toBeDefined()
+  expect(screen.getByText('Choose a room to see its messages.')).toBeDefined()
 })
 test('shows an empty thread and an empty composer with Send disabled', async () => {
   items = []
@@ -235,7 +235,7 @@ test('populated room uses API agents, badges, landmarks and chronological messag
   await screen.findByText('Hello team')
   expect(screen.getByRole('heading', { name: '#general' })).toBeDefined()
   expect(screen.getByText('Unaddressed messages go to Lead')).toBeDefined()
-  const nav = within(screen.getByRole('navigation', { name: 'Conversations' }))
+  const nav = within(screen.getByRole('navigation', { name: 'Rooms' }))
   expect(nav.getByRole('link', { name: /#general/ }).getAttribute('aria-current')).toBe('page')
   expect(nav.getByLabelText('2 unread messages')).toBeDefined()
   expect(nav.getByRole('img', { name: 'Lead, circle-dot' })).toBeDefined()
@@ -248,14 +248,14 @@ test('populated room uses API agents, badges, landmarks and chronological messag
 test('rooms failure can be retried and invalid responses fail validation', async () => {
   fetchMock.mockImplementation(async () => response({ rooms: 'invalid' }))
   setup('/chat')
-  await screen.findByText('Could not load conversations.')
+  await screen.findByText('Couldn’t load rooms.')
   fetchMock.mockImplementation(async (input) =>
     String(input) === '/api/rooms'
       ? response({ asOfSeq: 1, rooms: [room], directs: [] })
       : response({ asOfSeq: 1, items: [agent] }),
   )
   fireEvent.click(
-    within(screen.getByText('Could not load conversations.').parentElement!).getByRole('button', {
+    within(screen.getByText('Couldn’t load rooms.').parentElement!).getByRole('button', {
       name: 'Try again',
     }),
   )
@@ -276,10 +276,10 @@ test('message failures show an error and retry successfully', async () => {
       : original(...args),
   )
   setup()
-  await screen.findByText('Could not load messages.')
+  await screen.findByText('Couldn’t load messages.')
   fetchMock.mockImplementation(original)
   fireEvent.click(
-    within(screen.getByText('Could not load messages.').parentElement!).getByRole('button'),
+    within(screen.getByText('Couldn’t load messages.').parentElement!).getByRole('button'),
   )
   await screen.findByText('Hello team')
 })
@@ -637,7 +637,7 @@ test('side panels show an error with retry when the room details fail', async ()
   })
   setup()
   const aside = within(await panel())
-  expect(await aside.findByText('Could not load room details.')).toBeDefined()
+  expect(await aside.findByText('Couldn’t load room details.')).toBeDefined()
   expect(aside.getByRole('button', { name: 'Try again' })).toBeDefined()
 })
 
@@ -843,8 +843,8 @@ test('sending an edit posts `edits`; the original greys with a link to the new v
   fireEvent.click(screen.getByRole('button', { name: 'Send correction' }))
   // The confirmation says what happens, then the room is rewound and the correction is posted.
   const dialog = await screen.findByRole('dialog', { name: 'Edit and send again?' })
-  expect(await within(dialog).findByText(/Lead −2 turns/)).toBeDefined()
-  expect(within(dialog).getByText(/Long-term memory .* is not rewound/)).toBeDefined()
+  expect(await within(dialog).findByText(/Lead −2 exchanges/)).toBeDefined()
+  expect(within(dialog).getByText(/Long-term memory .* isn’t rewound/)).toBeDefined()
   rewindResponse = () =>
     response({
       version: { ...editVersion },
@@ -910,7 +910,7 @@ test('the delete dialog says live share links still show the message and revokes
     ).toBe(true),
   )
 })
-test('an agent that cannot be rewound blocks Rewind and offers Hide in Score only', async () => {
+test('an agent that can’t be rewound blocks Rewind and offers Hide in Score only', async () => {
   items = [mine]
   plan = {
     hiddenCount: 3,
@@ -924,8 +924,8 @@ test('an agent that cannot be rewound blocks Rewind and offers Hide in Score onl
   await screen.findByText('Ship it')
   fireEvent.click(screen.getByRole('button', { name: 'Delete message from You' }))
   const dialog = await screen.findByRole('dialog', { name: 'Delete this message?' })
-  await within(dialog).findByText(/These agents cannot be rewound/)
-  expect(within(dialog).getByText(/builder: its Hermes session was compressed/)).toBeDefined()
+  await within(dialog).findByText(/These agents can’t be rewound/)
+  expect(within(dialog).getByText(/builder: its Hermes session was compacted/)).toBeDefined()
   expect(
     (within(dialog).getByRole('button', { name: 'Rewind and delete' }) as HTMLButtonElement)
       .disabled,
@@ -947,13 +947,13 @@ test('a refused rewind says nothing was hidden and keeps the dialog', async () =
   await screen.findByText('Ship it')
   fireEvent.click(screen.getByRole('button', { name: 'Delete message from You' }))
   const dialog = await screen.findByRole('dialog', { name: 'Delete this message?' })
-  await within(dialog).findByText(/Lead −2 turns/)
+  await within(dialog).findByText(/Lead −2 exchanges/)
   rewindResponse = () =>
     response(
       {
         error: {
           code: 'rewind_incomplete',
-          message: 'Some agents could not be rewound',
+          message: 'Some agents couldn’t be rewound',
           details: { skipped: [{ agentId: 'lead', reason: 'no_answer' }], rewound: [] },
         },
       },
@@ -961,7 +961,7 @@ test('a refused rewind says nothing was hidden and keeps the dialog', async () =
     )
   fireEvent.click(within(dialog).getByRole('button', { name: 'Rewind and delete' }))
   await within(dialog).findByText(/Nothing was hidden/)
-  expect(within(dialog).getByText(/Lead: Hermes did not answer in time/)).toBeDefined()
+  expect(within(dialog).getByText(/Lead: Hermes didn’t answer in time/)).toBeDefined()
   expect(within(dialog).getByRole('button', { name: 'Hide in Score only' })).toBeDefined()
 })
 test('a blocked rewind explains why and cannot be confirmed', async () => {
@@ -1256,7 +1256,7 @@ test('PLAN 5.36: deleting a room lists what goes, needs the typed name, then lea
   fireEvent.click(screen.getByRole('menuitem', { name: 'Delete room…' }))
   const dialog = await screen.findByRole('dialog', { name: 'Delete general?', hidden: true })
   await within(dialog).findByText(
-    /12 messages, 2 attached files, 3 run records and 1 brief/,
+    /12 messages, 2 attached files, 3 run records and 1 Flow run/,
     undefined,
     {
       timeout: 3000,
@@ -1275,7 +1275,7 @@ test('PLAN 5.36: deleting a room lists what goes, needs the typed name, then lea
   await waitFor(() =>
     expect(roomCalls).toEqual([['DELETE', '/api/rooms/general', { confirm: 'general' }]]),
   )
-  await screen.findByText('Choose a conversation to see its messages.')
+  await screen.findByText('Choose a room to see its messages.')
 })
 
 test('PLAN 5.36: a blocked room explains why and cannot be deleted', async () => {
@@ -1295,7 +1295,7 @@ test('PLAN 5.36: room.deleted from another tab removes the room and leaves its p
   const { router } = setup()
   await screen.findByRole('button', { name: '#general (rename)' })
   emit('room.deleted', { id: 'general' }, 5)
-  await screen.findByText('Choose a conversation to see its messages.')
+  await screen.findByText('Choose a room to see its messages.')
   expect(router.state.location.pathname).toBe('/chat')
   expect(screen.queryByRole('link', { name: /general/ })).toBeNull()
 })

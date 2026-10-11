@@ -137,7 +137,7 @@ test('the run view draws the graph from the definition: shapes, states, the gate
   expect(screen.getByRole('button', { name: /^End Published, waiting$/ })).toBeTruthy()
   // The status is the executor's; no graph outcome yet.
   expect(screen.getByText('Running', { exact: true })).toBeTruthy()
-  expect(screen.queryByText(/Graph reached the end/)).toBeNull()
+  expect(screen.queryByText(/Workflow reached its end/)).toBeNull()
   // Edges carry words where they need them; the log says what the planner did.
   expect([...document.querySelectorAll('.orch-edge-label')].map((e) => e.textContent)).toEqual(
     expect.arrayContaining(['approved', 'verdict passed', 'otherwise']),
@@ -153,7 +153,7 @@ test('the node gate shows what it was shown when it opened, and approving posts 
   mount(<WorkflowRunLive runId="wfrun-1" onStarted={started} />)
   const gate = await screen.findByRole('region', { name: 'Decide on Approve the draft' })
   expect(within(gate).getByText('Is the reviewed draft good enough to publish?')).toBeTruthy()
-  expect(within(gate).getByText(/result v1/)).toBeTruthy()
+  expect(within(gate).getByText(/result version 1/)).toBeTruthy()
   expect(within(gate).getByText(/Rejecting stops the run/)).toBeTruthy()
   fireEvent.click(within(gate).getByRole('button', { name: 'Approve' }))
   await waitFor(() =>
@@ -288,7 +288,7 @@ test('a finished run says both what the executor did and what the graph did', as
     Object.assign(run, {
       status: 'finished_with_unresolved',
       graphOutcome: 'reached_end',
-      outcomeNote: 'Graph reached the end — 1 abandoned attempt not confirmed ended',
+      outcomeNote: 'Workflow reached its end — 1 abandoned attempt not confirmed ended',
       needsYou: [],
       endedAt: '2026-10-10T10:00:00.000Z',
     })
@@ -296,9 +296,9 @@ test('a finished run says both what the executor did and what the graph did', as
   mount(<WorkflowRunLive runId="wfrun-1" onStarted={started} />)
   await screen.findByRole('log', { name: 'Events' })
   expect(screen.getByText('Finished, not everything confirmed')).toBeTruthy()
-  expect(screen.getAllByText('Graph reached the end').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('Workflow reached its end').length).toBeGreaterThan(0)
   expect(
-    screen.getByText('Graph reached the end — 1 abandoned attempt not confirmed ended'),
+    screen.getByText('Workflow reached its end — 1 abandoned attempt not confirmed ended'),
   ).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Replay this run' })).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Run again…' })).toBeTruthy()
@@ -308,13 +308,13 @@ test('clicking a node filters the log to it and shows what it read, its verdict 
   mount(<WorkflowRunLive runId="wfrun-1" onStarted={started} />)
   const log = await screen.findByRole('log', { name: 'Events' })
   fireEvent.click(screen.getByRole('button', { name: /^Step Review the draft/ }))
-  const panel = screen.getByRole('region', { name: 'Selected node' })
+  const panel = screen.getByRole('region', { name: 'Selected step' })
   expect(within(panel).getByText(/The output of Draft the notes/)).toBeTruthy()
-  expect(within(panel).getByText(/result v1/, { selector: 'li' })).toBeTruthy()
+  expect(within(panel).getByText(/result version 1/, { selector: 'li' })).toBeTruthy()
   expect(within(panel).getByText(/Verdict: passed/)).toBeTruthy()
   expect(within(log).queryByText('Draft the notes started (builder)')).toBeNull()
   expect(within(log).getByText('Review the draft started (reviewer)')).toBeTruthy()
-  expect(within(panel).getByText(/agent-wide: may include other work/)).toBeTruthy()
+  expect(within(panel).getByText(/shows all the agent’s work/)).toBeTruthy()
 })
 
 test('a dot travels for a token event that arrives after the page loaded, not for old ones', async () => {
@@ -448,7 +448,7 @@ test('the editor shows every server problem on the node it is about, with words 
   ).toBe(true)
   // Selecting the node shows the same problem in the inspector.
   fireEvent.click(within(problems).getAllByRole('button', { name: 'Build it' })[0]!)
-  const inspector = screen.getByRole('complementary', { name: 'Node settings' })
+  const inspector = screen.getByRole('complementary', { name: 'Step settings' })
   expect(
     within(inspector).getAllByText(/nothing is connected to "when it fails"/).length,
   ).toBeGreaterThan(0)
@@ -501,7 +501,7 @@ test('the outline is the canvas as text, and the inspector connects with a selec
   expect(within(outline).getByText('when done goes to Review the draft')).toBeTruthy()
   expect(within(outline).getByText('otherwise goes to Repair the draft')).toBeTruthy()
   fireEvent.click(within(outline).getAllByRole('button', { name: 'Published' })[0]!)
-  const inspector = screen.getByRole('complementary', { name: 'Node settings' })
+  const inspector = screen.getByRole('complementary', { name: 'Step settings' })
   expect(within(inspector).getByRole('heading', { name: 'Published' })).toBeTruthy()
   fireEvent.click(within(outline).getAllByRole('button', { name: 'Draft the notes' })[0]!)
   const connect = within(inspector).getByRole('combobox', {
@@ -550,7 +550,7 @@ test('dragging a node moves it on a 16 px grid, marks the draft unsaved and keep
   expect(at('publish')).toEqual(before.publish)
   expect(screen.getByText(/unsaved changes/)).toBeTruthy()
   // The drag did not select the node.
-  expect(screen.getByRole('complementary', { name: 'Node settings' }).textContent).toMatch(
+  expect(screen.getByRole('complementary', { name: 'Step settings' }).textContent).toMatch(
     /Nothing selected/,
   )
 })

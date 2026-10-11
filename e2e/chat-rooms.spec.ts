@@ -4,7 +4,7 @@ import { makeRoom, openRoom } from './rooms.ts'
 
 // PLAN 5.36 against the fake adapter: rename a room inline, delete one with the typed name (an ordinary room and a
 // finished orchestration's), and compact an agent's context from the ring or with /compress.
-const conversations = (page: Page) => page.getByRole('navigation', { name: 'Conversations' })
+const conversations = (page: Page) => page.getByRole('navigation', { name: 'Rooms' })
 
 // A room's menu closes when the list re-renders under it (stream updates): open it again until the item shows.
 async function openMenuItem(page: Page, button: RegExp | string, item: string) {
@@ -116,7 +116,7 @@ test('a finished orchestration room can be deleted too', async ({ page }) => {
   await expect(second.getByRole('alert')).toHaveCount(0)
   await second.getByRole('button', { name: 'Delete room' }).click()
   await expect(page).toHaveURL(/\/chat$/)
-  await expect(page.getByText('Choose a conversation to see its messages.')).toBeVisible()
+  await expect(page.getByText('Choose a room to see its messages.')).toBeVisible()
 })
 
 test('compact from the ring: it asks first, shows Hermes’s before and after, and the ring shrinks', async ({
@@ -133,7 +133,7 @@ test('compact from the ring: it asks first, shows Hermes’s before and after, a
   await expect(panel.getByRole('listitem').filter({ hasText: 'Messages' })).toBeVisible()
   await expect(panel.getByText(/Hermes compacts automatically at 64,000 tokens/)).toBeVisible()
   await panel.getByRole('button', { name: 'Compact' }).click()
-  await expect(panel.getByText(/Hermes will summarise .*older turns/)).toBeVisible()
+  await expect(panel.getByText(/Hermes will summarise .*older exchanges/)).toBeVisible()
   await panel.getByRole('button', { name: 'Compact now' }).click()
   await expect(panel.getByText(/Compacted: 40 → 12 messages, 54,000 → 9,000 tokens/)).toBeVisible({
     timeout: 15_000,
@@ -157,7 +157,7 @@ test('/compress asks for confirmation instead of sending a message, then compact
   await composer.press('Enter')
   await composer.press('Enter')
   const panel = page.getByRole('dialog', { name: /context details/ })
-  await expect(panel.getByText(/Hermes will summarise .*older turns/)).toBeVisible()
+  await expect(panel.getByText(/Hermes will summarise .*older exchanges/)).toBeVisible()
   await expect(composer).toHaveValue('')
   await panel.getByLabel('Exchanges kept word for word').fill('3')
   await panel.getByRole('button', { name: 'Compact now' }).click()

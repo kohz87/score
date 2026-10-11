@@ -36,8 +36,8 @@ export function Palette({
     <section className="wf-palette" aria-label="Palette">
       <h3>Add to the workflow</h3>
       <p className="orch-muted">
-        Click to add (it is connected after the selected node), or drag onto the canvas. Dropping on
-        a node connects the new one after it.
+        Click to add (it is connected after the selected step), or drag onto the canvas. Dropping on
+        a step connects the new one after it.
       </p>
       <h4>Agent steps</h4>
       <ul>
@@ -88,7 +88,7 @@ export function Palette({
   )
 }
 
-/** Every node in reading order with where each connection goes: the text equivalent of the canvas. */
+/** Every step in reading order with where each connection goes: the text equivalent of the canvas. */
 export function Outline({
   draft,
   issues,
@@ -104,7 +104,7 @@ export function Outline({
   return (
     <section className="wf-outline" aria-label="Outline">
       <h3>Outline</h3>
-      <p className="orch-muted">The same workflow as text: each node and where it leads.</p>
+      <p className="orch-muted">The same workflow as text: each step and where it leads.</p>
       <ol>
         {items.map((item) => {
           const problems =

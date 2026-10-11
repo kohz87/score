@@ -38,7 +38,7 @@ export function FlowLog({ briefId, agents }: { briefId: string; agents: AgentSum
       </div>
       {log.isError && (
         <p role="alert">
-          The log could not load.{' '}
+          Couldn’t load the log.{' '}
           <button type="button" onClick={() => void log.refetch()}>
             Try again
           </button>

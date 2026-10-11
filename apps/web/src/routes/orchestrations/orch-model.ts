@@ -38,9 +38,9 @@ export const visualLabel: Record<NodeVisual, string> = {
   running: 'running',
   succeeded: 'succeeded',
   failed: 'failed',
-  cancelled: 'cancelled',
-  unknown: 'not confirmed ended',
-  abandoned: 'abandoned',
+  cancelled: 'stopped',
+  unknown: 'not confirmed as ended',
+  abandoned: 'stopped waiting',
   blocked: 'blocked',
   rejected: 'rejected',
   not_started: 'not started',
@@ -391,13 +391,13 @@ export function needsYouText(item: NeedsYou): string {
     case 'paused':
       return pauseReasonText(item.reason)
     case 'unknown':
-      return 'An attempt is not confirmed ended'
+      return 'Some work isn’t confirmed as ended'
     case 'cancel_fence':
-      return `Cancelled ${item.stepId} may still be running`
+      return `Stopped ${item.stepId} may still be running`
     case 'remap':
       return `${item.agentId} was replaced: decide whether this run uses the new one`
     case 'fence':
-      return 'Starting work is blocked until you review a reconciliation list'
+      return 'Starting work is blocked until you review a list'
   }
 }
 
@@ -418,9 +418,9 @@ export function pauseReasonText(reason: string | null): string {
     case 'lead_failing':
       return 'Paused: the lead keeps failing'
     case 'agent_unavailable':
-      return 'Paused: an agent is not available'
+      return 'Paused: an agent isn’t available'
     case 'abandonment':
-      return 'Paused after you abandoned attempts'
+      return 'Paused after you stopped waiting for some work'
     default:
       return 'Paused'
   }

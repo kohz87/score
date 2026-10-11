@@ -50,7 +50,7 @@ export function RoomMenu({
       await patchRoom(room.id, body)
       close()
     } catch {
-      setError('Could not save that. Please try again.')
+      setError('Couldn’t save that. Try again.')
     }
   }
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -225,7 +225,7 @@ export function RoomMenu({
               <div className="chat-menu-actions">
                 <button type="submit">Save</button>
                 <button type="button" onClick={() => void run({ tags: null })}>
-                  Use the name&apos;s #tags
+                  Use the name’s #tags
                 </button>
               </div>
             </form>
@@ -240,7 +240,7 @@ export function RoomMenu({
                     void run({ autoSummary: { ...summary, enabled: event.target.checked } })
                   }
                 />
-                Summarise long conversations
+                Summarise long rooms
               </label>
               <label>
                 After about (estimated tokens)
@@ -260,7 +260,7 @@ export function RoomMenu({
               <p>
                 The lead agent writes it as a normal run, which costs model tokens. Tokens are
                 estimated as characters divided by 4. You can edit or delete the summary in the
-                thread.
+                room.
               </p>
               <div className="chat-menu-actions">
                 <button
@@ -270,7 +270,9 @@ export function RoomMenu({
                       () => close(),
                       (failure: unknown) =>
                         setError(
-                          failure instanceof Error ? failure.message : 'Could not start it.',
+                          failure instanceof Error
+                            ? failure.message
+                            : 'Couldn’t summarise. Try again.',
                         ),
                     )
                   }

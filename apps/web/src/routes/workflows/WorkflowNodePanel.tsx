@@ -32,7 +32,7 @@ export function WorkflowNodePanel({
   const lastAttempt = attempts.at(-1)
   const effective = def.kind === 'agent' && step ? stepVisual(step, lastAttempt) : null
   return (
-    <section className="orch-selected wf-node-panel" aria-label="Selected node">
+    <section className="orch-selected wf-node-panel" aria-label="Selected step">
       <h3>
         {def.label} <small className="orch-muted">{KIND_LABEL[def.kind]}</small>
       </h3>
@@ -49,11 +49,11 @@ export function WorkflowNodePanel({
         <dd>
           <StateMark visual={visual} />
           {view.state === 'ready' && view.waitingFor ? ` ${waitingText[view.waitingFor]}` : ''}
-          {effective === 'unknown' ? ' (an attempt is not confirmed ended)' : ''}
+          {effective === 'unknown' ? ' (a try isn’t confirmed as ended)' : ''}
         </dd>
         {def.kind === 'agent' && (
           <>
-            <dt>Attempts</dt>
+            <dt>Tries</dt>
             <dd>
               {view.attemptsUsed} of {view.attemptsMax} used
               {view.canRetry ? '; Retry is available' : ''}
@@ -96,7 +96,7 @@ export function WorkflowNodePanel({
       {reads.length > 0 && (
         <>
           <h4>It read</h4>
-          <ul className="wf-reads" aria-label="Results this node read">
+          <ul className="wf-reads" aria-label="Results this step read">
             {reads.map((item) => (
               <li key={`${item.consumerAttempt}-${item.producer}`}>
                 {item.kind === 'default'
@@ -107,7 +107,7 @@ export function WorkflowNodePanel({
                 {item.kind !== 'default' && (
                   <>
                     {' '}
-                    (attempt {item.producerAttempt}, result v{item.outputRevision})
+                    (try {item.producerAttempt}, result version {item.outputRevision})
                   </>
                 )}
                 {!item.eligible && (
@@ -123,8 +123,8 @@ export function WorkflowNodePanel({
         <p>
           <strong>Verdict: {view.verdict.verdict.replace('_', ' ')}.</strong> {view.verdict.reason}{' '}
           <span className="orch-muted">
-            Read from the agent&apos;s complete reply
-            {view.verdict.outputTruncated ? ' before the stored output was shortened' : ''}.
+            Read from the agent’s complete reply
+            {view.verdict.outputTruncated ? ' before the saved output was shortened' : ''}.
           </span>
         </p>
       )}
@@ -132,7 +132,8 @@ export function WorkflowNodePanel({
       {view.output !== null && (
         <details open>
           <summary>
-            Output (result v{view.outputRevision}){view.outputTruncated ? ', shortened to fit' : ''}
+            Output (result version {view.outputRevision})
+            {view.outputTruncated ? ', shortened to fit' : ''}
           </summary>
           <pre className="orch-pre">{view.output}</pre>
         </details>
@@ -149,7 +150,7 @@ export function WorkflowNodePanel({
       {attempts.length > 0 && (
         <details>
           <summary>
-            {attempts.length} attempt{attempts.length === 1 ? '' : 's'} of this node
+            {attempts.length} {attempts.length === 1 ? 'try' : 'tries'} of this step
           </summary>
           <ul className="orch-attempts">
             {attempts.map((attempt) => (
@@ -161,10 +162,8 @@ export function WorkflowNodePanel({
 
       {def.kind === 'agent' && (
         <p className="orch-muted">
-          <Link to={`/now/watch/${encodeURIComponent(def.agentId)}`}>
-            Open the agent&apos;s Watch
-          </Link>{' '}
-          (agent-wide: may include other work).
+          <Link to={`/now/watch/${encodeURIComponent(def.agentId)}`}>Open the agent’s Watch</Link>{' '}
+          (shows all the agent’s work, not just this step).
         </p>
       )}
     </section>

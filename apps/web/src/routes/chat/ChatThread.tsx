@@ -135,7 +135,7 @@ function MessagePage({
       )}
       {status === 'error' && (
         <QueryError
-          text="Could not load messages."
+          text="Couldn’t load messages."
           retry={() => void context.queries.register(definition).refetch()}
         />
       )}
@@ -312,7 +312,7 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
   const owned = (orchestration ?? workflowRun)?.ownership
   const roomIsOwned = owned !== undefined && owned !== 'released'
   return (
-    <section className="chat-thread" aria-label="Conversation">
+    <section className="chat-thread" aria-label="Room">
       <header className="chat-thread-header">
         <div>
           {room && renaming ? (
@@ -357,7 +357,7 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
           text={
             error instanceof ApiError && error.status === 404
               ? 'Room not found.'
-              : 'Could not load room.'
+              : 'Couldn’t load room.'
           }
           retry={() => void context.queries.register(definition).refetch()}
         />

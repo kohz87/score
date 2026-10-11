@@ -93,7 +93,7 @@ export function RunControls({
         (confirming ? (
           <>
             <span className="orch-confirm">
-              Stop admits nothing more and stops what is running.
+              Stopping ends the run: nothing new starts and anything running is stopped.
             </span>
             <button
               type="button"
@@ -139,8 +139,8 @@ export function RunStatus({
       )}
       {run.status === 'paused' && <span>{pauseReasonText(run.pauseReason)}</span>}
       {run.ownership !== 'released' && isRunOver(run.status) && (
-        <span title="Score still owes Hermes a Stop, or an attempt is not confirmed ended">
-          Not fully wound down (ownership: {run.ownership})
+        <span title="Score still has to send Hermes a stop, or some work isn’t confirmed as ended">
+          Not fully stopped yet
         </span>
       )}
       {run.endReason && <span>{run.endReason}</span>}
@@ -167,13 +167,13 @@ export function BudgetBlock({
       <dt>Settled</dt>
       <dd>{usd(b.settledUsd)}</dd>
       <dt>Provisional</dt>
-      <dd>{usd(b.provisionalUsd)} (still moving; counted against the budget)</dd>
+      <dd>{usd(b.provisionalUsd)} (may still change; counted against the budget)</dd>
       <dt>Reserved</dt>
       <dd>{usd(b.reservedUsd)} for work not yet started</dd>
       <dt>Complete</dt>
       <dd>
-        {b.complete ? 'Yes: every attempt is settled' : 'No: some attempts are not settled yet'}
-        {b.unknownSpend ? '; some spend is unknown and is never counted as zero' : ''}
+        {b.complete ? 'Yes: all spend is settled' : 'No: some spend isn’t settled yet'}
+        {b.unknownSpend ? '; some spend is unknown and never counted as zero' : ''}
       </dd>
       <dd className="orch-muted orch-wide">
         {run.leadTurnEstimateUsd === undefined ? (
@@ -184,7 +184,7 @@ export function BudgetBlock({
             {usd(run.stepEstimateUsd)}).
           </>
         )}{' '}
-        Summaries and titles are not counted.
+        Summaries and titles aren’t counted.
       </dd>
     </dl>
   )
@@ -194,19 +194,19 @@ export function AttemptLine({ attempt }: { attempt: AttemptView }) {
   const evidence = attempt.evidence
     ? `ended (Hermes reported ${attempt.evidence})`
     : attempt.state === 'abandoned'
-      ? 'abandoned by you'
+      ? 'you stopped waiting for it'
       : attempt.state === 'unknown'
-        ? `not confirmed ended${attempt.unknownReason ? `: ${attempt.unknownReason}` : ''}`
+        ? `not confirmed as ended${attempt.unknownReason ? `: ${attempt.unknownReason.replaceAll('_', ' ')}` : ''}`
         : attempt.state.replace('_', ' ')
   const owed =
     attempt.stopRequestedAt && !attempt.stopAcknowledgedAt && !attempt.evidence
-      ? `Stop owed since ${time(attempt.stopRequestedAt)}, not acknowledged`
+      ? `Stop requested at ${time(attempt.stopRequestedAt)}, not yet acknowledged`
       : attempt.stopRequestedAt
-        ? `Stop asked ${time(attempt.stopRequestedAt)}${attempt.stopAcknowledgedAt ? `, acknowledged ${time(attempt.stopAcknowledgedAt)}` : ''}`
+        ? `Stop requested at ${time(attempt.stopRequestedAt)}${attempt.stopAcknowledgedAt ? `, acknowledged ${time(attempt.stopAcknowledgedAt)}` : ''}`
         : null
   return (
     <li>
-      Attempt {attempt.n} by {attempt.agentId}: {evidence}
+      Try {attempt.n} by {attempt.agentId}: {evidence}
       {attempt.retired ? ', retired' : ''}. Spend{' '}
       {attempt.spendUsd === null ? 'unknown' : usd(attempt.spendUsd)}
       {attempt.spendComplete ? '' : ' (not complete)'}.{owed ? ` ${owed}.` : ''}
@@ -251,7 +251,7 @@ export function StepCard({
       <p className="orch-muted">
         {step.after.length > 0 && <>After {step.after.join(', ')}. </>}
         {step.replaces && <>Replaces {step.replaces}. </>}
-        {step.disposition && <>Disposition: {step.disposition}. </>}
+        {step.disposition && <>Handled as: {step.disposition}. </>}
         {step.gateId && <>Gate {step.gateId}. </>}
         Estimate {usd(step.estimateUsd)}.
       </p>
@@ -266,7 +266,7 @@ export function StepCard({
       {attempts.length > 0 && (
         <details>
           <summary>
-            {attempts.length} attempt{attempts.length === 1 ? '' : 's'}
+            {attempts.length} {attempts.length === 1 ? 'try' : 'tries'}
           </summary>
           <ul className="orch-attempts">
             {attempts.map((attempt) => (
@@ -295,10 +295,10 @@ export function FinishBlock({ run }: { run: OrchestrationDetail }) {
       )}
       {stillOwed.length > 0 && (
         <>
-          <h3>Not confirmed ended</h3>
+          <h3>Not confirmed as ended</h3>
           <p>
-            Score keeps asking Hermes to stop these until it confirms. A Stop being acknowledged is
-            not proof that the run ended.
+            Score keeps asking Hermes to stop these until it confirms. A stop being acknowledged
+            doesn’t prove that the run ended.
           </p>
           <ul className="orch-attempts">
             {stillOwed.map((attempt) => (
@@ -309,7 +309,7 @@ export function FinishBlock({ run }: { run: OrchestrationDetail }) {
       )}
       {run.cancelFence.length > 0 && (
         <p>
-          Admission is fenced until cancelled work ends:{' '}
+          Nothing new starts until stopped work ends:{' '}
           {run.cancelFence.map((item) => item.stepId).join(', ')}.
         </p>
       )}
@@ -319,7 +319,7 @@ export function FinishBlock({ run }: { run: OrchestrationDetail }) {
 
 export function PlanList({ run }: { run: OrchestrationDetail }) {
   if (run.plan.length === 0)
-    return <p className="orch-muted">The lead has not recorded a plan yet.</p>
+    return <p className="orch-muted">The lead hasn’t recorded a plan yet.</p>
   return (
     <ol className="orch-plan" aria-label="Plan">
       {run.plan.map((entry, index) => (

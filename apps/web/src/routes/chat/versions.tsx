@@ -145,7 +145,7 @@ function useVersionDetail(version: RoomVersion) {
   })
 }
 
-const NOT_REWOUND = 'Agents were not rewound, so they may still remember it.'
+const NOT_REWOUND = 'Agents weren’t rewound, so they may still remember it.'
 
 /** The hidden messages of a version, read-only. A message that is itself a correction keeps its own control. */
 function VersionItems({
@@ -161,7 +161,7 @@ function VersionItems({
   return (
     <>
       {detail.isPending && <p role="status">Loading…</p>}
-      {detail.isError && <p role="alert">Could not load that version.</p>}
+      {detail.isError && <p role="alert">Couldn’t load that version.</p>}
       {detail.data && (
         <ReadOnlyMessages
           items={detail.data.items}

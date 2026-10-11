@@ -322,7 +322,7 @@ test('a block with a task opens the task from the keyboard; one without does not
 
 test('the cards render the thread, the asking card, made today and the composer', async () => {
   renderNow()
-  const thread = await screen.findByRole('region', { name: 'Thread' })
+  const thread = await screen.findByRole('region', { name: 'Room' })
   expect(within(thread).getByText('Make it composite.')).toBeTruthy()
   expect(within(thread).getByRole('link', { name: 'Open in Chat' }).getAttribute('href')).toBe(
     '/chat/room1',
@@ -387,7 +387,7 @@ test('the view switch links to Score, Flow and Routines; Routines lists every ag
   await waitFor(() => expect(screen.getAllByText('Nightly check')).toHaveLength(3))
   expect(
     screen
-      .getAllByRole('link', { name: 'Manage on Team page' })
+      .getAllByRole('link', { name: 'Manage in Team' })
       .map((link) => link.getAttribute('href')),
   ).toEqual(['/team/lead', '/team/builder', '/team/reviewer'])
 })

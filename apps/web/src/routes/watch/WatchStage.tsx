@@ -221,7 +221,7 @@ export function WatchStage({
   const present = surfaces.filter((surface) => bySurface[surface])
   const shown = bySurface[top ?? 'terminal'] ?? null
   return (
-    <section className="watch-stage" aria-label={`${agent.name}'s screen`} style={style}>
+    <section className="watch-stage" aria-label={`${agent.name}’s screen`} style={style}>
       <div className="watch-stage__bar">
         <span className="watch-stage__host">{agent.name}</span>
         <div role="group" aria-label="Screens" className="watch-stage__tabs">
@@ -259,16 +259,14 @@ export function WatchStage({
               <span aria-hidden="true" className="watch-banner__dot" />
               Live
             </span>
-            <span className="watch-banner__text">
-              You&apos;re watching. {agent.name} is in control.
-            </span>
+            <span className="watch-banner__text">You’re watching. {agent.name} is in control.</span>
           </>
         )}
       </div>
       {present.length === 0 && (
         <p className="watch-stage__empty" role="status">
           {live
-            ? `${agent.name} has not opened anything yet.`
+            ? `${agent.name} hasn’t opened anything yet.`
             : `No desktop open. ${agent.name} has nothing to show here yet.`}
         </p>
       )}

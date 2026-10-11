@@ -19,7 +19,7 @@ test('the meter shows tokens, window and cost, and hides when usage is unknown',
 test('/usage summarises tokens, cost and model', () => {
   expect(usageSummary('Builder', full)).toContain('Input 90,000')
   expect(usageSummary('Builder', { ...full, tokens: null })).toBe(
-    'Builder has not reported any usage yet.',
+    'Builder hasn’t reported any usage yet.',
   )
 })
 

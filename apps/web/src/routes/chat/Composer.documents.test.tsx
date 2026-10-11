@@ -186,7 +186,7 @@ test('a workspace file attaches by reference, with no upload', async () => {
   })
 })
 
-test('a notice from the server (a document that could not be saved) is shown after sending', async () => {
+test('a notice from the server (a document that couldn’t be saved) is shown after sending', async () => {
   sendResult = {
     ...sendResult,
     notices: ['report.pdf was not saved for @lead: No working folder is set'],

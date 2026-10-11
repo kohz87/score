@@ -157,7 +157,7 @@ test('/compress opens the compact confirmation for the agent and runs it, sendin
   fireEvent.keyDown(box(), { key: 'Enter' })
   fireEvent.keyDown(box(), { key: 'Enter' })
   const panel = await screen.findByRole('dialog', { name: 'Builder context details' })
-  expect(panel.textContent).toContain('Hermes will summarise Builder’s older turns')
+  expect(panel.textContent).toContain('Hermes will summarise Builder’s older exchanges')
   expect(calls('POST')).toHaveLength(0)
   fireEvent.change(screen.getByLabelText('Exchanges kept word for word'), {
     target: { value: '4' },

@@ -75,7 +75,7 @@ export function RewindDialog({
         setError(
           caught instanceof ApiError && caught.status === 409
             ? caught.message
-            : 'Could not do that. Please try again.',
+            : 'Couldn’t do that. Try again.',
         )
     }
   }
@@ -100,7 +100,7 @@ export function RewindDialog({
       <h2 id="rewind-title">{title}</h2>
       {plan.isPending && <p role="status">Checking what this changes…</p>}
       {plan.isError && (
-        <p role="alert">Could not check what this changes. Close this and try again.</p>
+        <p role="alert">Couldn’t check what this changes. Close this and try again.</p>
       )}
       {data && (
         <>
@@ -113,13 +113,16 @@ export function RewindDialog({
               <li>
                 Agents rewound:{' '}
                 {rewinds
-                  .map((agent) => `${name(agent.agentId)} −${plural(agent.turns, 'turn', 'turns')}`)
+                  .map(
+                    (agent) =>
+                      `${name(agent.agentId)} −${plural(agent.turns, 'exchange', 'exchanges')}`,
+                  )
                   .join(', ')}
                 .
               </li>
             )}
             {rewinds.length === 0 && !cannot?.length && (
-              <li>No agent has a turn to rewind from here.</li>
+              <li>No agent has an exchange to rewind from here.</li>
             )}
             {liveShares.length > 0 && (
               <li>
@@ -134,7 +137,7 @@ export function RewindDialog({
                 </button>
               </li>
             )}
-            <li>Long-term memory (MEMORY.md, skills, Knowledge notes) is not rewound.</li>
+            <li>Long-term memory (MEMORY.md, skills, Knowledge notes) isn’t rewound.</li>
           </ul>
           {data.blocked && (
             <p className="chat-rewind-warning" role="alert">
@@ -143,7 +146,7 @@ export function RewindDialog({
           )}
           {cannot && cannot.length > 0 && (
             <div className="chat-rewind-warning" role="alert">
-              <p>{failed ? 'Nothing was hidden. ' : ''}These agents cannot be rewound:</p>
+              <p>{failed ? 'Nothing was hidden. ' : ''}These agents can’t be rewound:</p>
               <ul>
                 {cannot.map((item) => (
                   <li key={item.agentId}>

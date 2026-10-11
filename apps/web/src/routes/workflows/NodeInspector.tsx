@@ -33,7 +33,7 @@ type Commit = (next: Draft, coalesce?: string) => void
 function IssueLines({ issues }: { issues: EditorIssue[] }) {
   if (issues.length === 0) return null
   return (
-    <ul className="wf-issues wf-issues--inline" aria-label="Problems with this node">
+    <ul className="wf-issues wf-issues--inline" aria-label="Problems with this step">
       {issues.map((issue, index) => (
         <li key={`${issue.code}-${index}`} className={`wf-issue wf-issue--${issue.severity}`}>
           <strong>{issue.severity === 'error' ? 'Problem' : 'Warning'}</strong>
@@ -55,16 +55,17 @@ function IdField({ draft, node, commit }: { draft: Draft; node: WorkflowNode; co
     if (text === node.id) return
     if (!/^[a-z][a-z0-9_-]{0,31}$/.test(text))
       return setError(
-        'Use lower-case letters, digits, - and _, starting with a letter (32 at most).',
+        'Use lowercase letters, digits, - and _, starting with a letter (32 at most).',
       )
-    if (draft.nodes.some((other) => other.id === text)) return setError('Another node has that id.')
+    if (draft.nodes.some((other) => other.id === text))
+      return setError('Another step has that reference name.')
     setError(null)
     commit(renameNode(draft, node.id, text))
   }
   return (
     <div className="orch-field">
       <label htmlFor={id}>
-        <span>Id</span>
+        <span>Reference name</span>
       </label>
       <input
         id={id}
@@ -356,7 +357,7 @@ export function NodeInspector({
                 checked={node.onFailure === 'route'}
                 onChange={() => patch({ onFailure: 'route' })}
               />
-              <span>Route a failure to its own path (connect &quot;when it fails&quot;)</span>
+              <span>Route a failure to its own path (connect “when it fails”)</span>
             </label>
           </fieldset>
         </>
@@ -391,7 +392,7 @@ export function NodeInspector({
                 checked={node.onReject === 'route'}
                 onChange={() => patch({ onReject: 'route' })}
               />
-              <span>Route a rejection to its own path (connect &quot;when rejected&quot;)</span>
+              <span>Route a rejection to its own path (connect “when rejected”)</span>
             </label>
           </fieldset>
         </>
@@ -481,14 +482,14 @@ export function NodeInspector({
             </button>
             {node.rules.some((rule) => rule.when.kind === 'output_contains') && (
               <small className="orch-muted">
-                &quot;Output contains&quot; looks at the stored output, which may be shortened, and
-                ignores capitals. It is a hint to route on, never an approval.
+                “Output contains” looks at the saved output, which may be shortened, and ignores
+                capitals. It is a hint to route on, never an approval.
               </small>
             )}
             {node.rules.some((rule) => rule.when.kind === 'verdict') && (
               <small className="orch-muted">
                 A verdict exists only if the agent ends its reply with a score-verdict block.
-                Otherwise the &quot;otherwise&quot; path is taken.
+                Otherwise the “otherwise” path is taken.
               </small>
             )}
           </fieldset>
@@ -506,7 +507,7 @@ export function NodeInspector({
             announce(`Deleted ${node.label}.`)
           }}
         >
-          Delete {node.label || 'this node'}
+          Delete {node.label || 'this step'}
         </button>
       </div>
     </div>

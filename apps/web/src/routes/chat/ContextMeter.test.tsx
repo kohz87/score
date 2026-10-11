@@ -147,7 +147,7 @@ test('Compact asks first, posts keepRecent, shows progress and then Hermes’s b
   fireEvent.click(await screen.findByRole('button', { name: /Builder context/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Compact' }))
   expect(screen.getByRole('dialog').textContent).toContain(
-    'Hermes will summarise Builder’s older turns',
+    'Hermes will summarise Builder’s older exchanges',
   )
   expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0)
   fireEvent.click(screen.getByRole('button', { name: 'Compact now' }))
