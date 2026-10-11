@@ -214,3 +214,41 @@ describe('SCORE-020 coherent note response', () => {
     )
   })
 })
+
+describe('SCORE-019 an incomplete walk deletes nothing', () => {
+  test('a folder that cannot be listed keeps its notes, documents and links', async () => {
+    h = await makeVault({
+      files: { 'sub/a.md': 'in sub [[top]]', 'top.md': 'top [[a]]', 'sub/data.csv': 'x,y\n1,2' },
+    })
+    expect((await h.vault.tree()).notes.map((n) => n.path)).toContain('sub/a.md')
+    expect((await h.vault.tree()).documents.map((d) => d.path)).toContain('sub/data.csv')
+    const real = fs.promises.readdir
+    vi.spyOn(fs.promises, 'readdir').mockImplementation((async (...args: unknown[]) => {
+      if (String(args[0]).endsWith(`${path.sep}sub`))
+        throw Object.assign(new Error('EACCES'), { code: 'EACCES' })
+      return (real as (...a: unknown[]) => Promise<unknown>)(...args)
+    }) as unknown as typeof fs.promises.readdir)
+    expect(await h.vault.scanNow()).toEqual([])
+    vi.restoreAllMocks()
+    const tree = await h.vault.tree()
+    expect(tree.notes.map((n) => n.path)).toContain('sub/a.md')
+    expect(tree.documents.map((d) => d.path)).toContain('sub/data.csv')
+    expect((await h.vault.readNote('top.md')).links.map((l) => l.path)).toEqual(['sub/a.md'])
+    expect(h.vault.search('sub', 5).map((x) => x.path)).toContain('sub/a.md')
+  })
+})
+
+describe('SCORE-018 same-size, same-mtime edits', () => {
+  test('a scan refreshes a note whose content changed but whose size and mtime did not', async () => {
+    h = await makeVault({ files: { 'a.md': 'alpha [[b]]', 'b.md': 'target', 'c.md': 'gamma' } })
+    const file = path.join(h.vaultDir, 'a.md')
+    const before = fs.statSync(file)
+    fs.writeFileSync(file, 'omega [[c]]')
+    fs.utimesSync(file, before.atime, before.mtime)
+    expect(Math.trunc(fs.statSync(file).mtimeMs)).toBe(Math.trunc(before.mtimeMs))
+    expect(await h.vault.scanNow()).toEqual(['a.md'])
+    expect(h.vault.search('omega', 5).map((x) => x.path)).toEqual(['a.md'])
+    expect((await h.vault.readNote('c.md')).backlinks.map((b) => b.path)).toEqual(['a.md'])
+    expect((await h.vault.readNote('b.md')).backlinks).toEqual([])
+  })
+})

@@ -118,6 +118,9 @@ export class KnowledgeVault {
   private debounce: NodeJS.Timeout | undefined
   private interval: NodeJS.Timeout | undefined
   private closed = false
+  /** Paths the watcher reported since the last scan. */
+  private dirty = new Set<string>()
+  private verifyNext = false
 
   constructor(private readonly options: VaultOptions) {
     this.root = path.resolve(options.vault)
@@ -190,7 +193,10 @@ export class KnowledgeVault {
     })
     if (this.options.watch !== false) this.startWatching()
     this.interval = setInterval(
-      () => void this.serial(() => this.scan(true)).catch((error: unknown) => this.logScan(error)),
+      () =>
+        void this.serial(() => this.scan(true, true)).catch((error: unknown) =>
+          this.logScan(error),
+        ),
       this.options.scanIntervalMs ?? 5 * 60_000,
     )
     this.interval.unref()
@@ -212,6 +218,8 @@ export class KnowledgeVault {
             .some((part) => part.startsWith('.'))
         )
           return
+        if (filename) this.dirty.add(String(filename).split(path.sep).join('/'))
+        else this.verifyNext = true
         clearTimeout(this.debounce)
         this.debounce = setTimeout(
           () =>
@@ -499,16 +507,23 @@ export class KnowledgeVault {
     files: Map<string, { mtimeMs: number; size: number }>
     documents: Map<string, { mtimeMs: number; size: number }>
     folders: string[]
+    /** Folders (relative; '' = the whole vault) whose contents could not be fully listed. */
+    incomplete: Set<string>
   }> {
+    const incomplete = new Set<string>()
     const files = new Map<string, { mtimeMs: number; size: number }>()
     const documents = new Map<string, { mtimeMs: number; size: number }>()
     const folders: string[] = []
     const visit = async (dir: string, rel: string, depth: number): Promise<void> => {
-      if (depth > MAX_DEPTH) return
+      if (depth > MAX_DEPTH) {
+        incomplete.add(rel)
+        return
+      }
       let entries
       try {
         entries = await fs.readdir(dir, { withFileTypes: true })
       } catch {
+        incomplete.add(rel)
         return
       }
       for (const entry of entries) {
@@ -517,14 +532,22 @@ export class KnowledgeVault {
         if (entry.isDirectory()) {
           folders.push(childRel)
           await visit(path.join(dir, entry.name), childRel, depth + 1)
-        } else if (entry.isFile() && /\.md$/i.test(entry.name) && files.size < MAX_FILES) {
+        } else if (entry.isFile() && /\.md$/i.test(entry.name)) {
+          if (files.size >= MAX_FILES) {
+            incomplete.add('')
+            continue
+          }
           try {
             const stat = await fs.lstat(path.join(dir, entry.name))
             files.set(childRel, { mtimeMs: stat.mtimeMs, size: stat.size })
           } catch {
             // vanished between readdir and stat
           }
-        } else if (entry.isFile() && isDocumentPath(entry.name) && documents.size < MAX_FILES) {
+        } else if (entry.isFile() && isDocumentPath(entry.name)) {
+          if (documents.size >= MAX_FILES) {
+            incomplete.add('')
+            continue
+          }
           try {
             const stat = await fs.lstat(path.join(dir, entry.name))
             documents.set(childRel, { mtimeMs: stat.mtimeMs, size: stat.size })
@@ -535,22 +558,36 @@ export class KnowledgeVault {
       }
     }
     await visit(this.root, '', 0)
-    return { files, documents, folders: folders.sort() }
+    return { files, documents, folders: folders.sort(), incomplete }
   }
 
   /**
    * Brings the index in line with the files: new and changed by `(mtime, size)` then hash, removed dropped.
    * With `announce`, each change is published as made by "outside" (an edit Score did not make).
    */
-  private async scan(announce: boolean): Promise<string[]> {
+  private async scan(announce: boolean, verifyAll = false): Promise<string[]> {
     if (this.closed) return []
-    const { files, documents } = await this.walk()
+    // Paths the watcher reported are hashed even when (mtime, size) look unchanged: an edit can keep both.
+    const dirty = this.dirty
+    this.dirty = new Set()
+    const everything = verifyAll || this.verifyNext
+    this.verifyNext = false
+    const verify = (rel: string): boolean => everything || dirty.has(rel)
+    const { files, documents, incomplete } = await this.walk()
+    // A folder that could not be listed proves nothing about what is in it: its notes stay indexed.
+    const covered = (rel: string): boolean =>
+      ![...incomplete].some((dir) => dir === '' || rel === dir || rel.startsWith(`${dir}/`))
+    if (incomplete.size > 0)
+      this.options.log?.warn(
+        { folders: [...incomplete].slice(0, 20) },
+        'Some vault folders could not be listed; their notes were left as they are',
+      )
     const known = new Map(
       this.options.db.read((sqlite) => this.noteRows(sqlite)).map((row) => [row.path, row]),
     )
     const removed = [...known.keys()].filter((rel) => {
       const file = files.get(rel)
-      return !file || file.size > MAX_NOTE_BYTES
+      return file ? file.size > MAX_NOTE_BYTES : covered(rel)
     })
     const touched: Array<{
       rel: string
@@ -560,7 +597,13 @@ export class KnowledgeVault {
     for (const [rel, stat] of files) {
       if (stat.size > MAX_NOTE_BYTES) continue
       const row = known.get(rel)
-      if (row && Math.trunc(stat.mtimeMs) === row.mtime_ms && stat.size === row.size) continue
+      if (
+        row &&
+        !verify(rel) &&
+        Math.trunc(stat.mtimeMs) === row.mtime_ms &&
+        stat.size === row.size
+      )
+        continue
       let raw: string
       try {
         raw = await this.readContained(path.join(this.root, rel))
@@ -592,7 +635,7 @@ export class KnowledgeVault {
       }
       if (changed.length > 0) this.relink(sqlite)
     })
-    changed.push(...(await this.docs.scan(documents, announce)))
+    changed.push(...(await this.docs.scan(documents, announce, verify, covered)))
     if (announce)
       for (const rel of changed
         .filter((item) => !isDocumentPath(item))
@@ -634,7 +677,8 @@ export class KnowledgeVault {
 
   /** Runs one scan now (the watcher and the timer do this too). */
   scanNow(announce = true): Promise<string[]> {
-    return this.serial(() => this.scan(announce))
+    // An explicit scan checks content, not just (mtime, size).
+    return this.serial(() => this.scan(announce, true))
   }
 
   // ---- reads -------------------------------------------------------------------------------------------------

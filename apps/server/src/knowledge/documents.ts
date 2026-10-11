@@ -613,17 +613,25 @@ export class KnowledgeDocuments {
   async scan(
     files: Map<string, { mtimeMs: number; size: number }>,
     announce: boolean,
+    verify: (rel: string) => boolean = () => false,
+    covered: (rel: string) => boolean = () => true,
   ): Promise<string[]> {
     const known = new Map(this.db.read((sqlite) => this.rows(sqlite)).map((row) => [row.path, row]))
     const changed: string[] = []
     for (const rel of known.keys())
-      if (!files.has(rel)) {
+      if (!files.has(rel) && covered(rel)) {
         this.db.tx((sqlite) => this.removeIndex(sqlite, rel))
         changed.push(rel)
       }
     for (const [rel, stat] of files) {
       const row = known.get(rel)
-      if (row && Math.trunc(stat.mtimeMs) === row.mtime_ms && stat.size === row.size) continue
+      if (
+        row &&
+        !verify(rel) &&
+        Math.trunc(stat.mtimeMs) === row.mtime_ms &&
+        stat.size === row.size
+      )
+        continue
       try {
         if (await this.ingestExisting(rel, announce || row ? 'outside' : null)) changed.push(rel)
       } catch {
