@@ -277,6 +277,8 @@ Envelope (`data`): `{ seq: number; ts: string; type: string; data: object }`
 | `message.deleted`    | `{ roomId, messageId }` (remove it from the cached messages; Score-side only)                  | Chat, Now thread                                         |
 | `message.updated`    | `{ roomId, messageId, editedBy?: MessageId \| null, parts?: MessagePart[] }` (`editedBy`: the original of an edit; `parts`: a summary edited or marked stale, replace the cached parts) | Chat                                                     |
 | `message.progressed` | `{ roomId, messageId, at }` (a streaming reply's run made a non-text move: tool call, reasoning, approval; set its `progressAt`. Text moves it via `message.delta`) | Chat |
+| `room.deleted`       | `{ id: RoomId }` (PLAN 5.36: the room and everything Score kept for it is gone; drop it from the cached lists and leave its page) | Chat, Tasks, Now |
+| `session.compacted`  | `SessionCompacted` (PLAN 5.36: the answer to a `…/compact` request; one per `commandId`) | Chat context meter |
 | `room.version.created` | `RoomVersion` (a rewind hid the anchor and everything after it; the `message.deleted` events for those messages precede it) | Chat |
 | `workflow.run.upserted` | `WorkflowRunSummary` (§15; after every change of a workflow run, which is not announced as `orchestration.upserted`) | Flow › Workflows run view, Now "Needs you" |
 | `knowledge.changed`  | `{ path; kind: 'written'\|'moved'\|'deleted'\|'restored'; to; by: 'you'\|'outside'\|{agentId} }` | Knowledge                                                |
@@ -596,6 +598,29 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 - **S** `GET /api/agents/:agentId/context` → `AgentContext` `{ model: string | null; tokens: { input; output } | null;
   costUsd: number | null; contextLength: number | null }` (PLAN 5.25): usage of the agent's latest finished or running run
   with usage and the model's context window when Hermes's model options carry one (else `null`). `404` unknown agent.
+- **S** `GET /api/agents/:agentId/sessions/:sessionId/context` → `SessionContext` + `asOfSeq` (a stream-query snapshot) `{ window: number | null; used: number | null;
+  measuredAt: string | null; model: string | null; source: ReadingSource | null; parts: { kind; label; tokens }[] | null;
+  autoCompactAt: number | null; compactions: number }` (PLAN 5.36): what the context meter and its popover show for one room
+  session. With the plugin's `context_breakdown` answer, `parts` lists what uses the window (Hermes's categories: system prompt,
+  tool definitions, rules, skills, MCP tools, subagent definitions, memory, conversation messages; compressed summaries and
+  files are inside the conversation and are not separated) and `used` is Hermes's own figure. When the plugin can't answer
+  (old plugin, no running gateway, coding agent, empty session) the response falls back to the totals of `GET
+  /api/agents/:agentId/context` with `parts: null`. Cached up to 30 s per session; the cache is dropped when a run of that agent
+  in that room finishes and after a compaction. `404` as for compact.
+- **H** `POST /api/agents/:agentId/sessions/:sessionId/compact` `{ keepRecent?: int 1-20 }` → `202 { commandId }` (PLAN 5.36;
+  schemas in `packages/contract/src/compaction.ts`). Asks Hermes to compact (summarise the older turns of) one of the agent's
+  room sessions (`score-<roomId>-<agentId>`, which in an imported room that continues a Hermes session stands for that session;
+  the tip of its compression lineage is compacted). The API server ignores `/compress`, so Score asks the agent's gateway through the bridge (`compact` command,
+  §11). The request returns at once; the answer is the stream event `session.compacted`
+  `{ commandId; agentId; sessionId; roomId: string | null; status: 'compacted' | 'nothing' | 'failed'; reason: CompactFailureReason
+  | null; keepRecent: number | null; before: { messages; tokens } | null; after: { messages; tokens } | null }`
+  (`reason`: `bridge_unavailable`, `no_answer`, `session_busy`, `lock_held`, `no_session`, `compact_failed`; `tokens` are Hermes's
+  rough request estimates; `nothing` = too short to compact). Refusals, synchronous: `404` unknown agent or a session that
+  is not one of this agent's room sessions; `409 unsupported` for a coding agent; `409 session_busy` while a message run of
+  that agent in that room is `pending` or `active` (Stop first) or the room is being rewound; `409
+  orchestration_owned` for a session in a room an orchestration or workflow run owns (owned or draining);
+  `409 conflict` when a compaction of that session is already in flight. Compacting changes the agent's Hermes session (a
+  compression continuation); the context meter reads the next run's usage. Idempotent per `Idempotency-Key`.
 - `POST /api/rooms/:roomId/messages`
 
   ```ts
@@ -629,7 +654,9 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
 
   The web composer also handles three commands itself and never posts them (PLAN 5.25): `/usage` (shows
   `GET /api/agents/:agentId/context` as a local card), `/model <model>` with no message (calls
-  `PUT /api/agents/:agentId/model`) and `/compress` (Hermes has no API to compact a session, so it explains that). They
+  `PUT /api/agents/:agentId/model`) and `/compress` (PLAN 5.36: after a confirmation it calls
+  `POST /api/agents/:agentId/sessions/:sessionId/compact` for the room's session of that agent and shows the before/after
+  token counts from `session.compacted`; the context meter's **Compact** button does the same). They
   act on the first "To" chip, else the agent that answered last, else the room lead.
 
 - `GET /api/commands` → `{ items: { name: string; usage: string; description: string }[] }` (slash menu: only the
@@ -663,6 +690,25 @@ contentType: string }`. Types come from the bytes: png, jpeg, gif, webp, PDF, DO
   **H** `PATCH /api/room-projects/:id` `{ name?; color? }` → `RoomProject` · **H** `DELETE /api/room-projects/:id` → `204`
   (its rooms leave the project). Stream: `room-project.upserted` (the project) and `room-project.deleted` (`{ id }`); a
   deleted project also emits `room.upserted` for each room that was in it.
+- **Rename** (PLAN 5.36): `PATCH /api/rooms/:roomId { name }` is the rename (the same name rules as creating a room: `#`-prefixed
+  slug, then optional `#tag` words; `409 conflict` for a name another room uses). Renaming is an organising action like
+  pinning and tags: it is allowed while an orchestration or workflow run owns the room (it does not touch the run's
+  records). The room header (click the name) and the room's ⋯ menu start an inline edit.
+- **H** `DELETE /api/rooms/:roomId` `{ confirm: string }` → `204` (PLAN 5.36). `confirm` must equal the room's current name
+  (`400 bad_request` otherwise). Score-side only: the room, its messages (with their attachment references; media files no other
+  message uses are released to the normal media cleanup), message runs, versions, summaries, shares, reads, sessions,
+  rewind holds, the briefs started in it with their task links (the Kanban tasks stay in Hermes), plan starts, coding
+  sessions and the room links of tasks are removed in one transaction. Runs, Reports, Watch history and the agents' Hermes sessions are
+  **not** touched (the dialog says so). Refusals: `404` unknown room; `409 conflict` for a direct room (an agent's home);
+  `409 room_busy` while any message run in the room is `pending` or `active`, or while it is being rewound (Stop
+  first); `409 orchestration_owned` while an orchestration or workflow run owns it (owned or draining). A room whose run is
+  finished and released may be deleted: the run's records are pruned in the same transaction with the executor's
+  prune path (the journal keeps its tombstones; the single `pruned` history row stays), then the room. Emits `room.deleted
+  { id }` after the transaction (the briefs simply disappear from the next read). The
+  web asks for the typed name, offers the room export first, and then returns to Chat home.
+  `GET /api/rooms/:roomId/delete-plan` (**S**) → `RoomDeletePlan` `{ name; messages; files; runs; briefs; blocked: 'room_busy' |
+  'orchestration_owned' | 'direct' | null }`, the counts the dialog lists (`files` = distinct attachments, `runs` = message runs
+  plus an orchestration run's records).
 - `GET /api/search/messages?q=&roomId?&limit=` (limit ≤ 50, default 20) → `{ items: { messageId; roomId; roomName;
   author; createdAt; snippet }[] }`: FTS5 over the text parts of finished, undeleted messages (a streaming reply is
   indexed once it completes); the query is tokenised into quoted terms (no FTS syntax from the user, the last word is a
@@ -1381,7 +1427,7 @@ sessionKey; requestId; choice: ApprovalChoice; reason: string | null }[] }`. Onl
 **Commands** (PLAN 5.33, server → plugin). A sibling long poll next to the decisions one, served only to a producer
 whose `isolation` is not `unknown`; the plugin polls only while it runs inside a gateway (it needs Hermes's session store).
 
-- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: { commandId; kind: 'rewind'; sessionId; turns; since?; expiresAt }[] }` (`expiresAt` = epoch seconds, issued + the 60 s answer
+- `GET /bridge/v1/commands?wait=25` (`wait` 0–30) → `{ items: ({ commandId; kind: 'rewind'; sessionId; turns; since?; expiresAt } | { commandId; kind: 'compact'; sessionId; keepRecent?; expiresAt } | { commandId; kind: 'context_breakdown'; sessionId; expiresAt })[] }` (`expiresAt` = epoch seconds, issued + the 60 s answer
   time; the plugin refuses the command (`expired`) when it is past, checked under the transcript lock immediately before it mutates, so a
   command Score gave up on can't rewind later work; `since` = epoch seconds of the rewound message; the plugin then
   computes the number of turns itself, as every user turn of Hermes's alternation-repaired projection from the first one at or after
@@ -1390,12 +1436,31 @@ whose `isolation` is not `unknown`; the plugin polls only while it runs inside a
   can't move the target; a target that changed is `failed`), and checks afterwards that no active user row from `since` remains, else `failed`). A
   command is handed to one polling producer of the profile once and is not redelivered.
 - `POST /bridge/v1/commands/:commandId/result` `{ outcome: 'done' | 'nothing' | 'failed' | 'expired'; turnsUndone?; rewoundCount?;
-  error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what
+  before?: { messages; tokens }; after?: { messages; tokens }; context?: SessionContextReading; error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what
   `/undo` uses; soft-deletes the rows, the next turn rebuilds from the active ones) from `hermes_private.py` and reports
   Hermes's `turns_undone` / `rewound_count`; `nothing` = Hermes had nothing to rewind. A command with no result within
   60 s is reported to the person as `no_answer`, and Score keeps the room's rewind hold (persisted in `rewind_holds`, restored after a
   restart) until `expiresAt` + 5 s, when the command can no longer act. The plugin remembers results by `commandId`, so a repeated command never
   rewinds twice.
+
+  **`compact`** (PLAN 5.36): `keepRecent` = the number of recent exchanges kept word for word (Hermes's `/compress here N`
+  form; absent = Hermes's full compression). Answer window 180 s (summarising is a model call), carried in `expiresAt`. The
+  plugin (`hermes_private.compact_session`) works in `profile`'s own session store, under Hermes's transcript lock (the one
+  rewind takes), loads the session's active rows, and runs Hermes's own manual-compress core
+  (`agent.conversation_compression_manual.compress_now`, what `/compress` uses) on a throwaway agent built like the gateway's
+  `_build_manual_compression_agent`; Hermes commits the result itself (in place or as a compression continuation, its
+  choice). It checks `expiresAt` immediately before compressing, and answers `nothing` for a session shorter than Hermes's
+  minimum, `failed` (`error`: `lock_held` while Hermes holds its compression lock for that session, `compact_failed`
+  otherwise; never Hermes text) and `done` with Hermes's before/after message and token estimates. A command is run at most once
+  per `commandId`; a repeated one returns the remembered result.
+
+  **`context_breakdown`** (PLAN 5.36): a read-only query, answer window 20 s. The plugin (`hermes_private.context_breakdown`)
+  asks Hermes's own context accounting for the session (`agent.context_breakdown.compute_session_context_breakdown`, what the
+  `/context` command reports; no model call; a throwaway agent is built only to read its prompt, tool schemas and compressor)
+  and answers `done` with `context: SessionContextReading` `{ window; used; model; source: 'provider_usage' |
+  'provider_usage_plus_estimate' | 'local_estimate'; autoCompactAt: number | null; parts: { kind: 'system_prompt' |
+  'tool_definitions' | 'rules' | 'skills' | 'mcp' | 'subagent_definitions' | 'memory' | 'conversation'; label; tokens }[] }`,
+  or `nothing` for a session without rows, or `failed` (`context_failed`).
 
 **Kanban denials** (D4.3, revised 2026-10-07): there are **no** grant endpoints. A Kanban worker's `post_tool_call`
 event may carry `kanbanDenial: { patternKey: string; commandDigest: string; taskId: string; runId: number | null }`
@@ -1581,7 +1646,7 @@ action }` unless delegated:
 
 | Action                                                                                                  | owned                                                                                                                              | draining                        | released                |
 | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ----------------------- |
-| Post / edit / delete / retry / rewind a message in the room, room rename / members / archive, summaries | 409                                                                                                                                | 409                             | allowed (ordinary room) |
+| Post / edit / delete / retry / rewind a message in the room, room members / archive, summaries (rename is allowed) | 409                                                                                                                                | 409                             | allowed (ordinary room) |
 | `rooms.post` (MCP) into the room                                                                        | 409                                                                                                                                | 409                             | allowed                 |
 | Stop a message run (`…/messages/:id/stop`), stop a flow node (`/api/flow/nodes/:id/stop`)               | 409 (use Stop)                                                                                                                     | 409                             | n/a                     |
 | Brief pause / resume (`/api/briefs/:id/pause                                                            | resume`)                                                                                                                           | delegated to run pause / resume | 409                     | 409 |

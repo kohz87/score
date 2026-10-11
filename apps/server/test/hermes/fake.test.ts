@@ -97,6 +97,9 @@ test('the whole fake scenario passes real ingest validation and covers every scr
         // Workflow runs (7.1a) are started by a person, like orchestrations.
         type !== 'workflow.run.upserted' &&
         type !== 'room.version.created' &&
+        // Deleting a room and compacting a session are person actions (5.36).
+        type !== 'room.deleted' &&
+        type !== 'session.compacted' &&
         type !== 'room-project.upserted' &&
         type !== 'room-project.deleted',
     )

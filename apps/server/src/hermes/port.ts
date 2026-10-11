@@ -38,6 +38,9 @@ import type {
   ModelSettings,
   ModelSettingsUpdate,
   RewindSkipReason,
+  CompactFailureReason,
+  SessionContextReading,
+  SessionSize,
 } from '@score/contract'
 import { HttpError } from '../errors.ts'
 import type { RewindBroker } from './bridge/rewind-broker.ts'
@@ -343,11 +346,34 @@ export interface HermesPort extends ProfileManagementPort {
     sinceMs: number
     dryRun?: boolean
   }): Promise<RewindSessionResult>
+  /**
+   * Compact (summarise the older turns of) one agent's room session through the Score bridge inside its gateway (PLAN
+   * 5.36). Resolves with the outcome after Hermes answers (a model call: minutes at most); never throws for a refusal.
+   * Absent on adapters that cannot.
+   */
+  compactSession?(req: {
+    agentId: string
+    sessionId: string
+    keepRecent?: number
+  }): Promise<CompactSessionResult>
+  /**
+   * What uses one room session's context window, from Hermes's own accounting via the bridge (PLAN 5.36). `null` = the
+   * bridge can't answer (not running, old plugin, empty session). Absent on adapters that cannot.
+   */
+  sessionContext?(req: {
+    agentId: string
+    sessionId: string
+  }): Promise<SessionContextReading | null>
   taskAction(req: z.infer<typeof TaskActionRequestSchema>): Promise<{ hermesStatus: string }>
   deliverDecision(
     req: z.infer<typeof DecisionDeliveryRequestSchema>,
   ): Promise<'applied' | 'not_pending' | 'failed'>
 }
+
+export type CompactSessionResult =
+  | { status: 'compacted'; before: SessionSize; after: SessionSize }
+  | { status: 'nothing' }
+  | { status: 'failed'; reason: CompactFailureReason }
 
 export type RewindSessionResult =
   | { status: 'ready' }

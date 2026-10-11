@@ -1,10 +1,11 @@
 import type { Room, RoomProject } from '@score/contract'
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { parseTagInput, patchRoom, regenerateSummary } from './conversation-api.ts'
+import { RenameRoom } from './RenameRoom.tsx'
 import { baseName } from './room-groups.ts'
 import { setShowDeleted, useShowDeleted } from './deleted-toggle.ts'
 
-type Panel = 'main' | 'project' | 'tags' | 'summary'
+type Panel = 'main' | 'project' | 'tags' | 'summary' | 'rename'
 
 /**
  * The "⋯" menu of a room in the list (PLAN 5.26): pin, archive, project, tags, export and share. A menu button
@@ -14,10 +15,12 @@ export function RoomMenu({
   room,
   projects,
   onShare,
+  onDelete,
 }: {
   room: Room
   projects: RoomProject[]
   onShare?: ((room: Room) => void) | undefined
+  onDelete?: ((room: Room) => void) | undefined
 }) {
   const [open, setOpen] = useState(false)
   const [panel, setPanel] = useState<Panel>('main')
@@ -99,6 +102,9 @@ export function RoomMenu({
         <div className="chat-menu" id={menuId} role="menu" aria-label={`${label} actions`}>
           {panel === 'main' && (
             <>
+              <button type="button" role="menuitem" onClick={() => setPanel('rename')}>
+                Rename…
+              </button>
               <button
                 type="button"
                 role="menuitem"
@@ -149,6 +155,18 @@ export function RoomMenu({
               >
                 Export as JSON
               </a>
+              {onDelete && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    close(false)
+                    onDelete(room)
+                  }}
+                >
+                  Delete room…
+                </button>
+              )}
               {onShare && (
                 <button
                   type="button"
@@ -162,6 +180,15 @@ export function RoomMenu({
                 </button>
               )}
             </>
+          )}
+          {panel === 'rename' && (
+            <RenameRoom
+              room={room}
+              onDone={() => close()}
+              onCancel={() => {
+                setPanel('main')
+              }}
+            />
           )}
           {panel === 'project' && (
             <label className="chat-menu-field">

@@ -2,12 +2,16 @@ import { recordRunResult } from '../../domain/workflows/verdict.ts'
 import {
   AgentDetailSchema,
   RewindSkipReasonSchema,
+  CompactFailureReasonSchema,
   ModelSettingsUpdateSchema,
   type AgentDetail,
   type ModelSettings,
   type ModelSettingsUpdate,
   type PluginItem,
   type RewindSkipReason,
+  type CompactFailureReason,
+  type ContextPartKind,
+  type SessionContextReading,
 } from '@score/contract'
 import {
   attachRunMessage,
@@ -106,6 +110,7 @@ import {
   type ObservationSink,
   notDispatched,
   type RewindSessionResult,
+  type CompactSessionResult,
   type Scheduler,
 } from '../port.ts'
 import {
@@ -1962,6 +1967,78 @@ export class FakePort implements HermesPort {
       status: 'rewound',
       turnsUndone: req.turns,
       rewoundCount: req.turns * 2,
+    })
+  }
+
+  /**
+   * Simulated compaction (PLAN 5.36): shrinks the session's fake context from 54k to 9k tokens, unless the agent is
+   * listed in SCORE_FAKE_COMPACT_FAIL as `agent:reason,…` (e2e) or in `compactFailures` (tests).
+   */
+  readonly compactFailures = new Map<string, CompactFailureReason>(
+    (process.env.SCORE_FAKE_COMPACT_FAIL ?? '').split(',').flatMap((item) => {
+      const [agent, reason] = item.split(':')
+      const parsed = CompactFailureReasonSchema.safeParse(reason)
+      return agent && parsed.success ? [[agent, parsed.data] as const] : []
+    }),
+  )
+  readonly compactions: { agentId: string; sessionId: string; keepRecent?: number }[] = []
+  /** Sessions already compacted: their fake context is small. */
+  private readonly compacted = new Set<string>()
+  /** Milliseconds the simulated summarising takes (tests and e2e can see the in-flight state). */
+  compactDelayMs = Number(process.env.SCORE_FAKE_COMPACT_DELAY_MS ?? 0)
+
+  async compactSession(
+    req: Parameters<NonNullable<HermesPort['compactSession']>>[0],
+  ): Promise<CompactSessionResult> {
+    if (this.compactDelayMs > 0)
+      await new Promise((resolve) => setTimeout(resolve, this.compactDelayMs))
+    const reason = this.compactFailures.get(req.agentId)
+    if (reason) return { status: 'failed', reason }
+    if (this.compacted.has(req.sessionId)) return { status: 'nothing' }
+    this.compactions.push({
+      agentId: req.agentId,
+      sessionId: req.sessionId,
+      ...(req.keepRecent === undefined ? {} : { keepRecent: req.keepRecent }),
+    })
+    this.compacted.add(req.sessionId)
+    return {
+      status: 'compacted',
+      before: { messages: 40, tokens: 54_000 },
+      after: { messages: 8 + (req.keepRecent ?? 2) * 2, tokens: 9_000 },
+    }
+  }
+
+  /** Simulated context breakdown; `SCORE_FAKE_NO_BREAKDOWN=1` plays an old plugin that cannot answer. */
+  sessionContext(
+    req: Parameters<NonNullable<HermesPort['sessionContext']>>[0],
+  ): Promise<SessionContextReading | null> {
+    if (process.env.SCORE_FAKE_NO_BREAKDOWN === '1') return Promise.resolve(null)
+    const small = this.compacted.has(req.sessionId)
+    const parts = small
+      ? [
+          ['system_prompt', 'System prompt', 3_000],
+          ['tool_definitions', 'Tool definitions', 3_500],
+          ['conversation', 'Messages', 2_500],
+        ]
+      : [
+          ['system_prompt', 'System prompt', 3_000],
+          ['tool_definitions', 'Tool definitions', 9_000],
+          ['mcp', 'MCP tools', 4_000],
+          ['skills', 'Skills', 2_000],
+          ['memory', 'Memory', 1_000],
+          ['conversation', 'Messages', 35_000],
+        ]
+    return Promise.resolve({
+      window: 128_000,
+      used: parts.reduce((sum, part) => sum + (part[2] as number), 0),
+      model: 'fake-model',
+      source: 'provider_usage',
+      autoCompactAt: 64_000,
+      parts: parts.map(([kind, label, tokens]) => ({
+        kind: kind as ContextPartKind,
+        label: label as string,
+        tokens: tokens as number,
+      })),
     })
   }
 

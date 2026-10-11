@@ -45,6 +45,7 @@ import { RunIntents } from './intents.ts'
 import { ProfileNameSchema, resolveHermesHome } from './paths.ts'
 import { recoverRunOutput } from './recover.ts'
 import { rewindSession } from './rewind.ts'
+import { compactSession, sessionContext } from './compact.ts'
 import { followRun, waitForRun, type FollowOptions } from './runs.ts'
 import { taskAction, taskReader } from './task-actions.ts'
 import { LiveTasks } from './tasks.ts'
@@ -739,6 +740,18 @@ export class LivePort implements HermesPort {
   }
   rewindSession(req: Parameters<HermesPort['rewindSession']>[0]) {
     return rewindSession(req, {
+      broker: this.options.rewindBroker,
+      ...(this.options.hermesHome ? { hermesHome: this.options.hermesHome } : {}),
+    })
+  }
+  compactSession(req: { agentId: string; sessionId: string; keepRecent?: number }) {
+    return compactSession(req, {
+      broker: this.options.rewindBroker,
+      ...(this.options.hermesHome ? { hermesHome: this.options.hermesHome } : {}),
+    })
+  }
+  sessionContext(req: { agentId: string; sessionId: string }) {
+    return sessionContext(req, {
       broker: this.options.rewindBroker,
       ...(this.options.hermesHome ? { hermesHome: this.options.hermesHome } : {}),
     })

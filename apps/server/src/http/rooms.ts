@@ -1,3 +1,4 @@
+import { deleteRoom, roomDeletePlan } from '../domain/room-delete.ts'
 import { assertRoomFree } from '../domain/orchestration/ownership.ts'
 import { randomUUID } from 'node:crypto'
 import {
@@ -8,6 +9,7 @@ import {
   MessagePartSchema,
   MessageAttachmentSchema,
   RewindRequestSchema,
+  RoomDeleteRequestSchema,
   RoomTagSchema,
   type CommandResult,
   type RewindPlan,
@@ -69,6 +71,7 @@ import { attachmentNote } from '../domain/attachment-input.ts'
 import { resolveAttachments } from './message-attachments.ts'
 import type { AgentWorkspaces } from '../workspace/agent-workspace.ts'
 import { requestIdempotency } from './idempotency.ts'
+import { registerSessionCompactionRoutes } from './session-compaction.ts'
 
 // "#launch" or "launch", optionally followed by #tag words ("#launch #q4"): tags are parsed from the name (PLAN 5.26).
 const NameSchema = z
@@ -136,6 +139,14 @@ export function registerRoomRoutes(
   )
   app.addHook('preClose', async () => {
     await routing.close()
+  })
+  registerSessionCompactionRoutes(app, {
+    port,
+    db,
+    ingest,
+    mutation,
+    redispatch: () => routing.dispatch(),
+    clock,
   })
   const agents = async () =>
     z
@@ -253,9 +264,8 @@ export function registerRoomRoutes(
       source: 'rooms',
       identity: randomUUID(),
       apply({ sqlite, now }) {
-        // Pinning, tags and the project are harmless; renaming, members, archiving and summaries are the run's.
+        // Pinning, renaming, tags and the project are harmless; members, archiving and summaries are the run's.
         if (
-          body.name !== undefined ||
           body.members !== undefined ||
           body.leadAgentId !== undefined ||
           body.archived !== undefined ||
@@ -299,6 +309,22 @@ export function registerRoomRoutes(
       },
     })
     return room
+  })
+
+  // Delete (PLAN 5.36): Score-side only; the dialog asks for the room's name and shows `delete-plan` first.
+  app.get('/api/rooms/:roomId/delete-plan', async (request) => {
+    const { roomId } = ParamsSchema.parse(request.params)
+    return db.read((sqlite) => roomDeletePlan(sqlite, roomId))
+  })
+  app.delete('/api/rooms/:roomId', mutation, async (request, reply) => {
+    const { roomId } = ParamsSchema.parse(request.params)
+    const body = RoomDeleteRequestSchema.parse(request.body)
+    await ingest.submit({
+      source: 'rooms',
+      identity: randomUUID(),
+      apply: ({ sqlite, now }) => deleteRoom(sqlite, roomId, body.confirm, now),
+    })
+    return reply.code(204).send()
   })
 
   app.get('/api/rooms/:roomId', async (request) => {

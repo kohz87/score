@@ -11,6 +11,7 @@ function RoomRow({
   selected,
   agents,
   onShare,
+  onDelete,
   onTag,
   activeTag,
   orchestrationRooms,
@@ -21,6 +22,7 @@ function RoomRow({
   selected: string | undefined
   agents: AgentSummary[]
   onShare?: ((room: Room) => void) | undefined
+  onDelete?: ((room: Room) => void) | undefined
   onTag: (tag: string | null) => void
   activeTag: string | null
   orchestrationRooms?: ReadonlySet<string> | undefined
@@ -36,7 +38,7 @@ function RoomRow({
           workflowRooms?.has(room.id) ? 'workflow' : (orchestrationRooms?.has(room.id) ?? false)
         }
       />
-      <RoomMenu room={room} projects={projects} onShare={onShare} />
+      <RoomMenu room={room} projects={projects} onShare={onShare} onDelete={onDelete} />
       {(room.tags ?? []).length > 0 && (
         <ul className="chat-tags" aria-label="Tags">
           {(room.tags ?? []).map((tag) => (
@@ -130,6 +132,7 @@ export function RoomList({
   selected,
   agents,
   onShare,
+  onDelete,
   orchestrationRooms,
   workflowRooms,
 }: {
@@ -138,6 +141,7 @@ export function RoomList({
   selected: string | undefined
   agents: AgentSummary[]
   onShare?: ((room: Room) => void) | undefined
+  onDelete?: ((room: Room) => void) | undefined
   /** Rooms that belong to an orchestration, marked in the list (they are ordinary rooms otherwise). */
   orchestrationRooms?: ReadonlySet<string> | undefined
   /** The subset of those that belong to a workflow run. */
@@ -156,6 +160,7 @@ export function RoomList({
       selected={selected}
       agents={agents}
       onShare={onShare}
+      onDelete={onDelete}
       onTag={setTag}
       activeTag={tag}
       orchestrationRooms={orchestrationRooms}

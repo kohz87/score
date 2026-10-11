@@ -7,7 +7,7 @@ export async function fetchAgentContext(agentId: string): Promise<AgentContext> 
   return AgentContextSchema.parse(await apiFetch(`agents/${encodeURIComponent(agentId)}/context`))
 }
 
-const compact = (value: number) =>
+export const compact = (value: number) =>
   value >= 1_000_000
     ? `${(value / 1_000_000).toFixed(1)}M`
     : value >= 1000

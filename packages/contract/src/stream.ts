@@ -3,6 +3,7 @@ import { RoomProjectEventSchema, RoomProjectSchema } from './conversations.ts'
 import { KnowledgeChangedSchema } from './knowledge.ts'
 import { BriefSummarySchema } from './briefs.ts'
 import { RoomVersionSchema } from './versions.ts'
+import { RoomDeletedSchema, SessionCompactedSchema } from './compaction.ts'
 import { GlobalFenceSchema, OrchestrationSummarySchema } from './orchestration.ts'
 import { WorkflowRunSummarySchema } from './workflows.ts'
 import {
@@ -119,6 +120,11 @@ export const StreamEventSchema = z.discriminatedUnion('type', [
   StreamEnvelopeSchema.extend({ type: z.literal('system.status'), data: SystemStatusSchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('agent.updated'), data: AgentSummarySchema }),
   StreamEnvelopeSchema.extend({ type: z.literal('room.upserted'), data: RoomSchema }),
+  StreamEnvelopeSchema.extend({ type: z.literal('room.deleted'), data: RoomDeletedSchema }),
+  StreamEnvelopeSchema.extend({
+    type: z.literal('session.compacted'),
+    data: SessionCompactedSchema,
+  }),
   StreamEnvelopeSchema.extend({
     type: z.literal('room-project.upserted'),
     data: RoomProjectSchema,

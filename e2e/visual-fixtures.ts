@@ -287,6 +287,43 @@ export const visualFixtures: Record<string, unknown> = {
       },
     ]),
   ),
+  // Context ring and popover of the room's agents (PLAN 5.36): Hermes's breakdown for each, and the delete dialog's plan.
+  ...Object.fromEntries(
+    [
+      'room-activity-feed',
+      ...(recorded['/api/rooms'] as { directs: { id: string }[] }).directs.map((room) => room.id),
+    ].flatMap((roomId) =>
+      ['lead', 'builder', 'reviewer', 'designer'].map((id) => [
+        `/api/agents/${id}/sessions/score-${roomId}-${id}/context`,
+        {
+          asOfSeq: 1,
+          window: 128_000,
+          used: 98_000,
+          measuredAt: '2026-10-09T10:00:00.000Z',
+          model: 'demo-model',
+          source: 'provider_usage',
+          parts: [
+            { kind: 'system_prompt', label: 'System prompt', tokens: 3_200 },
+            { kind: 'tool_definitions', label: 'Tool definitions', tokens: 9_400 },
+            { kind: 'mcp', label: 'MCP tools', tokens: 4_100 },
+            { kind: 'skills', label: 'Skills', tokens: 2_300 },
+            { kind: 'memory', label: 'Memory', tokens: 1_200 },
+            { kind: 'conversation', label: 'Messages', tokens: 77_800 },
+          ],
+          autoCompactAt: 64_000,
+          compactions: 0,
+        },
+      ]),
+    ),
+  ),
+  '/api/rooms/room-activity-feed/delete-plan': {
+    name: '#activity-feed',
+    messages: 18,
+    files: 2,
+    runs: 5,
+    briefs: 1,
+    blocked: null,
+  },
   // Hermes todo lists: none in the pictures (the agent pages and Now would grow a Todo card).
   ...Object.fromEntries(
     ['lead', 'builder', 'reviewer', 'designer'].map((id) => [`/api/agents/${id}/todos`, null]),

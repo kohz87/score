@@ -37,6 +37,17 @@ const context = {
   costUsd: 0.25,
   contextLength: 200_000,
 }
+const sessionContext = {
+  asOfSeq: 1,
+  window: 200_000,
+  used: 100_000,
+  measuredAt: '2026-10-11T10:00:00.000Z',
+  model: 'm',
+  source: null,
+  parts: null,
+  autoCompactAt: null,
+  compactions: 0,
+}
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>
 let queryClient: ReturnType<typeof createQueryClient>
 
@@ -64,6 +75,7 @@ beforeEach(() => {
   fetchMock = vi.fn(async (input, init) => {
     const url = String(input)
     if (url === '/api/commands') return json({ items: [] })
+    if (url.includes('/sessions/') && url.endsWith('/context')) return json(sessionContext)
     if (url.endsWith('/context')) return json(context)
     if (init?.method === 'POST' || init?.method === 'PUT') return json({ ok: true })
     return json({})
@@ -95,21 +107,25 @@ test('typing a follow-up brings Send back, and a finished reply shows only Send'
   expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
 })
 
-test('the context meter shows usage of the agent that answered last, and hides when unknown', async () => {
+test('the context ring shows the share used by the agent that answered last, and hides when unknown', async () => {
   mount([reply(false)])
-  expect(await screen.findByText('Builder: 100k of 200k tokens · $0.2500')).toBeTruthy()
+  const ring = await screen.findByRole('button', { name: 'Builder context: 50 % of 200k' })
+  expect(ring.className).toContain('chat-ctx-ring--normal')
+  expect(String(fetchMock.mock.calls.find(([url]) => String(url).includes('/sessions/'))![0])).toBe(
+    '/api/agents/builder/sessions/score-general-builder/context',
+  )
   cleanup()
   fetchMock.mockImplementation(async (input) =>
-    String(input).endsWith('/context')
-      ? json({ model: null, tokens: null, costUsd: null, contextLength: null })
+    String(input).includes('/sessions/')
+      ? json({ ...sessionContext, window: null, used: null, measuredAt: null })
       : json({ items: [] }),
   )
   queryClient.clear()
   mount([reply(false)])
   await waitFor(() =>
-    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/context'))).toBe(true),
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/sessions/'))).toBe(true),
   )
-  expect(document.querySelector('.chat-meter')).toBeNull()
+  expect(screen.queryByRole('button', { name: /context/ })).toBeNull()
 })
 
 test('/usage shows a local card and sends nothing to the room', async () => {
@@ -134,13 +150,29 @@ test('/model <name> sets the agent model with the existing PUT', async () => {
   expect(calls('POST')).toHaveLength(0)
 })
 
-test('/compress explains that Hermes has no API for it instead of sending the text', async () => {
+test('/compress opens the compact confirmation for the agent and runs it, sending nothing to the room', async () => {
   mount([reply(false)])
+  await screen.findByRole('button', { name: /Builder context/ })
   type('/compress')
   fireEvent.keyDown(box(), { key: 'Enter' })
   fireEvent.keyDown(box(), { key: 'Enter' })
-  expect(await screen.findByText(/can’t compact Builder’s session/)).toBeTruthy()
+  const panel = await screen.findByRole('dialog', { name: 'Builder context details' })
+  expect(panel.textContent).toContain('Hermes will summarise Builder’s older turns')
   expect(calls('POST')).toHaveLength(0)
+  fireEvent.change(screen.getByLabelText('Exchanges kept word for word'), {
+    target: { value: '4' },
+  })
+  fetchMock.mockImplementation(async (input, init) =>
+    init?.method === 'POST' ? json({ commandId: 'c1' }, 202) : json(sessionContext),
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Compact now' }))
+  await waitFor(() => expect(calls('POST')).toHaveLength(1))
+  expect(String(calls('POST')[0]![0])).toBe(
+    '/api/agents/builder/sessions/score-general-builder/compact',
+  )
+  expect(JSON.parse(String(calls('POST')[0]![1]!.body))).toEqual({ keepRecent: 4 })
+  expect(await screen.findAllByText('Compacting Builder…')).toBeTruthy()
+  expect(box().value).toBe('')
 })
 
 test('/model with a message still goes to the server as before', async () => {

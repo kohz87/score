@@ -339,3 +339,194 @@ def _rewind_direct(store, db, indexed: bool, session_id: str, turns: int, expire
         if indexed:
             store._clear_dirty_transcript(session_id)
     return getattr(outcome, "turns_undone", None), getattr(outcome, "rewound_count", None)
+
+
+class CompactLockHeld(Exception):
+    """Hermes holds its compression lock for the session (an auto-compression or another /compress is running)."""
+
+
+class SessionBusy(Exception):
+    """The gateway has a turn running in this session."""
+
+
+class CompactUnsupported(Exception):
+    """The session's runtime cannot be compacted by a throwaway agent (codex_app_server, no provider credentials)."""
+
+
+def _gateway_runner():
+    module = sys.modules.get("gateway.run")
+    ref = getattr(module, "_gateway_runner_ref", None)
+    try:
+        return ref() if callable(ref) else None
+    except Exception:
+        return None
+
+
+def _session_running(runner, session_id: str) -> bool:
+    """A turn of this session in the gateway's own running-agent table (API-server runs are Score's to check)."""
+    running = getattr(runner, "_running_agents", None)
+    if not isinstance(running, dict):
+        return False
+    return any(isinstance(key, str) and session_id in key for key in list(running))
+
+
+def _profile_scope(runner, profile: str | None):
+    """Multiplexed gateways resolve credentials through a per-profile secret scope, as the gateway's own
+    ``_handle_compress_command`` installs it. A single-profile gateway needs none."""
+    import contextlib
+    config = getattr(runner, "config", None)
+    scope = _lookup("gateway.run._profile_runtime_scope")
+    get_dir = _lookup("hermes_cli.profiles.get_profile_dir")
+    if not getattr(config, "multiplex_profiles", False) or scope is None or get_dir is None:
+        return contextlib.nullcontext()
+    return scope(get_dir(profile or current_profile()))
+
+
+def _build_compression_agent(runner, db, session_id: str, model, runtime_kwargs: dict):
+    """A throwaway agent that performs the rewrite, adapted from ``_build_manual_compression_agent`` in hermes-agent
+    gateway/slash_commands_session.py (MIT, see THIRD_PARTY_NOTICES.md)."""
+    run_agent = importlib.import_module("run_agent")
+    gateway_run = importlib.import_module("gateway.run")
+    session_row = None
+    try:
+        session_row = db.get_session(session_id)
+    except Exception:
+        pass  # the live turn rebuilds its prompt with its configured providers
+    agent = run_agent.AIAgent(**runtime_kwargs, model=model, max_iterations=4, quiet_mode=True, skip_memory=True,
+                              enabled_toolsets=["memory"], session_id=session_id, session_db=db)
+    gateway_run._seed_hygiene_system_prompt(agent, session_row)
+    agent.platform = gateway_run._GATEWAY_HYGIENE_PLATFORM
+    agent._print_fn = lambda *a, **kw: None
+    # close() must not end a session the compression just rotated to.
+    agent._end_session_on_close = False
+    return agent
+
+
+def compact_session(session_id: str, keep_recent: int | None = None, profile: str | None = None,
+                    expires_at: float | None = None) -> dict | None:
+    """Compact one session with Hermes's own manual-compress core (what ``/compress`` uses): the older turns are
+    summarised, ``keep_recent`` recent exchanges stay word for word (``/compress here N``); absent = full compression.
+
+    Works in ``profile``'s own store (Score's room sessions are API-server sessions the gateway's routing index does
+    not know) under the transcript lock that rewind takes, so an ``/undo`` can't move the history under it.
+    ``compress_now`` runs ``_compress_context(force=True)`` on the throwaway agent and Hermes commits the result itself
+    (in place or as a compression continuation). Returns ``{"before": {...}, "after": {...}}`` (message count and
+    Hermes's request-token estimate), or None when the session is too short to compact. Raises ``CompactLockHeld``,
+    ``SessionBusy``, ``CompactUnsupported``, ``CommandExpired`` or whatever Hermes raised.
+    """
+    store = gateway_session_store()
+    runner = _gateway_runner()
+    if store is None or runner is None:
+        raise RuntimeError("no gateway session store")
+    if type(session_id) is not str or not session_id:
+        raise ValueError("invalid compact")
+    if keep_recent is not None and (type(keep_recent) is not int or not 0 < keep_recent <= 20):
+        raise ValueError("invalid compact")
+    manual = importlib.import_module("agent.conversation_compression_manual")
+    notify = importlib.import_module("agent.conversation_compression")
+    if _session_running(runner, session_id):
+        raise SessionBusy()
+    db = _profile_session_db(profile)
+    agent = None
+    committed = False
+    try:
+        with store._get_transcript_drain_lock():
+            _check_fresh(expires_at)
+            history = db.get_messages_as_conversation(session_id, include_row_ids=True)
+            if not history or len(history) < manual.MIN_MESSAGES:
+                return None
+            # The full transcript, tool results included, like auto-compress.
+            messages = [m for m in history if m.get("role") in {"user", "assistant", "tool"}]
+            request = manual.CompressRequest(partial=True, keep_last=keep_recent) if keep_recent else \
+                manual.CompressRequest()
+            with _profile_scope(runner, profile):
+                model, runtime_kwargs = runner._resolve_session_agent_runtime()
+                if str(runtime_kwargs.get("api_mode") or "").lower() == "codex_app_server" \
+                        or not runtime_kwargs.get("api_key"):
+                    raise CompactUnsupported()
+                runtime_kwargs["gateway_session_key"] = session_id
+                # Same reasoning setting as a live turn: without it the transport applies its default effort, a 400 on
+                # non-reasoning models.
+                try:
+                    runtime_kwargs["reasoning_config"] = runner._resolve_session_reasoning_config(
+                        source=None, model=model)
+                except Exception:
+                    pass
+                agent = _build_compression_agent(runner, db, session_id, model, runtime_kwargs)
+                _check_fresh(expires_at)
+                result = manual.compress_now(agent, messages, request, system_message="", skip_without_window=True,
+                                             task_id=session_id)
+            if result.status == "nothing_to_do":
+                return None
+            if result.status == "lock_skipped":
+                raise CompactLockHeld()
+            if result.status != "compressed":
+                raise RuntimeError("compression did not run")
+            notify.finalize_context_engine_compression_notification(agent, committed=True)
+            committed = True
+            return {"before": {"messages": len(result.before_messages), "tokens": int(result.before_tokens)},
+                    "after": {"messages": len(result.after_messages), "tokens": int(result.after_tokens)}}
+    finally:
+        if agent is not None:
+            if not committed:
+                try:
+                    notify.finalize_context_engine_compression_notification(agent, committed=False)
+                except Exception:
+                    pass
+            close = getattr(agent, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception:
+                    pass
+        _release(db)
+
+
+_PART_KINDS = {"system_prompt", "tool_definitions", "rules", "skills", "mcp", "subagent_definitions", "memory",
+               "conversation"}
+
+
+def context_breakdown(session_id: str, profile: str | None = None) -> dict | None:
+    """What is using a session's context window, from Hermes's own accounting (what ``/context`` reports,
+    ``agent.context_breakdown.compute_session_context_breakdown``). Read-only and no model call: a throwaway agent is
+    built only to read its prompt, tool schemas and compressor; it is closed straight away. Returns
+    ``{"window", "used", "model", "source", "autoCompactAt", "parts": [{"kind", "label", "tokens"}]}``, or None when
+    the session has no rows. Raises when no gateway runs here or Hermes fails."""
+    runner = _gateway_runner()
+    if runner is None or gateway_session_store() is None:
+        raise RuntimeError("no gateway session store")
+    if type(session_id) is not str or not session_id:
+        raise ValueError("invalid context request")
+    module = importlib.import_module("agent.context_breakdown")
+    db = _profile_session_db(profile)
+    agent = None
+    try:
+        history = db.get_messages_as_conversation(session_id, include_row_ids=True)
+        if not history:
+            return None
+        messages = [m for m in history if m.get("role") in {"user", "assistant", "tool"}]
+        with _profile_scope(runner, profile):
+            model, runtime_kwargs = runner._resolve_session_agent_runtime()
+            if not runtime_kwargs.get("api_key"):
+                raise CompactUnsupported()
+            agent = _build_compression_agent(runner, db, session_id, model, runtime_kwargs)
+            payload = module.compute_session_context_breakdown(agent, messages)
+        compressor = getattr(agent, "context_compressor", None)
+        threshold = getattr(compressor, "threshold_tokens", None)
+        parts = [{"kind": str(cat.get("id")), "label": str(cat.get("label") or cat.get("id"))[:60],
+                  "tokens": max(0, int(cat.get("tokens") or 0))}
+                 for cat in payload.get("categories") or [] if str(cat.get("id")) in _PART_KINDS]
+        return {"window": max(0, int(payload.get("context_max") or 0)),
+                "used": max(0, int(payload.get("context_used") or 0)),
+                "model": str(payload.get("model") or "")[:200],
+                "source": str(payload.get("context_source") or "local_estimate"),
+                "autoCompactAt": int(threshold) if isinstance(threshold, (int, float)) and threshold > 0 else None,
+                "parts": parts}
+    finally:
+        close = getattr(agent, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                pass
+        _release(db)
