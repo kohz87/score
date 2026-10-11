@@ -17,7 +17,8 @@ test('rename: click the title, Enter saves, Escape cancels, a bad name stays ope
   await box.fill('Not Valid!')
   await box.press('Enter')
   await expect(page.getByRole('alert').filter({ hasText: 'lowercase' })).toBeVisible()
-  const renamed = `${room.name}-v2`
+  const base = room.name.replace(/^#/, '')
+  const renamed = `${base}-v2`
   await box.fill(`${renamed} #q4`)
   await box.press('Enter')
   await expect(page.getByRole('heading', { level: 1, name: `#${renamed}` })).toBeVisible()
@@ -86,14 +87,14 @@ test('a finished orchestration room can be deleted too', async ({ page }) => {
     .getByRole('button', { name: `Actions for ${name}` })
     .click()
   await page.getByRole('menuitem', { name: 'Delete room…' }).click()
-  const dialog = page.getByRole('dialog', { name: /^Delete .*\?$/ })
+  const dialog = page.getByRole('dialog', { name: /^Delete Orchestration.*\?$/ })
   await expect(dialog.getByRole('alert')).toContainText('still owns this room')
   await dialog.getByRole('button', { name: 'Cancel' }).click()
   // Renaming is allowed meanwhile.
   await page.getByRole('button', { name: /\(rename\)$/ }).click()
-  await page.getByRole('textbox', { name: 'Room name' }).fill(`${name}-kept`)
+  await page.getByRole('textbox', { name: 'Room name' }).fill(name)
   await page.getByRole('textbox', { name: 'Room name' }).press('Enter')
-  await expect(page.getByRole('heading', { level: 1, name: `#${name}-kept` })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: `#${name}` })).toBeVisible()
   // Approve both steps (every-step gates) and let the run finish.
   for (const step of ['s1', 's2']) {
     const gate = page.getByRole('region', { name: `Approve ${step}` })
@@ -108,12 +109,12 @@ test('a finished orchestration room can be deleted too', async ({ page }) => {
     timeout: 60_000,
   })
   await conversations(page)
-    .getByRole('button', { name: `Actions for ${name}-kept` })
+    .getByRole('button', { name: `Actions for ${name}` })
     .click()
   await page.getByRole('menuitem', { name: 'Delete room…' }).click()
-  const second = page.getByRole('dialog', { name: `Delete ${name}-kept?` })
+  const second = page.getByRole('dialog', { name: `Delete ${name}?` })
   await expect(second.getByRole('button', { name: 'Delete room' })).toBeDisabled()
-  await second.getByRole('textbox').fill(`${name}-kept`)
+  await second.getByRole('textbox').fill(`${name}`)
   await expect(second.getByRole('alert')).toHaveCount(0)
   await second.getByRole('button', { name: 'Delete room' }).click()
   await expect(page).toHaveURL(/\/chat$/)

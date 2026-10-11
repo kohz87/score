@@ -109,14 +109,25 @@ function MeterView({
   }, [answeredId]) // eslint-disable-line react-hooks/exhaustive-deps -- only a new answer refreshes it
   useEffect(() => {
     if (!open) return
-    const outside = (event: PointerEvent) => {
+    const outside = (event: globalThis.PointerEvent) => {
       if (root.current && !root.current.contains(event.target as Node)) {
         setOpen(false)
         setConfirming(false)
       }
     }
+    // Escape also works after the focused button went away (Compact now unmounts).
+    const escape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+        setConfirming(false)
+      }
+    }
     document.addEventListener('pointerdown', outside)
-    return () => document.removeEventListener('pointerdown', outside)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', outside)
+      document.removeEventListener('keydown', escape)
+    }
   }, [open])
   const lastSignal = useRef(confirmSignal)
   useEffect(() => {
