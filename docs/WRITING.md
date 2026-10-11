@@ -14,6 +14,9 @@ application, make sure they are coherent."
 - No internal words in the UI: no ids like `orchestration_owned`, `send_started`, `incarnation`, `attempt`, `fence`,
   `planner`, `token` (except AI tokens), `brief`, `ingest`, `bridge` (say "Score's plugin in Hermes" where needed),
   `payload`, `projection`, `revision`, `409`. Error codes may appear only inside a "Details" disclosure.
+- Contractions in errors and notes (couldn’t, can’t, isn’t, doesn’t); full forms only for emphasis.
+- Sizes in KB/MB/GB (not KiB/MiB). Technical names that the person types or looks for stay literal in code style:
+  `scripts/score …`, environment variables, `.env`, file names.
 - Numbers: digits ("3 steps"), thousands separators ("27,751 tokens"), units spaced ("25 MB", "30 s" only in compact
   meters; prose says "30 seconds").
 - Times: relative for recent ("12 min ago"), absolute with a date otherwise.
@@ -63,6 +66,11 @@ application, make sure they are coherent."
 | agent version | the exact set-up of an agent a step was planned for | incarnation |
 | reference name | a workflow step's short id used in references | id |
 | Score (the view) | the timeline on Now; say "the Score timeline" where it could mean the app | — |
+| access key | a key Score creates for MCP or an agent gateway | token (except platform field names such as "Bot token", which come from the platform) |
+| Knowledge folder | the folder on disk that holds Knowledge | vault folder |
+| end (a pairing) | sign a paired browser out | terminate, revoke (share links keep "Revoke") |
+| Score's plugin in Hermes | the bridge plugin, in UI text | bridge, score_bridge |
+| task run | a Kanban run, where "run" alone could be unclear | attempt |
 
 ## Where it applies
 All user-facing text in `apps/web/src` (JSX text, `aria-label`, `title`, `placeholder`, alt text, toasts, errors mapped
