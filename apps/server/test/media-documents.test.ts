@@ -51,3 +51,30 @@ describe('sniffMedia', () => {
     expect(declaredMatches('application/vnd.ms-excel', 'text/csv')).toBe(true)
   })
 })
+
+describe('sniffMedia edge cases (audit SCORE-025, SCORE-026)', () => {
+  test('plain text that starts with PK is text under every text extension', () => {
+    for (const [name, type] of [
+      ['a.txt', 'text/plain'],
+      ['a.md', 'text/markdown'],
+      ['a.csv', 'text/csv'],
+      ['a.html', 'text/html'],
+    ] as const)
+      expect(sniffMedia(text('PK report'), { name })).toBe(type)
+    expect(sniffMedia(text('PK{"a":1}'), { name: 'a.json' })).toBe('text/plain')
+  })
+
+  test('an EOCD signature inside the archive comment does not hide the real directory', () => {
+    for (const [make, type] of [
+      [docx, DOCX_TYPE],
+      [xlsx, XLSX_TYPE],
+    ] as const) {
+      const base = make()
+      const fake = Buffer.alloc(22)
+      fake.writeUInt32LE(0x06054b50, 0)
+      const comment = Buffer.concat([Buffer.from('note '), fake])
+      base.writeUInt16LE(comment.length, base.length - 2)
+      expect(sniffMedia(Buffer.concat([base, comment]))).toBe(type)
+    }
+  })
+})
