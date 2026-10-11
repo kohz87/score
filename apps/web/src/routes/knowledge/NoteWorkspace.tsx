@@ -23,6 +23,7 @@ import {
   useKnowledgeActions,
   useNote,
 } from './knowledge-queries.ts'
+import { noteDownloadHref } from './knowledge-export.ts'
 import { noteUrl, timeAgo } from './knowledge-paths.ts'
 import { readMode, useWide, writeMode, type NoteMode } from './note-mode.ts'
 import { resolveTarget } from './wikilinks.ts'
@@ -391,6 +392,9 @@ function Pane({
                 </button>
               )}
             </div>
+            <a className="kn-button" href={noteDownloadHref(path)} download>
+              Download
+            </a>
             <button type="button" onClick={onMove}>
               Rename or move
             </button>

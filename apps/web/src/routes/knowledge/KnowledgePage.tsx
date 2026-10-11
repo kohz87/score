@@ -5,6 +5,8 @@ import { ResponsiveDrawer } from '../../components/ResponsiveDrawer.tsx'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { agentsQuery } from '../team/team-queries.ts'
 import { DeleteDialog, MoveDialog, NewFolderDialog, NewNoteDialog } from './KnowledgeDialogs.tsx'
+import { ExportDialog } from './ExportDialog.tsx'
+import { useExport } from './knowledge-export.ts'
 import { DocumentWorkspace } from './DocumentWorkspace.tsx'
 import { FilesView } from './FilesView.tsx'
 import { ACCEPT_FILES, isNotePath, TYPE_LABEL } from './knowledge-files.ts'
@@ -29,6 +31,7 @@ type Dialog =
   | { kind: 'move'; path: string }
   | { kind: 'delete'; path: string }
   | { kind: 'folder'; parent: string }
+  | { kind: 'export-vault' }
   | null
 
 export function KnowledgePage() {
@@ -49,6 +52,7 @@ export function KnowledgePage() {
   const [dialog, setDialog] = useState<Dialog>(null)
   const [dialogError, setDialogError] = useState<unknown>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const exporter = useExport(setNotice)
   const flow = useUploadFlow((summary) => {
     const text = summaryText(summary)
     if (text) setNotice(text)
@@ -228,6 +232,9 @@ export function KnowledgePage() {
           <button type="button" disabled={flow.busy} onClick={() => uploadInput.current?.click()}>
             {flow.busy ? 'Uploading…' : 'Upload'}
           </button>
+          <button type="button" onClick={() => openDialog({ kind: 'export-vault' })}>
+            Export vault
+          </button>
         </div>
         <label className="kn-search">
           <span className="kn-sr">Search notes</span>
@@ -340,6 +347,8 @@ export function KnowledgePage() {
             onNewFolder={(parent) => openDialog({ kind: 'folder', parent })}
             onMove={(target) => openDialog({ kind: 'move', path: target })}
             onDelete={(target) => openDialog({ kind: 'delete', path: target })}
+            exporting={exporter.busy}
+            onExport={(request) => void exporter.run(request)}
             onDeleteFolder={(folder) =>
               actions.removeFolder.mutate(folder, {
                 onSuccess: () => setNotice(`Deleted the folder ${folder}.`),
@@ -365,6 +374,19 @@ export function KnowledgePage() {
         )}
       </main>
 
+      {dialog?.kind === 'export-vault' && (
+        <ExportDialog
+          heading="Export the whole vault"
+          request={{ all: true }}
+          busy={exporter.busy}
+          onClose={() => setDialog(null)}
+          onExport={() =>
+            void exporter.run({ all: true }).then((ok) => {
+              if (ok) setDialog(null)
+            })
+          }
+        />
+      )}
       {dialog?.kind === 'new' && (
         <NewNoteDialog
           initial={dialog.initial}

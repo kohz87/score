@@ -1281,6 +1281,21 @@ the bytes (magic numbers), never the extension or declared type alone. Names: no
   document path returns its extracted text as `body` (`kind: 'document'`, `notice` when the text is missing or cut at
   256 KiB); `knowledge_list` adds `documents`. Agents cannot upload or delete documents; their write tools stay
   notes-only (`400 not_a_note`).
+**Export (PLAN 6.7).** Notes and documents can be taken out of the vault.
+- `GET /api/knowledge/notes/*path?download=1` -> the note's `.md` bytes exactly as stored (frontmatter included),
+  `Content-Type: text/markdown; charset=utf-8`, `Content-Disposition: attachment` (UTF-8 `filename*`), `nosniff`.
+- **H** `POST /api/knowledge/export/summary` `{ paths? | folder? | all? }` (exactly one) -> `KnowledgeExportSummary`
+  `{ files; bytes; label }`: what the export would contain (shown before "Export the whole vault").
+- **H** `POST /api/knowledge/export` same body -> `application/zip`, streamed, `Content-Disposition: attachment;
+  filename="knowledge-<folder|selection|vault>-<YYYY-MM-DD>.zip"`. `paths` is a list of note/document paths (at most
+  10,000; unknown paths answer `404 not_found`, a folder path is not accepted: use `folder`); `folder` exports everything
+  under it, `all: true` the whole vault. Entries keep their path relative to the chosen root (`folder`) or to the vault
+  (`paths`, `all`), notes and documents as stored (original bytes), plus a root `README.txt` saying what the archive is and
+  when it was made. Never included: `.git`, dot-files and dot-folders, Score's index and extracted text, symlinks and
+  anything that is not a regular file. At most 10,000 files and 1 GiB in total, checked from the stored sizes before
+  anything is sent (`413 export_too_large`, `details: { files; bytes }`); an empty selection -> `400 bad_request`. Files are
+  streamed from disk (bounded memory) and a file that changes while it is read is still sent as read; the export aborts
+  after 10 minutes. Agents get no export tool.
 - Errors: path outside the vault, `..`, NUL, absolute, `.git` → `400 bad_path`; not a `.md` note where one is needed →
   `400 not_a_note`; too large (note > 2 MiB) → `413 payload_too_large`; missing → `404 not_found`.
 

@@ -948,6 +948,12 @@ const cases = [
     { folder: 'f', written: 'a' },
   ],
   ['KnowledgeFolderRequestSchema', { path: 'f' }, { path: '' }],
+  ['KnowledgeExportRequestSchema', { folder: 'f' }, { all: true, folder: 'f' }],
+  [
+    'KnowledgeExportSummarySchema',
+    { files: 2, bytes: 10, label: 'vault' },
+    { files: -1, bytes: 10, label: 'vault' },
+  ],
   [
     'KnowledgeFromMediaRequestSchema',
     { mediaId: 'm1', path: 'inbox/a.pdf', onConflict: 'ask' },

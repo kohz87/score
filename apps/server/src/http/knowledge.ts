@@ -1,7 +1,11 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import {
   KnowledgeDocumentSchema,
+  KnowledgeExportRequestSchema,
+  KnowledgeExportSummarySchema,
   KnowledgeFolderRequestSchema,
   KnowledgeFromMediaRequestSchema,
   KnowledgeHistorySchema,
@@ -23,7 +27,15 @@ import {
 import { humanGuard } from '../auth/human.ts'
 import { HttpError } from '../errors.ts'
 import { MAX_FILE_BYTES, isDocumentPath } from '../knowledge/doc-types.ts'
-import { MAX_NOTE_BYTES } from '../knowledge/note.ts'
+import {
+  EXPORT_TIMEOUT_MS,
+  exportCandidates,
+  exportFileName,
+  exportStream,
+  exportSummary,
+  planExport,
+} from '../knowledge/export.ts'
+import { MAX_NOTE_BYTES, parseNotePath } from '../knowledge/note.ts'
 import { sniffImage } from '../media/sniff.ts'
 import type { MediaStore } from '../media/store.ts'
 import type { KnowledgeVault } from '../knowledge/vault.ts'
@@ -63,8 +75,25 @@ export function registerKnowledgeRoutes(
 
   // `*` swallows `/history`, `/versions/<commit>` and `/restore`: note paths end in `.md`, so the suffixes are
   // unambiguous.
-  app.get('/api/knowledge/notes/*', async (request) => {
+  app.get('/api/knowledge/notes/*', async (request, reply) => {
     const target = rest(request)
+    if (DownloadQuerySchema.parse(request.query).download !== undefined) {
+      // The note exactly as stored (frontmatter included), read without following a symlink.
+      const rel = parseNotePath(target)
+      const abs = path.join(vault.vault, ...rel.split('/'))
+      const stat = await fs.lstat(abs).catch(() => null)
+      if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Unknown note')
+      const bytes = await vault.readContainedBuffer(abs)
+      return reply
+        .header('Content-Type', 'text/markdown; charset=utf-8')
+        .header('X-Content-Type-Options', 'nosniff')
+        .header('Cache-Control', 'no-store')
+        .header(
+          'Content-Disposition',
+          `attachment; filename*=UTF-8''${encodeURIComponent(rel.split('/').pop()!)}`,
+        )
+        .send(bytes)
+    }
     const history = /^(.+)\/history$/.exec(target)
     if (history) return KnowledgeHistorySchema.parse({ items: await vault.history(history[1]!) })
     const version = /^(.+)\/versions\/([^/]+)$/.exec(target)
@@ -135,6 +164,33 @@ export function registerKnowledgeRoutes(
         inline ? 'inline' : `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,
       )
       .send(file.bytes)
+  })
+
+  // ---- export (PLAN 6.7) -------------------------------------------------------------------------------------
+
+  const planFrom = async (body: unknown) =>
+    planExport(
+      vault.vault,
+      exportCandidates(await vault.tree()),
+      KnowledgeExportRequestSchema.parse(body),
+    )
+  app.post('/api/knowledge/export/summary', guard, async (request) =>
+    KnowledgeExportSummarySchema.parse(exportSummary(await planFrom(request.body))),
+  )
+  app.post('/api/knowledge/export', guard, async (request, reply) => {
+    const plan = await planFrom(request.body)
+    const now = new Date()
+    const stream = exportStream(vault.vault, plan, now)
+    const timer = setTimeout(() => stream.destroy(new Error('Export timed out')), EXPORT_TIMEOUT_MS)
+    stream.once('close', () => clearTimeout(timer))
+    // A closed connection stops the read; no orphaned file handles.
+    reply.raw.once('close', () => stream.destroy())
+    return reply
+      .header('Content-Type', 'application/zip')
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('Cache-Control', 'no-store')
+      .header('Content-Disposition', `attachment; filename="${exportFileName(plan, now)}"`)
+      .send(stream)
   })
 
   app.post('/api/knowledge/folders', guard, async (request, reply) => {
