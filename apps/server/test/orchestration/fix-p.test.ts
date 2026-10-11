@@ -20,8 +20,7 @@ test('SCORE-017: a rolled-back transaction leaves the fingerprint and ownership 
         "SELECT detail FROM orc_history WHERE kind = 'ownership' ORDER BY id",
       )
       .map((row) => JSON.parse(row.detail).state)
-  const upserts = () =>
-    h.rows("SELECT 1 FROM events WHERE type = 'orchestration.upserted'").length
+  const upserts = () => h.rows("SELECT 1 FROM events WHERE type = 'orchestration.upserted'").length
   const historyBefore = history()
   const upsertsBefore = upserts()
 

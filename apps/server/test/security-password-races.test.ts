@@ -34,11 +34,7 @@ vi.mock('node:crypto', async (importOriginal) => {
   return { ...real, scrypt }
 })
 
-import {
-  hashPassword,
-  SecurityPassword,
-  writePasswordFile,
-} from '../src/auth/security-password.ts'
+import { hashPassword, SecurityPassword, writePasswordFile } from '../src/auth/security-password.ts'
 
 let home: string
 beforeEach(() => {

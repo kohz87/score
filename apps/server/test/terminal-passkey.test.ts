@@ -189,6 +189,8 @@ test('SCORE-011: enrollment requires a discoverable credential and login offers 
     requireResidentKey: true,
   })
   // A passkey enrolled before this change (possibly not discoverable) must still be offered at login.
-  const options = (await post(app, '/api/session/passkey/authentication-options', {}, cookie)).json()
+  const options = (
+    await post(app, '/api/session/passkey/authentication-options', {}, cookie)
+  ).json()
   expect(options.allowCredentials).toEqual([expect.objectContaining({ id: device.id })])
 })
