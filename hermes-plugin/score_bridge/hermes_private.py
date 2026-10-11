@@ -383,7 +383,8 @@ def _profile_scope(runner, profile: str | None):
 
 
 def _build_compression_agent(runner, db, session_id: str, model, runtime_kwargs: dict):
-    """A throwaway agent that performs the rewrite, built like the gateway's ``_build_manual_compression_agent``."""
+    """A throwaway agent that performs the rewrite, adapted from ``_build_manual_compression_agent`` in hermes-agent
+    gateway/slash_commands_session.py (MIT, see THIRD_PARTY_NOTICES.md)."""
     run_agent = importlib.import_module("run_agent")
     gateway_run = importlib.import_module("gateway.run")
     session_row = None

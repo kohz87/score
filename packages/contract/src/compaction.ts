@@ -6,7 +6,9 @@ export const COMPACT_COMMAND_TTL_MS = 180_000
 /** Recent exchanges Hermes keeps word for word when the person does not choose (`/compress here N` default). */
 export const COMPACT_KEEP_RECENT_DEFAULT = 2
 
-export const CompactRequestSchema = z.object({ keepRecent: z.int().min(1).max(20).optional() }).strict()
+export const CompactRequestSchema = z
+  .object({ keepRecent: z.int().min(1).max(20).optional() })
+  .strict()
 export type CompactRequest = z.infer<typeof CompactRequestSchema>
 
 export const CompactAcceptedSchema = z.object({ commandId: z.string().min(1).max(128) })

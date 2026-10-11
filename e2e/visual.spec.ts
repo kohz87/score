@@ -238,6 +238,36 @@ for (const width of [1440, 390]) {
   })
 }
 
+// The context ring's popover and the delete-room dialog (PLAN 5.36).
+for (const width of [1440, 390]) {
+  test(`chat context details popover at ${width}px`, async ({ page }) => {
+    await open(page, destinations[1]!, width)
+    await page
+      .getByRole('button', { name: /context: 77 % of 128k/ })
+      .first()
+      .click()
+    await expect(page.getByRole('dialog', { name: /context details/ })).toBeVisible()
+    if (width === 390) await noPageOverflow(page)
+    await expect(page).toHaveScreenshot(`chat-context-${width}.png`, {
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.005,
+    })
+  })
+  test(`chat delete room dialog at ${width}px`, async ({ page }) => {
+    await open(page, destinations[1]!, width)
+    if (width < 1100) await page.getByRole('button', { name: 'Conversations' }).click()
+    await page.getByRole('button', { name: 'Actions for activity-feed' }).click()
+    await page.getByRole('menuitem', { name: 'Delete room…' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Delete #activity-feed?' })
+    await expect(dialog.getByText(/18 messages, 2 attached files/)).toBeVisible()
+    await dialog.getByRole('textbox').fill('#activity-feed')
+    await expect(page).toHaveScreenshot(`chat-delete-${width}.png`, {
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.005,
+    })
+  })
+}
+
 // Dark theme (Settings › Look): same pages, same fixtures, theme stored in the browser.
 test.describe('dark theme', () => {
   test.beforeEach(async ({ page }) => {

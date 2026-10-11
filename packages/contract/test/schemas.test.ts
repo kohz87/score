@@ -1302,7 +1302,14 @@ const cases = [
   ['ReadingSourceSchema', 'local_estimate', 'guess'],
   [
     'SessionContextReadingSchema',
-    { window: 1000, used: 10, model: 'm', source: 'provider_usage', autoCompactAt: null, parts: [] },
+    {
+      window: 1000,
+      used: 10,
+      model: 'm',
+      source: 'provider_usage',
+      autoCompactAt: null,
+      parts: [],
+    },
     { window: 1000, used: 10, model: 'm', source: 'x', autoCompactAt: null, parts: [] },
   ],
   [
