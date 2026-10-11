@@ -81,7 +81,12 @@ export class PasswordLockError extends Error {
 function startTime(pid: number): string | null {
   try {
     const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8')
-    return stat.slice(stat.lastIndexOf(')') + 2).trim().split(' ')[19] ?? null
+    return (
+      stat
+        .slice(stat.lastIndexOf(')') + 2)
+        .trim()
+        .split(' ')[19] ?? null
+    )
   } catch {
     return null
   }
@@ -161,7 +166,7 @@ export async function withPasswordLock<T>(
   const deadline = Date.now() + waitMs
   while (!tryAcquire(path, token)) {
     let content: string | undefined
-    let age = 0
+    let age: number
     try {
       content = fs.readFileSync(path, 'utf8')
       age = Date.now() - fs.statSync(path).mtimeMs

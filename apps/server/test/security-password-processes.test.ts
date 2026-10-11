@@ -24,9 +24,13 @@ afterEach(() => {
 })
 
 function run(args: string[]): { done: Promise<{ code: number | null; out: string; err: string }> } {
-  const proc = spawn(process.execPath, ['--experimental-transform-types', '--no-warnings', child, ...args], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
+  const proc = spawn(
+    process.execPath,
+    ['--experimental-transform-types', '--no-warnings', child, ...args],
+    {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  )
   started.push(proc.pid!)
   let out = ''
   let err = ''
@@ -76,7 +80,10 @@ test('a lock left by a process that is gone is recovered; a live holder blocks u
   await expect(withPasswordLock(home, () => 'ran')).resolves.toBe('ran')
   // A lock naming this live process and its real start time is respected.
   const stat = fs.readFileSync(`/proc/${process.pid}/stat`, 'utf8')
-  const start = stat.slice(stat.lastIndexOf(')') + 2).trim().split(' ')[19]
+  const start = stat
+    .slice(stat.lastIndexOf(')') + 2)
+    .trim()
+    .split(' ')[19]
   fs.writeFileSync(lock, `${process.pid} ${start}\n`)
   await expect(withPasswordLock(home, () => 'ran', 300)).rejects.toBeInstanceOf(PasswordLockError)
   // The same pid with another start time is a reused pid: stale.

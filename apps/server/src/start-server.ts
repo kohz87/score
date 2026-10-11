@@ -405,9 +405,13 @@ export async function startServer(
         : recoverTaskHolds
     if (recoverHolds) {
       // 20 fast passes (30 s apart), then every 5 minutes for as long as anything is unresolved.
-      holdRecovery = retryUntilResolved(recoverHolds, [...Array<number>(20).fill(30_000), 300_000], {
-        track,
-      })
+      holdRecovery = retryUntilResolved(
+        recoverHolds,
+        [...Array<number>(20).fill(30_000), 300_000],
+        {
+          track,
+        },
+      )
     }
     // Warm the per-profile caches, so the first page load after a restart doesn't wait ~15 s on cold Hermes reads.
     const warming = port

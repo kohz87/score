@@ -257,12 +257,16 @@ test('the sweep hash budget rotates, so damage in a later row is found over seve
     clock: () => now,
     sweepHashBudgetBytes: 25,
   })
-  const items = ['a'.repeat(10), 'b'.repeat(10), 'c'.repeat(10), 'd'.repeat(10), 'e'.repeat(10)].map(
-    (text, index) => {
-      now += 1000
-      return small.store(Buffer.from(text), undefined, `${index}.txt`)
-    },
-  )
+  const items = [
+    'a'.repeat(10),
+    'b'.repeat(10),
+    'c'.repeat(10),
+    'd'.repeat(10),
+    'e'.repeat(10),
+  ].map((text, index) => {
+    now += 1000
+    return small.store(Buffer.from(text), undefined, `${index}.txt`)
+  })
   const last = 'e'.repeat(10)
   writeFileSync(join(dir, 'media', sha(Buffer.from(last))), 'f'.repeat(10))
   let missing = 0
