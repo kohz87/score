@@ -384,11 +384,19 @@ export class CodingRuntime {
 
   private async execute(
     entry: ActiveRun,
-    agent: StoredCodingAgent,
+    admitted: StoredCodingAgent,
     input: string,
     room: string | null,
   ): Promise<void> {
     const { db, ingest, locator } = this.deps
+    // A queued turn starts long after admission: permission, workspace and the rest are read as they are now.
+    const agent = getCodingAgent(db.sqlite, admitted.id)
+    if (!agent)
+      return void (await this.finish(newTranslation(entry.runId, admitted.id, room), {
+        status: 'failed',
+        error: 'This coding agent was removed',
+        costKind: 'unknown',
+      }))
     const driver = driverFor(agent.runtime)
     const translation = newTranslation(entry.runId, agent.id, room)
     const costKind = agent.runtime === 'claude-code' ? 'estimated' : 'unknown'

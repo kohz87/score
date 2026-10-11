@@ -112,7 +112,7 @@ function framesFor(
     const drafts = framesForTool({
       hook: phase.hook,
       tool: 'terminal',
-      args: { command: detail.command, workdir: detail.cwd ?? '' },
+      args: { command: redact(detail.command), workdir: detail.cwd ?? '' },
       result: post ? { output: phase.output, exit_code: phase.exitCode } : {},
       status: post ? (phase.ok ? 'ok' : 'error') : 'running',
       watch: base.watch,
@@ -135,12 +135,12 @@ function framesFor(
   const tool = detail.type === 'write' ? 'write_file' : 'patch'
   const args =
     detail.type === 'write'
-      ? { path: detail.path, content: detail.content }
+      ? { path: detail.path, content: redact(detail.content) }
       : {
           mode: 'replace',
           path: detail.path,
-          old_string: detail.oldString,
-          new_string: detail.newString,
+          old_string: redact(detail.oldString),
+          new_string: redact(detail.newString),
         }
   return framesForTool({
     hook: 'post',
@@ -252,7 +252,8 @@ export function eventObservation(
               ...framesFor(sqlite, translation, event.callId, now, call.detail, {
                 hook: 'post',
                 ok: event.ok,
-                output: redact(tailBytes(event.preview, OUTPUT_BYTES - 40).text),
+                // Redact the whole result first: a tail cut can remove the label that marks the value as secret.
+                output: tailBytes(redact(event.preview), OUTPUT_BYTES - 40).text,
                 exitCode: event.exitCode ?? null,
               }),
             )

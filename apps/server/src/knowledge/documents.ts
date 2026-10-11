@@ -423,10 +423,12 @@ export class KnowledgeDocuments {
     return { path: rel, mtime: new Date(stat.mtimeMs).toISOString(), size: stat.size }
   }
 
-  private async freeName(rel: string): Promise<string> {
+  /** A free name next to `rel`: not on disk and not among `reserved` (lower-cased names other incoming files take). */
+  private async freeName(rel: string, reserved: ReadonlySet<string> = new Set()): Promise<string> {
     for (let n = 2; n < 100; n += 1) {
       const candidate = suffixed(rel, n)
-      if (!(await this.existing(candidate))) return candidate
+      if (!reserved.has(candidate.toLowerCase()) && !(await this.existing(candidate)))
+        return candidate
     }
     throw new HttpError(409, 'exists', 'Too many files with that name')
   }
@@ -712,11 +714,16 @@ export class KnowledgeDocuments {
           if (clash) clashes.push(clash)
         }
         if (clashes.length > 0 && onConflict === 'ask') throw this.exists(clashes)
-        if (clashes.length > 0 && onConflict === 'keep')
+        if (clashes.length > 0 && onConflict === 'keep') {
+          // Renamed files must also avoid every other incoming name and each other.
+          const reserved = new Set(prepared.map((item) => item.path.toLowerCase()))
           for (const item of prepared) {
             const clash = clashes.find((candidate) => candidate.path === item.path)
-            if (clash) item.path = await this.freeName(item.path)
+            if (!clash) continue
+            item.path = await this.freeName(item.path, reserved)
+            reserved.add(item.path.toLowerCase())
           }
+        }
         await this.vault.commitOutside()
         const committed: string[] = []
         const done: Prepared[] = []

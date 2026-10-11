@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { redact } from '../../redact.ts'
 import type {
   CodingDriver,
   CodingEvent,
@@ -66,7 +67,8 @@ function preview(tool: string, input: unknown): string {
     if (value) return value
   }
   try {
-    return JSON.stringify(input).slice(0, 300)
+    // Redact before the cut: a clipped label would leave its value unrecognisable.
+    return redact(JSON.stringify(input)).slice(0, 300)
   } catch {
     return ''
   }

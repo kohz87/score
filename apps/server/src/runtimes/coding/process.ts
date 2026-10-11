@@ -53,6 +53,8 @@ export function spawnCli(options: SpawnOptions): CliRun {
   let skipping = false
   let queue: Promise<void> = Promise.resolve()
   const timers: NodeJS.Timeout[] = []
+  // Only the wall-clock timer; the escalation timers outlive the leader until its whole group is gone.
+  const escalation: NodeJS.Timeout[] = []
 
   const child = spawn(options.file, options.args, {
     cwd: options.cwd,
@@ -82,7 +84,7 @@ export function spawnCli(options: SpawnOptions): CliRun {
     const kill = setTimeout(() => signal('SIGKILL'), graceMs * 2)
     term.unref()
     kill.unref()
-    timers.push(term, kill)
+    escalation.push(term, kill)
   }
   const wall = setTimeout(() => stop('timeout'), maxMs)
   wall.unref()
@@ -127,6 +129,26 @@ export function spawnCli(options: SpawnOptions): CliRun {
   child.stdin.on('error', () => undefined)
   child.stdin.end(options.stdin)
 
+  const groupAlive = (): boolean => {
+    if (child.pid === undefined) return false
+    try {
+      process.kill(-child.pid, 0)
+      return true
+    } catch (error) {
+      // EPERM means a member exists that we can't signal: still there.
+      return (error as NodeJS.ErrnoException).code === 'EPERM'
+    }
+  }
+  // After a Stop the CLI may exit while a tool it started ignores the signals: keep escalating until the group is empty.
+  const groupGone = async (): Promise<void> => {
+    if (stopped === null) return
+    const deadline = Date.now() + graceMs * 2 + 10_000
+    while (groupAlive() && Date.now() < deadline) {
+      if (Date.now() >= deadline - 10_000) signal('SIGKILL')
+      await new Promise((r) => setTimeout(r, 25))
+    }
+  }
+
   const done = new Promise<CliOutcome>((resolve) => {
     let settled = false
     const finish = (exitCode: number | null, exitSignal: NodeJS.Signals | null) => {
@@ -135,17 +157,22 @@ export function spawnCli(options: SpawnOptions): CliRun {
       for (const timer of timers) clearTimeout(timer)
       if (!skipping && buffered.trim() && Buffer.byteLength(buffered) <= CODING_LIMITS.maxLineBytes)
         handleLine(buffered)
-      void queue.then(() =>
-        resolve({
-          exitCode,
-          signal: exitSignal,
-          stopped,
-          stderr,
-          spawnError,
-          sawEvents,
-          stats: options.parser.stats,
-        }),
-      )
+      void queue
+        .then(groupGone)
+        .then(() => {
+          for (const timer of escalation) clearTimeout(timer)
+        })
+        .then(() =>
+          resolve({
+            exitCode,
+            signal: exitSignal,
+            stopped,
+            stderr,
+            spawnError,
+            sawEvents,
+            stats: options.parser.stats,
+          }),
+        )
     }
     child.on('error', (error) => {
       spawnError = (error as NodeJS.ErrnoException).code ?? 'spawn_failed'
