@@ -495,6 +495,34 @@ export function activityParts(
   return { parts, overflow }
 }
 
+/**
+ * The tool cards and reasoning of a reply that is still being written (PLAN 5.39), as the `message.updated` the browser
+ * replaces the message's parts with. They are what completion stores in front of the text, so the card that appears here
+ * stays where it is when the reply ends. Nothing is stored now: the final parts are written by `completeRunMessage`.
+ */
+export function liveActivityDraft(sqlite: DatabaseSync, runId: string): DomainEventDraft[] {
+  const value = sqlite.prepare('SELECT * FROM message_runs WHERE run_id = ?').get(runId)
+  if (!value) return []
+  const mapping = MessageRunSchema.parse(value)
+  if (mapping.state !== 'active' || mapping.purpose === 'summary') return []
+  const message = messageFromRow(
+    sqlite.prepare('SELECT * FROM messages WHERE id = ?').get(mapping.message_id),
+  )
+  if (!message.streaming) return []
+  const { parts } = activityParts(sqlite, runId)
+  if (parts.length === 0) return []
+  return [
+    {
+      type: 'message.updated',
+      data: {
+        roomId: mapping.room_id,
+        messageId: message.id,
+        parts: [...parts, ...message.parts.filter((part) => part.kind === 'text')],
+      },
+    },
+  ]
+}
+
 function failureNotice(status: string, error: string | null | undefined): string {
   const detail = error ? `: ${redactBounded(error, 300)}` : ''
   if (status === 'cancelled') return 'This run was stopped.'

@@ -21,7 +21,12 @@ import {
   redactRunPayload,
   type GatewayRun,
 } from './gateway.ts'
-import { appendRunMessage, completeRunMessage, noteRunProgress } from '../../domain/message-runs.ts'
+import {
+  appendRunMessage,
+  completeRunMessage,
+  liveActivityDraft,
+  noteRunProgress,
+} from '../../domain/message-runs.ts'
 import { chargeObservation } from '../../domain/orchestration/ops.ts'
 import { recordRunResult } from '../../domain/workflows/verdict.ts'
 import { ProfileNameSchema } from './paths.ts'
@@ -297,6 +302,8 @@ export function translateRunEvent(
             .run(row.id, seq, redactBounded(reasoning.text, MAX_THINKING_CHARS))
         return [
           ...progress,
+          // Reasoning that was kept appears as a collapsed card while the reply is written (PLAN 5.39).
+          ...(reasoning?.text.trim() ? liveActivityDraft(sqlite, row.id) : []),
           ...(delta
             ? appendRunMessage(sqlite, row.id, delta.delta, at)
             : interim && !interim.already_streamed
@@ -341,6 +348,8 @@ export function translateRunEvent(
             completed.tool,
           )
       }
+      // The reply under way shows the tool as a running card, then as done (PLAN 5.39).
+      if (started || completed) drafts.push(...liveActivityDraft(sqlite, row.id))
       if (started || completed || approval)
         drafts.push({
           type: 'log.line',

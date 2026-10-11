@@ -1,7 +1,12 @@
 import type { WatchFrame } from '@score/contract'
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { z } from 'zod'
-import { appendRunMessage, completeRunMessage, noteRunProgress } from '../../domain/message-runs.ts'
+import {
+  appendRunMessage,
+  completeRunMessage,
+  liveActivityDraft,
+  noteRunProgress,
+} from '../../domain/message-runs.ts'
 import {
   framesForTool,
   recordFrame,
@@ -237,6 +242,7 @@ export function eventObservation(
               text: redactBounded(`${event.tool}: ${event.preview}`, 2048),
             },
           })
+          drafts.push(...liveActivityDraft(sqlite, runId))
           if (event.detail)
             drafts.push(
               ...framesFor(sqlite, translation, event.callId, now, event.detail, { hook: 'pre' }),
@@ -259,6 +265,7 @@ export function eventObservation(
               runId,
               call.seq,
             )
+          drafts.push(...liveActivityDraft(sqlite, runId))
           if (call.detail)
             drafts.push(
               ...framesFor(sqlite, translation, event.callId, now, call.detail, {
