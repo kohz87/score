@@ -23,6 +23,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "mdast-util-from-markdown": "2.1.0",
     "tsx": "4.23.15"
   },
   "optionalDependencies": {
