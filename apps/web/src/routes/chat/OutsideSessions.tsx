@@ -74,7 +74,7 @@ export function OutsideSessions({ agents }: { agents: AgentSummary[] }) {
             copies them here to read; nothing changes in Hermes.
           </p>
           {sessions.isLoading && <p role="status">Looking for sessions…</p>}
-          {sessions.isError && <p role="alert">Could not read the agents’ sessions.</p>}
+          {sessions.isError && <p role="alert">Couldn’t read the agents’ sessions.</p>}
           {sessions.data && items.length === 0 && (
             <p className="chat-list-empty">No sessions from elsewhere.</p>
           )}
@@ -86,10 +86,10 @@ export function OutsideSessions({ agents }: { agents: AgentSummary[] }) {
           ))}
           {(sessions.data?.unavailable.length ?? 0) > 0 && (
             <p className="chat-list-empty">
-              Could not read the sessions of {sessions.data!.unavailable.map(nameOf).join(', ')}.
+              Couldn’t read the sessions of {sessions.data!.unavailable.map(nameOf).join(', ')}.
             </p>
           )}
-          {importSession.isError && <p role="alert">Could not import that session.</p>}
+          {importSession.isError && <p role="alert">Couldn’t import that session.</p>}
           <button
             type="button"
             className="chat-small-button"

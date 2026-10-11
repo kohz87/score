@@ -39,7 +39,7 @@ export function RenameRoom({
       setError(
         failure instanceof ApiError && failure.status === 409
           ? 'Another room already has that name.'
-          : 'Could not rename the room. Please try again.',
+          : 'Couldn’t rename the room. Try again.',
       )
     }
   }

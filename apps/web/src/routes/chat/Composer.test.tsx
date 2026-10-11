@@ -228,7 +228,7 @@ test('501 and network errors explain themselves; a retry reuses the idempotency 
   type('/routine @builder daily go')
   press('Enter')
   expect((await screen.findByRole('alert')).textContent).toBe(
-    'That command is not available yet. Usage: /routine @agent <schedule> <prompt>',
+    'That command isn’t available yet. Usage: /routine @agent <schedule> <prompt>',
   )
   press('Enter')
   await waitFor(() => expect(posts()).toHaveLength(2))

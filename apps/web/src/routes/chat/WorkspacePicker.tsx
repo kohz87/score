@@ -68,7 +68,7 @@ export function WorkspacePicker({
       )}
       <div className="chat-doc-body chat-picker-tree">
         {info.isPending && <p role="status">Loading…</p>}
-        {info.isError && <p role="alert">Could not load the workspace.</p>}
+        {info.isError && <p role="alert">Couldn’t load the workspace.</p>}
         {info.data && !info.data.available && (
           <p role="status">{info.data.reason ?? 'The workspace is unavailable.'}</p>
         )}

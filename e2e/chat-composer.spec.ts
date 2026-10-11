@@ -7,7 +7,7 @@ test('the composer sends a message that gets a streamed reply, and an /assign th
   await pair(page)
   await page.goto('/chat')
   await page
-    .getByRole('navigation', { name: 'Conversations' })
+    .getByRole('navigation', { name: 'Rooms' })
     .getByRole('link', { name: /#activity-feed/ })
     .click({ timeout: 15_000 })
   const history = page.getByRole('region', { name: 'Message history' })

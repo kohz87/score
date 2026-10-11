@@ -31,7 +31,7 @@ export function meterFraction(context: AgentContext): number | null {
 /** The local card for `/usage`. */
 export function usageSummary(name: string, context: AgentContext): string {
   const text = meterText(context)
-  if (!text) return `${name} has not reported any usage yet.`
+  if (!text) return `${name} hasn’t reported any usage yet.`
   const lines = [`${name}: ${text}`]
   if (context.tokens)
     lines.push(

@@ -12,7 +12,7 @@ test('a room can be summarised, the summary is editable and can be deleted', asy
   expect(made.ok()).toBe(true)
   await page.goto('/chat')
   await page
-    .getByRole('navigation', { name: 'Conversations' })
+    .getByRole('navigation', { name: 'Rooms' })
     .getByRole('link', { name: `#${name}` })
     .click({ timeout: 15_000 })
   const history = page.getByRole('region', { name: 'Message history' })

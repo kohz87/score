@@ -47,7 +47,7 @@ export function RoomPanels({ roomId, agents }: { roomId: string; agents: AgentSu
       <aside id={bodyId} className="chat-side-panels" aria-label="About this room">
         {panels.status === 'error' && !data && (
           <QueryError
-            text="Could not load room details."
+            text="Couldn’t load room details."
             retry={() => void context.queries.register(panelsDefinition).refetch()}
           />
         )}

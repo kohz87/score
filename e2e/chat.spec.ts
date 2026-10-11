@@ -12,7 +12,7 @@ test('fake Chat opens rooms and directs with keyboard access and an enabled comp
   await say(page, made.id, asked)
   await page.goto('/chat')
   await expect(page.getByRole('heading', { name: 'Chat', level: 1 })).toBeVisible()
-  const conversations = page.getByRole('navigation', { name: 'Conversations' })
+  const conversations = page.getByRole('navigation', { name: 'Rooms' })
   // The seeded room is listed; the keyboard walk below uses the room this spec made.
   await expect(conversations.getByRole('link', { name: /#activity-feed/ })).toBeVisible({
     timeout: 15_000,

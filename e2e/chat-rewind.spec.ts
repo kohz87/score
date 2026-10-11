@@ -37,7 +37,7 @@ test('Delete rewinds: your message and the reply become a read-only previous ver
   await mine.hover()
   await mine.getByRole('button', { name: 'Delete message from You' }).click()
   const dialog = page.getByRole('dialog', { name: 'Delete this message?' })
-  await expect(dialog.getByText(/Agents rewound:.*lead −\d+ turns?/)).toBeVisible()
+  await expect(dialog.getByText(/Agents rewound:.*lead −\d+ exchanges?/)).toBeVisible()
   await expect(dialog.getByText(/Long-term memory .* is not rewound/)).toBeVisible()
   await dialog.getByRole('button', { name: 'Rewind and delete' }).click()
   await expect(mine).toHaveCount(0)
@@ -50,7 +50,7 @@ test('Delete rewinds: your message and the reply become a read-only previous ver
   await expect(mine).toHaveCount(0)
   // The room's menu shows them dimmed and read-only, in place.
   await page
-    .getByRole('navigation', { name: 'Conversations' })
+    .getByRole('navigation', { name: 'Rooms' })
     .getByRole('button', { name: `Actions for ${room.label}` })
     .click()
   await page.getByRole('menuitemcheckbox', { name: 'Show deleted messages' }).click()
@@ -76,7 +76,7 @@ test('Edit rewinds, then the correction shows ‹ 2 / 2 › and the original is 
   await composer.fill(fixed)
   await composer.press('Enter')
   const dialog = page.getByRole('dialog', { name: 'Edit and send again?' })
-  await expect(dialog.getByText(/Agents rewound:.*lead −\d+ turns?/)).toBeVisible()
+  await expect(dialog.getByText(/Agents rewound:.*lead −\d+ exchanges?/)).toBeVisible()
   await dialog.getByRole('button', { name: 'Rewind and edit' }).click()
   const corrected = history
     .getByRole('article', { name: /Message from You/ })

@@ -8,7 +8,7 @@ test('a run that asks for approval shows a card in the room and approving it res
   await page.goto('/chat')
   // A direct of its own, so the other Chat specs' room traffic can't interleave with this one.
   await page
-    .getByRole('navigation', { name: 'Conversations' })
+    .getByRole('navigation', { name: 'Rooms' })
     .getByRole('link')
     .filter({ hasText: /^designer/ })
     .first()

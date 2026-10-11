@@ -33,7 +33,7 @@ export function ConversationSearch({ rooms, agents }: { rooms: Room[]; agents: A
       />
       {active && (
         <div className="chat-search-results" aria-live="polite">
-          {search.isError && <p role="alert">Search is not available right now.</p>}
+          {search.isError && <p role="alert">Search isn’t available right now.</p>}
           {search.data?.length === 0 && <p className="chat-list-empty">No messages found.</p>}
           <ul aria-label="Search results">
             {search.data?.map((hit) => (

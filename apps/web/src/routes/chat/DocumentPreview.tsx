@@ -99,7 +99,7 @@ function useText(url: string, enabled: boolean) {
     staleTime: Infinity,
     queryFn: async ({ signal }) => {
       const response = await fetch(url, { credentials: 'same-origin', signal })
-      if (!response.ok) throw new Error('Could not load the file')
+      if (!response.ok) throw new Error('Couldn’t load the file')
       return response.text()
     },
   })
@@ -160,7 +160,7 @@ export function DocumentDialog({ part, onClose }: { part: DocumentPart; onClose:
           <p className="chat-doc-note">This file is too large to preview. Download it instead.</p>
         )}
         {textual && !tooBig && text.isPending && <p role="status">Loading…</p>}
-        {textual && text.isError && <p role="alert">Could not load this file.</p>}
+        {textual && text.isError && <p role="alert">Couldn’t load this file.</p>}
         {textual && text.data !== undefined && <TextPreview kind={kind} text={text.data} />}
       </div>
       <div className="chat-doc-actions">

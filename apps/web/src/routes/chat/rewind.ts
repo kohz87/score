@@ -34,10 +34,10 @@ export async function postRewind(
 
 export const REASON_TEXT: Record<RewindSkipReason, string> = {
   score_only: 'not rewound (hidden in Score only)',
-  compressed: 'its Hermes session was compressed after this message',
-  bridge_unavailable: 'its Hermes gateway is not running or Score’s bridge is not loaded in it',
-  turn_count_mismatch: 'Hermes’s history does not match what Score recorded',
+  compressed: 'its Hermes session was compacted after this message',
+  bridge_unavailable: 'its Hermes gateway isn’t running or Score’s plugin isn’t loaded in it',
+  turn_count_mismatch: 'Hermes’s history doesn’t match what Score recorded',
   no_session: 'Hermes has no session for this room',
   rewind_failed: 'Hermes refused the rewind',
-  no_answer: 'Hermes did not answer in time (it may or may not have been rewound)',
+  no_answer: 'Hermes didn’t answer in time (it may or may not have been rewound)',
 }

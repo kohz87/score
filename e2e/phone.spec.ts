@@ -128,7 +128,7 @@ test.describe('on a phone', () => {
     await pair(page)
     await page.goto('/chat')
     await page
-      .getByRole('navigation', { name: 'Conversations' })
+      .getByRole('navigation', { name: 'Rooms' })
       .getByRole('link', { name: /#activity-feed/ })
       .click({ timeout: 15_000 })
     const composer = page.getByRole('combobox', { name: /^Message/ })

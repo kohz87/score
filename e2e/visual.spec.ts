@@ -284,7 +284,7 @@ for (const width of [1440, 390]) {
   })
   test(`chat delete room dialog at ${width}px`, async ({ page }) => {
     await open(page, destinations[1]!, width)
-    if (width < 1100) await page.getByRole('button', { name: 'Conversations' }).click()
+    if (width < 1100) await page.getByRole('button', { name: 'Rooms' }).click()
     await page.getByRole('button', { name: 'Actions for #activity-feed' }).click()
     await page.getByRole('menuitem', { name: 'Delete room…' }).click()
     const dialog = page.getByRole('dialog', { name: 'Delete #activity-feed?' })

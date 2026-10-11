@@ -9,7 +9,7 @@ test('a silent reply shows the waiting notice next to Stop, and stopping ends it
   await pair(page)
   await page.goto('/chat')
   await page
-    .getByRole('navigation', { name: 'Conversations' })
+    .getByRole('navigation', { name: 'Rooms' })
     .getByRole('link', { name: /#activity-feed/ })
     .click({ timeout: 15_000 })
   const history = page.getByRole('region', { name: 'Message history' })

@@ -31,7 +31,7 @@ export async function say(page: Page, roomId: string, text: string) {
 export async function openRoom(page: Page, label: string) {
   await page.goto('/chat')
   await page
-    .getByRole('navigation', { name: 'Conversations' })
+    .getByRole('navigation', { name: 'Rooms' })
     .getByRole('link', { name: label })
     .click({ timeout: 15_000 })
 }

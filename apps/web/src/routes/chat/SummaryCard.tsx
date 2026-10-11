@@ -34,9 +34,7 @@ export function SummaryCard({
       await action()
       done?.()
     } catch (failure) {
-      setError(
-        failure instanceof ApiError ? failure.message : 'Could not do that. Please try again.',
-      )
+      setError(failure instanceof ApiError ? failure.message : 'Couldn’t do that. Try again.')
     } finally {
       setBusy(false)
     }
