@@ -13,8 +13,7 @@ export function ChannelsTab({ agentId, agentName }: { agentId: string; agentName
       {channels.isPending && <p role="status">Loading channels…</p>}
       {channels.isError && (
         <p role="alert">
-          Could not load channels.{' '}
-          <button onClick={() => void channels.refetch()}>Try again</button>
+          Couldn’t load channels. <button onClick={() => void channels.refetch()}>Try again</button>
         </p>
       )}
       <ul className="team-routine-list">

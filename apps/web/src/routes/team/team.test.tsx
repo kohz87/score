@@ -190,7 +190,7 @@ test('profile shows the header band, tabs and overview cards from the detail', a
   renderTeam('/team/builder')
   expect(await screen.findByRole('heading', { name: 'Builder', level: 1 })).toBeDefined()
   expect(screen.getByText('Builds what Lead plans.')).toBeDefined()
-  expect(screen.getByRole('tablist', { name: "Builder's settings" })).toBeDefined()
+  expect(screen.getByRole('tablist', { name: 'Builder’s settings' })).toBeDefined()
   expect(screen.getAllByRole('tab')).toHaveLength(12)
   expect(screen.getByText('Calm and precise.')).toBeDefined()
   expect(
@@ -255,9 +255,9 @@ test('the glyph popover saves a new color and shape with the CSRF header', async
     }
     return baseline(path, init)
   }
-  fireEvent.click(await screen.findByRole('button', { name: "Change Builder's color and shape" }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Change Builder’s colour and shape' }))
   const dialog = screen.getByRole('dialog', { name: 'Agent appearance' })
-  fireEvent.change(within(dialog).getByLabelText('Color'), { target: { value: '#ff6b8a' } })
+  fireEvent.change(within(dialog).getByLabelText('Colour'), { target: { value: '#ff6b8a' } })
   fireEvent.change(within(dialog).getByLabelText('Shape'), { target: { value: 'star' } })
   fireEvent.click(within(dialog).getByRole('button', { name: 'Save appearance' }))
   await waitFor(() => expect(calls).toHaveLength(1))
@@ -268,7 +268,7 @@ test('the glyph popover saves a new color and shape with the CSRF header', async
   // The server also announces the change; the page follows the stream.
   agentUpdated(source, 1, { ...builder, style: { color: '#ff6b8a', shape: 'star' } })
   expect(document.activeElement).toBe(
-    screen.getByRole('button', { name: "Change Builder's color and shape" }),
+    screen.getByRole('button', { name: 'Change Builder’s colour and shape' }),
   )
 })
 
@@ -279,7 +279,7 @@ test('the glyph popover closes with Escape and reports a failed save', async () 
     init?.method === 'PATCH'
       ? json({ error: { code: 'not_paired', message: 'Pair first' } }, 403)
       : baseline(path, init)
-  const trigger = await screen.findByRole('button', { name: "Change Builder's color and shape" })
+  const trigger = await screen.findByRole('button', { name: 'Change Builder’s colour and shape' })
   fireEvent.click(trigger)
   fireEvent.click(screen.getByRole('button', { name: 'Save appearance' }))
   expect((await screen.findByRole('alert')).textContent).toMatch(/Pair this browser/)
@@ -345,7 +345,7 @@ test('the Routines tab lists routines and pauses, runs and deletes them', async 
   expect(screen.getByText(/Morning digest · Paused/)).toBeDefined()
 
   fireEvent.click(screen.getByRole('button', { name: 'Run Morning digest now' }))
-  expect((await screen.findAllByText(/will run on the next tick/)).length).toBeGreaterThan(0)
+  expect((await screen.findAllByText(/will run shortly/)).length).toBeGreaterThan(0)
   expect(calls.at(-1)).toMatchObject({ method: 'POST', path: '/api/routines/builder%3Aabc123/run' })
 
   fireEvent.click(screen.getByRole('button', { name: 'Delete Morning digest' }))
@@ -1073,7 +1073,7 @@ test('the History tab lists runs with links, filters by outcome, searches and pa
   expect(panel.getByRole('link', { name: /Task: Wire the stream/ }).getAttribute('href')).toBe(
     '/tasks/t-1',
   )
-  expect(panel.getByRole('link', { name: /Brief: Ship it/ }).getAttribute('href')).toBe(
+  expect(panel.getByRole('link', { name: /Run: Ship it/ }).getAttribute('href')).toBe(
     '/now/flow/b-1',
   )
   expect(panel.getByRole('link', { name: 'Replay Run 1 in Watch' }).getAttribute('href')).toBe(
@@ -1154,11 +1154,11 @@ test('the History tab shows Kanban attempts with their status and no replay', as
   fireEvent.click(await screen.findByRole('tab', { name: 'History' }))
   const panel = within(screen.getByRole('tabpanel'))
   expect(await panel.findByText('Changes requested')).toBeDefined()
-  expect(panel.getAllByText('Ended (unknown)').length).toBeGreaterThan(1)
+  expect(panel.getAllByText('Not confirmed as ended').length).toBeGreaterThan(1)
   expect(panel.getByText(/no longer seen since/)).toBeDefined()
   expect(panel.getByText(/Source unclear/)).toBeDefined()
   expect(panel.getByRole('link', { name: /Task: Wire the stream/ })).toBeDefined()
-  expect(panel.getByRole('link', { name: /Open the attempt/ }).getAttribute('href')).toBe(
+  expect(panel.getByRole('link', { name: /Open this run/ }).getAttribute('href')).toBe(
     '/attempts/kr_b',
   )
   expect(panel.queryByRole('link', { name: /Replay/ })).toBeNull()
@@ -1218,7 +1218,7 @@ test('the Plugins tab locks the Score bridge and shows a refused change', async 
     name: 'score-bridge for Builder',
   })) as HTMLButtonElement
   expect(bridge.disabled).toBe(true)
-  expect(screen.getByText(/can't be turned off here/)).toBeDefined()
+  expect(screen.getByText(/can’t be turned off here/)).toBeDefined()
   fireEvent.click(bridge)
   expect(calls.some((call) => call.method === 'PATCH')).toBe(false)
   fireEvent.click(screen.getByRole('switch', { name: 'image-tools for Builder' }))
@@ -1242,7 +1242,7 @@ test("the Overview shows the agent's Hermes todo list with states in words, and 
         })
       : base(path, init)
   renderTeam('/team/builder')
-  const card = await screen.findByRole('region', { name: 'Todo' })
+  const card = await screen.findByRole('region', { name: 'To do' })
   expect(within(card).getByText('1 of 3 done')).toBeDefined()
   expect(within(card).getByText('In progress')).toBeDefined()
   expect(within(card).getByText('Done')).toBeDefined()
@@ -1251,7 +1251,7 @@ test("the Overview shows the agent's Hermes todo list with states in words, and 
   respond = (path, init) => (path === '/api/agents/builder/todos' ? json(null) : base(path, init))
   renderTeam('/team/builder')
   await screen.findByRole('heading', { name: 'Builder', level: 1 })
-  expect(screen.queryByRole('region', { name: 'Todo' })).toBeNull()
+  expect(screen.queryByRole('region', { name: 'To do' })).toBeNull()
 })
 
 test('/team/:agent/workspace?path= opens the Workspace tab on that file', async () => {

@@ -21,7 +21,7 @@ function idempotencyKey() {
 }
 
 function errorText(error: unknown) {
-  return error instanceof ApiError ? error.message : 'The request failed. Please try again.'
+  return error instanceof ApiError ? error.message : 'Couldn’t complete that. Try again.'
 }
 
 // "May I install the pagination dependency?" -> "Approve: install the pagination dependency".
@@ -89,7 +89,7 @@ function Steps({ task }: { task: TaskDetail }) {
         current ? { ...current, steps: before.steps } : current,
       )
       if (caught instanceof ApiError && caught.status === 501) setReadOnly(true)
-      else setError(`Could not save that step. ${errorText(caught)}`)
+      else setError(`Couldn’t save that step. ${errorText(caught)}`)
     } finally {
       setSaving(false)
     }
@@ -305,7 +305,7 @@ function Details({
       <Steps task={task} />
       {task.unresolvedRunLinks && task.unresolvedRunLinks.length > 0 && (
         <section className="task-drawer-section" aria-labelledby="task-earlier-heading">
-          <h3 id="task-earlier-heading">Earlier attempts</h3>
+          <h3 id="task-earlier-heading">Earlier runs</h3>
           <ul className="task-earlier">
             {task.unresolvedRunLinks.map((link) => (
               <li key={link.legacyId} className="task-drawer-muted">
@@ -376,11 +376,11 @@ export function TaskDrawer({
         <div role="alert">
           <p>
             {detail.error instanceof ApiError && detail.error.status === 404
-              ? 'This task no longer exists.'
-              : 'Task details could not load.'}
+              ? 'This task doesn’t exist any more.'
+              : 'Couldn’t load the task details.'}
           </p>
           <button type="button" className="task-filter" onClick={() => void detail.refetch()}>
-            Retry task
+            Try again
           </button>
         </div>
       )}

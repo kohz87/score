@@ -417,7 +417,7 @@ describe('Reports', () => {
     withFlag(true)
     const csv = (await body('/api/reports/export.csv?range=today&tz=UTC')).text
     const rows = csv.trim().split('\r\n')
-    expect(rows.at(-1)).toBe('Unattributed,,2,,,')
+    expect(rows.at(-1)).toBe('Unknown agent,,2,,,')
     expect(rows.some((row) => row.startsWith('Builder,') || row.startsWith('builder,'))).toBe(true)
   })
 })

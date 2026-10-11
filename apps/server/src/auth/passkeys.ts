@@ -72,7 +72,11 @@ export function rpIdForOrigin(origin: string | undefined): string | null {
 }
 
 function fail(): never {
-  throw new HttpError(401, 'passkey_failed', 'Passkey sign-in failed')
+  throw new HttpError(
+    401,
+    'passkey_failed',
+    'Couldn’t sign in with the passkey. Try again or use a pairing link.',
+  )
 }
 
 export class PasskeyService {
@@ -127,7 +131,7 @@ export class PasskeyService {
       throw new HttpError(
         409,
         'passkeys_unavailable',
-        'Passkeys need a domain name (such as the Tailscale address), not an IP address',
+        'Passkeys need a domain name, not an IP address. Open Score at its Tailscale address.',
       )
     return { origin, rpId }
   }
@@ -208,7 +212,12 @@ export class PasskeyService {
       .object({ id: z.string(), response: z.object({ clientDataJSON: z.string() }).loose() })
       .loose()
       .safeParse(input.response)
-    if (!response.success) throw new HttpError(400, 'bad_request', 'Invalid request')
+    if (!response.success)
+      throw new HttpError(
+        400,
+        'bad_request',
+        'Couldn’t read that request. Check what you entered and try again.',
+      )
     const { challenge, entry } = this.take(
       response.data.response.clientDataJSON,
       'register',
@@ -232,7 +241,7 @@ export class PasskeyService {
     if (!verified.verified) return fail()
     const { credential } = verified.registrationInfo
     if (this.row(credential.id))
-      throw new HttpError(409, 'conflict', 'That passkey is already registered')
+      throw new HttpError(409, 'conflict', 'That passkey is already added.')
     const now = this.clock()
     const label = entry.label ?? 'Passkey'
     this.db.sqlite
@@ -297,7 +306,12 @@ export class PasskeyService {
       .object({ id: z.string(), response: z.object({ clientDataJSON: z.string() }).loose() })
       .loose()
       .safeParse(input.response)
-    if (!response.success) throw new HttpError(400, 'bad_request', 'Invalid request')
+    if (!response.success)
+      throw new HttpError(
+        400,
+        'bad_request',
+        'Couldn’t read that request. Check what you entered and try again.',
+      )
     const { challenge, entry } = this.take(
       response.data.response.clientDataJSON,
       'authenticate',

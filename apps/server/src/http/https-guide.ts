@@ -115,10 +115,18 @@ function registerGuideRoutes(
     try {
       pem = readFileSync(join(home, 'tls', 'ca.crt'), 'utf8')
     } catch {
-      throw new HttpError(404, 'not_found', 'No certificate authority yet: run scripts/score tls')
+      throw new HttpError(
+        404,
+        'not_found',
+        'There is no certificate authority yet. Run scripts/score tls first.',
+      )
     }
     if (!pem.includes('BEGIN CERTIFICATE') || pem.includes('PRIVATE KEY'))
-      throw new HttpError(404, 'not_found', 'No certificate authority yet: run scripts/score tls')
+      throw new HttpError(
+        404,
+        'not_found',
+        'There is no certificate authority yet. Run scripts/score tls first.',
+      )
     return reply
       .header('content-disposition', 'attachment; filename="score-ca.crt"')
       .header('x-content-type-options', 'nosniff')

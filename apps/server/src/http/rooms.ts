@@ -155,7 +155,8 @@ export function registerRoomRoutes(
       .filter((agent) => agentAdmits(db.sqlite, agent.id))
   async function validateAgents(ids: string[]) {
     const known = new Set((await agents()).map((agent) => agent.id))
-    if (ids.some((id) => !known.has(id))) throw new HttpError(400, 'bad_request', 'Unknown agent')
+    if (ids.some((id) => !known.has(id)))
+      throw new HttpError(400, 'bad_request', 'Couldn’t find that agent.')
   }
   const refresh = () =>
     ingest.submit({
@@ -279,10 +280,10 @@ export function registerRoomRoutes(
           body.leadAgentId !== undefined &&
           body.leadAgentId !== row.lead_agent_id
         )
-          throw new HttpError(409, 'conflict', 'A direct room belongs to its agent')
+          throw new HttpError(409, 'conflict', 'A direct room belongs to its agent.')
         const name = body.name ?? row.name
         if (sqlite.prepare('SELECT id FROM rooms WHERE name = ? AND id != ?').get(name, roomId))
-          throw new HttpError(409, 'conflict', 'Room name already exists')
+          throw new HttpError(409, 'conflict', 'A room with that name already exists.')
         if (body.projectId) assertProject(sqlite, body.projectId)
         sqlite
           .prepare(
@@ -387,7 +388,7 @@ export function registerRoomRoutes(
   const rewinding = rewindingRooms
   function assertNotRewinding(roomId: string) {
     if (rewinding.has(roomId))
-      throw new HttpError(409, 'conflict', 'This room is being rewound; try again in a moment')
+      throw new HttpError(409, 'conflict', 'This room is being rewound. Try again in a moment.')
   }
   async function rewindPlan(roomId: string, messageId: string) {
     const found = db.read((sqlite) => {
@@ -437,7 +438,7 @@ export function registerRoomRoutes(
     // Repeating a rewind that already happened returns what it did, and never touches Hermes again.
     if (prior) return { version: prior, rewound: prior.rewound, skipped: prior.skipped }
     if (rewinding.has(roomId))
-      throw new HttpError(409, 'conflict', 'This room is already being rewound')
+      throw new HttpError(409, 'conflict', 'This room is already being rewound.')
     rewinding.add(roomId)
     // A command nobody answered may still be claimed by the plugin: the room stays held until it has expired.
     let uncertainUntil: number | null = null
@@ -450,7 +451,7 @@ export function registerRoomRoutes(
             cannot ? [{ agentId: agent.agentId, reason: cannot }] : [],
           )
       if (!body.scoreOnly && skipped.length)
-        throw new HttpError(409, 'rewind_incomplete', 'Some agents cannot be rewound', {
+        throw new HttpError(409, 'rewind_incomplete', 'Some agents can’t be rewound.', {
           skipped,
           rewound: [],
         })
@@ -476,7 +477,7 @@ export function registerRoomRoutes(
           if (result.status === 'skipped' && result.reason === 'no_answer') uncertainUntil = until
           if (result.status !== 'rewound') {
             const reason = result.status === 'skipped' ? result.reason : 'rewind_failed'
-            throw new HttpError(409, 'rewind_incomplete', 'Some agents could not be rewound', {
+            throw new HttpError(409, 'rewind_incomplete', 'Some agents couldn’t be rewound.', {
               skipped: [{ agentId: agent.agentId, reason }],
               rewound,
             })
@@ -561,9 +562,9 @@ export function registerRoomRoutes(
       apply: ({ sqlite, now }) => {
         roomRow(sqlite, roomId)
         const current = visibleSummaries(sqlite, roomId)[0]
-        if (!current) throw new HttpError(404, 'not_found', 'This room has no summary')
+        if (!current) throw new HttpError(404, 'not_found', 'This room has no summary.')
         const text = sanitizeSummaryText(body.text)
-        if (!text) throw new HttpError(400, 'bad_request', 'The summary cannot be empty')
+        if (!text) throw new HttpError(400, 'bad_request', 'The summary can’t be empty.')
         // The person has read it and vouches for it: it is no longer stale.
         parts = [{ kind: 'summary', coversUntil: current.part.coversUntil, text, edited: true }]
         messageId = current.id
@@ -590,7 +591,7 @@ export function registerRoomRoutes(
         apply: ({ sqlite, now }) => {
           roomRow(sqlite, roomId)
           const current = visibleSummaries(sqlite, roomId)[0]
-          if (!current) throw new HttpError(404, 'not_found', 'This room has no summary')
+          if (!current) throw new HttpError(404, 'not_found', 'This room has no summary.')
           return deleteMessage(sqlite, roomId, current.id, now)
         },
       })
@@ -610,7 +611,7 @@ export function registerRoomRoutes(
       .parse(request.params)
     return db.read((sqlite) => {
       const version = versionOfAnchor(sqlite, roomId, anchorId)
-      if (!version) throw new HttpError(404, 'not_found', 'Unknown version')
+      if (!version) throw new HttpError(404, 'not_found', 'Couldn’t find that version.')
       return { version, items: versionMessages(sqlite, version.id) }
     })
   })
@@ -657,9 +658,9 @@ export function registerRoomRoutes(
           )
           .get(messageId, roomId),
       )
-    if (!row) throw new HttpError(404, 'not_found', 'Unknown message')
+    if (!row) throw new HttpError(404, 'not_found', 'Couldn’t find that message.')
     if (row.state !== 'active' || !row.run_id)
-      throw new HttpError(409, 'conflict', 'This reply is not being written right now')
+      throw new HttpError(409, 'conflict', 'This reply isn’t being written right now.')
     await port.stopRun({ agentId: row.agent_id, runId: row.run_id })
     return { ok: true }
   })
@@ -676,7 +677,7 @@ export function registerRoomRoutes(
     const to = [...new Set(body.to ?? original?.to ?? [])]
     const known = (await agents()).map((agent) => agent.id)
     if (to.some((id) => !known.includes(id)))
-      throw new HttpError(400, 'bad_request', 'Unknown agent')
+      throw new HttpError(400, 'bad_request', 'Couldn’t find that agent.')
     const attached = await resolveAttachments(body.attachments ?? [], media, workspaces, known)
     const mediaIds = attached.mediaIds
     const room = db.read((sqlite) => readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at))
@@ -714,7 +715,8 @@ export function registerRoomRoutes(
     }
     if (route.parsed.command?.kind === 'routine') {
       const routine = route.parsed.command
-      if (!known.includes(routine.agentId)) throw new HttpError(400, 'bad_request', 'Unknown agent')
+      if (!known.includes(routine.agentId))
+        throw new HttpError(400, 'bad_request', 'Couldn’t find that agent.')
       const created = await port.createRoutine(
         routine.agentId,
         {

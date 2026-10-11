@@ -197,7 +197,7 @@ export class SignInManager {
 
   private entry(id: string): Entry {
     const entry = this.entries.get(id)
-    if (!entry) throw new HttpError(404, 'not_found', 'Unknown sign-in')
+    if (!entry) throw new HttpError(404, 'not_found', 'Couldn’t find that sign-in.')
     return entry
   }
   private finish(entry: Entry, state: SignIn['state'], message: string | null): void {

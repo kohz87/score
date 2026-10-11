@@ -35,7 +35,7 @@ export function registerAgentRoutes(
 ): void {
   function storage() {
     if (!db || !ingest)
-      throw new HttpError(503, 'hermes_unavailable', 'Agent storage is unavailable')
+      throw new HttpError(503, 'hermes_unavailable', 'Couldn’t read the agent data. Try again.')
     return { db, ingest }
   }
   async function refresh() {
@@ -62,7 +62,7 @@ export function registerAgentRoutes(
   app.get('/api/agents/:agentId', async (request) => {
     const { agentId } = ParamsSchema.parse(request.params)
     const { db, ids } = await refresh()
-    if (!ids.includes(agentId)) throw new HttpError(404, 'not_found', 'Agent not found')
+    if (!ids.includes(agentId)) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     return snapshot(db, (sqlite) => readAgent(sqlite, agentId)).data
   })
   const receipts = requestIdempotency(db, clock)
@@ -76,7 +76,7 @@ export function registerAgentRoutes(
       const { agentId } = ParamsSchema.parse(request.params)
       const patch = StylePatchSchema.parse(request.body)
       const { ids } = await refresh()
-      if (!ids.includes(agentId)) throw new HttpError(404, 'not_found', 'Agent not found')
+      if (!ids.includes(agentId)) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
       const { ingest } = storage()
       let response: z.infer<typeof AgentSummarySchema> | undefined
       await ingest.submit({
@@ -84,7 +84,7 @@ export function registerAgentRoutes(
         identity: randomUUID(),
         apply({ sqlite, now }) {
           const previous = readAgent(sqlite, agentId)
-          if (!previous) throw new HttpError(404, 'not_found', 'Agent not found')
+          if (!previous) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
           const style = AgentStyleSchema.parse({
             ...(readAgentStyle(sqlite, agentId) ?? previous.style),
             ...patch,
@@ -109,9 +109,9 @@ export function registerAgentRoutes(
   async function fileTarget(params: unknown) {
     const { agentId, file: name } = FileParamsSchema.parse(params)
     const file = AgentFileNameSchema.safeParse(name)
-    if (!file.success) throw new HttpError(404, 'not_found', 'File not found')
+    if (!file.success) throw new HttpError(404, 'not_found', 'Couldn’t find that file.')
     const ids = (await port.listAgents()).map((agent) => agent.id)
-    if (!ids.includes(agentId)) throw new HttpError(404, 'not_found', 'Agent not found')
+    if (!ids.includes(agentId)) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     return { agentId, file: file.data }
   }
   app.get('/api/agents/:agentId/files/:file', async (request) => {
@@ -140,10 +140,15 @@ export function registerAgentRoutes(
         result = await port.writeAgentFile(agentId, file, body.content, body.etag)
       } catch (error) {
         if (!(error instanceof AgentFileConflictError)) throw error
-        throw new HttpError(409, 'conflict', 'The file changed since you loaded it', {
-          etag: error.current.etag,
-          diff: unifiedDiff(error.current.content, body.content),
-        })
+        throw new HttpError(
+          409,
+          'conflict',
+          'The file changed after you opened it. Reload it first.',
+          {
+            etag: error.current.etag,
+            diff: unifiedDiff(error.current.content, body.content),
+          },
+        )
       }
       // The personality excerpt / rules entry may have changed: refresh the projection and announce it.
       const detail = z

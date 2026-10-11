@@ -95,7 +95,7 @@ export function registerTeamPauseRoutes(
       throw new HttpError(
         502,
         'hermes_unavailable',
-        'Paused, but some briefs could not hold all their tasks. Try Pause again.',
+        'Paused, but some runs couldn’t hold all their tasks. Try Pause again.',
         { briefIds: failed, taskIds: teamFailed },
       )
     return response(true)
@@ -142,7 +142,7 @@ export function registerTeamPauseRoutes(
       throw new HttpError(
         502,
         'hermes_unavailable',
-        'Resumed, but some briefs could not be fully resumed. Try Resume again.',
+        'Resumed, but some runs couldn’t be fully resumed. Try Resume again.',
         { briefIds: failed, taskIds: teamFailed },
       )
     return response(false)

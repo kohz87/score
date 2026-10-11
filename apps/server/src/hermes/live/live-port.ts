@@ -474,7 +474,7 @@ export class LivePort implements HermesPort {
   private approvalProfile(agentId: string): string {
     const parsed = ProfileNameSchema.safeParse(agentId)
     if (!parsed.success || !this.profiles.profileHome(parsed.data))
-      throw new HttpError(404, 'not_found', 'Agent not found')
+      throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     return parsed.data
   }
   async readApprovals(agentId: string): Promise<ApprovalConfig> {
@@ -538,7 +538,7 @@ export class LivePort implements HermesPort {
     if (req.agentId !== undefined) {
       const parsed = ProfileNameSchema.safeParse(req.agentId)
       if (!parsed.success || !this.profiles.profileHome(parsed.data))
-        throw new HttpError(404, 'not_found', 'Agent not found')
+        throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
       profile = parsed.data
     }
     return saveMessagingValues({
@@ -581,7 +581,7 @@ export class LivePort implements HermesPort {
       throw new HttpError(
         409,
         'not_compatible',
-        'This Hermes build changed in ways Score cannot accept.',
+        'This Hermes build changed in ways Score can’t accept.',
       )
     this.accepted.add({
       id: fingerprint.id,
@@ -607,7 +607,7 @@ export class LivePort implements HermesPort {
   private agentHome(agentId: string): string {
     const parsed = ProfileNameSchema.safeParse(agentId)
     const home = parsed.success ? this.profiles.profileHome(parsed.data) : null
-    if (!home) throw new HttpError(404, 'not_found', 'Agent not found')
+    if (!home) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     return home
   }
   async readAgentFile(agentId: string, file: AgentFileName): Promise<AgentFile> {
@@ -630,7 +630,11 @@ export class LivePort implements HermesPort {
       !this.controller ||
       this.controller.signal.aborted
     )
-      throw new HttpError(503, 'hermes_unavailable', 'Live adapter is not started')
+      throw new HttpError(
+        503,
+        'hermes_unavailable',
+        'Score isn’t connected to Hermes yet. Try again in a moment.',
+      )
     return {
       db: this.db,
       gateway: this.gateway,
@@ -694,7 +698,7 @@ export class LivePort implements HermesPort {
       assertAgentAdmits(this.db!.sqlite, req.agentId)
       assertFeature(this.current, 'score-runs')
       if (!this.current.hermes.servedProfiles.includes(req.agentId))
-        throw new HttpError(503, 'hermes_unavailable', 'Profile is not served')
+        throw new HttpError(503, 'hermes_unavailable', 'This agent’s gateway isn’t running.')
     } catch (error) {
       // Nothing was sent: the orchestrator may conclude "not dispatched" from this.
       throw notDispatched(error)
@@ -724,7 +728,7 @@ export class LivePort implements HermesPort {
           error.status < 500 &&
           ![408, 409, 429].includes(error.status)
         )
-          throw new HttpError(422, error.code, 'Hermes refused this run')
+          throw new HttpError(422, error.code, 'Hermes refused this run.')
         throw error
       })
     this.follow(result.runId)
@@ -735,7 +739,8 @@ export class LivePort implements HermesPort {
     assertNotKanbanAttempt(req.runId)
     const { db, gateway } = this.requireStarted()
     const row = readRun(db.sqlite, req.runId)
-    if (row.profile !== req.agentId) throw new HttpError(404, 'not_found', 'Unknown run')
+    if (row.profile !== req.agentId)
+      throw new HttpError(404, 'not_found', 'Couldn’t find that run.')
     await gateway.stopRun(req.agentId, req.runId, row.credential_generation ?? undefined)
   }
   rewindSession(req: Parameters<HermesPort['rewindSession']>[0]) {
@@ -819,7 +824,7 @@ export class LivePort implements HermesPort {
     await this.refreshTasks()
     return db.read((sqlite) => {
       const task = readProjectedTask(sqlite, id)
-      if (!task) throw new HttpError(404, 'not_found', 'Unknown task')
+      if (!task) throw new HttpError(404, 'not_found', 'Couldn’t find that task.')
       return taskWithApproval(sqlite, task)
     })
   }
@@ -842,7 +847,7 @@ export class LivePort implements HermesPort {
     try {
       await this.tasks!.poll()
     } catch {
-      throw new HttpError(502, 'hermes_unavailable', 'Task data unavailable')
+      throw new HttpError(502, 'hermes_unavailable', 'Couldn’t read the tasks from Hermes.')
     }
   }
   async deliverDecision(

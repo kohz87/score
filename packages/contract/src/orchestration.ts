@@ -55,7 +55,7 @@ export const ORC_CAPABILITY_PLACEHOLDER = '{{SCORE_ORCHESTRATION_CAPABILITY}}'
 
 /** The wording the person must accept to start (both lead and steps; design v2 "Acknowledged unrestricted execution"). */
 export const ORCH_ACKNOWLEDGEMENT_TEXT =
-  "Score controls the work it starts (turns and steps) and can stop those runs; agents may still use other tools and start background work Score can't see or stop."
+  "Score controls the work it starts (exchanges and steps) and can stop those runs; agents may still use other tools and start background work Score can't see or stop."
 
 export const CommandIdSchema = z
   .string()

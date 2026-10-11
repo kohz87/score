@@ -81,11 +81,11 @@ test('both switches start off; writes cannot be turned on before access', async 
 
 test('the token is shown once after creating it, and the command is plain text without it', async () => {
   mount()
-  fireEvent.click(await screen.findByRole('button', { name: 'Create token' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Create key' }))
   expect(await screen.findByText(TOKEN)).toBeDefined()
   const command = screen.getByText(/^hermes --profile builder mcp add score/)
   expect(command.textContent).not.toContain(TOKEN)
-  expect(await screen.findByRole('button', { name: 'Rotate token' })).toBeDefined()
+  expect(await screen.findByRole('button', { name: 'Replace key' })).toBeDefined()
   fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
   await waitFor(() => expect(screen.queryByText(TOKEN)).toBeNull())
 })
@@ -94,7 +94,7 @@ test('without a bridge listener it says so and offers no token or command', asyn
   state = { ...state, available: false, url: null, command: null }
   mount()
   expect(await screen.findByText(/Not available here/)).toBeDefined()
-  expect((screen.getByRole('button', { name: 'Create token' }) as HTMLButtonElement).disabled).toBe(
+  expect((screen.getByRole('button', { name: 'Create key' }) as HTMLButtonElement).disabled).toBe(
     true,
   )
   expect(screen.queryByText(/hermes --profile/)).toBeNull()
@@ -102,12 +102,12 @@ test('without a bridge listener it says so and offers no token or command', asyn
 
 test('first-time setup and rotation are told apart', async () => {
   mount()
-  await screen.findByRole('button', { name: 'Create token' })
+  await screen.findByRole('button', { name: 'Create key' })
   expect(screen.queryByTestId('mcp-rotate-note')).toBeNull()
   expect(screen.getByText(/First-time setup/)).toBeDefined()
-  fireEvent.click(screen.getByRole('button', { name: 'Create token' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Create key' }))
   const note = await screen.findByTestId('mcp-rotate-note')
   expect(note.textContent).toContain('MCP_SCORE_API_KEY')
-  expect(note.textContent).toContain('will not ask for it again')
+  expect(note.textContent).toContain('won’t ask for it again')
   expect(note.textContent).not.toContain(TOKEN)
 })

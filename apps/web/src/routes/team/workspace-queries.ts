@@ -103,7 +103,7 @@ export async function fetchFile(
     throw new ApiError(
       response.status,
       error?.code ?? 'request_failed',
-      error?.message ?? 'The request failed. Please try again.',
+      error?.message ?? 'Couldn’t complete that. Try again.',
     )
   }
   if (type.startsWith('application/json')) {
@@ -154,7 +154,7 @@ export function workspaceFailure(error: unknown, action: string): string {
     if (error.status === 404) return 'That is no longer there.'
     if (error.status === 403) return error.message
   }
-  return `Could not ${action}. Please try again.`
+  return `Couldn’t ${action}. Try again.`
 }
 
 export function useWorkspaceActions(agentId: string) {

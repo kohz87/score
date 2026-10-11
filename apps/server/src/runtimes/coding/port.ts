@@ -29,11 +29,7 @@ const PROFILE_ONLY = new Set([
 ])
 
 const unsupported = () =>
-  new HttpError(
-    409,
-    'unsupported',
-    'Coding agents do not have this (it is a Hermes profile feature)',
-  )
+  new HttpError(409, 'unsupported', 'Coding agents don’t have this: it’s a Hermes feature.')
 
 /**
  * The port the routes see: Hermes's agents plus the coding agents, and turns for a coding agent go to its CLI runtime.
@@ -114,7 +110,7 @@ export function withCodingAgents(port: HermesPort, coding: CodingRuntime): Herme
               throw new HttpError(
                 422,
                 'unsupported',
-                'Coding agents take room work only for now, not Kanban tasks',
+                'Coding agents can only take room work for now, not tasks.',
               )
             return method.apply(target, args)
           }

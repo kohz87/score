@@ -64,8 +64,8 @@ export function WorkspaceTab({
         )}
       </div>
       <p className="team-muted">
-        The folder must already exist. Score never creates it, and refuses your home folder, Hermes,
-        Score and SSH folders.
+        The folder must already exist. Score never creates it, and won’t use your home folder or the
+        Hermes, Score or SSH folders.
       </p>
     </form>
   )
@@ -78,7 +78,7 @@ export function WorkspaceTab({
         <p>
           {info.error instanceof ApiError && info.error.code === 'not_paired'
             ? 'Pair this browser using the link in the server terminal to see the workspace.'
-            : 'Could not load the workspace.'}
+            : 'Couldn’t load the workspace.'}
         </p>
         <button type="button" onClick={() => void info.refetch()}>
           Try again
@@ -391,7 +391,7 @@ function Browser({
               ) : (
                 <>
                   <p>
-                    Delete <strong>{selected.path}</strong>? This cannot be undone.
+                    Delete <strong>{selected.path}</strong>? This can’t be undone.
                   </p>
                   <div className="ws-actions">
                     <button

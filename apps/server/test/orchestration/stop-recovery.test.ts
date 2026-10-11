@@ -140,7 +140,7 @@ test('an interrupted step is unknown: it fences the run (no steps, no new lead t
   expect(status(id)).toBe('paused')
   expect(h.orch.summary(id).pauseReason).toBe('abandonment')
   expect(detail(id).stepsList[0]!.status).toBe('failed')
-  expect(detail(id).stepsList[0]!.disposition).toContain('abandoned')
+  expect(detail(id).stepsList[0]!.disposition).toContain('stopped waiting')
   await h.settle(2000)
   expect(attemptOf(h, id, 'step', 's2')).toHaveLength(0)
   await h.orch.resume(id, { orchestrationRevision: detail(id).revision })

@@ -40,7 +40,7 @@ test.each(['tls'])(
     pairPage(transport)
     const button = await screen.findByRole('button', { name: 'Pair this browser' })
     expect(window.location.hash).toBe('')
-    expect(screen.getByText(/access to every conversation and profile/)).toBeDefined()
+    expect(screen.getByText(/access to every room and agent/)).toBeDefined()
     expect(fetch).not.toHaveBeenCalled()
     fireEvent.click(button)
     fireEvent.click(button)
@@ -183,7 +183,7 @@ test('pairing management stays locked until the security password is entered, th
   const fetch = managementFetch(true)
   vi.stubGlobal('fetch', fetch)
   render(withClient(<RemoteSection />))
-  const terminate = await screen.findByRole('button', { name: 'Terminate Old phone' })
+  const terminate = await screen.findByRole('button', { name: 'End Old phone' })
   expect(terminate.hasAttribute('disabled')).toBe(true)
   expect(screen.getByRole('button', { name: 'Pair another device' }).hasAttribute('disabled')).toBe(
     true,
@@ -191,8 +191,8 @@ test('pairing management stays locked until the security password is entered, th
   fireEvent.change(screen.getByLabelText('Security password'), {
     target: { value: 'correct horse battery' },
   })
-  fireEvent.click(screen.getByRole('button', { name: 'Terminate Old phone' }))
-  await screen.findByText('Pairing terminated.')
+  fireEvent.click(screen.getByRole('button', { name: 'End Old phone' }))
+  await screen.findByText('Pairing ended.')
   const call = fetch.mock.calls.find(([url]) => String(url).endsWith('/revoke'))!
   expect(call[0]).toBe('/api/session/browsers/22222222-2222-4222-8222-222222222222/revoke')
   expect(JSON.parse(String(call[1]!.body))).toEqual({ password: 'correct horse battery' })
@@ -209,7 +209,7 @@ test('a wrong security password says so', async () => {
   fireEvent.change(await screen.findByLabelText('Security password'), {
     target: { value: 'not the password' },
   })
-  fireEvent.click(screen.getByRole('button', { name: 'Terminate all other pairings' }))
+  fireEvent.click(screen.getByRole('button', { name: 'End all other pairings' }))
   expect((await screen.findByRole('alert')).textContent).toBe('That is not the security password.')
 })
 
@@ -220,7 +220,7 @@ test('without a password yet, Settings asks to set one first', async () => {
   render(withClient(<RemoteSection />))
   const form = await screen.findByRole('form', { name: 'Set a security password' })
   expect(screen.getByText('Set a security password to manage pairings.')).toBeTruthy()
-  fireEvent.change(within(form).getByLabelText('New password (8+ characters)'), {
+  fireEvent.change(within(form).getByLabelText('New password (at least 8 characters)'), {
     target: { value: 'correct horse battery' },
   })
   fireEvent.change(within(form).getByLabelText('New password again'), {
@@ -261,7 +261,7 @@ test('the pairing link comes with a QR code that goes away when the link expires
   document.documentElement.setAttribute('data-score-transport', 'tls')
   vi.stubGlobal('fetch', managementFetch(true, false, new Date(Date.now() + 300).toISOString()))
   render(withClient(<RemoteSection />))
-  await screen.findByRole('button', { name: 'Terminate Old phone' })
+  await screen.findByRole('button', { name: 'End Old phone' })
   fireEvent.change(screen.getByLabelText('Security password'), {
     target: { value: 'correct horse battery' },
   })
@@ -296,7 +296,7 @@ test('choosing another address clears the pairing link and QR minted for the pre
     ),
   )
   render(withClient(<RemoteSection />))
-  await screen.findByRole('button', { name: 'Terminate Old phone' })
+  await screen.findByRole('button', { name: 'End Old phone' })
   fireEvent.change(screen.getByLabelText('Security password'), {
     target: { value: 'correct horse battery' },
   })

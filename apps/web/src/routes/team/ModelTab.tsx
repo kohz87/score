@@ -47,7 +47,7 @@ export function ModelTab({ agent }: { agent: AgentDetail }) {
         <p className="team-muted-strong">
           {agent.model.via ? `Through ${agent.model.via}.` : 'Provider unavailable.'}
           {agent.model.fallback
-            ? ` Falls back to ${agent.model.fallback} if it's unavailable.`
+            ? ` Falls back to ${agent.model.fallback} if it’s unavailable.`
             : ' No fallback configured.'}
         </p>
       )}
@@ -89,7 +89,7 @@ export function ModelTab({ agent }: { agent: AgentDetail }) {
       {settings.isPending && <p role="status">Loading fallbacks, aliases and speech models…</p>}
       {settings.isError && (
         <p role="alert">
-          Could not read this agent&apos;s fallback, alias and speech settings from Hermes.
+          Couldn’t read this agent’s fallback, alias and speech settings from Hermes.
         </p>
       )}
       {settings.data && (

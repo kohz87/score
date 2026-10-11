@@ -230,7 +230,7 @@ function onAgentFailure(p: Pass, node: WfNodeRow, reason: string, retryable: boo
   const def = defOf(p, node.node_id)
   if (retryable && node.attempts_used < node.attempts_max) {
     setState(p, node.node_id, 'ready', {
-      reason: `attempt ${node.attempts_used} failed: ${reason}; retrying`,
+      reason: `try ${node.attempts_used} failed: ${reason}; retrying`,
       step_id: null,
     })
     return
@@ -284,7 +284,7 @@ function observe(p: Pass): boolean {
         if (attempt?.state === 'abandoned') {
           // Administrative: never a failed token. The person retries or stops.
           setState(p, node.node_id, 'unresolved', {
-            reason: 'abandoned: not confirmed ended',
+            reason: 'stopped waiting: not confirmed as ended',
             step_id: step.id,
           })
         } else onAgentFailure(p, node, step.disposition ?? 'the step failed', true)

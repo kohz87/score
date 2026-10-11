@@ -53,11 +53,15 @@ export function registerReportRoutes(
   function customDays(q: Query, now: number, tz?: string): CustomDays | undefined {
     if (q.range !== 'custom') {
       if (q.from !== undefined || q.to !== undefined)
-        throw new HttpError(400, 'bad_request', 'from and to only go with range=custom')
+        throw new HttpError(
+          400,
+          'bad_request',
+          'The from and to dates only work with a custom range.',
+        )
       return undefined
     }
     if (q.from === undefined || q.to === undefined)
-      throw new HttpError(400, 'bad_request', 'range=custom needs from and to (YYYY-MM-DD)')
+      throw new HttpError(400, 'bad_request', 'A custom range needs both dates (YYYY-MM-DD).')
     const custom = { from: q.from, to: q.to }
     const problem = customRangeProblem(custom, now, tz)
     if (problem) throw new HttpError(400, 'bad_request', problem)

@@ -270,10 +270,10 @@ export class KnowledgeVault {
         throw error
       }
       if (stat.isSymbolicLink())
-        throw new HttpError(400, 'bad_path', 'Links inside the vault are not followed')
+        throw new HttpError(400, 'bad_path', 'Score doesn’t follow links inside Knowledge.')
       const last = index === segments.length - 1
       if (!last && !stat.isDirectory())
-        throw new HttpError(400, 'bad_path', 'A file is in the way of that folder')
+        throw new HttpError(400, 'bad_path', 'A file is in the way of that folder.')
       if (last) return { abs: current, stat }
     }
     return { abs: current, stat: null }
@@ -291,7 +291,7 @@ export class KnowledgeVault {
   private async assertParent(parent: string): Promise<void> {
     const real = await fs.realpath(parent)
     if (real !== parent)
-      throw new HttpError(400, 'bad_path', 'The folder resolves outside the expected place')
+      throw new HttpError(400, 'bad_path', 'That folder points outside Knowledge.')
   }
 
   /** `expect`: the content hash the target must still have (null = must not exist) right before it is replaced. */
@@ -308,7 +308,7 @@ export class KnowledgeVault {
       if (expect) {
         const now = await this.readContained(abs).then(hashContent, () => null)
         if (now !== expect.hash)
-          throw new HttpError(412, 'precondition_failed', 'The note changed since you opened it', {
+          throw new HttpError(412, 'precondition_failed', 'The note changed after you opened it.', {
             etag: now === null ? null : etagOf(now),
           })
       }
@@ -332,7 +332,7 @@ export class KnowledgeVault {
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code
       if (code === 'EEXIST')
-        throw new HttpError(409, 'exists', 'A file with that name already exists')
+        throw new HttpError(409, 'exists', 'A file with that name already exists.')
       if (code !== 'EPERM' && code !== 'ENOSYS' && code !== 'EOPNOTSUPP') throw error
       if (
         await fs.lstat(dest).then(
@@ -340,7 +340,7 @@ export class KnowledgeVault {
           () => false,
         )
       )
-        throw new HttpError(409, 'exists', 'A file with that name already exists')
+        throw new HttpError(409, 'exists', 'A file with that name already exists.')
       await fs.rename(source, dest)
       return
     }
@@ -363,10 +363,10 @@ export class KnowledgeVault {
       if (process.platform === 'linux') {
         const actual = await fs.realpath(`/proc/self/fd/${handle.fd}`)
         if (actual !== abs)
-          throw new HttpError(400, 'bad_path', 'The note moved while it was being read')
+          throw new HttpError(400, 'bad_path', 'The note moved while it was being read.')
       }
       const tooLarge = () =>
-        new HttpError(413, 'payload_too_large', 'That file is too large to open')
+        new HttpError(413, 'payload_too_large', 'That file is too large to open.')
       if ((await handle.stat()).size > maxBytes) throw tooLarge()
       const chunks: Buffer[] = []
       let total = 0
@@ -385,9 +385,9 @@ export class KnowledgeVault {
   }
 
   private async readRaw(abs: string, stat: Stats): Promise<string> {
-    if (!stat.isFile()) throw new HttpError(400, 'not_a_note', 'That is not a note')
+    if (!stat.isFile()) throw new HttpError(400, 'not_a_note', 'That isn’t a note.')
     if (stat.size > MAX_NOTE_BYTES)
-      throw new HttpError(413, 'payload_too_large', 'That note is too large to open')
+      throw new HttpError(413, 'payload_too_large', 'That note is too large to open.')
     return this.readContained(abs)
   }
 
@@ -491,9 +491,9 @@ export class KnowledgeVault {
     author: KnowledgeAuthor,
   ): Promise<{ hash: string; raw: string; mtimeMs: number }> {
     const { abs, stat } = await this.lookup(rel.split('/'))
-    if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Unknown note')
+    if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Couldn’t find that note.')
     if (stat.size > MAX_NOTE_BYTES)
-      throw new HttpError(413, 'payload_too_large', 'That note is too large to open')
+      throw new HttpError(413, 'payload_too_large', 'That note is too large to open.')
     const raw = await this.readContained(abs)
     const hash = hashContent(raw)
     this.options.db.tx((sqlite) => {
@@ -735,7 +735,7 @@ export class KnowledgeVault {
   async readNote(input: string): Promise<KnowledgeNote> {
     const rel = parseNotePath(input)
     const { abs, stat } = await this.lookup(rel.split('/'))
-    if (!stat) throw new HttpError(404, 'not_found', 'Unknown note')
+    if (!stat) throw new HttpError(404, 'not_found', 'Couldn’t find that note.')
     let raw = await this.readRaw(abs, stat)
     let hash = hashContent(raw)
     let mtimeMs = stat.mtimeMs
@@ -751,7 +751,7 @@ export class KnowledgeVault {
       ;({ raw, hash, mtimeMs } = indexed)
       row = this.options.db.read((sqlite) => this.noteRow(sqlite, rel))
     }
-    if (!row) throw new HttpError(404, 'not_found', 'Unknown note')
+    if (!row) throw new HttpError(404, 'not_found', 'Couldn’t find that note.')
     const parsed = parseNote(raw)
     const { links, backlinks } = this.options.db.read((sqlite) => ({
       links: sqlite
@@ -846,7 +846,7 @@ export class KnowledgeVault {
   async version(input: string, commit: string): Promise<{ commit: string; body: string }> {
     const rel = parseNotePath(input)
     const raw = await this.serial(() => this.git.version(rel, commit))
-    if (raw === null) throw new HttpError(404, 'not_found', 'Unknown version')
+    if (raw === null) throw new HttpError(404, 'not_found', 'Couldn’t find that version.')
     return { commit, body: parseNote(raw).body }
   }
 
@@ -865,7 +865,7 @@ export class KnowledgeVault {
       throw new HttpError(
         503,
         'git_unavailable',
-        'The vault history is not working (git failed), so notes cannot be changed safely. Fix the vault repository and try again.',
+        'Knowledge history isn’t working (git failed), so notes can’t be changed safely. Fix the git repository in the Knowledge folder and try again.',
       )
     }
   }
@@ -913,12 +913,12 @@ export class KnowledgeVault {
         currentHash = hashContent(raw)
       }
       if (request.etag === null && stat)
-        throw new HttpError(409, 'exists', 'A note with that name already exists')
+        throw new HttpError(409, 'exists', 'A note with that name already exists.')
       if (request.etag !== null) {
         if (currentHash === null)
-          throw new HttpError(412, 'precondition_failed', 'The note was removed', { etag: null })
+          throw new HttpError(412, 'precondition_failed', 'The note was removed.', { etag: null })
         if (etagOf(currentHash) !== request.etag)
-          throw new HttpError(412, 'precondition_failed', 'The note changed since you opened it', {
+          throw new HttpError(412, 'precondition_failed', 'The note changed after you opened it.', {
             etag: etagOf(currentHash),
           })
       }
@@ -928,7 +928,7 @@ export class KnowledgeVault {
           ? (current?.prefix ?? '') + request.body
           : serialiseNote(request.body, request.frontmatter)
       if (Buffer.byteLength(content) > MAX_NOTE_BYTES)
-        throw new HttpError(413, 'payload_too_large', 'That note is too large')
+        throw new HttpError(413, 'payload_too_large', 'That note is too large.')
       validateNoteImages(content)
       const hash = hashContent(content)
       if (hash === currentHash) return { etag: etagOf(hash), path: rel }
@@ -954,10 +954,10 @@ export class KnowledgeVault {
     return this.serial(async () => {
       await this.recoverMove()
       const source = await this.lookup(from.split('/'))
-      if (!source.stat?.isFile()) throw new HttpError(404, 'not_found', 'Unknown note')
-      if (from === to) throw new HttpError(409, 'exists', 'A note with that name already exists')
+      if (!source.stat?.isFile()) throw new HttpError(404, 'not_found', 'Couldn’t find that note.')
+      if (from === to) throw new HttpError(409, 'exists', 'A note with that name already exists.')
       const target = await this.lookup(to.split('/'))
-      if (target.stat) throw new HttpError(409, 'exists', 'A note with that name already exists')
+      if (target.stat) throw new HttpError(409, 'exists', 'A note with that name already exists.')
       await this.commitOutside()
       // Notes or links added outside Score since the last scan must take part in the rewrite.
       await this.scan(true)
@@ -987,7 +987,7 @@ export class KnowledgeVault {
           throw new HttpError(
             413,
             'payload_too_large',
-            `Updating the links in ${old} would make that note too large; nothing was moved`,
+            `Updating the links in ${old} would make that note too large. Nothing was moved.`,
           )
         plan.push({ now: old === from ? to : old, content, baseHash: hashContent(raw) })
       }
@@ -1140,10 +1140,10 @@ export class KnowledgeVault {
   async createFolder(input: string): Promise<{ path: string }> {
     const segments = parseVaultPath(input)
     if (segments.some((segment) => segment.startsWith('.')))
-      throw new HttpError(400, 'bad_path', 'Hidden files and folders are not part of the vault')
+      throw new HttpError(400, 'bad_path', 'Hidden files and folders are not part of Knowledge.')
     return this.serial(async () => {
       const { stat } = await this.lookup(segments)
-      if (stat) throw new HttpError(409, 'exists', 'That name already exists')
+      if (stat) throw new HttpError(409, 'exists', 'That name already exists.')
       await this.prepareParent(segments.join('/'))
       await fs.mkdir(path.join(this.root, ...segments))
       await this.publish({ path: segments.join('/'), kind: 'written', to: null, by: 'you' })
@@ -1156,9 +1156,9 @@ export class KnowledgeVault {
     const segments = parseVaultPath(input)
     return this.serial(async () => {
       const { abs, stat } = await this.lookup(segments)
-      if (!stat?.isDirectory()) throw new HttpError(404, 'not_found', 'Unknown folder')
+      if (!stat?.isDirectory()) throw new HttpError(404, 'not_found', 'Couldn’t find that folder.')
       if ((await fs.readdir(abs)).length > 0)
-        throw new HttpError(409, 'not_empty', 'The folder is not empty')
+        throw new HttpError(409, 'not_empty', 'The folder isn’t empty.')
       await fs.rmdir(abs)
       await this.publish({ path: segments.join('/'), kind: 'deleted', to: null, by: 'you' })
     })
@@ -1169,7 +1169,7 @@ export class KnowledgeVault {
     const rel = parseNotePath(input)
     return this.serial(async () => {
       const { abs, stat } = await this.lookup(rel.split('/'))
-      if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Unknown note')
+      if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Couldn’t find that note.')
       await this.commitOutside()
       await fs.unlink(abs)
       await this.commit([rel], `Delete ${rel}`, author)
@@ -1190,11 +1190,11 @@ export class KnowledgeVault {
     const rel = parseNotePath(input)
     return this.serial(async () => {
       const raw = await this.git.version(rel, commit)
-      if (raw === null) throw new HttpError(404, 'not_found', 'Unknown version')
+      if (raw === null) throw new HttpError(404, 'not_found', 'Couldn’t find that version.')
       if (Buffer.byteLength(raw) > MAX_NOTE_BYTES)
-        throw new HttpError(413, 'payload_too_large', 'That version is too large')
+        throw new HttpError(413, 'payload_too_large', 'That version is too large.')
       const { stat } = await this.lookup(rel.split('/'))
-      if (stat && !stat.isFile()) throw new HttpError(400, 'not_a_note', 'That is not a note')
+      if (stat && !stat.isFile()) throw new HttpError(400, 'not_a_note', 'That isn’t a note.')
       await this.commitOutside()
       const abs = await this.prepareParent(rel)
       await this.atomicWrite(abs, raw)

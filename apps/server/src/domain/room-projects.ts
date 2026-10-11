@@ -16,7 +16,7 @@ export function listProjects(sqlite: DatabaseSync): RoomProject[] {
 
 function projectRow(sqlite: DatabaseSync, id: string): RoomProject {
   const row = sqlite.prepare('SELECT id, name, color FROM room_projects WHERE id = ?').get(id)
-  if (!row) throw new HttpError(404, 'not_found', 'Unknown project')
+  if (!row) throw new HttpError(404, 'not_found', 'Couldn’t find that project.')
   return RoomProjectSchema.parse(RowSchema.parse(row))
 }
 
@@ -24,7 +24,7 @@ function assertNameFree(sqlite: DatabaseSync, name: string, exceptId: string | n
   const clash = sqlite
     .prepare('SELECT id FROM room_projects WHERE name = ? COLLATE NOCASE AND id IS NOT ?')
     .get(name, exceptId)
-  if (clash) throw new HttpError(409, 'conflict', 'A project with that name already exists')
+  if (clash) throw new HttpError(409, 'conflict', 'A project with that name already exists.')
 }
 
 export function createProject(

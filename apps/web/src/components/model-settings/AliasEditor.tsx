@@ -34,7 +34,7 @@ export function AliasEditor({ agentId }: { agentId: string }) {
         Chat or search for it in the model picker.
       </p>
       {settings.isPending && <p role="status">Loading aliases…</p>}
-      {settings.isError && <p role="alert">Could not load this agent&apos;s aliases.</p>}
+      {settings.isError && <p role="alert">Couldn’t load this agent’s aliases.</p>}
       {settings.data && aliases.length === 0 && <p className="ms-note">No aliases yet.</p>}
       {aliases.length > 0 && (
         <ul className="ms-list" aria-label="Aliases">
@@ -111,7 +111,7 @@ export function AliasEditor({ agentId }: { agentId: string }) {
           )}
           {taken && (
             <p className="ms-note">
-              That alias exists already; remove it first to point it somewhere else.
+              That alias already exists. Remove it first to point it somewhere else.
             </p>
           )}
           <div className="ms-actions">

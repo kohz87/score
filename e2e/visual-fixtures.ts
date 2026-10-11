@@ -324,7 +324,7 @@ export const visualFixtures: Record<string, unknown> = {
     briefs: 1,
     blocked: null,
   },
-  // Hermes todo lists: none in the pictures (the agent pages and Now would grow a Todo card).
+  // Hermes todo lists: none in the pictures (the agent pages and Now would grow a To do card).
   ...Object.fromEntries(
     ['lead', 'builder', 'reviewer', 'designer'].map((id) => [`/api/agents/${id}/todos`, null]),
   ),

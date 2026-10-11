@@ -75,7 +75,7 @@ export function requestIdempotency(
           throw new HttpError(
             409,
             'idempotency_conflict',
-            'Idempotency key belongs to a different body',
+            'That request was already used with different content.',
           )
         const flight = flights.get(identity)
         if (receipt.status === null && flight) {
@@ -98,7 +98,11 @@ export function requestIdempotency(
         const receipt = ReceiptSchema.parse(value)
         // A crash may leave an uncertain side effect: never rerun a pending receipt.
         if (receipt.status === null || receipt.response === null)
-          throw new HttpError(409, 'idempotency_pending', 'Original request has not completed')
+          throw new HttpError(
+            409,
+            'idempotency_pending',
+            'The first copy of this request is still running.',
+          )
         if (receipt.status === 204) return reply.code(204).send()
         const response = decodeReceipt(receipt.response, maxResponseBytes)
         return reply.code(receipt.status).send(response)

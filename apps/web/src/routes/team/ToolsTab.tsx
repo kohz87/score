@@ -35,7 +35,7 @@ export function ToolsTab({ agent }: { agent: AgentDetail }) {
         ))}
         <KnowledgeToolsRow agent={agent} />
         <li>
-          <span>Helpers they can spawn</span>
+          <span>Helpers they can start</span>
           <strong>{agent.helpersMax === null ? 'Not set' : `Up to ${agent.helpersMax}`}</strong>
         </li>
       </ul>

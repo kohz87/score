@@ -87,15 +87,15 @@ function renderPage() {
 
 test('shows the frozen task read-only, from an earlier copy of the board, with no Watch link', async () => {
   renderPage()
-  await screen.findByRole('heading', { level: 1, name: /Run by an unknown agent/ })
-  expect(screen.getByText(/From an earlier copy of the board/)).toBeTruthy()
+  await screen.findByRole('heading', { level: 1, name: /Task run by an unknown agent/ })
+  expect(screen.getByText(/This run is from an earlier version of the board/)).toBeTruthy()
   const task = screen.getByRole('region', { name: 'Task as last seen' })
   expect(within(task).getByText('Port the importer')).toBeTruthy()
   expect(screen.getByText(/No longer seen since/)).toBeTruthy()
   expect(screen.getByText('Source unclear')).toBeTruthy()
   expect(screen.queryAllByRole('button')).toHaveLength(0)
   expect(screen.queryAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['/tasks'])
-  expect(screen.getByText('Watch').nextSibling?.textContent).toBe('Not recorded')
+  expect(screen.getByText('Replay in Watch').nextSibling?.textContent).toBe('Not recorded')
 })
 
 test('an unknown run says it is not available', async () => {

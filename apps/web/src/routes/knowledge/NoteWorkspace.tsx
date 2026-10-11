@@ -60,7 +60,7 @@ export function NoteWorkspace(props: Props) {
     const missing = note.error instanceof ApiError && note.error.status === 404
     return (
       <div className="kn-empty" role="alert">
-        <h2>{missing ? 'This note does not exist' : 'Could not open this note'}</h2>
+        <h2>{missing ? 'This note doesn’t exist' : 'Couldn’t open this note'}</h2>
         <p className="kn-muted">
           {missing
             ? 'It may have been moved or deleted.'
@@ -430,7 +430,7 @@ function Pane({
         {external?.kind === 'deleted' && (
           <p className="kn-banner is-warn" role="status">
             Deleted by <AuthorLabel author={external.by} agents={agents} />. Your text stays here
-            until you leave; saving it again creates the note anew.
+            until you leave. Save to create the note again.
           </p>
         )}
         {external?.kind === 'moved' && external.to && (
@@ -441,7 +441,7 @@ function Pane({
         )}
         {reloadError && (
           <p role="alert" className="kn-banner is-warn">
-            Could not reload the note.
+            Couldn’t reload the note.
           </p>
         )}
 
@@ -462,7 +462,7 @@ function Pane({
               </button>
             </div>
             {compare === 'loading' && <p role="status">Loading the other version…</p>}
-            {compare === 'removed' && <p>The note was removed. Overwrite recreates it.</p>}
+            {compare === 'removed' && <p>The note was removed. Overwrite creates it again.</p>}
             {compare && typeof compare === 'object' && (
               <DiffView before={compare.body} after={draft} />
             )}

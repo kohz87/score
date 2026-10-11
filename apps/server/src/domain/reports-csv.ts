@@ -30,7 +30,7 @@ export function reportsToCsv(report: Reports, names: Record<string, string>): st
   ])
   // Kanban attempts without a known agent (5.17a-1): counted, never assigned to anybody.
   if (report.unattributed)
-    rows.push(['Unattributed', null, report.unattributed.runs, null, null, null])
+    rows.push(['Unknown agent', null, report.unattributed.runs, null, null, null])
   return (
     [reportCsvColumns, ...rows]
       .map((row) => row.map((cell) => csvCell(cell)).join(','))

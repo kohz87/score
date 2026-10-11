@@ -9,11 +9,13 @@ export function SharesSection() {
       <h2 id="settings-shares">Shares</h2>
       <p>
         Links to frozen, read-only copies of rooms. Anyone with a link who can reach this Score can
-        read its snapshot until it expires or you revoke it. Make one from a room&apos;s menu in{' '}
+        read the copy until it expires or you revoke it. Make one from a room’s menu in{' '}
         <Link to="/chat">Chat</Link>.
       </p>
-      {shares.isError && <p role="alert">Could not load the share links.</p>}
-      {shares.data?.length === 0 && <p className="settings-muted">No share links.</p>}
+      {shares.isError && <p role="alert">Couldn’t load the share links.</p>}
+      {shares.data?.length === 0 && (
+        <p className="settings-muted">No share links yet. Make one from a room’s menu in Chat.</p>
+      )}
       {shares.data && shares.data.length > 0 && (
         <ul className="settings-rows" aria-label="Share links">
           {shares.data.map((share) => (
@@ -40,7 +42,7 @@ export function SharesSection() {
           ))}
         </ul>
       )}
-      {revoke.isError && <p role="alert">Could not revoke that link.</p>}
+      {revoke.isError && <p role="alert">Couldn’t revoke that link.</p>}
     </section>
   )
 }

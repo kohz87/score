@@ -165,7 +165,7 @@ test('loading keeps five labeled columns available', () => {
 
 test('empty board explains that there are no tasks', async () => {
   setup()
-  await screen.findByText('No tasks yet.')
+  await screen.findByText('No tasks yet. Add one with New task.')
   expect(screen.getAllByText('No tasks')).toHaveLength(5)
 })
 
@@ -188,12 +188,12 @@ test('failed task request can be retried', async () => {
       : fetchSnapshot(input, init),
   )
   setup()
-  await screen.findByText('Tasks could not load. Please try again.')
+  await screen.findByText('Couldn’t load tasks. Try again.')
   boardTasks = [task('1')]
   failed = false
-  fireEvent.click(screen.getByRole('button', { name: 'Retry tasks' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
   await screen.findByRole('link', { name: 'T-1: Task 1' })
-  expect(screen.queryByText('Tasks could not load. Please try again.')).toBeNull()
+  expect(screen.queryByText('Couldn’t load tasks. Try again.')).toBeNull()
 })
 
 test('rejects malformed task responses instead of rendering unvalidated data', async () => {
@@ -204,7 +204,7 @@ test('rejects malformed task responses instead of rendering unvalidated data', a
       : fetchSnapshot(input, init),
   )
   setup()
-  await screen.findByText('Tasks could not load. Please try again.')
+  await screen.findByText('Couldn’t load tasks. Try again.')
   expect(screen.queryByRole('link', { name: 'T-1: Task 1' })).toBeNull()
 })
 
@@ -346,7 +346,7 @@ test('deep links open a placeholder even when a task is absent from the filtered
   setup('/tasks/missing')
   expect(screen.getByRole('complementary', { name: 'Task details' })).toBeDefined()
   expect(screen.getByText('missing')).toBeDefined()
-  await screen.findByText('No tasks yet.')
+  await screen.findByText('No tasks yet. Add one with New task.')
 })
 
 test('live upserts add, update and move cards exactly once and ignore older events', async () => {
@@ -400,7 +400,7 @@ test('a stream reset refetch buffers task changes after the snapshot watermark',
 
 test('New task opens the dialog, creates a task, and the live card appears', async () => {
   setup()
-  await screen.findByText('No tasks yet.')
+  await screen.findByText('No tasks yet. Add one with New task.')
   fireEvent.click(screen.getByRole('button', { name: 'New task' }))
   const dialog = await screen.findByRole('dialog', { name: 'New task' })
   const created = {

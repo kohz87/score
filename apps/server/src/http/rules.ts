@@ -61,7 +61,7 @@ export function registerRulesRoutes(
   }
   function storage() {
     if (!db || !ingest)
-      throw new HttpError(503, 'hermes_unavailable', 'Rules storage is unavailable')
+      throw new HttpError(503, 'hermes_unavailable', 'Couldn’t read the rules from Hermes.')
     return { db, ingest }
   }
   // Team-level changes touch every profile: one at a time.
@@ -77,7 +77,7 @@ export function registerRulesRoutes(
   }
   async function assertAgent(agentId: string): Promise<void> {
     if (!(await agentIds()).includes(agentId))
-      throw new HttpError(404, 'not_found', 'Agent not found')
+      throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
   }
   async function actual(agentId: string): Promise<ApprovalConfig | null> {
     return port.readApprovals(agentId).catch(() => null)
@@ -166,9 +166,9 @@ export function registerRulesRoutes(
     const { dryRun } = DryRunQuery.parse(request.query)
     const body = PutRulesRequestSchema.parse(request.body)
     if (!body.goAhead.every(isKnownPatternKey))
-      throw new HttpError(400, 'bad_request', 'Go ahead accepts known command categories only')
+      throw new HttpError(400, 'bad_request', 'Go ahead takes only the listed kinds of command.')
     if (body.goAhead.some((key) => ALWAYS_BLOCKED_KEYS.includes(key)))
-      throw new HttpError(400, 'always_blocked', 'Hermes always blocks this kind of command')
+      throw new HttpError(400, 'always_blocked', 'Hermes always blocks this kind of command.')
     const next: Baseline = {
       mode: body.mode,
       goAhead: [...new Set(body.goAhead)],
@@ -209,7 +209,7 @@ export function registerRulesRoutes(
       const baseline = readBaseline(db.sqlite)
       const failed = await applyBaseline([agentId], baseline.never)
       if (failed.length > 0)
-        throw new HttpError(409, 'conflict', 'Hermes did not accept the team rules')
+        throw new HttpError(409, 'conflict', 'Hermes didn’t accept the team rules.')
       return view()
     })
   })
@@ -222,7 +222,7 @@ export function registerRulesRoutes(
     await assertAgent(agentId)
     const { db, ingest } = storage()
     const notStricter = () =>
-      new HttpError(400, 'not_stricter', 'A single agent can only be made stricter than the team')
+      new HttpError(400, 'not_stricter', 'A single agent can only be made stricter than the team.')
     return serial(async () => {
       let row: { id: string; label: string; level: typeof level; inherited: boolean }
       if (permId.startsWith(NEVER_PREFIX)) {
@@ -246,12 +246,12 @@ export function registerRulesRoutes(
         row = { id: neverId(glob), label: glob, level, inherited: false }
       } else {
         if (!isKnownPatternKey(permId))
-          throw new HttpError(400, 'bad_request', 'Unknown command category')
+          throw new HttpError(400, 'bad_request', 'Couldn’t find that kind of command.')
         if (level === 'never')
           throw new HttpError(
             400,
             'bad_request',
-            'Never applies to command patterns, not categories; add a Never rule instead',
+            'Never takes a command pattern, not a kind of command. Add a Never rule instead.',
           )
         await port.updateApprovals(agentId, (current) => {
           const has = current.allowlist.includes(permId)
@@ -304,9 +304,9 @@ export function registerRulesRoutes(
           throw new HttpError(
             400,
             'not_an_override',
-            'That rule comes from the team, not this agent',
+            'That rule comes from the team, not this agent.',
           )
-        throw new HttpError(404, 'not_found', 'This agent has no such override')
+        throw new HttpError(404, 'not_found', 'This agent has no rule of its own like that.')
       }
       const remaining: AgentOverrides = {
         withoutGoAhead: overrides.withoutGoAhead.filter(
@@ -325,7 +325,7 @@ export function registerRulesRoutes(
           ),
         )
       } catch {
-        throw new HttpError(409, 'conflict', 'Hermes did not accept the change')
+        throw new HttpError(409, 'conflict', 'Hermes didn’t accept the change.')
       }
       // Forgotten only once Hermes holds the baseline-derived config, so a failed write leaves the override.
       await ingest.submit({

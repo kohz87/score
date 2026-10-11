@@ -36,11 +36,19 @@ async function getJson(
     ...(fresh ? { fresh: true } : {}),
   }).catch(() => ({ exitCode: -1 }) as { exitCode: number; stdout?: string })
   if (result.exitCode !== 0 || !result.stdout)
-    throw new HttpError(502, 'hermes_unavailable', 'Approval settings are unavailable')
+    throw new HttpError(
+      502,
+      'hermes_unavailable',
+      'Couldn’t read the approval settings from Hermes.',
+    )
   try {
     return JSON.parse(result.stdout)
   } catch {
-    throw new HttpError(502, 'hermes_unavailable', 'Approval settings are unavailable')
+    throw new HttpError(
+      502,
+      'hermes_unavailable',
+      'Couldn’t read the approval settings from Hermes.',
+    )
   }
 }
 
@@ -57,7 +65,11 @@ export async function readApprovalConfig(
     await getJson(runner, hermesHome, profile, 'approvals', fresh),
   )
   if (!allowlist.success || !approvals.success)
-    throw new HttpError(502, 'hermes_unavailable', 'Approval settings are unreadable')
+    throw new HttpError(
+      502,
+      'hermes_unavailable',
+      'Couldn’t read the approval settings from Hermes.',
+    )
   const mode = approvals.data.mode
   return {
     mode: mode === false ? 'off' : (mode ?? 'smart'),
@@ -77,7 +89,7 @@ export function approvalIo(runner: HermesRunner, hermesHome: string, profile: st
       throw new HttpError(
         result.exitCode < 0 ? 502 : 409,
         result.exitCode < 0 ? 'hermes_unavailable' : 'conflict',
-        'Hermes rejected the change',
+        'Hermes didn’t accept the change.',
       )
   }
   const differs = (a: string[], b: string[]) =>

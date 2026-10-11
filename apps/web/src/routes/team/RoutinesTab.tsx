@@ -7,7 +7,7 @@ import { newId } from '../../data/ids.ts'
 function failure(error: unknown, action: string): string {
   if (error instanceof ApiError && error.code === 'not_paired')
     return `Pair this browser using the link in the server terminal to ${action}.`
-  return `Could not ${action}. Please try again.`
+  return `Couldn’t ${action}. Try again.`
 }
 
 function lastRun(routine: RoutineSummary): string {
@@ -133,8 +133,7 @@ export function RoutinesTab({
       {routines.isPending && <p role="status">Loading routines…</p>}
       {routines.isError && (
         <p role="alert">
-          Could not load routines.{' '}
-          <button onClick={() => void routines.refetch()}>Try again</button>
+          Couldn’t load routines. <button onClick={() => void routines.refetch()}>Try again</button>
         </p>
       )}
       {routines.isSuccess && !items.length && (
@@ -175,7 +174,7 @@ export function RoutinesTab({
                 aria-label={`Run ${routine.title} now`}
                 onClick={() =>
                   run.mutate(routine.id, {
-                    onSuccess: () => setNotice(`“${routine.title}” will run on the next tick.`),
+                    onSuccess: () => setNotice(`“${routine.title}” will run shortly.`),
                   })
                 }
               >

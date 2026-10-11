@@ -193,7 +193,7 @@ function FileEditor({
   if (loaded.isError || !loaded.data)
     return (
       <div role="alert">
-        <p>Could not load {file}.</p>
+        <p>Couldn’t load {file}.</p>
         <button type="button" onClick={() => void loaded.refetch()}>
           Try again
         </button>
@@ -207,7 +207,7 @@ function FileEditor({
         ? 'Pair this browser using the link in the server terminal to save changes.'
         : save.error instanceof ApiError && save.error.status === 413
           ? `${file} is larger than 256 KB.`
-          : 'Could not save. Please try again.'
+          : 'Couldn’t save. Try again.'
       : null
   return (
     <form
@@ -262,7 +262,7 @@ function FileEditor({
           {saved ? `Saved ${file}.` : ''}
         </span>
       </div>
-      {previewMutation.isError && <p role="alert">Could not preview changes. Please try again.</p>}
+      {previewMutation.isError && <p role="alert">Couldn’t preview changes. Try again.</p>}
       {failure && <p role="alert">{failure}</p>}
       {preview !== null && !conflict && (
         <div>

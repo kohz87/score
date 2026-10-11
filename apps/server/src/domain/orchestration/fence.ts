@@ -467,8 +467,13 @@ export class GlobalFenceStore {
   lift(expectedRevision: number, note: string | undefined): void {
     const current = this.db.read((sqlite) => readGlobal(sqlite))
     if (current.revision !== expectedRevision)
-      throw new HttpError(409, 'conflict', 'The fence changed since you looked; reload the list')
-    if (current.fenced !== 1) throw new HttpError(409, 'conflict', 'There is no fence to lift')
+      throw new HttpError(
+        409,
+        'conflict',
+        'The list changed while you were looking. Reload it and try again.',
+      )
+    if (current.fenced !== 1)
+      throw new HttpError(409, 'conflict', 'Nothing is blocked, so there is nothing to unblock.')
     const accepted = this.db
       .read((sqlite) =>
         z
@@ -486,7 +491,7 @@ export class GlobalFenceStore {
       throw new HttpError(
         409,
         'fenced',
-        'The execution journal is unreadable; restore or repair it first',
+        'Score can’t read its record of runs. Restore a backup or repair it first.',
       )
     this.journal.append({
       kind: 'global_fence',

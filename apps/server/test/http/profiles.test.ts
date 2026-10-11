@@ -651,7 +651,7 @@ test('a recorded failure is never confirmable, and an interrupted create that ma
   ).toBe(409)
 })
 
-test('Score refuses to continue an interrupted create when the profile does not exist', async () => {
+test('Score refuses to continue an interrupted create when the profile doesn’t exist', async () => {
   vi.spyOn(port, 'profileStep').mockImplementation(async (step) => {
     if (step === 'create_profile') throw new Error('connection reset before anything happened')
     throw new Error('unreachable')
@@ -665,5 +665,5 @@ test('Score refuses to continue an interrupted create when the profile does not 
     { 'idempotency-key': 'confirm-nothing' },
   )
   expect(response.statusCode).toBe(409)
-  expect(response.json().error.message).toContain('does not exist')
+  expect(response.json().error.message).toContain('doesn’t exist')
 })

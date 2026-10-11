@@ -347,7 +347,7 @@ export class ApprovalOutbox {
           `SELECT d.* FROM approval_deliveries d JOIN approval_delivery_leases l ON l.delivery_id = d.id WHERE d.id = ? AND d.producer_id = ? AND l.lease_id = ?`,
         )
         .get(deliveryId, producerId, ack.leaseId)
-      if (!value) throw new HttpError(404, 'not_found', 'Unknown delivery')
+      if (!value) throw new HttpError(404, 'not_found', 'Couldn’t find that delivery.')
       sqlite.prepare('UPDATE producers SET last_seen_at = ? WHERE id = ?').run(at, producerId)
       const delivery = DeliveryRowSchema.parse(value)
       if (ack.outcome === 'applied') return finishDelivery(sqlite, delivery, 'applied', at)

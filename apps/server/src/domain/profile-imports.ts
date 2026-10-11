@@ -33,7 +33,7 @@ export class ProfileImportStore {
     }
     const info = lstatSync(this.directory)
     if (!info.isDirectory() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0)
-      throw new HttpError(409, 'conflict', 'Score storage must be an owner-only directory.')
+      throw new HttpError(409, 'conflict', 'Score’s home folder must be private to your user.')
   }
   /** Path for a validated upload id; never built from anything else the client sends. */
   pathFor(uploadId: string): string {
@@ -44,7 +44,7 @@ export class ProfileImportStore {
       throw new HttpError(
         413,
         'payload_too_large',
-        'The archive must be between 1 byte and 200 MiB.',
+        'The archive must be between 1 byte and 200 MB.',
       )
     this.ensureDirectory()
     const id = randomUUID()

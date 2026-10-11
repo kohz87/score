@@ -376,7 +376,7 @@ test('a malformed custom date is a message, never an exception', async () => {
   expect(customRangeError('2026-02-30', '2026-03-01', '2026-10-09')).toBe('Pick both days.')
 })
 
-test('an Unattributed row counts attempts with no known agent and says what its time counts', async () => {
+test('an Unknown agent row counts attempts with no known agent and says what its time counts', async () => {
   respond = (path) =>
     path === '/api/agents'
       ? json({ asOfSeq: 0, items: agents })
@@ -385,16 +385,16 @@ test('an Unattributed row counts attempts with no known agent and says what its 
   const table = await screen.findByRole('table', { name: 'By agent' })
   const rows = within(table).getAllByRole('row')
   const last = rows.at(-1)!
-  expect(within(last).getByText('Unattributed')).toBeDefined()
+  expect(within(last).getByText('Unknown agent')).toBeDefined()
   expect(within(last).getByText('3')).toBeDefined()
-  expect(screen.getByText(/counts attempts with proven evidence only/)).toBeDefined()
+  expect(screen.getByText(/counts only the runs Score could confirm/)).toBeDefined()
   expect(screen.getByText(/10 min/)).toBeDefined()
 })
 
-test('without attempts there is no Unattributed row', async () => {
+test('without attempts there is no unknown-agent row', async () => {
   mount()
   const table = await screen.findByRole('table', { name: 'By agent' })
-  expect(within(table).queryByText('Unattributed')).toBeNull()
+  expect(within(table).queryByText('Unknown agent')).toBeNull()
 })
 
 const journey = {

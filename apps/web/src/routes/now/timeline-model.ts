@@ -11,7 +11,7 @@ const PLANNED_DEFAULT = 20 * 60_000
 const VIEWBOX_WIDTH = 1000
 
 /** What screen readers and the hand-off list call the lane of attempts with no known agent. */
-export const UNATTRIBUTED_NAME = 'Unattributed'
+export const UNATTRIBUTED_NAME = 'Unknown agent'
 
 export type TimeWindow = { from: number; to: number; now: number }
 
@@ -183,7 +183,7 @@ export function connectors(
     string,
     { lane: number; layout: BlockLayout; agent: string; chat: boolean; label: string }
   >()
-  // The Unattributed lane (attempts on) is drawn under the agent lanes; hand-offs to or from it have no agent.
+  // The unknown-agent lane (attempts on) is drawn under the agent lanes; hand-offs to or from it have no agent.
   const lanes: { agentId: string; blocks: LaneBlock[] }[] = snapshot.lanes.map((lane) => ({
     agentId: lane.agent.id,
     blocks: lane.blocks,

@@ -57,7 +57,7 @@
     "lead-asks": "A step starts without approval unless the lead asks you. Steps wait until the lead has finished its turn so it can ask first.",
     "none": "Assignments start without approval. Budget uncertainty and agent tool approvals still reach you."
   },
-  "acknowledgementText": "Score controls the work it starts (turns and steps) and can stop those runs; agents may still use other tools and start background work Score can't see or stop.",
+  "acknowledgementText": "Score controls the work it starts (exchanges and steps) and can stop those runs; agents may still use other tools and start background work Score can't see or stop.",
   "defaults": {
     "maxSteps": 12,
     "maxLeadTurns": 20,

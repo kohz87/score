@@ -83,9 +83,7 @@ test('removal needs the password, and says that terminating pairings keeps passk
   )
   vi.stubGlobal('fetch', fetch)
   panel('short')
-  expect(
-    await screen.findByText(/Terminating other pairings does not remove passkeys/),
-  ).toBeDefined()
+  expect(await screen.findByText(/Ending other pairings does not remove passkeys/)).toBeDefined()
   const remove = (await screen.findByRole('button', {
     name: 'Remove passkey Phone',
   })) as HTMLButtonElement

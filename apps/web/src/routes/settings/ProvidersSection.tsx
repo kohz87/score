@@ -120,12 +120,12 @@ export function ProvidersSection({ agents }: { agents: AgentSummary[] }) {
       <div>
         <h2 id="settings-models">Models and keys</h2>
         <p className="settings-muted-strong">
-          Where your agents&apos; thinking comes from, and who uses what.
+          Where your agents’ thinking comes from, and who uses what.
         </p>
       </div>
       {providers.status === 'pending' && <p role="status">Loading providers…</p>}
       {providers.status === 'error' && (
-        <p role="alert">Could not load providers. Check that the Score server is running.</p>
+        <p role="alert">Couldn’t load providers. Check that the Score server is running.</p>
       )}
       <ul className="settings-rows">
         {visible.map((item) => (

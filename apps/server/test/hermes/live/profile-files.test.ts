@@ -102,14 +102,14 @@ test('symlinked files, directories and non-allowlisted names are refused', async
   expect(() => files.read(linkedDir, 'AGENTS.md')).toThrow(/linked/)
   expect(() => files.read(home, '../config.yaml' as never)).toThrow()
   expect(() => files.read(home, 'config.yaml' as never)).toThrow()
-  expect(() => files.read(join(root, 'nope'), 'SOUL.md')).toThrow(/not found/i)
+  expect(() => files.read(join(root, 'nope'), 'SOUL.md')).toThrow(/find this agent/i)
 })
 test('size, NUL and encoding limits', async () => {
   const { etag } = files.read(home, 'SOUL.md')
   await expect(files.write(home, 'SOUL.md', 'x'.repeat(256 * 1024 + 1), etag)).rejects.toThrow(
     /256 KB/,
   )
-  await expect(files.write(home, 'SOUL.md', 'a\0b', etag)).rejects.toThrow(/NUL/)
+  await expect(files.write(home, 'SOUL.md', 'a\0b', etag)).rejects.toThrow(/null bytes/)
   await expect(files.write(home, 'SOUL.md', 'bad\ud800', etag)).rejects.toThrow(/UTF-8/)
   await files.write(home, 'SOUL.md', 'x'.repeat(256 * 1024), etag)
   fs.writeFileSync(join(home, 'AGENTS.md'), Buffer.from([0xff, 0xfe, 0x41]))

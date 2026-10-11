@@ -31,7 +31,7 @@ function authError(error: unknown): string {
     return 'The terminal only works over HTTPS (Score in remote mode with a certificate).'
   if (code === 'fresh_auth_required')
     return 'Confirm your password or passkey again, then open the terminal.'
-  return 'Could not open the terminal. Please try again.'
+  return 'Couldn’t open the terminal. Try again.'
 }
 
 const endings: Record<string, string> = {
@@ -199,7 +199,7 @@ export function TerminalPage() {
         jobs.
       </p>
       {phase === 'auth' && (
-        <form className="terminal-auth" onSubmit={submit} aria-label="Confirm it is you">
+        <form className="terminal-auth" onSubmit={submit} aria-label="Confirm it’s you">
           <label>
             Security password
             <input

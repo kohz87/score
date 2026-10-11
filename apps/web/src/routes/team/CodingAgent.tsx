@@ -227,9 +227,9 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
       }}
     >
       <label>
-        Coding CLI
+        Kind of coding agent
         <select
-          aria-label="Coding CLI"
+          aria-label="Kind of coding agent"
           value={runtime}
           onChange={(event) => {
             const next = event.target.value as CodingRuntime
@@ -339,7 +339,7 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
           contrast="high"
         />
         <label>
-          Color
+          Colour
           <input
             type="color"
             value={style.color}

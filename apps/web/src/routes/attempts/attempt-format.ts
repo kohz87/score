@@ -10,7 +10,7 @@ export const attemptStatusLabel: Record<AttemptStatus, string> = {
   blocked: 'Blocked',
   review_handoff: 'Handed to review',
   changes_requested: 'Changes requested',
-  ended_unknown: 'Ended (unknown)',
+  ended_unknown: 'Not confirmed as ended',
 }
 
 export const evidenceLabel: Record<AttemptSummary['evidence'], string> = {
@@ -22,7 +22,7 @@ export function attemptAgentName(
   attempt: Pick<AttemptSummary, 'agentId'>,
   agents: Pick<AgentSummary, 'id' | 'name'>[] | undefined,
 ): string {
-  if (attempt.agentId === null) return 'Unattributed'
+  if (attempt.agentId === null) return 'Unknown agent'
   return agents?.find((agent) => agent.id === attempt.agentId)?.name ?? attempt.agentId
 }
 

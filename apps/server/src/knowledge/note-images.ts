@@ -51,20 +51,20 @@ export function validateNoteImages(text: string): void {
         415,
         'unsupported_type',
         mime === 'image/svg+xml'
-          ? 'SVG images cannot be embedded in a note'
-          : 'Only PNG, JPEG, GIF and WebP images can be embedded in a note',
+          ? 'SVG images can’t be embedded in a note.'
+          : 'Only PNG, JPEG, GIF and WebP images can be embedded in a note.',
       )
     const payload = match?.[3] ?? ''
     if (match?.[2]?.toLowerCase() !== ';base64')
-      throw new HttpError(400, 'bad_request', 'An embedded image must be base64 encoded')
+      throw new HttpError(400, 'bad_request', 'An embedded image must be base64 encoded.')
     const size = base64Bytes(payload)
     if (size === null)
-      throw new HttpError(400, 'bad_request', 'An embedded image is not valid base64')
+      throw new HttpError(400, 'bad_request', 'An embedded image isn’t valid base64.')
     if (size > KNOWLEDGE_IMAGE_MAX_BYTES)
       throw new HttpError(
         413,
         'payload_too_large',
-        `An embedded image can be at most ${KNOWLEDGE_IMAGE_MAX_BYTES / 1024 / 1024} MiB`,
+        `An embedded image can be at most ${KNOWLEDGE_IMAGE_MAX_BYTES / 1024 / 1024} MB`,
       )
     // The first bytes are enough to check the magic number; decode a short prefix only.
     const head = Buffer.from(payload.slice(0, 64), 'base64')
@@ -72,7 +72,7 @@ export function validateNoteImages(text: string): void {
       throw new HttpError(
         415,
         'unsupported_type',
-        'An embedded image does not match its declared type',
+        'An embedded image doesn’t match its declared type.',
       )
   }
 }

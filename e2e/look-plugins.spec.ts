@@ -13,7 +13,7 @@ test('Team › agent › Plugins: toggles per agent, the bridge is locked; Setti
   let panel = await open('designer')
   const bridge = panel.getByRole('switch', { name: 'score-bridge for designer' })
   await expect(bridge).toBeDisabled()
-  await expect(panel.getByText(/can't be turned off here/)).toBeVisible()
+  await expect(panel.getByText(/can’t be turned off here/)).toBeVisible()
 
   const notes = panel.getByRole('switch', { name: 'memory-notes for designer' })
   await expect(notes).toHaveAttribute('aria-checked', 'true')

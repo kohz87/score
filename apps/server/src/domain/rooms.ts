@@ -84,7 +84,7 @@ function importedFrom(
 
 export function roomRow(sqlite: DatabaseSync, id: string) {
   const row = sqlite.prepare('SELECT * FROM rooms WHERE id = ?').get(id)
-  if (!row) throw new HttpError(404, 'not_found', 'Unknown room')
+  if (!row) throw new HttpError(404, 'not_found', 'Couldn’t find that room.')
   return RoomRowSchema.parse(row)
 }
 
@@ -147,7 +147,7 @@ export function insertRoom(
   now: string,
 ): void {
   if (sqlite.prepare('SELECT id FROM rooms WHERE name = ?').get(room.name))
-    throw new HttpError(409, 'conflict', 'Room name already exists')
+    throw new HttpError(409, 'conflict', 'A room with that name already exists.')
   sqlite
     .prepare(
       `INSERT INTO rooms (id, name, kind, lead_agent_id, members, created_at, updated_at, imported_from)
@@ -294,10 +294,10 @@ export function deleteMessage(
         .prepare('SELECT streaming, deleted_at FROM messages WHERE id = ? AND room_id = ?')
         .get(messageId, roomId),
     )
-  if (!row) throw new HttpError(404, 'not_found', 'Unknown message')
+  if (!row) throw new HttpError(404, 'not_found', 'Couldn’t find that message.')
   if (row.deleted_at !== null) return []
   if (row.streaming === 1)
-    throw new HttpError(409, 'conflict', 'This message is still being written')
+    throw new HttpError(409, 'conflict', 'This message is still being written.')
   // Same rule as an edit: a reply that is being written blocks the delete, replies still queued are cancelled.
   const answering = sqlite
     .prepare(
@@ -306,7 +306,7 @@ export function deleteMessage(
     )
     .get(messageId, messageId)
   if (answering)
-    throw new HttpError(409, 'conflict', 'An agent is still answering this message; stop it first')
+    throw new HttpError(409, 'conflict', 'An agent is still answering this message. Stop it first.')
   const before = readRoom(sqlite, roomId, roomRow(sqlite, roomId).updated_at)
   sqlite
     .prepare(
@@ -340,7 +340,11 @@ export function decodeMessageCursor(value: string, roomId: string) {
     if (cursor.roomId !== roomId) throw new Error('Wrong room')
     return cursor
   } catch {
-    throw new HttpError(400, 'bad_request', 'Invalid message cursor')
+    throw new HttpError(
+      400,
+      'bad_request',
+      'Couldn’t continue the messages from there. Reload and try again.',
+    )
   }
 }
 

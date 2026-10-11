@@ -62,7 +62,7 @@ export function registerCodingAgentRoutes(
     request: { headers: { cookie?: string | undefined } },
     password: string | undefined,
   ): Promise<void> {
-    if (!security) throw new HttpError(501, 'unsupported', 'Full access is not available here')
+    if (!security) throw new HttpError(501, 'unsupported', 'Full access isn’t available here.')
     await security.verify(password, sessionKey(request.headers.cookie))
   }
 
@@ -87,7 +87,7 @@ export function registerCodingAgentRoutes(
       throw new HttpError(
         422,
         'permission_unverified',
-        `${driver.label} is not verified for ${permission} access yet`,
+        `${driver.label} is not verified for ${permission} access yet.`,
       )
   }
 
@@ -112,15 +112,15 @@ export function registerCodingAgentRoutes(
       getCodingAgent(db.sqlite, body.id, true) !== null ||
       (await port.listAgents()).some((agent) => agent.id === body.id)
     if (taken || body.id === 'default')
-      throw new HttpError(409, 'conflict', 'An agent with this id already exists')
+      throw new HttpError(409, 'conflict', 'An agent with this ID already exists.')
     const cli = await coding.locator.detect(driver)
     if (cli.state === 'not_supported' || cli.state === 'not_installed')
-      throw new HttpError(422, 'cli_not_installed', cli.message ?? 'The CLI is not available')
+      throw new HttpError(422, 'cli_not_installed', cli.message ?? 'The CLI isn’t available.')
     if (driver.requiresReadAck(body.permission) && body.acknowledgeReads !== true)
       throw new HttpError(
         400,
         'acknowledgement_required',
-        `A ${driver.label} agent can read every file your user can (secrets outside its workspace too); confirm that to add it`,
+        `A ${driver.label} agent can read every file your user can including secrets outside its workspace. Confirm that to add it.`,
       )
     assertVerified(driver, body.permission)
     if (body.permission === 'full') await requirePassword(request, body.password)
@@ -148,7 +148,7 @@ export function registerCodingAgentRoutes(
     const { agentId } = Params.parse(request.params)
     const body = CodingAgentPatchSchema.parse(request.body)
     const agent = getCodingAgent(db.sqlite, agentId)
-    if (!agent) throw new HttpError(404, 'not_found', 'Unknown coding agent')
+    if (!agent) throw new HttpError(404, 'not_found', 'Couldn’t find that coding agent.')
     if (body.permission && body.permission !== agent.permission)
       assertVerified(driverFor(agent.runtime), body.permission)
     // Raising the access level is the sensitive change; lowering it never needs the password.
@@ -177,12 +177,12 @@ export function registerCodingAgentRoutes(
     const { agentId } = Params.parse(request.params)
     const body = CodingVersionConfirmSchema.parse(request.body)
     const agent = getCodingAgent(db.sqlite, agentId)
-    if (!agent) throw new HttpError(404, 'not_found', 'Unknown coding agent')
+    if (!agent) throw new HttpError(404, 'not_found', 'Couldn’t find that coding agent.')
     coding.locator.invalidate()
     const cli = await coding.locator.detect(driverFor(agent.runtime))
     // Only the version Score sees right now can be confirmed: a stale page can't bless a CLI that has since changed.
     if (cli.version === null || cli.version !== body.version)
-      throw new HttpError(409, 'conflict', 'The installed version is not the one you confirmed')
+      throw new HttpError(409, 'conflict', 'The installed version isn’t the one you confirmed.')
     db.tx((sqlite) => updateCodingAgent(sqlite, agentId, { confirmedVersion: body.version }))
     await publish(agentId)
     return CodingAgentSchema.parse(await coding.view(getCodingAgent(db.sqlite, agentId)!))
@@ -191,13 +191,13 @@ export function registerCodingAgentRoutes(
   app.delete('/api/coding-agents/:agentId', guard, async (request, reply) => {
     const { agentId } = Params.parse(request.params)
     if (!getCodingAgent(db.sqlite, agentId))
-      throw new HttpError(404, 'not_found', 'Unknown coding agent')
+      throw new HttpError(404, 'not_found', 'Couldn’t find that coding agent.')
     const busy = db.sqlite
       .prepare(
         "SELECT 1 FROM runs WHERE profile = ? AND status IN ('queued','running','waiting_for_approval') LIMIT 1",
       )
       .get(agentId)
-    if (busy) throw new HttpError(409, 'conflict', 'Stop this agent’s running turn first')
+    if (busy) throw new HttpError(409, 'conflict', 'Stop what this agent is doing first.')
     db.tx((sqlite) => removeCodingAgent(sqlite, agentId, new Date(clock()).toISOString()))
     // Gone from Team and Reports (their lists read the projection); browsers hear it as a removed agent.
     await ingest.submit({

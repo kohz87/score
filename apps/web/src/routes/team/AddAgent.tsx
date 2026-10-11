@@ -142,7 +142,7 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
           <ProfileOperation operation={operation} />
           {status.isError && (
             <p role="alert">
-              Could not refresh progress.{' '}
+              Couldn’t refresh progress.{' '}
               <button onClick={() => void status.refetch()}>Try again</button>
             </p>
           )}
@@ -162,18 +162,19 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
           }}
         >
           <label>
-            Profile name
+            Agent name
             <input
               autoFocus
               required
               pattern="[a-z0-9][a-z0-9_-]{0,63}"
+              title="Lowercase letters, digits, - and _"
               maxLength={64}
               value={input.id}
               onChange={(event) => change({ id: event.target.value, name: event.target.value })}
             />
           </label>
           <label>
-            Role / description
+            Role or description
             <textarea
               required
               maxLength={2000}
@@ -219,7 +220,7 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
               contrast="high"
             />
             <label>
-              Color
+              Colour
               <input
                 type="color"
                 value={input.style.color}
@@ -279,7 +280,7 @@ function AddAgentDialog({ agents, close }: { agents: AgentSummary[]; close: () =
                       checked={confirmed}
                       onChange={(event) => setConfirmed(event.target.checked)}
                     />
-                    I confirm the inherited data and capabilities.
+                    I’ve checked what this agent inherits.
                   </label>
                 </>
               )}

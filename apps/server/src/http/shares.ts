@@ -60,7 +60,7 @@ export function registerShareRoutes(
   app.post('/api/rooms/:roomId/shares', guard, async (request) => {
     const { roomId } = RoomParams.parse(request.params)
     const body = ShareCreateRequestSchema.parse(request.body)
-    if (!security) throw new HttpError(501, 'unsupported', 'Share links are not available here')
+    if (!security) throw new HttpError(501, 'unsupported', 'Share links aren’t available here.')
     await security.verify(body.password, sessionKey(request.headers.cookie))
     db.read((sqlite) => roomRow(sqlite, roomId))
     const agents = await port.listAgents().catch(() => [])
@@ -96,7 +96,7 @@ export function registerShareRoutes(
   app.delete('/api/shares/:id', guard, async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1).max(200) }).parse(request.params)
     if (!db.tx((sqlite) => revokeShare(sqlite, id, now())))
-      throw new HttpError(404, 'not_found', 'Unknown share')
+      throw new HttpError(404, 'not_found', 'Couldn’t find that share link.')
     return reply.code(204).send()
   })
 

@@ -271,9 +271,9 @@ test('a failed detail request can be retried', async () => {
       ? json({ error: { code: 'unavailable', message: 'Unavailable' } }, 503)
       : undefined
   setup()
-  await screen.findByText('Task details could not load.')
+  await screen.findByText('Couldn’t load the task details.')
   fail = false
-  fireEvent.click(screen.getByRole('button', { name: 'Retry task' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
   await screen.findByRole('heading', { name: 'Event stream for the feed' })
 })
 
@@ -308,7 +308,7 @@ test('a failed step save reverts the checkbox and says so', async () => {
     name: 'Reconnect from the cursor',
   })) as HTMLInputElement
   fireEvent.click(box)
-  await screen.findByText(/Could not save that step\. Hermes is offline/)
+  await screen.findByText(/Couldn’t save that step\. Hermes is offline/)
   expect(box.checked).toBe(false)
   expect(box.disabled).toBe(false)
 })

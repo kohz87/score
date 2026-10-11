@@ -35,14 +35,14 @@ export function createAgentWorkspaces(
       return {
         root: null,
         available: false,
-        reason: `This agent works on a remote terminal (${backend.replace(/[^\w.-]/g, '').slice(0, 40)}), so its files are not on this machine`,
+        reason: `This agent works on a remote terminal (${backend.replace(/[^\w.-]/g, '').slice(0, 40)}), so its files aren’t on this machine.`,
         cwd,
       }
     if (cwd === null || cwd.trim() === '' || cwd.trim() === '.')
       return {
         root: null,
         available: false,
-        reason: 'No working folder is set for this agent',
+        reason: 'No workspace folder is set for this agent.',
         cwd,
       }
     const checked = await checkRoot(cwd, policy)
@@ -60,7 +60,7 @@ export function createAgentWorkspaces(
       throw new HttpError(
         409,
         'workspace_unavailable',
-        state.reason ?? 'The workspace is unavailable',
+        state.reason ?? 'The workspace is unavailable.',
       )
     checkResolved?.(state.root)
     return Workspace.open(state.root, policy, onWrite)

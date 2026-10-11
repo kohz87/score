@@ -17,9 +17,9 @@ function failure(error: unknown): string {
     if (error.status === 409 && error.code === 'conflict')
       return 'Hermes changed after it was checked. Check it again.'
     if (error.status === 409)
-      return 'This version changed in ways Score cannot accept, so approvals stay paused.'
+      return 'This version changed in ways Score can’t accept, so approvals stay paused.'
   }
-  return 'Could not complete the check. Please try again.'
+  return 'Couldn’t complete the check. Try again.'
 }
 
 export function HermesVersionBanner() {
@@ -82,8 +82,8 @@ export function HermesVersionBanner() {
             </p>
           ) : (
             <p role="status">
-              Approvals stay paused. Changed: {changedNames}. Score cannot accept this version until
-              it is updated for it.
+              Approvals stay paused. Changed: {changedNames}. Score can’t accept this version until
+              Score is updated for it.
             </p>
           )}
           <div className="settings-actions">

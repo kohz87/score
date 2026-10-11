@@ -180,7 +180,7 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
     owners.push({
       key: ' unattributed',
       name: UNATTRIBUTED_NAME,
-      role: 'No known agent',
+      role: 'Task runs Score can’t tie to an agent',
       agent: null,
       blocks: snapshot.unattributed.blocks,
     })

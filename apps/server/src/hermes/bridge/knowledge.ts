@@ -34,7 +34,7 @@ export function registerBridgeKnowledgeRoutes(
       throw new HttpError(
         403,
         'observe_only',
-        'This agent is observe-only (its isolation is unknown): it cannot change notes',
+        'This agent is read-only: Score can’t tell how isolated it is, so it can’t change notes.',
       )
     return producer.profile
   }

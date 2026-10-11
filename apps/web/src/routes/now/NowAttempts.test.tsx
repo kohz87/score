@@ -121,7 +121,7 @@ function renderNow() {
   )
 }
 
-test('draws an Unattributed lane under the agents with a neutral glyph and no Watch link', async () => {
+test('draws an unknown-agent lane under the agents with a neutral glyph and no Watch link', async () => {
   current = snapshot({
     unattributed: {
       blocks: [attemptBlock({ id: 'attempt:kr_a', label: 'Mystery job', attemptId: 'kr_a' })],
@@ -129,14 +129,18 @@ test('draws an Unattributed lane under the agents with a neutral glyph and no Wa
   })
   renderNow()
   const timeline = await screen.findByRole('region', { name: /^Score:/ })
-  const lane = within(timeline).getByRole('group', { name: 'Unattributed, No known agent' })
-  expect(within(lane).getByRole('button', { name: /Unattributed: Mystery job, done/ })).toBeTruthy()
-  expect(within(timeline).getByRole('img', { name: 'Unattributed' })).toBeTruthy()
-  expect(within(timeline).getByText('Unattributed').closest('a')).toBeNull()
+  const lane = within(timeline).getByRole('group', {
+    name: 'Unknown agent, Task runs Score can’t tie to an agent',
+  })
+  expect(
+    within(lane).getByRole('button', { name: /Unknown agent: Mystery job, done/ }),
+  ).toBeTruthy()
+  expect(within(timeline).getByRole('img', { name: 'Unknown agent' })).toBeTruthy()
+  expect(within(timeline).getByText('Unknown agent').closest('a')).toBeNull()
   const groups = within(timeline).getAllByRole('group')
   expect(groups.map((group) => group.getAttribute('aria-label'))).toEqual([
     'builder, builder role',
-    'Unattributed, No known agent',
+    'Unknown agent, Task runs Score can’t tie to an agent',
   ])
 })
 
@@ -198,7 +202,7 @@ test('partial provenance says so, and blocks sort by order, not by id', async ()
   expect(buttons[1]!.getAttribute('title')).toMatch(/source unclear/)
 })
 
-test('a hand-off to the Unattributed lane is listed', async () => {
+test('a hand-off to the unknown-agent lane is listed', async () => {
   current = snapshot({
     lanes: [
       {
@@ -220,7 +224,7 @@ test('a hand-off to the Unattributed lane is listed', async () => {
     ],
   })
   renderNow()
-  expect(await screen.findByText('Hand-off: builder (Mine) to Unattributed (Theirs)')).toBeTruthy()
+  expect(await screen.findByText('Hand-off: builder (Mine) to Unknown agent (Theirs)')).toBeTruthy()
 })
 
 test('a block of an earlier copy of the board opens its attempt page', async () => {

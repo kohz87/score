@@ -55,16 +55,16 @@ export function isGitName(name: string): boolean {
  */
 export function parseRelativePath(input: string): string[] {
   if (input.length > MAX_PATH_CHARS)
-    throw new WorkspaceError(400, 'bad_path', 'The path is too long')
-  if (input.includes('\0')) throw new WorkspaceError(400, 'bad_path', 'The path is invalid')
+    throw new WorkspaceError(400, 'bad_path', 'The path is too long.')
+  if (input.includes('\0')) throw new WorkspaceError(400, 'bad_path', 'The path is invalid.')
   if (input.startsWith('/') || input.startsWith('\\') || /^[A-Za-z]:/.test(input))
-    throw new WorkspaceError(400, 'bad_path', 'The path must be relative to the workspace')
+    throw new WorkspaceError(400, 'bad_path', 'The path must be relative to the workspace folder.')
   const segments: string[] = []
   for (const segment of input.split('/')) {
     if (segment === '' || segment === '.') continue
-    if (segment === '..') throw new WorkspaceError(400, 'bad_path', 'The path may not contain ..')
+    if (segment === '..') throw new WorkspaceError(400, 'bad_path', 'The path can’t contain “..”.')
     if (Buffer.byteLength(segment) > MAX_NAME_BYTES)
-      throw new WorkspaceError(400, 'bad_path', 'A path segment is too long')
+      throw new WorkspaceError(400, 'bad_path', 'A path segment is too long.')
     segments.push(segment)
   }
   return segments
@@ -80,7 +80,7 @@ export function validateEntryName(name: string): void {
     name.includes('\0') ||
     Buffer.byteLength(name) > MAX_NAME_BYTES
   )
-    throw new WorkspaceError(400, 'bad_path', 'The name is invalid')
+    throw new WorkspaceError(400, 'bad_path', 'The name is invalid.')
 }
 
 export type PathUse = 'list' | 'read' | 'mutate'
@@ -94,9 +94,9 @@ export function assertAllowedSegments(segments: readonly string[], use: PathUse)
   segments.forEach((segment, index) => {
     const last = index === segments.length - 1
     if (isBlockedName(segment))
-      throw new WorkspaceError(403, 'blocked', 'That path is not available')
+      throw new WorkspaceError(403, 'blocked', 'That path isn’t available.')
     if (isGitName(segment) && (!last || use === 'mutate'))
-      throw new WorkspaceError(403, 'blocked', 'That path is not available')
+      throw new WorkspaceError(403, 'blocked', 'That path isn’t available.')
   })
 }
 
@@ -158,19 +158,19 @@ export type RootCheck = { ok: true; real: string } | { ok: false; reason: string
  */
 export async function checkRoot(candidate: string, policy: RootPolicy): Promise<RootCheck> {
   const expanded = expandHome(candidate.trim(), policy.home)
-  if (expanded === '' || expanded.includes('\0')) return { ok: false, reason: 'No folder is set' }
+  if (expanded === '' || expanded.includes('\0')) return { ok: false, reason: 'No folder is set.' }
   if (!path.isAbsolute(expanded))
-    return { ok: false, reason: 'The folder is not an absolute path (set a full path)' }
+    return { ok: false, reason: 'Use a full path, starting with / or ~.' }
   const lexical = path.resolve(expanded)
   let real: string
   try {
     const stat = await fs.stat(lexical)
-    if (!stat.isDirectory()) return { ok: false, reason: 'The folder is not a directory' }
+    if (!stat.isDirectory()) return { ok: false, reason: 'That path is a file, not a folder.' }
     if (typeof process.getuid === 'function' && stat.uid !== process.getuid())
-      return { ok: false, reason: 'The folder belongs to another user' }
+      return { ok: false, reason: 'That folder belongs to another user.' }
     real = await fs.realpath(lexical)
   } catch {
-    return { ok: false, reason: 'The folder does not exist on this machine' }
+    return { ok: false, reason: 'That folder doesn’t exist on this machine.' }
   }
   const home = await realOrSelf(path.resolve(policy.home))
   for (const form of new Set([lexical, real])) {
@@ -178,18 +178,21 @@ export async function checkRoot(candidate: string, policy: RootPolicy): Promise<
     if (form.split(path.sep).some((part) => isGitName(part) || isBlockedName(part)))
       return {
         ok: false,
-        reason: 'A folder inside .git or a credential folder cannot be a workspace',
+        reason: 'A folder inside .git or a credential folder can’t be a workspace.',
       }
     if (form === path.parse(form).root)
-      return { ok: false, reason: 'The whole file system cannot be a workspace' }
+      return { ok: false, reason: 'The whole file system can’t be a workspace.' }
     for (const homeForm of new Set([path.resolve(policy.home), home]))
       if (isInside(form, homeForm))
-        return { ok: false, reason: 'The home folder (or a parent of it) cannot be a workspace' }
+        return {
+          ok: false,
+          reason: 'The home folder (or a folder that contains it) can’t be a workspace.',
+        }
     for (const blocked of await forbiddenForms(policy))
       if (isInside(blocked, form) || isInside(form, blocked))
         return {
           ok: false,
-          reason: 'That folder holds agent-runtime, Score or SSH data and cannot be a workspace',
+          reason: 'That folder holds Hermes, Score or SSH data and can’t be a workspace.',
         }
   }
   return { ok: true, real }

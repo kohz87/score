@@ -16,7 +16,7 @@ async function createNote(page: Page, name: string, text: string) {
   // The button, not Ctrl+N: the shortcut is registered only once the lazily loaded page has mounted.
   await page.getByRole('button', { name: 'New note' }).click({ timeout: 15_000 })
   const dialog = page.getByRole('dialog', { name: 'New note' })
-  await dialog.getByLabel('Path in the vault').fill(name)
+  await dialog.getByLabel('Path in Knowledge').fill(name)
   await dialog.getByRole('button', { name: 'Create note' }).click()
   const path = `${name}.md`
   await expect(page).toHaveURL(

@@ -82,7 +82,7 @@ export function registerKnowledgeRoutes(
       const rel = parseNotePath(target)
       const abs = path.join(vault.vault, ...rel.split('/'))
       const stat = await fs.lstat(abs).catch(() => null)
-      if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Unknown note')
+      if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Couldn’t find that note.')
       const bytes = await vault.readContainedBuffer(abs)
       return reply
         .header('Content-Type', 'text/markdown; charset=utf-8')
@@ -98,7 +98,8 @@ export function registerKnowledgeRoutes(
     if (history) return KnowledgeHistorySchema.parse({ items: await vault.history(history[1]!) })
     const version = /^(.+)\/versions\/([^/]+)$/.exec(target)
     if (version) {
-      if (!COMMIT.test(version[2]!)) throw new HttpError(400, 'bad_request', 'Invalid commit')
+      if (!COMMIT.test(version[2]!))
+        throw new HttpError(400, 'bad_request', 'That isn’t a valid version.')
       return KnowledgeVersionSchema.parse(await vault.version(version[1]!, version[2]!))
     }
     return KnowledgeNoteSchema.parse(await vault.readNote(target))
@@ -108,14 +109,14 @@ export function registerKnowledgeRoutes(
     // The schema's own length cap would answer 400; the contract says 413 for an oversized note.
     const raw = request.body as { body?: unknown } | null
     if (typeof raw?.body === 'string' && raw.body.length > MAX_NOTE_BYTES)
-      throw new HttpError(413, 'payload_too_large', 'That note is too large')
+      throw new HttpError(413, 'payload_too_large', 'That note is too large.')
     const body = KnowledgeWriteRequestSchema.parse(request.body)
     return KnowledgeWriteResponseSchema.parse(await vault.writeNote(rest(request), body))
   })
 
   app.post('/api/knowledge/notes/*', guard, async (request) => {
     const restore = /^(.+)\/restore$/.exec(rest(request))
-    if (!restore) throw new HttpError(404, 'not_found', 'Route not found')
+    if (!restore) throw new HttpError(404, 'not_found', 'Couldn’t find that address.')
     const { commit } = KnowledgeRestoreRequestSchema.parse(request.body)
     return KnowledgeWriteResponseSchema.parse(await vault.restoreNote(restore[1]!, commit))
   })
@@ -206,7 +207,7 @@ export function registerKnowledgeRoutes(
     app.post('/api/knowledge/files-from-media', guard, async (request, reply) => {
       const body = KnowledgeFromMediaRequestSchema.parse(request.body)
       const stored = media.read(body.mediaId)
-      if (!stored) throw new HttpError(404, 'not_found', 'That attachment is no longer stored')
+      if (!stored) throw new HttpError(404, 'not_found', 'That attachment is no longer stored.')
       const result = await vault.docs.upload(body.path, stored.bytes, body.onConflict)
       return reply.code(201).send(KnowledgeUploadResultSchema.parse(result))
     })
@@ -226,12 +227,16 @@ export function registerKnowledgeRoutes(
         // Before the body is read, so an unpaired caller can't make the server buffer megabytes.
         onRequest: async (request) => {
           if (!app.pairing.isPaired(request.headers.cookie))
-            throw new HttpError(401, 'not_paired', 'Pair this browser to make human decisions')
+            throw new HttpError(
+              401,
+              'not_paired',
+              'Pair this browser first. Open the pairing link shown in the server terminal.',
+            )
         },
       },
       async (request, reply) => {
         if (!Buffer.isBuffer(request.body))
-          throw new HttpError(400, 'bad_request', 'The file is missing')
+          throw new HttpError(400, 'bad_request', 'No file was sent.')
         const target = rest(request)
         const query = UploadQuerySchema.parse(request.query)
         const name = target.split('/').pop()!

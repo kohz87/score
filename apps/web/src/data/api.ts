@@ -40,7 +40,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<un
     throw new ApiError(
       response.status,
       parsed.success ? parsed.data.error.code : 'request_failed',
-      parsed.success ? parsed.data.error.message : 'The request failed. Please try again.',
+      parsed.success ? parsed.data.error.message : 'Couldn’t complete that. Try again.',
       parsed.success ? parsed.data.error.details : undefined,
     )
   }

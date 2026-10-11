@@ -10,7 +10,7 @@ const MAX_IN_FLIGHT = 4
 
 export type McpRouteDeps = McpToolDeps
 
-const unauthorized = () => new HttpError(401, 'unauthorized', 'Invalid MCP token')
+const unauthorized = () => new HttpError(401, 'unauthorized', 'Invalid MCP key.')
 
 // Streamable HTTP, stateless: every POST gets its own server and transport, and answers with plain JSON. Registered on the
 // loopback bridge listener only (buildBridgeApp), never on the browser listener. An MCP token opens nothing else: the
@@ -27,7 +27,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpRouteDeps): voi
     const now = Date.now()
     const recent = (calls.get(agentId) ?? []).filter((at) => at > now - MINUTE)
     if (recent.length >= MCP_CALLS_PER_MINUTE)
-      throw new HttpError(429, 'rate_limited', 'Too many MCP requests; slow down', {
+      throw new HttpError(429, 'rate_limited', 'Too many MCP requests. Slow down.', {
         retryAfterSeconds: Math.max(1, Math.ceil((recent[0]! + MINUTE - now) / 1000)),
       })
     recent.push(now)
@@ -49,16 +49,16 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpRouteDeps): voi
   app.post(MCP_PATH, { bodyLimit: 1024 * 1024 }, async (request, reply) => {
     // Against DNS rebinding and browsers: MCP clients are not browsers, so a request with an Origin is refused.
     if (request.headers.origin !== undefined || !loopbackHost.test(request.headers.host ?? ''))
-      throw new HttpError(403, 'forbidden', 'Not an MCP client request')
+      throw new HttpError(403, 'forbidden', 'That isn’t an MCP request.')
     const header = request.headers.authorization
     const match = typeof header === 'string' ? /^Bearer (\S+)$/.exec(header) : null
     const identity = match ? access.agentForToken(match[1]!) : undefined
     if (!identity) throw unauthorized()
     if (!access.get(identity.agentId).enabled)
-      throw new HttpError(403, 'mcp_off', 'MCP access is turned off for this agent in Score')
+      throw new HttpError(403, 'mcp_off', 'MCP access is turned off for this agent in Score.')
     // A JSON-RPC batch would buy up to 100 tool calls with one request-rate slot.
     if (Array.isArray(request.body))
-      throw new HttpError(400, 'bad_request', 'Batched MCP requests are not supported')
+      throw new HttpError(400, 'bad_request', 'Batched MCP requests aren’t supported.')
     takeCall(identity.agentId)
     // Bounded concurrency also bounds the memory of in-flight (up to 256 KiB) knowledge reads.
     const running = inFlight.get(identity.agentId) ?? 0
@@ -66,7 +66,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpRouteDeps): voi
       throw new HttpError(
         429,
         'rate_limited',
-        'Too many MCP requests at once; wait for one to finish',
+        'Too many MCP requests at once. Wait for one to finish.',
         {
           retryAfterSeconds: 1,
         },

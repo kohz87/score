@@ -21,7 +21,7 @@ export async function addImageFiles(
       report(
         error instanceof ImageError
           ? `${file.name || 'Image'}: ${error.message}.`
-          : 'That image could not be added.',
+          : 'Couldn’t add that image.',
       )
     }
   }
@@ -29,7 +29,7 @@ export async function addImageFiles(
   const current = new TextEncoder().encode(view.state.doc.toString()).length
   const extra = added.reduce((sum, markdown) => sum + markdown.length, 0)
   if (current + extra > MAX_NOTE_BYTES) {
-    report('Adding this would make the note larger than 8 MiB. Remove an image first.')
+    report('Adding this would make the note larger than 8 MB. Remove an image first.')
     return
   }
   const pos = options.pos === undefined ? undefined : Math.min(options.pos, view.state.doc.length)

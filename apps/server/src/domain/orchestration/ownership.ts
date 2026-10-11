@@ -37,7 +37,7 @@ export function assertNotOwned(owner: Owner | undefined, action: string): void {
   throw new HttpError(
     409,
     'orchestration_owned',
-    'This belongs to an orchestration run; use the run controls instead',
+    'This belongs to an orchestration run. Use the run controls instead.',
     {
       orchestrationId: owner.orchestration.id,
       state: owner.state,

@@ -55,7 +55,11 @@ export function registerApprovalRoutes(
           JSON.parse(Buffer.from(query.cursor, 'base64url').toString('utf8')),
         )
       } catch {
-        throw new HttpError(400, 'validation_error', 'Invalid cursor')
+        throw new HttpError(
+          400,
+          'validation_error',
+          'Couldn’t continue the list from there. Reload and try again.',
+        )
       }
     }
     const result = snapshot(db, (sqlite) => {
@@ -96,7 +100,7 @@ export function registerApprovalRoutes(
       const row = readApprovalRow(sqlite, approvalId)
       return row?.visible ? approvalView(sqlite, row, { now: clock(), disabled: disabled() }) : null
     }).data
-    if (!found) throw new HttpError(404, 'not_found', 'Unknown approval')
+    if (!found) throw new HttpError(404, 'not_found', 'Couldn’t find that approval.')
     return found
   })
   const receipts = requestIdempotency(db, clock)
@@ -108,7 +112,8 @@ export function registerApprovalRoutes(
         .object({ approvalId: z.string().min(1).max(256) })
         .parse(request.params)
       const body = DecisionSchema.safeParse(request.body)
-      if (!body.success) throw new HttpError(400, 'validation_error', 'Invalid decision')
+      if (!body.success)
+        throw new HttpError(400, 'validation_error', 'That isn’t a valid decision.')
       const { choice, note } = body.data
       let result: Approval | undefined
       let producerId: string | undefined
@@ -117,17 +122,25 @@ export function registerApprovalRoutes(
         identity: randomUUID(),
         apply({ sqlite, now }) {
           const row = readApprovalRow(sqlite, approvalId)
-          if (!row?.visible) throw new HttpError(404, 'not_found', 'Unknown approval')
+          if (!row?.visible) throw new HttpError(404, 'not_found', 'Couldn’t find that approval.')
           const feature = routeFeature(row)
           if (feature && disabled().includes(feature))
-            throw new HttpError(403, 'feature_disabled', 'Approval route is disabled')
+            throw new HttpError(
+              403,
+              'feature_disabled',
+              'Answering approvals from Score is turned off.',
+            )
           const options = { now: clock(), disabled: disabled() }
           const current = approvalView(sqlite, row, options)
           const delivery = readDelivery(sqlite, approvalId)
           if (!actionable(sqlite, row, options) || (delivery && delivery.choice !== choice))
-            throw new HttpError(409, 'conflict', 'Approval cannot accept this decision', current)
+            throw new HttpError(409, 'conflict', 'This approval can’t take that decision.', current)
           if (!row.choices.includes(choice))
-            throw new HttpError(400, 'validation_error', 'Choice is not offered')
+            throw new HttpError(
+              400,
+              'validation_error',
+              'That choice isn’t offered for this approval.',
+            )
           if (delivery)
             sqlite
               .prepare(

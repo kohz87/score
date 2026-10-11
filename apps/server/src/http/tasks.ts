@@ -135,9 +135,9 @@ export function registerTaskRoutes(
       !TaskActionRequestSchema.safeParse({ ...body, taskId }).success &&
       body.action !== 'comment'
     )
-      throw new HttpError(501, 'not_implemented', 'Task action is not implemented')
+      throw new HttpError(501, 'not_implemented', 'That task action isn’t available yet.')
     if (body.action === 'comment' && !body.text?.trim())
-      throw new HttpError(400, 'bad_request', 'A comment requires text')
+      throw new HttpError(400, 'bad_request', 'Write something to comment.')
     const oldIds = body.action === 'unblock' && db ? openKanbanDenialIds(db.sqlite, taskId) : []
     const result = await port.taskAction(
       TaskActionRequestSchema.parse({

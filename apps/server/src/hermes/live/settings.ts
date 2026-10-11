@@ -208,7 +208,12 @@ export class LiveSettings {
   private readonly keyChildren = new Set<HermesChild>()
   private closed = false
   private admit(): void {
-    if (this.closed) throw new HttpError(503, 'unavailable', 'Score is shutting down')
+    if (this.closed)
+      throw new HttpError(
+        503,
+        'unavailable',
+        'Score is shutting down. Try again once it has restarted.',
+      )
   }
   private profileArgs(): string[] {
     return this.profile ? ['-p', this.profile] : []
@@ -350,10 +355,10 @@ export class LiveSettings {
 
   async connectProvider(id: string): Promise<ConnectResult> {
     const providerId = ProviderIdSchema.safeParse(id)
-    if (!providerId.success) throw new HttpError(404, 'not_found', 'Unknown provider')
+    if (!providerId.success) throw new HttpError(404, 'not_found', 'Couldn’t find that provider.')
     // The catalog alone answers "is this a provider?"; the full list would spawn two Hermes processes.
     const kind = await this.kindOf(providerId.data)
-    if (kind === null) throw new HttpError(404, 'not_found', 'Unknown provider')
+    if (kind === null) throw new HttpError(404, 'not_found', 'Couldn’t find that provider.')
     // The terminal command is always included: it is the fallback for every provider (ARCHITECTURE D2.7).
     const command = `hermes auth add ${providerId.data}`
     if (kind !== 'device_code') return { next: 'run_in_terminal', command }
@@ -386,14 +391,18 @@ export class LiveSettings {
    */
   async addProviderKey(id: string, req: ProviderKeyRequest): Promise<ProviderBase> {
     const providerId = ProviderIdSchema.safeParse(id)
-    if (!providerId.success) throw new HttpError(404, 'not_found', 'Unknown provider')
+    if (!providerId.success) throw new HttpError(404, 'not_found', 'Couldn’t find that provider.')
     const kind = await this.kindOf(providerId.data)
-    if (kind === null) throw new HttpError(404, 'not_found', 'Unknown provider')
+    if (kind === null) throw new HttpError(404, 'not_found', 'Couldn’t find that provider.')
     if (kind !== 'api_key')
-      throw new HttpError(409, 'not_supported', 'This provider does not take a pasted key')
+      throw new HttpError(
+        409,
+        'not_supported',
+        'This provider doesn’t take a pasted key. Use its sign-in instead.',
+      )
     this.admit()
     if (this.keyInFlight.has(providerId.data))
-      throw new HttpError(409, 'conflict', 'A key is already being added for this provider')
+      throw new HttpError(409, 'conflict', 'A key is already being added for this provider.')
     this.keyInFlight.add(providerId.data)
     try {
       const label = req.label ?? `score-${new Date().toISOString().slice(0, 10)}`
@@ -422,7 +431,7 @@ export class LiveSettings {
               (candidate) => candidate.id === providerId.data && candidate.status === 'connected',
             )
           : undefined
-      if (!item) throw new HttpError(409, 'not_verified', 'Hermes did not confirm the key')
+      if (!item) throw new HttpError(409, 'not_verified', 'Hermes didn’t accept that key.')
       return { ...item, signIn: 'api_key' }
     } finally {
       this.keyInFlight.delete(providerId.data)
@@ -432,10 +441,14 @@ export class LiveSettings {
   async addLocalProvider(req: LocalProviderRequest): Promise<ProviderBase> {
     const slug = slugify(req.label)
     if (!ProviderIdSchema.safeParse(slug).success)
-      throw new HttpError(400, 'bad_request', 'Invalid request')
+      throw new HttpError(
+        400,
+        'bad_request',
+        'Couldn’t read that request. Check what you entered and try again.',
+      )
     const exists = async () =>
       slug in CATALOG || (await this.listProviders()).some((item) => item.id === slug)
-    const taken = () => new HttpError(409, 'conflict', 'A provider with that name already exists')
+    const taken = () => new HttpError(409, 'conflict', 'A provider with that name already exists.')
     if (await exists()) throw taken()
     const base = `providers.${slug}`
     await this.locks.run(this.profile ?? 'default', async () => {
@@ -452,10 +465,10 @@ export class LiveSettings {
           { timeoutMs: READ_TIMEOUT_MS, hermesHome: this.home },
         )
         if (result.exitCode !== 0)
-          throw new HttpError(502, 'hermes_write_failed', 'Hermes did not accept the provider')
+          throw new HttpError(502, 'hermes_write_failed', 'Hermes didn’t accept the provider.')
       }
       const kept = (await this.localProviders()).some((item) => item.id === slug)
-      if (!kept) throw new HttpError(502, 'hermes_write_failed', 'Hermes did not keep the provider')
+      if (!kept) throw new HttpError(502, 'hermes_write_failed', 'Hermes didn’t keep the provider.')
     })
     return {
       id: slug,
@@ -495,7 +508,7 @@ export class LiveSettings {
 
   connectMessaging(platform: string): ConnectResult {
     if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(platform))
-      throw new HttpError(404, 'not_found', 'Unknown platform')
+      throw new HttpError(404, 'not_found', 'Couldn’t find that messaging platform.')
     // Token-based platforms are set up in the browser form; pairings (QR codes) still need the terminal.
     if (messagingFields(platform).browserSetup) return { next: 'form' }
     return { next: 'run_in_terminal', command: 'hermes gateway setup' }

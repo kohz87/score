@@ -100,12 +100,12 @@ function History({
       {commit && (
         <div className="kn-version" role="region" aria-label={`Version ${commit.slice(0, 7)}`}>
           {version.isPending && <p role="status">Loading version…</p>}
-          {version.isError && <p role="alert">Could not load that version.</p>}
+          {version.isError && <p role="alert">Couldn’t load that version.</p>}
           {version.data && (
             <>
               <div className="kn-actions">
                 <button type="button" onClick={() => setShowDiff((value) => !value)}>
-                  {showDiff ? 'Show version' : 'Diff with current'}
+                  {showDiff ? 'Show version' : 'Compare with current'}
                 </button>
                 <button
                   type="button"

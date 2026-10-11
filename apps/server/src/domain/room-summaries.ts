@@ -143,11 +143,11 @@ function summaryRunOpen(sqlite: DatabaseSync, roomId: string): boolean {
 }
 
 function whyHeld(sqlite: DatabaseSync, roomId: string, leadAgentId: string): string | null {
-  if (rewindingRooms.has(roomId)) return 'This room is being rewound; try again in a moment'
+  if (rewindingRooms.has(roomId)) return 'This room is being rewound. Try again in a moment.'
   if (sqlite.prepare('SELECT 1 FROM team_state WHERE paused_at IS NOT NULL').get())
-    return 'The team is paused; resume it first'
+    return 'The team is paused. Resume it first.'
   if (sqlite.prepare('SELECT 1 FROM agent_pauses WHERE agent_id = ?').get(leadAgentId))
-    return `${leadAgentId} is paused; resume it first`
+    return `${leadAgentId} is paused. Resume it first.`
   return null
 }
 
@@ -155,11 +155,11 @@ function whyHeld(sqlite: DatabaseSync, roomId: string, leadAgentId: string): str
 export function requestSummary(sqlite: DatabaseSync, roomId: string, now: string): string {
   const room = roomRow(sqlite, roomId)
   const lead = room.lead_agent_id
-  if (!lead) throw new HttpError(409, 'conflict', 'This room has no lead agent to write a summary')
+  if (!lead) throw new HttpError(409, 'conflict', 'This room has no lead agent to write a summary.')
   const held = whyHeld(sqlite, roomId, lead)
   if (held) throw new HttpError(409, 'conflict', held)
   if (summaryRunOpen(sqlite, roomId))
-    throw new HttpError(409, 'conflict', 'A summary is already being written')
+    throw new HttpError(409, 'conflict', 'A summary is already being written.')
   assertAgentAdmits(sqlite, lead)
   const previous = usableSummary(sqlite, roomId)
   const messages = transcript(sqlite, roomId, previous?.boundary ?? null)
@@ -167,7 +167,7 @@ export function requestSummary(sqlite: DatabaseSync, roomId: string, now: string
   const firstOpen = messages.findIndex((message) => message.streaming)
   const covered = firstOpen === -1 ? messages : messages.slice(0, firstOpen)
   const last = covered.at(-1)
-  if (!last) throw new HttpError(409, 'conflict', 'There is nothing new to summarise')
+  if (!last) throw new HttpError(409, 'conflict', 'There is nothing new to summarise.')
   const lines: string[] = []
   let size = 0
   for (const message of covered.toReversed()) {

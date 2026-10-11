@@ -17,7 +17,9 @@ test.each([
   expect(routeMessage(text, [...to], { leadAgentId }, agents).routedTo).toEqual(expected)
 })
 test('a room without a recipient rejects before admission', () => {
-  expect(() => routeMessage('hello', [], { leadAgentId: null }, agents)).toThrow('no recipient')
+  expect(() => routeMessage('hello', [], { leadAgentId: null }, agents)).toThrow(
+    'no agent to receive',
+  )
 })
 test.each([
   { from: 'lead', mentions: ['builder'], hop: 0, edges: [], targets: ['builder'], stopped: false },

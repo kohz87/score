@@ -71,7 +71,7 @@ function ChosenModels() {
           onChange={(e) => setQ(e.target.value)}
         />
       </label>
-      {models.isError && <p role="alert">Could not load the models.</p>}
+      {models.isError && <p role="alert">Couldn’t load the models.</p>}
       <ul className="ms-list ms-chooser" aria-label="Models">
         {(models.data ?? []).map((option) => (
           <li key={keyOf(option)} className="ms-row">
@@ -106,7 +106,7 @@ function ChosenModels() {
           Clear (show all)
         </button>
       </div>
-      {save.isError && <p role="alert">Could not save the list. Please try again.</p>}
+      {save.isError && <p role="alert">Couldn’t save the list. Try again.</p>}
     </div>
   )
 }
@@ -127,7 +127,7 @@ function AgentAliases({ agents }: { agents: AgentSummary[] }) {
           ))}
         </select>
       </label>
-      <p className="ms-note">Hermes keeps aliases per agent profile.</p>
+      <p className="ms-note">Hermes keeps aliases separately for each agent.</p>
       <AliasEditor key={agentId} agentId={agentId} />
     </div>
   )

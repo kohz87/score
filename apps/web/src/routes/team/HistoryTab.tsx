@@ -17,7 +17,7 @@ const outcomeLabels: Record<HistoryOutcome, string> = {
   interrupted: 'Interrupted',
   waiting: 'Waiting',
   running: 'Running',
-  unknown: 'Ended (unknown)',
+  unknown: 'Not confirmed as ended',
 }
 
 export function HistoryTab({ agentId, agentName }: { agentId: string; agentName: string }) {
@@ -37,7 +37,7 @@ export function HistoryTab({ agentId, agentName }: { agentId: string; agentName:
         <input
           type="search"
           aria-label="Search history"
-          placeholder={`Search ${agentName}'s runs`}
+          placeholder={`Search ${agentName}’s runs`}
           maxLength={200}
           value={draft}
           onChange={(event) => {
@@ -62,7 +62,7 @@ export function HistoryTab({ agentId, agentName }: { agentId: string; agentName:
       {history.isPending && <p role="status">Loading history…</p>}
       {history.isError && (
         <p role="alert">
-          Could not load history. <button onClick={() => void history.refetch()}>Try again</button>
+          Couldn’t load history. <button onClick={() => void history.refetch()}>Try again</button>
         </p>
       )}
       {history.isSuccess && !items.length && (
@@ -89,17 +89,14 @@ export function HistoryTab({ agentId, agentName }: { agentId: string; agentName:
               </p>
               {run.attempt && (
                 <p className="team-muted">
-                  Kanban attempt ·{' '}
-                  {attemptEndText(run.attempt, (iso) => new Date(iso).toLocaleString())}
+                  Task run · {attemptEndText(run.attempt, (iso) => new Date(iso).toLocaleString())}
                   {run.attempt.evidence === 'partial' && ` · ${evidenceLabel.partial}`} · tools and
-                  model not observed
+                  model not recorded
                 </p>
               )}
               <p className="team-muted">
                 {run.attempt && !run.attempt.task.current && (
-                  <Link to={attemptPath(run.attempt)}>
-                    Open the attempt (earlier copy of the board)
-                  </Link>
+                  <Link to={attemptPath(run.attempt)}>Open this run (from an earlier board)</Link>
                 )}
                 {run.attempt && !run.attempt.task.current && run.task && ' · '}
                 {run.task && (!run.attempt || run.attempt.task.current) && (
@@ -110,7 +107,7 @@ export function HistoryTab({ agentId, agentName }: { agentId: string; agentName:
                 {run.task && run.brief && ' · '}
                 {run.brief && (
                   <Link to={`/now/flow/${encodeURIComponent(run.brief.id)}`}>
-                    Brief: {run.brief.title}
+                    Run: {run.brief.title}
                   </Link>
                 )}
               </p>

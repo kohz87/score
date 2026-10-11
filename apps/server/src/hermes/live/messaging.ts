@@ -35,7 +35,7 @@ export async function saveMessagingValues(options: {
           throw new HttpError(
             result.exitCode < 0 ? 502 : 409,
             'hermes_write_failed',
-            'Hermes did not accept the settings',
+            'Hermes didn’t accept the settings.',
           )
       }
     } finally {

@@ -68,12 +68,12 @@ export function ProfileSettings({ agent }: { agent: AgentDetail }) {
         {operation && <ProfileOperation operation={operation} />}
         {status.isError && (
           <p role="alert">
-            Could not load operation status.{' '}
+            Couldn’t load operation status.{' '}
             <button onClick={() => void status.refetch()}>Try again</button>
           </p>
         )}
         {agent.lifecycle.state === 'removed' && (
-          <p>This agent has been removed. Its history is retained.</p>
+          <p>This agent has been removed. Its history is kept.</p>
         )}
       </div>
     )
@@ -141,7 +141,7 @@ export function ProfileSettings({ agent }: { agent: AgentDetail }) {
             <h3>Review deletion</h3>
             <p>
               {preview.pendingWork.activeRuns} active runs · {preview.pendingWork.queuedTurns}{' '}
-              queued turns · {preview.pendingWork.pendingApprovals} pending approvals ·{' '}
+              queued messages · {preview.pendingWork.pendingApprovals} pending approvals ·{' '}
               {preview.pendingWork.assignments} unfinished assignments
             </p>
             <p>{preview.pendingWork.disposition}</p>

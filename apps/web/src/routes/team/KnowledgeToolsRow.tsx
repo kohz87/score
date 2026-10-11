@@ -10,7 +10,7 @@ export function KnowledgeToolsRow({ agent }: { agent: AgentDetail }) {
   return (
     <li>
       <span>
-        Knowledge tools<small> search, read and write the shared vault of notes</small>
+        Knowledge tools<small> search, read and write the shared notes</small>
         {change.isError && <em role="alert">{tabFailure(change.error, 'change this setting')}</em>}
       </span>
       <button

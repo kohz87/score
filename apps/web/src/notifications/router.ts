@@ -94,7 +94,7 @@ export function createNotificationRouter({ prefs, hidden, nameOf }: RouterOption
             ? {
                 kind,
                 title: run.status === 'failed' ? 'Routine failed' : 'Routine finished',
-                body: `${name}'s routine ${run.status === 'failed' ? 'did not finish' : 'is done'}.`,
+                body: `${name}’s routine ${run.status === 'failed' ? 'did not finish' : 'is done'}.`,
                 url: '/now/routines',
                 tag: `run:${run.id}`,
               }
@@ -118,8 +118,8 @@ export function createNotificationRouter({ prefs, hidden, nameOf }: RouterOption
             kind: 'errors',
             title: attempt.agentId
               ? `${nameOf(attempt.agentId)} hit an error`
-              : 'An attempt failed',
-            body: 'A Kanban attempt failed. Open Score to see what happened.',
+              : 'A task run failed',
+            body: 'A task run failed. Open Score to see what happened.',
             url: attemptPath(attempt),
             tag: `attempt:${attempt.id}`,
           }

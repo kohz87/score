@@ -177,23 +177,23 @@ export function TasksPage() {
       </section>
       {agents.status === 'error' && (
         <p role="alert">
-          Agent details could not load.{' '}
+          Couldn’t load agent details.{' '}
           <button
             type="button"
             onClick={() => void context?.queries.register(taskAgentsQuery).refetch()}
           >
-            Retry agents
+            Try again
           </button>
         </p>
       )}
       {rooms.status === 'error' && (
         <p role="alert">
-          Rooms could not load.{' '}
+          Couldn’t load rooms.{' '}
           <button
             type="button"
             onClick={() => void context?.queries.register(taskRoomsQuery).refetch()}
           >
-            Retry rooms
+            Try again
           </button>
         </p>
       )}
@@ -204,13 +204,13 @@ export function TasksPage() {
           )}
           {board.status === 'error' && (
             <div className="tasks-message" role="alert">
-              <p>Tasks could not load. Please try again.</p>
+              <p>Couldn’t load tasks. Try again.</p>
               <button
                 type="button"
                 className="task-filter"
                 onClick={() => void context?.queries.register(definition).refetch()}
               >
-                Retry tasks
+                Try again
               </button>
             </div>
           )}
@@ -218,7 +218,7 @@ export function TasksPage() {
             <p className="tasks-empty" role="status">
               {filters.agent || filters.room || filters.needsYou
                 ? 'No tasks match these filters.'
-                : 'No tasks yet.'}
+                : 'No tasks yet. Add one with New task.'}
             </p>
           )}
           <p className="tasks-sr-only" aria-live="polite" aria-atomic="true">

@@ -11,7 +11,7 @@
     },
     {
       "runtime": "codex",
-      "label": "Codex CLI",
+      "label": "Codex",
       "state": "ready",
       "version": "0.160.1",
       "testedVersions": ["0.160.1"],

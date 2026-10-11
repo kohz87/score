@@ -89,7 +89,7 @@ test.each(['not JSON', '{}', '{"error":null}', '{"error":{"code":42,"message":[]
     await expect(apiFetch('/session')).rejects.toMatchObject({
       status: 502,
       code: 'request_failed',
-      message: 'The request failed. Please try again.',
+      message: 'Couldn’t complete that. Try again.',
     })
   },
 )

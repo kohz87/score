@@ -45,7 +45,7 @@ export function TeamPage() {
       {agents.status === 'pending' && !agents.data && <p role="status">Loading agents…</p>}
       {agents.status === 'error' && (
         <section className="team-card" role="alert">
-          <h2>Could not load the team</h2>
+          <h2>Couldn’t load the team</h2>
           <p className="team-muted-strong">
             Check that the Score server is running, then try again.
           </p>
@@ -61,7 +61,9 @@ export function TeamPage() {
       {agents.status === 'success' && agents.data?.length === 0 && (
         <section className="team-card">
           <h2>No agents yet</h2>
-          <p className="team-muted-strong">Your agent profiles will appear here.</p>
+          <p className="team-muted-strong">
+            Agents you add will appear here. Start with Add agent.
+          </p>
         </section>
       )}
       <ul className="team-list">

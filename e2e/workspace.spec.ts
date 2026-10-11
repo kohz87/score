@@ -233,9 +233,9 @@ test('the file list can be resized by keyboard and by dragging, and the width is
   )
 })
 
-test("the Overview shows the agent's Todo card", async ({ page }) => {
+test("the Overview shows the agent's To do card", async ({ page }) => {
   await page.goto('/team/reviewer')
-  const card = page.getByRole('region', { name: 'Todo' })
+  const card = page.getByRole('region', { name: 'To do' })
   await expect(card).toBeVisible({ timeout: 15_000 })
   await expect(card.getByText('Pick the accent colours')).toBeVisible()
   await expect(card.getByText('In progress')).toBeVisible()

@@ -268,8 +268,8 @@ export function workflowSummaryOf(
   const outcomeNote =
     wf.graph_outcome === 'reached_end'
       ? unconfirmed > 0
-        ? `Graph reached the end — ${unconfirmed} abandoned attempt${unconfirmed === 1 ? '' : 's'} not confirmed ended`
-        : 'Graph reached the end'
+        ? `Workflow reached its end — ${unconfirmed} step run${unconfirmed === 1 ? '' : 's'} not confirmed as ended`
+        : 'Workflow reached its end'
       : wf.graph_outcome === 'failed'
         ? (wf.graph_reason ?? 'The graph failed').slice(0, 280)
         : wf.graph_outcome === 'stopped'

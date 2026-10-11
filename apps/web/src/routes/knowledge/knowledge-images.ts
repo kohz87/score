@@ -53,14 +53,14 @@ export const openInBrowser: OpenImage = async (file) => {
   try {
     bitmap = await createImageBitmap(file)
   } catch {
-    throw new ImageError('decode', 'That image could not be read')
+    throw new ImageError('decode', 'Couldn’t read that image')
   }
   const canvasAt = (width: number, height: number) => {
     const canvas = document.createElement('canvas')
     canvas.width = width
     canvas.height = height
     const context = canvas.getContext('2d', { willReadFrequently: true })
-    if (!context) throw new ImageError('decode', 'This browser cannot resize images')
+    if (!context) throw new ImageError('decode', 'This browser can’t resize images')
     context.drawImage(bitmap, 0, 0, width, height)
     return { canvas, context }
   }
@@ -84,7 +84,7 @@ export const openInBrowser: OpenImage = async (file) => {
 export function toDataUri(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
-    reader.onerror = () => reject(new ImageError('decode', 'That image could not be read'))
+    reader.onerror = () => reject(new ImageError('decode', 'Couldn’t read that image'))
     reader.onload = () => resolve(String(reader.result))
     reader.readAsDataURL(blob)
   })

@@ -29,37 +29,39 @@ test.afterAll(async () => {
   await page.context().close()
 })
 
-test('Now draws the Unattributed lane, a dashed no-longer-observed tail and opens an earlier board', async () => {
+test('Now draws the unknown-agent lane, a dashed no-longer-seen tail and opens an earlier board', async () => {
   await page.goto('/now')
   const score = page.getByRole('region', { name: /^Score:/ })
-  const lane = score.getByRole('group', { name: 'Unattributed, No known agent' })
+  const lane = score.getByRole('group', {
+    name: 'Unknown agent, Task runs Score can’t tie to an agent',
+  })
   await expect(lane).toBeVisible()
-  await expect(lane.getByRole('button', { name: /Unattributed: .*source unclear/ })).toBeVisible()
+  await expect(lane.getByRole('button', { name: /Unknown agent: .*source unclear/ })).toBeVisible()
   const lost = score.getByRole('button', { name: /reviewer: .*no longer seen since/ })
   await expect(lost).toBeVisible()
   await expect(lost).toHaveClass(/now-block--unobserved/)
   await expect(score.getByText('No longer seen')).toBeVisible()
-  // Attempts have no session: nothing in the Unattributed lane links to Watch.
+  // Attempts have no session: nothing in the unknown-agent lane links to Watch.
   await expect(score.locator('a[href*="/now/watch/unattributed"]')).toHaveCount(0)
   await score.getByRole('button', { name: /designer: .*Old board job/ }).click()
   await expect(page).toHaveURL(/\/attempts\/kr_/)
-  await expect(page.getByText(/From an earlier copy of the board/)).toBeVisible()
+  await expect(page.getByText(/This run is from an earlier version of the board/)).toBeVisible()
   await expect(page.getByRole('region', { name: 'Task as last seen' })).toContainText(
     'Old board job',
   )
   await expect(page.locator('a[href*="/now/watch/"]')).toHaveCount(0)
 })
 
-test('Reports counts Unattributed work and Team history lists the attempts', async () => {
+test('Reports counts Unknown-agent work and Team history lists the attempts', async () => {
   await page.goto('/reports')
   const table = page.getByRole('table', { name: 'By agent', exact: true })
-  await expect(table.locator('tbody th', { hasText: 'Unattributed' })).toBeVisible()
-  await expect(page.getByText(/counts attempts with proven evidence only/)).toBeVisible()
+  await expect(table.locator('tbody th', { hasText: 'Unknown agent' })).toBeVisible()
+  await expect(page.getByText(/counts only the runs Score could confirm/)).toBeVisible()
   await page.goto('/team/designer')
   await page.getByRole('tab', { name: 'History' }).click()
   const panel = page.getByRole('tabpanel')
   await expect(panel.locator('.team-channel-state', { hasText: 'Failed' })).toBeVisible()
-  await expect(panel.getByRole('link', { name: /Open the attempt/ })).toBeVisible()
+  await expect(panel.getByRole('link', { name: /Open this run/ })).toBeVisible()
   await expect(panel.getByRole('link', { name: /Replay/ })).toHaveCount(0)
 })
 
@@ -116,7 +118,9 @@ test('Now with an unattributed lane and a dashed tail matches the baseline', asy
   )
   await page.goto('/now')
   const score = page.getByRole('region', { name: /^Score:/ })
-  await expect(score.getByRole('group', { name: 'Unattributed, No known agent' })).toBeVisible()
+  await expect(
+    score.getByRole('group', { name: 'Unknown agent, Task runs Score can’t tie to an agent' }),
+  ).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
   await expect(score).toHaveScreenshot('now-unattributed.png', { maxDiffPixelRatio: 0.01 })
 })

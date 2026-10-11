@@ -95,7 +95,7 @@ export function SignInPanel({
         </p>
       )}
       {poll.isError && state === 'waiting' && (
-        <p role="alert">Could not check the sign-in. It may have ended; try again.</p>
+        <p role="alert">Couldn’t check the sign-in. It may have ended; try again.</p>
       )}
       <div className="settings-command-actions">
         {state === 'waiting' && (

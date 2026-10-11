@@ -14,7 +14,7 @@ export function UnattributedGlyph({
 }) {
   const accessibility = decorative
     ? { 'aria-hidden': true as const }
-    : { role: 'img', 'aria-label': 'Unattributed' }
+    : { role: 'img', 'aria-label': 'Unknown agent' }
   return (
     <span {...accessibility} className={`unattributed-glyph unattributed-glyph--${size}`}>
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">

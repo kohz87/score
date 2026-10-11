@@ -194,11 +194,11 @@ test('the outcome is two statements: the graph, and the note that qualifies it',
   expect(
     outcomeLines({
       graphOutcome: 'reached_end',
-      outcomeNote: 'Graph reached the end — 1 abandoned attempt not confirmed ended',
+      outcomeNote: 'Workflow reached its end — 1 step run not confirmed as ended',
     }),
   ).toEqual({
     graph: 'Workflow reached its end',
-    note: 'Graph reached the end — 1 abandoned attempt not confirmed ended',
+    note: 'Workflow reached its end — 1 step run not confirmed as ended',
   })
   expect(outcomeLines({ graphOutcome: 'stopped', outcomeNote: null }).graph).toBe(
     'Workflow stopped',

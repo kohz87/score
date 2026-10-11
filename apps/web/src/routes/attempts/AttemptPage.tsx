@@ -65,7 +65,7 @@ export function AttemptPage() {
             {detail.agentId === null ? <UnattributedGlyph /> : null}
             <div>
               <h1 id="attempt-heading">
-                Run by{' '}
+                Task run by{' '}
                 {detail.agentId === null ? (
                   'an unknown agent'
                 ) : (
@@ -77,8 +77,8 @@ export function AttemptPage() {
           </header>
           {!detail.task.current && (
             <p className="attempt-note">
-              From an earlier copy of the board. This page is read-only, because the task it
-              belonged to is not on the board Score follows now.
+              This run is from an earlier version of the board. It is read-only because its task is
+              no longer on the board Score follows.
             </p>
           )}
           {detail.task.current && (
@@ -104,7 +104,7 @@ export function AttemptPage() {
             <dl className="attempt-rows">
               <Row label="Agent">
                 {detail.agentId === null ? (
-                  'Unattributed'
+                  'Unknown agent'
                 ) : (
                   <AgentsLookup agentId={detail.agentId} />
                 )}
@@ -124,7 +124,7 @@ export function AttemptPage() {
                 <Row label="Updates refused">{detail.refusedUpdates}</Row>
               )}
               <Row label="Tools, session and model">Not recorded</Row>
-              <Row label="Watch">Not recorded</Row>
+              <Row label="Replay in Watch">Not recorded</Row>
             </dl>
           </section>
         </article>

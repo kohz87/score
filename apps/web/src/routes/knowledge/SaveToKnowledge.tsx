@@ -48,7 +48,7 @@ export function saveCandidates(message: Message, authorName: string): Candidate[
           const response = await fetch(`/api/media/${encodeURIComponent(part.mediaId)}`, {
             credentials: 'same-origin',
           })
-          if (!response.ok) throw new Error('Could not load the image')
+          if (!response.ok) throw new Error('Couldn’t load the image')
           const blob = await response.blob()
           const extension = IMAGE_EXTENSIONS[blob.type] ?? 'png'
           return { name: `image-${part.mediaId.slice(0, 8)}.${extension}`, blob }
@@ -105,7 +105,7 @@ export function SaveToKnowledge({
           try {
             items.push(await candidate.build())
           } catch {
-            problems.push(`${candidate.label}: could not be read`)
+            problems.push(`${candidate.label}: couldn’t be read`)
           }
       const summary = await flow.start(items, folder.trim().replace(/\/+$/, ''))
       summary.problems.push(...problems)

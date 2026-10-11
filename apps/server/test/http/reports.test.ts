@@ -161,14 +161,14 @@ test('a custom range answers per day and its CSV follows it', async () => {
 })
 
 test.each([
-  ['?range=custom', /needs from and to/],
-  ['?range=custom&from=2026-03-01', /needs from and to/],
+  ['?range=custom', /needs both dates/],
+  ['?range=custom&from=2026-03-01', /needs both dates/],
   ['?range=custom&from=2026-03-05&to=2026-03-01', /after to/],
   ['?range=custom&from=2026-03-01&to=2026-03-12&tz=UTC', /after today/],
   ['?range=custom&from=2024-01-01&to=2026-03-01', /at most 366/],
   ['?range=custom&from=2026-02-31&to=2026-03-01', /real dates/],
   ['?range=custom&from=2026-13-01&to=2026-13-02', /real dates/],
-  ['?range=7d&from=2026-03-01&to=2026-03-02', /only go with range=custom/],
+  ['?range=7d&from=2026-03-01&to=2026-03-02', /only work with a custom range/],
 ])('an unusable custom range %s is a clear 400', async (query, message) => {
   for (const path of ['/api/reports', '/api/reports/export.csv']) {
     const response = await app.inject(`${path}${query}`)

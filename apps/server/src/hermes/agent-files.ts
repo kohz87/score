@@ -26,22 +26,26 @@ export function etagOf(bytes: Buffer | string): string {
 /** UTF-8 text without NUL, within the size limit. */
 export function assertFileContent(content: string): void {
   if (content.includes('\0'))
-    throw new HttpError(400, 'validation_error', 'File content must not contain NUL')
+    throw new HttpError(400, 'validation_error', 'The file can’t contain null bytes.')
   if (Buffer.byteLength(content, 'utf8') > MAX_AGENT_FILE_BYTES)
-    throw new HttpError(413, 'payload_too_large', 'File content is larger than 256 KB')
+    throw new HttpError(413, 'payload_too_large', 'The file is larger than 256 KB.')
   // Lone surrogates would not survive a UTF-8 round trip.
   if (!content.isWellFormed())
-    throw new HttpError(400, 'validation_error', 'File content must be valid UTF-8')
+    throw new HttpError(400, 'validation_error', 'The file must be UTF-8 text.')
 }
 export function decodeFileBytes(bytes: Buffer): string {
   if (bytes.length > MAX_AGENT_FILE_BYTES)
-    throw new HttpError(413, 'payload_too_large', 'File is larger than 256 KB')
+    throw new HttpError(413, 'payload_too_large', 'The file is larger than 256 KB.')
   try {
     const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
     if (text.includes('\0')) throw new Error('NUL')
     return text
   } catch {
-    throw new HttpError(422, 'unreadable_file', 'File is not valid UTF-8 text')
+    throw new HttpError(
+      422,
+      'unreadable_file',
+      'This file isn’t UTF-8 text, so Score can’t open it.',
+    )
   }
 }
 // Presentation excerpt: the first prose paragraph, headings skipped, bounded to 280 characters.

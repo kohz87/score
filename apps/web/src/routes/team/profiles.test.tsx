@@ -95,8 +95,8 @@ function mount(element: React.ReactNode) {
 async function form(clone = false) {
   mount(<AddAgent agents={[agent]} />)
   fireEvent.click(screen.getByRole('button', { name: 'Add agent' }))
-  fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'helper' } })
-  fireEvent.change(screen.getByLabelText('Role / description'), {
+  fireEvent.change(screen.getByLabelText('Agent name'), { target: { value: 'helper' } })
+  fireEvent.change(screen.getByLabelText('Role or description'), {
     target: { value: 'Helps build changes' },
   })
   if (clone) fireEvent.change(screen.getByLabelText('Start from'), { target: { value: 'builder' } })
@@ -124,11 +124,11 @@ test('clone lists capabilities and credential names and needs its checkbox', asy
   expect((screen.getByRole('button', { name: 'Create agent' }) as HTMLButtonElement).disabled).toBe(
     true,
   )
-  fireEvent.click(screen.getByRole('checkbox', { name: /I confirm/ }))
+  fireEvent.click(screen.getByRole('checkbox', { name: /I’ve checked what this agent inherits/ }))
   expect((screen.getByRole('button', { name: 'Create agent' }) as HTMLButtonElement).disabled).toBe(
     false,
   )
-  fireEvent.change(screen.getByLabelText('Role / description'), {
+  fireEvent.change(screen.getByLabelText('Role or description'), {
     target: { value: 'Changed description' },
   })
   expect(screen.queryByRole('heading', { name: 'Review changes' })).toBeNull()
@@ -140,7 +140,7 @@ test('an incomplete inheritance inventory blocks creation and the dialog returns
   response = () => ({ ...preview, blockers: ['Credential inventory unavailable'] })
   await form(true)
   expect(screen.getByRole('alert').textContent).toContain('Credential inventory unavailable')
-  fireEvent.click(screen.getByRole('checkbox', { name: /I confirm/ }))
+  fireEvent.click(screen.getByRole('checkbox', { name: /I’ve checked what this agent inherits/ }))
   expect((screen.getByRole('button', { name: 'Create agent' }) as HTMLButtonElement).disabled).toBe(
     true,
   )

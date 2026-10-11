@@ -198,14 +198,14 @@ export class CodingRuntime {
   async usage(runtime: RuntimeId): Promise<CodingUsage> {
     const driver = driverFor(runtime)
     if (!driver.usage)
-      throw new HttpError(409, 'unsupported', `${driver.label} has no quota reading`)
+      throw new HttpError(409, 'unsupported', `${driver.label} has no quota reading.`)
     const cached = this.usageCache.get(runtime)
     if (cached && Date.now() - cached.at < 60_000) return cached.value
     const cli = await this.deps.locator.detect(driver, { fresh: true })
     if (cli.state === 'not_installed' || cli.state === 'not_supported')
-      throw new HttpError(422, 'cli_not_installed', cli.message ?? 'The CLI is not available')
+      throw new HttpError(422, 'cli_not_installed', cli.message ?? 'The CLI isn’t available.')
     if (cli.state === 'untested_version')
-      throw new HttpError(422, 'untested_cli_version', cli.message ?? 'Untested CLI version')
+      throw new HttpError(422, 'untested_cli_version', cli.message ?? 'Untested CLI version.')
     const { file, args } = this.deps.locator.command(driver)
     const cwd = join(this.deps.home, 'coding')
     mkdirSync(cwd, { recursive: true, mode: 0o700 })
@@ -217,11 +217,11 @@ export class CodingRuntime {
         (error, stdout) => (error ? fail(error) : done(stdout)),
       ),
     ).catch(() => {
-      throw new HttpError(502, 'usage_unavailable', `${driver.label} did not report its quota`)
+      throw new HttpError(502, 'usage_unavailable', `${driver.label} didn’t report its quota.`)
     })
     const reading = driver.usage.parse(output)
     if (!reading.text)
-      throw new HttpError(502, 'usage_unavailable', `${driver.label} did not report its quota`)
+      throw new HttpError(502, 'usage_unavailable', `${driver.label} didn’t report its quota.`)
     const value: CodingUsage = {
       runtime,
       fetchedAt: new Date().toISOString(),
@@ -249,7 +249,7 @@ export class CodingRuntime {
     if (cli.state === 'not_supported' || cli.state === 'not_installed')
       return {
         code: 'cli_not_installed',
-        message: cli.message ?? 'The CLI is not available',
+        message: cli.message ?? 'The CLI isn’t available.',
         notice: `${driver.label} can't run: ${cli.message ?? 'not available'}`,
       }
     if (!this.deps.locator.verifiedPermissions(driver).includes(agent.permission))
@@ -261,7 +261,7 @@ export class CodingRuntime {
     if (cli.state === 'untested_version' && agent.confirmedVersion !== cli.version)
       return {
         code: 'untested_cli_version',
-        message: cli.message ?? 'Untested CLI version',
+        message: cli.message ?? 'Untested CLI version.',
         notice: `${driver.label} ${cli.version ?? ''} is an untested version. Open this agent in Team and confirm it to run.`,
       }
     return null
@@ -313,7 +313,7 @@ export class CodingRuntime {
     const { db, ingest } = this.deps
     this.assertOpen()
     const agent = getCodingAgent(db.sqlite, req.agentId)
-    if (!agent) throw new HttpError(404, 'not_found', 'Unknown coding agent')
+    if (!agent) throw new HttpError(404, 'not_found', 'Couldn’t find that coding agent.')
     assertAgentAdmits(db.sqlite, agent.id)
     const driver = driverFor(agent.runtime)
     const existing = db.sqlite
@@ -343,7 +343,7 @@ export class CodingRuntime {
     if (existing !== undefined) {
       const intent = IntentRow.parse(existing)
       if (intent.state === 'failed')
-        throw new HttpError(422, 'admission_refused', 'This turn was refused earlier')
+        throw new HttpError(422, 'admission_refused', 'This message was refused earlier.')
       intentId = intent.id
     } else {
       intentId = randomUUID()
@@ -397,7 +397,11 @@ export class CodingRuntime {
         error: TERMINAL_NOTE.interrupted,
         costKind: 'unknown',
       })
-      throw new HttpError(503, 'shutting_down', 'Score is shutting down')
+      throw new HttpError(
+        503,
+        'shutting_down',
+        'Score is shutting down. Try again once it has restarted.',
+      )
     }
     const entry: ActiveRun = { agentId: agent.id, runId, turnId: req.turnId }
     this.active.set(runId, entry)
@@ -423,7 +427,12 @@ export class CodingRuntime {
   }
 
   private assertOpen(): void {
-    if (this.closed) throw new HttpError(503, 'shutting_down', 'Score is shutting down')
+    if (this.closed)
+      throw new HttpError(
+        503,
+        'shutting_down',
+        'Score is shutting down. Try again once it has restarted.',
+      )
   }
 
   async stopRun(req: { agentId: string; runId: string }): Promise<void> {

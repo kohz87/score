@@ -30,7 +30,7 @@ function expectRevision(o: OrchRow, revision: number): void {
     throw new HttpError(
       409,
       'conflict',
-      'This run changed since you looked; reload and try again',
+      'This run changed while you were looking. Reload and try again.',
       {
         currentRevision: o.revision,
       },
@@ -38,7 +38,7 @@ function expectRevision(o: OrchRow, revision: number): void {
 }
 const mustBeLive = (o: OrchRow): void => {
   if (isTerminalStatus(o.status) || o.status === 'stopping' || o.status === 'finishing')
-    throw new HttpError(409, 'not_open', `The run is ${o.status}`)
+    throw new HttpError(409, 'not_open', `This run is ${o.status}.`)
 }
 
 export function decideNodeGate(ctx: Ctx, orchId: string, gateId: string, body: GateDecision): void {
@@ -51,18 +51,19 @@ export function decideNodeGate(ctx: Ctx, orchId: string, gateId: string, body: G
     .get(orchId, gateId) as
     | { node_id: string; status: string; revision: number; payload: string; payload_hash: string }
     | undefined
-  if (!gate) throw new HttpError(404, 'not_found', 'Unknown gate')
+  if (!gate) throw new HttpError(404, 'not_found', 'Couldn’t find that gate.')
   if (gate.status !== 'open' || gate.revision !== body.expectedRevision)
-    throw new HttpError(409, 'conflict', 'This gate was already decided or changed', {
+    throw new HttpError(409, 'conflict', 'This gate was already decided or has changed.', {
       currentRevision: gate.revision,
     })
   const wf = requireWfRun(sqlite, orchId)
   const def = wf.definition.nodes.find((n) => n.id === gate.node_id)
   const node = nodesOf(sqlite, orchId).find((n) => n.node_id === gate.node_id)
-  if (!def || def.kind !== 'gate' || !node) throw new HttpError(404, 'not_found', 'Unknown gate')
+  if (!def || def.kind !== 'gate' || !node)
+    throw new HttpError(404, 'not_found', 'Couldn’t find that gate.')
   const payload = JSON.parse(gate.payload) as { nodeRevision: number }
   if (node.revision !== payload.nodeRevision)
-    throw new HttpError(409, 'conflict', 'The node changed since the gate opened', {
+    throw new HttpError(409, 'conflict', 'The step changed since the gate opened.', {
       currentRevision: node.revision,
     })
   // The evidence the gate displayed must still stand: same revisions, still resolved.
@@ -76,7 +77,7 @@ export function decideNodeGate(ctx: Ctx, orchId: string, gateId: string, body: G
       !['succeeded', 'failed'].includes(producer.state) ||
       producer.output_revision !== shown.outputRevision
     )
-      throw new HttpError(409, 'conflict', `${shown.nodeId} changed since the gate opened`, {
+      throw new HttpError(409, 'conflict', `${shown.nodeId} changed since the gate opened.`, {
         currentRevision: gate.revision,
       })
   }
@@ -142,16 +143,16 @@ export function retryNode(
   expectRevision(o, body.orchestrationRevision)
   mustBeLive(o)
   const node = nodesOf(sqlite, orchId).find((n) => n.node_id === nodeId)
-  if (!node) throw new HttpError(404, 'not_found', 'Unknown node')
+  if (!node) throw new HttpError(404, 'not_found', 'Couldn’t find that step.')
   if (node.revision !== body.expectedNodeRevision)
-    throw new HttpError(409, 'conflict', 'The node changed since you looked', {
+    throw new HttpError(409, 'conflict', 'The step changed while you were looking.', {
       currentRevision: node.revision,
     })
   if (node.state !== 'unresolved' || node.attempts_used >= node.attempts_max)
     throw new HttpError(
       409,
       'not_retryable',
-      'Only an abandoned node with attempts left can be retried',
+      'Only an abandoned step that has retries left can be retried.',
     )
   journalSoft(ctx, () =>
     ctx.journal.append({ kind: 'transition', orchestrationId: orchId, what: 'retry', nodeId }),
@@ -160,7 +161,7 @@ export function retryNode(
     state: 'ready',
     step_id: null,
     ended_at: null,
-    reason: 'retrying after the abandoned attempt',
+    reason: 'retrying after the step run we stopped waiting for',
   })
   addHistory(sqlite, orchId, 'node_retried', { nodeId, state: 'ready' }, now)
   bumpAdmission(sqlite)
@@ -179,15 +180,15 @@ export function tryAgain(
   expectRevision(o, body.orchestrationRevision)
   mustBeLive(o)
   const node = nodesOf(sqlite, orchId).find((n) => n.node_id === nodeId)
-  if (!node) throw new HttpError(404, 'not_found', 'Unknown node')
+  if (!node) throw new HttpError(404, 'not_found', 'Couldn’t find that step.')
   if (node.revision !== body.expectedNodeRevision)
-    throw new HttpError(409, 'conflict', 'The node changed since you looked', {
+    throw new HttpError(409, 'conflict', 'The step changed while you were looking.', {
       currentRevision: node.revision,
     })
   const attempt = attemptsOf(sqlite, orchId).find(
     (a) => a.step_id === node.step_id && a.needs_person && a.state === 'created',
   )
-  if (!attempt) throw new HttpError(409, 'not_open', 'This node is not waiting for you')
+  if (!attempt) throw new HttpError(409, 'not_open', 'This step isn’t waiting for you.')
   journalSoft(ctx, () =>
     ctx.journal.append({ kind: 'transition', orchestrationId: orchId, what: 'try_again', nodeId }),
   )
@@ -219,15 +220,15 @@ export function remapWorkflow(
   mustBeLive(o)
   const frozen = frozenIncarnation(sqlite, orchId, body.agentId)
   if (frozen === undefined)
-    throw new HttpError(404, 'not_found', `${body.agentId} is not an agent of this run`)
+    throw new HttpError(404, 'not_found', `${body.agentId} is not an agent of this run.`)
   const current = lifecycleOf(sqlite, body.agentId)?.incarnation_id ?? 'untracked'
   if (
     frozen !== body.frozenIncarnation ||
     current !== body.currentIncarnation ||
     current === 'untracked'
   )
-    throw new HttpError(409, 'conflict', `${body.agentId} changed again; look at the run again`)
-  if (frozen === current) throw new HttpError(409, 'conflict', `${body.agentId} was not replaced`)
+    throw new HttpError(409, 'conflict', `${body.agentId} changed again. Look at the run again.`)
+  if (frozen === current) throw new HttpError(409, 'conflict', `${body.agentId} was not replaced.`)
   const wf = requireWfRun(sqlite, orchId)
   const plan = remapPlan(sqlite, o, wf, body.agentId, journal)
   const wanted = new Map(body.plan.map((p) => [p.nodeId, p.payloadHash]))
@@ -238,7 +239,7 @@ export function remapWorkflow(
     throw new HttpError(
       409,
       'stale_plan',
-      'The work this would re-create changed; look at the card again',
+      'The work this would recreate has changed. Look at the card again.',
       {
         currentRevision: o.revision,
       },
@@ -246,7 +247,7 @@ export function remapWorkflow(
   const nodes = new Map(nodesOf(sqlite, orchId).map((n) => [n.node_id, n]))
   for (const item of plan.items)
     if ((nodes.get(item.nodeId)?.remaps ?? 0) >= 2)
-      throw new HttpError(409, 'conflict', `${item.nodeId} was already remapped twice`)
+      throw new HttpError(409, 'conflict', `${item.nodeId} was already reassigned twice.`)
   journalSoft(ctx, () =>
     ctx.journal.append({
       kind: 'remap',

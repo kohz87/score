@@ -130,7 +130,7 @@ test('A unknown → Abandon → Retry → B succeeds → end ⇒ finished_with_u
   await h.until(done(id, 'finished_with_unresolved'))
   const detail = run(h, id)
   expect(detail.graphOutcome).toBe('reached_end')
-  expect(detail.outcomeNote).toBe('Graph reached the end — 1 abandoned attempt not confirmed ended')
+  expect(detail.outcomeNote).toBe('Workflow reached its end — 1 step run not confirmed as ended')
   // A late result of the abandoned attempt is recorded and never consumed.
   await endRun(h, old.runId!, 'completed', 'too late')
   await h.settle(2000)

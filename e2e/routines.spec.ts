@@ -69,9 +69,7 @@ test('create, pause, run now and delete a routine from the Team page', async ({ 
   await row.getByRole('button', { name: 'Resume Build check' }).click()
   await expect(row.getByRole('button', { name: 'Pause Build check' })).toBeVisible()
   await row.getByRole('button', { name: 'Run Build check now' }).click()
-  await expect(
-    page.getByRole('status').filter({ hasText: 'will run on the next tick' }),
-  ).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'will run shortly' })).toBeVisible()
   await row.getByRole('button', { name: 'Delete Build check' }).click()
   await row.getByRole('button', { name: 'Confirm deleting Build check' }).click()
   await expect(page.getByText('No routines configured.')).toBeVisible()

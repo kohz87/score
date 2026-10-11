@@ -48,5 +48,5 @@ export function shareFailure(error: unknown): string {
     return 'Too many wrong passwords. Wait 15 minutes and try again.'
   if (code === 'password_not_set')
     return 'Set a security password first (Settings › Remote access).'
-  return 'Could not create the link. Please try again.'
+  return 'Couldn’t create the link. Try again.'
 }

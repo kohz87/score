@@ -66,11 +66,7 @@ export function NewTaskDialog({
       )
       created(task)
     } catch (caught) {
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : 'Could not create the task. Please try again.',
-      )
+      setError(caught instanceof ApiError ? caught.message : 'Couldn’t create the task. Try again.')
       setBusy(false)
     }
   }

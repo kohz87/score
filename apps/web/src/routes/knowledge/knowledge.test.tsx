@@ -346,7 +346,7 @@ test('the editor shows the note formatted; a missing link offers Create in the s
   const side = screen.getByRole('complementary', { name: 'Note details' })
   fireEvent.click(await within(side).findByRole('button', { name: /Create/ }))
   const dialog = screen.getByRole('dialog', { name: 'New note' })
-  expect((within(dialog).getByLabelText('Path in the vault') as HTMLInputElement).value).toBe(
+  expect((within(dialog).getByLabelText('Path in Knowledge') as HTMLInputElement).value).toBe(
     'Ghost',
   )
   fireEvent.click(within(dialog).getByRole('button', { name: 'Create note' }))
@@ -376,7 +376,7 @@ test('history: view a version, diff it against the current text, and restore it'
   expect(await within(region).findByText(/Old goals/)).toBeDefined()
   // The version opens in the same editor, read-only.
   expect(region.querySelector('.cm-content')?.getAttribute('contenteditable')).toBe('false')
-  fireEvent.click(within(region).getByRole('button', { name: 'Diff with current' }))
+  fireEvent.click(within(region).getByRole('button', { name: 'Compare with current' }))
   const diff = within(region).getByLabelText('Differences')
   expect(diff.textContent).toContain('Old goals')
   fireEvent.click(within(region).getByRole('button', { name: 'Restore this version' }))
@@ -410,7 +410,7 @@ test('Ctrl+N asks for a path, creates the note with etag null and opens it', asy
   await screen.findByRole('tree', { name: 'Notes' })
   fireEvent.keyDown(document.body, { key: 'n', ctrlKey: true })
   const dialog = screen.getByRole('dialog', { name: 'New note' })
-  fireEvent.change(within(dialog).getByLabelText('Path in the vault'), {
+  fireEvent.change(within(dialog).getByLabelText('Path in Knowledge'), {
     target: { value: 'ideas/launch plan' },
   })
   fireEvent.click(within(dialog).getByRole('button', { name: 'Create note' }))
@@ -426,7 +426,7 @@ test('creating over an existing note shows the error', async () => {
   await screen.findByRole('tree', { name: 'Notes' })
   fireEvent.keyDown(document.body, { key: 'n', ctrlKey: true })
   const dialog = screen.getByRole('dialog', { name: 'New note' })
-  fireEvent.change(within(dialog).getByLabelText('Path in the vault'), {
+  fireEvent.change(within(dialog).getByLabelText('Path in Knowledge'), {
     target: { value: 'Home' },
   })
   fireEvent.click(within(dialog).getByRole('button', { name: 'Create note' }))
@@ -514,10 +514,10 @@ test('agent-written notes are marked, and Undo restores the commit before the ag
 
 test('a missing note at a deep link offers to create it', async () => {
   mount('/knowledge/nope/Missing.md')
-  expect(await screen.findByText('This note does not exist')).toBeDefined()
+  expect(await screen.findByText('This note doesn’t exist')).toBeDefined()
   fireEvent.click(screen.getByRole('button', { name: /Create nope\/Missing\.md/ }))
   const dialog = screen.getByRole('dialog', { name: 'New note' })
-  expect((within(dialog).getByLabelText('Path in the vault') as HTMLInputElement).value).toBe(
+  expect((within(dialog).getByLabelText('Path in Knowledge') as HTMLInputElement).value).toBe(
     'nope/Missing',
   )
 })
@@ -527,7 +527,7 @@ test('Settings › Knowledge shows the vault, git status and the agent switch', 
   const section = await screen.findByRole('region', { name: 'Knowledge' })
   expect(await within(section).findByText('/vault')).toBeDefined()
   expect(within(section).getByText(/Versioned with git/)).toBeDefined()
-  const toggle = within(section).getByRole('switch', { name: 'Agents can use knowledge' })
+  const toggle = within(section).getByRole('switch', { name: 'Agents can use Knowledge' })
   expect((toggle as HTMLInputElement).checked).toBe(true)
   fireEvent.click(toggle)
   await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(false))
@@ -604,7 +604,7 @@ test('a failed background read keeps the editor and the unsaved text', async () 
   failNoteReads = true
   emit({ path: 'projects/Plan.md', kind: 'written', to: null, by: { agentId: 'builder' } })
   await waitFor(() => expect(screen.getAllByRole('alert').length).toBeGreaterThan(1))
-  expect(screen.queryByText('Could not open this note')).toBeNull()
+  expect(screen.queryByText('Couldn’t open this note')).toBeNull()
   expect(editorView().state.doc.toString()).toBe('# Plan\n\nGoals\n mine')
 })
 

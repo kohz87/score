@@ -100,8 +100,8 @@ export function AdvancedSection() {
       onError: (error) =>
         setMessage(
           error instanceof ApiError && error.status === 400
-            ? 'One of these settings cannot be changed here.'
-            : 'Could not preview the changes. Please try again.',
+            ? 'One of these settings can’t be changed here.'
+            : 'Couldn’t preview the changes. Try again.',
         ),
     })
   }
@@ -126,10 +126,12 @@ export function AdvancedSection() {
         onError: (error) => {
           if (error instanceof ApiError && error.status === 409) {
             setPreviewed(null)
-            setMessage('The settings changed since the preview. Preview again to see the new diff.')
+            setMessage(
+              'The settings changed since the preview. Preview again to see the new changes.',
+            )
           } else if (error instanceof ApiError && error.code === 'not_paired')
             setMessage('Pair this browser using the link in the server terminal to apply changes.')
-          else setMessage('Could not apply the changes. Please try again.')
+          else setMessage('Couldn’t apply the changes. Try again.')
         },
       },
     )
@@ -141,8 +143,8 @@ export function AdvancedSection() {
         <div className="advanced-intro">
           <h2 id="settings-advanced">Advanced</h2>
           <p className="settings-muted-strong">
-            Every Hermes setting, searchable, with the file it lives in. Changes show as a diff
-            before they&apos;re saved.
+            Every Hermes setting, searchable, with the file it lives in. You see the changes before
+            they’re saved.
           </p>
         </div>
         <input
@@ -155,10 +157,10 @@ export function AdvancedSection() {
         />
       </div>
       <p className="settings-muted">
-        Keys, tokens, passwords and other credentials are never shown or changed here. Approval
-        rules live in Rules and approvals.
+        Keys, passwords and other credentials are never shown or changed here. Approval rules live
+        in Rules and approvals.
       </p>
-      {search.status === 'error' && <p role="alert">Could not search settings.</p>}
+      {search.status === 'error' && <p role="alert">Couldn’t search settings.</p>}
       {/* A search with text opens the list on its own; the disclosure matters when the box is empty. */}
       {!searching && search.data && (
         <button
@@ -203,7 +205,7 @@ export function AdvancedSection() {
                       onChange={(event) => setEditing({ ...editing, draft: event.target.value })}
                     />
                     <button type="submit" className="settings-pill">
-                      Stage change
+                      Add change
                     </button>
                     <button
                       type="button"
@@ -212,7 +214,7 @@ export function AdvancedSection() {
                     >
                       Cancel
                     </button>
-                    {invalid && <span role="alert">That is not a valid value.</span>}
+                    {invalid && <span role="alert">That isn’t a valid value.</span>}
                   </form>
                 ) : (
                   <div className="advanced-line">
@@ -256,7 +258,7 @@ export function AdvancedSection() {
             ))}
           </ul>
           {previewed && (
-            <pre className="advanced-diff" aria-label="Diff">
+            <pre className="advanced-diff" aria-label="Changes preview">
               {previewed.diff === '' ? 'No difference from the current settings.' : previewed.diff}
             </pre>
           )}

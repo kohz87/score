@@ -133,7 +133,7 @@ export function conflictOf(error: unknown): { etag: string | null } | null {
 
 export function knowledgeFailure(error: unknown, action: string): string {
   if (error instanceof UnsavedDraftError)
-    return 'Your unsaved changes could not be saved first, so nothing was changed. Fix that and try again.'
+    return 'Couldn’t save your unsaved changes first, so nothing was changed. Fix that and try again.'
   if (error instanceof ApiError) {
     if (error.code === 'not_paired')
       return `Pair this browser using the link in the server terminal to ${action}.`
@@ -142,10 +142,10 @@ export function knowledgeFailure(error: unknown, action: string): string {
     if (error.code === 'unsupported_type' || error.code === 'export_too_large') return error.message
     if (error.code === 'bad_path' || error.code === 'not_a_note') return error.message
     if (error.code === 'payload_too_large')
-      return 'That note is too large (8 MiB at most; one image 1.5 MB).'
+      return 'That note is too large (8 MB at most, and 1.5 MB for each image).'
     if (error.status === 404) return 'That note is no longer there.'
   }
-  return `Could not ${action}. Please try again.`
+  return `Couldn’t ${action}. Try again.`
 }
 
 export function useKnowledgeActions() {

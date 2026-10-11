@@ -130,15 +130,15 @@ export function messagingWrites(
 ): [key: string, value: string][] {
   const { fields } = messagingFields(platform)
   if (fields.length === 0)
-    throw new HttpError(409, 'not_supported', 'This platform needs the terminal')
+    throw new HttpError(409, 'not_supported', 'This platform needs the terminal.')
   const known = new Set(fields.map((item) => item.key))
   if (Object.keys(values).some((key) => !known.has(key)))
-    throw new HttpError(400, 'bad_request', 'Unknown setting for this platform')
+    throw new HttpError(400, 'bad_request', 'That setting doesn’t exist for this platform.')
   const writes: [string, string][] = []
   for (const item of fields) {
     const value = values[item.key]?.trim() ?? ''
     if (value === '') {
-      if (item.required) throw new HttpError(400, 'bad_request', `${item.label} is required`)
+      if (item.required) throw new HttpError(400, 'bad_request', `${item.label} is required.`)
       continue
     }
     writes.push([item.key, value])

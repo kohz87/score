@@ -9,8 +9,8 @@ function message(error: unknown): string {
     return 'Pair this browser using the link in the server terminal to save a key.'
   if (code === 'not_verified') return 'Hermes did not accept that key. Check it and try again.'
   if (code === 'bad_request')
-    return 'That does not look like an API key (8 to 512 characters, no spaces).'
-  return 'Could not save the key. Please try again.'
+    return 'That does not look like an API key (8–512 characters, no spaces).'
+  return 'Couldn’t save the key. Try again.'
 }
 
 export function ApiKeyPanel({
@@ -69,7 +69,7 @@ export function ApiKeyPanel({
           minLength={8}
           maxLength={512}
           pattern="[\x21-\x7e]{8,512}"
-          title="8 to 512 characters, no spaces"
+          title="8–512 characters, no spaces"
           value={apiKey}
           onChange={(event) => setApiKey(event.target.value)}
         />

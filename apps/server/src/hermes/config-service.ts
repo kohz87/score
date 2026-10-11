@@ -78,7 +78,7 @@ function navigate(
 }
 function bad(): HttpError {
   // One message for unknown and protected keys: the answer must not reveal which secret-like keys exist.
-  return new HttpError(400, 'bad_request', 'That setting cannot be changed here')
+  return new HttpError(400, 'bad_request', 'That setting can’t be changed here.')
 }
 
 /**
@@ -178,7 +178,7 @@ export class ConfigService {
         throw new HttpError(
           400,
           'bad_request',
-          `${change.key} has hidden members and cannot be replaced here; edit its individual keys instead`,
+          `${change.key} has hidden members and can’t be replaced here. Edit its individual keys instead.`,
         )
     })
     const before = sorted
@@ -225,20 +225,20 @@ export class ConfigService {
       throw new HttpError(
         409,
         'conflict',
-        'The config changed since the preview. Preview it again.',
+        'The settings changed since the preview. Preview them again.',
       )
     const todo = sorted.filter(
       (change, index) => !(current[index]!.found && sameValue(current[index]!.value, change.value)),
     )
     for (const change of todo) {
       if (!(await this.backend.write(change.key, serializeConfigValue(change.value))))
-        throw new HttpError(502, 'hermes_write_failed', 'Hermes did not accept the change')
+        throw new HttpError(502, 'hermes_write_failed', 'Hermes didn’t accept the change.')
     }
     const read = this.reader()
     for (const change of todo) {
       const after = await read(change.key)
       if (!after.found || !sameValue(after.value, change.value))
-        throw new HttpError(502, 'hermes_write_failed', 'Hermes did not keep the change')
+        throw new HttpError(502, 'hermes_write_failed', 'Hermes didn’t keep the change.')
     }
     return { ok: true, restartRequired: configRestartRequired(todo.map((change) => change.key)) }
   }

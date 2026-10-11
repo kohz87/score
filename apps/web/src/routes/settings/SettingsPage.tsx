@@ -93,7 +93,7 @@ export function SettingsPage() {
                 {section.label}
               </a>
             ))}
-            <p>Settings for one agent live on their page in Team.</p>
+            <p>Settings for one agent are on that agent’s page in Team.</p>
             {remoteTransport() && <a href="#remote-access">Remote access</a>}
           </>
         )}

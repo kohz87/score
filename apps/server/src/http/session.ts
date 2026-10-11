@@ -41,8 +41,7 @@ export function registerSessionRoutes(
   const PasswordBody = z.object({ password: z.unknown() }).loose()
   const sessionOf = sessionKey
   async function checkPassword(body: unknown, cookie: string | undefined): Promise<void> {
-    if (!security)
-      throw new HttpError(501, 'unsupported', 'Pairing management is not available here')
+    if (!security) throw new HttpError(501, 'unsupported', 'Pairing isn’t available here.')
     await security.verify(PasswordBody.parse(body ?? {}).password, sessionOf(cookie))
     // A correct password is also the "fresh second factor" the web terminal asks for (PLAN 7.3).
     pairing.markFresh(cookie)
@@ -81,7 +80,7 @@ export function registerSessionRoutes(
   }))
   // First time from any paired browser; changing it needs the current password; a forgotten one is reset on the host.
   app.put('/api/session/security/password', guarded, async (request, reply) => {
-    if (!security) throw new HttpError(501, 'unsupported', 'Not available here')
+    if (!security) throw new HttpError(501, 'unsupported', 'Not available here.')
     const body = z
       .object({ password: z.unknown(), current: z.unknown().optional() })
       .parse(request.body)
@@ -100,14 +99,18 @@ export function registerSessionRoutes(
   // prints (minting one replaces any earlier unused token).
   app.post('/api/session/pairing-links', guarded, async (request) => {
     await checkPassword(request.body, request.headers.cookie)
-    if (!origin) throw new HttpError(501, 'unsupported', 'Pairing links are not available here')
+    if (!origin) throw new HttpError(501, 'unsupported', 'Pairing links aren’t available here.')
     // Only a configured public origin may be put into a link; anything else is refused before a token is minted.
     const chosen = z
       .object({ origin: z.string().max(256).optional() })
       .loose()
       .parse(request.body ?? {}).origin
     if (chosen !== undefined && !origins.includes(chosen))
-      throw new HttpError(400, 'bad_request', 'That is not one of the configured origins')
+      throw new HttpError(
+        400,
+        'bad_request',
+        'That isn’t one of the addresses Score is set up for.',
+      )
     const token = pairing.createToken()
     return PairingLinkSchema.parse({
       url: `${chosen ?? origin}/pair#${token}`,
@@ -140,7 +143,7 @@ export function registerSessionRoutes(
   // and rate limited like pairing, and ends in the same kind of session a pairing link creates.
   function registerPasskeyRoutes(): void {
     const needed = () => {
-      if (!passkeys) throw new HttpError(501, 'unsupported', 'Passkeys are not available here')
+      if (!passkeys) throw new HttpError(501, 'unsupported', 'Passkeys aren’t available here.')
       return passkeys
     }
     const originOf = (request: { headers: { origin?: string | undefined } }) =>
@@ -193,7 +196,11 @@ export function registerSessionRoutes(
     const optionsLimiter = new RateLimiter(20, 60_000)
     app.post('/api/session/passkey/authentication-options', async (request) => {
       if (!optionsLimiter.allow(request.ip))
-        throw new HttpError(429, 'pairing_limited', 'Wait a minute before signing in again')
+        throw new HttpError(
+          429,
+          'pairing_limited',
+          'Too many sign-in attempts. Wait a minute and try again.',
+        )
       return needed().authenticationOptions({
         origin: originOf(request),
         peer: request.ip,

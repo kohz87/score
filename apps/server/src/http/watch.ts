@@ -78,10 +78,10 @@ export function registerWatchRoutes(
       .prepare('SELECT 1 FROM agent_lifecycle WHERE agent_id = ?')
       .get(agentId)
     if (!(await agentIds()).includes(agentId) && !retained)
-      throw new HttpError(404, 'not_found', 'Agent not found')
+      throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
     const result = snapshot(db, (sqlite) => {
       const agent = readAgent(sqlite, agentId)
-      if (!agent) throw new HttpError(404, 'not_found', 'Agent not found')
+      if (!agent) throw new HttpError(404, 'not_found', 'Couldn’t find that agent.')
       return {
         agent: AgentSummarySchema.parse(agent),
         live: isLive(sqlite, agentId),

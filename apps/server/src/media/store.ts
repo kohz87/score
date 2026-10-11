@@ -114,18 +114,18 @@ export class MediaStore {
   // Stores an image or document and returns its id; identical bytes return the existing id. Throws HttpError for
   // unsupported content (415), oversized items (413) and a full store of referenced items (507).
   store(bytes: Uint8Array, declaredType?: string, name?: string): StoredMedia {
-    if (bytes.length === 0) throw new HttpError(400, 'bad_request', 'The file is empty')
+    if (bytes.length === 0) throw new HttpError(400, 'bad_request', 'The file is empty.')
     if (bytes.length > this.maxItemBytes)
-      throw new HttpError(413, 'payload_too_large', 'The file is larger than 25 MB')
+      throw new HttpError(413, 'payload_too_large', 'The file is larger than 25 MB.')
     const type = sniffMedia(bytes, { name, declared: declaredType })
     if (!type || !declaredMatches(declaredType, type))
       throw new HttpError(
         415,
         'unsupported_media_type',
-        'Allowed: images, PDF, DOCX, XLSX, and TXT, Markdown, CSV, JSON or HTML text',
+        'This file type isn’t supported. Use images, PDF, DOCX, XLSX or TXT, Markdown, CSV, JSON or HTML text.',
       )
     if (isImageType(type) && bytes.length > MAX_IMAGE_BYTES)
-      throw new HttpError(413, 'payload_too_large', 'The image is larger than 8 MB')
+      throw new HttpError(413, 'payload_too_large', 'The image is larger than 8 MB.')
     const sha256 = createHash('sha256').update(bytes).digest('hex')
     const now = new Date(this.clock()).toISOString()
     let evicted: string[] = []
@@ -195,7 +195,8 @@ export class MediaStore {
       const changed = sqlite
         .prepare('UPDATE media SET refs = refs + 1, last_used_at = ? WHERE id = ?')
         .run(now, id).changes
-      if (Number(changed) === 0) throw new HttpError(400, 'bad_request', 'Unknown attachment')
+      if (Number(changed) === 0)
+        throw new HttpError(400, 'bad_request', 'Couldn’t find that attachment.')
     }
   }
 
@@ -292,7 +293,7 @@ function evictFor(
     total -= row.size
   }
   if (strict && total + incoming > quota)
-    throw new HttpError(507, 'media_quota_exceeded', 'Media storage is full')
+    throw new HttpError(507, 'media_quota_exceeded', 'Score’s attachment storage is full.')
   return victims
 }
 
