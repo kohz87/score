@@ -478,7 +478,10 @@ export class KnowledgeVault {
   }
 
   /** Indexes one file after a Score write (caller holds the lock). */
-  private async indexFile(rel: string, author: KnowledgeAuthor): Promise<string> {
+  private async indexFile(
+    rel: string,
+    author: KnowledgeAuthor,
+  ): Promise<{ hash: string; raw: string; mtimeMs: number }> {
     const { abs, stat } = await this.lookup(rel.split('/'))
     if (!stat?.isFile()) throw new HttpError(404, 'not_found', 'Unknown note')
     if (stat.size > MAX_NOTE_BYTES)
@@ -489,7 +492,7 @@ export class KnowledgeVault {
       this.upsert(sqlite, rel, { mtimeMs: stat.mtimeMs, size: stat.size, hash }, raw, author)
       this.relink(sqlite)
     })
-    return hash
+    return { hash, raw, mtimeMs: stat.mtimeMs }
   }
 
   private async walk(): Promise<{
@@ -689,15 +692,19 @@ export class KnowledgeVault {
     const rel = parseNotePath(input)
     const { abs, stat } = await this.lookup(rel.split('/'))
     if (!stat) throw new HttpError(404, 'not_found', 'Unknown note')
-    const raw = await this.readRaw(abs, stat)
-    const hash = hashContent(raw)
+    let raw = await this.readRaw(abs, stat)
+    let hash = hashContent(raw)
+    let mtimeMs = stat.mtimeMs
     let row = this.options.db.read((sqlite) => this.noteRow(sqlite, rel))
     if (row?.hash !== hash) {
-      // The file changed (or appeared) behind the scanner's back: index it now.
-      await this.serial(async () => {
-        await this.indexFile(rel, 'outside')
+      // The file changed (or appeared) behind the scanner's back: index it now, and answer from the very version
+      // that was indexed, so body, etag, title, links and author always belong together.
+      const indexed = await this.serial(async () => {
+        const result = await this.indexFile(rel, 'outside')
         await this.publish({ path: rel, kind: 'written', to: null, by: 'outside' })
+        return result
       })
+      ;({ raw, hash, mtimeMs } = indexed)
       row = this.options.db.read((sqlite) => this.noteRow(sqlite, rel))
     }
     if (!row) throw new HttpError(404, 'not_found', 'Unknown note')
@@ -726,7 +733,7 @@ export class KnowledgeVault {
       frontmatter: parsed.frontmatter,
       body: parsed.body,
       etag: etagOf(hash),
-      mtime: new Date(stat.mtimeMs).toISOString(),
+      mtime: new Date(mtimeMs).toISOString(),
       links,
       backlinks,
       lastAuthor: authorFromColumn(row.last_author),
@@ -1148,7 +1155,7 @@ export class KnowledgeVault {
       const abs = await this.prepareParent(rel)
       await this.atomicWrite(abs, raw)
       await this.commit([rel], `Restore ${rel} to ${commit.slice(0, 7)}`, author)
-      const hash = await this.indexFile(rel, author)
+      const { hash } = await this.indexFile(rel, author)
       await this.publish({ path: rel, kind: 'restored', to: null, by: author })
       return { etag: etagOf(hash), path: rel }
     })

@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { MAX_NOTE_BYTES } from '../../src/knowledge/note.ts'
+import { etagOf, hashContent, MAX_NOTE_BYTES } from '../../src/knowledge/note.ts'
 import { makeVault, type Harness } from './helpers.ts'
 
 let h: Harness
@@ -189,5 +189,28 @@ describe('SCORE-029 bounded reads', () => {
       status: 413,
     })
     expect(served).toBeLessThan(MAX_NOTE_BYTES + 1024 * 1024)
+  })
+})
+
+describe('SCORE-020 coherent note response', () => {
+  test('a change between the first read and the index read never mixes versions', async () => {
+    h = await makeVault({ files: { 'a.md': '# One\nbody one [[x]]' } })
+    fs.writeFileSync(path.join(h.vaultDir, 'a.md'), '# One\nbody uno [[x]]') // stale index: same size, new content
+    fs.utimesSync(path.join(h.vaultDir, 'a.md'), new Date(), new Date())
+    const real = fs.promises.open
+    let opens = 0
+    vi.spyOn(fs.promises, 'open').mockImplementation(async (...args) => {
+      if (String(args[0]).endsWith('a.md') && ++opens === 2)
+        fs.writeFileSync(path.join(h.vaultDir, 'a.md'), '# Two\nbody two [[y]]')
+      return real(...(args as Parameters<typeof real>))
+    })
+    const note = await h.vault.readNote('a.md')
+    vi.restoreAllMocks()
+    const second = note.body.includes('body two')
+    expect(note.title).toBe(second ? 'Two' : 'One')
+    expect(note.links.map((link) => link.target)).toEqual(second ? ['y'] : ['x'])
+    expect(note.etag).toBe(
+      etagOf(hashContent(second ? '# Two\nbody two [[y]]' : '# One\nbody uno [[x]]')),
+    )
   })
 })
