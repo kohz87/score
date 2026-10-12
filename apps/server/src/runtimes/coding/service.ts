@@ -46,6 +46,7 @@ import {
 } from './translate.ts'
 import type { CodingEvent } from './types.ts'
 import type { BackendStatus, UnitBackend } from './unit-backend.ts'
+import { turnWitnessed } from '../../domain/orchestration/coding-checkpoint.ts'
 
 export interface CodingRuntimeDeps {
   db: ScoreDb
@@ -436,6 +437,14 @@ export class CodingRuntime {
       const intent = IntentRow.parse(existing)
       if (intent.state === 'accepted' && intent.result) return { runId: intent.result }
     }
+    // A launch of this turn may already have executed (the journal says so, e.g. after a database restore): never run it
+    // again (7.7a code review #4).
+    if (turnWitnessed(db.sqlite, req.turnId))
+      throw new HttpError(
+        409,
+        'turn_witnessed',
+        'This message may already have run before Score restarted, so it won’t run again. Send it again if you want a new run.',
+      )
     // Refuse before anything is stored: a missing or untested CLI is the person's to fix, not a retry loop.
     const refusal = await this.cliRefusal(agent, driver, false)
     if (refusal) throw new HttpError(422, refusal.code, refusal.message, { notice: refusal.notice })

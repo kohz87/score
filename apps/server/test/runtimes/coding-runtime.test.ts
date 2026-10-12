@@ -1856,3 +1856,17 @@ test('fallback: hand-offs read only the final validated Codex message', async ()
   await finished(2)
   expect(runs()[1]).toMatchObject({ status: 'failed' })
 })
+
+test('a turn the journal says may already have run is refused and never spawned (7.7a code review #4)', async () => {
+  await addAgent()
+  db.sqlite
+    .prepare(
+      `INSERT INTO coding_launches (launch_id, run_id, turn_id, generation, phase, revoked, may_have_executed, waiver,
+         journal_n, unsendable, updated_at) VALUES ('l-seen', 'r-seen', 'turn-seen', 1, 'releasing', 0, 1, 0, 1, 1, '2026-10-12T00:00:00.000Z')`,
+    )
+    .run()
+  await expect(
+    coding.startRun({ agentId: 'coder', input: 'go', turnId: 'turn-seen' }),
+  ).rejects.toMatchObject({ status: 409, code: 'turn_witnessed' })
+  expect(() => readFileSync(log, 'utf8')).toThrow()
+})
