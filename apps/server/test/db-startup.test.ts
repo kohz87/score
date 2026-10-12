@@ -125,7 +125,10 @@ vi.mock('../src/domain/orchestration/journal-migration.ts', () => ({
   migrateLegacyJournal: () => ({ ok: true, state: 'none', copied: 0 }),
 }))
 vi.mock('../src/domain/orchestration/journal.ts', () => ({
-  ExecutionJournal: class {},
+  ExecutionJournal: class {
+    // The coding runtime's fallback recovery reads its own records at start (7.7a FX2).
+    readOwn = () => []
+  },
   journalScope: () => 'scope',
 }))
 vi.mock('../src/auth/sqlite-session-store.ts', () => ({
