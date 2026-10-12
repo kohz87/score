@@ -57,7 +57,7 @@ test('a normal run: output, exit, payload empty, receipts, end/ack-end, exit 0 (
   expect(outcome).toMatchObject({ kind: 'ended', eligible: true, exit: { code: 0, signal: null } })
   expect(h.stdout.map((l) => JSON.parse(l))).toHaveLength(2)
   expect(h.stderr.join('')).toBe('diagnostic\n')
-  expect(receipts(h)).toEqual(['ended.json', 'released.json'])
+  expect(receipts(h)).toEqual(['acked.json', 'ended.json', 'released.json'])
   expect(json(join(h.receiptDir, 'ended.json'))).toMatchObject({
     launch: 'launch1',
     code: 0,

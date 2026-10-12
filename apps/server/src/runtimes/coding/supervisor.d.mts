@@ -69,7 +69,7 @@ export type ParsedReceipt =
   { state: 'present'; body: Record<string, unknown> } | { state: 'invalid' }
 export function parseReceipt(
   text: string,
-  kind: 'released' | 'ended',
+  kind: 'released' | 'ended' | 'acked',
   expect?: { launch?: string; generation?: number },
 ): ParsedReceipt
 export function systemdCgroup(root?: string): SupervisorCgroup & {

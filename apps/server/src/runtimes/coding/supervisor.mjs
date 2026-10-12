@@ -92,7 +92,7 @@ export function writeReceipt(dir, name, body, io = {}) {
 
 /**
  * Parses a receipt the way every reader must (review #8): an empty, partial, malformed or foreign one is `invalid`
- * and is never proof of anything. `kind` is 'released' or 'ended'; `expect` pins the launch and generation.
+ * and is never proof of anything. `kind` is 'released', 'ended' or 'acked'; `expect` pins the launch and generation.
  * Returns { state: 'present', body } | { state: 'invalid' }.
  */
 export function parseReceipt(text, kind, expect = {}) {
@@ -113,7 +113,7 @@ export function parseReceipt(text, kind, expect = {}) {
   } else if (kind === 'ended') {
     if (!('code' in body) || !('signal' in body) || typeof body.survivorsKilled !== 'boolean')
       return { state: 'invalid' }
-  } else return { state: 'invalid' }
+  } else if (kind !== 'acked') return { state: 'invalid' }
   return { state: 'present', body }
 }
 
@@ -617,7 +617,25 @@ export async function runSupervisor(spec, deps = {}) {
         return
       case 'ack-end':
         if (phase === 'ended' && childExited) {
-          finish(stoppedAfterEnd ? EXIT.failed : EXIT.ok)
+          if (stoppedAfterEnd) {
+            finish(EXIT.failed)
+            return
+          }
+          // The final receipt: written after `ack-end` was READ, before the clean exit. Score treats a run as normally
+          // completed only with this file (a unit's exit metadata can vanish with the manager; this can't).
+          try {
+            writeReceipt(spec.receiptDir, 'acked.json', {
+              launch: spec.launch,
+              generation: spec.generation,
+              at: now(),
+            })
+          } catch (error) {
+            if (error?.code !== 'EEXIST') {
+              finish(EXIT.failed)
+              return
+            }
+          }
+          finish(EXIT.ok)
         }
         return
       default:

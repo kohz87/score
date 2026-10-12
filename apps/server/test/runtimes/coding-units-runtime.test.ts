@@ -340,6 +340,7 @@ test('a Chat turn runs as a supervised unit end to end: journal phases, receipts
   expect(launch!.receipt_dir!.startsWith(namespace)).toBe(true)
   expect(launch!.receipt_dir!.startsWith(home)).toBe(false)
   expect(readdirSync(launch!.receipt_dir!).sort()).toEqual([
+    'acked.json',
     'ended.json',
     'identity.json',
     'released.json',
@@ -1767,6 +1768,24 @@ test('re-review 2 #10: eligibility needs the unit’s own exit status 0 from the
   await say('@coder [fixture:basic] third')
   await finished(3)
   expect(runs()[2]!.status).toBe('failed')
+})
+
+test('FW #4: an absent unit is not a clean exit: without the supervisor’s final receipt the result is not eligible', async () => {
+  await addAgent()
+  await makeRoom()
+  // The supervisor died with Score's acknowledgment unread, and the manager's replacement removed its failure metadata:
+  // the unit is simply gone and no final receipt exists.
+  fake.hooks.onExit = ({ receiptDir }) => rmSync(join(receiptDir, 'acked.json'), { force: true })
+  await say('@coder [fixture:basic] go')
+  await finished()
+  expect(fake.units.size).toBe(0)
+  expect(runs()[0]!.status).toBe('failed')
+  expect(launches()[0]!.eligibility).toContain('supervisor-exit')
+  // With the receipt in place the same shape of run (unit collected at once) completes.
+  fake.hooks.onExit = undefined
+  await say('@coder [fixture:basic] again')
+  await finished(2)
+  expect(runs()[1]!.status).toBe('completed')
 })
 
 test('re-review 2 #17: a first cause the supervisor wrote itself is adopted into the journal before the launch ends', async () => {

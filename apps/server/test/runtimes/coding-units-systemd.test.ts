@@ -172,6 +172,7 @@ describe.skipIf(!ENABLED)(
       expect(launch!.unit.startsWith(PREFIX)).toBe(true)
       expect(launch!.proof).toMatch(/cgroup|never/)
       expect(readdirSync(launch!.receipt_dir).sort()).toEqual([
+        'acked.json',
         'ended.json',
         'identity.json',
         'released.json',

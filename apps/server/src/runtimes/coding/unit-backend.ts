@@ -830,12 +830,18 @@ export class UnitBackend {
         // Eligibility also needs the unit's own account of its supervisor: it exited with status 0 (#10), and every stop
         // cause was made durable (#17).
         const exit = await this.supervisorExit(launchId)
-        if (!proof.proven || exit !== 'clean') {
+        // The supervisor writes its final receipt after reading `ack-end` and before exiting 0: positive evidence that
+        // Score's acknowledgment was consumed (FW #4). Missing unit metadata is uncertainty, never "clean".
+        const acked = this.readReceiptIn(this.recorded(launchId), 'acked.json') === 'present'
+        if (!proof.proven || (exit !== 'clean' && exit !== 'absent')) {
           outcome.complete = false
           outcome.reasons = [
             ...outcome.reasons,
             `supervisor-exit:${proof.proven ? exit : 'unproven'}`,
           ]
+        } else if (!acked) {
+          outcome.complete = false
+          outcome.reasons = [...outcome.reasons, 'supervisor-exit:unacknowledged']
         }
         if (this.unrecordedStops.has(launchId)) {
           outcome.complete = false
@@ -1307,7 +1313,7 @@ export class UnitBackend {
     return now !== null && `${now.pid}:${now.start}` !== rec.manager
   }
 
-  private readReceiptIn(rec: RecordedLaunch, name: 'released.json' | 'ended.json') {
+  private readReceiptIn(rec: RecordedLaunch, name: 'released.json' | 'ended.json' | 'acked.json') {
     return this.readReceipt({ launch_id: rec.launchId, receipt_dir: rec.receiptDir } as Row, name)
   }
 
@@ -1317,7 +1323,7 @@ export class UnitBackend {
    */
   private readReceipt(
     row: Row,
-    name: 'released.json' | 'ended.json',
+    name: 'released.json' | 'ended.json' | 'acked.json',
   ): 'present' | 'absent' | 'invalid' | 'error' {
     if (!row.receipt_dir) return 'absent'
     let text: string
@@ -1329,7 +1335,7 @@ export class UnitBackend {
     const generation = this.deps.journal.state(row.launch_id)?.state.generation
     return validReceipt(
       text,
-      name === 'ended.json' ? 'ended' : 'released',
+      name === 'ended.json' ? 'ended' : name === 'acked.json' ? 'acked' : 'released',
       row.launch_id,
       generation,
     )
@@ -1347,7 +1353,9 @@ export class UnitBackend {
     const rec = this.recorded(launchId)
     if (!rec.unit || !rec.supervisor) return 'unrecorded'
     const shown = await showUnit(this.run, rec.unit)
-    if (shown.kind === 'absent') return 'clean'
+    // A unit that exited 0 is collected at once, and a replaced manager forgets failures too: absence is no account of the
+    // exit. The caller decides with the supervisor's own final receipt (`acked.json`).
+    if (shown.kind === 'absent') return 'absent'
     if (shown.kind !== 'present') return 'unreadable'
     const state = shown.state
     if (rec.invocationId && state.invocationId !== rec.invocationId) return 'other-invocation'
@@ -1764,7 +1772,7 @@ const FALLBACK_NOTE =
 /** One definition of a valid receipt, shared with the writer (supervisor.mjs `parseReceipt`, FX1). */
 function validReceipt(
   text: string,
-  kind: 'released' | 'ended',
+  kind: 'released' | 'ended' | 'acked',
   launchId: string,
   generation: number | undefined,
 ): boolean {

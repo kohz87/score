@@ -55,6 +55,8 @@ export interface FakeHooks {
   /** What `systemctl show` reports as ExecMainStatus / ExecMainPID instead of the supervisor's own. */
   execMainStatus?: number
   execMainPid?: number
+  /** Runs when the supervisor exited, before the unit is collected (a test erases receipts the way a crash would). */
+  onExit?: (info: { receiptDir: string; code: number }) => void
 }
 
 export class FakeSystemd {
@@ -182,6 +184,7 @@ export class FakeSystemd {
       unit.exitCode = code
       unit.running = false
       unit.active = code === 0 ? 'inactive' : 'failed'
+      this.hooks.onExit?.({ receiptDir: spec.receiptDir, code })
       // A cleanly exited transient unit is garbage-collected; a failed one stays until reset-failed.
       if (code === 0 && !this.hooks.keepExited) this.removeUnit(name)
       return code
