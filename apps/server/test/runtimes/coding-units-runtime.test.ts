@@ -28,6 +28,7 @@ import { bootId, processStart } from '../../src/runtimes/coding/proc.ts'
 import { spawnCli } from '../../src/runtimes/coding/process.ts'
 import { CodingRuntime, type CodingRuntimeDeps } from '../../src/runtimes/coding/service.ts'
 import { RunSession } from '../../src/runtimes/coding/coding-socket.ts'
+import { writeReceipt } from '../../src/runtimes/coding/supervisor.mjs'
 import { UnitBackend, type UnitBackendDeps } from '../../src/runtimes/coding/unit-backend.ts'
 import { defaultRootPolicy } from '../../src/workspace/policy.ts'
 import { FakeSystemd } from '../helpers/fake-systemd.ts'
@@ -88,11 +89,12 @@ function makeBackend(options: BootOptions = {}): UnitBackend {
     run: fake.run,
     population: fake.population,
     proc: {
-      start: processStart,
+      start: (pid) => fake.procStart(pid) ?? processStart(pid),
       cgroup: (_pid, claimed) => claimed,
       boot: () => fake.boot,
     },
     manager: async () => ({ pid: fake.managerPid, start: '1000' }),
+    signalSupervisor: fake.signal,
     notifySocket: join(runtimeDir, 'notify'),
     notifyBin: null,
     specOverrides: { tickMs: 50, pollMs: 20 },
@@ -341,7 +343,11 @@ test('a Chat turn runs as a supervised unit end to end: journal phases, receipts
   // Receipts live beside the journal, outside the home; the spec (with its token) is gone.
   expect(launch!.receipt_dir!.startsWith(namespace)).toBe(true)
   expect(launch!.receipt_dir!.startsWith(home)).toBe(false)
-  expect(readdirSync(launch!.receipt_dir!).sort()).toEqual(['ended.json', 'released.json'])
+  expect(readdirSync(launch!.receipt_dir!).sort()).toEqual([
+    'ended.json',
+    'identity.json',
+    'released.json',
+  ])
   expect(existsSync(join(runtimeDir, 'score', 'abcdef01', 'launches', launch!.launch_id))).toBe(
     false,
   )
@@ -380,7 +386,21 @@ test('a failed capability check keeps the process-group backend; Check again fol
   await finished()
   expect(runs()[0]!.status).toBe('completed')
   expect(processLaunches).toBe(1)
-  expect(launches()).toEqual([])
+  // No unit launch; the fallback launch is projected into the database with its routing (re-review #6) and checkpoint.
+  expect(launches().filter((l) => l.backend === 'unit')).toEqual([])
+  expect(launches()).toHaveLength(1)
+  expect(launches()[0]).toMatchObject({
+    backend: 'process-group',
+    agent_id: 'coder',
+    runtime: 'claude-code',
+    phase: 'settled',
+    may_have_executed: 1,
+  })
+  const entries = journal.readOwn()
+  if (!entries.ok) throw new Error(entries.reason)
+  expect(db.sqlite.prepare('SELECT seq FROM coding_journal_checkpoint WHERE id = 1').get()).toEqual(
+    { seq: Math.max(...entries.entries.map((e) => e.n)) },
+  )
   // Review 2026-10-12 #6: the fallback launch is witnessed in the journal outside the home, with its process identity.
   const witnessed = journalOf(runs()[0]!.id)
   expect(witnessed.map((e) => e.kind)).toEqual([
@@ -743,6 +763,8 @@ function seedLaunch(
     manager?: string | null
     runStatus?: string
     cgroup?: string
+    /** Skip the identity file (a launch whose supervisor identity Score never recorded). */
+    noIdentity?: boolean
   } = {},
 ) {
   const n = ++seeded
@@ -779,6 +801,30 @@ function seedLaunch(
       ).ok,
     ).toBe(true)
   }
+  if (upto !== 'requested' && !over.noIdentity) {
+    // The identity file Score writes beside the journal at verification (re-review #5/#6): the supervisor to signal,
+    // the boot and the manager. A seeded launch without a live unit gets a supervisor that no longer exists.
+    const cgroup = over.cgroup ?? `/fake/${unit}`
+    const managerText = manager ?? `${fake.boot}|${fake.managerPid}:1000`
+    const pid = live?.pid ?? 2_000_000 + n
+    writeReceipt(receiptDir, 'identity.json', {
+      launch: launchId,
+      generation: 0,
+      at: Date.now(),
+      unit,
+      invocationId: live?.invocationId ?? 'f'.repeat(32),
+      cgroup,
+      boot: over.manager === null ? null : managerText.split('|')[0],
+      manager:
+        over.manager === null
+          ? null
+          : {
+              pid: Number(managerText.split('|')[1]!.split(':')[0]),
+              start: managerText.split(':')[1]!,
+            },
+      supervisor: { pid, start: live?.start ?? String(100_000 + pid) },
+    })
+  }
   if (upto === 'releasing' || upto === 'released-seen')
     expect(cj.release(launchId, () => true, project).ok).toBe(true)
   if (upto === 'released-seen') expect(cj.releasedSeen(launchId, {}, project).ok).toBe(true)
@@ -812,7 +858,7 @@ test('recovery: a launch that never reached releasing is revoked by the journal 
   expect(journalKinds(seed.launchId)).toEqual(['launch-requested', 'revoked', 'ended', 'settled'])
 })
 
-test('recovery: an armed launch with a live unit is revoked and its unit stopped by exact name', async () => {
+test('recovery: an armed launch with a live unit is revoked and its supervisor stopped through its pinned identity', async () => {
   await addAgent()
   const seed = seedLaunch('armed', { withUnit: true })
   await coding.recover()
@@ -822,9 +868,11 @@ test('recovery: an armed launch with a live unit is revoked and its unit stopped
     may_have_executed: 0,
     phase: 'settled',
   })
-  // The stop was gated on the recorded InvocationID: the call sequence shows a `show` before the `stop`.
-  const stops = fake.calls.filter((c) => c.includes('stop') && c.includes(seed.unit))
-  expect(stops).toHaveLength(1)
+  // The stop went to the recorded supervisor (pid + start), never to the unit by name (re-review #5).
+  expect(fake.signals.filter((s) => s.delivered)).toEqual([
+    { pid: seed.live!.pid, start: seed.live!.start, signal: 'SIGINT', delivered: true },
+  ])
+  expect(fake.calls.filter((c) => c.includes('stop'))).toEqual([])
 })
 
 test('recovery: a released launch with a live unit is stopped, proven ended and settled; released-seen needs the receipt', async () => {
@@ -929,6 +977,7 @@ test('recovery: systemd that cannot be read holds every open launch and the pers
     { timeout: 15_000 },
   )
   fake.hooks.showFails = false
+  const signalsBefore = fake.signals.length
   const released = await request('POST', '/api/coding-agents/coder/release', {})
   expect(released.statusCode, released.body).toBe(200)
   const row = launchRow(seed.launchId)
@@ -937,8 +986,10 @@ test('recovery: systemd that cannot be read holds every open launch and the pers
   expect(db.sqlite.prepare('SELECT agent_id, run_id FROM coding_releases').all()).toEqual([
     { agent_id: 'coder', run_id: seed.runId },
   ])
-  // Nothing was signalled: the fake unit was never asked to stop by the release.
-  expect(fake.units.has(seed.unit)).toBe(true)
+  // Nothing was signalled by the release itself, and the journal says the launch is settled as waived.
+  expect(fake.signals.length).toBe(signalsBefore)
+  expect(row.disposition).toBe('waived')
+  expect(journalKinds(seed.launchId).slice(-2)).toEqual(['ended', 'settled'])
 })
 
 test('recovery: after a manager cold restart the receipts and the recorded cgroup decide, never missing metadata', async () => {
@@ -1259,4 +1310,293 @@ test('#5: the fallback launch is refused while a barrier is up (needs the servic
     .startRun({ agentId: 'coder', input: 'go', turnId: 't-barrier' })
     .catch((error: unknown) => error)
   expect(refused).toMatchObject({ status: 422, code: 'coding_paused' })
+})
+
+// ---- second review round (FY1) ---------------------------------------------------------------------------------------
+
+/** Everything Score stored about the runs, as one searchable string. */
+function storedText(): string {
+  const parts: string[] = []
+  for (const table of ['runs', 'messages', 'coding_launches'])
+    parts.push(JSON.stringify(db.sqlite.prepare(`SELECT * FROM ${table}`).all()))
+  return parts.join('\n')
+}
+
+test('#3 (re-review): the eligibility note is redacted before it reaches SQLite', async () => {
+  setEnv('SCORE_CODING_VERIFIED_ANTIGRAVITY', 'read-only')
+  await addAgent({
+    id: 'agy1',
+    name: 'Agy',
+    runtime: 'antigravity',
+    permission: 'read-only',
+    acknowledgeReads: true,
+  })
+  await makeRoom()
+  await say('@agy1 [fixture:deniedsecret] go')
+  await finished()
+  expect(launches()[0]!.eligibility).toBeTruthy()
+  expect(launches()[0]!.eligibility).not.toContain('review-sentinel')
+  expect(storedText()).not.toContain('review-sentinel')
+})
+
+test('#4 (re-review): a long secret value on stderr never reaches the failure notice, the run or the launch row', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:stderrleak] go')
+  await finished()
+  expect(runs()[0]!.status).toBe('failed')
+  expect(runs()[0]!.error).toContain('ended without a result Score can use')
+  expect(storedText()).not.toMatch(/v{20}/)
+})
+
+test('#3 (re-review): a record that cannot be validated after turn.completed still makes the result unusable', async () => {
+  await addAgent({ id: 'cx', name: 'Cx', runtime: 'codex', acknowledgeReads: true })
+  await makeRoom()
+  await say('@cx [fixture:lateloss] go')
+  await finished()
+  expect(runs()[0]!.status).toBe('failed')
+  expect(runs()[0]!.error).toContain('without a result Score can use')
+  expect(launches()[0]!.eligibility).toContain('could not validate')
+})
+
+test('#5 (re-review): a barrier raised after admission stops the fallback release: no releasing record, no CLI', async () => {
+  let fenced = false
+  await coding.close()
+  await app.close()
+  await boot({
+    unit: { disabled: 'The fallback is forced.' },
+    blocked: () => (fenced ? 'Score is waiting for you to review the coding journal.' : null),
+    ingestWrap: (real) => ({
+      submit: (observation) => {
+        // The turn is admitted and goes `running`; the fence rises while it waits to be released.
+        if (observation.identity.endsWith(':running')) fenced = true
+        return real.submit(observation)
+      },
+    }),
+  })
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:basic] go')
+  await finished()
+  expect(processLaunches).toBe(0)
+  expect(cliCalls()).toHaveLength(0)
+  const kinds = (journal.readOwn() as { entries: { kind: string }[] }).entries.map((e) => e.kind)
+  expect(kinds).not.toContain('releasing')
+  expect(runs()[0]!.status).toBe('failed')
+})
+
+test('#5 (re-review): recovery signals only the recorded supervisor; a foreign invocation under the same name is never stopped', async () => {
+  await addAgent()
+  // The recorded supervisor is gone; another invocation now occupies the unit name.
+  const seed = seedLaunch('releasing', { receipts: ['released.json'] })
+  const foreign = fake.addUnit(seed.unit)
+  await coding.recover()
+  expect(foreign.running).toBe(true)
+  expect(fake.units.has(seed.unit)).toBe(true)
+  expect(fake.calls.filter((c) => c.includes('stop'))).toEqual([])
+  expect(fake.signals.every((s) => !s.delivered)).toBe(true)
+  // Not proven ended (the name belongs to a different invocation): the agent stays held.
+  expect(launchRow(seed.launchId)).toMatchObject({ held: expect.any(Number), phase: 'releasing' })
+  expect(launchRow(seed.launchId).held).toBeGreaterThan(0)
+})
+
+test('#5 (re-review): a launch whose supervisor identity was never recorded is never stopped; it stays uncertain and releasable', async () => {
+  await addAgent()
+  const seed = seedLaunch('releasing', { withUnit: true, noIdentity: true })
+  await coding.recover()
+  expect(seed.live!.running).toBe(true)
+  expect(fake.signals).toEqual([])
+  expect(fake.calls.filter((c) => c.includes('stop'))).toEqual([])
+  await vi.waitFor(() => expect(launchRow(seed.launchId).held).toBe(2), { timeout: 15_000 })
+  expect(seed.live!.running).toBe(true)
+})
+
+test('#6 (re-review): the proof checks the recorded cgroup; a control group that disagrees proves nothing', async () => {
+  await addAgent()
+  const seed = seedLaunch('releasing', { withUnit: true, receipts: ['released.json'] })
+  // systemd now names an empty, different control group for the unit while the recorded one is populated.
+  seed.live!.controlGroup = '/fake/somewhere-else'
+  seed.live!.active = 'inactive'
+  const proof = await backend.proveEnded(seed.launchId, { timeoutMs: 200 })
+  expect(proof.proven).toBe(false)
+  expect(proof.detail).toMatch(/control group differs/)
+})
+
+test('#6 (re-review): the boot and the manager are kept beside the journal; a restored database that lost them still decides by the receipt', async () => {
+  await coding.close()
+  await app.close()
+  await boot({ unit: { population: () => 'unknown', recoverProofMs: 200 }, reapRetryMs: 5_000 })
+  await addAgent()
+  const old = `${fake.boot}|1111:5`
+  const seed = seedLaunch('releasing', { manager: old, receipts: ['released.json', 'ended.json'] })
+  // The database lost its copy of the manager identity (an older backup).
+  db.sqlite
+    .prepare('UPDATE coding_launches SET manager = NULL WHERE launch_id = ?')
+    .run(seed.launchId)
+  await coding.recover()
+  expect(launchRow(seed.launchId)).toMatchObject({ phase: 'settled', proof: 'receipt', held: 0 })
+})
+
+test('#6 (re-review): a recorded boot that differs means ended, and nothing is signalled', async () => {
+  await addAgent()
+  const seed = seedLaunch('releasing', { manager: 'boot-OLD|99:5' })
+  await coding.recover()
+  expect(launchRow(seed.launchId)).toMatchObject({ phase: 'settled', proof: 'boot-change' })
+  expect(fake.signals).toEqual([])
+})
+
+test('#2 (re-review): a launch the journal does not own is never stopped, reset or settled', async () => {
+  await addAgent()
+  const seed = seedLaunch('releasing', { withUnit: true, receipts: ['released.json'] })
+  vi.spyOn(CodingJournal.prototype, 'isOwned').mockReturnValue(false)
+  await coding.recover()
+  expect(seed.live!.running).toBe(true)
+  expect(fake.signals).toEqual([])
+  expect(fake.calls.filter((c) => c.includes('stop') || c.includes('reset-failed'))).toEqual([])
+  expect(journalKinds(seed.launchId)).toEqual(['launch-requested', 'armed', 'releasing'])
+})
+
+test('#2 (re-review): a unit of another installation is never stopped or reset, whatever its journal record says', async () => {
+  await addAgent()
+  const other = 'score-11111111-c-deadbeefdeadbeefdeadbeefdeadbeef.service'
+  const unit = fake.addUnit(other)
+  // The unit-level stop and reset refuse a name outside the caller's prefix before looking at systemd.
+  const { stopUnit, resetUnit } = await import('../../src/runtimes/coding/units.ts')
+  fake.calls.length = 0
+  expect(await stopUnit(fake.run, other, unit.invocationId, 'score-abcdef01-c-')).toBe('unknown')
+  expect(await resetUnit(fake.run, other, unit.invocationId, 'score-abcdef01-c-')).toBe('unknown')
+  expect(fake.calls).toEqual([])
+})
+
+test('#14 (re-review): the stop cause is journaled before any signal reaches the supervisor', async () => {
+  await addAgent()
+  const seed = seedLaunch('releasing', { withUnit: true, receipts: ['released.json'] })
+  const order: string[] = []
+  const original = CodingJournal.prototype.recordStop
+  vi.spyOn(CodingJournal.prototype, 'recordStop').mockImplementation(function (
+    this: CodingJournal,
+    ...args: Parameters<CodingJournal['recordStop']>
+  ) {
+    order.push(`journal:${args[1]}`)
+    return original.apply(this, args)
+  })
+  const handler = seed.live!.stopHandler
+  seed.live!.stopHandler = () => {
+    order.push('signal')
+    handler?.()
+  }
+  await coding.stopRun({ agentId: 'coder', runId: seed.runId })
+  expect(order).toEqual(['journal:user', 'signal'])
+})
+
+test('#8 (re-review): Release settles the launch in the journal first; a restart never stops it again', async () => {
+  await coding.close()
+  await app.close()
+  await boot({ unit: { recoverProofMs: 200 }, reapRetryMs: 30 })
+  await addAgent()
+  const seed = seedLaunch('releasing', { withUnit: true })
+  fake.hooks.showFails = true
+  await coding.recover()
+  await vi.waitFor(
+    async () =>
+      expect((await request('GET', '/api/coding-agents')).json().items[0].heldGroups).toEqual([
+        expect.objectContaining({ canRelease: true }),
+      ]),
+    { timeout: 15_000 },
+  )
+  const waive = vi.spyOn(CodingJournal.prototype, 'waive')
+  expect((await request('POST', '/api/coding-agents/coder/release', {})).statusCode).toBe(200)
+  expect(waive).toHaveBeenCalledWith(seed.launchId, expect.any(String), expect.anything())
+  expect(journalKinds(seed.launchId).at(-1)).toBe('settled')
+  const before = fake.signals.length
+  fake.hooks.showFails = false
+  await backend.recover()
+  expect(fake.signals.length).toBe(before)
+})
+
+// ---- the process-group fallback's reconciliation (re-review #6) -------------------------------------------------------
+
+function seedFallback(over: { identity?: boolean; witness?: boolean; run?: boolean } = {}) {
+  const n = ++seeded
+  const launchId = `00000000-0000-4000-9000-${String(n).padStart(12, '0')}`
+  const runId = `cr_fb${n}`
+  if (over.run !== false) seedRun(runId)
+  const cj = new CodingJournal(journal)
+  expect(cj.requestLaunch({ launchId, runId, turnId: `turn-${runId}`, generation: 0 }).ok).toBe(
+    true,
+  )
+  cj.arm(launchId, { disposition: 'process-group' })
+  cj.release(launchId, () => true)
+  return { cj, launchId, runId }
+}
+
+test('#6 (re-review): a released fallback launch with no recorded identity fences the agent and can be released', async () => {
+  await boot({ noUnit: true })
+  await addAgent()
+  const seed = seedFallback()
+  await coding.recover()
+  expect(db.sqlite.prepare('SELECT unresolved, unobservable FROM coding_processes').all()).toEqual([
+    { unresolved: 1, unobservable: 1 },
+  ])
+  const refused = await coding
+    .startRun({ agentId: 'coder', input: 'go', turnId: 't-fenced' })
+    .catch((error: unknown) => error)
+  expect(refused).toMatchObject({ status: 422, code: 'agent_still_stopping' })
+  const view = (await request('GET', '/api/coding-agents')).json().items[0]
+  expect(view.heldGroups).toEqual([{ runId: seed.runId, pgid: 0, canRelease: true }])
+  // The person's release waives the launch in the journal.
+  expect((await request('POST', '/api/coding-agents/coder/release', {})).statusCode).toBe(200)
+  expect(journalKinds(seed.launchId).at(-1)).toBe('settled')
+  expect(db.sqlite.prepare('SELECT 1 FROM coding_processes').all()).toEqual([])
+})
+
+test('#6 (re-review): surviving tools recorded beside the journal are stopped even when the database lost the group, and a group that survives fences everyone', async () => {
+  await boot({ noUnit: true })
+  await addAgent()
+  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], {
+    detached: true,
+    stdio: 'ignore',
+  })
+  try {
+    const pid = child.pid!
+    // A restored database: no run row, no process row. The leader is long gone (no identity); a tool survives.
+    const seed = seedFallback({ run: false })
+    const { writeFallbackWitness } = await import('../../src/runtimes/coding/fallback-witness.ts')
+    writeFallbackWitness(namespace, {
+      launch: seed.launchId,
+      runId: seed.runId,
+      turnId: `turn-${seed.runId}`,
+      agentId: 'coder',
+      members: [{ pid, start: processStart(pid)! }],
+      at: Date.now(),
+    })
+    await coding.recover()
+    await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow(), { timeout: 10_000 })
+    expect(journalKinds(seed.launchId).slice(-2)).toEqual(['ended', 'settled'])
+  } finally {
+    try {
+      process.kill(-child.pid!, 'SIGKILL')
+    } catch {
+      // gone
+    }
+  }
+})
+
+test('#6 (re-review): an unresolved fallback group whose run row is gone fences every agent and is visible', async () => {
+  await coding.close()
+  await app.close()
+  await boot({ noUnit: true })
+  await addAgent()
+  const seed = seedFallback({ run: false })
+  db.sqlite
+    .prepare(
+      `INSERT INTO coding_processes (run_id, pid, pgid, start_time, boot_id, created_at, unresolved, unobservable)
+       VALUES (?, 0, 0, NULL, NULL, ?, 1, 1)`,
+    )
+    .run(seed.runId, new Date().toISOString())
+  const refused = await coding
+    .startRun({ agentId: 'coder', input: 'go', turnId: 't-lost-routing' })
+    .catch((error: unknown) => error)
+  expect(refused).toMatchObject({ status: 422, code: 'agent_still_stopping' })
+  expect((await request('GET', '/api/coding-agents')).json().items[0].heldGroups).toHaveLength(1)
 })

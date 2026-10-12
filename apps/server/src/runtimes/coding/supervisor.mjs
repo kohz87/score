@@ -55,7 +55,9 @@ export function procStart(pid) {
  * exists, which keeps the old O_EXCL "exactly once" meaning; a plain rename would overwrite), the temp name is removed
  * and the directory is fsynced. Throws on any error: callers fail closed.
  */
-export function writeReceipt(dir, name, body) {
+export function writeReceipt(dir, name, body, io = {}) {
+  const write = io.writeSync ?? writeSync
+  const link = io.linkSync ?? linkSync
   const final = join(dir, name)
   const tmp = join(dir, `.${name}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`)
   const data = Buffer.from(JSON.stringify(body) + '\n')
@@ -64,7 +66,7 @@ export function writeReceipt(dir, name, body) {
     try {
       let off = 0
       while (off < data.length) {
-        const n = writeSync(fd, data, off, data.length - off)
+        const n = write(fd, data, off, data.length - off)
         if (!(n > 0)) throw new Error('receipt: short write')
         off += n
       }
@@ -72,7 +74,7 @@ export function writeReceipt(dir, name, body) {
     } finally {
       closeSync(fd)
     }
-    linkSync(tmp, final)
+    link(tmp, final)
   } finally {
     try {
       unlinkSync(tmp)
@@ -219,6 +221,9 @@ export async function runSupervisor(spec, deps = {}) {
   let payloadDir = null
   const seq = { stdout: 0, stderr: 0 }
   const eof = { stdout: false, stderr: false }
+  // A pipe Score closed itself (cleanup, read error) is loss, never a clean EOF (review 2026-10-12 #1): unread output
+  // may have been thrown away, so the `eof` frame says so and the result is ineligible.
+  const forced = { stdout: false, stderr: false }
   const bytes = { stdout: 0, stderr: 0 }
   let paused = false
   let finished = false
@@ -331,10 +336,18 @@ export async function runSupervisor(spec, deps = {}) {
       // Backpressure (design section 4): stop reading the CLI's pipes while the socket buffer is high; the CLI blocks.
       if (sock.writableLength > limits.highWaterBytes) pauseOutput()
     })
+    stream.on('error', () => {
+      forced[name] = true
+    })
     stream.on('close', () => {
       if (eof[name]) return
       eof[name] = true
-      send({ t: 'eof', stream: name, lastSeq: seq[name] })
+      send({
+        t: 'eof',
+        stream: name,
+        lastSeq: seq[name],
+        ...(forced[name] ? { forced: true } : {}),
+      })
       void maybeDrained()
     })
   }
@@ -434,7 +447,11 @@ export async function runSupervisor(spec, deps = {}) {
         // Nothing left in the payload can hold a pipe open; if EOF still has not arrived, close our ends.
         emptySince ??= now()
         if (now() - emptySince >= grace)
-          for (const name of ['stdout', 'stderr']) if (!eof[name]) child?.[name]?.destroy()
+          for (const name of ['stdout', 'stderr'])
+            if (!eof[name]) {
+              forced[name] = true
+              child?.[name]?.destroy()
+            }
       } else {
         emptySince = null
         if (!survivorsKilled && (stopCause !== null || now() >= graceDeadline)) {
@@ -539,10 +556,11 @@ export async function runSupervisor(spec, deps = {}) {
           return
         }
         phase = 'waiting-go'
+        // `deps.self` lets tests that run the supervisor inside the test process report a distinct identity.
         send({
           t: 'ready',
-          pid: process.pid,
-          start: procStart(process.pid),
+          pid: deps.self?.pid ?? process.pid,
+          start: deps.self?.start ?? procStart(process.pid),
           cgroup: cgroup.path,
         })
         return

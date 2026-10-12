@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { codingProjection } from '../../domain/orchestration/coding-checkpoint.ts'
 import type { CodingJournal } from '../../domain/orchestration/coding-journal.ts'
@@ -12,26 +13,28 @@ import {
 } from '../../domain/orchestration/coding-records.ts'
 import { installation8, LAUNCHES_DIR } from '../../installation.ts'
 import { mkdirDurable } from '../../locks/os-lock.ts'
-import { CodingSocketServer, type RunSession } from './coding-socket.ts'
+import { CodingSocketServer, RETAINED_RUN_BYTES, type RunSession } from './coding-socket.ts'
+import './fy2-shim.ts'
+import { redactNote } from './note.ts'
+import { signalPid, type PidSignalResult } from './pidfd-signal.ts'
 import { bootId, processStart } from './proc.ts'
 import { pdeathsigSupport } from './pdeathsig-exec.ts'
 import type { StopReason } from './process.ts'
-import { hashSpec, parseReceipt, type SupervisorSpec } from './supervisor.mjs'
+import { hashSpec, parseReceipt, writeReceipt, type SupervisorSpec } from './supervisor.mjs'
 import type { CodingEvent, LineParser } from './types.ts'
 import {
   buildSystemRun,
   cgroupPopulation,
   checkCapabilities,
+  hasInstallationPrefix,
   listInstallationUnits,
   managerEnvironmentNames,
   managerIncarnation,
   realRunTool,
   resetUnit,
   showUnit,
-  stopUnit,
   unitNameFor,
   unitPrefix,
-  validateUnitName,
   type ManagerIncarnation,
   type Population,
   type RunTool,
@@ -100,6 +103,11 @@ export interface UnitBackendDeps {
     boot(): string | null
   }
   manager?: () => Promise<ManagerIncarnation | null>
+  /**
+   * Signals the recorded supervisor through a pidfd that pins pid + start time (review 2026-10-12 #5). The only way
+   * Score stops a unit it holds no connection to; it never stops by unit name. Tests inject a fake.
+   */
+  signalSupervisor?: (pid: number, start: string, signal: NodeJS.Signals) => PidSignalResult
   /** Merged into the supervisor's spec before it is hashed (tests tighten its ticks). */
   specOverrides?: Partial<SupervisorSpec>
   readyTimeoutMs?: number
@@ -167,7 +175,7 @@ export interface UnitRun {
   done: Promise<UnitOutcome>
 }
 
-const STOP_CAUSE: Record<StopReason, string> = {
+export const STOP_CAUSE: Record<StopReason, string> = {
   user: 'user',
   timeout: 'deadline',
   output_limit: 'output-cap',
@@ -223,6 +231,36 @@ interface Row {
   revoked: number
   may_have_executed: number
   held: number
+}
+
+const IDENTITY_FILE = 'identity.json'
+const IdentityFile = z.object({
+  launch: z.string().min(1),
+  generation: z.number().int(),
+  at: z.number(),
+  unit: z.string().min(1),
+  invocationId: z.string().min(1),
+  cgroup: z.string().min(1),
+  boot: z.string().nullable(),
+  manager: z.object({ pid: z.number().int(), start: z.string() }).nullable(),
+  supervisor: z.object({ pid: z.number().int().positive(), start: z.string().regex(/^\d+$/) }),
+})
+
+/** Everything Score recorded about one launch, merged from the journal, the identity file and the database row. */
+interface RecordedLaunch {
+  launchId: string
+  unit: string | null
+  invocationId: string | null
+  cgroup: string | null
+  boot: string | null
+  /** `<pid>:<start>` of the user manager that verified the launch. */
+  manager: string | null
+  supervisor: { pid: number; start: string } | null
+  /** Any source knows the launch. */
+  known: boolean
+  /** Names of the fields two sources disagree on, or null. */
+  disagreement: string | null
+  receiptDir: string
 }
 
 export interface RecoveredLaunch {
@@ -404,11 +442,36 @@ export class UnitBackend {
   }
 
   /**
-   * The first stop cause is saved in the database before any signal goes out, so a Score that dies between the request
-   * and the end of the run still knows why it stopped (review #14). The first cause wins. A failed write is reported
-   * and the stop goes ahead: stopping matters more than the note.
+   * The first stop cause is saved before any signal goes out, so a Score that dies between the request and the end of
+   * the run still knows why it stopped. It goes into the installation's journal first (an fsynced record outside the
+   * restorable home; review 2026-10-12 #14) and into the database after it. The first cause wins. A failed write is
+   * reported and the stop goes ahead: stopping matters more than the note.
    */
   recordStop(launchId: string, reason: StopReason): void {
+    try {
+      const cause = STOP_CAUSE[reason]
+      const journaled = this.deps.journal.recordStop(
+        launchId,
+        cause,
+        codingProjection(this.deps.db, this.clock, (sqlite) =>
+          sqlite
+            .prepare(
+              'UPDATE coding_launches SET stop_cause = COALESCE(stop_cause, ?) WHERE launch_id = ?',
+            )
+            .run(cause, launchId),
+        ),
+      )
+      // A launch the journal doesn't know yet (stopped before `requested`) has nothing to record; an inherited one is
+      // not ours.
+      if (
+        !journaled.ok &&
+        journaled.reason !== 'unknown_launch' &&
+        journaled.reason !== ('inherited' as string)
+      )
+        this.deps.onError?.(new Error(`stop cause not journaled: ${journaled.reason}`))
+    } catch (error) {
+      this.deps.onError?.(error)
+    }
     try {
       this.deps.db.sqlite
         .prepare(
@@ -420,11 +483,13 @@ export class UnitBackend {
     }
   }
 
-  /** Called by `Control.requestStop` once a session exists and the CLI is released. */
+  /**
+   * Called by `Control.requestStop` once a session exists and the CLI is released, after `recordStop`. The stop goes over
+   * the authenticated connection; without one, to the recorded supervisor through its pidfd. Never by unit name.
+   */
   sendStop(launchId: string, session: RunSession | null, reason: StopReason): void {
-    this.recordStop(launchId, reason)
     if (session?.connected) session.stop(STOP_CAUSE[reason])
-    else void this.stopByName(launchId).catch((error: unknown) => this.deps.onError?.(error))
+    else void this.stopSupervisor(launchId).catch((error: unknown) => this.deps.onError?.(error))
   }
 
   private outcomeOf(
@@ -540,9 +605,8 @@ export class UnitBackend {
 
     // ---- from here the launch is journaled: every exit goes through `end()` ----
     let session: RunSession | null = null
-    let unitState: UnitState | null = null
     let released = false
-    let stderr = ''
+    const diagnostics = new BoundedDiagnostics()
     const finish = async (
       over: Partial<UnitOutcome> = {},
       stopCause: string | null = null,
@@ -553,7 +617,7 @@ export class UnitBackend {
       this.removeSpecDir(specDir)
       return this.outcomeOf(launchId, unit, {
         released,
-        stderr,
+        stderr: diagnostics.text(),
         stats,
         proven: proof.proven,
         proof: proof.proof,
@@ -576,7 +640,9 @@ export class UnitBackend {
       } catch {
         // the unit stop below ends it
       }
-      await this.stopByName(launchId, unitState?.invocationId)
+      // A supervisor that never reported has nothing to pin: its launch is unknown to Score now, so it is rejected and
+      // leaves by itself; the proof below waits for that. One that reported is stopped through its pidfd.
+      await this.stopSupervisor(launchId)
       return finish({ refusal: reason })
     }
 
@@ -587,9 +653,7 @@ export class UnitBackend {
         if (events.length) sawEvents = true
         for (const event of events) await request.onEvent(event)
       },
-      onStderr: (text: string) => {
-        stderr = (stderr + text).slice(-8 * 1024)
-      },
+      onStderr: (text: string) => diagnostics.push(text),
     }
 
     // ---- spec, token, unit ----
@@ -617,12 +681,20 @@ export class UnitBackend {
         this.deps.notifyBin === undefined ? '/usr/bin/systemd-notify' : this.deps.notifyBin,
       ...this.deps.specOverrides,
     }
-    const registered = this.socket.expect({
-      launch: launchId,
-      generation: request.generation,
-      specHash: hashSpec(spec),
-      handlers,
-    })
+    let registered: ReturnType<CodingSocketServer['expect']>
+    try {
+      registered = this.socket.expect({
+        launch: launchId,
+        generation: request.generation,
+        specHash: hashSpec(spec),
+        handlers,
+        retainedBytes: RETAINED_RUN_BYTES,
+      })
+    } catch {
+      return abort(
+        'Score is holding too much coding output in memory right now. Try again shortly.',
+      )
+    }
     session = registered.session
     spec.token = registered.token
     const specPath = join(specDir, 'spec.json')
@@ -649,7 +721,7 @@ export class UnitBackend {
       return this.run(cmd.file, cmd.args, { timeoutMs: 30_000 })
     })()
     if (started.code !== 0) {
-      const detail = started.stderr.trim().slice(0, 160)
+      const detail = redactNote(started.stderr.trim(), 160)
       return abort(
         `The system service manager refused to start the run${detail ? ` (${detail})` : ''}.`,
       )
@@ -673,9 +745,26 @@ export class UnitBackend {
       )
     const verified = await this.verifyIdentity(unit, ready.info)
     if (!verified.ok) return abort(`The run’s identity didn’t check out (${verified.reason}).`)
-    unitState = verified.state
+    const unitState = verified.state
     const manager = await this.managerNow()
     const managerText = manager ? `${this.bootNow() ?? ''}|${manager.pid}:${manager.start}` : null
+    // The identity Score verified is also kept beside the journal (outside the restorable home): the supervisor to
+    // signal, the boot and the user manager it ran under (review 2026-10-12 #5/#6). Written before `armed`.
+    try {
+      writeReceipt(receiptDir, IDENTITY_FILE, {
+        launch: launchId,
+        generation: request.generation,
+        at: this.clock(),
+        unit,
+        invocationId: unitState.invocationId,
+        cgroup: ready.info.cgroup,
+        boot: this.bootNow(),
+        manager: manager ? { pid: manager.pid, start: manager.start } : null,
+        supervisor: { pid: ready.info.pid, start: ready.info.start },
+      })
+    } catch (error) {
+      return abort(`Couldn’t record the run’s identity (${errorText(error)}).`)
+    }
     const armed = journal.arm(
       launchId,
       { unit, invocationId: unitState.invocationId, cgroup: ready.info.cgroup },
@@ -703,7 +792,7 @@ export class UnitBackend {
         } catch {
           // stopped by name below
         }
-        await this.stopByName(launchId, unitState.invocationId)
+        await this.stopSupervisor(launchId)
         return finish({ refusal: 'Couldn’t save the run’s start. Nothing was sent to the CLI.' })
       }
       return abort(
@@ -779,33 +868,109 @@ export class UnitBackend {
       .get(launchId) as Row | undefined
   }
 
-  /**
-   * `systemctl --user stop <exact name>`, gated on an InvocationID Score established independently (the recorded one,
-   * or the one it verified against the supervisor). A launch with none (never armed, or never verified) is never
-   * stopped by name: the invocation systemd shows now could be a foreign one that took the name, and a stop would
-   * adopt it (review #9). Such a unit stays unresolved: the person releases it after looking.
-   */
-  async stopByName(
-    launchId: string,
-    invocationId?: string,
-  ): Promise<'stopped' | 'absent' | 'unknown' | 'other'> {
-    const row = this.rowOf(launchId)
-    const unit = row?.unit
-    if (!unit || !validateUnitName(unit)) return 'unknown'
-    const invocation = invocationId ?? row.invocation_id ?? ''
-    if (invocation === '') {
-      const shown = await showUnit(this.run, unit)
-      return shown.kind === 'absent' ? 'absent' : 'unknown'
+  /** Ownership at every stop/reset boundary: this installation's unit-name prefix AND a launch the journal says is ours. */
+  private owns(launchId: string, unit: string | null | undefined): boolean {
+    if (!unit || !hasInstallationPrefix(unit, this.deps.installationId, this.prefix)) return false
+    try {
+      return this.deps.journal.isOwned(launchId)
+    } catch {
+      return false
     }
-    const result = await stopUnit(this.run, unit, invocation)
-    if (result === 'stopped') return 'stopped'
-    if (result === 'absent') return 'absent'
-    return result === 'unknown' ? 'unknown' : 'other'
   }
 
   /**
-   * Ended proof (§6): the recorded cgroup is absent or empty, no job is pending, identity checks pass; a changed boot
-   * means ended; a cold-restarted manager with the unit gone is decided by the receipts and the recorded cgroup.
+   * What Score recorded about a launch, from every place it is recorded: the journal (authoritative for the unit, its
+   * InvocationID and cgroup), the identity file beside it (the supervisor, the boot and the user manager; outside the
+   * restorable home) and the database row (a projection). Where two sources name different values the launch is in
+   * `disagreement`: nothing is concluded from it (review 2026-10-12 #6).
+   */
+  private recorded(launchId: string): RecordedLaunch {
+    const row = this.rowOf(launchId)
+    let state: CodingState | undefined
+    try {
+      state = this.deps.journal.state(launchId)?.state
+    } catch {
+      // The journal can't be read right now: the other sources stand in, and the caller treats a missing one as unknown.
+    }
+    const dir = row?.receipt_dir ?? join(this.deps.namespaceDir, LAUNCHES_DIR, launchId)
+    const file = this.readIdentity(dir, launchId, state?.generation)
+    const rowManager = row?.manager?.split('|') ?? []
+    const disagreements: string[] = []
+    const agree = (name: string, values: (string | null | undefined)[]): string | null => {
+      const present = [...new Set(values.filter((v): v is string => !!v))]
+      if (present.length > 1) disagreements.push(name)
+      return present[0] ?? null
+    }
+    const unit = agree('unit', [state?.unit, file?.unit, row?.unit])
+    return {
+      launchId,
+      unit,
+      invocationId: agree('invocation', [
+        state?.invocationId,
+        file?.invocationId,
+        row?.invocation_id,
+      ]),
+      cgroup: agree('cgroup', [state?.cgroup, file?.cgroup, row?.cgroup]),
+      boot: file ? file.boot : rowManager[0] || null,
+      manager: file
+        ? file.manager
+          ? `${file.manager.pid}:${file.manager.start}`
+          : null
+        : rowManager[1] || null,
+      supervisor: file?.supervisor ?? null,
+      known: state !== undefined || row !== undefined,
+      disagreement: disagreements.length > 0 ? disagreements.join(', ') : null,
+      receiptDir: dir,
+    }
+  }
+
+  private readIdentity(dir: string, launchId: string, generation: number | undefined) {
+    let text: string
+    try {
+      text = readFileSync(join(dir, IDENTITY_FILE), 'utf8')
+    } catch {
+      return undefined
+    }
+    try {
+      const file = IdentityFile.parse(JSON.parse(text))
+      if (file.launch !== launchId) return undefined
+      if (generation !== undefined && file.generation !== generation) return undefined
+      return file
+    } catch {
+      return undefined
+    }
+  }
+
+  /**
+   * Stops a unit's run through a handle that stays pinned to the recorded supervisor: SIGINT through a pidfd that was
+   * opened and checked against the recorded pid + start time (the same signal systemd's own stop sends). Never by unit
+   * name: between a check and a name-based stop another invocation could take the name (review 2026-10-12 #5). Without
+   * a recorded supervisor, a recorded boot that is still current, or pidfd support, nothing is sent and the launch stays
+   * uncertain ('unknown'). A launch that isn't this installation's is never touched.
+   */
+  async stopSupervisor(launchId: string): Promise<'signalled' | 'gone' | 'unknown'> {
+    const rec = this.recorded(launchId)
+    if (!this.owns(launchId, rec.unit) || rec.disagreement) return 'unknown'
+    if (!rec.supervisor) return 'unknown'
+    // A different boot: the pid and start time mean nothing now and the supervisor is long gone.
+    const bootHere = this.bootNow()
+    if (rec.boot && bootHere && rec.boot !== bootHere) return 'gone'
+    const signal = this.deps.signalSupervisor ?? signalPid
+    switch (signal(rec.supervisor.pid, rec.supervisor.start, 'SIGINT')) {
+      case 'signalled':
+        return 'signalled'
+      case 'mismatch':
+        return 'gone'
+      default:
+        return 'unknown'
+    }
+  }
+
+  /**
+   * Ended proof (§6): the RECORDED cgroup is absent or empty, no job is pending, identity checks pass; a changed boot
+   * means ended; a cold-restarted manager with the unit gone is decided by the receipts and the recorded cgroup. Where
+   * the sources of the record disagree, or systemd names another invocation or control group than the recorded one,
+   * nothing is proven. The manager incarnation is re-read on every pass (review 2026-10-12 #6).
    */
   async proveEnded(
     launchId: string,
@@ -815,17 +980,24 @@ export class UnitBackend {
     const population = this.deps.population ?? ((cg: string) => cgroupPopulation(cg))
     let detail: string
     for (;;) {
-      const row = this.rowOf(launchId)
-      const unit = row?.unit ?? null
-      if (!row || !unit) return { proven: false, proof: null, detail: 'no record of the unit' }
-      const bootThen = row.manager?.split('|')[0] ?? ''
+      const rec = this.recorded(launchId)
+      const unit = rec.unit
+      if (!rec.known || !unit)
+        return { proven: false, proof: null, detail: 'no record of the unit' }
+      if (rec.disagreement)
+        return {
+          proven: false,
+          proof: null,
+          detail: `the recorded identity disagrees (${rec.disagreement})`,
+        }
       const bootHere = this.bootNow()
-      if (bootThen !== '' && bootHere !== null && bootThen !== bootHere)
+      if (rec.boot && bootHere !== null && rec.boot !== bootHere)
         return { proven: true, proof: 'boot-change', detail: 'the machine restarted' }
+      const replaced = await this.incarnationChanged(rec)
       const shown = await showUnit(this.run, unit)
       if (shown.kind === 'unknown') detail = `systemd can’t be read (${shown.detail})`
       else if (shown.kind === 'absent') {
-        const cgroup = row.cgroup
+        const cgroup = rec.cgroup
         const pop = cgroup ? population(cgroup) : 'absent'
         if (pop === 'absent' || pop === 'empty') {
           return {
@@ -838,11 +1010,7 @@ export class UnitBackend {
         // A different manager incarnation with the unit missing: the outcome comes from the receipts and the recorded
         // cgroup only, never from the missing metadata (§5). The supervisor writes `ended` only once its payload was
         // empty and nothing else of the unit lived, so the receipt is a witness the new manager cannot erase.
-        if (
-          pop === 'unknown' &&
-          (await this.incarnationChanged(row)) &&
-          this.readReceipt(row, 'ended.json') === 'present'
-        )
+        if (pop === 'unknown' && replaced && this.readReceiptIn(rec, 'ended.json') === 'present')
           return {
             proven: true,
             proof: 'receipt',
@@ -850,14 +1018,22 @@ export class UnitBackend {
           }
       } else {
         const s = shown.state
-        if (row.invocation_id && s.invocationId !== row.invocation_id)
+        if (rec.invocationId && s.invocationId !== rec.invocationId)
           return {
             proven: false,
             proof: null,
             detail: 'the unit’s invocation differs from the recorded one',
           }
+        if (rec.cgroup && s.controlGroup && s.controlGroup !== rec.cgroup)
+          return {
+            proven: false,
+            proof: null,
+            detail: 'the unit’s control group differs from the recorded one',
+          }
         if (!s.jobPending && (s.activeState === 'inactive' || s.activeState === 'failed')) {
-          const cg = s.controlGroup || row.cgroup || ''
+          // The recorded cgroup is what must be empty; the one systemd names now is only a fallback for a launch that
+          // never recorded one.
+          const cg = rec.cgroup ?? s.controlGroup
           const pop = cg ? population(cg) : 'absent'
           if (pop === 'absent' || pop === 'empty')
             return { proven: true, proof: 'cgroup-empty', detail: 'unit inactive, cgroup empty' }
@@ -870,12 +1046,15 @@ export class UnitBackend {
   }
 
   /** The user manager is not the one that verified this launch (a different PID or start time, or unreadable now). */
-  private async incarnationChanged(row: Row): Promise<boolean> {
+  private async incarnationChanged(rec: RecordedLaunch): Promise<boolean> {
     // Only a manager identity read now AND recorded before can differ; an unreadable one is uncertain, never a change.
-    const recorded = row.manager?.split('|')[1]
-    if (!recorded) return false
+    if (!rec.manager) return false
     const now = await this.managerNow()
-    return now !== null && `${now.pid}:${now.start}` !== recorded
+    return now !== null && `${now.pid}:${now.start}` !== rec.manager
+  }
+
+  private readReceiptIn(rec: RecordedLaunch, name: 'released.json' | 'ended.json') {
+    return this.readReceipt({ launch_id: rec.launchId, receipt_dir: rec.receiptDir } as Row, name)
   }
 
   /**
@@ -962,7 +1141,7 @@ export class UnitBackend {
   noteEligibility(launchId: string, text: string): void {
     this.deps.db.sqlite
       .prepare('UPDATE coding_launches SET eligibility = ? WHERE launch_id = ?')
-      .run(text.slice(0, 400), launchId)
+      .run(redactNote(text, 400), launchId)
   }
 
   // ---- settlement and collection (§6b) ------------------------------------------------------------------------------
@@ -995,6 +1174,8 @@ export class UnitBackend {
   }
 
   private async settle(row: Row, disposition: string): Promise<boolean> {
+    // A launch that isn't this installation's (a copied witness) is evidence only: never settled, never reset.
+    if (!this.owns(row.launch_id, row.unit)) return false
     const result = this.deps.journal.settled(
       row.launch_id,
       { disposition },
@@ -1004,9 +1185,10 @@ export class UnitBackend {
       this.deps.onError?.(new Error(`settle refused: ${result.reason}`))
       return false
     }
-    if (row.unit && row.invocation_id) {
+    const rec = this.recorded(row.launch_id)
+    if (rec.unit && rec.invocationId && this.owns(row.launch_id, rec.unit)) {
       try {
-        await resetUnit(this.run, row.unit, row.invocation_id)
+        await resetUnit(this.run, rec.unit, rec.invocationId, this.prefix)
       } catch (error) {
         this.deps.onError?.(error)
       }
@@ -1032,22 +1214,47 @@ export class UnitBackend {
     }))
   }
 
-  /** The person's deliberate way out of a launch Score can’t observe: recorded as a waiver, nothing is signalled. */
-  releaseHeld(agentId: string): { launchId: string; runId: string; unit: string }[] {
+  /**
+   * The person's deliberate way out of a launch Score can’t observe: recorded as a waiver, nothing is signalled. The
+   * waiver goes into the journal first and settles the launch there, so a restart never stops it again; only then do the
+   * database projections change (review 2026-10-12 #8). A launch whose waiver can't be journaled stays held.
+   */
+  releaseHeld(
+    agentId: string,
+    by = 'the person',
+  ): { launchId: string; runId: string; unit: string }[] {
     const rows = this.deps.db.sqlite
       .prepare(
         "SELECT * FROM coding_launches WHERE agent_id = ? AND backend = 'unit' AND held = 2 AND phase NOT IN ('ended','settled')",
       )
       .all(agentId) as unknown as Row[]
+    const released: Row[] = []
     for (const row of rows) {
-      const project = codingProjection(this.deps.db, this.clock, (sqlite) =>
-        sqlite
-          .prepare('UPDATE coding_launches SET held = 0 WHERE launch_id = ?')
-          .run(row.launch_id),
+      if (!this.owns(row.launch_id, row.unit)) continue
+      const waived = this.deps.journal.waive(
+        row.launch_id,
+        by,
+        codingProjection(this.deps.db, this.clock, (sqlite) =>
+          sqlite
+            .prepare(
+              "UPDATE coding_launches SET held = 0, waiver = 1, disposition = 'waived', proof = COALESCE(proof, 'waiver') WHERE launch_id = ?",
+            )
+            .run(row.launch_id),
+        ),
       )
-      this.deps.journal.ended(row.launch_id, { proof: 'waiver', waiver: true }, project)
+      if (!waived.ok) {
+        this.deps.onError?.(new Error(`waiver not journaled: ${waived.reason}`))
+        continue
+      }
+      // FY2: `waive` projects the settled launch itself once batch FY2 merges; until then the row is updated here.
+      this.deps.db.sqlite
+        .prepare(
+          "UPDATE coding_launches SET held = 0, waiver = 1, disposition = 'waived', phase = 'settled', proof = COALESCE(proof, 'waiver') WHERE launch_id = ?",
+        )
+        .run(row.launch_id)
+      released.push(row)
     }
-    return rows.map((r) => ({ launchId: r.launch_id, runId: r.run_id, unit: r.unit ?? '' }))
+    return released.map((r) => ({ launchId: r.launch_id, runId: r.run_id, unit: r.unit ?? '' }))
   }
 
   /**
@@ -1067,7 +1274,7 @@ export class UnitBackend {
         const row = this.rowOf(launchId)
         if (!row) return true
         if (row.phase === 'ended' || row.phase === 'settled') return true
-        const stop = await this.stopByName(launchId)
+        const stop = await this.stopSupervisor(launchId)
         const proof = await this.proveEnded(launchId, { timeoutMs: 5000 })
         if (proof.proven) {
           this.endRecord(row, proof.proof ?? 'unknown')
@@ -1077,7 +1284,7 @@ export class UnitBackend {
         }
         this.markHeld(
           launchId,
-          stop === 'unknown' || /can’t be read|differs/.test(proof.detail) ? 2 : 1,
+          stop === 'unknown' || /can’t be read|differs|disagrees/.test(proof.detail) ? 2 : 1,
         )
       }
       return false
@@ -1111,7 +1318,7 @@ export class UnitBackend {
   /** The runtime stopped waiting for the run: the stop request for a launch that has no live handle (no `UnitRun`). */
   async stopUnattached(launchId: string, reason: StopReason = 'user'): Promise<boolean> {
     this.recordStop(launchId, reason)
-    await this.stopByName(launchId)
+    await this.stopSupervisor(launchId)
     const proof = await this.proveEnded(launchId, { timeoutMs: 5000 })
     const row = this.rowOf(launchId)
     if (!row) return true
@@ -1139,8 +1346,9 @@ export class UnitBackend {
   // ---- recovery (§6b) -----------------------------------------------------------------------------------------------
 
   /**
-   * Journal ↔ database ↔ live units ↔ receipts, before any admission. Every unsettled launch of this installation is
-   * stopped (by exact name, InvocationID-gated) and its end proven; a launch that never reached `releasing` is revoked
+   * Journal ↔ database ↔ live units ↔ receipts, before any admission. Every unsettled launch this installation owns
+   * (its unit-name prefix and a journal launch that isn't a copied witness) is stopped through its recorded
+   * supervisor and its end proven; launches copied from another installation are evidence only and never acted on; a launch that never reached `releasing` is revoked
    * (the journal proves no-launch); one that may have executed and can’t be proven is held. Units carrying this
    * installation's prefix that no journal launch owns are orphans: they fence admission and are never adopted.
    */
@@ -1154,7 +1362,10 @@ export class UnitBackend {
         unreadable: `the execution journal can’t be read (${read.reason})`,
       }
     const folded = foldCodingLaunches(read.entries)
-    const owned = [...folded.values()].filter((l) => l.state.unit !== undefined)
+    const withUnit = [...folded.values()].filter((l) => l.state.unit !== undefined)
+    // Only this installation's own launches are acted on (review 2026-10-12 #2): the prefix alone is not enough, since
+    // a copy keeps the source's unit names and InvocationIDs in its witnesses.
+    const owned = withUnit.filter((l) => this.owns(l.state.launchId, l.state.unit))
     const inventory = await listInstallationUnits(this.run, this.prefix)
     const open = owned.filter((l) => l.kind !== 'settled')
     if (inventory.kind === 'unknown' && open.length > 0) {
@@ -1167,7 +1378,7 @@ export class UnitBackend {
       }
     }
     const names = inventory.kind === 'ok' ? inventory.names : []
-    const known = new Set(owned.map((l) => l.state.unit))
+    const known = new Set(withUnit.map((l) => l.state.unit))
     this.orphans = names.filter((n) => !known.has(n))
     const launches: RecoveredLaunch[] = []
     for (const l of open) {
@@ -1221,7 +1432,7 @@ export class UnitBackend {
     // No `releasing` record: the journal proves the CLI never ran. Revoke so nothing can release it later.
     if (!l.state.mayHaveExecuted && !l.state.revoked)
       this.deps.journal.revoke(id, undefined, codingProjection(this.deps.db, this.clock))
-    await this.stopByName(id, l.state.invocationId)
+    await this.stopSupervisor(id)
     const proof = await this.proveEnded(id, { timeoutMs: this.deps.recoverProofMs ?? 10_000 })
     const row = this.rowOf(id)
     if (proof.proven && row) {
@@ -1256,6 +1467,35 @@ class Control {
     backend.recordStop(this.launchId, reason)
     this.wake()
     if (this.session) backend.sendStop(this.launchId, this.session, reason)
+  }
+}
+
+/**
+ * The CLI's stderr as it may be kept (review 2026-10-12 #4). Redaction needs the label in front of a value, so the
+ * text is kept from its start (never a tail cut through a value) up to a raw limit, and it is redacted as a whole
+ * whenever it is read. Past the limit the rest is dropped, not kept in a form redaction can't recognise.
+ */
+export class BoundedDiagnostics {
+  private raw = ''
+  private overflowed = false
+  constructor(
+    private readonly rawLimit = 64 * 1024,
+    private readonly keepBytes = 8 * 1024,
+  ) {}
+
+  push(text: string): void {
+    if (this.overflowed) return
+    const room = this.rawLimit - this.raw.length
+    if (text.length > room) {
+      this.raw += text.slice(0, Math.max(0, room))
+      this.overflowed = true
+    } else this.raw += text
+  }
+
+  /** Redacted and bounded; safe to store or show. */
+  text(): string {
+    const safe = redactNote(this.raw, this.keepBytes)
+    return this.overflowed ? `${safe} […]` : safe
   }
 }
 

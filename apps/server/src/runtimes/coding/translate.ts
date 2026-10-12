@@ -18,6 +18,7 @@ import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
 import { guardedUpsert } from '../../hub/projections.ts'
 import { redact, redactBounded } from '../../redact.ts'
 import { readRun, runDraft, runLifecycle } from '../../hermes/index.ts'
+import { MAX_REMEMBERED_IDS } from './note.ts'
 import { rememberCliSession } from './store.ts'
 import type { CodingEvent, ToolDetail } from './types.ts'
 
@@ -214,6 +215,9 @@ export function eventObservation(
             .run(runId, seq, redactBounded(event.text, MAX_THINKING_CHARS))
           break
         case 'tool_start': {
+          // Calls that never end must not pile up: past the limit the oldest is forgotten (its end is then ignored).
+          if (translation.calls.size >= MAX_REMEMBERED_IDS)
+            translation.calls.delete(translation.calls.keys().next().value as string)
           translation.calls.set(event.callId, {
             seq,
             startedAt: now,

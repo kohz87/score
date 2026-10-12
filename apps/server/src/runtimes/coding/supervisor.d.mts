@@ -48,13 +48,23 @@ export interface SupervisorDeps {
   now?: () => number
   watchdog?: () => void
   pollMs?: number
+  /** The identity reported in `ready` (tests that run the supervisor in their own process). */
+  self?: { pid: number; start: string | null }
   /** Registers the handler for systemd's stop signal; returns the detach function. Default: process SIGINT/SIGTERM. */
   onUnitStop?: (handler: () => void) => (() => void) | void
 }
 
 export function hashSpec(spec: SupervisorSpec): string
 export function procStart(pid: number): string | null
-export function writeReceipt(dir: string, name: string, body: unknown): void
+export function writeReceipt(
+  dir: string,
+  name: string,
+  body: unknown,
+  io?: {
+    writeSync?: (fd: number, data: Buffer, offset: number, length: number) => number
+    linkSync?: (existing: string, target: string) => void
+  },
+): void
 export type ParsedReceipt =
   { state: 'present'; body: Record<string, unknown> } | { state: 'invalid' }
 export function parseReceipt(

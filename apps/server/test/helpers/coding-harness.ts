@@ -6,6 +6,7 @@ import {
   existsSync,
   readdirSync,
 } from 'node:fs'
+import type net from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -109,6 +110,8 @@ export interface HarnessOptions {
   launch?: string
   preReceipt?: string
   token?: string
+  /** Test seam: the supervisor's socket (wrap it to model a stuck consumer). */
+  connect?: (path: string) => net.Socket
 }
 
 export async function startHarness(options: HarnessOptions): Promise<Harness> {
@@ -165,6 +168,7 @@ export async function startHarness(options: HarnessOptions): Promise<Harness> {
     cgroup,
     watchdog: options.watchdog ?? (() => undefined),
     pollMs: 20,
+    ...(options.connect ? { connect: options.connect } : {}),
   })
   return {
     dir,

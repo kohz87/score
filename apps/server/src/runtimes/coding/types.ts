@@ -63,6 +63,11 @@ export interface LineParser {
   /** One non-empty stdout line. Unknown or malformed lines yield nothing and are counted. */
   parse(line: string): CodingEvent[]
   readonly stats: { unknown: number; malformed: number }
+  /**
+   * Why nothing this attempt produced may be authoritative, judged over the whole stream processed so far (a record that
+   * was dropped or invalid, also after the result). Asked once the stream is complete; null = no loss seen.
+   */
+  lossReason?(): string | null
 }
 
 export interface DriverRunOptions {

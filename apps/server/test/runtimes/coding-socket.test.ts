@@ -404,3 +404,98 @@ test('shutdown sends stop to attached runs and destroys the accepted sockets exp
   expect((await session.outcome).kind).toBe('lost')
   expect(existsSync(server.path)).toBe(false)
 })
+
+// ---- review 2026-10-12 #1 and #7: terminal order and forced closure ------------------------------------------------
+
+test('#7: an early end (before EOF and exit) is never acknowledged and is not eligible', async () => {
+  const { server } = await setup()
+  const { sup, session } = await connect(server)
+  sup.out('stdout', 1, 'one\n')
+  sup.send({ t: 'end' })
+  await vi.waitFor(() => expect(sup.closed).toBe(true))
+  expect(sup.has('ack-end')).toBe(false)
+  const outcome = await session.outcome
+  expect(outcome.eligible).toBe(false)
+  expect(outcome.reasons).toContain('socket-loss')
+})
+
+test('#7: output after end is refused and the connection is dropped', async () => {
+  const { server } = await setup()
+  let release!: () => void
+  const gate = new Promise<void>((r) => (release = r))
+  const { token, session } = server.expect({
+    launch: 'L7',
+    generation: 1,
+    specHash: 'h',
+    handlers: { onStdoutRecord: () => gate },
+  })
+  const sup = new FakeSupervisor(server.path)
+  sup.hello('L7', token)
+  await vi.waitFor(() => expect(sup.has('welcome')).toBe(true))
+  sup.out('stdout', 1, 'a\n')
+  sup.send({ t: 'eof', stream: 'stdout', lastSeq: 1 })
+  sup.send({ t: 'eof', stream: 'stderr', lastSeq: 0 })
+  sup.send({ t: 'exit', code: 0, signal: null })
+  sup.send({ t: 'end' })
+  sup.out('stderr', 1, 'late\n') // after end
+  await vi.waitFor(() => expect(sup.closed).toBe(true))
+  release()
+  const outcome = await session.outcome
+  expect(sup.has('ack-end')).toBe(false)
+  expect(outcome.eligible).toBe(false)
+})
+
+test('#1: an eof the supervisor forced (a pipe it closed itself) is loss, not a clean end of stream', async () => {
+  const { server } = await setup()
+  const { sup, session } = await connect(server)
+  sup.out('stdout', 1, '{"ok":1}\n')
+  sup.send({ t: 'eof', stream: 'stdout', lastSeq: 1, forced: true })
+  sup.send({ t: 'eof', stream: 'stderr', lastSeq: 0 })
+  sup.send({ t: 'exit', code: 0, signal: null })
+  sup.send({ t: 'end' })
+  await vi.waitFor(() => expect(sup.has('ack-end')).toBe(true))
+  sup.socket.end()
+  const outcome = await session.outcome
+  expect(outcome.eligible).toBe(false)
+  expect(outcome.reasons).toContain('forced-eof-stdout')
+  expect(outcome.droppedRecords).toBeGreaterThan(0)
+})
+
+test('#15: what an active run keeps in memory is reserved from the installation budget and released at its end', async () => {
+  const { server } = await setup({ memoryBudgetBytes: 1000 })
+  const a = server.expect({
+    launch: 'A',
+    generation: 1,
+    specHash: 'h',
+    handlers: { onStdoutRecord: () => undefined },
+    retainedBytes: 400,
+  })
+  expect(server.bufferedBytes).toBe(400)
+  server.expect({
+    launch: 'B',
+    generation: 1,
+    specHash: 'h',
+    handlers: { onStdoutRecord: () => undefined },
+    retainedBytes: 400,
+  })
+  expect(server.bufferedBytes).toBe(800)
+  // A third does not fit: the launch is refused, nothing is left reserved for it.
+  expect(() =>
+    server.expect({
+      launch: 'C',
+      generation: 1,
+      specHash: 'h',
+      handlers: { onStdoutRecord: () => undefined },
+      retainedBytes: 400,
+    }),
+  ).toThrow('memory-budget')
+  expect(server.bufferedBytes).toBe(800)
+  server.forget('B')
+  expect(server.bufferedBytes).toBe(400)
+  const sup = new FakeSupervisor(server.path)
+  sup.hello('A', a.token)
+  await vi.waitFor(() => expect(sup.has('welcome')).toBe(true))
+  sup.socket.destroy()
+  await a.session.outcome
+  await vi.waitFor(() => expect(server.bufferedBytes).toBe(0))
+})
