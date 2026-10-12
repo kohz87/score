@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { execFileSync, spawn, type ChildProcessByStdio } from 'node:child_process'
 import type { Readable, Writable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
@@ -52,8 +53,11 @@ const unsupported = () =>
  */
 class Server {
   private child: ChildProcessByStdio<Writable, Readable, null> | undefined
-  private waiting: Array<{ resolve: (code: number) => void; timer: NodeJS.Timeout }> = []
-  private buffer = ''
+  // Each helper has its own queue and read buffer: a dead helper's cleanup must never touch its replacement's requests.
+  private readonly queues = new WeakMap<
+    ChildProcessByStdio<Writable, Readable, null>,
+    { waiting: Array<{ resolve: (code: number) => void; timer: NodeJS.Timeout }>; buffer: string }
+  >()
 
   constructor(private readonly python: string) {}
 
@@ -61,17 +65,22 @@ class Server {
     const child = spawn(this.python, ['-I', SCRIPT, '--serve'], {
       stdio: ['pipe', 'pipe', 'ignore'],
     })
+    const queue = {
+      waiting: [] as Array<{ resolve: (code: number) => void; timer: NodeJS.Timeout }>,
+      buffer: '',
+    }
+    this.queues.set(child, queue)
     child.unref()
     // The pipes must not keep Node alive either.
     ;(child.stdin as unknown as { unref?: () => void }).unref?.()
     ;(child.stdout as unknown as { unref?: () => void }).unref?.()
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', (chunk: string) => {
-      this.buffer += chunk
-      for (let end = this.buffer.indexOf('\n'); end >= 0; end = this.buffer.indexOf('\n')) {
-        const line = this.buffer.slice(0, end)
-        this.buffer = this.buffer.slice(end + 1)
-        const entry = this.waiting.shift()
+      queue.buffer += chunk
+      for (let end = queue.buffer.indexOf('\n'); end >= 0; end = queue.buffer.indexOf('\n')) {
+        const line = queue.buffer.slice(0, end)
+        queue.buffer = queue.buffer.slice(end + 1)
+        const entry = queue.waiting.shift()
         if (!entry) continue
         clearTimeout(entry.timer)
         try {
@@ -84,8 +93,8 @@ class Server {
     })
     const gone = () => {
       if (this.child === child) this.child = undefined
-      this.buffer = ''
-      for (const entry of this.waiting.splice(0)) {
+      queue.buffer = ''
+      for (const entry of queue.waiting.splice(0)) {
         clearTimeout(entry.timer)
         entry.resolve(5)
       }
@@ -96,13 +105,65 @@ class Server {
     return child
   }
 
-  request(source: string, dest: string): Promise<number> {
+  private busy(child: ChildProcessByStdio<Writable, Readable, null>): void {
+    child.ref()
+    ;(child.stdout as unknown as { ref?: () => void }).ref?.()
+  }
+
+  private idle(child: ChildProcessByStdio<Writable, Readable, null>): void {
+    child.unref()
+    ;(child.stdout as unknown as { unref?: () => void }).unref?.()
+  }
+
+  request(source: string, dest: string, retried = false): Promise<number> {
     return new Promise<number>((resolve) => {
+      // Node learns of a dead helper asynchronously; the kernel knows now (a reaped child fails signal 0).
+      const alive = (c: ChildProcessByStdio<Writable, Readable, null>) => {
+        if (
+          c.exitCode !== null ||
+          c.signalCode !== null ||
+          c.stdin.destroyed ||
+          c.pid === undefined
+        )
+          return false
+        try {
+          process.kill(c.pid, 0)
+        } catch {
+          return false
+        }
+        // A helper that died but isn't reaped yet still answers signal 0: it is a zombie and will never reply.
+        try {
+          const stat = readFileSync(`/proc/${c.pid}/stat`, 'utf8')
+          return stat.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3) !== 'Z'
+        } catch {
+          return false
+        }
+      }
+      if (this.child && !alive(this.child)) this.child = undefined
       const child = (this.child ??= this.start())
+      const queue = this.queues.get(child)!
       const timer = setTimeout(() => child.kill('SIGKILL'), 15_000)
       timer.unref()
-      this.waiting.push({ resolve, timer })
-      child.stdin.write(`${JSON.stringify({ from: source, to: dest })}\n`)
+      const entry = {
+        resolve: (code: number) => {
+          // Keep Node alive only while a request is outstanding; an idle helper never holds the process open.
+          if (queue.waiting.length === 0) this.idle(child)
+          resolve(code)
+        },
+        timer,
+      }
+      this.busy(child)
+      queue.waiting.push(entry)
+      child.stdin.write(`${JSON.stringify({ from: source, to: dest })}\n`, (error) => {
+        if (!error || retried) return
+        // The helper was already gone: the request never reached it, so nothing was renamed and sending it once more,
+        // to a fresh helper, is safe.
+        const at = queue.waiting.indexOf(entry)
+        if (at >= 0) queue.waiting.splice(at, 1)
+        clearTimeout(timer)
+        if (this.child === child) this.child = undefined
+        resolve(this.request(source, dest, true))
+      })
     })
   }
 }

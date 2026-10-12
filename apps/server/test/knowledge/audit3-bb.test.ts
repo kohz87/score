@@ -431,3 +431,42 @@ describe('S3-003 recovery needs proof the destination is the moved file', () => 
     }
   })
 })
+
+describe('the rename helper process', () => {
+  // Our own children only: the long-lived helper this test process started.
+  const helperPids = () =>
+    fs
+      .readdirSync('/proc')
+      .filter((name) => /^\d+$/.test(name))
+      .filter((pid) => {
+        try {
+          const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8')
+          const ppid = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1])
+          const cmd = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8')
+          return (
+            ppid === process.pid && cmd.includes('rename-noreplace.py') && cmd.includes('--serve')
+          )
+        } catch {
+          return false
+        }
+      })
+      .map(Number)
+
+  test('a helper that dies is replaced and the next move works', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'score-rename-respawn-'))
+    try {
+      fs.writeFileSync(path.join(dir, 'a'), 'one')
+      await renameNoReplace(path.join(dir, 'a'), path.join(dir, 'b'))
+      const [pid] = helperPids()
+      expect(pid).toBeGreaterThan(0)
+      process.kill(pid!, 'SIGKILL')
+      await expect.poll(() => helperPids().includes(pid!)).toBe(false)
+      fs.writeFileSync(path.join(dir, 'c'), 'two')
+      await renameNoReplace(path.join(dir, 'c'), path.join(dir, 'd'))
+      expect(fs.readFileSync(path.join(dir, 'd'), 'utf8')).toBe('two')
+      expect(fs.existsSync(path.join(dir, 'c'))).toBe(false)
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
