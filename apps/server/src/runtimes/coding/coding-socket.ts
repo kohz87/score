@@ -103,11 +103,7 @@ export const DEFAULT_LIMITS: SocketLimits = {
 export class SocketStartError extends Error {
   constructor(
     readonly code:
-      | 'path-too-long'
-      | 'bad-directory'
-      | 'foreign-listener'
-      | 'stale-needs-lock'
-      | 'not-a-socket',
+      'path-too-long' | 'bad-directory' | 'foreign-listener' | 'stale-needs-lock' | 'not-a-socket',
     message: string,
   ) {
     super(message)
@@ -138,7 +134,10 @@ export class RunSession {
   private readonly lastSeq = { stdout: 0, stderr: 0 }
   private readonly eofSeen = { stdout: false, stderr: false }
   private readonly bytes = { stdout: 0, stderr: 0 }
-  private readonly decoders = { stdout: new StringDecoder('utf8'), stderr: new StringDecoder('utf8') }
+  private readonly decoders = {
+    stdout: new StringDecoder('utf8'),
+    stderr: new StringDecoder('utf8'),
+  }
   private stdoutPartial = ''
   private skippingOversize = false
   private stderrKept = 0
@@ -208,7 +207,8 @@ export class RunSession {
       const socket = this.socket
       if (!socket || socket.destroyed) return resolve()
       socket.once('close', () => resolve())
-      const line = JSON.stringify({ v: PROTOCOL_VERSION, t: 'stop', cause: 'score-shutdown' }) + '\n'
+      const line =
+        JSON.stringify({ v: PROTOCOL_VERSION, t: 'stop', cause: 'score-shutdown' }) + '\n'
       socket.write(line, () => socket.destroy())
       setTimeout(() => socket.destroy(), 1000).unref()
     })
@@ -222,9 +222,9 @@ export class RunSession {
 
   private violate(reason: string): void {
     if (!this.violations.includes(reason)) this.violations.push(reason)
-    // A bound was broken or the stream is inconsistent: stop the run; the result is ineligible.
+    // A bound was broken or the stream is inconsistent: stop the run (once); the result is ineligible.
+    if (this.lastStopCause === null) this.send({ t: 'stop', cause: reason.slice(0, 64) })
     this.lastStopCause ??= reason
-    this.send({ t: 'stop', cause: reason.slice(0, 64) })
   }
 
   private onData(chunk: string): void {
@@ -283,14 +283,16 @@ export class RunSession {
     if (this.eofSeen[stream]) return this.protocolError('out-after-eof')
     if (seq !== this.lastSeq[stream] + 1) {
       // A gap or a repeat means chunks were lost or duplicated: nothing after it can be trusted.
-      this.violate(`seq-${stream}`)
-      return this.protocolError(`seq-${stream}`)
+      return this.violate(`seq-${stream}`)
     }
     this.lastSeq[stream] = seq
     const raw = Buffer.from(data, 'base64')
     if (raw.length > MAX_CHUNK_BYTES) return this.protocolError('chunk-too-large')
     this.bytes[stream] += raw.length
-    if (this.bytes[stream] > this.limits.maxStreamBytes || this.bytes.stdout + this.bytes.stderr > this.limits.maxRunBytes) {
+    if (
+      this.bytes[stream] > this.limits.maxStreamBytes ||
+      this.bytes.stdout + this.bytes.stderr > this.limits.maxRunBytes
+    ) {
       return this.violate('run-cap')
     }
     const text = this.decoders[stream].write(raw)
@@ -326,7 +328,8 @@ export class RunSession {
     if (!text) return
     const room = this.limits.maxStderrKeptBytes - this.stderrKept
     if (room <= 0) return
-    const kept = Buffer.byteLength(text) <= room ? text : Buffer.from(text).subarray(0, room).toString('utf8')
+    const kept =
+      Buffer.byteLength(text) <= room ? text : Buffer.from(text).subarray(0, room).toString('utf8')
     this.stderrKept += Buffer.byteLength(kept)
     this.handlers.onStderr?.(kept)
   }
@@ -492,13 +495,19 @@ export class CodingSocketServer {
    */
   async start(holdsInstallationLock: boolean): Promise<void> {
     if (Buffer.byteLength(this.path) > MAX_SOCKET_PATH_BYTES) {
-      throw new SocketStartError('path-too-long', `socket path is ${Buffer.byteLength(this.path)} bytes long`)
+      throw new SocketStartError(
+        'path-too-long',
+        `socket path is ${Buffer.byteLength(this.path)} bytes long`,
+      )
     }
     const dir = dirname(this.path)
     mkdirSync(dir, { recursive: true, mode: 0o700 })
     const stat = lstatSync(dir)
     if (!stat.isDirectory() || stat.uid !== process.getuid!()) {
-      throw new SocketStartError('bad-directory', 'socket directory is not a directory owned by this user')
+      throw new SocketStartError(
+        'bad-directory',
+        'socket directory is not a directory owned by this user',
+      )
     }
     if ((stat.mode & 0o077) !== 0) chmodSync(dir, 0o700)
     await this.clearStale(holdsInstallationLock)
@@ -522,7 +531,8 @@ export class CodingSocketServer {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
       throw error
     }
-    if (!stat.isSocket()) throw new SocketStartError('not-a-socket', 'socket path is occupied by a non-socket')
+    if (!stat.isSocket())
+      throw new SocketStartError('not-a-socket', 'socket path is occupied by a non-socket')
     const alive = await new Promise<boolean>((resolve, reject) => {
       const probe = net.connect(this.path)
       probe.once('connect', () => {
@@ -534,8 +544,13 @@ export class CodingSocketServer {
         else reject(error)
       })
     })
-    if (alive) throw new SocketStartError('foreign-listener', 'another process is listening on the socket')
-    if (!holdsLock) throw new SocketStartError('stale-needs-lock', 'stale socket removal needs the installation lock')
+    if (alive)
+      throw new SocketStartError('foreign-listener', 'another process is listening on the socket')
+    if (!holdsLock)
+      throw new SocketStartError(
+        'stale-needs-lock',
+        'stale socket removal needs the installation lock',
+      )
     unlinkSync(this.path)
   }
 
@@ -543,14 +558,18 @@ export class CodingSocketServer {
    * Registers a launch and returns its single-use token (bound to installation, launch, generation, spec hash and this
    * Score incarnation) and the session that will carry it. The token goes into the supervisor's spec file only.
    */
-  expect(args: {
-    launch: string
-    generation: number
-    specHash: string
-    handlers: RunHandlers
-  }): { token: string; session: RunSession } {
+  expect(args: { launch: string; generation: number; specHash: string; handlers: RunHandlers }): {
+    token: string
+    session: RunSession
+  } {
     if (this.pending.has(args.launch)) throw new Error('launch already registered')
-    const session = new RunSession(args.launch, args.generation, args.handlers, this.limits, this.budget)
+    const session = new RunSession(
+      args.launch,
+      args.generation,
+      args.handlers,
+      this.limits,
+      this.budget,
+    )
     this.pending.set(args.launch, {
       generation: args.generation,
       specHash: args.specHash,
@@ -612,7 +631,12 @@ export class CodingSocketServer {
     socket.on('data', onData)
   }
 
-  private hello(socket: net.Socket, line: string, leftover: string, authenticated: () => void): void {
+  private hello(
+    socket: net.Socket,
+    line: string,
+    leftover: string,
+    authenticated: () => void,
+  ): void {
     const reject = (reason: string) => {
       // Reasons are fixed words; never echo the presented token or anything the peer sent.
       socket.end(JSON.stringify({ v: PROTOCOL_VERSION, t: 'reject', reason }) + '\n')
@@ -628,10 +652,12 @@ export class CodingSocketServer {
     const entry = this.pending.get(hello.launch)
     if (!entry) return reject('unknown-launch')
     if (entry.used) return reject('already-connected')
-    if (entry.generation !== hello.generation || entry.specHash !== hello.specHash) return reject('mismatch')
+    if (entry.generation !== hello.generation || entry.specHash !== hello.specHash)
+      return reject('mismatch')
     const expected = Buffer.from(this.tokenFor(hello.launch, hello.generation, hello.specHash))
     const presented = Buffer.from(hello.token)
-    if (presented.length !== expected.length || !timingSafeEqual(presented, expected)) return reject('mismatch')
+    if (presented.length !== expected.length || !timingSafeEqual(presented, expected))
+      return reject('mismatch')
     // Consumed atomically (this runs synchronously): a replay finds `used` and is rejected.
     entry.used = true
     authenticated()

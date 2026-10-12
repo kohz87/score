@@ -228,7 +228,9 @@ export async function runSupervisor(spec, deps = {}) {
   function endWithoutRun() {
     phase = 'ended'
     // The payload cgroup exists but nothing was started in it, so there is nothing to wait for.
-    finish(stopCause === 'cancel' ? EXIT.ok : stopCause === 'socket-loss' ? EXIT.socketLoss : EXIT.ok)
+    finish(
+      stopCause === 'cancel' ? EXIT.ok : stopCause === 'socket-loss' ? EXIT.socketLoss : EXIT.ok,
+    )
   }
 
   const onSignal = () => requestStop('unit-stop')
@@ -511,7 +513,16 @@ export async function runSupervisor(spec, deps = {}) {
   return done
 }
 
-const REQUIRED = ['launch', 'generation', 'token', 'socket', 'receiptDir', 'command', 'graceMs', 'deadline']
+const REQUIRED = [
+  'launch',
+  'generation',
+  'token',
+  'socket',
+  'receiptDir',
+  'command',
+  'graceMs',
+  'deadline',
+]
 
 function loadSpec(path) {
   const spec = JSON.parse(readFileSync(path, 'utf8'))

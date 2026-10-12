@@ -13,7 +13,11 @@ export interface ToolResult {
   /** Set when the tool did not run to completion (missing binary, timeout). */
   failed?: 'spawn' | 'timeout'
 }
-export type RunTool = (file: string, args: string[], options?: { timeoutMs?: number }) => Promise<ToolResult>
+export type RunTool = (
+  file: string,
+  args: string[],
+  options?: { timeoutMs?: number },
+) => Promise<ToolResult>
 
 export const realRunTool: RunTool = (file, args, options) =>
   new Promise((resolve) => {
@@ -132,12 +136,15 @@ function assertValue(label: string, value: string, absolute = false): void {
 /** The deny list for `UnsetEnvironment`: the concrete list plus whatever the manager exports (except the exempt names). */
 export function unsetEnvironmentList(managerEnvNames: readonly string[] = []): string[] {
   const names = new Set(ENV_DENY_LIST)
-  for (const name of managerEnvNames) if (ENV_NAME.test(name) && !NEVER_UNSET.has(name)) names.add(name)
+  for (const name of managerEnvNames)
+    if (ENV_NAME.test(name) && !NEVER_UNSET.has(name)) names.add(name)
   return [...names]
 }
 
 /** The property arguments of the transient unit (design section 1). */
-export function unitProperties(options: Pick<UnitLaunchOptions, 'graceMs' | 'remainingTurnMs' | 'managerEnvNames'>): string[] {
+export function unitProperties(
+  options: Pick<UnitLaunchOptions, 'graceMs' | 'remainingTurnMs' | 'managerEnvNames'>,
+): string[] {
   const stop = 2 * options.graceMs + 5000
   return [
     'Type=exec',
@@ -227,9 +234,7 @@ export interface UnitState {
 }
 
 export type UnitLookup =
-  | { kind: 'present'; state: UnitState }
-  | { kind: 'absent' }
-  | { kind: 'unknown'; detail: string }
+  { kind: 'present'; state: UnitState } | { kind: 'absent' } | { kind: 'unknown'; detail: string }
 
 export function parseUnitState(text: string): UnitState {
   const m = parseShow(text)
@@ -246,7 +251,16 @@ export function parseUnitState(text: string): UnitState {
   }
 }
 
-const SHOW_PROPS = ['LoadState', 'ActiveState', 'SubState', 'MainPID', 'InvocationID', 'ControlGroup', 'Result', 'Job']
+const SHOW_PROPS = [
+  'LoadState',
+  'ActiveState',
+  'SubState',
+  'MainPID',
+  'InvocationID',
+  'ControlGroup',
+  'Result',
+  'Job',
+]
 
 /**
  * Looks at one unit. A transport or permission error is `unknown`, never `absent` (design section 5): only systemd
@@ -254,7 +268,13 @@ const SHOW_PROPS = ['LoadState', 'ActiveState', 'SubState', 'MainPID', 'Invocati
  */
 export async function showUnit(run: RunTool, name: string): Promise<UnitLookup> {
   if (!validateUnitName(name)) return { kind: 'unknown', detail: 'invalid unit name' }
-  const r = await run(SYSTEMCTL, ['--user', 'show', ...SHOW_PROPS.map((p) => `--property=${p}`), '--', name])
+  const r = await run(SYSTEMCTL, [
+    '--user',
+    'show',
+    ...SHOW_PROPS.map((p) => `--property=${p}`),
+    '--',
+    name,
+  ])
   if (r.code !== 0) return { kind: 'unknown', detail: r.failed ?? r.stderr.trim().slice(0, 200) }
   const state = parseUnitState(r.stdout)
   if (state.loadState === '') return { kind: 'unknown', detail: 'no LoadState in output' }
@@ -270,12 +290,20 @@ const ACTIVE = new Set(['active', 'activating', 'deactivating', 'reloading', 're
  * `systemctl --user stop <exact name>`, only while the unit's InvocationID is the recorded one, and re-checked after
  * the call (design section 6b): a mismatch after the call is uncertainty (fence), not success.
  */
-export async function stopUnit(run: RunTool, name: string, invocationId: string): Promise<UnitAction> {
+export async function stopUnit(
+  run: RunTool,
+  name: string,
+  invocationId: string,
+): Promise<UnitAction> {
   return actOnUnit(run, name, invocationId, 'stop')
 }
 
 /** `reset-failed` (collection), with the same exact-name and InvocationID gate; only after settled + ended proof. */
-export async function resetUnit(run: RunTool, name: string, invocationId: string): Promise<UnitAction> {
+export async function resetUnit(
+  run: RunTool,
+  name: string,
+  invocationId: string,
+): Promise<UnitAction> {
   return actOnUnit(run, name, invocationId, 'reset-failed')
 }
 
@@ -296,7 +324,8 @@ async function actOnUnit(
   if (after.kind === 'unknown') return 'unknown'
   if (after.kind === 'absent') return verb === 'stop' ? 'stopped' : 'reset'
   if (after.state.invocationId !== invocationId) return 'uncertain'
-  if (verb === 'stop') return ACTIVE.has(after.state.activeState) || after.state.jobPending ? 'uncertain' : 'stopped'
+  if (verb === 'stop')
+    return ACTIVE.has(after.state.activeState) || after.state.jobPending ? 'uncertain' : 'stopped'
   return after.state.activeState === 'failed' ? 'uncertain' : 'reset'
 }
 
@@ -318,7 +347,9 @@ export function cgroupPopulation(controlGroup: string, root = CGROUP_ROOT): Popu
     return parseCgroupEvents(readFileSync(`${dir}/cgroup.events`, 'utf8'))
   } catch (error) {
     // The directory is removed once the unit is gone, which is the "absent" proof; anything else is unreadable.
-    return (error as NodeJS.ErrnoException).code === 'ENOENT' && !existsSync(dir) ? 'absent' : 'unknown'
+    return (error as NodeJS.ErrnoException).code === 'ENOENT' && !existsSync(dir)
+      ? 'absent'
+      : 'unknown'
   }
 }
 
@@ -346,7 +377,10 @@ export async function managerIncarnation(
   return start === null ? null : { pid, start }
 }
 
-export function sameIncarnation(a: ManagerIncarnation | null, b: ManagerIncarnation | null): boolean {
+export function sameIncarnation(
+  a: ManagerIncarnation | null,
+  b: ManagerIncarnation | null,
+): boolean {
   return a !== null && b !== null && a.pid === b.pid && a.start === b.start
 }
 
@@ -371,44 +405,71 @@ export interface CapabilityOptions {
 export const MAX_SOCKET_PATH = 100
 
 /** Design sections 7/8: can this host run coding runs as units? Each check reports why it failed. */
-export async function checkCapabilities(options: CapabilityOptions): Promise<{ ok: boolean; checks: CapabilityCheck[] }> {
+export async function checkCapabilities(
+  options: CapabilityOptions,
+): Promise<{ ok: boolean; checks: CapabilityCheck[] }> {
   const { run } = options
   const checks: CapabilityCheck[] = []
   const manager = await run(SYSTEMCTL, ['--user', 'show', '--property=Version'])
   checks.push({
     name: 'manager',
     ok: manager.code === 0 && /^Version=/m.test(manager.stdout),
-    detail: manager.code === 0 ? 'user manager reachable' : `user manager unreachable: ${manager.failed ?? manager.stderr.trim().slice(0, 120)}`,
+    detail:
+      manager.code === 0
+        ? 'user manager reachable'
+        : `user manager unreachable: ${manager.failed ?? manager.stderr.trim().slice(0, 120)}`,
   })
   const root = options.cgroupRoot ?? CGROUP_ROOT
   const v2 = existsSync(`${root}/cgroup.controllers`)
-  checks.push({ name: 'cgroup-v2', ok: v2, detail: v2 ? 'cgroup v2 (unified)' : 'cgroup v2 is not mounted' })
+  checks.push({
+    name: 'cgroup-v2',
+    ok: v2,
+    detail: v2 ? 'cgroup v2 (unified)' : 'cgroup v2 is not mounted',
+  })
   const uid = options.uid ?? process.getuid!()
   const linger = await run(LOGINCTL, ['show-user', String(uid), '--property=Linger'])
   const lingerOn = linger.code === 0 && /^Linger=yes$/m.test(linger.stdout)
   checks.push({
     name: 'linger',
     ok: lingerOn,
-    detail: lingerOn ? 'linger enabled' : 'linger is off: the user manager would stop at logout (loginctl enable-linger)',
+    detail: lingerOn
+      ? 'linger enabled'
+      : 'linger is off: the user manager would stop at logout (loginctl enable-linger)',
   })
   const length = Buffer.byteLength(options.socketPath)
   checks.push({
     name: 'socket-path',
     ok: length <= MAX_SOCKET_PATH,
-    detail: length <= MAX_SOCKET_PATH ? `socket path ${length} bytes` : `socket path is ${length} bytes (limit ${MAX_SOCKET_PATH})`,
+    detail:
+      length <= MAX_SOCKET_PATH
+        ? `socket path ${length} bytes`
+        : `socket path is ${length} bytes (limit ${MAX_SOCKET_PATH})`,
   })
   if (options.probeProperties) {
     const unit = `score-probe-${Math.random().toString(36).slice(2, 10)}.service`
     const props = unitProperties({ graceMs: options.graceMs ?? 5000, remainingTurnMs: 60_000 })
     const r = await run(
       SYSTEMD_RUN,
-      ['--user', '--quiet', '--wait', '--collect', '--no-ask-password', `--unit=${unit}`, ...props, '--', '/usr/bin/true'],
+      [
+        '--user',
+        '--quiet',
+        '--wait',
+        '--collect',
+        '--no-ask-password',
+        `--unit=${unit}`,
+        ...props,
+        '--',
+        '/usr/bin/true',
+      ],
       { timeoutMs: 30_000 },
     )
     checks.push({
       name: 'properties',
       ok: r.code === 0,
-      detail: r.code === 0 ? 'manager accepts the unit properties' : `systemd-run refused: ${r.stderr.trim().slice(0, 160)}`,
+      detail:
+        r.code === 0
+          ? 'manager accepts the unit properties'
+          : `systemd-run refused: ${r.stderr.trim().slice(0, 160)}`,
     })
   }
   return { ok: checks.every((c) => c.ok), checks }
