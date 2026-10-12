@@ -19,6 +19,7 @@ describe('first use', () => {
       agentAccess: true,
       documents: 0,
       documentBytes: 0,
+      moveIssue: null,
     })
   })
 

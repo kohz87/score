@@ -126,6 +126,10 @@ export function registerKnowledgeRoutes(
     return reply.code(204).send()
   })
 
+  app.post('/api/knowledge/move-issue/dismiss', guard, async () => {
+    await vault.dismissMoveIssue()
+    return KnowledgeInfoSchema.parse(vault.info())
+  })
   app.post('/api/knowledge/move', guard, async (request) => {
     const { from, to, updateLinks } = KnowledgeMoveRequestSchema.parse(request.body)
     // Documents (PLAN 6.6) move by the same route; they have no links to rewrite.

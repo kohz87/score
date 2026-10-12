@@ -16,26 +16,19 @@ const read = (rel: string) => fs.readFileSync(path.join(h.vaultDir, rel), 'utf8'
 const isTemp = (value: unknown) => /\.score-[^/]*\.tmp$/.test(String(value))
 
 /**
- * Runs `before` once, right before Score publishes a temp file (whichever of rename/link it uses) or moves a
+ * Runs `before` once, right before Score publishes a temp file or moves a
  * note: the deterministic barrier between "destination was absent" and "destination now exists".
  */
 function atPublication(before: () => void, match: (from: unknown) => boolean) {
   let fired = false
-  const fire = (from: unknown) => {
+  const real = h.vault.moveNoReplace.bind(h.vault)
+  // The vault's rename is the filesystem boundary: the write lands right before the kernel call.
+  vi.spyOn(h.vault, 'moveNoReplace').mockImplementation(async (from, to) => {
     if (!fired && match(from)) {
       fired = true
       before()
     }
-  }
-  const rename = fs.promises.rename
-  const link = fs.promises.link
-  vi.spyOn(fs.promises, 'rename').mockImplementation(async (from, to) => {
-    fire(from)
-    return rename(from, to)
-  })
-  vi.spyOn(fs.promises, 'link').mockImplementation(async (from, to) => {
-    fire(from)
-    return link(from, to)
+    return real(from, to)
   })
   return () => fired
 }

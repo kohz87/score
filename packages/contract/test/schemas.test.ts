@@ -870,6 +870,7 @@ const cases = [
       agentAccess: true,
       documents: 1,
       documentBytes: 10,
+      moveIssue: { state: 'conflicted', from: 'a.md', to: 'b.md', message: 'm' },
     },
     { vault: '/v', notes: -1, gitAvailable: true, agentAccess: true },
   ],

@@ -21,7 +21,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { HttpError } from '../errors.ts'
 import { VaultGit } from './git.ts'
 import { forIndex, prepareNoteContent } from './note-images.ts'
-import { moveNoReplace, parkedNameFor, removeOldName, restoreParked, syncDir } from './move-file.ts'
+import { moveNoReplace, syncDir } from './move-file.ts'
 import { buildNoteIndex, parseWikilinks, resolveLink, rewriteLinks } from './links.ts'
 import {
   authorFromColumn,
@@ -64,6 +64,8 @@ export interface VaultOptions {
   watch?: boolean
   /** Score's own state for Knowledge (`$SCORE_HOME/knowledge`): the move plan lives here, never in the vault. */
   stateDir?: string
+  /** Tests: first retry delay for an interrupted move that couldn't be finished (doubles up to 5 minutes). */
+  moveRetryMs?: number
 }
 
 const NoteRowSchema = z.object({
@@ -84,6 +86,16 @@ const LinkRowSchema = z.object({
   to_path: z.string().nullable(),
 })
 
+const FileIdentitySchema = z.object({
+  dev: z.number(),
+  ino: z.number(),
+  birthtimeMs: z.number(),
+  size: z.number(),
+  /** Content hash; absent for the identity read off the destination right after the rename. */
+  hash: z.string().optional(),
+})
+type FileIdentity = z.infer<typeof FileIdentitySchema>
+
 const MovePlanSchema = z.object({
   from: z.string(),
   to: z.string(),
@@ -99,10 +111,22 @@ const MovePlanSchema = z.object({
       reason: z.string().optional(),
     }),
   ),
-  /** Where the old name is parked while a move removes it, so an interrupted move can finish or undo that. */
+  /** Older versions parked the old name while removing it; such a plan is only reported, never interpreted. */
   parked: z.string().optional(),
+  /** What the source was before the move; recovery accepts the destination as the moved file only if it matches. */
+  identity: FileIdentitySchema.optional(),
+  /** `conflicted`: recovery found the evidence doesn't add up; the plan is kept, shown, and not retried. */
+  state: z.enum(['active', 'conflicted']).default('active'),
+  detail: z.string().optional(),
 })
 type MovePlan = z.infer<typeof MovePlanSchema>
+/** Kept in memory and shown on the Knowledge page while a move plan needs attention. */
+export interface MoveIssue {
+  state: 'pending' | 'conflicted'
+  from: string
+  to: string
+  message: string
+}
 export interface MoveSkipped {
   path: string
   reason: string
@@ -135,6 +159,9 @@ export class KnowledgeVault {
   private debounce: NodeJS.Timeout | undefined
   private interval: NodeJS.Timeout | undefined
   private closed = false
+  private issue: MoveIssue | null = null
+  private retryTimer: NodeJS.Timeout | undefined
+  private retryDelayMs: number
   /** Paths the watcher reported since the last scan. */
   private dirty = new Set<string>()
   private verifyNext = false
@@ -142,6 +169,7 @@ export class KnowledgeVault {
   constructor(private readonly options: VaultOptions) {
     this.root = path.resolve(options.vault)
     this.now = options.now ?? Date.now
+    this.retryDelayMs = options.moveRetryMs ?? 2000
     this.git = new VaultGit(this.root, this.now)
     this.docs = new KnowledgeDocuments(this, options.db)
     // Stored-only documents (over 10 MB) are not in git, so "Outside changes" must not sweep them in.
@@ -266,6 +294,7 @@ export class KnowledgeVault {
     this.closed = true
     clearTimeout(this.debounce)
     clearInterval(this.interval)
+    clearTimeout(this.retryTimer)
     this.watcher?.close()
     await this.queue.catch(() => undefined)
   }
@@ -363,8 +392,8 @@ export class KnowledgeVault {
   }
 
   /** Moves `source` to `dest`, failing with 409 instead of replacing anything there (see move-file.ts). */
-  async moveNoReplace(source: string, dest: string, parked?: string): Promise<void> {
-    await moveNoReplace(source, dest, parked)
+  async moveNoReplace(source: string, dest: string): Promise<{ synced: boolean }> {
+    return moveNoReplace(source, dest)
   }
 
   /**
@@ -742,6 +771,7 @@ export class KnowledgeVault {
       agentAccess: this.agentAccess(),
       documents: documents.documents,
       documentBytes: documents.bytes,
+      moveIssue: this.issue,
     }
   }
 
@@ -979,6 +1009,14 @@ export class KnowledgeVault {
     const to = parseNotePath(toInput)
     return this.serial(async () => {
       await this.recoverMove()
+      if (this.issue !== null)
+        throw new HttpError(
+          409,
+          'move_pending',
+          this.issue.state === 'conflicted'
+            ? 'An earlier move needs your attention first (see the notice on the Knowledge page).'
+            : 'An earlier move is still being finished. Try again in a moment.',
+        )
       const source = await this.lookup(from.split('/'))
       if (!source.stat?.isFile()) throw new HttpError(404, 'not_found', 'Couldn’t find that note.')
       if (from === to) throw new HttpError(409, 'exists', 'A note with that name already exists.')
@@ -1018,12 +1056,13 @@ export class KnowledgeVault {
         plan.push({ now: old === from ? to : old, content, baseHash: hashContent(raw) })
       }
       const abs = await this.prepareParent(to)
-      const parked = parkedNameFor(source.abs)
+      const identity = await this.identityOf(source.abs)
       const movePlan: MovePlan = {
         from,
         to,
         author,
-        parked: path.relative(this.root, parked).split(path.sep).join('/'),
+        state: 'active',
+        identity,
         items: plan.map((item) => ({
           path: item.now,
           baseHash: item.baseHash,
@@ -1036,12 +1075,31 @@ export class KnowledgeVault {
       // Written before anything moves: if Score stops half way, the next start finishes (or drops) the rewrites.
       await this.savePlan(movePlan)
       try {
-        await this.moveNoReplace(source.abs, abs, parked)
-        await this.assertParent(path.dirname(abs))
+        const moved = await this.moveNoReplace(source.abs, abs)
+        if (!moved.synced)
+          this.options.log?.warn({ from, to }, 'Couldn’t flush the folders after a move')
       } catch (error) {
-        await this.clearPlan()
+        // One atomic call: when it failed with a definite answer nothing moved and the plan ends. Anything else
+        // (a killed helper, say) is settled by looking at the files, never by assuming.
+        if (
+          error instanceof HttpError &&
+          (error.code === 'exists' ||
+            error.code === 'not_found' ||
+            error.code === 'rename_unsupported')
+        )
+          await this.clearPlan()
+        else await this.recoverMove()
         throw error
       }
+      // What was actually moved (the file may have been saved again after the plan was written): recovery compares
+      // the destination with this, not with the older identity.
+      try {
+        movePlan.identity = await this.identityOf(abs, false)
+        await this.savePlan(movePlan)
+      } catch (error) {
+        this.options.log?.warn({ err: error }, 'Couldn’t record the moved note’s identity')
+      }
+      await this.assertParent(path.dirname(abs))
       // The rename gets a commit of its own: with the link edits in the same commit a short note can look like a
       // delete plus a create to git, and its earlier versions would no longer be found.
       await this.commit([from, to], `Move ${from} to ${to}`, author)
@@ -1220,16 +1278,92 @@ export class KnowledgeVault {
     }
   }
 
+  /** Identity of the file at `abs`: inode and birth time survive a rename, the content hash survives a copy. */
+  private async identityOf(abs: string, withHash = true): Promise<FileIdentity> {
+    const st = await fs.lstat(abs)
+    const hash = withHash
+      ? hashContent(await this.readContainedBuffer(abs, MAX_FILE_BYTES))
+      : undefined
+    return {
+      dev: st.dev,
+      ino: st.ino,
+      birthtimeMs: st.birthtimeMs,
+      size: st.size,
+      ...(hash === undefined ? {} : { hash }),
+    }
+  }
+
+  /** Whether the file at `abs` is the one `identity` describes. */
+  private async matchesIdentity(abs: string, identity: FileIdentity): Promise<boolean> {
+    const st = await fs.lstat(abs).catch(() => null)
+    if (!st?.isFile()) return false
+    if (
+      st.dev === identity.dev &&
+      st.ino === identity.ino &&
+      st.birthtimeMs === identity.birthtimeMs
+    )
+      return true
+    if (identity.hash === undefined || st.size !== identity.size) return false
+    const bytes = await this.readContainedBuffer(abs, MAX_FILE_BYTES).catch(() => null)
+    return bytes !== null && hashContent(bytes) === identity.hash
+  }
+
+  /** The move that needs attention, for the Knowledge page. */
+  moveIssue(): MoveIssue | null {
+    return this.issue
+  }
+
+  /** Owner decision: abandon a conflicted (or stuck) plan. The files are left exactly as they are. */
+  async dismissMoveIssue(): Promise<void> {
+    return this.serial(async () => {
+      await this.clearPlan()
+      this.setIssue(null)
+    })
+  }
+
+  private setIssue(issue: MoveIssue | null): void {
+    this.issue = issue
+    if (issue?.state !== 'pending') {
+      clearTimeout(this.retryTimer)
+      this.retryTimer = undefined
+      this.retryDelayMs = this.options.moveRetryMs ?? 2000
+    }
+  }
+
+  private scheduleRecoveryRetry(): void {
+    if (this.closed || this.retryTimer !== undefined) return
+    const delay = this.retryDelayMs
+    this.retryDelayMs = Math.min(this.retryDelayMs * 2, 5 * 60_000)
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined
+      void this.serial(() => this.recoverMove()).catch(() => undefined)
+    }, delay)
+    this.retryTimer.unref()
+  }
+
   /**
-   * Finishes a move that was interrupted after its plan was saved (caller holds the lock). Never throws: whatever
-   * can't be finished is logged, and the plan always ends (a later start must not meet the same problem again).
+   * Finishes a move that was interrupted after its plan was saved (caller holds the lock). Never throws, and the plan
+   * only ends when the move is finished, was abandoned by the owner, or is proven untouched. A transient failure keeps
+   * the plan, shows "move pending" and retries with backoff; a conflict keeps it and shows that instead; a plan that
+   * can't be parsed is set aside as `.bad`.
    */
   private async recoverMove(): Promise<void> {
     try {
       await this.recoverMoveUnsafe()
     } catch (error) {
-      this.options.log?.warn({ err: error }, 'Couldn’t finish an interrupted move; it was dropped')
-      await this.clearPlan().catch(() => undefined)
+      this.options.log?.warn(
+        { err: error },
+        'Couldn’t finish an interrupted move; it will be retried',
+      )
+      const plan = await this.readPlan(this.planFile()).catch(() => null)
+      if (plan === null) return
+      this.setIssue({
+        state: 'pending',
+        from: plan.from,
+        to: plan.to,
+        message: 'A move is waiting to be finished; Score retries automatically.',
+      })
+      this.scheduleRecoveryRetry()
     }
   }
 
@@ -1238,37 +1372,67 @@ export class KnowledgeVault {
     try {
       plan = await this.readPlan(this.planFile())
     } catch (error) {
-      this.options.log?.warn({ err: error }, 'Ignored an unreadable move plan')
-      await this.clearPlan()
+      if (!(error instanceof SyntaxError || error instanceof z.ZodError)) throw error
+      // Malformed: keep it for inspection, but it can't block Knowledge.
+      this.options.log?.warn({ err: error }, 'Set aside an unreadable move plan')
+      await fs.rename(this.planFile(), `${this.planFile()}.bad`)
+      await syncDir(this.stateRoot()).catch(() => undefined)
+      this.setIssue(null)
       return
     }
-    if (plan === null) return
-    const source = await this.lookup(plan.from.split('/'))
-    const target = await this.lookup(plan.to.split('/'))
-    // A move that stopped while the old name was parked: the parked file is either the moved one (finish removing
-    // it) or a newer file that took the old name's place (put it back).
-    if (plan.parked !== undefined) {
-      const parked = path.join(this.root, ...plan.parked.split('/'))
-      const parkedStat = await fs.lstat(parked).catch(() => null)
-      if (parkedStat?.isFile()) {
-        if (target.stat && parkedStat.ino === target.stat.ino && parkedStat.dev === target.stat.dev)
-          await fs.unlink(parked)
-        else await restoreParked(parked, source.abs)
-      }
+    if (plan === null) {
+      this.setIssue(null)
+      return
     }
-    const nowSource = await this.lookup(plan.from.split('/'))
-    const nowTarget = await this.lookup(plan.to.split('/'))
-    if (nowSource.stat && nowTarget.stat) {
-      // Linked but not yet unlinked: the same file under both names finishes the move; anything else is not ours.
-      if (nowSource.stat.ino !== nowTarget.stat.ino || nowSource.stat.dev !== nowTarget.stat.dev) {
-        await this.clearPlan()
+    const conflict = async (detail: string): Promise<void> => {
+      plan.state = 'conflicted'
+      plan.detail = detail
+      await this.savePlan(plan)
+      this.options.log?.warn({ from: plan.from, to: plan.to, detail }, 'A move needs attention')
+      this.setIssue({ state: 'conflicted', from: plan.from, to: plan.to, message: detail })
+    }
+    if (plan.state === 'conflicted') {
+      this.setIssue({
+        state: 'conflicted',
+        from: plan.from,
+        to: plan.to,
+        message: plan.detail ?? 'An interrupted move could not be verified.',
+      })
+      return
+    }
+    if (plan.parked !== undefined) {
+      await conflict(
+        `A move from an older version of Score was interrupted. Look for a file named ${plan.parked} before dismissing this.`,
+      )
+      return
+    }
+    const target = await this.lookup(plan.to.split('/'))
+    if (!target.stat) {
+      // The rename is one atomic call and the destination was never created: nothing moved.
+      await this.clearPlan()
+      this.setIssue(null)
+      return
+    }
+    const source = await this.lookup(plan.from.split('/'))
+    const identity = plan.identity
+    const targetIsMoved =
+      identity === undefined ? !source.stat : await this.matchesIdentity(target.abs, identity)
+    if (!targetIsMoved) {
+      if (
+        identity !== undefined &&
+        source.stat &&
+        (await this.matchesIdentity(source.abs, identity))
+      ) {
+        await this.clearPlan() // untouched: someone else's file sits at the destination
+        this.setIssue(null)
         return
       }
-      await removeOldName(nowSource.abs, parkedNameFor(nowSource.abs), nowSource.stat)
-    } else if (!nowTarget.stat) {
-      await this.clearPlan() // the move never happened
+      await conflict(
+        `Score was moving ${plan.from} to ${plan.to}, but the file now at ${plan.to} is not the one that was being moved. Nothing was changed; check both names, then dismiss this.`,
+      )
       return
     }
+    this.setIssue(null)
     await this.commit([plan.from, plan.to], `Move ${plan.from} to ${plan.to}`, plan.author)
     await this.finishMove(plan)
   }
