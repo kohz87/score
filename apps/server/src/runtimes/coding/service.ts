@@ -78,6 +78,11 @@ export interface CodingRuntimeDeps {
    * signalled. The unit backend wires it to the journal; absent where there is none. A failure is reported, never thrown.
    */
   onStop?: (cause: string) => void
+  /**
+   * Whether a recorded process row belongs to this installation (not an inherited copy). Asked before every signal to a
+   * `coding_processes` row, in recovery and in the reaper; false = never signalled, never treated as ours. Default: true.
+   */
+  ownsProcessRow?: (runId: string) => boolean
   /** Units carrying this installation's prefix that no journal launch owns: the caller fences and raises a review item. */
   onOrphans?: (units: string[]) => void
 }
@@ -1261,6 +1266,7 @@ export class CodingRuntime {
         }
         const record = this.recordOf(runId)
         if (!record) return true
+        if (!this.ownsRow(runId)) return false
         const outcome = await this.stopGroup(record, extraMembers)
         if (outcome === 'gone') {
           this.forgetProcess(runId)
@@ -1277,6 +1283,16 @@ export class CodingRuntime {
       .finally(() => this.reapers.delete(runId))
     this.reapers.set(runId, loop)
     return loop
+  }
+
+  /** A throwing check counts as not ours: nothing is signalled on doubt. */
+  private ownsRow(runId: string): boolean {
+    try {
+      return this.deps.ownsProcessRow?.(runId) ?? true
+    } catch (error) {
+      this.deps.onError?.(error)
+      return false
+    }
   }
 
   private markUnobservable(runId: string, value: boolean): void {
@@ -1398,6 +1414,7 @@ export class CodingRuntime {
         }
     }
     for (const record of records) {
+      if (!this.ownsRow(record.run_id)) continue
       const outcome = await this.stopGroup(record)
       if (outcome === 'gone') this.forgetProcess(record.run_id)
       else {

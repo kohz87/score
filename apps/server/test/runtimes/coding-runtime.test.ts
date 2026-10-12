@@ -70,6 +70,7 @@ async function boot(
     reapRetryMs?: number
     stopObserveMs?: number
     onStop?: (cause: string) => void
+    ownsProcessRow?: (runId: string) => boolean
     ingestWrap?: (ingest: Ingest) => Pick<Ingest, 'submit'>
   } = {},
 ) {
@@ -88,6 +89,7 @@ async function boot(
     ...(options.reapRetryMs ? { reapRetryMs: options.reapRetryMs } : {}),
     ...(options.stopObserveMs ? { stopObserveMs: options.stopObserveMs } : {}),
     ...(options.onStop ? { onStop: options.onStop } : {}),
+    ...(options.ownsProcessRow ? { ownsProcessRow: options.ownsProcessRow } : {}),
     // Counts launches and keeps the pids, so a test can prove nothing started or that a child is gone.
     spawn: (spawnOptions) => {
       launches++
@@ -1958,4 +1960,27 @@ test('#17: a failing stop hook is reported and the stop goes on', async () => {
   await finished()
   expect(runs()[0]!.status).toBe('failed')
   expect(errors.length).toBeGreaterThan(0)
+})
+
+test('#6: a process row the installation does not own is never signalled, in recovery or by the reaper, and is not ours', async () => {
+  const asked: string[] = []
+  await rebootWith({
+    reapRetryMs: 20,
+    ownsProcessRow: (runId) => runId !== 'cr_inherited',
+    killGroup: async (record) => {
+      asked.push(`${record.pid}`)
+      return 'gone'
+    },
+  })
+  await addAgent()
+  seedCrashedRun('cr_inherited', { pid: 4_000_011, start: '5' })
+  seedCrashedRun('cr_ours', { pid: 4_000_012, start: '5' })
+  await coding.recover()
+  await new Promise((r) => setTimeout(r, 150))
+  expect(asked).toEqual(['4000012'])
+  // Left as it was: not signalled, not deleted, not marked unresolved.
+  expect(processRows()).toEqual([{ run_id: 'cr_inherited', unresolved: 0 }])
+  // The reaper path (a Stop for that run) doesn't signal it either.
+  await coding.stopRun({ agentId: 'coder', runId: 'cr_inherited' })
+  expect(asked).toEqual(['4000012'])
 })
