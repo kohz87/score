@@ -666,17 +666,48 @@ export class UnitBackend {
    */
   private adoptStopReceipt(launchId: string): void {
     const rec = this.recorded(launchId)
+    let text: string
     try {
-      const body = JSON.parse(readFileSync(join(rec.receiptDir, STOP_RECEIPT), 'utf8')) as {
-        launch?: unknown
-        cause?: unknown
-      }
-      if (body.launch !== launchId || typeof body.cause !== 'string' || body.cause === '') return
-      if (this.deps.journal.state(launchId)?.state.stopCause !== undefined) return
-      this.recordCause(launchId, body.cause.slice(0, 64))
-    } catch {
-      // no receipt (the common case) or an unreadable one: nothing to adopt
+      text = readFileSync(join(rec.receiptDir, STOP_RECEIPT), 'utf8')
+    } catch (error) {
+      // No receipt is the common case. One that exists but can't be read is uncertainty about why the run stopped.
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+        this.stopReceiptProblem(launchId, error)
+      return
     }
+    const generation = this.deps.journal.state(launchId)?.state.generation
+    let body: { launch?: unknown; generation?: unknown; cause?: unknown }
+    try {
+      body = JSON.parse(text) as typeof body
+    } catch (error) {
+      this.stopReceiptProblem(launchId, error)
+      return
+    }
+    if (
+      body === null ||
+      typeof body !== 'object' ||
+      body.launch !== launchId ||
+      generation === undefined ||
+      body.generation !== generation ||
+      typeof body.cause !== 'string' ||
+      body.cause === '' ||
+      body.cause.length > 64
+    ) {
+      this.stopReceiptProblem(launchId, new Error('the stop-cause receipt is not for this launch'))
+      return
+    }
+    if (this.deps.journal.state(launchId)?.state.stopCause !== undefined) return
+    this.recordCause(launchId, body.cause)
+  }
+
+  /** A receipt that can't be trusted: reported, and the launch's result can't be eligible (visible uncertainty). */
+  private stopReceiptProblem(launchId: string, error: unknown): void {
+    this.unrecordedStops.add(launchId)
+    this.deps.onError?.(
+      new Error(
+        `stop-cause receipt of ${launchId} unusable: ${error instanceof Error ? error.message : String(error)}`,
+      ),
+    )
   }
 
   /**
@@ -736,7 +767,10 @@ export class UnitBackend {
         ]
         for (const [column, value] of Object.entries(extra)) {
           if (!EXTRA_COLUMNS.has(column)) continue
-          sets.push(`${column} = ?`)
+          // The first stop cause stays: a projection never overwrites an adopted cause (FW #9).
+          sets.push(
+            column === 'stop_cause' ? 'stop_cause = COALESCE(stop_cause, ?)' : `${column} = ?`,
+          )
           values.push(value ?? null)
         }
         sqlite
@@ -1396,7 +1430,8 @@ export class UnitBackend {
     const proof = await this.proveEnded(launchId)
     if (proof.proven) this.adoptStopReceipt(launchId)
     const project = this.projection(request, receiptDir, specDir, {
-      stop_cause: extra.stopCause,
+      // The journal's first cause (possibly just adopted from the supervisor's receipt) wins over this session's view.
+      stop_cause: this.deps.journal.state(launchId)?.state.stopCause ?? extra.stopCause,
       held: proof.proven ? 0 : 1,
     })(launchId)
     try {

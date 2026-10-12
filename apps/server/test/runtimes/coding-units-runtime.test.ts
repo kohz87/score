@@ -1808,6 +1808,52 @@ test('FW #8: the installation budget charges the translator’s call details and
   await vi.waitFor(() => expect(backend.budgetBytes).toBe(0), { timeout: 10_000 })
 })
 
+test('FW #9: a cause the supervisor recorded survives live completion: journal, database and verification agree', async () => {
+  await addAgent()
+  await makeRoom()
+  fake.hooks.onExit = ({ receiptDir }) => {
+    const launch = receiptDir.split('/').at(-1)!
+    writeReceipt(receiptDir, 'stop-cause.json', {
+      launch,
+      generation: 0,
+      at: Date.now(),
+      cause: 'socket-loss',
+    })
+  }
+  await say('@coder [fixture:basic] go')
+  await finished()
+  const [row] = launches()
+  const read = journal.readOwn()
+  if (!read.ok) throw new Error(read.reason)
+  const stops = read.entries.filter(
+    (e) => 'launchId' in e && e.launchId === row!.launch_id && e.kind === 'stop-requested',
+  ) as unknown as { stopCause: string }[]
+  expect(stops.map((e) => e.stopCause)).toEqual(['socket-loss'])
+  expect(launchRow(row!.launch_id).stop_cause).toBe('socket-loss')
+  expect(verifyCoding(db.sqlite, read.entries)).toEqual([])
+})
+
+test('FW #9: a stop receipt that is unreadable, foreign or for another generation is reported and costs the result', async () => {
+  await addAgent()
+  await makeRoom()
+  errors.length = 0
+  fake.hooks.onExit = ({ receiptDir }) => {
+    const launch = receiptDir.split('/').at(-1)!
+    writeReceipt(receiptDir, 'stop-cause.json', {
+      launch,
+      generation: 7,
+      at: Date.now(),
+      cause: 'deadline',
+    })
+  }
+  await say('@coder [fixture:basic] go')
+  await finished()
+  expect(runs()[0]!.status).toBe('failed')
+  expect(launches()[0]!.eligibility).toContain('stop-unrecorded')
+  expect(errors.map(String).join('\n')).toMatch(/stop-cause receipt/)
+  errors.length = 0
+})
+
 test('re-review 2 #17: a first cause the supervisor wrote itself is adopted into the journal before the launch ends', async () => {
   await addAgent()
   const seed = seedLaunch('releasing', { receipts: ['released.json', 'ended.json'] })
