@@ -59,7 +59,6 @@ export function writeReceipt(dir, name, body) {
   const final = join(dir, name)
   const tmp = join(dir, `.${name}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`)
   const data = Buffer.from(JSON.stringify(body) + '\n')
-  let linked = false
   try {
     const fd = openSync(tmp, 'wx', 0o600)
     try {
@@ -74,7 +73,6 @@ export function writeReceipt(dir, name, body) {
       closeSync(fd)
     }
     linkSync(tmp, final)
-    linked = true
   } finally {
     try {
       unlinkSync(tmp)
@@ -82,7 +80,6 @@ export function writeReceipt(dir, name, body) {
       // never created, or already gone
     }
   }
-  if (!linked) return
   const dirFd = openSync(dir, 'r')
   try {
     fsyncSync(dirFd)
