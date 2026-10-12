@@ -925,8 +925,12 @@ test('recovery: a unit with this installation’s prefix and no journal launch i
     .startRun({ agentId: 'coder', input: 'go', turnId: 't-orphan' })
     .catch((error: unknown) => error)
   expect(refused).toMatchObject({ status: 422, code: 'coding_paused' })
-  // A different installation’s unit is not ours.
   expect(backend.orphaned).toEqual([stray.name])
+  // The person removes the stray service and presses Check again: admission resumes.
+  fake.forget(stray.name)
+  await request('POST', '/api/coding-agents/backend/check', {})
+  expect(backend.orphaned).toEqual([])
+  expect(backend.block()).toBeNull()
 })
 
 test('recovery: both backends are reconciled after an upgrade (a recorded process group and a unit launch)', async () => {

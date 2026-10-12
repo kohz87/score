@@ -291,6 +291,7 @@ export class UnitBackend {
 
   /** "Check again": the same check, on demand. */
   async check(): Promise<BackendStatus> {
+    await this.rescanOrphans()
     const checks: { name: string; ok: boolean; detail: string }[] = []
     let ok: boolean
     try {
@@ -346,6 +347,14 @@ export class UnitBackend {
       note: all ? UNIT_NOTE : `${FALLBACK_NOTE} ${checks.find((c) => !c.ok)?.detail ?? ''}`.trim(),
     }
     return this.current
+  }
+
+  /** An orphan the person has dealt with (the unit is gone) no longer pauses admission. A failed read changes nothing. */
+  private async rescanOrphans(): Promise<void> {
+    if (this.orphans.length === 0) return
+    const inventory = await listInstallationUnits(this.run, this.prefix)
+    if (inventory.kind === 'ok')
+      this.orphans = this.orphans.filter((n) => inventory.names.includes(n))
   }
 
   private notifySocket(): string {
