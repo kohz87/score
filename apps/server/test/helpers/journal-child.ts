@@ -10,6 +10,15 @@ if (role === 'hold') {
     fs.writeFileSync(a!, 'x')
     while (!fs.existsSync(b!)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10)
   })
+} else if (role === 'revoke') {
+  // Tries to revoke launch `a` (run r1/t1) in the journal at `dir`; `b` is touched just before the lock is requested.
+  const { CodingJournal } = await import('../../src/domain/orchestration/coding-journal.ts')
+  const coding = new CodingJournal(
+    new ExecutionJournal(dir!, process.argv[6] ?? 'scope-x', undefined, undefined, undefined, 30_000),
+  )
+  fs.writeFileSync(b!, 'about to revoke')
+  const result = coding.revoke(a!)
+  console.log(JSON.stringify({ ok: result.ok, reason: result.ok ? null : result.reason }))
 } else {
   // Appends `a` send_started entries, one per attempt.
   const journal = new ExecutionJournal(dir!, 'scope-x')

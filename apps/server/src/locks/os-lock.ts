@@ -52,6 +52,22 @@ export function mkdirDurable(dir: string, fsync: (fd: number) => void = fsyncSyn
   }
 }
 
+/**
+ * Lock order (7.7a v7 §3): registry (1) → installation journal (2) → legacy journal during a migration (3) → database.
+ * A synchronous holder of a ranked lock may only take locks of a higher rank; the guard is per process, which is where
+ * a nested acquisition (the only way to deadlock against oneself) can happen.
+ */
+export const LOCK_RANK = { registry: 1, journal: 2, legacyJournal: 3 } as const
+const heldRanks: number[] = []
+
+export class LockOrderError extends Error {
+  // No parameter properties: scripts import this file with Node's type stripping.
+  constructor(message: string) {
+    super(message)
+    this.name = 'LockOrderError'
+  }
+}
+
 export class OsLockTimeoutError extends Error {
   readonly code = 'ELOCKED'
   readonly file: string
@@ -80,11 +96,19 @@ export class OsLock {
 
   readonly dir: string
   private readonly fsync: (fd: number) => void
+  private readonly rank: number | undefined
 
-  constructor(dir: string, fsync: (fd: number) => void = fsyncSync) {
+  /** `fileName` lets a directory hold more than one lock (the registry lock sits beside the namespaces). */
+  constructor(
+    dir: string,
+    fsync: (fd: number) => void = fsyncSync,
+    fileName: string = LOCK_FILE_NAME,
+    rank?: number,
+  ) {
     this.dir = dir
     this.fsync = fsync
-    this.file = join(resolve(dir), LOCK_FILE_NAME)
+    this.rank = rank
+    this.file = join(resolve(dir), fileName)
   }
 
   private connection(): DatabaseSync {
@@ -113,6 +137,10 @@ export class OsLock {
         this.depth--
       }
     }
+    if (this.rank !== undefined && heldRanks.some((held) => held >= this.rank!))
+      throw new LockOrderError(
+        `Lock order violation: ${this.file} (rank ${this.rank}) requested while holding rank ${Math.max(...heldRanks)}`,
+      )
     const db = this.connection()
     db.exec(`PRAGMA busy_timeout = ${Math.max(0, Math.floor(waitMs))}`)
     try {
@@ -122,9 +150,11 @@ export class OsLock {
       throw error
     }
     this.depth = 1
+    if (this.rank !== undefined) heldRanks.push(this.rank)
     try {
       return fn()
     } finally {
+      if (this.rank !== undefined) heldRanks.pop()
       this.depth = 0
       try {
         db.exec('ROLLBACK') // nothing was written: ends the transaction and drops the file lock

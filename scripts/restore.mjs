@@ -19,7 +19,13 @@ import {
   writeSync,
 } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
+import { OsLock } from '../apps/server/src/locks/os-lock.ts'
+import {
+  registeredIdForHome,
+  restoreMarkerDir,
+  writeHomeInstallation,
+} from '../apps/server/src/installation.ts'
 import {
   canonicalPath,
   journalInsideHome,
@@ -72,38 +78,51 @@ if (existsSync(pidFile)) {
 }
 
 const realHome = home
-const scope = createHash('sha256').update(realHome).digest('hex').slice(0, 12)
+const legacyScope = createHash('sha256').update(realHome).digest('hex').slice(0, 12)
 const stamp = new Date().toISOString().replace(/[:.]/g, '-')
 
 mkdirSync(journalDirRequested, { recursive: true, mode: 0o700 })
 const journalDir = canonicalPath(journalDirRequested)
 
-// 1. The marker first: if anything below fails half-way, the next start is fenced anyway.
-mkdirSync(journalDir, { recursive: true, mode: 0o700 })
-const markerPath = join(journalDir, 'restore-marker.json')
-const temp = `${markerPath}.tmp`
-const fd = openSync(temp, 'w', 0o600)
+// 7.7a: the marker goes where the home's journal lives now: its installation namespace (following the legacy journal's
+// cutover, or the registry), or the legacy directory for a home that was never migrated.
+let markerDir
 try {
-  // The whole marker or an error: writeSync may write fewer bytes than asked.
-  const data = Buffer.from(JSON.stringify({ scope, at: new Date().toISOString(), backup }))
-  for (let offset = 0; offset < data.length;) {
-    const written = writeSync(fd, data, offset, data.length - offset)
-    if (!(written > 0)) throw new Error('marker write made no progress')
-    offset += written
-  }
-  fsyncSync(fd)
-} finally {
-  closeSync(fd)
+  markerDir = restoreMarkerDir(journalDir, realHome)
+} catch (error) {
+  fail(error instanceof Error ? error.message : String(error))
 }
-renameSync(temp, markerPath)
-{
-  const dirFd = openSync(journalDir, 'r')
+const scope = markerDir === journalDir ? legacyScope : basename(markerDir)
+
+// 1. The marker first: if anything below fails half-way, the next start is fenced anyway. Under the namespace's lock,
+// like every other writer of that folder.
+mkdirSync(markerDir, { recursive: true, mode: 0o700 })
+const markerPath = join(markerDir, 'restore-marker.json')
+const temp = `${markerPath}.tmp`
+new OsLock(markerDir).runSync(() => {
+  const fd = openSync(temp, 'w', 0o600)
+  try {
+    // The whole marker or an error: writeSync may write fewer bytes than asked.
+    const data = Buffer.from(
+      JSON.stringify({ scope, at: new Date().toISOString(), backup, origin: 'restore' }),
+    )
+    for (let offset = 0; offset < data.length;) {
+      const written = writeSync(fd, data, offset, data.length - offset)
+      if (!(written > 0)) throw new Error('marker write made no progress')
+      offset += written
+    }
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+  renameSync(temp, markerPath)
+  const dirFd = openSync(markerDir, 'r')
   try {
     fsyncSync(dirFd)
   } finally {
     closeSync(dirFd)
   }
-}
+})
 
 // 2. Move the current home aside (never deleted) and copy the backup in.
 let aside = null
@@ -117,6 +136,10 @@ try {
   // Process-local files of the old home do not belong to the restored one.
   for (const name of ['score.pid', 'score.url', 'score.launcher.lock'])
     rmSync(join(home, name), { force: true })
+  // The backup's copy of the installation id may be another installation's: the registry (outside the home) decides.
+  const registered = registeredIdForHome(journalDir, realHome)
+  if (registered) writeHomeInstallation(home, registered)
+  else rmSync(join(home, 'installation.json'), { force: true })
 } catch (error) {
   fail(
     `copying the backup failed (${error instanceof Error ? error.message : String(error)}); the previous home is at ${aside ?? 'nowhere (there was none)'}`,

@@ -13,12 +13,15 @@ import { loadWebAssets, type WebAssets } from './http/web-assets.ts'
 import { SqliteSessionStore } from './auth/sqlite-session-store.ts'
 import { resolveJournalDir, type Config } from './config.ts'
 import {
+  canonicalPath,
   homeProvenance,
   journalInsideHome,
   journalRootProblem,
   pointerVouches,
   recordJournalRoot,
 } from './journal-location.ts'
+import { resolveInstallation, type InstallationResult } from './installation.ts'
+import { migrateLegacyJournal } from './domain/orchestration/journal-migration.ts'
 import { Orchestrator } from './domain/orchestration/executor.ts'
 import { GlobalFenceStore } from './domain/orchestration/fence.ts'
 import { ExecutionJournal, journalScope } from './domain/orchestration/journal.ts'
@@ -232,6 +235,9 @@ export async function startServer(
   }
 
   let rootProvenance: ReturnType<typeof homeProvenance> | undefined
+  // 7.7a §2: who this home is. Unresolved (copied home, ambiguity, corrupt registry) blocks every admission.
+  let installation: InstallationResult | undefined
+  let installationBlock: string | null = null
   try {
     // Before any lock, marker or write: a live journal inside the home would be rewound by a restore (AA3).
     // The fake adapter starts no real runs, so its journal may stay in the home.
@@ -252,6 +258,22 @@ export async function startServer(
       )
         rootProvenance = undefined
       recordJournalRoot(config.home, resolveJournalDir(config))
+    }
+    {
+      const journalRoot = resolveJournalDir(config)
+      const home = realHome(config.home)
+      installation = resolveInstallation({ journalDir: journalRoot, home })
+      if (!installation.ok) installationBlock = installation.message
+      else {
+        const migrated = migrateLegacyJournal({
+          journalDir: canonicalPath(journalRoot),
+          homeScope: journalScope(home),
+          installationId: installation.id,
+          namespaceDir: installation.namespaceDir,
+        })
+        if (!migrated.ok)
+          installationBlock = `The execution journal could not be moved into this installation's folder: ${migrated.reason}`
+      }
     }
     db = openDatabase(join(config.home, 'score.db'))
     migrate(db, fileURLToPath(new URL('../migrations/', import.meta.url)))
@@ -289,11 +311,14 @@ export async function startServer(
     const adapter = port
     // Orchestrations (PLAN 7.5a): the execution journal lives outside the home; every start compares it with the
     // database and fences admission when they disagree (design v3).
-    const journal = new ExecutionJournal(
-      resolveJournalDir(config),
-      journalScope(realHome(config.home)),
-    )
+    // Per-installation namespace (7.7a §2); while the installation is unresolved the legacy path is only read (its
+    // writers are refused after a cutover) and the hard block keeps the fence up.
+    const journal =
+      installation?.ok && installationBlock === null
+        ? new ExecutionJournal(installation.namespaceDir, installation.id)
+        : new ExecutionJournal(resolveJournalDir(config), journalScope(realHome(config.home)))
     const fenceStore = new GlobalFenceStore(database, journal)
+    fenceStore.setHardBlock(installationBlock)
     const fenced = fenceStore.startupCheck()
     if (rootProvenance && rootProvenance.state !== 'known') {
       const why =
@@ -548,7 +573,15 @@ export async function startServer(
       }, 60_000)
       logRotation.unref()
     }
-    return { app, bridgeApp, pairingToken: token, ingest, db: database, close }
+    return {
+      app,
+      bridgeApp,
+      pairingToken: token,
+      ingest,
+      db: database,
+      installation: installationBlock === null ? installation : undefined,
+      close,
+    }
   } catch (error) {
     try {
       await close()

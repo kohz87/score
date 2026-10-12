@@ -15,7 +15,14 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { mkdirDurable, OsLock, OsLockTimeoutError } from '../../locks/os-lock.ts'
+import { legacyJournalScope } from '../../installation.ts'
+import { LOCK_RANK, mkdirDurable, OsLock, OsLockTimeoutError } from '../../locks/os-lock.ts'
+import {
+  CODING_RECORD_KINDS as CODING_KINDS,
+  codingRecordSchemas,
+  foldCodingLaunches,
+  type CodingLaunch,
+} from './coding-records.ts'
 
 // The execution journal (design v3, "Restore: an external journal plus an operator protocol"): an append-only, fsync'd
 // file OUTSIDE $SCORE_HOME, so restoring the home or the database cannot rewind it. Every external effect is preceded
@@ -134,8 +141,27 @@ const EntrySchema = z.discriminatedUnion('kind', [
   }),
   // Keeps the sequence monotonic when compaction removed the newest entries.
   z.object({ ...Base, kind: z.literal('checkpoint') }),
+  // 7.7a §2: written to the LEGACY path-scoped journal once this home's records were copied to its installation
+  // namespace. After it, every writer refuses the legacy path for this home; the file stays as a read-only witness.
+  z.object({
+    ...Base,
+    kind: z.literal('cutover'),
+    installationId: z.string().min(1),
+    /** The namespace directory name under the journal root (the installation id). */
+    namespace: z.string().min(1),
+    /** Highest legacy `n` of this home that was copied; anything of this home above it was written after the cutover. */
+    copiedThrough: z.int().nonnegative(),
+  }),
+  // 7.7a §2/§3: coding-run records (launch-requested … settled) and their permanent tombstones.
+  ...codingRecordSchemas(Base),
 ])
 export type JournalEntry = z.infer<typeof EntrySchema>
+
+/** What a critical section can do: read a launch's newest state, and append (fsync'd) under the same lock. */
+export interface CriticalTx {
+  launch(launchId: string): CodingLaunch | undefined
+  append(body: JournalEntryBody): JournalEntry
+}
 
 type DistributiveOmit<T, K extends string> = T extends unknown ? Omit<T, K> : never
 export type JournalEntryBody = DistributiveOmit<JournalEntry, 'n' | 'at' | 'scope'>
@@ -200,10 +226,17 @@ export type JournalRead =
 const checksum = (payload: string): string =>
   createHash('sha256').update(payload).digest('hex').slice(0, 16)
 
+/** One journal line (record + checksum + newline), exactly as the writers produce it. */
+export function journalLine(entry: JournalEntry): Buffer {
+  return Buffer.from(`${JSON.stringify({ ...entry, c: checksum(JSON.stringify(entry)) })}\n`)
+}
+
 const MarkerSchema = z.object({
   scope: z.string().min(1),
   at: z.iso.datetime(),
   backup: z.string(),
+  /** `copy`: written when a copied home was confirmed as its own installation (its history is the source's). */
+  origin: z.enum(['restore', 'copy']).optional(),
 })
 export type RestoreMarker = z.infer<typeof MarkerSchema>
 
@@ -227,15 +260,59 @@ export class ExecutionJournal {
     private readonly alarmBytes: number = JOURNAL_SIZE_ALARM_BYTES,
     private readonly io: JournalIo = nodeIo,
     lockWaitMs?: number,
+    /** The lock-order rank (os-lock.ts): installation namespaces use the default; a legacy journal read during a
+     * migration is taken after its namespace. */
+    lockRank: number = LOCK_RANK.journal,
   ) {
     this.file = join(dir, JOURNAL_FILE)
     this.lockWaitMs = lockWaitMs
-    this.lock = new OsLock(dir, (fd) => this.io.fsyncSync(fd))
+    this.lock = new OsLock(dir, (fd) => this.io.fsyncSync(fd), undefined, lockRank)
   }
   private readonly lockWaitMs: number | undefined
+  private cutoverSeen = false
 
   private locked<T>(fn: () => T): T {
     return this.lock.runSync(fn, this.lockWaitMs)
+  }
+
+  /** Runs `fn` holding this journal's OS lock (reentrant). For multi-step operations such as a migration. */
+  withLock<T>(fn: () => T): T {
+    return this.locked(fn)
+  }
+
+  /**
+   * The ordering point (7.7a §3): holds the journal's OS lock across the authority read, the CAS, the append+fsync and
+   * the database projection the caller performs inside `fn`. `tx` sees the launches' newest state as read under the
+   * lock and is kept current by its own appends. Lock order registry → journal → database is enforced by os-lock.ts.
+   */
+  critical<T>(fn: (tx: CriticalTx) => T): T {
+    return this.locked(() => {
+      if (this.broken !== undefined)
+        throw new Error(`Execution journal is unreadable: ${this.broken}`)
+      if (this.nextN === undefined && !this.open())
+        throw new Error('Execution journal is unreadable')
+      this.repairTail()
+      const read = this.parse()
+      if (!read.ok) {
+        this.broken = read.reason
+        throw new Error(`Execution journal is unreadable: ${read.reason}`)
+      }
+      const launches = foldCodingLaunches(
+        read.entries.filter((entry) => entry.scope === this.scope),
+      )
+      const tx: CriticalTx = {
+        launch: (launchId) => launches.get(launchId),
+        append: (body) => {
+          const entry = this.appendLocked(body)
+          const fold = foldCodingLaunches([entry]).get(
+            (entry as { launchId?: string }).launchId ?? '',
+          )
+          if (fold) launches.set(fold.state.launchId, fold)
+          return entry
+        },
+      }
+      return fn(tx)
+    })
   }
 
   /** True when the journal file has never been created in this directory. */
@@ -336,7 +413,35 @@ export class ExecutionJournal {
    * cannot, and then the caller must not act (and the partial bytes, if any, are cut off again).
    */
   append(body: JournalEntryBody): JournalEntry {
+    if (body.kind === 'cutover') throw new Error('Use appendCutover for a cutover record')
     return this.locked(() => this.appendLocked(body))
+  }
+
+  /** The migration's last step on the legacy journal (see journal-migration.ts). Idempotence is the caller's. */
+  appendCutover(body: Extract<JournalEntryBody, { kind: 'cutover' }>): JournalEntry {
+    return this.locked(() => this.appendLocked(body))
+  }
+
+  /** True once this home's records have been moved to an installation namespace: writers refuse this path. */
+  private cutoverRecorded(): boolean {
+    if (this.cutoverSeen) return true
+    let raw: string
+    try {
+      raw = readFileSync(this.file, 'utf8')
+    } catch {
+      return false
+    }
+    if (!raw.includes('"kind":"cutover"')) return false
+    for (const line of raw.split('\n')) {
+      if (!line.includes('"kind":"cutover"')) continue
+      try {
+        const entry = JSON.parse(line) as { kind?: string; scope?: string }
+        if (entry.kind === 'cutover' && entry.scope === this.scope) this.cutoverSeen = true
+      } catch {
+        // a torn or damaged line: parse() reports it
+      }
+    }
+    return this.cutoverSeen
   }
 
   private appendLocked(body: JournalEntryBody): JournalEntry {
@@ -345,6 +450,10 @@ export class ExecutionJournal {
     if (this.nextN === undefined && !this.open()) throw new Error('Execution journal is unreadable')
     // Another process (or handle) may have crashed mid-append or compacted: look at the file itself, under the lock.
     this.repairTail()
+    if (body.kind !== 'cutover' && this.cutoverRecorded())
+      throw new Error(
+        `This journal (${this.dir}) was migrated to an installation namespace; it is a read-only witness now`,
+      )
     this.nextN = Math.max(this.nextN ?? 1, this.tailN() + 1)
     const entry = EntrySchema.parse({
       ...body,
@@ -439,7 +548,7 @@ export class ExecutionJournal {
     if (!result.ok) throw new Error(`Cannot compact an unreadable journal: ${result.reason}`)
     // Detail goes, the proof stays: an admission or a fence becomes a permanent tombstone with its original number.
     const out: JournalEntry[] = []
-    const folded = foldGenerations(result.entries, this.scope)
+    const folded = foldCodingRecords(foldGenerations(result.entries, this.scope), this.scope)
     for (const entry of folded) {
       const compactable = [
         'send_started',
@@ -609,7 +718,36 @@ export function foldGenerations(entries: readonly JournalEntry[], scope: string)
   return entries.filter((e) => !drop.has(e.n)).map((e) => replace.get(e.n) ?? e)
 }
 
-/** Journal entries are scoped to a home so a shared directory never confuses two homes. */
-export function journalScope(realHome: string): string {
-  return createHash('sha256').update(realHome).digest('hex').slice(0, 12)
+/**
+ * 7.7a §2: only a launch's newest coding record survives compaction, and a settled launch's becomes a compact tombstone
+ * kept forever (same number). The newest record carries the launch's full state, including the monotonic "may have
+ * executed" and "revoked" flags, so nothing a restore check needs is lost; an unsettled launch keeps its real record.
+ */
+export function foldCodingRecords(entries: readonly JournalEntry[], scope: string): JournalEntry[] {
+  const newest = new Map<string, number>()
+  for (const entry of entries) {
+    if (entry.scope !== scope) continue
+    const launchId = (entry as { launchId?: string }).launchId
+    if (launchId !== undefined && isCodingKind(entry.kind)) newest.set(launchId, entry.n)
+  }
+  const out: JournalEntry[] = []
+  for (const entry of entries) {
+    const launchId = (entry as { launchId?: string }).launchId
+    if (entry.scope !== scope || launchId === undefined || !isCodingKind(entry.kind)) {
+      out.push(entry)
+      continue
+    }
+    if (newest.get(launchId) !== entry.n) continue
+    if (entry.kind === 'settled') {
+      out.push({ ...entry, kind: 'coding-tombstone', of: 'settled' } as JournalEntry)
+    } else out.push(entry)
+  }
+  return out
 }
+
+function isCodingKind(kind: string): boolean {
+  return kind === 'coding-tombstone' || (CODING_KINDS as readonly string[]).includes(kind)
+}
+
+/** The legacy (path-scoped) scope of a home. Namespaced journals use the installation id as their scope instead. */
+export const journalScope = legacyJournalScope
