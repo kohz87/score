@@ -265,13 +265,62 @@ test('any close other than after ack-end is socket loss', async () => {
   expect(outcome.eligible).toBe(false)
 })
 
-test('an oversize stdout record is dropped (lossy) and the run goes on', async () => {
+test('an oversize stdout record is dropped (lossy) and the run is stopped (review #15)', async () => {
   const { server } = await setup({ maxRecordBytes: 100 })
   const { sup, session, records } = await connect(server)
   sup.out('stdout', 1, 'ok\n' + 'z'.repeat(5000) + '\nafter\n')
+  await vi.waitFor(() => expect(sup.frames.some((f) => f['t'] === 'stop')).toBe(true))
   const outcome = await finishCleanly(sup, session, 1)
   expect(records).toEqual(['ok', 'after'])
   expect(outcome).toMatchObject({ eligible: false, droppedRecords: 1 })
+  expect(outcome.reasons).toContain('record-too-large')
+})
+
+test('partial records count against the installation memory budget (review #15)', async () => {
+  const { server } = await setup({ memoryBudgetBytes: 1000, pauseBytes: 1_000_000 })
+  const mk = (id: string) =>
+    server.expect({
+      launch: id,
+      generation: 1,
+      specHash: 'h',
+      handlers: { onStdoutRecord: () => undefined },
+    })
+  const a = mk('A')
+  const b = mk('B')
+  const sa = new FakeSupervisor(server.path)
+  const sb = new FakeSupervisor(server.path)
+  sa.hello('A', a.token)
+  sb.hello('B', b.token)
+  await vi.waitFor(() => expect(sa.has('welcome') && sb.has('welcome')).toBe(true))
+  sa.out('stdout', 1, 'a'.repeat(600))
+  await vi.waitFor(() => expect(server.bufferedBytes).toBe(600))
+  sb.out('stdout', 1, 'b'.repeat(600))
+  await vi.waitFor(() => expect(sb.frames.some((f) => f['t'] === 'stop')).toBe(true))
+  expect(server.bufferedBytes).toBeLessThanOrEqual(1000)
+  sb.socket.destroy()
+  expect((await b.session.outcome).reasons).toContain('memory-budget')
+  // The completed line releases the charge.
+  sa.out('stdout', 2, '\n')
+  await vi.waitFor(() => expect(server.bufferedBytes).toBe(0))
+})
+
+test('queue entries carry per-record overhead against the memory budget (review #15)', async () => {
+  const { server } = await setup({ memoryBudgetBytes: 1000, pauseBytes: 1_000_000 })
+  const never = new Promise<void>(() => undefined)
+  const reg = server.expect({
+    launch: 'Q',
+    generation: 1,
+    specHash: 'h',
+    handlers: { onStdoutRecord: () => never },
+  })
+  const sup = new FakeSupervisor(server.path)
+  sup.hello('Q', reg.token)
+  await vi.waitFor(() => expect(sup.has('welcome')).toBe(true))
+  sup.out('stdout', 1, '\n'.repeat(40)) // empty records: zero text bytes, still queue entries
+  await vi.waitFor(() => expect(sup.frames.some((f) => f['t'] === 'stop')).toBe(true))
+  expect(server.bufferedBytes).toBeLessThanOrEqual(1000)
+  sup.socket.destroy()
+  expect((await reg.session.outcome).reasons).toContain('memory-budget')
 })
 
 test('the installation-wide memory budget caps buffered records across runs', async () => {

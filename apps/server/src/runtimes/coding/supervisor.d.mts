@@ -26,6 +26,8 @@ export interface SupervisorSpec {
   python?: string
   wrapper?: string
   notifyBin?: string | null
+  /** Socket-loss cleanup budget (ms); default 2 x graceMs + 5000. */
+  disconnectBudgetMs?: number
   watchdogMs?: number
   tickMs?: number
   pollMs?: number
@@ -53,6 +55,13 @@ export interface SupervisorDeps {
 export function hashSpec(spec: SupervisorSpec): string
 export function procStart(pid: number): string | null
 export function writeReceipt(dir: string, name: string, body: unknown): void
+export type ParsedReceipt =
+  { state: 'present'; body: Record<string, unknown> } | { state: 'invalid' }
+export function parseReceipt(
+  text: string,
+  kind: 'released' | 'ended',
+  expect?: { launch?: string; generation?: number },
+): ParsedReceipt
 export function systemdCgroup(root?: string): SupervisorCgroup & {
   unitDir: string
   payloadDir: string
