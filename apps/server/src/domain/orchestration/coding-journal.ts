@@ -58,9 +58,9 @@ export class CodingJournal {
    * confirmed copy retired the row (the source's process) or its launch was inherited, and when the journal can't be
    * read (no evidence, no signal). The process-group engine keeps no journal of its own, so a row nobody retired is ours.
    */
-  ownsProcessRow(runId: string): boolean {
+  ownsProcessRow(runId: string, copied = false): boolean {
     const read = this.journal.readOwn()
-    return read.ok && ownsProcessRowIn(read.entries, runId)
+    return read.ok && ownsProcessRowIn(read.entries, runId, copied)
   }
 
   /** `requested`: before `systemd-run`. A revoked launch can never be requested again. */

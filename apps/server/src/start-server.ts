@@ -408,8 +408,15 @@ export async function startServer(
       ingest,
       ...(unit ? { unit } : {}),
       // A process row a confirmed copy inherited (or that an inherited launch covers) is never ours to signal (FZ3 #6).
-      ...(config.mode === 'live' && resolved !== undefined && installationBlock === null
-        ? { ownsProcessRow: (runId: string) => codingJournal.ownsProcessRow(runId) }
+      // Always wired in live mode and conservative: an unresolved or blocked installation, a copy without its retirement
+      // record and an unreadable history all mean "not ours", so nothing is signalled (decision 70).
+      ...(config.mode === 'live'
+        ? {
+            ownsProcessRow: (runId: string) =>
+              resolved !== undefined &&
+              installationBlock === null &&
+              codingJournal.ownsProcessRow(runId, resolved.copiedFrom !== undefined),
+          }
         : {}),
       onOrphans: (names) =>
         fenceStore.set(

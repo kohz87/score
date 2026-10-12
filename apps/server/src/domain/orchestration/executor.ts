@@ -2393,7 +2393,7 @@ export class Orchestrator {
         .parse(
           sqlite
             .prepare(
-              `SELECT * FROM orc_attempts WHERE stop_requested_at IS NOT NULL AND stop_acknowledged_at IS NULL AND run_id IS NOT NULL AND state IN ('send_started', 'running', 'unknown', 'abandoned')`,
+              `SELECT * FROM orc_attempts WHERE stop_requested_at IS NOT NULL AND stop_acknowledged_at IS NULL AND run_id IS NOT NULL AND state IN ('send_started', 'running', 'unknown', 'abandoned') AND unknown_reason IS NOT 'inherited_retired'`,
             )
             .all(),
         ),

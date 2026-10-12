@@ -265,6 +265,8 @@ export type InstallationResult =
       /** How the id was obtained: it was already agreed, recovered from the registry/manifests/legacy cutover, adopted
        * from the home's own copy, or newly minted. */
       how: 'existing' | 'recovered' | 'adopted' | 'created'
+      /** Set when the registry says this installation was confirmed as a copy of another one. */
+      copiedFrom?: string
     }
   | { ok: false; code: InstallationProblem; message: string; id?: string }
 
@@ -377,6 +379,7 @@ export function resolveInstallation(options: ResolveOptions): InstallationResult
         id,
         namespaceDir: namespaceDir(journalDir, id),
         how: copy.state === 'ok' && !loaded.rebuilt ? 'existing' : 'recovered',
+        ...(entry.copiedFrom === undefined ? {} : { copiedFrom: entry.copiedFrom }),
       }
     }
     // No entry for this path.
@@ -490,29 +493,18 @@ interface InheritedIdentities {
 }
 
 /**
- * Read from the copy's own database (the copy is ours; opened read-only), before the copy is published: coding start
- * intents that had not finished, every coding process row (also the ones no launch record explains), and orchestration
- * attempts that were never sent and that the inherited journal never witnessed. A missing table is "none"; a database
+ * Read from the copy's own database (the copy is ours; opened read-only), before the copy is published: every
+ * intent that had not finished (any kind: each can execute), every coding process row (also the ones no launch record
+ * explains), and every non-terminal orchestration attempt, whatever the inherited journal witnessed (a journaled refusal
+ * stays sendable, a running attempt's run handle and owed Stop would act on the source's run). A missing table is "none"; a database
  * that can't be read is a refusal (the copy would inherit unknowns it can't retire).
  */
 function inheritedIdentities(
   home: string,
-  inheritedLines: string,
 ): { ok: true; value: InheritedIdentities } | { ok: false; problem: string } {
   const file = join(home, 'score.db')
   const value: InheritedIdentities = { intents: [], processes: [], attempts: [] }
   if (!existsSync(file)) return { ok: true, value }
-  // Dispatches the inherited journal already witnessed are handled by that journal's own evidence.
-  const witnessed = new Set<string>()
-  for (const line of inheritedLines.split('\n')) {
-    if (!line.includes('"attemptId"')) continue
-    try {
-      const entry: unknown = JSON.parse(line)
-      if (isObject(entry) && typeof entry.attemptId === 'string') witnessed.add(entry.attemptId)
-    } catch {
-      // checksummed and parsed once already
-    }
-  }
   let db: DatabaseSync | undefined
   try {
     db = new DatabaseSync(file, { readOnly: true })
@@ -526,14 +518,15 @@ function inheritedIdentities(
       })
     if (has('command_intents'))
       value.intents = column(
-        `SELECT idempotency_key FROM command_intents WHERE kind = 'start_coding_run'
-           AND (state IN ('pending', 'sent', 'unknown') OR (state = 'accepted' AND result IS NULL))`,
+        `SELECT idempotency_key FROM command_intents
+           WHERE state IN ('pending', 'sent', 'unknown')
+              OR (kind = 'start_coding_run' AND state = 'accepted' AND result IS NULL)`,
       )
     if (has('coding_processes')) value.processes = column('SELECT run_id FROM coding_processes')
     if (has('orc_attempts'))
       value.attempts = column(
-        `SELECT id FROM orc_attempts WHERE state IN ('created', 'send_started')`,
-      ).filter((id) => !witnessed.has(id))
+        `SELECT id FROM orc_attempts WHERE state IN ('created', 'send_started', 'running', 'unknown', 'abandoned')`,
+      )
     return { ok: true, value }
   } catch (error) {
     return {
@@ -694,7 +687,7 @@ export function confirmCopy(options: ResolveOptions): ConfirmResult {
     // Everything the copy inherited that could still lead to an execution is recorded in its journal BEFORE the copy
     // is published, as one permanent record: reconciliation re-applies it after every start and every restore, so a
     // restored backup of the copy can never send, signal or resume any of it (decision 69).
-    const identities = inheritedIdentities(home, inherited.lines)
+    const identities = inheritedIdentities(home)
     if (!identities.ok)
       return {
         ok: false,

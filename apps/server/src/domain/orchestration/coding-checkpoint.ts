@@ -232,7 +232,13 @@ export function inheritedRetirements(entries: readonly JournalEntry[]): Inherite
  * retired the row (it was inherited from the source installation) or when the journal says the run's launch was
  * inherited. A row with no evidence either way is this installation's own (the process-group engine keeps no journal).
  */
-export function ownsProcessRowIn(entries: readonly JournalEntry[], runId: string): boolean {
+export function ownsProcessRowIn(
+  entries: readonly JournalEntry[],
+  runId: string,
+  /** A confirmed copy must hold its `inherited-retired` record: without it the rows can't be told apart. */
+  copied = false,
+): boolean {
+  if (copied && !entries.some((entry) => entry.kind === 'inherited-retired')) return false
   if (inheritedRetirements(entries).processes.has(runId)) return false
   for (const launch of foldCodingLaunches(entries).values())
     if (launch.state.runId === runId && launch.state.inherited) return false
@@ -281,16 +287,24 @@ export function applyInheritedRetirements(
       changed += Number(sqlite.prepare(`DELETE FROM ${table} WHERE run_id = ?`).run(runId).changes)
   for (const attemptId of retired.attempts) {
     const attempt = sqlite
-      .prepare('SELECT orchestration_id, step_id FROM orc_attempts WHERE id = ?')
-      .get(attemptId) as { orchestration_id: string; step_id: string | null } | undefined
+      .prepare('SELECT orchestration_id, step_id, state FROM orc_attempts WHERE id = ?')
+      .get(attemptId) as
+      { orchestration_id: string; step_id: string | null; state: string } | undefined
     if (!attempt) continue
-    // Only a state the executor could still send from; anything further along has its own evidence.
+    // Whatever the source had in flight is its own: an unsent attempt is never sent, a running one's run handle and owed
+    // Stop never act on the source's run. Terminal rows keep their evidence.
+    if (!['created', 'send_started', 'running', 'unknown', 'abandoned'].includes(attempt.state))
+      continue
     const result = sqlite
       .prepare(
-        `UPDATE orc_attempts SET state = 'unknown', unknown_reason = 'inherited_retired', sent_at = COALESCE(sent_at, ?),
-           updated_at = ? WHERE id = ? AND state IN ('created', 'send_started')`,
+        `UPDATE orc_attempts SET state = CASE WHEN state IN ('created', 'send_started', 'running') THEN 'unknown' ELSE state END,
+           unknown_reason = 'inherited_retired', sent_at = COALESCE(sent_at, ?),
+           stop_acknowledged_at = CASE WHEN stop_requested_at IS NOT NULL THEN COALESCE(stop_acknowledged_at, ?) ELSE stop_acknowledged_at END,
+           updated_at = ?
+         WHERE id = ? AND (state IN ('created', 'send_started', 'running') OR unknown_reason IS NOT 'inherited_retired'
+           OR (stop_requested_at IS NOT NULL AND stop_acknowledged_at IS NULL))`,
       )
-      .run(now, now, attemptId)
+      .run(now, now, now, attemptId)
     if (Number(result.changes) === 0) continue
     changed++
     if (attempt.step_id)

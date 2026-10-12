@@ -245,3 +245,95 @@ test('#13: a launch folder the journal has no launch for is a lost witness even 
   expect(readFileSync(join(dir, 'ns', JOURNAL_FILE), 'utf8')).toContain('known')
   database.close()
 })
+
+test('FW #1: a confirmed copy retires journaled refusals, running attempts, their owed Stops and every intent kind', async () => {
+  const home = join(root, 'home')
+  mkdirSync(home)
+  const first = await run(home)
+  await first.close()
+  const sourceId = (
+    JSON.parse(readFileSync(join(home, 'installation.json'), 'utf8')) as { id: string }
+  ).id
+  const sqlite = new DatabaseSync(join(home, 'score.db'))
+  sqlite.exec('PRAGMA foreign_keys = OFF')
+  sqlite
+    .prepare(
+      `INSERT INTO orchestrations (id, title, goal, lead_agent_id, lead_incarnation, allowed_agents, room_id, brief_id,
+         gate_policy, max_steps, max_lead_turns, max_concurrent_steps, lead_turn_estimate_usd, step_estimate_usd, status,
+         acknowledgement, preflight, reserve_bytes, created_at, updated_at)
+       VALUES ('o1', 't', 'g', 'lead', 'i', '[]', 'r', 'b', 'none', 1, 1, 1, 1, 1, 'running', '{}', '{}', 0, ?, ?)`,
+    )
+    .run(AT, AT)
+  const attempt = (id: string, state: string, runId: string | null, stop: string | null) =>
+    sqlite
+      .prepare(
+        `INSERT INTO orc_attempts (id, orchestration_id, kind, n, agent_id, agent_incarnation, session_id, turn_id,
+           message_id, state, input, run_id, stop_requested_at, created_at, updated_at)
+         VALUES (?, 'o1', 'lead', 1, 'lead', 'i', 's', ?, 'm', ?, '', ?, ?, ?, ?)`,
+      )
+      .run(id, `turn-${id}`, state, runId, stop, AT, AT)
+  attempt('att-ref', 'created', null, null)
+  attempt('att-run', 'running', 'source-live-run', AT)
+  sqlite
+    .prepare(
+      `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at)
+       VALUES ('ci-h', 'start_run', 'turn-hermes', '{}', 'sent', ?, ?)`,
+    )
+    .run(AT, AT)
+  sqlite.close()
+  // The source's journal witnessed the first dispatch and a proven refusal: reconciliation leaves such an attempt sendable.
+  const sourceJournal = new ExecutionJournal(join(root, 'journal', sourceId), sourceId)
+  sourceJournal.append({
+    kind: 'send_started',
+    attemptId: 'att-ref',
+    orchestrationId: 'o1',
+    attemptKind: 'lead',
+    agentId: 'lead',
+    generation: 1,
+  })
+  sourceJournal.append({
+    kind: 'send_refused',
+    attemptId: 'att-ref',
+    orchestrationId: 'o1',
+    generation: 1,
+  })
+
+  const copy = join(root, 'home-copy')
+  cpSync(home, copy, { recursive: true })
+  rmSync(join(copy, 'score.pid'), { force: true })
+  const confirmed = confirmCopy({ journalDir: join(root, 'journal'), home: copy })
+  if (!confirmed.ok) throw new Error(confirmed.message)
+  const second = await run(copy)
+  await second.close()
+  expect(
+    read(
+      join(copy, 'score.db'),
+      `SELECT id, state, unknown_reason, stop_acknowledged_at IS NOT NULL AS acked FROM orc_attempts ORDER BY id`,
+    ),
+  ).toEqual([
+    { id: 'att-ref', state: 'unknown', unknown_reason: 'inherited_retired', acked: 0 },
+    { id: 'att-run', state: 'unknown', unknown_reason: 'inherited_retired', acked: 1 },
+  ])
+  expect(
+    read(join(copy, 'score.db'), "SELECT state FROM command_intents WHERE id = 'ci-h'"),
+  ).toEqual([{ state: 'failed' }])
+}, 60_000)
+
+test('FW #1: a confirmed copy without its retirement record owns no process row; unreadable history owns none either', () => {
+  const dir = join(root, 'own')
+  mkdirSync(dir)
+  const journal = new ExecutionJournal(dir, 'ns-own')
+  journal.append({
+    kind: 'send_started',
+    attemptId: 'a',
+    orchestrationId: 'o',
+    attemptKind: 'lead',
+    agentId: 'lead',
+    generation: 1,
+  })
+  const coding = new CodingJournal(journal)
+  expect(coding.ownsProcessRow('run-x')).toBe(true) // not a copy: no evidence either way is ours
+  expect(coding.ownsProcessRow('run-x', true)).toBe(false) // a copy whose retirement record is gone
+  writeFileSync(join(dir, JOURNAL_FILE), 'garbage\n')
+  expect(coding.ownsProcessRow('run-x')).toBe(false)
+})
