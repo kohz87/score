@@ -284,6 +284,8 @@ export function applyJournalEvidence(
   sqlite: DatabaseSync,
   entries: readonly JournalEntry[],
   now: string,
+  /** The home is a confirmed copy of another installation: its pending coding intents are the source's. */
+  copied: boolean = false,
 ): number {
   let changed = 0
   for (const [attemptId, latest] of journalDispatches(entries)) {
@@ -361,7 +363,7 @@ export function applyJournalEvidence(
       .run(entry.runId, now, entry.attemptId)
     changed += Number(result.changes)
   }
-  changed += applyCodingEvidence(sqlite, entries, now)
+  changed += applyCodingEvidence(sqlite, entries, now, copied)
   return changed
 }
 
@@ -583,6 +585,14 @@ export class GlobalFenceStore {
         ],
         { untrustedHistory: true },
       )
+      // A confirmed copy: retire every coding intent it inherited before the marker is gone (7.7a FY2 #10).
+      if (marker !== 'malformed' && marker.origin === 'copy') {
+        const own = this.journal.readOwn()
+        if (own.ok) {
+          const now = new Date(this.clock()).toISOString()
+          this.db.tx((sqlite) => applyJournalEvidence(sqlite, own.entries, now, true))
+        }
+      }
       this.journal.clearRestoreMarker()
     }
     if (!opened) {

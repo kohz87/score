@@ -1,3 +1,4 @@
+import { DatabaseSync } from 'node:sqlite'
 import { GlobalFenceSchema } from '@score/contract'
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -81,9 +82,23 @@ test('a copied home starts, but every admission is blocked and the fence cannot 
   const result = confirmCopy({ journalDir: join(root, 'journal'), home: copy })
   if (!result.ok) throw new Error(result.message)
   expect(result.id).not.toBe(id)
+  // The copied database holds a pending coding turn the source started (FY2 #10): the copy must never send it.
+  const copied = new DatabaseSync(join(copy, 'score.db'))
+  copied
+    .prepare(
+      `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at)
+       VALUES ('ci-1', 'start_coding_run', 'turn-copied', '{}', 'pending', '2026-10-12T00:00:00Z', '2026-10-12T00:00:00Z')`,
+    )
+    .run()
+  copied.close()
   const third = await start(copy)
   try {
     expect(third.server.installation).toMatchObject({ ok: true, id: result.id })
+    const intent = new DatabaseSync(join(copy, 'score.db'), { readOnly: true })
+    expect(
+      intent.prepare("SELECT state FROM command_intents WHERE id = 'ci-1'").get(),
+    ).toMatchObject({ state: 'failed' })
+    intent.close()
     const fence = await third.fence()
     expect(fence).toMatchObject({ fenced: true, untrustedHistory: true })
     expect(fence.items.map((item) => item.detail).join('\n')).toMatch(/is a copy of installation/)
