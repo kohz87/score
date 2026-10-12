@@ -1,7 +1,7 @@
 """Starts a fallback coding CLI so that it dies with Score, and not before Score has recorded it (7.7a v4 review #5).
 
 usage: pdeathsig-exec.py --probe
-       pdeathsig-exec.py PARENTPID GATEFD -- COMMAND [ARG ...]
+       pdeathsig-exec.py PARENTPID GATEFD [--cgroup DIR] -- COMMAND [ARG ...]
 
 Sets prctl(PR_SET_PDEATHSIG, SIGKILL), so the kernel kills this process when its parent (Score) dies, and checks the
 parent is still PARENTPID (it may have died before the prctl took effect). Then it waits for the single byte "g" on
@@ -9,8 +9,11 @@ GATEFD, which Score writes only after the process is recorded durably; EOF or an
 failed) ends it without running the command. Finally it closes GATEFD and execs the command, which must be an absolute path (execv; no PATH search). PDEATHSIG survives
 execve, so the CLI is killed when Score dies; descendants the CLI starts are NOT covered (they are not our children).
 The signal follows the parent *thread* that spawned us, which is Node's main thread for child_process.
+With --cgroup DIR (7.7a design section 1, payload subgroup) the launcher writes its OWN pid to DIR/cgroup.procs after
+the gate opened and before the exec, so the command and every descendant are born inside that cgroup and are never
+moved after spawning. If that write fails the command is not run.
 Exit codes: 0 never (exec replaces us), 3 parent gone or gate not opened, 4 prctl unsupported, 5 bad usage,
-127 command could not be executed. Standard library only; run with `python3 -I`.
+6 could not enter the cgroup, 127 command could not be executed. Standard library only; run with `python3 -I`.
 """
 import ctypes
 import os
@@ -31,12 +34,26 @@ def main(argv):
             return 4
         sys.stdout.write(sys.executable + "\n")
         return 0
-    if len(argv) < 5 or argv[3] != "--" or not argv[1].isdigit() or not argv[2].isdigit():
+    if len(argv) < 5 or not argv[1].isdigit() or not argv[2].isdigit():
+        sys.stderr.write("pdeathsig-exec: bad usage\n")
+        return 5
+    cgroup = None
+    rest = 3
+    if argv[3] == "--cgroup":
+        if len(argv) < 7 or argv[5] != "--" or not os.path.isabs(argv[4]):
+            sys.stderr.write("pdeathsig-exec: bad usage\n")
+            return 5
+        cgroup = argv[4]
+        rest = 5
+    elif argv[3] != "--":
         sys.stderr.write("pdeathsig-exec: bad usage\n")
         return 5
     parent = int(argv[1])
     gate = int(argv[2])
-    command = argv[4:]
+    command = argv[rest + 1 :]
+    if not command:
+        sys.stderr.write("pdeathsig-exec: bad usage\n")
+        return 5
     try:
         if not set_pdeathsig():
             return 4
@@ -55,6 +72,16 @@ def main(argv):
     if not os.path.isabs(command[0]):
         sys.stderr.write("pdeathsig-exec: cannot run %s: not an absolute path\n" % command[0])
         return 127
+    if cgroup is not None:
+        try:
+            fd = os.open(os.path.join(cgroup, "cgroup.procs"), os.O_WRONLY)
+            try:
+                os.write(fd, str(os.getpid()).encode())
+            finally:
+                os.close(fd)
+        except OSError as error:
+            sys.stderr.write("pdeathsig-exec: cannot enter cgroup %s: %s\n" % (cgroup, error.strerror))
+            return 6
     try:
         os.execv(command[0], command)
     except OSError as error:
