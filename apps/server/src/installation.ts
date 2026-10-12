@@ -430,6 +430,7 @@ function inheritedJournal(
   const scope = file === own ? sourceId : sourceHome ? legacyJournalScope(sourceHome) : undefined
   if (!existsSync(file) || scope === undefined) return { lines: '' }
   const lines: string[] = []
+  let migratedAway = false
   // Under the journal's own lock, so a running source can't be mid-append or mid-compaction while it is read.
   const lock = new OsLock(
     dirname(file),
@@ -459,10 +460,23 @@ function inheritedJournal(
     const { c, ...body } = entry
     if (c !== lineChecksum(JSON.stringify(body)))
       return { problem: `line ${index + 1} of ${file} fails its checksum` }
+    if (body.scope === scope && body.kind === 'cutover') migratedAway = true
     if (body.scope !== scope || body.kind === 'cutover') continue
-    const copied = { ...body, scope: newId }
+    // Coding records (the only ones with a launch) are evidence in the copy, never ours to act on: the flag is part of
+    // the record, so the copy's journal, its database projection and its recovery all see it.
+    const copied = {
+      ...body,
+      scope: newId,
+      ...(typeof body.launchId === 'string' ? { inherited: true } : {}),
+    }
     lines.push(JSON.stringify({ ...copied, c: lineChecksum(JSON.stringify(copied)) }))
   }
+  // The legacy journal says the source's history moved to its namespace, but the namespace journal is gone: what the
+  // source did since then can't be known, so the copy would inherit nothing and could repeat it.
+  if (migratedAway && file !== own)
+    return {
+      problem: `${own} is missing although the legacy journal says this installation's history moved there`,
+    }
   return { lines: lines.map((line) => `${line}\n`).join('') }
 }
 

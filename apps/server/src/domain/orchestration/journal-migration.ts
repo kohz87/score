@@ -9,12 +9,14 @@ import {
   writeSync,
 } from 'node:fs'
 import { join } from 'node:path'
+import { foldCodingLaunches } from './coding-records.ts'
 import { LOCK_RANK, mkdirDurable } from '../../locks/os-lock.ts'
 import { withRegistryLock } from '../../installation.ts'
 import {
   ExecutionJournal,
   JOURNAL_FILE,
   RESTORE_MARKER_FILE,
+  journalDispatches,
   journalLine,
   writeAll,
   type JournalEntry,
@@ -196,12 +198,73 @@ function destinationProblem(
   const top = Math.max(0, ...have.keys())
   if (top < copiedThrough)
     return `the namespace journal at ${nsDir} ends at record ${top}, before the cutover's ${copiedThrough}: records were lost`
+  const destination = [...have.values()]
   for (const entry of snapshot) {
     const found = have.get(entry.n)
-    if (!found) continue // compaction may have dropped a reconciled record
+    if (!found) continue // compaction may have dropped a reconciled record; the witnesses are checked below
     const translated = { ...entry, scope: installationId } as JournalEntry
     if (found.kind === translated.kind && !same(found, translated))
       return `the namespace journal at ${nsDir} holds a different record ${entry.n} than the legacy journal`
+  }
+  return missingWitness(snapshot, destination, nsDir)
+}
+
+/**
+ * Execution authority is verified witness by witness, not by number: a later record (a checkpoint, anything) at the
+ * same number never stands in for a legacy send, launch, fence or decision that is gone. Compaction may have folded a
+ * witness into a tombstone, a later generation or a later phase of the same attempt/launch, and those cover it.
+ */
+function missingWitness(
+  snapshot: readonly JournalEntry[],
+  destination: readonly JournalEntry[],
+  nsDir: string,
+): string | undefined {
+  const lost = (what: string) =>
+    `the namespace journal at ${nsDir} no longer holds ${what}; execution history can't be trusted`
+  // Sends: every attempt the legacy journal dispatched must be at least as far along in the destination.
+  const have = journalDispatches(destination)
+  for (const [attemptId, legacy] of journalDispatches(snapshot)) {
+    const now = have.get(attemptId)
+    if (
+      !now ||
+      now.generation < legacy.generation ||
+      (now.generation === legacy.generation && legacy.state === 'sent' && now.state !== 'sent')
+    )
+      return lost(`the dispatch witness of attempt ${attemptId}`)
+  }
+  // Coding launches: present, same identity, and with every monotonic flag the legacy record had.
+  const launches = foldCodingLaunches(destination)
+  for (const [launchId, legacy] of foldCodingLaunches(snapshot)) {
+    const now = launches.get(launchId)
+    if (
+      !now ||
+      now.state.runId !== legacy.state.runId ||
+      now.state.turnId !== legacy.state.turnId ||
+      now.state.generation !== legacy.state.generation ||
+      (legacy.state.mayHaveExecuted && !now.state.mayHaveExecuted) ||
+      (legacy.state.revoked && !now.state.revoked)
+    )
+      return lost(`the witness of coding launch ${launchId}`)
+  }
+  // Fences and decisions that gate admission: kept as the record or as a tombstone of it.
+  const keys = new Set(destination.map(coveringKey).filter((key) => key !== undefined))
+  for (const entry of snapshot) {
+    const key = coveringKey(entry)
+    if (key !== undefined && !keys.has(key)) return lost(`the ${entry.kind} witness ${key}`)
+  }
+  return undefined
+}
+
+/** What identifies a stop fence or a transition, whether it is the record or the tombstone compaction left of it. */
+function coveringKey(entry: JournalEntry): string | undefined {
+  const kind = entry.kind === 'tombstone' ? entry.of : entry.kind
+  if (kind === 'stop_fence') {
+    const e = entry as { orchestrationId: string; attemptId?: string }
+    return `stop_fence:${e.orchestrationId}:${e.attemptId ?? ''}`
+  }
+  if (kind === 'transition') {
+    const e = entry as { orchestrationId: string; what?: string; attemptIds?: string[] }
+    return `transition:${e.orchestrationId}:${e.what ?? ''}:${(e.attemptIds ?? []).join(',')}`
   }
   return undefined
 }

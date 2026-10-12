@@ -7,9 +7,12 @@ import {
   ExecutionJournal,
   JOURNAL_FILE,
   RESTORE_MARKER_FILE,
+  journalLine,
   journalScope,
+  type JournalEntry,
   type JournalEntryBody,
 } from '../../src/domain/orchestration/journal.ts'
+import { CodingJournal } from '../../src/domain/orchestration/coding-journal.ts'
 import { resolveInstallation, restoreMarkerDir } from '../../src/installation.ts'
 
 // 7.7a design v7 §2 [v5 6]: migration of the path-scoped journal into the installation namespace.
@@ -217,4 +220,39 @@ test('FX3 #11: a cutover is accepted only while its destination witness is still
   // Truncated: it no longer reaches the cutover's copied-through record.
   writeFileSync(join(nsDir, JOURNAL_FILE), '')
   expect(migrate()).toMatchObject({ ok: false, reason: expect.stringMatching(/lost/) })
+})
+
+test('FY2 #11: a surviving checkpoint does not stand in for a missing individual witness', () => {
+  seedLegacy()
+  const mine = new ExecutionJournal(journalDir, scope)
+  // (a coding launch witnessed executing is part of the legacy history too)
+  const legacyCoding = new CodingJournal(mine)
+  const identity = { launchId: 'l1', runId: 'r1', turnId: 't1', generation: 1 }
+  legacyCoding.requestLaunch(identity)
+  legacyCoding.arm('l1', { unit: 'u', invocationId: 'i', cgroup: '/c' })
+  legacyCoding.release('l1', () => true)
+  expect(migrate()).toMatchObject({ ok: true, state: 'migrated' })
+  const target = join(nsDir, JOURNAL_FILE)
+  const good = readFileSync(target)
+  const read = new ExecutionJournal(nsDir, id).readOwn()
+  if (!read.ok) throw new Error(read.reason)
+  const top = read.entries.at(-1)!
+  // An older restored namespace holding only a checkpoint with the cutover's number: the sends are gone.
+  writeFileSync(
+    target,
+    journalLine({ n: top.n, at: top.at, scope: id, kind: 'checkpoint' } as JournalEntry),
+  )
+  expect(migrate()).toMatchObject({ ok: false, reason: expect.stringMatching(/dispatch witness/) })
+  // The dispatches survive but the coding launch's witness is gone behind a later record.
+  const withoutCoding: JournalEntry[] = [
+    ...read.entries.filter((e) => (e as { launchId?: string }).launchId === undefined),
+    { n: top.n, at: top.at, scope: id, kind: 'checkpoint' },
+  ]
+  writeFileSync(target, Buffer.concat(withoutCoding.map(journalLine)))
+  expect(migrate()).toMatchObject({ ok: false, reason: expect.stringMatching(/coding launch l1/) })
+  // The intact copy, and the same copy after compaction folded it into tombstones, are still accepted.
+  writeFileSync(target, good)
+  expect(migrate()).toMatchObject({ ok: true, state: 'already' })
+  new ExecutionJournal(nsDir, id).compact(() => true)
+  expect(migrate()).toMatchObject({ ok: true, state: 'already' })
 })
