@@ -1,5 +1,13 @@
-import { MessageSchema, RoomSchema, type CodingAgent, type Message } from '@score/contract'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { RoomSchema, type CodingAgent, type Message } from '@score/contract'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -274,11 +282,13 @@ const launches = () =>
   db.sqlite
     .prepare('SELECT * FROM coding_launches ORDER BY updated_at, launch_id')
     .all() as unknown as LaunchRow[]
-const journalKinds = (launchId: string) =>
-  journal
-    .readOwn()
-    .entries.filter((e) => 'launchId' in e && e.launchId === launchId)
+const journalKinds = (launchId: string) => {
+  const read = journal.readOwn()
+  if (!read.ok) throw new Error(read.reason)
+  return read.entries
+    .filter((e) => 'launchId' in e && e.launchId === launchId)
     .map((e) => e.kind)
+}
 const textOf = (message: Message | undefined) => JSON.stringify(message?.parts ?? [])
 
 // ---- the normal turn -------------------------------------------------------------------------------------------------
@@ -625,5 +635,319 @@ test('a fence pauses supervised launching with a sentence the person can act on'
   expect(cliCalls()).toHaveLength(0)
 })
 
-// Helpers used by the recovery tests below.
-export { codingProjection, foldCodingLaunches, MessageSchema }
+
+// ---- recovery: journal <-> database <-> units <-> receipts -------------------------------------------------------------
+
+let seeded = 0
+function seedRun(runId: string, status = 'running') {
+  const now = new Date().toISOString()
+  db.sqlite
+    .prepare(
+      `INSERT INTO runs (id, profile, origin, score_turn_id, status, model, started_at, updated_at, runtime)
+       VALUES (?, 'coder', 'score', ?, ?, NULL, ?, ?, 'claude-code')`,
+    )
+    .run(runId, `turn-${runId}`, status, now, now)
+}
+type Upto = 'requested' | 'armed' | 'releasing' | 'released-seen'
+function seedLaunch(
+  upto: Upto,
+  over: {
+    withUnit?: boolean
+    receipts?: string[]
+    manager?: string | null
+    runStatus?: string
+    cgroup?: string
+  } = {},
+) {
+  const n = ++seeded
+  const launchId = `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
+  const runId = `cr_seed${n}`
+  seedRun(runId, over.runStatus)
+  const unit = `score-abcdef01-c-${launchId.replaceAll('-', '')}.service`
+  const receiptDir = join(namespace, 'launches', launchId)
+  mkdirSync(receiptDir, { recursive: true })
+  const manager = over.manager === undefined ? `${fake.boot}|${fake.managerPid}:1000` : over.manager
+  const project = codingProjection(db, undefined, (sqlite) => {
+    sqlite
+      .prepare(
+        "UPDATE coding_launches SET backend = 'unit', agent_id = 'coder', runtime = 'claude-code', receipt_dir = ?, manager = ? WHERE launch_id = ?",
+      )
+      .run(receiptDir, manager, launchId)
+  })
+  const cj = new CodingJournal(journal)
+  expect(
+    cj.requestLaunch({ launchId, runId, turnId: `turn-${runId}`, generation: 0 }, project, { unit }).ok,
+  ).toBe(true)
+  const live = over.withUnit ? fake.addUnit(unit) : undefined
+  if (upto !== 'requested') {
+    expect(
+      cj.arm(
+        launchId,
+        {
+          unit,
+          invocationId: live?.invocationId ?? 'f'.repeat(32),
+          cgroup: over.cgroup ?? `/fake/${unit}`,
+        },
+        project,
+      ).ok,
+    ).toBe(true)
+  }
+  if (upto === 'releasing' || upto === 'released-seen')
+    expect(cj.release(launchId, () => true, project).ok).toBe(true)
+  if (upto === 'released-seen') expect(cj.releasedSeen(launchId, {}, project).ok).toBe(true)
+  for (const name of over.receipts ?? []) writeFileSync(join(receiptDir, name), '{}')
+  return { launchId, runId, unit, live }
+}
+const launchRow = (id: string) => launches().find((l) => l.launch_id === id)!
+const runRow = (id: string) => runs().find((r) => r.id === id)!
+
+test('recovery: a launch that never reached releasing is revoked by the journal alone; the run is interrupted', async () => {
+  await addAgent()
+  const seed = seedLaunch('requested')
+  expect(await coding.recover()).toBe(1)
+  expect(runRow(seed.runId)).toMatchObject({ status: 'interrupted' })
+  expect(launchRow(seed.launchId)).toMatchObject({
+    revoked: 1,
+    may_have_executed: 0,
+    phase: 'settled',
+    held: 0,
+  })
+  expect(journalKinds(seed.launchId)).toEqual(['launch-requested', 'revoked', 'ended', 'settled'])
+})
+
+test('recovery: an armed launch with a live unit is revoked and its unit stopped by exact name', async () => {
+  await addAgent()
+  const seed = seedLaunch('armed', { withUnit: true })
+  await coding.recover()
+  expect(fake.units.has(seed.unit)).toBe(false)
+  expect(launchRow(seed.launchId)).toMatchObject({ revoked: 1, may_have_executed: 0, phase: 'settled' })
+  // The stop was gated on the recorded InvocationID: the call sequence shows a `show` before the `stop`.
+  const stops = fake.calls.filter((c) => c.includes('stop') && c.includes(seed.unit))
+  expect(stops).toHaveLength(1)
+})
+
+test('recovery: a released launch with a live unit is stopped, proven ended and settled; released-seen needs the receipt', async () => {
+  await addAgent()
+  const seen = seedLaunch('releasing', { withUnit: true, receipts: ['released.json'] })
+  const unseen = seedLaunch('releasing', { withUnit: true })
+  await coding.recover()
+  expect(runRow(seen.runId)).toMatchObject({ status: 'interrupted' })
+  expect(launchRow(seen.launchId)).toMatchObject({ phase: 'settled', may_have_executed: 1, held: 0 })
+  expect(journalKinds(seen.launchId)).toEqual([
+    'launch-requested',
+    'armed',
+    'releasing',
+    'released-seen',
+    'ended',
+    'settled',
+  ])
+  expect(journalKinds(unseen.launchId)).toEqual([
+    'launch-requested',
+    'armed',
+    'releasing',
+    'ended',
+    'settled',
+  ])
+  expect(fake.units.size).toBe(0)
+})
+
+test('recovery: a run whose result was saved but whose launch was never settled is settled now', async () => {
+  await addAgent()
+  const seed = seedLaunch('releasing', { runStatus: 'completed' })
+  await coding.recover()
+  expect(runRow(seed.runId).status).toBe('completed')
+  expect(launchRow(seed.launchId)).toMatchObject({ phase: 'settled' })
+})
+
+test('recovery: a database that lost the launch row (an older backup) is rebuilt from the journal', async () => {
+  await addAgent()
+  const seed = seedLaunch('releasing')
+  db.sqlite.prepare('DELETE FROM coding_launches WHERE launch_id = ?').run(seed.launchId)
+  await coding.recover()
+  expect(launchRow(seed.launchId)).toMatchObject({ backend: 'unit', phase: 'settled', may_have_executed: 1 })
+})
+
+test('recovery: may have executed and not provable is unconfirmed, holds the agent, and a later proof releases it', async () => {
+  await coding.close()
+  await app.close()
+  await boot({ unit: { recoverProofMs: 300 }, reapRetryMs: 30 })
+  await addAgent()
+  fake.hooks.ignoreStop = true
+  const seed = seedLaunch('releasing', { withUnit: true })
+  await coding.recover()
+  expect(runRow(seed.runId)).toMatchObject({ status: 'interrupted', terminal_source: 'unconfirmed' })
+  expect(runRow(seed.runId).error).toMatch(/Some of its tools may still be running/)
+  expect(launchRow(seed.launchId)).toMatchObject({ held: 1, phase: 'releasing' })
+  const refused = await coding
+    .startRun({ agentId: 'coder', input: 'go', turnId: 't-held' })
+    .catch((error: unknown) => error)
+  expect(refused).toMatchObject({ status: 422, code: 'agent_still_stopping' })
+  const view = (await request('GET', '/api/coding-agents')).json().items[0]
+  expect(view.heldGroups).toEqual([
+    { runId: seed.runId, pgid: 0, canRelease: false, unit: seed.unit },
+  ])
+  // The unit finally obeys: the background loop proves it ended and the agent is free again.
+  fake.hooks.ignoreStop = false
+  await vi.waitFor(() => expect(launchRow(seed.launchId)).toMatchObject({ phase: 'settled', held: 0 }), {
+    timeout: 15_000,
+  })
+  expect((await request('GET', '/api/coding-agents')).json().items[0].heldGroups).toEqual([])
+})
+
+test('recovery: systemd that cannot be read holds every open launch and the person may release them', async () => {
+  await coding.close()
+  await app.close()
+  await boot({ unit: { recoverProofMs: 200 }, reapRetryMs: 30 })
+  await addAgent()
+  const seed = seedLaunch('releasing', { withUnit: true })
+  fake.hooks.showFails = true
+  await coding.recover()
+  expect(runRow(seed.runId)).toMatchObject({ status: 'interrupted', terminal_source: 'unconfirmed' })
+  await vi.waitFor(
+    async () => {
+      const held = (await request('GET', '/api/coding-agents')).json().items[0].heldGroups
+      expect(held).toEqual([{ runId: seed.runId, pgid: 0, canRelease: true, unit: seed.unit }])
+    },
+    { timeout: 15_000 },
+  )
+  fake.hooks.showFails = false
+  const released = await request('POST', '/api/coding-agents/coder/release', {})
+  expect(released.statusCode, released.body).toBe(200)
+  const row = launchRow(seed.launchId)
+  expect(row.held).toBe(0)
+  expect(row.proof).toBe('waiver')
+  expect(
+    db.sqlite.prepare('SELECT agent_id, run_id FROM coding_releases').all(),
+  ).toEqual([{ agent_id: 'coder', run_id: seed.runId }])
+  // Nothing was signalled: the fake unit was never asked to stop by the release.
+  expect(fake.units.has(seed.unit)).toBe(true)
+})
+
+test('recovery: after a manager cold restart the receipts and the recorded cgroup decide, never missing metadata', async () => {
+  await coding.close()
+  await app.close()
+  await boot({ unit: { population: () => 'unknown', recoverProofMs: 200 }, reapRetryMs: 5_000 })
+  await addAgent()
+  // The unit is gone and the cgroup cannot be read: the supervisor's own `ended` receipt (written only once the
+  // payload was empty) is the witness.
+  const witnessed = seedLaunch('releasing', { receipts: ['released.json', 'ended.json'] })
+  const unwitnessed = seedLaunch('releasing', { receipts: ['released.json'] })
+  await coding.recover()
+  expect(launchRow(witnessed.launchId)).toMatchObject({ phase: 'settled', proof: 'receipt', held: 0 })
+  expect(launchRow(unwitnessed.launchId)).toMatchObject({ phase: 'releasing', held: 1 })
+  expect(runRow(unwitnessed.runId).terminal_source).toBe('unconfirmed')
+})
+
+test('recovery: a changed boot means everything ended', async () => {
+  await coding.close()
+  await app.close()
+  await boot({ unit: { population: () => 'unknown' } })
+  await addAgent()
+  const seed = seedLaunch('releasing', { manager: 'boot-OLD|99:5' })
+  await coding.recover()
+  expect(launchRow(seed.launchId)).toMatchObject({ phase: 'settled', proof: 'boot-change' })
+})
+
+test('recovery: a unit with this installation’s prefix and no journal launch is an orphan: never adopted, admission paused', async () => {
+  const orphans: string[][] = []
+  await coding.close()
+  await app.close()
+  await boot({ onOrphans: (names) => orphans.push(names) })
+  await addAgent()
+  const stray = fake.addUnit('score-abcdef01-c-deadbeefdeadbeefdeadbeefdeadbeef.service')
+  await coding.recover()
+  expect(orphans).toEqual([[stray.name]])
+  // Not stopped, not adopted.
+  expect(fake.units.has(stray.name)).toBe(true)
+  expect(fake.calls.some((c) => c.includes('stop') && c.includes(stray.name))).toBe(false)
+  const refused = await coding
+    .startRun({ agentId: 'coder', input: 'go', turnId: 't-orphan' })
+    .catch((error: unknown) => error)
+  expect(refused).toMatchObject({ status: 422, code: 'coding_paused' })
+  // A different installation’s unit is not ours.
+  expect(backend.orphaned).toEqual([stray.name])
+})
+
+test('recovery: both backends are reconciled after an upgrade (a recorded process group and a unit launch)', async () => {
+  await coding.close()
+  await app.close()
+  const asked: number[] = []
+  await rebootWithKill(async (record) => {
+    asked.push(record.pid)
+    return 'gone' as const
+  })
+  await addAgent()
+  seedRun('cr_oldstyle')
+  db.sqlite
+    .prepare(
+      `INSERT INTO coding_processes (run_id, pid, pgid, start_time, boot_id, created_at) VALUES ('cr_oldstyle', 4000001, 4000001, '5', 'b', ?)`,
+    )
+    .run(new Date().toISOString())
+  const seed = seedLaunch('releasing', { withUnit: true })
+  expect(await coding.recover()).toBe(2)
+  expect(asked).toEqual([4000001])
+  expect(runRow('cr_oldstyle').status).toBe('interrupted')
+  expect(runRow(seed.runId).status).toBe('interrupted')
+  expect(launchRow(seed.launchId).phase).toBe('settled')
+  expect(db.sqlite.prepare('SELECT run_id FROM coding_processes').all()).toEqual([])
+})
+
+async function rebootWithKill(killGroup: CodingRuntimeDeps['killGroup']) {
+  backend = makeBackend()
+  await backend.start()
+  coding = new CodingRuntime({
+    db,
+    ingest,
+    locator: new CliLocator({ fakeCli: FAKE_CLI, cacheMs: 0 }),
+    home,
+    policy: defaultRootPolicy([home]),
+    unit: backend,
+    killGroup,
+    terminalRetryMs: 10,
+    onError: (error) => errors.push(error),
+  })
+  app = buildApp({
+    config: loadConfig({ SCORE_MODE: 'fake', SCORE_HOME: home }),
+    logger: false,
+    db,
+    ingest,
+    port,
+    coding,
+    security: new SecurityPassword(home),
+  })
+  const paired = await app.inject({
+    method: 'POST',
+    url: '/api/session/pair',
+    headers: { 'x-score-client': 'web' },
+    payload: { token: app.pairing.createToken() },
+  })
+  headers = {
+    'x-score-client': 'web',
+    cookie: paired.headers['set-cookie']!.toString().split(';')[0]!,
+  }
+}
+
+test('Stop on a supervised run this process no longer holds stops the unit by name and ends the run', async () => {
+  await addAgent()
+  const seed = seedLaunch('releasing', { withUnit: true, receipts: ['released.json'] })
+  const outcome = await coding.stopRun({ agentId: 'coder', runId: seed.runId })
+  expect(outcome).toBe('stopped')
+  expect(fake.units.size).toBe(0)
+  expect(runRow(seed.runId).status).toBe('cancelled')
+  expect(launchRow(seed.launchId)).toMatchObject({ phase: 'settled', held: 0 })
+})
+
+test('the user can stop a run whose unit ignores the stop: the answer is unconfirmed and the loop goes on', async () => {
+  await coding.close()
+  await app.close()
+  await boot({ stopObserveMs: 300, reapRetryMs: 30, unit: { proofTimeoutMs: 200 } })
+  await addAgent()
+  fake.hooks.ignoreStop = true
+  const seed = seedLaunch('releasing', { withUnit: true })
+  const outcome = await coding.stopRun({ agentId: 'coder', runId: seed.runId })
+  expect(outcome).toBe('unconfirmed')
+  await vi.waitFor(() => expect(launchRow(seed.launchId).held).toBeGreaterThan(0), { timeout: 5000 })
+  fake.hooks.ignoreStop = false
+  await vi.waitFor(() => expect(launchRow(seed.launchId).phase).toBe('settled'), { timeout: 15_000 })
+  expect(runRow(seed.runId).status).toBe('cancelled')
+})

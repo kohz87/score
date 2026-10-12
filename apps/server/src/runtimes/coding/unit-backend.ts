@@ -92,6 +92,8 @@ export interface UnitBackendDeps {
   specOverrides?: Partial<SupervisorSpec>
   readyTimeoutMs?: number
   proofTimeoutMs?: number
+  /** How long recovery waits for one launch's end before holding it (default 10 s). */
+  recoverProofMs?: number
   pollMs?: number
   launchesPerMinute?: number
   probeProperties?: boolean
@@ -1042,7 +1044,7 @@ export class UnitBackend {
     if (!l.state.mayHaveExecuted && !l.state.revoked)
       this.deps.journal.revoke(id, undefined, codingProjection(this.deps.db, this.clock))
     await this.stopByName(id, l.state.invocationId)
-    const proof = await this.proveEnded(id, { timeoutMs: 10_000 })
+    const proof = await this.proveEnded(id, { timeoutMs: this.deps.recoverProofMs ?? 10_000 })
     const row = this.rowOf(id)
     if (proof.proven && row) {
       if (l.kind !== 'ended') this.endRecord(row, proof.proof ?? 'unknown')

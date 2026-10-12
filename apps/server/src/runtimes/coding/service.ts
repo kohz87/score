@@ -593,15 +593,14 @@ export class CodingRuntime {
           setTimeout(resolve, this.deps.stopObserveMs ?? 1000, 'unconfirmed').unref(),
         ),
       ])
-      if (answer === 'stopped' && (run.status === 'running' || run.status === 'waiting_for_approval')) {
-        const agent = getCodingAgent(this.deps.db.sqlite, req.agentId, true)
-        await this.finish(newTranslation(req.runId, req.agentId, this.roomOfRun(req.runId)), {
-          status: 'cancelled',
-          costKind: agent?.runtime === 'claude-code' ? 'estimated' : 'unknown',
-          group: 'released',
-        })
-      }
-      if (answer === 'unconfirmed') for (const id of launches) void unit.reap(id, this.deps.reapRetryMs)
+      if (answer === 'stopped') await this.cancelIfOpen(req.agentId, req.runId)
+      // The stop goes on in the background; once the unit is proven ended the run ends as cancelled.
+      else
+        for (const id of launches)
+          void unit
+            .reap(id, this.deps.reapRetryMs)
+            .then((ok) => (ok ? this.cancelIfOpen(req.agentId, req.runId) : undefined))
+            .catch((error: unknown) => this.deps.onError?.(error))
       return answer
     }
     if (run.status === 'queued') {
@@ -615,6 +614,20 @@ export class CodingRuntime {
     }
     if (run.status === 'running' || run.status === 'waiting_for_approval') return 'unconfirmed'
     return 'not_running'
+  }
+
+  /** A run whose supervised unit is proven ended by a Stop that found no live handle: it ends as cancelled. */
+  private async cancelIfOpen(agentId: string, runId: string): Promise<void> {
+    const run = this.deps.db.sqlite.prepare('SELECT status FROM runs WHERE id = ?').get(runId) as
+      | { status: string }
+      | undefined
+    if (!run || !['queued', 'running', 'waiting_for_approval'].includes(run.status)) return
+    const agent = getCodingAgent(this.deps.db.sqlite, agentId, true)
+    await this.finish(newTranslation(runId, agentId, this.roomOfRun(runId)), {
+      status: 'cancelled',
+      costKind: agent?.runtime === 'claude-code' ? 'estimated' : 'unknown',
+      group: 'released',
+    })
   }
 
   private roomOfRun(runId: string): string | null {
