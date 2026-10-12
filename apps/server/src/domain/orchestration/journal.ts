@@ -160,6 +160,8 @@ export type JournalEntry = z.infer<typeof EntrySchema>
 /** What a critical section can do: read a launch's newest state, and append (fsync'd) under the same lock. */
 export interface CriticalTx {
   launch(launchId: string): CodingLaunch | undefined
+  /** Every launch the journal knows for a turn (any generation), so a witnessed turn can be recognised. */
+  launchesOfTurn(turnId: string): CodingLaunch[]
   append(body: JournalEntryBody): JournalEntry
 }
 
@@ -302,6 +304,8 @@ export class ExecutionJournal {
       )
       const tx: CriticalTx = {
         launch: (launchId) => launches.get(launchId),
+        launchesOfTurn: (turnId) =>
+          [...launches.values()].filter((launch) => launch.state.turnId === turnId),
         append: (body) => {
           const entry = this.appendLocked(body)
           const fold = foldCodingLaunches([entry]).get(

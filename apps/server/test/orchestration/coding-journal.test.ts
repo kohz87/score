@@ -8,6 +8,7 @@ import {
   applyCodingEvidence,
   codingProjection,
   readCheckpoint,
+  turnWitnessed,
   verifyCoding,
 } from '../../src/domain/orchestration/coding-checkpoint.ts'
 import { CodingJournal } from '../../src/domain/orchestration/coding-journal.ts'
@@ -356,4 +357,65 @@ test('coding records written by another scope are never mixed into this installa
   new CodingJournal(foreign).requestLaunch({ ...id(), launchId: 'lx' })
   expect(coding.state('lx')).toBeUndefined()
   expect(existsSync(join(dir, JOURNAL_FILE))).toBe(true)
+})
+
+test('FX3 #4: a witnessed turn is unsendable, not only its launch: no new launch for it, and its start intent is retired', () => {
+  toArmed()
+  coding.release('l1', () => true, project)
+  // Same turn, new launch id: refused at request time (and at release if a request slipped in before the witness).
+  const again = coding.requestLaunch({ ...id(1), launchId: 'l1b' }, project)
+  expect(again).toMatchObject({ ok: false, reason: 'turn_witnessed' })
+  // A database restored from before: it lost the launch row and the accepted intent, keeping only a pending one.
+  db.sqlite.exec('DELETE FROM coding_launches')
+  db.sqlite
+    .prepare(
+      `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at)
+       VALUES ('i1', 'start_coding_run', 't1', '{}', 'pending', 'x', 'x')`,
+    )
+    .run()
+  const entries = journal.readOwn()
+  if (!entries.ok) throw new Error(entries.reason)
+  applyCodingEvidence(db.sqlite, entries.entries, new Date(now).toISOString())
+  expect(
+    db.sqlite.prepare("SELECT state FROM command_intents WHERE idempotency_key = 't1'").get(),
+  ).toEqual({ state: 'failed' })
+  expect(turnWitnessed(db.sqlite, 't1')).toBe(true)
+  // And when the database lost the intent altogether, a retired one is written so admission still refuses the turn.
+  db.sqlite.exec('DELETE FROM command_intents')
+  applyCodingEvidence(db.sqlite, entries.entries, new Date(now).toISOString())
+  expect(
+    db.sqlite.prepare("SELECT state FROM command_intents WHERE idempotency_key = 't1'").get(),
+  ).toEqual({ state: 'failed' })
+  // A launch revoked before release never ran: its turn is not retired.
+  expect(coding.requestLaunch(id(2), project).ok).toBe(true)
+  expect(coding.revoke('l2', undefined, project).ok).toBe(true)
+})
+
+test('FX3 #12: reconciliation compares the full state, not the sequence number', () => {
+  toArmed()
+  coding.release('l1', () => true, project)
+  const entries = journal.readOwn()
+  if (!entries.ok) throw new Error(entries.reason)
+  expect(verifyCoding(db.sqlite, entries.entries)).toEqual([])
+  // Same record number, different content.
+  db.sqlite
+    .prepare(
+      "UPDATE coding_launches SET phase = 'armed', invocation_id = 'other', unit = 'x' WHERE launch_id = 'l1'",
+    )
+    .run()
+  const found = verifyCoding(db.sqlite, entries.entries)
+  expect(found.map((m) => m.ref)).toContain('coding:l1')
+  expect(found.map((m) => m.detail).join()).toMatch(/phase.*unit.*invocation/)
+  expect(
+    applyCodingEvidence(db.sqlite, entries.entries, new Date(now).toISOString()),
+  ).toBeGreaterThan(0)
+  expect(rowOf('l1')).toMatchObject({ phase: 'releasing', invocation_id: 'inv1', unit: 'score-u1' })
+  expect(verifyCoding(db.sqlite, entries.entries)).toEqual([])
+  // A row that is AHEAD of the journal is a divergence too (the journal lost records).
+  db.sqlite.prepare('UPDATE coding_launches SET journal_n = 99').run()
+  expect(
+    verifyCoding(db.sqlite, entries.entries)
+      .map((m) => m.detail)
+      .join(),
+  ).toMatch(/past the journal/)
 })

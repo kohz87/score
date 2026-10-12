@@ -20,6 +20,7 @@ export type CodingRejection =
   | 'revoked' // a revoked launch can only be stopped and settled
   | 'may_have_executed' // `releasing` won the race: revocation is a Stop of a possibly-executing run
   | 'not_authorised' // the run's authorisation no longer holds (re-evaluated under the lock)
+  | 'turn_witnessed' // the journal already witnessed this turn executing (another launch, same or later generation)
   | 'unknown_launch'
   | 'projection_failed' // the record is durable but the database commit failed: do NOT send `go`
 
@@ -112,6 +113,19 @@ export class CodingJournal {
         return { ok: false, reason: 'may_have_executed', state: current.state }
       if (kind === 'launch-requested' && current?.state.revoked)
         return { ok: false, reason: 'revoked', state: current.state }
+      // A permanent witness makes the TURN unsendable, not only its launch: a restored database that lost the intent and
+      // the run must not mint a new launch for the same turn (checked again at release, under the same lock).
+      if (kind === 'launch-requested' || kind === 'releasing') {
+        const witnessed = tx
+          .launchesOfTurn(id.turnId)
+          .find(
+            (other) =>
+              other.state.launchId !== id.launchId &&
+              other.state.mayHaveExecuted &&
+              other.state.generation >= id.generation,
+          )
+        if (witnessed) return { ok: false, reason: 'turn_witnessed', state: witnessed.state }
+      }
       if (!transitionAllowed(current?.kind, kind))
         return {
           ok: false,

@@ -103,6 +103,16 @@ export function migrateLegacyJournal(options: MigrationOptions): MigrationResult
                 ok: false as const,
                 reason: `the legacy journal says this home was migrated to installation ${cutover.installationId}, not ${installationId}`,
               }
+            // The cutover only says the copy was made; the copy itself must still be there (a restored or damaged
+            // namespace is not evidence), or an older database could repeat sends the legacy journal witnessed.
+            const problem = destinationProblem(
+              target,
+              nsDir,
+              installationId,
+              own.filter((entry) => entry.kind !== 'cutover' && entry.n <= cutover.copiedThrough),
+              cutover.copiedThrough,
+            )
+            if (problem) return { ok: false as const, reason: problem }
             state = 'already'
           } else if (own.length > 0) {
             const snapshot = own.map(
@@ -160,6 +170,40 @@ export function migrateLegacyJournal(options: MigrationOptions): MigrationResult
       }),
     )
   })
+}
+
+/**
+ * The namespace journal must still hold what the cutover says was copied: the file exists and reads, reaches the
+ * copied-through number (compaction keeps the sequence), and every surviving record with a copied number agrees with the
+ * legacy record of that number (compaction may have folded it into a tombstone of the same launch or attempt, but never
+ * into another kind of record).
+ */
+function destinationProblem(
+  target: ExecutionJournal,
+  nsDir: string,
+  installationId: string,
+  snapshot: readonly JournalEntry[],
+  copiedThrough: number,
+): string | undefined {
+  if (snapshot.length === 0 && copiedThrough === 0) return undefined
+  if (!existsSync(join(nsDir, JOURNAL_FILE)))
+    return `the legacy journal says this home was migrated to ${nsDir}, but that journal is missing; execution history can't be trusted`
+  const read = target.read()
+  if (!read.ok) return `the namespace journal at ${nsDir} is unreadable: ${read.reason}`
+  const have = new Map(
+    read.entries.filter((e) => e.scope === installationId).map((e) => [e.n, e] as const),
+  )
+  const top = Math.max(0, ...have.keys())
+  if (top < copiedThrough)
+    return `the namespace journal at ${nsDir} ends at record ${top}, before the cutover's ${copiedThrough}: records were lost`
+  for (const entry of snapshot) {
+    const found = have.get(entry.n)
+    if (!found) continue // compaction may have dropped a reconciled record
+    const translated = { ...entry, scope: installationId } as JournalEntry
+    if (found.kind === translated.kind && !same(found, translated))
+      return `the namespace journal at ${nsDir} holds a different record ${entry.n} than the legacy journal`
+  }
+  return undefined
 }
 
 /** A restore marker for this home in the legacy directory moves into the namespace (scope translated). */
