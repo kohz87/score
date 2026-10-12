@@ -326,7 +326,7 @@ test('antigravity: file, browser and plain tools map to frame details; unknown s
   expect(starts.map((e) => (e as { detail?: unknown }).detail)).toEqual([
     { type: 'command', command: 'ls -la', cwd: '/work' },
     { type: 'file', path: '/work/notes.txt', change: 'update' },
-    { type: 'browser', url: 'https://example.test/docs?token=abc#frag' },
+    { type: 'browser', url: 'https://example.test/docs?token=[redacted]#frag' },
     undefined,
   ])
   expect(starts[3]).toMatchObject({ tool: 'view_file', preview: '/work/notes.txt' })

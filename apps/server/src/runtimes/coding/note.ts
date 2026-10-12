@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { redactBounded } from '../../redact.ts'
+import { redact, redactBounded } from '../../redact.ts'
 import type { CodingEvent, LineParser, ToolDetail } from './types.ts'
 
 /**
@@ -73,9 +73,23 @@ export class BoundedDiagnostics {
 
   /** Redacted and bounded; safe to store or show. */
   text(): string {
-    const safe = redactNote(this.raw, this.keepBytes)
+    const safe = redactNote(
+      this.overflowed ? closeOpenCredential(this.raw) : this.raw,
+      this.keepBytes,
+    )
     return this.overflowed ? `${safe} […]` : safe
   }
+}
+
+/**
+ * The raw cap cut the text somewhere (FW #6). A credential value the cut left open would be read by the redactor as just
+ * its first word, or its prefix would no longer be recognisable. So the partial last word is discarded and any quote the
+ * cut left open is closed: the redactor then sees the whole value and masks it to the end.
+ */
+export function closeOpenCredential(raw: string): string {
+  let text = raw.replace(/[^\s"']*$/, '')
+  for (const quote of ['"', "'"] as const) if (text.split(quote).length % 2 === 0) text += quote
+  return text
 }
 
 // ---- bounds on what a parser and the translator keep (7.7a re-review 2026-10-12 #18) -------------------------------
@@ -102,11 +116,16 @@ export function cutBytes(text: string, limit: number): string {
 /** An id as it may be remembered: short ids unchanged, long ones a prefix plus a digest of the whole. */
 export function boundId(id: string): string {
   if (Buffer.byteLength(id) <= MAX_ID_BYTES) return id
-  return `${cutBytes(id, 128)}~${createHash('sha256').update(id).digest('hex').slice(0, 32)}`
+  return `${cutBytes(redact(id), 128)}~${createHash('sha256').update(id).digest('hex').slice(0, 32)}`
+}
+
+/** A CLI-supplied field: redacted as a whole first, then cut (a cut can remove the closing quote or the label). */
+function safeCut(text: string, limit: number): string {
+  return cutBytes(redact(text), limit)
 }
 
 function boundDetail(detail: ToolDetail): ToolDetail {
-  const cut = (text: string) => cutBytes(text, MAX_DETAIL_FIELD_BYTES)
+  const cut = (text: string) => safeCut(text, MAX_DETAIL_FIELD_BYTES)
   switch (detail.type) {
     case 'command':
       return {
@@ -137,15 +156,15 @@ export function boundEvent(event: CodingEvent): CodingEvent {
       return {
         ...event,
         callId: boundId(event.callId),
-        tool: cutBytes(event.tool, MAX_TOOL_NAME_BYTES),
-        preview: cutBytes(event.preview, MAX_PREVIEW_BYTES),
+        tool: redactNote(event.tool, MAX_TOOL_NAME_BYTES),
+        preview: safeCut(event.preview, MAX_PREVIEW_BYTES),
         ...(event.detail ? { detail: boundDetail(event.detail) } : {}),
       }
     case 'tool_end':
       return {
         ...event,
         callId: boundId(event.callId),
-        preview: cutBytes(event.preview, MAX_PREVIEW_BYTES),
+        preview: safeCut(event.preview, MAX_PREVIEW_BYTES),
       }
     case 'result': {
       const verdict =
@@ -155,7 +174,7 @@ export function boundEvent(event: CodingEvent): CodingEvent {
       return {
         ...event,
         ...(event.text === undefined ? {} : { text: cutBytes(event.text, MAX_REPLY_BYTES) }),
-        ...(event.error === undefined ? {} : { error: cutBytes(event.error, MAX_ERROR_BYTES) }),
+        ...(event.error === undefined ? {} : { error: safeCut(event.error, MAX_ERROR_BYTES) }),
         ...(verdict ? { verdict } : {}),
       }
     }

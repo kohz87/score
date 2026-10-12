@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest'
+import { registerKnownSecret } from '../../src/redact.ts'
 import {
   BoundedDiagnostics,
   boundEvent,
@@ -74,4 +75,45 @@ test('#18: individual retained values are bounded by bytes, not only by count', 
     detail: { type: 'write', path: 'f', content: 'z'.repeat(1_000_000) },
   })
   expect(eventBytes(bounded)).toBeLessThanOrEqual(256 + 200 + 16 * 1024 + 1 + 64)
+})
+
+// ---- FW #6: redact whole CLI fields before cutting them -------------------------------------------------------------
+
+test('FW #6: a quoted credential in a tool name is masked whole, not cut through its closing quote', () => {
+  const event = boundEvent({
+    kind: 'tool_start',
+    callId: 'c',
+    tool: `deploy password="${'hunter2 '.repeat(60)}" now`,
+    preview: '',
+  })
+  if (event.kind !== 'tool_start') throw new Error('unexpected')
+  expect(event.tool).not.toContain('hunter2')
+})
+
+test('FW #6: a registered opaque credential is replaced before a cut can leave its prefix', () => {
+  const secret = 'opaque-gateway-credential-' + 'q'.repeat(300)
+  registerKnownSecret(secret)
+  const command = `${'x'.repeat(16 * 1024 - 40)} ${secret}`
+  const event = boundEvent({
+    kind: 'tool_start',
+    callId: 'c',
+    tool: 'Bash',
+    preview: command,
+    detail: { type: 'command', command },
+  })
+  if (event.kind !== 'tool_start' || event.detail?.type !== 'command') throw new Error('unexpected')
+  expect(event.detail.command).not.toContain('opaque-gateway')
+  expect(event.preview).not.toContain('opaque-gateway')
+  // A long id carrying it is redacted before its prefix is kept.
+  expect(boundId(`${secret}${'z'.repeat(400)}`)).not.toContain('opaque-gateway')
+})
+
+test('FW #6: stderr cut at the raw cap masks the open credential to the end instead of leaking it', () => {
+  for (const open of ['password="', "token='"]) {
+    const notes = new BoundedDiagnostics(256, 4096)
+    notes.push('x'.repeat(200))
+    notes.push(` ${open}${'spacey secret words '.repeat(40)}`)
+    const text = notes.text()
+    expect(text, open).not.toMatch(/spacey|secret words/)
+  }
 })
