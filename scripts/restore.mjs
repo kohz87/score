@@ -71,12 +71,26 @@ const markerPath = join(journalDir, 'restore-marker.json')
 const temp = `${markerPath}.tmp`
 const fd = openSync(temp, 'w', 0o600)
 try {
-  writeSync(fd, JSON.stringify({ scope, at: new Date().toISOString(), backup }))
+  // The whole marker or an error: writeSync may write fewer bytes than asked.
+  const data = Buffer.from(JSON.stringify({ scope, at: new Date().toISOString(), backup }))
+  for (let offset = 0; offset < data.length;) {
+    const written = writeSync(fd, data, offset, data.length - offset)
+    if (!(written > 0)) throw new Error('marker write made no progress')
+    offset += written
+  }
   fsyncSync(fd)
 } finally {
   closeSync(fd)
 }
 renameSync(temp, markerPath)
+{
+  const dirFd = openSync(journalDir, 'r')
+  try {
+    fsyncSync(dirFd)
+  } finally {
+    closeSync(dirFd)
+  }
+}
 
 // 2. Move the current home aside (never deleted) and copy the backup in.
 let aside = null

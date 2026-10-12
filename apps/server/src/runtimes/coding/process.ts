@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process'
+import type { Writable } from 'node:stream'
+import { GATE_FD, PDEATHSIG_SCRIPT, pdeathsigSupport } from './pdeathsig-exec.ts'
 import { kernelGroupExists, procAvailable, scanGroup, type MemberIdentity } from './proc.ts'
 import { CODING_LIMITS, type CodingEvent, type LineParser } from './types.ts'
 
@@ -55,7 +57,8 @@ export interface SpawnOptions {
   onEvent(event: CodingEvent): Promise<void>
   /**
    * Called synchronously right after the spawn (records the process durably). Supervision is installed first; if this
-   * throws, the whole group is killed and the error propagates (S2-004).
+   * throws, the whole group is killed and the error propagates (S2-004). The CLI is not executed, and gets no prompt,
+   * until this has returned.
    */
   onSpawn?(pid: number): void
   /**
@@ -96,13 +99,48 @@ export function spawnCli(options: SpawnOptions): CliRun {
   // Only the wall-clock timer; the escalation timers outlive the leader until its whole group is gone.
   const escalation: NodeJS.Timeout[] = []
 
-  const child = spawn(options.file, options.args, {
-    cwd: options.cwd,
-    env: options.env,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    // Own process group, so Stop reaches the tools the CLI started too.
-    detached: true,
-  })
+  // The CLI is started through a small launcher that asks the kernel to kill it when Score dies (PDEATHSIG) and that
+  // only runs the CLI after Score has recorded the process (the gate). Without python there is no such guarantee, so
+  // nothing is started. Tools the CLI starts itself are not covered: they may keep running until Score restarts and
+  // stops them.
+  const support = pdeathsigSupport()
+  if (support.python === null) {
+    return {
+      stop: () => undefined,
+      pid: undefined,
+      done: Promise.resolve({
+        exitCode: null,
+        signal: null,
+        stopped: null,
+        stderr: support.detail,
+        spawnError: 'python_unavailable',
+        leftovers: false,
+        groupGone: true,
+        sawEvents: false,
+        stats: options.parser.stats,
+      }),
+    }
+  }
+  const child = spawn(
+    support.python,
+    [
+      '-I',
+      PDEATHSIG_SCRIPT,
+      String(process.pid),
+      String(GATE_FD),
+      '--',
+      options.file,
+      ...options.args,
+    ],
+    {
+      cwd: options.cwd,
+      env: options.env,
+      // fd 3 is the gate: the launcher runs the CLI only after "g" arrives on it.
+      stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
+      // Own process group, so Stop reaches the tools the CLI started too.
+      detached: true,
+    },
+  )
   // A process group id is only ours to signal while we created it and have not seen it empty: once the last member is
   // gone the kernel may hand the same number to an unrelated group, so `groupEmpty` ends all signalling.
   let groupEmpty = false
@@ -213,7 +251,13 @@ export function spawnCli(options: SpawnOptions): CliRun {
   child.stderr.on('error', () => undefined)
   // The CLI may exit without reading all of stdin.
   child.stdin.on('error', () => undefined)
-  child.stdin.end(options.stdin)
+  const gate = child.stdio[GATE_FD] as Writable | null
+  gate?.on('error', () => undefined)
+  // Launches the CLI and hands it its prompt: only after the process has been recorded.
+  const release = () => {
+    gate?.end('g')
+    child.stdin.end(options.stdin)
+  }
 
   const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
   // The turn is over when the leader has ended AND nothing of its group is left. A tool that ignores the signals
@@ -281,6 +325,9 @@ export function spawnCli(options: SpawnOptions): CliRun {
     child.on('exit', (code, sig) => {
       exitCode = code
       exitSignal = sig
+      // The launcher could not execute the CLI (missing binary, no permission): the same as a failed spawn.
+      if (code === 127 && stderr.startsWith('pdeathsig-exec: cannot run'))
+        spawnError = 'exec_failed'
       leaderExited = true
       // Survivors are recorded before anything is signalled: from here on only continuity can vouch for them.
       noteMembers(true)
@@ -318,5 +365,6 @@ export function spawnCli(options: SpawnOptions): CliRun {
       )
     }
   }
+  if (child.pid !== undefined) release()
   return { stop, pid: child.pid, done }
 }
