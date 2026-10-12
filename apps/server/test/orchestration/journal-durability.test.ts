@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import {
   existsSync,
   fstatSync,
+  statSync,
   fsyncSync as realSync,
   mkdtempSync,
   readFileSync,
@@ -48,6 +49,11 @@ const send = (id: string): JournalEntryBody => ({
   agentId: 'builder',
   generation: 1,
 })
+// True when the descriptor is the journal directory itself (the ancestors above it are synced too, EE1).
+const isJournalDir = (fd: number) => {
+  const stat = fstatSync(fd)
+  return stat.isDirectory() && stat.ino === statSync(dir).ino
+}
 const real: JournalIo = { writeSync: (...a) => realWrite(...a), fsyncSync: (fd) => realSync(fd) }
 const realWrite = (fd: number, buf: Buffer, off: number, len: number) =>
   realWriteSync(fd, buf, off, len)
@@ -122,13 +128,15 @@ test('an fsync failure throws before the caller acts and the record does not sta
 })
 
 test('a directory-sync failure for a new journal throws, and is retried by the next append', () => {
-  let calls = 0
-  const failDir = true
+  // Ancestor syncs (EE1) also hit directories; this is about the journal directory's own sync.
+  let journalDirSyncs = 0
   const io: JournalIo = {
     writeSync: real.writeSync,
     fsyncSync: (fd) => {
-      calls++
-      if (calls === 2 && failDir) throw new Error('EIO on directory') // 1 = file, 2 = directory
+      if (isJournalDir(fd)) {
+        journalDirSyncs++
+        if (journalDirSyncs === 1) throw new Error('EIO on directory')
+      }
       real.fsyncSync(fd)
     },
   }
@@ -136,9 +144,9 @@ test('a directory-sync failure for a new journal throws, and is retried by the n
   const first = guarded(journal, 'a1')
   expect(first.effect).toBe(false)
   expect(String(first.error)).toMatch(/directory/)
-  // The same handle retries the directory sync before it allows an effect; here the fsync calls are 3 (file) and 4 (dir).
+  // The same handle retries the directory sync before it allows an effect.
   expect(guarded(journal, 'a2').effect).toBe(true)
-  expect(calls).toBe(4)
+  expect(journalDirSyncs).toBeGreaterThanOrEqual(2)
 })
 
 test('compaction writes its whole temp file or throws, leaving the journal untouched', () => {
@@ -259,7 +267,7 @@ const dirSyncFailsOnce = (): { io: JournalIo; dirFsyncs: () => number } => {
     io: {
       writeSync: real.writeSync,
       fsyncSync: (fd) => {
-        if (fstatSync(fd).isDirectory()) {
+        if (isJournalDir(fd)) {
           dirFsyncs++
           if (!failed) {
             failed = true
@@ -281,7 +289,7 @@ test('AA1: a fresh handle after another handle failed its directory sync still s
   const counting: JournalIo = {
     writeSync: real.writeSync,
     fsyncSync: (fd) => {
-      if (fstatSync(fd).isDirectory()) dirSyncs++
+      if (isJournalDir(fd)) dirSyncs++
       real.fsyncSync(fd)
     },
   }
@@ -318,8 +326,9 @@ test('AA1: opening the journal syncs the parent of every directory it created', 
   const deep = join(dir, 'x', 'y', 'journal')
   const journal = new ExecutionJournal(deep, 'home', Date.now, undefined, io)
   expect(journal.open()).toBe(true)
-  // x, y and journal were created: their three parents are fsync'd.
-  expect(synced).toHaveLength(3)
+  // x, y and journal were created: their three parents are fsync'd (and the chain above is re-synced too).
+  const parents = [dir, join(dir, 'x'), join(dir, 'x', 'y')].map((p) => String(statSync(p).ino))
+  expect(synced).toEqual(expect.arrayContaining(parents))
 })
 
 test('AA1: a separate process appending after a failed directory sync syncs the directory itself', async () => {

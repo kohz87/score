@@ -6,7 +6,7 @@ usage: pdeathsig-exec.py --probe
 Sets prctl(PR_SET_PDEATHSIG, SIGKILL), so the kernel kills this process when its parent (Score) dies, and checks the
 parent is still PARENTPID (it may have died before the prctl took effect). Then it waits for the single byte "g" on
 GATEFD, which Score writes only after the process is recorded durably; EOF or anything else (Score died, or the record
-failed) ends it without running the command. Finally it closes GATEFD and execs the command. PDEATHSIG survives
+failed) ends it without running the command. Finally it closes GATEFD and execs the command, which must be an absolute path (execv; no PATH search). PDEATHSIG survives
 execve, so the CLI is killed when Score dies; descendants the CLI starts are NOT covered (they are not our children).
 The signal follows the parent *thread* that spawned us, which is Node's main thread for child_process.
 Exit codes: 0 never (exec replaces us), 3 parent gone or gate not opened, 4 prctl unsupported, 5 bad usage,
@@ -51,8 +51,12 @@ def main(argv):
     if not opened or os.getppid() != parent:
         return 3
     os.close(gate)
+    # Score passes the verified native executable's absolute path: never search a PATH of our own.
+    if not os.path.isabs(command[0]):
+        sys.stderr.write("pdeathsig-exec: cannot run %s: not an absolute path\n" % command[0])
+        return 127
     try:
-        os.execvp(command[0], command)
+        os.execv(command[0], command)
     except OSError as error:
         sys.stderr.write("pdeathsig-exec: cannot run %s: %s\n" % (command[0], error.strerror))
         return 127

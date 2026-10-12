@@ -606,4 +606,31 @@ export class GlobalFenceStore {
     const fenced = alreadyFenced || reasons.length > 0
     return { fenced, reasons }
   }
+
+  /**
+   * The journal root's provenance (kept outside the home) is missing, corrupt or never saw this home, yet the database
+   * holds orchestration or workflow history: the journal that witnessed it may be elsewhere, so no executor work is
+   * admitted until the operator reconciles. Returns true when the fence was raised.
+   */
+  fenceUnverifiedRoot(why: string): boolean {
+    const hasHistory = this.db.read(
+      (sqlite) =>
+        sqlite.prepare('SELECT 1 FROM orchestrations LIMIT 1').get() !== undefined ||
+        sqlite.prepare('SELECT 1 FROM wf_runs LIMIT 1').get() !== undefined,
+    )
+    if (!hasHistory) return false
+    this.set(
+      'journal_root_unverified',
+      [
+        {
+          kind: 'journal',
+          ref: 'journal-root',
+          journalN: null,
+          detail: `${why}. This database holds orchestration history but Score can't tell which execution journal witnessed it; confirm the journal folder holds this home's journal before lifting the fence`,
+        },
+      ],
+      { untrustedHistory: true },
+    )
+    return true
+  }
 }

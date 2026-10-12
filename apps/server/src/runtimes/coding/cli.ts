@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import type { CliState, CodingPermission, CodingRuntimeInfo } from '@score/contract'
 import { DRIVERS, isTestedVersion } from './drivers.ts'
 import { buildChildEnv } from './env.ts'
-import { resolveNativeExecutable } from './native-exec.ts'
+import { resolveNativeExecutable, resolveOnPath } from './native-exec.ts'
 import type { CodingDriver } from './types.ts'
 
 export interface CliLocatorOptions {
@@ -104,7 +104,18 @@ export class CliLocator {
         version: null,
         message: this.options.disabled,
       })
-    const { file, args } = this.command(driver)
+    const command = this.command(driver)
+    // The same absolute-PATH search the fallback uses, so the file that reports a version is the file that would run.
+    const file = this.fake
+      ? command.file
+      : resolveOnPath(command.file, (this.options.env ?? process.env).PATH)
+    const { args } = command
+    if (file === null)
+      return Promise.resolve({
+        state: 'not_installed',
+        version: null,
+        message: `${driver.label} (${driver.executable}) is not installed or not on PATH.`,
+      })
     return new Promise((resolve) => {
       execFile(
         file,

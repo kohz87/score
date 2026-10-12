@@ -421,3 +421,15 @@ test('a database restored from before a Finish or a Pause is detected without an
   const res = again.startupCheck()
   expect(res, JSON.stringify(again.view().items)).toEqual({ fenced: false, reasons: [] })
 })
+
+// EE3: provenance of the journal root is missing/corrupt while the database holds orchestration history.
+test('EE3: an unverified journal root fences admission only when history exists', () => {
+  const store = new GlobalFenceStore(db, journalOf(), clock)
+  expect(store.fenceUnverifiedRoot('No record')).toBe(false) // a fresh database has nothing to protect
+  expect(db.read((sqlite) => readGlobal(sqlite).fenced)).toBe(0)
+  seedAttempt(db, 'a1', null, null)
+  expect(store.fenceUnverifiedRoot('No record')).toBe(true)
+  const row = db.read((sqlite) => readGlobal(sqlite))
+  expect(row.fenced).toBe(1)
+  expect(row.reason).toBe('journal_root_unverified')
+})
