@@ -1128,18 +1128,31 @@ export class UnitBackend {
 
   /** A launch the journal knows but the database lacks (an older backup): a minimal row, so routing exists. */
   private ensureRow(l: CodingLaunch): void {
-    if (this.rowOf(l.state.launchId)) return
-    const project = codingProjection(this.deps.db, this.clock, (sqlite, state: CodingState) =>
-      sqlite
-        .prepare("UPDATE coding_launches SET backend = 'unit', receipt_dir = ? WHERE launch_id = ?")
-        .run(join(this.deps.namespaceDir, LAUNCHES_DIR, state.launchId), state.launchId),
-    )
-    // Re-project the journal's own newest record.
-    const entry = this.deps.journal.journal.readOwn()
-    if (entry.ok) {
-      const mine = entry.entries.findLast((e) => 'launchId' in e && e.launchId === l.state.launchId)
-      if (mine) project(mine, l.state)
+    const id = l.state.launchId
+    if (!this.rowOf(id)) {
+      const project = codingProjection(this.deps.db, this.clock, (sqlite, state: CodingState) =>
+        sqlite
+          .prepare('UPDATE coding_launches SET receipt_dir = ? WHERE launch_id = ?')
+          .run(join(this.deps.namespaceDir, LAUNCHES_DIR, state.launchId), state.launchId),
+      )
+      // Re-project the journal's own newest record.
+      const entry = this.deps.journal.journal.readOwn()
+      if (entry.ok) {
+        const mine = entry.entries.findLast((e) => 'launchId' in e && e.launchId === id)
+        if (mine) project(mine, l.state)
+      }
     }
+    // Routing a restored or rebuilt row lacks (the journal carries identity, not the agent): the run names its agent,
+    // and a removed agent's launches keep their routing until settled (§6b).
+    this.deps.db.sqlite
+      .prepare(
+        `UPDATE coding_launches SET backend = COALESCE(backend, 'unit'),
+           agent_id = COALESCE(agent_id, (SELECT profile FROM runs WHERE runs.id = coding_launches.run_id)),
+           runtime = COALESCE(runtime, (SELECT runtime FROM runs WHERE runs.id = coding_launches.run_id)),
+           receipt_dir = COALESCE(receipt_dir, ?)
+         WHERE launch_id = ?`,
+      )
+      .run(join(this.deps.namespaceDir, LAUNCHES_DIR, id), id)
   }
 
   private async recoverOne(l: CodingLaunch): Promise<RecoveredLaunch> {
