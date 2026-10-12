@@ -16,6 +16,7 @@ import { Link, useNavigate } from 'react-router'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { runtimeLabel } from '../../components/runtime-label.ts'
+import { CodingBackend } from './CodingBackend.tsx'
 import { ReleaseHeld } from './ReleaseHeld.tsx'
 
 const permissionLabels: Record<CodingPermission, string> = {
@@ -494,10 +495,7 @@ function CodingSettings({
           </dd>
         </div>
       </dl>
-      <p className="team-muted">
-        If Score stops, this coding agent stops with it. Tools it started may keep running until
-        Score starts again and stops them.
-      </p>
+      <CodingBackend />
       {coding.heldGroups.length > 0 && (
         <div role="alert">
           <p className="team-muted-strong">

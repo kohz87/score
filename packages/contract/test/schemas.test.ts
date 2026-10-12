@@ -1412,6 +1412,16 @@ const cases = [
   ],
   ['CodingAgentsResponseSchema', { items: [] }, { items: 'none' }],
   [
+    'CodingBackendSchema',
+    {
+      kind: 'unit',
+      note: 'Runs as a supervised system service.',
+      checks: [{ name: 'linger', ok: true, detail: 'linger enabled' }],
+      checkedAt: '2026-10-12T10:00:00.000Z',
+    },
+    { kind: 'container', note: '', checks: [], checkedAt: 'now' },
+  ],
+  [
     'CodingAgentCreateSchema',
     {
       id: 'coder',

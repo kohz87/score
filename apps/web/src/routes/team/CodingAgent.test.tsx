@@ -141,3 +141,80 @@ test('Release: shown only for groups Score can’t attribute, posts once and nam
   fireEvent.click(button)
   await waitFor(() => expect(releases).toEqual(['/api/coding-agents/coder/release']))
 })
+
+test('Release: a supervised run is named by its service, not by a process group', async () => {
+  const { ReleaseHeld } = await import('./ReleaseHeld.tsx')
+  vi.stubGlobal(
+    'fetch',
+    async () =>
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: 'coder',
+              name: 'Coder',
+              role: '',
+              runtime: 'claude-code',
+              workspace: '/w',
+              permission: 'workspace-write',
+              model: null,
+              style: { color: '#6B4EFF', shape: 'hexagon' },
+              quota: 'q',
+              cli: { state: 'ready', version: '1.0.0', testedVersions: ['1.0.0'], confirmed: false },
+              heldGroups: [
+                { runId: 'cr_1', pgid: 0, canRelease: true, unit: 'score-01234567-c-abc.service' },
+              ],
+              createdAt: '2026-10-11T00:00:00.000Z',
+            },
+          ],
+        }),
+        { headers: { 'Content-Type': 'application/json' } },
+      ),
+  )
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <ReleaseHeld agentId="coder" />
+    </QueryClientProvider>,
+  )
+  expect(await screen.findByText(/systemctl --user status score-01234567-c-abc.service/)).toBeTruthy()
+  expect(screen.queryByText(/ps -o pid/)).toBeNull()
+})
+
+test('Backend note: says how coding runs launch, lists the host check, and Check again posts', async () => {
+  const { CodingBackend } = await import('./CodingBackend.tsx')
+  const posts: string[] = []
+  let kind: 'unit' | 'process-group' = 'process-group'
+  const body = () => ({
+    kind,
+    note:
+      kind === 'unit'
+        ? 'Runs as a supervised system service.'
+        : 'Runs without a supervisor: tools a coding CLI started may keep running until Score restarts and stops them. linger is off',
+    checks: [
+      { name: 'linger', ok: kind === 'unit', detail: kind === 'unit' ? 'linger enabled' : 'linger is off' },
+      { name: 'python', ok: true, detail: 'Python at /usr/bin/python3' },
+    ],
+    checkedAt: '2026-10-12T10:00:00.000Z',
+  })
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (init?.method === 'POST') {
+      posts.push(path)
+      kind = 'unit'
+    }
+    return new Response(JSON.stringify(body()), { headers: { 'Content-Type': 'application/json' } })
+  })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <CodingBackend />
+    </QueryClientProvider>,
+  )
+  expect(await screen.findByText(/Runs without a supervisor/)).toBeTruthy()
+  expect(screen.getByText(/Host check \(1 not met\)/)).toBeTruthy()
+  expect(screen.getByText(/Keeps running after you log out: not met/)).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
+  await waitFor(() => expect(posts).toEqual(['/api/coding-agents/backend/check']))
+  expect(await screen.findByText('Runs as a supervised system service.')).toBeTruthy()
+  expect(screen.getByText(/the service stops this agent and everything it started/)).toBeTruthy()
+})
