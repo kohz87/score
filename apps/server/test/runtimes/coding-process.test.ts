@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { spawnCli } from '../../src/runtimes/coding/process.ts'
+import { realProcEnv, type ProcEnv } from '../../src/runtimes/coding/proc.ts'
 
 let dir: string
 beforeEach(() => {
@@ -101,8 +102,8 @@ setInterval(() => {}, 1000)
     `import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 spawn(process.execPath, [${JSON.stringify(worker)}, ${JSON.stringify(pidFile)}], { stdio: ${JSON.stringify(stdio)} })
-// Leave only once the worker is really running.
-const wait = setInterval(() => { if (existsSync(${JSON.stringify(pidFile)})) process.exit(0) }, 10)
+// Leave only once the worker is really running and Score has had time to see it (it scans while the leader lives).
+const wait = setInterval(() => { if (existsSync(${JSON.stringify(pidFile)})) setTimeout(() => process.exit(0), 400) }, 10)
 `,
   )
   return { leader, pidFile }
@@ -217,6 +218,76 @@ test('N4: the identity of a worker that outlives its leader is reported while th
     if (alive(pid)) process.kill(pid, 'SIGKILL')
   }
 }, 60_000)
+
+test('S3-005: members whose first recording failed are offered again and recorded by a later scan', async () => {
+  const { leader, pidFile } = leaderAndWorker('ignore')
+  const recorded = new Set<number>()
+  const errors: unknown[] = []
+  let calls = 0
+  const run = spawnCli({
+    ...baseOptions([leader]),
+    graceMs: 600,
+    onMembers: (members) => {
+      // The very first save fails (a busy database); nothing is kept from it.
+      if (calls++ === 0) throw new Error('database is busy')
+      for (const member of members) recorded.add(member.pid)
+    },
+    onMembersError: (error) => errors.push(error),
+  })
+  const pid = await workerPid(pidFile)
+  try {
+    await run.done
+    expect(calls).toBeGreaterThan(1)
+    expect(recorded.has(pid)).toBe(true)
+    expect(errors).toHaveLength(1)
+  } finally {
+    if (alive(pid)) process.kill(pid, 'SIGKILL')
+  }
+}, 60_000)
+
+test('v6-5: after the leader exits, a process that reuses the group number is neither signalled nor recorded', async () => {
+  const recorded: number[] = []
+  const signalled: number[] = []
+  const FOREIGN = 999_999
+  const run: { pid?: number } = {}
+  // A replacement member of a reissued group number: not recorded while the leader lived, its parent is init.
+  const env: ProcEnv = {
+    ...realProcEnv,
+    // Appears only once the leader is gone (its number was reissued).
+    pids: () => [
+      ...(realProcEnv.pids() ?? []),
+      ...(run.pid !== undefined && realProcEnv.stat(run.pid) === null ? [FOREIGN] : []),
+    ],
+    stat: (pid) => {
+      if (pid !== FOREIGN) return realProcEnv.stat(pid)
+      const fields = Array<string>(22).fill('0')
+      fields[0] = 'S'
+      fields[1] = '1'
+      fields[2] = String(run.pid)
+      fields[19] = '424242'
+      return fields
+    },
+  }
+  const spawned = spawnCli({
+    ...baseOptions(['-e', 'process.exit(0)']),
+    graceMs: 50,
+    reapSlackMs: 100,
+    procEnv: env,
+    groupExists: () => 'exists',
+    onMembers: (members) => recorded.push(...members.map((m) => m.pid)),
+    signalGroup: () => 'unavailable',
+    signalPid: (pid) => {
+      signalled.push(pid)
+      return 'unavailable'
+    },
+  })
+  run.pid = spawned.pid
+  const outcome = await spawned.done
+  expect(recorded).not.toContain(FOREIGN)
+  expect(signalled).not.toContain(FOREIGN)
+  // Not proven gone: the record stays and the agent is fenced.
+  expect(outcome.groupGone).toBe(false)
+}, 30_000)
 
 test('N5: an empty listing never overrides the kernel: while it says the group exists, the group is not gone', async () => {
   const run = spawnCli({
