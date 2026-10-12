@@ -28,6 +28,9 @@ function fakeEnv(
   const hidden = new Set<number>()
   /** Runs `apply` just before the nth stat read of `pid` is answered (a pid reused between scan and signal). */
   const swaps: { pid: number; nth: number; apply(): void; seen: number }[] = []
+  /** Runs just before a pid-directed signal is delivered (the instant a check-then-kill would be racy). */
+  const beforeSignal: ((pid: number) => void)[] = []
+  let pidfd = true
   const env: ProcEnv = {
     stat: (pid) => {
       for (const swap of swaps) {
@@ -53,15 +56,28 @@ function fakeEnv(
             .map(Number)
             .filter((pid) => !hidden.has(pid))
         : null,
-    kill: (pid, signal) => {
+    // Through the leader's pidfd: identity is judged and the whole group signalled as one step.
+    signalGroup: (leader, startTime, signal) => {
+      if (!pidfd) return 'unavailable'
+      for (const hook of beforeSignal) hook(leader)
+      const p = procs[leader]
+      if (!p || String(p.start) !== startTime) return 'mismatch'
+      signals.push([-p.pgrp, signal])
+      for (const q of Object.keys(procs).map(Number))
+        if (procs[q]!.pgrp === p.pgrp && !ignores.has(q) && signal !== 'SIGHUP') delete procs[q]
+      return 'signalled'
+    },
+    // Like the real helper: identity is judged and the signal delivered as one step, so a pid reused since the
+    // scan reports a mismatch and receives nothing.
+    signalPid: (pid, startTime, signal) => {
+      if (!pidfd) return 'unavailable'
+      for (const hook of beforeSignal) hook(pid)
+      const p = procs[pid]
+      if (!p || String(p.start) !== startTime) return 'mismatch'
+      if (signal === 0) return 'signalled'
       signals.push([pid, signal])
-      const targets =
-        pid < 0
-          ? Object.keys(procs)
-              .map(Number)
-              .filter((q) => procs[q]!.pgrp === -pid)
-          : [pid]
-      for (const q of targets) if (!ignores.has(q) && signal !== 'SIGHUP') delete procs[q]
+      if (!ignores.has(pid) && signal !== 'SIGHUP') delete procs[pid]
+      return 'signalled'
     },
     groupExists: (pgid) => (Object.values(procs).some((p) => p.pgrp === pgid) ? 'exists' : 'none'),
     bootId: () => boot,
@@ -73,6 +89,8 @@ function fakeEnv(
     unreadable,
     hidden,
     swaps,
+    beforeSignal,
+    setPidfd: (value: boolean) => (pidfd = value),
     setListable: (value: boolean) => (listable = value),
   }
 }
@@ -177,19 +195,14 @@ test('N4: continuity is also learned while the leader is alive, and passed to th
   expect(seen).toEqual([501])
 })
 
-test('X3: a pid that was reused between the scan and the signal is skipped', async () => {
+test('X3/Y1: a pid that was reused between the scan and the signal is not signalled', async () => {
   const world = fakeEnv({ 510: { pgrp: 500, start: 90 } })
-  // Calls on 510: the first inspection, the inspection inside signal(), then the re-read right before kill.
-  world.swaps.push({
-    pid: 510,
-    nth: 3,
-    seen: 0,
-    apply: () => {
-      world.env.stat(510)
-      // The process ended and an unrelated one took its pid, in another group.
+  world.beforeSignal.push((pid) => {
+    // The process ended and an unrelated one took its pid, in another group, after the last look at it.
+    if (pid === 510 && world.procs[510]?.start === 90) {
       delete world.procs[510]
       world.procs[510] = { pgrp: 777, start: 9999 }
-    },
+    }
   })
   const outcome = await killRecordedGroup(
     {
@@ -203,7 +216,60 @@ test('X3: a pid that was reused between the scan and the signal is skipped', asy
     world.env,
   )
   expect(world.signals.filter(([pid]) => pid === 510)).toEqual([])
+  expect(world.procs[510]).toBeDefined()
   expect(outcome).toBe('gone')
+})
+
+test('Y1: without pidfd support nothing is signalled by number: unobservable', async () => {
+  const world = fakeEnv({ 510: { pgrp: 500, start: 90 } })
+  world.setPidfd(false)
+  const outcome = await killRecordedGroup(
+    {
+      pid: 500,
+      pgid: 500,
+      startTime: '77',
+      bootId: 'boot-1',
+      members: [{ pid: 510, startTime: '90' }],
+    },
+    50,
+    world.env,
+  )
+  expect(world.signals).toEqual([])
+  expect(outcome).toBe('unobservable')
+})
+
+test('Y1: a live recorded leader gets the group signal through its pidfd, never a numeric kill', async () => {
+  const world = fakeEnv({ 500: { pgrp: 500, start: 77 }, 510: { pgrp: 500, start: 90 } })
+  expect('kill' in world.env).toBe(false)
+  const outcome = await killRecordedGroup(
+    { pid: 500, pgid: 500, startTime: '77', bootId: 'boot-1' },
+    50,
+    world.env,
+  )
+  expect(world.signals[0]).toEqual([-500, 'SIGTERM'])
+  expect(outcome).toBe('gone')
+})
+
+test('Y1: a kernel without the group flag (injected unavailable) sends nothing: unobservable', async () => {
+  const world = fakeEnv({ 500: { pgrp: 500, start: 77 }, 510: { pgrp: 500, start: 90 } })
+  world.env.signalGroup = () => 'unavailable'
+  const outcome = await killRecordedGroup(
+    { pid: 500, pgid: 500, startTime: '77', bootId: 'boot-1' },
+    50,
+    world.env,
+  )
+  expect(world.signals).toEqual([])
+  expect(Object.keys(world.procs)).toHaveLength(2)
+  expect(outcome).toBe('unobservable')
+})
+
+test('Y1: a leader whose pid was reused (pidfd mismatch) gets no group signal', async () => {
+  const world = fakeEnv({ 500: { pgrp: 500, start: 77 }, 510: { pgrp: 500, start: 90 } })
+  world.beforeSignal.push((pid) => {
+    if (pid === 500) world.procs[500] = { pgrp: 888, start: 123 }
+  })
+  await killRecordedGroup({ pid: 500, pgid: 500, startTime: '77', bootId: 'boot-1' }, 50, world.env)
+  expect(world.signals.filter(([pid]) => pid < 0)).toEqual([])
 })
 
 test('N5: an unreadable stat is not absence: unobservable, nothing signalled', async () => {

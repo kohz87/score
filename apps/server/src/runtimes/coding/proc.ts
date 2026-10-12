@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs'
+import { signalGroup, signalPid, type PidSignalResult } from './pidfd-signal.ts'
 
 /** Fields up to the start time (index 19) must be there for a stat line to mean anything. */
 const MIN_FIELDS = 20
@@ -71,7 +72,17 @@ export interface ProcEnv {
    * absence: 'none' is ESRCH, anything we can't read is 'unknown'.
    */
   groupExists(pgid: number): 'exists' | 'none' | 'unknown'
-  kill(pid: number, signal: NodeJS.Signals): void
+  /**
+   * Signals the whole group through the recorded leader's pidfd, after its start time matched while the pidfd was held.
+   * The group number is never used (it could have been reissued). `unavailable` = can't prove it (no python, pidfd or
+   * group-flag support): nothing sent.
+   */
+  signalGroup(leader: number, startTime: string, signal: NodeJS.Signals): PidSignalResult
+  /**
+   * The only way to signal a single pid: identity (start time) is checked while a pidfd pins the process, so a reused
+   * pid is never signalled. Signal 0 verifies without signalling. `unavailable` = identity can't be proven: nothing sent.
+   */
+  signalPid(pid: number, startTime: string, signal: NodeJS.Signals | 0): PidSignalResult
   bootId(): string | null
 }
 export function kernelGroupExists(pgid: number): 'exists' | 'none' | 'unknown' {
@@ -98,7 +109,8 @@ export const realProcEnv: ProcEnv = {
     }
   },
   groupExists: kernelGroupExists,
-  kill: (pid, signal) => process.kill(pid, signal),
+  signalGroup: (leader, startTime, signal) => signalGroup(leader, startTime, signal),
+  signalPid: (pid, startTime, signal) => signalPid(pid, startTime, signal),
   bootId,
 }
 
@@ -299,27 +311,25 @@ export async function killRecordedGroup(
   if (found.state !== 'ours') return found.state
   if (!found.exists) return 'gone'
   if (!alive(found)) return 'unobservable'
-  const signal = (name: NodeJS.Signals) => {
+  /** Returns false when identity couldn't be proven (no pidfd support): nothing was sent and waiting won't help. */
+  const signal = (name: NodeJS.Signals): boolean => {
     const now = inspect(record, env, known)
-    if (now.state !== 'ours') return
+    if (now.state !== 'ours') return true
     if (now.leader) {
-      try {
-        env.kill(-record.pgid, name)
-      } catch {
-        // gone meanwhile, or not ours to signal: the next inspection says which
-      }
-      return
+      // Through the leader's pidfd: identity is checked and the group signalled as one step, with no numeric kill.
+      const verdict = env.signalGroup(record.pid, record.startTime!, name)
+      return verdict !== 'unavailable'
     }
+    let usable = true
     for (const target of now.targets) {
-      // The pid was read during the scan: signal it only if it still is the same process (X3).
+      // The identity is checked under a pidfd inside the helper: a pid reused since the scan is never signalled (X3, Y1).
       try {
-        const fields = env.stat(target.pid)
-        if (!fields || fields[0] === 'Z' || fields[19] !== target.start) continue
-        env.kill(target.pid, name)
+        if (env.signalPid(target.pid, target.start, name) === 'unavailable') usable = false
       } catch {
-        // gone meanwhile, or unreadable: not signalled
+        usable = false
       }
     }
+    return usable
   }
   const settle = async (ms: number) => {
     const until = Date.now() + ms
@@ -330,10 +340,10 @@ export async function killRecordedGroup(
     } while (Date.now() < until)
     found = inspect(record, env, known)
   }
-  signal('SIGTERM')
+  if (!signal('SIGTERM')) return 'unobservable'
   await settle(graceMs)
   if (alive(found)) {
-    signal('SIGKILL')
+    if (!signal('SIGKILL')) return 'unobservable'
     await settle(graceMs)
   }
   // `found` is reassigned inside `settle`, which flow analysis can't see.
