@@ -293,7 +293,7 @@ test('a database restored to before `releasing` is behind the journal: it fences
     .prepare(
       'UPDATE coding_launches SET phase = ?, may_have_executed = 0, unsendable = 0, journal_n = ? WHERE launch_id = ?',
     )
-    .run(backupRow.phase, backupRow.journal_n, 'l1')
+    .run(backupRow.phase as string, backupRow.journal_n as number, 'l1')
   db.sqlite.prepare('UPDATE coding_journal_checkpoint SET seq = ?').run(backupSeq)
   const fence = new GlobalFenceStore(db, journal, clock)
   expect(fence.startupCheck()).toMatchObject({ fenced: true, reasons: ['journal_mismatch'] })

@@ -10,6 +10,13 @@ if (role === 'hold') {
     fs.writeFileSync(a!, 'x')
     while (!fs.existsSync(b!)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10)
   })
+} else if (role === 'registry-hold') {
+  // Holds the registry-wide lock of journal root `dir` for `a` ms (after touching `b`).
+  const { withRegistryLock } = await import('../../src/installation.ts')
+  withRegistryLock(dir!, () => {
+    fs.writeFileSync(b!, 'x')
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(a))
+  })
 } else if (role === 'revoke') {
   // Tries to revoke launch `a` (run r1/t1) in the journal at `dir`; `b` is touched just before the lock is requested.
   const { CodingJournal } = await import('../../src/domain/orchestration/coding-journal.ts')

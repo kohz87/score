@@ -10,6 +10,8 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { spawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import {
   confirmCopy,
@@ -196,3 +198,30 @@ test('restore finds the namespace through the registry, and the legacy directory
   const id = okId(resolveHome())
   expect(restoreMarkerDir(journalDir, home)).toBe(join(canonicalPath(journalDir), id))
 })
+
+test('registry operations are mutually exclusive across processes (registry-wide OS lock)', async () => {
+  mkdirSync(journalDir, { recursive: true })
+  const ready = join(root, 'ready')
+  const child = fileURLToPath(new URL('./helpers/journal-child.ts', import.meta.url))
+  const proc = spawn(
+    process.execPath,
+    [
+      '--experimental-transform-types',
+      '--no-warnings',
+      child,
+      'registry-hold',
+      journalDir,
+      '1500',
+      ready,
+    ],
+    { stdio: 'ignore' },
+  )
+  const exited = new Promise((resolve) => proc.on('close', resolve))
+  const deadline = Date.now() + 15_000
+  while (!existsSync(ready) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 20))
+  const started = Date.now()
+  const result = resolveHome() // blocks on the registry lock until the child lets go
+  expect(Date.now() - started).toBeGreaterThan(800)
+  expect(result.ok).toBe(true)
+  await exited
+}, 30_000)
