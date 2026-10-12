@@ -206,3 +206,15 @@ test('a lost registry and manifests are recovered from the legacy cutover (never
   const again = resolveInstallation({ journalDir, home })
   expect(again).toMatchObject({ ok: true, id, how: 'recovered' })
 })
+
+test('FX3 #11: a cutover is accepted only while its destination witness is still there', () => {
+  seedLegacy()
+  expect(migrate()).toMatchObject({ ok: true, state: 'migrated' })
+  expect(migrate()).toMatchObject({ ok: true, state: 'already' })
+  // The namespace journal is gone (a restored or damaged folder): fail closed.
+  rmSync(join(nsDir, JOURNAL_FILE))
+  expect(migrate()).toMatchObject({ ok: false, reason: expect.stringMatching(/missing/) })
+  // Truncated: it no longer reaches the cutover's copied-through record.
+  writeFileSync(join(nsDir, JOURNAL_FILE), '')
+  expect(migrate()).toMatchObject({ ok: false, reason: expect.stringMatching(/lost/) })
+})

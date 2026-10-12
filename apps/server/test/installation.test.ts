@@ -11,6 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import {
@@ -26,6 +27,7 @@ import {
   restoreMarkerDir,
 } from '../src/installation.ts'
 import { canonicalPath } from '../src/journal-location.ts'
+import { ExecutionJournal } from '../src/domain/orchestration/journal.ts'
 
 // 7.7a design v7 §2: installation identity, the registry outside the home, manifests, recovery, refusal on ambiguity,
 // copied/moved-home detection.
@@ -225,3 +227,59 @@ test('registry operations are mutually exclusive across processes (registry-wide
   expect(result.ok).toBe(true)
   await exited
 }, 30_000)
+
+test('FX3 #16: after A → B → A a lost registry is rebuilt with A current, not B', () => {
+  const id = okId(resolveHome())
+  const moved = join(root, 'home-moved')
+  cpSync(home, moved, { recursive: true })
+  expect(confirmMove({ journalDir, home: moved })).toMatchObject({ ok: true, changed: true })
+  // And back: the original folder is the installation again.
+  expect(confirmMove({ journalDir, home })).toMatchObject({ ok: true, changed: true })
+  const manifest = JSON.parse(readFileSync(join(journalDir, id, MANIFEST_FILE), 'utf8')) as {
+    paths: string[]
+    current?: string
+  }
+  expect(manifest.paths).toEqual([canonicalPath(home), canonicalPath(moved)])
+  expect(manifest.current).toBe(canonicalPath(home))
+  rmSync(registryFile())
+  expect(resolveHome(home)).toMatchObject({ ok: true, id })
+  expect(resolveHome(moved)).toMatchObject({ ok: false, code: 'moved_away', id })
+})
+
+test('FX3 #10: confirm-copy carries the source journal into the copy, so inherited intents stay reconcilable', () => {
+  const source = okId(resolveHome())
+  const sourceJournal = join(journalDir, source, 'journal.ndjson')
+  const body = {
+    kind: 'send_started',
+    attemptId: 'a1',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: 1,
+    n: 1,
+    at: '2026-10-12T10:00:00.000Z',
+    scope: source,
+  }
+  const sum = (payload: string) => createHash('sha256').update(payload).digest('hex').slice(0, 16)
+  writeFileSync(
+    sourceJournal,
+    `${JSON.stringify({ ...body, c: sum(JSON.stringify(body)) })}\n{"torn":`,
+  )
+  const copy = join(root, 'home-copy')
+  cpSync(home, copy, { recursive: true })
+  const result = confirmCopy({ journalDir, home: copy })
+  if (!result.ok) throw new Error(result.message)
+  const journal = new ExecutionJournal(join(journalDir, result.id), result.id)
+  const read = journal.read()
+  expect(read.ok && read.entries.map((e) => [e.n, e.kind, e.scope])).toEqual([
+    [1, 'send_started', result.id],
+  ])
+  // A damaged source journal is not guessed at: nothing is published.
+  const other = join(root, 'home-copy-2')
+  cpSync(home, other, { recursive: true })
+  writeFileSync(sourceJournal, '{"broken"\n')
+  const refused = confirmCopy({ journalDir, home: other })
+  expect(refused).toMatchObject({ ok: false })
+  const registry = readRegistry(journalDir)
+  expect(registry.state === 'ok' && Object.keys(registry.installations)).toHaveLength(2)
+})

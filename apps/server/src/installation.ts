@@ -58,6 +58,8 @@ interface Manifest {
   version: 1
   id: string
   paths: string[]
+  /** The path the installation lives at now. Stored, not inferred from the array's order: A → B → A leaves [A, B]. */
+  current?: string
   createdAt: string
   copiedFrom?: string
 }
@@ -145,6 +147,9 @@ function writeManifest(journalDir: string, id: string, entry: RegistryEntry): vo
     version: 1,
     id,
     paths: entry.paths.map((item) => item.path),
+    ...(entry.paths.some((item) => item.state === 'current')
+      ? { current: entry.paths.find((item) => item.state === 'current')!.path }
+      : {}),
     createdAt: entry.createdAt,
     ...(entry.copiedFrom === undefined ? {} : { copiedFrom: entry.copiedFrom }),
   }
@@ -183,6 +188,9 @@ function readManifests(journalDir: string): { valid: Manifest[]; invalid: string
         id: name,
         paths: value.paths as string[],
         createdAt: value.createdAt,
+        ...(typeof value.current === 'string' && value.paths.includes(value.current)
+          ? { current: value.current }
+          : {}),
         ...(isInstallationId(value.copiedFrom) ? { copiedFrom: value.copiedFrom } : {}),
       })
     } catch {
@@ -296,10 +304,13 @@ function loadRegistry(journalDir: string): LoadedRegistry {
     installations[manifest.id] = {
       createdAt: manifest.createdAt,
       ...(manifest.copiedFrom === undefined ? {} : { copiedFrom: manifest.copiedFrom }),
-      // The newest path in a manifest is the current one; earlier ones are aliases.
-      paths: manifest.paths.map((path, index) => ({
+      // The manifest names its current path; one from before that field existed falls back to the newest (last) path.
+      paths: manifest.paths.map((path) => ({
         path,
-        state: index === manifest.paths.length - 1 ? ('current' as const) : ('moved' as const),
+        state:
+          path === (manifest.current ?? manifest.paths.at(-1))
+            ? ('current' as const)
+            : ('moved' as const),
         at: manifest.createdAt,
       })),
     }
@@ -398,6 +409,63 @@ export function resolveInstallation(options: ResolveOptions): InstallationResult
   })
 }
 
+const lineChecksum = (payload: string): string =>
+  createHash('sha256').update(payload).digest('hex').slice(0, 16)
+
+/**
+ * The records a copy inherits: the source installation's journal, rewritten under the copy's scope (same numbers, fresh
+ * checksums). The copy's database came from the source, so every execution the source has witnessed since must be
+ * known to the copy before it can admit anything; with the records in the copy's namespace, its reconciliation sees the
+ * sends and launches the inherited intents lack. Returns undefined, or why the source's evidence can't be trusted.
+ */
+function inheritedJournal(
+  journalDir: string,
+  sourceId: string,
+  sourceHome: string | undefined,
+  newId: string,
+): { lines: string; problem?: undefined } | { problem: string } {
+  const own = join(namespaceDir(journalDir, sourceId), JOURNAL)
+  // A source that never migrated still has its history in the legacy, path-scoped journal.
+  const file = existsSync(own) ? own : join(journalDir, JOURNAL)
+  const scope = file === own ? sourceId : sourceHome ? legacyJournalScope(sourceHome) : undefined
+  if (!existsSync(file) || scope === undefined) return { lines: '' }
+  const lines: string[] = []
+  // Under the journal's own lock, so a running source can't be mid-append or mid-compaction while it is read.
+  const lock = new OsLock(
+    dirname(file),
+    fsyncSync,
+    undefined,
+    file === own ? LOCK_RANK.journal : LOCK_RANK.legacyJournal,
+  )
+  let text: string
+  try {
+    text = lock.runSync(() => readFileSync(file, 'utf8'))
+  } finally {
+    lock.close()
+  }
+  const raw = text.split('\n')
+  for (const [index, line] of raw.entries()) {
+    if (!line) continue
+    // An unterminated last line was never effective (journal.ts discards it on recovery).
+    if (index === raw.length - 1) continue
+    let entry: Record<string, unknown>
+    try {
+      const parsed: unknown = JSON.parse(line)
+      if (!isObject(parsed)) throw new Error('not a record')
+      entry = parsed
+    } catch {
+      return { problem: `line ${index + 1} of ${file} is damaged` }
+    }
+    const { c, ...body } = entry
+    if (c !== lineChecksum(JSON.stringify(body)))
+      return { problem: `line ${index + 1} of ${file} fails its checksum` }
+    if (body.scope !== scope || body.kind === 'cutover') continue
+    const copied = { ...body, scope: newId }
+    lines.push(JSON.stringify({ ...copied, c: lineChecksum(JSON.stringify(copied)) }))
+  }
+  return { lines: lines.map((line) => `${line}\n`).join('') }
+}
+
 export type ConfirmResult =
   { ok: true; id: string; changed: boolean; message: string } | { ok: false; message: string }
 
@@ -478,14 +546,30 @@ export function confirmCopy(options: ResolveOptions): ConfirmResult {
       copiedFrom: copy.id,
       paths: [{ path: home, state: 'current', at: now }],
     }
-    loaded.installations[id] = entry
-    writeRegistry(journalDir, loaded.installations) // registry first
-    ensureSetup(journalDir, id, entry, home)
-    // The inherited run history is the source's: the next start fences admission (same machinery as a restore).
+    // Before the copy becomes an admissible identity: its namespace holds the source's evidence and the marker that
+    // fences it. A crash anywhere in here leaves a namespace nothing refers to, and the next confirm starts over.
+    const source = loaded.installations[copy.id]!
+    const inherited = inheritedJournal(
+      journalDir,
+      copy.id,
+      source.paths.find((item) => item.state === 'current')?.path,
+      id,
+    )
+    if (inherited.problem !== undefined)
+      return {
+        ok: false,
+        message: `The source installation ${copy.id}'s execution journal can't be trusted: ${inherited.problem}. Resolve that first; nothing was changed.`,
+      }
+    const nsDir = namespaceDir(journalDir, id)
+    mkdirDurable(join(nsDir, LAUNCHES_DIR))
+    if (inherited.lines) writeDurable(join(nsDir, JOURNAL), inherited.lines)
     writeDurable(
-      join(namespaceDir(journalDir, id), RESTORE_MARKER),
+      join(nsDir, RESTORE_MARKER),
       JSON.stringify({ scope: id, at: now, backup: `installation ${copy.id}`, origin: 'copy' }),
     )
+    loaded.installations[id] = entry
+    writeRegistry(journalDir, loaded.installations) // the registry entry before anything that makes the id usable
+    ensureSetup(journalDir, id, entry, home)
     return {
       ok: true,
       id,
