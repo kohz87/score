@@ -20,6 +20,7 @@ import { LOCK_RANK, mkdirDurable, OsLock, OsLockTimeoutError } from '../../locks
 import {
   CODING_RECORD_KINDS as CODING_KINDS,
   codingRecordSchemas,
+  foldCodingEntry,
   foldCodingLaunches,
   type CodingLaunch,
 } from './coding-records.ts'
@@ -308,10 +309,7 @@ export class ExecutionJournal {
           [...launches.values()].filter((launch) => launch.state.turnId === turnId),
         append: (body) => {
           const entry = this.appendLocked(body)
-          const fold = foldCodingLaunches([entry]).get(
-            (entry as { launchId?: string }).launchId ?? '',
-          )
-          if (fold) launches.set(fold.state.launchId, fold)
+          foldCodingEntry(launches, entry)
           return entry
         },
       }
@@ -742,8 +740,8 @@ export function foldCodingRecords(entries: readonly JournalEntry[], scope: strin
       continue
     }
     if (newest.get(launchId) !== entry.n) continue
-    if (entry.kind === 'settled') {
-      out.push({ ...entry, kind: 'coding-tombstone', of: 'settled' } as JournalEntry)
+    if (entry.kind === 'settled' || entry.kind === 'waived') {
+      out.push({ ...entry, kind: 'coding-tombstone', of: entry.kind } as JournalEntry)
     } else out.push(entry)
   }
   return out
