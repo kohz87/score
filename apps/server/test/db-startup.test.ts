@@ -104,6 +104,8 @@ vi.mock('../src/domain/orchestration/executor.ts', () => ({
   },
 }))
 vi.mock('../src/domain/orchestration/fence.ts', () => ({
+  isFenced: () => false,
+  fenceItems: () => [],
   GlobalFenceStore: class {
     startupCheck = () => ({ fenced: false, reasons: [] })
     fenceUnverifiedRoot = () => false
