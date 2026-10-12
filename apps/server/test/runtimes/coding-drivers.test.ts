@@ -706,3 +706,63 @@ test('#18: Claude and Antigravity results and tool details are bounded too', () 
   const result = claude.parse(claudeResult({ result: 'r'.repeat(400 * 1024) }))
   expect(verdictOf(result)).toMatchObject({ eligible: false })
 })
+
+// ---- FW #5 -----------------------------------------------------------------------------------------------------------
+
+test('FW #5: Codex unknown records are loss unless explicitly allow-listed', () => {
+  const unknownTop = codexLine({ type: 'mystery.notice', note: 'x' })
+  const unknownItem = codexLine({ type: 'item.completed', item: { id: 'u1', type: 'hologram' } })
+  expect(runCodex([finalMessage, turnCompleted, unknownTop]).lost).not.toBeNull()
+  expect(runCodex([finalMessage, unknownItem, turnCompleted]).verdict?.eligible).toBe(false)
+  // Allow-listed: a todo list item, the retry notice.
+  const todo = codexLine({ type: 'item.completed', item: { id: 't1', type: 'todo_list' } })
+  const notice = codexLine({ type: 'error', message: 'stream disconnected, retrying' })
+  const clean = runCodex([finalMessage, todo, notice, turnCompleted])
+  expect(clean.lost).toBeNull()
+  expect(clean.verdict?.eligible).toBe(true)
+})
+
+test('FW #5: Claude Code gets the same final loss check: rejected and unknown records take the authority', () => {
+  const run = (lines: string[]) => {
+    const parser = createClaudeParser()
+    const events = lines.flatMap((line) => parser.parse(line))
+    return { verdict: verdictOf(events), lost: parser.lossReason?.() ?? null }
+  }
+  const success = JSON.stringify({
+    type: 'result',
+    subtype: 'success',
+    is_error: false,
+    result: 'Done.',
+  })
+  const rejectedError = JSON.stringify({
+    type: 'result',
+    subtype: 'error',
+    is_error: 'yes',
+    result: 'It failed.',
+  })
+  expect(run([success]).lost).toBeNull()
+  expect(run([success, rejectedError]).lost).not.toBeNull()
+  expect(run([success, JSON.stringify({ type: 'mystery' })]).lost).not.toBeNull()
+  expect(run([success, JSON.stringify({ type: 'assistant', message: 7 })]).lost).not.toBeNull()
+  expect(run([success, 'not json']).lost).not.toBeNull()
+  const badBlock = JSON.stringify({
+    type: 'assistant',
+    message: { content: [{ type: 'tool_use', name: 'Bash' }] },
+  })
+  expect(run([success, badBlock]).lost).not.toBeNull()
+  // Allow-listed notices keep the authority.
+  const notices = [
+    JSON.stringify({ type: 'stream_event', event: {} }),
+    JSON.stringify({ type: 'rate_limit_event' }),
+    JSON.stringify({ type: 'system', subtype: 'hook_started' }),
+  ]
+  expect(run([...notices, success]).lost).toBeNull()
+})
+
+test('FW #5: Antigravity unknown records are loss; telemetry is allow-listed', () => {
+  const parser = createAntigravityParser()
+  parser.parse(JSON.stringify({ event: 'telemetry', x: 1 }))
+  expect(parser.lossReason?.()).toBeNull()
+  parser.parse(JSON.stringify({ event: 'mystery' }))
+  expect(parser.lossReason?.()).not.toBeNull()
+})

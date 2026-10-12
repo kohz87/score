@@ -559,15 +559,34 @@ test('output is redacted before it is stored: reply text, tool previews, frames'
   expect(stored).toContain('[redacted]')
 })
 
-test('unknown CLI events are dropped, not stored', async () => {
+test('allow-listed CLI notices are dropped, not stored, and do not cost the result', async () => {
   await addAgent()
   await makeRoom()
-  await say('@coder [fixture:unknown] go')
+  await say('@coder [fixture:ignorable] go')
   await finished()
   expect(runs()[0]!.status).toBe('completed')
   expect(JSON.stringify(db.sqlite.prepare('SELECT data FROM events').all())).not.toContain(
     'rate_limit_event',
   )
+})
+
+test('FW #5: unknown or unparseable CLI records are dropped, not stored, and the answer is not used', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:unknown] go')
+  await finished()
+  expect(runs()[0]!.status).toBe('failed')
+  expect(JSON.stringify(db.sqlite.prepare('SELECT data FROM events').all())).not.toContain(
+    'rate_limit_event',
+  )
+})
+
+test('FW #5: an explicit Claude success followed by a rejected error record is not a result', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:lateerror] go')
+  await finished()
+  expect(runs()[0]!.status).toBe('failed')
 })
 
 test('an untested CLI version runs only after the person confirms that version', async () => {

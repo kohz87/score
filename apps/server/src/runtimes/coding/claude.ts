@@ -57,6 +57,12 @@ const ResultEvent = z.object({
     .optional(),
 })
 
+// Records and blocks Score knows it can ignore, named explicitly (FW #5): notices and partial stream events that carry
+// neither the answer nor a failure. Anything else Score can't understand is loss for the whole attempt (it could have
+// been the final result or the error that contradicts an earlier success).
+const IGNORABLE_RECORDS = new Set(['stream_event', 'rate_limit_event', 'keep_alive'])
+const IGNORABLE_BLOCKS = new Set(['image', 'redacted_thinking', 'document'])
+
 const PATH_KEYS = ['file_path', 'path', 'notebook_path']
 function preview(tool: string, input: unknown): string {
   if (input === null || typeof input !== 'object') return ''
@@ -119,8 +125,15 @@ export function createClaudeParser(cwd?: string): LineParser {
 function createInnerClaudeParser(cwd?: string): LineParser {
   const stats = { unknown: 0, malformed: 0 }
   let spoke = false
+  // Sticky for the whole attempt, also after the result record (like Codex): decided once the stream was processed.
+  let lossNote: string | null = null
+  const lose = (note: string) => {
+    lossNote ??= note
+  }
   return {
     stats,
+    lossReason: () =>
+      lossNote ?? (stats.malformed > 0 ? 'Score dropped a record of this turn' : null),
     parse(line) {
       let value: unknown
       try {
@@ -136,6 +149,13 @@ function createInnerClaudeParser(cwd?: string): LineParser {
       }
       const events: CodingEvent[] = []
       const init = InitEvent.safeParse(value)
+      const envelopeType = envelope.data.type
+      if (
+        !init.success &&
+        envelopeType === 'system' &&
+        (value as { subtype?: unknown }).subtype === 'init'
+      )
+        lose('Claude Code sent a record Score could not validate')
       if (init.success) {
         return [
           {
@@ -146,6 +166,11 @@ function createInnerClaudeParser(cwd?: string): LineParser {
         ]
       }
       const message = MessageEvent.safeParse(value)
+      if (!message.success && (envelopeType === 'assistant' || envelopeType === 'user')) {
+        stats.unknown++
+        lose('Claude Code sent a record Score could not validate')
+        return events
+      }
       if (message.success) {
         const content = message.data.message.content
         if (typeof content === 'string') {
@@ -183,7 +208,16 @@ function createInnerClaudeParser(cwd?: string): LineParser {
               ok: result.data.is_error !== true,
               preview: resultText(result.data.content),
             })
-          } else stats.unknown++
+          } else {
+            stats.unknown++
+            // A block of a known kind that fails its schema, or one nobody allow-listed, may have been the answer or a
+            // tool outcome. (Text and thinking inside a user message are echoes: nothing depends on them.)
+            const kind = ContentBlock.safeParse(block)
+            const type = kind.success ? kind.data.type : ''
+            const echo = message.data.type === 'user' && (type === 'text' || type === 'thinking')
+            if (!echo && !IGNORABLE_BLOCKS.has(type))
+              lose('Claude Code sent a record Score could not validate')
+          }
         }
         return events
       }
@@ -233,8 +267,11 @@ function createInnerClaudeParser(cwd?: string): LineParser {
         })
         return events
       }
-      // Known envelope, no meaning for us (rate-limit notices, partial stream events, hooks…).
+      // Known envelope without meaning for us: only the allow-listed notices (and non-init system records, hooks…) may be
+      // ignored. A `result` that failed validation is exactly what must not vanish.
       stats.unknown++
+      if (!IGNORABLE_RECORDS.has(envelopeType) && envelopeType !== 'system')
+        lose('Claude Code sent a record Score could not validate')
       return events
     },
   }

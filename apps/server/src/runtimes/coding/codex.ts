@@ -46,6 +46,11 @@ const McpItem = z.object({
 })
 const SearchItem = z.object({ query: z.string() })
 
+// Records Score knows it can ignore, named explicitly (FW #5): a notice that carries no turn content. Everything else
+// that isn't understood is loss for the whole attempt, because it could have been the one that mattered.
+const IGNORABLE_RECORDS = new Set(['turn.started', 'error'])
+const IGNORABLE_ITEMS = new Set(['todo_list'])
+
 /** Whether a decoded record says it is a completed or updated agent message, whatever else is wrong with it. */
 function claimsAgentMessage(value: unknown): boolean {
   if (typeof value !== 'object' || value === null) return false
@@ -160,13 +165,16 @@ function createInnerCodexParser(cwd?: string): LineParser & { ownBytes(): number
           },
         ]
       // Known, nothing to show.
-      if (Envelope.parse(value).type === 'turn.started') return []
+      if (IGNORABLE_RECORDS.has(recordType)) {
+        if (recordType !== 'turn.started') stats.unknown++
+        return []
+      }
       const item = ItemEvent.safeParse(value)
       if (!item.success) {
         stats.unknown++
-        // An item record without a usable item (null, no id) may have carried the final message.
-        if (/^item\./.test(String((value as { type?: unknown }).type)))
-          lose('Codex sent a record Score could not validate')
+        // A record that isn't an item and isn't allow-listed, or an item record without a usable item (null, no id),
+        // may have carried the final message or the failure.
+        lose('Codex sent a record Score could not validate')
         return []
       }
       const { type } = item.data.item
@@ -283,6 +291,7 @@ function createInnerCodexParser(cwd?: string): LineParser & { ownBytes(): number
         ]
       }
       stats.unknown++
+      if (!IGNORABLE_ITEMS.has(type)) lose('Codex sent a record Score could not validate')
       return []
     },
   }

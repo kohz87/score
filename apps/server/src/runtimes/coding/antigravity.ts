@@ -113,12 +113,21 @@ export function createAntigravityParser(cwd?: string): LineParser {
   return withBounds(createInnerAntigravityParser(cwd))
 }
 
+// Events Score knows it can ignore, named explicitly (FW #5). Every other record it can't use is loss for the attempt.
+const IGNORABLE_EVENTS = new Set(['telemetry'])
+
 function createInnerAntigravityParser(cwd?: string): LineParser {
   const stats = { unknown: 0, malformed: 0 }
   const started = new Set<number>()
   let spoke = false
+  let lossNote: string | null = null
+  const lose = () => {
+    lossNote ??= 'Antigravity sent a record Score could not validate'
+  }
   return {
     stats,
+    lossReason: () =>
+      lossNote ?? (stats.malformed > 0 ? 'Score dropped a record of this turn' : null),
     parse(line) {
       let value: unknown
       try {
@@ -137,6 +146,7 @@ function createInnerAntigravityParser(cwd?: string): LineParser {
         const init = Init.safeParse(value)
         if (!init.success) {
           stats.unknown++
+          lose()
           return []
         }
         return [{ kind: 'session', sessionId: init.data.conversation_id }]
@@ -145,6 +155,7 @@ function createInnerAntigravityParser(cwd?: string): LineParser {
         const parsed = Step.safeParse(value)
         if (!parsed.success) {
           stats.unknown++
+          lose()
           return []
         }
         const step = parsed.data.step_update
@@ -157,11 +168,13 @@ function createInnerAntigravityParser(cwd?: string): LineParser {
         }
         if (step.step_type !== 'tool') {
           stats.unknown++
+          lose()
           return []
         }
         const tool = step.tool_name ?? step.tool_info?.name
         if (!tool) {
           stats.unknown++
+          lose()
           return []
         }
         const callId = `step-${step.step_index}`
@@ -183,6 +196,7 @@ function createInnerAntigravityParser(cwd?: string): LineParser {
         const parsed = Result.safeParse(value)
         if (!parsed.success) {
           stats.unknown++
+          lose()
           return []
         }
         const { status, response, usage, denied_actions: denied = [] } = parsed.data.result
@@ -241,6 +255,7 @@ function createInnerAntigravityParser(cwd?: string): LineParser {
         return events
       }
       stats.unknown++
+      if (!IGNORABLE_EVENTS.has(kind)) lose()
       return []
     },
   }
