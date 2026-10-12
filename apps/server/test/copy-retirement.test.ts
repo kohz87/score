@@ -337,3 +337,82 @@ test('FW #1: a confirmed copy without its retirement record owns no process row;
   writeFileSync(join(dir, JOURNAL_FILE), 'garbage\n')
   expect(coding.ownsProcessRow('run-x')).toBe(false)
 })
+
+function seedMissingJournal(dir: string, routing: boolean) {
+  mkdirSync(dir)
+  const { journal, store, database } = fenceOf(dir, 'ns-id')
+  expect(store.startupCheck()).toEqual({ fenced: false, reasons: [] })
+  journal.append({
+    kind: 'send_started',
+    attemptId: 'zz',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: 0,
+  })
+  const folder = join(dir, 'ns', 'launches', 'L1')
+  mkdirSync(folder, { recursive: true })
+  if (routing)
+    writeFileSync(
+      join(folder, 'routing.json'),
+      JSON.stringify({
+        launch: 'L1',
+        generation: 1,
+        agentId: 'coder',
+        runtime: 'x',
+        runId: 'run-1',
+        turnId: 'turn-1',
+      }),
+    )
+  writeFileSync(join(folder, 'released.json'), '{}')
+  rmSync(join(dir, 'ns', JOURNAL_FILE))
+  // SQLite was restored to before execution: the turn is still pending there.
+  database.sqlite.exec('PRAGMA foreign_keys = OFF')
+  database.sqlite
+    .prepare(
+      `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at)
+       VALUES ('ci-1', 'start_coding_run', 'turn-1', '{}', 'pending', ?, ?)`,
+    )
+    .run(AT, AT)
+  const again = new GlobalFenceStore(database, new ExecutionJournal(join(dir, 'ns'), 'ns-id'))
+  expect(again.startupCheck()).toMatchObject({ fenced: true, reasons: ['journal_missing'] })
+  return { database, again }
+}
+
+test('FW #3: lifting a missing-journal fence first retires the turns of the surviving launch folders for good', () => {
+  const { database, again } = seedMissingJournal(join(root, 'fence4'), true)
+  again.lift(again.view().revision, 'checked')
+  const intent = database.sqlite
+    .prepare("SELECT state FROM command_intents WHERE idempotency_key = 'turn-1'")
+    .get()
+  expect(intent).toEqual({ state: 'failed' })
+  const entries = new ExecutionJournal(join(root, 'fence4', 'ns'), 'ns-id').readOwn()
+  if (!entries.ok) throw new Error(entries.reason)
+  expect(entries.entries.find((e) => e.kind === 'inherited-retired')).toMatchObject({
+    intents: ['turn-1'],
+    processes: ['run-1'],
+    launches: ['L1'],
+  })
+  // A restored database can't bring it back, and the folder doesn't fence again on the next start.
+  database.sqlite
+    .prepare("UPDATE command_intents SET state = 'pending' WHERE idempotency_key = 'turn-1'")
+    .run()
+  const restart = new GlobalFenceStore(
+    database,
+    new ExecutionJournal(join(root, 'fence4', 'ns'), 'ns-id'),
+  )
+  expect(restart.startupCheck().reasons).not.toContain('journal_mismatch')
+  expect(
+    database.sqlite
+      .prepare("SELECT state FROM command_intents WHERE idempotency_key = 'turn-1'")
+      .get(),
+  ).toEqual({ state: 'failed' })
+  database.close()
+})
+
+test('FW #3: the lift is refused while a surviving launch folder can’t be accounted for', () => {
+  const { database, again } = seedMissingJournal(join(root, 'fence5'), false)
+  expect(() => again.lift(again.view().revision, 'checked')).toThrow(/routing file/)
+  expect(again.view().fenced).toBe(true)
+  database.close()
+})

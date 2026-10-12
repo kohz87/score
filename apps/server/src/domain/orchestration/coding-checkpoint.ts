@@ -285,7 +285,14 @@ export function applyInheritedRetirements(
   for (const runId of retired.processes)
     for (const table of ['coding_processes', 'coding_process_members', 'coding_pending_terminals'])
       changed += Number(sqlite.prepare(`DELETE FROM ${table} WHERE run_id = ?`).run(runId).changes)
-  for (const attemptId of retired.attempts) {
+  // A retired turn is also the turn of an orchestration attempt (a lost journal's launch folders name turns only).
+  const attemptIds = new Set(retired.attempts)
+  for (const turnId of retired.intents)
+    for (const row of sqlite
+      .prepare('SELECT id FROM orc_attempts WHERE turn_id = ?')
+      .all(turnId) as { id: string }[])
+      attemptIds.add(row.id)
+  for (const attemptId of attemptIds) {
     const attempt = sqlite
       .prepare('SELECT orchestration_id, step_id, state FROM orc_attempts WHERE id = ?')
       .get(attemptId) as

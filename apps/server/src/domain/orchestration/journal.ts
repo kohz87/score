@@ -168,6 +168,8 @@ const EntrySchema = z.discriminatedUnion('kind', [
     processes: z.array(z.string().min(1)),
     /** Orchestration attempts the source had not sent (and its journal had not witnessed) yet. */
     attempts: z.array(z.string().min(1)),
+    /** Launch folders the record accounts for (a lifted `journal_missing` fence: their receipts survived the journal). */
+    launches: z.array(z.string().min(1)).optional(),
   }),
   // 7.7a §2/§3: coding-run records (launch-requested … settled) and their permanent tombstones.
   ...codingRecordSchemas(Base),
@@ -380,6 +382,39 @@ export class ExecutionJournal {
       }
     }
     return found
+  }
+
+  /**
+   * What the surviving launch folders say about their turns (FW #3): each folder's routing file names the launch, its
+   * run and its turn. A folder with evidence but no readable routing can't be accounted for (`problem`).
+   */
+  survivingLaunches():
+    | { ok: true; launches: { id: string; turnId: string; runId: string }[] }
+    | { ok: false; problem: string } {
+    const launches: { id: string; turnId: string; runId: string }[] = []
+    for (const folder of this.launchDirectories()) {
+      try {
+        const routing = z
+          .object({
+            launch: z.string().min(1),
+            runId: z.string().min(1),
+            turnId: z.string().min(1),
+          })
+          .parse(
+            JSON.parse(
+              readFileSync(join(this.dir, LAUNCHES_DIR, folder.id, 'routing.json'), 'utf8'),
+            ),
+          )
+        if (routing.launch !== folder.id) throw new Error('names another launch')
+        launches.push({ id: folder.id, turnId: routing.turnId, runId: routing.runId })
+      } catch (error) {
+        return {
+          ok: false,
+          problem: `the launch folder ${folder.id} holds receipts but its routing file can't be read (${error instanceof Error ? error.message : String(error)}), so its turn can't be retired`,
+        }
+      }
+    }
+    return { ok: true, launches }
   }
 
   private historyMarked = false

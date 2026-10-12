@@ -384,12 +384,18 @@ export function unownedLaunchFolders(
   folders: readonly LaunchFolder[],
 ): Mismatch[] {
   const known = foldCodingLaunches(entries)
+  // Folders a reconciled `journal_missing` lift accounted for are known (their turns are retired, FW #3).
+  const accounted = new Set<string>()
+  for (const entry of entries)
+    if (entry.kind === 'inherited-retired') for (const id of entry.launches ?? []) accounted.add(id)
   // A person who lifted the fence after the folder last changed has seen it (these items carry no journal number to
   // accept, so the lift's time stands in).
   const lifted = entries.findLast((e) => e.kind === 'global_fence' && e.action === 'lift')
   const liftedAt = lifted ? Date.parse(lifted.at) : -Infinity
   return folders
-    .filter((folder) => !known.has(folder.id) && folder.mtimeMs > liftedAt)
+    .filter(
+      (folder) => !known.has(folder.id) && !accounted.has(folder.id) && folder.mtimeMs > liftedAt,
+    )
     .map(({ id }) => ({
       kind: 'journal' as const,
       ref: `launch-folder:${id}`,
@@ -539,6 +545,7 @@ export class GlobalFenceStore {
         'fenced',
         'Score can’t read its record of runs. Restore a backup or repair it first.',
       )
+    this.retireSurvivingLaunches()
     this.journal.append({
       kind: 'global_fence',
       action: 'lift',
@@ -562,6 +569,40 @@ export class GlobalFenceStore {
         .run('global_fence_lifted', JSON.stringify({ note: note ?? null, accepted }), now)
     })
     this.onChange()
+  }
+
+  /**
+   * A lost journal can't say what its launch folders' turns did. Before the fence is lifted every surviving folder's
+   * turn is recorded in the fresh journal as permanently retired (never sent, signalled or resumed again), whatever the
+   * restored database says. Refused (409) when a folder can't be read: no timestamp stands in for the reconciliation.
+   */
+  private retireSurvivingLaunches(): void {
+    const missing = this.db.read((sqlite) =>
+      fenceItems(sqlite).some((item) => item.ref === 'journal-missing'),
+    )
+    if (!missing) return
+    const found = this.journal.survivingLaunches()
+    if (!found.ok)
+      throw new HttpError(
+        409,
+        'fenced',
+        `Score can't account for what the lost journal recorded: ${found.problem}. Restore the journal or remove that folder after checking it, then try again.`,
+      )
+    const own = this.journal.readOwn()
+    const already = new Set<string>()
+    if (own.ok)
+      for (const entry of own.entries)
+        if (entry.kind === 'inherited-retired')
+          for (const id of entry.launches ?? []) already.add(id)
+    const fresh = found.launches.filter((launch) => !already.has(launch.id))
+    if (fresh.length === 0) return
+    this.journal.append({
+      kind: 'inherited-retired',
+      intents: [...new Set(fresh.map((launch) => launch.turnId))],
+      processes: [...new Set(fresh.map((launch) => launch.runId))],
+      attempts: [],
+      launches: fresh.map((launch) => launch.id),
+    })
   }
 
   /** Fence numbers only grow: past the database's and past anything the journal remembers (a restored database lags). */
@@ -653,7 +694,8 @@ export class GlobalFenceStore {
         this.set('journal_missing', [
           {
             kind: 'journal',
-            ref: 'journal',
+            // A distinct ref: lifting this one first reconciles the surviving launch folders (FW #3).
+            ref: 'journal-missing',
             journalN: null,
             detail:
               lost !== undefined
