@@ -1833,6 +1833,26 @@ test('FW #9: a cause the supervisor recorded survives live completion: journal, 
   expect(verifyCoding(db.sqlite, read.entries)).toEqual([])
 })
 
+test('FW #9: after real socket loss the supervisor’s first cause stays in the database too (live projection)', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:slow] go')
+  await vi.waitFor(() => expect(cliCalls().length).toBeGreaterThan(0), { timeout: 10_000 })
+  // Score’s side of the connection dies: the supervisor stops the CLI by itself and records why.
+  const sockets = (backend.socket as unknown as { sockets: Set<{ destroy(): void }> }).sockets
+  for (const socket of [...sockets]) socket.destroy()
+  await finished()
+  const [row] = launches()
+  const read = journal.readOwn()
+  if (!read.ok) throw new Error(read.reason)
+  const stops = read.entries.filter(
+    (e) => 'launchId' in e && e.launchId === row!.launch_id && e.kind === 'stop-requested',
+  ) as unknown as { stopCause: string }[]
+  expect(stops.map((e) => e.stopCause)).toEqual(['socket-loss'])
+  expect(launchRow(row!.launch_id).stop_cause).toBe('socket-loss')
+  expect(verifyCoding(db.sqlite, read.entries)).toEqual([])
+})
+
 test('FW #9: a stop receipt that is unreadable, foreign or for another generation is reported and costs the result', async () => {
   await addAgent()
   await makeRoom()
