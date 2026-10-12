@@ -12,7 +12,12 @@ import { buildGuideApp } from './http/https-guide.ts'
 import { loadWebAssets, type WebAssets } from './http/web-assets.ts'
 import { SqliteSessionStore } from './auth/sqlite-session-store.ts'
 import { resolveJournalDir, type Config } from './config.ts'
-import { journalInsideHome, journalRootProblem, recordJournalRoot } from './journal-location.ts'
+import {
+  homeProvenance,
+  journalInsideHome,
+  journalRootProblem,
+  recordJournalRoot,
+} from './journal-location.ts'
 import { Orchestrator } from './domain/orchestration/executor.ts'
 import { GlobalFenceStore } from './domain/orchestration/fence.ts'
 import { ExecutionJournal, journalScope } from './domain/orchestration/journal.ts'
@@ -225,6 +230,7 @@ export async function startServer(
     return closing
   }
 
+  let rootProvenance: ReturnType<typeof homeProvenance> | undefined
   try {
     // Before any lock, marker or write: a live journal inside the home would be rewound by a restore (AA3).
     // The fake adapter starts no real runs, so its journal may stay in the home.
@@ -236,6 +242,8 @@ export async function startServer(
     if (config.mode !== 'fake') {
       const moved = journalRootProblem(config.home, resolveJournalDir(config))
       if (moved) throw new Error(moved)
+      // Read before recording: it says whether anything outside the home vouched for this home's journal root.
+      rootProvenance = homeProvenance(config.home)
       recordJournalRoot(config.home, resolveJournalDir(config))
     }
     db = openDatabase(join(config.home, 'score.db'))
@@ -280,6 +288,19 @@ export async function startServer(
     )
     const fenceStore = new GlobalFenceStore(database, journal)
     const fenced = fenceStore.startupCheck()
+    if (rootProvenance && rootProvenance.state !== 'known') {
+      const why =
+        rootProvenance.state === 'corrupt'
+          ? `The journal-root record outside the home is unreadable (${rootProvenance.reason})`
+          : rootProvenance.state === 'missing'
+            ? 'No journal-root record exists outside the home'
+            : "The journal-root record outside the home doesn't list this home"
+      if (
+        fenceStore.fenceUnverifiedRoot(why) &&
+        !fenced.reasons.includes('journal_root_unverified')
+      )
+        fenced.reasons.push('journal_root_unverified')
+    }
     if (fenced.reasons.length > 0)
       process.stderr.write(
         `Orchestration admission is fenced (${fenced.reasons.join(', ')}): review the reconciliation list in Score before lifting it.\n`,

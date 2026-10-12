@@ -4,18 +4,61 @@
 // stolen, and the sidecar is created once and never renamed, rewritten or deleted (a lock-file protocol that renames or
 // unlinks its own file has an interleaving where two holders enter, finding 3). Node built-ins only, and only syntax
 // Node can strip, so `scripts/set-password.mjs` can import it as it is.
-import { chmodSync, closeSync, fstatSync, mkdirSync, openSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import {
+  chmodSync,
+  closeSync,
+  existsSync,
+  fstatSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+} from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
 export const LOCK_FILE_NAME = 'lock.sqlite'
 export const DEFAULT_LOCK_WAIT_MS = 10_000
 const POLL_MS = 25
 
+/**
+ * Creates `dir` and makes every name on the way to it durable (7.7a v6 review #1). Each level that is missing is created
+ * and its parent fsynced; the levels that already exist have their parents fsynced again, because a handle or process
+ * that did not create them cannot know whether the creator's sync succeeded. So a failed sync is retried by whoever
+ * comes next, and nothing creates a path (the lock file included) before this has passed. An existing ancestor whose
+ * parent cannot be opened for reading (a traverse-only directory) is skipped; any fsync failure throws.
+ */
+export function mkdirDurable(dir: string, fsync: (fd: number) => void = fsyncSync): void {
+  const chain: string[] = []
+  for (let p = resolve(dir); ; p = dirname(p)) {
+    chain.push(p)
+    if (dirname(p) === p) break
+  }
+  chain.reverse() // root first
+  for (const p of chain.slice(1)) {
+    const created = !existsSync(p)
+    if (created) mkdirSync(p, { mode: 0o700 })
+    let fd: number
+    try {
+      fd = openSync(dirname(p), 'r')
+    } catch (error) {
+      if (!created && (error as NodeJS.ErrnoException).code === 'EACCES') continue
+      throw error
+    }
+    try {
+      fsync(fd)
+    } finally {
+      closeSync(fd)
+    }
+  }
+}
+
 export class OsLockTimeoutError extends Error {
   readonly code = 'ELOCKED'
-  constructor(readonly file: string) {
+  readonly file: string
+  // No parameter properties: scripts import this file with Node's type stripping.
+  constructor(file: string) {
     super(`Timed out waiting for the lock ${file}.`)
+    this.file = file
   }
 }
 
@@ -35,13 +78,18 @@ export class OsLock {
   private db: DatabaseSync | undefined
   private depth = 0
 
-  constructor(readonly dir: string) {
+  readonly dir: string
+  private readonly fsync: (fd: number) => void
+
+  constructor(dir: string, fsync: (fd: number) => void = fsyncSync) {
+    this.dir = dir
+    this.fsync = fsync
     this.file = join(resolve(dir), LOCK_FILE_NAME)
   }
 
   private connection(): DatabaseSync {
     if (!this.db) {
-      mkdirSync(this.dir, { recursive: true, mode: 0o700 })
+      mkdirDurable(this.dir, this.fsync)
       // Owner-only, whether new or left over with wider bits: created here before SQLite opens it (which would use 0644).
       const fd = openSync(this.file, 'a', 0o600)
       try {

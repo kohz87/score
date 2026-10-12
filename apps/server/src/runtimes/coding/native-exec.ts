@@ -9,7 +9,7 @@ import {
   statSync,
 } from 'node:fs'
 import { arch } from 'node:os'
-import { delimiter, dirname, isAbsolute, join } from 'node:path'
+import { basename, delimiter, dirname, isAbsolute, join } from 'node:path'
 import type { CodingRuntime } from '@score/contract'
 
 // The fallback protects the process it execs with PR_SET_PDEATHSIG, and the flag is cleared for that process's
@@ -40,12 +40,17 @@ function kindOf(path: string): Kind {
   }
 }
 
-function findOnPath(file: string, pathVar: string | undefined): string | null {
+/**
+ * The real, absolute path of `file`: itself when absolute, otherwise the first match in the *absolute* components of
+ * `pathVar`. A missing or empty PATH, or relative and empty components, never find anything: a bare command name must
+ * not reach an exec that would search its own default path (7.7a v6 review #2).
+ */
+export function resolveOnPath(file: string, pathVar: string | undefined): string | null {
   const candidates = isAbsolute(file)
     ? [file]
     : (pathVar ?? '')
         .split(delimiter)
-        .filter(Boolean)
+        .filter((dir) => dir !== '' && isAbsolute(dir))
         .map((dir) => join(dir, file))
   for (const candidate of candidates) {
     try {
@@ -71,19 +76,38 @@ function codexTriples(): { triple: string; platform: string }[] {
   return arch() === 'arm64' ? arm : arch() === 'x64' ? x64 : []
 }
 
-/** Codex npm layout: the package that owns the launcher holds `vendor/<target>/codex/codex` (or a platform package does). */
+/** Directories that hold `@openai/codex-<platform>` for a launcher package at `dir`: node resolution's search path. */
+function platformPackages(dir: string, platform: string): string[] {
+  const found: string[] = []
+  for (let at = dir; ; at = dirname(at)) {
+    found.push(join(at, 'node_modules', '@openai', `codex-${platform}`))
+    if (basename(at) === 'node_modules') found.push(join(at, '@openai', `codex-${platform}`))
+    if (dirname(at) === at) break
+  }
+  return found
+}
+
+/**
+ * Codex npm layout, as the pinned launcher (0.160.1) resolves it: the optional platform package
+ * (`@openai/codex-<platform>/vendor/<target>/bin/codex`) first, then the launcher package's own
+ * `vendor/<target>/bin/codex`. The older `vendor/<target>/codex/codex` spelling is accepted too. Only an ELF counts.
+ */
 function codexNative(launcher: string): string | null {
   let dir = dirname(launcher)
   for (let depth = 0; depth < 6; depth++) {
     if (isCodexPackage(dir)) {
       for (const { triple, platform } of codexTriples()) {
-        for (const base of [dir, join(dir, 'node_modules', '@openai', `codex-${platform}`)]) {
-          const candidate = join(base, 'vendor', triple, 'codex', 'codex')
-          try {
-            const real = realpathSync(candidate)
-            if (kindOf(real) === 'elf') return real
-          } catch {
-            // next
+        for (const base of [...platformPackages(dir, platform), dir]) {
+          for (const tail of [
+            ['bin', 'codex'],
+            ['codex', 'codex'],
+          ]) {
+            try {
+              const real = realpathSync(join(base, 'vendor', triple, ...tail))
+              if (kindOf(real) === 'elf') return real
+            } catch {
+              // next
+            }
           }
         }
       }
@@ -120,8 +144,12 @@ export function resolveNativeExecutable(
   file: string,
   pathVar: string | undefined,
 ): NativeResolution {
-  const real = findOnPath(file, pathVar)
-  if (real === null) return { ok: true, file } // not found: the launch reports it as it always did
+  const real = resolveOnPath(file, pathVar)
+  if (real === null)
+    return {
+      ok: false,
+      message: `${label} (${file}) was not found on an absolute PATH entry, so Score can't start it.`,
+    }
   const kind = kindOf(real)
   if (kind === 'elf') return { ok: true, file: real }
   if (kind === 'script' && runtime === 'codex') {

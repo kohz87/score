@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { loadConfig, resolveJournalDir } from '../src/config.ts'
 import {
+  homeProvenance,
   journalInsideHome,
   journalRootProblem,
   recordJournalRoot,
@@ -24,12 +25,22 @@ import { startServer } from '../src/start-server.ts'
 
 let root: string
 let home: string
+let xdg: string
+let savedXdg: string | undefined
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'score-jloc-'))
   home = join(root, 'home')
   mkdirSync(home)
+  // The provenance file lives under XDG_STATE_HOME: never the real one.
+  xdg = join(root, 'xdg')
+  savedXdg = process.env.XDG_STATE_HOME
+  process.env.XDG_STATE_HOME = xdg
 })
-afterEach(() => rmSync(root, { recursive: true, force: true }))
+afterEach(() => {
+  if (savedXdg === undefined) delete process.env.XDG_STATE_HOME
+  else process.env.XDG_STATE_HOME = savedXdg
+  rmSync(root, { recursive: true, force: true })
+})
 
 const live = (extra: Record<string, string>) =>
   loadConfig({ SCORE_MODE: 'live', SCORE_HOME: home, HOME: root, ...extra })
@@ -90,9 +101,10 @@ test('AA3: changing the journal root while a journal exists at the old root is r
   mkdirSync(oldRoot)
   recordJournalRoot(home, oldRoot)
   expect(journalRootProblem(home, oldRoot)).toBeNull()
-  expect(journalRootProblem(home, join(root, 'new'))).toBeNull() // nothing at the old root to forget
+  // The provenance outside the home is the authority: a new root is refused even before any journal file exists.
+  expect(journalRootProblem(home, join(root, 'new'))).toMatch(/last at/)
   writeFileSync(join(oldRoot, 'journal.ndjson'), '')
-  expect(journalRootProblem(home, join(root, 'new'))).toMatch(/journal is at/)
+  expect(journalRootProblem(home, join(root, 'new'))).toMatch(/last at/)
   expect(journalRootProblem(home, oldRoot)).toBeNull()
 })
 
@@ -100,7 +112,13 @@ const script = fileURLToPath(new URL('../../../scripts/restore.mjs', import.meta
 const restore = (env: Record<string, string>, backup: string) => {
   try {
     execFileSync('node', [script, backup], {
-      env: { PATH: process.env.PATH!, HOME: root, SCORE_HOME: home, ...env },
+      env: {
+        PATH: process.env.PATH!,
+        HOME: root,
+        XDG_STATE_HOME: xdg,
+        SCORE_HOME: home,
+        ...env,
+      },
       stdio: 'pipe',
     })
     return { code: 0, err: '' }
@@ -128,4 +146,48 @@ test('AA3: restore refuses an in-home journal before writing a marker or moving 
   const ok = restore({ SCORE_JOURNAL_DIR: join(root, 'journal') }, backup)
   expect(ok.code).toBe(0)
   expect(existsSync(join(root, 'journal', 'restore-marker.json'))).toBe(true)
+})
+
+// EE3 (7.7a v6 review #3): the journal root is remembered outside the home and outside every root.
+test('EE3: backup before the pointer, work under J1, restore, start with J2 is refused', () => {
+  const j1 = join(root, 'j1')
+  const j2 = join(root, 'j2')
+  const backup = join(root, 'backup')
+  mkdirSync(backup)
+  writeFileSync(join(backup, 'score.db'), 'backup') // taken before any journal-root pointer existed
+  writeFileSync(join(home, 'score.db'), 'current')
+  recordJournalRoot(home, j1) // the server started with J1 and did work
+  mkdirSync(j1)
+  writeFileSync(join(j1, 'journal.ndjson'), '')
+  const restored = restore({ SCORE_JOURNAL_DIR: j1 }, backup)
+  expect(restored.code).toBe(0)
+  expect(existsSync(join(home, 'journal-root'))).toBe(false) // the restored home lost its pointer
+  expect(journalRootProblem(home, j2)).toMatch(/last at/)
+  expect(restore({ SCORE_JOURNAL_DIR: j2 }, backup).err).toMatch(/last at/)
+  expect(journalRootProblem(home, j1)).toBeNull()
+  expect(process.env.XDG_STATE_HOME).toBe(xdg)
+  expect(existsSync(join(xdg, 'score', 'roots.json'))).toBe(true)
+  // An explicit confirmation accepts the new root.
+  expect(
+    journalRootProblem(home, j2, { ...process.env, SCORE_CONFIRM_JOURNAL_ROOT: '1' }),
+  ).toBeNull()
+})
+
+test('EE3: the provenance records every root with timestamps and survives a pointer-less home', () => {
+  recordJournalRoot(home, join(root, 'j1'))
+  recordJournalRoot(home, join(root, 'j2'))
+  const file = JSON.parse(readFileSync(join(xdg, 'score', 'roots.json'), 'utf8'))
+  const entry = Object.values(file.homes)[0] as { current: string; roots: { first: string }[] }
+  expect(entry.roots).toHaveLength(2)
+  expect(entry.roots[0]!.first).toMatch(/^\d{4}-/)
+  expect(entry.current).toMatch(/j2$/)
+})
+
+test('EE3: missing or corrupt provenance is reported as such', () => {
+  expect(homeProvenance(home).state).toBe('missing')
+  mkdirSync(join(xdg, 'score'), { recursive: true })
+  writeFileSync(join(xdg, 'score', 'roots.json'), '{nope')
+  expect(homeProvenance(home).state).toBe('corrupt')
+  recordJournalRoot(home, join(root, 'j1'))
+  expect(homeProvenance(home).state).toBe('known')
 })

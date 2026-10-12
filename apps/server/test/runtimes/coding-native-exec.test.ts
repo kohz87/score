@@ -116,3 +116,74 @@ test('AA2: the resolved native path is what the fallback execs (no launcher in b
     await run.done
   }
 })
+
+// EE2 (7.7a v6 review #2): no PATH, an empty PATH or relative components never yield a bare command name.
+test('EE2: an absent, empty or relative-only PATH refuses instead of returning a bare name', () => {
+  for (const env of [{}, { PATH: '' }, { PATH: ':' }, { PATH: 'bin:./bin:.' }]) {
+    const locator = new CliLocator({ env: env as NodeJS.ProcessEnv, cacheMs: 0 })
+    const result = locator.nativeCommand(codexDriver)
+    expect(result.ok).toBe(false)
+  }
+})
+
+test('EE2: a relative PATH component is not searched even when it holds a native codex', () => {
+  const bin = join(dir, 'bin')
+  nativeCopy(join(bin, 'codex'))
+  const previous = process.cwd()
+  process.chdir(dir)
+  try {
+    expect(locatorFor('bin').nativeCommand(codexDriver).ok).toBe(false)
+    expect(locatorFor(`bin:${bin}`).nativeCommand(codexDriver).ok).toBe(true)
+  } finally {
+    process.chdir(previous)
+  }
+})
+
+test('EE2: version detection uses the same search, so an absent PATH reports not installed', async () => {
+  const locator = new CliLocator({ env: {} as NodeJS.ProcessEnv, cacheMs: 0 })
+  expect((await locator.detect(codexDriver)).state).toBe('not_installed')
+})
+
+test('EE2: the wrapper execs an absolute path only (a bare name on the default path is not run)', async () => {
+  const run = spawnCli({
+    file: 'sleep', // on every default PATH; the old execvp would have run it
+    args: ['0.1'],
+    cwd: dir,
+    env: {}, // no PATH at all: the old execvp fell back to its own default path
+    stdin: '',
+    parser: { parse: () => [], stats: { unknown: 0, malformed: 0 } },
+    onEvent: async () => undefined,
+    graceMs: 50,
+  })
+  const outcome = await run.done
+  expect(JSON.stringify(outcome)).toMatch(/exec_failed/)
+})
+
+// EE4: the pinned npm Codex layout.
+const launcherPackage = (base: string) => {
+  const pkg = join(base, 'node_modules', '@openai', 'codex')
+  mkdirSync(join(pkg, 'bin'), { recursive: true })
+  writeFileSync(join(pkg, 'package.json'), JSON.stringify({ name: '@openai/codex' }))
+  writeFileSync(join(pkg, 'bin', 'codex.js'), '#!/usr/bin/env node\n', { mode: 0o755 })
+  const bin = join(dir, 'bin')
+  mkdirSync(bin, { recursive: true })
+  symlinkSync(join(pkg, 'bin', 'codex.js'), join(bin, 'codex'))
+  return { pkg, bin }
+}
+const platform = arch() === 'arm64' ? 'linux-arm64' : 'linux-x64'
+
+test('EE4: the optional platform package layout (vendor/<target>/bin/codex) resolves', () => {
+  const { pkg, bin } = launcherPackage(join(dir, 'lib'))
+  const native = join(pkg, '..', `codex-${platform}`, 'vendor', triple, 'bin', 'codex')
+  nativeCopy(native)
+  const result = locatorFor(bin).nativeCommand(codexDriver)
+  expect(result).toEqual({ ok: true, file: realpathSync(native), args: [] })
+})
+
+test('EE4: the package-local fallback layout (vendor/<target>/bin/codex) resolves', () => {
+  const { pkg, bin } = launcherPackage(join(dir, 'lib'))
+  const native = join(pkg, 'vendor', triple, 'bin', 'codex')
+  nativeCopy(native)
+  const result = locatorFor(bin).nativeCommand(codexDriver)
+  expect(result).toEqual({ ok: true, file: realpathSync(native), args: [] })
+})

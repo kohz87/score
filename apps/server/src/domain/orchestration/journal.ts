@@ -5,7 +5,6 @@ import {
   fsyncSync,
   ftruncateSync,
   fstatSync,
-  mkdirSync,
   openSync,
   readFileSync,
   renameSync,
@@ -14,9 +13,9 @@ import {
   truncateSync,
   writeSync,
 } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { z } from 'zod'
-import { OsLock, OsLockTimeoutError } from '../../locks/os-lock.ts'
+import { mkdirDurable, OsLock, OsLockTimeoutError } from '../../locks/os-lock.ts'
 
 // The execution journal (design v3, "Restore: an external journal plus an operator protocol"): an append-only, fsync'd
 // file OUTSIDE $SCORE_HOME, so restoring the home or the database cannot rewind it. Every external effect is preceded
@@ -231,7 +230,7 @@ export class ExecutionJournal {
   ) {
     this.file = join(dir, JOURNAL_FILE)
     this.lockWaitMs = lockWaitMs
-    this.lock = new OsLock(dir)
+    this.lock = new OsLock(dir, (fd) => this.io.fsyncSync(fd))
   }
   private readonly lockWaitMs: number | undefined
 
@@ -312,22 +311,9 @@ export class ExecutionJournal {
     })
   }
 
-  /** Creates the directory, fsyncing the parent of every level this call created so the new names survive a crash. */
+  /** Creates the directory and syncs every ancestor name (see `mkdirDurable` in the OS lock module). */
   private mkdirDurable(): void {
-    const missing: string[] = []
-    for (let p = resolve(this.dir); !existsSync(p); p = dirname(p)) {
-      missing.push(p)
-      if (dirname(p) === p) break
-    }
-    for (const p of missing.reverse()) {
-      mkdirSync(p, { recursive: true, mode: 0o700 })
-      const fd = openSync(dirname(p), 'r')
-      try {
-        this.io.fsyncSync(fd)
-      } finally {
-        closeSync(fd)
-      }
-    }
+    mkdirDurable(this.dir, (fd) => this.io.fsyncSync(fd))
   }
 
   /** Cuts an unterminated last line (never effective: its writer did not return) and makes the cut durable. */
