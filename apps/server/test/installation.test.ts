@@ -276,6 +276,7 @@ test('FX3 #10: confirm-copy carries the source journal into the copy, so inherit
   const read = journal.read()
   expect(read.ok && read.entries.map((e) => [e.n, e.kind, e.scope])).toEqual([
     [1, 'send_started', result.id],
+    [2, 'inherited-retired', result.id],
   ])
   // A damaged source journal is not guessed at: nothing is published.
   const other = join(root, 'home-copy-2')

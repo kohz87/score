@@ -6,6 +6,7 @@ import {
   ftruncateSync,
   fstatSync,
   openSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -15,7 +16,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { legacyJournalScope } from '../../installation.ts'
+import { LAUNCHES_DIR, legacyJournalScope } from '../../installation.ts'
 import { LOCK_RANK, mkdirDurable, OsLock, OsLockTimeoutError } from '../../locks/os-lock.ts'
 import {
   CODING_RECORD_KINDS as CODING_KINDS,
@@ -32,6 +33,8 @@ import {
 
 export const JOURNAL_FILE = 'journal.ndjson'
 export const RESTORE_MARKER_FILE = 'restore-marker.json'
+/** FZ3 #13: written before the first record of a namespace; its presence says "this folder has execution history". */
+export const HISTORY_MARKER_FILE = 'history.json'
 /** v3.1: a size alarm at 50 MB (compaction removes reconciled entries daily; unresolved ones are never dropped). */
 export const JOURNAL_SIZE_ALARM_BYTES = 50 * 1024 * 1024
 
@@ -153,6 +156,19 @@ const EntrySchema = z.discriminatedUnion('kind', [
     /** Highest legacy `n` of this home that was copied; anything of this home above it was written after the cutover. */
     copiedThrough: z.int().nonnegative(),
   }),
+  // FZ3 (decision 69): written by `confirmCopy` before a copy is published. Every execution-intent identity the copied
+  // database held at that moment: they belong to the source and are never sent, signalled or resumed here, whatever a
+  // later restore puts back into the database. Permanent (compaction never drops it).
+  z.object({
+    ...Base,
+    kind: z.literal('inherited-retired'),
+    /** Coding start intents (their idempotency key = turn id) that had not finished. */
+    intents: z.array(z.string().min(1)),
+    /** Run ids of the coding process rows (including pre-journal ones) the copy inherited. */
+    processes: z.array(z.string().min(1)),
+    /** Orchestration attempts the source had not sent (and its journal had not witnessed) yet. */
+    attempts: z.array(z.string().min(1)),
+  }),
   // 7.7a §2/§3: coding-run records (launch-requested … settled) and their permanent tombstones.
   ...codingRecordSchemas(Base),
 ])
@@ -220,6 +236,12 @@ export function writeAll(io: JournalIo, fd: number, data: Buffer): void {
       throw new Error('Execution journal write made no progress')
     offset += written
   }
+}
+
+/** A launch receipt folder that holds files, and when its newest file changed. */
+export interface LaunchFolder {
+  id: string
+  mtimeMs: number
 }
 
 export type JournalRead =
@@ -322,6 +344,73 @@ export class ExecutionJournal {
     return !existsSync(this.file)
   }
 
+  /**
+   * FZ3 #13: why a missing journal file is NOT a fresh namespace, or undefined. The folder keeps a durable "has
+   * execution history" marker and per-launch receipt folders; either one without the journal means it was lost.
+   */
+  missingHistory(): string | undefined {
+    if (existsSync(this.file)) return undefined
+    if (existsSync(join(this.dir, HISTORY_MARKER_FILE)))
+      return 'this folder recorded execution history (history.json), but the journal file is gone'
+    const dirs = this.launchDirectories().map((folder) => folder.id)
+    if (dirs.length > 0)
+      return `launch folders exist (${dirs.slice(0, 3).join(', ')}${dirs.length > 3 ? ', …' : ''}) but there is no journal`
+    return undefined
+  }
+
+  /** Launch folders that hold evidence (an empty folder, made before the first record, is none). */
+  launchDirectories(): LaunchFolder[] {
+    const root = join(this.dir, LAUNCHES_DIR)
+    let names: string[]
+    try {
+      names = readdirSync(root)
+    } catch {
+      return []
+    }
+    const found: LaunchFolder[] = []
+    for (const id of names) {
+      try {
+        const files = readdirSync(join(root, id))
+        if (files.length === 0) continue
+        // Newest file time: a person lifting the fence after this moment has seen the folder.
+        const mtimeMs = Math.max(...files.map((f) => statSync(join(root, id, f)).mtimeMs))
+        found.push({ id, mtimeMs })
+      } catch {
+        found.push({ id, mtimeMs: Number.MAX_SAFE_INTEGER }) // unreadable: evidence we can't date
+      }
+    }
+    return found
+  }
+
+  private historyMarked = false
+  /** Durable (temp, fsync, rename, directory fsync) and idempotent; it exists before the first record does. */
+  private ensureHistoryMarker(): void {
+    if (this.historyMarked) return
+    const path = join(this.dir, HISTORY_MARKER_FILE)
+    if (!existsSync(path)) {
+      const temp = `${path}.tmp`
+      const fd = openSync(temp, 'w', 0o600)
+      try {
+        writeAll(
+          nodeIo,
+          fd,
+          Buffer.from(JSON.stringify({ version: 1, at: new Date().toISOString() })),
+        )
+        fsyncSync(fd)
+      } finally {
+        closeSync(fd)
+      }
+      renameSync(temp, path)
+      const dirFd = openSync(this.dir, 'r')
+      try {
+        fsyncSync(dirFd)
+      } finally {
+        closeSync(dirFd)
+      }
+    }
+    this.historyMarked = true
+  }
+
   private parse(): JournalRead {
     if (!existsSync(this.file)) return { ok: true, entries: [], bytes: 0 }
     let raw: string
@@ -386,6 +475,8 @@ export class ExecutionJournal {
       if (!result.ok) return false
       this.repairTail()
       this.nextN = (result.entries.at(-1)?.n ?? 0) + 1
+      // A journal that has records (copied by a migration or a copy confirmation) is history from now on.
+      if (result.entries.length > 0) this.ensureHistoryMarker()
       return true
     })
   }
@@ -457,6 +548,7 @@ export class ExecutionJournal {
         `This journal (${this.dir}) was migrated to an installation namespace; it is a read-only witness now`,
       )
     this.nextN = Math.max(this.nextN ?? 1, this.tailN() + 1)
+    if (body.kind !== 'cutover') this.ensureHistoryMarker()
     const entry = EntrySchema.parse({
       ...body,
       n: this.nextN!,

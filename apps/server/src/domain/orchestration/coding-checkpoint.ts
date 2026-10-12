@@ -205,6 +205,104 @@ function retireInherited(sqlite: DatabaseSync, state: CodingState, now: string):
   return changed
 }
 
+/** What the copy's `inherited-retired` records name (FZ3, decision 69), as sets. */
+export interface InheritedRetirements {
+  intents: Set<string>
+  processes: Set<string>
+  attempts: Set<string>
+}
+
+export function inheritedRetirements(entries: readonly JournalEntry[]): InheritedRetirements {
+  const result: InheritedRetirements = {
+    intents: new Set(),
+    processes: new Set(),
+    attempts: new Set(),
+  }
+  for (const entry of entries) {
+    if (entry.kind !== 'inherited-retired') continue
+    for (const id of entry.intents) result.intents.add(id)
+    for (const id of entry.processes) result.processes.add(id)
+    for (const id of entry.attempts) result.attempts.add(id)
+  }
+  return result
+}
+
+/**
+ * Whether this installation owns the process row of `runId` and may signal its group: false when a confirmed copy
+ * retired the row (it was inherited from the source installation) or when the journal says the run's launch was
+ * inherited. A row with no evidence either way is this installation's own (the process-group engine keeps no journal).
+ */
+export function ownsProcessRowIn(entries: readonly JournalEntry[], runId: string): boolean {
+  if (inheritedRetirements(entries).processes.has(runId)) return false
+  for (const launch of foldCodingLaunches(entries).values())
+    if (launch.state.runId === runId && launch.state.inherited) return false
+  return true
+}
+
+/**
+ * Re-applies every `inherited-retired` record to the database: the copied intents become `failed` (created that way
+ * when a restore lost the row), the inherited process rows and their member/terminal rows are deleted, and the
+ * orchestration attempts the source had not sent become `unknown` (never sent again). Idempotent; run on every start,
+ * every restore and every fence lift, so restoring a copy's own backup can never re-open them. Returns rows changed.
+ */
+export function applyInheritedRetirements(
+  sqlite: DatabaseSync,
+  entries: readonly JournalEntry[],
+  now: string,
+): number {
+  const retired = inheritedRetirements(entries)
+  let changed = 0
+  const note =
+    'This turn belongs to the installation this one was copied from; it is never sent here.'
+  for (const turnId of retired.intents) {
+    const row = sqlite
+      .prepare('SELECT id, state, result FROM command_intents WHERE idempotency_key = ?')
+      .get(turnId) as { id: string; state: string; result: string | null } | undefined
+    if (!row) {
+      changed += Number(
+        sqlite
+          .prepare(
+            `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, last_error, created_at, updated_at)
+             VALUES (?, ?, ?, '{}', 'failed', ?, ?, ?)`,
+          )
+          .run(`retired-inherited-${turnId}`, CODING_INTENT_KIND, turnId, note, now, now).changes,
+      )
+    } else if (!(row.state === 'failed' || (row.state === 'accepted' && row.result)))
+      changed += Number(
+        sqlite
+          .prepare(
+            `UPDATE command_intents SET state = 'failed', last_error = ?, updated_at = ? WHERE id = ?`,
+          )
+          .run(note, now, row.id).changes,
+      )
+  }
+  for (const runId of retired.processes)
+    for (const table of ['coding_processes', 'coding_process_members', 'coding_pending_terminals'])
+      changed += Number(sqlite.prepare(`DELETE FROM ${table} WHERE run_id = ?`).run(runId).changes)
+  for (const attemptId of retired.attempts) {
+    const attempt = sqlite
+      .prepare('SELECT orchestration_id, step_id FROM orc_attempts WHERE id = ?')
+      .get(attemptId) as { orchestration_id: string; step_id: string | null } | undefined
+    if (!attempt) continue
+    // Only a state the executor could still send from; anything further along has its own evidence.
+    const result = sqlite
+      .prepare(
+        `UPDATE orc_attempts SET state = 'unknown', unknown_reason = 'inherited_retired', sent_at = COALESCE(sent_at, ?),
+           updated_at = ? WHERE id = ? AND state IN ('created', 'send_started')`,
+      )
+      .run(now, now, attemptId)
+    if (Number(result.changes) === 0) continue
+    changed++
+    if (attempt.step_id)
+      sqlite
+        .prepare(
+          "UPDATE orc_steps SET status = 'unknown', disposition = 'inherited_retired', updated_at = ? WHERE orchestration_id = ? AND id = ? AND status = 'admitted'",
+        )
+        .run(now, attempt.orchestration_id, attempt.step_id)
+  }
+  return changed
+}
+
 /** Every start intent that had not finished when the database was copied belongs to the source, not to the copy. */
 function retireCopiedIntents(sqlite: DatabaseSync, now: string): number {
   return Number(

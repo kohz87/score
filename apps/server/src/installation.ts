@@ -10,6 +10,7 @@ import {
   renameSync,
   writeFileSync,
 } from 'node:fs'
+import { DatabaseSync } from 'node:sqlite'
 import { dirname, join } from 'node:path'
 import { LOCK_RANK, mkdirDurable, OsLock } from './locks/os-lock.ts'
 import { canonicalPath } from './journal-location.ts'
@@ -27,6 +28,7 @@ export const MANIFEST_FILE = 'manifest.json'
 export const HOME_INSTALLATION_FILE = 'installation.json'
 export const LAUNCHES_DIR = 'launches'
 const RESTORE_MARKER = 'restore-marker.json'
+const HISTORY_MARKER = 'history.json'
 const JOURNAL = 'journal.ndjson'
 const ID_PATTERN = /^[0-9a-f]{16}$/
 
@@ -480,6 +482,121 @@ function inheritedJournal(
   return { lines: lines.map((line) => `${line}\n`).join('') }
 }
 
+/** What the copied database holds that could still lead to an execution (FZ3, decision 69). */
+interface InheritedIdentities {
+  intents: string[]
+  processes: string[]
+  attempts: string[]
+}
+
+/**
+ * Read from the copy's own database (the copy is ours; opened read-only), before the copy is published: coding start
+ * intents that had not finished, every coding process row (also the ones no launch record explains), and orchestration
+ * attempts that were never sent and that the inherited journal never witnessed. A missing table is "none"; a database
+ * that can't be read is a refusal (the copy would inherit unknowns it can't retire).
+ */
+function inheritedIdentities(
+  home: string,
+  inheritedLines: string,
+): { ok: true; value: InheritedIdentities } | { ok: false; problem: string } {
+  const file = join(home, 'score.db')
+  const value: InheritedIdentities = { intents: [], processes: [], attempts: [] }
+  if (!existsSync(file)) return { ok: true, value }
+  // Dispatches the inherited journal already witnessed are handled by that journal's own evidence.
+  const witnessed = new Set<string>()
+  for (const line of inheritedLines.split('\n')) {
+    if (!line.includes('"attemptId"')) continue
+    try {
+      const entry: unknown = JSON.parse(line)
+      if (isObject(entry) && typeof entry.attemptId === 'string') witnessed.add(entry.attemptId)
+    } catch {
+      // checksummed and parsed once already
+    }
+  }
+  let db: DatabaseSync | undefined
+  try {
+    db = new DatabaseSync(file, { readOnly: true })
+    const has = (table: string): boolean =>
+      db!.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) !==
+      undefined
+    const column = (sql: string): string[] =>
+      (db!.prepare(sql).all() as Record<string, unknown>[]).flatMap((row) => {
+        const v = Object.values(row)[0]
+        return typeof v === 'string' && v ? [v] : []
+      })
+    if (has('command_intents'))
+      value.intents = column(
+        `SELECT idempotency_key FROM command_intents WHERE kind = 'start_coding_run'
+           AND (state IN ('pending', 'sent', 'unknown') OR (state = 'accepted' AND result IS NULL))`,
+      )
+    if (has('coding_processes')) value.processes = column('SELECT run_id FROM coding_processes')
+    if (has('orc_attempts'))
+      value.attempts = column(
+        `SELECT id FROM orc_attempts WHERE state IN ('created', 'send_started')`,
+      ).filter((id) => !witnessed.has(id))
+    return { ok: true, value }
+  } catch (error) {
+    return {
+      ok: false,
+      problem: `the copy's database (${file}) can't be read (${error instanceof Error ? error.message : String(error)})`,
+    }
+  } finally {
+    db?.close()
+  }
+}
+
+/**
+ * While the copy was unconfirmed, the hard-block start wrote its fence into the legacy journal under the copy's path
+ * scope. Those records are not history to migrate (the namespace journal is already the copy's complete record and the
+ * fence lives in its database): a cutover at 0 closes the legacy scope for this home, so migration finds nothing to
+ * merge into the namespace and every writer refuses the legacy path from now on.
+ */
+function closeLegacyScope(journalDir: string, home: string, id: string): void {
+  const scope = legacyJournalScope(home)
+  const file = join(journalDir, JOURNAL)
+  let raw: string
+  try {
+    raw = readFileSync(file, 'utf8')
+  } catch {
+    return
+  }
+  if (!raw.includes(`"scope":"${scope}"`)) return
+  const lock = new OsLock(journalDir, fsyncSync, undefined, LOCK_RANK.legacyJournal)
+  try {
+    lock.runSync(() => {
+      const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean)
+      let last = 0
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line) as { n?: number; scope?: string; kind?: string }
+          if (typeof entry.n === 'number') last = Math.max(last, entry.n)
+          if (entry.scope === scope && entry.kind === 'cutover') return // already closed
+        } catch {
+          // a damaged line: the journal reports it
+        }
+      }
+      const cutover = {
+        n: last + 1,
+        at: new Date().toISOString(),
+        scope,
+        kind: 'cutover',
+        installationId: id,
+        namespace: id,
+        copiedThrough: 0,
+      }
+      const text = JSON.stringify({ ...cutover, c: lineChecksum(JSON.stringify(cutover)) }) + '\n'
+      const raw2 = readFileSync(file, 'utf8')
+      writeDurable(
+        file,
+        (raw2.endsWith('\n') || raw2 === '' ? raw2 : raw2.slice(0, raw2.lastIndexOf('\n') + 1)) +
+          text,
+      )
+    })
+  } finally {
+    lock.close()
+  }
+}
+
 export type ConfirmResult =
   { ok: true; id: string; changed: boolean; message: string } | { ok: false; message: string }
 
@@ -574,9 +691,35 @@ export function confirmCopy(options: ResolveOptions): ConfirmResult {
         ok: false,
         message: `The source installation ${copy.id}'s execution journal can't be trusted: ${inherited.problem}. Resolve that first; nothing was changed.`,
       }
+    // Everything the copy inherited that could still lead to an execution is recorded in its journal BEFORE the copy
+    // is published, as one permanent record: reconciliation re-applies it after every start and every restore, so a
+    // restored backup of the copy can never send, signal or resume any of it (decision 69).
+    const identities = inheritedIdentities(home, inherited.lines)
+    if (!identities.ok)
+      return {
+        ok: false,
+        message: `Can't record what ${home} inherited: ${identities.problem}. Nothing was changed.`,
+      }
+    const last = inherited.lines
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => (JSON.parse(line) as { n: number }).n)
+      .at(-1)
+    const retired = {
+      n: (last ?? 0) + 1,
+      at: now,
+      scope: id,
+      kind: 'inherited-retired',
+      ...identities.value,
+    }
+    const journalText =
+      inherited.lines +
+      JSON.stringify({ ...retired, c: lineChecksum(JSON.stringify(retired)) }) +
+      '\n'
     const nsDir = namespaceDir(journalDir, id)
     mkdirDurable(join(nsDir, LAUNCHES_DIR))
-    if (inherited.lines) writeDurable(join(nsDir, JOURNAL), inherited.lines)
+    writeDurable(join(nsDir, JOURNAL), journalText)
+    writeDurable(join(nsDir, HISTORY_MARKER), JSON.stringify({ version: 1, at: now }))
     writeDurable(
       join(nsDir, RESTORE_MARKER),
       JSON.stringify({ scope: id, at: now, backup: `installation ${copy.id}`, origin: 'copy' }),
@@ -584,6 +727,7 @@ export function confirmCopy(options: ResolveOptions): ConfirmResult {
     loaded.installations[id] = entry
     writeRegistry(journalDir, loaded.installations) // the registry entry before anything that makes the id usable
     ensureSetup(journalDir, id, entry, home)
+    closeLegacyScope(journalDir, home, id)
     return {
       ok: true,
       id,
