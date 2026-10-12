@@ -12,6 +12,7 @@ import { buildGuideApp } from './http/https-guide.ts'
 import { loadWebAssets, type WebAssets } from './http/web-assets.ts'
 import { SqliteSessionStore } from './auth/sqlite-session-store.ts'
 import { resolveJournalDir, type Config } from './config.ts'
+import { journalInsideHome, journalRootProblem, recordJournalRoot } from './journal-location.ts'
 import { Orchestrator } from './domain/orchestration/executor.ts'
 import { GlobalFenceStore } from './domain/orchestration/fence.ts'
 import { ExecutionJournal, journalScope } from './domain/orchestration/journal.ts'
@@ -225,7 +226,18 @@ export async function startServer(
   }
 
   try {
+    // Before any lock, marker or write: a live journal inside the home would be rewound by a restore (AA3).
+    // The fake adapter starts no real runs, so its journal may stay in the home.
+    if (config.mode !== 'fake') {
+      const inside = journalInsideHome(resolveJournalDir(config), config.home)
+      if (inside) throw new Error(inside)
+    }
     homeLock = acquireHomeLock(config.home)
+    if (config.mode !== 'fake') {
+      const moved = journalRootProblem(config.home, resolveJournalDir(config))
+      if (moved) throw new Error(moved)
+      recordJournalRoot(config.home, resolveJournalDir(config))
+    }
     db = openDatabase(join(config.home, 'score.db'))
     migrate(db, fileURLToPath(new URL('../migrations/', import.meta.url)))
     restoreRoomHolds(db.sqlite, Date.now())

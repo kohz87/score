@@ -1,7 +1,14 @@
 import { spawn } from 'node:child_process'
 import type { Writable } from 'node:stream'
 import { GATE_FD, PDEATHSIG_SCRIPT, pdeathsigSupport } from './pdeathsig-exec.ts'
-import { kernelGroupExists, procAvailable, scanGroup, type MemberIdentity } from './proc.ts'
+import { signalGroup, signalPid } from './pidfd-signal.ts'
+import {
+  kernelGroupExists,
+  procAvailable,
+  processStart,
+  scanGroup,
+  type MemberIdentity,
+} from './proc.ts'
 import { CODING_LIMITS, type CodingEvent, type LineParser } from './types.ts'
 
 export type StopReason = 'user' | 'timeout' | 'output_limit' | 'shutdown'
@@ -73,8 +80,12 @@ export interface SpawnOptions {
   memberScanMs?: number
   maxMs?: number
   graceMs?: number
-  /** Test seam: how signals are sent (to fake a survivor that ignores them). */
-  kill?: (pid: number, signal: NodeJS.Signals) => void
+  /**
+   * Test seams for how signals are sent (to fake a survivor that ignores them, or an unavailable/mismatching pidfd).
+   * Defaults go through pidfds; there is no numeric kill anywhere in this module.
+   */
+  signalGroup?: typeof signalGroup
+  signalPid?: typeof signalPid
   /** Test seam: how long past the second grace the reaper keeps trying before it gives up (default 10 s). */
   reapSlackMs?: number
 }
@@ -85,8 +96,8 @@ export interface SpawnOptions {
  */
 export function spawnCli(options: SpawnOptions): CliRun {
   const { maxMs = CODING_LIMITS.maxTurnMs, graceMs = CODING_LIMITS.stopGraceMs } = options
-  const sendSignal =
-    options.kill ?? ((pid: number, name: NodeJS.Signals) => process.kill(pid, name))
+  const sendGroup = options.signalGroup ?? signalGroup
+  const sendPid = options.signalPid ?? signalPid
   let stopped: StopReason | null = null
   let spawnError: string | null = null
   let sawEvents = false
@@ -146,20 +157,31 @@ export function spawnCli(options: SpawnOptions): CliRun {
   let groupEmpty = false
   let leaderExited = false
   let leftovers = false
-  const signal = (name: NodeJS.Signals) => {
-    if (child.pid === undefined || groupEmpty) return
+  // The leader's start time, read at spawn (the exec inside the launcher keeps it): with the pid it names this process
+  // for good, and every signal below is delivered through a pidfd that verifies it (AA4). Never a numeric kill: if
+  // identity cannot be proven the signal is not sent, the group stays alive, and the run ends unconfirmed with its
+  // record kept, so the fence and Release apply (as in recovery).
+  const leaderStart = child.pid === undefined ? null : processStart(child.pid)
+  /** True when the signal was delivered to something; false when identity could not be proven and nothing was sent. */
+  const signal = (name: NodeJS.Signals): boolean => {
+    if (child.pid === undefined || groupEmpty || leaderStart === null) return false
     try {
-      sendSignal(-child.pid, name)
+      if (!leaderExited) return sendGroup(child.pid, leaderStart, name) === 'signalled'
+      // The leader is gone, so there is no pidfd to signal the group through: each remaining member goes individually,
+      // by its own pid + start time.
+      let delivered = false
+      for (const member of scanGroup(child.pid).members)
+        if (sendPid(member.pid, member.startTime, name) === 'signalled') delivered = true
+      return delivered
     } catch {
-      if (!leaderExited) {
-        try {
-          child.kill(name)
-        } catch {
-          // already gone
-        }
-      }
+      // best effort; the reaper reports a group that survived
+      return false
     }
   }
+  // Set by `done`: ends the turn as unconfirmed when SIGKILL could not be delivered to a leader that is still running
+  // (nothing else would ever end the turn, and nothing may be signalled by number).
+  let abandoned = false
+  let giveUp: () => void = () => undefined
   // Identities already reported, so each is recorded once.
   const noted = new Set<string>()
   let lastNoted = 0
@@ -199,7 +221,12 @@ export function spawnCli(options: SpawnOptions): CliRun {
     stopped = reason
     signal('SIGINT')
     const term = setTimeout(() => signal('SIGTERM'), graceMs)
-    const kill = setTimeout(() => signal('SIGKILL'), graceMs * 2)
+    const kill = setTimeout(() => {
+      if (signal('SIGKILL') || leaderExited) return
+      const abandon = setTimeout(() => giveUp(), options.reapSlackMs ?? 10_000)
+      abandon.unref()
+      escalation.push(abandon)
+    }, graceMs * 2)
     term.unref()
     kill.unref()
     escalation.push(term, kill)
@@ -221,6 +248,7 @@ export function spawnCli(options: SpawnOptions): CliRun {
   }
   child.stdout.setEncoding('utf8')
   child.stdout.on('data', (chunk: string) => {
+    if (abandoned) return
     total += Buffer.byteLength(chunk)
     if (total > CODING_LIMITS.maxOutputBytes) {
       stop('output_limit')
@@ -246,6 +274,7 @@ export function spawnCli(options: SpawnOptions): CliRun {
   child.stdout.on('error', () => undefined)
   child.stderr.setEncoding('utf8')
   child.stderr.on('data', (chunk: string) => {
+    if (abandoned) return
     stderr = (stderr + chunk).slice(-CODING_LIMITS.stderrBytes)
   })
   child.stderr.on('error', () => undefined)
@@ -314,6 +343,14 @@ export function spawnCli(options: SpawnOptions): CliRun {
             groupGone: gone,
           })
         })
+    }
+    giveUp = () => {
+      if (closed) return
+      leaderExited = true
+      // The pipes stay open (closing them could end a CLI we are not allowed to signal) but nothing more is read.
+      abandoned = true
+      closed = true
+      settle()
     }
     child.on('error', (error) => {
       spawnError = (error as NodeJS.ErrnoException).code ?? 'spawn_failed'

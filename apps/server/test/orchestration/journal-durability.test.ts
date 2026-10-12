@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import {
   existsSync,
+  fstatSync,
   fsyncSync as realSync,
   mkdtempSync,
   readFileSync,
@@ -246,4 +247,92 @@ test('compaction in this process and appends in another never lose an append', a
   for (let i = 0; i < 120; i++) expect(seen.has(`child-${i}`)).toBe(true)
   // Numbers are strictly increasing, which the parser enforces.
   expect(read.entries.length).toBeGreaterThan(100)
+})
+
+// ---- AA1: every append makes the pathname durable -----------------------------------------------------------------
+
+const dirSyncFailsOnce = (): { io: JournalIo; dirFsyncs: () => number } => {
+  let dirFsyncs = 0
+  let failed = false
+  return {
+    dirFsyncs: () => dirFsyncs,
+    io: {
+      writeSync: real.writeSync,
+      fsyncSync: (fd) => {
+        if (fstatSync(fd).isDirectory()) {
+          dirFsyncs++
+          if (!failed) {
+            failed = true
+            throw new Error('EIO on directory')
+          }
+        }
+        real.fsyncSync(fd)
+      },
+    },
+  }
+}
+
+test('AA1: a fresh handle after another handle failed its directory sync still syncs the directory', () => {
+  const first = dirSyncFailsOnce()
+  expect(
+    guarded(new ExecutionJournal(dir, 'home', Date.now, undefined, first.io), 'a1').effect,
+  ).toBe(false)
+  let dirSyncs = 0
+  const counting: JournalIo = {
+    writeSync: real.writeSync,
+    fsyncSync: (fd) => {
+      if (fstatSync(fd).isDirectory()) dirSyncs++
+      real.fsyncSync(fd)
+    },
+  }
+  const fresh = new ExecutionJournal(dir, 'home', Date.now, undefined, counting)
+  expect(guarded(fresh, 'a2').effect).toBe(true)
+  expect(dirSyncs).toBe(1)
+  // Every later append syncs the directory too.
+  expect(guarded(fresh, 'a3').effect).toBe(true)
+  expect(dirSyncs).toBe(2)
+})
+
+test('AA1: a failed directory sync after the compaction rename is covered by the next append', () => {
+  const seed = new ExecutionJournal(dir, 'home')
+  for (const id of ['a1', 'a2']) seed.append(send(id))
+  const flaky = dirSyncFailsOnce()
+  const compacting = new ExecutionJournal(dir, 'home', Date.now, undefined, flaky.io)
+  expect(() => compacting.compact(() => true)).toThrow(/directory/)
+  const before = flaky.dirFsyncs()
+  expect(
+    guarded(new ExecutionJournal(dir, 'home', Date.now, undefined, flaky.io), 'a3').effect,
+  ).toBe(true)
+  expect(flaky.dirFsyncs()).toBe(before + 1)
+})
+
+test('AA1: opening the journal syncs the parent of every directory it created', () => {
+  const synced: string[] = []
+  const io: JournalIo = {
+    writeSync: real.writeSync,
+    fsyncSync: (fd) => {
+      if (fstatSync(fd).isDirectory()) synced.push(String(fstatSync(fd).ino))
+      real.fsyncSync(fd)
+    },
+  }
+  const deep = join(dir, 'x', 'y', 'journal')
+  const journal = new ExecutionJournal(deep, 'home', Date.now, undefined, io)
+  expect(journal.open()).toBe(true)
+  // x, y and journal were created: their three parents are fsync'd.
+  expect(synced).toHaveLength(3)
+})
+
+test('AA1: a separate process appending after a failed directory sync syncs the directory itself', async () => {
+  const first = dirSyncFailsOnce()
+  expect(
+    guarded(new ExecutionJournal(dir, 'home', Date.now, undefined, first.io), 'a1').effect,
+  ).toBe(false)
+  const proc = spawn(
+    process.execPath,
+    ['--experimental-transform-types', '--no-warnings', child, 'append', dir, '1'],
+    { stdio: 'ignore' },
+  )
+  started.push(proc.pid!)
+  await new Promise((resolve) => proc.on('close', resolve))
+  expect(ids(dir)).toHaveLength(2)
 })

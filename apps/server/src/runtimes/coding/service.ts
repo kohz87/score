@@ -679,7 +679,14 @@ export class CodingRuntime {
       if (entry.stopBeforeStart)
         return void (await this.finish(translation, stopped(entry.stopBeforeStart)))
       const parser = driver.createParser({ cwd: checked.real })
-      const { file, args } = locator.command(driver)
+      const command = locator.nativeCommand(driver)
+      if (!command.ok)
+        return void (await this.finish(translation, {
+          status: 'failed',
+          error: command.message,
+          costKind,
+        }))
+      const { file, args } = command
       // Not a visible queued -> running step for a turn that has been stopped already.
       if (entry.stopBeforeStart)
         return void (await this.finish(translation, stopped(entry.stopBeforeStart)))
