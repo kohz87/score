@@ -1284,7 +1284,7 @@ Score's own Markdown vault (default `~/score-vault`, `$SCORE_VAULT`), git-versio
 Score's DB only indexes them. Paths are POSIX, relative to the vault; notes end in `.md`, attachments live under
 `attachments/`. Schemas in `packages/contract/src/knowledge.ts`. Writes from browsers are **H**; agents use the bridge
 tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
-- `GET /api/knowledge` → `KnowledgeInfo` `{ vault; notes; gitAvailable; agentAccess }`
+- `GET /api/knowledge` → `KnowledgeInfo` `{ vault; notes; gitAvailable; agentAccess; moveIssue }`. `moveIssue` is null, or `{ state: 'pending' | 'conflicted'; from; to; message }` for an interrupted move: `pending` is retried automatically (backoff), `conflicted` means recovery could not prove the destination is the moved file and waits for the owner. While one exists, `POST /api/knowledge/move` answers `409 move_pending`. **H** `POST /api/knowledge/move-issue/dismiss` → `KnowledgeInfo` abandons the plan (files untouched).
 - `GET /api/knowledge/tree` → `{ folders: string[]; notes: KnowledgeNoteSummary[] }` (`{ path; title; mtime; lastAuthor }`)
 - `GET /api/knowledge/notes/*path` → `KnowledgeNote` `{ path; title; frontmatter; body; etag; mtime; links: { target;
   path | null }[]; backlinks: { path; title }[]; lastAuthor }`. Title: frontmatter `title`, else the first `# H1`, else
@@ -1298,7 +1298,7 @@ tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
   is overwritten), and a save whose note changed on disk meanwhile gets `412` with the new etag. Agent `write`/`append`
   from an observe-only producer (`isolation: 'unknown'`) → `403 observe_only`.
 - **H** `POST /api/knowledge/move` `{ from; to; updateLinks }` → `{ path; updatedNotes; skipped: { path; reason }[] }` (`skipped` lists notes whose links were left as they are because they changed or were removed meanwhile; two commits: the pure rename, then the link edits, so
-  git follows the file; `409 exists`; `413` and nothing moved when a link rewrite would push a note over 8 MiB; links added
+  git follows the file; `409 exists` (decided by one atomic no-replace rename, so a destination created meanwhile survives untouched); `500 rename_unsupported` where the system can't do that (Linux with python3 needed); `413` and nothing moved when a link rewrite would push a note over 8 MiB; links added
   outside Score since the last scan are included).
 - **H** `DELETE /api/knowledge/notes/*path` → `204` (owner only; agents have no delete).
 - `GET /api/knowledge/search?q=&limit=` (limit ≤ 50, default 20) → `{ items: { path; title; snippet }[] }`: FTS5-ranked;

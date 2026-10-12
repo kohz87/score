@@ -3,9 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { moveNoReplace } from '../../src/knowledge/move-file.ts'
 import { KnowledgeVault } from '../../src/knowledge/vault.ts'
-import { textPdf } from './doc-fixtures.ts'
 import { makeVault, type Harness } from './helpers.ts'
 
 let h: Harness | undefined
@@ -22,128 +20,6 @@ const tmp = () => {
   scratch.push(dir)
   return dir
 }
-
-/** Runs `after` right after the real hard link `from` -> `to` was made (the interval the audit names). */
-function afterLink(from: string, to: string, after: () => void) {
-  const real = fs.promises.link.bind(fs.promises)
-  vi.spyOn(fs.promises, 'link').mockImplementation(async (a, b) => {
-    await real(a, b)
-    if (String(a).endsWith(from) && String(b).endsWith(to)) after()
-  })
-}
-function externalReplace(file: string, content: string) {
-  const temp = `${file}.editor-tmp`
-  fs.writeFileSync(temp, content)
-  fs.renameSync(temp, file)
-}
-
-describe('S2-001 a move never deletes a file that replaced its source', () => {
-  test('a source replaced between the check and the link is moved whole, never left under two names', async () => {
-    const dir = tmp()
-    fs.writeFileSync(path.join(dir, 'a.md'), 'original')
-    const realLink = fs.promises.link.bind(fs.promises)
-    vi.spyOn(fs.promises, 'link').mockImplementationOnce(async (a, b) => {
-      externalReplace(path.join(dir, 'a.md'), 'saved just before the link')
-      await realLink(a, b)
-    })
-    await moveNoReplace(path.join(dir, 'a.md'), path.join(dir, 'b.md'))
-    vi.restoreAllMocks()
-    expect(fs.existsSync(path.join(dir, 'a.md'))).toBe(false)
-    expect(fs.readFileSync(path.join(dir, 'b.md'), 'utf8')).toBe('saved just before the link')
-    expect(fs.statSync(path.join(dir, 'b.md')).nlink).toBe(1)
-  })
-
-  test('note: an external atomic save right after the link survives', async () => {
-    h = await makeVault({ files: { 'a.md': 'original' } })
-    afterLink('a.md', 'b.md', () => externalReplace(path.join(h!.vaultDir, 'a.md'), 'new edit'))
-    await expect(h.vault.moveNote('a.md', 'b.md', false)).rejects.toMatchObject({ status: 409 })
-    vi.restoreAllMocks()
-    expect(read('a.md')).toBe('new edit')
-    // The older copy isn't presented as the moved file.
-    expect(fs.existsSync(path.join(h.vaultDir, 'b.md'))).toBe(false)
-    expect(fs.readdirSync(h.vaultDir).filter((name) => name.startsWith('.score-move'))).toEqual([])
-  })
-
-  test('document: the same', async () => {
-    h = await makeVault()
-    await h.vault.docs.upload('d.pdf', textPdf('original'), 'ask')
-    afterLink('d.pdf', 'e.pdf', () =>
-      externalReplace(path.join(h!.vaultDir, 'd.pdf'), 'new external edit'),
-    )
-    await expect(h.vault.docs.move('d.pdf', 'e.pdf')).rejects.toMatchObject({ status: 409 })
-    vi.restoreAllMocks()
-    expect(read('d.pdf')).toBe('new external edit')
-    expect(fs.existsSync(path.join(h.vaultDir, 'e.pdf'))).toBe(false)
-  })
-
-  test('a file that is put back keeps a visible copy when the old name was taken again', async () => {
-    const dir = tmp()
-    fs.writeFileSync(path.join(dir, 'a.md'), 'original')
-    const real = fs.promises.rename.bind(fs.promises)
-    vi.spyOn(fs.promises, 'rename').mockImplementation(async (a, b) => {
-      // Two outside saves: one lands before the old name is parked, one while it is parked.
-      externalReplace(path.join(dir, 'a.md'), 'newer')
-      await real(a, b)
-      fs.writeFileSync(path.join(dir, 'a.md'), 'newest')
-    })
-    await expect(
-      moveNoReplace(path.join(dir, 'a.md'), path.join(dir, 'b.md')),
-    ).rejects.toMatchObject({
-      status: 409,
-    })
-    vi.restoreAllMocks()
-    expect(fs.existsSync(path.join(dir, 'b.md'))).toBe(false)
-    expect(fs.readFileSync(path.join(dir, 'a.md'), 'utf8')).toBe('newest')
-    const copies = fs.readdirSync(dir).filter((name) => name.includes('conflict copy'))
-    expect(copies).toHaveLength(1)
-    expect(fs.readFileSync(path.join(dir, copies[0]!), 'utf8')).toBe('newer')
-  })
-})
-
-describe('S2-002 there is no replacing fallback', () => {
-  test('unsupported hard links fail closed and the destination another writer created stays as it is', async () => {
-    const dir = tmp()
-    fs.writeFileSync(path.join(dir, 'a.md'), 'incoming')
-    vi.spyOn(fs.promises, 'link').mockImplementation(async () => {
-      fs.writeFileSync(path.join(dir, 'b.md'), 'external destination')
-      throw Object.assign(new Error('nope'), { code: 'EOPNOTSUPP' })
-    })
-    await expect(
-      moveNoReplace(path.join(dir, 'a.md'), path.join(dir, 'b.md')),
-    ).rejects.toMatchObject({ code: 'hard_links_unsupported' })
-    expect(fs.readFileSync(path.join(dir, 'b.md'), 'utf8')).toBe('external destination')
-    expect(fs.readFileSync(path.join(dir, 'a.md'), 'utf8')).toBe('incoming')
-  })
-
-  test('a source that can’t be read is an error, not a missing file', async () => {
-    const dir = tmp()
-    fs.writeFileSync(path.join(dir, 'a.md'), 'incoming')
-    vi.spyOn(fs.promises, 'lstat').mockRejectedValue(
-      Object.assign(new Error('denied'), { code: 'EACCES' }),
-    )
-    await expect(
-      moveNoReplace(path.join(dir, 'a.md'), path.join(dir, 'b.md')),
-    ).rejects.toMatchObject({ code: 'EACCES' })
-    vi.restoreAllMocks()
-    await expect(
-      moveNoReplace(path.join(dir, 'gone.md'), path.join(dir, 'c.md')),
-    ).rejects.toMatchObject({ status: 404 })
-  })
-
-  test('a note move on such a filesystem leaves everything in place', async () => {
-    h = await makeVault({ files: { 'a.md': 'mine' } })
-    vi.spyOn(fs.promises, 'link').mockRejectedValue(
-      Object.assign(new Error('nope'), { code: 'EPERM' }),
-    )
-    await expect(h.vault.moveNote('a.md', 'b.md', false)).rejects.toMatchObject({
-      code: 'hard_links_unsupported',
-    })
-    vi.restoreAllMocks()
-    expect(read('a.md')).toBe('mine')
-    expect(fs.existsSync(path.join(h.vaultDir, 'b.md'))).toBe(false)
-    expect(fs.existsSync(h.vault.planFile())).toBe(false)
-  })
-})
 
 describe('S2-013 the move plan lives in Score’s state', () => {
   test('a linked Git worktree starts, moves and recovers', async () => {
@@ -266,7 +142,7 @@ describe('S2-022 skipped link rewrites are reported', () => {
 })
 
 describe('S2-027 the plan is on disk before the vault changes', () => {
-  test('the plan file and its folder are flushed before the first link, and clearing flushes too', async () => {
+  test('the plan file and its folder are flushed before the rename, and clearing flushes too', async () => {
     h = await makeVault({ files: { 'a.md': 'x' } })
     const events: string[] = []
     const stateDir = path.join(h.dir, 'home', 'knowledge')
@@ -283,10 +159,10 @@ describe('S2-027 the plan is on disk before the vault changes', () => {
         return handle
       },
     )
-    const realLink = fs.promises.link.bind(fs.promises)
-    vi.spyOn(fs.promises, 'link').mockImplementation(async (a, b) => {
-      if (String(a).endsWith('a.md')) events.push('link-source')
-      return realLink(a, b)
+    const realMove = h.vault.moveNoReplace.bind(h.vault)
+    vi.spyOn(h.vault, 'moveNoReplace').mockImplementation(async (a, b) => {
+      if (String(a).endsWith('a.md')) events.push('rename-source')
+      return realMove(a, b)
     })
     const realRm = fs.promises.rm.bind(fs.promises)
     vi.spyOn(fs.promises, 'rm').mockImplementation(async (file, options) => {
@@ -296,9 +172,16 @@ describe('S2-027 the plan is on disk before the vault changes', () => {
     })
     await h.vault.moveNote('a.md', 'b.md', false)
     vi.restoreAllMocks()
-    const link = events.indexOf('link-source')
-    expect(events.slice(0, link)).toEqual(['sync-plan', 'sync-dir'])
-    expect(events.slice(link)).toEqual(['link-source', 'rm-plan', 'sync-dir'])
+    const at = events.indexOf('rename-source')
+    expect(events.slice(0, at)).toEqual(['sync-plan', 'sync-dir'])
+    // The plan is rewritten once more with what was moved, then cleared.
+    expect(events.slice(at)).toEqual([
+      'rename-source',
+      'sync-plan',
+      'sync-dir',
+      'rm-plan',
+      'sync-dir',
+    ])
   })
 })
 

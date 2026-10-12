@@ -18,6 +18,16 @@ export const KnowledgeInfoSchema = z.object({
   /** Uploaded documents (PDF, DOCX, CSV, images, zips, ...) and their total size on disk (task 6.6). */
   documents: z.number().int().nonnegative().default(0),
   documentBytes: z.number().int().nonnegative().default(0),
+  /** An interrupted move that needs attention (retrying, or waiting for the owner); null when all is well. */
+  moveIssue: z
+    .object({
+      state: z.enum(['pending', 'conflicted']),
+      from: z.string(),
+      to: z.string(),
+      message: z.string(),
+    })
+    .nullable()
+    .default(null),
 })
 export const KnowledgeNoteSummarySchema = z.object({
   path: z.string().min(1),

@@ -312,6 +312,18 @@ export function KnowledgePage() {
             </button>
           </p>
         )}
+        {info.data?.moveIssue && (
+          <p className="kn-banner is-warn" role="status">
+            {info.data.moveIssue.state === 'pending'
+              ? `Move pending: ${info.data.moveIssue.from} to ${info.data.moveIssue.to}. Score is finishing it.`
+              : `Move needs attention: ${info.data.moveIssue.message}`}{' '}
+            {info.data.moveIssue.state === 'conflicted' && (
+              <button type="button" onClick={() => actions.dismissMoveIssue.mutate()}>
+                Dismiss
+              </button>
+            )}
+          </p>
+        )}
         {info.data && !info.data.gitAvailable && (
           <p className="kn-banner is-warn">
             Git isn’t available for Knowledge. Notes still save; history and undo are unavailable.

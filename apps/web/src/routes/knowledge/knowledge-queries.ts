@@ -169,6 +169,10 @@ export function useKnowledgeActions() {
         ),
       onSuccess: refresh,
     }),
+    dismissMoveIssue: useMutation({
+      mutationFn: async () => apiFetch('knowledge/move-issue/dismiss', { method: 'POST' }),
+      onSuccess: refresh,
+    }),
     remove: useMutation({
       mutationFn: (path: string) => apiFetch(apiNote(path), { method: 'DELETE' }),
       onSuccess: refresh,
