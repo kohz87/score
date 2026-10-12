@@ -270,7 +270,24 @@ next start fences admission and marks execution history untrusted. A restore don
 hand, a filesystem rollback) on the same host and boot **cannot be detected**: Hermes runs Score started after the backup
 was made are then unknown to Score and may still be running. This is the wording Settings › Backup repeats.
 
+### Installation identity and the journal folders (PLAN 7.7a)
+
+Each Score home has an **installation id** kept outside the home, in `<journal dir>/installations.json` (with a
+`manifest.json` in each installation's own folder `<journal dir>/<id>/`, so a lost or damaged registry is rebuilt from the
+manifests). The home keeps a copy in `installation.json`. The orchestration journal now lives in `<journal dir>/<id>/`
+(`journal.ndjson`, its lock, `launches/` for coding-run receipts); the first start after the upgrade copies this home's
+records out of the old shared `journal.ndjson` and writes a `cutover` record there (the old file stays as a read-only
+witness; `scripts/score restore` follows the cutover). Nothing to do for you.
+
+A home at a **path Score does not know** (a moved, renamed or copied folder) starts, but all orchestration and coding
+admission is blocked and the fence cannot be lifted. Say which it is, with Score stopped:
+`scripts/score installation confirm-move` (same installation, new folder: keeps its journal) or
+`scripts/score installation confirm-copy` (a copy: gets its own id and its inherited run history is marked untrusted).
+`scripts/score installation status` shows what the home and the registry say. If the registry is corrupt and no manifest
+survives, Score refuses admission until you restore `installations.json` from a backup.
+
 ## Changelog of this file
+- 2026-10-12: installation identity, per-installation journal folders, `score installation` (PLAN 7.7a part 1).
 - 2026-10-10: orchestrations: execution journal location and `scripts/score restore` (PLAN 7.5a).
 - 2026-10-09: do not VACUUM by hand (search index rebuilt at start).- 2026-10-09: the knowledge vault (`SCORE_VAULT`, git).
 - 2026-10-08: section 9, running the built app (pnpm start, launcher, systemd unit).

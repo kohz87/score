@@ -4,6 +4,7 @@ import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { HttpError } from '../../errors.ts'
 import { recordRefusal } from './ops.ts'
+import { applyCodingEvidence, verifyCoding } from './coding-checkpoint.ts'
 import { journalDispatches, type ExecutionJournal, type JournalEntry } from './journal.ts'
 
 // The persistent global admission fence (design v3). It is set when the journal and the database disagree, when the
@@ -269,6 +270,8 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
         detail: 'A global fence change is newer than the database',
       })
   }
+  // 7.7a §2: coding launches and the database's checkpoint sequence.
+  mismatches.push(...verifyCoding(sqlite, entries, accepted))
   return mismatches
 }
 
@@ -358,6 +361,7 @@ export function applyJournalEvidence(
       .run(entry.runId, now, entry.attemptId)
     changed += Number(result.changes)
   }
+  changed += applyCodingEvidence(sqlite, entries, now)
   return changed
 }
 
@@ -402,6 +406,14 @@ export function fenceView(sqlite: DatabaseSync, journal: ExecutionJournal): Glob
 }
 
 export class GlobalFenceStore {
+  /** Set when the installation identity is unresolved (copied home, ambiguity, corrupt registry): no admission, and
+   * the person cannot lift the fence until they have resolved it (`score installation confirm-move|confirm-copy`). */
+  private hardBlock: string | null = null
+
+  setHardBlock(message: string | null): void {
+    this.hardBlock = message
+  }
+
   constructor(
     private readonly db: ScoreDb,
     readonly journal: ExecutionJournal,
@@ -474,6 +486,7 @@ export class GlobalFenceStore {
       )
     if (current.fenced !== 1)
       throw new HttpError(409, 'conflict', 'Nothing is blocked, so there is nothing to unblock.')
+    if (this.hardBlock !== null) throw new HttpError(409, 'fenced', this.hardBlock)
     const accepted = this.db
       .read((sqlite) =>
         z
@@ -541,6 +554,13 @@ export class GlobalFenceStore {
   startupCheck(): { fenced: boolean; reasons: string[] } {
     const reasons: string[] = []
     const alreadyFenced = this.db.read((sqlite) => isFenced(sqlite))
+    if (this.hardBlock === null) this.liftResolvedInstallationBlock()
+    if (this.hardBlock !== null) {
+      reasons.push('installation_unresolved')
+      this.set('installation_unresolved', [
+        { kind: 'journal', ref: 'installation', journalN: null, detail: this.hardBlock },
+      ])
+    }
     const marker = this.journal.readRestoreMarker()
     const fresh = this.journal.isFresh()
     const opened = this.journal.open()
@@ -556,7 +576,9 @@ export class GlobalFenceStore {
             detail:
               marker === 'malformed'
                 ? 'A restore marker exists but cannot be read; treat history as untrusted'
-                : `Score's home was restored from ${marker.backup} at ${marker.at}; execution history is untrusted`,
+                : marker.origin === 'copy'
+                  ? `This home is a copy of ${marker.backup}, confirmed at ${marker.at}; the run history it inherited is untrusted`
+                  : `Score's home was restored from ${marker.backup} at ${marker.at}; execution history is untrusted`,
           },
         ],
         { untrustedHistory: true },
@@ -605,6 +627,18 @@ export class GlobalFenceStore {
     }
     const fenced = alreadyFenced || reasons.length > 0
     return { fenced, reasons }
+  }
+
+  /**
+   * The fence an earlier start raised because the installation was unresolved is the only one the person's
+   * `score installation confirm-*` already decided: once the identity resolves, nothing else holds it up.
+   */
+  private liftResolvedInstallationBlock(): void {
+    const row = this.db.read((sqlite) => readGlobal(sqlite))
+    if (row.fenced !== 1 || row.reason !== 'installation_unresolved') return
+    const items = this.db.read((sqlite) => fenceItems(sqlite))
+    if (items.some((item) => item.ref !== 'installation')) return
+    this.lift(row.revision, 'the installation was confirmed')
   }
 
   /**

@@ -151,7 +151,9 @@ export function pointerVouches(home: string, journalDir: string): boolean {
     return (
       recorded !== '' &&
       canonicalPath(recorded) === canonicalPath(journalDir) &&
-      existsSync(join(journalDir, JOURNAL_FILE_NAME))
+      // 7.7a: an installation's journal lives in its namespace, so the registry is evidence of a journal root too.
+      (existsSync(join(journalDir, JOURNAL_FILE_NAME)) ||
+        existsSync(join(journalDir, 'installations.json')))
     )
   } catch {
     return false
