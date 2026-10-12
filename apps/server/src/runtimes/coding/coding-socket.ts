@@ -72,6 +72,8 @@ export interface SessionOutcome {
   survivorsKilled: boolean
   /** Records dropped for size or because the last stdout line was partial at eof. */
   droppedRecords: number
+  /** The `ack-end` frame reached the kernel's socket buffer (not merely queued): only then can the close be a normal one. */
+  ackFlushed: boolean
 }
 
 export interface RunHandlers {
@@ -79,6 +81,13 @@ export interface RunHandlers {
   onStdoutRecord(line: string): void | Promise<void>
   /** Diagnostic stderr text (bounded, never parsed as records). */
   onStderr?(text: string): void
+  /**
+   * Score's side is about to stop the run on its own account (a broken bound, an ingestion failure, shutdown). Called
+   * BEFORE the stop frame goes out so the cause can be made durable first (review 2026-10-12 #17). It must not throw.
+   */
+  onStop?(cause: string): void
+  /** What the run keeps in memory besides queued records right now (the parser's retained values), in bytes. */
+  retainedBytes?(): number
 }
 
 export interface SocketLimits {
@@ -155,6 +164,7 @@ export class RunSession {
   private exitInfo: { code: number | null; signal: string | null } | null = null
   private endFrame: Extract<SupervisorFrame, { t: 'end' }> | null = null
   private ackSent = false
+  private ackFlushed = false
   private violations: string[] = []
   private dropped = 0
   private ingestFailed = false
@@ -171,6 +181,8 @@ export class RunSession {
     private readonly handlers: RunHandlers,
     private readonly limits: SocketLimits,
     private readonly budget: Budget,
+    /** Bytes charged to the budget for what the run retains; grows with the parser's actual retained bytes. */
+    private readonly reservation: { bytes: number; floor: number } = { bytes: 0, floor: 0 },
   ) {
     this.ready = new Promise<ReadyInfo>((resolve, reject) => {
       this.resolveReady = resolve
@@ -220,21 +232,37 @@ export class RunSession {
       socket.once('close', () => resolve())
       const line =
         JSON.stringify({ v: PROTOCOL_VERSION, t: 'stop', cause: 'score-shutdown' }) + '\n'
+      this.noteStop('score-shutdown')
       socket.write(line, () => socket.destroy())
       setTimeout(() => socket.destroy(), 1000).unref()
     })
   }
 
-  private send(frame: Record<string, unknown>): void {
+  private send(frame: Record<string, unknown>, flushed?: (ok: boolean) => void): void {
     const socket = this.socket
-    if (!socket || socket.destroyed) return
-    socket.write(JSON.stringify({ v: PROTOCOL_VERSION, ...frame }) + '\n')
+    if (!socket || socket.destroyed) return flushed?.(false)
+    socket.write(
+      JSON.stringify({ v: PROTOCOL_VERSION, ...frame }) + '\n',
+      flushed ? (error) => flushed(!error) : undefined,
+    )
+  }
+
+  /** Makes Score's own stop cause durable before the frame is sent; a failing hook never blocks the stop. */
+  private noteStop(cause: string): void {
+    try {
+      this.handlers.onStop?.(cause)
+    } catch {
+      // the hook reports its own failure; stopping matters more than the note
+    }
   }
 
   private violate(reason: string): void {
     if (!this.violations.includes(reason)) this.violations.push(reason)
     // A bound was broken or the stream is inconsistent: stop the run (once); the result is ineligible.
-    if (this.lastStopCause === null) this.send({ t: 'stop', cause: reason.slice(0, 64) })
+    if (this.lastStopCause === null) {
+      this.noteStop(reason.slice(0, 64))
+      this.send({ t: 'stop', cause: reason.slice(0, 64) })
+    }
     this.lastStopCause ??= reason
   }
 
@@ -395,12 +423,14 @@ export class RunSession {
         } catch {
           if (!this.ingestFailed) {
             this.ingestFailed = true
+            if (this.lastStopCause === null) this.noteStop('ingest-failure')
             this.lastStopCause ??= 'ingest-failure'
             this.send({ t: 'stop', cause: 'ingest-failure' })
           }
         }
         this.queueBytes -= size
         this.budget.used -= size
+        this.chargeRetained()
         if (this.readPaused && this.queueBytes <= this.limits.pauseBytes / 2) {
           this.readPaused = false
           this.socket?.resume()
@@ -445,7 +475,28 @@ export class RunSession {
   private async maybeComplete(): Promise<void> {
     if (!this.endFrame || this.ackSent || this.pumping || this.queue.length > 0) return
     this.ackSent = true
-    this.send({ t: 'ack-end' })
+    // Queued is not delivered: only a completed write makes the acknowledgment something the supervisor can have seen.
+    this.send({ t: 'ack-end' }, (ok) => {
+      this.ackFlushed = ok
+    })
+  }
+
+  /**
+   * Charges what the run really retains (the parser's values, which can far exceed any entry count) instead of a fixed
+   * reservation. Past the installation budget the run is stopped and ineligible (review 2026-10-12 #18).
+   */
+  private chargeRetained(): void {
+    const actual = this.handlers.retainedBytes?.()
+    if (actual === undefined || !Number.isFinite(actual)) return
+    const target = Math.max(this.reservation.floor, Math.ceil(actual))
+    const delta = target - this.reservation.bytes
+    if (delta > 0 && this.budget.used + delta > this.budget.limit) {
+      this.dropped += 1
+      this.violate('memory-budget')
+      return
+    }
+    this.budget.used += delta
+    this.reservation.bytes = target
   }
 
   private reasons(): string[] {
@@ -467,6 +518,8 @@ export class RunSession {
     const ended = this.ackSent && this.endFrame !== null
     if (!this.readySeen) this.rejectReady(new Error('connection closed before ready'))
     const reasons = ended ? this.reasons() : [...this.reasons(), 'socket-loss']
+    // Normal only when the acknowledgment was actually written: a lost ack means the supervisor saw a closed socket.
+    if (ended && !this.ackFlushed) reasons.push('ack-not-flushed')
     // Closing with records still queued or being ingested means output was acknowledged or counted before it was saved.
     if (this.pumping || this.queue.length > 0) reasons.push('ingestion-incomplete')
     // Records still queued would be lost with the connection: they are not processed, so not complete.
@@ -486,6 +539,7 @@ export class RunSession {
       stopCause: this.endFrame?.stopCause ?? this.lastStopCause,
       survivorsKilled: this.endFrame?.survivorsKilled ?? false,
       droppedRecords: this.dropped,
+      ackFlushed: this.ackFlushed,
     })
   }
 }
@@ -496,7 +550,7 @@ interface Pending {
   session: RunSession
   used: boolean
   /** Budget bytes reserved for what the run keeps in memory besides queued records (released once, see `release`). */
-  reserved: number
+  reservation: { bytes: number; floor: number }
 }
 
 /** What an active run may keep in memory beyond queued records (retained text, remembered call ids): reserved up front. */
@@ -619,19 +673,21 @@ export class CodingSocketServer {
     const reserved = args.retainedBytes ?? 0
     if (this.budget.used + reserved > this.budget.limit) throw new Error('memory-budget')
     this.budget.used += reserved
+    const reservation = { bytes: reserved, floor: reserved }
     const session = new RunSession(
       args.launch,
       args.generation,
       args.handlers,
       this.limits,
       this.budget,
+      reservation,
     )
     this.pending.set(args.launch, {
       generation: args.generation,
       specHash: args.specHash,
       session,
       used: false,
-      reserved,
+      reservation,
     })
     void session.outcome.then(() => this.release(args.launch))
     return { token: this.tokenFor(args.launch, args.generation, args.specHash), session }
@@ -646,8 +702,9 @@ export class CodingSocketServer {
     const entry = this.pending.get(launch)
     if (!entry) return
     this.pending.delete(launch)
-    this.budget.used -= entry.reserved
-    entry.reserved = 0
+    this.budget.used -= entry.reservation.bytes
+    entry.reservation.bytes = 0
+    entry.reservation.floor = 0
   }
 
   private tokenFor(launch: string, generation: number, specHash: string): string {

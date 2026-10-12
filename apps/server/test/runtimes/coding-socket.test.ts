@@ -107,7 +107,7 @@ test('hello with the right token is welcomed; ready, go and the terminal order w
   sup.out('stdout', 1, 'one\ntwo\n')
   const outcome = await finishCleanly(sup, session, 1)
   expect(records).toEqual(['one', 'two'])
-  expect(outcome).toMatchObject({ kind: 'ended', eligible: true, reasons: [] })
+  expect(outcome).toMatchObject({ kind: 'ended', eligible: true, reasons: [], ackFlushed: true })
 })
 
 test('a token is single-use: a replay and a second connection for the same launch are rejected', async () => {
@@ -498,4 +498,101 @@ test('#15: what an active run keeps in memory is reserved from the installation 
   sup.socket.destroy()
   await a.session.outcome
   await vi.waitFor(() => expect(server.bufferedBytes).toBe(0))
+})
+
+test('re-review 2 #10: an ack-end that was queued but never delivered is not a normal end', async () => {
+  const { server } = await setup()
+  const { sup, session } = await connect(server)
+  sup.send({ t: 'ready', pid: 1, start: '1', cgroup: '/x' })
+  await session.ready
+  // The write of the acknowledgment fails (peer gone): the supervisor never saw it and exits for socket loss.
+  const socket = (session as unknown as { socket: net.Socket }).socket
+  const write = socket.write.bind(socket) as (...args: unknown[]) => boolean
+  socket.write = ((data: string, cb?: (error?: Error) => void) => {
+    if (typeof data === 'string' && data.includes('"ack-end"')) {
+      queueMicrotask(() => cb?.(new Error('EPIPE')))
+      return true
+    }
+    return write(data, cb)
+  }) as typeof socket.write
+  sup.send({ t: 'eof', stream: 'stdout', lastSeq: 0 })
+  sup.send({ t: 'eof', stream: 'stderr', lastSeq: 0 })
+  sup.send({ t: 'exit', code: 0, signal: null })
+  sup.send({ t: 'end' })
+  // The supervisor gives up on the acknowledgment it never saw and closes.
+  sup.socket.end()
+  const outcome = await session.outcome
+  expect(outcome.ackFlushed).toBe(false)
+  expect(outcome.eligible).toBe(false)
+  expect(outcome.reasons).toContain('ack-not-flushed')
+})
+
+test('re-review 2 #17: Score-side stops (broken bound, ingestion failure, shutdown) are reported to the hook before the frame goes out', async () => {
+  const { server } = await setup()
+  const causes: { cause: string; frameSeen: boolean }[] = []
+  const supRef: { sup?: FakeSupervisor } = {}
+  const note = (cause: string) =>
+    causes.push({ cause, frameSeen: supRef.sup?.has('stop') ?? false })
+  const reg = server.expect({
+    launch: 'L1',
+    generation: 1,
+    specHash: 'h',
+    handlers: {
+      onStdoutRecord: (line) => {
+        if (line === 'boom') throw new Error('cannot save')
+      },
+      onStop: note,
+    },
+  })
+  const sup = new FakeSupervisor(server.path)
+  supRef.sup = sup
+  sup.hello('L1', reg.token)
+  await vi.waitFor(() => expect(sup.has('welcome')).toBe(true))
+  sup.out('stdout', 1, 'boom\n')
+  await vi.waitFor(() => expect(causes.map((c) => c.cause)).toEqual(['ingest-failure']))
+  // A gap in the sequence is a violation: its cause is reported too (the first stop cause already won, so none follows).
+  expect(causes[0]!.frameSeen).toBe(false)
+  await vi.waitFor(() => expect(sup.has('stop')).toBe(true))
+  const seen: string[] = []
+  const second = server.expect({
+    launch: 'L2',
+    generation: 1,
+    specHash: 'h',
+    handlers: { onStdoutRecord: () => undefined, onStop: (cause) => void seen.push(cause) },
+  })
+  const sup2 = new FakeSupervisor(server.path)
+  sup2.hello('L2', second.token)
+  await vi.waitFor(() => expect(sup2.has('welcome')).toBe(true))
+  sup2.out('stdout', 2, 'gap\n')
+  await vi.waitFor(() => expect(seen).toEqual(['seq-stdout']))
+  await server.shutdown()
+  servers.splice(servers.indexOf(server), 1)
+})
+
+test('re-review 2 #18: a run is charged for what its parser really retains, and stopped past the installation budget', async () => {
+  const { server } = await setup({ memoryBudgetBytes: 1024 * 1024 })
+  let retained = 0
+  const reg = server.expect({
+    launch: 'L1',
+    generation: 1,
+    specHash: 'h',
+    handlers: { onStdoutRecord: () => undefined, retainedBytes: () => retained },
+    retainedBytes: 1024,
+  })
+  const sup = new FakeSupervisor(server.path)
+  sup.hello('L1', reg.token)
+  await vi.waitFor(() => expect(sup.has('welcome')).toBe(true))
+  expect(server.bufferedBytes).toBe(1024)
+  retained = 300 * 1024
+  sup.out('stdout', 1, 'a\n')
+  await vi.waitFor(() => expect(server.bufferedBytes).toBe(300 * 1024))
+  // Many short ids were cheap in the old count; large retained values are charged by their bytes.
+  retained = 5 * 1024 * 1024
+  sup.out('stdout', 2, 'b\n')
+  await vi.waitFor(() => expect(sup.has('stop')).toBe(true))
+  sup.socket.destroy()
+  const outcome = await reg.session.outcome
+  expect(outcome.eligible).toBe(false)
+  expect(outcome.reasons).toContain('memory-budget')
+  expect(server.bufferedBytes).toBe(0)
 })

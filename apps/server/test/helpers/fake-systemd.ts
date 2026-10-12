@@ -50,6 +50,11 @@ export interface FakeHooks {
   ignoreStop?: boolean
   /** `loginctl` reports linger off. */
   lingerOff?: boolean
+  /** A cleanly exited unit stays visible (inactive) instead of being collected at once, so ExecMain* can be read. */
+  keepExited?: boolean
+  /** What `systemctl show` reports as ExecMainStatus / ExecMainPID instead of the supervisor's own. */
+  execMainStatus?: number
+  execMainPid?: number
 }
 
 export class FakeSystemd {
@@ -114,8 +119,12 @@ export class FakeSystemd {
         `MainPID=${unit.active === 'active' ? (this.hooks.mainPid ?? unit.pid) : 0}`,
         `InvocationID=${unit.invocationId}`,
         `ControlGroup=${unit.controlGroup}`,
-        `Result=${unit.active === 'failed' ? 'exit-code' : 'success'}`,
+        `Result=${unit.active === 'failed' || (this.hooks.execMainStatus ?? 0) !== 0 ? 'exit-code' : 'success'}`,
         'Job=',
+        // The main process as systemd last ran it (kept after it exited): CLD_EXITED = 1.
+        `ExecMainPID=${this.hooks.execMainPid ?? unit.pid}`,
+        `ExecMainStatus=${this.hooks.execMainStatus ?? unit.exitCode ?? 0}`,
+        `ExecMainCode=${unit.running ? 0 : 1}`,
       ].join('\n') + '\n',
     )
   }
@@ -174,7 +183,7 @@ export class FakeSystemd {
       unit.running = false
       unit.active = code === 0 ? 'inactive' : 'failed'
       // A cleanly exited transient unit is garbage-collected; a failed one stays until reset-failed.
-      if (code === 0) this.removeUnit(name)
+      if (code === 0 && !this.hooks.keepExited) this.removeUnit(name)
       return code
     })
     this.units.set(name, unit)

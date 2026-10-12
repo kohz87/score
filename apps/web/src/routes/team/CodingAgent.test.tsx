@@ -234,3 +234,32 @@ test('Backend note: says how coding runs launch, lists the host check, and Check
   )
   expect(promise.textContent).not.toContain('everything it started')
 })
+
+test('Backend note: a paused installation says why, offers Check again and makes no supervision promise', async () => {
+  const { CodingBackend } = await import('./CodingBackend.tsx')
+  const note =
+    'Coding runs are paused: this computer no longer meets what supervised services need (linger is off). Fix that and choose Check again.'
+  vi.stubGlobal(
+    'fetch',
+    async () =>
+      new Response(
+        JSON.stringify({
+          kind: 'unit',
+          note,
+          checks: [{ name: 'linger', ok: false, detail: 'linger is off' }],
+          checkedAt: '2026-10-12T10:00:00.000Z',
+        }),
+        { headers: { 'Content-Type': 'application/json' } },
+      ),
+  )
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <CodingBackend />
+    </QueryClientProvider>,
+  )
+  const paragraph = await screen.findByText(/Coding runs are paused/)
+  expect(paragraph.getAttribute('data-backend')).toBe('paused')
+  expect(screen.queryByText(/the service stops this agent/)).toBeNull()
+  expect(screen.getByRole('button', { name: 'Check again' })).toBeTruthy()
+})

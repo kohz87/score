@@ -245,10 +245,19 @@ export interface UnitState {
   result: string
   /** A job (start/stop) is queued or running for the unit. */
   jobPending: boolean
+  /** The main process as systemd last ran it (kept after it exited): pid, exit status and how it ended (1 = exited). */
+  execMainPid: number
+  execMainStatus: number | null
+  execMainCode: number | null
 }
 
 export type UnitLookup =
   { kind: 'present'; state: UnitState } | { kind: 'absent' } | { kind: 'unknown'; detail: string }
+
+function numberOrNull(text: string | undefined): number | null {
+  if (text === undefined || !/^\d+$/.test(text)) return null
+  return Number(text)
+}
 
 export function parseUnitState(text: string): UnitState {
   const m = parseShow(text)
@@ -262,6 +271,9 @@ export function parseUnitState(text: string): UnitState {
     controlGroup: m.get('ControlGroup') ?? '',
     result: m.get('Result') ?? '',
     jobPending: job !== '' && job !== '0',
+    execMainPid: Number(m.get('ExecMainPID') ?? '0') || 0,
+    execMainStatus: numberOrNull(m.get('ExecMainStatus')),
+    execMainCode: numberOrNull(m.get('ExecMainCode')),
   }
 }
 
@@ -274,6 +286,9 @@ const SHOW_PROPS = [
   'ControlGroup',
   'Result',
   'Job',
+  'ExecMainPID',
+  'ExecMainStatus',
+  'ExecMainCode',
 ]
 
 /**

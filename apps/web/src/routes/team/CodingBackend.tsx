@@ -20,8 +20,8 @@ export const codingBackendQuery = {
 }
 
 /**
- * How coding runs are launched (7.7a): as supervised system services, or by the fallback that has no supervisor.
- * The sentence comes from Score; "Check again" reruns the host check, and new runs follow its answer.
+ * How coding runs are launched (7.7a): as supervised system services, or by the fallback that has no supervisor, or
+ * paused when services worked before and don’t now. The sentence comes from Score; "Check again" reruns the host check, and new runs follow its answer.
  */
 export function CodingBackend() {
   const queryClient = useQueryClient()
@@ -38,10 +38,14 @@ export function CodingBackend() {
   if (!backend.data) return null
   const { note, kind, checks } = backend.data
   const failed = checks.filter((check) => !check.ok)
+  // Services that worked before and no longer do: Score pauses coding runs rather than falling back (decision 69).
+  const paused = kind === 'unit' && failed.length > 0
   return (
     <div className="team-muted" aria-label="How this agent runs">
-      <p data-backend={kind}>{note}</p>
-      {kind === 'unit' && (
+      <p data-backend={paused ? 'paused' : kind} role={paused ? 'status' : undefined}>
+        {note}
+      </p>
+      {kind === 'unit' && !paused && (
         <p>
           If Score stops, the service stops this agent and everything running inside it, and Score
           confirms that before it calls a run finished. Work the agent hands to another service, a
