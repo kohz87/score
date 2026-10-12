@@ -1,0 +1,6 @@
+{"_fixture":"hand-made: an early message mentions an agent, the final reply does not (hand-offs read only the final reply)"}
+{"type":"thread.started","thread_id":"0199aaaa-0000-7000-8000-000000000011"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Thinking aloud: maybe @reviewer should see this."}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"Done. Nothing else is needed."}}
+{"type":"turn.completed","usage":{"input_tokens":5,"cached_input_tokens":0,"output_tokens":6}}

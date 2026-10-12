@@ -84,10 +84,12 @@ export interface UnitBackendDeps {
   population?: (controlGroup: string) => Population
   proc?: {
     start(pid: number): string | null
-    cgroup(pid: number): string | null
+    cgroup(pid: number, claimed: string): string | null
     boot(): string | null
   }
   manager?: () => Promise<ManagerIncarnation | null>
+  /** Merged into the supervisor's spec before it is hashed (tests tighten its ticks). */
+  specOverrides?: Partial<SupervisorSpec>
   readyTimeoutMs?: number
   proofTimeoutMs?: number
   pollMs?: number
@@ -546,6 +548,7 @@ export class UnitBackend {
       python: (this.deps.python === undefined ? pdeathsigSupport().python : this.deps.python) ?? undefined,
       wrapper: this.deps.wrapper ?? WRAPPER_FILE,
       notifyBin: this.deps.notifyBin === undefined ? '/usr/bin/systemd-notify' : this.deps.notifyBin,
+      ...this.deps.specOverrides,
     }
     const registered = this.socket.expect({
       launch: launchId,
@@ -670,9 +673,9 @@ export class UnitBackend {
     if (state.mainPid !== ready.pid) return { ok: false, reason: 'the main process differs' }
     if (state.controlGroup !== ready.cgroup) return { ok: false, reason: 'the control group differs' }
     if (!/^[0-9a-f]{32}$/.test(state.invocationId)) return { ok: false, reason: 'no invocation id' }
-    const proc = this.deps.proc ?? { start: processStart, cgroup: procCgroup, boot: bootId }
+    const proc = this.deps.proc ?? { start: processStart, cgroup: (pid: number) => procCgroup(pid), boot: bootId }
     if (proc.start(ready.pid) !== ready.start) return { ok: false, reason: 'the start time differs' }
-    if (proc.cgroup(ready.pid) !== ready.cgroup) return { ok: false, reason: '/proc names another cgroup' }
+    if (proc.cgroup(ready.pid, ready.cgroup) !== ready.cgroup) return { ok: false, reason: '/proc names another cgroup' }
     return { ok: true, state }
   }
 
