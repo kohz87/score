@@ -68,6 +68,8 @@ export interface LineParser {
    * was dropped or invalid, also after the result). Asked once the stream is complete; null = no loss seen.
    */
   lossReason?(): string | null
+  /** Bytes the parser (and the candidate result it produced) currently hold; the installation budget charges this. */
+  retainedBytes?(): number
 }
 
 export interface DriverRunOptions {

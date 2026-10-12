@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { signalGroup as realSignalGroup } from '../../src/runtimes/coding/pidfd-signal.ts'
 import { spawnCli } from '../../src/runtimes/coding/process.ts'
 import { realProcEnv, type ProcEnv } from '../../src/runtimes/coding/proc.ts'
 
@@ -337,3 +338,120 @@ test.each(['mismatch', 'unavailable'] as const)(
   },
   30_000,
 )
+
+// ---- FZ1 (re-review 2026-10-12 #5, #9, #17) --------------------------------------------------------------------------
+
+const script = (code: string) => baseOptions(['-e', code])
+
+test('#9: a final stdout line with no newline is no record: the stream is incomplete and nothing parses it', async () => {
+  const lines: string[] = []
+  const run = spawnCli({
+    ...script(`process.stdout.write('{"ok":1}\\n{"result":"success"}')`),
+    parser: {
+      parse: (line: string) => {
+        lines.push(line)
+        return []
+      },
+      stats: { unknown: 0, malformed: 0 },
+    },
+    onEvent: async () => undefined,
+  })
+  const outcome = await run.done
+  expect(outcome.exitCode).toBe(0)
+  expect(lines).toEqual(['{"ok":1}'])
+  expect(outcome.streamComplete).toBe(false)
+  expect(outcome.streamLoss).toContain('partial-last-line')
+}, 30_000)
+
+test('#9: an oversized record is a dropped record and the stream is incomplete', async () => {
+  const run = spawnCli({
+    ...script(`process.stdout.write('x'.repeat(1100 * 1024) + '\\n{"a":1}\\n')`),
+    onEvent: async () => undefined,
+  })
+  const outcome = await run.done
+  expect(outcome.streamComplete).toBe(false)
+  expect(outcome.streamLoss).toContain('dropped-record')
+}, 30_000)
+
+test('#9: a clean stream is complete', async () => {
+  const run = spawnCli({
+    ...script(`process.stdout.write('{"a":1}\\n')`),
+    onEvent: async () => undefined,
+  })
+  const outcome = await run.done
+  expect(outcome).toMatchObject({ streamComplete: true, streamLoss: [] })
+}, 30_000)
+
+test('#5: stderr keeps its start and is redacted whole: a labelled long value never leaks', async () => {
+  const run = spawnCli({
+    ...script(`process.stderr.write('password=' + 'v'.repeat(10000) + '\\n')`),
+    onEvent: async () => undefined,
+  })
+  const outcome = await run.done
+  expect(outcome.stderr).not.toMatch(/v{20}/)
+}, 30_000)
+
+test('#5: stderr past the raw limit is dropped, not kept as a tail', async () => {
+  const run = spawnCli({
+    ...script(`process.stderr.write('head ' + 'a'.repeat(200000) + ' TAILMARK')`),
+    onEvent: async () => undefined,
+  })
+  const outcome = await run.done
+  expect(outcome.stderr.startsWith('head ')).toBe(true)
+  expect(outcome.stderr).not.toContain('TAILMARK')
+}, 30_000)
+
+test('#17: every stop path calls the hook once, with its cause, before the group is signalled', async () => {
+  const cases = [
+    ['user', 'user'],
+    ['shutdown', 'score-shutdown'],
+    ['timeout', 'deadline'],
+    ['output_limit', 'output-cap'],
+  ] as const
+  for (const [reason, cause] of cases) {
+    const causes: string[] = []
+    const firstSignalSawCauses: number[] = []
+    const output =
+      reason === 'output_limit'
+        ? `const l = 'x'.repeat(500 * 1024) + '\\n'; for (let i = 0; i < 90; i++) process.stdout.write(l); setInterval(() => {}, 1000)`
+        : `setInterval(() => {}, 1000)`
+    const run = spawnCli({
+      ...script(output),
+      ...(reason === 'timeout' ? { maxMs: 300 } : {}),
+      graceMs: 200,
+      onStop: (c) => causes.push(c),
+      signalGroup: (pid, start, name) => {
+        firstSignalSawCauses.push(causes.length)
+        return realSignalGroup(pid, start, name)
+      },
+      onEvent: async () => undefined,
+    })
+    if (reason === 'user' || reason === 'shutdown') {
+      // Asked twice: still recorded once.
+      run.stop(reason)
+      run.stop(reason)
+    }
+    const outcome = await run.done
+    expect(outcome.stopped).toBe(reason)
+    expect(causes).toEqual([cause])
+    expect(firstSignalSawCauses[0]).toBe(1)
+  }
+}, 120_000)
+
+test('#17: a hook that throws is reported and the stop still goes on', async () => {
+  const errors: unknown[] = []
+  const run = spawnCli({
+    ...script(`setInterval(() => {}, 1000)`),
+    graceMs: 200,
+    onStop: () => {
+      throw new Error('journal down')
+    },
+    onStopError: (error) => errors.push(error),
+    onEvent: async () => undefined,
+  })
+  run.stop('user')
+  const outcome = await run.done
+  expect(outcome.stopped).toBe('user')
+  expect(outcome.groupGone).toBe(true)
+  expect(errors).toHaveLength(1)
+}, 60_000)

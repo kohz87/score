@@ -1,0 +1,5 @@
+{"_fixture":"hand-made: a valid final message and turn.completed, then a malformed terminal record (7.7a re-review 2026-10-12 #1)"}
+{"type":"thread.started","thread_id":"eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"All done."}}
+{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}
+{"type":"turn.failed","error":7}

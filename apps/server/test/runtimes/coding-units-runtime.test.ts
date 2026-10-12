@@ -8,7 +8,6 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
-import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -24,7 +23,7 @@ import { messageFromRow } from '../../src/domain/rooms.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { CliLocator } from '../../src/runtimes/coding/cli.ts'
-import { bootId, processStart } from '../../src/runtimes/coding/proc.ts'
+import { processStart } from '../../src/runtimes/coding/proc.ts'
 import { spawnCli } from '../../src/runtimes/coding/process.ts'
 import { CodingRuntime, type CodingRuntimeDeps } from '../../src/runtimes/coding/service.ts'
 import { RunSession } from '../../src/runtimes/coding/coding-socket.ts'
@@ -124,8 +123,6 @@ async function boot(options: BootOptions = {}) {
     ...(options.stopObserveMs ? { stopObserveMs: options.stopObserveMs } : {}),
     ...(options.reapRetryMs ? { reapRetryMs: options.reapRetryMs } : {}),
     ...(options.noUnit ? {} : { unit: backend }),
-    // The installation journal also witnesses the process-group fallback (review 2026-10-12 #6).
-    journal: new CodingJournal(journal),
     ...(options.onOrphans ? { onOrphans: options.onOrphans } : {}),
     onError: (error) => errors.push(error),
     spawn: (spawnOptions) => {
@@ -292,15 +289,6 @@ const journalKinds = (launchId: string) => {
   if (!read.ok) throw new Error(read.reason)
   return read.entries.filter((e) => 'launchId' in e && e.launchId === launchId).map((e) => e.kind)
 }
-const journalOf = (runId: string) => {
-  const read = journal.readOwn()
-  if (!read.ok) throw new Error(read.reason)
-  return read.entries.filter((e) => 'runId' in e && e.runId === runId) as unknown as {
-    kind: string
-    mayHaveExecuted: boolean
-    cgroup?: string
-  }[]
-}
 const textOf = (message: Message | undefined) => JSON.stringify(message?.parts ?? [])
 
 // ---- the normal turn -------------------------------------------------------------------------------------------------
@@ -386,33 +374,8 @@ test('a failed capability check keeps the process-group backend; Check again fol
   await finished()
   expect(runs()[0]!.status).toBe('completed')
   expect(processLaunches).toBe(1)
-  // No unit launch; the fallback launch is projected into the database with its routing (re-review #6) and checkpoint.
-  expect(launches().filter((l) => l.backend === 'unit')).toEqual([])
-  expect(launches()).toHaveLength(1)
-  expect(launches()[0]).toMatchObject({
-    backend: 'process-group',
-    agent_id: 'coder',
-    runtime: 'claude-code',
-    phase: 'settled',
-    may_have_executed: 1,
-  })
-  const entries = journal.readOwn()
-  if (!entries.ok) throw new Error(entries.reason)
-  expect(db.sqlite.prepare('SELECT seq FROM coding_journal_checkpoint WHERE id = 1').get()).toEqual(
-    { seq: Math.max(...entries.entries.map((e) => e.n)) },
-  )
-  // Review 2026-10-12 #6: the fallback launch is witnessed in the journal outside the home, with its process identity.
-  const witnessed = journalOf(runs()[0]!.id)
-  expect(witnessed.map((e) => e.kind)).toEqual([
-    'launch-requested',
-    'armed',
-    'releasing',
-    'released-seen',
-    'ended',
-    'settled',
-  ])
-  expect(witnessed[2]).toMatchObject({ mayHaveExecuted: true })
-  expect(witnessed[3]!.cgroup).toMatch(/^process-group:\{"pid":\d+,/)
+  // No unit launch: the fallback keeps no journal.
+  expect(launches()).toEqual([])
   fake.hooks.lingerOff = false
   const again = await request('POST', '/api/coding-agents/backend/check', {})
   expect(again.json()).toMatchObject({ kind: 'unit', note: 'Runs as a supervised system service.' })
@@ -707,37 +670,6 @@ test('settled follows the terminal commit: a result that cannot be saved yet is 
   await vi.waitFor(() => expect(launches()[0]?.phase).toBe('settled'), { timeout: 15_000 })
   expect(runs()[0]!.status).toBe('completed')
   expect(db.sqlite.prepare('SELECT run_id FROM coding_pending_terminals').all()).toEqual([])
-})
-
-test('review #6: a fallback group whose database record was lost is stopped from its journal identity', async () => {
-  await boot({ noUnit: true })
-  await addAgent()
-  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], {
-    detached: true,
-    stdio: 'ignore',
-  })
-  try {
-    const pid = child.pid!
-    const identity = { launchId: 'fb-1', runId: 'cr_lost', turnId: 't-lost', generation: 0 }
-    const cj = new CodingJournal(journal)
-    expect(cj.requestLaunch(identity).ok).toBe(true)
-    cj.arm('fb-1', { disposition: 'process-group' })
-    cj.release('fb-1', () => true)
-    cj.releasedSeen('fb-1', {
-      cgroup: `process-group:${JSON.stringify({ pid, start: processStart(pid), boot: bootId() })}`,
-    })
-    // No coding_processes row exists (a restored older database).
-    expect(db.sqlite.prepare('SELECT 1 FROM coding_processes').all()).toEqual([])
-    await coding.recover()
-    await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow(), { timeout: 10_000 })
-    expect(journalKinds('fb-1').slice(-2)).toEqual(['ended', 'settled'])
-  } finally {
-    try {
-      process.kill(-child.pid!, 'SIGKILL')
-    } catch {
-      // gone
-    }
-  }
 })
 
 // ---- recovery: journal <-> database <-> units <-> receipts -------------------------------------------------------------
@@ -1359,32 +1291,6 @@ test('#3 (re-review): a record that cannot be validated after turn.completed sti
   expect(launches()[0]!.eligibility).toContain('could not validate')
 })
 
-test('#5 (re-review): a barrier raised after admission stops the fallback release: no releasing record, no CLI', async () => {
-  let fenced = false
-  await coding.close()
-  await app.close()
-  await boot({
-    unit: { disabled: 'The fallback is forced.' },
-    blocked: () => (fenced ? 'Score is waiting for you to review the coding journal.' : null),
-    ingestWrap: (real) => ({
-      submit: (observation) => {
-        // The turn is admitted and goes `running`; the fence rises while it waits to be released.
-        if (observation.identity.endsWith(':running')) fenced = true
-        return real.submit(observation)
-      },
-    }),
-  })
-  await addAgent()
-  await makeRoom()
-  await say('@coder [fixture:basic] go')
-  await finished()
-  expect(processLaunches).toBe(0)
-  expect(cliCalls()).toHaveLength(0)
-  const kinds = (journal.readOwn() as { entries: { kind: string }[] }).entries.map((e) => e.kind)
-  expect(kinds).not.toContain('releasing')
-  expect(runs()[0]!.status).toBe('failed')
-})
-
 test('#5 (re-review): recovery signals only the recorded supervisor; a foreign invocation under the same name is never stopped', async () => {
   await addAgent()
   // The recorded supervisor is gone; another invocation now occupies the unit name.
@@ -1516,78 +1422,12 @@ test('#8 (re-review): Release settles the launch in the journal first; a restart
 
 // ---- the process-group fallback's reconciliation (re-review #6) -------------------------------------------------------
 
-function seedFallback(over: { identity?: boolean; witness?: boolean; run?: boolean } = {}) {
-  const n = ++seeded
-  const launchId = `00000000-0000-4000-9000-${String(n).padStart(12, '0')}`
-  const runId = `cr_fb${n}`
-  if (over.run !== false) seedRun(runId)
-  const cj = new CodingJournal(journal)
-  expect(cj.requestLaunch({ launchId, runId, turnId: `turn-${runId}`, generation: 0 }).ok).toBe(
-    true,
-  )
-  cj.arm(launchId, { disposition: 'process-group' })
-  cj.release(launchId, () => true)
-  return { cj, launchId, runId }
-}
-
-test('#6 (re-review): a released fallback launch with no recorded identity fences the agent and can be released', async () => {
-  await boot({ noUnit: true })
-  await addAgent()
-  const seed = seedFallback()
-  await coding.recover()
-  expect(db.sqlite.prepare('SELECT unresolved, unobservable FROM coding_processes').all()).toEqual([
-    { unresolved: 1, unobservable: 1 },
-  ])
-  const refused = await coding
-    .startRun({ agentId: 'coder', input: 'go', turnId: 't-fenced' })
-    .catch((error: unknown) => error)
-  expect(refused).toMatchObject({ status: 422, code: 'agent_still_stopping' })
-  const view = (await request('GET', '/api/coding-agents')).json().items[0]
-  expect(view.heldGroups).toEqual([{ runId: seed.runId, pgid: 0, canRelease: true }])
-  // The person's release waives the launch in the journal.
-  expect((await request('POST', '/api/coding-agents/coder/release', {})).statusCode).toBe(200)
-  expect(journalKinds(seed.launchId).at(-1)).toBe('waived')
-  expect(db.sqlite.prepare('SELECT 1 FROM coding_processes').all()).toEqual([])
-})
-
-test('#6 (re-review): surviving tools recorded beside the journal are stopped even when the database lost the group, and a group that survives fences everyone', async () => {
-  await boot({ noUnit: true })
-  await addAgent()
-  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], {
-    detached: true,
-    stdio: 'ignore',
-  })
-  try {
-    const pid = child.pid!
-    // A restored database: no run row, no process row. The leader is long gone (no identity); a tool survives.
-    const seed = seedFallback({ run: false })
-    const { writeFallbackWitness } = await import('../../src/runtimes/coding/fallback-witness.ts')
-    writeFallbackWitness(namespace, {
-      launch: seed.launchId,
-      runId: seed.runId,
-      turnId: `turn-${seed.runId}`,
-      agentId: 'coder',
-      members: [{ pid, start: processStart(pid)! }],
-      at: Date.now(),
-    })
-    await coding.recover()
-    await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow(), { timeout: 10_000 })
-    expect(journalKinds(seed.launchId).slice(-2)).toEqual(['ended', 'settled'])
-  } finally {
-    try {
-      process.kill(-child.pid!, 'SIGKILL')
-    } catch {
-      // gone
-    }
-  }
-})
-
 test('#6 (re-review): an unresolved fallback group whose run row is gone fences every agent and is visible', async () => {
   await coding.close()
   await app.close()
   await boot({ noUnit: true })
   await addAgent()
-  const seed = seedFallback({ run: false })
+  const seed = { runId: 'cr_lostrun' }
   db.sqlite
     .prepare(
       `INSERT INTO coding_processes (run_id, pid, pgid, start_time, boot_id, created_at, unresolved, unobservable)
@@ -1599,4 +1439,13 @@ test('#6 (re-review): an unresolved fallback group whose run row is gone fences 
     .catch((error: unknown) => error)
   expect(refused).toMatchObject({ status: 422, code: 'agent_still_stopping' })
   expect((await request('GET', '/api/coding-agents')).json().items[0].heldGroups).toHaveLength(1)
+})
+
+test('#1 (re-review 2): a malformed terminal record after a success takes the authority away', async () => {
+  await addAgent({ id: 'cx', name: 'Cx', runtime: 'codex', acknowledgeReads: true })
+  await makeRoom()
+  await say('@cx [fixture:lateterminal] go')
+  await finished()
+  expect(runs()[0]!.status).toBe('failed')
+  expect(launches()[0]!.eligibility).toContain('could not validate')
 })

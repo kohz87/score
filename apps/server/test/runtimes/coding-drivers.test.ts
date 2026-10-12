@@ -601,3 +601,108 @@ test('antigravity: SUCCESS and a non-empty response are eligible, and the respon
   expect(parse('ERROR', 'The answer.')?.eligible).toBe(false)
   expect(parse('success', 'The answer.')?.eligible).toBe(false)
 })
+
+// ---- FZ1 (re-review 2026-10-12 #1, #18) ------------------------------------------------------------------------------
+
+const runCodex = (lines: string[]) => {
+  const parser = createCodexParser()
+  const events = lines.flatMap((line) => parser.parse(line))
+  return { events, verdict: verdictOf(events), lost: parser.lossReason?.() ?? null }
+}
+const finalMessage = agentMessage('m1', 'All done.')
+
+test('#1: any rejected recognised Codex record takes the authority of the attempt, terminal ones and later ones too', () => {
+  const rejected: Record<string, string> = {
+    'command with no command': codexLine({
+      type: 'item.completed',
+      item: { id: 'c1', type: 'command_execution' },
+    }),
+    'file change with bad changes': codexLine({
+      type: 'item.completed',
+      item: { id: 'f1', type: 'file_change', changes: 'nope' },
+    }),
+    'mcp call without a tool': codexLine({
+      type: 'item.completed',
+      item: { id: 'x1', type: 'mcp_tool_call' },
+    }),
+    'search without a query': codexLine({
+      type: 'item.completed',
+      item: { id: 's1', type: 'web_search' },
+    }),
+    'reasoning without text': codexLine({
+      type: 'item.completed',
+      item: { id: 'r1', type: 'reasoning' },
+    }),
+  }
+  for (const [name, line] of Object.entries(rejected)) {
+    // Before the terminal record and after it: the verdict is decided once the whole stream was processed.
+    const before = runCodex([finalMessage, line, turnCompleted])
+    expect(before.verdict?.eligible, name).toBe(false)
+    const after = runCodex([finalMessage, turnCompleted, line])
+    expect(after.lost, name).not.toBeNull()
+  }
+  // Malformed terminal records.
+  const badCompleted = codexLine({ type: 'turn.completed', usage: 'many' })
+  const badFailed = codexLine({ type: 'turn.failed', error: 7 })
+  expect(runCodex([finalMessage, turnCompleted, badFailed]).lost).not.toBeNull()
+  expect(runCodex([finalMessage, badCompleted]).lost).not.toBeNull()
+  expect(runCodex([finalMessage, badCompleted, turnCompleted]).verdict?.eligible).toBe(false)
+  // A clean attempt keeps its authority.
+  const clean = runCodex([finalMessage, turnCompleted])
+  expect(clean.verdict?.eligible).toBe(true)
+  expect(clean.lost).toBeNull()
+})
+
+test('#18: ids, tool details and candidate replies are bounded, and the parser reports what it really holds', () => {
+  const parser = createCodexParser()
+  const hugeId = 'i'.repeat(200_000)
+  const events: CodingEvent[] = []
+  for (let n = 0; n < 64; n++)
+    events.push(
+      ...parser.parse(
+        codexLine({
+          type: 'item.started',
+          item: { id: `${hugeId}${n}`, type: 'command_execution', command: 'c'.repeat(500_000) },
+        }),
+      ),
+    )
+  const starts = events.filter((e) => e.kind === 'tool_start')
+  expect(starts).toHaveLength(64)
+  for (const start of starts) {
+    expect(Buffer.byteLength(start.callId)).toBeLessThanOrEqual(256)
+    if (start.detail?.type === 'command')
+      expect(Buffer.byteLength(start.detail.command)).toBeLessThanOrEqual(16 * 1024)
+  }
+  // Distinct long ids stay distinct, and the same id maps to the same short id (the end pairs with the start).
+  expect(new Set(starts.map((s) => s.callId)).size).toBe(64)
+  expect(parser.retainedBytes!()).toBeLessThan(64 * 300)
+  // A candidate reply past the limit is never an authoritative reply.
+  const big = runCodex([agentMessage('m1', 'r'.repeat(300 * 1024)), turnCompleted])
+  expect(big.verdict?.eligible).toBe(false)
+  const ok = createCodexParser()
+  ;[agentMessage('m1', 'r'.repeat(100 * 1024)), turnCompleted].forEach((l) => ok.parse(l))
+  expect(ok.retainedBytes!()).toBeGreaterThanOrEqual(100 * 1024)
+})
+
+test('#18: Claude and Antigravity results and tool details are bounded too', () => {
+  const claude = createClaudeParser()
+  const events = claude.parse(
+    JSON.stringify({
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 't'.repeat(10_000),
+            name: 'Bash',
+            input: { command: 'c'.repeat(300_000) },
+          },
+        ],
+      },
+    }),
+  )
+  const start = events.find((e) => e.kind === 'tool_start')!
+  expect(start.kind === 'tool_start' && Buffer.byteLength(start.callId)).toBeLessThanOrEqual(256)
+  const result = claude.parse(claudeResult({ result: 'r'.repeat(400 * 1024) }))
+  expect(verdictOf(result)).toMatchObject({ eligible: false })
+})
