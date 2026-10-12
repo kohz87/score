@@ -7,6 +7,7 @@ import {
   readdirSync,
   rmSync,
   writeFileSync,
+  writeSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -32,6 +33,7 @@ import { writeReceipt } from '../../src/runtimes/coding/supervisor.mjs'
 import {
   fenceBarrier,
   UNIT_CAPABLE_FILE,
+  fallbackForced,
   UnitBackend,
   type UnitBackendDeps,
 } from '../../src/runtimes/coding/unit-backend.ts'
@@ -1537,6 +1539,63 @@ test('decision 69: a forced fallback is a choice, not a failure: it never pauses
   await boot({ unit: { disabled: 'The fallback is forced.', forced: true } })
   expect(backend.status.kind).toBe('process-group')
   expect(backend.block()).toBeNull()
+})
+
+test('FW #2: a marker that can’t be written pauses coding until it is durable; a restart never falls back', async () => {
+  await coding.close()
+  await app.close()
+  rmSync(marker(), { force: true })
+  let full = true
+  const diskFull = {
+    writeSync: (fd: number, data: Buffer, offset: number, length: number) => {
+      if (full) throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' })
+      return writeSync(fd, data, offset, length)
+    },
+  }
+  try {
+    await boot({ unit: { markerIo: diskFull } })
+    await addAgent()
+    await makeRoom()
+    expect(backend.status.kind).toBe('unit')
+    expect(backend.usable()).toBe(false)
+    expect(backend.block()).toMatch(/paused/)
+    expect(existsSync(marker())).toBe(false)
+    const refused = await coding
+      .startRun({ agentId: 'coder', input: 'go', turnId: 't-nomarker' })
+      .catch((error: unknown) => error)
+    expect(refused).toMatchObject({ status: 422, code: 'coding_paused' })
+  } finally {
+    full = false
+  }
+  // The disk recovers: the retry writes it and coding resumes without another check.
+  expect(backend.usable()).toBe(true)
+  expect(existsSync(marker())).toBe(true)
+  errors.length = 0
+})
+
+test('FW #2: the environment forces the fallback only under the test harness, never in production', () => {
+  expect(fallbackForced({ SCORE_CODING_BACKEND: 'process-group', NODE_ENV: 'production' })).toBe(
+    false,
+  )
+  expect(fallbackForced({ SCORE_CODING_BACKEND: 'process-group' })).toBe(false)
+  expect(fallbackForced({ SCORE_CODING_BACKEND: 'process-group', NODE_ENV: 'test' })).toBe(true)
+  expect(fallbackForced({ NODE_ENV: 'test' })).toBe(false)
+})
+
+test('FW #2: a lost marker is recovered from owned unit history: a failing host pauses instead of falling back', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:basic] go')
+  await finished()
+  expect(launches().map((l) => l.backend)).toEqual(['unit'])
+  await coding.close()
+  await app.close()
+  rmSync(marker(), { force: true })
+  fake.hooks.lingerOff = true
+  await boot()
+  expect(backend.status.kind).toBe('unit')
+  expect(backend.block()).toMatch(/paused/)
+  expect(backend.usable()).toBe(false)
 })
 
 test('re-review 2 #2: restore, journal, journal-root and installation fences stop coding through the production classifier', () => {

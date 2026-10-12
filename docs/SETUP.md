@@ -307,7 +307,10 @@ result, with **Check again**, on each coding agent's card in Team.
   process-group engine and says so on the card: "tools a coding CLI started may keep running until Score restarts and
   stops them". That engine keeps its earlier limits: it signals the processes Score recorded for the run (through
   pidfds), not everything the CLI started, and its proof is the group, not a control group.
-- `SCORE_CODING_BACKEND=process-group` forces the process-group engine. That is your choice, so it never pauses.
+- There is no setting that forces the process-group engine in production (decision 70).
+- Score saves the pass before it starts the first supervised service. If the file can't be written (disk full), coding
+  stays paused and Score retries the write; it also recognises an installation that has run supervised services from
+  its journal and database, so losing the file doesn't re-open the process-group engine.
 - Restore, journal and installation uncertainty (an unresolved fence in Score) stops every coding launch, whichever
   engine would run it, also at the moment of release.
 
@@ -318,6 +321,7 @@ Tests: `SCORE_TEST_SYSTEMD=1 pnpm --filter @score/server test coding-units-syste
 against the real user manager. Its units are named `score-test-<random>-…` and always stopped and reset by the test.
 
 ## Changelog of this file
+- 2026-10-12: no production switch for the process-group engine; the pass is saved before any unit launch (decision 70).
 - 2026-10-12: supervised services are the only engine once an installation has passed the check; a later failure pauses coding (decision 69).
 - 2026-10-12: coding runs as supervised services, capability check, `SCORE_CODING_BACKEND` (PLAN 7.7a part 3).
 - 2026-10-12: installation identity, per-installation journal folders, `score installation` (PLAN 7.7a part 1).

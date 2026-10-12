@@ -56,6 +56,8 @@ export type BackendKind = 'unit' | 'process-group'
 
 /** A file the installation keeps (beside its journal, outside the home) once the unit check has passed (decision 69). */
 export const UNIT_CAPABLE_FILE = 'unit-capable.json'
+const MARKER_PAUSE =
+  'Coding runs are paused: Score couldn’t save that this computer runs supervised services, and it won’t start a run until it has. Check the disk and choose Check again.'
 /** Written before `requested`: where the launch belongs, so a restored database that lost its rows can still route it. */
 const ROUTING_FILE = 'routing.json'
 /** The supervisor's first stop cause, written before it acts on it (review 2026-10-12 #17). */
@@ -74,6 +76,13 @@ export function fenceBarrier(sqlite: DatabaseSync): string | null {
   return blocking
     ? 'Score is waiting for you to review the execution journal before it starts coding runs.'
     : null
+}
+/**
+ * Whether the environment forces the process-group engine. Only the test harness may (decision 70): in production a
+ * host that ever ran supervised services never silently loses them, whatever the environment says.
+ */
+export function fallbackForced(env: NodeJS.ProcessEnv): boolean {
+  return env.SCORE_CODING_BACKEND === 'process-group' && env.NODE_ENV === 'test'
 }
 export interface BackendStatus {
   kind: BackendKind
@@ -116,6 +125,8 @@ export interface UnitBackendDeps {
   clock?: () => number
   onError?: (error: unknown) => void
   /** Test seams. */
+  /** The write primitives of the capability marker (a test makes the disk fail). */
+  markerIo?: Parameters<typeof writeReceipt>[3]
   unitPrefix?: string
   socket?: CodingSocketServer
   node?: string
@@ -328,6 +339,8 @@ export class UnitBackend {
   private capable = false
   /** Why runs are paused: the unit check failed on an installation that passed it before. */
   private paused: string | null = null
+  /** The pass is known but its marker file isn't durable yet: no unit launch until it is (decision 70). */
+  private markerPending = false
   /** Launches whose stop cause couldn't be made durable: their result can't be eligible. */
   private readonly unrecordedStops = new Set<string>()
   private closed = false
@@ -350,7 +363,33 @@ export class UnitBackend {
       checkedAt: new Date(this.clock()).toISOString(),
       note: FALLBACK_NOTE,
     }
-    this.capable = !deps.unresolved && existsSync(join(deps.namespaceDir, UNIT_CAPABLE_FILE))
+    this.capable =
+      !deps.unresolved &&
+      (existsSync(join(deps.namespaceDir, UNIT_CAPABLE_FILE)) || this.historyShowsUnits())
+    // Evidence from owned history stands in for a lost marker; write it back (best effort, it is also retried).
+    if (this.capable && !deps.unresolved && deps.disabled === undefined) this.markerPending = true
+  }
+
+  /**
+   * Positive evidence that this installation ran supervised services: an owned unit launch in its database or journal.
+   * A history that can't be read counts as evidence (pausing is the safe side of the choice).
+   */
+  private historyShowsUnits(): boolean {
+    try {
+      if (
+        this.deps.db.sqlite
+          .prepare("SELECT 1 FROM coding_launches WHERE backend = 'unit' LIMIT 1")
+          .get() !== undefined
+      )
+        return true
+    } catch {
+      return true
+    }
+    const read = this.deps.journal.journal.readOwn()
+    if (!read.ok) return true
+    for (const launch of foldCodingLaunches(read.entries).values())
+      if (launch.state.inherited !== true) return true
+    return false
   }
 
   get status(): BackendStatus {
@@ -358,10 +397,12 @@ export class UnitBackend {
   }
   /** True when new coding runs should use the unit backend. */
   usable(): boolean {
+    this.retryMarker()
     return this.current.kind === 'unit' && this.paused === null && !this.closed
   }
   /** Why admission is paused, or null. */
   block(): string | null {
+    this.retryMarker()
     if (this.paused !== null) return this.paused
     if (this.orphans.length > 0)
       return 'A coding service from an earlier session isn’t accounted for. Score paused coding runs until you review it.'
@@ -461,13 +502,15 @@ export class UnitBackend {
     const all = ok && listening && python !== null && notifyOk
     if (all) {
       this.paused = null
-      this.rememberCapable()
+      this.capable = true
+      this.markerPending = !this.persistCapable()
       this.current = {
         kind: 'unit',
         checks,
         checkedAt: new Date(this.clock()).toISOString(),
         note: UNIT_NOTE,
       }
+      if (this.markerPending) this.pauseForMarker()
     } else this.current = this.shortfall(checks, checks.find((c) => !c.ok)?.detail ?? '')
     return this.current
   }
@@ -492,19 +535,37 @@ export class UnitBackend {
     }
   }
 
-  private rememberCapable(): void {
-    if (this.deps.unresolved || this.deps.disabled !== undefined) return
-    // In memory first: this process pauses on a later failure even when the file can't be written.
-    const first = !this.capable
-    this.capable = true
-    if (!first) return
+  /** Whether the marker file exists durably afterwards. Never throws. */
+  private persistCapable(): boolean {
+    if (this.deps.unresolved || this.deps.disabled !== undefined) return true
     try {
-      writeReceipt(this.deps.namespaceDir, UNIT_CAPABLE_FILE, {
-        installation: this.deps.installationId,
-        at: this.clock(),
-      })
+      writeReceipt(
+        this.deps.namespaceDir,
+        UNIT_CAPABLE_FILE,
+        { installation: this.deps.installationId, at: this.clock() },
+        this.deps.markerIo,
+      )
+      return true
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') this.deps.onError?.(error)
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') return true
+      this.deps.onError?.(error)
+      return false
+    }
+  }
+
+  private pauseForMarker(): void {
+    this.paused = MARKER_PAUSE
+    this.current = { ...this.current, kind: 'unit', note: this.paused }
+  }
+
+  /** Retries the marker while it is pending; once durable the pause lifts (the check itself had passed). */
+  private retryMarker(): void {
+    if (!this.markerPending || this.closed) return
+    if (!this.persistCapable()) return
+    this.markerPending = false
+    if (this.paused === MARKER_PAUSE) {
+      this.paused = null
+      this.current = { ...this.current, note: UNIT_NOTE }
     }
   }
 

@@ -69,7 +69,7 @@ import { retireIngestKeys, retireMedia } from './hub/retire.ts'
 import { restoreRoomHolds } from './domain/room-rewinding.ts'
 import { locatorForMode } from './runtimes/coding/cli.ts'
 import { CodingRuntime } from './runtimes/coding/service.ts'
-import { fenceBarrier, UnitBackend } from './runtimes/coding/unit-backend.ts'
+import { fallbackForced, fenceBarrier, UnitBackend } from './runtimes/coding/unit-backend.ts'
 import { CodingJournal } from './domain/orchestration/coding-journal.ts'
 import { defaultRootPolicy } from './workspace/policy.ts'
 
@@ -361,12 +361,13 @@ export async function startServer(
     // *supervised* is decided by the capability check; a forced fallback, a missing runtime directory or an unresolved
     // installation only mark the backend disabled (review #5).
     const runtimeDir = process.env.XDG_RUNTIME_DIR
+    const forcedFallback = fallbackForced(process.env)
     const disabled =
       installation?.ok !== true || installationBlock !== null
         ? (installationBlock ?? 'This installation isn’t resolved yet.')
         : !runtimeDir
           ? 'There is no user runtime folder ($XDG_RUNTIME_DIR).'
-          : process.env.SCORE_CODING_BACKEND === 'process-group'
+          : forcedFallback
             ? 'The fallback is forced (SCORE_CODING_BACKEND).'
             : undefined
     const resolved = installation?.ok === true ? installation : undefined
@@ -384,7 +385,7 @@ export async function startServer(
             ...(resolved === undefined || installationBlock !== null ? { unresolved: true } : {}),
             // Restore, journal and installation uncertainty stop every coding launch, whichever engine runs it.
             blocked: () => installationBlock ?? database.read((sqlite) => fenceBarrier(sqlite)),
-            ...(process.env.SCORE_CODING_BACKEND === 'process-group' ? { forced: true } : {}),
+            ...(forcedFallback ? { forced: true } : {}),
             onError: (error) => app?.log.error({ err: error }, 'Coding unit backend failed'),
           })
         : undefined
