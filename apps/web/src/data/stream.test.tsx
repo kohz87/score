@@ -906,6 +906,35 @@ test('SCORE-016: a handle kept across idle eviction reads and refetches the fres
   await vi.waitFor(() => expect(old.getSnapshot().data).toBe('three'))
 })
 
+test('S3-006: events dropped while idle make the cache stale; a failed refresh never turns a later delta into success', async () => {
+  vi.useFakeTimers()
+  const { queries, source } = setupWith({ retryBaseMs: 1000 })
+  hello(source)
+  const { def, requests } = definition()
+  const handle = queries.register(def)
+  let off = handle.subscribe(() => {})
+  await vi.waitFor(() => expect(requests).toHaveLength(1))
+  requests[0]!.resolve({ data: 'A', asOfSeq: 10 })
+  await vi.waitFor(() => expect(handle.getSnapshot().data).toBe('A'))
+  off()
+  // A changes while nobody observes; the event is dropped. Same epoch, no reconnect.
+  delta(source, 11, '+')
+  off = handle.subscribe(() => {})
+  await vi.waitFor(() => expect(requests).toHaveLength(2))
+  requests[1]!.reject(new Error('offline'))
+  await vi.waitFor(() => expect(handle.getSnapshot().status).toBe('error'))
+  delta(source, 12, 'B')
+  expect(handle.getSnapshot()).toMatchObject({ status: 'error', data: 'A', asOfSeq: 10 })
+  // Backoff retries; the new snapshot (taken after B) repairs it.
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(requests).toHaveLength(3)
+  requests[2]!.resolve({ data: 'A+B', asOfSeq: 12 })
+  await vi.waitFor(() =>
+    expect(handle.getSnapshot()).toMatchObject({ status: 'success', data: 'A+B', asOfSeq: 12 }),
+  )
+  off()
+})
+
 test('an unobserved registration is evicted after the idle period and registers again on next use', async () => {
   vi.useFakeTimers()
   const { queries, queryClient } = setupWith({ idleEvictMs: 1000 })

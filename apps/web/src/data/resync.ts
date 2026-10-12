@@ -132,7 +132,9 @@ export function createStreamQueryRegistry(
     let observers = 0
     let generation = 0
     let fetching = false
-    let fenced = false
+    // A cache that exists before this registration was made (e.g. after idle eviction) missed every
+    // event in between, so it starts out untrusted.
+    let fenced = queryClient.getQueryData(definition.key) !== undefined
     // Events were dropped while a snapshot was in flight, so that snapshot cannot be trusted.
     let overflowed = false
     let controller: AbortController | undefined
@@ -259,7 +261,15 @@ export function createStreamQueryRegistry(
     const entry: Entry = {
       refetch,
       event(event) {
-        if (!observers || !definition.types.includes(event.type)) return
+        if (!definition.types.includes(event.type)) return
+        if (!observers) {
+          // An idle cache misses this event for good: it stays untrusted until a snapshot succeeds.
+          if (cached()) {
+            fenced = true
+            pending = []
+          }
+          return
+        }
         if (fetching || fenced || !cached()) {
           if (overflowed) return
           buffer.push(event)
