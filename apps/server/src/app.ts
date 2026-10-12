@@ -67,6 +67,7 @@ import { registerSystemRoutes } from './http/system.ts'
 import { registerStreamRoute, type StreamRouteOptions } from './http/stream.ts'
 import type { ScoreDb } from './db/index.ts'
 import type { Ingest } from './hub/ingest.ts'
+import { pidfdSupport } from './runtimes/coding/pidfd-signal.ts'
 import { getSystemStatus as defaultSystemStatus } from './system-status.ts'
 import {
   createHermesPort,
@@ -440,6 +441,13 @@ export function buildApp({
       ...streamOptions,
     })
   }
+  // Which interpreter signals coding-agent processes through pidfds (Y1); shows in Settings > Logs.
+  if (coding)
+    app.addHook('onReady', async () => {
+      const support = pidfdSupport()
+      if (support.python) app.log.info(support.detail)
+      else app.log.warn(support.detail)
+    })
   if (config.remote) registerHttpsGuide(app, config)
   if (webAssets) registerWebAssets(app, webAssets, config.remote ? 'tls' : undefined)
   return app
