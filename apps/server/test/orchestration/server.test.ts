@@ -61,8 +61,13 @@ test('a started fake server runs an orchestration end to end with its scripted l
       (await server.app.inject({ url: `/api/orchestrations/${id}`, headers })).json(),
     )
     expect(snap.orchestration.stepsList.map((s) => s.status)).toEqual(['succeeded', 'succeeded'])
-    // The fake adapter's journal lives in the home; a live one is outside it.
-    expect(existsSync(join(resolveJournalDir(config), 'journal.ndjson'))).toBe(true)
+    // The fake adapter's journal folder lives in the home (a live one is outside it); the journal itself is in the
+    // installation's namespace (7.7a), not at the journal root.
+    expect(server.installation).toMatchObject({ ok: true })
+    const namespace = server.installation!.ok ? server.installation!.namespaceDir : ''
+    expect(namespace.startsWith(resolveJournalDir(config))).toBe(true)
+    expect(existsSync(join(namespace, 'journal.ndjson'))).toBe(true)
+    expect(existsSync(join(resolveJournalDir(config), 'journal.ndjson'))).toBe(false)
     expect(resolveJournalDir({ ...config, mode: 'live' }, { XDG_STATE_HOME: '/state' })).toBe(
       '/state/score/execution-journal',
     )

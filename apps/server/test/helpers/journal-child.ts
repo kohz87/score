@@ -14,7 +14,14 @@ if (role === 'hold') {
   // Tries to revoke launch `a` (run r1/t1) in the journal at `dir`; `b` is touched just before the lock is requested.
   const { CodingJournal } = await import('../../src/domain/orchestration/coding-journal.ts')
   const coding = new CodingJournal(
-    new ExecutionJournal(dir!, process.argv[6] ?? 'scope-x', undefined, undefined, undefined, 30_000),
+    new ExecutionJournal(
+      dir!,
+      process.argv[6] ?? 'scope-x',
+      undefined,
+      undefined,
+      undefined,
+      30_000,
+    ),
   )
   fs.writeFileSync(b!, 'about to revoke')
   const result = coding.revoke(a!)

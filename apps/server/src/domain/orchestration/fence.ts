@@ -554,6 +554,7 @@ export class GlobalFenceStore {
   startupCheck(): { fenced: boolean; reasons: string[] } {
     const reasons: string[] = []
     const alreadyFenced = this.db.read((sqlite) => isFenced(sqlite))
+    if (this.hardBlock === null) this.liftResolvedInstallationBlock()
     if (this.hardBlock !== null) {
       reasons.push('installation_unresolved')
       this.set('installation_unresolved', [
@@ -626,6 +627,18 @@ export class GlobalFenceStore {
     }
     const fenced = alreadyFenced || reasons.length > 0
     return { fenced, reasons }
+  }
+
+  /**
+   * The fence an earlier start raised because the installation was unresolved is the only one the person's
+   * `score installation confirm-*` already decided: once the identity resolves, nothing else holds it up.
+   */
+  private liftResolvedInstallationBlock(): void {
+    const row = this.db.read((sqlite) => readGlobal(sqlite))
+    if (row.fenced !== 1 || row.reason !== 'installation_unresolved') return
+    const items = this.db.read((sqlite) => fenceItems(sqlite))
+    if (items.some((item) => item.ref !== 'installation')) return
+    this.lift(row.revision, 'the installation was confirmed')
   }
 
   /**

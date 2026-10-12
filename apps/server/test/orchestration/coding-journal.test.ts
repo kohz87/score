@@ -167,7 +167,16 @@ test('the race across two processes: a revoke waiting on the lock sees the relea
       // asks to revoke the same launch. It must wait for the lock and then find `releasing`.
       const proc = spawn(
         process.execPath,
-        ['--experimental-transform-types', '--no-warnings', child, 'revoke', dir, 'l1', marker, SCOPE],
+        [
+          '--experimental-transform-types',
+          '--no-warnings',
+          child,
+          'revoke',
+          dir,
+          'l1',
+          marker,
+          SCOPE,
+        ],
         {
           env: { ...process.env, XDG_STATE_HOME: join(tmp.dir, 'state') },
         },

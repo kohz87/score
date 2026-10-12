@@ -107,7 +107,20 @@ vi.mock('../src/domain/orchestration/fence.ts', () => ({
   GlobalFenceStore: class {
     startupCheck = () => ({ fenced: false, reasons: [] })
     fenceUnverifiedRoot = () => false
+    setHardBlock = () => undefined
   },
+}))
+// Installation identity and the journal migration have their own tests (installation, orchestration/journal-migration).
+vi.mock('../src/installation.ts', () => ({
+  resolveInstallation: () => ({
+    ok: true,
+    id: '0123456789abcdef',
+    namespaceDir: '/tmp/score-test-startup-ns',
+    how: 'created',
+  }),
+}))
+vi.mock('../src/domain/orchestration/journal-migration.ts', () => ({
+  migrateLegacyJournal: () => ({ ok: true, state: 'none', copied: 0 }),
 }))
 vi.mock('../src/domain/orchestration/journal.ts', () => ({
   ExecutionJournal: class {},

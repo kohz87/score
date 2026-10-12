@@ -15,6 +15,9 @@ import { afterEach, expect, test } from 'vitest'
 import { GlobalFenceStore, readGlobal } from '../../src/domain/orchestration/fence.ts'
 import { ExecutionJournal, journalScope } from '../../src/domain/orchestration/journal.ts'
 import { migrate, openDatabase } from '../../src/db/index.ts'
+import { migrateLegacyJournal } from '../../src/domain/orchestration/journal-migration.ts'
+import { readHomeInstallation, resolveInstallation } from '../../src/installation.ts'
+import { realpathSync } from 'node:fs'
 import { migrationsDir } from '../orchestration/harness-db.ts'
 
 const launcher = fileURLToPath(new URL('../../../../scripts/score', import.meta.url))
@@ -80,4 +83,55 @@ test('score restore refuses a backup that is not a Score home, a missing folder 
   expect(result.stderr).toContain('Score is running')
   expect(existsSync(join(env.SCORE_JOURNAL_DIR, 'restore-marker.json'))).toBe(false)
   expect(readFileSync(join(home, 'score.db'), 'utf8')).toBe('current database')
+})
+
+test('7.7a: with an installation, the marker goes to its namespace (scope = the id) and the restored home gets the registry id back', () => {
+  const { home, backup, journalDir, env } = setup()
+  const resolved = resolveInstallation({ journalDir, home })
+  if (!resolved.ok) throw new Error(resolved.message)
+  // The backup carries another installation's id (it came from a copy): the registry outside the home decides.
+  writeFileSync(
+    join(backup, 'installation.json'),
+    JSON.stringify({ version: 1, id: 'e'.repeat(16) }),
+  )
+  execFileSync(launcher, ['restore', backup], { env, encoding: 'utf8' })
+  expect(existsSync(join(journalDir, 'restore-marker.json'))).toBe(false)
+  const marker = JSON.parse(
+    readFileSync(join(resolved.namespaceDir, 'restore-marker.json'), 'utf8'),
+  )
+  expect(marker).toMatchObject({ scope: resolved.id, origin: 'restore' })
+  expect(readHomeInstallation(home)).toEqual({ state: 'ok', id: resolved.id })
+
+  // The next start (fence store on the namespace journal) fences with the untrusted-history marker.
+  const db = openDatabase(join(home, 'score.db'))
+  const store = new GlobalFenceStore(db, new ExecutionJournal(resolved.namespaceDir, resolved.id))
+  expect(store.startupCheck()).toEqual({ fenced: true, reasons: ['restore'] })
+  expect(readGlobal(db.sqlite)).toMatchObject({ fenced: 1, untrusted_history: 1 })
+  db.close()
+})
+
+test('7.7a: restore follows the legacy journal’s cutover even when the registry entry is gone', () => {
+  const { home, backup, journalDir, env } = setup()
+  const real = realpathSync(home)
+  const legacy = new ExecutionJournal(journalDir, journalScope(real))
+  legacy.append({
+    kind: 'send_started',
+    attemptId: 'a1',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: 1,
+  })
+  const resolved = resolveInstallation({ journalDir, home })
+  if (!resolved.ok) throw new Error(resolved.message)
+  migrateLegacyJournal({
+    journalDir: realpathSync(journalDir),
+    homeScope: journalScope(real),
+    installationId: resolved.id,
+    namespaceDir: resolved.namespaceDir,
+  })
+  rmSync(join(journalDir, 'installations.json'))
+  execFileSync(launcher, ['restore', backup], { env, encoding: 'utf8' })
+  expect(existsSync(join(realpathSync(journalDir), resolved.id, 'restore-marker.json'))).toBe(true)
+  expect(existsSync(join(journalDir, 'restore-marker.json'))).toBe(false)
 })
