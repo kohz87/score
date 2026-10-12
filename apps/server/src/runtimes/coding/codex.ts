@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { rememberId } from './note.ts'
 import type { CodingDriver, CodingEvent, DriverRunOptions, LineParser } from './types.ts'
 
 // Codex CLI, headless: `codex exec --json`. Event shapes follow OpenAI's documented JSONL stream
@@ -63,11 +64,17 @@ export function createCodexParser(cwd?: string): LineParser {
   // 7.7a §6: every agent_message is validated; a malformed or empty completed one invalidates authority for the turn.
   // The reply is the last validated message before turn.completed.
   let lastMessage: string | null = null
-  let messageInvalid = false
-  let droppedAtTurnStart = 0
+  // Sticky for the whole attempt, also after `turn.completed` (review 2026-10-12 #3): once a message or record that could
+  // have been the final one was lost or invalid, nothing this attempt produced is authoritative.
+  let lossNote: string | null = null
+  const lose = (note: string) => {
+    lossNote ??= note
+  }
   const started = new Set<string>()
   return {
     stats,
+    lossReason: () =>
+      lossNote ?? (stats.malformed > 0 ? 'Score dropped a record of this turn' : null),
     parse(line) {
       let value: unknown
       try {
@@ -82,7 +89,8 @@ export function createCodexParser(cwd?: string): LineParser {
       }
       // A record that claims to be an agent_message and fails the item schema (no id, wrong shape) could have been the
       // final one: the turn loses its authority before the outer validation drops it (review 2026-10-12 #3).
-      if (claimsAgentMessage(value) && !ItemEvent.safeParse(value).success) messageInvalid = true
+      if (claimsAgentMessage(value) && !ItemEvent.safeParse(value).success)
+        lose('Codex sent a message Score could not validate')
       const thread = ThreadStarted.safeParse(value)
       if (thread.success) return [{ kind: 'session', sessionId: thread.data.thread_id }]
       const completed = TurnCompleted.safeParse(value)
@@ -96,9 +104,11 @@ export function createCodexParser(cwd?: string): LineParser {
             inputTokens: usage.input_tokens ?? 0,
             outputTokens: usage.output_tokens ?? 0,
           })
-        // Any record dropped during the turn (unparseable line) means the stream is not whole: no authority.
-        const dropped = stats.malformed - droppedAtTurnStart
-        const eligible = !messageInvalid && lastMessage !== null && dropped === 0
+        // Any record dropped so far (unparseable line) means the stream is not whole: no authority. Loss that comes after
+        // this record is applied once the whole stream was processed (`lossReason`).
+        const lost =
+          lossNote ?? (stats.malformed > 0 ? 'Score dropped a record of this turn' : null)
+        const eligible = lost === null && lastMessage !== null
         events.push({
           kind: 'result',
           ok: true,
@@ -107,16 +117,10 @@ export function createCodexParser(cwd?: string): LineParser {
             : {
                 eligible: false,
                 reply: null,
-                reason: messageInvalid
-                  ? 'Codex sent a message Score could not validate'
-                  : dropped > 0
-                    ? 'Score dropped a record of this turn'
-                    : 'Codex ended the turn without a final message',
+                reason: lost ?? 'Codex ended the turn without a final message',
               },
         })
         lastMessage = null
-        messageInvalid = false
-        droppedAtTurnStart = stats.malformed
         return events
       }
       const failed = TurnFailed.safeParse(value)
@@ -134,15 +138,19 @@ export function createCodexParser(cwd?: string): LineParser {
       const item = ItemEvent.safeParse(value)
       if (!item.success) {
         stats.unknown++
+        // An item record without a usable item (null, no id) may have carried the final message.
+        if (/^item\./.test(String((value as { type?: unknown }).type)))
+          lose('Codex sent a record Score could not validate')
         return []
       }
       const { id, type } = item.data.item
       const phase = item.data.type
       if (type === 'agent_message') {
         const message = MessageItem.safeParse(item.data.item)
-        if (phase === 'item.completed' && (!message.success || !message.data.text.trim()))
-          messageInvalid = true
-        if (phase === 'item.updated' && !message.success) messageInvalid = true
+        // Every phase is validated: a started or updated message that is malformed makes the turn non-authoritative too.
+        if (!message.success) lose('Codex sent a message Score could not validate')
+        else if (phase === 'item.completed' && !message.data.text.trim())
+          lose('Codex sent a message Score could not validate')
         if (phase !== 'item.completed' || !message.success || !message.data.text) return []
         lastMessage = message.data.text
         const text = spoke ? `\n\n${message.data.text}` : message.data.text
@@ -163,7 +171,7 @@ export function createCodexParser(cwd?: string): LineParser {
         }
         const events: CodingEvent[] = []
         if (!started.has(id)) {
-          started.add(id)
+          rememberId(started, id)
           events.push({
             kind: 'tool_start',
             callId: id,
@@ -213,7 +221,7 @@ export function createCodexParser(cwd?: string): LineParser {
         }
         const events: CodingEvent[] = []
         if (!started.has(id)) {
-          started.add(id)
+          rememberId(started, id)
           events.push({
             kind: 'tool_start',
             callId: id,

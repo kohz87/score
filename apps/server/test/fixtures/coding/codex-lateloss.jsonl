@@ -1,0 +1,5 @@
+{"_fixture":"hand-made: a valid final message and turn.completed, then a record that cannot be validated (7.7a re-review #3)"}
+{"type":"thread.started","thread_id":"dddddddd-dddd-4ddd-8ddd-dddddddddddd"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"All done."}}
+{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}
+{"type":"item.completed","item":null}

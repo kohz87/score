@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import {
   chmodSync,
+  writeSync,
   existsSync,
   mkdtempSync,
   readdirSync,
@@ -9,7 +10,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type net from 'node:net'
+import net from 'node:net'
 import { afterEach, expect, test, vi } from 'vitest'
 import {
   alive,
@@ -337,9 +338,35 @@ test('the disconnect budget holds after the leader exited, even when the payload
   expect(existsSync(join(h.receiptDir, 'ended.json'))).toBe(false)
 }, 20_000)
 
-test('a receipt that fails mid-write leaves no file under the final name (review #8)', () => {
+test('a receipt that fails mid-write leaves no file under the final name (review #8, test fixed in FY1)', () => {
   const dir = mkdtempSync(join(tmpdir(), 'score-receipt-'))
-  expect(() => writeReceipt(dir, 'released.json', { n: 1n })).toThrow()
+  // A real short write, then an I/O error: the temp file holds a partial body when the write throws.
+  let calls = 0
+  const io = {
+    writeSync: (fd: number, data: Buffer, off: number, len: number) => {
+      calls += 1
+      if (calls > 1) throw new Error('EIO')
+      return writeSync(fd, data, off, Math.min(5, len))
+    },
+  }
+  expect(() => writeReceipt(dir, 'released.json', { launch: 'L', generation: 1 }, io)).toThrow(
+    'EIO',
+  )
+  expect(calls).toBe(2)
+  expect(readdirSync(dir)).toEqual([])
+  // A failing publish (link) after a complete temp file also leaves nothing under the final name.
+  expect(() =>
+    writeReceipt(
+      dir,
+      'ended.json',
+      { launch: 'L' },
+      {
+        linkSync: () => {
+          throw new Error('EXDEV')
+        },
+      },
+    ),
+  ).toThrow('EXDEV')
   expect(readdirSync(dir)).toEqual([])
 })
 
@@ -376,4 +403,42 @@ test('readers reject empty, partial, malformed and foreign receipts (review #8)'
     expect(parseReceipt(bad, 'ended', { launch: 'L', generation: 2 }).state).toBe('invalid')
   expect(parseReceipt(ok, 'ended', { launch: 'L', generation: 3 }).state).toBe('invalid')
   expect(parseReceipt(ok, 'released', { launch: 'L' }).state).toBe('invalid')
+})
+
+test('#1: a pipe the supervisor had to close itself (a holder outside the payload) is loss, never a clean EOF', async () => {
+  const { h, outcome, code } = await run({
+    graceMs: 200,
+    // The holder is not in the fake payload's survivors file, so the cgroup reports empty while the pipe stays open:
+    // the cleanup closes Score's end of the pipes without an EOF having arrived.
+    script: `
+      const { spawn } = require('child_process');
+      const c = spawn('sleep', ['30'], { detached: true, stdio: 'inherit' }); c.unref();
+      console.log(JSON.stringify({ type: 'first', holder: c.pid }))`,
+  })
+  const holder = Number(JSON.parse(h.stdout[0]!).holder)
+  process.kill(holder, 'SIGKILL') // this test's own process
+  expect(code).toBe(0)
+  expect(outcome.eligible).toBe(false)
+  expect(outcome.reasons).toEqual(
+    expect.arrayContaining(['forced-eof-stdout', 'forced-eof-stderr']),
+  )
+  expect(outcome.droppedRecords).toBeGreaterThan(0)
+})
+
+test('a leader that exits while its pipes are paused under backpressure still delivers every unread byte (weak test of review #1 completed)', async () => {
+  const { h, outcome, code } = await run({
+    graceMs: 200,
+    // A consumer that never catches up: the supervisor pauses the CLI's pipes after the first chunk.
+    connect: (path) => {
+      const s = net.connect(path)
+      Object.defineProperty(s, 'writableLength', { get: () => 10_000_000 })
+      return s
+    },
+    script: `
+      console.log(JSON.stringify({ type: 'first' }));
+      setTimeout(() => console.log(JSON.stringify({ type: 'turn.completed' })), 300)`,
+  })
+  expect(code).toBe(0)
+  expect(h.stdout.map((l) => JSON.parse(l).type)).toEqual(['first', 'turn.completed'])
+  expect(outcome).toMatchObject({ eligible: true, reasons: [] })
 })

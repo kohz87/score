@@ -170,7 +170,11 @@ describe.skipIf(!ENABLED)(
       const [launch] = launchRows(kit)
       expect(launch!.unit.startsWith(PREFIX)).toBe(true)
       expect(launch!.proof).toMatch(/cgroup|never/)
-      expect(readdirSync(launch!.receipt_dir).sort()).toEqual(['ended.json', 'released.json'])
+      expect(readdirSync(launch!.receipt_dir).sort()).toEqual([
+        'ended.json',
+        'identity.json',
+        'released.json',
+      ])
       // The unit is collected: systemd no longer knows it.
       expect(await listInstallationUnits(run, PREFIX)).toEqual({ kind: 'ok', names: [] })
       // The spec (with its token) is gone from the runtime dir.

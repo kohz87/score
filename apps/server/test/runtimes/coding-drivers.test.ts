@@ -543,12 +543,44 @@ test('codex: a malformed agent_message (no or bad id, bad updated shape) invalid
   expect(run([noId(), agentMessage('m2', 'Fine.'), turnCompleted])?.eligible).toBe(false)
 })
 
-test('codex: the next turn starts clean after a malformed one', () => {
+test('codex: loss is sticky for the whole attempt; a later turn in the same stream is not authoritative either (re-review #3)', () => {
   const parser = createCodexParser()
   const first = ['bad', agentMessage('m1', 'A'), turnCompleted].flatMap((l) => parser.parse(l))
   expect(verdictOf(first)?.eligible).toBe(false)
   const second = [agentMessage('m2', 'B'), turnCompleted].flatMap((l) => parser.parse(l))
-  expect(verdictOf(second)).toMatchObject({ eligible: true, reply: 'B' })
+  expect(verdictOf(second)).toMatchObject({ eligible: false, reply: null })
+  expect(parser.lossReason?.()).toBeTruthy()
+})
+
+test('codex: an item record with no item, or a malformed started message, leaves no authority (re-review #3)', () => {
+  const run = (lines: string[]) => {
+    const parser = createCodexParser()
+    const events = lines.flatMap((line) => parser.parse(line))
+    return { verdict: verdictOf(events), loss: parser.lossReason?.() ?? null }
+  }
+  const nullItem = codexLine({ type: 'item.completed', item: null })
+  const startedNoText = codexLine({
+    type: 'item.started',
+    item: { id: 'm3', type: 'agent_message' },
+  })
+  expect(run([agentMessage('m1', 'Final.'), nullItem, turnCompleted]).verdict?.eligible).toBe(false)
+  expect(run([agentMessage('m1', 'Final.'), startedNoText, turnCompleted]).verdict?.eligible).toBe(
+    false,
+  )
+  expect(run([agentMessage('m1', 'Final.'), turnCompleted]).loss).toBeNull()
+})
+
+test('codex: a record dropped or invalid after turn.completed still takes the authority away, asked once the stream is done (re-review #3)', () => {
+  const parser = createCodexParser()
+  const events = [agentMessage('m1', 'Final.'), turnCompleted].flatMap((l) => parser.parse(l))
+  expect(verdictOf(events)?.eligible).toBe(true)
+  expect(parser.lossReason?.()).toBeNull()
+  parser.parse('not json at all')
+  expect(parser.lossReason?.()).toBeTruthy()
+  const other = createCodexParser()
+  ;[agentMessage('m1', 'Final.'), turnCompleted].forEach((l) => other.parse(l))
+  other.parse(codexLine({ type: 'item.completed', item: null }))
+  expect(other.lossReason?.()).toBeTruthy()
 })
 
 test('antigravity: SUCCESS and a non-empty response are eligible, and the response wins over commentary (7.7a section 6)', () => {

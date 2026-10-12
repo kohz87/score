@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { redactNote, rememberId } from './note.ts'
 import type {
   CodingDriver,
   CodingEvent,
@@ -162,7 +163,7 @@ export function createAntigravityParser(cwd?: string): LineParser {
         const callId = `step-${step.step_index}`
         const events: CodingEvent[] = []
         if (!started.has(step.step_index)) {
-          started.add(step.step_index)
+          rememberId(started, step.step_index)
           events.push({
             kind: 'tool_start',
             callId,
@@ -191,7 +192,7 @@ export function createAntigravityParser(cwd?: string): LineParser {
           })
         // What the level refused, as cards: "Antigravity refused: RunCommand".
         denied.forEach((action, index) => {
-          const name = action.display_name ?? action.action ?? 'an action'
+          const name = redactNote(action.display_name ?? action.action ?? 'an action', 120)
           events.push(
             {
               kind: 'tool_start',
@@ -203,7 +204,10 @@ export function createAntigravityParser(cwd?: string): LineParser {
           )
         })
         const ok = status === 'SUCCESS'
-        const refused = denied.map((action) => action.display_name ?? action.action ?? 'an action')
+        // The names come from the CLI: redacted before they reach a card, a verdict reason or a stored note.
+        const refused = denied.map((action) =>
+          redactNote(action.display_name ?? action.action ?? 'an action', 120),
+        )
         const note = refused.length
           ? `Antigravity refused: ${refused.join(', ')}. This agent's permission level does not allow it.`
           : undefined

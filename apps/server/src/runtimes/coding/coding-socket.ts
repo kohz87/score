@@ -35,7 +35,13 @@ const SupervisorFrame = z.discriminatedUnion('t', [
     seq: z.number().int().positive(),
     data: z.string().max(Math.ceil((MAX_CHUNK_BYTES * 4) / 3) + 4),
   }),
-  z.object({ t: z.literal('eof'), stream: Stream, lastSeq: z.number().int().nonnegative() }),
+  z.object({
+    t: z.literal('eof'),
+    stream: Stream,
+    lastSeq: z.number().int().nonnegative(),
+    /** The supervisor closed its end of the pipe itself: unread output may be lost, so this is not a clean EOF. */
+    forced: z.boolean().optional(),
+  }),
   z.object({
     t: z.literal('exit'),
     code: z.number().int().nullable(),
@@ -260,6 +266,8 @@ export class RunSession {
     const parsed = SupervisorFrame.safeParse(raw)
     if (!parsed.success) return this.protocolError('bad-frame')
     const f = parsed.data
+    // Terminal order (design section 4): nothing follows `end`, and `end` follows both EOFs and the exit.
+    if (this.endFrame && f.t !== 'error') return this.protocolError('frame-after-end')
     switch (f.t) {
       case 'hello':
         return this.protocolError('duplicate-hello')
@@ -271,7 +279,7 @@ export class RunSession {
       case 'out':
         return this.onOut(f.stream, f.seq, f.data)
       case 'eof':
-        return this.onEof(f.stream, f.lastSeq)
+        return this.onEof(f.stream, f.lastSeq, f.forced === true)
       case 'exit':
         if (this.exitInfo) return this.protocolError('duplicate-exit')
         this.exitInfo = { code: f.code, signal: f.signal }
@@ -404,9 +412,14 @@ export class RunSession {
     void this.maybeComplete()
   }
 
-  private onEof(stream: 'stdout' | 'stderr', lastSeq: number): void {
+  private onEof(stream: 'stdout' | 'stderr', lastSeq: number, forced: boolean): void {
     if (this.eofSeen[stream]) return this.protocolError('duplicate-eof')
     this.eofSeen[stream] = true
+    // A pipe the supervisor had to close itself is loss, not an end of stream (review 2026-10-12 #1).
+    if (forced) {
+      this.dropped += 1
+      this.violate(`forced-eof-${stream}`)
+    }
     if (lastSeq !== this.lastSeq[stream]) this.violate(`eof-seq-${stream}`)
     const tail = this.decoders[stream].end()
     if (stream === 'stdout') {
@@ -421,6 +434,9 @@ export class RunSession {
 
   private onEnd(f: Extract<SupervisorFrame, { t: 'end' }>): void {
     if (this.endFrame) return this.protocolError('duplicate-end')
+    // `end` before both EOFs and the exit is out of order: never acknowledged, and the connection is dropped.
+    if (!this.eofSeen.stdout || !this.eofSeen.stderr || !this.exitInfo)
+      return this.protocolError('end-before-eof')
     this.endFrame = f
     void this.maybeComplete()
   }
@@ -451,6 +467,8 @@ export class RunSession {
     const ended = this.ackSent && this.endFrame !== null
     if (!this.readySeen) this.rejectReady(new Error('connection closed before ready'))
     const reasons = ended ? this.reasons() : [...this.reasons(), 'socket-loss']
+    // Closing with records still queued or being ingested means output was acknowledged or counted before it was saved.
+    if (this.pumping || this.queue.length > 0) reasons.push('ingestion-incomplete')
     // Records still queued would be lost with the connection: they are not processed, so not complete.
     this.stdoutPartial = ''
     this.chargePartial(0)
@@ -477,7 +495,12 @@ interface Pending {
   specHash: string
   session: RunSession
   used: boolean
+  /** Budget bytes reserved for what the run keeps in memory besides queued records (released once, see `release`). */
+  reserved: number
 }
+
+/** What an active run may keep in memory beyond queued records (retained text, remembered call ids): reserved up front. */
+export const RETAINED_RUN_BYTES = 512 * 1024
 
 export interface CodingSocketOptions {
   /** `$XDG_RUNTIME_DIR` (or a test directory). */
@@ -581,11 +604,21 @@ export class CodingSocketServer {
    * Registers a launch and returns its single-use token (bound to installation, launch, generation, spec hash and this
    * Score incarnation) and the session that will carry it. The token goes into the supervisor's spec file only.
    */
-  expect(args: { launch: string; generation: number; specHash: string; handlers: RunHandlers }): {
+  expect(args: {
+    launch: string
+    generation: number
+    specHash: string
+    handlers: RunHandlers
+    /** Bytes the run keeps in memory besides queued records; charged to the installation budget while it is active. */
+    retainedBytes?: number
+  }): {
     token: string
     session: RunSession
   } {
     if (this.pending.has(args.launch)) throw new Error('launch already registered')
+    const reserved = args.retainedBytes ?? 0
+    if (this.budget.used + reserved > this.budget.limit) throw new Error('memory-budget')
+    this.budget.used += reserved
     const session = new RunSession(
       args.launch,
       args.generation,
@@ -598,14 +631,23 @@ export class CodingSocketServer {
       specHash: args.specHash,
       session,
       used: false,
+      reserved,
     })
-    void session.outcome.then(() => this.pending.delete(args.launch))
+    void session.outcome.then(() => this.release(args.launch))
     return { token: this.tokenFor(args.launch, args.generation, args.specHash), session }
   }
 
   /** Forget a launch that will never connect (it was revoked before systemd-run). */
   forget(launch: string): void {
+    this.release(launch)
+  }
+
+  private release(launch: string): void {
+    const entry = this.pending.get(launch)
+    if (!entry) return
     this.pending.delete(launch)
+    this.budget.used -= entry.reserved
+    entry.reserved = 0
   }
 
   private tokenFor(launch: string, generation: number, specHash: string): string {
