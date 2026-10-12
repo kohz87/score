@@ -636,6 +636,32 @@ test('a fence pauses supervised launching with a sentence the person can act on'
 })
 
 
+test('settled follows the terminal commit: a result that cannot be saved yet is delivered later, and only then settled', async () => {
+  await coding.close()
+  await app.close()
+  let failures = 0
+  await boot({
+    ingestWrap: (real) => ({
+      submit: (observation) => {
+        // The first six attempts at the terminal result fail (more than the foreground budget of five).
+        if (observation.identity.endsWith(':terminal') && failures++ < 6)
+          return Promise.reject(new Error('database is locked'))
+        return real.submit(observation)
+      },
+    }),
+  })
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:basic] go')
+  // The run has ended (proof obtained) but its result is still waiting: the launch is `ended`, not `settled`.
+  await vi.waitFor(() => expect(launches()[0]?.phase).toBe('ended'), { timeout: 15_000 })
+  expect(runs()[0]!.status).toBe('running')
+  expect(db.sqlite.prepare('SELECT run_id FROM coding_pending_terminals').all()).toHaveLength(1)
+  await vi.waitFor(() => expect(launches()[0]?.phase).toBe('settled'), { timeout: 15_000 })
+  expect(runs()[0]!.status).toBe('completed')
+  expect(db.sqlite.prepare('SELECT run_id FROM coding_pending_terminals').all()).toEqual([])
+})
+
 // ---- recovery: journal <-> database <-> units <-> receipts -------------------------------------------------------------
 
 let seeded = 0
@@ -830,12 +856,16 @@ test('recovery: after a manager cold restart the receipts and the recorded cgrou
   await addAgent()
   // The unit is gone and the cgroup cannot be read: the supervisor's own `ended` receipt (written only once the
   // payload was empty) is the witness.
-  const witnessed = seedLaunch('releasing', { receipts: ['released.json', 'ended.json'] })
-  const unwitnessed = seedLaunch('releasing', { receipts: ['released.json'] })
+  const old = `${fake.boot}|1111:5`
+  const witnessed = seedLaunch('releasing', { manager: old, receipts: ['released.json', 'ended.json'] })
+  const unwitnessed = seedLaunch('releasing', { manager: old, receipts: ['released.json'] })
+  // The same manager with the unit missing and the cgroup unreadable is NOT enough: missing metadata proves nothing.
+  const sameManager = seedLaunch('releasing', { receipts: ['released.json', 'ended.json'] })
   await coding.recover()
   expect(launchRow(witnessed.launchId)).toMatchObject({ phase: 'settled', proof: 'receipt', held: 0 })
   expect(launchRow(unwitnessed.launchId)).toMatchObject({ phase: 'releasing', held: 1 })
   expect(runRow(unwitnessed.runId).terminal_source).toBe('unconfirmed')
+  expect(launchRow(sameManager.launchId)).toMatchObject({ phase: 'releasing', held: 1 })
 })
 
 test('recovery: a changed boot means everything ended', async () => {

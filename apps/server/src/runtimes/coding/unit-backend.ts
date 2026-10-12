@@ -740,12 +740,18 @@ export class UnitBackend {
         const cgroup = row.cgroup
         const pop = cgroup ? population(cgroup) : 'absent'
         if (pop === 'absent' || pop === 'empty') {
-          // With the unit gone and the manager replaced, the receipt is the extra witness (§5).
           return { proven: true, proof: cgroup ? 'cgroup-gone' : 'never-started', detail: 'unit gone' }
         }
         detail = `the unit is gone but its cgroup is ${pop}`
-        if (pop === 'unknown' && this.readReceipt(row, 'ended.json') === 'present')
-          return { proven: true, proof: 'receipt', detail: 'ended receipt, unit gone' }
+        // A different manager incarnation with the unit missing: the outcome comes from the receipts and the recorded
+        // cgroup only, never from the missing metadata (§5). The supervisor writes `ended` only once its payload was
+        // empty and nothing else of the unit lived, so the receipt is a witness the new manager cannot erase.
+        if (
+          pop === 'unknown' &&
+          (await this.incarnationChanged(row)) &&
+          this.readReceipt(row, 'ended.json') === 'present'
+        )
+          return { proven: true, proof: 'receipt', detail: 'ended receipt, manager replaced, unit gone' }
       } else {
         const s = shown.state
         if (row.invocation_id && s.invocationId !== row.invocation_id)
@@ -761,6 +767,14 @@ export class UnitBackend {
       if (this.clock() >= deadline) return { proven: false, proof: null, detail }
       await sleep(this.deps.pollMs ?? 100)
     }
+  }
+
+  /** The user manager is not the one that verified this launch (a different PID or start time, or unreadable now). */
+  private async incarnationChanged(row: Row): Promise<boolean> {
+    const recorded = row.manager?.split('|')[1]
+    if (!recorded) return true
+    const now = await this.managerNow()
+    return now === null || `${now.pid}:${now.start}` !== recorded
   }
 
   private readReceipt(row: Row, name: string): 'present' | 'absent' | 'error' {

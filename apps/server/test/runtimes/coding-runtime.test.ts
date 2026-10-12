@@ -69,13 +69,14 @@ async function boot(
     killGroup?: CodingRuntimeDeps['killGroup']
     reapRetryMs?: number
     stopObserveMs?: number
+    ingestWrap?: (ingest: Ingest) => Pick<Ingest, 'submit'>
   } = {},
 ) {
   setEnv('SCORE_CODING_FAKE_LOG', log)
   setEnv('SCORE_CODING_FAKE_VERSION', options.version)
   coding = new CodingRuntime({
     db,
-    ingest,
+    ingest: options.ingestWrap ? options.ingestWrap(ingest) : ingest,
     locator: new CliLocator({ fakeCli: FAKE_CLI, cacheMs: 0 }),
     home,
     policy: defaultRootPolicy([home]),
@@ -1780,4 +1781,52 @@ test('W5: a refused resume that nothing ran behind starts fresh once, within the
   ).toEqual([true, false])
   expect(runs()[1]).toMatchObject({ status: 'failed' })
   expect(processRows()).toEqual([])
+})
+
+// ---- 7.7a part 3: the acceptance matrix holds on the fallback backend too -----------------------------------------------
+
+test('fallback: a clean exit with text but no explicit success is no result (the exit-zero fallback is gone)', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:nosuccess] go')
+  await finished()
+  expect(runs()[0]).toMatchObject({ status: 'failed' })
+  expect(runs()[0]!.error).toContain('without a result Score can use')
+})
+
+test('fallback: an event that cannot be saved makes the result not used, however the CLI ended', async () => {
+  let failed = false
+  await rebootWith({
+    ingestWrap: (real) => ({
+      submit: (observation) => {
+        // The first saved event of the run fails once.
+        if (!failed && /^coding:cr_[^:]+:0$/.test(observation.identity)) {
+          failed = true
+          return Promise.reject(new Error('database is locked'))
+        }
+        return real.submit(observation)
+      },
+    }),
+  })
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:basic] go')
+  await finished()
+  expect(failed).toBe(true)
+  expect(runs()[0]).toMatchObject({ status: 'failed' })
+  expect(runs()[0]!.error).toMatch(/complete record/)
+})
+
+test('fallback: hand-offs read only the final validated Codex message', async () => {
+  await addAgent({ id: 'cx', name: 'Cx', runtime: 'codex', acknowledgeReads: true })
+  await makeRoom()
+  await say('@cx [fixture:commentary] go')
+  await finished()
+  expect(runs()[0]).toMatchObject({ status: 'completed' })
+  expect(
+    db.sqlite.prepare("SELECT agent_id FROM message_runs WHERE from_agent_id = 'cx'").all(),
+  ).toEqual([])
+  await say('@cx [fixture:malformed] go')
+  await finished(2)
+  expect(runs()[1]).toMatchObject({ status: 'failed' })
 })
