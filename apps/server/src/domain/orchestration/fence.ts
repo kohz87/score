@@ -4,8 +4,18 @@ import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { HttpError } from '../../errors.ts'
 import { recordRefusal } from './ops.ts'
-import { applyCodingEvidence, verifyCoding } from './coding-checkpoint.ts'
-import { journalDispatches, type ExecutionJournal, type JournalEntry } from './journal.ts'
+import {
+  applyCodingEvidence,
+  applyInheritedRetirements,
+  verifyCoding,
+} from './coding-checkpoint.ts'
+import { foldCodingLaunches } from './coding-records.ts'
+import {
+  journalDispatches,
+  type ExecutionJournal,
+  type JournalEntry,
+  type LaunchFolder,
+} from './journal.ts'
 
 // The persistent global admission fence (design v3). It is set when the journal and the database disagree, when the
 // journal is unreadable or missing, or when the operator restored a backup; only a recorded human decision lifts it.
@@ -364,7 +374,28 @@ export function applyJournalEvidence(
     changed += Number(result.changes)
   }
   changed += applyCodingEvidence(sqlite, entries, now, copied)
+  changed += applyInheritedRetirements(sqlite, entries, now)
   return changed
+}
+
+/** Launch folders that hold receipts the journal has no launch for: evidence this installation can't account for. */
+export function unownedLaunchFolders(
+  entries: readonly JournalEntry[],
+  folders: readonly LaunchFolder[],
+): Mismatch[] {
+  const known = foldCodingLaunches(entries)
+  // A person who lifted the fence after the folder last changed has seen it (these items carry no journal number to
+  // accept, so the lift's time stands in).
+  const lifted = entries.findLast((e) => e.kind === 'global_fence' && e.action === 'lift')
+  const liftedAt = lifted ? Date.parse(lifted.at) : -Infinity
+  return folders
+    .filter((folder) => !known.has(folder.id) && folder.mtimeMs > liftedAt)
+    .map(({ id }) => ({
+      kind: 'journal' as const,
+      ref: `launch-folder:${id}`,
+      journalN: null,
+      detail: `A launch folder (${id}) holds receipts, but the journal has no coding launch with that id: the journal lost a witness`,
+    }))
 }
 
 export function fenceItems(sqlite: DatabaseSync): FenceItem[] {
@@ -608,29 +639,40 @@ export class GlobalFenceStore {
       ])
     } else {
       const entries = this.journal.readOwn()
+      const lost = this.journal.missingHistory()
       const sqliteHasHistory = this.db.read(
         (sqlite) =>
           sqlite.prepare('SELECT 1 FROM orc_attempts WHERE sent_at IS NOT NULL LIMIT 1').get() !==
-          undefined,
+            undefined ||
+          sqlite.prepare('SELECT 1 FROM coding_launches LIMIT 1').get() !== undefined,
       )
-      if (fresh && sqliteHasHistory) {
-        // The database remembers admissions but the journal has never existed here: it was deleted or moved.
+      if (fresh && (sqliteHasHistory || lost !== undefined)) {
+        // The database remembers admissions (or the folder remembers its own history) but the journal is not there:
+        // it was deleted or moved. A missing file is "fresh" only when nothing else says otherwise (FZ3 #13).
         reasons.push('journal_missing')
         this.set('journal_missing', [
           {
             kind: 'journal',
             ref: 'journal',
             journalN: null,
-            detail: 'The database records admissions, but the execution journal does not exist',
+            detail:
+              lost !== undefined
+                ? `The execution journal does not exist, although ${lost}`
+                : 'The database records admissions, but the execution journal does not exist',
           },
         ])
       } else if (entries.ok) {
-        const mismatches = this.db.read((sqlite) => verifyJournal(sqlite, entries.entries))
+        // The copy's retirements hold after every start and every restore, mismatch or not (decision 69).
+        const now = new Date(this.clock()).toISOString()
+        this.db.tx((sqlite) => applyInheritedRetirements(sqlite, entries.entries, now))
+        const mismatches = [
+          ...this.db.read((sqlite) => verifyJournal(sqlite, entries.entries)),
+          ...unownedLaunchFolders(entries.entries, this.journal.launchDirectories()),
+        ]
         if (mismatches.length > 0) {
           reasons.push('journal_mismatch')
           this.set('journal_mismatch', mismatches)
           // What the journal says was sent is never sendable again, whatever happens to the fence.
-          const now = new Date(this.clock()).toISOString()
           this.db.tx((sqlite) => applyJournalEvidence(sqlite, entries.entries, now))
         }
       }

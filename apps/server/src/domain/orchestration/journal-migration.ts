@@ -246,11 +246,64 @@ function missingWitness(
     )
       return lost(`the witness of coding launch ${launchId}`)
   }
+  // FZ3 #14: the other authority-bearing records. Compaction only drops a record once a later word supersedes it
+  // (authorization, hold, remap) or its attempt is over (run handle), so the newest legacy word must survive.
+  const authority = authorityProblem(snapshot, destination)
+  if (authority) return lost(authority)
   // Fences and decisions that gate admission: kept as the record or as a tombstone of it.
   const keys = new Set(destination.map(coveringKey).filter((key) => key !== undefined))
   for (const entry of snapshot) {
     const key = coveringKey(entry)
     if (key !== undefined && !keys.has(key)) return lost(`the ${entry.kind} witness ${key}`)
+  }
+  return undefined
+}
+
+type Keyed = { key: string; n: number; entry: JournalEntry }
+
+/** The newest record per key among the authority-bearing kinds that compaction keeps until superseded. */
+function newestByKey(entries: readonly JournalEntry[]): Map<string, Keyed> {
+  const newest = new Map<string, Keyed>()
+  for (const entry of entries) {
+    let key: string | undefined
+    if (entry.kind === 'authorization') key = `authorization of ${entry.orchestrationId}`
+    else if (entry.kind === 'hold')
+      key = `hold of ${entry.target === 'team' ? 'the team' : `agent ${entry.agentId}`}`
+    else if (entry.kind === 'remap') key = `remap of ${entry.agentId} in ${entry.orchestrationId}`
+    else if (entry.kind === 'global_fence') key = 'global fence'
+    if (key !== undefined) newest.set(key, { key, n: entry.n, entry })
+  }
+  return newest
+}
+
+/**
+ * Every authorization, hold, remap, global fence and run handle the legacy journal holds has a successor or an identical
+ * record in the destination. A run handle may only be missing together with its send record (compaction turns both
+ * into tombstones once the attempt is over).
+ */
+function authorityProblem(
+  snapshot: readonly JournalEntry[],
+  destination: readonly JournalEntry[],
+): string | undefined {
+  const have = newestByKey(destination)
+  for (const [key, legacy] of newestByKey(snapshot)) {
+    const now = have.get(key)
+    if (!now || now.n < legacy.n) return `the ${key}`
+    if (now.n === legacy.n && !same(now.entry, { ...legacy.entry, scope: now.entry.scope }))
+      return `the ${key} (a different record at ${legacy.n})`
+  }
+  for (const entry of snapshot) {
+    if (entry.kind !== 'run_handle') continue
+    const covered = destination.some(
+      (other) =>
+        (other.kind === 'run_handle' &&
+          other.attemptId === entry.attemptId &&
+          other.runId === entry.runId) ||
+        (other.kind === 'tombstone' &&
+          other.of === 'send_started' &&
+          other.attemptId === entry.attemptId),
+    )
+    if (!covered) return `the run handle of attempt ${entry.attemptId}`
   }
   return undefined
 }

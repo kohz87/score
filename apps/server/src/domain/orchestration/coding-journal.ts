@@ -1,3 +1,4 @@
+import { ownsProcessRowIn } from './coding-checkpoint.ts'
 import type { ExecutionJournal, JournalEntry } from './journal.ts'
 import {
   nextState,
@@ -50,6 +51,16 @@ export class CodingJournal {
   isOwned(launchId: string): boolean {
     const launch = this.state(launchId)
     return launch !== undefined && launch.state.inherited !== true
+  }
+
+  /**
+   * FZ3 #6: whether this installation owns the coding process row of `runId` and may signal its group. False when a
+   * confirmed copy retired the row (the source's process) or its launch was inherited, and when the journal can't be
+   * read (no evidence, no signal). The process-group engine keeps no journal of its own, so a row nobody retired is ours.
+   */
+  ownsProcessRow(runId: string): boolean {
+    const read = this.journal.readOwn()
+    return read.ok && ownsProcessRowIn(read.entries, runId)
   }
 
   /** `requested`: before `systemd-run`. A revoked launch can never be requested again. */

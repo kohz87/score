@@ -256,3 +256,48 @@ test('FY2 #11: a surviving checkpoint does not stand in for a missing individual
   new ExecutionJournal(nsDir, id).compact(() => true)
   expect(migrate()).toMatchObject({ ok: true, state: 'already' })
 })
+
+test('FZ3 #14: every authority-bearing record must survive the cutover (authorization, hold, remap, global fence, run handle)', () => {
+  const mine = new ExecutionJournal(journalDir, scope)
+  mine.append(send('a1'))
+  mine.append({
+    kind: 'authorization',
+    orchestrationId: 'o1',
+    budgetUsd: 1,
+    deadlineAt: null,
+    acceptUnknownSpend: false,
+  })
+  mine.append({ kind: 'hold', target: 'agent', agentId: 'builder', action: 'set' })
+  mine.append({ kind: 'remap', orchestrationId: 'o1', agentId: 'builder', incarnation: 'inc-2' })
+  mine.append({ kind: 'global_fence', action: 'set', fenceSeq: 1, reason: 'test' })
+  mine.append({ kind: 'run_handle', attemptId: 'a1', runId: 'run-1' })
+  expect(migrate()).toMatchObject({ ok: true, state: 'migrated' })
+  const target = join(nsDir, JOURNAL_FILE)
+  const good = readFileSync(target)
+  const read = new ExecutionJournal(nsDir, id).readOwn()
+  if (!read.ok) throw new Error(read.reason)
+  const without = (kind: string, label: RegExp) => {
+    // Each lost record is replaced by a checkpoint of the same number, so only the witness itself is missing.
+    const kept = read.entries.map((e) =>
+      e.kind === kind ? ({ n: e.n, at: e.at, scope: id, kind: 'checkpoint' } as JournalEntry) : e,
+    )
+    writeFileSync(target, Buffer.concat(kept.map(journalLine)))
+    expect(migrate()).toMatchObject({ ok: false, reason: expect.stringMatching(label) })
+    writeFileSync(target, good)
+    expect(migrate()).toMatchObject({ ok: true, state: 'already' })
+  }
+  without('authorization', /authorization of o1/)
+  without('hold', /hold of agent builder/)
+  without('remap', /remap of builder in o1/)
+  without('run_handle', /run handle of attempt a1/)
+  without('global_fence', /global fence/)
+  // A later authorization supersedes the legacy one (a person tightened it again here): accepted.
+  new ExecutionJournal(nsDir, id).append({
+    kind: 'authorization',
+    orchestrationId: 'o1',
+    budgetUsd: 0.5,
+    deadlineAt: null,
+    acceptUnknownSpend: false,
+  })
+  expect(migrate()).toMatchObject({ ok: true, state: 'already' })
+})
