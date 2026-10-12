@@ -3,16 +3,20 @@ import {
   closeSync,
   existsSync,
   fsyncSync,
+  ftruncateSync,
+  fstatSync,
   mkdirSync,
   openSync,
   readFileSync,
   renameSync,
+  rmSync,
   statSync,
   truncateSync,
   writeSync,
 } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { OsLock, OsLockTimeoutError } from '../../locks/os-lock.ts'
 
 // The execution journal (design v3, "Restore: an external journal plus an operator protocol"): an append-only, fsync'd
 // file OUTSIDE $SCORE_HOME, so restoring the home or the database cannot rewind it. Every external effect is preceded
@@ -166,6 +170,30 @@ export function journalDispatches(entries: readonly JournalEntry[]): Map<string,
   return result
 }
 
+/** The two syscalls whose results decide durability; a seam so tests can inject short writes and sync failures. */
+export interface JournalIo {
+  writeSync(fd: number, buffer: Buffer, offset: number, length: number): number
+  fsyncSync(fd: number): void
+}
+const nodeIo: JournalIo = {
+  writeSync: (fd, buffer, offset, length) => writeSync(fd, buffer, offset, length),
+  fsyncSync: (fd) => fsyncSync(fd),
+}
+
+/**
+ * Writes the whole buffer or throws. `writeSync` may write fewer bytes than asked; a record that is only partly on disk
+ * must never count as written, because recovery discards an unterminated last line as "never effective".
+ */
+export function writeAll(io: JournalIo, fd: number, data: Buffer): void {
+  let offset = 0
+  while (offset < data.length) {
+    const written = io.writeSync(fd, data, offset, data.length - offset)
+    if (!Number.isInteger(written) || written <= 0)
+      throw new Error('Execution journal write made no progress')
+    offset += written
+  }
+}
+
 export type JournalRead =
   | { ok: true; entries: JournalEntry[]; bytes: number }
   | { ok: false; reason: string; bytes: number }
@@ -180,18 +208,37 @@ const MarkerSchema = z.object({
 })
 export type RestoreMarker = z.infer<typeof MarkerSchema>
 
+/**
+ * INVARIANT: no external effect is permitted by a record that recovery could discard. A writer returns only after the
+ * whole record is written and the file (and, when the name is new or changed, the directory) is fsync'd; any short
+ * write that cannot be completed, or any sync error, throws, and the caller must not act. Every operation that reads
+ * for a decision, repairs, appends, numbers or compacts runs under one OS lock (`locks/os-lock.ts`), so two Score
+ * processes (or a compaction and an append) can never interleave and lose a record.
+ */
 export class ExecutionJournal {
   private readonly file: string
+  private readonly lock: OsLock
   private nextN: number | undefined
   private broken: string | undefined
+  /** A directory sync failed after the file was written: the name is not known durable until one succeeds. */
+  private dirSyncPending = false
 
   constructor(
     readonly dir: string,
     readonly scope: string,
     private readonly clock: () => number = Date.now,
     private readonly alarmBytes: number = JOURNAL_SIZE_ALARM_BYTES,
+    private readonly io: JournalIo = nodeIo,
+    lockWaitMs?: number,
   ) {
     this.file = join(dir, JOURNAL_FILE)
+    this.lockWaitMs = lockWaitMs
+    this.lock = new OsLock(dir)
+  }
+  private readonly lockWaitMs: number | undefined
+
+  private locked<T>(fn: () => T): T {
+    return this.lock.runSync(fn, this.lockWaitMs)
   }
 
   /** True when the journal file has never been created in this directory. */
@@ -234,7 +281,15 @@ export class ExecutionJournal {
 
   /** Every entry of every scope (a journal directory may be shared by test homes); callers filter by `scope`. */
   read(): JournalRead {
-    const result = this.parse()
+    let result: JournalRead
+    try {
+      result = this.locked(() => this.parse())
+    } catch (error) {
+      // Not being able to take the lock is not damage to the journal: report it, but don't mark the journal broken.
+      if (error instanceof OsLockTimeoutError)
+        return { ok: false, reason: 'the journal lock is busy', bytes: 0 }
+      throw error
+    }
     if (!result.ok) this.broken = result.reason
     return result
   }
@@ -250,25 +305,44 @@ export class ExecutionJournal {
   /** Repairs a torn tail (never effective) so appends stay line-aligned; returns false when the journal is unreadable. */
   open(): boolean {
     mkdirSync(this.dir, { recursive: true, mode: 0o700 })
-    const result = this.read()
-    if (!result.ok) return false
-    if (existsSync(this.file)) {
-      const raw = readFileSync(this.file, 'utf8')
-      if (raw.length > 0 && !raw.endsWith('\n')) {
-        const keep = raw.lastIndexOf('\n') + 1
-        truncateSync(this.file, Buffer.byteLength(raw.slice(0, keep)))
-      }
-    }
-    this.nextN = (result.entries.at(-1)?.n ?? 0) + 1
-    return true
+    return this.locked(() => {
+      const result = this.read()
+      if (!result.ok) return false
+      this.repairTail()
+      this.nextN = (result.entries.at(-1)?.n ?? 0) + 1
+      return true
+    })
   }
 
-  /** Appends and fsyncs before returning: the caller may perform the effect afterwards. Throws when it cannot. */
+  /** Cuts an unterminated last line (never effective: its writer did not return) and makes the cut durable. */
+  private repairTail(): void {
+    if (!existsSync(this.file)) return
+    const raw = readFileSync(this.file, 'utf8')
+    if (raw.length === 0 || raw.endsWith('\n')) return
+    const keep = raw.lastIndexOf('\n') + 1
+    truncateSync(this.file, Buffer.byteLength(raw.slice(0, keep)))
+    const fd = openSync(this.file, 'r+')
+    try {
+      this.io.fsyncSync(fd)
+    } finally {
+      closeSync(fd)
+    }
+  }
+
+  /**
+   * Appends the whole record and fsyncs before returning: the caller may perform the effect afterwards. Throws when it
+   * cannot, and then the caller must not act (and the partial bytes, if any, are cut off again).
+   */
   append(body: JournalEntryBody): JournalEntry {
+    return this.locked(() => this.appendLocked(body))
+  }
+
+  private appendLocked(body: JournalEntryBody): JournalEntry {
     if (this.broken !== undefined)
       throw new Error(`Execution journal is unreadable: ${this.broken}`)
     if (this.nextN === undefined && !this.open()) throw new Error('Execution journal is unreadable')
-    // Another handle on the same file (a second executor, a test) may have appended: number from the file's own tail.
+    // Another process (or handle) may have crashed mid-append or compacted: look at the file itself, under the lock.
+    this.repairTail()
     this.nextN = Math.max(this.nextN ?? 1, this.tailN() + 1)
     const entry = EntrySchema.parse({
       ...body,
@@ -277,17 +351,33 @@ export class ExecutionJournal {
       scope: this.scope,
     })
     const text = JSON.stringify(entry)
-    const line = `${JSON.stringify({ ...entry, c: checksum(text) })}\n`
-    const fresh = !existsSync(this.file)
+    const line = Buffer.from(`${JSON.stringify({ ...entry, c: checksum(text) })}\n`)
+    if (!existsSync(this.file)) this.dirSyncPending = true
     const fd = openSync(this.file, 'a', 0o600)
     try {
-      writeSync(fd, line)
-      fsyncSync(fd)
+      const before = fstatSync(fd).size
+      try {
+        writeAll(this.io, fd, line)
+        this.io.fsyncSync(fd)
+      } catch (error) {
+        // Part of the record may be on disk: take it off again so the file stays line-aligned. If even that fails the
+        // tail repair at the next open (or append) removes it; either way the caller does not proceed.
+        try {
+          ftruncateSync(fd, before)
+        } catch {
+          // handled by repairTail
+        }
+        throw error
+      }
     } finally {
       closeSync(fd)
     }
-    if (fresh) this.syncDirectory()
+    // The entry is on disk now; the next number is taken whatever happens to the directory sync below.
     this.nextN = entry.n + 1
+    if (this.dirSyncPending) {
+      this.syncDirectory()
+      this.dirSyncPending = false
+    }
     return entry
   }
 
@@ -310,16 +400,13 @@ export class ExecutionJournal {
     return 0
   }
 
+  /** Errors propagate: a name that may not survive a crash is not a witness. */
   private syncDirectory(): void {
+    const fd = openSync(this.dir, 'r')
     try {
-      const fd = openSync(this.dir, 'r')
-      try {
-        fsyncSync(fd)
-      } finally {
-        closeSync(fd)
-      }
-    } catch {
-      // Best effort: some filesystems refuse to fsync a directory.
+      this.io.fsyncSync(fd)
+    } finally {
+      closeSync(fd)
     }
   }
 
@@ -340,6 +427,14 @@ export class ExecutionJournal {
    * every scope that passes. Rewrites atomically (temp file, fsync, rename); never drops anything unresolved.
    */
   compact(droppable: (entry: JournalEntry) => boolean): { kept: number; dropped: number } {
+    return this.locked(() => this.compactLocked(droppable))
+  }
+
+  private compactLocked(droppable: (entry: JournalEntry) => boolean): {
+    kept: number
+    dropped: number
+  } {
+    this.repairTail()
     const result = this.read()
     if (!result.ok) throw new Error(`Cannot compact an unreadable journal: ${result.reason}`)
     // Detail goes, the proof stays: an admission or a fence becomes a permanent tombstone with its original number.
@@ -404,27 +499,38 @@ export class ExecutionJournal {
     const dropped = result.entries.length - keep.length
     if (JSON.stringify(keep) === JSON.stringify(result.entries))
       return { kept: keep.length, dropped: 0 }
-    const text = keep
-      .map((entry) => JSON.stringify({ ...entry, c: checksum(JSON.stringify(entry)) }))
-      .map((line) => `${line}\n`)
-      .join('')
+    const text = Buffer.from(
+      keep
+        .map((entry) => JSON.stringify({ ...entry, c: checksum(JSON.stringify(entry)) }))
+        .map((line) => `${line}\n`)
+        .join(''),
+    )
     const temp = `${this.file}.tmp`
-    const fd = openSync(temp, 'w', 0o600)
     try {
-      writeSync(fd, text)
-      fsyncSync(fd)
-    } finally {
-      closeSync(fd)
+      const fd = openSync(temp, 'w', 0o600)
+      try {
+        writeAll(this.io, fd, text)
+        this.io.fsyncSync(fd)
+      } finally {
+        closeSync(fd)
+      }
+      renameSync(temp, this.file)
+    } catch (error) {
+      rmSync(temp, { force: true }) // the old journal is untouched until the rename
+      throw error
     }
-    renameSync(temp, this.file)
-    this.syncDirectory()
     // Numbering continues: a later restore of an older journal copy must not look newer than this one.
     this.nextN = Math.max(this.nextN ?? 1, (result.entries.at(-1)?.n ?? 0) + 1)
+    this.syncDirectory()
     return { kept: keep.length, dropped }
   }
 
   /** The marker `scripts/restore.mjs` left for this home, if any. A malformed marker counts as present. */
   readRestoreMarker(): RestoreMarker | 'malformed' | undefined {
+    return this.locked(() => this.readRestoreMarkerLocked())
+  }
+
+  private readRestoreMarkerLocked(): RestoreMarker | 'malformed' | undefined {
     const path = join(this.dir, RESTORE_MARKER_FILE)
     if (!existsSync(path)) return undefined
     try {
@@ -436,12 +542,16 @@ export class ExecutionJournal {
   }
 
   clearRestoreMarker(): void {
-    const path = join(this.dir, RESTORE_MARKER_FILE)
-    try {
-      renameSync(path, `${path}.consumed`)
-    } catch {
-      // Already gone.
-    }
+    this.locked(() => {
+      const path = join(this.dir, RESTORE_MARKER_FILE)
+      try {
+        renameSync(path, `${path}.consumed`)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return // already gone
+        throw error
+      }
+      this.syncDirectory()
+    })
   }
 }
 

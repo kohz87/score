@@ -765,7 +765,10 @@ export class CodingRuntime {
       else if (outcome.spawnError)
         info = {
           status: 'failed',
-          error: `Could not start ${driver.label} (${outcome.spawnError}).`,
+          error:
+            outcome.spawnError === 'python_unavailable'
+              ? outcome.stderr
+              : `Could not start ${driver.label} (${outcome.spawnError}).`,
           costKind,
         }
       else if (result)

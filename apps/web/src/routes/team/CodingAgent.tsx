@@ -494,6 +494,10 @@ function CodingSettings({
           </dd>
         </div>
       </dl>
+      <p className="team-muted">
+        If Score stops, this coding agent stops with it. Tools it started may keep running until
+        Score starts again and stops them.
+      </p>
       {coding.heldGroups.length > 0 && (
         <div role="alert">
           <p className="team-muted-strong">

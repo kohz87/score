@@ -74,37 +74,62 @@ test('a host reset during a browser change waits for the lock; the end state is 
   expect(fs.existsSync(join(home, 'security-password.lock'))).toBe(false)
 })
 
-test('a lock left by a process that is gone is recovered; a live holder blocks until the wait runs out', async () => {
+// Z2 (7.7a v4 review #3): the lock is an OS lock on a permanent sidecar; there is nothing to steal or recover.
+function startHolder(): { pid: number; ready: string; go: string; done: Promise<unknown> } {
+  const ready = join(home, 'hold-ready')
+  const go = join(home, 'hold-go')
+  const proc = spawn(
+    process.execPath,
+    ['--experimental-transform-types', '--no-warnings', child, 'hold', home, ready, go],
+    { stdio: 'ignore' },
+  )
+  started.push(proc.pid!)
+  return { pid: proc.pid!, ready, go, done: new Promise((resolve) => proc.on('close', resolve)) }
+}
+
+test('a live holder in another process blocks until the wait runs out; the next contender proceeds once it lets go', async () => {
+  const holder = startHolder()
+  await until(() => fs.existsSync(holder.ready))
+  await expect(withPasswordLock(home, () => 'ran', 300)).rejects.toBeInstanceOf(PasswordLockError)
+  const waiting = withPasswordLock(home, () => 'ran')
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  fs.writeFileSync(holder.go, 'x')
+  await expect(waiting).resolves.toBe('ran')
+  await holder.done
+})
+
+test('a holder killed with SIGKILL releases the lock at once, and no stale-lock file is involved', async () => {
+  const holder = startHolder()
+  await until(() => fs.existsSync(holder.ready))
+  const sidecar = join(home, 'lock.sqlite')
+  const inode = fs.statSync(sidecar).ino
+  process.kill(holder.pid, 'SIGKILL')
+  await holder.done
+  const t0 = Date.now()
+  await expect(withPasswordLock(home, () => 'ran', 2000)).resolves.toBe('ran')
+  expect(Date.now() - t0).toBeLessThan(1500)
+  // Never renamed or replaced, and no lock file in the old protocol exists.
+  expect(fs.statSync(sidecar).ino).toBe(inode)
+  expect(fs.existsSync(join(home, 'security-password.lock'))).toBe(false)
+})
+
+test('a leftover file that looks like an old-protocol lock of a dead process is ignored, not stolen or deleted', async () => {
   const lock = join(home, 'security-password.lock')
   fs.writeFileSync(lock, '999999 1\n')
   await expect(withPasswordLock(home, () => 'ran')).resolves.toBe('ran')
-  // A lock naming this live process and its real start time is respected.
-  const stat = fs.readFileSync(`/proc/${process.pid}/stat`, 'utf8')
-  const start = stat
-    .slice(stat.lastIndexOf(')') + 2)
-    .trim()
-    .split(' ')[19]
-  fs.writeFileSync(lock, `${process.pid} ${start}\n`)
-  await expect(withPasswordLock(home, () => 'ran', 300)).rejects.toBeInstanceOf(PasswordLockError)
-  // The same pid with another start time is a reused pid: stale.
-  fs.writeFileSync(lock, `${process.pid} 1\n`)
-  await expect(withPasswordLock(home, () => 'ran')).resolves.toBe('ran')
+  expect(fs.readFileSync(lock, 'utf8')).toBe('999999 1\n')
 })
 
-test('a lock file it cannot read makes the setter wait and give up, never spin', async () => {
-  if (process.getuid?.() === 0) return // root reads everything
-  const home = fs.mkdtempSync(join(tmpdir(), 'score-pw-unreadable-'))
-  const lock = join(home, 'security-password.lock')
-  fs.writeFileSync(lock, '1 1\n', { mode: 0o000 })
-  let ticks = 0
-  const timer = setInterval(() => ticks++, 10)
-  try {
-    await expect(withPasswordLock(home, () => 'ran', 300)).rejects.toBeInstanceOf(PasswordLockError)
-    expect(ticks).toBeGreaterThan(5)
-    expect(fs.existsSync(lock)).toBe(true)
-  } finally {
-    clearInterval(timer)
-    fs.chmodSync(lock, 0o600)
-    fs.rmSync(home, { recursive: true, force: true })
-  }
+test('two callers in one process serialise even when the holder awaits inside', async () => {
+  const order: string[] = []
+  const a = withPasswordLock(home, async () => {
+    order.push('a-in')
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    order.push('a-out')
+  })
+  const b = withPasswordLock(home, () => {
+    order.push('b-in')
+  })
+  await Promise.all([a, b])
+  expect(order).toEqual(['a-in', 'a-out', 'b-in'])
 })
