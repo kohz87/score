@@ -184,13 +184,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 type Extra = Partial<
   Record<
-    | 'manager'
-    | 'stop_cause'
-    | 'eligibility'
-    | 'held'
-    | 'deadline_at'
-    | 'receipt_dir'
-    | 'spec_dir',
+    'manager' | 'stop_cause' | 'eligibility' | 'held' | 'deadline_at' | 'receipt_dir' | 'spec_dir',
     string | number | null
   >
 >
@@ -298,7 +292,7 @@ export class UnitBackend {
   /** "Check again": the same check, on demand. */
   async check(): Promise<BackendStatus> {
     const checks: { name: string; ok: boolean; detail: string }[] = []
-    let ok = true
+    let ok: boolean
     try {
       const result = await checkCapabilities({
         run: this.run,
@@ -320,7 +314,9 @@ export class UnitBackend {
     checks.push({
       name: 'socket',
       ok: listening,
-      detail: listening ? 'Score is listening for supervisors' : `couldn’t listen: ${this.socketError}`,
+      detail: listening
+        ? 'Score is listening for supervisors'
+        : `couldn’t listen: ${this.socketError}`,
     })
     const python = this.deps.python === undefined ? pdeathsigSupport().python : this.deps.python
     checks.push({
@@ -329,11 +325,18 @@ export class UnitBackend {
       detail: python !== null ? `Python at ${python}` : 'Python 3 is needed to start a coding CLI',
     })
     const notify = this.notifySocket()
-    const notifyOk = this.deps.notifySocket !== undefined || existsSync(notify)
+    const notifyBin =
+      this.deps.notifyBin === undefined ? '/usr/bin/systemd-notify' : this.deps.notifyBin
+    // The watchdog needs both: the manager's notify socket and the tool that pings it.
+    const notifyOk =
+      (this.deps.notifySocket !== undefined || existsSync(notify)) &&
+      (notifyBin === null || existsSync(notifyBin))
     checks.push({
       name: 'notify',
       ok: notifyOk,
-      detail: notifyOk ? 'the manager’s notify socket exists' : `no notify socket at ${notify}`,
+      detail: notifyOk
+        ? 'the manager’s notify socket and systemd-notify exist'
+        : `no notify socket at ${notify}, or no ${notifyBin}`,
     })
     const all = ok && listening && python !== null && notifyOk
     this.current = {
@@ -407,7 +410,13 @@ export class UnitBackend {
   ) {
     return (launchId: string) =>
       codingProjection(this.deps.db, this.clock, (sqlite) => {
-        const sets = ['backend = ?', 'agent_id = ?', 'runtime = ?', 'receipt_dir = ?', 'spec_dir = ?']
+        const sets = [
+          'backend = ?',
+          'agent_id = ?',
+          'runtime = ?',
+          'receipt_dir = ?',
+          'spec_dir = ?',
+        ]
         const values: (string | number | null)[] = [
           'unit',
           request.agentId,
@@ -451,7 +460,8 @@ export class UnitBackend {
       launchId,
     )
     const refuse = (refusal: string) => this.outcomeOf(launchId, unit, { refusal, stats })
-    if (this.tooFast()) return refuse('Score is starting coding runs too quickly. Try again in a minute.')
+    if (this.tooFast())
+      return refuse('Score is starting coding runs too quickly. Try again in a minute.')
     const blocked = this.block()
     if (blocked) return refuse(blocked)
     if (ctl.stopReason) return refuse('Stopped before it started.')
@@ -482,7 +492,6 @@ export class UnitBackend {
     // ---- from here the launch is journaled: every exit goes through `end()` ----
     let session: RunSession | null = null
     let unitState: UnitState | null = null
-    let manager: ManagerIncarnation | null = null
     let released = false
     let stderr = ''
     const finish = async (
@@ -506,7 +515,11 @@ export class UnitBackend {
     const abort = async (reason: string): Promise<UnitOutcome> => {
       // Nothing was released. Revoke if the journal still allows it (no `releasing`), cancel/stop, then prove.
       const revoked = journal.revoke(launchId, undefined, project(launchId))
-      if (!revoked.ok && revoked.reason !== 'may_have_executed' && revoked.reason !== 'illegal_transition')
+      if (
+        !revoked.ok &&
+        revoked.reason !== 'may_have_executed' &&
+        revoked.reason !== 'illegal_transition'
+      )
         this.deps.onError?.(new Error(`revoke refused: ${revoked.reason}`))
       this.socket.forget(launchId)
       try {
@@ -547,9 +560,12 @@ export class UnitBackend {
       },
       graceMs: request.graceMs,
       deadline: request.deadline,
-      python: (this.deps.python === undefined ? pdeathsigSupport().python : this.deps.python) ?? undefined,
+      python:
+        (this.deps.python === undefined ? pdeathsigSupport().python : this.deps.python) ??
+        undefined,
       wrapper: this.deps.wrapper ?? WRAPPER_FILE,
-      notifyBin: this.deps.notifyBin === undefined ? '/usr/bin/systemd-notify' : this.deps.notifyBin,
+      notifyBin:
+        this.deps.notifyBin === undefined ? '/usr/bin/systemd-notify' : this.deps.notifyBin,
       ...this.deps.specOverrides,
     }
     const registered = this.socket.expect({
@@ -585,14 +601,19 @@ export class UnitBackend {
     })()
     if (started.code !== 0) {
       const detail = started.stderr.trim().slice(0, 160)
-      return abort(`The system service manager refused to start the run${detail ? ` (${detail})` : ''}.`)
+      return abort(
+        `The system service manager refused to start the run${detail ? ` (${detail})` : ''}.`,
+      )
     }
     if (ctl.stopReason) return abort('Stopped before it started.')
 
     // ---- hello / ready, then identity (§5) ----
     const ready = await Promise.race([
       session.ready.then((info) => ({ ok: true as const, info })),
-      sleep(this.deps.readyTimeoutMs ?? 15_000).then(() => ({ ok: false as const, why: 'timeout' })),
+      sleep(this.deps.readyTimeoutMs ?? 15_000).then(() => ({
+        ok: false as const,
+        why: 'timeout',
+      })),
       ctl.stopped.then(() => ({ ok: false as const, why: 'stopped' })),
     ]).catch(() => ({ ok: false as const, why: 'closed' }))
     if (!ready.ok)
@@ -604,7 +625,7 @@ export class UnitBackend {
     const verified = await this.verifyIdentity(unit, ready.info)
     if (!verified.ok) return abort(`The run’s identity didn’t check out (${verified.reason}).`)
     unitState = verified.state
-    manager = await this.managerNow()
+    const manager = await this.managerNow()
     const managerText = manager ? `${this.bootNow() ?? ''}|${manager.pid}:${manager.start}` : null
     const armed = journal.arm(
       launchId,
@@ -617,7 +638,11 @@ export class UnitBackend {
     if (ctl.stopReason) return abort('Stopped before it started.')
 
     // ---- the ordering point (§3) ----
-    const releasing = journal.release(launchId, () => !ctl.stopReason && request.authorised(), project(launchId))
+    const releasing = journal.release(
+      launchId,
+      () => !ctl.stopReason && request.authorised(),
+      project(launchId),
+    )
     if (!releasing.ok) {
       if (releasing.reason === 'projection_failed') {
         // The record is durable: this launch MAY have executed. No `go`; stop it and prove it ended.
@@ -671,13 +696,21 @@ export class UnitBackend {
     const shown = await showUnit(this.run, unit)
     if (shown.kind !== 'present') return { ok: false, reason: 'the unit isn’t visible to systemd' }
     const state = shown.state
-    if (state.activeState !== 'active') return { ok: false, reason: `the unit is ${state.activeState}` }
+    if (state.activeState !== 'active')
+      return { ok: false, reason: `the unit is ${state.activeState}` }
     if (state.mainPid !== ready.pid) return { ok: false, reason: 'the main process differs' }
-    if (state.controlGroup !== ready.cgroup) return { ok: false, reason: 'the control group differs' }
+    if (state.controlGroup !== ready.cgroup)
+      return { ok: false, reason: 'the control group differs' }
     if (!/^[0-9a-f]{32}$/.test(state.invocationId)) return { ok: false, reason: 'no invocation id' }
-    const proc = this.deps.proc ?? { start: processStart, cgroup: (pid: number) => procCgroup(pid), boot: bootId }
-    if (proc.start(ready.pid) !== ready.start) return { ok: false, reason: 'the start time differs' }
-    if (proc.cgroup(ready.pid, ready.cgroup) !== ready.cgroup) return { ok: false, reason: '/proc names another cgroup' }
+    const proc = this.deps.proc ?? {
+      start: processStart,
+      cgroup: (pid: number) => procCgroup(pid),
+      boot: bootId,
+    }
+    if (proc.start(ready.pid) !== ready.start)
+      return { ok: false, reason: 'the start time differs' }
+    if (proc.cgroup(ready.pid, ready.cgroup) !== ready.cgroup)
+      return { ok: false, reason: '/proc names another cgroup' }
     return { ok: true, state }
   }
 
@@ -697,7 +730,10 @@ export class UnitBackend {
   }
 
   /** `systemctl --user stop <exact name>`, gated on the InvocationID (the recorded one, else the one systemd shows). */
-  async stopByName(launchId: string, invocationId?: string): Promise<'stopped' | 'absent' | 'unknown' | 'other'> {
+  async stopByName(
+    launchId: string,
+    invocationId?: string,
+  ): Promise<'stopped' | 'absent' | 'unknown' | 'other'> {
     const row = this.rowOf(launchId)
     const unit = row?.unit
     if (!unit || !validateUnitName(unit)) return 'unknown'
@@ -725,7 +761,7 @@ export class UnitBackend {
   ): Promise<{ proven: boolean; proof: string | null; detail: string }> {
     const deadline = this.clock() + (options.timeoutMs ?? this.deps.proofTimeoutMs ?? 30_000)
     const population = this.deps.population ?? ((cg: string) => cgroupPopulation(cg))
-    let detail = 'not yet'
+    let detail: string
     for (;;) {
       const row = this.rowOf(launchId)
       const unit = row?.unit ?? null
@@ -740,7 +776,11 @@ export class UnitBackend {
         const cgroup = row.cgroup
         const pop = cgroup ? population(cgroup) : 'absent'
         if (pop === 'absent' || pop === 'empty') {
-          return { proven: true, proof: cgroup ? 'cgroup-gone' : 'never-started', detail: 'unit gone' }
+          return {
+            proven: true,
+            proof: cgroup ? 'cgroup-gone' : 'never-started',
+            detail: 'unit gone',
+          }
         }
         detail = `the unit is gone but its cgroup is ${pop}`
         // A different manager incarnation with the unit missing: the outcome comes from the receipts and the recorded
@@ -751,11 +791,19 @@ export class UnitBackend {
           (await this.incarnationChanged(row)) &&
           this.readReceipt(row, 'ended.json') === 'present'
         )
-          return { proven: true, proof: 'receipt', detail: 'ended receipt, manager replaced, unit gone' }
+          return {
+            proven: true,
+            proof: 'receipt',
+            detail: 'ended receipt, manager replaced, unit gone',
+          }
       } else {
         const s = shown.state
         if (row.invocation_id && s.invocationId !== row.invocation_id)
-          return { proven: false, proof: null, detail: 'the unit’s invocation differs from the recorded one' }
+          return {
+            proven: false,
+            proof: null,
+            detail: 'the unit’s invocation differs from the recorded one',
+          }
         if (!s.jobPending && (s.activeState === 'inactive' || s.activeState === 'failed')) {
           const cg = s.controlGroup || row.cgroup || ''
           const pop = cg ? population(cg) : 'absent'
@@ -803,9 +851,17 @@ export class UnitBackend {
     try {
       const state = this.deps.journal.state(launchId)
       if (proof.proven) {
-        if (state?.state.mayHaveExecuted && state.kind === 'releasing' && this.hasReceipt(receiptDir, 'released.json'))
+        if (
+          state?.state.mayHaveExecuted &&
+          state.kind === 'releasing' &&
+          this.hasReceipt(receiptDir, 'released.json')
+        )
           this.deps.journal.releasedSeen(launchId, {}, project)
-        const ended = this.deps.journal.ended(launchId, { proof: proof.proof ?? 'unknown' }, project)
+        const ended = this.deps.journal.ended(
+          launchId,
+          { proof: proof.proof ?? 'unknown' },
+          project,
+        )
         if (!ended.ok && ended.reason !== 'illegal_transition')
           this.deps.onError?.(new Error(`ended refused: ${ended.reason}`))
       } else this.markHeld(launchId, 1)
@@ -829,7 +885,9 @@ export class UnitBackend {
   }
 
   markHeld(launchId: string, value: 0 | 1 | 2): void {
-    this.deps.db.sqlite.prepare('UPDATE coding_launches SET held = ? WHERE launch_id = ?').run(value, launchId)
+    this.deps.db.sqlite
+      .prepare('UPDATE coding_launches SET held = ? WHERE launch_id = ?')
+      .run(value, launchId)
   }
 
   /** The driver verdict on the result, kept beside the launch (design §2 "eligibility"). */
@@ -847,12 +905,13 @@ export class UnitBackend {
    * number of launches settled.
    */
   async settleRun(runId: string, disposition = 'committed'): Promise<number> {
-    const run = this.deps.db.sqlite
-      .prepare('SELECT status FROM runs WHERE id = ?')
-      .get(runId) as { status: string } | undefined
+    const run = this.deps.db.sqlite.prepare('SELECT status FROM runs WHERE id = ?').get(runId) as
+      { status: string } | undefined
     if (!run || ['queued', 'running', 'waiting_for_approval'].includes(run.status)) return 0
     const rows = this.deps.db.sqlite
-      .prepare("SELECT * FROM coding_launches WHERE run_id = ? AND backend = 'unit' AND phase = 'ended'")
+      .prepare(
+        "SELECT * FROM coding_launches WHERE run_id = ? AND backend = 'unit' AND phase = 'ended'",
+      )
       .all(runId) as unknown as Row[]
     let settled = 0
     for (const row of rows) {
@@ -868,7 +927,11 @@ export class UnitBackend {
   }
 
   private async settle(row: Row, disposition: string): Promise<boolean> {
-    const result = this.deps.journal.settled(row.launch_id, { disposition }, codingProjection(this.deps.db, this.clock))
+    const result = this.deps.journal.settled(
+      row.launch_id,
+      { disposition },
+      codingProjection(this.deps.db, this.clock),
+    )
     if (!result.ok) {
       this.deps.onError?.(new Error(`settle refused: ${result.reason}`))
       return false
@@ -893,7 +956,12 @@ export class UnitBackend {
           "SELECT run_id, launch_id, unit, held FROM coding_launches WHERE agent_id = ? AND backend = 'unit' AND held > 0 AND phase NOT IN ('ended','settled') ORDER BY updated_at",
         )
         .all(agentId) as { run_id: string; launch_id: string; unit: string; held: number }[]
-    ).map((r) => ({ runId: r.run_id, launchId: r.launch_id, unit: r.unit, canRelease: r.held === 2 }))
+    ).map((r) => ({
+      runId: r.run_id,
+      launchId: r.launch_id,
+      unit: r.unit,
+      canRelease: r.held === 2,
+    }))
   }
 
   /** The person's deliberate way out of a launch Score can’t observe: recorded as a waiver, nothing is signalled. */
@@ -905,7 +973,9 @@ export class UnitBackend {
       .all(agentId) as unknown as Row[]
     for (const row of rows) {
       const project = codingProjection(this.deps.db, this.clock, (sqlite) =>
-        sqlite.prepare('UPDATE coding_launches SET held = 0 WHERE launch_id = ?').run(row.launch_id),
+        sqlite
+          .prepare('UPDATE coding_launches SET held = 0 WHERE launch_id = ?')
+          .run(row.launch_id),
       )
       this.deps.journal.ended(row.launch_id, { proof: 'waiver', waiver: true }, project)
     }
@@ -937,7 +1007,10 @@ export class UnitBackend {
           await this.settleRun(row.run_id, 'interrupted')
           return true
         }
-        this.markHeld(launchId, stop === 'unknown' || /can’t be read|differs/.test(proof.detail) ? 2 : 1)
+        this.markHeld(
+          launchId,
+          stop === 'unknown' || /can’t be read|differs/.test(proof.detail) ? 2 : 1,
+        )
       }
       return false
     })()
@@ -953,7 +1026,11 @@ export class UnitBackend {
   private endRecord(row: Row, proof: string): void {
     const project = codingProjection(this.deps.db, this.clock)
     const state = this.deps.journal.state(row.launch_id)
-    if (state?.kind === 'releasing' && row.receipt_dir && this.hasReceipt(row.receipt_dir, 'released.json'))
+    if (
+      state?.kind === 'releasing' &&
+      row.receipt_dir &&
+      this.hasReceipt(row.receipt_dir, 'released.json')
+    )
       this.deps.journal.releasedSeen(row.launch_id, {}, project)
     // A launch that never executed is revoked before it ends: the journal alone proves no-launch (§3).
     if (state && !state.state.mayHaveExecuted && !state.state.revoked)
@@ -970,7 +1047,8 @@ export class UnitBackend {
     const row = this.rowOf(launchId)
     if (!row) return true
     if (proof.proven) {
-      if (row.phase !== 'ended' && row.phase !== 'settled') this.endRecord(row, proof.proof ?? 'unknown')
+      if (row.phase !== 'ended' && row.phase !== 'settled')
+        this.endRecord(row, proof.proof ?? 'unknown')
       this.markHeld(launchId, 0)
       return true
     }
@@ -1000,7 +1078,11 @@ export class UnitBackend {
   async recover(): Promise<RecoveryReport> {
     const read = this.deps.journal.journal.readOwn()
     if (!read.ok)
-      return { launches: [], orphans: [], unreadable: `the execution journal can’t be read (${read.reason})` }
+      return {
+        launches: [],
+        orphans: [],
+        unreadable: `the execution journal can’t be read (${read.reason})`,
+      }
     const folded = foldCodingLaunches(read.entries)
     const owned = [...folded.values()].filter((l) => l.state.unit !== undefined)
     const inventory = await listInstallationUnits(this.run, this.prefix)
@@ -1044,8 +1126,7 @@ export class UnitBackend {
         .run(join(this.deps.namespaceDir, LAUNCHES_DIR, state.launchId), state.launchId),
     )
     // Re-project the journal's own newest record.
-    const entry = this.deps.journal.journal
-      .readOwn()
+    const entry = this.deps.journal.journal.readOwn()
     if (entry.ok) {
       const mine = entry.entries.findLast((e) => 'launchId' in e && e.launchId === l.state.launchId)
       if (mine) project(mine, l.state)

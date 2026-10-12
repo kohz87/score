@@ -619,8 +619,7 @@ export class CodingRuntime {
   /** A run whose supervised unit is proven ended by a Stop that found no live handle: it ends as cancelled. */
   private async cancelIfOpen(agentId: string, runId: string): Promise<void> {
     const run = this.deps.db.sqlite.prepare('SELECT status FROM runs WHERE id = ?').get(runId) as
-      | { status: string }
-      | undefined
+      { status: string } | undefined
     if (!run || !['queued', 'running', 'waiting_for_approval'].includes(run.status)) return
     const agent = getCodingAgent(this.deps.db.sqlite, agentId, true)
     await this.finish(newTranslation(runId, agentId, this.roomOfRun(runId)), {
@@ -680,7 +679,9 @@ export class CodingRuntime {
     this.dropPending(translation.runId)
     // The terminal result is saved: the unit launch is settled and collected (design §6b). A failure here never
     // un-saves the result; recovery settles whatever was left.
-    await this.deps.unit?.settleRun(translation.runId).catch((error: unknown) => this.deps.onError?.(error))
+    await this.deps.unit
+      ?.settleRun(translation.runId)
+      .catch((error: unknown) => this.deps.onError?.(error))
     return result
   }
 
@@ -901,7 +902,8 @@ export class CodingRuntime {
           onEvent: handleEvent,
           deadline,
           graceMs: this.deps.graceMs ?? 5_000,
-          authorised: () => !entry.stopBeforeStart && !this.closed && !this.hasUnresolvedGroup(agent.id),
+          authorised: () =>
+            !entry.stopBeforeStart && !this.closed && !this.hasUnresolvedGroup(agent.id),
         })
         // Stop must wait for proof from here on: the unit may be starting.
         entry.launched = true
@@ -1053,7 +1055,9 @@ export class CodingRuntime {
       if (outcome.launchId)
         unit?.noteEligibility(
           outcome.launchId,
-          info.status === 'completed' ? 'eligible' : (verdict?.reason ?? outcome.reasons.join(', ')) || info.status,
+          info.status === 'completed'
+            ? 'eligible'
+            : (verdict?.reason ?? outcome.reasons.join(', ')) || info.status,
         )
       if (outcome.leftovers && info.status === 'completed')
         info.output =
@@ -1335,7 +1339,10 @@ export class CodingRuntime {
     // Launches whose end is proven but whose run was already terminal (a crash between the result and `settled`).
     if (recovered && unit)
       for (const launch of recovered.launches)
-        if (launch.ended) await unit.settleRun(launch.runId, 'interrupted').catch((e: unknown) => this.deps.onError?.(e))
+        if (launch.ended)
+          await unit
+            .settleRun(launch.runId, 'interrupted')
+            .catch((e: unknown) => this.deps.onError?.(e))
     // Anything still pending belongs to a run that is terminal now (or was interrupted just above).
     db.sqlite
       .prepare(

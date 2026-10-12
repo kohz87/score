@@ -18,7 +18,6 @@ import { loadConfig } from '../../src/config.ts'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
 import { CodingJournal } from '../../src/domain/orchestration/coding-journal.ts'
 import { codingProjection } from '../../src/domain/orchestration/coding-checkpoint.ts'
-import { foldCodingLaunches } from '../../src/domain/orchestration/coding-records.ts'
 import { ExecutionJournal } from '../../src/domain/orchestration/journal.ts'
 import { messageFromRow } from '../../src/domain/rooms.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
@@ -285,9 +284,7 @@ const launches = () =>
 const journalKinds = (launchId: string) => {
   const read = journal.readOwn()
   if (!read.ok) throw new Error(read.reason)
-  return read.entries
-    .filter((e) => 'launchId' in e && e.launchId === launchId)
-    .map((e) => e.kind)
+  return read.entries.filter((e) => 'launchId' in e && e.launchId === launchId).map((e) => e.kind)
 }
 const textOf = (message: Message | undefined) => JSON.stringify(message?.parts ?? [])
 
@@ -332,7 +329,9 @@ test('a Chat turn runs as a supervised unit end to end: journal phases, receipts
   expect(launch!.receipt_dir!.startsWith(namespace)).toBe(true)
   expect(launch!.receipt_dir!.startsWith(home)).toBe(false)
   expect(readdirSync(launch!.receipt_dir!).sort()).toEqual(['ended.json', 'released.json'])
-  expect(existsSync(join(runtimeDir, 'score', 'abcdef01', 'launches', launch!.launch_id))).toBe(false)
+  expect(existsSync(join(runtimeDir, 'score', 'abcdef01', 'launches', launch!.launch_id))).toBe(
+    false,
+  )
   // Collected: the unit is gone from the manager.
   expect(fake.units.size).toBe(0)
   expect(errors).toEqual([])
@@ -508,7 +507,11 @@ test('an ingest failure stops the run and makes the result ineligible (the swall
     ingestWrap: (real) => ({
       submit: (observation) => {
         // The second event of the run cannot be saved.
-        if (observation.identity.startsWith('coding:') && /:1$/.test(observation.identity) && count++ === 0)
+        if (
+          observation.identity.startsWith('coding:') &&
+          /:1$/.test(observation.identity) &&
+          count++ === 0
+        )
           return Promise.reject(new Error('database is locked'))
         return real.submit(observation)
       },
@@ -635,7 +638,6 @@ test('a fence pauses supervised launching with a sentence the person can act on'
   expect(cliCalls()).toHaveLength(0)
 })
 
-
 test('settled follows the terminal commit: a result that cannot be saved yet is delivered later, and only then settled', async () => {
   await coding.close()
   await app.close()
@@ -702,7 +704,8 @@ function seedLaunch(
   })
   const cj = new CodingJournal(journal)
   expect(
-    cj.requestLaunch({ launchId, runId, turnId: `turn-${runId}`, generation: 0 }, project, { unit }).ok,
+    cj.requestLaunch({ launchId, runId, turnId: `turn-${runId}`, generation: 0 }, project, { unit })
+      .ok,
   ).toBe(true)
   const live = over.withUnit ? fake.addUnit(unit) : undefined
   if (upto !== 'requested') {
@@ -746,7 +749,11 @@ test('recovery: an armed launch with a live unit is revoked and its unit stopped
   const seed = seedLaunch('armed', { withUnit: true })
   await coding.recover()
   expect(fake.units.has(seed.unit)).toBe(false)
-  expect(launchRow(seed.launchId)).toMatchObject({ revoked: 1, may_have_executed: 0, phase: 'settled' })
+  expect(launchRow(seed.launchId)).toMatchObject({
+    revoked: 1,
+    may_have_executed: 0,
+    phase: 'settled',
+  })
   // The stop was gated on the recorded InvocationID: the call sequence shows a `show` before the `stop`.
   const stops = fake.calls.filter((c) => c.includes('stop') && c.includes(seed.unit))
   expect(stops).toHaveLength(1)
@@ -758,7 +765,11 @@ test('recovery: a released launch with a live unit is stopped, proven ended and 
   const unseen = seedLaunch('releasing', { withUnit: true })
   await coding.recover()
   expect(runRow(seen.runId)).toMatchObject({ status: 'interrupted' })
-  expect(launchRow(seen.launchId)).toMatchObject({ phase: 'settled', may_have_executed: 1, held: 0 })
+  expect(launchRow(seen.launchId)).toMatchObject({
+    phase: 'settled',
+    may_have_executed: 1,
+    held: 0,
+  })
   expect(journalKinds(seen.launchId)).toEqual([
     'launch-requested',
     'armed',
@@ -790,7 +801,11 @@ test('recovery: a database that lost the launch row (an older backup) is rebuilt
   const seed = seedLaunch('releasing')
   db.sqlite.prepare('DELETE FROM coding_launches WHERE launch_id = ?').run(seed.launchId)
   await coding.recover()
-  expect(launchRow(seed.launchId)).toMatchObject({ backend: 'unit', phase: 'settled', may_have_executed: 1 })
+  expect(launchRow(seed.launchId)).toMatchObject({
+    backend: 'unit',
+    phase: 'settled',
+    may_have_executed: 1,
+  })
 })
 
 test('recovery: may have executed and not provable is unconfirmed, holds the agent, and a later proof releases it', async () => {
@@ -801,7 +816,10 @@ test('recovery: may have executed and not provable is unconfirmed, holds the age
   fake.hooks.ignoreStop = true
   const seed = seedLaunch('releasing', { withUnit: true })
   await coding.recover()
-  expect(runRow(seed.runId)).toMatchObject({ status: 'interrupted', terminal_source: 'unconfirmed' })
+  expect(runRow(seed.runId)).toMatchObject({
+    status: 'interrupted',
+    terminal_source: 'unconfirmed',
+  })
   expect(runRow(seed.runId).error).toMatch(/Some of its tools may still be running/)
   expect(launchRow(seed.launchId)).toMatchObject({ held: 1, phase: 'releasing' })
   const refused = await coding
@@ -814,9 +832,12 @@ test('recovery: may have executed and not provable is unconfirmed, holds the age
   ])
   // The unit finally obeys: the background loop proves it ended and the agent is free again.
   fake.hooks.ignoreStop = false
-  await vi.waitFor(() => expect(launchRow(seed.launchId)).toMatchObject({ phase: 'settled', held: 0 }), {
-    timeout: 15_000,
-  })
+  await vi.waitFor(
+    () => expect(launchRow(seed.launchId)).toMatchObject({ phase: 'settled', held: 0 }),
+    {
+      timeout: 15_000,
+    },
+  )
   expect((await request('GET', '/api/coding-agents')).json().items[0].heldGroups).toEqual([])
 })
 
@@ -828,7 +849,10 @@ test('recovery: systemd that cannot be read holds every open launch and the pers
   const seed = seedLaunch('releasing', { withUnit: true })
   fake.hooks.showFails = true
   await coding.recover()
-  expect(runRow(seed.runId)).toMatchObject({ status: 'interrupted', terminal_source: 'unconfirmed' })
+  expect(runRow(seed.runId)).toMatchObject({
+    status: 'interrupted',
+    terminal_source: 'unconfirmed',
+  })
   await vi.waitFor(
     async () => {
       const held = (await request('GET', '/api/coding-agents')).json().items[0].heldGroups
@@ -842,9 +866,9 @@ test('recovery: systemd that cannot be read holds every open launch and the pers
   const row = launchRow(seed.launchId)
   expect(row.held).toBe(0)
   expect(row.proof).toBe('waiver')
-  expect(
-    db.sqlite.prepare('SELECT agent_id, run_id FROM coding_releases').all(),
-  ).toEqual([{ agent_id: 'coder', run_id: seed.runId }])
+  expect(db.sqlite.prepare('SELECT agent_id, run_id FROM coding_releases').all()).toEqual([
+    { agent_id: 'coder', run_id: seed.runId },
+  ])
   // Nothing was signalled: the fake unit was never asked to stop by the release.
   expect(fake.units.has(seed.unit)).toBe(true)
 })
@@ -857,12 +881,19 @@ test('recovery: after a manager cold restart the receipts and the recorded cgrou
   // The unit is gone and the cgroup cannot be read: the supervisor's own `ended` receipt (written only once the
   // payload was empty) is the witness.
   const old = `${fake.boot}|1111:5`
-  const witnessed = seedLaunch('releasing', { manager: old, receipts: ['released.json', 'ended.json'] })
+  const witnessed = seedLaunch('releasing', {
+    manager: old,
+    receipts: ['released.json', 'ended.json'],
+  })
   const unwitnessed = seedLaunch('releasing', { manager: old, receipts: ['released.json'] })
   // The same manager with the unit missing and the cgroup unreadable is NOT enough: missing metadata proves nothing.
   const sameManager = seedLaunch('releasing', { receipts: ['released.json', 'ended.json'] })
   await coding.recover()
-  expect(launchRow(witnessed.launchId)).toMatchObject({ phase: 'settled', proof: 'receipt', held: 0 })
+  expect(launchRow(witnessed.launchId)).toMatchObject({
+    phase: 'settled',
+    proof: 'receipt',
+    held: 0,
+  })
   expect(launchRow(unwitnessed.launchId)).toMatchObject({ phase: 'releasing', held: 1 })
   expect(runRow(unwitnessed.runId).terminal_source).toBe('unconfirmed')
   expect(launchRow(sameManager.launchId)).toMatchObject({ phase: 'releasing', held: 1 })
@@ -976,8 +1007,12 @@ test('the user can stop a run whose unit ignores the stop: the answer is unconfi
   const seed = seedLaunch('releasing', { withUnit: true })
   const outcome = await coding.stopRun({ agentId: 'coder', runId: seed.runId })
   expect(outcome).toBe('unconfirmed')
-  await vi.waitFor(() => expect(launchRow(seed.launchId).held).toBeGreaterThan(0), { timeout: 5000 })
+  await vi.waitFor(() => expect(launchRow(seed.launchId).held).toBeGreaterThan(0), {
+    timeout: 5000,
+  })
   fake.hooks.ignoreStop = false
-  await vi.waitFor(() => expect(launchRow(seed.launchId).phase).toBe('settled'), { timeout: 15_000 })
+  await vi.waitFor(() => expect(launchRow(seed.launchId).phase).toBe('settled'), {
+    timeout: 15_000,
+  })
   expect(runRow(seed.runId).status).toBe('cancelled')
 })

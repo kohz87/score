@@ -479,7 +479,10 @@ test('claude: only an explicit success with text is eligible; defaults never imp
 const codexLine = (value: unknown) => JSON.stringify(value)
 const agentMessage = (id: string, text: unknown, type = 'item.completed') =>
   codexLine({ type, item: { id, type: 'agent_message', text } })
-const turnCompleted = codexLine({ type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1 } })
+const turnCompleted = codexLine({
+  type: 'turn.completed',
+  usage: { input_tokens: 1, output_tokens: 1 },
+})
 
 test('codex: the reply is the last validated agent_message before turn.completed (7.7a section 6)', () => {
   const parser = createCodexParser()
@@ -497,9 +500,9 @@ test('codex: a malformed or empty agent_message, a dropped record or no message 
     return verdictOf(lines.flatMap((line) => parser.parse(line)))
   }
   // A completed message with the wrong shape or no text invalidates the whole turn, even with a good one after it.
-  expect(
-    run([agentMessage('m1', 42), agentMessage('m2', 'Fine.'), turnCompleted])?.eligible,
-  ).toBe(false)
+  expect(run([agentMessage('m1', 42), agentMessage('m2', 'Fine.'), turnCompleted])?.eligible).toBe(
+    false,
+  )
   expect(run([agentMessage('m1', ''), agentMessage('m2', 'Fine.'), turnCompleted])?.eligible).toBe(
     false,
   )
@@ -526,7 +529,10 @@ test('codex: the next turn starts clean after a malformed one', () => {
 
 test('antigravity: SUCCESS and a non-empty response are eligible, and the response wins over commentary (7.7a section 6)', () => {
   const result = (status: string, response: string | undefined) =>
-    JSON.stringify({ event: 'result', result: { status, ...(response === undefined ? {} : { response }) } })
+    JSON.stringify({
+      event: 'result',
+      result: { status, ...(response === undefined ? {} : { response }) },
+    })
   const parse = (status: string, response: string | undefined) =>
     verdictOf(createAntigravityParser().parse(result(status, response)))
   expect(parse('SUCCESS', 'The answer.')).toEqual({

@@ -286,7 +286,26 @@ admission is blocked and the fence cannot be lifted. Say which it is, with Score
 `scripts/score installation status` shows what the home and the registry say. If the registry is corrupt and no manifest
 survives, Score refuses admission until you restore `installations.json` from a backup.
 
+### Coding runs as supervised services (PLAN 7.7a)
+
+In live mode, every coding run (Claude Code, Codex, Antigravity) starts as a transient **systemd user service**
+(`score-<first 8 characters of the installation id>-c-<launch id>.service`) with a small supervisor inside it. When Score
+stops or crashes the service stops the CLI and everything it started, and Score confirms from the service's control group
+that nothing is left before it calls a run finished. It needs, on the host: a reachable user manager
+(`systemctl --user`), cgroup v2, **linger** (`loginctl enable-linger $USER`, so the manager outlives your login), Python 3,
+`systemd-notify`, `$XDG_RUNTIME_DIR` and a socket path under 100 bytes. Score checks all of this at start and shows the
+result, with **Check again**, on each coding agent's card in Team. If anything is missing the previous process-group
+backend runs instead, with the weaker guarantee stated on the card ("tools a coding CLI started may keep running until
+Score restarts and stops them"). `SCORE_CODING_BACKEND=process-group` forces the fallback.
+
+Receipts and the single-use spec files live outside the home (`<journal dir>/<id>/launches/…`,
+`$XDG_RUNTIME_DIR/score/<id8>/launches/…`). To inspect a stuck service: `systemctl --user list-units 'score-*-c-*'`.
+
+Tests: `SCORE_TEST_SYSTEMD=1 pnpm --filter @score/server test coding-units-systemd coding-systemd` runs the opt-in suite
+against the real user manager. Its units are named `score-test-<random>-…` and always stopped and reset by the test.
+
 ## Changelog of this file
+- 2026-10-12: coding runs as supervised services, capability check, `SCORE_CODING_BACKEND` (PLAN 7.7a part 3).
 - 2026-10-12: installation identity, per-installation journal folders, `score installation` (PLAN 7.7a part 1).
 - 2026-10-10: orchestrations: execution journal location and `scripts/score restore` (PLAN 7.5a).
 - 2026-10-09: do not VACUUM by hand (search index rebuilt at start).- 2026-10-09: the knowledge vault (`SCORE_VAULT`, git).

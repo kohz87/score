@@ -53,7 +53,8 @@ export class FakeSystemd {
   private async handle(file: string, args: string[]): Promise<ToolResult> {
     this.calls.push([file, ...args])
     if (file.endsWith('systemd-run')) return this.systemdRun(args)
-    if (file.endsWith('loginctl')) return this.result(this.hooks.lingerOff ? 'Linger=no\n' : 'Linger=yes\n')
+    if (file.endsWith('loginctl'))
+      return this.result(this.hooks.lingerOff ? 'Linger=no\n' : 'Linger=yes\n')
     if (!file.endsWith('systemctl')) return this.result('', 127, 'unknown tool')
     const user = args[0] === '--user'
     const rest = user ? args.slice(1) : args
@@ -84,7 +85,8 @@ export class FakeSystemd {
     if (this.hooks.showFails) return this.result('', 1, 'Failed to connect to bus')
     if (name === '' || !name.endsWith('.service')) return this.result('Version=259\n')
     const unit = this.units.get(name)
-    if (!unit) return this.result('LoadState=not-found\nActiveState=inactive\nSubState=dead\nJob=\n')
+    if (!unit)
+      return this.result('LoadState=not-found\nActiveState=inactive\nSubState=dead\nJob=\n')
     return this.result(
       [
         'LoadState=loaded',

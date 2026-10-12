@@ -381,7 +381,14 @@ export async function startServer(
     if (unit) {
       const status = await unit.start()
       process.stderr.write(
-        `Coding runs: ${status.kind === 'unit' ? 'supervised system services' : `process-group fallback (${status.checks.filter((c) => !c.ok).map((c) => c.detail).join('; ')})`}\n`,
+        `Coding runs: ${
+          status.kind === 'unit'
+            ? 'supervised system services'
+            : `process-group fallback (${status.checks
+                .filter((c) => !c.ok)
+                .map((c) => c.detail)
+                .join('; ')})`
+        }\n`,
       )
     }
     coding = new CodingRuntime({

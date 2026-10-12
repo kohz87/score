@@ -109,7 +109,11 @@ export function unitNameFor(installationId: string, launchId: string, prefix?: s
 }
 
 /** Whether a unit name carries this installation's prefix (necessary, not sufficient: the journal decides ownership). */
-export function hasInstallationPrefix(name: string, installationId: string, prefix?: string): boolean {
+export function hasInstallationPrefix(
+  name: string,
+  installationId: string,
+  prefix?: string,
+): boolean {
   return validateUnitName(name) && name.startsWith(prefix ?? unitPrefix(installationId))
 }
 

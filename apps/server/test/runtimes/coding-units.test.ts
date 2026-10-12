@@ -124,9 +124,7 @@ test('unit names are validated; arguments with control characters or relative pa
   expect(() => buildSystemRun({ ...base, unit: 'bad name.service' })).toThrow()
   expect(() => buildSystemRun({ ...base, home: 'relative' })).toThrow()
   expect(() => buildSystemRun({ ...base, spec: '/a\nb' })).toThrow()
-  expect(unitNameFor('0123456789abcdef', 'LAUNCH-1_x')).toBe(
-    'score-01234567-c-LAUNCH1x.service',
-  )
+  expect(unitNameFor('0123456789abcdef', 'LAUNCH-1_x')).toBe('score-01234567-c-LAUNCH1x.service')
   expect(hasInstallationPrefix('score-01234567-c-a.service', '0123456789abcdef')).toBe(true)
   expect(hasInstallationPrefix('score-99999999-c-a.service', '0123456789abcdef')).toBe(false)
 })

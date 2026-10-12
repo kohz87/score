@@ -13,15 +13,9 @@ import { insertCodingAgent } from '../../src/runtimes/coding/store.ts'
 import { UnitBackend } from '../../src/runtimes/coding/unit-backend.ts'
 import { defaultRootPolicy } from '../../src/workspace/policy.ts'
 
-const [dir, workspace, fakeCli, runtimeDir, installationId, prefix, cliLog] = process.argv.slice(2) as [
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-]
+const [dir, workspace, fakeCli, runtimeDir, installationId, prefix, cliLog] = process.argv.slice(
+  2,
+) as [string, string, string, string, string, string, string]
 mkdirSync(join(dir, 'home'), { recursive: true })
 const namespace = join(dir, 'journal', installationId)
 mkdirSync(join(namespace, 'launches'), { recursive: true })
@@ -71,7 +65,8 @@ const timer = setInterval(() => {
     .get() as { launch_id: string } | undefined
   let pid = 0
   try {
-    pid = (JSON.parse(readFileSync(cliLog, 'utf8').trim().split('\n').at(-1)!) as { pid: number }).pid
+    pid = (JSON.parse(readFileSync(cliLog, 'utf8').trim().split('\n').at(-1)!) as { pid: number })
+      .pid
   } catch {
     // the CLI has not logged yet
   }

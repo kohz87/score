@@ -44,8 +44,8 @@ export function ReleaseHeld({ agentId }: { agentId: string }) {
         <p>
           Score can’t tell whether{' '}
           {unclear.length === 1 ? 'these programs are' : 'the programs of these groups are'} its
-          own, so it hasn’t touched them and this agent can’t take new messages. Check them
-          yourself (for example <code>{`ps -o pid,pgid,args -g ${unclear[0]!.pgid}`}</code>
+          own, so it hasn’t touched them and this agent can’t take new messages. Check them yourself
+          (for example <code>{`ps -o pid,pgid,args -g ${unclear[0]!.pgid}`}</code>
           ), then release the agent. Releasing stops nothing.
         </p>
       )}

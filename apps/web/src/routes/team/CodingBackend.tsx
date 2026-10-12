@@ -43,19 +43,18 @@ export function CodingBackend() {
       <p data-backend={kind}>{note}</p>
       {kind === 'unit' && (
         <p>
-          If Score stops, the service stops this agent and everything it started, and Score
-          confirms that before it calls a run finished.
+          If Score stops, the service stops this agent and everything it started, and Score confirms
+          that before it calls a run finished.
         </p>
       )}
       {checks.length > 0 && (
         <details>
-          <summary>
-            Host check{failed.length > 0 ? ` (${failed.length} not met)` : ''}
-          </summary>
+          <summary>Host check{failed.length > 0 ? ` (${failed.length} not met)` : ''}</summary>
           <ul>
             {checks.map((check) => (
               <li key={check.name}>
-                {checkLabels[check.name] ?? check.name}: {check.ok ? 'OK' : 'not met'}. {check.detail}
+                {checkLabels[check.name] ?? check.name}: {check.ok ? 'OK' : 'not met'}.{' '}
+                {check.detail}
               </li>
             ))}
           </ul>

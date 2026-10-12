@@ -97,9 +97,7 @@ export function registerCodingAgentRoutes(
       items: await Promise.all(coding.agents().map((agent) => coding.view(agent))),
     }),
   )
-  app.get('/api/coding-agents/backend', async () =>
-    CodingBackendSchema.parse(coding.backend()),
-  )
+  app.get('/api/coding-agents/backend', async () => CodingBackendSchema.parse(coding.backend()))
   app.post('/api/coding-agents/backend/check', guard, async () =>
     CodingBackendSchema.parse(await coding.checkBackend()),
   )

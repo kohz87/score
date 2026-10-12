@@ -160,7 +160,12 @@ test('Release: a supervised run is named by its service, not by a process group'
               model: null,
               style: { color: '#6B4EFF', shape: 'hexagon' },
               quota: 'q',
-              cli: { state: 'ready', version: '1.0.0', testedVersions: ['1.0.0'], confirmed: false },
+              cli: {
+                state: 'ready',
+                version: '1.0.0',
+                testedVersions: ['1.0.0'],
+                confirmed: false,
+              },
               heldGroups: [
                 { runId: 'cr_1', pgid: 0, canRelease: true, unit: 'score-01234567-c-abc.service' },
               ],
@@ -177,7 +182,9 @@ test('Release: a supervised run is named by its service, not by a process group'
       <ReleaseHeld agentId="coder" />
     </QueryClientProvider>,
   )
-  expect(await screen.findByText(/systemctl --user status score-01234567-c-abc.service/)).toBeTruthy()
+  expect(
+    await screen.findByText(/systemctl --user status score-01234567-c-abc.service/),
+  ).toBeTruthy()
   expect(screen.queryByText(/ps -o pid/)).toBeNull()
 })
 
@@ -192,7 +199,11 @@ test('Backend note: says how coding runs launch, lists the host check, and Check
         ? 'Runs as a supervised system service.'
         : 'Runs without a supervisor: tools a coding CLI started may keep running until Score restarts and stops them. linger is off',
     checks: [
-      { name: 'linger', ok: kind === 'unit', detail: kind === 'unit' ? 'linger enabled' : 'linger is off' },
+      {
+        name: 'linger',
+        ok: kind === 'unit',
+        detail: kind === 'unit' ? 'linger enabled' : 'linger is off',
+      },
       { name: 'python', ok: true, detail: 'Python at /usr/bin/python3' },
     ],
     checkedAt: '2026-10-12T10:00:00.000Z',
