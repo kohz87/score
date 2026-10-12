@@ -27,6 +27,7 @@ import { CliLocator } from '../../src/runtimes/coding/cli.ts'
 import { bootId, processStart } from '../../src/runtimes/coding/proc.ts'
 import { spawnCli } from '../../src/runtimes/coding/process.ts'
 import { CodingRuntime, type CodingRuntimeDeps } from '../../src/runtimes/coding/service.ts'
+import { RunSession } from '../../src/runtimes/coding/coding-socket.ts'
 import { UnitBackend, type UnitBackendDeps } from '../../src/runtimes/coding/unit-backend.ts'
 import { defaultRootPolicy } from '../../src/workspace/policy.ts'
 import { FakeSystemd } from '../helpers/fake-systemd.ts'
@@ -737,6 +738,8 @@ function seedLaunch(
   over: {
     withUnit?: boolean
     receipts?: string[]
+    /** Replaces a receipt's content (default: a valid body for this launch). */
+    bodies?: Record<string, string>
     manager?: string | null
     runStatus?: string
     cgroup?: string
@@ -779,7 +782,17 @@ function seedLaunch(
   if (upto === 'releasing' || upto === 'released-seen')
     expect(cj.release(launchId, () => true, project).ok).toBe(true)
   if (upto === 'released-seen') expect(cj.releasedSeen(launchId, {}, project).ok).toBe(true)
-  for (const name of over.receipts ?? []) writeFileSync(join(receiptDir, name), '{}')
+  for (const name of over.receipts ?? []) {
+    const valid = JSON.stringify({
+      launch: launchId,
+      generation: 0,
+      at: Date.now(),
+      ...(name === 'ended.json'
+        ? { code: 0, signal: null, stopCause: null, survivorsKilled: 0 }
+        : { supervisorPid: 1 }),
+    })
+    writeFileSync(join(receiptDir, name), over.bodies?.[name] ?? valid)
+  }
   return { launchId, runId, unit, live }
 }
 const launchRow = (id: string) => launches().find((l) => l.launch_id === id)!
@@ -1075,3 +1088,178 @@ test('the user can stop a run whose unit ignores the stop: the answer is unconfi
   })
   expect(runRow(seed.runId).status).toBe('cancelled')
 })
+
+// ---- review fixes FX4 (#5, #9, #14) ----------------------------------------------------------------------------------
+
+test('#9: recovery never stops a unit it did not verify: an unarmed launch has no recorded invocation to match', async () => {
+  await addAgent()
+  // A launch that never armed, while a unit with its name is running: Score cannot tell whose invocation that is.
+  const seed = seedLaunch('requested', { withUnit: true })
+  await coding.recover()
+  expect(fake.calls.some((c) => c.includes('stop') && c.includes(seed.unit))).toBe(false)
+  expect(fake.units.get(seed.unit)?.active).toBe('active')
+  // Unresolved, not guessed: the launch is held and the person may release it.
+  expect(launchRow(seed.launchId).held).toBeGreaterThan(0)
+  expect(launchRow(seed.launchId).phase).not.toBe('settled')
+})
+
+test('#9: an unarmed launch whose unit is gone is still proven to have never started', async () => {
+  await addAgent()
+  const seed = seedLaunch('requested')
+  expect(await coding.recover()).toBe(1)
+  expect(launchRow(seed.launchId)).toMatchObject({ phase: 'settled', held: 0 })
+})
+
+test('#14: the stop cause is saved before the stop frame is sent', async () => {
+  const seen: (string | null)[] = []
+  const original = RunSession.prototype.stop
+  vi.spyOn(RunSession.prototype, 'stop').mockImplementation(function (
+    this: RunSession,
+    cause: string,
+  ) {
+    seen.push(launches()[0]?.stop_cause ?? null)
+    return original.call(this, cause)
+  })
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:slow] take your time')
+  await vi.waitFor(() => expect(replies()[0]?.parts.length).toBeGreaterThan(0), { timeout: 15_000 })
+  await coding.stopRun({ agentId: 'coder', runId: runs()[0]!.id })
+  await finished()
+  expect(seen).toEqual(['user'])
+})
+
+test('#14: a stop on a launch Score no longer holds saves its cause before the unit is stopped', async () => {
+  await addAgent()
+  const seed = seedLaunch('releasing', { withUnit: true, receipts: ['released.json'] })
+  const live = seed.live!
+  const handler = live.stopHandler
+  const seen: (string | null)[] = []
+  live.stopHandler = () => {
+    seen.push(launchRow(seed.launchId).stop_cause)
+    handler?.()
+  }
+  await coding.stopRun({ agentId: 'coder', runId: seed.runId })
+  expect(seen).toEqual(['user'])
+})
+
+test('#5: a fence raised while the unit starts stops the release: the CLI never runs', async () => {
+  let fenced = false
+  await coding.close()
+  await app.close()
+  await boot({ blocked: () => (fenced ? 'Score is waiting for you to review the journal.' : null) })
+  await addAgent()
+  await makeRoom()
+  fake.hooks.afterStart = () => {
+    fenced = true
+  }
+  await say('@coder [fixture:basic] go')
+  await finished()
+  expect(cliCalls()).toHaveLength(0)
+  const [launch] = launches()
+  expect(launch).toMatchObject({ revoked: 1, may_have_executed: 0 })
+  expect(journalKinds(launch!.launch_id)).not.toContain('releasing')
+})
+
+test('#5: a disabled backend (forced fallback) still reconciles units and enforces the barriers', async () => {
+  await coding.close()
+  await app.close()
+  fake.calls.length = 0
+  await boot({ unit: { disabled: 'The fallback is forced.' } })
+  expect(backend.status.kind).toBe('process-group')
+  expect(backend.status.note).toContain('The fallback is forced.')
+  expect(backend.usable()).toBe(false)
+  await addAgent()
+  const stray = fake.addUnit('score-abcdef01-c-deadbeefdeadbeefdeadbeefdeadbeef.service')
+  await coding.recover()
+  // The orphan inventory ran although nothing is supervised, and the barrier answers.
+  expect(backend.orphaned).toEqual([stray.name])
+  expect(backend.block()).toMatch(/isn’t accounted for/)
+  // A disabled backend runs no capability probe and starts nothing.
+  expect(fake.calls.some((c) => c[0]!.endsWith('systemd-run'))).toBe(false)
+})
+
+test('#5: an unresolved installation reconciles nothing and keeps the barrier up', async () => {
+  await coding.close()
+  await app.close()
+  await boot({
+    unit: { disabled: 'This installation isn’t resolved yet.', unresolved: true },
+    blocked: () => 'The installation isn’t resolved.',
+  })
+  const stray = fake.addUnit('score-00000000-c-deadbeefdeadbeefdeadbeefdeadbeef.service')
+  expect(await backend.recover()).toEqual({ launches: [], orphans: [], unreadable: null })
+  expect(backend.block()).toBe('The installation isn’t resolved.')
+  expect(fake.calls.some((c) => c.includes('stop') && c.includes(stray.name))).toBe(false)
+})
+
+test('#8 reader: an empty, truncated, foreign or wrong-kind receipt is never proof', async () => {
+  await coding.close()
+  await app.close()
+  await boot({ unit: { population: () => 'unknown', recoverProofMs: 200 }, reapRetryMs: 5_000 })
+  await addAgent()
+  const old = `${fake.boot}|1111:5`
+  const mk = (ended: string) =>
+    seedLaunch('releasing', {
+      manager: old,
+      receipts: ['released.json', 'ended.json'],
+      bodies: { 'ended.json': ended },
+    })
+  const good = mk(
+    JSON.stringify({ launch: 'x', generation: 0, at: 1, code: 0, signal: null, stopCause: null }),
+  )
+  // `good` names the wrong launch: rebuild it properly below; the invalid ones must all stay held.
+  const empty = mk('')
+  const truncated = mk('{"launch":"')
+  const array = mk('[]')
+  const wrongKind = mk(JSON.stringify({ launch: 'x', generation: 0, at: 1, supervisorPid: 1 }))
+  await coding.recover()
+  for (const seed of [good, empty, truncated, array, wrongKind])
+    expect(launchRow(seed.launchId)).toMatchObject({ phase: 'releasing', held: 1 })
+})
+
+test('#8 reader: an empty released receipt does not record released-seen', async () => {
+  await addAgent()
+  const seed = seedLaunch('releasing', {
+    withUnit: true,
+    bodies: { 'released.json': '' },
+    receipts: ['released.json'],
+  })
+  await coding.recover()
+  expect(launchRow(seed.launchId).phase).toBe('settled')
+  expect(journalKinds(seed.launchId)).not.toContain('released-seen')
+})
+
+test('#8 reader: an unreadable manager identity is uncertain, not a changed incarnation', async () => {
+  await coding.close()
+  await app.close()
+  await boot({
+    unit: { population: () => 'unknown', recoverProofMs: 200, manager: async () => null },
+    reapRetryMs: 5_000,
+  })
+  await addAgent()
+  const seed = seedLaunch('releasing', {
+    manager: `${fake.boot}|1111:5`,
+    receipts: ['released.json', 'ended.json'],
+  })
+  await coding.recover()
+  expect(launchRow(seed.launchId)).toMatchObject({ phase: 'releasing', held: 1 })
+})
+
+// The service must consult the barrier whichever backend launches: `service.ts` calls `unit.block()` only when
+// `unit.usable()` (an FX2 file). This documents the gap; when service.ts calls block() unconditionally, delete `.fails`.
+test.fails(
+  '#5: the fallback launch is refused while a barrier is up (needs the service.ts change)',
+  async () => {
+    await coding.close()
+    await app.close()
+    await boot({
+      unit: { disabled: 'The fallback is forced.' },
+      blocked: () => 'Score is waiting for you to review the coding journal.',
+    })
+    await addAgent()
+    const refused = await coding
+      .startRun({ agentId: 'coder', input: 'go', turnId: 't-barrier' })
+      .catch((error: unknown) => error)
+    expect(refused).toMatchObject({ status: 422, code: 'coding_paused' })
+  },
+)

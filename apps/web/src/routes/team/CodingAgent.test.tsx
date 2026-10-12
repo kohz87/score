@@ -227,5 +227,10 @@ test('Backend note: says how coding runs launch, lists the host check, and Check
   fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
   await waitFor(() => expect(posts).toEqual(['/api/coding-agents/backend/check']))
   expect(await screen.findByText('Runs as a supervised system service.')).toBeTruthy()
-  expect(screen.getByText(/the service stops this agent and everything it started/)).toBeTruthy()
+  // Only what the design proves: the service's own processes, not work handed to another service or daemon (review #17).
+  const promise = screen.getByText(/the service stops this agent and everything running inside it/)
+  expect(promise.textContent).toContain(
+    'another service, a scheduler or a background daemon isn’t covered',
+  )
+  expect(promise.textContent).not.toContain('everything it started')
 })

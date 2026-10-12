@@ -69,6 +69,18 @@ export interface UnitBackendDeps {
   home: string
   /** Why coding admission is paused (hard block, journal fence, orphan units), or null. Evaluated at every admission. */
   blocked?: () => string | null
+  /**
+   * Why runs can't be supervised on this host or in this setup (forced fallback, no runtime directory, unresolved
+   * installation). The backend then stays on the fallback, but it still reconciles the unit inventory and the journal
+   * and still enforces the admission barriers (`blocked`, orphans, held launches): the barriers don't depend on the
+   * backend that launches (review #5).
+   */
+  disabled?: string
+  /**
+   * The installation isn't resolved (`installationId` is a placeholder): nothing is reconciled or acted on, because the
+   * journal and the unit prefix don't belong to this home yet. Only the `blocked` barrier applies.
+   */
+  unresolved?: boolean
   run?: RunTool
   clock?: () => number
   onError?: (error: unknown) => void
@@ -280,18 +292,28 @@ export class UnitBackend {
 
   /** Starts the socket listener and runs the capability check. Never throws: a failure means the fallback backend. */
   async start(): Promise<BackendStatus> {
-    try {
-      // Held by the caller: the home lock keeps a second Score off this installation's socket (design §4).
-      await this.socket.start(true)
-    } catch (error) {
-      this.socketError = error instanceof Error ? error.message : String(error)
+    if (this.deps.disabled === undefined) {
+      try {
+        // Held by the caller: the home lock keeps a second Score off this installation's socket (design §4).
+        await this.socket.start(true)
+      } catch (error) {
+        this.socketError = error instanceof Error ? error.message : String(error)
+      }
     }
     return this.check()
   }
-
   /** "Check again": the same check, on demand. */
   async check(): Promise<BackendStatus> {
     await this.rescanOrphans()
+    if (this.deps.disabled !== undefined) {
+      this.current = {
+        kind: 'process-group',
+        checks: [{ name: 'manager', ok: false, detail: this.deps.disabled }],
+        checkedAt: new Date(this.clock()).toISOString(),
+        note: `${FALLBACK_NOTE} ${this.deps.disabled}`.trim(),
+      }
+      return this.current
+    }
     const checks: { name: string; ok: boolean; detail: string }[] = []
     let ok: boolean
     try {
@@ -370,7 +392,7 @@ export class UnitBackend {
 
   launch(request: UnitLaunchRequest): UnitRun {
     const launchId = randomUUID()
-    const ctl = new Control()
+    const ctl = new Control(launchId)
     const done = this.drive(launchId, request, ctl).catch((error: unknown) => {
       this.deps.onError?.(error)
       return this.outcomeOf(launchId, '', {
@@ -381,8 +403,26 @@ export class UnitBackend {
     return { launchId, stop: (reason = 'user') => ctl.requestStop(reason, this), done }
   }
 
+  /**
+   * The first stop cause is saved in the database before any signal goes out, so a Score that dies between the request
+   * and the end of the run still knows why it stopped (review #14). The first cause wins. A failed write is reported
+   * and the stop goes ahead: stopping matters more than the note.
+   */
+  recordStop(launchId: string, reason: StopReason): void {
+    try {
+      this.deps.db.sqlite
+        .prepare(
+          'UPDATE coding_launches SET stop_cause = COALESCE(stop_cause, ?) WHERE launch_id = ?',
+        )
+        .run(STOP_CAUSE[reason], launchId)
+    } catch (error) {
+      this.deps.onError?.(error)
+    }
+  }
+
   /** Called by `Control.requestStop` once a session exists and the CLI is released. */
   sendStop(launchId: string, session: RunSession | null, reason: StopReason): void {
+    this.recordStop(launchId, reason)
     if (session?.connected) session.stop(STOP_CAUSE[reason])
     else void this.stopByName(launchId).catch((error: unknown) => this.deps.onError?.(error))
   }
@@ -649,7 +689,8 @@ export class UnitBackend {
     // ---- the ordering point (§3) ----
     const releasing = journal.release(
       launchId,
-      () => !ctl.stopReason && request.authorised(),
+      // A fence raised while the unit was starting also stops the release (review #5).
+      () => !ctl.stopReason && this.block() === null && request.authorised(),
       project(launchId),
     )
     if (!releasing.ok) {
@@ -738,7 +779,12 @@ export class UnitBackend {
       .get(launchId) as Row | undefined
   }
 
-  /** `systemctl --user stop <exact name>`, gated on the InvocationID (the recorded one, else the one systemd shows). */
+  /**
+   * `systemctl --user stop <exact name>`, gated on an InvocationID Score established independently (the recorded one,
+   * or the one it verified against the supervisor). A launch with none (never armed, or never verified) is never
+   * stopped by name: the invocation systemd shows now could be a foreign one that took the name, and a stop would
+   * adopt it (review #9). Such a unit stays unresolved: the person releases it after looking.
+   */
   async stopByName(
     launchId: string,
     invocationId?: string,
@@ -746,13 +792,10 @@ export class UnitBackend {
     const row = this.rowOf(launchId)
     const unit = row?.unit
     if (!unit || !validateUnitName(unit)) return 'unknown'
-    let invocation = invocationId ?? row.invocation_id ?? ''
+    const invocation = invocationId ?? row.invocation_id ?? ''
     if (invocation === '') {
-      // The launch never armed: the name is unique to this launch, so the invocation systemd shows now is its own.
       const shown = await showUnit(this.run, unit)
-      if (shown.kind === 'absent') return 'absent'
-      if (shown.kind === 'unknown') return 'unknown'
-      invocation = shown.state.invocationId
+      return shown.kind === 'absent' ? 'absent' : 'unknown'
     }
     const result = await stopUnit(this.run, unit, invocation)
     if (result === 'stopped') return 'stopped'
@@ -828,20 +871,37 @@ export class UnitBackend {
 
   /** The user manager is not the one that verified this launch (a different PID or start time, or unreadable now). */
   private async incarnationChanged(row: Row): Promise<boolean> {
+    // Only a manager identity read now AND recorded before can differ; an unreadable one is uncertain, never a change.
     const recorded = row.manager?.split('|')[1]
-    if (!recorded) return true
+    if (!recorded) return false
     const now = await this.managerNow()
-    return now === null || `${now.pid}:${now.start}` !== recorded
+    return now !== null && `${now.pid}:${now.start}` !== recorded
   }
 
-  private readReceipt(row: Row, name: string): 'present' | 'absent' | 'error' {
+  /**
+   * A receipt is proof only when it is complete JSON, an object of the expected kind, for this launch and generation.
+   * Empty, partial, malformed or foreign input is `invalid`, never proof (review #8, reader side).
+   */
+  private readReceipt(
+    row: Row,
+    name: 'released.json' | 'ended.json',
+  ): 'present' | 'absent' | 'invalid' | 'error' {
     if (!row.receipt_dir) return 'absent'
+    let text: string
     try {
-      readFileSync(join(row.receipt_dir, name), 'utf8')
-      return 'present'
+      text = readFileSync(join(row.receipt_dir, name), 'utf8')
     } catch (error) {
       return (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'absent' : 'error'
     }
+    const generation = this.deps.journal.state(row.launch_id)?.state.generation
+    return validReceipt(
+      text,
+      name === 'ended.json' ? 'ended' : 'released',
+      row.launch_id,
+      generation,
+    )
+      ? 'present'
+      : 'invalid'
   }
 
   /** After the session: record `released-seen`/`ended` in the journal (when proven) or hold the launch (when not). */
@@ -863,7 +923,10 @@ export class UnitBackend {
         if (
           state?.state.mayHaveExecuted &&
           state.kind === 'releasing' &&
-          this.hasReceipt(receiptDir, 'released.json')
+          this.readReceipt(
+            { launch_id: launchId, receipt_dir: receiptDir } as Row,
+            'released.json',
+          ) === 'present'
         )
           this.deps.journal.releasedSeen(launchId, {}, project)
         const ended = this.deps.journal.ended(
@@ -879,10 +942,6 @@ export class UnitBackend {
       return { proven: false, proof: null }
     }
     return { proven: proof.proven, proof: proof.proof }
-  }
-
-  private hasReceipt(dir: string, name: string): boolean {
-    return existsSync(join(dir, name))
   }
 
   private removeSpecDir(dir: string): void {
@@ -1038,7 +1097,7 @@ export class UnitBackend {
     if (
       state?.kind === 'releasing' &&
       row.receipt_dir &&
-      this.hasReceipt(row.receipt_dir, 'released.json')
+      this.readReceipt(row, 'released.json') === 'present'
     )
       this.deps.journal.releasedSeen(row.launch_id, {}, project)
     // A launch that never executed is revoked before it ends: the journal alone proves no-launch (§3).
@@ -1050,7 +1109,8 @@ export class UnitBackend {
   }
 
   /** The runtime stopped waiting for the run: the stop request for a launch that has no live handle (no `UnitRun`). */
-  async stopUnattached(launchId: string): Promise<boolean> {
+  async stopUnattached(launchId: string, reason: StopReason = 'user'): Promise<boolean> {
+    this.recordStop(launchId, reason)
     await this.stopByName(launchId)
     const proof = await this.proveEnded(launchId, { timeoutMs: 5000 })
     const row = this.rowOf(launchId)
@@ -1085,6 +1145,7 @@ export class UnitBackend {
    * installation's prefix that no journal launch owns are orphans: they fence admission and are never adopted.
    */
   async recover(): Promise<RecoveryReport> {
+    if (this.deps.unresolved) return { launches: [], orphans: [], unreadable: null }
     const read = this.deps.journal.journal.readOwn()
     if (!read.ok)
       return {
@@ -1181,16 +1242,18 @@ class Control {
   readonly stopped: Promise<void> = new Promise<void>((resolve) => {
     this.wake = resolve
   })
-  private launchId = ''
+
+  constructor(private readonly launchId: string) {}
 
   attach(session: RunSession): void {
     this.session = session
-    this.launchId = session.launch
   }
 
   requestStop(reason: StopReason, backend: UnitBackend): void {
     if (this.stopReason !== null) return
     this.stopReason = reason
+    // Durable first, even before a session exists: the launch row may already be there.
+    backend.recordStop(this.launchId, reason)
     this.wake()
     if (this.session) backend.sendStop(this.launchId, this.session, reason)
   }
@@ -1199,6 +1262,26 @@ class Control {
 const UNIT_NOTE = 'Runs as a supervised system service.'
 const FALLBACK_NOTE =
   'Runs without a supervisor: tools a coding CLI started may keep running until Score restarts and stops them.'
+
+/** The receipt kinds' required fields, as the supervisor writes them (FX1's `parseReceipt` replaces this at merge). */
+function validReceipt(
+  text: string,
+  kind: 'released' | 'ended',
+  launchId: string,
+  generation: number | undefined,
+): boolean {
+  let value: unknown
+  try {
+    value = JSON.parse(text)
+  } catch {
+    return false
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const r = value as Record<string, unknown>
+  if (r.launch !== launchId || generation === undefined || r.generation !== generation) return false
+  if (typeof r.at !== 'number') return false
+  return kind === 'released' ? typeof r.supervisorPid === 'number' : 'stopCause' in r && 'code' in r
+}
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error)

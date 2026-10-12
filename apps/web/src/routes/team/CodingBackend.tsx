@@ -43,8 +43,9 @@ export function CodingBackend() {
       <p data-backend={kind}>{note}</p>
       {kind === 'unit' && (
         <p>
-          If Score stops, the service stops this agent and everything it started, and Score confirms
-          that before it calls a run finished.
+          If Score stops, the service stops this agent and everything running inside it, and Score
+          confirms that before it calls a run finished. Work the agent hands to another service, a
+          scheduler or a background daemon isn’t covered.
         </p>
       )}
       {checks.length > 0 && (
