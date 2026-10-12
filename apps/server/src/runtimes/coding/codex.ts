@@ -45,6 +45,18 @@ const McpItem = z.object({
 })
 const SearchItem = z.object({ query: z.string() })
 
+/** Whether a decoded record says it is a completed or updated agent message, whatever else is wrong with it. */
+function claimsAgentMessage(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false
+  const { type, item } = value as { type?: unknown; item?: unknown }
+  if (type !== 'item.completed' && type !== 'item.updated') return false
+  return (
+    typeof item === 'object' &&
+    item !== null &&
+    (item as { type?: unknown }).type === 'agent_message'
+  )
+}
+
 export function createCodexParser(cwd?: string): LineParser {
   const stats = { unknown: 0, malformed: 0 }
   let spoke = false
@@ -68,6 +80,9 @@ export function createCodexParser(cwd?: string): LineParser {
         stats.malformed++
         return []
       }
+      // A record that claims to be an agent_message and fails the item schema (no id, wrong shape) could have been the
+      // final one: the turn loses its authority before the outer validation drops it (review 2026-10-12 #3).
+      if (claimsAgentMessage(value) && !ItemEvent.safeParse(value).success) messageInvalid = true
       const thread = ThreadStarted.safeParse(value)
       if (thread.success) return [{ kind: 'session', sessionId: thread.data.thread_id }]
       const completed = TurnCompleted.safeParse(value)
@@ -127,6 +142,7 @@ export function createCodexParser(cwd?: string): LineParser {
         const message = MessageItem.safeParse(item.data.item)
         if (phase === 'item.completed' && (!message.success || !message.data.text.trim()))
           messageInvalid = true
+        if (phase === 'item.updated' && !message.success) messageInvalid = true
         if (phase !== 'item.completed' || !message.success || !message.data.text) return []
         lastMessage = message.data.text
         const text = spoke ? `\n\n${message.data.text}` : message.data.text
