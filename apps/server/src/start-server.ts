@@ -73,6 +73,9 @@ import { UnitBackend } from './runtimes/coding/unit-backend.ts'
 import { CodingJournal } from './domain/orchestration/coding-journal.ts'
 import { defaultRootPolicy } from './workspace/policy.ts'
 
+/** Stands in for the installation id while it is unresolved: the backend is disabled and launches nothing. */
+const UNRESOLVED_INSTALLATION = '00000000-0000-4000-8000-000000000000'
+
 const INSECURE_FLAG_REMOVED =
   'SCORE_REMOTE_INSECURE_HTTP was removed and is ignored: Score serves its app over HTTPS only (see /setup/https)'
 
@@ -353,23 +356,34 @@ export async function startServer(
     if (config.mode === 'fake' && port instanceof FakePort) attachFakeLead(port, executor)
     // Coding agents (PLAN 7.2): fake mode never starts a real CLI (see locatorForMode).
     const { hermesHome: runtimeHome } = config
-    // Supervised units (7.7a): live mode, a resolved installation and a user runtime dir. The capability check at
-    // start decides; without it the process-group fallback runs and says so on the coding agent card.
+    // Coding backend (7.7a). Live mode always gets a UnitBackend: it owns the admission barriers (fences, orphan units,
+    // held launches) and the reconciliation of both inventories, whichever backend launches. Whether runs are
+    // *supervised* is decided by the capability check; a forced fallback, a missing runtime directory or an unresolved
+    // installation only mark the backend disabled (review #5).
     const runtimeDir = process.env.XDG_RUNTIME_DIR
+    const disabled =
+      installation?.ok !== true || installationBlock !== null
+        ? (installationBlock ?? 'This installation isn’t resolved yet.')
+        : !runtimeDir
+          ? 'There is no user runtime folder ($XDG_RUNTIME_DIR).'
+          : process.env.SCORE_CODING_BACKEND === 'process-group'
+            ? 'The fallback is forced (SCORE_CODING_BACKEND).'
+            : undefined
+    const resolved = installation?.ok === true ? installation : undefined
+    const codingJournal = new CodingJournal(journal)
     const unit =
-      config.mode === 'live' &&
-      installation?.ok &&
-      installationBlock === null &&
-      runtimeDir &&
-      process.env.SCORE_CODING_BACKEND !== 'process-group'
+      config.mode === 'live'
         ? new UnitBackend({
             db: database,
-            journal: new CodingJournal(journal),
-            installationId: installation.id,
-            namespaceDir: installation.namespaceDir,
-            runtimeDir,
+            journal: codingJournal,
+            installationId: resolved?.id ?? UNRESOLVED_INSTALLATION,
+            namespaceDir: resolved?.namespaceDir ?? resolveJournalDir(config),
+            runtimeDir: runtimeDir ?? tmpdir(),
             home: homedir(),
+            ...(disabled !== undefined ? { disabled } : {}),
+            ...(resolved === undefined || installationBlock !== null ? { unresolved: true } : {}),
             blocked: () =>
+              installationBlock ??
               database.read((sqlite) =>
                 isFenced(sqlite) && fenceItems(sqlite).some((item) => item.ref.startsWith('coding'))
                   ? 'Score is waiting for you to review the coding journal before it starts coding runs.'
@@ -395,6 +409,10 @@ export async function startServer(
       db: database,
       ingest,
       ...(unit ? { unit } : {}),
+      // FX2: fallback witness. Process-group launches are journaled too whenever the installation is resolved.
+      ...(config.mode === 'live' && resolved !== undefined && installationBlock === null
+        ? ({ journal: codingJournal } as object)
+        : {}),
       onOrphans: (names) =>
         fenceStore.set(
           'A coding service Score can’t account for is running',
