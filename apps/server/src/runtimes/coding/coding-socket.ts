@@ -665,6 +665,11 @@ export class CodingSocketServer {
     handlers: RunHandlers
     /** Bytes the run keeps in memory besides queued records; charged to the installation budget while it is active. */
     retainedBytes?: number
+    /**
+     * Keep the reservation after the socket outcome (FW #8): the caller still holds the run's state (proof, translator,
+     * the terminal result awaiting delivery) and calls `releaseReservation` once that is cleared.
+     */
+    holdAfterOutcome?: boolean
   }): {
     token: string
     session: RunSession
@@ -689,13 +694,37 @@ export class CodingSocketServer {
       used: false,
       reservation,
     })
-    void session.outcome.then(() => this.release(args.launch))
+    if (args.holdAfterOutcome !== true) void session.outcome.then(() => this.release(args.launch))
     return { token: this.tokenFor(args.launch, args.generation, args.specHash), session }
   }
 
   /** Forget a launch that will never connect (it was revoked before systemd-run). */
   forget(launch: string): void {
     this.release(launch)
+  }
+
+  /** Releases a reservation kept with `holdAfterOutcome` (idempotent). */
+  releaseReservation(launch: string): void {
+    this.release(launch)
+  }
+
+  private readonly holds = new Map<string, number>()
+  /**
+   * Charges state kept after the socket is gone (a terminal result waiting to be saved). It may exceed the budget: the
+   * result must not be dropped, the charge only keeps new runs from piling more on top. Replaces an earlier hold.
+   */
+  hold(key: string, bytes: number): void {
+    this.unhold(key)
+    const charge = Math.max(0, Math.ceil(bytes))
+    this.holds.set(key, charge)
+    this.budget.used += charge
+  }
+
+  unhold(key: string): void {
+    const charge = this.holds.get(key)
+    if (charge === undefined) return
+    this.holds.delete(key)
+    this.budget.used -= charge
   }
 
   private release(launch: string): void {

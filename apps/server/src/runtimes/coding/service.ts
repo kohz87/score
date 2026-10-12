@@ -38,7 +38,9 @@ import {
 import {
   eventObservation,
   newTranslation,
+  pendingBytes,
   runningObservation,
+  translationBytes,
   terminalObservation,
   type RunTranslation,
   type TerminalInfo,
@@ -690,6 +692,8 @@ export class CodingRuntime {
    */
   private async finish(translation: RunTranslation, info: TerminalInfo): Promise<unknown> {
     this.keepPending(translation, info)
+    // Until it is saved the result and the translator's state are still in memory: they stay charged (FW #8).
+    this.deps.unit?.holdDelivery(translation.runId, pendingBytes(translation, info))
     const tries = 5
     let delay = this.deps.terminalRetryMs ?? 250
     let last: unknown
@@ -769,6 +773,7 @@ export class CodingRuntime {
   }
 
   private dropPending(runId: string): void {
+    this.deps.unit?.releaseDelivery(runId)
     try {
       this.deps.db.sqlite
         .prepare('DELETE FROM coding_pending_terminals WHERE run_id = ?')
@@ -972,6 +977,7 @@ export class CodingRuntime {
           generation: attempt,
           command: { file, args: cliArgs, env: locator.childEnv(), cwd: checked.real, stdin },
           parser,
+          retainedBytes: () => translationBytes(translation),
           onEvent: handleEvent,
           deadline,
           graceMs: this.deps.graceMs ?? 5_000,

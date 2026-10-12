@@ -40,6 +40,11 @@ export function translationBytes(translation: RunTranslation): number {
     bytes += Buffer.byteLength(id) + detailBytes(call.detail) + 64
   return bytes
 }
+/** Bytes a result waiting to be saved holds: the translator's state plus the texts of the terminal record. */
+export function pendingBytes(translation: RunTranslation, info: TerminalInfo): number {
+  const size = (text: string | null | undefined) => Buffer.byteLength(text ?? '')
+  return translationBytes(translation) + size(info.output) + size(info.error) + size(info.reply)
+}
 export const newTranslation = (
   runId: string,
   agentId: string,

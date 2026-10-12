@@ -1788,6 +1788,26 @@ test('FW #4: an absent unit is not a clean exit: without the supervisor’s fina
   expect(runs()[1]!.status).toBe('completed')
 })
 
+test('FW #8: the installation budget charges the translator’s call details and the result awaiting delivery, and releases them when cleared', async () => {
+  await addAgent()
+  await makeRoom()
+  let peak = 0
+  const timer = setInterval(() => {
+    peak = Math.max(peak, backend.budgetBytes)
+  }, 2)
+  try {
+    await say('@coder [fixture:manytools] go')
+    await finished()
+  } finally {
+    clearInterval(timer)
+  }
+  expect(runs()[0]!.status).toBe('completed')
+  // 128 remembered tool starts of 15 kB each are retained by the translator: far past the fixed 512 KiB reservation.
+  expect(peak).toBeGreaterThan(1_500_000)
+  // Delivered and settled: nothing stays charged.
+  await vi.waitFor(() => expect(backend.budgetBytes).toBe(0), { timeout: 10_000 })
+})
+
 test('re-review 2 #17: a first cause the supervisor wrote itself is adopted into the journal before the launch ends', async () => {
   await addAgent()
   const seed = seedLaunch('releasing', { receipts: ['released.json', 'ended.json'] })

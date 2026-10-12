@@ -49,6 +49,8 @@ import {
 
 /** Policy, not protocol: how many units one installation may start per minute (unique names bypass systemd's own counters, §6b). */
 export const LAUNCHES_PER_MINUTE = 30
+/** How long a run's budget reservation outlives its socket before it is released even if nobody handed the run over. */
+const RESERVATION_GRACE_MS = 10 * 60_000
 const SUPERVISOR_FILE = fileURLToPath(new URL('./supervisor.mjs', import.meta.url))
 const WRAPPER_FILE = fileURLToPath(new URL('./pdeathsig-exec.py', import.meta.url))
 
@@ -174,6 +176,8 @@ export interface UnitLaunchRequest {
     stdin: string
   }
   parser: LineParser
+  /** Bytes the caller keeps for this run besides the parser (the translator's call details): charged to the budget. */
+  retainedBytes?(): number
   /** Processes one parsed event, strictly in order. A rejection makes the result ineligible and stops the run. */
   onEvent(event: CodingEvent): Promise<void>
   /** Wall-clock deadline of the whole turn (epoch ms), shared by every launch attempt. */
@@ -885,7 +889,8 @@ export class UnitBackend {
       // What the parser really keeps, charged to the installation's budget (#18). Drivers that don't report it keep the
       // fixed reservation.
       retainedBytes: () =>
-        (request.parser as { retainedBytes?: () => number }).retainedBytes?.() ?? 0,
+        ((request.parser as { retainedBytes?: () => number }).retainedBytes?.() ?? 0) +
+        (request.retainedBytes?.() ?? 0),
     }
 
     // ---- spec, token, unit ----
@@ -921,6 +926,20 @@ export class UnitBackend {
         specHash: hashSpec(spec),
         handlers,
         retainedBytes: RETAINED_RUN_BYTES,
+        // Kept until the caller hands the run's result over (`holdDelivery`): proof and delivery still retain state.
+        holdAfterOutcome: true,
+      })
+      this.reservations.set(request.runId, [
+        ...(this.reservations.get(request.runId) ?? []),
+        launchId,
+      ])
+      // A caller that never hands over (a crash path) must not hold the budget for ever.
+      void registered.session.outcome.then(() => {
+        const timer = setTimeout(
+          () => this.releaseReservations(request.runId),
+          RESERVATION_GRACE_MS,
+        )
+        timer.unref()
       })
     } catch {
       return abort(
@@ -1413,6 +1432,34 @@ export class UnitBackend {
     } catch {
       // the directory is 0700 in the runtime dir; a leftover is harmless without the token's spec
     }
+  }
+
+  /** Launch reservations kept past the socket outcome, by run. */
+  private readonly reservations = new Map<string, string[]>()
+
+  private releaseReservations(runId: string): void {
+    for (const launchId of this.reservations.get(runId) ?? [])
+      this.socket.releaseReservation(launchId)
+    this.reservations.delete(runId)
+  }
+
+  /**
+   * The run's result is waiting to be saved (FW #8): its bytes are charged to the installation budget in place of the
+   * launch reservation, until `releaseDelivery`. Called with everything the caller still retains for the run.
+   */
+  holdDelivery(runId: string, bytes: number): void {
+    this.socket.hold(`delivery:${runId}`, bytes)
+    this.releaseReservations(runId)
+  }
+
+  releaseDelivery(runId: string): void {
+    this.socket.unhold(`delivery:${runId}`)
+    this.releaseReservations(runId)
+  }
+
+  /** Bytes the installation budget currently charges (tests, diagnostics). */
+  get budgetBytes(): number {
+    return this.socket.bufferedBytes
   }
 
   markHeld(launchId: string, value: 0 | 1 | 2): void {
