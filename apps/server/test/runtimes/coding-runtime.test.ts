@@ -1348,7 +1348,27 @@ test('S3-004: a result that cannot be saved is kept and saved once ingestion rec
   expect(recordRows()).toBe(0)
 })
 
-test('S3-004: a result still pending when Score restarts is committed before anything is marked interrupted', async () => {
+test('review #7: a pending terminal record never holds unredacted free text on disk', async () => {
+  await addAgent()
+  await makeRoom()
+  const realSubmit = ingest.submit.bind(ingest)
+  let terminalTries = 0
+  vi.spyOn(ingest, 'submit').mockImplementation(async (observation) => {
+    if (observation.identity.includes(':terminal')) {
+      terminalTries++
+      throw new Error('database is busy')
+    }
+    return realSubmit(observation)
+  })
+  await say('@coder [fixture:secret] go')
+  await vi.waitFor(() => expect(terminalTries).toBeGreaterThan(0), { timeout: 15_000 })
+  const stored = JSON.stringify(db.sqlite.prepare('SELECT * FROM coding_pending_terminals').all())
+  expect(stored).toContain('The key is')
+  expect(stored).not.toContain('sk-abcdefghijklmnopqrstuvwx')
+  expect(stored).toContain('[redacted]')
+})
+
+test('S3-004: a success still pending when Score restarts is interrupted, never promoted (review #13)', async () => {
   await addAgent()
   await makeRoom()
   const realSubmit = ingest.submit.bind(ingest)
@@ -1369,11 +1389,13 @@ test('S3-004: a result still pending when Score restarts is committed before any
   await coding.recover()
   await ingest.flushListeners()
   await ingest.drain()
-  expect(runs()[0]).toMatchObject({ status: 'completed' })
+  // Review 2026-10-12 #13: a pending success is a candidate only; after a restart it is interrupted, never promoted.
+  expect(runs()[0]).toMatchObject({ status: 'interrupted' })
+  expect(
+    db.sqlite.prepare("SELECT 1 FROM message_runs WHERE from_agent_id = 'coder'").all(),
+  ).toEqual([])
   expect(launches).toBe(1)
   expect(replies()[0]!.streaming).toBe(false)
-  expect(savedOutput()).toBeTruthy()
-  expect(JSON.stringify(replies()[0]!.parts)).toContain(savedOutput())
   expect(pendingRows()).toBe(0)
   expect(recordRows()).toBe(0)
 })
@@ -1502,9 +1524,13 @@ test('W3: a turn whose tools survive every signal still ends, but unconfirmed, w
     await say('@coder [fixture:leftover] go')
     await finished()
     const row = runs()[0]!
-    // The CLI finished cleanly, but "completed" is not evidence while a tool it started may still be running.
-    expect(row.status).toBe('completed')
+    // The CLI finished cleanly, but "completed" is not evidence while a tool it started may still be running
+    // (review 2026-10-12 #2): no ended proof, no success and no reply.
+    expect(row.status).toBe('failed')
     expect(runRow(row.id).terminal_source).toBe('unconfirmed')
+    expect(
+      db.sqlite.prepare("SELECT 1 FROM message_runs WHERE from_agent_id = 'coder'").all(),
+    ).toEqual([])
     expect(runRow(row.id).error).toMatch(/Some of its tools may still be running/)
     expect(processRows()).toEqual([{ run_id: row.id, unresolved: 1 }])
     expect(pidAlive(-spawned[0]!)).toBe(true)

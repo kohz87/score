@@ -519,6 +519,30 @@ test('codex: a malformed or empty agent_message, a dropped record or no message 
   expect(run([agentMessage('m1', 'Part', 'item.updated'), turnCompleted])?.eligible).toBe(false)
 })
 
+test('codex: a malformed agent_message (no or bad id, bad updated shape) invalidates authority, review #3', () => {
+  const run = (lines: string[]) => {
+    const parser = createCodexParser()
+    return verdictOf(lines.flatMap((line) => parser.parse(line)))
+  }
+  const noId = (type = 'item.completed') =>
+    codexLine({ type, item: { type: 'agent_message', text: 'Final.' } })
+  const badId = codexLine({
+    type: 'item.completed',
+    item: { id: '', type: 'agent_message', text: 'Final.' },
+  })
+  expect(run([agentMessage('m1', 'Preliminary.'), noId(), turnCompleted])?.eligible).toBe(false)
+  expect(run([agentMessage('m1', 'Preliminary.'), badId, turnCompleted])?.eligible).toBe(false)
+  expect(
+    run([agentMessage('m1', 'Preliminary.'), agentMessage('m2', 7, 'item.updated'), turnCompleted])
+      ?.eligible,
+  ).toBe(false)
+  expect(
+    run([agentMessage('m1', 'Preliminary.'), noId('item.updated'), turnCompleted])?.eligible,
+  ).toBe(false)
+  // The loss is sticky: a good message after it does not restore authority.
+  expect(run([noId(), agentMessage('m2', 'Fine.'), turnCompleted])?.eligible).toBe(false)
+})
+
 test('codex: the next turn starts clean after a malformed one', () => {
   const parser = createCodexParser()
   const first = ['bad', agentMessage('m1', 'A'), turnCompleted].flatMap((l) => parser.parse(l))

@@ -8,6 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
+import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -23,7 +24,7 @@ import { messageFromRow } from '../../src/domain/rooms.ts'
 import { FakePort } from '../../src/hermes/fake/fake-port.ts'
 import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { CliLocator } from '../../src/runtimes/coding/cli.ts'
-import { processStart } from '../../src/runtimes/coding/proc.ts'
+import { bootId, processStart } from '../../src/runtimes/coding/proc.ts'
 import { spawnCli } from '../../src/runtimes/coding/process.ts'
 import { CodingRuntime, type CodingRuntimeDeps } from '../../src/runtimes/coding/service.ts'
 import { UnitBackend, type UnitBackendDeps } from '../../src/runtimes/coding/unit-backend.ts'
@@ -120,6 +121,8 @@ async function boot(options: BootOptions = {}) {
     ...(options.stopObserveMs ? { stopObserveMs: options.stopObserveMs } : {}),
     ...(options.reapRetryMs ? { reapRetryMs: options.reapRetryMs } : {}),
     ...(options.noUnit ? {} : { unit: backend }),
+    // The installation journal also witnesses the process-group fallback (review 2026-10-12 #6).
+    journal: new CodingJournal(journal),
     ...(options.onOrphans ? { onOrphans: options.onOrphans } : {}),
     onError: (error) => errors.push(error),
     spawn: (spawnOptions) => {
@@ -286,6 +289,15 @@ const journalKinds = (launchId: string) => {
   if (!read.ok) throw new Error(read.reason)
   return read.entries.filter((e) => 'launchId' in e && e.launchId === launchId).map((e) => e.kind)
 }
+const journalOf = (runId: string) => {
+  const read = journal.readOwn()
+  if (!read.ok) throw new Error(read.reason)
+  return read.entries.filter((e) => 'runId' in e && e.runId === runId) as unknown as {
+    kind: string
+    mayHaveExecuted: boolean
+    cgroup?: string
+  }[]
+}
 const textOf = (message: Message | undefined) => JSON.stringify(message?.parts ?? [])
 
 // ---- the normal turn -------------------------------------------------------------------------------------------------
@@ -368,6 +380,18 @@ test('a failed capability check keeps the process-group backend; Check again fol
   expect(runs()[0]!.status).toBe('completed')
   expect(processLaunches).toBe(1)
   expect(launches()).toEqual([])
+  // Review 2026-10-12 #6: the fallback launch is witnessed in the journal outside the home, with its process identity.
+  const witnessed = journalOf(runs()[0]!.id)
+  expect(witnessed.map((e) => e.kind)).toEqual([
+    'launch-requested',
+    'armed',
+    'releasing',
+    'released-seen',
+    'ended',
+    'settled',
+  ])
+  expect(witnessed[2]).toMatchObject({ mayHaveExecuted: true })
+  expect(witnessed[3]!.cgroup).toMatch(/^process-group:\{"pid":\d+,/)
   fake.hooks.lingerOff = false
   const again = await request('POST', '/api/coding-agents/backend/check', {})
   expect(again.json()).toMatchObject({ kind: 'unit', note: 'Runs as a supervised system service.' })
@@ -662,6 +686,37 @@ test('settled follows the terminal commit: a result that cannot be saved yet is 
   await vi.waitFor(() => expect(launches()[0]?.phase).toBe('settled'), { timeout: 15_000 })
   expect(runs()[0]!.status).toBe('completed')
   expect(db.sqlite.prepare('SELECT run_id FROM coding_pending_terminals').all()).toEqual([])
+})
+
+test('review #6: a fallback group whose database record was lost is stopped from its journal identity', async () => {
+  await boot({ noUnit: true })
+  await addAgent()
+  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], {
+    detached: true,
+    stdio: 'ignore',
+  })
+  try {
+    const pid = child.pid!
+    const identity = { launchId: 'fb-1', runId: 'cr_lost', turnId: 't-lost', generation: 0 }
+    const cj = new CodingJournal(journal)
+    expect(cj.requestLaunch(identity).ok).toBe(true)
+    cj.arm('fb-1', { disposition: 'process-group' })
+    cj.release('fb-1', () => true)
+    cj.releasedSeen('fb-1', {
+      cgroup: `process-group:${JSON.stringify({ pid, start: processStart(pid), boot: bootId() })}`,
+    })
+    // No coding_processes row exists (a restored older database).
+    expect(db.sqlite.prepare('SELECT 1 FROM coding_processes').all()).toEqual([])
+    await coding.recover()
+    await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow(), { timeout: 10_000 })
+    expect(journalKinds('fb-1').slice(-2)).toEqual(['ended', 'settled'])
+  } finally {
+    try {
+      process.kill(-child.pid!, 'SIGKILL')
+    } catch {
+      // gone
+    }
+  }
 })
 
 // ---- recovery: journal <-> database <-> units <-> receipts -------------------------------------------------------------
