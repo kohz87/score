@@ -14,7 +14,6 @@ import {
 import { installation8, LAUNCHES_DIR } from '../../installation.ts'
 import { mkdirDurable } from '../../locks/os-lock.ts'
 import { CodingSocketServer, RETAINED_RUN_BYTES, type RunSession } from './coding-socket.ts'
-import './fy2-shim.ts'
 import { redactNote } from './note.ts'
 import { signalPid, type PidSignalResult } from './pidfd-signal.ts'
 import { bootId, processStart } from './proc.ts'
@@ -1246,7 +1245,7 @@ export class UnitBackend {
         this.deps.onError?.(new Error(`waiver not journaled: ${waived.reason}`))
         continue
       }
-      // FY2: `waive` projects the settled launch itself once batch FY2 merges; until then the row is updated here.
+      // `waive` projected the settled launch; `held` is runtime state the projection doesn't own, so clear it here too.
       this.deps.db.sqlite
         .prepare(
           "UPDATE coding_launches SET held = 0, waiver = 1, disposition = 'waived', phase = 'settled', proof = COALESCE(proof, 'waiver') WHERE launch_id = ?",
@@ -1367,7 +1366,8 @@ export class UnitBackend {
     // a copy keeps the source's unit names and InvocationIDs in its witnesses.
     const owned = withUnit.filter((l) => this.owns(l.state.launchId, l.state.unit))
     const inventory = await listInstallationUnits(this.run, this.prefix)
-    const open = owned.filter((l) => l.kind !== 'settled')
+    // The phase, not the last record's kind: a waived launch's last record is `waived`, its phase `settled`.
+    const open = owned.filter((l) => l.state.phase !== 'settled')
     if (inventory.kind === 'unknown' && open.length > 0) {
       for (const l of open) this.ensureRow(l)
       for (const l of open) this.markHeld(l.state.launchId, 1)

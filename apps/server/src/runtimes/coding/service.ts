@@ -21,7 +21,6 @@ import { redact, redactBounded } from '../../redact.ts'
 import { checkRoot, type RootPolicy } from '../../workspace/policy.ts'
 import { CliLocator } from './cli.ts'
 import { driverFor } from './drivers.ts'
-import './fy2-shim.ts'
 import { readFallbackWitness, writeFallbackWitness } from './fallback-witness.ts'
 import { CappedText } from './note.ts'
 import {
@@ -1349,7 +1348,7 @@ export class CodingRuntime {
     const read = journal.journal.readOwn()
     if (!read.ok) return []
     return [...foldCodingLaunches(read.entries).values()].filter(
-      (l) => l.state.unit === undefined && l.state.runId === runId && l.kind !== 'settled',
+      (l) => l.state.unit === undefined && l.state.runId === runId && l.state.phase !== 'settled',
     )
   }
   private endFallback(runId: string): void {
@@ -1384,7 +1383,8 @@ export class CodingRuntime {
     const read = journal?.journal.readOwn()
     if (!journal || !read?.ok) return
     for (const l of foldCodingLaunches(read.entries).values()) {
-      if (l.state.unit !== undefined || l.kind === 'settled' || l.violation !== undefined) continue
+      if (l.state.unit !== undefined || l.state.phase === 'settled' || l.violation !== undefined)
+        continue
       // A witness copied from another installation is evidence only: its processes are not ours to stop or settle.
       if (!journal.isOwned(l.state.launchId)) continue
       const { launchId, runId } = l.state

@@ -989,7 +989,7 @@ test('recovery: systemd that cannot be read holds every open launch and the pers
   // Nothing was signalled by the release itself, and the journal says the launch is settled as waived.
   expect(fake.signals.length).toBe(signalsBefore)
   expect(row.disposition).toBe('waived')
-  expect(journalKinds(seed.launchId).slice(-2)).toEqual(['ended', 'settled'])
+  expect(journalKinds(seed.launchId).at(-1)).toBe('waived') // Release is a waiver record, phase settled
 })
 
 test('recovery: after a manager cold restart the receipts and the recorded cgroup decide, never missing metadata', async () => {
@@ -1507,7 +1507,7 @@ test('#8 (re-review): Release settles the launch in the journal first; a restart
   const waive = vi.spyOn(CodingJournal.prototype, 'waive')
   expect((await request('POST', '/api/coding-agents/coder/release', {})).statusCode).toBe(200)
   expect(waive).toHaveBeenCalledWith(seed.launchId, expect.any(String), expect.anything())
-  expect(journalKinds(seed.launchId).at(-1)).toBe('settled')
+  expect(journalKinds(seed.launchId).at(-1)).toBe('waived')
   const before = fake.signals.length
   fake.hooks.showFails = false
   await backend.recover()
@@ -1546,7 +1546,7 @@ test('#6 (re-review): a released fallback launch with no recorded identity fence
   expect(view.heldGroups).toEqual([{ runId: seed.runId, pgid: 0, canRelease: true }])
   // The person's release waives the launch in the journal.
   expect((await request('POST', '/api/coding-agents/coder/release', {})).statusCode).toBe(200)
-  expect(journalKinds(seed.launchId).at(-1)).toBe('settled')
+  expect(journalKinds(seed.launchId).at(-1)).toBe('waived')
   expect(db.sqlite.prepare('SELECT 1 FROM coding_processes').all()).toEqual([])
 })
 
