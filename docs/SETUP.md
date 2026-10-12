@@ -290,8 +290,9 @@ survives, Score refuses admission until you restore `installations.json` from a 
 
 In live mode, every coding run (Claude Code, Codex, Antigravity) starts as a transient **systemd user service**
 (`score-<first 8 characters of the installation id>-c-<launch id>.service`) with a small supervisor inside it. When Score
-stops or crashes the service stops the CLI and everything it started, and Score confirms from the service's control group
-that nothing is left before it calls a run finished. It needs, on the host: a reachable user manager
+stops or crashes, the service stops the CLI and every process running inside it, and Score confirms from the service's
+control group that nothing is left before it calls a run finished. Work a tool hands to another service, a scheduler or a
+background daemon runs outside that group and isn't covered. It needs, on the host: a reachable user manager
 (`systemctl --user`), cgroup v2, **linger** (`loginctl enable-linger $USER`, so the manager outlives your login), Python 3,
 `systemd-notify`, `$XDG_RUNTIME_DIR` and a socket path under 100 bytes. Score checks all of this at start and shows the
 result, with **Check again**, on each coding agent's card in Team. If anything is missing the previous process-group

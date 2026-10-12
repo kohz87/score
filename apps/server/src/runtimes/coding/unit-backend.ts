@@ -16,7 +16,7 @@ import { CodingSocketServer, type RunSession } from './coding-socket.ts'
 import { bootId, processStart } from './proc.ts'
 import { pdeathsigSupport } from './pdeathsig-exec.ts'
 import type { StopReason } from './process.ts'
-import { hashSpec, type SupervisorSpec } from './supervisor.mjs'
+import { hashSpec, parseReceipt, type SupervisorSpec } from './supervisor.mjs'
 import type { CodingEvent, LineParser } from './types.ts'
 import {
   buildSystemRun,
@@ -1263,24 +1263,15 @@ const UNIT_NOTE = 'Runs as a supervised system service.'
 const FALLBACK_NOTE =
   'Runs without a supervisor: tools a coding CLI started may keep running until Score restarts and stops them.'
 
-/** The receipt kinds' required fields, as the supervisor writes them (FX1's `parseReceipt` replaces this at merge). */
+/** One definition of a valid receipt, shared with the writer (supervisor.mjs `parseReceipt`, FX1). */
 function validReceipt(
   text: string,
   kind: 'released' | 'ended',
   launchId: string,
   generation: number | undefined,
 ): boolean {
-  let value: unknown
-  try {
-    value = JSON.parse(text)
-  } catch {
-    return false
-  }
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-  const r = value as Record<string, unknown>
-  if (r.launch !== launchId || generation === undefined || r.generation !== generation) return false
-  if (typeof r.at !== 'number') return false
-  return kind === 'released' ? typeof r.supervisorPid === 'number' : 'stopCause' in r && 'code' in r
+  if (generation === undefined) return false
+  return parseReceipt(text, kind, { launch: launchId, generation }).state === 'present'
 }
 
 function errorText(error: unknown): string {

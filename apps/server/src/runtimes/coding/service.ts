@@ -427,7 +427,7 @@ export class CodingRuntime {
         agentId: agent.id,
       })
     // Supervised units pause on a fence (an unreadable journal, orphan units): the person reviews it first (design §7).
-    const paused = this.deps.unit?.usable() ? this.deps.unit.block() : null
+    const paused = this.deps.unit?.block() ?? null
     if (paused) throw new HttpError(422, 'coding_paused', paused, { notice: paused })
     const driver = driverFor(agent.runtime)
     const existing = db.sqlite

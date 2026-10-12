@@ -788,7 +788,7 @@ function seedLaunch(
       generation: 0,
       at: Date.now(),
       ...(name === 'ended.json'
-        ? { code: 0, signal: null, stopCause: null, survivorsKilled: 0 }
+        ? { code: 0, signal: null, stopCause: null, survivorsKilled: false }
         : { supervisorPid: 1 }),
     })
     writeFileSync(join(receiptDir, name), over.bodies?.[name] ?? valid)
@@ -1247,19 +1247,16 @@ test('#8 reader: an unreadable manager identity is uncertain, not a changed inca
 
 // The service must consult the barrier whichever backend launches: `service.ts` calls `unit.block()` only when
 // `unit.usable()` (an FX2 file). This documents the gap; when service.ts calls block() unconditionally, delete `.fails`.
-test.fails(
-  '#5: the fallback launch is refused while a barrier is up (needs the service.ts change)',
-  async () => {
-    await coding.close()
-    await app.close()
-    await boot({
-      unit: { disabled: 'The fallback is forced.' },
-      blocked: () => 'Score is waiting for you to review the coding journal.',
-    })
-    await addAgent()
-    const refused = await coding
-      .startRun({ agentId: 'coder', input: 'go', turnId: 't-barrier' })
-      .catch((error: unknown) => error)
-    expect(refused).toMatchObject({ status: 422, code: 'coding_paused' })
-  },
-)
+test('#5: the fallback launch is refused while a barrier is up (needs the service.ts change)', async () => {
+  await coding.close()
+  await app.close()
+  await boot({
+    unit: { disabled: 'The fallback is forced.' },
+    blocked: () => 'Score is waiting for you to review the coding journal.',
+  })
+  await addAgent()
+  const refused = await coding
+    .startRun({ agentId: 'coder', input: 'go', turnId: 't-barrier' })
+    .catch((error: unknown) => error)
+  expect(refused).toMatchObject({ status: 422, code: 'coding_paused' })
+})

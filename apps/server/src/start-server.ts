@@ -411,7 +411,7 @@ export async function startServer(
       ...(unit ? { unit } : {}),
       // FX2: fallback witness. Process-group launches are journaled too whenever the installation is resolved.
       ...(config.mode === 'live' && resolved !== undefined && installationBlock === null
-        ? ({ journal: codingJournal } as object)
+        ? { journal: codingJournal }
         : {}),
       onOrphans: (names) =>
         fenceStore.set(
