@@ -110,6 +110,9 @@ export class SocketStartError extends Error {
   }
 }
 
+/** Bookkeeping cost charged per queued record on top of its text (array slot, string header). */
+export const QUEUE_ENTRY_OVERHEAD_BYTES = 64
+
 interface Budget {
   used: number
   limit: number
@@ -139,6 +142,8 @@ export class RunSession {
     stderr: new StringDecoder('utf8'),
   }
   private stdoutPartial = ''
+  /** Budget bytes charged for `stdoutPartial` (released and recharged as it changes). */
+  private partialCharge = 0
   private skippingOversize = false
   private stderrKept = 0
   private exitInfo: { code: number | null; signal: string | null } | null = null
@@ -303,6 +308,7 @@ export class RunSession {
   private takeStdout(text: string): void {
     let rest = this.stdoutPartial + text
     this.stdoutPartial = ''
+    this.chargePartial(0)
     for (;;) {
       const nl = rest.indexOf('\n')
       if (nl < 0) break
@@ -316,12 +322,25 @@ export class RunSession {
     }
     if (this.skippingOversize) return
     if (Buffer.byteLength(rest) > this.limits.maxRecordBytes) {
-      // Over the per-line allowance: a dropped record, skipped up to its newline.
+      // Over the per-line allowance: a dropped record, skipped up to its newline, and the run is stopped (design 4).
       this.dropped += 1
       this.skippingOversize = true
-      return
+      return this.violate('record-too-large')
+    }
+    // The partial line is buffered text like any other: it counts against the installation-wide budget.
+    const size = Buffer.byteLength(rest)
+    if (this.budget.used + size > this.budget.limit) {
+      this.dropped += 1
+      this.skippingOversize = true
+      return this.violate('memory-budget')
     }
     this.stdoutPartial = rest
+    this.chargePartial(size)
+  }
+
+  private chargePartial(size: number): void {
+    this.budget.used += size - this.partialCharge
+    this.partialCharge = size
   }
 
   private takeStderr(text: string): void {
@@ -335,11 +354,12 @@ export class RunSession {
   }
 
   private enqueue(line: string): void {
-    if (Buffer.byteLength(line) > this.limits.maxRecordBytes) {
+    const text = Buffer.byteLength(line)
+    if (text > this.limits.maxRecordBytes) {
       this.dropped += 1
-      return
+      return this.violate('record-too-large')
     }
-    const size = Buffer.byteLength(line)
+    const size = text + QUEUE_ENTRY_OVERHEAD_BYTES
     if (this.budget.used + size > this.budget.limit) {
       this.dropped += 1
       return this.violate('memory-budget')
@@ -361,7 +381,7 @@ export class RunSession {
     try {
       while (this.queue.length > 0) {
         const line = this.queue.shift()!
-        const size = Buffer.byteLength(line)
+        const size = Buffer.byteLength(line) + QUEUE_ENTRY_OVERHEAD_BYTES
         try {
           await this.handlers.onStdoutRecord(line)
         } catch {
@@ -392,6 +412,7 @@ export class RunSession {
     if (stream === 'stdout') {
       const rest = this.stdoutPartial + tail
       this.stdoutPartial = ''
+      this.chargePartial(0)
       // A partial last stdout line is a dropped record (lossy); stderr's partial line is just text.
       if (rest.length > 0 && !this.skippingOversize) this.dropped += 1
       this.skippingOversize = false
@@ -431,8 +452,10 @@ export class RunSession {
     if (!this.readySeen) this.rejectReady(new Error('connection closed before ready'))
     const reasons = ended ? this.reasons() : [...this.reasons(), 'socket-loss']
     // Records still queued would be lost with the connection: they are not processed, so not complete.
+    this.stdoutPartial = ''
+    this.chargePartial(0)
     for (const line of this.queue) {
-      const size = Buffer.byteLength(line)
+      const size = Buffer.byteLength(line) + QUEUE_ENTRY_OVERHEAD_BYTES
       this.budget.used -= size
       this.queueBytes -= size
     }

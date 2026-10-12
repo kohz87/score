@@ -1,5 +1,12 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type net from 'node:net'
@@ -12,6 +19,7 @@ import {
   type Harness,
   type HarnessOptions,
 } from '../helpers/coding-harness.ts'
+import { parseReceipt, writeReceipt } from '../../src/runtimes/coding/supervisor.mjs'
 
 // 7.7a part 2: the supervisor with harmless `node -e` CLIs and an injected cgroup (no systemd). Fake-boundary tests.
 
@@ -271,4 +279,101 @@ test('a bad spec file ends a real supervisor process with exit 4', () => {
     status = (error as { status: number }).status
   }
   expect(status).toBe(4)
+})
+
+test('a survivor that keeps the CLI pipes open is killed after one grace, and the run still ends (review #1)', async () => {
+  const { h, outcome, code } = await run({
+    graceMs: 300,
+    script: `
+      const { spawn } = require('child_process');
+      const c = spawn('sleep', ['30'], { detached: true, stdio: 'inherit' }); c.unref();
+      require('fs').appendFileSync(process.env.SURVIVORS, c.pid + '\\n'); console.log(c.pid)`,
+  })
+  expect(code).toBe(0)
+  expect(outcome).toMatchObject({ kind: 'ended', survivorsKilled: true })
+  expect(alive(Number(h.stdout[0]))).toBe(false)
+})
+
+test('socket loss after the leader exited, with survivors holding the pipes, still kills them and exits 2 (review #1)', async () => {
+  const { h, code } = await run(
+    {
+      graceMs: 300,
+      script: `
+        const { spawn } = require('child_process');
+        const c = spawn('sleep', ['30'], { detached: true, stdio: 'inherit' }); c.unref();
+        require('fs').appendFileSync(process.env.SURVIVORS, c.pid + '\\n'); console.log(c.pid)`,
+    },
+    async (h) => {
+      h.session.go()
+      await vi.waitFor(() => expect(h.stdout.length).toBe(1))
+      ;(h.session as unknown as { socket: net.Socket }).socket.destroy()
+    },
+  )
+  expect(code).toBe(2)
+  expect(alive(Number(h.stdout[0]))).toBe(false)
+})
+
+test('the disconnect budget holds after the leader exited, even when the payload cannot be emptied (review #1)', async () => {
+  const h = await startHarness({
+    graceMs: 200,
+    script: `
+      const { spawn } = require('child_process');
+      const c = spawn('sleep', ['30'], { detached: true, stdio: 'inherit' }); c.unref();
+      require('fs').appendFileSync(process.env.SURVIVORS, c.pid + '\\n'); console.log(c.pid)`,
+  })
+  harnesses.push(h)
+  const realKill = h.cgroup.killPayload.bind(h.cgroup)
+  h.cgroup.killPayload = () => false // cgroup.kill unavailable: nothing can empty the payload
+  await h.session.ready
+  h.session.go()
+  await vi.waitFor(() => expect(h.stdout.length).toBe(1))
+  ;(h.session as unknown as { socket: net.Socket }).socket.destroy()
+  const code = await Promise.race([
+    h.done,
+    new Promise<string>((r) => setTimeout(() => r('hung'), 9000)),
+  ])
+  h.cgroup.killPayload = realKill // test cleanup only: kills this test's own recorded survivor
+  expect(code).toBe(2)
+  expect(existsSync(join(h.receiptDir, 'ended.json'))).toBe(false)
+}, 20_000)
+
+test('a receipt that fails mid-write leaves no file under the final name (review #8)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'score-receipt-'))
+  expect(() => writeReceipt(dir, 'released.json', { n: 1n })).toThrow()
+  expect(readdirSync(dir)).toEqual([])
+})
+
+test('a receipt appears whole, exactly once, with no temp leftovers (review #8)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'score-receipt-'))
+  writeReceipt(dir, 'ended.json', {
+    launch: 'L',
+    generation: 1,
+    at: 5,
+    code: 0,
+    signal: null,
+    survivorsKilled: false,
+  })
+  expect(readdirSync(dir)).toEqual(['ended.json'])
+  expect(JSON.parse(readFileSync(join(dir, 'ended.json'), 'utf8'))).toMatchObject({ launch: 'L' })
+  expect(() => writeReceipt(dir, 'ended.json', { other: true })).toThrow()
+  expect(JSON.parse(readFileSync(join(dir, 'ended.json'), 'utf8'))).toMatchObject({ launch: 'L' })
+  expect(readdirSync(dir)).toEqual(['ended.json'])
+  chmodSync(dir, 0o700)
+})
+
+test('readers reject empty, partial, malformed and foreign receipts (review #8)', () => {
+  const ended = { launch: 'L', generation: 2, at: 5, code: 0, signal: null, survivorsKilled: false }
+  const ok = JSON.stringify(ended) + '\n'
+  expect(parseReceipt(ok, 'ended', { launch: 'L', generation: 2 }).state).toBe('present')
+  for (const bad of [
+    '',
+    '{}',
+    '{"launch":"L"',
+    'null',
+    '[]',
+    JSON.stringify({ ...ended, launch: 'X' }),
+  ])
+    expect(parseReceipt(bad, 'ended', { launch: 'L', generation: 2 }).state).toBe('invalid')
+  expect(parseReceipt(ok, 'ended', { launch: 'L', generation: 3 }).state).toBe('invalid')
+  expect(parseReceipt(ok, 'released', { launch: 'L' }).state).toBe('invalid')
 })
