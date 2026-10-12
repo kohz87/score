@@ -4,7 +4,7 @@
 // stolen, and the sidecar is created once and never renamed, rewritten or deleted (a lock-file protocol that renames or
 // unlinks its own file has an interleaving where two holders enter, finding 3). Node built-ins only, and only syntax
 // Node can strip, so `scripts/set-password.mjs` can import it as it is.
-import { mkdirSync } from 'node:fs'
+import { chmodSync, closeSync, fstatSync, mkdirSync, openSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -42,6 +42,13 @@ export class OsLock {
   private connection(): DatabaseSync {
     if (!this.db) {
       mkdirSync(this.dir, { recursive: true, mode: 0o700 })
+      // Owner-only, whether new or left over with wider bits: created here before SQLite opens it (which would use 0644).
+      const fd = openSync(this.file, 'a', 0o600)
+      try {
+        if ((fstatSync(fd).mode & 0o777) !== 0o600) chmodSync(this.file, 0o600)
+      } finally {
+        closeSync(fd)
+      }
       this.db = new DatabaseSync(this.file)
     }
     return this.db

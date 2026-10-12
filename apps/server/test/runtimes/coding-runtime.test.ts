@@ -1426,7 +1426,8 @@ test('W2: recovery deletes the record only on proof (a gone group)', async () =>
 test('W3: a turn whose tools survive every signal still ends, but unconfirmed, with the record kept and the agent fenced', async () => {
   // Group signals never arrive: the tool the CLI left behind stays up past the reaper's deadline.
   spawnExtra = {
-    kill: (pid, name) => (pid < 0 ? undefined : process.kill(pid, name)),
+    signalGroup: () => 'unavailable',
+    signalPid: () => 'unavailable',
     reapSlackMs: 100,
   }
   let gone = false
@@ -1479,10 +1480,18 @@ test('W3: a turn whose tools survive every signal still ends, but unconfirmed, w
 test('X4: Stop on a running turn is `stopped` only once the group is proven gone, `unconfirmed` while a survivor lives', async () => {
   // Group signals never arrive, so the turn's process keeps running after Stop.
   spawnExtra = {
-    kill: (pid, name) => (pid < 0 ? undefined : process.kill(pid, name)),
+    signalGroup: () => 'unavailable',
+    signalPid: () => 'unavailable',
     reapSlackMs: 100,
   }
-  await rebootWith({ graceMs: 50, stopObserveMs: 700, reapRetryMs: 20 })
+  // The turn gives up on an undeliverable SIGKILL and the service re-reaps; its answer is the test's own observation
+  // of the survivor (never a real kill), so load cannot make the first answer a proof.
+  await rebootWith({
+    graceMs: 50,
+    stopObserveMs: 700,
+    reapRetryMs: 20,
+    killGroup: async (record) => (pidAlive(-record.pgid) ? 'alive' : 'gone'),
+  })
   try {
     await addAgent()
     await makeRoom()

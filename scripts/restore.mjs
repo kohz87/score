@@ -20,6 +20,11 @@ import {
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import {
+  canonicalPath,
+  journalInsideHome,
+  journalRootProblem,
+} from '../apps/server/src/journal-location.ts'
 
 const fail = (message) => {
   process.stderr.write(`score restore: ${message}\n`)
@@ -38,8 +43,13 @@ const journalDirRequested = resolve(
   process.env.SCORE_JOURNAL_DIR ?? join(stateHome, 'score', 'execution-journal'),
 )
 const backup = resolve(backupArg)
-mkdirSync(journalDirRequested, { recursive: true, mode: 0o700 })
-const journalDir = realpathSync(journalDirRequested)
+// Before anything is created or written: a journal inside the home would be moved aside with it (AA3).
+{
+  const inside = journalInsideHome(journalDirRequested, home)
+  if (inside) fail(inside)
+  const moved = journalRootProblem(home, journalDirRequested)
+  if (moved) fail(moved)
+}
 
 if (!existsSync(backup) || !statSync(backup).isDirectory()) fail(`${backup} is not a folder`)
 if (!existsSync(join(backup, 'score.db')))
@@ -64,6 +74,9 @@ if (existsSync(pidFile)) {
 const realHome = home
 const scope = createHash('sha256').update(realHome).digest('hex').slice(0, 12)
 const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+
+mkdirSync(journalDirRequested, { recursive: true, mode: 0o700 })
+const journalDir = canonicalPath(journalDirRequested)
 
 // 1. The marker first: if anything below fails half-way, the next start is fenced anyway.
 mkdirSync(journalDir, { recursive: true, mode: 0o700 })

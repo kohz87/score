@@ -14,7 +14,7 @@ import {
   truncateSync,
   writeSync,
 } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { z } from 'zod'
 import { OsLock, OsLockTimeoutError } from '../../locks/os-lock.ts'
 
@@ -220,8 +220,6 @@ export class ExecutionJournal {
   private readonly lock: OsLock
   private nextN: number | undefined
   private broken: string | undefined
-  /** A directory sync failed after the file was written: the name is not known durable until one succeeds. */
-  private dirSyncPending = false
 
   constructor(
     readonly dir: string,
@@ -304,7 +302,7 @@ export class ExecutionJournal {
 
   /** Repairs a torn tail (never effective) so appends stay line-aligned; returns false when the journal is unreadable. */
   open(): boolean {
-    mkdirSync(this.dir, { recursive: true, mode: 0o700 })
+    this.mkdirDurable()
     return this.locked(() => {
       const result = this.read()
       if (!result.ok) return false
@@ -312,6 +310,24 @@ export class ExecutionJournal {
       this.nextN = (result.entries.at(-1)?.n ?? 0) + 1
       return true
     })
+  }
+
+  /** Creates the directory, fsyncing the parent of every level this call created so the new names survive a crash. */
+  private mkdirDurable(): void {
+    const missing: string[] = []
+    for (let p = resolve(this.dir); !existsSync(p); p = dirname(p)) {
+      missing.push(p)
+      if (dirname(p) === p) break
+    }
+    for (const p of missing.reverse()) {
+      mkdirSync(p, { recursive: true, mode: 0o700 })
+      const fd = openSync(dirname(p), 'r')
+      try {
+        this.io.fsyncSync(fd)
+      } finally {
+        closeSync(fd)
+      }
+    }
   }
 
   /** Cuts an unterminated last line (never effective: its writer did not return) and makes the cut durable. */
@@ -352,7 +368,6 @@ export class ExecutionJournal {
     })
     const text = JSON.stringify(entry)
     const line = Buffer.from(`${JSON.stringify({ ...entry, c: checksum(text) })}\n`)
-    if (!existsSync(this.file)) this.dirSyncPending = true
     const fd = openSync(this.file, 'a', 0o600)
     try {
       const before = fstatSync(fd).size
@@ -374,10 +389,9 @@ export class ExecutionJournal {
     }
     // The entry is on disk now; the next number is taken whatever happens to the directory sync below.
     this.nextN = entry.n + 1
-    if (this.dirSyncPending) {
-      this.syncDirectory()
-      this.dirSyncPending = false
-    }
+    // Always, not only for a new name: a handle or process that did not create the file cannot know whether an earlier
+    // writer's directory sync (or a compaction's rename sync) failed, and appends are rare enough to afford it.
+    this.syncDirectory()
     return entry
   }
 

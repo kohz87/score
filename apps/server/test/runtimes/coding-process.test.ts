@@ -229,3 +229,40 @@ test('N5: an empty listing never overrides the kernel: while it says the group e
   const outcome = await run.done
   expect(outcome.groupGone).toBe(false)
 }, 30_000)
+
+test.each(['mismatch', 'unavailable'] as const)(
+  'AA4: a %s pidfd answer sends no numeric signal and the run ends with the group unconfirmed',
+  async (verdict) => {
+    const sleeper = join(dir, 'aa4-sleeper.mjs')
+    writeFileSync(sleeper, 'setInterval(() => {}, 1000)\n')
+    const groupCalls: string[] = []
+    const kill = vi.spyOn(process, 'kill')
+    const run = spawnCli({
+      ...baseOptions([sleeper]),
+      graceMs: 50,
+      reapSlackMs: 100,
+      signalGroup: (_leader, _start, name) => {
+        groupCalls.push(name)
+        return verdict
+      },
+      signalPid: () => verdict,
+    })
+    const pid = run.pid!
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      run.stop('user')
+      const outcome = await run.done
+      expect(groupCalls).toEqual(['SIGINT', 'SIGTERM', 'SIGKILL'])
+      // Nothing signalled by number: the sleeper is still up and the run says so.
+      expect(
+        kill.mock.calls.filter(([target, sig]) => (target === pid || target === -pid) && sig !== 0),
+      ).toEqual([])
+      expect(outcome.groupGone).toBe(false)
+      expect(alive(pid)).toBe(true)
+    } finally {
+      kill.mockRestore()
+      if (alive(pid)) process.kill(-pid, 'SIGKILL')
+    }
+  },
+  30_000,
+)

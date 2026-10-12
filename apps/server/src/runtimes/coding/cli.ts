@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import type { CliState, CodingPermission, CodingRuntimeInfo } from '@score/contract'
 import { DRIVERS, isTestedVersion } from './drivers.ts'
 import { buildChildEnv } from './env.ts'
+import { resolveNativeExecutable } from './native-exec.ts'
 import type { CodingDriver } from './types.ts'
 
 export interface CliLocatorOptions {
@@ -38,6 +39,24 @@ export class CliLocator {
     return this.options.fakeCli
       ? { file: process.execPath, args: [this.options.fakeCli, driver.runtime] }
       : { file: driver.executable, args: [] }
+  }
+
+  /**
+   * `command()` for the fallback launch: the CLI's real native executable, or a refusal message. Fake mode runs its
+   * Node stand-in as is. A launcher that spawns the engine could not be stopped when Score dies.
+   */
+  nativeCommand(
+    driver: CodingDriver,
+  ): { ok: true; file: string; args: string[] } | { ok: false; message: string } {
+    const command = this.command(driver)
+    if (this.fake) return { ok: true, ...command }
+    const resolved = resolveNativeExecutable(
+      driver.runtime,
+      driver.label,
+      command.file,
+      (this.options.env ?? process.env).PATH,
+    )
+    return resolved.ok ? { ok: true, file: resolved.file, args: command.args } : resolved
   }
 
   childEnv(): Record<string, string> {

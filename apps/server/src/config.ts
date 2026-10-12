@@ -2,6 +2,7 @@ import { homedir } from 'node:os'
 import { isIP } from 'node:net'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { journalInsideHome } from './journal-location.ts'
 
 const OriginSchema = z
   .url({ protocol: /^https?$/ })
@@ -151,6 +152,10 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   })
   const fail = (message: string): never => {
     throw new z.ZodError([{ code: 'custom', path: [], message }])
+  }
+  if (config.mode !== 'fake') {
+    const inside = journalInsideHome(resolveJournalDir(config, env), config.home)
+    if (inside) fail(inside)
   }
   if (!remote && !isLoopback(config.host)) fail('Non-loopback SCORE_HOST requires SCORE_REMOTE=1')
   if (remote && isIP(config.host) === 0) fail('Remote SCORE_HOST must be a numeric IP address')
