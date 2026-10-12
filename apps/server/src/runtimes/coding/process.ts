@@ -337,6 +337,12 @@ export function spawnCli(options: SpawnOptions): CliRun {
     }
   })
   child.stdout.on('error', () => streamLoss.add('read-error'))
+  // Natural end of stdout, tracked apart from the pipe being destroyed: destruction (a descendant holding the pipe open
+  // past the end of the turn) can discard unread records, including the one that matters (FW #7).
+  let stdoutEnded = false
+  child.stdout.on('end', () => {
+    stdoutEnded = true
+  })
   child.stderr.setEncoding('utf8')
   child.stderr.on('data', (chunk: string) => {
     if (abandoned) return
@@ -391,6 +397,7 @@ export function spawnCli(options: SpawnOptions): CliRun {
       // A last line with no newline may be a cut-off record: it is never parsed, and the stream is not complete.
       if (!skipping && buffered.trim()) streamLoss.add('partial-last-line')
       if (abandoned) streamLoss.add('abandoned')
+      else if (!stdoutEnded && spawnError === null) streamLoss.add('forced-stdout-close')
       void queue
         .then(() => reapGroup())
         .then((gone) => {

@@ -455,3 +455,20 @@ test('#17: a hook that throws is reported and the stop still goes on', async () 
   expect(outcome.groupGone).toBe(true)
   expect(errors).toHaveLength(1)
 }, 60_000)
+
+test('FW #7: a pipe destroyed because a descendant outside the group holds it open is forced loss, not a complete stream', async () => {
+  const run = spawnCli({
+    ...script(
+      // A descendant in its own session keeps stdout open past the turn, then ends by itself.
+      `const { spawn } = require('node:child_process');
+       const holder = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 3500)'], { detached: true, stdio: ['ignore', 'inherit', 'ignore'] });
+       holder.unref();
+       process.stdout.write('{"result":"success"}\\n')`,
+    ),
+    onEvent: async () => undefined,
+  })
+  const outcome = await run.done
+  expect(outcome.exitCode).toBe(0)
+  expect(outcome.streamComplete).toBe(false)
+  expect(outcome.streamLoss).toContain('forced-stdout-close')
+}, 30_000)
