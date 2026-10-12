@@ -131,7 +131,7 @@ test('unit names are validated; arguments with control characters or relative pa
 
 test('systemctl show output is parsed into unit state; Job marks a pending job', () => {
   const text =
-    'LoadState=loaded\nActiveState=active\nSubState=running\nMainPID=123\nInvocationID=abc\nControlGroup=/user.slice/x.service\nResult=success\nJob=77\n'
+    'LoadState=loaded\nActiveState=active\nSubState=running\nMainPID=123\nInvocationID=abc\nControlGroup=/user.slice/x.service\nResult=success\nJob=77\nExecMainPID=122\nExecMainStatus=0\nExecMainCode=1\n'
   expect(parseShow(text).get('MainPID')).toBe('123')
   expect(parseUnitState(text)).toEqual({
     loadState: 'loaded',
@@ -142,8 +142,13 @@ test('systemctl show output is parsed into unit state; Job marks a pending job',
     controlGroup: '/user.slice/x.service',
     result: 'success',
     jobPending: true,
+    execMainPid: 122,
+    execMainStatus: 0,
+    execMainCode: 1,
   })
   expect(parseUnitState('LoadState=loaded\n').jobPending).toBe(false)
+  // A unit that never ran its main process reports nothing: unknown, never a clean zero.
+  expect(parseUnitState('LoadState=loaded\nExecMainStatus=\n').execMainStatus).toBeNull()
 })
 
 test('cgroup.events and population: populated 0/1, absent directory, unreadable', () => {

@@ -23,7 +23,7 @@ import {
 import { resolveInstallation, type InstallationResult } from './installation.ts'
 import { migrateLegacyJournal } from './domain/orchestration/journal-migration.ts'
 import { Orchestrator } from './domain/orchestration/executor.ts'
-import { fenceItems, GlobalFenceStore, isFenced } from './domain/orchestration/fence.ts'
+import { GlobalFenceStore } from './domain/orchestration/fence.ts'
 import { ExecutionJournal, journalScope } from './domain/orchestration/journal.ts'
 import { retryUntilResolved } from './retry-until-resolved.ts'
 import {
@@ -69,7 +69,7 @@ import { retireIngestKeys, retireMedia } from './hub/retire.ts'
 import { restoreRoomHolds } from './domain/room-rewinding.ts'
 import { locatorForMode } from './runtimes/coding/cli.ts'
 import { CodingRuntime } from './runtimes/coding/service.ts'
-import { UnitBackend } from './runtimes/coding/unit-backend.ts'
+import { fenceBarrier, UnitBackend } from './runtimes/coding/unit-backend.ts'
 import { CodingJournal } from './domain/orchestration/coding-journal.ts'
 import { defaultRootPolicy } from './workspace/policy.ts'
 
@@ -382,13 +382,9 @@ export async function startServer(
             home: homedir(),
             ...(disabled !== undefined ? { disabled } : {}),
             ...(resolved === undefined || installationBlock !== null ? { unresolved: true } : {}),
-            blocked: () =>
-              installationBlock ??
-              database.read((sqlite) =>
-                isFenced(sqlite) && fenceItems(sqlite).some((item) => item.ref.startsWith('coding'))
-                  ? 'Score is waiting for you to review the coding journal before it starts coding runs.'
-                  : null,
-              ),
+            // Restore, journal and installation uncertainty stop every coding launch, whichever engine runs it.
+            blocked: () => installationBlock ?? database.read((sqlite) => fenceBarrier(sqlite)),
+            ...(process.env.SCORE_CODING_BACKEND === 'process-group' ? { forced: true } : {}),
             onError: (error) => app?.log.error({ err: error }, 'Coding unit backend failed'),
           })
         : undefined
@@ -396,12 +392,14 @@ export async function startServer(
       const status = await unit.start()
       process.stderr.write(
         `Coding runs: ${
-          status.kind === 'unit'
-            ? 'supervised system services'
-            : `process-group fallback (${status.checks
-                .filter((c) => !c.ok)
-                .map((c) => c.detail)
-                .join('; ')})`
+          status.kind === 'unit' && status.checks.some((c) => !c.ok)
+            ? `paused (${status.note})`
+            : status.kind === 'unit'
+              ? 'supervised system services'
+              : `process-group fallback (${status.checks
+                  .filter((c) => !c.ok)
+                  .map((c) => c.detail)
+                  .join('; ')})`
         }\n`,
       )
     }
@@ -409,9 +407,9 @@ export async function startServer(
       db: database,
       ingest,
       ...(unit ? { unit } : {}),
-      // FX2: fallback witness. Process-group launches are journaled too whenever the installation is resolved.
+      // A process row a confirmed copy inherited (or that an inherited launch covers) is never ours to signal (FZ3 #6).
       ...(config.mode === 'live' && resolved !== undefined && installationBlock === null
-        ? { journal: codingJournal }
+        ? { ownsProcessRow: (runId: string) => codingJournal.ownsProcessRow(runId) }
         : {}),
       onOrphans: (names) =>
         fenceStore.set(

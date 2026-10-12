@@ -159,6 +159,7 @@ export async function startHarness(options: HarnessOptions): Promise<Harness> {
     generation: 1,
     specHash: hashSpec(spec),
     handlers: {
+      ...options.handlers,
       onStdoutRecord: options.handlers?.onStdoutRecord ?? ((line) => void stdout.push(line)),
       onStderr: options.handlers?.onStderr ?? ((text) => void stderr.push(text)),
     },

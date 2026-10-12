@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { codingProjection } from '../../domain/orchestration/coding-checkpoint.ts'
@@ -11,10 +12,11 @@ import {
   type CodingLaunch,
   type CodingState,
 } from '../../domain/orchestration/coding-records.ts'
+import { fenceItems, isFenced } from '../../domain/orchestration/fence.ts'
 import { installation8, LAUNCHES_DIR } from '../../installation.ts'
 import { mkdirDurable } from '../../locks/os-lock.ts'
 import { CodingSocketServer, RETAINED_RUN_BYTES, type RunSession } from './coding-socket.ts'
-import { redactNote } from './note.ts'
+import { BoundedDiagnostics, redactNote } from './note.ts'
 import { signalPid, type PidSignalResult } from './pidfd-signal.ts'
 import { bootId, processStart } from './proc.ts'
 import { pdeathsigSupport } from './pdeathsig-exec.ts'
@@ -51,6 +53,28 @@ const SUPERVISOR_FILE = fileURLToPath(new URL('./supervisor.mjs', import.meta.ur
 const WRAPPER_FILE = fileURLToPath(new URL('./pdeathsig-exec.py', import.meta.url))
 
 export type BackendKind = 'unit' | 'process-group'
+
+/** A file the installation keeps (beside its journal, outside the home) once the unit check has passed (decision 69). */
+export const UNIT_CAPABLE_FILE = 'unit-capable.json'
+/** Written before `requested`: where the launch belongs, so a restored database that lost its rows can still route it. */
+const ROUTING_FILE = 'routing.json'
+/** The supervisor's first stop cause, written before it acts on it (review 2026-10-12 #17). */
+const STOP_RECEIPT = 'stop-cause.json'
+
+/**
+ * Coding admission barrier from the fence (review 2026-10-12 #2): an unresolved restore, journal or installation
+ * uncertainty, or a coding item, stops every coding launch, whichever engine launches and also inside release. Items
+ * about orchestration attempts alone don't concern coding. This is the production callback; tests call it as it is.
+ */
+export function fenceBarrier(sqlite: DatabaseSync): string | null {
+  if (!isFenced(sqlite)) return null
+  const blocking = fenceItems(sqlite).some(
+    (item) => item.kind === 'restore' || item.kind === 'journal' || item.ref.startsWith('coding'),
+  )
+  return blocking
+    ? 'Score is waiting for you to review the execution journal before it starts coding runs.'
+    : null
+}
 export interface BackendStatus {
   kind: BackendKind
   checks: { name: string; ok: boolean; detail: string }[]
@@ -78,6 +102,11 @@ export interface UnitBackendDeps {
    * backend that launches (review #5).
    */
   disabled?: string
+  /**
+   * The fallback was asked for (SCORE_CODING_BACKEND). That is a choice, not a failure: it never pauses coding even on an
+   * installation that has passed the unit check (decision 69).
+   */
+  forced?: boolean
   /**
    * The installation isn't resolved (`installationId` is a placeholder): nothing is reconciled or acted on, because the
    * journal and the unit prefix don't belong to this home yet. Only the `blocked` barrier applies.
@@ -232,6 +261,15 @@ interface Row {
   held: number
 }
 
+const RoutingFile = z.object({
+  launch: z.string().min(1),
+  generation: z.number().int(),
+  agentId: z.string().min(1),
+  runtime: z.string().min(1),
+  runId: z.string().min(1),
+  turnId: z.string().min(1),
+})
+
 const IDENTITY_FILE = 'identity.json'
 const IdentityFile = z.object({
   launch: z.string().min(1),
@@ -286,6 +324,12 @@ export class UnitBackend {
   private readonly starts: number[] = []
   private current: BackendStatus
   private socketError: string | null = null
+  /** The installation has passed the unit check at least once (the marker file). */
+  private capable = false
+  /** Why runs are paused: the unit check failed on an installation that passed it before. */
+  private paused: string | null = null
+  /** Launches whose stop cause couldn't be made durable: their result can't be eligible. */
+  private readonly unrecordedStops = new Set<string>()
   private closed = false
   private orphans: string[] = []
   private readonly reapers = new Map<string, Promise<boolean>>()
@@ -306,6 +350,7 @@ export class UnitBackend {
       checkedAt: new Date(this.clock()).toISOString(),
       note: FALLBACK_NOTE,
     }
+    this.capable = !deps.unresolved && existsSync(join(deps.namespaceDir, UNIT_CAPABLE_FILE))
   }
 
   get status(): BackendStatus {
@@ -313,13 +358,32 @@ export class UnitBackend {
   }
   /** True when new coding runs should use the unit backend. */
   usable(): boolean {
-    return this.current.kind === 'unit' && !this.closed
+    return this.current.kind === 'unit' && this.paused === null && !this.closed
   }
   /** Why admission is paused, or null. */
   block(): string | null {
+    if (this.paused !== null) return this.paused
     if (this.orphans.length > 0)
       return 'A coding service from an earlier session isn’t accounted for. Score paused coding runs until you review it.'
+    if (this.unattributed())
+      return 'Score can’t tell which agent an unfinished coding run belonged to. It paused all coding runs until you review it.'
     return this.deps.blocked?.() ?? null
+  }
+
+  /** An owned launch that may still be running and that no agent can be named for: it fences every coding agent. */
+  private unattributed(): boolean {
+    if (this.deps.unresolved) return false
+    try {
+      return (
+        this.deps.db.sqlite
+          .prepare(
+            "SELECT 1 FROM coding_launches WHERE backend = 'unit' AND agent_id IS NULL AND held > 0 AND phase NOT IN ('ended','settled') LIMIT 1",
+          )
+          .get() !== undefined
+      )
+    } catch {
+      return true
+    }
   }
   get orphaned(): readonly string[] {
     return this.orphans
@@ -343,12 +407,8 @@ export class UnitBackend {
   async check(): Promise<BackendStatus> {
     await this.rescanOrphans()
     if (this.deps.disabled !== undefined) {
-      this.current = {
-        kind: 'process-group',
-        checks: [{ name: 'manager', ok: false, detail: this.deps.disabled }],
-        checkedAt: new Date(this.clock()).toISOString(),
-        note: `${FALLBACK_NOTE} ${this.deps.disabled}`.trim(),
-      }
+      const checks = [{ name: 'manager', ok: false, detail: this.deps.disabled }]
+      this.current = this.shortfall(checks, this.deps.disabled)
       return this.current
     }
     const checks: { name: string; ok: boolean; detail: string }[] = []
@@ -399,13 +459,53 @@ export class UnitBackend {
         : `no notify socket at ${notify}, or no ${notifyBin}`,
     })
     const all = ok && listening && python !== null && notifyOk
-    this.current = {
-      kind: all ? 'unit' : 'process-group',
-      checks,
-      checkedAt: new Date(this.clock()).toISOString(),
-      note: all ? UNIT_NOTE : `${FALLBACK_NOTE} ${checks.find((c) => !c.ok)?.detail ?? ''}`.trim(),
-    }
+    if (all) {
+      this.paused = null
+      this.rememberCapable()
+      this.current = {
+        kind: 'unit',
+        checks,
+        checkedAt: new Date(this.clock()).toISOString(),
+        note: UNIT_NOTE,
+      }
+    } else this.current = this.shortfall(checks, checks.find((c) => !c.ok)?.detail ?? '')
     return this.current
+  }
+
+  /**
+   * The check isn't met. An installation that passed it before is paused (decision 69): no fallback behind its back, the
+   * card says why and offers Check again. One that never passed (or was told to use the fallback) runs without a
+   * supervisor, with the weaker guarantee stated.
+   */
+  private shortfall(checks: BackendStatus['checks'], detail: string): BackendStatus {
+    const checkedAt = new Date(this.clock()).toISOString()
+    if (this.capable && this.deps.forced !== true) {
+      this.paused = `Coding runs are paused: this computer no longer meets what supervised services need${detail ? ` (${detail})` : ''}. Fix that and choose Check again.`
+      return { kind: 'unit', checks, checkedAt, note: this.paused }
+    }
+    this.paused = null
+    return {
+      kind: 'process-group',
+      checks,
+      checkedAt,
+      note: `${FALLBACK_NOTE} ${detail}`.trim(),
+    }
+  }
+
+  private rememberCapable(): void {
+    if (this.deps.unresolved || this.deps.disabled !== undefined) return
+    // In memory first: this process pauses on a later failure even when the file can't be written.
+    const first = !this.capable
+    this.capable = true
+    if (!first) return
+    try {
+      writeReceipt(this.deps.namespaceDir, UNIT_CAPABLE_FILE, {
+        installation: this.deps.installationId,
+        at: this.clock(),
+      })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') this.deps.onError?.(error)
+    }
   }
 
   /** An orphan the person has dealt with (the unit is gone) no longer pauses admission. A failed read changes nothing. */
@@ -447,8 +547,17 @@ export class UnitBackend {
    * reported and the stop goes ahead: stopping matters more than the note.
    */
   recordStop(launchId: string, reason: StopReason): void {
+    this.recordCause(launchId, STOP_CAUSE[reason])
+  }
+
+  /**
+   * The same for any stop Score starts on its own account (a broken bound, an ingestion failure, shutdown, or a cause the
+   * supervisor reported first). A cause that couldn't be made durable is not lost silently: the launch is remembered as
+   * having an unrecorded stop, so its result can't be eligible and the person sees why.
+   */
+  recordCause(launchId: string, cause: string): void {
+    let recorded = true
     try {
-      const cause = STOP_CAUSE[reason]
       const journaled = this.deps.journal.recordStop(
         launchId,
         cause,
@@ -466,9 +575,12 @@ export class UnitBackend {
         !journaled.ok &&
         journaled.reason !== 'unknown_launch' &&
         journaled.reason !== ('inherited' as string)
-      )
+      ) {
+        recorded = false
         this.deps.onError?.(new Error(`stop cause not journaled: ${journaled.reason}`))
+      }
     } catch (error) {
+      recorded = false
       this.deps.onError?.(error)
     }
     try {
@@ -476,9 +588,29 @@ export class UnitBackend {
         .prepare(
           'UPDATE coding_launches SET stop_cause = COALESCE(stop_cause, ?) WHERE launch_id = ?',
         )
-        .run(STOP_CAUSE[reason], launchId)
+        .run(cause, launchId)
     } catch (error) {
       this.deps.onError?.(error)
+    }
+    if (!recorded) this.unrecordedStops.add(launchId)
+  }
+
+  /**
+   * The first cause a supervisor wrote before acting on its own (deadline, socket loss, systemd's stop) becomes part of
+   * the journal, if Score didn't already hold one, before the launch is ended.
+   */
+  private adoptStopReceipt(launchId: string): void {
+    const rec = this.recorded(launchId)
+    try {
+      const body = JSON.parse(readFileSync(join(rec.receiptDir, STOP_RECEIPT), 'utf8')) as {
+        launch?: unknown
+        cause?: unknown
+      }
+      if (body.launch !== launchId || typeof body.cause !== 'string' || body.cause === '') return
+      if (this.deps.journal.state(launchId)?.state.stopCause !== undefined) return
+      this.recordCause(launchId, body.cause.slice(0, 64))
+    } catch {
+      // no receipt (the common case) or an unreadable one: nothing to adopt
     }
   }
 
@@ -584,6 +716,16 @@ export class UnitBackend {
     try {
       mkdirDurable(receiptDir)
       mkdirSync(specDir, { recursive: true, mode: 0o700 })
+      // Where the launch belongs, outside the restorable database and before the journal knows it (review #7).
+      writeReceipt(receiptDir, ROUTING_FILE, {
+        launch: launchId,
+        generation: request.generation,
+        at: this.clock(),
+        agentId: request.agentId,
+        runtime: request.runtime,
+        runId: request.runId,
+        turnId: request.turnId,
+      })
     } catch (error) {
       return refuse(`Couldn’t prepare the run’s folders: ${errorText(error)}`)
     }
@@ -614,7 +756,7 @@ export class UnitBackend {
         stopCause: ctl.stopReason ? STOP_CAUSE[ctl.stopReason] : stopCause,
       })
       this.removeSpecDir(specDir)
-      return this.outcomeOf(launchId, unit, {
+      const outcome = this.outcomeOf(launchId, unit, {
         released,
         stderr: diagnostics.text(),
         stats,
@@ -623,6 +765,24 @@ export class UnitBackend {
         stopped: ctl.stopReason,
         ...over,
       })
+      if (outcome.complete) {
+        // Eligibility also needs the unit's own account of its supervisor: it exited with status 0 (#10), and every stop
+        // cause was made durable (#17).
+        const exit = await this.supervisorExit(launchId)
+        if (!proof.proven || exit !== 'clean') {
+          outcome.complete = false
+          outcome.reasons = [
+            ...outcome.reasons,
+            `supervisor-exit:${proof.proven ? exit : 'unproven'}`,
+          ]
+        }
+        if (this.unrecordedStops.has(launchId)) {
+          outcome.complete = false
+          outcome.reasons = [...outcome.reasons, 'stop-unrecorded']
+        }
+      }
+      this.unrecordedStops.delete(launchId)
+      return outcome
     }
     const abort = async (reason: string): Promise<UnitOutcome> => {
       // Nothing was released. Revoke if the journal still allows it (no `releasing`), cancel/stop, then prove.
@@ -653,6 +813,12 @@ export class UnitBackend {
         for (const event of events) await request.onEvent(event)
       },
       onStderr: (text: string) => diagnostics.push(text),
+      // Score's own stops (a bound, an ingestion failure, shutdown) are made durable before the frame goes out (#17).
+      onStop: (cause: string) => this.recordCause(launchId, cause),
+      // What the parser really keeps, charged to the installation's budget (#18). Drivers that don't report it keep the
+      // fixed reservation.
+      retainedBytes: () =>
+        (request.parser as { retainedBytes?: () => number }).retainedBytes?.() ?? 0,
     }
 
     // ---- spec, token, unit ----
@@ -815,7 +981,7 @@ export class UnitBackend {
         exitCode: outcome.exit?.code ?? null,
         signal: outcome.exit?.signal ?? null,
         stopped,
-        complete: outcome.kind === 'ended' && blocking.length === 0,
+        complete: outcome.kind === 'ended' && outcome.ackFlushed && blocking.length === 0,
         reasons: outcome.reasons,
         leftovers: outcome.survivorsKilled,
         sawEvents,
@@ -923,6 +1089,15 @@ export class UnitBackend {
     }
   }
 
+  private readRouting(dir: string, launchId: string) {
+    try {
+      const file = RoutingFile.parse(JSON.parse(readFileSync(join(dir, ROUTING_FILE), 'utf8')))
+      return file.launch === launchId ? file : undefined
+    } catch {
+      return undefined
+    }
+  }
+
   private readIdentity(dir: string, launchId: string, generation: number | undefined) {
     let text: string
     try {
@@ -944,16 +1119,35 @@ export class UnitBackend {
    * Stops a unit's run through a handle that stays pinned to the recorded supervisor: SIGINT through a pidfd that was
    * opened and checked against the recorded pid + start time (the same signal systemd's own stop sends). Never by unit
    * name: between a check and a name-based stop another invocation could take the name (review 2026-10-12 #5). Without
-   * a recorded supervisor, a recorded boot that is still current, or pidfd support, nothing is sent and the launch stays
-   * uncertain ('unknown'). A launch that isn't this installation's is never touched.
+   * a recorded supervisor, pidfd support, or ANY of these that is unknown, nothing is sent and the launch stays uncertain
+   * ('unknown'): a known, matching boot (pid and start time can recur across boots), the same user-manager incarnation,
+   * and the unit systemd names now carrying the recorded InvocationID, cgroup and main pid (review 2026-10-12 #8). A
+   * launch that isn't this installation's is never touched.
    */
   async stopSupervisor(launchId: string): Promise<'signalled' | 'gone' | 'unknown'> {
     const rec = this.recorded(launchId)
     if (!this.owns(launchId, rec.unit) || rec.disagreement) return 'unknown'
-    if (!rec.supervisor) return 'unknown'
-    // A different boot: the pid and start time mean nothing now and the supervisor is long gone.
+    if (!rec.supervisor || !rec.unit) return 'unknown'
+    // Boot first: a different known boot means the supervisor is long gone; an unknown one proves nothing.
     const bootHere = this.bootNow()
-    if (rec.boot && bootHere && rec.boot !== bootHere) return 'gone'
+    if (!rec.boot || !bootHere) return 'unknown'
+    if (rec.boot !== bootHere) return 'gone'
+    // The manager that verified the launch must be the one running now.
+    const manager = await this.managerNow()
+    if (!rec.manager || !manager || rec.manager !== `${manager.pid}:${manager.start}`)
+      return 'unknown'
+    // And the unit must still be that invocation, with that supervisor as its main process.
+    const shown = await showUnit(this.run, rec.unit)
+    if (shown.kind === 'absent') return 'gone'
+    if (shown.kind !== 'present') return 'unknown'
+    const state = shown.state
+    if (
+      !rec.invocationId ||
+      state.invocationId !== rec.invocationId ||
+      (rec.cgroup && state.controlGroup !== rec.cgroup)
+    )
+      return 'unknown'
+    if (state.activeState === 'active' && state.mainPid !== rec.supervisor.pid) return 'unknown'
     const signal = this.deps.signalSupervisor ?? signalPid
     switch (signal(rec.supervisor.pid, rec.supervisor.start, 'SIGINT')) {
       case 'signalled':
@@ -1082,6 +1276,27 @@ export class UnitBackend {
       : 'invalid'
   }
 
+  /**
+   * What systemd says about the recorded supervisor's exit, once the run ended and was proven: 'clean' only when the unit
+   * is gone (a unit whose main process exited 0 is collected at once; a failed one stays and is read here) or still names
+   * THIS supervisor (pid) with an ordinary exit and status 0. A supervisor that left because the socket or its ack was lost
+   * exits non-zero, so a lost acknowledgment can't pass for a normal end (review 2026-10-12 #10).
+   */
+  private async supervisorExit(launchId: string): Promise<string> {
+    const rec = this.recorded(launchId)
+    if (!rec.unit || !rec.supervisor) return 'unrecorded'
+    const shown = await showUnit(this.run, rec.unit)
+    if (shown.kind === 'absent') return 'clean'
+    if (shown.kind !== 'present') return 'unreadable'
+    const state = shown.state
+    if (rec.invocationId && state.invocationId !== rec.invocationId) return 'other-invocation'
+    if (state.activeState === 'active' || state.jobPending) return 'running'
+    if (state.execMainPid !== rec.supervisor.pid) return 'other-process'
+    if (state.execMainCode !== 1 || state.execMainStatus !== 0 || state.result !== 'success')
+      return `status-${state.execMainStatus ?? 'unknown'}`
+    return 'clean'
+  }
+
   /** After the session: record `released-seen`/`ended` in the journal (when proven) or hold the launch (when not). */
   private async proveAndEnd(
     launchId: string,
@@ -1091,6 +1306,7 @@ export class UnitBackend {
     extra: { stopCause: string | null },
   ): Promise<{ proven: boolean; proof: string | null }> {
     const proof = await this.proveEnded(launchId)
+    if (proof.proven) this.adoptStopReceipt(launchId)
     const project = this.projection(request, receiptDir, specDir, {
       stop_cause: extra.stopCause,
       held: proof.proven ? 0 : 1,
@@ -1236,7 +1452,7 @@ export class UnitBackend {
         codingProjection(this.deps.db, this.clock, (sqlite) =>
           sqlite
             .prepare(
-              "UPDATE coding_launches SET held = 0, waiver = 1, disposition = 'waived', proof = COALESCE(proof, 'waiver') WHERE launch_id = ?",
+              "UPDATE coding_launches SET held = 0, waiver = 1, disposition = 'waived' WHERE launch_id = ?",
             )
             .run(row.launch_id),
         ),
@@ -1248,7 +1464,7 @@ export class UnitBackend {
       // `waive` projected the settled launch; `held` is runtime state the projection doesn't own, so clear it here too.
       this.deps.db.sqlite
         .prepare(
-          "UPDATE coding_launches SET held = 0, waiver = 1, disposition = 'waived', phase = 'settled', proof = COALESCE(proof, 'waiver') WHERE launch_id = ?",
+          "UPDATE coding_launches SET held = 0, waiver = 1, disposition = 'waived', phase = 'settled' WHERE launch_id = ?",
         )
         .run(row.launch_id)
       released.push(row)
@@ -1298,6 +1514,7 @@ export class UnitBackend {
   }
 
   private endRecord(row: Row, proof: string): void {
+    this.adoptStopReceipt(row.launch_id)
     const project = codingProjection(this.deps.db, this.clock)
     const state = this.deps.journal.state(row.launch_id)
     if (
@@ -1415,16 +1632,19 @@ export class UnitBackend {
       }
     }
     // Routing a restored or rebuilt row lacks (the journal carries identity, not the agent): the run names its agent,
-    // and a removed agent's launches keep their routing until settled (§6b).
+    // and a removed agent's launches keep their routing until settled (§6b). Where the run row is lost too, the routing
+    // file beside the journal answers; with neither, the launch stays unattributed and fences all coding (`block`).
+    const dir = join(this.deps.namespaceDir, LAUNCHES_DIR, id)
+    const routing = this.readRouting(dir, id)
     this.deps.db.sqlite
       .prepare(
         `UPDATE coding_launches SET backend = COALESCE(backend, 'unit'),
-           agent_id = COALESCE(agent_id, (SELECT profile FROM runs WHERE runs.id = coding_launches.run_id)),
-           runtime = COALESCE(runtime, (SELECT runtime FROM runs WHERE runs.id = coding_launches.run_id)),
+           agent_id = COALESCE(agent_id, (SELECT profile FROM runs WHERE runs.id = coding_launches.run_id), ?),
+           runtime = COALESCE(runtime, (SELECT runtime FROM runs WHERE runs.id = coding_launches.run_id), ?),
            receipt_dir = COALESCE(receipt_dir, ?)
          WHERE launch_id = ?`,
       )
-      .run(join(this.deps.namespaceDir, LAUNCHES_DIR, id), id)
+      .run(routing?.agentId ?? null, routing?.runtime ?? null, dir, id)
   }
 
   private async recoverOne(l: CodingLaunch): Promise<RecoveredLaunch> {
@@ -1475,29 +1695,6 @@ class Control {
  * text is kept from its start (never a tail cut through a value) up to a raw limit, and it is redacted as a whole
  * whenever it is read. Past the limit the rest is dropped, not kept in a form redaction can't recognise.
  */
-export class BoundedDiagnostics {
-  private raw = ''
-  private overflowed = false
-  constructor(
-    private readonly rawLimit = 64 * 1024,
-    private readonly keepBytes = 8 * 1024,
-  ) {}
-
-  push(text: string): void {
-    if (this.overflowed) return
-    const room = this.rawLimit - this.raw.length
-    if (text.length > room) {
-      this.raw += text.slice(0, Math.max(0, room))
-      this.overflowed = true
-    } else this.raw += text
-  }
-
-  /** Redacted and bounded; safe to store or show. */
-  text(): string {
-    const safe = redactNote(this.raw, this.keepBytes)
-    return this.overflowed ? `${safe} […]` : safe
-  }
-}
 
 const UNIT_NOTE = 'Runs as a supervised system service.'
 const FALLBACK_NOTE =

@@ -927,6 +927,17 @@ export class CodingRuntime {
         .catch((error: unknown) => this.deps.onError?.(error))
       if (entry.stopBeforeStart)
         return void (await this.finish(translation, stopped(entry.stopBeforeStart)))
+      // The last admission boundary for the process-group engine: a restore, journal or coding fence raised since
+      // admission keeps the CLI from starting (re-review 2 #2; decision 69 removed the fallback journal that held this).
+      if (!this.deps.unit?.usable()) {
+        const barrier = this.deps.unit?.block() ?? null
+        if (barrier)
+          return void (await this.finish(translation, {
+            status: 'failed',
+            error: barrier,
+            costKind,
+          }))
+      }
       const cliArgs = [
         ...args,
         ...driver.buildArgs({

@@ -262,11 +262,45 @@ export async function runSupervisor(spec, deps = {}) {
   }
 
   // ---- stop and escalation: INT -> TERM -> KILL, one grace each, every signal exactly once (design section 1)
-  function requestStop(cause) {
+  // The first cause of a stop the supervisor starts itself (deadline, socket loss, systemd's stop) is written beside the
+  // other receipts BEFORE anything is signalled, so a Score that restarts, or a run that dies before its `ended` receipt,
+  // still knows why it was stopped (review 2026-10-12 #17). The first cause wins (`link` refuses a second file). A cause
+  // that couldn't be written is told to Score as an error frame and stays uncertainty on its side.
+  let stopRecorded = false
+  function recordStopCause(cause) {
+    if (stopRecorded) return
+    stopRecorded = true
+    try {
+      writeReceipt(spec.receiptDir, 'stop-cause.json', {
+        launch: spec.launch,
+        generation: spec.generation,
+        at: now(),
+        cause,
+      })
+    } catch (error) {
+      // EEXIST: an earlier pass already holds the first cause.
+      if (error?.code !== 'EEXIST') send({ t: 'error', code: 'stop-unrecorded' })
+    }
+  }
+  // A stop that arrives after `end` went out (a deadline while Score finishes ingesting, systemd's stop, socket trouble):
+  // the terminal candidate is no longer clean. Score hears about it before the acknowledgment can complete, and this
+  // supervisor then leaves with a failure status instead of 0 (review 2026-10-12 #11).
+  let stoppedAfterEnd = false
+
+  // `fromScore`: the stop came over the wire; Score made its cause durable before sending it, so no receipt of ours.
+  function requestStop(cause, fromScore = false) {
     if (stopCause === null) stopCause = cause
     if (phase === 'waiting-go' || phase === 'connecting') {
       // Nothing has run, and nothing will: leave without a `released` receipt.
       endWithoutRun()
+      return
+    }
+    if (!fromScore) recordStopCause(stopCause)
+    if (phase === 'ended' && !finished) {
+      if (!stoppedAfterEnd) {
+        stoppedAfterEnd = true
+        send({ t: 'error', code: 'stop-after-end' })
+      }
       return
     }
     if (escalating || childExited || !child) return
@@ -576,14 +610,14 @@ export async function runSupervisor(spec, deps = {}) {
         if (phase === 'waiting-go' || phase === 'connecting') {
           stopCause = 'cancel'
           endWithoutRun()
-        } else requestStop('cancel')
+        } else requestStop('cancel', true)
         return
       case 'stop':
-        requestStop(typeof f.cause === 'string' && f.cause.length <= 64 ? f.cause : 'stop')
+        requestStop(typeof f.cause === 'string' && f.cause.length <= 64 ? f.cause : 'stop', true)
         return
       case 'ack-end':
         if (phase === 'ended' && childExited) {
-          finish(EXIT.ok)
+          finish(stoppedAfterEnd ? EXIT.failed : EXIT.ok)
         }
         return
       default:

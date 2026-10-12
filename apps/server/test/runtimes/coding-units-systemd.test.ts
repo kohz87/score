@@ -13,11 +13,12 @@ import { CliLocator } from '../../src/runtimes/coding/cli.ts'
 import { alive } from '../helpers/coding-harness.ts'
 import { CodingRuntime } from '../../src/runtimes/coding/service.ts'
 import { insertCodingAgent } from '../../src/runtimes/coding/store.ts'
-import { UnitBackend } from '../../src/runtimes/coding/unit-backend.ts'
+import { UNIT_CAPABLE_FILE, UnitBackend } from '../../src/runtimes/coding/unit-backend.ts'
 import {
   listInstallationUnits,
   realRunTool,
   SYSTEMCTL,
+  showUnit,
   SYSTEMD_RUN,
 } from '../../src/runtimes/coding/units.ts'
 import { defaultRootPolicy } from '../../src/workspace/policy.ts'
@@ -174,6 +175,7 @@ describe.skipIf(!ENABLED)(
         'ended.json',
         'identity.json',
         'released.json',
+        'routing.json',
       ])
       // The unit is collected: systemd no longer knows it.
       expect(await listInstallationUnits(run, PREFIX)).toEqual({ kind: 'ok', names: [] })
@@ -303,6 +305,37 @@ describe.skipIf(!ENABLED)(
       expect(still.stdout.trim()).toBe('active')
       expect(kit.backend.block()).toMatch(/isn’t accounted for/)
     }, 90_000)
+
+    test('re-review 2 #10: systemd reports a finished main process’s pid, exit code and status, and a pass is remembered', async () => {
+      const kit = await kitFor()
+      // The first passing check is remembered beside the journal (decision 69).
+      expect(existsSync(join(kit.dir, 'journal', kit.installationId, UNIT_CAPABLE_FILE))).toBe(true)
+      const name = `${PREFIX}${randomBytes(8).toString('hex')}.service`
+      extraUnits.push(name)
+      const started = await run(SYSTEMD_RUN, [
+        '--user',
+        '--no-ask-password',
+        `--unit=${name}`,
+        '--property=Type=exec',
+        '--',
+        '/usr/bin/sh',
+        '-c',
+        'exit 3',
+      ])
+      expect(started.code, started.stderr).toBe(0)
+      let state: Awaited<ReturnType<typeof showUnit>> | undefined
+      await vi.waitFor(
+        async () => {
+          state = await showUnit(run, name)
+          expect(state.kind === 'present' && state.state.activeState === 'failed').toBe(true)
+        },
+        { timeout: 15_000 },
+      )
+      if (state?.kind !== 'present') throw new Error('unit not present')
+      // A failed unit stays visible with the status of its main process: what the eligibility check reads.
+      expect(state.state).toMatchObject({ execMainCode: 1, execMainStatus: 3, result: 'exit-code' })
+      expect(state.state.execMainPid).toBeGreaterThan(1)
+    }, 60_000)
 
     test('the capability check on this host passes, including real unit properties', async () => {
       const kit = await kitFor()
