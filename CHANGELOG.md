@@ -3,6 +3,40 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.3] — 2026-10-12
+
+Fixes from a third external audit of 1.0.2 (6 findings; `docs/reviews/2026-10-12-external-audit-3.md`) and from the
+adversarial design reviews of 7.7 (coding agents as orchestration workers), several of which found bugs in today's
+coding-agent support. Every fix has a regression test that failed before it.
+
+### Fixed — Knowledge
+- Moves use one atomic kernel call (`renameat2` with `RENAME_NOREPLACE`): a move can no longer delete a file another
+  program put at the destination or lose the original; filesystems that can't do it refuse instead of risking it.
+- An interrupted move keeps its plan through errors that can be retried, shows "move pending" on the Knowledge page, and
+  is finished only with proof that the destination is the moved file.
+
+### Fixed — coding agents (Claude Code, Codex, Antigravity)
+- A run ends as completed only with proof that every process it started is gone; otherwise the reply says tools may
+  still be running and that agent waits, with a **Release** action when Score can't tell whose processes they are.
+- Stop says what really happened; a failed session resume can't run the CLI twice; a finished run's result is kept and
+  retried until saved, also across a restart.
+- Signals reach only Score's own processes: kernel-checked group absence, recorded identities, and pidfds (never a
+  process number that may have been reused); the CLI dies with Score and starts only after it is recorded; only a
+  verified native executable runs.
+
+### Fixed — orchestration journal and locks
+- Journal records are written whole with every required sync (file, folder and new parent folders), or the action they
+  would permit doesn't happen.
+- The journal and the security password use kernel-held locks (never stolen after a crash); the journal can't live
+  inside Score's home, and where it lives is recorded outside both, so a restore can't make Score forget work it did.
+
+### Fixed — live data
+- A page reopened after it missed updates refreshes before trusting its data; a failed refresh shows an error instead of
+  stale data as current.
+
+### Changed
+- Coding agents and Knowledge moves now need `python3` (present wherever Hermes runs) for these kernel calls.
+
 ## [1.0.2] — 2026-10-11
 
 Fixes from a second external audit of 1.0.1 (27 findings; `docs/reviews/2026-10-11-external-audit-2.md`), each with a
@@ -137,6 +171,7 @@ profiles. Tested with Hermes v0.21.x on Linux.
   app version.
 - Licensed under PolyForm Noncommercial 1.0.0; commercial licences on request ([COMMERCIAL.md](COMMERCIAL.md)).
 
+[1.0.3]: https://github.com/kohz87/score/releases/tag/v1.0.3
 [1.0.2]: https://github.com/kohz87/score/releases/tag/v1.0.2
 [1.0.1]: https://github.com/kohz87/score/releases/tag/v1.0.1
 [1.0.0]: https://github.com/kohz87/score/releases/tag/v1.0.0

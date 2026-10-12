@@ -17,7 +17,8 @@ Score runs on Linux (tested on Ubuntu 26.04, x86_64). Every step below installs 
 
 ### 1. Prerequisites
 
-You need `git`, `curl`, `tar` and `xz`, plus **Node.js 24** and **pnpm 12**. Node without sudo:
+You need `git`, `curl`, `tar` and `xz`, plus **Node.js 24** and **pnpm 12**. Coding agents and Knowledge moves also use
+`python3` (3.9 or newer, already there wherever Hermes runs) for two kernel calls Node can't make. Node without sudo:
 
 ```bash
 V=v24.21.0; D=node-$V-linux-x64

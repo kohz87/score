@@ -40,6 +40,13 @@ export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 pnpm -v    # 12.9.1
 ```
 
+### 1b2. python3
+
+Score calls `python3` (3.9+, standard library only) for kernel calls Node doesn't offer: atomic no-replace renames
+(Knowledge moves, `renameat2`) and identity-safe signals and parent-death handling for coding agents (pidfds,
+`PR_SET_PDEATHSIG`). Ubuntu ships it; set `SCORE_PYTHON` to use another interpreter. Without it, Knowledge moves and
+coding-agent turns are refused with a clear message (everything else works).
+
 ### 1c. uv (Python tooling for the Hermes bridge plugin, user-local)
 
 ```bash
