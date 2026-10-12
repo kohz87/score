@@ -140,6 +140,25 @@ export function journalRootProblem(
 }
 
 /**
+ * Upgrade evidence when the outside record has no entry yet: the home's own pointer (written by the previous version
+ * under the home lock) names exactly this root, and a journal already exists there. A home restored from a backup taken
+ * before the pointer existed has no pointer, so it is still fenced.
+ */
+export function pointerVouches(home: string, journalDir: string): boolean {
+  const pointer = join(home, JOURNAL_ROOT_FILE)
+  try {
+    const recorded = readFileSync(pointer, 'utf8').trim()
+    return (
+      recorded !== '' &&
+      canonicalPath(recorded) === canonicalPath(journalDir) &&
+      existsSync(join(journalDir, JOURNAL_FILE_NAME))
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
  * Remembers the journal root for later starts and restores: the provenance file first (atomic, under its own OS lock,
  * and durable), then the home's convenience pointer. A corrupt provenance file is replaced only by writing this home's
  * entry into a fresh one (the start has already refused or fenced on the corruption).

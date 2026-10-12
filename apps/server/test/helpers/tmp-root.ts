@@ -8,6 +8,11 @@ import { afterAll } from 'vitest'
 // fail. Individual tests may still clean up earlier; this is the backstop.
 const root = mkdtempSync(join(tmpdir(), 'score-test-root-'))
 process.env.TMPDIR = root
+// Never the real state folder: the execution journal, its provenance record and locks default to
+// $XDG_STATE_HOME/score, so every test (and every child process) gets a private one. A test that needs a specific
+// journal folder still sets SCORE_JOURNAL_DIR itself.
+process.env.XDG_STATE_HOME = join(root, 'state')
+delete process.env.SCORE_JOURNAL_DIR
 
 afterAll(() => {
   rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })

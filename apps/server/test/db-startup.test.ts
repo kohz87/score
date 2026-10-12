@@ -1,3 +1,4 @@
+import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
@@ -105,6 +106,7 @@ vi.mock('../src/domain/orchestration/executor.ts', () => ({
 vi.mock('../src/domain/orchestration/fence.ts', () => ({
   GlobalFenceStore: class {
     startupCheck = () => ({ fenced: false, reasons: [] })
+    fenceUnverifiedRoot = () => false
   },
 }))
 vi.mock('../src/domain/orchestration/journal.ts', () => ({
@@ -131,6 +133,9 @@ beforeEach(() => {
   previousExitCode = process.exitCode
   process.exitCode = undefined
   vi.stubEnv('SCORE_HOME', '/tmp/score-test-startup')
+  // Live starts record the journal root in the home; the fixed home must not carry one from an earlier run (it would
+  // name another state folder and correctly refuse the start).
+  rmSync('/tmp/score-test-startup/journal-root', { force: true })
   vi.stubEnv('SCORE_VAULT', '/tmp/score-test-startup/vault') // the vault is mocked here; no temp folder
   vi.stubEnv('SCORE_PORT', '8740')
   vi.stubEnv('SCORE_HOST', '127.0.0.1')
@@ -205,7 +210,10 @@ test('startup opens and migrates the configured database before building and lis
 test('live startup initializes bridge bootstrap and passes shared DB, ingest and dynamic compatibility', async () => {
   vi.stubEnv('SCORE_MODE', 'live')
   await import('../src/index.ts')
-  expect(mocks.loadBridgeBootstrap).toHaveBeenCalledExactlyOnceWith('/tmp/score-test-startup')
+  // Startup continues after the import resolves (journal folders are created and synced first).
+  await vi.waitFor(() =>
+    expect(mocks.loadBridgeBootstrap).toHaveBeenCalledExactlyOnceWith('/tmp/score-test-startup'),
+  )
   const options = mocks.buildApp.mock.calls[0] as unknown as [
     {
       bridge: {

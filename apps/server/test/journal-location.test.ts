@@ -17,6 +17,7 @@ import {
   homeProvenance,
   journalInsideHome,
   journalRootProblem,
+  pointerVouches,
   recordJournalRoot,
 } from '../src/journal-location.ts'
 import { startServer } from '../src/start-server.ts'
@@ -190,4 +191,22 @@ test('EE3: missing or corrupt provenance is reported as such', () => {
   expect(homeProvenance(home).state).toBe('corrupt')
   recordJournalRoot(home, join(root, 'j1'))
   expect(homeProvenance(home).state).toBe('known')
+})
+
+test('upgrade bootstrap: the home pointer plus an existing journal at that root vouch for it; no pointer does not', () => {
+  const base = mkdtempSync(join(tmpdir(), 'score-vouch-'))
+  try {
+    const home = join(base, 'home')
+    const root = join(base, 'state', 'journal')
+    mkdirSync(home, { recursive: true })
+    mkdirSync(root, { recursive: true })
+    expect(pointerVouches(home, root)).toBe(false)
+    writeFileSync(join(home, 'journal-root'), `${root}\n`)
+    expect(pointerVouches(home, root)).toBe(false) // no journal there yet
+    writeFileSync(join(root, 'journal.ndjson'), '')
+    expect(pointerVouches(home, root)).toBe(true)
+    expect(pointerVouches(home, join(base, 'elsewhere'))).toBe(false)
+  } finally {
+    rmSync(base, { recursive: true, force: true })
+  }
 })

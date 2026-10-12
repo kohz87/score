@@ -16,6 +16,7 @@ import {
   homeProvenance,
   journalInsideHome,
   journalRootProblem,
+  pointerVouches,
   recordJournalRoot,
 } from './journal-location.ts'
 import { Orchestrator } from './domain/orchestration/executor.ts'
@@ -244,6 +245,12 @@ export async function startServer(
       if (moved) throw new Error(moved)
       // Read before recording: it says whether anything outside the home vouched for this home's journal root.
       rootProvenance = homeProvenance(config.home)
+      // First start after the upgrade: the home's pointer and an existing journal at that root vouch for it.
+      if (
+        (rootProvenance.state === 'missing' || rootProvenance.state === 'unknown') &&
+        pointerVouches(config.home, resolveJournalDir(config))
+      )
+        rootProvenance = undefined
       recordJournalRoot(config.home, resolveJournalDir(config))
     }
     db = openDatabase(join(config.home, 'score.db'))
