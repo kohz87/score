@@ -1306,24 +1306,75 @@ test('S2-008: a failed terminal save is retried without launching the CLI again'
   expect(replies()[0]!.streaming).toBe(false)
 })
 
-test('S2-008: when the terminal save keeps failing the run ends with a plain failure, never a silent success', async () => {
+const savedOutput = () =>
+  (db.sqlite.prepare('SELECT output FROM runs').get() as { output: string }).output
+const pendingRows = () =>
+  db.sqlite.prepare('SELECT run_id FROM coding_pending_terminals').all().length
+const recordRows = () => db.sqlite.prepare('SELECT run_id FROM coding_processes').all().length
+
+test('S3-004: a result that cannot be saved is kept and saved once ingestion recovers, without relaunching', async () => {
   await addAgent()
   await makeRoom()
   const realSubmit = ingest.submit.bind(ingest)
   const errors: unknown[] = []
   ;(coding as unknown as { deps: { onError?: (e: unknown) => void } }).deps.onError = (e) =>
     errors.push(e)
+  let failing = true
+  let terminalTries = 0
   vi.spyOn(ingest, 'submit').mockImplementation(async (observation) => {
-    if (observation.identity.endsWith(':terminal')) throw new Error('database is busy')
+    // Every terminal write fails, normal or degraded.
+    if (failing && observation.identity.includes(':terminal')) {
+      terminalTries++
+      throw new Error('database is busy')
+    }
     return realSubmit(observation)
   })
   await say('@coder go')
-  await finished()
-  expect(launches).toBe(1)
-  expect(runs()[0]).toMatchObject({ status: 'failed' })
-  expect(runs()[0]!.error).toMatch(/couldn’t save this run’s result/)
-  expect(replies()[0]!.streaming).toBe(false)
+  await vi.waitFor(() => expect(terminalTries).toBeGreaterThan(6), { timeout: 15_000 })
+  // Past the retry budget: still not abandoned, not a silent success, record and process evidence kept.
+  expect(pendingRows()).toBe(1)
+  expect(recordRows()).toBe(1)
+  expect(runs()[0]!.status).not.toBe('completed')
   expect(errors.length).toBeGreaterThan(0)
+  failing = false
+  await finished()
+  expect(runs()[0]).toMatchObject({ status: 'completed' })
+  expect(launches).toBe(1)
+  expect(replies()[0]!.streaming).toBe(false)
+  expect(savedOutput()).toBeTruthy()
+  expect(JSON.stringify(replies()[0]!.parts)).toContain(savedOutput())
+  expect(pendingRows()).toBe(0)
+  expect(recordRows()).toBe(0)
+})
+
+test('S3-004: a result still pending when Score restarts is committed before anything is marked interrupted', async () => {
+  await addAgent()
+  await makeRoom()
+  const realSubmit = ingest.submit.bind(ingest)
+  let terminalTries = 0
+  vi.spyOn(ingest, 'submit').mockImplementation(async (observation) => {
+    if (observation.identity.includes(':terminal')) {
+      terminalTries++
+      throw new Error('database is busy')
+    }
+    return realSubmit(observation)
+  })
+  await say('@coder go')
+  await vi.waitFor(() => expect(terminalTries).toBeGreaterThan(6), { timeout: 15_000 })
+  expect(pendingRows()).toBe(1)
+  await coding.close()
+  vi.restoreAllMocks()
+  await boot()
+  await coding.recover()
+  await ingest.flushListeners()
+  await ingest.drain()
+  expect(runs()[0]).toMatchObject({ status: 'completed' })
+  expect(launches).toBe(1)
+  expect(replies()[0]!.streaming).toBe(false)
+  expect(savedOutput()).toBeTruthy()
+  expect(JSON.stringify(replies()[0]!.parts)).toContain(savedOutput())
+  expect(pendingRows()).toBe(0)
+  expect(recordRows()).toBe(0)
 })
 
 test('S2-004: when recording the process fails, the child is killed and the run ends visibly', async () => {

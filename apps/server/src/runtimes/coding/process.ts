@@ -7,6 +7,9 @@ import {
   procAvailable,
   processStart,
   scanGroup,
+  scanOwnedAfterExit,
+  realProcEnv,
+  type ProcEnv,
   type MemberIdentity,
 } from './proc.ts'
 import { CODING_LIMITS, type CodingEvent, type LineParser } from './types.ts'
@@ -71,12 +74,16 @@ export interface SpawnOptions {
   /**
    * Called with the identities (pid + start time) of group members not reported before: while the leader runs, when it
    * exits with survivors, and while the group is reaped. They are the continuity that lets a leaderless group be
-   * recognised as ours after a restart (N4). A throw is ignored: recording is best effort, never a reason to fail.
+   * recognised as ours after a restart (N4). A throw never fails the run: the members are offered again on the next scan.
    */
   onMembers?(members: MemberIdentity[]): void
+  /** A save failed; the same members are offered again on the next scan. Called once per streak of failures. */
+  onMembersError?(error: unknown): void
+  /** Test seam: the process table (default /proc). */
+  procEnv?: ProcEnv
   /** Test seam: the kernel's answer to "does any process have this PGID" (default `kill(-pgid, 0)`). */
   groupExists?: typeof kernelGroupExists
-  /** How often members are noted while the leader runs (default 2 s). */
+  /** How often members are noted while the leader runs (default 100 ms: members found while the leader lives are the only proof of ownership once it has exited). */
   memberScanMs?: number
   maxMs?: number
   graceMs?: number
@@ -162,6 +169,24 @@ export function spawnCli(options: SpawnOptions): CliRun {
   // identity cannot be proven the signal is not sent, the group stays alive, and the run ends unconfirmed with its
   // record kept, so the fence and Release apply (as in recovery).
   const leaderStart = child.pid === undefined ? null : processStart(child.pid)
+  const env = options.procEnv ?? realProcEnv
+  // Identities proven ours (pid -> start time): the leader, and everything seen in the group while the leader lived.
+  // After the leader exits only these, and processes descending from them, may be signalled or recorded: a listing of
+  // the group number proves existence, not ownership (v6 review, finding 5).
+  const owned = new Map<number, string>()
+  if (child.pid !== undefined && leaderStart !== null) owned.set(child.pid, leaderStart)
+  /** Live members of the group that are ours; `foreign` = something else holds the group number. */
+  const ownMembers = (): { members: MemberIdentity[]; foreign: boolean } => {
+    if (child.pid === undefined) return { members: [], foreign: false }
+    if (!leaderExited) {
+      const members = scanGroup(child.pid, env).members
+      for (const member of members) owned.set(member.pid, member.startTime)
+      return { members, foreign: false }
+    }
+    const found = scanOwnedAfterExit(child.pid, owned, env)
+    for (const member of found.members) owned.set(member.pid, member.startTime)
+    return found
+  }
   /** True when the signal was delivered to something; false when identity could not be proven and nothing was sent. */
   const signal = (name: NodeJS.Signals): boolean => {
     if (child.pid === undefined || groupEmpty || leaderStart === null) return false
@@ -170,7 +195,7 @@ export function spawnCli(options: SpawnOptions): CliRun {
       // The leader is gone, so there is no pidfd to signal the group through: each remaining member goes individually,
       // by its own pid + start time.
       let delivered = false
-      for (const member of scanGroup(child.pid).members)
+      for (const member of ownMembers().members)
         if (sendPid(member.pid, member.startTime, name) === 'signalled') delivered = true
       return delivered
     } catch {
@@ -185,22 +210,24 @@ export function spawnCli(options: SpawnOptions): CliRun {
   // Identities already reported, so each is recorded once.
   const noted = new Set<string>()
   let lastNoted = 0
+  let failedMembers = 0
   const noteMembers = (force = false) => {
-    if (child.pid === undefined || !options.onMembers || !procAvailable()) return
+    if (child.pid === undefined || !procAvailable()) return
     const now = Date.now()
-    if (!force && now - lastNoted < 200) return
+    if (!force && now - lastNoted < 50) return
     lastNoted = now
-    const fresh = scanGroup(child.pid).members.filter((member) => {
-      const key = `${member.pid}:${member.startTime}`
-      if (noted.has(key)) return false
-      noted.add(key)
-      return true
-    })
-    if (fresh.length === 0) return
+    const fresh = ownMembers().members.filter(
+      (member) => !noted.has(`${member.pid}:${member.startTime}`),
+    )
+    if (fresh.length === 0 || !options.onMembers) return
     try {
       options.onMembers(fresh)
-    } catch {
-      // best effort
+      // Only now are they recorded: a failed save leaves them eligible for the next scan (S3-005).
+      for (const member of fresh) noted.add(`${member.pid}:${member.startTime}`)
+      failedMembers = 0
+    } catch (error) {
+      // Retried on the next scan; the caller hears about it once per streak, so a persistent failure is visible.
+      if (failedMembers++ === 0) options.onMembersError?.(error)
     }
   }
   // "The group is gone" is the kernel's word alone (ESRCH from kill(-pgid, 0)): a /proc listing can miss a child that
@@ -233,7 +260,7 @@ export function spawnCli(options: SpawnOptions): CliRun {
   }
   const scanner = setInterval(() => {
     if (!leaderExited) noteMembers()
-  }, options.memberScanMs ?? 2000)
+  }, options.memberScanMs ?? 100)
   scanner.unref()
   const wall = setTimeout(() => stop('timeout'), maxMs)
   wall.unref()

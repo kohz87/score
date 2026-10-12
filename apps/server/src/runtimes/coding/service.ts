@@ -127,6 +127,8 @@ function oneLine(text: string, max: number): string {
 export class CodingRuntime {
   private readonly active = new Map<string, ActiveRun>()
   private readonly queues = new Map<string, Promise<void>>()
+  /** Terminal results that are being saved in the background after the first attempts failed (S3-004). */
+  private readonly deliveries = new Map<string, Promise<void>>()
   private closed = false
 
   constructor(private readonly deps: CodingRuntimeDeps) {}
@@ -478,7 +480,10 @@ export class CodingRuntime {
       .finally(() => entry.settle())
     this.queues.set(agent.id, tail)
     void tail.finally(() => {
-      this.active.delete(runId)
+      // A result still waiting to be saved keeps the entry (S3-004): it goes once the delivery has committed.
+      const delivery = this.deliveries.get(runId)
+      if (delivery) void delivery.finally(() => this.active.delete(runId))
+      else this.active.delete(runId)
       if (this.queues.get(agent.id) === tail) this.queues.delete(agent.id)
     })
     return { runId }
@@ -557,17 +562,20 @@ export class CodingRuntime {
   }
 
   /**
-   * Saves the terminal result. A failed save is tried again (bounded backoff) without touching the process; if the budget
-   * runs out the run is ended with a plain note instead of being left running, and only then is the failure reported.
+   * Saves the terminal result. The outcome is first kept in a durable pending record, then saved with a bounded
+   * backoff without touching the process. If that budget runs out the result is NOT dropped: it is retried in the
+   * background (up to a minute apart) until it commits, the failure is reported once, and the active entry and the
+   * process record stay meanwhile. The record is also committed on restart. The CLI is never launched again (S3-004).
    */
   private async finish(translation: RunTranslation, info: TerminalInfo): Promise<unknown> {
-    const { ingest } = this.deps
+    this.keepPending(translation, info)
     const tries = 5
     let delay = this.deps.terminalRetryMs ?? 250
     let last: unknown
     for (let attempt = 0; attempt < tries; attempt++) {
       try {
-        return await ingest.submit(terminalObservation(translation, info))
+        const result = await this.commitTerminal(translation, info)
+        return result
       } catch (error) {
         last = error
         if (attempt < tries - 1) {
@@ -577,22 +585,99 @@ export class CodingRuntime {
       }
     }
     this.deps.onError?.(last)
-    // Degraded end: no output, no usage, a different key so it isn't mistaken for the observation that failed.
-    return ingest
-      .submit(
-        terminalObservation(
-          translation,
-          {
-            status: 'failed',
-            error:
-              'Score couldn’t save this run’s result. The agent has finished; send the message again if you need it.',
-            costKind: info.costKind,
-            ...(info.group ? { group: info.group } : {}),
-          },
-          'terminal-degraded',
-        ),
+    if (!this.deliveries.has(translation.runId) && !this.closed) {
+      const loop = this.deliverInBackground(translation, info)
+        .catch((error: unknown) => this.deps.onError?.(error))
+        .finally(() => this.deliveries.delete(translation.runId))
+      this.deliveries.set(translation.runId, loop)
+    }
+    return undefined
+  }
+
+  private async commitTerminal(translation: RunTranslation, info: TerminalInfo): Promise<unknown> {
+    const result = await this.deps.ingest.submit(terminalObservation(translation, info))
+    this.dropPending(translation.runId)
+    return result
+  }
+
+  private async deliverInBackground(
+    translation: RunTranslation,
+    info: TerminalInfo,
+  ): Promise<void> {
+    let delay = this.deps.terminalRetryMs ?? 250
+    for (;;) {
+      await this.wait(Math.min(delay, 60_000))
+      delay = Math.min(delay * 2, 60_000)
+      // On shutdown the durable record is left for the next start.
+      if (this.closed) return
+      try {
+        await this.commitTerminal(translation, info)
+        return
+      } catch {
+        // keep trying; the first failure was reported
+      }
+    }
+  }
+
+  private keepPending(translation: RunTranslation, info: TerminalInfo): void {
+    try {
+      this.deps.db.sqlite
+        .prepare(
+          `INSERT OR IGNORE INTO coding_pending_terminals (run_id, agent_id, room_id, usage, info, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          translation.runId,
+          translation.agentId,
+          translation.roomId,
+          translation.usage ? JSON.stringify(translation.usage) : null,
+          JSON.stringify(info),
+          new Date().toISOString(),
+        )
+    } catch (error) {
+      // The in-memory retry still runs; only a restart before it succeeds would lose the exact result.
+      this.deps.onError?.(error)
+    }
+  }
+
+  private dropPending(runId: string): void {
+    try {
+      this.deps.db.sqlite
+        .prepare('DELETE FROM coding_pending_terminals WHERE run_id = ?')
+        .run(runId)
+    } catch (error) {
+      this.deps.onError?.(error)
+    }
+  }
+
+  /** Terminal results that were still waiting to be saved when Score stopped: committed before recovery interrupts anything. */
+  private async commitPendingTerminals(): Promise<void> {
+    const rows = z
+      .array(
+        z.object({
+          run_id: z.string(),
+          agent_id: z.string(),
+          room_id: z.string().nullable(),
+          usage: z.string().nullable(),
+          info: z.string(),
+        }),
       )
-      .catch((error: unknown) => this.deps.onError?.(error))
+      .parse(
+        this.deps.db.sqlite
+          .prepare('SELECT * FROM coding_pending_terminals ORDER BY created_at')
+          .all(),
+      )
+    for (const row of rows) {
+      try {
+        const translation = newTranslation(row.run_id, row.agent_id, row.room_id)
+        if (row.usage)
+          translation.usage = JSON.parse(row.usage) as NonNullable<RunTranslation['usage']>
+        await this.commitTerminal(translation, JSON.parse(row.info) as TerminalInfo)
+      } catch (error) {
+        // Stays recorded; the interruption below still ends the run if it is not terminal by then.
+        this.deps.onError?.(error)
+      }
+    }
   }
 
   private async execute(
@@ -717,6 +802,7 @@ export class CodingRuntime {
           entry.launched = true
         },
         onMembers: (members) => this.recordMembers(entry.runId, members),
+        onMembersError: (error) => this.deps.onError?.(error),
         stdin: driver.promptVia === 'stdin' ? input : '',
         parser,
         maxMs: Math.max(1, deadline - Date.now()),
@@ -843,7 +929,15 @@ export class CodingRuntime {
     const insert = this.deps.db.sqlite.prepare(
       'INSERT OR IGNORE INTO coding_process_members (run_id, pid, start_time, boot_id, seen_at) VALUES (?, ?, ?, ?, ?)',
     )
-    for (const member of members) insert.run(runId, member.pid, member.startTime, boot, now)
+    const { sqlite } = this.deps.db
+    sqlite.exec('BEGIN')
+    try {
+      for (const member of members) insert.run(runId, member.pid, member.startTime, boot, now)
+      sqlite.exec('COMMIT')
+    } catch (error) {
+      sqlite.exec('ROLLBACK')
+      throw error
+    }
   }
   private membersOf(runId: string): MemberIdentity[] {
     return this.deps.db.sqlite
@@ -988,6 +1082,7 @@ export class CodingRuntime {
 
   async recover(): Promise<number> {
     const { db } = this.deps
+    await this.commitPendingTerminals()
     // Children can outlive a crashed Score: stop what is left of each recorded group before admitting anything. A
     // record goes only when the group is proven gone; otherwise it stays (the agent takes no new turn), the run says
     // so, and Score keeps trying in the background.
@@ -1029,6 +1124,12 @@ export class CodingRuntime {
         ...(unresolved.has(row.id) ? { group: 'unconfirmed' as const } : {}),
       })
     }
+    // Anything still pending belongs to a run that is terminal now (or was interrupted just above).
+    db.sqlite
+      .prepare(
+        "DELETE FROM coding_pending_terminals WHERE run_id IN (SELECT id FROM runs WHERE status NOT IN ('queued','running','waiting_for_approval'))",
+      )
+      .run()
     return rows.length
   }
 
@@ -1039,7 +1140,7 @@ export class CodingRuntime {
     for (const entry of entries) this.requestStop(entry, 'shutdown')
     await Promise.allSettled([...this.queues.values()])
     for (const wake of [...this.wakers]) wake()
-    await Promise.allSettled([...this.reapers.values()])
+    await Promise.allSettled([...this.reapers.values(), ...this.deliveries.values()])
   }
   get isClosed(): boolean {
     return this.closed

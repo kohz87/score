@@ -170,6 +170,29 @@ export function scanGroup(
   return { members, complete: true }
 }
 
+/**
+ * Members of group `pgid` that are provably ours, for a group whose leader has exited (v6 review, finding 5). A fresh
+ * listing proves existence, not ownership: once the original group emptied its number can be reissued. A member is ours
+ * only if its identity was proven while the leader lived (`owned`) or it descends from one that was. Anything else is
+ * `foreign`: never signalled, never recorded, and it keeps the group from being called gone.
+ */
+export function scanOwnedAfterExit(
+  pgid: number,
+  owned: Map<number, string>,
+  env: ProcEnv = realProcEnv,
+): { members: MemberIdentity[]; foreign: boolean; complete: boolean } {
+  const table = scanTable(env)
+  if (table === null) return { members: [], foreign: false, complete: false }
+  const members: MemberIdentity[] = []
+  let foreign = false
+  for (const row of table.values()) {
+    if (row.pgrp !== pgid || row.state === 'Z') continue
+    if (descendsFromKnown(row, table, owned)) members.push({ pid: row.pid, startTime: row.start })
+    else foreign = true
+  }
+  return { members, foreign, complete: true }
+}
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 export interface RecordedGroup {
