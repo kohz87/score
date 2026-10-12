@@ -1,11 +1,14 @@
 import { expect, test } from 'vitest'
 import {
+  BoundedDiagnostics,
+  boundEvent,
+  boundId,
   CappedText,
+  eventBytes,
   MAX_REMEMBERED_IDS,
   redactNote,
   rememberId,
 } from '../../src/runtimes/coding/note.ts'
-import { BoundedDiagnostics } from '../../src/runtimes/coding/unit-backend.ts'
 
 // 7.7a re-review #15 and #4: what a run keeps in memory is bounded, and stderr is redacted as a whole.
 
@@ -47,4 +50,28 @@ test('#3: a colon before a credential label does not hide it from the redactor',
   expect(redactNote('Antigravity refused: password=review-sentinel. Done', 400)).not.toContain(
     'review-sentinel',
   )
+})
+
+test('#18: individual retained values are bounded by bytes, not only by count', () => {
+  // Long ids map to short, stable ones: distinct stay distinct, the same stays the same.
+  const a = boundId('a'.repeat(100_000))
+  expect(Buffer.byteLength(a)).toBeLessThanOrEqual(256)
+  expect(boundId('a'.repeat(100_000))).toBe(a)
+  expect(boundId('a'.repeat(100_001))).not.toBe(a)
+  expect(boundId('call-1')).toBe('call-1')
+  // 1,024 remembered entries of the worst-case size stay within a small fixed budget.
+  const ids = new Set<string>()
+  for (let i = 0; i < MAX_REMEMBERED_IDS * 2; i++)
+    rememberId(ids, boundId(`${'x'.repeat(50_000)}${i}`))
+  const held = [...ids].reduce((sum, id) => sum + Buffer.byteLength(id), 0)
+  expect(held).toBeLessThanOrEqual(MAX_REMEMBERED_IDS * 256)
+  // A tool start keeps its details to a fixed size, and the reported bytes are what is really held.
+  const bounded = boundEvent({
+    kind: 'tool_start',
+    callId: 'c',
+    tool: 't'.repeat(10_000),
+    preview: 'p'.repeat(100_000),
+    detail: { type: 'write', path: 'f', content: 'z'.repeat(1_000_000) },
+  })
+  expect(eventBytes(bounded)).toBeLessThanOrEqual(256 + 200 + 16 * 1024 + 1 + 64)
 })

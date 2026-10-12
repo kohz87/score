@@ -1,3 +1,4 @@
+import { withBounds } from './note.ts'
 import { z } from 'zod'
 import { redact } from '../../redact.ts'
 import type {
@@ -112,6 +113,10 @@ function resultText(content: unknown): string {
 }
 
 export function createClaudeParser(cwd?: string): LineParser {
+  return withBounds(createInnerClaudeParser(cwd))
+}
+
+function createInnerClaudeParser(cwd?: string): LineParser {
   const stats = { unknown: 0, malformed: 0 }
   let spoke = false
   return {

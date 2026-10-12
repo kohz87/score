@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { rememberId } from './note.ts'
+import { boundId, MAX_REPLY_BYTES, rememberId, withBounds } from './note.ts'
 import type { CodingDriver, CodingEvent, DriverRunOptions, LineParser } from './types.ts'
 
 // Codex CLI, headless: `codex exec --json`. Event shapes follow OpenAI's documented JSONL stream
@@ -59,6 +59,11 @@ function claimsAgentMessage(value: unknown): boolean {
 }
 
 export function createCodexParser(cwd?: string): LineParser {
+  const inner = createInnerCodexParser(cwd)
+  return withBounds(inner)
+}
+
+function createInnerCodexParser(cwd?: string): LineParser & { ownBytes(): number } {
   const stats = { unknown: 0, malformed: 0 }
   let spoke = false
   // 7.7a §6: every agent_message is validated; a malformed or empty completed one invalidates authority for the turn.
@@ -73,6 +78,9 @@ export function createCodexParser(cwd?: string): LineParser {
   const started = new Set<string>()
   return {
     stats,
+    ownBytes: () =>
+      Buffer.byteLength(lastMessage ?? '') +
+      [...started].reduce((sum, id) => sum + Buffer.byteLength(id), 0),
     lossReason: () =>
       lossNote ?? (stats.malformed > 0 ? 'Score dropped a record of this turn' : null),
     parse(line) {
@@ -91,9 +99,22 @@ export function createCodexParser(cwd?: string): LineParser {
       // final one: the turn loses its authority before the outer validation drops it (review 2026-10-12 #3).
       if (claimsAgentMessage(value) && !ItemEvent.safeParse(value).success)
         lose('Codex sent a message Score could not validate')
+      // Any recognised record Score rejects takes the authority of the whole attempt, terminal ones too: it could have
+      // been the one that mattered (re-review 2026-10-12 #1). Decided once the stream was processed (`lossReason`).
+      const recordType = Envelope.parse(value).type
       const thread = ThreadStarted.safeParse(value)
       if (thread.success) return [{ kind: 'session', sessionId: thread.data.thread_id }]
+      if (recordType === 'thread.started') {
+        stats.unknown++
+        lose('Codex sent a record Score could not validate')
+        return []
+      }
       const completed = TurnCompleted.safeParse(value)
+      if (!completed.success && recordType === 'turn.completed') {
+        stats.unknown++
+        lose('Codex sent a record Score could not validate')
+        return []
+      }
       if (completed.success) {
         const events: CodingEvent[] = []
         const usage = completed.data.usage
@@ -124,6 +145,11 @@ export function createCodexParser(cwd?: string): LineParser {
         return events
       }
       const failed = TurnFailed.safeParse(value)
+      if (!failed.success && recordType === 'turn.failed') {
+        stats.unknown++
+        lose('Codex sent a record Score could not validate')
+        return []
+      }
       if (failed.success)
         return [
           {
@@ -143,7 +169,8 @@ export function createCodexParser(cwd?: string): LineParser {
           lose('Codex sent a record Score could not validate')
         return []
       }
-      const { id, type } = item.data.item
+      const { type } = item.data.item
+      const id = boundId(item.data.item.id)
       const phase = item.data.type
       if (type === 'agent_message') {
         const message = MessageItem.safeParse(item.data.item)
@@ -152,6 +179,10 @@ export function createCodexParser(cwd?: string): LineParser {
         else if (phase === 'item.completed' && !message.data.text.trim())
           lose('Codex sent a message Score could not validate')
         if (phase !== 'item.completed' || !message.success || !message.data.text) return []
+        if (Buffer.byteLength(message.data.text) > MAX_REPLY_BYTES) {
+          lose('Codex sent a message larger than Score keeps')
+          return []
+        }
         lastMessage = message.data.text
         const text = spoke ? `\n\n${message.data.text}` : message.data.text
         spoke = true
@@ -159,6 +190,7 @@ export function createCodexParser(cwd?: string): LineParser {
       }
       if (type === 'reasoning') {
         const message = MessageItem.safeParse(item.data.item)
+        if (!message.success) lose('Codex sent a record Score could not validate')
         return phase === 'item.completed' && message.success && message.data.text
           ? [{ kind: 'thinking', text: message.data.text }]
           : []
@@ -167,6 +199,7 @@ export function createCodexParser(cwd?: string): LineParser {
         const command = CommandItem.safeParse(item.data.item)
         if (!command.success) {
           stats.unknown++
+          lose('Codex sent a record Score could not validate')
           return []
         }
         const events: CodingEvent[] = []
@@ -194,6 +227,7 @@ export function createCodexParser(cwd?: string): LineParser {
         const change = FileItem.safeParse(item.data.item)
         if (!change.success) {
           stats.unknown++
+          lose('Codex sent a record Score could not validate')
           return []
         }
         if (phase !== 'item.completed') return []
@@ -217,6 +251,7 @@ export function createCodexParser(cwd?: string): LineParser {
         const call = McpItem.safeParse(item.data.item)
         if (!call.success) {
           stats.unknown++
+          lose('Codex sent a record Score could not validate')
           return []
         }
         const events: CodingEvent[] = []
@@ -240,6 +275,7 @@ export function createCodexParser(cwd?: string): LineParser {
       }
       if (type === 'web_search') {
         const search = SearchItem.safeParse(item.data.item)
+        if (!search.success) lose('Codex sent a record Score could not validate')
         if (phase !== 'item.completed' || !search.success) return []
         return [
           { kind: 'tool_start', callId: id, tool: 'WebSearch', preview: search.data.query },

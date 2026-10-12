@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { redactNote, rememberId } from './note.ts'
+import { redactNote, rememberId, withBounds } from './note.ts'
 import type {
   CodingDriver,
   CodingEvent,
@@ -110,6 +110,10 @@ function toolDetail(
 }
 
 export function createAntigravityParser(cwd?: string): LineParser {
+  return withBounds(createInnerAntigravityParser(cwd))
+}
+
+function createInnerAntigravityParser(cwd?: string): LineParser {
   const stats = { unknown: 0, malformed: 0 }
   const started = new Set<number>()
   let spoke = false

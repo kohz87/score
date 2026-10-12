@@ -69,6 +69,7 @@ async function boot(
     killGroup?: CodingRuntimeDeps['killGroup']
     reapRetryMs?: number
     stopObserveMs?: number
+    onStop?: (cause: string) => void
     ingestWrap?: (ingest: Ingest) => Pick<Ingest, 'submit'>
   } = {},
 ) {
@@ -86,6 +87,7 @@ async function boot(
     ...(options.killGroup ? { killGroup: options.killGroup } : {}),
     ...(options.reapRetryMs ? { reapRetryMs: options.reapRetryMs } : {}),
     ...(options.stopObserveMs ? { stopObserveMs: options.stopObserveMs } : {}),
+    ...(options.onStop ? { onStop: options.onStop } : {}),
     // Counts launches and keeps the pids, so a test can prove nothing started or that a child is gone.
     spawn: (spawnOptions) => {
       launches++
@@ -1869,4 +1871,91 @@ test('a turn the journal says may already have run is refused and never spawned 
     coding.startRun({ agentId: 'coder', input: 'go', turnId: 'turn-seen' }),
   ).rejects.toMatchObject({ status: 409, code: 'turn_witnessed' })
   expect(() => readFileSync(log, 'utf8')).toThrow()
+})
+
+// ---- FZ1 (re-review 2026-10-12 #5, #9, #12, #17): the process-group fallback end to end -----------------------------------
+
+test('#12: a labelled secret in a tool name never reaches the tool card, the run row or its tool list', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:toolsecret] go')
+  await finished()
+  const stored = JSON.stringify([
+    db.sqlite.prepare('SELECT * FROM tool_calls').all(),
+    db.sqlite.prepare('SELECT tools_used FROM runs').all(),
+    db.sqlite.prepare('SELECT data FROM events').all(),
+  ])
+  expect(stored).not.toContain('review-sentinel')
+})
+
+test('#9: a success record with no terminating newline is no success: the run fails and says the record is incomplete', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:partial] go')
+  await finished()
+  expect(runs()[0]!.status).toBe('failed')
+  expect(runs()[0]!.error).toContain('complete record')
+  expect(JSON.stringify(replies()[0]!.parts)).not.toContain('Done.')
+})
+
+test('#5: a long secret value on stderr never reaches the failure notice or any stored text', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:stderrleak] go')
+  await finished()
+  expect(runs()[0]!.status).toBe('failed')
+  const stored = JSON.stringify([
+    runs(),
+    replies().map((reply) => reply.parts),
+    db.sqlite.prepare('SELECT data FROM events').all(),
+  ])
+  expect(stored).not.toMatch(/v{20}/)
+})
+
+test('#17: Stop, the wall-clock limit and shutdown each hand their cause to the stop hook', async () => {
+  const causes: string[] = []
+  await coding.close()
+  await app.close()
+  await boot({ onStop: (cause) => causes.push(cause) })
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:slow] take your time')
+  await vi.waitFor(() => expect(replies()[0]?.parts.length).toBeGreaterThan(0), { timeout: 10_000 })
+  const reply = replies()[0]!
+  await request('POST', `/api/rooms/${roomId}/messages/${reply.id}/stop`)
+  await finished()
+  expect(causes).toEqual(['user'])
+})
+
+test('#17: the wall-clock limit reaches the stop hook as `deadline`', async () => {
+  const causes: string[] = []
+  await coding.close()
+  await app.close()
+  await boot({ maxTurnMs: 300, graceMs: 100, onStop: (cause) => causes.push(cause) })
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:slow] forever')
+  await finished()
+  expect(causes).toEqual(['deadline'])
+})
+
+test('#17: a failing stop hook is reported and the stop goes on', async () => {
+  const errors: unknown[] = []
+  await coding.close()
+  await app.close()
+  await boot({
+    maxTurnMs: 300,
+    graceMs: 100,
+    onStop: () => {
+      throw new Error('journal down')
+    },
+  })
+  ;(coding as unknown as { deps: { onError?: (e: unknown) => void } }).deps.onError = (e) =>
+    errors.push(e)
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:slow] forever')
+  await finished()
+  expect(runs()[0]!.status).toBe('failed')
+  expect(errors.length).toBeGreaterThan(0)
 })

@@ -10,8 +10,6 @@ import type {
 } from '@score/contract'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
-import type { CodingJournal } from '../../domain/orchestration/coding-journal.ts'
-import { foldCodingLaunches } from '../../domain/orchestration/coding-records.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import { attachRunMessage, isCancelledTurn } from '../../domain/message-runs.ts'
 import { HttpError } from '../../errors.ts'
@@ -21,7 +19,6 @@ import { redact, redactBounded } from '../../redact.ts'
 import { checkRoot, type RootPolicy } from '../../workspace/policy.ts'
 import { CliLocator } from './cli.ts'
 import { driverFor } from './drivers.ts'
-import { readFallbackWitness, writeFallbackWitness } from './fallback-witness.ts'
 import { CappedText } from './note.ts'
 import {
   bootId,
@@ -30,7 +27,7 @@ import {
   type GroupOutcome,
   type MemberIdentity,
 } from './proc.ts'
-import { spawnCli, SpawnRecordError, type CliRun, type StopReason } from './process.ts'
+import { spawnCli, SpawnRecordError, stopCauseOf, type CliRun, type StopReason } from './process.ts'
 import {
   cliSessionFor,
   forgetCliSession,
@@ -47,8 +44,8 @@ import {
   type TerminalInfo,
 } from './translate.ts'
 import type { CodingEvent } from './types.ts'
-import { STOP_CAUSE, type BackendStatus, type UnitBackend } from './unit-backend.ts'
-import { codingProjection, turnWitnessed } from '../../domain/orchestration/coding-checkpoint.ts'
+import type { BackendStatus, UnitBackend } from './unit-backend.ts'
+import { turnWitnessed } from '../../domain/orchestration/coding-checkpoint.ts'
 
 export interface CodingRuntimeDeps {
   db: ScoreDb
@@ -77,11 +74,10 @@ export interface CodingRuntimeDeps {
    */
   unit?: UnitBackend
   /**
-   * The installation's coding journal (outside the restorable home). With it, a launch on the process-group fallback is
-   * witnessed there too: the possibility of execution is durable before the CLI starts, and its process identity right
-   * after (review 2026-10-12 #6). Absent where Score owns no installation journal (the fake mode, most tests).
+   * Records that a stop was asked, with its cause (`user`, `deadline`, `output-cap`, `score-shutdown`), before anything is
+   * signalled. The unit backend wires it to the journal; absent where there is none. A failure is reported, never thrown.
    */
-  journal?: CodingJournal
+  onStop?: (cause: string) => void
   /** Units carrying this installation's prefix that no journal launch owns: the caller fences and raises a review item. */
   onOrphans?: (units: string[]) => void
 }
@@ -564,6 +560,15 @@ export class CodingRuntime {
     return { runId }
   }
 
+  /** A stop asked outside any live process (a recorded group): its cause goes to the hook like any other. */
+  private recordStop(reason: StopReason): void {
+    try {
+      this.deps.onStop?.(stopCauseOf(reason))
+    } catch (error) {
+      this.deps.onError?.(error)
+    }
+  }
+
   private assertOpen(): void {
     if (this.closed)
       throw new HttpError(
@@ -602,8 +607,7 @@ export class CodingRuntime {
     if (!run || run.profile !== req.agentId) return 'not_running'
     const record = this.recordOf(req.runId)
     if (record) {
-      for (const launch of this.fallbackLaunches(req.runId))
-        this.journalStop(launch.state.launchId, 'user')
+      this.recordStop('user')
       const reaping = this.reapInBackground(req.runId)
       const answer = await Promise.race([
         reaping.then((gone) => (gone ? ('stopped' as const) : ('unconfirmed' as const))),
@@ -709,7 +713,6 @@ export class CodingRuntime {
   private async commitTerminal(translation: RunTranslation, info: TerminalInfo): Promise<unknown> {
     const result = await this.deps.ingest.submit(terminalObservation(translation, info))
     this.dropPending(translation.runId)
-    this.settleFallback(translation.runId)
     // The terminal result is saved: the unit launch is settled and collected (design §6b). A failure here never
     // un-saves the result; recovery settles whatever was left.
     await this.deps.unit
@@ -986,23 +989,6 @@ export class CodingRuntime {
           launchId: done.launchId,
         }
       } else {
-        // The execution witness first, outside the restorable home: from `releasing` on the launch MAY have executed.
-        const witnessed = this.journalFallback(entry, attempt, agent.runtime, () =>
-          this.fallbackAuthorised(entry, agent.id),
-        )
-        if (!witnessed.ok)
-          return void (await this.finish(
-            translation,
-            witnessed.reason === 'not_authorised' && entry.stopBeforeStart
-              ? stopped(entry.stopBeforeStart)
-              : {
-                  status: 'failed',
-                  error: `Couldn’t record the run (${witnessed.reason}), so it wasn’t started.`,
-                  costKind,
-                },
-          ))
-        const witnessId = witnessed.launchId
-        const seenMembers = new Map<number, MemberIdentity>()
         const spawnOptions: Parameters<typeof spawnCli>[0] = {
           file,
           args: cliArgs,
@@ -1010,18 +996,13 @@ export class CodingRuntime {
           env: locator.childEnv(),
           onSpawn: (pid) => {
             this.recordProcess(entry.runId, pid)
-            this.journalProcess(witnessId, pid)
             entry.launched = true
           },
-          onMembers: (members) => {
-            this.recordMembers(entry.runId, members)
-            // Also next to the journal, whenever the set grows: a restored database would have lost them.
-            const before = seenMembers.size
-            for (const member of members) seenMembers.set(member.pid, member)
-            if (seenMembers.size !== before)
-              this.journalMembers(witnessId, entry, [...seenMembers.values()])
-          },
+          onMembers: (members) => this.recordMembers(entry.runId, members),
           onMembersError: (error) => this.deps.onError?.(error),
+          // Every stop path of the group goes through one recording hook, before anything is signalled.
+          onStop: (cause) => this.deps.onStop?.(cause),
+          onStopError: (error) => this.deps.onError?.(error),
           stdin,
           parser,
           maxMs: Math.max(1, deadline - Date.now()),
@@ -1043,17 +1024,10 @@ export class CodingRuntime {
           }
           throw error
         }
-        // The stop cause is journaled before the group is signalled, whoever asks.
-        entry.process = {
-          stop: (reason) => {
-            this.journalStop(witnessId, reason ?? 'user')
-            run.stop(reason)
-          },
-        }
+        entry.process = run
         if (entry.stopBeforeStart) entry.process.stop(entry.stopBeforeStart)
         const done = await run.done
         entry.process = undefined
-        if (done.groupGone) this.journalEnded(witnessId)
         outcome = {
           exitCode: done.exitCode,
           signal: done.signal,
@@ -1062,9 +1036,10 @@ export class CodingRuntime {
           spawnError: done.spawnError,
           leftovers: done.leftovers,
           groupGone: done.groupGone,
-          complete: !ingestFailed,
+          // A partial last line, a read error or a dropped record is loss, as for the supervised unit.
+          complete: !ingestFailed && done.streamComplete,
           refusal: null,
-          reasons: ingestFailed ? ['ingest-failure'] : [],
+          reasons: [...(ingestFailed ? ['ingest-failure'] : []), ...done.streamLoss],
           launchId: null,
         }
       }
@@ -1088,10 +1063,7 @@ export class CodingRuntime {
       ) {
         // Proven gone and nothing is being finished: the record goes now so the second launch can write its own.
         if (outcome.launchId) await unit?.settleLaunch(outcome.launchId, 'retried')
-        else {
-          this.forgetProcess(entry.runId)
-          this.settleFallback(entry.runId)
-        }
+        else this.forgetProcess(entry.runId)
         if (room) forgetCliSession(db.sqlite, room, agent.id)
         resume = null
         continue
@@ -1209,272 +1181,6 @@ export class CodingRuntime {
     const { sqlite } = this.deps.db
     sqlite.prepare('DELETE FROM coding_processes WHERE run_id = ?').run(runId)
     sqlite.prepare('DELETE FROM coding_process_members WHERE run_id = ?').run(runId)
-    // The group is proven gone: its witness says so too (and is settled once the run's result is saved).
-    this.endFallback(runId)
-    const terminal = sqlite.prepare('SELECT status FROM runs WHERE id = ?').get(runId) as
-      { status: string } | undefined
-    if (terminal && !['queued', 'running', 'waiting_for_approval'].includes(terminal.status))
-      this.settleFallback(runId)
-  }
-
-  // ---- the fallback's execution witness (review 2026-10-12 #6) -------------------------------------------------------
-
-  private fallbackAuthorised(entry: ActiveRun, agentId: string): boolean {
-    // The admission barrier is checked again here, inside the release critical section: one that rose while the turn
-    // waited (an orphan unit, a journal or restore fence) stops the release too (review 2026-10-12 #5).
-    return (
-      !entry.stopBeforeStart &&
-      !this.closed &&
-      !this.hasUnresolvedGroup(agentId) &&
-      (this.deps.unit?.block() ?? null) === null
-    )
-  }
-
-  /** Journals the launch up to `releasing` before the CLI exists; with no journal the fallback is as it was. */
-  private journalFallback(
-    entry: ActiveRun,
-    generation: number,
-    runtime: string,
-    authorised: () => boolean,
-  ): { ok: true; launchId: string | null } | { ok: false; reason: string } {
-    const journal = this.deps.journal
-    if (!journal) return { ok: true, launchId: null }
-    const launchId = randomUUID()
-    // Every step is projected into the database in its own critical section, with the launch's routing: the row and the
-    // checkpoint follow the journal, and the person sees the group's agent and runtime (review 2026-10-12 #6).
-    const project = codingProjection(this.deps.db, undefined, (sqlite) =>
-      sqlite
-        .prepare(
-          "UPDATE coding_launches SET backend = 'process-group', agent_id = ?, runtime = ? WHERE launch_id = ?",
-        )
-        .run(entry.agentId, runtime, launchId),
-    )
-    const requested = journal.requestLaunch(
-      { launchId, runId: entry.runId, turnId: entry.turnId, generation },
-      project,
-      {},
-    )
-    if (!requested.ok) return { ok: false, reason: requested.reason }
-    const armed = journal.arm(launchId, { disposition: 'process-group' }, project)
-    // The routing outside the restorable home, before the release: a restored database that lost the run still knows
-    // whose launch this was and which processes its group had.
-    if (armed.ok && !this.writeWitness(journal, { launch: launchId, entry, members: [] })) {
-      journal.revoke(launchId, undefined, project)
-      journal.ended(launchId, { proof: 'never-released' }, project)
-      journal.settled(launchId, { disposition: 'never-released' }, project)
-      return { ok: false, reason: 'witness_unwritten' }
-    }
-    const released = armed.ok ? journal.release(launchId, authorised, project) : armed
-    if (released.ok) return { ok: true, launchId }
-    // Nothing ran: close the record so no later reconciliation mistakes it for a live launch.
-    journal.revoke(launchId, undefined, project)
-    journal.ended(launchId, { proof: 'never-released' }, project)
-    journal.settled(launchId, { disposition: 'never-released' }, project)
-    return { ok: false, reason: released.reason }
-  }
-
-  private writeWitness(
-    journal: CodingJournal,
-    args: { launch: string; entry: ActiveRun; members: { pid: number; start: string }[] },
-  ): boolean {
-    try {
-      writeFallbackWitness(journal.journal.dir, {
-        launch: args.launch,
-        runId: args.entry.runId,
-        turnId: args.entry.turnId,
-        agentId: args.entry.agentId,
-        members: args.members,
-        at: Date.now(),
-      })
-      return true
-    } catch (error) {
-      this.deps.onError?.(error)
-      return false
-    }
-  }
-
-  /** The members of the group seen so far, next to the journal (they used to live only in the database). */
-  private journalMembers(
-    launchId: string | null,
-    entry: ActiveRun,
-    members: MemberIdentity[],
-  ): void {
-    const journal = this.deps.journal
-    if (!launchId || !journal) return
-    this.writeWitness(journal, {
-      launch: launchId,
-      entry,
-      members: members.map((m) => ({ pid: m.pid, start: m.startTime })),
-    })
-  }
-
-  /** The stop cause goes into the journal before anything is signalled (review 2026-10-12 #14). */
-  private journalStop(launchId: string | null, reason: StopReason): void {
-    if (!launchId || !this.deps.journal) return
-    try {
-      const result = this.deps.journal.recordStop(
-        launchId,
-        STOP_CAUSE[reason],
-        codingProjection(this.deps.db),
-      )
-      if (!result.ok) this.deps.onError?.(new Error(`stop cause not journaled: ${result.reason}`))
-    } catch (error) {
-      this.deps.onError?.(error)
-    }
-  }
-
-  /** The CLI exists: its process identity goes into the journal (outside the home) next to the in-home record. */
-  private journalProcess(launchId: string | null, pid: number): void {
-    if (!launchId || !this.deps.journal) return
-    const identity = `process-group:${JSON.stringify({ pid, start: processStart(pid), boot: bootId() })}`
-    const seen = this.deps.journal.releasedSeen(
-      launchId,
-      { cgroup: identity },
-      codingProjection(this.deps.db),
-    )
-    // Thrown inside the spawn callback: the group is killed rather than left running unrecorded.
-    if (!seen.ok) throw new Error(`could not journal the process (${seen.reason})`)
-  }
-
-  private journalEnded(launchId: string | null): void {
-    if (!launchId || !this.deps.journal) return
-    this.deps.journal.ended(launchId, { proof: 'process-group' }, codingProjection(this.deps.db))
-  }
-
-  /** The open fallback launches (no unit) of a run, from the journal. */
-  private fallbackLaunches(runId: string) {
-    const journal = this.deps.journal
-    if (!journal) return []
-    const read = journal.journal.readOwn()
-    if (!read.ok) return []
-    return [...foldCodingLaunches(read.entries).values()].filter(
-      (l) => l.state.unit === undefined && l.state.runId === runId && l.state.phase !== 'settled',
-    )
-  }
-  private endFallback(runId: string): void {
-    try {
-      for (const l of this.fallbackLaunches(runId))
-        if (l.kind !== 'ended' && l.state.disposition === 'process-group')
-          this.deps.journal?.ended(
-            l.state.launchId,
-            { proof: 'process-group' },
-            codingProjection(this.deps.db),
-          )
-    } catch (error) {
-      this.deps.onError?.(error)
-    }
-  }
-  private settleFallback(runId: string): void {
-    try {
-      for (const l of this.fallbackLaunches(runId))
-        if (l.kind === 'ended')
-          this.deps.journal?.settled(l.state.launchId, {}, codingProjection(this.deps.db))
-    } catch (error) {
-      this.deps.onError?.(error)
-    }
-  }
-
-  /**
-   * Fallback launches whose database record is gone (a restored backup) but whose witness survives outside the home:
-   * the recorded process identity is stopped like any recorded group, and the launch is closed on proof.
-   */
-  private async recoverFallback(): Promise<void> {
-    const journal = this.deps.journal
-    const read = journal?.journal.readOwn()
-    if (!journal || !read?.ok) return
-    for (const l of foldCodingLaunches(read.entries).values()) {
-      if (l.state.unit !== undefined || l.state.phase === 'settled' || l.violation !== undefined)
-        continue
-      // A witness copied from another installation is evidence only: its processes are not ours to stop or settle.
-      if (!journal.isOwned(l.state.launchId)) continue
-      const { launchId, runId } = l.state
-      const project = codingProjection(this.deps.db)
-      try {
-        if (!l.state.mayHaveExecuted) {
-          // Never released: the journal proves the CLI never ran.
-          if (!l.state.revoked) journal.revoke(launchId, undefined, project)
-          if (l.kind !== 'ended') journal.ended(launchId, { proof: 'never-released' }, project)
-          journal.settled(launchId, { disposition: 'never-released' }, project)
-          continue
-        }
-        if (l.kind === 'ended') {
-          journal.settled(launchId, {}, project)
-          continue
-        }
-        // A record in the database is handled by the normal recovery (its proof ends the witness).
-        if (this.recordOf(runId)) continue
-        // The routing and the group's members seen so far were kept beside the journal (outside the restorable home).
-        const witness = readFallbackWitness(journal.journal.dir, launchId)
-        const members = (witness?.members ?? []).map((m) => ({ pid: m.pid, startTime: m.start }))
-        const identity = /^process-group:(.*)$/.exec(l.state.cgroup ?? '')?.[1]
-        const parsed = identity
-          ? z
-              .object({ pid: z.int(), start: z.string().nullable(), boot: z.string().nullable() })
-              .safeParse(JSON.parse(identity))
-          : undefined
-        const leader = parsed?.success
-          ? parsed.data
-          : members[0]
-            ? { pid: members[0].pid, start: members[0].startTime, boot: bootId() }
-            : null
-        // Released, and neither the leader's identity nor any member was ever recorded (a crash right after the release):
-        // the CLI may be running and there is nothing to signal. The launch stays unresolved and the agent is fenced,
-        // releasable by the person (who then waives it).
-        if (!leader) {
-          this.fenceUnattributable(runId, 0, null, true)
-          continue
-        }
-        const outcome = await this.stopGroup(
-          {
-            run_id: runId,
-            pid: leader.pid,
-            pgid: leader.pid,
-            start_time: leader.start,
-            boot_id: leader.boot,
-            unresolved: 1,
-            unobservable: 0,
-          },
-          members,
-        )
-        if (outcome === 'gone') {
-          journal.ended(launchId, { proof: 'process-group' }, project)
-          journal.settled(launchId, {}, project)
-        } else {
-          // Not proven gone: keep the identity where the normal machinery retries it and fences the agent.
-          this.fenceUnattributable(runId, leader.pid, leader, outcome === 'unobservable')
-          void this.reapInBackground(runId, members)
-        }
-      } catch (error) {
-        this.deps.onError?.(error)
-      }
-    }
-  }
-
-  /**
-   * Records an unresolved group in the database where the normal machinery retries it and the agent is fenced. The run
-   * row may be missing (a restored older database): `hasUnresolvedGroup` and the held-groups list then count the group
-   * against every agent, since the journal alone can't say whose it was (review 2026-10-12 #6).
-   */
-  private fenceUnattributable(
-    runId: string,
-    pid: number,
-    leader: { start: string | null; boot: string | null } | null,
-    unobservable: boolean,
-  ): void {
-    this.deps.db.sqlite
-      .prepare(
-        `INSERT OR IGNORE INTO coding_processes (run_id, pid, pgid, start_time, boot_id, created_at, unresolved, unobservable)
-         VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
-      )
-      .run(
-        runId,
-        pid,
-        pid,
-        leader?.start ?? null,
-        leader?.boot ?? null,
-        new Date().toISOString(),
-        unobservable ? 1 : 0,
-      )
   }
 
   /** Identities of the group's members, recorded while Score supervises it (N4). */
@@ -1637,9 +1343,7 @@ export class CodingRuntime {
       )
       .all(agentId)
       .map((row) => z.object({ run_id: z.string(), pid: z.int(), pgid: z.int() }).parse(row))
-    // The decision is journaled first and settles the fallback launch there, so a restart never stops it again; a
-    // group whose waiver can't be journaled stays (review 2026-10-12 #8).
-    const rows = candidates.filter((row) => this.waiveFallback(row.run_id, by))
+    const rows = candidates
     const units = this.deps.unit?.held(agentId).filter((held) => held.canRelease) ?? []
     if (rows.length === 0 && units.length === 0)
       throw new HttpError(
@@ -1669,26 +1373,6 @@ export class CodingRuntime {
     return rows.length + releasedUnits.length
   }
 
-  /** Waives the open fallback launches of a run in the journal; false when one can't be (then nothing is deleted). */
-  private waiveFallback(runId: string, by: string): boolean {
-    const journal = this.deps.journal
-    if (!journal) return true
-    let ok = true
-    try {
-      for (const launch of this.fallbackLaunches(runId)) {
-        const waived = journal.waive(launch.state.launchId, by, codingProjection(this.deps.db))
-        if (!waived.ok) {
-          ok = false
-          this.deps.onError?.(new Error(`waiver not journaled: ${waived.reason}`))
-        }
-      }
-    } catch (error) {
-      ok = false
-      this.deps.onError?.(error)
-    }
-    return ok
-  }
-
   async recover(): Promise<number> {
     const { db } = this.deps
     await this.commitPendingTerminals()
@@ -1713,7 +1397,6 @@ export class CodingRuntime {
           void unit!.reap(launch.launchId, this.deps.reapRetryMs)
         }
     }
-    await this.recoverFallback()
     for (const record of records) {
       const outcome = await this.stopGroup(record)
       if (outcome === 'gone') this.forgetProcess(record.run_id)
