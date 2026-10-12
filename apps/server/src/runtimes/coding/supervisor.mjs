@@ -162,7 +162,6 @@ export async function runSupervisor(spec, deps = {}) {
   let child = null
   let childExited = false
   let exitInfo = null
-  let released = false
   let survivorsKilled = false
   let escalating = false
   let lastWatchdog = now()
@@ -291,7 +290,6 @@ export async function runSupervisor(spec, deps = {}) {
         at: now(),
         supervisorPid: process.pid,
       })
-      released = true
     } catch {
       send({ t: 'error', code: 'receipt' })
       phase = 'ended'

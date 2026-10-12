@@ -129,7 +129,8 @@ export interface UnitLaunchOptions {
 const seconds = (ms: number) => `${Math.ceil(ms / 1000)}s`
 
 function assertValue(label: string, value: string, absolute = false): void {
-  if (value.length === 0 || /[\0-\x1f\x7f]/.test(value)) throw new Error(`${label}: invalid value`)
+  if (value.length === 0 || [...value].some((c) => c < ' ' || c === '\x7f'))
+    throw new Error(`${label}: invalid value`)
   if (absolute && !value.startsWith('/')) throw new Error(`${label}: must be an absolute path`)
 }
 
