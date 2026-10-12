@@ -209,13 +209,25 @@ export function createAntigravityParser(cwd?: string): LineParser {
           : undefined
         // Streamed text is the reply; only a turn that said nothing falls back to the final response or the refusal note.
         const text = spoke ? undefined : response?.trim() ? response : note
+        // 7.7a §6: SUCCESS and a non-empty response; the response wins over streamed commentary.
+        const eligible = ok && Boolean(response?.trim())
+        const verdict = eligible
+          ? { eligible: true, reply: response!, reason: null }
+          : {
+              eligible: false,
+              reply: null,
+              reason: ok
+                ? (note ?? 'Antigravity reported success without a response')
+                : `Antigravity ended with status ${status}`,
+            }
         events.push(
           ok
-            ? { kind: 'result', ok: true, ...(text ? { text } : {}) }
+            ? { kind: 'result', ok: true, ...(text ? { text } : {}), verdict }
             : {
                 kind: 'result',
                 ok: false,
                 error: response?.trim() || `Antigravity ended with status ${status}`,
+                verdict,
               },
         )
         return events

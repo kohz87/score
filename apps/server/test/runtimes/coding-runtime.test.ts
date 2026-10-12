@@ -1035,13 +1035,13 @@ test('antigravity: a turn spawns by argv with the level flags, shows tool cards 
   )
 })
 
-test('antigravity: refused actions show as a card, the turn completes, and the reply explains', async () => {
+test('antigravity: refused actions show as a card; SUCCESS without a response is no result, and the note says why (7.7a section 6)', async () => {
   setEnv('SCORE_CODING_VERIFIED_ANTIGRAVITY', 'read-only')
   await agy()
   await makeRoom()
   await say('@agy1 [fixture:denied] list the files')
   await finished()
-  expect(runs()[0]!.status).toBe('completed')
+  expect(runs()[0]!.status).toBe('failed')
   const text = JSON.stringify(replies()[0]!.parts)
   expect(text).toContain('Antigravity refused')
   expect(text).toContain('RunCommand')

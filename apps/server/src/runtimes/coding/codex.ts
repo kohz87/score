@@ -48,6 +48,11 @@ const SearchItem = z.object({ query: z.string() })
 export function createCodexParser(cwd?: string): LineParser {
   const stats = { unknown: 0, malformed: 0 }
   let spoke = false
+  // 7.7a §6: every agent_message is validated; a malformed or empty completed one invalidates authority for the turn.
+  // The reply is the last validated message before turn.completed.
+  let lastMessage: string | null = null
+  let messageInvalid = false
+  let droppedAtTurnStart = 0
   const started = new Set<string>()
   return {
     stats,
@@ -76,7 +81,27 @@ export function createCodexParser(cwd?: string): LineParser {
             inputTokens: usage.input_tokens ?? 0,
             outputTokens: usage.output_tokens ?? 0,
           })
-        events.push({ kind: 'result', ok: true })
+        // Any record dropped during the turn (unparseable line) means the stream is not whole: no authority.
+        const dropped = stats.malformed - droppedAtTurnStart
+        const eligible = !messageInvalid && lastMessage !== null && dropped === 0
+        events.push({
+          kind: 'result',
+          ok: true,
+          verdict: eligible
+            ? { eligible: true, reply: lastMessage, reason: null }
+            : {
+                eligible: false,
+                reply: null,
+                reason: messageInvalid
+                  ? 'Codex sent a message Score could not validate'
+                  : dropped > 0
+                    ? 'Score dropped a record of this turn'
+                    : 'Codex ended the turn without a final message',
+              },
+        })
+        lastMessage = null
+        messageInvalid = false
+        droppedAtTurnStart = stats.malformed
         return events
       }
       const failed = TurnFailed.safeParse(value)
@@ -86,6 +111,7 @@ export function createCodexParser(cwd?: string): LineParser {
             kind: 'result',
             ok: false,
             error: failed.data.error?.message || 'Codex reported a failed turn',
+            verdict: { eligible: false, reply: null, reason: 'Codex reported a failed turn' },
           },
         ]
       // Known, nothing to show.
@@ -99,7 +125,10 @@ export function createCodexParser(cwd?: string): LineParser {
       const phase = item.data.type
       if (type === 'agent_message') {
         const message = MessageItem.safeParse(item.data.item)
+        if (phase === 'item.completed' && (!message.success || !message.data.text.trim()))
+          messageInvalid = true
         if (phase !== 'item.completed' || !message.success || !message.data.text) return []
+        lastMessage = message.data.text
         const text = spoke ? `\n\n${message.data.text}` : message.data.text
         spoke = true
         return [{ kind: 'text', text }]

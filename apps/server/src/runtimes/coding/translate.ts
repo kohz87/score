@@ -305,6 +305,8 @@ export interface TerminalInfo {
    * stays, marked unresolved, and the run is not termination evidence.
    */
   group?: 'released' | 'unconfirmed'
+  /** The eligible authoritative reply (7.7a §6): plans and hand-offs read only this. `null` = none; absent = legacy. */
+  reply?: string | null
 }
 
 /** The run ended: record it and finish the room reply (hand-offs only after a clean finish). */
@@ -348,6 +350,7 @@ export function terminalObservation(
           handoffs: info.status === 'completed' && info.group !== 'unconfirmed',
           status: info.status,
           error: info.error ?? null,
+          ...(info.reply === undefined ? {} : { reply: info.reply }),
         }),
       ]
     },

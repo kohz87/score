@@ -70,11 +70,12 @@ test('claude: unknown shapes and malformed lines are counted and dropped, never 
 
 test('claude: an error result is a failed result with the CLI’s message', () => {
   const events = parseAll(createClaudeParser(), 'claude-error')
-  expect(events.at(-1)).toEqual({
+  expect(events.at(-1)).toMatchObject({
     kind: 'result',
     ok: false,
     text: 'The model request failed',
     error: 'The model request failed',
+    verdict: { eligible: false, reply: null },
   })
 })
 
@@ -291,7 +292,7 @@ test('antigravity fixtures (recorded): a text turn becomes session, text and usa
     '\n',
   ])
   expect(events[3]).toEqual({ kind: 'usage', inputTokens: 12624, outputTokens: 1567 })
-  expect(events[4]).toEqual({ kind: 'result', ok: true })
+  expect(events[4]).toMatchObject({ kind: 'result', ok: true, verdict: { eligible: true } })
   expect(parser.stats).toEqual({ unknown: 0, malformed: 0 })
 })
 
@@ -338,7 +339,12 @@ test('antigravity: file, browser and plain tools map to frame details; unknown s
 
 test('antigravity: a failed result carries the CLI’s words, an unknown status is still a failure', () => {
   const events = parseAll(createAntigravityParser(), 'antigravity-error')
-  expect(events.at(-1)).toEqual({ kind: 'result', ok: false, error: 'The model request failed' })
+  expect(events.at(-1)).toMatchObject({
+    kind: 'result',
+    ok: false,
+    error: 'The model request failed',
+    verdict: { eligible: false },
+  })
 })
 
 test('antigravity argv per permission level; the prompt is in argv, bare slash/dash prompts are wrapped', () => {
@@ -439,4 +445,97 @@ test('antigravity: the file tools name their path by TargetFile / AbsolutePath',
   expect(parser.parse(line('view_file', { AbsolutePath: '/work/b.txt' }))[0]).toMatchObject({
     preview: '/work/b.txt',
   })
+})
+
+// ---- 7.7a design section 6: the acceptance matrix per pinned driver ----------------------------------------------
+
+const verdictOf = (events: CodingEvent[]) =>
+  (events.findLast((event) => event.kind === 'result') as Extract<CodingEvent, { kind: 'result' }>)
+    ?.verdict
+
+const claudeResult = (fields: Record<string, unknown>) =>
+  JSON.stringify({ type: 'result', ...fields })
+
+test('claude: only an explicit success with text is eligible; defaults never imply success (7.7a section 6)', () => {
+  const run = (fields: Record<string, unknown>) =>
+    verdictOf(createClaudeParser().parse(claudeResult(fields)))
+  expect(run({ subtype: 'success', is_error: false, result: 'Done.' })).toEqual({
+    eligible: true,
+    reply: 'Done.',
+    reason: null,
+  })
+  // Each default is a refusal: no subtype, no is_error, no text, empty text, an error flag, another subtype.
+  for (const fields of [
+    { is_error: false, result: 'Done.' },
+    { subtype: 'success', result: 'Done.' },
+    { subtype: 'success', is_error: false },
+    { subtype: 'success', is_error: false, result: '   ' },
+    { subtype: 'success', is_error: true, result: 'Done.' },
+    { subtype: 'error_max_turns', is_error: false, result: 'Done.' },
+  ])
+    expect(run(fields)?.eligible, JSON.stringify(fields)).toBe(false)
+})
+
+const codexLine = (value: unknown) => JSON.stringify(value)
+const agentMessage = (id: string, text: unknown, type = 'item.completed') =>
+  codexLine({ type, item: { id, type: 'agent_message', text } })
+const turnCompleted = codexLine({ type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1 } })
+
+test('codex: the reply is the last validated agent_message before turn.completed (7.7a section 6)', () => {
+  const parser = createCodexParser()
+  const events = [
+    agentMessage('m1', 'First thoughts.'),
+    agentMessage('m2', 'The final answer.'),
+    turnCompleted,
+  ].flatMap((line) => parser.parse(line))
+  expect(verdictOf(events)).toEqual({ eligible: true, reply: 'The final answer.', reason: null })
+})
+
+test('codex: a malformed or empty agent_message, a dropped record or no message at all leaves no authority', () => {
+  const run = (lines: string[]) => {
+    const parser = createCodexParser()
+    return verdictOf(lines.flatMap((line) => parser.parse(line)))
+  }
+  // A completed message with the wrong shape or no text invalidates the whole turn, even with a good one after it.
+  expect(
+    run([agentMessage('m1', 42), agentMessage('m2', 'Fine.'), turnCompleted])?.eligible,
+  ).toBe(false)
+  expect(run([agentMessage('m1', ''), agentMessage('m2', 'Fine.'), turnCompleted])?.eligible).toBe(
+    false,
+  )
+  expect(run([agentMessage('m1', '  \n'), turnCompleted])?.eligible).toBe(false)
+  // An unparseable line inside the turn is a dropped record.
+  expect(run([agentMessage('m1', 'Fine.'), 'not json at all', turnCompleted])?.eligible).toBe(false)
+  // A turn that said nothing, and a failed turn.
+  expect(run([turnCompleted])?.eligible).toBe(false)
+  expect(
+    run([agentMessage('m1', 'Fine.'), codexLine({ type: 'turn.failed', error: { message: 'x' } })])
+      ?.eligible,
+  ).toBe(false)
+  // Messages still streaming (not completed) are not validated messages.
+  expect(run([agentMessage('m1', 'Part', 'item.updated'), turnCompleted])?.eligible).toBe(false)
+})
+
+test('codex: the next turn starts clean after a malformed one', () => {
+  const parser = createCodexParser()
+  const first = ['bad', agentMessage('m1', 'A'), turnCompleted].flatMap((l) => parser.parse(l))
+  expect(verdictOf(first)?.eligible).toBe(false)
+  const second = [agentMessage('m2', 'B'), turnCompleted].flatMap((l) => parser.parse(l))
+  expect(verdictOf(second)).toMatchObject({ eligible: true, reply: 'B' })
+})
+
+test('antigravity: SUCCESS and a non-empty response are eligible, and the response wins over commentary (7.7a section 6)', () => {
+  const result = (status: string, response: string | undefined) =>
+    JSON.stringify({ event: 'result', result: { status, ...(response === undefined ? {} : { response }) } })
+  const parse = (status: string, response: string | undefined) =>
+    verdictOf(createAntigravityParser().parse(result(status, response)))
+  expect(parse('SUCCESS', 'The answer.')).toEqual({
+    eligible: true,
+    reply: 'The answer.',
+    reason: null,
+  })
+  expect(parse('SUCCESS', '   ')?.eligible).toBe(false)
+  expect(parse('SUCCESS', undefined)?.eligible).toBe(false)
+  expect(parse('ERROR', 'The answer.')?.eligible).toBe(false)
+  expect(parse('success', 'The answer.')?.eligible).toBe(false)
 })

@@ -64,11 +64,26 @@ export const CodingAgentSchema = z.object({
       pgid: z.int(),
       /** True when Score can't tell whether the processes are its own: the person may release the agent. */
       canRelease: z.boolean(),
+      /** The supervised service the run used (7.7a), when it was one; `pgid` is then 0. */
+      unit: z.string().optional(),
     }),
   ),
   createdAt: z.iso.datetime(),
 })
 export type CodingAgent = z.infer<typeof CodingAgentSchema>
+/**
+ * How coding runs are launched right now (7.7a): as supervised system services, or by the fallback that has no
+ * supervisor. `checks` is the capability check behind the choice; "Check again" reruns it.
+ */
+export const CodingBackendSchema = z.object({
+  kind: z.enum(['unit', 'process-group']),
+  /** One sentence for the coding agent card. */
+  note: z.string(),
+  checks: z.array(z.object({ name: z.string(), ok: z.boolean(), detail: z.string() })),
+  checkedAt: z.iso.datetime(),
+})
+export type CodingBackend = z.infer<typeof CodingBackendSchema>
+
 export const CodingAgentsResponseSchema = z.object({ items: z.array(CodingAgentSchema) })
 
 const NameSchema = z

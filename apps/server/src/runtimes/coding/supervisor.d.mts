@@ -46,6 +46,8 @@ export interface SupervisorDeps {
   now?: () => number
   watchdog?: () => void
   pollMs?: number
+  /** Registers the handler for systemd's stop signal; returns the detach function. Default: process SIGINT/SIGTERM. */
+  onUnitStop?: (handler: () => void) => (() => void) | void
 }
 
 export function hashSpec(spec: SupervisorSpec): string

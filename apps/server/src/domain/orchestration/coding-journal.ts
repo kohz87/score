@@ -39,8 +39,13 @@ export class CodingJournal {
   }
 
   /** `requested`: before `systemd-run`. A revoked launch can never be requested again. */
-  requestLaunch(identity: CodingIdentity, project?: Projection): CodingResult {
-    return this.step(identity.launchId, 'launch-requested', identity, {}, project)
+  requestLaunch(
+    identity: CodingIdentity,
+    project?: Projection,
+    /** The exact unit name goes into the first record (part 3: never derived again). */
+    patch: CodingPatch = {},
+  ): CodingResult {
+    return this.step(identity.launchId, 'launch-requested', identity, patch, project)
   }
 
   /** `armed`: Score has verified the supervisor's identity (§5). */

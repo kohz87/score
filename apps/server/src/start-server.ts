@@ -23,7 +23,7 @@ import {
 import { resolveInstallation, type InstallationResult } from './installation.ts'
 import { migrateLegacyJournal } from './domain/orchestration/journal-migration.ts'
 import { Orchestrator } from './domain/orchestration/executor.ts'
-import { GlobalFenceStore } from './domain/orchestration/fence.ts'
+import { fenceItems, GlobalFenceStore, isFenced } from './domain/orchestration/fence.ts'
 import { ExecutionJournal, journalScope } from './domain/orchestration/journal.ts'
 import { retryUntilResolved } from './retry-until-resolved.ts'
 import {
@@ -69,6 +69,8 @@ import { retireIngestKeys, retireMedia } from './hub/retire.ts'
 import { restoreRoomHolds } from './domain/room-rewinding.ts'
 import { locatorForMode } from './runtimes/coding/cli.ts'
 import { CodingRuntime } from './runtimes/coding/service.ts'
+import { UnitBackend } from './runtimes/coding/unit-backend.ts'
+import { CodingJournal } from './domain/orchestration/coding-journal.ts'
 import { defaultRootPolicy } from './workspace/policy.ts'
 
 const INSECURE_FLAG_REMOVED =
@@ -351,9 +353,51 @@ export async function startServer(
     if (config.mode === 'fake' && port instanceof FakePort) attachFakeLead(port, executor)
     // Coding agents (PLAN 7.2): fake mode never starts a real CLI (see locatorForMode).
     const { hermesHome: runtimeHome } = config
+    // Supervised units (7.7a): live mode, a resolved installation and a user runtime dir. The capability check at
+    // start decides; without it the process-group fallback runs and says so on the coding agent card.
+    const runtimeDir = process.env.XDG_RUNTIME_DIR
+    const unit =
+      config.mode === 'live' &&
+      installation?.ok &&
+      installationBlock === null &&
+      runtimeDir &&
+      process.env.SCORE_CODING_BACKEND !== 'process-group'
+        ? new UnitBackend({
+            db: database,
+            journal: new CodingJournal(journal),
+            installationId: installation.id,
+            namespaceDir: installation.namespaceDir,
+            runtimeDir,
+            home: homedir(),
+            blocked: () =>
+              database.read((sqlite) =>
+                isFenced(sqlite) && fenceItems(sqlite).some((item) => item.ref.startsWith('coding'))
+                  ? 'Score is waiting for you to review the coding journal before it starts coding runs.'
+                  : null,
+              ),
+            onError: (error) => app?.log.error({ err: error }, 'Coding unit backend failed'),
+          })
+        : undefined
+    if (unit) {
+      const status = await unit.start()
+      process.stderr.write(
+        `Coding runs: ${status.kind === 'unit' ? 'supervised system services' : `process-group fallback (${status.checks.filter((c) => !c.ok).map((c) => c.detail).join('; ')})`}\n`,
+      )
+    }
     coding = new CodingRuntime({
       db: database,
       ingest,
+      ...(unit ? { unit } : {}),
+      onOrphans: (names) =>
+        fenceStore.set(
+          'A coding service Score can’t account for is running',
+          names.map((name) => ({
+            kind: 'journal' as const,
+            ref: `coding-unit:${name}`,
+            journalN: null,
+            detail: `The service ${name} carries this installation’s prefix but no journal launch owns it.`,
+          })),
+        ),
       locator: locatorForMode(config.mode, process.env),
       home: config.home,
       policy: defaultRootPolicy([config.home, resolveHermesHome(runtimeHome), resolveHermesHome()]),

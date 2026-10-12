@@ -125,10 +125,10 @@ test('unit names are validated; arguments with control characters or relative pa
   expect(() => buildSystemRun({ ...base, home: 'relative' })).toThrow()
   expect(() => buildSystemRun({ ...base, spec: '/a\nb' })).toThrow()
   expect(unitNameFor('0123456789abcdef', 'LAUNCH-1_x')).toBe(
-    'score-coding-01234567-LAUNCH1x.service',
+    'score-01234567-c-LAUNCH1x.service',
   )
-  expect(hasInstallationPrefix('score-coding-01234567-a.service', '0123456789abcdef')).toBe(true)
-  expect(hasInstallationPrefix('score-coding-99999999-a.service', '0123456789abcdef')).toBe(false)
+  expect(hasInstallationPrefix('score-01234567-c-a.service', '0123456789abcdef')).toBe(true)
+  expect(hasInstallationPrefix('score-99999999-c-a.service', '0123456789abcdef')).toBe(false)
 })
 
 test('systemctl show output is parsed into unit state; Job marks a pending job', () => {

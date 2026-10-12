@@ -68,11 +68,17 @@ export function readCheckpoint(sqlite: DatabaseSync): number {
 }
 
 /** The projection `CodingJournal` calls inside its critical section: the launch row and the checkpoint, one commit. */
-export function codingProjection(db: ScoreDb, clock: () => number = Date.now): Projection {
+export function codingProjection(
+  db: ScoreDb,
+  clock: () => number = Date.now,
+  /** Extra columns the caller keeps beside the journal's state (part 3), written in the same commit. */
+  extra?: (sqlite: DatabaseSync, state: CodingState) => void,
+): Projection {
   return (entry: JournalEntry, state: CodingState) => {
     const now = new Date(clock()).toISOString()
     db.tx((sqlite) => {
       upsertLaunch(sqlite, { state, kind: kindOf(entry), n: entry.n }, now)
+      extra?.(sqlite, state)
       sqlite
         .prepare(
           'UPDATE coding_journal_checkpoint SET seq = MAX(seq, ?), updated_at = ? WHERE id = 1',

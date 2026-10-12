@@ -16,6 +16,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  unlinkSync,
   writeFileSync,
   writeSync,
 } from 'node:fs'
@@ -179,8 +180,7 @@ export async function runSupervisor(spec, deps = {}) {
     if (finished) return
     finished = true
     clearInterval(timer)
-    process.off('SIGINT', onSignal)
-    process.off('SIGTERM', onSignal)
+    detachSignals()
     sock.destroy()
     resolveDone(code)
   }
@@ -233,8 +233,18 @@ export async function runSupervisor(spec, deps = {}) {
   }
 
   const onSignal = () => requestStop('unit-stop')
-  process.on('SIGINT', onSignal)
-  process.on('SIGTERM', onSignal)
+  // systemd's stop reaches the supervisor as SIGINT (KillMode=mixed). `deps.onUnitStop` replaces the process signals
+  // in tests that run the supervisor inside the test process.
+  const detachSignals = deps.onUnitStop
+    ? (deps.onUnitStop(onSignal) ?? (() => undefined))
+    : (() => {
+        process.on('SIGINT', onSignal)
+        process.on('SIGTERM', onSignal)
+        return () => {
+          process.off('SIGINT', onSignal)
+          process.off('SIGTERM', onSignal)
+        }
+      })()
 
   // ---- output
   const pauseOutput = () => {
@@ -539,6 +549,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     spec = loadSpec(process.argv[2])
   } catch {
     process.exit(EXIT.badSpec)
+  }
+  // The spec holds the single-use token: delete it right after reading, before `hello` (lead answer, part 3). Score
+  // deletes it again on `ready` or settlement as a backstop.
+  try {
+    unlinkSync(process.argv[2])
+  } catch {
+    // Score's backstop removes it
   }
   runSupervisor(spec).then(
     (code) => process.exit(code),

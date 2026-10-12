@@ -200,8 +200,23 @@ export function createClaudeParser(cwd?: string): LineParser {
         }
         const failed =
           result.data.is_error === true || (result.data.subtype ?? 'success') !== 'success'
+        // 7.7a §6: explicit success only. A missing subtype or is_error never implies it, and the reply must be text.
+        const explicit =
+          result.data.subtype === 'success' &&
+          result.data.is_error === false &&
+          typeof result.data.result === 'string' &&
+          result.data.result.trim().length > 0
         events.push({
           kind: 'result',
+          verdict: explicit
+            ? { eligible: true, reply: result.data.result!, reason: null }
+            : {
+                eligible: false,
+                reply: null,
+                reason: failed
+                  ? 'Claude Code reported an error'
+                  : 'Claude Code did not report an explicit success with text',
+              },
           ok: !failed,
           ...(result.data.result ? { text: result.data.result } : {}),
           ...(failed

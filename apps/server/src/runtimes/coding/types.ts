@@ -20,7 +20,25 @@ export type CodingEvent =
     }
   | { kind: 'tool_end'; callId: string; ok: boolean; preview: string; exitCode?: number | null }
   | { kind: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number }
-  | { kind: 'result'; ok: boolean; text?: string; error?: string }
+  | {
+      kind: 'result'
+      ok: boolean
+      text?: string
+      error?: string
+      /**
+       * The pinned driver's acceptance rule (7.7a §6): whether this result may be used at all and which text is the
+       * authoritative reply. Absent = not eligible (defaults never imply success).
+       */
+      verdict?: ResultVerdict
+    }
+
+export interface ResultVerdict {
+  eligible: boolean
+  /** The authoritative reply when eligible. */
+  reply: string | null
+  /** Why not, when not eligible. */
+  reason: string | null
+}
 
 export type ToolDetail =
   | { type: 'command'; command: string; cwd?: string }
