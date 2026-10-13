@@ -574,3 +574,28 @@ test('FT #2: a database with no execution state at all still adopts the generati
   expect(next.executionFrozen()).toBeNull()
   database.close()
 })
+
+test('FT #4: reset retires active replies, live run rows, their pending approvals and every unfinished approval delivery', () => {
+  const dir = join(root, 'retire-all')
+  mkdirSync(dir)
+  const { database } = fenceOf(dir, 'ns-id')
+  const sqlite = database.sqlite
+  sqlite.exec('PRAGMA foreign_keys = OFF')
+  sqlite.exec(`
+    INSERT INTO runs (id, profile, origin, status, started_at, updated_at) VALUES ('run-1', 'builder', 'score', 'running', 'x', 'x');
+    INSERT INTO message_runs (message_id, run_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, state, created_at)
+      VALUES ('m1', 'run-1', 'r1', 'builder', 'm0', 0, 'turn-1', 'm0', 'go', '[]', 'active', 'x');
+    INSERT INTO approval_deliveries (id, approval_id, choice, route, state, lease_id, lease_until, created_at, updated_at)
+      VALUES ('d1', 'ap1', 'once', 'bridge', 'delivering', 'l1', 9999999999999, 'x', 'x'),
+             ('d2', 'ap2', 'once', 'bridge', 'intent', NULL, NULL, 'x', 'x'),
+             ('d3', 'ap3', 'once', 'port', 'applied', NULL, NULL, 'x', 'x');`)
+  resetDatabaseHistory(sqlite, new Date().toISOString())
+  expect(sqlite.prepare('SELECT state FROM message_runs').all()).toEqual([{ state: 'failed' }])
+  expect(sqlite.prepare('SELECT status FROM runs').all()).toEqual([{ status: 'interrupted' }])
+  expect(sqlite.prepare('SELECT id, state FROM approval_deliveries ORDER BY id').all()).toEqual([
+    { id: 'd1', state: 'failed' },
+    { id: 'd2', state: 'failed' },
+    { id: 'd3', state: 'applied' },
+  ])
+  database.close()
+})

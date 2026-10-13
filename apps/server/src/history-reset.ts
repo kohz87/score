@@ -284,13 +284,49 @@ export function resetDatabaseHistory(
           .prepare("UPDATE command_intents SET stop_state = 'done' WHERE stop_state = 'pending'")
           .run()
     }
-    // Chat replies that were queued (or admitted without a run) are never dispatched: the dispatcher only picks `pending`.
-    if (has('message_runs'))
+    // Every unfinished chat reply, also an active one that already has a run: its bubble stops streaming and it can never
+    // route a hand-off, accept late output as work or take a Stop (re-review 6 #3). Late evidence may still be shown as
+    // history, but completeRunMessage and the dispatcher only act on `pending`/`active` replies.
+    if (has('message_runs')) {
+      if (has('messages'))
+        sqlite
+          .prepare(
+            `UPDATE messages SET streaming = 0
+             WHERE id IN (SELECT message_id FROM message_runs WHERE state IN ('pending', 'active'))`,
+          )
+          .run()
+      sqlite
+        .prepare(`UPDATE message_runs SET state = 'failed' WHERE state IN ('pending', 'active')`)
+        .run()
+    }
+    // The run rows are the handles Stop, the follower, recovery and approvals look up: a retired run has none.
+    if (has('runs')) {
+      if (has('approvals'))
+        sqlite
+          .prepare(
+            `UPDATE approvals SET phase = 'withdrawn', status = 'withdrawn', closed_reason = 'run_ended', closed_at = ?,
+               updated_at = ?, version = version + 1
+             WHERE phase IN ('guardian_evaluating', 'escalated', 'human_pending')
+               AND run_id IN (SELECT id FROM runs WHERE status IN ('queued', 'running', 'waiting_for_approval'))`,
+          )
+          .run(nowIso, nowIso)
       sqlite
         .prepare(
-          `UPDATE message_runs SET state = 'failed' WHERE state = 'pending' OR (state = 'active' AND run_id IS NULL)`,
+          `UPDATE runs SET status = 'interrupted', ended_at = COALESCE(ended_at, ?), error = COALESCE(error, ?),
+             updated_at = ?, version = version + 1
+           WHERE status IN ('queued', 'running', 'waiting_for_approval')`,
         )
-        .run()
+        .run(nowIso, 'history_reset', nowIso)
+    }
+    // Decisions still owed to a run: never leased, retried or acknowledged as work again.
+    if (has('approval_deliveries'))
+      sqlite
+        .prepare(
+          `UPDATE approval_deliveries SET state = 'failed', error = 'history_reset', lease_until = NULL,
+             next_attempt_at = NULL, updated_at = ?
+           WHERE state IN ('intent', 'delivering', 'unknown')`,
+        )
+        .run(nowIso)
     for (const table of ['coding_processes', 'coding_process_members', 'coding_pending_terminals'])
       if (has(table))
         result.processes += Number(sqlite.prepare(`DELETE FROM ${table}`).run().changes)
