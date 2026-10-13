@@ -1,5 +1,7 @@
 import { z } from 'zod'
+import { join } from 'node:path'
 import { boundId, MAX_REPLY_BYTES, rememberId, withBounds } from './note.ts'
+import { inChain } from './worker-sources.ts'
 import type { CodingDriver, CodingEvent, DriverRunOptions, LineParser } from './types.ts'
 
 // Codex CLI, headless: `codex exec --json`. Event shapes follow OpenAI's documented JSONL stream
@@ -381,6 +383,8 @@ export const codexDriver: CodingDriver = {
       'exec',
       '--json',
       '--skip-git-repo-check',
+      // A worker reads neither the person's own config.toml nor their execution rules (7.7b §3).
+      ...(options.worker ? ['--ignore-user-config', '--ignore-rules'] : []),
       '-s',
       sandbox,
       '-C',
@@ -391,6 +395,51 @@ export const codexDriver: CodingDriver = {
     if (options.model) args.push('-m', options.model)
     args.push('-')
     return args
+  },
+  worker: {
+    // Checked against `codex exec --help` of 0.160.1 (the installed and pinned CLI, 2026-10-13).
+    versions: ['0.160.1'],
+    neutralised: [
+      {
+        source: 'the user’s $CODEX_HOME/config.toml',
+        flag: '--ignore-user-config',
+        evidence:
+          '"--ignore-user-config  Do not load `$CODEX_HOME/config.toml`; auth still uses `CODEX_HOME`"',
+      },
+      {
+        source: 'execution rules (.rules files, user and project)',
+        flag: '--ignore-rules',
+        evidence: '"--ignore-rules  Do not load user or project execpolicy `.rules` files"',
+      },
+    ],
+    // The help documents no switch for the project's .codex/ folder, managed config or AGENTS.md files: bound by identity.
+    bound: ({ home, workspace, env }) => {
+      const codexHome = env['CODEX_HOME'] ?? join(home, '.codex')
+      return [
+        join(codexHome, 'config.toml'),
+        join(codexHome, 'AGENTS.md'),
+        join(codexHome, 'AGENTS.override.md'),
+        join(codexHome, 'rules'),
+        ...inChain(workspace, '.codex', 'config.toml'),
+        ...inChain(workspace, '.codex', 'hooks.json'),
+        ...inChain(workspace, '.codex', 'rules'),
+        ...inChain(workspace, 'AGENTS.md'),
+        ...inChain(workspace, 'AGENTS.override.md'),
+        '/etc/codex/config.toml',
+        '/etc/codex/managed_config.toml',
+        '/etc/codex/requirements.toml',
+      ]
+    },
+    reach: (permission, workspace) =>
+      permission === 'read-only'
+        ? {
+            text: `Reads any file you can read, not only the ones in ${workspace}. It can’t change files.`,
+            beyondWorkspace: true,
+          }
+        : {
+            text: `Reads any file you can read, not only the ones in ${workspace}, and changes files only inside ${workspace} and temporary folders.`,
+            beyondWorkspace: true,
+          },
   },
   createParser: (options) => createCodexParser(options.cwd),
 }

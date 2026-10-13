@@ -26,6 +26,8 @@ export const ORCH_LIMITS = {
   maxLeadTurns: 40,
   maxConcurrentSteps: 3,
   maxAllowedAgents: 8,
+  /** How many coding launches one run may release (7.7b §8); the default is `ORCH_DEFAULTS.codingSteps`. */
+  maxCodingSteps: 100,
   /** Per run: steps × this + lead turns × this + `controlReserveBytes` for Stop and obligation records. */
   storagePerItemBytes: 64 * 1024,
   /** Per item: receipts, transitions, gates, associations and replay records the item can cause. */
@@ -46,6 +48,7 @@ export const ORCH_DEFAULTS = {
   maxConcurrentSteps: 2,
   leadTurnEstimateUsd: 0.25,
   stepEstimateUsd: 0.5,
+  codingSteps: 10,
 } as const
 
 /** `orc_` + 43 base64url characters: a per-turn bearer capability, distinct from `scm_` MCP tokens. */
@@ -120,6 +123,33 @@ export type AttemptState = z.infer<typeof AttemptStateSchema>
 export const OwnershipStateSchema = z.enum(['owned', 'draining', 'released'])
 export type OwnershipState = z.infer<typeof OwnershipStateSchema>
 
+/** The id of a coding worker's policy: the sha-256 of its canonical JSON (7.7b §3). */
+export const PolicyIdSchema = z.string().regex(/^[0-9a-f]{64}$/)
+
+/** Where a cost comes from. An unknown cost is tracked, and accepted, per source (7.7b §8). */
+export const CostSourceSchema = z.enum(['hermes', 'claude-code', 'codex'])
+export type CostSource = z.infer<typeof CostSourceSchema>
+
+/** Whether a coding agent can take a step now. `changed` is for a started run whose agent no longer matches its policy. */
+export const WorkerReadinessSchema = z.enum([
+  'ready',
+  'not_installed',
+  'version_untested',
+  'level_unverified',
+  'reach_unverifiable',
+  'changed',
+  'paused',
+  'frozen',
+  'needs_units',
+])
+export type WorkerReadiness = z.infer<typeof WorkerReadinessSchema>
+
+/** "I accept what these workers can reach": the policy ids the person saw (an old acknowledgement never carries over). */
+export const CodingReachAcknowledgementSchema = z
+  .object({ policyIds: z.array(PolicyIdSchema).max(ORCH_LIMITS.maxAllowedAgents) })
+  .strict()
+export type CodingReachAcknowledgement = z.infer<typeof CodingReachAcknowledgementSchema>
+
 const goal = z
   .string()
   .min(1)
@@ -147,6 +177,14 @@ export const OrchestrationCreateSchema = z
     stepEstimateUsd: z.number().positive().max(1000).default(ORCH_DEFAULTS.stepEstimateUsd),
     /** Must be exactly `ORCH_ACKNOWLEDGEMENT_TEXT`; recorded on the run. */
     acknowledgement: z.object({ text: z.literal(ORCH_ACKNOWLEDGEMENT_TEXT) }),
+    /** 7.7b: the policy id the person saw for each coding worker among `allowedAgents` (`409 policy_changed` otherwise). */
+    codingPolicies: z.record(AgentIdSchema, PolicyIdSchema).optional(),
+    /** 7.7b: required for every worker whose reach goes beyond its workspace. */
+    acknowledgeCodingReach: CodingReachAcknowledgementSchema.optional(),
+    /** 7.7b: sources whose unknown cost the person accepts from the start. */
+    acceptUnknownCost: z.array(CostSourceSchema).max(3).optional(),
+    /** 7.7b: how many coding launches the run may release. */
+    codingSteps: z.int().min(1).max(ORCH_LIMITS.maxCodingSteps).optional(),
   })
   .strict()
 export type OrchestrationCreate = z.infer<typeof OrchestrationCreateSchema>
@@ -170,9 +208,26 @@ export const PreflightCheckSchema = z.object({
 })
 export type PreflightCheck = z.infer<typeof PreflightCheckSchema>
 
+/** What preflight says about one coding worker (7.7b §3). The policy id is what `POST /api/orchestrations` must echo. */
+export const CodingWorkerPreflightSchema = z.object({
+  agentId: AgentIdSchema,
+  runtime: z.enum(['claude-code', 'codex']),
+  readiness: WorkerReadinessSchema,
+  /** Why it isn't ready, in a sentence; null when it is. */
+  detail: z.string().nullable(),
+  policyId: PolicyIdSchema.nullable(),
+  /** What the worker can reach, in plain words; null when no policy could be computed. */
+  reach: z.string().nullable(),
+  /** True when the reach goes beyond the worker's workspace: the person has to acknowledge it. */
+  reachBeyondWorkspace: z.boolean(),
+})
+export type CodingWorkerPreflight = z.infer<typeof CodingWorkerPreflightSchema>
+
 export const PreflightSchema = z.object({
   ok: z.boolean(),
   checks: z.array(PreflightCheckSchema),
+  /** One entry per coding worker among the step agents; empty for a run with Hermes agents only. */
+  workers: z.array(CodingWorkerPreflightSchema),
   gatePolicyNotes: z.object({
     'every-step': z.string(),
     'lead-asks': z.string(),
@@ -185,6 +240,7 @@ export const PreflightSchema = z.object({
     maxConcurrentSteps: z.int(),
     leadTurnEstimateUsd: z.number(),
     stepEstimateUsd: z.number(),
+    codingSteps: z.int(),
   }),
   reserveBytes: z.int().nonnegative(),
 })
@@ -262,6 +318,8 @@ export const GateViewSchema = z.object({
     estimateUsd: z.number(),
     /** Result revisions of the dependencies the lead saw when it assigned the step. */
     dependencyRevisions: z.record(z.string(), z.int().nonnegative()),
+    /** 7.7b: a coding worker's policy id when the gate was opened; an approval never covers another policy. */
+    policyId: PolicyIdSchema.optional(),
   }),
   payloadHash: z.string(),
   revision: z.int().positive(),
@@ -290,6 +348,16 @@ export const NeedsYouSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('unknown'), attemptId: z.string() }),
   z.object({ kind: z.literal('cancel_fence'), stepId: z.string(), attemptId: z.string() }),
   z.object({ kind: z.literal('fence'), reason: z.string() }),
+  /** 7.7b: a coding worker's settings changed since the run was approved; "Use the new settings" is a policy-only remap. */
+  z.object({
+    kind: z.literal('policy_changed'),
+    stepId: z.string(),
+    agentId: AgentIdSchema,
+    /** The worker's policy id now, or null when it isn't ready. */
+    currentPolicyId: PolicyIdSchema.nullable(),
+  }),
+  /** 7.7b: the run reached its coding step limit; raising `codingSteps` lets the blocked step go on. */
+  z.object({ kind: z.literal('coding_limit'), stepId: z.string() }),
   /** An agent was replaced after the run started: the run keeps working with the agent it was started with. */
   z.object({
     kind: z.literal('remap'),
@@ -364,6 +432,22 @@ export const OrchestrationDetailSchema = OrchestrationSummarySchema.extend({
   acknowledgedAt: z.iso.datetime(),
   endReason: z.string().nullable(),
   storage: z.object({ reserveBytes: z.int(), storedBytes: z.int() }),
+  /** 7.7b: the run's coding limits and the policy each coding worker was approved with. */
+  coding: z
+    .object({
+      stepLimit: z.int().positive(),
+      acceptedUnknownCost: z.array(CostSourceSchema),
+      workers: z.array(
+        z.object({
+          agentId: AgentIdSchema,
+          runtime: z.enum(['claude-code', 'codex']),
+          policyId: PolicyIdSchema,
+          reach: z.string(),
+          reachBeyondWorkspace: z.boolean(),
+        }),
+      ),
+    })
+    .optional(),
 })
 export type OrchestrationDetail = z.infer<typeof OrchestrationDetailSchema>
 
@@ -428,12 +512,26 @@ export const LimitsDecisionSchema = z
     deadlineAt: z.iso.datetime().nullable().optional(),
     /** Continue although spend is unknown (otherwise unknown spend keeps the run paused). */
     acceptUnknownSpend: z.boolean().optional(),
+    /** 7.7b: raise or lower how many coding launches the run may release. */
+    codingSteps: z.int().min(1).max(ORCH_LIMITS.maxCodingSteps).optional(),
+    /** 7.7b: accept (or stop accepting) unknown cost for single sources. */
+    acceptUnknownCost: z
+      .object({
+        add: z.array(CostSourceSchema).max(3).optional(),
+        remove: z.array(CostSourceSchema).max(3).optional(),
+      })
+      .strict()
+      .optional(),
     orchestrationRevision: revision,
   })
   .strict()
   .refine(
     (v) =>
-      v.budgetUsd !== undefined || v.deadlineAt !== undefined || v.acceptUnknownSpend !== undefined,
+      v.budgetUsd !== undefined ||
+      v.deadlineAt !== undefined ||
+      v.acceptUnknownSpend !== undefined ||
+      v.codingSteps !== undefined ||
+      v.acceptUnknownCost !== undefined,
   )
 export type LimitsDecision = z.infer<typeof LimitsDecisionSchema>
 
@@ -454,9 +552,23 @@ export const RemapDecisionSchema = z
     currentIncarnation: z.string().min(1),
     orchestrationRevision: revision,
     acknowledge: z.literal(true),
+    /** 7.7b: for a coding worker, the new agent's policy id and the acknowledgement of its reach. */
+    policyId: PolicyIdSchema.optional(),
+    acknowledgeCodingReach: CodingReachAcknowledgementSchema.optional(),
   })
   .strict()
 export type RemapDecision = z.infer<typeof RemapDecisionSchema>
+
+/** 7.7b §12a: "Use the new settings" for a step blocked `agent_changed`: the same agent, a new policy id. */
+export const PolicyRemapDecisionSchema = z
+  .object({
+    agentId: AgentIdSchema,
+    policyId: PolicyIdSchema,
+    acknowledgeCodingReach: CodingReachAcknowledgementSchema.optional(),
+    orchestrationRevision: revision,
+  })
+  .strict()
+export type PolicyRemapDecision = z.infer<typeof PolicyRemapDecisionSchema>
 
 export const AbandonDecisionSchema = z
   .object({

@@ -1,6 +1,8 @@
 import { withBounds } from './note.ts'
 import { z } from 'zod'
 import { redact } from '../../redact.ts'
+import { join } from 'node:path'
+import { inChain } from './worker-sources.ts'
 import type {
   CodingDriver,
   CodingEvent,
@@ -376,10 +378,50 @@ export const claudeDriver: CodingDriver = {
         break
     }
     if (options.settingsPath) args.push('--settings', options.settingsPath)
+    // A worker uses no MCP server the person configured for their own sessions (7.7b §3).
+    if (options.worker) args.push('--strict-mcp-config')
     args.push('--disallowed-tools', claudeDenyRules(options.denyPaths, options.denyFiles).join(','))
     if (options.model) args.push('--model', options.model)
     if (options.sessionId) args.push('--resume', options.sessionId)
     return args
+  },
+  worker: {
+    // Checked against `claude --help` of 2.1.296 (the installed CLI, 2026-10-13); 2.1.295 is the pinned test version.
+    versions: ['2.1.295', '2.1.296'],
+    neutralised: [
+      {
+        source: 'MCP servers (user, project, local and managed)',
+        flag: '--strict-mcp-config',
+        evidence:
+          '"--strict-mcp-config  Only use MCP servers from --mcp-config, ignoring all other MCP configurations" (no --mcp-config is passed)',
+      },
+    ],
+    // `--setting-sources` is documented ("Comma-separated list of setting sources to load (user, project, local)"), but the
+    // help does not say what an empty list does, so the settings sources are bound by identity instead of switched off.
+    bound: ({ home, workspace, env }) => {
+      const config = env['CLAUDE_CONFIG_DIR'] ?? join(home, '.claude')
+      return [
+        join(config, 'settings.json'),
+        join(config, 'CLAUDE.md'),
+        ...inChain(workspace, '.claude', 'settings.json'),
+        ...inChain(workspace, '.claude', 'settings.local.json'),
+        ...inChain(workspace, 'CLAUDE.md'),
+        ...inChain(workspace, 'CLAUDE.local.md'),
+        ...inChain(workspace, '.claude', 'CLAUDE.md'),
+        '/etc/claude-code/managed-settings.json',
+        '/etc/claude-code/CLAUDE.md',
+      ]
+    },
+    reach: (permission, workspace) =>
+      permission === 'read-only'
+        ? {
+            text: `Reads files in ${workspace}. It can’t change files, run commands or use the network.`,
+            beyondWorkspace: false,
+          }
+        : {
+            text: `Reads and edits files in ${workspace}, and runs read-only git commands and ls there. Anything else it tries is refused.`,
+            beyondWorkspace: false,
+          },
   },
   createParser: (options) => createClaudeParser(options.cwd),
   settingsFile(denyPaths, denyFiles) {
