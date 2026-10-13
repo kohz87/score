@@ -390,11 +390,18 @@ export function unjournaledAttempts(
   const resetAt = foldHistory(entries, scope).resetAt
   const rows = sqlite
     .prepare(
-      `SELECT id, created_at FROM orc_attempts WHERE dispatch_generation > 0 AND unknown_reason IS NOT 'history_reset'`,
+      `SELECT id, created_at, dispatch_generation FROM orc_attempts WHERE dispatch_generation > 0 AND unknown_reason IS NOT 'history_reset'`,
     )
-    .all() as { id: string; created_at: string }[]
+    .all() as { id: string; created_at: string; dispatch_generation: number }[]
+  // The journal is written before the database commits a dispatch, so it can never hold an older generation of an
+  // attempt than the database does: a surviving older word (a refusal, an earlier send) is a truncated journal, not a
+  // match (re-review 6 #7). A generation of 0 is a tombstone that kept no number.
+  const lostWitness = (row: { id: string; dispatch_generation: number }): boolean => {
+    const witness = known.get(row.id)
+    return !witness || (witness.generation > 0 && witness.generation < row.dispatch_generation)
+  }
   return rows
-    .filter((row) => !known.has(row.id) && (resetAt === null || row.created_at >= resetAt))
+    .filter((row) => lostWitness(row) && (resetAt === null || row.created_at >= resetAt))
     .slice(0, 20)
     .map((row) => ({
       kind: 'attempt' as const,
@@ -487,6 +494,9 @@ export class GlobalFenceStore {
   }
 
   /** The installation registry says this home is a copy of another installation (until its history is reset). */
+  /** Set once the journal file has been seen: its later absence is a loss, never a fresh namespace. */
+  private journalSeen = false
+
   private copiedFrom: string | undefined
   setCopiedFrom(id: string | undefined): void {
     this.copiedFrom = id
@@ -500,7 +510,16 @@ export class GlobalFenceStore {
    */
   executionFrozen(): string | null {
     if (this.hardBlock !== null) return this.hardBlock
-    return this.db.read((sqlite) => this.executionFrozenIn(sqlite))
+    const why = this.db.read((sqlite) => this.executionFrozenIn(sqlite))
+    // A journal that vanished is remembered for good, so recreating the file can't thaw it.
+    if (why !== null && this.journalSeen && this.journal.isFresh()) {
+      try {
+        this.freeze(why)
+      } catch {
+        // the predicate keeps answering from the journal's absence
+      }
+    }
+    return why
   }
 
   /**
@@ -516,6 +535,11 @@ export class GlobalFenceStore {
           { frozen_reason: string | null } | undefined
       )?.frozen_reason ?? null
     if (stored !== null) return stored
+    // An established journal that disappears while Score runs is history lost, not a fresh start (re-review 6 #7).
+    // Checked here so it precedes every dispatch decision and append that asks the predicate.
+    if (this.journal.isFresh()) {
+      if (this.journalSeen) return 'the execution journal disappeared while Score was running'
+    } else this.journalSeen = true
     const history = this.journal.historyState()
     if (!history.ok) return `the execution journal cannot be read (${history.reason})`
     return historyHold(history)

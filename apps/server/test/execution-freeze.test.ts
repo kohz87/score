@@ -599,3 +599,63 @@ test('FT #4: reset retires active replies, live run rows, their pending approval
   ])
   database.close()
 })
+
+test('FT #6: an established journal that disappears while Score runs holds all agent work, and recreating it does not thaw', () => {
+  const dir = join(root, 'vanish')
+  mkdirSync(dir)
+  const { journal, store, database } = fenceOf(dir, 'ns-id')
+  expect(store.startupCheck()).toEqual({ fenced: false, reasons: [] })
+  journal.append({
+    kind: 'send_started',
+    attemptId: 'a1',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: 1,
+  })
+  // Same server incarnation: the file was there and the predicate has seen it.
+  expect(store.executionFrozen()).toBeNull()
+  rmSync(join(dir, 'ns', JOURNAL_FILE))
+  expect(store.executionFrozenIn(database.sqlite)).toMatch(/disappeared/)
+  expect(store.executionFrozen()).toMatch(/disappeared/)
+  // The file coming back (the freeze record itself, or anything else) does not lift it.
+  expect(existsSync(join(dir, 'ns', JOURNAL_FILE))).toBe(true)
+  expect(store.executionFrozen()).toMatch(/disappeared/)
+  expect(again(dir, 'ns-id', database).executionFrozen()).toMatch(/disappeared/)
+  database.close()
+})
+
+test('FT #6: a journal truncated back to an older generation of an attempt freezes, matching the id is not enough', () => {
+  const dir = join(root, 'generation-truncated')
+  mkdirSync(dir)
+  const { journal, store, database } = fenceOf(dir, 'ns-id')
+  expect(store.startupCheck()).toEqual({ fenced: false, reasons: [] })
+  database.sqlite.exec('PRAGMA foreign_keys = OFF')
+  database.sqlite.exec(`
+    INSERT INTO orchestrations (id, title, goal, lead_agent_id, lead_incarnation, allowed_agents, room_id, brief_id,
+      gate_policy, max_steps, max_lead_turns, max_concurrent_steps, lead_turn_estimate_usd, step_estimate_usd, status,
+      acknowledgement, preflight, reserve_bytes, created_at, updated_at)
+      VALUES ('o1', 't', 'g', 'lead', 'i', '[]', 'r', 'b', 'none', 1, 1, 1, 1, 1, 'running', '{}', '{}', 0, 'x', 'x');
+    INSERT INTO orc_attempts (id, orchestration_id, kind, n, agent_id, agent_incarnation, session_id, turn_id, message_id,
+      state, input, dispatch_generation, created_at, updated_at)
+      VALUES ('att1', 'o1', 'step', 1, 'builder', 'i', 's', 'turn-att', 'm', 'running', '', 2, '2026-10-13T00:00:00.000Z', 'x');`)
+  // The journal still holds generation 1 (sent, then refused) but lost the second send.
+  journal.append({
+    kind: 'send_started',
+    attemptId: 'att1',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: 1,
+  })
+  journal.append({ kind: 'send_refused', attemptId: 'att1', orchestrationId: 'o1', generation: 1 })
+  const restart = again(dir, 'ns-id', database)
+  expect(restart.startupCheck().reasons).toContain('journal_truncated')
+  expect(restart.executionFrozen()).toMatch(/att1/)
+  // The matching generation is no loss.
+  database.sqlite.exec('UPDATE orc_attempts SET dispatch_generation = 1')
+  const clean = new GlobalFenceStore(database, new ExecutionJournal(join(dir, 'ns'), 'ns-id'))
+  database.sqlite.exec('UPDATE orc_global SET frozen_reason = NULL, fenced = 0, reason = NULL')
+  expect(clean.startupCheck().reasons).not.toContain('journal_truncated')
+  database.close()
+})
