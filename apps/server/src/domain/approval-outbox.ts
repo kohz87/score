@@ -290,6 +290,9 @@ export class ApprovalOutbox {
     await this.change((sqlite, at) => {
       const now = Date.parse(at)
       sqlite.prepare('UPDATE producers SET last_seen_at = ? WHERE id = ?').run(at, producerId)
+      // A decision leased to the plugin is an outgoing control call: while Score holds all agent work (decisions 71 and
+      // 72) nothing is leased, read under the same transaction that would issue the lease (re-review 6 #4).
+      if ((this.deps.port.executionHold?.() ?? null) !== null) return []
       // Only a producer qualified at its latest hello may receive decisions (gate review #2).
       if (
         !sqlite

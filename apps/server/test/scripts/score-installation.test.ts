@@ -1,10 +1,22 @@
 import { execFileSync, spawnSync } from 'node:child_process'
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { DatabaseSync } from 'node:sqlite'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test } from 'vitest'
+import { acquireHomeLock } from '../../src/db/lock.ts'
+import { resetHistory } from '../../src/history-reset.ts'
 import { readHomeInstallation, readRegistry, resolveInstallation } from '../../src/installation.ts'
+import { openMigrated } from '../orchestration/harness-db.ts'
 
 // `score installation …` (7.7a §2): the way a moved or copied home is confirmed.
 
@@ -79,4 +91,97 @@ test('refuses while Score runs on the home, with bad usage, and for a home with 
   })
   expect(none.status).toBe(1)
   expect(none.stderr).toContain('nothing to confirm')
+})
+
+test('FV #1: reset-history asks first, refuses while Score runs, and then retires everything and leaves a fresh journal', () => {
+  const first = resolveInstallation({ journalDir, home })
+  if (!first.ok) throw new Error(first.message)
+  const copy = join(root, 'copy')
+  cpSync(home, copy, { recursive: true })
+  execFileSync(launcher, ['installation', 'confirm-copy'], { env: envFor(copy), encoding: 'utf8' })
+  const id = readHomeInstallation(copy)
+  if (id.state !== 'ok') throw new Error('no installation file')
+  const database = openMigrated(copy)
+  database.sqlite
+    .prepare(
+      `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at)
+       VALUES ('i1', 'start_coding_run', 't1', '{}', 'pending', 'x', 'x')`,
+    )
+    .run()
+  database.sqlite.prepare("UPDATE orc_global SET frozen_reason = 'a copy', fenced = 1").run()
+  database.close()
+
+  // No terminal and no --yes: it asks, so a script can't reset by accident.
+  const asked = spawnSync(launcher, ['installation', 'reset-history'], {
+    env: envFor(copy),
+    encoding: 'utf8',
+    input: '',
+  })
+  expect(asked.status).toBe(1)
+  expect(asked.stderr).toContain('--yes')
+  writeFileSync(join(copy, 'score.pid'), String(process.pid))
+  const running = spawnSync(launcher, ['installation', 'reset-history', '--yes'], {
+    env: envFor(copy),
+    encoding: 'utf8',
+  })
+  expect(running.status).toBe(1)
+  expect(running.stderr).toContain('Score is running')
+  rmSync(join(copy, 'score.pid'))
+  // FT #3: the lock a running server really holds (<home>/score.lock) refuses the reset, with no score.pid anywhere.
+  const serverLock = acquireHomeLock(copy)
+  try {
+    expect(existsSync(join(copy, 'score.pid'))).toBe(false)
+    const locked = spawnSync(launcher, ['installation', 'reset-history', '--yes'], {
+      env: envFor(copy),
+      encoding: 'utf8',
+    })
+    expect(locked.status).toBe(1)
+    expect(locked.stderr).toContain('Another Score server')
+    expect(locked.stdout).not.toContain('History reset')
+    expect(() =>
+      resetHistory({
+        journalDir,
+        namespaceDir: join(journalDir, id.id),
+        installationId: id.id,
+        home: copy,
+        dbFile: join(copy, 'score.db'),
+      }),
+    ).toThrow(/Another Score server/)
+  } finally {
+    serverLock.release()
+  }
+  const unchanged = new DatabaseSync(join(copy, 'score.db'), { readOnly: true })
+  expect(unchanged.prepare("SELECT state FROM command_intents WHERE id = 'i1'").get()).toEqual({
+    state: 'pending',
+  })
+  unchanged.close()
+
+  const done = spawnSync(launcher, ['installation', 'reset-history', '--yes'], {
+    env: envFor(copy),
+    encoding: 'utf8',
+  })
+  expect(done.stderr).toBe('')
+  expect(done.status).toBe(0)
+  expect(done.stdout).toContain('History reset')
+  const after = new DatabaseSync(join(copy, 'score.db'), { readOnly: true })
+  expect(after.prepare("SELECT state FROM command_intents WHERE id = 'i1'").get()).toEqual({
+    state: 'failed',
+  })
+  expect(after.prepare('SELECT frozen_reason, fenced FROM orc_global').get()).toEqual({
+    frozen_reason: null,
+    fenced: 0,
+  })
+  after.close()
+  const files = readdirSync(join(journalDir, id.id))
+  expect(files.some((name) => name.startsWith('history-before-reset-'))).toBe(true)
+  expect(existsSync(join(journalDir, id.id, 'journal.ndjson'))).toBe(true)
+  // An unresolved home is not something a history reset can fix.
+  const stray = join(root, 'stray')
+  cpSync(home, stray, { recursive: true })
+  const refused = spawnSync(launcher, ['installation', 'reset-history', '--yes'], {
+    env: envFor(stray),
+    encoding: 'utf8',
+  })
+  expect(refused.status).toBe(1)
+  expect(refused.stderr).toMatch(/confirm-copy/)
 })

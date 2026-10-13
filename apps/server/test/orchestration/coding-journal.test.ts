@@ -8,6 +8,7 @@ import {
   applyCodingEvidence,
   codingProjection,
   readCheckpoint,
+  turnWitnessed,
   verifyCoding,
 } from '../../src/domain/orchestration/coding-checkpoint.ts'
 import { CodingJournal } from '../../src/domain/orchestration/coding-journal.ts'
@@ -356,4 +357,241 @@ test('coding records written by another scope are never mixed into this installa
   new CodingJournal(foreign).requestLaunch({ ...id(), launchId: 'lx' })
   expect(coding.state('lx')).toBeUndefined()
   expect(existsSync(join(dir, JOURNAL_FILE))).toBe(true)
+})
+
+test('FX3 #4: a witnessed turn is unsendable, not only its launch: no new launch for it, and its start intent is retired', () => {
+  toArmed()
+  coding.release('l1', () => true, project)
+  // Same turn, new launch id: refused at request time (and at release if a request slipped in before the witness).
+  const again = coding.requestLaunch({ ...id(1), launchId: 'l1b' }, project)
+  expect(again).toMatchObject({ ok: false, reason: 'turn_witnessed' })
+  // A database restored from before: it lost the launch row and the accepted intent, keeping only a pending one.
+  db.sqlite.exec('DELETE FROM coding_launches')
+  db.sqlite
+    .prepare(
+      `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at)
+       VALUES ('i1', 'start_coding_run', 't1', '{}', 'pending', 'x', 'x')`,
+    )
+    .run()
+  const entries = journal.readOwn()
+  if (!entries.ok) throw new Error(entries.reason)
+  applyCodingEvidence(db.sqlite, entries.entries, new Date(now).toISOString())
+  expect(
+    db.sqlite.prepare("SELECT state FROM command_intents WHERE idempotency_key = 't1'").get(),
+  ).toEqual({ state: 'failed' })
+  expect(turnWitnessed(db.sqlite, 't1')).toBe(true)
+  // And when the database lost the intent altogether, a retired one is written so admission still refuses the turn.
+  db.sqlite.exec('DELETE FROM command_intents')
+  applyCodingEvidence(db.sqlite, entries.entries, new Date(now).toISOString())
+  expect(
+    db.sqlite.prepare("SELECT state FROM command_intents WHERE idempotency_key = 't1'").get(),
+  ).toEqual({ state: 'failed' })
+  // A launch revoked before release never ran: its turn is not retired.
+  expect(coding.requestLaunch(id(2), project).ok).toBe(true)
+  expect(coding.revoke('l2', undefined, project).ok).toBe(true)
+})
+
+test('FX3 #12: reconciliation compares the full state, not the sequence number', () => {
+  toArmed()
+  coding.release('l1', () => true, project)
+  const entries = journal.readOwn()
+  if (!entries.ok) throw new Error(entries.reason)
+  expect(verifyCoding(db.sqlite, entries.entries)).toEqual([])
+  // Same record number, different content.
+  db.sqlite
+    .prepare(
+      "UPDATE coding_launches SET phase = 'armed', invocation_id = 'other', unit = 'x' WHERE launch_id = 'l1'",
+    )
+    .run()
+  const found = verifyCoding(db.sqlite, entries.entries)
+  expect(found.map((m) => m.ref)).toContain('coding:l1')
+  expect(found.map((m) => m.detail).join()).toMatch(/phase.*unit.*invocation/)
+  expect(
+    applyCodingEvidence(db.sqlite, entries.entries, new Date(now).toISOString()),
+  ).toBeGreaterThan(0)
+  expect(rowOf('l1')).toMatchObject({ phase: 'releasing', invocation_id: 'inv1', unit: 'score-u1' })
+  expect(verifyCoding(db.sqlite, entries.entries)).toEqual([])
+  // A row that is AHEAD of the journal is a divergence too (the journal lost records).
+  db.sqlite.prepare('UPDATE coding_launches SET journal_n = 99').run()
+  expect(
+    verifyCoding(db.sqlite, entries.entries)
+      .map((m) => m.detail)
+      .join(),
+  ).toMatch(/past the journal/)
+})
+
+// ---- Second fix round, FY2 ----
+
+const entriesOf = () => {
+  const read = journal.readOwn()
+  if (!read.ok) throw new Error(read.reason)
+  return read.entries
+}
+const iso = () => new Date(now).toISOString()
+
+test('FY2 #14: recordStop journals the first cause before any signal; first cause wins; the database projects it', () => {
+  toArmed()
+  coding.release('l1', () => true, project)
+  const first = coding.recordStop('l1', 'user', project)
+  expect(first).toMatchObject({ ok: true, state: { stopCause: 'user', phase: 'releasing' } })
+  // The record is already on disk when it returns (a second handle reads it).
+  const last = journalAt().readOwn()
+  expect(last.ok && last.entries.at(-1)).toMatchObject({
+    kind: 'stop-requested',
+    stopCause: 'user',
+  })
+  expect(coding.recordStop('l1', 'deadline', project)).toMatchObject({
+    ok: true,
+    state: { stopCause: 'user' },
+  })
+  expect(rowOf('l1')).toMatchObject({ stop_cause: 'user' })
+  // The phase machine is unaffected: the launch still ends and settles normally.
+  expect(coding.ended('l1', { proof: 'cgroup-empty' }, project).ok).toBe(true)
+  expect(coding.settled('l1', { disposition: 'stopped' }, project).ok).toBe(true)
+  expect(coding.recordStop('l1', 'user', project)).toMatchObject({
+    ok: false,
+    reason: 'illegal_transition',
+  })
+  expect(coding.recordStop('nope', 'user')).toMatchObject({ ok: false, reason: 'unknown_launch' })
+})
+
+test('FY2 #14: a stop cause survives a restored database and compaction; a revoked launch can still be stopped', () => {
+  toArmed()
+  coding.release('l1', () => true, project)
+  coding.recordStop('l1', 'user', project)
+  db.sqlite.exec('DELETE FROM coding_launches; UPDATE coding_journal_checkpoint SET seq = 0')
+  applyCodingEvidence(db.sqlite, entriesOf(), iso())
+  expect(rowOf('l1')).toMatchObject({ stop_cause: 'user' })
+  journal.compact(() => true)
+  const folded = coding.state('l1')!
+  expect(folded.state.stopCause).toBe('user')
+  expect(folded.kind).toBe('releasing') // the annotation did not change the phase kind
+  expect(coding.ended('l1', { proof: 'cgroup-empty' }, project).ok).toBe(true)
+  // Revoked before release: stoppable, never releasable.
+  expect(coding.requestLaunch(id(2), project).ok).toBe(true)
+  expect(coding.revoke('l2', undefined, project).ok).toBe(true)
+  expect(coding.recordStop('l2', 'user', project).ok).toBe(true)
+  expect(coding.release('l2', () => true, project)).toMatchObject({ ok: false, reason: 'revoked' })
+})
+
+test('FY2 #8: waive settles the launch for good, in one critical section, and survives compaction', () => {
+  toArmed()
+  coding.release('l1', () => true, project)
+  const waived = coding.waive('l1', 'person', project)
+  expect(waived).toMatchObject({
+    ok: true,
+    state: { phase: 'settled', disposition: 'waived', waiver: true, waivedBy: 'person' },
+  })
+  expect(rowOf('l1')).toMatchObject({
+    phase: 'settled',
+    disposition: 'waived',
+    waiver: 1,
+    unsendable: 1,
+  })
+  // Nothing acts on it again.
+  for (const attempt of [
+    coding.recordStop('l1', 'user'),
+    coding.ended('l1', { proof: 'x' }),
+    coding.settled('l1', {}),
+    coding.waive('l1', 'again'),
+  ])
+    expect(attempt).toMatchObject({ ok: false, reason: 'illegal_transition' })
+  journal.compact(() => true)
+  expect(entriesOf().at(-1)).toMatchObject({ kind: 'coding-tombstone', of: 'waived' })
+  expect(coding.state('l1')!.state).toMatchObject({ disposition: 'waived', waiver: true })
+  // A database that lost the waiver is repaired from the journal (equal record number, different state).
+  db.sqlite
+    .prepare("UPDATE coding_launches SET waiver = 0, disposition = NULL WHERE launch_id = 'l1'")
+    .run()
+  expect(verifyCoding(db.sqlite, entriesOf()).map((m) => m.ref)).toContain('coding:l1')
+  applyCodingEvidence(db.sqlite, entriesOf(), iso())
+  expect(rowOf('l1')).toMatchObject({ waiver: 1, disposition: 'waived' })
+})
+
+function inheritedJournal() {
+  // The records of another installation, rewritten under this scope the way confirm-copy writes them.
+  const other = new CodingJournal(new ExecutionJournal(join(tmp.dir, 'src'), 'inst-src', clock))
+  other.requestLaunch(id(9))
+  other.arm('l9', { unit: 'score-11111111-c-l9', invocationId: 'inv9', cgroup: '/cg/9' })
+  const read = other.journal.readOwn()
+  if (!read.ok) throw new Error(read.reason)
+  return read.entries
+}
+
+test('FY2 #2: an inherited launch is evidence only: never owned, never acted on, and its turn is never sent here', () => {
+  const lines = inheritedJournal().map((e) => ({ ...e, scope: SCOPE, inherited: true }))
+  // Written the way installation.ts writes the copy: scope rewritten, flag set, fresh checksums.
+  const copyJournal = new CodingJournal(new ExecutionJournal(join(tmp.dir, 'copy'), SCOPE, clock))
+  // Build the file through the public path: inherited state rides in the record.
+  const writer = new ExecutionJournal(join(tmp.dir, 'copy'), SCOPE, clock)
+  for (const entry of lines) {
+    const body = Object.fromEntries(
+      Object.entries(entry).filter(([key]) => !['n', 'at', 'scope'].includes(key)),
+    )
+    writer.append(body as Parameters<typeof writer.append>[0])
+  }
+  expect(copyJournal.state('l9')!.state.inherited).toBe(true)
+  expect(copyJournal.isOwned('l9')).toBe(false)
+  expect(coding.isOwned('l1')).toBe(false)
+  for (const attempt of [
+    copyJournal.recordStop('l9', 'user'),
+    copyJournal.waive('l9', 'person'),
+    copyJournal.release('l9', () => true),
+    copyJournal.ended('l9', {}),
+  ])
+    expect(attempt).toMatchObject({ ok: false, reason: 'inherited' })
+  // The same turn under a new launch id is witnessed even though the source never released it.
+  expect(copyJournal.requestLaunch({ ...id(9), launchId: 'mine' })).toMatchObject({
+    ok: false,
+    reason: 'turn_witnessed',
+  })
+  // Owned launches stay owned.
+  toArmed()
+  expect(coding.isOwned('l1')).toBe(true)
+})
+
+test('FV #1: reconciling inherited launches marks them unsendable and nothing else (the frozen home does the holding)', () => {
+  const entries = inheritedJournal().map(
+    (e) =>
+      ({ ...e, scope: SCOPE, inherited: true }) as unknown as ReturnType<typeof entriesOf>[number],
+  )
+  db.sqlite.exec(`
+    INSERT INTO coding_launches (launch_id, run_id, turn_id, generation, phase, journal_n, updated_at, held, unit)
+      VALUES ('l9', 'r9', 't9', 1, 'armed', 2, 'x', 1, 'score-11111111-c-l9');
+    INSERT INTO coding_processes (run_id, pid, pgid, created_at) VALUES ('r9', 4242, 4242, 'x');
+    INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at)
+      VALUES ('i10', 'start_coding_run', 'unrelated', '{}', 'pending', 'x', 'x');
+  `)
+  expect(
+    verifyCoding(db.sqlite, entries)
+      .map((m) => m.detail)
+      .join(),
+  ).toMatch(/inherited/)
+  applyCodingEvidence(db.sqlite, entries, iso())
+  expect(rowOf('l9')).toMatchObject({ inherited: 1, unsendable: 1 })
+  // No automatic retirement any more: the process row and the pending intent are left for `reset-history`.
+  expect(db.sqlite.prepare('SELECT COUNT(*) AS n FROM coding_processes').get()).toEqual({ n: 1 })
+  expect(db.sqlite.prepare('SELECT state FROM command_intents WHERE id = ?').get('i10')).toEqual({
+    state: 'pending',
+  })
+  expect(verifyCoding(db.sqlite, entries)).toEqual([])
+})
+
+test('FY2 #12: a launch the database holds and the journal lost is reported even while newer launches exist; identity divergence is repaired', () => {
+  toArmed(1)
+  toArmed(2)
+  const all = entriesOf()
+  // The journal lost launch 1 but keeps the newer launch 2.
+  const without = all.filter((e) => (e as { launchId?: string }).launchId !== 'l1')
+  expect(verifyCoding(db.sqlite, without).filter((m) => m.ref === 'coding:l1')).toMatchObject([
+    { journalN: null, detail: expect.stringMatching(/no record of it/) },
+  ])
+  // A row whose immutable identity differs from a NEWER journal record is repaired, not left as it was.
+  db.sqlite
+    .prepare(
+      "UPDATE coding_launches SET run_id = 'wrong', turn_id = 'wrong', generation = 7, journal_n = 1 WHERE launch_id = 'l2'",
+    )
+    .run()
+  applyCodingEvidence(db.sqlite, all, iso())
+  expect(rowOf('l2')).toMatchObject({ run_id: 'r2', turn_id: 't2', generation: 1 })
 })

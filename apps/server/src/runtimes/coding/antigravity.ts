@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { redactNote, rememberId, withBounds } from './note.ts'
 import type {
   CodingDriver,
   CodingEvent,
@@ -109,11 +110,24 @@ function toolDetail(
 }
 
 export function createAntigravityParser(cwd?: string): LineParser {
+  return withBounds(createInnerAntigravityParser(cwd))
+}
+
+// Events Score knows it can ignore, named explicitly (FW #5). Every other record it can't use is loss for the attempt.
+const IGNORABLE_EVENTS = new Set(['telemetry'])
+
+function createInnerAntigravityParser(cwd?: string): LineParser {
   const stats = { unknown: 0, malformed: 0 }
   const started = new Set<number>()
   let spoke = false
+  let lossNote: string | null = null
+  const lose = () => {
+    lossNote ??= 'Antigravity sent a record Score could not validate'
+  }
   return {
     stats,
+    lossReason: () =>
+      lossNote ?? (stats.malformed > 0 ? 'Score dropped a record of this turn' : null),
     parse(line) {
       let value: unknown
       try {
@@ -132,6 +146,7 @@ export function createAntigravityParser(cwd?: string): LineParser {
         const init = Init.safeParse(value)
         if (!init.success) {
           stats.unknown++
+          lose()
           return []
         }
         return [{ kind: 'session', sessionId: init.data.conversation_id }]
@@ -140,6 +155,7 @@ export function createAntigravityParser(cwd?: string): LineParser {
         const parsed = Step.safeParse(value)
         if (!parsed.success) {
           stats.unknown++
+          lose()
           return []
         }
         const step = parsed.data.step_update
@@ -152,17 +168,19 @@ export function createAntigravityParser(cwd?: string): LineParser {
         }
         if (step.step_type !== 'tool') {
           stats.unknown++
+          lose()
           return []
         }
         const tool = step.tool_name ?? step.tool_info?.name
         if (!tool) {
           stats.unknown++
+          lose()
           return []
         }
         const callId = `step-${step.step_index}`
         const events: CodingEvent[] = []
         if (!started.has(step.step_index)) {
-          started.add(step.step_index)
+          rememberId(started, step.step_index)
           events.push({
             kind: 'tool_start',
             callId,
@@ -178,6 +196,7 @@ export function createAntigravityParser(cwd?: string): LineParser {
         const parsed = Result.safeParse(value)
         if (!parsed.success) {
           stats.unknown++
+          lose()
           return []
         }
         const { status, response, usage, denied_actions: denied = [] } = parsed.data.result
@@ -191,7 +210,7 @@ export function createAntigravityParser(cwd?: string): LineParser {
           })
         // What the level refused, as cards: "Antigravity refused: RunCommand".
         denied.forEach((action, index) => {
-          const name = action.display_name ?? action.action ?? 'an action'
+          const name = redactNote(action.display_name ?? action.action ?? 'an action', 120)
           events.push(
             {
               kind: 'tool_start',
@@ -203,24 +222,40 @@ export function createAntigravityParser(cwd?: string): LineParser {
           )
         })
         const ok = status === 'SUCCESS'
-        const refused = denied.map((action) => action.display_name ?? action.action ?? 'an action')
+        // The names come from the CLI: redacted before they reach a card, a verdict reason or a stored note.
+        const refused = denied.map((action) =>
+          redactNote(action.display_name ?? action.action ?? 'an action', 120),
+        )
         const note = refused.length
           ? `Antigravity refused: ${refused.join(', ')}. This agent's permission level does not allow it.`
           : undefined
         // Streamed text is the reply; only a turn that said nothing falls back to the final response or the refusal note.
         const text = spoke ? undefined : response?.trim() ? response : note
+        // 7.7a §6: SUCCESS and a non-empty response; the response wins over streamed commentary.
+        const eligible = ok && Boolean(response?.trim())
+        const verdict = eligible
+          ? { eligible: true, reply: response!, reason: null }
+          : {
+              eligible: false,
+              reply: null,
+              reason: ok
+                ? (note ?? 'Antigravity reported success without a response')
+                : `Antigravity ended with status ${status}`,
+            }
         events.push(
           ok
-            ? { kind: 'result', ok: true, ...(text ? { text } : {}) }
+            ? { kind: 'result', ok: true, ...(text ? { text } : {}), verdict }
             : {
                 kind: 'result',
                 ok: false,
                 error: response?.trim() || `Antigravity ended with status ${status}`,
+                verdict,
               },
         )
         return events
       }
       stats.unknown++
+      if (!IGNORABLE_EVENTS.has(kind)) lose()
       return []
     },
   }

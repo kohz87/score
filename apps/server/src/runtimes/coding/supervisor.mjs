@@ -8,14 +8,17 @@
 // Terminal order: eof (both streams) + exit, payload cgroup empty, `ended` receipt, `end`, Score's `ack-end`, exit 0.
 // Any socket close other than after `ack-end` is socket loss: stop the CLI tree, wait for the payload to empty, exit 2.
 import { spawn, execFile } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import {
   closeSync,
   existsSync,
   fsyncSync,
+  linkSync,
   mkdirSync,
   openSync,
   readFileSync,
+  renameSync,
+  unlinkSync,
   writeFileSync,
   writeSync,
 } from 'node:fs'
@@ -47,21 +50,126 @@ export function procStart(pid) {
   }
 }
 
-/** Writes a receipt O_EXCL + fsync + directory fsync (design section 3). Throws on any error: callers fail closed. */
-export function writeReceipt(dir, name, body) {
-  const fd = openSync(join(dir, name), 'wx', 0o600)
+/**
+ * Writes a receipt so that the final name only ever holds a complete one (design section 3, review #8): the whole body
+ * goes to a temp name (short writes looped), is fsynced, then linked to the final name (link fails when it already
+ * exists, which keeps the old O_EXCL "exactly once" meaning; a plain rename would overwrite), the temp name is removed
+ * and the directory is fsynced. Throws on any error: callers fail closed.
+ */
+export function writeReceipt(dir, name, body, io = {}) {
+  const write = io.writeSync ?? writeSync
+  const link = io.linkSync ?? linkSync
+  const sync = io.fsyncSync ?? fsyncSync
+  const final = join(dir, name)
+  const tmp = join(dir, `.${name}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`)
+  const data = Buffer.from(JSON.stringify(body) + '\n')
   try {
-    writeSync(fd, JSON.stringify(body) + '\n')
-    fsyncSync(fd)
+    const fd = openSync(tmp, 'wx', 0o600)
+    try {
+      let off = 0
+      while (off < data.length) {
+        const n = write(fd, data, off, data.length - off)
+        if (!(n > 0)) throw new Error('receipt: short write')
+        off += n
+      }
+      sync(fd)
+    } finally {
+      closeSync(fd)
+    }
+    link(tmp, final)
   } finally {
-    closeSync(fd)
+    try {
+      unlinkSync(tmp)
+    } catch {
+      // never created, or already gone
+    }
   }
+  syncDirectory(dir, sync)
+}
+
+function syncDirectory(dir, sync = fsyncSync) {
   const dirFd = openSync(dir, 'r')
   try {
-    fsyncSync(dirFd)
+    sync(dirFd)
   } finally {
     closeSync(dirFd)
   }
+}
+
+/**
+ * Makes an EXISTING receipt durable: its contents and its directory entry are fsynced. A name that exists is not yet
+ * proof that it survives a crash (the writer's directory sync may have failed), so a reader that finds `EEXIST` calls
+ * this before it trusts the file. Throws on any error, including a missing file.
+ */
+export function syncReceipt(dir, name, io = {}) {
+  const sync = io.fsyncSync ?? fsyncSync
+  const fd = openSync(join(dir, name), 'r')
+  try {
+    sync(fd)
+  } finally {
+    closeSync(fd)
+  }
+  syncDirectory(dir, sync)
+}
+
+/**
+ * Replaces an existing receipt with a new body in one step (temp file, fsync, rename over the name, directory fsync). Used
+ * for the final `acked.json`, whose `durable: true` form exists only once the directory sync of the first one succeeded.
+ */
+export function replaceReceipt(dir, name, body, io = {}) {
+  const write = io.writeSync ?? writeSync
+  const sync = io.fsyncSync ?? fsyncSync
+  const tmp = join(dir, `.${name}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`)
+  const data = Buffer.from(JSON.stringify(body) + '\n')
+  try {
+    const fd = openSync(tmp, 'wx', 0o600)
+    try {
+      let off = 0
+      while (off < data.length) {
+        const n = write(fd, data, off, data.length - off)
+        if (!(n > 0)) throw new Error('receipt: short write')
+        off += n
+      }
+      sync(fd)
+    } finally {
+      closeSync(fd)
+    }
+    renameSync(tmp, join(dir, name))
+  } finally {
+    try {
+      unlinkSync(tmp)
+    } catch {
+      // renamed away, or never created
+    }
+  }
+  syncDirectory(dir, sync)
+}
+
+/**
+ * Parses a receipt the way every reader must (review #8): an empty, partial, malformed or foreign one is `invalid`
+ * and is never proof of anything. `kind` is 'released', 'ended' or 'acked'; `expect` pins the launch and generation.
+ * Returns { state: 'present', body } | { state: 'invalid' }.
+ */
+export function parseReceipt(text, kind, expect = {}) {
+  let body
+  try {
+    body = JSON.parse(text)
+  } catch {
+    return { state: 'invalid' }
+  }
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return { state: 'invalid' }
+  if (typeof body.launch !== 'string' || body.launch === '') return { state: 'invalid' }
+  if (!Number.isInteger(body.generation) || !Number.isFinite(body.at)) return { state: 'invalid' }
+  if (expect.launch !== undefined && body.launch !== expect.launch) return { state: 'invalid' }
+  if (expect.generation !== undefined && body.generation !== expect.generation)
+    return { state: 'invalid' }
+  if (kind === 'released') {
+    if (!Number.isInteger(body.supervisorPid)) return { state: 'invalid' }
+  } else if (kind === 'ended') {
+    if (!('code' in body) || !('signal' in body) || typeof body.survivorsKilled !== 'boolean')
+      return { state: 'invalid' }
+  } else if (kind !== 'acked') return { state: 'invalid' }
+  return { state: 'present', body }
 }
 
 /**
@@ -168,6 +276,9 @@ export async function runSupervisor(spec, deps = {}) {
   let payloadDir = null
   const seq = { stdout: 0, stderr: 0 }
   const eof = { stdout: false, stderr: false }
+  // A pipe Score closed itself (cleanup, read error) is loss, never a clean EOF (review 2026-10-12 #1): unread output
+  // may have been thrown away, so the `eof` frame says so and the result is ineligible.
+  const forced = { stdout: false, stderr: false }
   const bytes = { stdout: 0, stderr: 0 }
   let paused = false
   let finished = false
@@ -179,8 +290,7 @@ export async function runSupervisor(spec, deps = {}) {
     if (finished) return
     finished = true
     clearInterval(timer)
-    process.off('SIGINT', onSignal)
-    process.off('SIGTERM', onSignal)
+    detachSignals()
     sock.destroy()
     resolveDone(code)
   }
@@ -207,11 +317,45 @@ export async function runSupervisor(spec, deps = {}) {
   }
 
   // ---- stop and escalation: INT -> TERM -> KILL, one grace each, every signal exactly once (design section 1)
-  function requestStop(cause) {
+  // The first cause of a stop the supervisor starts itself (deadline, socket loss, systemd's stop) is written beside the
+  // other receipts BEFORE anything is signalled, so a Score that restarts, or a run that dies before its `ended` receipt,
+  // still knows why it was stopped (review 2026-10-12 #17). The first cause wins (`link` refuses a second file). A cause
+  // that couldn't be written is told to Score as an error frame and stays uncertainty on its side.
+  let stopRecorded = false
+  function recordStopCause(cause) {
+    if (stopRecorded) return
+    stopRecorded = true
+    try {
+      writeReceipt(spec.receiptDir, 'stop-cause.json', {
+        launch: spec.launch,
+        generation: spec.generation,
+        at: now(),
+        cause,
+      })
+    } catch (error) {
+      // EEXIST: an earlier pass already holds the first cause.
+      if (error?.code !== 'EEXIST') send({ t: 'error', code: 'stop-unrecorded' })
+    }
+  }
+  // A stop that arrives after `end` went out (a deadline while Score finishes ingesting, systemd's stop, socket trouble):
+  // the terminal candidate is no longer clean. Score hears about it before the acknowledgment can complete, and this
+  // supervisor then leaves with a failure status instead of 0 (review 2026-10-12 #11).
+  let stoppedAfterEnd = false
+
+  // `fromScore`: the stop came over the wire; Score made its cause durable before sending it, so no receipt of ours.
+  function requestStop(cause, fromScore = false) {
     if (stopCause === null) stopCause = cause
     if (phase === 'waiting-go' || phase === 'connecting') {
       // Nothing has run, and nothing will: leave without a `released` receipt.
       endWithoutRun()
+      return
+    }
+    if (!fromScore) recordStopCause(stopCause)
+    if (phase === 'ended' && !finished) {
+      if (!stoppedAfterEnd) {
+        stoppedAfterEnd = true
+        send({ t: 'error', code: 'stop-after-end' })
+      }
       return
     }
     if (escalating || childExited || !child) return
@@ -233,8 +377,18 @@ export async function runSupervisor(spec, deps = {}) {
   }
 
   const onSignal = () => requestStop('unit-stop')
-  process.on('SIGINT', onSignal)
-  process.on('SIGTERM', onSignal)
+  // systemd's stop reaches the supervisor as SIGINT (KillMode=mixed). `deps.onUnitStop` replaces the process signals
+  // in tests that run the supervisor inside the test process.
+  const detachSignals = deps.onUnitStop
+    ? (deps.onUnitStop(onSignal) ?? (() => undefined))
+    : (() => {
+        process.on('SIGINT', onSignal)
+        process.on('SIGTERM', onSignal)
+        return () => {
+          process.off('SIGINT', onSignal)
+          process.off('SIGTERM', onSignal)
+        }
+      })()
 
   // ---- output
   const pauseOutput = () => {
@@ -271,10 +425,18 @@ export async function runSupervisor(spec, deps = {}) {
       // Backpressure (design section 4): stop reading the CLI's pipes while the socket buffer is high; the CLI blocks.
       if (sock.writableLength > limits.highWaterBytes) pauseOutput()
     })
+    stream.on('error', () => {
+      forced[name] = true
+    })
     stream.on('close', () => {
       if (eof[name]) return
       eof[name] = true
-      send({ t: 'eof', stream: name, lastSeq: seq[name] })
+      send({
+        t: 'eof',
+        stream: name,
+        lastSeq: seq[name],
+        ...(forced[name] ? { forced: true } : {}),
+      })
       void maybeDrained()
     })
   }
@@ -360,17 +522,34 @@ export async function runSupervisor(spec, deps = {}) {
   // ---- end of the run: payload empty, receipt, `end`
   let draining = false
   async function maybeDrained() {
-    if (draining || !childExited || !eof.stdout || !eof.stderr) return
+    // Cleanup runs once the leader has exited, whether or not the pipes have reached EOF: a survivor that keeps the
+    // CLI's stdout/stderr open must not delay killing the payload (review #1).
+    if (draining || !childExited) return
     draining = true
     phase = 'draining'
     const graceDeadline = now() + grace
+    let emptySince = null
     for (;;) {
       const state = cgroup.payloadState()
-      if (state === 'empty' && cgroup.unitAlone()) break
-      if (state !== 'empty' && !survivorsKilled && (stopCause !== null || now() >= graceDeadline)) {
-        // A survivor outlived the CLI (a daemon, a setsid job): the cgroup is the only thing that still reaches it.
-        survivorsKilled = true
-        cgroup.killPayload()
+      if (state === 'empty' && cgroup.unitAlone()) {
+        if (eof.stdout && eof.stderr) break
+        // Nothing left in the payload can hold a pipe open; if EOF still has not arrived, close our ends.
+        emptySince ??= now()
+        if (now() - emptySince >= grace)
+          for (const name of ['stdout', 'stderr'])
+            if (!eof[name]) {
+              forced[name] = true
+              child?.[name]?.destroy()
+            }
+      } else {
+        emptySince = null
+        if (!survivorsKilled && (stopCause !== null || now() >= graceDeadline)) {
+          // A survivor outlived the CLI (a daemon, a setsid job): the cgroup is the only thing that still reaches it.
+          // Retried while the kill is unavailable or has not emptied the cgroup.
+          survivorsKilled = cgroup.killPayload()
+        } else if (survivorsKilled && now() >= graceDeadline + grace) {
+          cgroup.killPayload()
+        }
       }
       await sleep(deps.pollMs ?? spec.pollMs ?? 50)
       if (finished) return
@@ -432,8 +611,11 @@ export async function runSupervisor(spec, deps = {}) {
     // Socket loss: stop the CLI tree, wait for the payload to empty (maybeDrained), then exit 2.
     stopCause ??= 'socket-loss'
     requestStop('socket-loss')
+    // Disconnect budget (design section 1): 2 x grace + 5 s from the loss, leader exit or not. Past it the supervisor
+    // exits anyway, and systemd's stop then kills whatever the cgroup still holds.
+    const lossDeadline = now() + (spec.disconnectBudgetMs ?? 2 * grace + 5000)
     void (async () => {
-      while (!(phase === 'ended' && childExited)) {
+      while (!(phase === 'ended' && childExited) && now() < lossDeadline) {
         await sleep(deps.pollMs ?? spec.pollMs ?? 50)
         if (finished) return
       }
@@ -463,10 +645,11 @@ export async function runSupervisor(spec, deps = {}) {
           return
         }
         phase = 'waiting-go'
+        // `deps.self` lets tests that run the supervisor inside the test process report a distinct identity.
         send({
           t: 'ready',
-          pid: process.pid,
-          start: procStart(process.pid),
+          pid: deps.self?.pid ?? process.pid,
+          start: deps.self?.start ?? procStart(process.pid),
           cgroup: cgroup.path,
         })
         return
@@ -482,13 +665,44 @@ export async function runSupervisor(spec, deps = {}) {
         if (phase === 'waiting-go' || phase === 'connecting') {
           stopCause = 'cancel'
           endWithoutRun()
-        } else requestStop('cancel')
+        } else requestStop('cancel', true)
         return
       case 'stop':
-        requestStop(typeof f.cause === 'string' && f.cause.length <= 64 ? f.cause : 'stop')
+        requestStop(typeof f.cause === 'string' && f.cause.length <= 64 ? f.cause : 'stop', true)
         return
       case 'ack-end':
         if (phase === 'ended' && childExited) {
+          if (stoppedAfterEnd) {
+            finish(EXIT.failed)
+            return
+          }
+          // The final receipt: written after `ack-end` was READ, before the exit. It is evidence that the acknowledgment was
+          // consumed and nothing more: a failed publication is removed again, but removal can fail too, so Score never
+          // takes the receipt (or its `durable` flag) for a clean exit; that comes from the unit's own metadata (FU #1).
+          const body = { launch: spec.launch, generation: spec.generation, at: now() }
+          try {
+            try {
+              writeReceipt(spec.receiptDir, 'acked.json', body, deps.receiptIo)
+            } catch (error) {
+              // An earlier writer's name: take it over and make it durable below (or fail).
+              if (error?.code !== 'EEXIST') throw error
+            }
+            replaceReceipt(
+              spec.receiptDir,
+              'acked.json',
+              { ...body, durable: true },
+              deps.receiptIo,
+            )
+          } catch {
+            try {
+              unlinkSync(join(spec.receiptDir, 'acked.json'))
+              syncDirectory(spec.receiptDir)
+            } catch {
+              // nothing more can be done; the exit below is non-zero
+            }
+            finish(EXIT.failed)
+            return
+          }
           finish(EXIT.ok)
         }
         return
@@ -539,6 +753,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     spec = loadSpec(process.argv[2])
   } catch {
     process.exit(EXIT.badSpec)
+  }
+  // The spec holds the single-use token: delete it right after reading, before `hello` (lead answer, part 3). Score
+  // deletes it again on `ready` or settlement as a backstop.
+  try {
+    unlinkSync(process.argv[2])
+  } catch {
+    // Score's backstop removes it
   }
   runSupervisor(spec).then(
     (code) => process.exit(code),

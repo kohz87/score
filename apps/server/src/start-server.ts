@@ -69,7 +69,12 @@ import { retireIngestKeys, retireMedia } from './hub/retire.ts'
 import { restoreRoomHolds } from './domain/room-rewinding.ts'
 import { locatorForMode } from './runtimes/coding/cli.ts'
 import { CodingRuntime } from './runtimes/coding/service.ts'
+import { fallbackForced, fenceBarrier, UnitBackend } from './runtimes/coding/unit-backend.ts'
+import { CodingJournal } from './domain/orchestration/coding-journal.ts'
 import { defaultRootPolicy } from './workspace/policy.ts'
+
+/** Stands in for the installation id while it is unresolved: the backend is disabled and launches nothing. */
+const UNRESOLVED_INSTALLATION = '00000000-0000-4000-8000-000000000000'
 
 const INSECURE_FLAG_REMOVED =
   'SCORE_REMOTE_INSECURE_HTTP was removed and is ignored: Score serves its app over HTTPS only (see /setup/https)'
@@ -302,7 +307,10 @@ export async function startServer(
     })
     // Session rewinds (5.33): the live port asks, the bridge routes hand the command to the plugin.
     const rewindBroker = new RewindBroker()
+    // The fence store exists a few lines further down; the port only asks once it is started.
+    let holding: () => string | null = () => null
     port = createHermesPort(config, {
+      frozen: () => holding(),
       db: database,
       rewindBroker,
       imageReader: (id) => media.read(id),
@@ -319,6 +327,8 @@ export async function startServer(
         : new ExecutionJournal(resolveJournalDir(config), journalScope(realHome(config.home)))
     const fenceStore = new GlobalFenceStore(database, journal)
     fenceStore.setHardBlock(installationBlock)
+    fenceStore.setCopiedFrom(installation?.ok ? installation.copiedFrom : undefined)
+    holding = () => fenceStore.frozenNotice()
     const fenced = fenceStore.startupCheck()
     if (rootProvenance && rootProvenance.state !== 'known') {
       const why =
@@ -351,9 +361,80 @@ export async function startServer(
     if (config.mode === 'fake' && port instanceof FakePort) attachFakeLead(port, executor)
     // Coding agents (PLAN 7.2): fake mode never starts a real CLI (see locatorForMode).
     const { hermesHome: runtimeHome } = config
+    // Coding backend (7.7a). Live mode always gets a UnitBackend: it owns the admission barriers (fences, orphan units,
+    // held launches) and the reconciliation of both inventories, whichever backend launches. Whether runs are
+    // *supervised* is decided by the capability check; a forced fallback, a missing runtime directory or an unresolved
+    // installation only mark the backend disabled (review #5).
+    const runtimeDir = process.env.XDG_RUNTIME_DIR
+    const forcedFallback = fallbackForced(process.env)
+    const disabled =
+      installation?.ok !== true || installationBlock !== null
+        ? (installationBlock ?? 'This installation isn’t resolved yet.')
+        : !runtimeDir
+          ? 'There is no user runtime folder ($XDG_RUNTIME_DIR).'
+          : forcedFallback
+            ? 'The fallback is forced (SCORE_CODING_BACKEND).'
+            : undefined
+    const resolved = installation?.ok === true ? installation : undefined
+    const codingJournal = new CodingJournal(journal)
+    const unit =
+      config.mode === 'live'
+        ? new UnitBackend({
+            db: database,
+            journal: codingJournal,
+            installationId: resolved?.id ?? UNRESOLVED_INSTALLATION,
+            namespaceDir: resolved?.namespaceDir ?? resolveJournalDir(config),
+            runtimeDir: runtimeDir ?? tmpdir(),
+            home: homedir(),
+            ...(disabled !== undefined ? { disabled } : {}),
+            ...(resolved === undefined || installationBlock !== null ? { unresolved: true } : {}),
+            // Restore, journal and installation uncertainty stop every coding launch, whichever engine runs it.
+            blocked: () => installationBlock ?? database.read((sqlite) => fenceBarrier(sqlite)),
+            frozen: () => fenceStore.frozenNotice(),
+            ...(forcedFallback ? { forced: true } : {}),
+            onError: (error) => app?.log.error({ err: error }, 'Coding unit backend failed'),
+          })
+        : undefined
+    if (unit) {
+      const status = await unit.start()
+      process.stderr.write(
+        `Coding runs: ${
+          status.kind === 'unit' && status.checks.some((c) => !c.ok)
+            ? `paused (${status.note})`
+            : status.kind === 'unit'
+              ? 'supervised system services'
+              : `process-group fallback (${status.checks
+                  .filter((c) => !c.ok)
+                  .map((c) => c.detail)
+                  .join('; ')})`
+        }\n`,
+      )
+    }
     coding = new CodingRuntime({
       db: database,
       ingest,
+      ...(unit ? { unit } : {}),
+      // Frozen homes (unresolved or copied installation, lost journal) admit and signal nothing (decision 71); beyond that
+      // a process row an inherited launch covers is never ours, and an unreadable history owns nothing.
+      frozen: () => fenceStore.frozenNotice(),
+      ...(config.mode === 'live'
+        ? {
+            ownsProcessRow: (runId: string) =>
+              resolved !== undefined &&
+              installationBlock === null &&
+              codingJournal.ownsProcessRow(runId),
+          }
+        : {}),
+      onOrphans: (names) =>
+        fenceStore.set(
+          'A coding service Score can’t account for is running',
+          names.map((name) => ({
+            kind: 'journal' as const,
+            ref: `coding-unit:${name}`,
+            journalN: null,
+            detail: `The service ${name} carries this installation’s prefix but no journal launch owns it.`,
+          })),
+        ),
       locator: locatorForMode(config.mode, process.env),
       home: config.home,
       policy: defaultRootPolicy([config.home, resolveHermesHome(runtimeHome), resolveHermesHome()]),

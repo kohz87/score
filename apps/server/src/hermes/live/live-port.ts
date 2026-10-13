@@ -9,6 +9,7 @@ import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import type { MessagingSetupRequest } from '@score/contract'
 import { HttpError } from '../../errors.ts'
+import { assertThawed } from './freeze.ts'
 import {
   projectedTasks,
   readProjectedTask,
@@ -201,6 +202,7 @@ export class LivePort implements HermesPort {
         gateway: this.gateway,
         sink,
         ...(this.options.imageReader ? { imageReader: this.options.imageReader } : {}),
+        ...(this.options.frozen ? { frozen: this.options.frozen } : {}),
       })
       await this.refreshStatus()
       await this.intents.recoverIntents()
@@ -222,6 +224,10 @@ export class LivePort implements HermesPort {
       await this.stop()
       throw error
     }
+  }
+  /** Why Score holds all agent work, or null (decision 72). The chat dispatcher asks before it pumps. */
+  executionHold(): string | null {
+    return this.options.frozen?.() ?? null
   }
   async stop(): Promise<void> {
     this.settings.close()
@@ -404,6 +410,8 @@ export class LivePort implements HermesPort {
     await this.routines.remove(id)
   }
   async runRoutine(id: string) {
+    // A routine run is an agent turn: refused like every other outgoing execution while Score holds all agent work.
+    assertThawed(this.options.frozen)
     this.requireStarted()
     await this.routines.run(id)
   }
@@ -695,6 +703,7 @@ export class LivePort implements HermesPort {
     let intents: RunIntents
     try {
       ;({ intents } = this.requireStarted())
+      assertThawed(this.options.frozen)
       assertAgentAdmits(this.db!.sqlite, req.agentId)
       assertFeature(this.current, 'score-runs')
       if (!this.current.hermes.servedProfiles.includes(req.agentId))
@@ -737,6 +746,8 @@ export class LivePort implements HermesPort {
   async stopRun(req: { agentId: string; runId: string }): Promise<void> {
     // Kanban attempts are not runs and cannot be stopped from Score: refused before any profile or run lookup.
     assertNotKanbanAttempt(req.runId)
+    // Any Stop (a message's, a Flow's, a person's) can name a run that belongs to another installation (decision 72).
+    assertThawed(this.options.frozen)
     const { db, gateway } = this.requireStarted()
     const row = readRun(db.sqlite, req.runId)
     if (row.profile !== req.agentId)
@@ -764,6 +775,9 @@ export class LivePort implements HermesPort {
   async taskAction(
     req: Parameters<HermesPort['taskAction']>[0],
   ): Promise<{ hermesStatus: string }> {
+    // Actions that make Hermes pick a task up (start, unblock, schedule, ask for review or changes) start agent work.
+    if (['start', 'unblock', 'schedule', 'request_review', 'request_changes'].includes(req.action))
+      assertThawed(this.options.frozen)
     const { gateway } = this.requireStarted()
     const result = await taskAction(req, {
       readTask: taskReader(this.options.hermesHome),
@@ -854,6 +868,8 @@ export class LivePort implements HermesPort {
     req: Parameters<HermesPort['deliverDecision']>[0],
   ): Promise<'applied' | 'not_pending' | 'failed'> {
     try {
+      const hold = this.options.frozen?.() ?? null
+      if (hold !== null) throw new ApprovalDeliveryError('execution_frozen', false, true)
       const { db, gateway } = this.requireStarted()
       const target = DecisionDeliveryRequestSchema.extend({ runId: z.string().min(1) }).parse(req)
       const row = readRun(db.sqlite, target.runId)

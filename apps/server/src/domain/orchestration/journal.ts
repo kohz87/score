@@ -6,6 +6,7 @@ import {
   ftruncateSync,
   fstatSync,
   openSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -15,11 +16,12 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { legacyJournalScope } from '../../installation.ts'
+import { LAUNCHES_DIR, legacyJournalScope } from '../../installation.ts'
 import { LOCK_RANK, mkdirDurable, OsLock, OsLockTimeoutError } from '../../locks/os-lock.ts'
 import {
   CODING_RECORD_KINDS as CODING_KINDS,
   codingRecordSchemas,
+  foldCodingEntry,
   foldCodingLaunches,
   type CodingLaunch,
 } from './coding-records.ts'
@@ -31,6 +33,8 @@ import {
 
 export const JOURNAL_FILE = 'journal.ndjson'
 export const RESTORE_MARKER_FILE = 'restore-marker.json'
+/** FZ3 #13: written before the first record of a namespace; its presence says "this folder has execution history". */
+export const HISTORY_MARKER_FILE = 'history.json'
 /** v3.1: a size alarm at 50 MB (compaction removes reconciled entries daily; unresolved ones are never dropped). */
 export const JOURNAL_SIZE_ALARM_BYTES = 50 * 1024 * 1024
 
@@ -152,14 +156,85 @@ const EntrySchema = z.discriminatedUnion('kind', [
     /** Highest legacy `n` of this home that was copied; anything of this home above it was written after the cutover. */
     copiedThrough: z.int().nonnegative(),
   }),
+  // FV (decision 71) / FU (decision 72): `scripts/score installation reset-history` starts a fresh journal with this
+  // record. The person decided to start a new history; the archived journal and launch folders are evidence only. The
+  // random `generation` is stored in the database in the same step; a reset is finished only by the matching
+  // `history-reset-complete` record, written after the database commit was made durable. Permanent.
+  z.object({
+    ...Base,
+    kind: z.literal('history-reset'),
+    /** Where the previous journal and launch folders were moved (a folder beside this journal). */
+    archive: z.string().min(1),
+    /** How many records the archived journal held (0 when it was missing). */
+    archived: z.int().nonnegative(),
+    /** Names this history; the database must carry the same one (a restored older database does not). */
+    generation: z.string().min(1).max(100),
+  }),
+  z.object({
+    ...Base,
+    kind: z.literal('history-reset-complete'),
+    generation: z.string().min(1).max(100),
+  }),
+  // FU (decision 72): why Score holds all agent work. Durable outside the database, so a restored older database can't
+  // forget it; only a completed reset of a LATER generation supersedes it. Permanent.
+  z.object({
+    ...Base,
+    kind: z.literal('execution-freeze'),
+    reason: z.string().min(1).max(1000),
+  }),
   // 7.7a §2/§3: coding-run records (launch-requested … settled) and their permanent tombstones.
   ...codingRecordSchemas(Base),
 ])
 export type JournalEntry = z.infer<typeof EntrySchema>
 
+/** What the journal says about the history reset and the freeze (decision 72). */
+export interface HistoryState {
+  /** The newest history-reset record's generation, or null when this journal never had one. */
+  generation: string | null
+  /** When that reset record was written (attempts created before it belong to the archived history). */
+  resetAt: string | null
+  /** The matching `history-reset-complete` came after it. */
+  complete: boolean
+  /** The reason of a freeze record no completed reset superseded, or null. */
+  freeze: string | null
+}
+
+/** Replays the reset and freeze records in order. A completed reset of the current generation supersedes what came before. */
+export function foldHistory(entries: readonly JournalEntry[], scope: string): HistoryState {
+  const state: HistoryState = { generation: null, resetAt: null, complete: false, freeze: null }
+  for (const entry of entries) {
+    if (entry.scope !== scope) continue
+    if (entry.kind === 'history-reset') {
+      state.generation = entry.generation
+      state.resetAt = entry.at
+      state.complete = false
+      state.freeze = null
+    } else if (entry.kind === 'history-reset-complete') {
+      if (entry.generation === state.generation) {
+        state.complete = true
+        state.freeze = null
+      }
+    } else if (entry.kind === 'execution-freeze') {
+      state.freeze ??= entry.reason
+    }
+  }
+  return state
+}
+
+/** Why the history is held according to the journal alone, or null. */
+export function historyHold(state: HistoryState): string | null {
+  if (state.generation !== null && !state.complete)
+    return 'a history reset was started but not finished'
+  return state.freeze
+}
+
+export type HistoryRead = ({ ok: true } & HistoryState) | { ok: false; reason: string }
+
 /** What a critical section can do: read a launch's newest state, and append (fsync'd) under the same lock. */
 export interface CriticalTx {
   launch(launchId: string): CodingLaunch | undefined
+  /** Every launch the journal knows for a turn (any generation), so a witnessed turn can be recognised. */
+  launchesOfTurn(turnId: string): CodingLaunch[]
   append(body: JournalEntryBody): JournalEntry
 }
 
@@ -219,6 +294,12 @@ export function writeAll(io: JournalIo, fd: number, data: Buffer): void {
   }
 }
 
+/** A launch receipt folder that holds files, and when its newest file changed. */
+export interface LaunchFolder {
+  id: string
+  mtimeMs: number
+}
+
 export type JournalRead =
   | { ok: true; entries: JournalEntry[]; bytes: number }
   | { ok: false; reason: string; bytes: number }
@@ -252,6 +333,10 @@ export class ExecutionJournal {
   private readonly lock: OsLock
   private nextN: number | undefined
   private broken: string | undefined
+  // Verification #5: once this handle has seen the file, its disappearance is history lost for good. Latched here so no
+  // append through this handle can recreate the file and make the loss look like a fresh namespace.
+  private established = false
+  private vanished: string | undefined
 
   constructor(
     readonly dir: string,
@@ -302,12 +387,11 @@ export class ExecutionJournal {
       )
       const tx: CriticalTx = {
         launch: (launchId) => launches.get(launchId),
+        launchesOfTurn: (turnId) =>
+          [...launches.values()].filter((launch) => launch.state.turnId === turnId),
         append: (body) => {
           const entry = this.appendLocked(body)
-          const fold = foldCodingLaunches([entry]).get(
-            (entry as { launchId?: string }).launchId ?? '',
-          )
-          if (fold) launches.set(fold.state.launchId, fold)
+          foldCodingEntry(launches, entry)
           return entry
         },
       }
@@ -315,9 +399,104 @@ export class ExecutionJournal {
     })
   }
 
+  private historyCache: { signature: string; value: HistoryRead } | undefined
+  /**
+   * The reset and freeze state, read WITHOUT the journal lock (it is asked at every outgoing boundary, also inside
+   * transactions) and cached while the file is unchanged. An unreadable journal is a result, not an exception: callers
+   * treat it as frozen (decision 72).
+   */
+  historyState(): HistoryRead {
+    if (this.vanished !== undefined) return { ok: false, reason: this.vanished }
+    let signature = 'none'
+    try {
+      const stat = statSync(this.file)
+      signature = `${stat.ino}:${stat.size}:${stat.mtimeMs}`
+      this.established = true
+    } catch {
+      // no file: a fresh namespace, unless this handle saw it before
+      if (this.established) {
+        this.vanished = 'the execution journal disappeared while Score was running'
+        return { ok: false, reason: this.vanished }
+      }
+    }
+    if (this.historyCache?.signature === signature) return this.historyCache.value
+    const read = this.parse()
+    if (!read.ok) return { ok: false, reason: read.reason }
+    const value: HistoryRead = { ok: true, ...foldHistory(read.entries, this.scope) }
+    this.historyCache = { signature, value }
+    return value
+  }
+
   /** True when the journal file has never been created in this directory. */
   isFresh(): boolean {
     return !existsSync(this.file)
+  }
+
+  /**
+   * FZ3 #13: why a missing journal file is NOT a fresh namespace, or undefined. The folder keeps a durable "has
+   * execution history" marker and per-launch receipt folders; either one without the journal means it was lost.
+   */
+  missingHistory(): string | undefined {
+    if (existsSync(this.file)) return undefined
+    if (existsSync(join(this.dir, HISTORY_MARKER_FILE)))
+      return 'this folder recorded execution history (history.json), but the journal file is gone'
+    const dirs = this.launchDirectories().map((folder) => folder.id)
+    if (dirs.length > 0)
+      return `launch folders exist (${dirs.slice(0, 3).join(', ')}${dirs.length > 3 ? ', …' : ''}) but there is no journal`
+    return undefined
+  }
+
+  /** Launch folders that hold evidence (an empty folder, made before the first record, is none). */
+  launchDirectories(): LaunchFolder[] {
+    const root = join(this.dir, LAUNCHES_DIR)
+    let names: string[]
+    try {
+      names = readdirSync(root)
+    } catch {
+      return []
+    }
+    const found: LaunchFolder[] = []
+    for (const id of names) {
+      try {
+        const files = readdirSync(join(root, id))
+        if (files.length === 0) continue
+        // Newest file time: a person lifting the fence after this moment has seen the folder.
+        const mtimeMs = Math.max(...files.map((f) => statSync(join(root, id, f)).mtimeMs))
+        found.push({ id, mtimeMs })
+      } catch {
+        found.push({ id, mtimeMs: Number.MAX_SAFE_INTEGER }) // unreadable: evidence we can't date
+      }
+    }
+    return found
+  }
+
+  private historyMarked = false
+  /** Durable (temp, fsync, rename, directory fsync) and idempotent; it exists before the first record does. */
+  private ensureHistoryMarker(): void {
+    if (this.historyMarked) return
+    const path = join(this.dir, HISTORY_MARKER_FILE)
+    if (!existsSync(path)) {
+      const temp = `${path}.tmp`
+      const fd = openSync(temp, 'w', 0o600)
+      try {
+        writeAll(
+          nodeIo,
+          fd,
+          Buffer.from(JSON.stringify({ version: 1, at: new Date().toISOString() })),
+        )
+        fsyncSync(fd)
+      } finally {
+        closeSync(fd)
+      }
+      renameSync(temp, path)
+      const dirFd = openSync(this.dir, 'r')
+      try {
+        fsyncSync(dirFd)
+      } finally {
+        closeSync(dirFd)
+      }
+    }
+    this.historyMarked = true
   }
 
   private parse(): JournalRead {
@@ -384,6 +563,8 @@ export class ExecutionJournal {
       if (!result.ok) return false
       this.repairTail()
       this.nextN = (result.entries.at(-1)?.n ?? 0) + 1
+      // A journal that has records (copied by a migration or a copy confirmation) is history from now on.
+      if (result.entries.length > 0) this.ensureHistoryMarker()
       return true
     })
   }
@@ -445,6 +626,11 @@ export class ExecutionJournal {
   }
 
   private appendLocked(body: JournalEntryBody): JournalEntry {
+    if (this.established && !existsSync(this.file))
+      this.vanished ??= 'the execution journal disappeared while Score was running'
+    // Only the freeze record itself may follow a loss: it is the evidence a restored database can't forget.
+    if (this.vanished !== undefined && body.kind !== 'execution-freeze')
+      throw new Error(`Execution journal is unusable: ${this.vanished}`)
     if (this.broken !== undefined)
       throw new Error(`Execution journal is unreadable: ${this.broken}`)
     if (this.nextN === undefined && !this.open()) throw new Error('Execution journal is unreadable')
@@ -455,6 +641,7 @@ export class ExecutionJournal {
         `This journal (${this.dir}) was migrated to an installation namespace; it is a read-only witness now`,
       )
     this.nextN = Math.max(this.nextN ?? 1, this.tailN() + 1)
+    if (body.kind !== 'cutover') this.ensureHistoryMarker()
     const entry = EntrySchema.parse({
       ...body,
       n: this.nextN!,
@@ -484,6 +671,7 @@ export class ExecutionJournal {
     }
     // The entry is on disk now; the next number is taken whatever happens to the directory sync below.
     this.nextN = entry.n + 1
+    this.established = true
     // Always, not only for a new name: a handle or process that did not create the file cannot know whether an earlier
     // writer's directory sync (or a compaction's rename sync) failed, and appends are rare enough to afford it.
     this.syncDirectory()
@@ -738,8 +926,8 @@ export function foldCodingRecords(entries: readonly JournalEntry[], scope: strin
       continue
     }
     if (newest.get(launchId) !== entry.n) continue
-    if (entry.kind === 'settled') {
-      out.push({ ...entry, kind: 'coding-tombstone', of: 'settled' } as JournalEntry)
+    if (entry.kind === 'settled' || entry.kind === 'waived') {
+      out.push({ ...entry, kind: 'coding-tombstone', of: entry.kind } as JournalEntry)
     } else out.push(entry)
   }
   return out

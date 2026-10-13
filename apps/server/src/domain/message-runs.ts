@@ -539,7 +539,18 @@ export function completeRunMessage(
     handoffs: wantHandoffs = true,
     status = 'completed',
     error,
-  }: { output?: string | null; handoffs?: boolean; status?: string; error?: string | null } = {},
+    reply,
+  }: {
+    output?: string | null
+    handoffs?: boolean
+    status?: string
+    error?: string | null
+    /**
+     * The eligible authoritative reply (7.7a v3 §5): when given, plans and hand-offs read only this text, never the
+     * rest of what was streamed (commentary, earlier messages). `null` = there is none, so nothing is parsed.
+     */
+    reply?: string | null
+  } = {},
 ): DomainEventDraft[] {
   const value = sqlite.prepare('SELECT * FROM message_runs WHERE run_id = ?').get(runId)
   if (!value) return []
@@ -603,17 +614,23 @@ export function completeRunMessage(
   // A plan-first turn only proposes: the checklist becomes a plan part, and nothing is handed off until the
   // person presses Start plan.
   if (mapping.plan_first && !mapping.orchestration_attempt_id) {
-    const text = message.parts
-      .filter((part) => part.kind === 'text')
-      .map((part) => part.text)
-      .join('\n')
+    const text =
+      reply !== undefined
+        ? redact(reply ?? '')
+        : message.parts
+            .filter((part) => part.kind === 'text')
+            .map((part) => part.text)
+            .join('\n')
     const plan = planPart(mapping.chain_id, parsePlanSteps(text, mapping.agents), now)
     if (plan) message.parts.push(plan)
   } else if (handoffs) {
-    const text = message.parts
-      .filter((part) => part.kind === 'text')
-      .map((part) => redact(part.text))
-      .join('\n')
+    const text =
+      reply !== undefined
+        ? redact(reply ?? '')
+        : message.parts
+            .filter((part) => part.kind === 'text')
+            .map((part) => redact(part.text))
+            .join('\n')
     const edges = z
       .array(z.object({ from: z.string(), to: z.string() }))
       .parse(

@@ -69,6 +69,11 @@ for (const line of lines) {
     spawn(process.execPath, ['-e', `setTimeout(() => {}, ${directive._orphan})`], {
       stdio: 'ignore',
     }).unref()
+  else if (directive._stderr !== undefined)
+    process.stderr.write(
+      directive._stderr.replace(/\{\{PAD:(\d+)\}\}/g, (_, count) => 'v'.repeat(Number(count))),
+    )
+  else if (directive._raw !== undefined) process.stdout.write(directive._raw)
   else if (directive._exit !== undefined) process.exit(directive._exit)
   // `{{PAD:n}}` stands for n filler characters, so a fixture can carry a very large tool result.
   else

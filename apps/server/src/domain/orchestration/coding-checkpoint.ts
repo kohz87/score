@@ -14,16 +14,65 @@ import type { Mismatch } from './fence.ts'
 // The database side of the coding-run journal (7.7a design v7 §2, §3): the per-launch projection, the checkpoint
 // sequence and the reconciliation that rebuilds what a restored or crashed database lacks. The journal is authoritative.
 
+// The authority-relevant projection of a launch: everything the journal's record carries, so reconciliation compares
+// full state and not just the sequence number (an equal number with a different phase or revocation is a divergence).
 const RowSchema = z.object({
   launch_id: z.string(),
+  run_id: z.string(),
+  turn_id: z.string(),
+  generation: z.int(),
+  phase: z.string(),
+  revoked: z.int(),
+  may_have_executed: z.int(),
+  unit: z.string().nullable(),
+  invocation_id: z.string().nullable(),
+  cgroup: z.string().nullable(),
+  proof: z.string().nullable(),
+  disposition: z.string().nullable(),
+  waiver: z.int(),
+  stop_cause: z.string().nullable(),
+  inherited: z.int(),
   journal_n: z.int(),
   unsendable: z.int(),
 })
+type Row = z.infer<typeof RowSchema>
+
+const ROW_COLUMNS =
+  'launch_id, run_id, turn_id, generation, phase, revoked, may_have_executed, unit, invocation_id, cgroup, proof, disposition, waiver, stop_cause, inherited, journal_n, unsendable'
+
+/** The fields in which a row differs from the journal's state for the same record number (empty = they agree). */
+function divergence(row: Row, state: CodingState): string[] {
+  const differs: string[] = []
+  const check = (name: string, mine: unknown, theirs: unknown) => {
+    if (mine !== theirs) differs.push(name)
+  }
+  check('run', row.run_id, state.runId)
+  check('turn', row.turn_id, state.turnId)
+  check('generation', row.generation, state.generation)
+  check('phase', row.phase, state.phase)
+  check('revoked', row.revoked, state.revoked ? 1 : 0)
+  check('release possibility', row.may_have_executed, state.mayHaveExecuted ? 1 : 0)
+  check('unit', row.unit, state.unit ?? null)
+  check('invocation', row.invocation_id, state.invocationId ?? null)
+  check('cgroup', row.cgroup, state.cgroup ?? null)
+  check('proof', row.proof, state.proof ?? null)
+  check('disposition', row.disposition, state.disposition ?? null)
+  check('waiver', row.waiver, state.waiver ? 1 : 0)
+  // The journal's first stop cause is the truth; a row with a cause the journal never saw is not a divergence.
+  if (state.stopCause !== undefined) check('stop cause', row.stop_cause, state.stopCause)
+  check('inherited', row.inherited, state.inherited ? 1 : 0)
+  if (isUnsendable(state) && row.unsendable === 0) differs.push('unsendable')
+  return differs
+}
 
 /** A launch that was released, revoked or ended can never be sent again, whatever happens to any fence. */
 export function isUnsendable(state: CodingState): boolean {
   return (
-    state.mayHaveExecuted || state.revoked || state.phase === 'ended' || state.phase === 'settled'
+    state.mayHaveExecuted ||
+    state.revoked ||
+    state.inherited === true ||
+    state.phase === 'ended' ||
+    state.phase === 'settled'
   )
 }
 
@@ -32,9 +81,12 @@ function upsertLaunch(sqlite: DatabaseSync, launch: CodingLaunch, now: string): 
   sqlite
     .prepare(
       `INSERT INTO coding_launches (launch_id, run_id, turn_id, generation, phase, revoked, may_have_executed, unit,
-         invocation_id, cgroup, proof, disposition, waiver, journal_n, unsendable, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (launch_id) DO UPDATE SET phase = excluded.phase, revoked = excluded.revoked,
+         invocation_id, cgroup, proof, disposition, waiver, stop_cause, inherited, journal_n, unsendable, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (launch_id) DO UPDATE SET run_id = excluded.run_id, turn_id = excluded.turn_id,
+         generation = excluded.generation, phase = excluded.phase, revoked = excluded.revoked,
+         stop_cause = COALESCE(excluded.stop_cause, coding_launches.stop_cause),
+         inherited = MAX(coding_launches.inherited, excluded.inherited),
          may_have_executed = excluded.may_have_executed, unit = excluded.unit, invocation_id = excluded.invocation_id,
          cgroup = excluded.cgroup, proof = excluded.proof, disposition = excluded.disposition, waiver = excluded.waiver,
          journal_n = excluded.journal_n, unsendable = MAX(coding_launches.unsendable, excluded.unsendable),
@@ -55,10 +107,96 @@ function upsertLaunch(sqlite: DatabaseSync, launch: CodingLaunch, now: string): 
       s.proof ?? null,
       s.disposition ?? null,
       s.waiver ? 1 : 0,
+      s.stopCause ?? null,
+      s.inherited ? 1 : 0,
       launch.n,
       isUnsendable(s) ? 1 : 0,
       now,
     )
+}
+
+function repairLaunch(sqlite: DatabaseSync, launch: CodingLaunch, now: string): void {
+  const s = launch.state
+  sqlite
+    .prepare(
+      `UPDATE coding_launches SET run_id = ?, turn_id = ?, generation = ?, phase = ?,
+         revoked = MAX(revoked, ?), may_have_executed = MAX(may_have_executed, ?), unit = ?, invocation_id = ?,
+         cgroup = ?, proof = ?, disposition = ?, waiver = ?, stop_cause = COALESCE(?, stop_cause),
+         inherited = MAX(inherited, ?), unsendable = MAX(unsendable, ?), updated_at = ?
+       WHERE launch_id = ?`,
+    )
+    .run(
+      s.runId,
+      s.turnId,
+      s.generation,
+      s.phase,
+      s.revoked ? 1 : 0,
+      s.mayHaveExecuted ? 1 : 0,
+      s.unit ?? null,
+      s.invocationId ?? null,
+      s.cgroup ?? null,
+      s.proof ?? null,
+      s.disposition ?? null,
+      s.waiver ? 1 : 0,
+      s.stopCause ?? null,
+      s.inherited ? 1 : 0,
+      isUnsendable(s) ? 1 : 0,
+      now,
+      s.launchId,
+    )
+}
+
+const CODING_INTENT_KIND = 'start_coding_run'
+
+/**
+ * The turn behind a launch the journal witnessed is never admitted again (a restored database may have lost the accepted
+ * intent and run): its start intent is retired as `failed`, which admission refuses, or created that way when the
+ * database lost it. An intent that was accepted with its run is left alone: that turn answers with its existing run.
+ * Returns the rows changed.
+ */
+function retireIntent(sqlite: DatabaseSync, state: CodingState, now: string): number {
+  const row = sqlite
+    .prepare('SELECT id, state, result FROM command_intents WHERE idempotency_key = ?')
+    .get(state.turnId) as { id: string; state: string; result: string | null } | undefined
+  const note = 'The journal witnessed this turn executing; it is never sent again.'
+  if (!row)
+    return Number(
+      sqlite
+        .prepare(
+          `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, last_error, created_at, updated_at)
+           VALUES (?, ?, ?, '{}', 'failed', ?, ?, ?)`,
+        )
+        .run(`retired-${state.launchId}`, CODING_INTENT_KIND, state.turnId, note, now, now).changes,
+    )
+  if (row.state === 'failed' || (row.state === 'accepted' && row.result)) return 0
+  return Number(
+    sqlite
+      .prepare(
+        `UPDATE command_intents SET state = 'failed', last_error = ?, updated_at = ? WHERE id = ?`,
+      )
+      .run(note, now, row.id).changes,
+  )
+}
+
+/**
+ * Whether this installation owns the process row of `runId` and may signal its group: false when the journal says the
+ * run's launch was inherited from another installation. A row with no evidence either way is this installation's own
+ * (the process-group engine keeps no journal). A copied home is frozen as a whole (`executionFrozen`), so this is only
+ * the second line of defence.
+ */
+export function ownsProcessRowIn(entries: readonly JournalEntry[], runId: string): boolean {
+  for (const launch of foldCodingLaunches(entries).values())
+    if (launch.state.runId === runId && launch.state.inherited) return false
+  return true
+}
+
+/** Whether the journal's evidence has made this turn permanently unsendable (admission and release check this). */
+export function turnWitnessed(sqlite: DatabaseSync, turnId: string): boolean {
+  return (
+    sqlite
+      .prepare('SELECT 1 FROM coding_launches WHERE turn_id = ? AND unsendable = 1 LIMIT 1')
+      .get(turnId) !== undefined
+  )
 }
 
 export function readCheckpoint(sqlite: DatabaseSync): number {
@@ -68,11 +206,17 @@ export function readCheckpoint(sqlite: DatabaseSync): number {
 }
 
 /** The projection `CodingJournal` calls inside its critical section: the launch row and the checkpoint, one commit. */
-export function codingProjection(db: ScoreDb, clock: () => number = Date.now): Projection {
+export function codingProjection(
+  db: ScoreDb,
+  clock: () => number = Date.now,
+  /** Extra columns the caller keeps beside the journal's state (part 3), written in the same commit. */
+  extra?: (sqlite: DatabaseSync, state: CodingState) => void,
+): Projection {
   return (entry: JournalEntry, state: CodingState) => {
     const now = new Date(clock()).toISOString()
     db.tx((sqlite) => {
       upsertLaunch(sqlite, { state, kind: kindOf(entry), n: entry.n }, now)
+      extra?.(sqlite, state)
       sqlite
         .prepare(
           'UPDATE coding_journal_checkpoint SET seq = MAX(seq, ?), updated_at = ? WHERE id = 1',
@@ -102,7 +246,7 @@ export function verifyCoding(
   const rows = new Map(
     z
       .array(RowSchema)
-      .parse(sqlite.prepare('SELECT launch_id, journal_n, unsendable FROM coding_launches').all())
+      .parse(sqlite.prepare(`SELECT ${ROW_COLUMNS} FROM coding_launches`).all())
       .map((row) => [row.launch_id, row] as const),
   )
   for (const [launchId, launch] of launches) {
@@ -124,7 +268,36 @@ export function verifyCoding(
           ? `The journal records coding launch ${launchId} as ${launch.kind}, but the database is behind it`
           : `The journal records coding launch ${launchId} (${launch.kind}), but the database has no record of it`,
       })
+    else if (row.journal_n > launch.n)
+      mismatches.push({
+        kind: 'journal',
+        ref: `coding:${launchId}`,
+        journalN: launch.n,
+        lost: true,
+        detail: `The database holds coding launch ${launchId} at record ${row.journal_n}, past the journal's ${launch.n}: the journal lost records`,
+      })
+    else {
+      const differs = divergence(row, launch.state)
+      if (differs.length > 0)
+        mismatches.push({
+          kind: 'journal',
+          ref: `coding:${launchId}`,
+          journalN: launch.n,
+          detail: `The database and the journal disagree about coding launch ${launchId} at record ${launch.n} (${differs.join(', ')})`,
+        })
+    }
   }
+  // The other direction: a launch the database knows and the journal does not. The journal keeps a permanent record of
+  // every launch (a tombstone at least), so the journal lost a witness; newer launches elsewhere don't make up for it.
+  for (const row of rows.values())
+    if (!launches.has(row.launch_id) && row.journal_n > 0)
+      mismatches.push({
+        kind: 'journal',
+        ref: `coding:${row.launch_id}`,
+        journalN: null,
+        lost: true,
+        detail: `The database holds coding launch ${row.launch_id} (record ${row.journal_n}), but the journal has no record of it: the journal lost a witness`,
+      })
   if (dbSeq < journalMax) {
     const newest = entries.findLast((entry) => entry.n === journalMax)
     if (!newest || !accepted.has(newest.n))
@@ -139,6 +312,7 @@ export function verifyCoding(
       kind: 'journal',
       ref: 'coding-checkpoint',
       journalN: null,
+      lost: true,
       detail: `The database's coding checkpoint (${dbSeq}) is ahead of the journal (${journalMax}): the journal lost coding records`,
     })
   return mismatches
@@ -156,16 +330,22 @@ export function applyCodingEvidence(
   now: string,
 ): number {
   let changed = 0
-  for (const launch of foldCodingLaunches(entries).values()) {
-    const before = sqlite
-      .prepare('SELECT journal_n FROM coding_launches WHERE launch_id = ?')
-      .get(launch.state.launchId) as { journal_n: number } | undefined
+  const folded = foldCodingLaunches(entries)
+  for (const launch of folded.values()) {
+    const found = sqlite
+      .prepare(`SELECT ${ROW_COLUMNS} FROM coding_launches WHERE launch_id = ?`)
+      .get(launch.state.launchId)
+    const before = found === undefined ? undefined : RowSchema.parse(found)
     if (!before || before.journal_n < launch.n) {
       upsertLaunch(sqlite, launch, now)
       changed++
+    } else if (before.journal_n === launch.n && divergence(before, launch.state).length > 0) {
+      // Same record number, different state: the journal's word stands, except that the two safety flags only grow.
+      repairLaunch(sqlite, launch, now)
+      changed++
     }
     // A launch the journal says executed stays unsendable even if its row was newer in some other respect.
-    if (isUnsendable(launch.state))
+    if (isUnsendable(launch.state)) {
       changed += Number(
         sqlite
           .prepare(
@@ -173,6 +353,9 @@ export function applyCodingEvidence(
           )
           .run(launch.state.launchId).changes,
       )
+      // Only an execution retires the turn; a launch revoked before release never ran, its turn may be retried.
+      if (launch.state.mayHaveExecuted) changed += retireIntent(sqlite, launch.state, now)
+    }
   }
   const journalMax = maxCodingN(entries)
   if (readCheckpoint(sqlite) !== journalMax) {

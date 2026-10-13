@@ -13,6 +13,7 @@ import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
 import { messageFromRow, storeMessage } from '../../src/domain/rooms.ts'
 import { RoutingDispatcher } from '../../src/domain/routing-dispatch.ts'
+import { resetDatabaseHistory } from '../../src/history-reset.ts'
 import { reserveMessageRun } from '../../src/domain/message-runs.ts'
 
 let dir: string
@@ -362,6 +363,78 @@ test('same-room turns serialize, build bounded redacted context at admission and
   } finally {
     await restarted.close()
   }
+})
+
+test('FU #3: a frozen home pumps no chat reply; the reply stays queued until the freeze is gone', async () => {
+  let holding: string | null = 'Score is holding all agent work: this folder is a copy.'
+  Object.assign(port, { executionHold: () => holding })
+  const run = vi.spyOn(port, 'startRun')
+  await send({ text: 'while frozen' })
+  expect(run).not.toHaveBeenCalled()
+  expect(
+    db.sqlite.prepare("SELECT count(*) AS n FROM message_runs WHERE state = 'pending'").get(),
+  ).toEqual({ n: 1 })
+  holding = null
+  await app.close()
+  const restarted = new RoutingDispatcher(db, ingest, port, () => undefined)
+  try {
+    await restarted.dispatch()
+    expect(run).toHaveBeenCalledTimes(1)
+  } finally {
+    await restarted.close()
+    Object.assign(port, { executionHold: undefined })
+  }
+})
+
+test('FU #4: reset-history retires a queued chat reply: nothing is dispatched after the reset', async () => {
+  let holding: string | null = 'Score is holding all agent work: this folder is a copy.'
+  Object.assign(port, { executionHold: () => holding })
+  const run = vi.spyOn(port, 'startRun')
+  await send({ text: 'queued while frozen' })
+  expect(run).not.toHaveBeenCalled()
+  // The probe of re-review 5: an inherited pending reply with no command intent survived the reset and was dispatched.
+  resetDatabaseHistory(db.sqlite, new Date().toISOString())
+  holding = null
+  await app.close()
+  const restarted = new RoutingDispatcher(db, ingest, port, () => undefined)
+  try {
+    await restarted.dispatch()
+    await advance(1100)
+    expect(run).not.toHaveBeenCalled()
+    expect(db.sqlite.prepare('SELECT state FROM message_runs').all()).toEqual([{ state: 'failed' }])
+  } finally {
+    await restarted.close()
+    Object.assign(port, { executionHold: undefined })
+  }
+})
+
+test('FT #4: reset-history retires an active reply with a run: a late @mention is no hand-off and Stop has no handle', async () => {
+  replies.lead = `${'Working through the details. '.repeat(30)} @builder please check`
+  const run = vi.spyOn(port, 'startRun')
+  await send({ text: 'long reply please' })
+  await advance(600)
+  const writing = messages().find((message) => message.author.kind === 'agent')!
+  expect(writing.streaming).toBe(true)
+  expect(db.sqlite.prepare('SELECT run_id, state FROM message_runs').get()).toMatchObject({
+    state: 'active',
+  })
+  // The probe of re-review 6: an active reply with a live run survives the reset and its late output hands off.
+  resetDatabaseHistory(db.sqlite, new Date().toISOString())
+  expect(
+    db.sqlite.prepare("SELECT count(*) AS n FROM runs WHERE status IN ('queued','running')").get(),
+  ).toEqual({ n: 0 })
+  await advance(30_000)
+  expect(run.mock.calls.map(([req]) => req.agentId)).toEqual(['lead'])
+  expect(
+    db.sqlite.prepare("SELECT 1 FROM message_runs WHERE agent_id = 'builder'").get(),
+  ).toBeUndefined()
+  expect(
+    db.sqlite
+      .prepare("SELECT count(*) AS n FROM message_runs WHERE state IN ('pending','active')")
+      .get(),
+  ).toEqual({ n: 0 })
+  const stopped = await post(`/api/rooms/${roomId}/messages/${writing.id}/stop`, {})
+  expect(stopped.statusCode).toBe(409)
 })
 
 test('an uncertain admission holds later turns and retries the same frozen input', async () => {

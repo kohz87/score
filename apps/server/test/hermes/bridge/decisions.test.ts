@@ -266,3 +266,16 @@ test('gate follow-up: an unqualified producer receives no decisions, even ones a
   env.db.sqlite.prepare('UPDATE producers SET gateway_approvals = 1').run()
   expect(await poll()).toHaveLength(1)
 })
+
+test('FT #4: nothing is leased to the plugin while Score holds all agent work, and the lease is issued once it lifts', async () => {
+  let holding: string | null = 'Score is holding all agent work.'
+  const port = createHermesPort({ mode: 'fake', home: env.home, fakeSpeed: 1, fakeLoop: false })
+  Object.assign(port, { executionHold: () => holding })
+  const held = new ApprovalOutbox({ db: env.db, ingest: env.ingest, port, clock: () => now })
+  const producerId = String(env.db.sqlite.prepare('SELECT id FROM producers').get()!.id)
+  expect(await held.claimBridge(producerId)).toEqual([])
+  expect(readDelivery(env.db.sqlite, id)).toMatchObject({ state: 'intent', cycle_attempts: 0 })
+  holding = null
+  expect(await held.claimBridge(producerId)).toHaveLength(1)
+  await held.stop()
+})

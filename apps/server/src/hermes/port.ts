@@ -330,6 +330,8 @@ export interface HermesPort extends ProfileManagementPort {
    * `unconfirmed` (coding agents only) = Stop was asked but the work is not proven ended; callers must not record the
    * Stop as acknowledged and should ask again. Hermes returns nothing.
    */
+  /** Why Score holds all agent work (decision 72), or null. Absent on ports that never hold. */
+  executionHold?(): string | null
   stopRun(req: { agentId: string; runId: string }): Promise<StopOutcome | void>
   /**
    * The MCP tool names the agent's serving Hermes process currently lists for the Score server (PLAN 7.5 v3.2: Hermes
@@ -399,6 +401,11 @@ export interface HermesPortDeps {
   imageReader?: ImageReader
   /** Live only: how rewinds reach the Score bridge inside an agent's gateway (the bridge routes share it). */
   rewindBroker?: RewindBroker
+  /**
+   * Why Score holds all agent work, or null (decision 71). While non-null, recovery of unfinished start intents sends
+   * nothing and delivers no Stop: whose runs those handles name can't be told. Evaluated at every recovery.
+   */
+  frozen?: () => string | null
 }
 
 export type ImageReader = (mediaId: string) => { contentType: string; bytes: Uint8Array } | null

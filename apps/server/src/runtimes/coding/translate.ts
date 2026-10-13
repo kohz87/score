@@ -18,6 +18,7 @@ import type { DomainEventDraft, Observation } from '../../hub/ingest.ts'
 import { guardedUpsert } from '../../hub/projections.ts'
 import { redact, redactBounded } from '../../redact.ts'
 import { readRun, runDraft, runLifecycle } from '../../hermes/index.ts'
+import { boundEvent, detailBytes, MAX_REMEMBERED_IDS, redactNote } from './note.ts'
 import { rememberCliSession } from './store.ts'
 import type { CodingEvent, ToolDetail } from './types.ts'
 
@@ -31,6 +32,18 @@ export interface RunTranslation {
   seq: number
   calls: Map<string, { seq: number; startedAt: string; detail?: ToolDetail }>
   usage: { input: number; output: number; costUsd: number | null } | null
+}
+/** Bytes the translator's per-run state holds (call ids and the tool details kept for their frames). */
+export function translationBytes(translation: RunTranslation): number {
+  let bytes = 0
+  for (const [id, call] of translation.calls)
+    bytes += Buffer.byteLength(id) + detailBytes(call.detail) + 64
+  return bytes
+}
+/** Bytes a result waiting to be saved holds: the translator's state plus the texts of the terminal record. */
+export function pendingBytes(translation: RunTranslation, info: TerminalInfo): number {
+  const size = (text: string | null | undefined) => Buffer.byteLength(text ?? '')
+  return translationBytes(translation) + size(info.output) + size(info.error) + size(info.reply)
 }
 export const newTranslation = (
   runId: string,
@@ -176,10 +189,12 @@ function framesFor(
  */
 export function eventObservation(
   translation: RunTranslation,
-  event: CodingEvent,
+  rawEvent: CodingEvent,
   index: number,
 ): Observation {
   const { runId, agentId } = translation
+  // Whatever a parser handed over, the values kept past this point are bounded (re-review #18).
+  const event = boundEvent(rawEvent)
   return {
     source: `coding:${agentId}`,
     identity: `coding:${runId}:${index}`,
@@ -214,16 +229,21 @@ export function eventObservation(
             .run(runId, seq, redactBounded(event.text, MAX_THINKING_CHARS))
           break
         case 'tool_start': {
+          // Calls that never end must not pile up: past the limit the oldest is forgotten (its end is then ignored).
+          if (translation.calls.size >= MAX_REMEMBERED_IDS)
+            translation.calls.delete(translation.calls.keys().next().value as string)
           translation.calls.set(event.callId, {
             seq,
             startedAt: now,
             ...(event.detail ? { detail: event.detail } : {}),
           })
+          // CLI metadata is redacted before it is bounded or stored: tool names and what is derived from them (#12).
+          const toolName = redactNote(event.tool, 200)
           sqlite
             .prepare(
               `INSERT INTO tool_calls (run_id, seq, tool, preview, status, started_at) VALUES (?, ?, ?, ?, 'running', ?) ON CONFLICT DO NOTHING`,
             )
-            .run(runId, seq, event.tool.slice(0, 200), redactBounded(event.preview, 2048), now)
+            .run(runId, seq, toolName, redactBounded(event.preview, 2048), now)
           const tools = z
             .array(z.object({ tool: z.string() }))
             .parse(
@@ -239,7 +259,7 @@ export function eventObservation(
               at: now,
               agentId,
               kind: 'tool',
-              text: redactBounded(`${event.tool}: ${event.preview}`, 2048),
+              text: redactBounded(`${toolName}: ${event.preview}`, 2048),
             },
           })
           drafts.push(...liveActivityDraft(sqlite, runId))
@@ -305,6 +325,8 @@ export interface TerminalInfo {
    * stays, marked unresolved, and the run is not termination evidence.
    */
   group?: 'released' | 'unconfirmed'
+  /** The eligible authoritative reply (7.7a §6): plans and hand-offs read only this. `null` = none; absent = legacy. */
+  reply?: string | null
 }
 
 /** The run ended: record it and finish the room reply (hand-offs only after a clean finish). */
@@ -348,6 +370,7 @@ export function terminalObservation(
           handoffs: info.status === 'completed' && info.group !== 'unconfirmed',
           status: info.status,
           error: info.error ?? null,
+          ...(info.reply === undefined ? {} : { reply: info.reply }),
         }),
       ]
     },

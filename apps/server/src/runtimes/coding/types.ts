@@ -20,7 +20,25 @@ export type CodingEvent =
     }
   | { kind: 'tool_end'; callId: string; ok: boolean; preview: string; exitCode?: number | null }
   | { kind: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number }
-  | { kind: 'result'; ok: boolean; text?: string; error?: string }
+  | {
+      kind: 'result'
+      ok: boolean
+      text?: string
+      error?: string
+      /**
+       * The pinned driver's acceptance rule (7.7a §6): whether this result may be used at all and which text is the
+       * authoritative reply. Absent = not eligible (defaults never imply success).
+       */
+      verdict?: ResultVerdict
+    }
+
+export interface ResultVerdict {
+  eligible: boolean
+  /** The authoritative reply when eligible. */
+  reply: string | null
+  /** Why not, when not eligible. */
+  reason: string | null
+}
 
 export type ToolDetail =
   | { type: 'command'; command: string; cwd?: string }
@@ -45,6 +63,13 @@ export interface LineParser {
   /** One non-empty stdout line. Unknown or malformed lines yield nothing and are counted. */
   parse(line: string): CodingEvent[]
   readonly stats: { unknown: number; malformed: number }
+  /**
+   * Why nothing this attempt produced may be authoritative, judged over the whole stream processed so far (a record that
+   * was dropped or invalid, also after the result). Asked once the stream is complete; null = no loss seen.
+   */
+  lossReason?(): string | null
+  /** Bytes the parser (and the candidate result it produced) currently hold; the installation budget charges this. */
+  retainedBytes?(): number
 }
 
 export interface DriverRunOptions {

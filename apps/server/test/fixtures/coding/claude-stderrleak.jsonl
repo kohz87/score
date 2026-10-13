@@ -1,0 +1,3 @@
+{"_fixture":"hand-made: a labelled secret with a very long value on stderr, then a failing exit (7.7a re-review #4)"}
+{"_stderr":"password={{PAD:10000}}\n"}
+{"_exit":1}

@@ -13,6 +13,9 @@ process.env.TMPDIR = root
 // journal folder still sets SCORE_JOURNAL_DIR itself.
 process.env.XDG_STATE_HOME = join(root, 'state')
 delete process.env.SCORE_JOURNAL_DIR
+// Coding runs on the host's real systemd user manager only where a test asks for it (the opt-in suites build their own
+// UnitBackend): a server started by a test never probes or starts a unit.
+process.env.SCORE_CODING_BACKEND = 'process-group'
 
 afterAll(() => {
   rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })

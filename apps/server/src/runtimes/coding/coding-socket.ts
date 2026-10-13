@@ -35,7 +35,13 @@ const SupervisorFrame = z.discriminatedUnion('t', [
     seq: z.number().int().positive(),
     data: z.string().max(Math.ceil((MAX_CHUNK_BYTES * 4) / 3) + 4),
   }),
-  z.object({ t: z.literal('eof'), stream: Stream, lastSeq: z.number().int().nonnegative() }),
+  z.object({
+    t: z.literal('eof'),
+    stream: Stream,
+    lastSeq: z.number().int().nonnegative(),
+    /** The supervisor closed its end of the pipe itself: unread output may be lost, so this is not a clean EOF. */
+    forced: z.boolean().optional(),
+  }),
   z.object({
     t: z.literal('exit'),
     code: z.number().int().nullable(),
@@ -66,6 +72,8 @@ export interface SessionOutcome {
   survivorsKilled: boolean
   /** Records dropped for size or because the last stdout line was partial at eof. */
   droppedRecords: number
+  /** The `ack-end` frame reached the kernel's socket buffer (not merely queued): only then can the close be a normal one. */
+  ackFlushed: boolean
 }
 
 export interface RunHandlers {
@@ -73,6 +81,13 @@ export interface RunHandlers {
   onStdoutRecord(line: string): void | Promise<void>
   /** Diagnostic stderr text (bounded, never parsed as records). */
   onStderr?(text: string): void
+  /**
+   * Score's side is about to stop the run on its own account (a broken bound, an ingestion failure, shutdown). Called
+   * BEFORE the stop frame goes out so the cause can be made durable first (review 2026-10-12 #17). It must not throw.
+   */
+  onStop?(cause: string): void
+  /** What the run keeps in memory besides queued records right now (the parser's retained values), in bytes. */
+  retainedBytes?(): number
 }
 
 export interface SocketLimits {
@@ -110,6 +125,9 @@ export class SocketStartError extends Error {
   }
 }
 
+/** Bookkeeping cost charged per queued record on top of its text (array slot, string header). */
+export const QUEUE_ENTRY_OVERHEAD_BYTES = 64
+
 interface Budget {
   used: number
   limit: number
@@ -139,11 +157,14 @@ export class RunSession {
     stderr: new StringDecoder('utf8'),
   }
   private stdoutPartial = ''
+  /** Budget bytes charged for `stdoutPartial` (released and recharged as it changes). */
+  private partialCharge = 0
   private skippingOversize = false
   private stderrKept = 0
   private exitInfo: { code: number | null; signal: string | null } | null = null
   private endFrame: Extract<SupervisorFrame, { t: 'end' }> | null = null
   private ackSent = false
+  private ackFlushed = false
   private violations: string[] = []
   private dropped = 0
   private ingestFailed = false
@@ -160,6 +181,8 @@ export class RunSession {
     private readonly handlers: RunHandlers,
     private readonly limits: SocketLimits,
     private readonly budget: Budget,
+    /** Bytes charged to the budget for what the run retains; grows with the parser's actual retained bytes. */
+    private readonly reservation: { bytes: number; floor: number } = { bytes: 0, floor: 0 },
   ) {
     this.ready = new Promise<ReadyInfo>((resolve, reject) => {
       this.resolveReady = resolve
@@ -202,28 +225,46 @@ export class RunSession {
   }
 
   /** @internal Shutdown: tell the supervisor to stop, then destroy the socket once the frame is flushed. */
-  shutdown(): Promise<void> {
+  shutdown(sendStop = true): Promise<void> {
     return new Promise((resolve) => {
       const socket = this.socket
       if (!socket || socket.destroyed) return resolve()
       socket.once('close', () => resolve())
+      // Held (re-review 6 #5): the socket is simply dropped; the supervisor's own disconnect containment ends the CLI.
+      if (!sendStop) return void socket.destroy()
       const line =
         JSON.stringify({ v: PROTOCOL_VERSION, t: 'stop', cause: 'score-shutdown' }) + '\n'
+      this.noteStop('score-shutdown')
       socket.write(line, () => socket.destroy())
       setTimeout(() => socket.destroy(), 1000).unref()
     })
   }
 
-  private send(frame: Record<string, unknown>): void {
+  private send(frame: Record<string, unknown>, flushed?: (ok: boolean) => void): void {
     const socket = this.socket
-    if (!socket || socket.destroyed) return
-    socket.write(JSON.stringify({ v: PROTOCOL_VERSION, ...frame }) + '\n')
+    if (!socket || socket.destroyed) return flushed?.(false)
+    socket.write(
+      JSON.stringify({ v: PROTOCOL_VERSION, ...frame }) + '\n',
+      flushed ? (error) => flushed(!error) : undefined,
+    )
+  }
+
+  /** Makes Score's own stop cause durable before the frame is sent; a failing hook never blocks the stop. */
+  private noteStop(cause: string): void {
+    try {
+      this.handlers.onStop?.(cause)
+    } catch {
+      // the hook reports its own failure; stopping matters more than the note
+    }
   }
 
   private violate(reason: string): void {
     if (!this.violations.includes(reason)) this.violations.push(reason)
     // A bound was broken or the stream is inconsistent: stop the run (once); the result is ineligible.
-    if (this.lastStopCause === null) this.send({ t: 'stop', cause: reason.slice(0, 64) })
+    if (this.lastStopCause === null) {
+      this.noteStop(reason.slice(0, 64))
+      this.send({ t: 'stop', cause: reason.slice(0, 64) })
+    }
     this.lastStopCause ??= reason
   }
 
@@ -255,6 +296,8 @@ export class RunSession {
     const parsed = SupervisorFrame.safeParse(raw)
     if (!parsed.success) return this.protocolError('bad-frame')
     const f = parsed.data
+    // Terminal order (design section 4): nothing follows `end`, and `end` follows both EOFs and the exit.
+    if (this.endFrame && f.t !== 'error') return this.protocolError('frame-after-end')
     switch (f.t) {
       case 'hello':
         return this.protocolError('duplicate-hello')
@@ -266,7 +309,7 @@ export class RunSession {
       case 'out':
         return this.onOut(f.stream, f.seq, f.data)
       case 'eof':
-        return this.onEof(f.stream, f.lastSeq)
+        return this.onEof(f.stream, f.lastSeq, f.forced === true)
       case 'exit':
         if (this.exitInfo) return this.protocolError('duplicate-exit')
         this.exitInfo = { code: f.code, signal: f.signal }
@@ -303,6 +346,7 @@ export class RunSession {
   private takeStdout(text: string): void {
     let rest = this.stdoutPartial + text
     this.stdoutPartial = ''
+    this.chargePartial(0)
     for (;;) {
       const nl = rest.indexOf('\n')
       if (nl < 0) break
@@ -316,12 +360,25 @@ export class RunSession {
     }
     if (this.skippingOversize) return
     if (Buffer.byteLength(rest) > this.limits.maxRecordBytes) {
-      // Over the per-line allowance: a dropped record, skipped up to its newline.
+      // Over the per-line allowance: a dropped record, skipped up to its newline, and the run is stopped (design 4).
       this.dropped += 1
       this.skippingOversize = true
-      return
+      return this.violate('record-too-large')
+    }
+    // The partial line is buffered text like any other: it counts against the installation-wide budget.
+    const size = Buffer.byteLength(rest)
+    if (this.budget.used + size > this.budget.limit) {
+      this.dropped += 1
+      this.skippingOversize = true
+      return this.violate('memory-budget')
     }
     this.stdoutPartial = rest
+    this.chargePartial(size)
+  }
+
+  private chargePartial(size: number): void {
+    this.budget.used += size - this.partialCharge
+    this.partialCharge = size
   }
 
   private takeStderr(text: string): void {
@@ -332,14 +389,17 @@ export class RunSession {
       Buffer.byteLength(text) <= room ? text : Buffer.from(text).subarray(0, room).toString('utf8')
     this.stderrKept += Buffer.byteLength(kept)
     this.handlers.onStderr?.(kept)
+    // Diagnostics are retained text too (FU #8).
+    this.chargeRetained()
   }
 
   private enqueue(line: string): void {
-    if (Buffer.byteLength(line) > this.limits.maxRecordBytes) {
+    const text = Buffer.byteLength(line)
+    if (text > this.limits.maxRecordBytes) {
       this.dropped += 1
-      return
+      return this.violate('record-too-large')
     }
-    const size = Buffer.byteLength(line)
+    const size = text + QUEUE_ENTRY_OVERHEAD_BYTES
     if (this.budget.used + size > this.budget.limit) {
       this.dropped += 1
       return this.violate('memory-budget')
@@ -361,18 +421,20 @@ export class RunSession {
     try {
       while (this.queue.length > 0) {
         const line = this.queue.shift()!
-        const size = Buffer.byteLength(line)
+        const size = Buffer.byteLength(line) + QUEUE_ENTRY_OVERHEAD_BYTES
         try {
           await this.handlers.onStdoutRecord(line)
         } catch {
           if (!this.ingestFailed) {
             this.ingestFailed = true
+            if (this.lastStopCause === null) this.noteStop('ingest-failure')
             this.lastStopCause ??= 'ingest-failure'
             this.send({ t: 'stop', cause: 'ingest-failure' })
           }
         }
         this.queueBytes -= size
         this.budget.used -= size
+        this.chargeRetained()
         if (this.readPaused && this.queueBytes <= this.limits.pauseBytes / 2) {
           this.readPaused = false
           this.socket?.resume()
@@ -384,14 +446,20 @@ export class RunSession {
     void this.maybeComplete()
   }
 
-  private onEof(stream: 'stdout' | 'stderr', lastSeq: number): void {
+  private onEof(stream: 'stdout' | 'stderr', lastSeq: number, forced: boolean): void {
     if (this.eofSeen[stream]) return this.protocolError('duplicate-eof')
     this.eofSeen[stream] = true
+    // A pipe the supervisor had to close itself is loss, not an end of stream (review 2026-10-12 #1).
+    if (forced) {
+      this.dropped += 1
+      this.violate(`forced-eof-${stream}`)
+    }
     if (lastSeq !== this.lastSeq[stream]) this.violate(`eof-seq-${stream}`)
     const tail = this.decoders[stream].end()
     if (stream === 'stdout') {
       const rest = this.stdoutPartial + tail
       this.stdoutPartial = ''
+      this.chargePartial(0)
       // A partial last stdout line is a dropped record (lossy); stderr's partial line is just text.
       if (rest.length > 0 && !this.skippingOversize) this.dropped += 1
       this.skippingOversize = false
@@ -400,6 +468,9 @@ export class RunSession {
 
   private onEnd(f: Extract<SupervisorFrame, { t: 'end' }>): void {
     if (this.endFrame) return this.protocolError('duplicate-end')
+    // `end` before both EOFs and the exit is out of order: never acknowledged, and the connection is dropped.
+    if (!this.eofSeen.stdout || !this.eofSeen.stderr || !this.exitInfo)
+      return this.protocolError('end-before-eof')
     this.endFrame = f
     void this.maybeComplete()
   }
@@ -408,7 +479,32 @@ export class RunSession {
   private async maybeComplete(): Promise<void> {
     if (!this.endFrame || this.ackSent || this.pumping || this.queue.length > 0) return
     this.ackSent = true
-    this.send({ t: 'ack-end' })
+    // Queued is not delivered: only a completed write makes the acknowledgment something the supervisor can have seen.
+    this.send({ t: 'ack-end' }, (ok) => {
+      this.ackFlushed = ok
+    })
+  }
+
+  /**
+   * Charges what the run really retains (the parser's values, which can far exceed any entry count) instead of a fixed
+   * reservation. Past the installation budget the run is stopped and ineligible (review 2026-10-12 #18).
+   */
+  private chargeRetained(): void {
+    const actual = this.handlers.retainedBytes?.()
+    if (actual === undefined || !Number.isFinite(actual)) return
+    const target = Math.max(this.reservation.floor, Math.ceil(actual))
+    const delta = target - this.reservation.bytes
+    const over = delta > 0 && this.budget.used + delta > this.budget.limit
+    // The parser really holds these bytes whether or not they fit: they stay charged (as debt, past the limit) until the
+    // state is cleared, so other runs can't be admitted on top of memory that is already in use (FV #3).
+    if (delta !== 0) {
+      this.budget.used += delta
+      this.reservation.bytes = target
+    }
+    if (over) {
+      this.dropped += 1
+      this.violate('memory-budget')
+    }
   }
 
   private reasons(): string[] {
@@ -430,9 +526,15 @@ export class RunSession {
     const ended = this.ackSent && this.endFrame !== null
     if (!this.readySeen) this.rejectReady(new Error('connection closed before ready'))
     const reasons = ended ? this.reasons() : [...this.reasons(), 'socket-loss']
+    // Normal only when the acknowledgment was actually written: a lost ack means the supervisor saw a closed socket.
+    if (ended && !this.ackFlushed) reasons.push('ack-not-flushed')
+    // Closing with records still queued or being ingested means output was acknowledged or counted before it was saved.
+    if (this.pumping || this.queue.length > 0) reasons.push('ingestion-incomplete')
     // Records still queued would be lost with the connection: they are not processed, so not complete.
+    this.stdoutPartial = ''
+    this.chargePartial(0)
     for (const line of this.queue) {
-      const size = Buffer.byteLength(line)
+      const size = Buffer.byteLength(line) + QUEUE_ENTRY_OVERHEAD_BYTES
       this.budget.used -= size
       this.queueBytes -= size
     }
@@ -445,6 +547,7 @@ export class RunSession {
       stopCause: this.endFrame?.stopCause ?? this.lastStopCause,
       survivorsKilled: this.endFrame?.survivorsKilled ?? false,
       droppedRecords: this.dropped,
+      ackFlushed: this.ackFlushed,
     })
   }
 }
@@ -454,13 +557,20 @@ interface Pending {
   specHash: string
   session: RunSession
   used: boolean
+  /** Budget bytes reserved for what the run keeps in memory besides queued records (released once, see `release`). */
+  reservation: { bytes: number; floor: number }
 }
+
+/** What an active run may keep in memory beyond queued records (retained text, remembered call ids): reserved up front. */
+export const RETAINED_RUN_BYTES = 512 * 1024
 
 export interface CodingSocketOptions {
   /** `$XDG_RUNTIME_DIR` (or a test directory). */
   runtimeDir: string
   installationId: string
   limits?: Partial<SocketLimits>
+  /** Why Score holds all agent work, or null (decisions 71 and 72). While held, Score sends no Stop frame of its own. */
+  frozen?: () => string | null
 }
 
 export class CodingSocketServer {
@@ -558,31 +668,82 @@ export class CodingSocketServer {
    * Registers a launch and returns its single-use token (bound to installation, launch, generation, spec hash and this
    * Score incarnation) and the session that will carry it. The token goes into the supervisor's spec file only.
    */
-  expect(args: { launch: string; generation: number; specHash: string; handlers: RunHandlers }): {
+  expect(args: {
+    launch: string
+    generation: number
+    specHash: string
+    handlers: RunHandlers
+    /** Bytes the run keeps in memory besides queued records; charged to the installation budget while it is active. */
+    retainedBytes?: number
+    /**
+     * Keep the reservation after the socket outcome (FW #8): the caller still holds the run's state (proof, translator,
+     * the terminal result awaiting delivery) and calls `releaseReservation` once that is cleared.
+     */
+    holdAfterOutcome?: boolean
+  }): {
     token: string
     session: RunSession
   } {
     if (this.pending.has(args.launch)) throw new Error('launch already registered')
+    const reserved = args.retainedBytes ?? 0
+    if (this.budget.used + reserved > this.budget.limit) throw new Error('memory-budget')
+    this.budget.used += reserved
+    const reservation = { bytes: reserved, floor: reserved }
     const session = new RunSession(
       args.launch,
       args.generation,
       args.handlers,
       this.limits,
       this.budget,
+      reservation,
     )
     this.pending.set(args.launch, {
       generation: args.generation,
       specHash: args.specHash,
       session,
       used: false,
+      reservation,
     })
-    void session.outcome.then(() => this.pending.delete(args.launch))
+    if (args.holdAfterOutcome !== true) void session.outcome.then(() => this.release(args.launch))
     return { token: this.tokenFor(args.launch, args.generation, args.specHash), session }
   }
 
   /** Forget a launch that will never connect (it was revoked before systemd-run). */
   forget(launch: string): void {
+    this.release(launch)
+  }
+
+  /** Releases a reservation kept with `holdAfterOutcome` (idempotent). */
+  releaseReservation(launch: string): void {
+    this.release(launch)
+  }
+
+  private readonly holds = new Map<string, number>()
+  /**
+   * Charges state kept after the socket is gone (a terminal result waiting to be saved). It may exceed the budget: the
+   * result must not be dropped, the charge only keeps new runs from piling more on top. Replaces an earlier hold.
+   */
+  hold(key: string, bytes: number): void {
+    this.unhold(key)
+    const charge = Math.max(0, Math.ceil(bytes))
+    this.holds.set(key, charge)
+    this.budget.used += charge
+  }
+
+  unhold(key: string): void {
+    const charge = this.holds.get(key)
+    if (charge === undefined) return
+    this.holds.delete(key)
+    this.budget.used -= charge
+  }
+
+  private release(launch: string): void {
+    const entry = this.pending.get(launch)
+    if (!entry) return
     this.pending.delete(launch)
+    this.budget.used -= entry.reservation.bytes
+    entry.reservation.bytes = 0
+    entry.reservation.floor = 0
   }
 
   private tokenFor(launch: string, generation: number, specHash: string): string {
@@ -670,7 +831,8 @@ export class CodingSocketServer {
    */
   async shutdown(): Promise<void> {
     const sessions = [...this.pending.values()].map((p) => p.session)
-    await Promise.all(sessions.map((s) => s.shutdown()))
+    const held = (this.options.frozen?.() ?? null) !== null
+    await Promise.all(sessions.map((s) => s.shutdown(!held)))
     for (const socket of this.sockets) socket.destroy()
     const server = this.server
     this.server = null

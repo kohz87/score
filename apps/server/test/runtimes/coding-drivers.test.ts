@@ -70,11 +70,12 @@ test('claude: unknown shapes and malformed lines are counted and dropped, never 
 
 test('claude: an error result is a failed result with the CLI’s message', () => {
   const events = parseAll(createClaudeParser(), 'claude-error')
-  expect(events.at(-1)).toEqual({
+  expect(events.at(-1)).toMatchObject({
     kind: 'result',
     ok: false,
     text: 'The model request failed',
     error: 'The model request failed',
+    verdict: { eligible: false, reply: null },
   })
 })
 
@@ -291,7 +292,7 @@ test('antigravity fixtures (recorded): a text turn becomes session, text and usa
     '\n',
   ])
   expect(events[3]).toEqual({ kind: 'usage', inputTokens: 12624, outputTokens: 1567 })
-  expect(events[4]).toEqual({ kind: 'result', ok: true })
+  expect(events[4]).toMatchObject({ kind: 'result', ok: true, verdict: { eligible: true } })
   expect(parser.stats).toEqual({ unknown: 0, malformed: 0 })
 })
 
@@ -325,7 +326,7 @@ test('antigravity: file, browser and plain tools map to frame details; unknown s
   expect(starts.map((e) => (e as { detail?: unknown }).detail)).toEqual([
     { type: 'command', command: 'ls -la', cwd: '/work' },
     { type: 'file', path: '/work/notes.txt', change: 'update' },
-    { type: 'browser', url: 'https://example.test/docs?token=abc#frag' },
+    { type: 'browser', url: 'https://example.test/docs?token=[redacted]#frag' },
     undefined,
   ])
   expect(starts[3]).toMatchObject({ tool: 'view_file', preview: '/work/notes.txt' })
@@ -338,7 +339,12 @@ test('antigravity: file, browser and plain tools map to frame details; unknown s
 
 test('antigravity: a failed result carries the CLI’s words, an unknown status is still a failure', () => {
   const events = parseAll(createAntigravityParser(), 'antigravity-error')
-  expect(events.at(-1)).toEqual({ kind: 'result', ok: false, error: 'The model request failed' })
+  expect(events.at(-1)).toMatchObject({
+    kind: 'result',
+    ok: false,
+    error: 'The model request failed',
+    verdict: { eligible: false },
+  })
 })
 
 test('antigravity argv per permission level; the prompt is in argv, bare slash/dash prompts are wrapped', () => {
@@ -439,4 +445,459 @@ test('antigravity: the file tools name their path by TargetFile / AbsolutePath',
   expect(parser.parse(line('view_file', { AbsolutePath: '/work/b.txt' }))[0]).toMatchObject({
     preview: '/work/b.txt',
   })
+})
+
+// ---- 7.7a design section 6: the acceptance matrix per pinned driver ----------------------------------------------
+
+const verdictOf = (events: CodingEvent[]) =>
+  (events.findLast((event) => event.kind === 'result') as Extract<CodingEvent, { kind: 'result' }>)
+    ?.verdict
+
+const claudeResult = (fields: Record<string, unknown>) =>
+  JSON.stringify({ type: 'result', ...fields })
+
+test('claude: only an explicit success with text is eligible; defaults never imply success (7.7a section 6)', () => {
+  const run = (fields: Record<string, unknown>) =>
+    verdictOf(createClaudeParser().parse(claudeResult(fields)))
+  expect(run({ subtype: 'success', is_error: false, result: 'Done.' })).toEqual({
+    eligible: true,
+    reply: 'Done.',
+    reason: null,
+  })
+  // Each default is a refusal: no subtype, no is_error, no text, empty text, an error flag, another subtype.
+  for (const fields of [
+    { is_error: false, result: 'Done.' },
+    { subtype: 'success', result: 'Done.' },
+    { subtype: 'success', is_error: false },
+    { subtype: 'success', is_error: false, result: '   ' },
+    { subtype: 'success', is_error: true, result: 'Done.' },
+    { subtype: 'error_max_turns', is_error: false, result: 'Done.' },
+  ])
+    expect(run(fields)?.eligible, JSON.stringify(fields)).toBe(false)
+})
+
+const codexLine = (value: unknown) => JSON.stringify(value)
+const agentMessage = (id: string, text: unknown, type = 'item.completed') =>
+  codexLine({ type, item: { id, type: 'agent_message', text } })
+const turnCompleted = codexLine({
+  type: 'turn.completed',
+  usage: { input_tokens: 1, output_tokens: 1 },
+})
+
+test('codex: the reply is the last validated agent_message before turn.completed (7.7a section 6)', () => {
+  const parser = createCodexParser()
+  const events = [
+    agentMessage('m1', 'First thoughts.'),
+    agentMessage('m2', 'The final answer.'),
+    turnCompleted,
+  ].flatMap((line) => parser.parse(line))
+  expect(verdictOf(events)).toEqual({ eligible: true, reply: 'The final answer.', reason: null })
+})
+
+test('codex: a malformed or empty agent_message, a dropped record or no message at all leaves no authority', () => {
+  const run = (lines: string[]) => {
+    const parser = createCodexParser()
+    return verdictOf(lines.flatMap((line) => parser.parse(line)))
+  }
+  // A completed message with the wrong shape or no text invalidates the whole turn, even with a good one after it.
+  expect(run([agentMessage('m1', 42), agentMessage('m2', 'Fine.'), turnCompleted])?.eligible).toBe(
+    false,
+  )
+  expect(run([agentMessage('m1', ''), agentMessage('m2', 'Fine.'), turnCompleted])?.eligible).toBe(
+    false,
+  )
+  expect(run([agentMessage('m1', '  \n'), turnCompleted])?.eligible).toBe(false)
+  // An unparseable line inside the turn is a dropped record.
+  expect(run([agentMessage('m1', 'Fine.'), 'not json at all', turnCompleted])?.eligible).toBe(false)
+  // A turn that said nothing, and a failed turn.
+  expect(run([turnCompleted])?.eligible).toBe(false)
+  expect(
+    run([agentMessage('m1', 'Fine.'), codexLine({ type: 'turn.failed', error: { message: 'x' } })])
+      ?.eligible,
+  ).toBe(false)
+  // Messages still streaming (not completed) are not validated messages.
+  expect(run([agentMessage('m1', 'Part', 'item.updated'), turnCompleted])?.eligible).toBe(false)
+})
+
+test('codex: a malformed agent_message (no or bad id, bad updated shape) invalidates authority, review #3', () => {
+  const run = (lines: string[]) => {
+    const parser = createCodexParser()
+    return verdictOf(lines.flatMap((line) => parser.parse(line)))
+  }
+  const noId = (type = 'item.completed') =>
+    codexLine({ type, item: { type: 'agent_message', text: 'Final.' } })
+  const badId = codexLine({
+    type: 'item.completed',
+    item: { id: '', type: 'agent_message', text: 'Final.' },
+  })
+  expect(run([agentMessage('m1', 'Preliminary.'), noId(), turnCompleted])?.eligible).toBe(false)
+  expect(run([agentMessage('m1', 'Preliminary.'), badId, turnCompleted])?.eligible).toBe(false)
+  expect(
+    run([agentMessage('m1', 'Preliminary.'), agentMessage('m2', 7, 'item.updated'), turnCompleted])
+      ?.eligible,
+  ).toBe(false)
+  expect(
+    run([agentMessage('m1', 'Preliminary.'), noId('item.updated'), turnCompleted])?.eligible,
+  ).toBe(false)
+  // The loss is sticky: a good message after it does not restore authority.
+  expect(run([noId(), agentMessage('m2', 'Fine.'), turnCompleted])?.eligible).toBe(false)
+})
+
+test('codex: loss is sticky for the whole attempt; a later turn in the same stream is not authoritative either (re-review #3)', () => {
+  const parser = createCodexParser()
+  const first = ['bad', agentMessage('m1', 'A'), turnCompleted].flatMap((l) => parser.parse(l))
+  expect(verdictOf(first)?.eligible).toBe(false)
+  const second = [agentMessage('m2', 'B'), turnCompleted].flatMap((l) => parser.parse(l))
+  // The first terminal closed the attempt: the second yields no verdict at all (FT #1) and the loss stays.
+  expect(verdictOf(second)).toBeUndefined()
+  expect(parser.lossReason?.()).toBeTruthy()
+})
+
+test('codex: an item record with no item, or a malformed started message, leaves no authority (re-review #3)', () => {
+  const run = (lines: string[]) => {
+    const parser = createCodexParser()
+    const events = lines.flatMap((line) => parser.parse(line))
+    return { verdict: verdictOf(events), loss: parser.lossReason?.() ?? null }
+  }
+  const nullItem = codexLine({ type: 'item.completed', item: null })
+  const startedNoText = codexLine({
+    type: 'item.started',
+    item: { id: 'm3', type: 'agent_message' },
+  })
+  expect(run([agentMessage('m1', 'Final.'), nullItem, turnCompleted]).verdict?.eligible).toBe(false)
+  expect(run([agentMessage('m1', 'Final.'), startedNoText, turnCompleted]).verdict?.eligible).toBe(
+    false,
+  )
+  expect(run([agentMessage('m1', 'Final.'), turnCompleted]).loss).toBeNull()
+})
+
+test('codex: a record dropped or invalid after turn.completed still takes the authority away, asked once the stream is done (re-review #3)', () => {
+  const parser = createCodexParser()
+  const events = [agentMessage('m1', 'Final.'), turnCompleted].flatMap((l) => parser.parse(l))
+  expect(verdictOf(events)?.eligible).toBe(true)
+  expect(parser.lossReason?.()).toBeNull()
+  parser.parse('not json at all')
+  expect(parser.lossReason?.()).toBeTruthy()
+  const other = createCodexParser()
+  ;[agentMessage('m1', 'Final.'), turnCompleted].forEach((l) => other.parse(l))
+  other.parse(codexLine({ type: 'item.completed', item: null }))
+  expect(other.lossReason?.()).toBeTruthy()
+})
+
+test('antigravity: SUCCESS and a non-empty response are eligible, and the response wins over commentary (7.7a section 6)', () => {
+  const result = (status: string, response: string | undefined) =>
+    JSON.stringify({
+      event: 'result',
+      result: { status, ...(response === undefined ? {} : { response }) },
+    })
+  const parse = (status: string, response: string | undefined) =>
+    verdictOf(createAntigravityParser().parse(result(status, response)))
+  expect(parse('SUCCESS', 'The answer.')).toEqual({
+    eligible: true,
+    reply: 'The answer.',
+    reason: null,
+  })
+  expect(parse('SUCCESS', '   ')?.eligible).toBe(false)
+  expect(parse('SUCCESS', undefined)?.eligible).toBe(false)
+  expect(parse('ERROR', 'The answer.')?.eligible).toBe(false)
+  expect(parse('success', 'The answer.')?.eligible).toBe(false)
+})
+
+// ---- FZ1 (re-review 2026-10-12 #1, #18) ------------------------------------------------------------------------------
+
+const runCodex = (lines: string[]) => {
+  const parser = createCodexParser()
+  const events = lines.flatMap((line) => parser.parse(line))
+  return { events, verdict: verdictOf(events), lost: parser.lossReason?.() ?? null }
+}
+const finalMessage = agentMessage('m1', 'All done.')
+
+test('#1: any rejected recognised Codex record takes the authority of the attempt, terminal ones and later ones too', () => {
+  const rejected: Record<string, string> = {
+    'command with no command': codexLine({
+      type: 'item.completed',
+      item: { id: 'c1', type: 'command_execution' },
+    }),
+    'file change with bad changes': codexLine({
+      type: 'item.completed',
+      item: { id: 'f1', type: 'file_change', changes: 'nope' },
+    }),
+    'mcp call without a tool': codexLine({
+      type: 'item.completed',
+      item: { id: 'x1', type: 'mcp_tool_call' },
+    }),
+    'search without a query': codexLine({
+      type: 'item.completed',
+      item: { id: 's1', type: 'web_search' },
+    }),
+    'reasoning without text': codexLine({
+      type: 'item.completed',
+      item: { id: 'r1', type: 'reasoning' },
+    }),
+  }
+  for (const [name, line] of Object.entries(rejected)) {
+    // Before the terminal record and after it: the verdict is decided once the whole stream was processed.
+    const before = runCodex([finalMessage, line, turnCompleted])
+    expect(before.verdict?.eligible, name).toBe(false)
+    const after = runCodex([finalMessage, turnCompleted, line])
+    expect(after.lost, name).not.toBeNull()
+  }
+  // Malformed terminal records.
+  const badCompleted = codexLine({ type: 'turn.completed', usage: 'many' })
+  const badFailed = codexLine({ type: 'turn.failed', error: 7 })
+  expect(runCodex([finalMessage, turnCompleted, badFailed]).lost).not.toBeNull()
+  expect(runCodex([finalMessage, badCompleted]).lost).not.toBeNull()
+  expect(runCodex([finalMessage, badCompleted, turnCompleted]).verdict?.eligible).toBe(false)
+  // A clean attempt keeps its authority.
+  const clean = runCodex([finalMessage, turnCompleted])
+  expect(clean.verdict?.eligible).toBe(true)
+  expect(clean.lost).toBeNull()
+})
+
+test('#18: ids, tool details and candidate replies are bounded, and the parser reports what it really holds', () => {
+  const parser = createCodexParser()
+  const hugeId = 'i'.repeat(200_000)
+  const events: CodingEvent[] = []
+  for (let n = 0; n < 64; n++)
+    events.push(
+      ...parser.parse(
+        codexLine({
+          type: 'item.started',
+          item: { id: `${hugeId}${n}`, type: 'command_execution', command: 'c'.repeat(500_000) },
+        }),
+      ),
+    )
+  const starts = events.filter((e) => e.kind === 'tool_start')
+  expect(starts).toHaveLength(64)
+  for (const start of starts) {
+    expect(Buffer.byteLength(start.callId)).toBeLessThanOrEqual(256)
+    if (start.detail?.type === 'command')
+      expect(Buffer.byteLength(start.detail.command)).toBeLessThanOrEqual(16 * 1024)
+  }
+  // Distinct long ids stay distinct, and the same id maps to the same short id (the end pairs with the start).
+  expect(new Set(starts.map((s) => s.callId)).size).toBe(64)
+  expect(parser.retainedBytes!()).toBeLessThan(64 * 300)
+  // A candidate reply past the limit is never an authoritative reply.
+  const big = runCodex([agentMessage('m1', 'r'.repeat(300 * 1024)), turnCompleted])
+  expect(big.verdict?.eligible).toBe(false)
+  const ok = createCodexParser()
+  ;[agentMessage('m1', 'r'.repeat(100 * 1024)), turnCompleted].forEach((l) => ok.parse(l))
+  expect(ok.retainedBytes!()).toBeGreaterThanOrEqual(100 * 1024)
+})
+
+test('#18: Claude and Antigravity results and tool details are bounded too', () => {
+  const claude = createClaudeParser()
+  const events = claude.parse(
+    JSON.stringify({
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 't'.repeat(10_000),
+            name: 'Bash',
+            input: { command: 'c'.repeat(300_000) },
+          },
+        ],
+      },
+    }),
+  )
+  const start = events.find((e) => e.kind === 'tool_start')!
+  expect(start.kind === 'tool_start' && Buffer.byteLength(start.callId)).toBeLessThanOrEqual(256)
+  const result = claude.parse(claudeResult({ result: 'r'.repeat(400 * 1024) }))
+  expect(verdictOf(result)).toMatchObject({ eligible: false })
+})
+
+// ---- FW #5 -----------------------------------------------------------------------------------------------------------
+
+test('FW #5: Codex unknown records are loss unless explicitly allow-listed', () => {
+  const unknownTop = codexLine({ type: 'mystery.notice', note: 'x' })
+  const unknownItem = codexLine({ type: 'item.completed', item: { id: 'u1', type: 'hologram' } })
+  expect(runCodex([finalMessage, turnCompleted, unknownTop]).lost).not.toBeNull()
+  expect(runCodex([finalMessage, unknownItem, turnCompleted]).verdict?.eligible).toBe(false)
+  // Allow-listed: a todo list item, the retry notice.
+  const todo = codexLine({ type: 'item.completed', item: { id: 't1', type: 'todo_list' } })
+  const notice = codexLine({ type: 'error', message: 'Reconnecting... 1/5' })
+  const clean = runCodex([finalMessage, todo, notice, turnCompleted])
+  expect(clean.lost).toBeNull()
+  expect(clean.verdict?.eligible).toBe(true)
+})
+
+test('FW #5: Claude Code gets the same final loss check: rejected and unknown records take the authority', () => {
+  const run = (lines: string[]) => {
+    const parser = createClaudeParser()
+    const events = lines.flatMap((line) => parser.parse(line))
+    return { verdict: verdictOf(events), lost: parser.lossReason?.() ?? null }
+  }
+  const success = JSON.stringify({
+    type: 'result',
+    subtype: 'success',
+    is_error: false,
+    result: 'Done.',
+  })
+  const rejectedError = JSON.stringify({
+    type: 'result',
+    subtype: 'error',
+    is_error: 'yes',
+    result: 'It failed.',
+  })
+  expect(run([success]).lost).toBeNull()
+  expect(run([success, rejectedError]).lost).not.toBeNull()
+  expect(run([success, JSON.stringify({ type: 'mystery' })]).lost).not.toBeNull()
+  expect(run([success, JSON.stringify({ type: 'assistant', message: 7 })]).lost).not.toBeNull()
+  expect(run([success, 'not json']).lost).not.toBeNull()
+  const badBlock = JSON.stringify({
+    type: 'assistant',
+    message: { content: [{ type: 'tool_use', name: 'Bash' }] },
+  })
+  expect(run([success, badBlock]).lost).not.toBeNull()
+  // Allow-listed notices keep the authority.
+  const notices = [
+    JSON.stringify({ type: 'stream_event', event: {} }),
+    JSON.stringify({ type: 'rate_limit_event' }),
+    JSON.stringify({ type: 'system', subtype: 'hook_started' }),
+  ]
+  expect(run([...notices, success]).lost).toBeNull()
+})
+
+test('FW #5: Antigravity unknown records are loss; telemetry is allow-listed', () => {
+  const parser = createAntigravityParser()
+  parser.parse(JSON.stringify({ event: 'telemetry', x: 1 }))
+  expect(parser.lossReason?.()).toBeNull()
+  parser.parse(JSON.stringify({ event: 'mystery' }))
+  expect(parser.lossReason?.()).not.toBeNull()
+})
+
+// ---- FV #3 -----------------------------------------------------------------------------------------------------------
+
+test('FV #3: Codex `error` records are ignorable only as a validated retry notice before the turn ended', () => {
+  const fatal = codexLine({ type: 'error', message: 'fatal: the final output was lost' })
+  const retry = codexLine({ type: 'error', message: 'Reconnecting... 2/5' })
+  const malformed = codexLine({ type: 'error', message: { nested: true } })
+  const noMessage = codexLine({ type: 'error' })
+  // The probe of re-review 4: a validated answer and turn.completed, then an error claiming fatal output loss.
+  const late = runCodex([finalMessage, turnCompleted, fatal])
+  expect(late.lost).not.toBeNull()
+  expect(late.verdict?.eligible).toBe(true) // the verdict was already given; the final loss check takes the authority
+  // A retry notice after the verdict is still too late to be a notice about the turn.
+  expect(runCodex([finalMessage, turnCompleted, retry]).lost).not.toBeNull()
+  // Before the verdict: an error that reports a failure, a malformed one and one without a message all lose it.
+  expect(runCodex([finalMessage, fatal, turnCompleted]).lost).not.toBeNull()
+  expect(runCodex([finalMessage, malformed, turnCompleted]).lost).not.toBeNull()
+  expect(runCodex([finalMessage, noMessage, turnCompleted]).lost).not.toBeNull()
+  // The retry notice before the verdict keeps it.
+  const clean = runCodex([retry, finalMessage, turnCompleted])
+  expect(clean.lost).toBeNull()
+  expect(clean.verdict?.eligible).toBe(true)
+})
+
+test('FU #2: only the anchored `Reconnecting... n/m` notice is harmless; messages that merely mention a retry are loss', () => {
+  const text = (message: string) => codexLine({ type: 'error', message })
+  for (const message of [
+    'stream disconnected: fatal output loss; no retries remain',
+    'Retrying fatal',
+    'reconnecting... 1/5',
+    'Reconnecting... 0/5',
+    'Reconnecting... 6/5',
+    'Reconnecting... x/5',
+    ' Reconnecting... 1/5',
+    'error: Reconnecting... 1/5',
+  ]) {
+    expect(runCodex([finalMessage, text(message), turnCompleted]).lost, message).not.toBeNull()
+    expect(runCodex([text(message), finalMessage, turnCompleted]).lost, message).not.toBeNull()
+  }
+  // Extra fields that could report a failure are not a plain notice either.
+  const extra = codexLine({ type: 'error', message: 'Reconnecting... 1/5', fatal: true })
+  expect(runCodex([extra, finalMessage, turnCompleted]).lost).not.toBeNull()
+  // The anchored form, with a reason after it, is the notice.
+  const reason = text('Reconnecting... 2/5 (stream disconnected before completion)')
+  expect(runCodex([reason, finalMessage, turnCompleted]).lost).toBeNull()
+})
+
+test('FV #3: Claude Code system records: only known notices that report no error, and only before the result', () => {
+  const run = (lines: string[]) => {
+    const parser = createClaudeParser()
+    const events = lines.flatMap((line) => parser.parse(line))
+    return { verdict: verdictOf(events), lost: parser.lossReason?.() ?? null }
+  }
+  const success = JSON.stringify({
+    type: 'result',
+    subtype: 'success',
+    is_error: false,
+    result: 'Done.',
+  })
+  const system = (extra: object) => JSON.stringify({ type: 'system', ...extra })
+  expect(run([system({ subtype: 'hook_started' }), success]).lost).toBeNull()
+  expect(run([system({ subtype: 'api_retry', error: 'overloaded' }), success]).lost).toBeNull()
+  // The probe of re-review 4: an unknown system error record after a clean success.
+  expect(run([success, system({ subtype: 'error', message: 'output lost' })]).lost).not.toBeNull()
+  expect(run([system({ subtype: 'fatal_error' }), success]).lost).not.toBeNull()
+  // A known subtype that reports an error, a record with no subtype, and a notice after the result.
+  expect(run([system({ subtype: 'hook_response', is_error: true }), success]).lost).not.toBeNull()
+  expect(run([system({}), success]).lost).not.toBeNull()
+  expect(run([success, system({ subtype: 'hook_started' })]).lost).not.toBeNull()
+})
+
+test('a real Claude Code read-only turn (record order and shapes captured 2026-10-13, ids stripped) keeps its success', () => {
+  const parser = createClaudeParser()
+  const lines = [
+    {
+      type: 'system',
+      subtype: 'init',
+      session_id: '88888888-8888-4888-8888-888888888888',
+      tools: [],
+      cwd: '/w',
+    },
+    {
+      type: 'system',
+      subtype: 'commands_changed',
+      session_id: '88888888-8888-4888-8888-888888888888',
+      commands: [],
+    },
+    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'ok' }] } },
+    { type: 'rate_limit_event', rate_limit_info: { status: 'allowed' } },
+    { type: 'result', subtype: 'success', is_error: false, result: 'ok', num_turns: 1 },
+  ]
+  const events = lines.flatMap((line) => parser.parse(JSON.stringify(line)))
+  expect(parser.lossReason?.() ?? null).toBeNull()
+  expect(verdictOf(events)?.eligible).toBe(true)
+})
+
+// ---- FT #1 (re-review 6): one terminal per attempt -----------------------------------------------------------------
+
+test('FT #1: codex turn.failed followed by a message and turn.completed is loss; the failure is never replaced', () => {
+  const parser = createCodexParser()
+  const events = [
+    codexLine({ type: 'turn.failed', error: { message: 'x' } }),
+    agentMessage('m1', 'All done.'),
+    turnCompleted,
+  ].flatMap((line) => parser.parse(line))
+  expect(events.filter((event) => event.kind === 'result')).toHaveLength(1)
+  expect(verdictOf(events)?.eligible).toBe(false)
+  expect(parser.lossReason?.()).toBeTruthy()
+})
+
+test('FT #1: codex turn.completed followed by turn.failed, or by a second completion, is loss', () => {
+  for (const second of [
+    codexLine({ type: 'turn.failed', error: { message: 'x' } }),
+    turnCompleted,
+  ]) {
+    const parser = createCodexParser()
+    const events = [agentMessage('m1', 'Done.'), turnCompleted, second].flatMap((line) =>
+      parser.parse(line),
+    )
+    expect(events.filter((event) => event.kind === 'result')).toHaveLength(1)
+    expect(parser.lossReason?.()).toBeTruthy()
+  }
+})
+
+test('FT #1: claude error result followed by an explicit success is loss and the first result stands', () => {
+  const parser = createClaudeParser()
+  const events = [
+    claudeResult({ subtype: 'error_during_execution', is_error: true, result: 'x' }),
+    claudeResult({ subtype: 'success', is_error: false, result: 'Done.' }),
+  ].flatMap((line) => parser.parse(line))
+  expect(events.filter((event) => event.kind === 'result')).toHaveLength(1)
+  expect(verdictOf(events)?.eligible).toBe(false)
+  expect(parser.lossReason?.()).toBeTruthy()
 })

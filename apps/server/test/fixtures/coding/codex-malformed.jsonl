@@ -1,0 +1,6 @@
+{"_fixture":"hand-made: a completed agent_message of the wrong shape invalidates authority for the turn"}
+{"type":"thread.started","thread_id":"0199aaaa-0000-7000-8000-000000000012"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":42}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"Done. @reviewer please look."}}
+{"type":"turn.completed","usage":{"input_tokens":5,"cached_input_tokens":0,"output_tokens":6}}

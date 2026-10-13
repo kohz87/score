@@ -92,16 +92,29 @@ export function validateUnitName(name: string): boolean {
   return name.length <= MAX_UNIT_NAME && UNIT_NAME.test(name)
 }
 
-/** `score-coding-<installation8>-<launch id>.service`: globally unique per launch and never reused (design 6b). */
-export function unitNameFor(installationId: string, launchId: string): string {
-  const name = `score-coding-${installationId.slice(0, 8)}-${launchId.replaceAll(/[^A-Za-z0-9]/g, '')}.service`
+/** The unit-name prefix of an installation: `score-<installation8>-c-` (lead answer, part 3). */
+export function unitPrefix(installationId: string): string {
+  return `score-${installationId.slice(0, 8)}-c-`
+}
+
+/**
+ * `score-<installation8>-c-<launch id without dashes>.service`. Launch ids are server-minted UUIDv4s, so the name is
+ * globally unique per launch and never reused (design 6b). The exact name is stored in the launch row and the journal
+ * record and is never derived again from other fields. `prefix` is a test seam (the opt-in suite uses `score-test-…`).
+ */
+export function unitNameFor(installationId: string, launchId: string, prefix?: string): string {
+  const name = `${prefix ?? unitPrefix(installationId)}${launchId.replaceAll(/[^A-Za-z0-9]/g, '')}.service`
   if (!validateUnitName(name)) throw new Error('cannot build a valid unit name')
   return name
 }
 
 /** Whether a unit name carries this installation's prefix (necessary, not sufficient: the journal decides ownership). */
-export function hasInstallationPrefix(name: string, installationId: string): boolean {
-  return validateUnitName(name) && name.startsWith(`score-coding-${installationId.slice(0, 8)}-`)
+export function hasInstallationPrefix(
+  name: string,
+  installationId: string,
+  prefix?: string,
+): boolean {
+  return validateUnitName(name) && name.startsWith(prefix ?? unitPrefix(installationId))
 }
 
 // ---- systemd-run argv ----------------------------------------------------------------------------------------------
@@ -232,10 +245,19 @@ export interface UnitState {
   result: string
   /** A job (start/stop) is queued or running for the unit. */
   jobPending: boolean
+  /** The main process as systemd last ran it (kept after it exited): pid, exit status and how it ended (1 = exited). */
+  execMainPid: number
+  execMainStatus: number | null
+  execMainCode: number | null
 }
 
 export type UnitLookup =
   { kind: 'present'; state: UnitState } | { kind: 'absent' } | { kind: 'unknown'; detail: string }
+
+function numberOrNull(text: string | undefined): number | null {
+  if (text === undefined || !/^\d+$/.test(text)) return null
+  return Number(text)
+}
 
 export function parseUnitState(text: string): UnitState {
   const m = parseShow(text)
@@ -249,6 +271,9 @@ export function parseUnitState(text: string): UnitState {
     controlGroup: m.get('ControlGroup') ?? '',
     result: m.get('Result') ?? '',
     jobPending: job !== '' && job !== '0',
+    execMainPid: Number(m.get('ExecMainPID') ?? '0') || 0,
+    execMainStatus: numberOrNull(m.get('ExecMainStatus')),
+    execMainCode: numberOrNull(m.get('ExecMainCode')),
   }
 }
 
@@ -261,6 +286,9 @@ const SHOW_PROPS = [
   'ControlGroup',
   'Result',
   'Job',
+  'ExecMainPID',
+  'ExecMainStatus',
+  'ExecMainCode',
 ]
 
 /**
@@ -283,20 +311,59 @@ export async function showUnit(run: RunTool, name: string): Promise<UnitLookup> 
   return { kind: 'present', state }
 }
 
+/** Units of this installation the manager has loaded (active, failed or inactive). Transport errors are `unknown`. */
+export async function listInstallationUnits(
+  run: RunTool,
+  prefix: string,
+): Promise<{ kind: 'ok'; names: string[] } | { kind: 'unknown'; detail: string }> {
+  const r = await run(SYSTEMCTL, [
+    '--user',
+    'list-units',
+    '--all',
+    '--plain',
+    '--no-legend',
+    '--no-pager',
+    '--full',
+    '--type=service',
+    `${prefix}*`,
+  ])
+  if (r.code !== 0) return { kind: 'unknown', detail: r.failed ?? r.stderr.trim().slice(0, 200) }
+  const names = r.stdout
+    .split('\n')
+    .map((line) => line.trim().split(/\s+/)[0] ?? '')
+    // A failed unit is listed with a bullet in front of the name on some versions.
+    .map((name) => name.replace(/^[●*]+/, ''))
+    .filter((name) => name.startsWith(prefix) && validateUnitName(name))
+  return { kind: 'ok', names: [...new Set(names)] }
+}
+
+/** Names of the variables the user manager exports (`show-environment`): added to the unit's deny list. */
+export async function managerEnvironmentNames(run: RunTool): Promise<string[]> {
+  const r = await run(SYSTEMCTL, ['--user', 'show-environment'])
+  if (r.code !== 0) return []
+  return r.stdout
+    .split('\n')
+    .map((line) => line.slice(0, Math.max(0, line.indexOf('='))))
+    .filter((name) => ENV_NAME.test(name))
+}
+
 export type UnitAction = 'stopped' | 'reset' | 'absent' | 'mismatch' | 'uncertain' | 'unknown'
 
 const ACTIVE = new Set(['active', 'activating', 'deactivating', 'reloading', 'refreshing'])
 
 /**
  * `systemctl --user stop <exact name>`, only while the unit's InvocationID is the recorded one, and re-checked after
- * the call (design section 6b): a mismatch after the call is uncertainty (fence), not success.
+ * the call (design section 6b): a mismatch after the call is uncertainty (fence), not success. Score's backend no
+ * longer stops by name (re-review #5: the check and the stop are not one step); this stays for the opt-in suite and
+ * tooling, with the same ownership gate as `resetUnit`.
  */
 export async function stopUnit(
   run: RunTool,
   name: string,
   invocationId: string,
+  prefix?: string,
 ): Promise<UnitAction> {
-  return actOnUnit(run, name, invocationId, 'stop')
+  return actOnUnit(run, name, invocationId, 'stop', prefix)
 }
 
 /** `reset-failed` (collection), with the same exact-name and InvocationID gate; only after settled + ended proof. */
@@ -304,8 +371,9 @@ export async function resetUnit(
   run: RunTool,
   name: string,
   invocationId: string,
+  prefix?: string,
 ): Promise<UnitAction> {
-  return actOnUnit(run, name, invocationId, 'reset-failed')
+  return actOnUnit(run, name, invocationId, 'reset-failed', prefix)
 }
 
 async function actOnUnit(
@@ -313,8 +381,11 @@ async function actOnUnit(
   name: string,
   invocationId: string,
   verb: 'stop' | 'reset-failed',
+  prefix?: string,
 ): Promise<UnitAction> {
   if (!validateUnitName(name) || invocationId === '') return 'unknown'
+  // A unit outside the caller's own namespace (another installation's, or a copied witness) is never acted on.
+  if (prefix !== undefined && !name.startsWith(prefix)) return 'unknown'
   const before = await showUnit(run, name)
   if (before.kind === 'unknown') return 'unknown'
   if (before.kind === 'absent') return 'absent'

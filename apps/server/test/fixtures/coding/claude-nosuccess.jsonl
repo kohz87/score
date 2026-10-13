@@ -1,0 +1,4 @@
+{"_fixture":"hand-made: a result event without the explicit success markers (7.7a section 6: defaults never imply success)"}
+{"type":"system","subtype":"init","session_id":"66666666-6666-4666-8666-666666666666","model":"claude-sonnet-fixture"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Looks finished to me."}]}}
+{"type":"result","result":"Looks finished to me.","session_id":"66666666-6666-4666-8666-666666666666","usage":{"input_tokens":3,"output_tokens":4}}

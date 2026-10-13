@@ -124,16 +124,14 @@ test('unit names are validated; arguments with control characters or relative pa
   expect(() => buildSystemRun({ ...base, unit: 'bad name.service' })).toThrow()
   expect(() => buildSystemRun({ ...base, home: 'relative' })).toThrow()
   expect(() => buildSystemRun({ ...base, spec: '/a\nb' })).toThrow()
-  expect(unitNameFor('0123456789abcdef', 'LAUNCH-1_x')).toBe(
-    'score-coding-01234567-LAUNCH1x.service',
-  )
-  expect(hasInstallationPrefix('score-coding-01234567-a.service', '0123456789abcdef')).toBe(true)
-  expect(hasInstallationPrefix('score-coding-99999999-a.service', '0123456789abcdef')).toBe(false)
+  expect(unitNameFor('0123456789abcdef', 'LAUNCH-1_x')).toBe('score-01234567-c-LAUNCH1x.service')
+  expect(hasInstallationPrefix('score-01234567-c-a.service', '0123456789abcdef')).toBe(true)
+  expect(hasInstallationPrefix('score-99999999-c-a.service', '0123456789abcdef')).toBe(false)
 })
 
 test('systemctl show output is parsed into unit state; Job marks a pending job', () => {
   const text =
-    'LoadState=loaded\nActiveState=active\nSubState=running\nMainPID=123\nInvocationID=abc\nControlGroup=/user.slice/x.service\nResult=success\nJob=77\n'
+    'LoadState=loaded\nActiveState=active\nSubState=running\nMainPID=123\nInvocationID=abc\nControlGroup=/user.slice/x.service\nResult=success\nJob=77\nExecMainPID=122\nExecMainStatus=0\nExecMainCode=1\n'
   expect(parseShow(text).get('MainPID')).toBe('123')
   expect(parseUnitState(text)).toEqual({
     loadState: 'loaded',
@@ -144,8 +142,13 @@ test('systemctl show output is parsed into unit state; Job marks a pending job',
     controlGroup: '/user.slice/x.service',
     result: 'success',
     jobPending: true,
+    execMainPid: 122,
+    execMainStatus: 0,
+    execMainCode: 1,
   })
   expect(parseUnitState('LoadState=loaded\n').jobPending).toBe(false)
+  // A unit that never ran its main process reports nothing: unknown, never a clean zero.
+  expect(parseUnitState('LoadState=loaded\nExecMainStatus=\n').execMainStatus).toBeNull()
 })
 
 test('cgroup.events and population: populated 0/1, absent directory, unreadable', () => {

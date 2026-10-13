@@ -5,7 +5,15 @@ import type { ScoreDb } from '../../db/index.ts'
 import { HttpError } from '../../errors.ts'
 import { recordRefusal } from './ops.ts'
 import { applyCodingEvidence, verifyCoding } from './coding-checkpoint.ts'
-import { journalDispatches, type ExecutionJournal, type JournalEntry } from './journal.ts'
+import { foldCodingLaunches } from './coding-records.ts'
+import {
+  foldHistory,
+  historyHold,
+  journalDispatches,
+  type ExecutionJournal,
+  type JournalEntry,
+  type LaunchFolder,
+} from './journal.ts'
 
 // The persistent global admission fence (design v3). It is set when the journal and the database disagree, when the
 // journal is unreadable or missing, or when the operator restored a backup; only a recorded human decision lifts it.
@@ -30,6 +38,8 @@ export interface Mismatch {
   ref: string
   journalN: number | null
   detail: string
+  /** The database holds more than the journal does: the journal lost records (a truncated or replaced file). */
+  lost?: boolean
 }
 
 export function readGlobal(sqlite: DatabaseSync) {
@@ -365,6 +375,63 @@ export function applyJournalEvidence(
   return changed
 }
 
+/**
+ * Orchestration-only loss (decision 72): every attempt the database says was dispatched has a `send_started` record (or
+ * the tombstone compaction leaves) in the journal. One without it means the journal lost a witness (a truncated or
+ * replaced file) even when no coding state is involved. Attempts of an archived history (created before the newest
+ * reset, or retired by it) are exempt: their witnesses are in the archive.
+ */
+export function unjournaledAttempts(
+  sqlite: DatabaseSync,
+  entries: readonly JournalEntry[],
+  scope: string,
+): Mismatch[] {
+  const known = journalDispatches(entries.filter((entry) => entry.scope === scope))
+  const resetAt = foldHistory(entries, scope).resetAt
+  const rows = sqlite
+    .prepare(
+      `SELECT id, created_at, dispatch_generation FROM orc_attempts WHERE dispatch_generation > 0 AND unknown_reason IS NOT 'history_reset'`,
+    )
+    .all() as { id: string; created_at: string; dispatch_generation: number }[]
+  // The journal is written before the database commits a dispatch, so it can never hold an older generation of an
+  // attempt than the database does: a surviving older word (a refusal, an earlier send) is a truncated journal, not a
+  // match (re-review 6 #7). A generation of 0 is a tombstone that kept no number.
+  const lostWitness = (row: { id: string; dispatch_generation: number }): boolean => {
+    const witness = known.get(row.id)
+    return !witness || (witness.generation > 0 && witness.generation < row.dispatch_generation)
+  }
+  return rows
+    .filter((row) => lostWitness(row) && (resetAt === null || row.created_at >= resetAt))
+    .slice(0, 20)
+    .map((row) => ({
+      kind: 'attempt' as const,
+      ref: row.id,
+      journalN: null,
+      lost: true,
+      detail: `The database dispatched attempt ${row.id}, but the journal has no record of that: the journal lost a witness`,
+    }))
+}
+
+/**
+ * Launch folders that hold receipts the journal has no launch for: evidence this installation can't account for (the
+ * journal lost a witness). No lift, time or earlier decision accounts for them; only `reset-history` does.
+ */
+export function unownedLaunchFolders(
+  entries: readonly JournalEntry[],
+  folders: readonly LaunchFolder[],
+): Mismatch[] {
+  const known = foldCodingLaunches(entries)
+  return folders
+    .filter((folder) => !known.has(folder.id))
+    .map(({ id }) => ({
+      kind: 'journal' as const,
+      ref: `launch-folder:${id}`,
+      journalN: null,
+      lost: true,
+      detail: `A launch folder (${id}) holds receipts, but the journal has no coding launch with that id: the journal lost a witness`,
+    }))
+}
+
 export function fenceItems(sqlite: DatabaseSync): FenceItem[] {
   const seq = readGlobal(sqlite).fence_seq
   return z
@@ -405,6 +472,18 @@ export function fenceView(sqlite: DatabaseSync, journal: ExecutionJournal): Glob
   }
 }
 
+/**
+ * What the person reads (fence screen, coding card) while Score holds all agent work. A frozen state is only left with
+ * `scripts/score installation reset-history`; an unresolved installation says what to do about the installation instead.
+ */
+export function holdingNotice(why: string, resettable = true): string {
+  const reason = why.trim().replace(/[.]$/, '')
+  return `Score is holding all agent work: ${reason}.${resettable ? ' Run scripts/score installation reset-history to continue.' : ''}`
+}
+
+/** The fence item that carries the freeze (the web fence screen shows its sentence and no lift button). */
+export const FROZEN_REF = 'execution-frozen'
+
 export class GlobalFenceStore {
   /** Set when the installation identity is unresolved (copied home, ambiguity, corrupt registry): no admission, and
    * the person cannot lift the fence until they have resolved it (`score installation confirm-move|confirm-copy`). */
@@ -412,6 +491,98 @@ export class GlobalFenceStore {
 
   setHardBlock(message: string | null): void {
     this.hardBlock = message
+  }
+
+  /** The installation registry says this home is a copy of another installation (until its history is reset). */
+  /** Set once the journal file has been seen: its later absence is a loss, never a fresh namespace. */
+  private journalSeen = false
+  private lostHistory: string | null = null
+  private lostPersisted = false
+
+  private copiedFrom: string | undefined
+  setCopiedFrom(id: string | undefined): void {
+    this.copiedFrom = id
+  }
+
+  /**
+   * FV (decision 71): why Score holds all agent work, or null. One predicate for the executor, Hermes intent recovery,
+   * the coding runtime and the unit backend: while it is non-null nothing is dispatched, no Stop is delivered, no
+   * recovery signals anything. Unresolved installation is derived; the persisted states (a copied home, a lost or
+   * truncated execution journal) are left only by `reset-history`.
+   */
+  executionFrozen(): string | null {
+    if (this.hardBlock !== null) return this.hardBlock
+    // Callers ask from inside their own transactions too (the bridge lease, verification #1): answer on that one.
+    const inTx = this.db.sqlite.isTransaction
+    const why = inTx
+      ? this.executionFrozenIn(this.db.sqlite)
+      : this.db.read((sqlite) => this.executionFrozenIn(sqlite))
+    // A journal that vanished is remembered for good (latched in memory at once, persisted at the first chance outside a
+    // transaction), so recreating the file can't thaw it.
+    if (this.lostHistory !== null && !this.lostPersisted && !inTx) {
+      try {
+        this.freeze(this.lostHistory)
+        this.lostPersisted = true
+      } catch {
+        // the in-memory latch keeps answering
+      }
+    }
+    return why
+  }
+
+  /**
+   * The same, inside a transaction the caller already holds. Sticky (decision 72): the database says so, OR the journal's
+   * newest freeze record is not superseded by a completed reset, OR the journal can't be read at all. A restored older
+   * database therefore can't forget a freeze the journal remembers.
+   */
+  executionFrozenIn(sqlite: DatabaseSync): string | null {
+    if (this.hardBlock !== null) return this.hardBlock
+    const stored =
+      (
+        sqlite.prepare('SELECT frozen_reason FROM orc_global WHERE id = 1').get() as
+          { frozen_reason: string | null } | undefined
+      )?.frozen_reason ?? null
+    if (stored !== null) return stored
+    if (this.lostHistory !== null) return this.lostHistory
+    // An established journal that disappears while Score runs is history lost, not a fresh start (re-review 6 #7).
+    // Checked here so it precedes every dispatch decision and append that asks the predicate.
+    if (this.journal.isFresh()) {
+      if (this.journalSeen)
+        return (this.lostHistory = 'the execution journal disappeared while Score was running')
+    } else this.journalSeen = true
+    const history = this.journal.historyState()
+    if (!history.ok) return `the execution journal cannot be read (${history.reason})`
+    return historyHold(history)
+  }
+
+  /** `executionFrozen()` as the sentence the person reads, or null. */
+  frozenNotice(): string | null {
+    const why = this.executionFrozen()
+    return why === null ? null : holdingNotice(why, this.hardBlock === null)
+  }
+
+  /** Persists the freeze (the first reason stays) and raises the fence with the sentence as its only way forward. */
+  freeze(why: string): void {
+    // The durable evidence outside the database first; the database flag below stands on its own if the journal can't
+    // take the record. Once per freeze: a later start finds the earlier record.
+    try {
+      const history = this.journal.historyState()
+      // A journal that vanished reads as not ok, yet takes this one record (verification #5); a damaged one refuses it.
+      if (!history.ok || historyHold(history) === null)
+        this.journal.append({ kind: 'execution-freeze', reason: why.slice(0, 1000) })
+    } catch {
+      // unreadable or unwritable: executionFrozen() treats an unreadable journal as frozen anyway
+    }
+    this.db.tx((sqlite) =>
+      sqlite
+        .prepare('UPDATE orc_global SET frozen_reason = COALESCE(frozen_reason, ?) WHERE id = 1')
+        .run(why),
+    )
+    this.set(
+      'execution_frozen',
+      [{ kind: 'journal', ref: FROZEN_REF, journalN: null, detail: holdingNotice(why) }],
+      { untrustedHistory: true },
+    )
   }
 
   constructor(
@@ -486,7 +657,8 @@ export class GlobalFenceStore {
       )
     if (current.fenced !== 1)
       throw new HttpError(409, 'conflict', 'Nothing is blocked, so there is nothing to unblock.')
-    if (this.hardBlock !== null) throw new HttpError(409, 'fenced', this.hardBlock)
+    const frozen = this.frozenNotice()
+    if (frozen !== null) throw new HttpError(409, 'fenced', frozen)
     const accepted = this.db
       .read((sqlite) =>
         z
@@ -558,12 +730,18 @@ export class GlobalFenceStore {
     if (this.hardBlock !== null) {
       reasons.push('installation_unresolved')
       this.set('installation_unresolved', [
-        { kind: 'journal', ref: 'installation', journalN: null, detail: this.hardBlock },
+        {
+          kind: 'journal',
+          ref: FROZEN_REF,
+          journalN: null,
+          detail: holdingNotice(this.hardBlock, false),
+        },
       ])
     }
     const marker = this.journal.readRestoreMarker()
     const fresh = this.journal.isFresh()
     const opened = this.journal.open()
+    this.checkHistoryGeneration(reasons)
     if (marker !== undefined) {
       reasons.push('restore')
       this.set(
@@ -583,6 +761,11 @@ export class GlobalFenceStore {
         ],
         { untrustedHistory: true },
       )
+      // A confirmed copy holds everything it inherited, and the marker is about to go: remember that for good.
+      if (marker !== 'malformed' && marker.origin === 'copy')
+        this.freeze(
+          `this folder is a copy of ${marker.backup}, and what it inherited is not its own`,
+        )
       this.journal.clearRestoreMarker()
     }
     if (!opened) {
@@ -598,29 +781,57 @@ export class GlobalFenceStore {
       ])
     } else {
       const entries = this.journal.readOwn()
+      // A copy (confirmed in the registry) holds all agent work until its history is reset, whatever happened to the
+      // marker or the database since.
+      if (
+        this.copiedFrom !== undefined &&
+        entries.ok &&
+        !entries.entries.some((entry) => entry.kind === 'history-reset')
+      ) {
+        reasons.push('execution_frozen')
+        this.freeze(
+          `this folder is a copy of installation ${this.copiedFrom}, and what it inherited is not its own`,
+        )
+      }
+      const lost = this.journal.missingHistory()
       const sqliteHasHistory = this.db.read(
         (sqlite) =>
           sqlite.prepare('SELECT 1 FROM orc_attempts WHERE sent_at IS NOT NULL LIMIT 1').get() !==
-          undefined,
+            undefined ||
+          sqlite.prepare('SELECT 1 FROM coding_launches LIMIT 1').get() !== undefined,
       )
-      if (fresh && sqliteHasHistory) {
-        // The database remembers admissions but the journal has never existed here: it was deleted or moved.
+      if (fresh && (sqliteHasHistory || lost !== undefined)) {
+        // The database remembers admissions (or the folder remembers its own history) but the journal is not there:
+        // it was deleted or moved. A missing file is "fresh" only when nothing else says otherwise (FZ3 #13). Nothing
+        // here can say what ran, so Score freezes until the person starts a new history.
         reasons.push('journal_missing')
-        this.set('journal_missing', [
-          {
-            kind: 'journal',
-            ref: 'journal',
-            journalN: null,
-            detail: 'The database records admissions, but the execution journal does not exist',
-          },
-        ])
+        this.freeze(
+          lost !== undefined
+            ? `the execution journal does not exist, although ${lost}`
+            : 'the database records admissions, but the execution journal does not exist',
+        )
       } else if (entries.ok) {
-        const mismatches = this.db.read((sqlite) => verifyJournal(sqlite, entries.entries))
+        const now = new Date(this.clock()).toISOString()
+        const mismatches = [
+          ...this.db.read((sqlite) => verifyJournal(sqlite, entries.entries)),
+          ...unownedLaunchFolders(entries.entries, this.journal.launchDirectories()),
+          ...this.db.read((sqlite) =>
+            unjournaledAttempts(sqlite, entries.entries, this.journal.scope),
+          ),
+        ]
+        // The journal holds less than the database or the launch folders witnessed (truncated, replaced): nothing
+        // automatic can say what ran, so this freezes too (decision 71).
+        const lostRecords = mismatches.filter((item) => item.lost === true)
+        if (lostRecords.length > 0) {
+          reasons.push('journal_truncated')
+          this.freeze(
+            `the execution journal holds less than this installation witnessed (${lostRecords[0]!.detail})`,
+          )
+        }
         if (mismatches.length > 0) {
           reasons.push('journal_mismatch')
           this.set('journal_mismatch', mismatches)
           // What the journal says was sent is never sendable again, whatever happens to the fence.
-          const now = new Date(this.clock()).toISOString()
           this.db.tx((sqlite) => applyJournalEvidence(sqlite, entries.entries, now))
         }
       }
@@ -630,14 +841,82 @@ export class GlobalFenceStore {
   }
 
   /**
+   * The journal and the database must name the same history (decision 72). A database that doesn't carry the generation
+   * of the journal's completed reset predates it (a restored backup): its retired work would come back. A database that
+   * names a generation the journal doesn't hold has lost its journal. Both freeze, durably.
+   */
+  private checkHistoryGeneration(reasons: string[]): void {
+    const history = this.journal.historyState()
+    if (!history.ok) return // executionFrozen() already reports an unreadable journal
+    const stored = this.db.read(
+      (sqlite) =>
+        (
+          sqlite.prepare('SELECT history_generation FROM orc_global WHERE id = 1').get() as
+            { history_generation: string | null } | undefined
+        )?.history_generation ?? null,
+    )
+    if (history.generation !== null && history.complete) {
+      if (stored === history.generation) return
+      // A database with no history of its own (brand new, or the reset ran before it existed) adopts the generation.
+      if (stored === null && !this.databaseHoldsExecutionHistory()) {
+        this.db.tx((sqlite) =>
+          sqlite
+            .prepare('UPDATE orc_global SET history_generation = ? WHERE id = 1')
+            .run(history.generation),
+        )
+        return
+      }
+      reasons.push('history_generation_mismatch')
+      this.freeze(
+        'the database is not the one that was reset (it looks like a backup from before the history reset)',
+      )
+    } else if (history.generation === null && stored !== null) {
+      reasons.push('history_generation_mismatch')
+      this.freeze(
+        'the database belongs to a history that was reset, but the execution journal does not hold that reset',
+      )
+    }
+  }
+
+  /**
+   * Whether the database carries any execution state at all (re-review 6 #2): attempts, launches, intents, steps, chat
+   * replies, runs or approval deliveries that are not provably over. Only a database with none of it is "brand new" and
+   * may adopt the journal's reset generation; a backup that still holds executable work must freeze instead.
+   */
+  private databaseHoldsExecutionHistory(): boolean {
+    const probes: [table: string, where: string][] = [
+      ['orc_attempts', '1'],
+      ['coding_launches', '1'],
+      ['command_intents', '1'],
+      ['orc_steps', "status IN ('pending_gate', 'queued', 'admitted')"],
+      ['message_runs', "state IN ('pending', 'active')"],
+      ['runs', "status NOT IN ('completed', 'failed', 'cancelled', 'interrupted')"],
+      ['approval_deliveries', '1'],
+    ]
+    return this.db.read((sqlite) =>
+      probes.some(([table, where]) => {
+        // A table an older schema doesn't have holds nothing.
+        if (
+          sqlite
+            .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
+            .get(table) === undefined
+        )
+          return false
+        return sqlite.prepare(`SELECT 1 FROM ${table} WHERE ${where} LIMIT 1`).get() !== undefined
+      }),
+    )
+  }
+
+  /**
    * The fence an earlier start raised because the installation was unresolved is the only one the person's
    * `score installation confirm-*` already decided: once the identity resolves, nothing else holds it up.
    */
   private liftResolvedInstallationBlock(): void {
     const row = this.db.read((sqlite) => readGlobal(sqlite))
     if (row.fenced !== 1 || row.reason !== 'installation_unresolved') return
+    if (this.executionFrozen() !== null) return
     const items = this.db.read((sqlite) => fenceItems(sqlite))
-    if (items.some((item) => item.ref !== 'installation')) return
+    if (items.some((item) => item.ref !== FROZEN_REF)) return
     this.lift(row.revision, 'the installation was confirmed')
   }
 

@@ -1,9 +1,11 @@
+import { DatabaseSync } from 'node:sqlite'
 import { GlobalFenceSchema } from '@score/contract'
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { loadConfig } from '../src/config.ts'
+import { resetHistory } from '../src/history-reset.ts'
 import { confirmCopy, confirmMove } from '../src/installation.ts'
 import { startServer } from '../src/start-server.ts'
 
@@ -81,15 +83,56 @@ test('a copied home starts, but every admission is blocked and the fence cannot 
   const result = confirmCopy({ journalDir: join(root, 'journal'), home: copy })
   if (!result.ok) throw new Error(result.message)
   expect(result.id).not.toBe(id)
+  // The copied database holds a pending coding turn the source started (FY2 #10): the copy must never send it, and
+  // nothing retires it behind the person's back either: Score holds all agent work until reset-history (decision 71).
+  const copied = new DatabaseSync(join(copy, 'score.db'))
+  copied
+    .prepare(
+      `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at)
+       VALUES ('ci-1', 'start_coding_run', 'turn-copied', '{}', 'pending', '2026-10-12T00:00:00Z', '2026-10-12T00:00:00Z')`,
+    )
+    .run()
+  copied.close()
   const third = await start(copy)
   try {
     expect(third.server.installation).toMatchObject({ ok: true, id: result.id })
+    const intent = new DatabaseSync(join(copy, 'score.db'), { readOnly: true })
+    expect(
+      intent.prepare("SELECT state FROM command_intents WHERE id = 'ci-1'").get(),
+    ).toMatchObject({ state: 'pending' })
+    intent.close()
     const fence = await third.fence()
     expect(fence).toMatchObject({ fenced: true, untrustedHistory: true })
     expect(fence.items.map((item) => item.detail).join('\n')).toMatch(/is a copy of installation/)
-    expect((await third.lift(fence.revision)).statusCode).toBe(200)
+    const holding = fence.items.find((item) => item.ref === 'execution-frozen')
+    expect(holding?.detail).toMatch(
+      /^Score is holding all agent work: .*Run scripts\/score installation reset-history to continue\.$/,
+    )
+    const lifted = await third.lift(fence.revision)
+    expect(lifted.statusCode).toBe(409)
+    expect(lifted.json().error.message).toMatch(/reset-history/)
   } finally {
     await third.server.close()
+  }
+  // reset-history (Score stopped) starts a fresh history: the copy runs, and the intent is retired for good.
+  const namespace = join(root, 'journal', result.id)
+  resetHistory({
+    journalDir: join(root, 'journal'),
+    namespaceDir: namespace,
+    installationId: result.id,
+    home: copy,
+    dbFile: join(copy, 'score.db'),
+  })
+  const fourth = await start(copy)
+  try {
+    expect(await fourth.fence()).toMatchObject({ fenced: false })
+    const intent = new DatabaseSync(join(copy, 'score.db'), { readOnly: true })
+    expect(
+      intent.prepare("SELECT state FROM command_intents WHERE id = 'ci-1'").get(),
+    ).toMatchObject({ state: 'failed' })
+    intent.close()
+  } finally {
+    await fourth.server.close()
   }
   // The source is untouched.
   const again = await start(home)

@@ -104,10 +104,14 @@ vi.mock('../src/domain/orchestration/executor.ts', () => ({
   },
 }))
 vi.mock('../src/domain/orchestration/fence.ts', () => ({
+  isFenced: () => false,
+  fenceItems: () => [],
   GlobalFenceStore: class {
     startupCheck = () => ({ fenced: false, reasons: [] })
     fenceUnverifiedRoot = () => false
     setHardBlock = () => undefined
+    setCopiedFrom = () => undefined
+    frozenNotice = () => null
   },
 }))
 // Installation identity and the journal migration have their own tests (installation, orchestration/journal-migration).
@@ -123,7 +127,10 @@ vi.mock('../src/domain/orchestration/journal-migration.ts', () => ({
   migrateLegacyJournal: () => ({ ok: true, state: 'none', copied: 0 }),
 }))
 vi.mock('../src/domain/orchestration/journal.ts', () => ({
-  ExecutionJournal: class {},
+  ExecutionJournal: class {
+    // The coding runtime's fallback recovery reads its own records at start (7.7a FX2).
+    readOwn = () => []
+  },
   journalScope: () => 'scope',
 }))
 vi.mock('../src/auth/sqlite-session-store.ts', () => ({

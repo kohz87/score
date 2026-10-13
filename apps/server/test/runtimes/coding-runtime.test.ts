@@ -69,13 +69,17 @@ async function boot(
     killGroup?: CodingRuntimeDeps['killGroup']
     reapRetryMs?: number
     stopObserveMs?: number
+    onStop?: (cause: string) => void
+    ownsProcessRow?: (runId: string) => boolean
+    frozen?: () => string | null
+    ingestWrap?: (ingest: Ingest) => Pick<Ingest, 'submit'>
   } = {},
 ) {
   setEnv('SCORE_CODING_FAKE_LOG', log)
   setEnv('SCORE_CODING_FAKE_VERSION', options.version)
   coding = new CodingRuntime({
     db,
-    ingest,
+    ingest: options.ingestWrap ? options.ingestWrap(ingest) : ingest,
     locator: new CliLocator({ fakeCli: FAKE_CLI, cacheMs: 0 }),
     home,
     policy: defaultRootPolicy([home]),
@@ -85,6 +89,9 @@ async function boot(
     ...(options.killGroup ? { killGroup: options.killGroup } : {}),
     ...(options.reapRetryMs ? { reapRetryMs: options.reapRetryMs } : {}),
     ...(options.stopObserveMs ? { stopObserveMs: options.stopObserveMs } : {}),
+    ...(options.onStop ? { onStop: options.onStop } : {}),
+    ...(options.ownsProcessRow ? { ownsProcessRow: options.ownsProcessRow } : {}),
+    ...(options.frozen ? { frozen: options.frozen } : {}),
     // Counts launches and keeps the pids, so a test can prove nothing started or that a child is gone.
     spawn: (spawnOptions) => {
       launches++
@@ -554,15 +561,34 @@ test('output is redacted before it is stored: reply text, tool previews, frames'
   expect(stored).toContain('[redacted]')
 })
 
-test('unknown CLI events are dropped, not stored', async () => {
+test('allow-listed CLI notices are dropped, not stored, and do not cost the result', async () => {
   await addAgent()
   await makeRoom()
-  await say('@coder [fixture:unknown] go')
+  await say('@coder [fixture:ignorable] go')
   await finished()
   expect(runs()[0]!.status).toBe('completed')
   expect(JSON.stringify(db.sqlite.prepare('SELECT data FROM events').all())).not.toContain(
     'rate_limit_event',
   )
+})
+
+test('FW #5: unknown or unparseable CLI records are dropped, not stored, and the answer is not used', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:unknown] go')
+  await finished()
+  expect(runs()[0]!.status).toBe('failed')
+  expect(JSON.stringify(db.sqlite.prepare('SELECT data FROM events').all())).not.toContain(
+    'rate_limit_event',
+  )
+})
+
+test('FW #5: an explicit Claude success followed by a rejected error record is not a result', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:lateerror] go')
+  await finished()
+  expect(runs()[0]!.status).toBe('failed')
 })
 
 test('an untested CLI version runs only after the person confirms that version', async () => {
@@ -1035,13 +1061,13 @@ test('antigravity: a turn spawns by argv with the level flags, shows tool cards 
   )
 })
 
-test('antigravity: refused actions show as a card, the turn completes, and the reply explains', async () => {
+test('antigravity: refused actions show as a card; SUCCESS without a response is no result, and the note says why (7.7a section 6)', async () => {
   setEnv('SCORE_CODING_VERIFIED_ANTIGRAVITY', 'read-only')
   await agy()
   await makeRoom()
   await say('@agy1 [fixture:denied] list the files')
   await finished()
-  expect(runs()[0]!.status).toBe('completed')
+  expect(runs()[0]!.status).toBe('failed')
   const text = JSON.stringify(replies()[0]!.parts)
   expect(text).toContain('Antigravity refused')
   expect(text).toContain('RunCommand')
@@ -1347,7 +1373,27 @@ test('S3-004: a result that cannot be saved is kept and saved once ingestion rec
   expect(recordRows()).toBe(0)
 })
 
-test('S3-004: a result still pending when Score restarts is committed before anything is marked interrupted', async () => {
+test('review #7: a pending terminal record never holds unredacted free text on disk', async () => {
+  await addAgent()
+  await makeRoom()
+  const realSubmit = ingest.submit.bind(ingest)
+  let terminalTries = 0
+  vi.spyOn(ingest, 'submit').mockImplementation(async (observation) => {
+    if (observation.identity.includes(':terminal')) {
+      terminalTries++
+      throw new Error('database is busy')
+    }
+    return realSubmit(observation)
+  })
+  await say('@coder [fixture:secret] go')
+  await vi.waitFor(() => expect(terminalTries).toBeGreaterThan(0), { timeout: 15_000 })
+  const stored = JSON.stringify(db.sqlite.prepare('SELECT * FROM coding_pending_terminals').all())
+  expect(stored).toContain('The key is')
+  expect(stored).not.toContain('sk-abcdefghijklmnopqrstuvwx')
+  expect(stored).toContain('[redacted]')
+})
+
+test('S3-004: a success still pending when Score restarts is interrupted, never promoted (review #13)', async () => {
   await addAgent()
   await makeRoom()
   const realSubmit = ingest.submit.bind(ingest)
@@ -1368,11 +1414,13 @@ test('S3-004: a result still pending when Score restarts is committed before any
   await coding.recover()
   await ingest.flushListeners()
   await ingest.drain()
-  expect(runs()[0]).toMatchObject({ status: 'completed' })
+  // Review 2026-10-12 #13: a pending success is a candidate only; after a restart it is interrupted, never promoted.
+  expect(runs()[0]).toMatchObject({ status: 'interrupted' })
+  expect(
+    db.sqlite.prepare("SELECT 1 FROM message_runs WHERE from_agent_id = 'coder'").all(),
+  ).toEqual([])
   expect(launches).toBe(1)
   expect(replies()[0]!.streaming).toBe(false)
-  expect(savedOutput()).toBeTruthy()
-  expect(JSON.stringify(replies()[0]!.parts)).toContain(savedOutput())
   expect(pendingRows()).toBe(0)
   expect(recordRows()).toBe(0)
 })
@@ -1501,9 +1549,13 @@ test('W3: a turn whose tools survive every signal still ends, but unconfirmed, w
     await say('@coder [fixture:leftover] go')
     await finished()
     const row = runs()[0]!
-    // The CLI finished cleanly, but "completed" is not evidence while a tool it started may still be running.
-    expect(row.status).toBe('completed')
+    // The CLI finished cleanly, but "completed" is not evidence while a tool it started may still be running
+    // (review 2026-10-12 #2): no ended proof, no success and no reply.
+    expect(row.status).toBe('failed')
     expect(runRow(row.id).terminal_source).toBe('unconfirmed')
+    expect(
+      db.sqlite.prepare("SELECT 1 FROM message_runs WHERE from_agent_id = 'coder'").all(),
+    ).toEqual([])
     expect(runRow(row.id).error).toMatch(/Some of its tools may still be running/)
     expect(processRows()).toEqual([{ run_id: row.id, unresolved: 1 }])
     expect(pidAlive(-spawned[0]!)).toBe(true)
@@ -1780,4 +1832,222 @@ test('W5: a refused resume that nothing ran behind starts fresh once, within the
   ).toEqual([true, false])
   expect(runs()[1]).toMatchObject({ status: 'failed' })
   expect(processRows()).toEqual([])
+})
+
+test('FV #3: on the fallback too, a refusal behind an unreadable record is not retried', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:stalelossy] one')
+  await finished(1)
+  const before = launches
+  await say('@coder [fixture:stalelossy] two')
+  await finished(2)
+  expect(launches - before).toBe(1)
+  expect(runs()[1]).toMatchObject({ status: 'failed' })
+})
+
+// ---- 7.7a part 3: the acceptance matrix holds on the fallback backend too -----------------------------------------------
+
+test('fallback: a clean exit with text but no explicit success is no result (the exit-zero fallback is gone)', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:nosuccess] go')
+  await finished()
+  expect(runs()[0]).toMatchObject({ status: 'failed' })
+  expect(runs()[0]!.error).toContain('without a result Score can use')
+})
+
+test('fallback: an event that cannot be saved makes the result not used, however the CLI ended', async () => {
+  let failed = false
+  await rebootWith({
+    ingestWrap: (real) => ({
+      submit: (observation) => {
+        // The first saved event of the run fails once.
+        if (!failed && /^coding:cr_[^:]+:0$/.test(observation.identity)) {
+          failed = true
+          return Promise.reject(new Error('database is locked'))
+        }
+        return real.submit(observation)
+      },
+    }),
+  })
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:basic] go')
+  await finished()
+  expect(failed).toBe(true)
+  expect(runs()[0]).toMatchObject({ status: 'failed' })
+  expect(runs()[0]!.error).toMatch(/complete record/)
+})
+
+test('fallback: hand-offs read only the final validated Codex message', async () => {
+  await addAgent({ id: 'cx', name: 'Cx', runtime: 'codex', acknowledgeReads: true })
+  await makeRoom()
+  await say('@cx [fixture:commentary] go')
+  await finished()
+  expect(runs()[0]).toMatchObject({ status: 'completed' })
+  expect(
+    db.sqlite.prepare("SELECT agent_id FROM message_runs WHERE from_agent_id = 'cx'").all(),
+  ).toEqual([])
+  await say('@cx [fixture:malformed] go')
+  await finished(2)
+  expect(runs()[1]).toMatchObject({ status: 'failed' })
+})
+
+test('a turn the journal says may already have run is refused and never spawned (7.7a code review #4)', async () => {
+  await addAgent()
+  db.sqlite
+    .prepare(
+      `INSERT INTO coding_launches (launch_id, run_id, turn_id, generation, phase, revoked, may_have_executed, waiver,
+         journal_n, unsendable, updated_at) VALUES ('l-seen', 'r-seen', 'turn-seen', 1, 'releasing', 0, 1, 0, 1, 1, '2026-10-12T00:00:00.000Z')`,
+    )
+    .run()
+  await expect(
+    coding.startRun({ agentId: 'coder', input: 'go', turnId: 'turn-seen' }),
+  ).rejects.toMatchObject({ status: 409, code: 'turn_witnessed' })
+  expect(() => readFileSync(log, 'utf8')).toThrow()
+})
+
+// ---- FZ1 (re-review 2026-10-12 #5, #9, #12, #17): the process-group fallback end to end -----------------------------------
+
+test('#12: a labelled secret in a tool name never reaches the tool card, the run row or its tool list', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:toolsecret] go')
+  await finished()
+  const stored = JSON.stringify([
+    db.sqlite.prepare('SELECT * FROM tool_calls').all(),
+    db.sqlite.prepare('SELECT tools_used FROM runs').all(),
+    db.sqlite.prepare('SELECT data FROM events').all(),
+  ])
+  expect(stored).not.toContain('review-sentinel')
+})
+
+test('#9: a success record with no terminating newline is no success: the run fails and says the record is incomplete', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:partial] go')
+  await finished()
+  expect(runs()[0]!.status).toBe('failed')
+  expect(runs()[0]!.error).toContain('complete record')
+  expect(JSON.stringify(replies()[0]!.parts)).not.toContain('Done.')
+})
+
+test('#5: a long secret value on stderr never reaches the failure notice or any stored text', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:stderrleak] go')
+  await finished()
+  expect(runs()[0]!.status).toBe('failed')
+  const stored = JSON.stringify([
+    runs(),
+    replies().map((reply) => reply.parts),
+    db.sqlite.prepare('SELECT data FROM events').all(),
+  ])
+  expect(stored).not.toMatch(/v{20}/)
+})
+
+test('#17: Stop, the wall-clock limit and shutdown each hand their cause to the stop hook', async () => {
+  const causes: string[] = []
+  await coding.close()
+  await app.close()
+  await boot({ onStop: (cause) => causes.push(cause) })
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:slow] take your time')
+  await vi.waitFor(() => expect(replies()[0]?.parts.length).toBeGreaterThan(0), { timeout: 10_000 })
+  const reply = replies()[0]!
+  await request('POST', `/api/rooms/${roomId}/messages/${reply.id}/stop`)
+  await finished()
+  expect(causes).toEqual(['user'])
+})
+
+test('#17: the wall-clock limit reaches the stop hook as `deadline`', async () => {
+  const causes: string[] = []
+  await coding.close()
+  await app.close()
+  await boot({ maxTurnMs: 300, graceMs: 100, onStop: (cause) => causes.push(cause) })
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:slow] forever')
+  await finished()
+  expect(causes).toEqual(['deadline'])
+})
+
+test('#17: a failing stop hook is reported and the stop goes on', async () => {
+  const errors: unknown[] = []
+  await coding.close()
+  await app.close()
+  await boot({
+    maxTurnMs: 300,
+    graceMs: 100,
+    onStop: () => {
+      throw new Error('journal down')
+    },
+  })
+  ;(coding as unknown as { deps: { onError?: (e: unknown) => void } }).deps.onError = (e) =>
+    errors.push(e)
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:slow] forever')
+  await finished()
+  expect(runs()[0]!.status).toBe('failed')
+  expect(errors.length).toBeGreaterThan(0)
+})
+
+test('#6: a process row the installation does not own is never signalled, in recovery or by the reaper, and is not ours', async () => {
+  const asked: string[] = []
+  await rebootWith({
+    reapRetryMs: 20,
+    ownsProcessRow: (runId) => runId !== 'cr_inherited',
+    killGroup: async (record) => {
+      asked.push(`${record.pid}`)
+      return 'gone'
+    },
+  })
+  await addAgent()
+  seedCrashedRun('cr_inherited', { pid: 4_000_011, start: '5' })
+  seedCrashedRun('cr_ours', { pid: 4_000_012, start: '5' })
+  await coding.recover()
+  await new Promise((r) => setTimeout(r, 150))
+  expect(asked).toEqual(['4000012'])
+  // Left as it was: not signalled, not deleted, not marked unresolved.
+  expect(processRows()).toEqual([{ run_id: 'cr_inherited', unresolved: 0 }])
+  // The reaper path (a Stop for that run) doesn't signal it either.
+  await coding.stopRun({ agentId: 'coder', runId: 'cr_inherited' })
+  expect(asked).toEqual(['4000012'])
+})
+
+test('FV #1: a frozen home starts no CLI and signals no recorded group, in recovery or by the reaper', async () => {
+  let holding: string | null = 'Score is holding all agent work: this folder is a copy.'
+  const asked: string[] = []
+  await rebootWith({
+    reapRetryMs: 20,
+    frozen: () => holding,
+    killGroup: async (record) => {
+      asked.push(`${record.pid}`)
+      return 'gone'
+    },
+  })
+  await addAgent()
+  seedCrashedRun('cr_inherited', { pid: 4_000_021, start: '5' })
+  await coding.recover()
+  await new Promise((r) => setTimeout(r, 150))
+  expect(asked).toEqual([])
+  expect(processRows()).toEqual([{ run_id: 'cr_inherited', unresolved: 0 }])
+  // A Stop is refused with the freeze sentence (FT #5) and signals nothing.
+  await expect(coding.stopRun({ agentId: 'coder', runId: 'cr_inherited' })).rejects.toMatchObject({
+    code: 'execution_frozen',
+  })
+  expect(asked).toEqual([])
+  const before = launches
+  await expect(
+    coding.startRun({ agentId: 'coder', input: 'hi', turnId: 'turn-frozen' }),
+  ).rejects.toMatchObject({ message: holding })
+  expect(launches).toBe(before)
+  expect(coding.backend().note).toBe(holding)
+  // Unfrozen, the same row is signalled.
+  holding = null
+  await coding.recover()
+  expect(asked).toEqual(['4000021'])
 })

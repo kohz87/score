@@ -6,6 +6,7 @@ import {
   existsSync,
   readdirSync,
 } from 'node:fs'
+import type net from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -20,6 +21,7 @@ import {
   hashSpec,
   runSupervisor,
   type SupervisorCgroup,
+  type SupervisorDeps,
   type SupervisorSpec,
 } from '../../src/runtimes/coding/supervisor.mjs'
 
@@ -109,6 +111,10 @@ export interface HarnessOptions {
   launch?: string
   preReceipt?: string
   token?: string
+  /** Test seam: the supervisor's socket (wrap it to model a stuck consumer). */
+  connect?: (path: string) => net.Socket
+  /** Test seam: the write primitives of the supervisor's final receipt. */
+  receiptIo?: SupervisorDeps['receiptIo']
 }
 
 export async function startHarness(options: HarnessOptions): Promise<Harness> {
@@ -156,6 +162,7 @@ export async function startHarness(options: HarnessOptions): Promise<Harness> {
     generation: 1,
     specHash: hashSpec(spec),
     handlers: {
+      ...options.handlers,
       onStdoutRecord: options.handlers?.onStdoutRecord ?? ((line) => void stdout.push(line)),
       onStderr: options.handlers?.onStderr ?? ((text) => void stderr.push(text)),
     },
@@ -165,6 +172,8 @@ export async function startHarness(options: HarnessOptions): Promise<Harness> {
     cgroup,
     watchdog: options.watchdog ?? (() => undefined),
     pollMs: 20,
+    ...(options.connect ? { connect: options.connect } : {}),
+    ...(options.receiptIo ? { receiptIo: options.receiptIo } : {}),
   })
   return {
     dir,

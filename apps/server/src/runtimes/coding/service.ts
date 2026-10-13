@@ -19,6 +19,7 @@ import { redact, redactBounded } from '../../redact.ts'
 import { checkRoot, type RootPolicy } from '../../workspace/policy.ts'
 import { CliLocator } from './cli.ts'
 import { driverFor } from './drivers.ts'
+import { CappedText } from './note.ts'
 import {
   bootId,
   killRecordedGroup,
@@ -26,7 +27,7 @@ import {
   type GroupOutcome,
   type MemberIdentity,
 } from './proc.ts'
-import { spawnCli, SpawnRecordError, type CliRun, type StopReason } from './process.ts'
+import { spawnCli, SpawnRecordError, stopCauseOf, type CliRun, type StopReason } from './process.ts'
 import {
   cliSessionFor,
   forgetCliSession,
@@ -37,12 +38,16 @@ import {
 import {
   eventObservation,
   newTranslation,
+  pendingBytes,
   runningObservation,
+  translationBytes,
   terminalObservation,
   type RunTranslation,
   type TerminalInfo,
 } from './translate.ts'
 import type { CodingEvent } from './types.ts'
+import type { BackendStatus, UnitBackend } from './unit-backend.ts'
+import { turnWitnessed } from '../../domain/orchestration/coding-checkpoint.ts'
 
 export interface CodingRuntimeDeps {
   db: ScoreDb
@@ -65,14 +70,54 @@ export interface CodingRuntimeDeps {
   reapRetryMs?: number
   /** How long Stop waits to see a recorded group end before it answers `unconfirmed` (the kill goes on). */
   stopObserveMs?: number
+  /**
+   * The supervised-unit backend (7.7a). Present only where Score owns an installation journal; a run uses it while its
+   * capability check passes, and the process-group backend otherwise.
+   */
+  unit?: UnitBackend
+  /**
+   * Records that a stop was asked, with its cause (`user`, `deadline`, `output-cap`, `score-shutdown`), before anything is
+   * signalled. The unit backend wires it to the journal; absent where there is none. A failure is reported, never thrown.
+   */
+  onStop?: (cause: string) => void
+  /**
+   * Whether a recorded process row belongs to this installation (not an inherited copy). Asked before every signal to a
+   * `coding_processes` row, in recovery and in the reaper; false = never signalled, never treated as ours. Default: true.
+   */
+  ownsProcessRow?: (runId: string) => boolean
+  /**
+   * Why Score holds all agent work (decision 71: an unresolved or copied home, a lost or truncated journal), as the
+   * sentence the person reads, or null. While non-null nothing is admitted and recovery signals nothing.
+   */
+  frozen?: () => string | null
+  /** Units carrying this installation's prefix that no journal launch owns: the caller fences and raises a review item. */
+  onOrphans?: (units: string[]) => void
+}
+
+/** What both launch backends hand back to `execute()`. */
+interface Attempt {
+  exitCode: number | null
+  signal: string | null
+  stopped: StopReason | null
+  stderr: string
+  spawnError: string | null
+  leftovers: boolean
+  /** Every process of the run is proven gone (a group for the fallback, the unit's cgroup for the unit backend). */
+  groupGone: boolean
+  /** Every stdout record was parsed and saved (completeness, design §4). */
+  complete: boolean
+  /** Set when the run never started (refused, revoked, stopped first). */
+  refusal: string | null
+  reasons: string[]
+  launchId: string | null
 }
 
 interface ActiveRun {
   agentId: string
   runId: string
   turnId: string
-  /** Set once the process exists. */
-  process?: CliRun
+  /** Set once the process (or unit) exists. */
+  process?: { stop(reason?: StopReason): void }
   /** Stop asked while the turn was still waiting for the agent's previous turn. */
   stopBeforeStart?: StopReason
   /** A process was started for this run: Stop must then wait for proof that its group ended. */
@@ -120,6 +165,17 @@ function refusesResume(driver: ReturnType<typeof driverFor>, message: string): b
   return driver.resumeRefusal?.test(message.trim()) ?? false
 }
 
+/** The terminal info as it may be stored: every free-text field redacted and bounded, as `terminalObservation` stores it. */
+function redactedInfo(info: TerminalInfo): TerminalInfo {
+  const { output, error, reply } = info
+  return {
+    ...info,
+    ...(output == null ? {} : { output: redactBounded(output, 8192) }),
+    ...(error == null ? {} : { error: redactBounded(error, 2048) }),
+    ...(reply == null ? {} : { reply: redactBounded(reply, 8192) }),
+  }
+}
+
 function oneLine(text: string, max: number): string {
   return redactBounded(text.replace(/\s+/g, ' ').trim(), max)
 }
@@ -132,6 +188,28 @@ export class CodingRuntime {
   private closed = false
 
   constructor(private readonly deps: CodingRuntimeDeps) {}
+
+  /** How coding runs are launched right now, with the capability check behind it (docs/API-CONTRACT.md §8). */
+  backend(): BackendStatus {
+    const status = this.deps.unit?.status ?? {
+      kind: 'process-group' as const,
+      checks: [],
+      checkedAt: new Date().toISOString(),
+      note: 'Runs without a supervisor: tools a coding CLI started may keep running until Score restarts and stops them.',
+    }
+    const frozen = this.deps.frozen?.() ?? null
+    if (frozen === null) return status
+    // The card says why nothing runs and what to do (docs/WRITING.md); the checks stay as they were.
+    return {
+      ...status,
+      note: frozen,
+      checks: [...status.checks, { name: 'history', ok: false, detail: frozen }],
+    }
+  }
+  /** "Check again": reruns the capability check; new runs follow its answer. */
+  async checkBackend(): Promise<BackendStatus> {
+    return this.deps.unit ? this.deps.unit.check() : this.backend()
+  }
 
   get locator(): CliLocator {
     return this.deps.locator
@@ -364,6 +442,12 @@ export class CodingRuntime {
         notice: UNRESOLVED_NOTE,
         agentId: agent.id,
       })
+    // A frozen home admits nothing, whichever engine would launch (decision 71).
+    const frozen = this.deps.frozen?.() ?? null
+    if (frozen) throw new HttpError(422, 'coding_paused', frozen, { notice: frozen })
+    // Supervised units pause on a fence (an unreadable journal, orphan units): the person reviews it first (design §7).
+    const paused = this.deps.unit?.block() ?? null
+    if (paused) throw new HttpError(422, 'coding_paused', paused, { notice: paused })
     const driver = driverFor(agent.runtime)
     const existing = db.sqlite
       .prepare('SELECT * FROM command_intents WHERE idempotency_key = ?')
@@ -372,6 +456,14 @@ export class CodingRuntime {
       const intent = IntentRow.parse(existing)
       if (intent.state === 'accepted' && intent.result) return { runId: intent.result }
     }
+    // A launch of this turn may already have executed (the journal says so, e.g. after a database restore): never run it
+    // again (7.7a code review #4).
+    if (turnWitnessed(db.sqlite, req.turnId))
+      throw new HttpError(
+        409,
+        'turn_witnessed',
+        'This message may already have run before Score restarted, so it won’t run again. Send it again if you want a new run.',
+      )
     // Refuse before anything is stored: a missing or untested CLI is the person's to fix, not a retry loop.
     const refusal = await this.cliRefusal(agent, driver, false)
     if (refusal) throw new HttpError(422, refusal.code, refusal.message, { notice: refusal.notice })
@@ -489,6 +581,15 @@ export class CodingRuntime {
     return { runId }
   }
 
+  /** A stop asked outside any live process (a recorded group): its cause goes to the hook like any other. */
+  private recordStop(reason: StopReason): void {
+    try {
+      this.deps.onStop?.(stopCauseOf(reason))
+    } catch (error) {
+      this.deps.onError?.(error)
+    }
+  }
+
   private assertOpen(): void {
     if (this.closed)
       throw new HttpError(
@@ -506,6 +607,12 @@ export class CodingRuntime {
    */
   async stopRun(req: { agentId: string; runId: string }): Promise<StopOutcome> {
     const entry = this.active.get(req.runId)
+    // A Stop is an outgoing control call (decisions 71 and 72). While Score holds all agent work it still stops a run this
+    // process started itself (decision 74): that run is provably its own and a Stop only ends work. Recovered or
+    // inherited runs wait for reset-history.
+    const hold = this.deps.frozen?.() ?? null
+    if (hold !== null && !entry)
+      throw new HttpError(423, 'execution_frozen', hold, { notice: hold })
     if (entry) {
       if (entry.agentId !== req.agentId) return 'not_running'
       this.requestStop(entry, 'user')
@@ -527,6 +634,7 @@ export class CodingRuntime {
     if (!run || run.profile !== req.agentId) return 'not_running'
     const record = this.recordOf(req.runId)
     if (record) {
+      this.recordStop('user')
       const reaping = this.reapInBackground(req.runId)
       const answer = await Promise.race([
         reaping.then((gone) => (gone ? ('stopped' as const) : ('unconfirmed' as const))),
@@ -534,6 +642,28 @@ export class CodingRuntime {
           setTimeout(resolve, this.deps.stopObserveMs ?? 1000, 'unconfirmed').unref(),
         ),
       ])
+      return answer
+    }
+    const launches = this.deps.unit?.openLaunchesOf(req.runId) ?? []
+    if (launches.length > 0) {
+      const unit = this.deps.unit!
+      const gone = Promise.all(launches.map((id) => unit.stopUnattached(id))).then((all) =>
+        all.every(Boolean),
+      )
+      const answer = await Promise.race([
+        gone.then((ok) => (ok ? ('stopped' as const) : ('unconfirmed' as const))),
+        new Promise<'unconfirmed'>((resolve) =>
+          setTimeout(resolve, this.deps.stopObserveMs ?? 1000, 'unconfirmed').unref(),
+        ),
+      ])
+      if (answer === 'stopped') await this.cancelIfOpen(req.agentId, req.runId)
+      // The stop goes on in the background; once the unit is proven ended the run ends as cancelled.
+      else
+        for (const id of launches)
+          void unit
+            .reap(id, this.deps.reapRetryMs)
+            .then((ok) => (ok ? this.cancelIfOpen(req.agentId, req.runId) : undefined))
+            .catch((error: unknown) => this.deps.onError?.(error))
       return answer
     }
     if (run.status === 'queued') {
@@ -547,6 +677,19 @@ export class CodingRuntime {
     }
     if (run.status === 'running' || run.status === 'waiting_for_approval') return 'unconfirmed'
     return 'not_running'
+  }
+
+  /** A run whose supervised unit is proven ended by a Stop that found no live handle: it ends as cancelled. */
+  private async cancelIfOpen(agentId: string, runId: string): Promise<void> {
+    const run = this.deps.db.sqlite.prepare('SELECT status FROM runs WHERE id = ?').get(runId) as
+      { status: string } | undefined
+    if (!run || !['queued', 'running', 'waiting_for_approval'].includes(run.status)) return
+    const agent = getCodingAgent(this.deps.db.sqlite, agentId, true)
+    await this.finish(newTranslation(runId, agentId, this.roomOfRun(runId)), {
+      status: 'cancelled',
+      costKind: agent?.runtime === 'claude-code' ? 'estimated' : 'unknown',
+      group: 'released',
+    })
   }
 
   private roomOfRun(runId: string): string | null {
@@ -569,6 +712,8 @@ export class CodingRuntime {
    */
   private async finish(translation: RunTranslation, info: TerminalInfo): Promise<unknown> {
     this.keepPending(translation, info)
+    // Until it is saved the result and the translator's state are still in memory: they stay charged (FW #8).
+    this.deps.unit?.holdDelivery(translation.runId, pendingBytes(translation, info))
     const tries = 5
     let delay = this.deps.terminalRetryMs ?? 250
     let last: unknown
@@ -597,6 +742,11 @@ export class CodingRuntime {
   private async commitTerminal(translation: RunTranslation, info: TerminalInfo): Promise<unknown> {
     const result = await this.deps.ingest.submit(terminalObservation(translation, info))
     this.dropPending(translation.runId)
+    // The terminal result is saved: the unit launch is settled and collected (design §6b). A failure here never
+    // un-saves the result; recovery settles whatever was left.
+    await this.deps.unit
+      ?.settleRun(translation.runId)
+      .catch((error: unknown) => this.deps.onError?.(error))
     return result
   }
 
@@ -631,7 +781,9 @@ export class CodingRuntime {
           translation.agentId,
           translation.roomId,
           translation.usage ? JSON.stringify(translation.usage) : null,
-          JSON.stringify(info),
+          // Free text is redacted and bounded BEFORE it reaches the disk: deleting the row later would not remove the
+          // bytes already written to the WAL or the database file (review 2026-10-12 #7). Same limits as the terminal row.
+          JSON.stringify(redactedInfo(info)),
           new Date().toISOString(),
         )
     } catch (error) {
@@ -641,12 +793,29 @@ export class CodingRuntime {
   }
 
   private dropPending(runId: string): void {
+    this.deps.unit?.releaseDelivery(runId)
     try {
       this.deps.db.sqlite
         .prepare('DELETE FROM coding_pending_terminals WHERE run_id = ?')
         .run(runId)
     } catch (error) {
       this.deps.onError?.(error)
+    }
+  }
+
+  /**
+   * A pending SUCCESS never survives a restart (design v7 §4, review 2026-10-12 #13): the group's end was not proven
+   * across the incarnation, so the candidate is not promoted to a result and no hand-off follows from it. Failures,
+   * cancellations and interruptions keep their meaning; the process records are left for the recovery below to settle.
+   */
+  private afterRestart(info: TerminalInfo): TerminalInfo {
+    if (info.status !== 'completed') return info
+    return {
+      status: 'interrupted',
+      output: info.output ?? null,
+      error: TERMINAL_NOTE.interrupted,
+      costKind: info.costKind,
+      reply: null,
     }
   }
 
@@ -672,7 +841,10 @@ export class CodingRuntime {
         const translation = newTranslation(row.run_id, row.agent_id, row.room_id)
         if (row.usage)
           translation.usage = JSON.parse(row.usage) as NonNullable<RunTranslation['usage']>
-        await this.commitTerminal(translation, JSON.parse(row.info) as TerminalInfo)
+        await this.commitTerminal(
+          translation,
+          this.afterRestart(JSON.parse(row.info) as TerminalInfo),
+        )
       } catch (error) {
         // Stays recorded; the interruption below still ends the run if it is not terminal by then.
         this.deps.onError?.(error)
@@ -757,7 +929,9 @@ export class CodingRuntime {
     const deadline = Date.now() + turnMs
     for (let attempt = 0; attempt < 2; attempt++) {
       let result: Extract<CodingEvent, { kind: 'result' }> | undefined
-      let text = ''
+      // One terminal per attempt (re-review 6 #1): the first result stands, a second one is loss, never a replacement.
+      let extraResult = false
+      const text = new CappedText()
       // Anything the CLI did besides naming its session and reporting a result.
       let worked = false
       // Between fallback attempts too: nothing launches once Stop or shutdown has been asked for.
@@ -780,59 +954,150 @@ export class CodingRuntime {
         .catch((error: unknown) => this.deps.onError?.(error))
       if (entry.stopBeforeStart)
         return void (await this.finish(translation, stopped(entry.stopBeforeStart)))
-      const spawnOptions: Parameters<typeof spawnCli>[0] = {
-        file,
-        args: [
-          ...args,
-          ...driver.buildArgs({
-            workspace: checked.real,
-            prompt: input,
-            permission: agent.permission,
-            model,
-            sessionId: resume,
-            settingsPath,
-            denyPaths: this.denyPaths(),
-            denyFiles: this.denyFiles(),
-          }),
-        ],
-        cwd: checked.real,
-        env: locator.childEnv(),
-        onSpawn: (pid) => {
-          this.recordProcess(entry.runId, pid)
-          entry.launched = true
-        },
-        onMembers: (members) => this.recordMembers(entry.runId, members),
-        onMembersError: (error) => this.deps.onError?.(error),
-        stdin: driver.promptVia === 'stdin' ? input : '',
-        parser,
-        maxMs: Math.max(1, deadline - Date.now()),
-        graceMs: this.deps.graceMs ?? 5_000,
-        onEvent: async (event) => {
-          if (event.kind === 'result') result = event
-          if (event.kind === 'text') text += event.text
-          if (event.kind !== 'session' && event.kind !== 'result') worked = true
-          await ingest
-            .submit(eventObservation(translation, event, index++))
-            .catch((error: unknown) => this.deps.onError?.(error))
-        },
+      // The last admission boundary for the process-group engine: a restore, journal or coding fence raised since
+      // admission keeps the CLI from starting (re-review 2 #2; decision 69 removed the fallback journal that held this).
+      if (!this.deps.unit?.usable()) {
+        const barrier = this.deps.frozen?.() ?? this.deps.unit?.block() ?? null
+        if (barrier)
+          return void (await this.finish(translation, {
+            status: 'failed',
+            error: barrier,
+            costKind,
+          }))
       }
-      let run: CliRun
-      try {
-        run = (this.deps.spawn ?? spawnCli)(spawnOptions)
-      } catch (error) {
-        // The process is already being killed: report nothing until it is proven gone.
-        if (error instanceof SpawnRecordError) {
-          await error.terminated.catch(() => false)
-          throw error.original
+      const cliArgs = [
+        ...args,
+        ...driver.buildArgs({
+          workspace: checked.real,
+          prompt: input,
+          permission: agent.permission,
+          model,
+          sessionId: resume,
+          settingsPath,
+          denyPaths: this.denyPaths(),
+          denyFiles: this.denyFiles(),
+        }),
+      ]
+      const stdin = driver.promptVia === 'stdin' ? input : ''
+      // Saving an event can fail. The supervised backend stops the run and the result is not used (design §4); the
+      // fallback keeps the run going but cannot call it complete either.
+      let ingestFailed = false
+      const handleEvent = async (event: CodingEvent): Promise<void> => {
+        if (event.kind === 'result') {
+          if (result) extraResult = true
+          else result = event
         }
-        throw error
+        if (event.kind === 'text') text.push(event.text)
+        if (event.kind !== 'session' && event.kind !== 'result') worked = true
+        await ingest.submit(eventObservation(translation, event, index++))
       }
-      entry.process = run
-      if (entry.stopBeforeStart) run.stop(entry.stopBeforeStart)
-      const outcome = await run.done
-      entry.process = undefined
+      let outcome: Attempt
+      const unit = this.deps.unit?.usable() ? this.deps.unit : undefined
+      if (unit) {
+        const unitRun = unit.launch({
+          agentId: agent.id,
+          runtime: agent.runtime,
+          runId: entry.runId,
+          turnId: entry.turnId,
+          generation: attempt,
+          command: { file, args: cliArgs, env: locator.childEnv(), cwd: checked.real, stdin },
+          parser,
+          retainedBytes: () => translationBytes(translation) + text.size,
+          onEvent: handleEvent,
+          deadline,
+          graceMs: this.deps.graceMs ?? 5_000,
+          authorised: () =>
+            !entry.stopBeforeStart && !this.closed && !this.hasUnresolvedGroup(agent.id),
+        })
+        // Stop must wait for proof from here on: the unit may be starting.
+        entry.launched = true
+        entry.process = unitRun
+        if (entry.stopBeforeStart) unitRun.stop(entry.stopBeforeStart)
+        const done = await unitRun.done
+        entry.process = undefined
+        const exec = done.reasons.includes('supervisor-error:spawn')
+        outcome = {
+          exitCode: done.exitCode,
+          signal: done.signal,
+          stopped: done.stopped,
+          stderr: done.stderr,
+          spawnError: exec
+            ? done.stderr.startsWith('pdeathsig-exec: cannot run')
+              ? 'exec_failed'
+              : 'spawn_failed'
+            : done.exitCode === 127 && done.stderr.startsWith('pdeathsig-exec: cannot run')
+              ? 'exec_failed'
+              : null,
+          leftovers: done.leftovers,
+          groupGone: done.proven,
+          complete: done.complete,
+          refusal: done.refusal,
+          reasons: done.reasons,
+          launchId: done.launchId,
+        }
+      } else {
+        const spawnOptions: Parameters<typeof spawnCli>[0] = {
+          file,
+          args: cliArgs,
+          cwd: checked.real,
+          env: locator.childEnv(),
+          onSpawn: (pid) => {
+            this.recordProcess(entry.runId, pid)
+            entry.launched = true
+          },
+          onMembers: (members) => this.recordMembers(entry.runId, members),
+          onMembersError: (error) => this.deps.onError?.(error),
+          // Every stop path of the group goes through one recording hook, before anything is signalled.
+          onStop: (cause) => this.deps.onStop?.(cause),
+          onStopError: (error) => this.deps.onError?.(error),
+          stdin,
+          parser,
+          maxMs: Math.max(1, deadline - Date.now()),
+          graceMs: this.deps.graceMs ?? 5_000,
+          onEvent: (event) =>
+            handleEvent(event).catch((error: unknown) => {
+              ingestFailed = true
+              this.deps.onError?.(error)
+            }),
+        }
+        let run: CliRun
+        try {
+          run = (this.deps.spawn ?? spawnCli)(spawnOptions)
+        } catch (error) {
+          // The process is already being killed: report nothing until it is proven gone.
+          if (error instanceof SpawnRecordError) {
+            await error.terminated.catch(() => false)
+            throw error.original
+          }
+          throw error
+        }
+        entry.process = run
+        if (entry.stopBeforeStart) entry.process.stop(entry.stopBeforeStart)
+        const done = await run.done
+        entry.process = undefined
+        outcome = {
+          exitCode: done.exitCode,
+          signal: done.signal,
+          stopped: done.stopped,
+          stderr: done.stderr,
+          spawnError: done.spawnError,
+          leftovers: done.leftovers,
+          groupGone: done.groupGone,
+          // A partial last line, a read error or a dropped record is loss, as for the supervised unit.
+          complete: !ingestFailed && done.streamComplete,
+          refusal: null,
+          reasons: [...(ingestFailed ? ['ingest-failure'] : []), ...done.streamLoss],
+          launchId: null,
+        }
+      }
       if (!outcome.groupGone) entry.unproven = true
       const stderr = oneLine(outcome.stderr, 400)
+      // Loss anywhere in the stream (also after the result record) takes the authority away, decided once the whole
+      // stream was processed (re-review #3). It is evaluated before anything else is decided from this attempt: a
+      // record Score dropped may have been work (a tool call it could not read), so "nothing happened" is unprovable.
+      const lost =
+        parser.lossReason?.() ??
+        (extraResult ? 'The CLI reported more than one result for this attempt' : null)
       // A resumed session the CLI refused before doing anything: start fresh once, and forget the dead id. Only with
       // proof that nothing ran: the first group is gone, no output or tool call was seen, and the CLI itself said the
       // session is unknown (a generic "not found" proves nothing). The second launch shares the turn's deadline.
@@ -840,21 +1105,31 @@ export class CodingRuntime {
         attempt === 0 &&
         resume &&
         outcome.groupGone &&
+        outcome.refusal === null &&
         !worked &&
+        lost === null &&
         !outcome.stopped &&
         !outcome.spawnError &&
+        outcome.complete &&
         deadline - Date.now() > 0 &&
         (outcome.exitCode !== 0 || result?.ok === false) &&
         refusesResume(driver, result?.error ?? stderr)
       ) {
         // Proven gone and nothing is being finished: the record goes now so the second launch can write its own.
-        this.forgetProcess(entry.runId)
+        if (outcome.launchId) await unit?.settleLaunch(outcome.launchId, 'retried')
+        else this.forgetProcess(entry.runId)
         if (room) forgetCliSession(db.sqlite, room, agent.id)
         resume = null
         continue
       }
+      const verdict =
+        lost !== null && result?.verdict
+          ? { eligible: false, reply: null, reason: lost }
+          : result?.verdict
+      const ran = outcome.refusal === null
       let info: TerminalInfo
       if (outcome.stopped) info = stopped(outcome.stopped)
+      else if (outcome.refusal) info = { status: 'failed', error: outcome.refusal, costKind }
       else if (outcome.spawnError)
         info = {
           status: 'failed',
@@ -864,26 +1139,60 @@ export class CodingRuntime {
               : `Could not start ${driver.label} (${outcome.spawnError}).`,
           costKind,
         }
-      else if (result)
-        info = result.ok
-          ? { status: 'completed', output: result.text ?? text, costKind }
-          : {
-              status: 'failed',
-              output: text || null,
-              error: result.error ?? 'The run failed',
-              costKind,
-            }
-      else if (outcome.exitCode === 0 && text)
-        info = { status: 'completed', output: text, costKind }
+      else if (!outcome.complete)
+        info = {
+          status: 'failed',
+          output: text.value || null,
+          error: `Score couldn’t keep a complete record of this run, so its answer wasn’t used${
+            outcome.reasons.length ? ` (${outcome.reasons.slice(0, 3).join(', ')})` : ''
+          }.`,
+          costKind,
+        }
+      else if (result && !result.ok)
+        info = {
+          status: 'failed',
+          output: text.value || null,
+          error: result.error ?? 'The run failed',
+          costKind,
+        }
+      // The pinned driver's rule (design §6): explicit success with an authoritative reply, a clean exit and nothing
+      // stopped it. A zero exit alone, or streamed commentary, never makes a result.
+      // `completed` needs proof that every process of the run ended, decided here with the verdict (review #2): without
+      // it the reply is only a candidate and never a result or a hand-off.
+      else if (
+        verdict?.eligible &&
+        outcome.exitCode === 0 &&
+        outcome.signal === null &&
+        !outcome.groupGone
+      )
+        info = {
+          status: 'failed',
+          output: verdict.reply,
+          reply: null,
+          error:
+            'The agent finished, but Score couldn’t confirm that everything it started has ended.',
+          costKind,
+        }
+      else if (verdict?.eligible && outcome.exitCode === 0 && outcome.signal === null)
+        info = { status: 'completed', output: verdict.reply, reply: verdict.reply, costKind }
       else
         info = {
           status: 'failed',
-          output: text || null,
-          error: `${driver.label} ended without a result${
+          output: text.value || null,
+          error: `${driver.label} ended without a result Score can use${
             outcome.exitCode === null ? '' : ` (exit ${outcome.exitCode})`
-          }${stderr ? `: ${stderr}` : ''}`,
+          }${verdict?.reason ? `: ${verdict.reason}` : stderr ? `: ${stderr}` : ''}`,
           costKind,
         }
+      // Plans and hand-offs read only an eligible authoritative reply (design v3 §5).
+      if (ran && info.reply === undefined) info.reply = null
+      if (outcome.launchId)
+        unit?.noteEligibility(
+          outcome.launchId,
+          info.status === 'completed'
+            ? 'eligible'
+            : (verdict?.reason ?? outcome.reasons.join(', ')) || info.status,
+        )
       if (outcome.leftovers && info.status === 'completed')
         info.output =
           `${info.output ?? ''}\n\nSome programs the agent started were still running when it finished, so Score stopped them.`.trim()
@@ -895,7 +1204,10 @@ export class CodingRuntime {
           `${info.error ?? ''} Some programs the agent started couldn’t be stopped. ${UNRESOLVED_NOTE}`.trim()
       if (info.error) info.error = redact(info.error)
       await this.finish(translation, info)
-      if (!outcome.groupGone) void this.reapInBackground(entry.runId)
+      if (!outcome.groupGone) {
+        if (outcome.launchId) void unit?.reap(outcome.launchId, this.deps.reapRetryMs)
+        else void this.reapInBackground(entry.runId)
+      }
       return
     }
   }
@@ -956,10 +1268,13 @@ export class CodingRuntime {
 
   /** A process group of this agent that was never proven gone: the agent takes no new turn until it is. */
   private hasUnresolvedGroup(agentId: string): boolean {
+    if ((this.deps.unit?.held(agentId).length ?? 0) > 0) return true
+    // A recorded group whose run row is gone (a restored older database) has no agent to blame: it fences everyone.
     return (
       this.deps.db.sqlite
         .prepare(
-          `SELECT 1 FROM coding_processes cp JOIN runs r ON r.id = cp.run_id WHERE r.profile = ? AND cp.unresolved = 1`,
+          `SELECT 1 FROM coding_processes cp LEFT JOIN runs r ON r.id = cp.run_id
+           WHERE cp.unresolved = 1 AND (r.id IS NULL OR r.profile = ?)`,
         )
         .get(agentId) !== undefined
     )
@@ -985,7 +1300,7 @@ export class CodingRuntime {
    * Stops a recorded group until it is proven gone, then drops the record. Retries with a bounded backoff (the
    * answer for a caller is the first attempt's); one loop per run. Resolves true once the record is gone.
    */
-  private reapInBackground(runId: string): Promise<boolean> {
+  private reapInBackground(runId: string, extraMembers: MemberIdentity[] = []): Promise<boolean> {
     const known = this.reapers.get(runId)
     if (known) return known
     const loop = (async () => {
@@ -997,7 +1312,8 @@ export class CodingRuntime {
         }
         const record = this.recordOf(runId)
         if (!record) return true
-        const outcome = await this.stopGroup(record)
+        if (!this.ownsRow(runId)) return false
+        const outcome = await this.stopGroup(record, extraMembers)
         if (outcome === 'gone') {
           this.forgetProcess(runId)
           return true
@@ -1015,29 +1331,61 @@ export class CodingRuntime {
     return loop
   }
 
+  /** A throwing check counts as not ours: nothing is signalled on doubt. */
+  private ownsRow(runId: string): boolean {
+    try {
+      // Frozen: whose process this is can't be told, so nothing is signalled (decision 71).
+      if (this.deps.frozen?.() != null) return false
+      return this.deps.ownsProcessRow?.(runId) ?? true
+    } catch (error) {
+      this.deps.onError?.(error)
+      return false
+    }
+  }
+
   private markUnobservable(runId: string, value: boolean): void {
     this.deps.db.sqlite
       .prepare('UPDATE coding_processes SET unobservable = ? WHERE run_id = ?')
       .run(value ? 1 : 0, runId)
   }
 
-  private stopGroup(record: z.infer<typeof ProcessRow>): Promise<GroupOutcome> {
+  private stopGroup(
+    record: z.infer<typeof ProcessRow>,
+    extraMembers: MemberIdentity[] = [],
+  ): Promise<GroupOutcome> {
+    // A group recorded without any process identity can't be signalled: it stays unobservable (and releasable).
+    if (record.pid <= 1 && extraMembers.length === 0) return Promise.resolve('unobservable')
+    const members = new Map<number, MemberIdentity>()
+    for (const member of [...this.membersOf(record.run_id), ...extraMembers])
+      members.set(member.pid, member)
     return (this.deps.killGroup ?? killRecordedGroup)({
       pid: record.pid,
       pgid: record.pgid,
       startTime: record.start_time,
       bootId: record.boot_id,
-      members: this.membersOf(record.run_id),
+      members: [...members.values()],
       onMembers: (members) => this.recordMembers(record.run_id, members),
     })
   }
 
   /** Groups of this agent that were not proven gone; `canRelease` = Score can't tell whether they are its own. */
-  heldGroups(agentId: string): { runId: string; pgid: number; canRelease: boolean }[] {
+  heldGroups(
+    agentId: string,
+  ): { runId: string; pgid: number; canRelease: boolean; unit?: string }[] {
+    const units = (this.deps.unit?.held(agentId) ?? []).map((held) => ({
+      runId: held.runId,
+      pgid: 0,
+      canRelease: held.canRelease,
+      unit: held.unit,
+    }))
+    return [...this.processGroups(agentId), ...units]
+  }
+
+  private processGroups(agentId: string): { runId: string; pgid: number; canRelease: boolean }[] {
     return this.deps.db.sqlite
       .prepare(
-        `SELECT cp.run_id, cp.pgid, cp.unobservable FROM coding_processes cp JOIN runs r ON r.id = cp.run_id
-         WHERE r.profile = ? AND cp.unresolved = 1 ORDER BY cp.created_at`,
+        `SELECT cp.run_id, cp.pgid, cp.unobservable FROM coding_processes cp LEFT JOIN runs r ON r.id = cp.run_id
+         WHERE (r.id IS NULL OR r.profile = ?) AND cp.unresolved = 1 ORDER BY cp.created_at`,
       )
       .all(agentId)
       .map((row) =>
@@ -1052,20 +1400,29 @@ export class CodingRuntime {
    */
   release(agentId: string, by: string): number {
     const { db } = this.deps
-    const rows = db.sqlite
+    const candidates = db.sqlite
       .prepare(
-        `SELECT cp.run_id, cp.pid, cp.pgid FROM coding_processes cp JOIN runs r ON r.id = cp.run_id
-         WHERE r.profile = ? AND cp.unresolved = 1 AND cp.unobservable = 1`,
+        `SELECT cp.run_id, cp.pid, cp.pgid FROM coding_processes cp LEFT JOIN runs r ON r.id = cp.run_id
+         WHERE (r.id IS NULL OR r.profile = ?) AND cp.unresolved = 1 AND cp.unobservable = 1`,
       )
       .all(agentId)
       .map((row) => z.object({ run_id: z.string(), pid: z.int(), pgid: z.int() }).parse(row))
-    if (rows.length === 0)
+    const rows = candidates
+    const units = this.deps.unit?.held(agentId).filter((held) => held.canRelease) ?? []
+    if (rows.length === 0 && units.length === 0)
       throw new HttpError(
         409,
         'conflict',
         'Nothing to release: Score has no unclear processes for this agent.',
       )
     const at = new Date().toISOString()
+    const releasedUnits = units.length > 0 ? (this.deps.unit?.releaseHeld(agentId, by) ?? []) : []
+    for (const released of releasedUnits)
+      db.sqlite
+        .prepare(
+          'INSERT INTO coding_releases (agent_id, run_id, pid, pgid, released_by, released_at) VALUES (?, ?, 0, 0, ?, ?)',
+        )
+        .run(agentId, released.runId, by, at)
     db.tx((sqlite) => {
       for (const row of rows) {
         sqlite
@@ -1077,7 +1434,7 @@ export class CodingRuntime {
         sqlite.prepare('DELETE FROM coding_process_members WHERE run_id = ?').run(row.run_id)
       }
     })
-    return rows.length
+    return rows.length + releasedUnits.length
   }
 
   async recover(): Promise<number> {
@@ -1091,7 +1448,21 @@ export class CodingRuntime {
       .all()
       .map((row) => ProcessRow.parse(row))
     const unresolved = new Set<string>()
+    // Supervised units first (journal <-> database <-> units <-> receipts, design §6b): each unsettled launch is
+    // stopped and proven ended; one that may have executed and can't be proven is held, like an unresolved group.
+    const unit = this.deps.unit
+    const recovered = unit ? await unit.recover() : null // reports nothing (and signals nothing) while frozen
+    if (recovered) {
+      if (recovered.unreadable) this.deps.onError?.(new Error(recovered.unreadable))
+      if (recovered.orphans.length > 0) this.deps.onOrphans?.(recovered.orphans)
+      for (const launch of recovered.launches)
+        if (!launch.ended) {
+          unresolved.add(launch.runId)
+          void unit!.reap(launch.launchId, this.deps.reapRetryMs)
+        }
+    }
     for (const record of records) {
+      if (!this.ownsRow(record.run_id)) continue
       const outcome = await this.stopGroup(record)
       if (outcome === 'gone') this.forgetProcess(record.run_id)
       else {
@@ -1124,6 +1495,13 @@ export class CodingRuntime {
         ...(unresolved.has(row.id) ? { group: 'unconfirmed' as const } : {}),
       })
     }
+    // Launches whose end is proven but whose run was already terminal (a crash between the result and `settled`).
+    if (recovered && unit)
+      for (const launch of recovered.launches)
+        if (launch.ended)
+          await unit
+            .settleRun(launch.runId, 'interrupted')
+            .catch((e: unknown) => this.deps.onError?.(e))
     // Anything still pending belongs to a run that is terminal now (or was interrupted just above).
     db.sqlite
       .prepare(
@@ -1140,6 +1518,7 @@ export class CodingRuntime {
     for (const entry of entries) this.requestStop(entry, 'shutdown')
     await Promise.allSettled([...this.queues.values()])
     for (const wake of [...this.wakers]) wake()
+    await this.deps.unit?.close()
     await Promise.allSettled([...this.reapers.values(), ...this.deliveries.values()])
   }
   get isClosed(): boolean {

@@ -27,7 +27,8 @@ export const MANIFEST_FILE = 'manifest.json'
 export const HOME_INSTALLATION_FILE = 'installation.json'
 export const LAUNCHES_DIR = 'launches'
 const RESTORE_MARKER = 'restore-marker.json'
-const JOURNAL = 'journal.ndjson'
+export const HISTORY_MARKER = 'history.json'
+export const JOURNAL = 'journal.ndjson'
 const ID_PATTERN = /^[0-9a-f]{16}$/
 
 export function isInstallationId(value: unknown): value is string {
@@ -58,6 +59,8 @@ interface Manifest {
   version: 1
   id: string
   paths: string[]
+  /** The path the installation lives at now. Stored, not inferred from the array's order: A → B → A leaves [A, B]. */
+  current?: string
   createdAt: string
   copiedFrom?: string
 }
@@ -115,7 +118,7 @@ export function readRegistry(journalDir: string): Registry {
 }
 
 /** The whole text or an error, then rename, then the directory: a reader sees the old file or the new one. */
-function writeDurable(file: string, text: string): void {
+export function writeDurable(file: string, text: string): void {
   const temp = `${file}.tmp`
   const fd = openSync(temp, 'w', 0o600)
   try {
@@ -145,6 +148,9 @@ function writeManifest(journalDir: string, id: string, entry: RegistryEntry): vo
     version: 1,
     id,
     paths: entry.paths.map((item) => item.path),
+    ...(entry.paths.some((item) => item.state === 'current')
+      ? { current: entry.paths.find((item) => item.state === 'current')!.path }
+      : {}),
     createdAt: entry.createdAt,
     ...(entry.copiedFrom === undefined ? {} : { copiedFrom: entry.copiedFrom }),
   }
@@ -183,6 +189,9 @@ function readManifests(journalDir: string): { valid: Manifest[]; invalid: string
         id: name,
         paths: value.paths as string[],
         createdAt: value.createdAt,
+        ...(typeof value.current === 'string' && value.paths.includes(value.current)
+          ? { current: value.current }
+          : {}),
         ...(isInstallationId(value.copiedFrom) ? { copiedFrom: value.copiedFrom } : {}),
       })
     } catch {
@@ -255,6 +264,8 @@ export type InstallationResult =
       /** How the id was obtained: it was already agreed, recovered from the registry/manifests/legacy cutover, adopted
        * from the home's own copy, or newly minted. */
       how: 'existing' | 'recovered' | 'adopted' | 'created'
+      /** Set when the registry says this installation was confirmed as a copy of another one. */
+      copiedFrom?: string
     }
   | { ok: false; code: InstallationProblem; message: string; id?: string }
 
@@ -296,10 +307,13 @@ function loadRegistry(journalDir: string): LoadedRegistry {
     installations[manifest.id] = {
       createdAt: manifest.createdAt,
       ...(manifest.copiedFrom === undefined ? {} : { copiedFrom: manifest.copiedFrom }),
-      // The newest path in a manifest is the current one; earlier ones are aliases.
-      paths: manifest.paths.map((path, index) => ({
+      // The manifest names its current path; one from before that field existed falls back to the newest (last) path.
+      paths: manifest.paths.map((path) => ({
         path,
-        state: index === manifest.paths.length - 1 ? ('current' as const) : ('moved' as const),
+        state:
+          path === (manifest.current ?? manifest.paths.at(-1))
+            ? ('current' as const)
+            : ('moved' as const),
         at: manifest.createdAt,
       })),
     }
@@ -364,6 +378,7 @@ export function resolveInstallation(options: ResolveOptions): InstallationResult
         id,
         namespaceDir: namespaceDir(journalDir, id),
         how: copy.state === 'ok' && !loaded.rebuilt ? 'existing' : 'recovered',
+        ...(entry.copiedFrom === undefined ? {} : { copiedFrom: entry.copiedFrom }),
       }
     }
     // No entry for this path.
@@ -396,6 +411,137 @@ export function resolveInstallation(options: ResolveOptions): InstallationResult
       how: adoptedId === undefined ? 'created' : copy.state === 'ok' ? 'adopted' : 'recovered',
     }
   })
+}
+
+export const lineChecksum = (payload: string): string =>
+  createHash('sha256').update(payload).digest('hex').slice(0, 16)
+
+/**
+ * The records a copy inherits: the source installation's journal, rewritten under the copy's scope (same numbers, fresh
+ * checksums). The copy's database came from the source, so every execution the source has witnessed since must be
+ * known to the copy before it can admit anything; with the records in the copy's namespace, its reconciliation sees the
+ * sends and launches the inherited intents lack. Returns undefined, or why the source's evidence can't be trusted.
+ */
+function inheritedJournal(
+  journalDir: string,
+  sourceId: string,
+  sourceHome: string | undefined,
+  newId: string,
+): { lines: string; problem?: undefined } | { problem: string } {
+  const own = join(namespaceDir(journalDir, sourceId), JOURNAL)
+  // A source that never migrated still has its history in the legacy, path-scoped journal.
+  const file = existsSync(own) ? own : join(journalDir, JOURNAL)
+  const scope = file === own ? sourceId : sourceHome ? legacyJournalScope(sourceHome) : undefined
+  if (!existsSync(file) || scope === undefined) return { lines: '' }
+  const lines: string[] = []
+  let migratedAway = false
+  // Under the journal's own lock, so a running source can't be mid-append or mid-compaction while it is read.
+  const lock = new OsLock(
+    dirname(file),
+    fsyncSync,
+    undefined,
+    file === own ? LOCK_RANK.journal : LOCK_RANK.legacyJournal,
+  )
+  let text: string
+  try {
+    text = lock.runSync(() => readFileSync(file, 'utf8'))
+  } finally {
+    lock.close()
+  }
+  const raw = text.split('\n')
+  for (const [index, line] of raw.entries()) {
+    if (!line) continue
+    // An unterminated last line was never effective (journal.ts discards it on recovery).
+    if (index === raw.length - 1) continue
+    let entry: Record<string, unknown>
+    try {
+      const parsed: unknown = JSON.parse(line)
+      if (!isObject(parsed)) throw new Error('not a record')
+      entry = parsed
+    } catch {
+      return { problem: `line ${index + 1} of ${file} is damaged` }
+    }
+    const { c, ...body } = entry
+    if (c !== lineChecksum(JSON.stringify(body)))
+      return { problem: `line ${index + 1} of ${file} fails its checksum` }
+    if (body.scope === scope && body.kind === 'cutover') migratedAway = true
+    if (body.scope !== scope || body.kind === 'cutover') continue
+    // The source's reset and freeze records are its own decisions: a copy must reset its OWN history, so inheriting them
+    // would let the source's reset stand in for it (decision 72).
+    if (
+      body.kind === 'history-reset' ||
+      body.kind === 'history-reset-complete' ||
+      body.kind === 'execution-freeze'
+    )
+      continue
+    // Coding records (the only ones with a launch) are evidence in the copy, never ours to act on: the flag is part of
+    // the record, so the copy's journal, its database projection and its recovery all see it.
+    const copied = {
+      ...body,
+      scope: newId,
+      ...(typeof body.launchId === 'string' ? { inherited: true } : {}),
+    }
+    lines.push(JSON.stringify({ ...copied, c: lineChecksum(JSON.stringify(copied)) }))
+  }
+  // The legacy journal says the source's history moved to its namespace, but the namespace journal is gone: what the
+  // source did since then can't be known, so the copy would inherit nothing and could repeat it.
+  if (migratedAway && file !== own)
+    return {
+      problem: `${own} is missing although the legacy journal says this installation's history moved there`,
+    }
+  return { lines: lines.map((line) => `${line}\n`).join('') }
+}
+
+/**
+ * While the copy was unconfirmed, the hard-block start wrote its fence into the legacy journal under the copy's path
+ * scope. Those records are not history to migrate (the namespace journal is already the copy's complete record and the
+ * fence lives in its database): a cutover at 0 closes the legacy scope for this home, so migration finds nothing to
+ * merge into the namespace and every writer refuses the legacy path from now on.
+ */
+function closeLegacyScope(journalDir: string, home: string, id: string): void {
+  const scope = legacyJournalScope(home)
+  const file = join(journalDir, JOURNAL)
+  let raw: string
+  try {
+    raw = readFileSync(file, 'utf8')
+  } catch {
+    return
+  }
+  if (!raw.includes(`"scope":"${scope}"`)) return
+  const lock = new OsLock(journalDir, fsyncSync, undefined, LOCK_RANK.legacyJournal)
+  try {
+    lock.runSync(() => {
+      const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean)
+      let last = 0
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line) as { n?: number; scope?: string; kind?: string }
+          if (typeof entry.n === 'number') last = Math.max(last, entry.n)
+          if (entry.scope === scope && entry.kind === 'cutover') return // already closed
+        } catch {
+          // a damaged line: the journal reports it
+        }
+      }
+      const cutover = {
+        n: last + 1,
+        at: new Date().toISOString(),
+        scope,
+        kind: 'cutover',
+        installationId: id,
+        namespace: id,
+        copiedThrough: 0,
+      }
+      const text = JSON.stringify({ ...cutover, c: lineChecksum(JSON.stringify(cutover)) }) + '\n'
+      const raw2 = readFileSync(file, 'utf8')
+      writeDurable(
+        file,
+        (raw2.endsWith('\n') || raw2 === '' ? raw2 : raw2.slice(0, raw2.lastIndexOf('\n') + 1)) +
+          text,
+      )
+    })
+  } finally {
+    lock.close()
+  }
 }
 
 export type ConfirmResult =
@@ -478,19 +624,37 @@ export function confirmCopy(options: ResolveOptions): ConfirmResult {
       copiedFrom: copy.id,
       paths: [{ path: home, state: 'current', at: now }],
     }
-    loaded.installations[id] = entry
-    writeRegistry(journalDir, loaded.installations) // registry first
-    ensureSetup(journalDir, id, entry, home)
-    // The inherited run history is the source's: the next start fences admission (same machinery as a restore).
+    // Before the copy becomes an admissible identity: its namespace holds the source's evidence and the marker that
+    // fences it. A crash anywhere in here leaves a namespace nothing refers to, and the next confirm starts over.
+    const source = loaded.installations[copy.id]!
+    const inherited = inheritedJournal(
+      journalDir,
+      copy.id,
+      source.paths.find((item) => item.state === 'current')?.path,
+      id,
+    )
+    if (inherited.problem !== undefined)
+      return {
+        ok: false,
+        message: `The source installation ${copy.id}'s execution journal can't be trusted: ${inherited.problem}. Resolve that first; nothing was changed.`,
+      }
+    const nsDir = namespaceDir(journalDir, id)
+    mkdirDurable(join(nsDir, LAUNCHES_DIR))
+    writeDurable(join(nsDir, JOURNAL), inherited.lines)
+    writeDurable(join(nsDir, HISTORY_MARKER), JSON.stringify({ version: 1, at: now }))
     writeDurable(
-      join(namespaceDir(journalDir, id), RESTORE_MARKER),
+      join(nsDir, RESTORE_MARKER),
       JSON.stringify({ scope: id, at: now, backup: `installation ${copy.id}`, origin: 'copy' }),
     )
+    loaded.installations[id] = entry
+    writeRegistry(journalDir, loaded.installations) // the registry entry before anything that makes the id usable
+    ensureSetup(journalDir, id, entry, home)
+    closeLegacyScope(journalDir, home, id)
     return {
       ok: true,
       id,
       changed: true,
-      message: `${home} is now its own installation (${id}), copied from ${copy.id}. The next start fences admission until you review the inherited history.`,
+      message: `${home} is now its own installation (${id}), copied from ${copy.id}. Score holds all agent work in it until you run \`scripts/score installation reset-history\`.`,
     }
   })
 }

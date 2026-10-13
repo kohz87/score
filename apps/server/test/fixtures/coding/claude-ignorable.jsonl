@@ -1,0 +1,6 @@
+{"_fixture":"hand-made: only allow-listed notices around a clean success (7.7a FW #5)"}
+{"type":"system","subtype":"init","session_id":"77777777-7777-4777-8777-777777777777"}
+{"type":"stream_event","event":{"type":"content_block_delta"}}
+{"type":"rate_limit_event","info":{"note":"fine"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Fine."}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"Fine."}

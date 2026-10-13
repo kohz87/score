@@ -286,7 +286,55 @@ admission is blocked and the fence cannot be lifted. Say which it is, with Score
 `scripts/score installation status` shows what the home and the registry say. If the registry is corrupt and no manifest
 survives, Score refuses admission until you restore `installations.json` from a backup.
 
+**When Score holds all agent work.** A confirmed copy, and a home whose execution journal is missing or holds less than the
+database and the launch folders witnessed (deleted, replaced, truncated), freeze: no orchestration step is sent, no Stop is
+delivered, no coding run is admitted or recovered, and no process is signalled. The fence screen and each coding agent's card
+say "Score is holding all agent work: <why>. Run scripts/score installation reset-history to continue." Nothing is
+reconciled or retired automatically in these states: Score can't tell what ran, and doing nothing can't repeat or misdirect
+work. With Score stopped, `scripts/score installation reset-history` (it asks you to type `reset`; `--yes` skips the question
+for scripts) retires every unfinished orchestration step, owed Stop, start request, coding process record and launch in the
+database, moves the old journal and launch folders into `history-before-reset-<time>/` beside a fresh journal whose first
+record is a permanent `history-reset`, and lifts the freeze. Nothing it retired is ever sent, stopped or signalled again, so
+check Hermes and your coding services yourself for anything the old history started that may still be running.
+
+### Coding runs as supervised services (PLAN 7.7a)
+
+In live mode, every coding run (Claude Code, Codex, Antigravity) starts as a transient **systemd user service**
+(`score-<first 8 characters of the installation id>-c-<launch id>.service`) with a small supervisor inside it. When Score
+stops or crashes, the service stops the CLI and every process running inside it, and Score confirms from the service's
+control group that nothing is left before it calls a run finished. Work a tool hands to another service, a scheduler or a
+background daemon runs outside that group and isn't covered. It needs, on the host: a reachable user manager
+(`systemctl --user`), cgroup v2, **linger** (`loginctl enable-linger $USER`, so the manager outlives your login), Python 3,
+`systemd-notify`, `$XDG_RUNTIME_DIR` and a socket path under 100 bytes. Score checks all of this at start and shows the
+result, with **Check again**, on each coding agent's card in Team.
+
+**When the check doesn't pass.** The first time it passes, Score remembers that for this installation (a small file,
+`unit-capable.json`, beside the journal in `<journal dir>/<id>/`, outside the home). From then on:
+- A later failure (linger turned off, no user manager, no `$XDG_RUNTIME_DIR`) **pauses** coding agents. New coding
+  messages are refused (`422 coding_paused`) and the card says what is missing and offers **Check again**. Score never
+  falls back to the process-group engine behind your back on a host that has run supervised services. Fix the host and
+  choose Check again; runs resume.
+- An installation that has never passed (for example a host without a user manager at all) runs coding agents with the
+  process-group engine and says so on the card: "tools a coding CLI started may keep running until Score restarts and
+  stops them". That engine keeps its earlier limits: it signals the processes Score recorded for the run (through
+  pidfds), not everything the CLI started, and its proof is the group, not a control group.
+- There is no setting that forces the process-group engine in production (decision 70).
+- Score saves the pass before it starts the first supervised service. If the file can't be written (disk full), coding
+  stays paused and Score retries the write; it also recognises an installation that has run supervised services from
+  its journal and database, so losing the file doesn't re-open the process-group engine.
+- Restore, journal and installation uncertainty (an unresolved fence in Score) stops every coding launch, whichever
+  engine would run it, also at the moment of release.
+
+Receipts and the single-use spec files live outside the home (`<journal dir>/<id>/launches/…`,
+`$XDG_RUNTIME_DIR/score/<id8>/launches/…`). To inspect a stuck service: `systemctl --user list-units 'score-*-c-*'`.
+
+Tests: `SCORE_TEST_SYSTEMD=1 pnpm --filter @score/server test coding-units-systemd coding-systemd` runs the opt-in suite
+against the real user manager. Its units are named `score-test-<random>-…` and always stopped and reset by the test.
+
 ## Changelog of this file
+- 2026-10-12: no production switch for the process-group engine; the pass is saved before any unit launch (decision 70).
+- 2026-10-12: supervised services are the only engine once an installation has passed the check; a later failure pauses coding (decision 69).
+- 2026-10-12: coding runs as supervised services, capability check, `SCORE_CODING_BACKEND` (PLAN 7.7a part 3).
 - 2026-10-12: installation identity, per-installation journal folders, `score installation` (PLAN 7.7a part 1).
 - 2026-10-10: orchestrations: execution journal location and `scripts/score restore` (PLAN 7.5a).
 - 2026-10-09: do not VACUUM by hand (search index rebuilt at start).- 2026-10-09: the knowledge vault (`SCORE_VAULT`, git).

@@ -107,7 +107,7 @@ test('hello with the right token is welcomed; ready, go and the terminal order w
   sup.out('stdout', 1, 'one\ntwo\n')
   const outcome = await finishCleanly(sup, session, 1)
   expect(records).toEqual(['one', 'two'])
-  expect(outcome).toMatchObject({ kind: 'ended', eligible: true, reasons: [] })
+  expect(outcome).toMatchObject({ kind: 'ended', eligible: true, reasons: [], ackFlushed: true })
 })
 
 test('a token is single-use: a replay and a second connection for the same launch are rejected', async () => {
@@ -265,13 +265,62 @@ test('any close other than after ack-end is socket loss', async () => {
   expect(outcome.eligible).toBe(false)
 })
 
-test('an oversize stdout record is dropped (lossy) and the run goes on', async () => {
+test('an oversize stdout record is dropped (lossy) and the run is stopped (review #15)', async () => {
   const { server } = await setup({ maxRecordBytes: 100 })
   const { sup, session, records } = await connect(server)
   sup.out('stdout', 1, 'ok\n' + 'z'.repeat(5000) + '\nafter\n')
+  await vi.waitFor(() => expect(sup.frames.some((f) => f['t'] === 'stop')).toBe(true))
   const outcome = await finishCleanly(sup, session, 1)
   expect(records).toEqual(['ok', 'after'])
   expect(outcome).toMatchObject({ eligible: false, droppedRecords: 1 })
+  expect(outcome.reasons).toContain('record-too-large')
+})
+
+test('partial records count against the installation memory budget (review #15)', async () => {
+  const { server } = await setup({ memoryBudgetBytes: 1000, pauseBytes: 1_000_000 })
+  const mk = (id: string) =>
+    server.expect({
+      launch: id,
+      generation: 1,
+      specHash: 'h',
+      handlers: { onStdoutRecord: () => undefined },
+    })
+  const a = mk('A')
+  const b = mk('B')
+  const sa = new FakeSupervisor(server.path)
+  const sb = new FakeSupervisor(server.path)
+  sa.hello('A', a.token)
+  sb.hello('B', b.token)
+  await vi.waitFor(() => expect(sa.has('welcome') && sb.has('welcome')).toBe(true))
+  sa.out('stdout', 1, 'a'.repeat(600))
+  await vi.waitFor(() => expect(server.bufferedBytes).toBe(600))
+  sb.out('stdout', 1, 'b'.repeat(600))
+  await vi.waitFor(() => expect(sb.frames.some((f) => f['t'] === 'stop')).toBe(true))
+  expect(server.bufferedBytes).toBeLessThanOrEqual(1000)
+  sb.socket.destroy()
+  expect((await b.session.outcome).reasons).toContain('memory-budget')
+  // The completed line releases the charge.
+  sa.out('stdout', 2, '\n')
+  await vi.waitFor(() => expect(server.bufferedBytes).toBe(0))
+})
+
+test('queue entries carry per-record overhead against the memory budget (review #15)', async () => {
+  const { server } = await setup({ memoryBudgetBytes: 1000, pauseBytes: 1_000_000 })
+  const never = new Promise<void>(() => undefined)
+  const reg = server.expect({
+    launch: 'Q',
+    generation: 1,
+    specHash: 'h',
+    handlers: { onStdoutRecord: () => never },
+  })
+  const sup = new FakeSupervisor(server.path)
+  sup.hello('Q', reg.token)
+  await vi.waitFor(() => expect(sup.has('welcome')).toBe(true))
+  sup.out('stdout', 1, '\n'.repeat(40)) // empty records: zero text bytes, still queue entries
+  await vi.waitFor(() => expect(sup.frames.some((f) => f['t'] === 'stop')).toBe(true))
+  expect(server.bufferedBytes).toBeLessThanOrEqual(1000)
+  sup.socket.destroy()
+  expect((await reg.session.outcome).reasons).toContain('memory-budget')
 })
 
 test('the installation-wide memory budget caps buffered records across runs', async () => {
@@ -354,4 +403,250 @@ test('shutdown sends stop to attached runs and destroys the accepted sockets exp
   await vi.waitFor(() => expect(sup.closed).toBe(true))
   expect((await session.outcome).kind).toBe('lost')
   expect(existsSync(server.path)).toBe(false)
+})
+
+test('FT #5: a held Score drops the sockets at shutdown without sending its own Stop frame', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'score-sock-'))
+  const server = new CodingSocketServer({
+    runtimeDir: dir,
+    installationId: INSTALL,
+    frozen: () => 'Score is holding all agent work.',
+  })
+  await server.start(true)
+  servers.push(server)
+  const { sup, session } = await connect(server)
+  await server.shutdown()
+  await vi.waitFor(() => expect(sup.closed).toBe(true))
+  expect(sup.frames.some((f) => f['t'] === 'stop')).toBe(false)
+  expect((await session.outcome).kind).toBe('lost')
+})
+
+// ---- review 2026-10-12 #1 and #7: terminal order and forced closure ------------------------------------------------
+
+test('#7: an early end (before EOF and exit) is never acknowledged and is not eligible', async () => {
+  const { server } = await setup()
+  const { sup, session } = await connect(server)
+  sup.out('stdout', 1, 'one\n')
+  sup.send({ t: 'end' })
+  await vi.waitFor(() => expect(sup.closed).toBe(true))
+  expect(sup.has('ack-end')).toBe(false)
+  const outcome = await session.outcome
+  expect(outcome.eligible).toBe(false)
+  expect(outcome.reasons).toContain('socket-loss')
+})
+
+test('#7: output after end is refused and the connection is dropped', async () => {
+  const { server } = await setup()
+  let release!: () => void
+  const gate = new Promise<void>((r) => (release = r))
+  const { token, session } = server.expect({
+    launch: 'L7',
+    generation: 1,
+    specHash: 'h',
+    handlers: { onStdoutRecord: () => gate },
+  })
+  const sup = new FakeSupervisor(server.path)
+  sup.hello('L7', token)
+  await vi.waitFor(() => expect(sup.has('welcome')).toBe(true))
+  sup.out('stdout', 1, 'a\n')
+  sup.send({ t: 'eof', stream: 'stdout', lastSeq: 1 })
+  sup.send({ t: 'eof', stream: 'stderr', lastSeq: 0 })
+  sup.send({ t: 'exit', code: 0, signal: null })
+  sup.send({ t: 'end' })
+  sup.out('stderr', 1, 'late\n') // after end
+  await vi.waitFor(() => expect(sup.closed).toBe(true))
+  release()
+  const outcome = await session.outcome
+  expect(sup.has('ack-end')).toBe(false)
+  expect(outcome.eligible).toBe(false)
+})
+
+test('#1: an eof the supervisor forced (a pipe it closed itself) is loss, not a clean end of stream', async () => {
+  const { server } = await setup()
+  const { sup, session } = await connect(server)
+  sup.out('stdout', 1, '{"ok":1}\n')
+  sup.send({ t: 'eof', stream: 'stdout', lastSeq: 1, forced: true })
+  sup.send({ t: 'eof', stream: 'stderr', lastSeq: 0 })
+  sup.send({ t: 'exit', code: 0, signal: null })
+  sup.send({ t: 'end' })
+  await vi.waitFor(() => expect(sup.has('ack-end')).toBe(true))
+  sup.socket.end()
+  const outcome = await session.outcome
+  expect(outcome.eligible).toBe(false)
+  expect(outcome.reasons).toContain('forced-eof-stdout')
+  expect(outcome.droppedRecords).toBeGreaterThan(0)
+})
+
+test('#15: what an active run keeps in memory is reserved from the installation budget and released at its end', async () => {
+  const { server } = await setup({ memoryBudgetBytes: 1000 })
+  const a = server.expect({
+    launch: 'A',
+    generation: 1,
+    specHash: 'h',
+    handlers: { onStdoutRecord: () => undefined },
+    retainedBytes: 400,
+  })
+  expect(server.bufferedBytes).toBe(400)
+  server.expect({
+    launch: 'B',
+    generation: 1,
+    specHash: 'h',
+    handlers: { onStdoutRecord: () => undefined },
+    retainedBytes: 400,
+  })
+  expect(server.bufferedBytes).toBe(800)
+  // A third does not fit: the launch is refused, nothing is left reserved for it.
+  expect(() =>
+    server.expect({
+      launch: 'C',
+      generation: 1,
+      specHash: 'h',
+      handlers: { onStdoutRecord: () => undefined },
+      retainedBytes: 400,
+    }),
+  ).toThrow('memory-budget')
+  expect(server.bufferedBytes).toBe(800)
+  server.forget('B')
+  expect(server.bufferedBytes).toBe(400)
+  const sup = new FakeSupervisor(server.path)
+  sup.hello('A', a.token)
+  await vi.waitFor(() => expect(sup.has('welcome')).toBe(true))
+  sup.socket.destroy()
+  await a.session.outcome
+  await vi.waitFor(() => expect(server.bufferedBytes).toBe(0))
+})
+
+test('re-review 2 #10: an ack-end that was queued but never delivered is not a normal end', async () => {
+  const { server } = await setup()
+  const { sup, session } = await connect(server)
+  sup.send({ t: 'ready', pid: 1, start: '1', cgroup: '/x' })
+  await session.ready
+  // The write of the acknowledgment fails (peer gone): the supervisor never saw it and exits for socket loss.
+  const socket = (session as unknown as { socket: net.Socket }).socket
+  const write = socket.write.bind(socket) as (...args: unknown[]) => boolean
+  socket.write = ((data: string, cb?: (error?: Error) => void) => {
+    if (typeof data === 'string' && data.includes('"ack-end"')) {
+      queueMicrotask(() => cb?.(new Error('EPIPE')))
+      return true
+    }
+    return write(data, cb)
+  }) as typeof socket.write
+  sup.send({ t: 'eof', stream: 'stdout', lastSeq: 0 })
+  sup.send({ t: 'eof', stream: 'stderr', lastSeq: 0 })
+  sup.send({ t: 'exit', code: 0, signal: null })
+  sup.send({ t: 'end' })
+  // The supervisor gives up on the acknowledgment it never saw and closes.
+  sup.socket.end()
+  const outcome = await session.outcome
+  expect(outcome.ackFlushed).toBe(false)
+  expect(outcome.eligible).toBe(false)
+  expect(outcome.reasons).toContain('ack-not-flushed')
+})
+
+test('re-review 2 #17: Score-side stops (broken bound, ingestion failure, shutdown) are reported to the hook before the frame goes out', async () => {
+  const { server } = await setup()
+  const causes: { cause: string; frameSeen: boolean }[] = []
+  const supRef: { sup?: FakeSupervisor } = {}
+  const note = (cause: string) =>
+    causes.push({ cause, frameSeen: supRef.sup?.has('stop') ?? false })
+  const reg = server.expect({
+    launch: 'L1',
+    generation: 1,
+    specHash: 'h',
+    handlers: {
+      onStdoutRecord: (line) => {
+        if (line === 'boom') throw new Error('cannot save')
+      },
+      onStop: note,
+    },
+  })
+  const sup = new FakeSupervisor(server.path)
+  supRef.sup = sup
+  sup.hello('L1', reg.token)
+  await vi.waitFor(() => expect(sup.has('welcome')).toBe(true))
+  sup.out('stdout', 1, 'boom\n')
+  await vi.waitFor(() => expect(causes.map((c) => c.cause)).toEqual(['ingest-failure']))
+  // A gap in the sequence is a violation: its cause is reported too (the first stop cause already won, so none follows).
+  expect(causes[0]!.frameSeen).toBe(false)
+  await vi.waitFor(() => expect(sup.has('stop')).toBe(true))
+  const seen: string[] = []
+  const second = server.expect({
+    launch: 'L2',
+    generation: 1,
+    specHash: 'h',
+    handlers: { onStdoutRecord: () => undefined, onStop: (cause) => void seen.push(cause) },
+  })
+  const sup2 = new FakeSupervisor(server.path)
+  sup2.hello('L2', second.token)
+  await vi.waitFor(() => expect(sup2.has('welcome')).toBe(true))
+  sup2.out('stdout', 2, 'gap\n')
+  await vi.waitFor(() => expect(seen).toEqual(['seq-stdout']))
+  await server.shutdown()
+  servers.splice(servers.indexOf(server), 1)
+})
+
+test('FU #8: stderr diagnostics and commentary the handlers keep are charged to the budget as they change', async () => {
+  const { server } = await setup({ memoryBudgetBytes: 1024 * 1024 })
+  let diagnostics = 0
+  const reg = server.expect({
+    launch: 'L1',
+    generation: 1,
+    specHash: 'h',
+    handlers: {
+      onStdoutRecord: () => undefined,
+      onStderr: (text: string) => {
+        diagnostics += text.length
+      },
+      retainedBytes: () => diagnostics,
+    },
+    retainedBytes: 1024,
+  })
+  const sup = new FakeSupervisor(server.path)
+  sup.hello('L1', reg.token)
+  await vi.waitFor(() => expect(sup.has('welcome')).toBe(true))
+  // Nothing from stdout arrives: only stderr grows what the handlers keep, and that alone is charged.
+  sup.out('stderr', 1, 'x'.repeat(4000))
+  await vi.waitFor(() => expect(server.bufferedBytes).toBe(4000))
+  sup.socket.destroy()
+  await reg.session.outcome
+})
+
+test('re-review 2 #18: a run is charged for what its parser really retains, and stopped past the installation budget', async () => {
+  const { server } = await setup({ memoryBudgetBytes: 1024 * 1024 })
+  let retained = 0
+  const reg = server.expect({
+    launch: 'L1',
+    generation: 1,
+    specHash: 'h',
+    handlers: { onStdoutRecord: () => undefined, retainedBytes: () => retained },
+    retainedBytes: 1024,
+  })
+  const sup = new FakeSupervisor(server.path)
+  sup.hello('L1', reg.token)
+  await vi.waitFor(() => expect(sup.has('welcome')).toBe(true))
+  expect(server.bufferedBytes).toBe(1024)
+  retained = 300 * 1024
+  sup.out('stdout', 1, 'a\n')
+  await vi.waitFor(() => expect(server.bufferedBytes).toBe(300 * 1024))
+  // Many short ids were cheap in the old count; large retained values are charged by their bytes.
+  retained = 5 * 1024 * 1024
+  sup.out('stdout', 2, 'b\n')
+  await vi.waitFor(() => expect(sup.has('stop')).toBe(true))
+  // FV #3: the run stops, but the bytes it really holds stay charged (debt past the limit) until its state is cleared, so
+  // nothing else is admitted on top of them.
+  expect(server.bufferedBytes).toBe(5 * 1024 * 1024)
+  expect(() =>
+    server.expect({
+      launch: 'L2',
+      generation: 1,
+      specHash: 'h',
+      handlers: { onStdoutRecord: () => undefined },
+      retainedBytes: 1024,
+    }),
+  ).toThrow('memory-budget')
+  sup.socket.destroy()
+  const outcome = await reg.session.outcome
+  expect(outcome.eligible).toBe(false)
+  expect(outcome.reasons).toContain('memory-budget')
+  expect(server.bufferedBytes).toBe(0)
 })

@@ -12,16 +12,35 @@ import {
   type ProcEnv,
   type MemberIdentity,
 } from './proc.ts'
+import { BoundedDiagnostics } from './note.ts'
 import { CODING_LIMITS, type CodingEvent, type LineParser } from './types.ts'
 
 export type StopReason = 'user' | 'timeout' | 'output_limit' | 'shutdown'
+
+const STOP_CAUSE: Record<StopReason, string> = {
+  user: 'user',
+  timeout: 'deadline',
+  output_limit: 'output-cap',
+  shutdown: 'score-shutdown',
+}
+/** The cause string the stop-recording hook receives. */
+export function stopCauseOf(reason: StopReason): string {
+  return STOP_CAUSE[reason]
+}
 
 export interface CliOutcome {
   exitCode: number | null
   signal: NodeJS.Signals | null
   stopped: StopReason | null
-  /** Tail of stderr, unredacted (callers redact before storing). */
+  /** The start of stderr, already redacted and bounded (a tail cut through a labelled value would leak it). */
   stderr: string
+  /**
+   * Whether the whole stdout stream was seen and handled: no partial last line, no read error and no dropped (oversized)
+   * record. False disqualifies the result, as for the supervised unit.
+   */
+  streamComplete: boolean
+  /** Why the stream is incomplete (empty when complete). */
+  streamLoss: string[]
   /** The process could not be started at all. */
   spawnError: string | null
   /**
@@ -79,6 +98,12 @@ export interface SpawnOptions {
   onMembers?(members: MemberIdentity[]): void
   /** A save failed; the same members are offered again on the next scan. Called once per streak of failures. */
   onMembersError?(error: unknown): void
+  /**
+   * Called once, synchronously, with the cause (`user`, `deadline`, `output-cap`, `score-shutdown`) before the group is
+   * first signalled, on every stop path. It must not throw; if it does, `onStopError` hears of it and the stop goes on.
+   */
+  onStop?(cause: string): void
+  onStopError?(error: unknown): void
   /** Test seam: the process table (default /proc). */
   procEnv?: ProcEnv
   /** Test seam: the kernel's answer to "does any process have this PGID" (default `kill(-pgid, 0)`). */
@@ -108,7 +133,8 @@ export function spawnCli(options: SpawnOptions): CliRun {
   let stopped: StopReason | null = null
   let spawnError: string | null = null
   let sawEvents = false
-  let stderr = ''
+  const stderr = new BoundedDiagnostics()
+  const streamLoss = new Set<string>()
   let total = 0
   let buffered = ''
   let skipping = false
@@ -131,6 +157,8 @@ export function spawnCli(options: SpawnOptions): CliRun {
         signal: null,
         stopped: null,
         stderr: support.detail,
+        streamComplete: true,
+        streamLoss: [],
         spawnError: 'python_unavailable',
         leftovers: false,
         groupGone: true,
@@ -241,11 +269,19 @@ export function spawnCli(options: SpawnOptions): CliRun {
     }
     return true
   }
+  function recordStop(reason: StopReason): void {
+    try {
+      options.onStop?.(STOP_CAUSE[reason])
+    } catch (error) {
+      options.onStopError?.(error)
+    }
+  }
   function stop(reason: StopReason = 'user'): void {
     if (stopped !== null) return
     // After the leader has gone Stop still acts, as long as a member of the group lives.
     if (leaderExited && !groupAlive()) return
     stopped = reason
+    recordStop(reason)
     signal('SIGINT')
     const term = setTimeout(() => signal('SIGTERM'), graceMs)
     const kill = setTimeout(() => {
@@ -287,24 +323,32 @@ export function spawnCli(options: SpawnOptions): CliRun {
       const line = buffered.slice(0, index)
       buffered = buffered.slice(index + 1)
       if (skipping) skipping = false
-      else if (Buffer.byteLength(line) > CODING_LIMITS.maxLineBytes)
+      else if (Buffer.byteLength(line) > CODING_LIMITS.maxLineBytes) {
         options.parser.stats.malformed++
-      else handleLine(line)
+        streamLoss.add('dropped-record')
+      } else handleLine(line)
     }
     // A line that never ends is dropped once it passes the cap.
     if (buffered.length > CODING_LIMITS.maxLineBytes) {
       buffered = ''
       skipping = true
       options.parser.stats.malformed++
+      streamLoss.add('dropped-record')
     }
   })
-  child.stdout.on('error', () => undefined)
+  child.stdout.on('error', () => streamLoss.add('read-error'))
+  // Natural end of stdout, tracked apart from the pipe being destroyed: destruction (a descendant holding the pipe open
+  // past the end of the turn) can discard unread records, including the one that matters (FW #7).
+  let stdoutEnded = false
+  child.stdout.on('end', () => {
+    stdoutEnded = true
+  })
   child.stderr.setEncoding('utf8')
   child.stderr.on('data', (chunk: string) => {
     if (abandoned) return
-    stderr = (stderr + chunk).slice(-CODING_LIMITS.stderrBytes)
+    stderr.push(chunk)
   })
-  child.stderr.on('error', () => undefined)
+  child.stderr.on('error', () => streamLoss.add('read-error'))
   // The CLI may exit without reading all of stdin.
   child.stdin.on('error', () => undefined)
   const gate = child.stdio[GATE_FD] as Writable | null
@@ -350,8 +394,10 @@ export function spawnCli(options: SpawnOptions): CliRun {
     const settle = () => {
       if (settled || !closed || !leaderExited) return
       settled = true
-      if (!skipping && buffered.trim() && Buffer.byteLength(buffered) <= CODING_LIMITS.maxLineBytes)
-        handleLine(buffered)
+      // A last line with no newline may be a cut-off record: it is never parsed, and the stream is not complete.
+      if (!skipping && buffered.trim()) streamLoss.add('partial-last-line')
+      if (abandoned) streamLoss.add('abandoned')
+      else if (!stdoutEnded && spawnError === null) streamLoss.add('forced-stdout-close')
       void queue
         .then(() => reapGroup())
         .then((gone) => {
@@ -362,7 +408,9 @@ export function spawnCli(options: SpawnOptions): CliRun {
             exitCode,
             signal: exitSignal,
             stopped,
-            stderr,
+            stderr: stderr.text(),
+            streamComplete: streamLoss.size === 0,
+            streamLoss: [...streamLoss],
             spawnError,
             sawEvents,
             stats: options.parser.stats,
@@ -421,7 +469,10 @@ export function spawnCli(options: SpawnOptions): CliRun {
       options.onSpawn(child.pid)
     } catch (error) {
       // Nothing was returned to the caller, so nothing else will ever stop this group: end it here.
-      if (stopped === null) stopped = 'shutdown'
+      if (stopped === null) {
+        stopped = 'shutdown'
+        recordStop('shutdown')
+      }
       signal('SIGKILL')
       throw new SpawnRecordError(
         error,

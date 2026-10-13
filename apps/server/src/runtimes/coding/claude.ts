@@ -1,3 +1,4 @@
+import { withBounds } from './note.ts'
 import { z } from 'zod'
 import { redact } from '../../redact.ts'
 import type {
@@ -56,6 +57,29 @@ const ResultEvent = z.object({
     .optional(),
 })
 
+// Records and blocks Score knows it can ignore, named explicitly (FW #5): notices and partial stream events that carry
+// neither the answer nor a failure. Anything else Score can't understand is loss for the whole attempt (it could have
+// been the final result or the error that contradicts an earlier success).
+const IGNORABLE_RECORDS = new Set(['stream_event', 'rate_limit_event', 'keep_alive'])
+// System records that are notices (hooks, a retried request, status). Validated: a known subtype that reports an error,
+// an unknown subtype, or any system record after the result could be the failure that contradicts the verdict (FV #3).
+const IGNORABLE_SYSTEM = new Set([
+  'hook_started',
+  'hook_response',
+  // Sent by Claude Code 2.x right after init, before the answer (seen in a real read-only turn, 2026-10-13).
+  'commands_changed',
+  'hook_progress',
+  'api_retry',
+  'status',
+  'compact_boundary',
+])
+const SystemNotice = z.object({
+  type: z.literal('system'),
+  subtype: z.string().min(1),
+  is_error: z.boolean().optional(),
+})
+const IGNORABLE_BLOCKS = new Set(['image', 'redacted_thinking', 'document'])
+
 const PATH_KEYS = ['file_path', 'path', 'notebook_path']
 function preview(tool: string, input: unknown): string {
   if (input === null || typeof input !== 'object') return ''
@@ -112,10 +136,22 @@ function resultText(content: unknown): string {
 }
 
 export function createClaudeParser(cwd?: string): LineParser {
+  return withBounds(createInnerClaudeParser(cwd))
+}
+
+function createInnerClaudeParser(cwd?: string): LineParser {
   const stats = { unknown: 0, malformed: 0 }
   let spoke = false
+  // Sticky for the whole attempt, also after the result record (like Codex): decided once the stream was processed.
+  let lossNote: string | null = null
+  const lose = (note: string) => {
+    lossNote ??= note
+  }
+  let resultSeen = false
   return {
     stats,
+    lossReason: () =>
+      lossNote ?? (stats.malformed > 0 ? 'Score dropped a record of this turn' : null),
     parse(line) {
       let value: unknown
       try {
@@ -131,6 +167,13 @@ export function createClaudeParser(cwd?: string): LineParser {
       }
       const events: CodingEvent[] = []
       const init = InitEvent.safeParse(value)
+      const envelopeType = envelope.data.type
+      if (
+        !init.success &&
+        envelopeType === 'system' &&
+        (value as { subtype?: unknown }).subtype === 'init'
+      )
+        lose('Claude Code sent a record Score could not validate')
       if (init.success) {
         return [
           {
@@ -141,6 +184,11 @@ export function createClaudeParser(cwd?: string): LineParser {
         ]
       }
       const message = MessageEvent.safeParse(value)
+      if (!message.success && (envelopeType === 'assistant' || envelopeType === 'user')) {
+        stats.unknown++
+        lose('Claude Code sent a record Score could not validate')
+        return events
+      }
       if (message.success) {
         const content = message.data.message.content
         if (typeof content === 'string') {
@@ -178,12 +226,27 @@ export function createClaudeParser(cwd?: string): LineParser {
               ok: result.data.is_error !== true,
               preview: resultText(result.data.content),
             })
-          } else stats.unknown++
+          } else {
+            stats.unknown++
+            // A block of a known kind that fails its schema, or one nobody allow-listed, may have been the answer or a
+            // tool outcome. (Text and thinking inside a user message are echoes: nothing depends on them.)
+            const kind = ContentBlock.safeParse(block)
+            const type = kind.success ? kind.data.type : ''
+            const echo = message.data.type === 'user' && (type === 'text' || type === 'thinking')
+            if (!echo && !IGNORABLE_BLOCKS.has(type))
+              lose('Claude Code sent a record Score could not validate')
+          }
         }
         return events
       }
       const result = ResultEvent.safeParse(value)
       if (result.success) {
+        // One terminal per attempt (re-review 6 #1): a second result, success or not, is loss and never replaces the first.
+        if (resultSeen) {
+          lose('Claude Code reported more than one result')
+          return events
+        }
+        resultSeen = true
         const usage = result.data.usage
         if (usage) {
           events.push({
@@ -200,8 +263,23 @@ export function createClaudeParser(cwd?: string): LineParser {
         }
         const failed =
           result.data.is_error === true || (result.data.subtype ?? 'success') !== 'success'
+        // 7.7a §6: explicit success only. A missing subtype or is_error never implies it, and the reply must be text.
+        const explicit =
+          result.data.subtype === 'success' &&
+          result.data.is_error === false &&
+          typeof result.data.result === 'string' &&
+          result.data.result.trim().length > 0
         events.push({
           kind: 'result',
+          verdict: explicit
+            ? { eligible: true, reply: result.data.result!, reason: null }
+            : {
+                eligible: false,
+                reply: null,
+                reason: failed
+                  ? 'Claude Code reported an error'
+                  : 'Claude Code did not report an explicit success with text',
+              },
           ok: !failed,
           ...(result.data.result ? { text: result.data.result } : {}),
           ...(failed
@@ -213,8 +291,20 @@ export function createClaudeParser(cwd?: string): LineParser {
         })
         return events
       }
-      // Known envelope, no meaning for us (rate-limit notices, partial stream events, hooks…).
+      // Known envelope without meaning for us: only the allow-listed notices (and non-init system records, hooks…) may be
+      // ignored. A `result` that failed validation is exactly what must not vanish.
       stats.unknown++
+      if (envelopeType === 'system') {
+        const notice = SystemNotice.safeParse(value)
+        if (
+          !notice.success ||
+          !IGNORABLE_SYSTEM.has(notice.data.subtype) ||
+          notice.data.is_error === true ||
+          resultSeen
+        )
+          lose('Claude Code sent a system record that Score could not rule out as a failure')
+      } else if (!IGNORABLE_RECORDS.has(envelopeType))
+        lose('Claude Code sent a record Score could not validate')
       return events
     },
   }

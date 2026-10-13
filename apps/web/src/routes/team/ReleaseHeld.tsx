@@ -30,15 +30,25 @@ export function ReleaseHeld({ agentId }: { agentId: string }) {
   const held = list.data?.find((item) => item.id === agentId)?.heldGroups ?? []
   const unclear = held.filter((group) => group.canRelease)
   if (unclear.length === 0) return null
+  const service = unclear.find((group) => group.unit)?.unit
   return (
     <div className="team-muted-strong" role="group" aria-label="Release this agent">
-      <p>
-        Score can’t tell whether{' '}
-        {unclear.length === 1 ? 'these programs are' : 'the programs of these groups are'} its own,
-        so it hasn’t touched them and this agent can’t take new messages. Check them yourself (for
-        example <code>{`ps -o pid,pgid,args -g ${unclear[0]!.pgid}`}</code>
-        ), then release the agent. Releasing stops nothing.
-      </p>
+      {service ? (
+        <p>
+          Score can’t read the service this agent ran in, so it hasn’t touched it and this agent
+          can’t take new messages. Check it yourself (for example{' '}
+          <code>{`systemctl --user status ${service}`}</code>), then release the agent. Releasing
+          stops nothing.
+        </p>
+      ) : (
+        <p>
+          Score can’t tell whether{' '}
+          {unclear.length === 1 ? 'these programs are' : 'the programs of these groups are'} its
+          own, so it hasn’t touched them and this agent can’t take new messages. Check them yourself
+          (for example <code>{`ps -o pid,pgid,args -g ${unclear[0]!.pgid}`}</code>
+          ), then release the agent. Releasing stops nothing.
+        </p>
+      )}
       {release.error && <p role="alert">{release.error.message}</p>}
       <button
         type="button"
