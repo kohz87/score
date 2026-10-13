@@ -84,6 +84,7 @@ import { admissionDenial, recoveredOnly } from './admission.ts'
 import {
   MAX_GENERATIONS,
   applyClosure,
+  dropUnlaunchedInput,
   causeClass,
   codingTurnId,
   launchFacts,
@@ -102,6 +103,7 @@ import {
   compactControlHistory,
   refuseAttempt,
   reserveFor,
+  codingItemsFor,
   setStepStatus,
 } from './ops.ts'
 import { renderLeadInput, renderStepInput } from './render.ts'
@@ -690,7 +692,11 @@ export class Orchestrator {
         ? `${running} of ${ORCH_CAPACITY.runningOrchestrations} orchestrations are running`
         : `${ORCH_CAPACITY.runningOrchestrations} orchestrations are already running.`,
     )
-    const reserve = reserveFor(12, 20)
+    const reserve = reserveFor(
+      12,
+      20,
+      reports.size > 0 ? codingItemsFor(12, ORCH_DEFAULTS.codingSteps) : 0,
+    )
     const fits = this.db.read((sqlite) => this.quotaUsed(sqlite) + reserve <= this.quotaBytes)
     add(
       'quota',
@@ -868,7 +874,13 @@ export class Orchestrator {
         'capacity',
         `${ORCH_CAPACITY.runningOrchestrations} orchestrations are already running.`,
       )
-    const reserve = reserveFor(body.maxSteps, body.maxLeadTurns)
+    const reserve = reserveFor(
+      body.maxSteps,
+      body.maxLeadTurns,
+      reports.size > 0
+        ? codingItemsFor(body.maxSteps, body.codingSteps ?? ORCH_DEFAULTS.codingSteps)
+        : 0,
+    )
     if (this.quotaUsed(sqlite) + reserve > this.quotaBytes)
       throw new HttpError(
         409,
@@ -2628,6 +2640,7 @@ export class Orchestrator {
           "UPDATE message_runs SET state = 'failed' WHERE orchestration_attempt_id = ? AND generation = ? AND state = 'pending'",
         )
         .run(attempt.id, generation)
+      dropUnlaunchedInput(sqlite, attempt.id, generation)
       sqlite.prepare('UPDATE orc_attempts SET run_id = NULL WHERE id = ?').run(attempt.id)
       recordRefusal(sqlite, o, attempt, generation, now)
       this.cooldown.set(o.id, this.nowMs() + this.retryMs)

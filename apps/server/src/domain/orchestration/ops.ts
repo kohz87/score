@@ -29,9 +29,21 @@ export function addStored(sqlite: DatabaseSync, orchId: string, bytes: number): 
 }
 
 /** The reserve a run takes at creation: steps and lead turns at 64 KiB each plus the control reserve. */
-export const reserveFor = (maxSteps: number, maxLeadTurns: number): number =>
+export const reserveFor = (maxSteps: number, maxLeadTurns: number, codingItems = 0): number =>
   (maxSteps + maxLeadTurns) * (ORCH_LIMITS.storagePerItemBytes + ORCH_LIMITS.recordsPerItemBytes) +
-  ORCH_LIMITS.controlReserveBytes
+  ORCH_LIMITS.controlReserveBytes +
+  codingItems * CODING_ITEM_EXTRA_BYTES
+
+/**
+ * What a coding worker item reserves beyond an ordinary step (design §11): the result (32 KiB), one retained input
+ * (32 KiB) and 2 KiB for each of up to 20 dispatch generations. Independent of the observation pool, so its terminal
+ * state, proof, refusal receipt and Stop always fit.
+ */
+export const CODING_ITEM_EXTRA_BYTES = 32 * 1024 + 32 * 1024 + 20 * 2 * 1024
+
+/** A run can release at most `codingSteps` launches, and each coding item needs one, so that bounds the items. */
+export const codingItemsFor = (maxSteps: number, codingSteps: number): number =>
+  Math.min(maxSteps, codingSteps)
 
 export function setStepStatus(
   sqlite: DatabaseSync,

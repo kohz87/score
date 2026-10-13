@@ -19,6 +19,7 @@ import { guardedUpsert } from '../../hub/projections.ts'
 import { redact, redactBounded } from '../../redact.ts'
 import { readRun, runDraft, runLifecycle } from '../../hermes/index.ts'
 import { boundEvent, detailBytes, MAX_REMEMBERED_IDS, redactNote } from './note.ts'
+import { chargeObservation } from '../../domain/orchestration/ops.ts'
 import { rememberCliSession } from './store.ts'
 import type { CodingEvent, ToolDetail } from './types.ts'
 
@@ -222,11 +223,14 @@ export function eventObservation(
           drafts.push(...appendRunMessage(sqlite, runId, event.text, now))
           break
         case 'thinking':
-          sqlite
-            .prepare(
-              'INSERT INTO run_thinking (run_id, seq, text) VALUES (?, ?, ?) ON CONFLICT DO NOTHING',
-            )
-            .run(runId, seq, redactBounded(event.text, MAX_THINKING_CHARS))
+          // An orchestration's coding run charges what it keeps to the run's allowance and drops the row when none is
+          // left; the protected reserve for Stop and obligation evidence is never spent here (design §11).
+          if (chargeObservation(sqlite, runId, MAX_THINKING_CHARS * 4))
+            sqlite
+              .prepare(
+                'INSERT INTO run_thinking (run_id, seq, text) VALUES (?, ?, ?) ON CONFLICT DO NOTHING',
+              )
+              .run(runId, seq, redactBounded(event.text, MAX_THINKING_CHARS))
           break
         case 'tool_start': {
           // Calls that never end must not pile up: past the limit the oldest is forgotten (its end is then ignored).
@@ -239,19 +243,24 @@ export function eventObservation(
           })
           // CLI metadata is redacted before it is bounded or stored: tool names and what is derived from them (#12).
           const toolName = redactNote(event.tool, 200)
-          sqlite
-            .prepare(
-              `INSERT INTO tool_calls (run_id, seq, tool, preview, status, started_at) VALUES (?, ?, ?, ?, 'running', ?) ON CONFLICT DO NOTHING`,
-            )
-            .run(runId, seq, toolName, redactBounded(event.preview, 2048), now)
-          const tools = z
-            .array(z.object({ tool: z.string() }))
-            .parse(
-              sqlite
-                .prepare('SELECT DISTINCT tool FROM tool_calls WHERE run_id = ? ORDER BY seq')
-                .all(runId),
-            )
-          setRun(sqlite, runId, now, { tools_used: JSON.stringify(tools.map(({ tool }) => tool)) })
+          // The whole bounded row is charged at the start: preview, result preview and overhead.
+          if (chargeObservation(sqlite, runId, 2048 + 2000 + 256)) {
+            sqlite
+              .prepare(
+                `INSERT INTO tool_calls (run_id, seq, tool, preview, status, started_at) VALUES (?, ?, ?, ?, 'running', ?) ON CONFLICT DO NOTHING`,
+              )
+              .run(runId, seq, toolName, redactBounded(event.preview, 2048), now)
+            const tools = z
+              .array(z.object({ tool: z.string() }))
+              .parse(
+                sqlite
+                  .prepare('SELECT DISTINCT tool FROM tool_calls WHERE run_id = ? ORDER BY seq')
+                  .all(runId),
+              )
+            setRun(sqlite, runId, now, {
+              tools_used: JSON.stringify(tools.map(({ tool }) => tool)),
+            })
+          }
           drafts.push({
             type: 'log.line',
             data: {

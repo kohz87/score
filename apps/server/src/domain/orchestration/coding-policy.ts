@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import type { WorkerPolicy } from '../../runtimes/coding/policy.ts'
+import { addStored } from './ops.ts'
 
 // The worker policy each coding worker of a run was approved with (7.7b §3, table `orc_worker_policies`). The stored
 // policy holds identities and hashes only; the invocation is rebuilt from it before every launch.
@@ -75,6 +76,8 @@ export function storeWorkerPolicy(
   // A policy snapshot stays small (identities and hashes): well under the 4 KB the run's reserve charges for it.
   if (Buffer.byteLength(text) > 4096)
     throw new Error('A worker policy snapshot is larger than 4 KB')
+  // The snapshot is retained with the run, so it is charged to the run's allowance (design §11).
+  addStored(sqlite, orchId, Buffer.byteLength(text) + Buffer.byteLength(value.reach))
   sqlite
     .prepare(
       `INSERT INTO orc_worker_policies (orchestration_id, agent_id, policy_id, policy, reach, reach_beyond_workspace, acknowledged_at, created_at, updated_at)

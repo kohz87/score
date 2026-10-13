@@ -52,7 +52,7 @@ describe('Stop jobs', () => {
 
   test('a coding Stop answered with anything but stopped / not_running stays owed', async () => {
     const id = await runningStep()
-    const stop = vi.spyOn(h.coding, 'stopRun').mockResolvedValue(undefined)
+    const stop = vi.spyOn(h.coding, 'stopRun').mockResolvedValue(undefined as never)
     await h.orch.stop(id)
     await h.until(() => stop.mock.calls.length >= 2, 10_000)
     expect(attempt()['stop_acknowledged_at']).toBeNull()

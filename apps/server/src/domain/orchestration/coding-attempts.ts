@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { getCodingAgent } from '../../runtimes/coding/store.ts'
 import { foldCodingLaunches } from './coding-records.ts'
@@ -156,6 +157,36 @@ function failPendingReply(sqlite: DatabaseSync, attemptId: string, generation: n
  * and a proven no-launch has known-zero execution spend. Idempotent: it only acts while the attempt is still at that
  * generation in `send_started` or `running`.
  */
+/**
+ * A generation that provably launched nothing keeps only the hash of its input (design §11): it was never sent, so
+ * nothing needs the text again for recovery, and only the current generation and launched generations keep theirs.
+ */
+export function dropUnlaunchedInput(
+  sqlite: DatabaseSync,
+  attemptId: string,
+  generation: number,
+): void {
+  const rows = sqlite
+    .prepare(
+      `SELECT id, payload FROM command_intents WHERE orchestration_attempt_id = ? AND generation = ?`,
+    )
+    .all(attemptId, generation) as { id: string; payload: string }[]
+  for (const row of rows) {
+    let payload: Record<string, unknown>
+    try {
+      payload = JSON.parse(row.payload) as Record<string, unknown>
+    } catch {
+      continue
+    }
+    if (typeof payload['input'] !== 'string' || payload['inputSha256'] !== undefined) continue
+    payload['inputSha256'] = createHash('sha256').update(payload['input']).digest('hex')
+    payload['input'] = ''
+    sqlite
+      .prepare('UPDATE command_intents SET payload = ? WHERE id = ?')
+      .run(JSON.stringify(payload), row.id)
+  }
+}
+
 export function applyClosure(
   sqlite: DatabaseSync,
   o: Pick<OrchRow, 'id'>,
@@ -170,6 +201,7 @@ export function applyClosure(
     )
     .run(cause, now, attempt.id, generation)
   failPendingReply(sqlite, attempt.id, generation)
+  dropUnlaunchedInput(sqlite, attempt.id, generation)
   if (
     attempt.dispatch_generation !== generation ||
     !['send_started', 'running'].includes(attempt.state)
