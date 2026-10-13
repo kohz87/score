@@ -3,6 +3,45 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.1.0] — 2026-10-13
+
+Stage 1 of coding agents in orchestration (PLAN 7.7a): every coding turn now runs as its own supervised systemd user
+service. Reviewed in seven Codex code reviews and two verification passes; every fix has a regression test that failed
+before it.
+
+### Added — coding runs as supervised services
+- On hosts where systemd user services work, each Claude Code, Codex or Antigravity turn runs as a transient
+  `score-<id>-c-<launch>.service` with a small supervisor. The supervisor talks to Score over a private socket with a
+  single-use signed token, starts the CLI only after Score says go, and ends it if Score disappears (watchdog), so a
+  crash or restart of Score never leaves a CLI running unseen.
+- A turn counts as completed only with proof: the CLI's own success record (validated per CLI), every output line
+  received and saved, and the supervisor's final receipt. Anything a CLI sends that Score can't vouch for (an unknown or
+  contradictory record, a failure followed by a "success", output lost or cut off) makes the turn fail clearly instead.
+- Once a host has run units, coding pauses with a clear note if they stop working, rather than silently falling back.
+  Hosts where units never worked keep the 1.0.3 engine.
+- A launch journal outside the Score folder records every launch, so a turn is never sent twice, also across crashes,
+  restarts and database restores.
+- Team › agent shows which engine runs that agent's coding turns.
+
+### Added — installation identity and the freeze
+- Each Score folder has an installation identity. A moved folder is confirmed with
+  `scripts/score installation confirm-move`, a copy with `confirm-copy`.
+- Rare states (a copied folder, a lost or cut-back journal, a database restored over a newer journal) **freeze** all
+  agent work: nothing is dispatched, no chat reply or approval goes out, no inherited run is stopped or signalled. Score
+  says why, and `scripts/score installation reset-history` (Score stopped; asks first) retires everything unfinished and
+  starts a fresh history. Coding runs this Score started itself can still be stopped while frozen.
+
+### Fixed
+- Now › Score › Room renders messages as Markdown, like Chat (tables, lists, code).
+- A Claude Code `commands_changed` notice (sent by current versions on every turn) is understood.
+
+### Known limitations
+- While frozen, Score's own deadline Stop reaches only runs it started in this session; the supervisor's watchdog still
+  contains the rest.
+- Rolling back both the database and the external journal together to the same older point can't be detected.
+- A failed final-receipt sync combined with systemd collecting the unit under the same manager can still be read as a
+  clean end.
+
 ## [1.0.3] — 2026-10-12
 
 Fixes from a third external audit of 1.0.2 (6 findings; `docs/reviews/2026-10-12-external-audit-3.md`) and from the
