@@ -19,6 +19,7 @@ import {
   withRegistryLock,
   writeDurable,
 } from './installation.ts'
+import { acquireHomeLock } from './db/lock.ts'
 import { LOCK_RANK, mkdirDurable, OsLock } from './locks/os-lock.ts'
 
 // `scripts/score installation reset-history` (decision 71): the only way out of a frozen state (a copied home, a lost or
@@ -144,44 +145,46 @@ export function resetHistory(options: {
   home: string
   dbFile: string
   now?: Date
+  /** The caller already holds `<home>/score.lock` (the command takes it before resolving the identity). */
+  homeLockHeld?: boolean
 }): { archive: string; archived: number; generation: string; database: DatabaseReset | null } {
   const at = options.now ?? new Date()
   mkdirDurable(options.home)
-  const homeLock = new OsLock(options.home)
+  // The same lock a running server holds for its lifetime (db/lock.ts): taken here unless the caller holds it, and
+  // refused while another process (or this one) owns it (re-review 6 #6).
+  const homeLock = options.homeLockHeld ? null : acquireHomeLock(options.home)
   try {
-    return homeLock.runSync(() => {
-      const generation = randomUUID()
-      // The journal and registry locks are taken (and released) inside; the home lock stays held around all of it, so
-      // nothing that opens the database through the home lock can interleave with the retirement.
-      const journal = resetJournalHistory({
-        journalDir: options.journalDir,
-        namespaceDir: options.namespaceDir,
-        installationId: options.installationId,
-        now: at,
-        generation,
-      })
-      let database: DatabaseReset | null = null
-      if (existsSync(options.dbFile)) {
-        const sqlite = new DatabaseSync(options.dbFile)
-        try {
-          sqlite.exec('PRAGMA busy_timeout = 10000')
-          database = resetDatabaseHistory(sqlite, at.toISOString(), generation)
-          // The retirement must be on disk before the journal says the reset is complete.
-          sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)')
-        } finally {
-          sqlite.close()
-        }
-      }
-      completeJournalHistory({
-        namespaceDir: options.namespaceDir,
-        installationId: options.installationId,
-        generation,
-        now: at,
-      })
-      return { ...journal, database }
+    const generation = randomUUID()
+    // The journal and registry locks are taken (and released) inside; the home lock stays held around all of it, so
+    // nothing that opens the database through the home lock can interleave with the retirement.
+    const journal = resetJournalHistory({
+      journalDir: options.journalDir,
+      namespaceDir: options.namespaceDir,
+      installationId: options.installationId,
+      now: at,
+      generation,
     })
+    let database: DatabaseReset | null = null
+    if (existsSync(options.dbFile)) {
+      const sqlite = new DatabaseSync(options.dbFile)
+      try {
+        sqlite.exec('PRAGMA busy_timeout = 10000')
+        database = resetDatabaseHistory(sqlite, at.toISOString(), generation)
+        // The retirement must be on disk before the journal says the reset is complete.
+        sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+      } finally {
+        sqlite.close()
+      }
+    }
+    completeJournalHistory({
+      namespaceDir: options.namespaceDir,
+      installationId: options.installationId,
+      generation,
+      now: at,
+    })
+    return { ...journal, database }
   } finally {
-    homeLock.close()
+    homeLock?.release()
   }
 }
 

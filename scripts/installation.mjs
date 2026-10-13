@@ -19,6 +19,7 @@ import {
   registeredIdForHome,
   resolveInstallation,
 } from '../apps/server/src/installation.ts'
+import { acquireHomeLock } from '../apps/server/src/db/lock.ts'
 import { resetHistory } from '../apps/server/src/history-reset.ts'
 
 const fail = (message) => {
@@ -76,6 +77,22 @@ if (existsSync(pidFile)) {
 }
 
 if (command === 'reset-history') {
+  // The exact lock a running server holds (<home>/score.lock), taken before the identity is resolved and held until the
+  // process ends: a server started in between, or one started directly without score.pid, makes the reset refuse
+  // (re-review 6 #6). A pid file cannot provide this exclusion.
+  let homeLock
+  try {
+    homeLock = acquireHomeLock(home)
+  } catch (error) {
+    fail(`${error instanceof Error ? error.message : String(error)}; run \`score stop\` first`)
+  }
+  process.on('exit', () => {
+    try {
+      homeLock.release()
+    } catch {
+      // A lock that cannot be released is judged stale by the next contender.
+    }
+  })
   const resolved = resolveInstallation({ journalDir, home })
   if (!resolved.ok)
     fail(`${resolved.message}\nResolve that first (it is not something a history reset can fix).`)
@@ -102,6 +119,7 @@ if (command === 'reset-history') {
     installationId: resolved.id,
     home,
     dbFile: join(home, 'score.db'),
+    homeLockHeld: true,
   })
   const counts = done.database
     ? `${done.database.attempts} orchestration steps, ${done.database.intents} start requests, ${done.database.processes} process records and ${done.database.launches} coding launches retired`

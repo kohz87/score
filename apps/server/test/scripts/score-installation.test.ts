@@ -13,6 +13,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test } from 'vitest'
+import { acquireHomeLock } from '../../src/db/lock.ts'
+import { resetHistory } from '../../src/history-reset.ts'
 import { readHomeInstallation, readRegistry, resolveInstallation } from '../../src/installation.ts'
 import { openMigrated } from '../orchestration/harness-db.ts'
 
@@ -125,6 +127,29 @@ test('FV #1: reset-history asks first, refuses while Score runs, and then retire
   expect(running.status).toBe(1)
   expect(running.stderr).toContain('Score is running')
   rmSync(join(copy, 'score.pid'))
+  // FT #3: the lock a running server really holds (<home>/score.lock) refuses the reset, with no score.pid anywhere.
+  const serverLock = acquireHomeLock(copy)
+  try {
+    expect(existsSync(join(copy, 'score.pid'))).toBe(false)
+    const locked = spawnSync(launcher, ['installation', 'reset-history', '--yes'], {
+      env: envFor(copy),
+      encoding: 'utf8',
+    })
+    expect(locked.status).toBe(1)
+    expect(locked.stderr).toContain('Another Score server')
+    expect(locked.stdout).not.toContain('History reset')
+    expect(() =>
+      resetHistory({
+        journalDir,
+        namespaceDir: join(journalDir, id.id),
+        installationId: id.id,
+        home: copy,
+        dbFile: join(copy, 'score.db'),
+      }),
+    ).toThrow(/Another Score server/)
+  } finally {
+    serverLock.release()
+  }
   const unchanged = new DatabaseSync(join(copy, 'score.db'), { readOnly: true })
   expect(unchanged.prepare("SELECT state FROM command_intents WHERE id = 'i1'").get()).toEqual({
     state: 'pending',
