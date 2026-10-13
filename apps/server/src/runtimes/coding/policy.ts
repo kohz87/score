@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync, realpathSync, statSync } from 'node:fs'
 import { driverFor } from './drivers.ts'
 import type { CodingDriver } from './types.ts'
+import { PolicyUnverifiable } from './worker-sources.ts'
 
 // The worker policy (7.7b §3): everything that decides what an orchestration step's CLI can do, frozen when the person
 // starts the run and checked again right before each launch. Three rules:
@@ -34,8 +35,7 @@ export interface WorkerPolicy {
   sources: [string, FileIdentity][]
 }
 
-/** Why a policy can't be computed: the reach of this CLI can't be verified. */
-export class PolicyUnverifiable extends Error {}
+export { PolicyUnverifiable }
 
 export function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`

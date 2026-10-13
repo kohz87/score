@@ -2,7 +2,7 @@ import { withBounds } from './note.ts'
 import { z } from 'zod'
 import { redact } from '../../redact.ts'
 import { join } from 'node:path'
-import { inChain } from './worker-sources.ts'
+import { inRoots } from './worker-sources.ts'
 import type {
   CodingDriver,
   CodingEvent,
@@ -403,11 +403,11 @@ export const claudeDriver: CodingDriver = {
       return [
         join(config, 'settings.json'),
         join(config, 'CLAUDE.md'),
-        ...inChain(workspace, '.claude', 'settings.json'),
-        ...inChain(workspace, '.claude', 'settings.local.json'),
-        ...inChain(workspace, 'CLAUDE.md'),
-        ...inChain(workspace, 'CLAUDE.local.md'),
-        ...inChain(workspace, '.claude', 'CLAUDE.md'),
+        ...inRoots(workspace, '.claude', 'settings.json'),
+        ...inRoots(workspace, '.claude', 'settings.local.json'),
+        ...inRoots(workspace, 'CLAUDE.md'),
+        ...inRoots(workspace, 'CLAUDE.local.md'),
+        ...inRoots(workspace, '.claude', 'CLAUDE.md'),
         '/etc/claude-code/managed-settings.json',
         '/etc/claude-code/CLAUDE.md',
       ]

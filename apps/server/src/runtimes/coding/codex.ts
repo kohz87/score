@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { join } from 'node:path'
 import { boundId, MAX_REPLY_BYTES, rememberId, withBounds } from './note.ts'
-import { inChain } from './worker-sources.ts'
+import { inRoots } from './worker-sources.ts'
 import type { CodingDriver, CodingEvent, DriverRunOptions, LineParser } from './types.ts'
 
 // Codex CLI, headless: `codex exec --json`. Event shapes follow OpenAI's documented JSONL stream
@@ -420,11 +420,11 @@ export const codexDriver: CodingDriver = {
         join(codexHome, 'AGENTS.md'),
         join(codexHome, 'AGENTS.override.md'),
         join(codexHome, 'rules'),
-        ...inChain(workspace, '.codex', 'config.toml'),
-        ...inChain(workspace, '.codex', 'hooks.json'),
-        ...inChain(workspace, '.codex', 'rules'),
-        ...inChain(workspace, 'AGENTS.md'),
-        ...inChain(workspace, 'AGENTS.override.md'),
+        ...inRoots(workspace, '.codex', 'config.toml'),
+        ...inRoots(workspace, '.codex', 'hooks.json'),
+        ...inRoots(workspace, '.codex', 'rules'),
+        ...inRoots(workspace, 'AGENTS.md'),
+        ...inRoots(workspace, 'AGENTS.override.md'),
         '/etc/codex/config.toml',
         '/etc/codex/managed_config.toml',
         '/etc/codex/requirements.toml',
