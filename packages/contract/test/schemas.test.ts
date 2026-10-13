@@ -100,9 +100,20 @@ const orcDetail = {
   endReason: null,
   storage: { reserveBytes: 1000, storedBytes: 10 },
 }
+const orcPolicyId = 'a'.repeat(64)
+const orcWorker = {
+  agentId: 'coder',
+  runtime: 'claude-code',
+  readiness: 'ready',
+  detail: null,
+  policyId: orcPolicyId,
+  reach: 'Reads and edits files in /work.',
+  reachBeyondWorkspace: false,
+}
 const orcPreflight = {
   ok: true,
   checks: [{ id: 'listener', status: 'ok', message: 'ok' }],
+  workers: [orcWorker],
   gatePolicyNotes: { 'every-step': 'a', 'lead-asks': 'b', none: 'c' },
   acknowledgementText: contract.ORCH_ACKNOWLEDGEMENT_TEXT,
   defaults: {
@@ -111,6 +122,7 @@ const orcPreflight = {
     maxConcurrentSteps: 2,
     leadTurnEstimateUsd: 0.25,
     stepEstimateUsd: 0.5,
+    codingSteps: 10,
   },
   reserveBytes: 100,
 }
@@ -1460,8 +1472,22 @@ const cases = [
       leadTurnEstimateUsd: 0.25,
       stepEstimateUsd: 0.5,
       acknowledgement: { text: contract.ORCH_ACKNOWLEDGEMENT_TEXT },
+      codingPolicies: { builder: orcPolicyId },
+      acknowledgeCodingReach: { policyIds: [orcPolicyId] },
+      acceptUnknownCost: ['codex'],
+      codingSteps: 5,
     },
     { goal: 'Ship it', leadAgentId: 'lead', allowedAgents: [], acknowledgement: { text: 'x' } },
+  ],
+  ['PolicyIdSchema', orcPolicyId, 'not-a-hash'],
+  ['CostSourceSchema', 'claude-code', 'gemini'],
+  ['WorkerReadinessSchema', 'reach_unverifiable', 'fine'],
+  ['CodingReachAcknowledgementSchema', { policyIds: [orcPolicyId] }, { policyIds: ['x'] }],
+  ['CodingWorkerPreflightSchema', orcWorker, { ...orcWorker, runtime: 'antigravity' }],
+  [
+    'PolicyRemapDecisionSchema',
+    { agentId: 'builder', policyId: orcPolicyId, orchestrationRevision: 2 },
+    { agentId: 'builder', policyId: 'x', orchestrationRevision: 2 },
   ],
   ['PreflightCheckSchema', { id: 'journal', status: 'ok', message: 'ok' }, { id: 'x' }],
   ['PreflightSchema', orcPreflight, { ok: true }],
@@ -1506,7 +1532,12 @@ const cases = [
   ],
   [
     'LimitsDecisionSchema',
-    { budgetUsd: 10, orchestrationRevision: 2 },
+    {
+      budgetUsd: 10,
+      codingSteps: 20,
+      acceptUnknownCost: { add: ['codex'], remove: ['hermes'] },
+      orchestrationRevision: 2,
+    },
     { orchestrationRevision: 2 },
   ],
   ['RunControlSchema', { orchestrationRevision: 2 }, { orchestrationRevision: 0 }],

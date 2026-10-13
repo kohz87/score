@@ -47,6 +47,7 @@ const preflight = {
       message: 'Hermes loads MCP tools per session; Score cannot see whether the lead has them',
     },
   ],
+  workers: [],
   gatePolicyNotes: {
     'every-step': 'Every step waits for you.',
     'lead-asks': 'Steps start unless the lead asks you first.',
@@ -60,6 +61,7 @@ const preflight = {
     maxConcurrentSteps: 2,
     leadTurnEstimateUsd: 0.25,
     stepEstimateUsd: 0.5,
+    codingSteps: 10,
   },
   reserveBytes: 100,
 }
