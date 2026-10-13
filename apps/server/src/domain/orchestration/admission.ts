@@ -166,8 +166,9 @@ export function admissionDenial(
     )
     if (problem) return { cause: 'agent_changed', policy: problem }
   }
-  const view = budgetView(sqlite, o)
+  // Spend from the run facts as they are now, not from attempts the executor hasn't reconciled yet (F1 #1).
+  const view = budgetView(sqlite, o, { fresh: true })
   if (overBudget(view)) return { cause: 'budget' }
-  if (unknownCostBlocks(sqlite, o, view)) return { cause: 'unknown_cost' }
+  if (unknownCostBlocks(sqlite, o, view, { fresh: true })) return { cause: 'unknown_cost' }
   return undefined
 }
