@@ -965,3 +965,17 @@ button.orch-primary,
 .orch-risk {
   margin-top: 8px;
 }
+.orch-node__cli {
+  position: absolute;
+  top: -9px;
+  left: 10px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--subtle);
+  border: 1px solid var(--hairline);
+  color: var(--ink-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}

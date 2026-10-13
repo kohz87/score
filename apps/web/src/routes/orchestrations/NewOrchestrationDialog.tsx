@@ -150,7 +150,8 @@ export function NewOrchestrationDialog({
   const reachCovered = reachIds.every((id) => reachAccepted.includes(id))
   const costSources: CostSource[] = ['hermes', ...new Set(workers.map((worker) => worker.runtime))]
   const notes = preflight.data?.gatePolicyNotes
-  const blocked = preflight.data ? !preflight.data.ok : false
+  // A refused check (a coding agent this computer can't run, say) blocks the start just like a failed one.
+  const blocked = preflight.data ? !preflight.data.ok : preflight.isError
   const failed =
     create.error instanceof ApiError && create.error.code === 'preflight_failed'
       ? (create.error.details as { checks?: PreflightCheck[] } | undefined)?.checks

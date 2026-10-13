@@ -614,15 +614,13 @@ export function LiveDiagram({
                     <>
                       <b>{title}</b>
                       <span>
-                        {glyph.name}
-                        {cli && <em className="orch-cli">{cli}</em>} · <Caption text={shown} />
+                        {glyph.name} · <Caption text={shown} />
                       </span>
                     </>
                   ) : (
                     <>
                       <b>
                         {isLead ? 'Lead' : title} {!shaped && <i>{glyph.name}</i>}
-                        {cli && <em className="orch-cli">{cli}</em>}
                       </b>
                       <span>
                         <Caption text={shown} />
@@ -630,6 +628,7 @@ export function LiveDiagram({
                     </>
                   )}
                 </span>
+                {cli && <span className="orch-node__cli">{cli}</span>}
                 {visual === 'gate' && <span className="orch-node__flag">Needs you</span>}
                 {visual === 'unknown' && (
                   <span className="orch-node__q" aria-hidden="true">

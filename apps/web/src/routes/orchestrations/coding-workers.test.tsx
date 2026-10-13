@@ -263,6 +263,35 @@ test('an acknowledgement never carries over to a changed policy id', async () =>
   expect(startButton(dialog).disabled).toBe(true)
 })
 
+test('a refused check explains itself and blocks the start', async () => {
+  const get = (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).getMockImplementation() as (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ) => Promise<Response>
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).startsWith('/api/orchestrations/preflight')
+        ? Promise.resolve(
+            json(
+              {
+                error: {
+                  code: 'coding_workers_need_units',
+                  message:
+                    'Coding agents can take steps only where Score runs them as system services.',
+                },
+              },
+              422,
+            ),
+          )
+        : get(input, init),
+    ),
+  )
+  const dialog = await openDialog('designer')
+  await within(dialog).findByText(/only where Score runs them as system services/)
+  expect(startButton(dialog).disabled).toBe(true)
+})
+
 type Snapshot = {
   orchestration: { needsYou: unknown[]; coding?: unknown }
 }

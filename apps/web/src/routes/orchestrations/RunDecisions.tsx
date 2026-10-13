@@ -520,8 +520,7 @@ export function PolicyChangedCard({
       aria-label={`New settings for ${item.agentId}`}
     >
       <h3>
-        <AgentChip agentId={item.agentId} agents={agents} />
-        ’s settings changed
+        Settings changed for <AgentChip agentId={item.agentId} agents={agents} />
       </h3>
       <p>
         {item.stepId} is blocked because {item.agentId} isn’t set up the way it was when you
