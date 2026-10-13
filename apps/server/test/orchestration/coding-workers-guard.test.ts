@@ -32,6 +32,11 @@ const facts = (unitHost: boolean): CodingWorkerFacts => ({
       ag: { runtime: 'antigravity', permission: 'workspace-write' },
       wide: { runtime: 'codex', permission: 'full' },
     })[id],
+  // The guard never asks for a policy: these two are not reached.
+  report: () => Promise.reject(new Error('not used by the guard')),
+  checkPolicy: () => {
+    throw new Error('not used by the guard')
+  },
 })
 const codeOf = (fn: () => void): string | undefined => {
   try {

@@ -7,6 +7,7 @@ import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { codingProjection } from '../../domain/orchestration/coding-checkpoint.ts'
 import type { CodingJournal, ReleaseDecision } from '../../domain/orchestration/coding-journal.ts'
+import type { OwnedLaunchJournal, PreparedLaunch } from '../../domain/orchestration/owner.ts'
 import {
   foldCodingLaunches,
   type CodingLaunch,
@@ -207,7 +208,9 @@ export interface UnitLaunchRequest {
    */
   launchId?: string
   owner?: { orchestrationId: string; attemptId: string; generation: number }
-  authorise?(prepared: { expiry: number }): ReleaseDecision
+  authorise?(prepared: PreparedLaunch, journal: OwnedLaunchJournal): ReleaseDecision
+  /** The id of the worker policy the invocation was built from (7.7b §3); handed to `authorise` with the expiry. */
+  preparedPolicyId?: string
 }
 
 export interface UnitOutcome {
@@ -1136,12 +1139,22 @@ export class UnitBackend {
     // ---- the ordering point (§3) ----
     // A fence raised while the unit was starting also stops the release (review #5). An owned launch asks its owner,
     // inside the critical section and in a read transaction of its own; a refusal is revoked there with its cause.
-    const decide = (): ReleaseDecision => {
+    const decide = (tx: OwnedLaunchJournal): ReleaseDecision => {
       if (ctl.stopReason) return { allowed: false, cause: 'stop' }
       if (this.deps.frozen?.() != null) return { allowed: false, cause: 'frozen' }
       if (this.block() !== null) return { allowed: false, cause: 'fenced' }
       if (!request.authorised()) return { allowed: false, cause: 'stop' }
-      return request.authorise?.({ expiry: request.deadline }) ?? { allowed: true }
+      return (
+        request.authorise?.(
+          {
+            expiry: request.deadline,
+            ...(request.preparedPolicyId === undefined
+              ? {}
+              : { policyId: request.preparedPolicyId }),
+          },
+          tx,
+        ) ?? { allowed: true }
+      )
     }
     let releasing: ReturnType<typeof journal.release>
     try {

@@ -349,6 +349,8 @@ describe('the decision itself: every rule of authorise() on an attempt that is r
     generation: number
     launchId: string
     expiry: number
+    policyId?: string
+    executed?: number
   }
   type Decide = (sqlite: unknown, subject: Subject) => { allowed: boolean; cause?: string }
   let subject: Subject
@@ -388,6 +390,10 @@ describe('the decision itself: every rule of authorise() on an attempt that is r
       generation: 1,
       launchId: gens()[0]!['launch_id'] as string,
       expiry: Date.now() + 60_000,
+      // What the runtime prepared the invocation from and what the journal counts (7.7b part 2).
+      policyId: h.rows<{ policy_id: string }>('SELECT policy_id FROM orc_worker_policies')[0]!
+        .policy_id,
+      executed: 0,
     }
   }
   const decide = (over: Partial<Subject> = {}) =>

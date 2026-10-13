@@ -102,8 +102,13 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
   const remap = new Map<string, Extract<JournalEntry, { kind: 'remap' }>>()
   for (const entry of entries)
     if (entry.kind === 'remap') remap.set(`${entry.orchestrationId}:${entry.agentId}`, entry)
+  // 7.7b: the newest settings a coding worker was remapped to (a database restored from before it would run the old ones).
+  const policyRemap = new Map<string, Extract<JournalEntry, { kind: 'policy_remap' }>>()
+  for (const entry of entries)
+    if (entry.kind === 'policy_remap')
+      policyRemap.set(`${entry.orchestrationId}:${entry.agentId}`, entry)
   const limits = sqlite.prepare(
-    'SELECT budget_usd, deadline_at, accepted_unknown_spend FROM orchestrations WHERE id = ?',
+    'SELECT budget_usd, deadline_at, accepted_unknown_spend, coding_steps, accepted_unknown_cost FROM orchestrations WHERE id = ?',
   )
   // v8.2 / v8.3: only the newest word on an attempt's dispatch counts; older generations are history.
   const dispatches = journalDispatches(entries)
@@ -121,6 +126,8 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
             budget_usd: number | null
             deadline_at: string | null
             accepted_unknown_spend: number
+            coding_steps: number
+            accepted_unknown_cost: string
           }
         | undefined
       const lost: string[] = []
@@ -138,6 +145,16 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
           lost.push('a shorter deadline')
         if (!entry.acceptUnknownSpend && row.accepted_unknown_spend === 1)
           lost.push('a revoked unknown-spend acceptance')
+        // 7.7b: a lowered coding step limit, or an unknown-cost acceptance taken back, that this database lacks.
+        if (entry.codingSteps !== undefined && row.coding_steps > entry.codingSteps)
+          lost.push('a lowered coding step limit')
+        if (
+          entry.acceptUnknownCost !== undefined &&
+          (JSON.parse(row.accepted_unknown_cost) as string[]).some(
+            (source) => !entry.acceptUnknownCost!.includes(source),
+          )
+        )
+          lost.push('an unknown-cost acceptance that was taken back')
       }
       if (lost.length > 0)
         mismatches.push({
@@ -159,6 +176,20 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
           ref: entry.orchestrationId,
           journalN: entry.n,
           detail: `The remap of ${entry.agentId} in ${entry.orchestrationId} was recorded, but the database does not hold it`,
+        })
+    } else if (entry.kind === 'policy_remap') {
+      if (policyRemap.get(`${entry.orchestrationId}:${entry.agentId}`) !== entry) continue
+      const row = sqlite
+        .prepare(
+          'SELECT policy_id FROM orc_worker_policies WHERE orchestration_id = ? AND agent_id = ?',
+        )
+        .get(entry.orchestrationId, entry.agentId) as { policy_id: string } | undefined
+      if (!row || row.policy_id !== entry.policyId)
+        mismatches.push({
+          kind: 'fence',
+          ref: entry.orchestrationId,
+          journalN: entry.n,
+          detail: `The new settings for ${entry.agentId} in ${entry.orchestrationId} were approved, but the database does not hold them`,
         })
     } else if (entry.kind === 'hold') {
       const key = entry.target === 'team' ? 'team' : `agent:${entry.agentId}`

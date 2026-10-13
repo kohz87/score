@@ -157,6 +157,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'orc_history',
     'orc_inquiries',
     'orc_steps',
+    'orc_worker_policies',
     'orchestrations',
     'passkeys',
     'plan_start_runs',

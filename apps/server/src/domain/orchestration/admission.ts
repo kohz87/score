@@ -1,7 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { agentAdmits, agentPausedAt, lifecycleOf } from '../agent-lifecycle.ts'
 import { teamPausedAt } from '../team-pause.ts'
-import { budgetView, overBudget } from './budget.ts'
+import { policyBindingProblem } from './coding-policy.ts'
+import { budgetView, overBudget, unknownCostBlocks } from './budget.ts'
 import { isFenced } from './fence.ts'
 import {
   attemptsOf,
@@ -116,6 +117,8 @@ export interface AdmissionDenial {
   withdrawn?: string
   /** `agent_changed`: the run's frozen mapping, not the live agent row, is what differs. */
   frozenMapping?: boolean
+  /** `agent_changed` for a coding step: why its approved settings and its admission or approval don't match (7.7b §12a). */
+  policy?: string
 }
 
 /**
@@ -151,9 +154,20 @@ export function admissionDenial(
   const frozen = frozenIncarnation(sqlite, o.id, attempt.agent_id)
   if (frozen !== undefined && frozen !== attempt.agent_incarnation)
     return { cause: 'agent_changed', frozenMapping: true }
+  // A coding step runs only under the policy it was approved with: its stored policy, its admission and its current gate
+  // must name the same id (DB-only; the CLI's own files are checked by the release check).
+  if (attempt.kind === 'step' && attempt.runtime !== 'hermes' && attempt.step_id !== null) {
+    const problem = policyBindingProblem(
+      sqlite,
+      o.id,
+      attempt.step_id,
+      attempt.agent_id,
+      attempt.policy_id,
+    )
+    if (problem) return { cause: 'agent_changed', policy: problem }
+  }
   const view = budgetView(sqlite, o)
   if (overBudget(view)) return { cause: 'budget' }
-  if (view.limitUsd !== null && view.unknownSpend && !o.accepted_unknown_spend)
-    return { cause: 'unknown_cost' }
+  if (unknownCostBlocks(sqlite, o, view)) return { cause: 'unknown_cost' }
   return undefined
 }

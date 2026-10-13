@@ -50,6 +50,8 @@ export const OrchRowSchema = z.object({
   stop_requested_at: z.string().nullable(),
   waiver_at: z.string().nullable(),
   accepted_unknown_spend: bool,
+  coding_steps: z.int(),
+  accepted_unknown_cost: jsonArray,
   acknowledgement: z.string(),
   preflight: z.string(),
   reserve_bytes: z.int(),
@@ -165,6 +167,7 @@ export const AttemptRowSchema = z.object({
   suspended: bool,
   result_text: z.string().nullable(),
   result_truncated: bool,
+  policy_id: z.string().nullable(),
 })
 export type AttemptRow = z.infer<typeof AttemptRowSchema>
 

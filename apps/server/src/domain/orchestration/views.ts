@@ -9,6 +9,7 @@ import type {
   StepView,
 } from '@score/contract'
 import type { DatabaseSync } from 'node:sqlite'
+import { workerPoliciesOf } from './coding-policy.ts'
 import { lifecycleOf } from '../agent-lifecycle.ts'
 import { budgetView } from './budget.ts'
 import { isFenced } from './fence.ts'
@@ -106,6 +107,22 @@ export function needsYouOf(
   if (!isTerminalStatus(o.status) && isFenced(sqlite))
     result.push({ kind: 'fence', reason: 'global' })
   if (!isTerminalStatus(o.status) && o.status !== 'stopping' && o.status !== 'finishing') {
+    // 7.7b: a coding step blocked with its suspended attempt waits for a decision of the person.
+    const suspended = new Set(
+      attempts.filter((a) => a.suspended && a.step_id !== null).map((a) => a.step_id),
+    )
+    for (const step of stepsOf(sqlite, o.id)) {
+      if (step.status !== 'blocked' || !suspended.has(step.id)) continue
+      if (step.disposition === 'agent_changed')
+        result.push({
+          kind: 'policy_changed',
+          stepId: step.id,
+          agentId: step.agent_id,
+          currentPolicyId: null,
+        })
+      else if (step.disposition === 'coding_limit')
+        result.push({ kind: 'coding_limit', stepId: step.id })
+    }
     const mapped = sqlite
       .prepare(
         'SELECT agent_id, role, incarnation FROM orc_agent_map WHERE orchestration_id = ? ORDER BY role DESC, agent_id',
@@ -258,6 +275,20 @@ export function detailOf(sqlite: DatabaseSync, o: OrchRow): OrchestrationDetail 
     acknowledgedAt: (JSON.parse(o.acknowledgement) as { at: string }).at,
     endReason: o.end_reason,
     storage: { reserveBytes: o.reserve_bytes, storedBytes: o.stored_bytes },
+    coding: {
+      stepLimit: o.coding_steps,
+      acceptedUnknownCost: o.accepted_unknown_cost.filter(
+        (source): source is 'hermes' | 'claude-code' | 'codex' =>
+          source === 'hermes' || source === 'claude-code' || source === 'codex',
+      ),
+      workers: workerPoliciesOf(sqlite, o.id).map((stored) => ({
+        agentId: stored.agentId,
+        runtime: stored.policy.runtime as 'claude-code' | 'codex',
+        policyId: stored.policyId,
+        reach: stored.reach,
+        reachBeyondWorkspace: stored.reachBeyondWorkspace,
+      })),
+    },
   }
 }
 

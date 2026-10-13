@@ -1,4 +1,5 @@
-import type { AgentSummary } from '@score/contract'
+import type { AgentSummary, WorkerReadiness } from '@score/contract'
+import type { WorkerPolicy } from '../../runtimes/coding/policy.ts'
 import { HttpError } from '../../errors.ts'
 
 /**
@@ -28,7 +29,23 @@ export interface CodingWorkerFacts {
   /** The host supervises coding runs as systemd units and the capability check passes right now. */
   unitHost(): boolean
   agent(id: string): { runtime: string; permission: string } | undefined
+  /** Preflight's view of a coding worker: readiness and the policy to approve (7.7b §3). */
+  report(agentId: string): Promise<WorkerReport>
+  /** The policy id of what would run now for a stored policy, every identity read again (sync; never throws on a mismatch). */
+  checkPolicy(agentId: string, policy: WorkerPolicy): PolicyCheck
 }
+
+export interface WorkerReport {
+  readiness: WorkerReadiness
+  detail: string | null
+  policy: WorkerPolicy | null
+  policyId: string | null
+  reach: string | null
+  reachBeyondWorkspace: boolean
+}
+export type PolicyCheck =
+  | { ok: true; id: string }
+  | { ok: false; cause: 'agent_changed' | 'reach_unverifiable'; detail: string }
 
 /** Coding runtimes that can take orchestration steps (7.7b §1). Antigravity may leave scheduled work behind its run. */
 export const WORKER_RUNTIMES: readonly string[] = ['claude-code', 'codex']

@@ -127,27 +127,29 @@ export function cascadeBlocked(sqlite: DatabaseSync, orchId: string, now: string
   for (;;) {
     const steps = stepsOf(sqlite, orchId)
     const byId = new Map(steps.map((step) => [step.id, step]))
-    const next = steps.find(
-      (step) =>
-        (step.status === 'queued' || step.status === 'pending_gate') &&
-        step.after_steps.some((id) => {
-          const dependency = byId.get(id)
-          return (
-            dependency !== undefined &&
-            isFinalStep(dependency.status) &&
-            dependency.status !== 'succeeded'
-          )
-        }),
+    // A coding step blocked "agent changed" or "limit reached" keeps its suspended attempt and may go on once the person
+    // decides (7.7b §12a): the steps waiting for it keep waiting instead of being blocked for good.
+    const suspended = new Set(
+      attemptsOf(sqlite, orchId)
+        .filter((attempt) => attempt.suspended && attempt.step_id !== null)
+        .map((attempt) => attempt.step_id),
     )
-    if (!next) return blocked
-    const culprit = next.after_steps.find((id) => {
+    const failedDependency = (id: string): boolean => {
       const dependency = byId.get(id)
       return (
         dependency !== undefined &&
         isFinalStep(dependency.status) &&
-        dependency.status !== 'succeeded'
+        dependency.status !== 'succeeded' &&
+        !(dependency.status === 'blocked' && suspended.has(dependency.id))
       )
-    })!
+    }
+    const next = steps.find(
+      (step) =>
+        (step.status === 'queued' || step.status === 'pending_gate') &&
+        step.after_steps.some(failedDependency),
+    )
+    if (!next) return blocked
+    const culprit = next.after_steps.find(failedDependency)!
     setStepStatus(
       sqlite,
       orchId,

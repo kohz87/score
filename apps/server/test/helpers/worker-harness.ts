@@ -1,7 +1,7 @@
 import { ORCH_ACKNOWLEDGEMENT_TEXT, type OrchestrationCreate } from '@score/contract'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, vi } from 'vitest'
 import { migrate, openDatabase, type ScoreDb } from '../../src/db/index.ts'
@@ -50,6 +50,10 @@ export interface WorkerHarness {
   dir: string
   home: string
   workspace: string
+  /** The fake CLI as this test's own copy (its identity is the CLI's identity: a test may replace it). */
+  cliFile: string
+  /** The environment the CLI would be started from (the locator's input): a test may change an allow-listed variable. */
+  cliEnv: Record<string, string | undefined>
   namespace: string
   db: ScoreDb
   ingest: Ingest
@@ -87,8 +91,19 @@ export async function workerHarness(options: WorkerHarnessOptions = {}): Promise
   mkdirSync(runtimeDir, { mode: 0o700 })
   mkdirSync(namespace, { recursive: true })
   mkdirSync(join(namespace, 'launches'))
+  // The fake CLI and its fixtures are copied, so replacing "the CLI" in one test touches nothing another test runs.
+  const cliDir = join(dir, 'cli')
+  cpSync(dirname(FAKE_CLI), cliDir, { recursive: true })
+  const cliFile = join(cliDir, 'fake-cli.mjs')
+  const cliEnv: Record<string, string | undefined> = {
+    ...process.env,
+    HOME: home,
+    CLAUDE_CONFIG_DIR: join(home, '.claude'),
+    CODEX_HOME: join(home, '.codex'),
+  }
   const previousFake = process.env['SCORE_CODING_FAKE_LOG']
   process.env['SCORE_CODING_FAKE_LOG'] = join(dir, 'fake-cli.log')
+  cliEnv['SCORE_CODING_FAKE_LOG'] = join(dir, 'fake-cli.log')
   const fake = new FakeSystemd()
   const db = openDatabase(join(dir, 'score.db'))
   migrate(db, fileURLToPath(new URL('../../migrations/', import.meta.url)))
@@ -112,6 +127,8 @@ export async function workerHarness(options: WorkerHarnessOptions = {}): Promise
     home,
     workspace,
     namespace,
+    cliFile,
+    cliEnv,
     db,
     ingest,
     raw,
@@ -155,7 +172,12 @@ export async function workerHarness(options: WorkerHarnessOptions = {}): Promise
     const coding = new CodingRuntime({
       db,
       ingest,
-      locator: new CliLocator({ fakeCli: FAKE_CLI, cacheMs: 0 }),
+      locator: new CliLocator({
+        fakeCli: cliFile,
+        cacheMs: 0,
+        // The CLIs' configuration folders are this test's own (their files are only ever stat'ed).
+        env: cliEnv,
+      }),
       home,
       policy: defaultRootPolicy([home]),
       maxTurnMs: options.maxTurnMs ?? 60_000,
@@ -177,10 +199,7 @@ export async function workerHarness(options: WorkerHarnessOptions = {}): Promise
       access: new McpAccessStore(db),
       fence,
       retryMs: 100,
-      codingFacts: {
-        unitHost: () => backend.status.kind === 'unit',
-        agent: (id) => coding.agents().find((agent) => agent.id === id),
-      },
+      codingFacts: coding.workerFacts(),
       onError: (error) => errors.push(error),
       ...options.orchestrator,
     })
@@ -220,7 +239,21 @@ export async function workerHarness(options: WorkerHarnessOptions = {}): Promise
       })
     },
     async create(overrides: Partial<OrchestrationCreate> = {}) {
+      // The person looks at preflight and approves what it shows: the policy ids, and the reach where it goes beyond.
+      const preflight = await self.orch.preflight(
+        overrides.leadAgentId ?? 'lead',
+        overrides.allowedAgents ?? ['coder'],
+      )
+      const policies = preflight.workers.flatMap((worker) =>
+        worker.policyId === null ? [] : [[worker.agentId, worker.policyId] as const],
+      )
       const created = await self.orch.create({
+        codingPolicies: Object.fromEntries(policies),
+        acknowledgeCodingReach: {
+          policyIds: preflight.workers.flatMap((worker) =>
+            worker.reachBeyondWorkspace && worker.policyId ? [worker.policyId] : [],
+          ),
+        },
         goal: 'Write the release notes',
         leadAgentId: 'lead',
         allowedAgents: ['coder'],

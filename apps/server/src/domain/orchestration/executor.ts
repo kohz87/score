@@ -3,6 +3,7 @@ import {
   WORKFLOW_LIMITS,
   ORCH_ACKNOWLEDGEMENT_TEXT,
   ORCH_CAPACITY,
+  ORCH_DEFAULTS,
   ORCH_LIMITS,
   ORC_CAPABILITY_PLACEHOLDER,
   type GateDecision,
@@ -19,6 +20,7 @@ import {
   type PreflightCheck,
   type AbandonDecision,
   type RunControl,
+  type PolicyRemapDecision,
   type RemapDecision,
   type WaiverDecision,
   type WorkflowPreflight,
@@ -46,7 +48,14 @@ import { agentAdmits, agentPausedAt, lifecycleOf } from '../agent-lifecycle.ts'
 import { briefTitle, createBrief, emitBriefChange } from '../briefs.ts'
 import { insertRoom, storeMessage } from '../rooms.ts'
 import { teamPausedAt } from '../team-pause.ts'
-import { budgetView, canReserve, makeSpendReader, overBudget, type SpendReader } from './budget.ts'
+import {
+  budgetView,
+  canReserve,
+  makeSpendReader,
+  overBudget,
+  unknownCostBlocks,
+  type SpendReader,
+} from './budget.ts'
 import {
   containsCapability,
   hashCapability,
@@ -63,12 +72,14 @@ import {
   grantWaiver,
   remapAgent,
   pauseRun,
+  policyRemapStep,
   resumeRun,
   setLimits,
   stopRun,
 } from './decisions.ts'
 import { applyJournalEvidence, fenceView, isFenced, type GlobalFenceStore } from './fence.ts'
 import { journalDispatches } from './journal.ts'
+import { readWorkerPolicy, storeWorkerPolicy } from './coding-policy.ts'
 import { admissionDenial, recoveredOnly } from './admission.ts'
 import {
   MAX_GENERATIONS,
@@ -102,6 +113,7 @@ import {
   assertHermesOnly,
   assertOrchestrationWorkers,
   type CodingWorkerFacts,
+  type WorkerReport,
 } from './supported-agents.ts'
 import {
   agentIdsOf,
@@ -195,6 +207,10 @@ export interface ReleaseSubject {
   launchId: string
   /** The expiry this launch was prepared with (epoch ms). */
   expiry: number
+  /** The id of the worker policy the launch's invocation was built from (coding workers). */
+  policyId?: string | undefined
+  /** Launches of this orchestration that may have executed, read from the coding journal inside the critical section. */
+  executed?: number | undefined
 }
 export interface ReleaseChecks {
   /** The policy checks (prepared spec, bound identities, consent); runs in the release read transaction, never writes. */
@@ -556,6 +572,15 @@ export class Orchestrator {
     allowedAgents: string[],
     agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
   ): Promise<Preflight> {
+    return (await this.preflightWith(leadAgentId, allowedAgents, agents)).preflight
+  }
+
+  /** The preflight and, for each coding worker, the full report its policy came from (create stores the policy). */
+  private async preflightWith(
+    leadAgentId: string,
+    allowedAgents: string[],
+    agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
+  ): Promise<{ preflight: Preflight; reports: Map<string, WorkerReport> }> {
     const { port, access } = this.options
     const fake = port.mode === 'fake'
     const checks: PreflightCheck[] = []
@@ -564,6 +589,13 @@ export class Orchestrator {
     const team = agents ?? (await port.listAgents())
     assertOrchestrationWorkers(leadAgentId, allowedAgents, team, this.options.codingFacts)
     const known = new Map(team.map((agent) => [agent.id, agent]))
+    // Each coding worker: can it take a step now, and what policy would the person approve (7.7b §3).
+    const reports = new Map<string, WorkerReport>()
+    for (const id of new Set(allowedAgents)) {
+      const runtime = known.get(id)?.runtime
+      if (runtime && runtime !== 'hermes' && this.options.codingFacts)
+        reports.set(id, await this.options.codingFacts.report(id))
+    }
     const ready = (id: string): string | undefined => {
       const agent = known.get(id)
       if (!agent) return `${id} is not a team member`
@@ -607,6 +639,9 @@ export class Orchestrator {
         const problem = ready(id)
         return problem ? [problem] : []
       }),
+      ...[...reports].flatMap(([id, report]) =>
+        report.readiness === 'ready' ? [] : [`${id}: ${report.detail ?? report.readiness}`],
+      ),
     ]
     add(
       'allowed_agents',
@@ -678,9 +713,18 @@ export class Orchestrator {
           ? 'Scripted lead'
           : 'Score cannot see which MCP tools the lead has. Hermes caches the tool list per connection, so after Score is upgraded reload MCP (/reload-mcp, or restart the gateway) before starting.',
       )
-    return {
+    const preflight: Preflight = {
       ok: checks.every((check) => check.status !== 'fail'),
       checks,
+      workers: [...reports].map(([agentId, report]) => ({
+        agentId,
+        runtime: known.get(agentId)!.runtime as 'claude-code' | 'codex',
+        readiness: report.readiness,
+        detail: report.detail,
+        policyId: report.policyId,
+        reach: report.reach,
+        reachBeyondWorkspace: report.reachBeyondWorkspace,
+      })),
       gatePolicyNotes: {
         'every-step': 'You approve every assignment before it starts.',
         'lead-asks':
@@ -694,9 +738,11 @@ export class Orchestrator {
         maxConcurrentSteps: 2,
         leadTurnEstimateUsd: 0.25,
         stepEstimateUsd: 0.5,
+        codingSteps: ORCH_DEFAULTS.codingSteps,
       },
       reserveBytes: reserve,
     }
+    return { preflight, reports }
   }
 
   /** Orchestrations that hold capacity: running ones, and finished ones whose attempts are still not confirmed ended. */
@@ -721,7 +767,11 @@ export class Orchestrator {
     body: OrchestrationCreate,
     agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
   ): Promise<OrchestrationCreated> {
-    const preflight = await this.preflight(body.leadAgentId, body.allowedAgents, agents)
+    const { preflight, reports } = await this.preflightWith(
+      body.leadAgentId,
+      body.allowedAgents,
+      agents,
+    )
     if (new Set(body.allowedAgents).size !== body.allowedAgents.length)
       throw new HttpError(400, 'bad_request', 'An agent is listed twice in the allowed agents.')
     if (!preflight.ok) {
@@ -746,13 +796,47 @@ export class Orchestrator {
         )
       throw new HttpError(409, 'preflight_failed', 'The check before the run failed.', details)
     }
+    // Consent is by policy id (7.7b §4): the id the person saw must still be the agent's, and a reach beyond the workspace
+    // needs the acknowledgement of exactly that id.
+    for (const [agentId, report] of reports) {
+      const seen = body.codingPolicies?.[agentId]
+      if (seen === undefined)
+        throw new HttpError(
+          400,
+          'bad_request',
+          `The request has to name the settings it was approved with for ${agentId}.`,
+        )
+      if (seen !== report.policyId)
+        throw new HttpError(
+          409,
+          'policy_changed',
+          `${agentId} changed since you looked. Check what it can reach and start again.`,
+          { agentId, currentPolicyId: report.policyId },
+        )
+      if (
+        report.reachBeyondWorkspace &&
+        !body.acknowledgeCodingReach?.policyIds.includes(report.policyId!)
+      )
+        throw new HttpError(
+          409,
+          'reach_not_acknowledged',
+          `${agentId} can read beyond its workspace. Accept that before the run starts.`,
+          { agentId, policyId: report.policyId },
+        )
+    }
     const id = `orc-${randomUUID().slice(0, 8)}`
-    await this.mutate((ctx) => this.insert(ctx, id, body, preflight))
+    await this.mutate((ctx) => this.insert(ctx, id, body, preflight, reports))
     this.kick()
     return { orchestration: this.summary(id), preflight }
   }
 
-  private insert(ctx: Ctx, id: string, body: OrchestrationCreate, preflight: Preflight): void {
+  private insert(
+    ctx: Ctx,
+    id: string,
+    body: OrchestrationCreate,
+    preflight: Preflight,
+    reports: Map<string, WorkerReport>,
+  ): void {
     const { sqlite, now } = ctx
     if (isFenced(sqlite))
       throw new HttpError(
@@ -813,8 +897,8 @@ export class Orchestrator {
       .prepare(
         `INSERT INTO orchestrations (id, title, goal, lead_agent_id, lead_incarnation, allowed_agents, room_id, brief_id, gate_policy,
            budget_usd, deadline_at, max_steps, max_lead_turns, max_concurrent_steps, lead_turn_estimate_usd, step_estimate_usd,
-           status, acknowledgement, preflight, reserve_bytes, stored_bytes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?)`,
+           status, acknowledgement, preflight, reserve_bytes, stored_bytes, created_at, updated_at, coding_steps, accepted_unknown_cost)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -839,7 +923,50 @@ export class Orchestrator {
         Buffer.byteLength(body.goal) + 1024,
         now,
         now,
+        body.codingSteps ?? ORCH_DEFAULTS.codingSteps,
+        JSON.stringify([...new Set(body.acceptUnknownCost ?? [])].sort()),
       )
+    // The policy each coding worker is approved with, and the acknowledgement that covered it (stored in the history).
+    for (const [agentId, report] of reports) {
+      storeWorkerPolicy(
+        sqlite,
+        id,
+        agentId,
+        {
+          policyId: report.policyId!,
+          policy: report.policy!,
+          reach: report.reach!,
+          reachBeyondWorkspace: report.reachBeyondWorkspace,
+          acknowledged: body.acknowledgeCodingReach?.policyIds.includes(report.policyId!) ?? false,
+        },
+        now,
+      )
+    }
+    if (reports.size > 0) {
+      addHistory(
+        sqlite,
+        id,
+        'coding_reach_acknowledged',
+        {
+          policyIds: [...reports.values()]
+            .filter((report) => body.acknowledgeCodingReach?.policyIds.includes(report.policyId!))
+            .map((report) => report.policyId),
+        },
+        now,
+      )
+      // The limits the person started with are journaled like any later change (verified after a restore).
+      journalSoft(ctx, () =>
+        ctx.journal.append({
+          kind: 'authorization',
+          orchestrationId: id,
+          budgetUsd: body.budgetUsd ?? null,
+          deadlineAt: body.deadlineAt ?? null,
+          acceptUnknownSpend: false,
+          codingSteps: body.codingSteps ?? ORCH_DEFAULTS.codingSteps,
+          acceptUnknownCost: [...new Set(body.acceptUnknownCost ?? [])].sort(),
+        }),
+      )
+    }
     // Freeze who this run was started with: the lead and every allowed agent (fix-h item 3).
     const freeze = sqlite.prepare(
       'INSERT INTO orc_agent_map (orchestration_id, agent_id, role, incarnation, updated_at) VALUES (?, ?, ?, ?, ?)',
@@ -896,8 +1023,21 @@ export class Orchestrator {
   stop(id: string) {
     return this.decide(id, (ctx) => stopRun(ctx, id))
   }
-  remap(id: string, body: RemapDecision) {
-    return this.decide(id, (ctx) => remapAgent(ctx, id, body))
+  async remap(id: string, body: RemapDecision) {
+    this.db.read((sqlite) => requireLeadOrch(sqlite, id))
+    // A coding worker's replacement is judged on its policy as it is now (the report is asked before the transaction).
+    const isCoding = this.db.read(
+      (sqlite) => readWorkerPolicy(sqlite, id, body.agentId) !== undefined,
+    )
+    const report = isCoding ? await this.options.codingFacts?.report(body.agentId) : undefined
+    return this.decide(id, (ctx) => remapAgent(ctx, id, body, report))
+  }
+
+  /** "Use the new settings" for a step blocked `agent_changed` (7.7b §12a). */
+  async policyRemap(id: string, stepId: string, body: PolicyRemapDecision) {
+    this.db.read((sqlite) => requireLeadOrch(sqlite, id))
+    const report = await this.options.codingFacts?.report(body.agentId)
+    return this.decide(id, (ctx) => policyRemapStep(ctx, id, stepId, body, report))
   }
 
   waiver(id: string, body: WaiverDecision) {
@@ -1614,7 +1754,10 @@ export class Orchestrator {
       steps.some((s) => ['pending_gate', 'queued', 'admitted'].includes(s.status)) ||
       inquiriesOf(sqlite, orchId).some((q) => q.status === 'open') ||
       gatesOf(sqlite, orchId).some((g) => g.status === 'open') ||
-      attempts.some((a) => a.state === 'unknown' && a.abandoned_at === null)
+      attempts.some((a) => a.state === 'unknown' && a.abandoned_at === null) ||
+      // A coding step blocked with its suspended attempt waits for the person (settings, limit): that is on Needs you, not
+      // a run nobody can wake (7.7b §12a).
+      attempts.some((a) => a.suspended && a.state === 'created')
     if (!wakeSource) {
       this.pauseFor(ctx, o, 'no_wake_source')
       return true
@@ -1677,8 +1820,7 @@ export class Orchestrator {
     if (o.deadline_at !== null && now >= o.deadline_at) return
     const view = budgetView(sqlite, o)
     if (overBudget(view)) return this.pauseFor(ctx, o, 'budget')
-    if (view.limitUsd !== null && view.unknownSpend && !o.accepted_unknown_spend)
-      return this.pauseFor(ctx, o, 'unknown_spend')
+    if (unknownCostBlocks(sqlite, o, view)) return this.pauseFor(ctx, o, 'unknown_spend')
     if (teamPausedAt(sqlite) !== null) return
 
     const steps = stepsOf(sqlite, o.id)
@@ -1786,6 +1928,23 @@ export class Orchestrator {
         touch(ctx, o.id)
         continue
       }
+      // A step that was blocked with a suspended attempt (agent changed, limit reached) goes on with that SAME attempt:
+      // one active attempt per step, its reservation and frozen input kept (7.7b §12a). It is admitted again through the
+      // same rules; its policy id is the one the step is approved for now.
+      const suspended = attempts.findLast((a) => a.step_id === step.id && a.suspended)
+      if (suspended) {
+        sqlite
+          .prepare(
+            'UPDATE orc_attempts SET suspended = 0, policy_id = ?, updated_at = ? WHERE id = ?',
+          )
+          .run(readWorkerPolicy(sqlite, o.id, step.agent_id)?.policyId ?? null, now, suspended.id)
+        setStepStatus(sqlite, o.id, step.id, 'admitted', null, now)
+        counts.perRun.set(o.id, (counts.perRun.get(o.id) ?? 0) + 1)
+        counts.perAgent.set(step.agent_id, (counts.perAgent.get(step.agent_id) ?? 0) + 1)
+        counts.total++
+        touch(ctx, o.id)
+        continue
+      }
       const n = attempts.filter((a) => a.step_id === step.id).length + 1
       const attemptId = `orc-${o.id.slice(4)}-${step.id}-${n}`
       this.insertAttempt(ctx, o, {
@@ -1839,8 +1998,8 @@ export class Orchestrator {
     sqlite
       .prepare(
         `INSERT INTO orc_attempts (id, orchestration_id, kind, step_id, n, agent_id, agent_incarnation, session_id, turn_id, message_id,
-           state, input, reserved_usd, claim_from, claim_to, created_at, updated_at, runtime)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'created', ?, ?, ?, ?, ?, ?, ?)`,
+           state, input, reserved_usd, claim_from, claim_to, created_at, updated_at, runtime, policy_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'created', ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         a.id,
@@ -1860,6 +2019,7 @@ export class Orchestrator {
         now,
         now,
         a.kind === 'step' ? runtimeOfAgent(sqlite, a.agentId) : 'hermes',
+        a.kind === 'step' ? (readWorkerPolicy(sqlite, o.id, a.agentId)?.policyId ?? null) : null,
       )
     // The reply row the run's text attaches to. Never queued by the room dispatcher (orchestration_attempt_id).
     sqlite
@@ -1933,9 +2093,10 @@ export class Orchestrator {
     attempt: AttemptRow,
     coding: { generation: number; launchId: string },
   ): OrchestrationOwner {
-    const deadline = this.db.read(
-      (sqlite) => readOrch(sqlite, attempt.orchestration_id)?.deadline_at ?? null,
-    )
+    const { deadline, policy } = this.db.read((sqlite) => ({
+      deadline: readOrch(sqlite, attempt.orchestration_id)?.deadline_at ?? null,
+      policy: readWorkerPolicy(sqlite, attempt.orchestration_id, attempt.agent_id),
+    }))
     return {
       kind: 'orchestration',
       orchestrationId: attempt.orchestration_id,
@@ -1943,8 +2104,10 @@ export class Orchestrator {
       generation: coding.generation,
       launchId: coding.launchId,
       deadlineAt: deadline === null ? null : Date.parse(deadline),
+      // The invocation is built from this stored policy, never from the live agent row (7.7b §3).
+      ...(policy ? { policy: { id: policy.policyId, policy: policy.policy } } : {}),
       // Its own read transaction, inside the release critical section. Never writes, never awaits (design §6).
-      authorise: (prepared) =>
+      authorise: (prepared, journal) =>
         this.db.read((sqlite) =>
           this.decideRelease(sqlite, {
             orchestrationId: attempt.orchestration_id,
@@ -1952,6 +2115,8 @@ export class Orchestrator {
             generation: coding.generation,
             launchId: coding.launchId,
             expiry: prepared.expiry,
+            policyId: prepared.policyId,
+            executed: journal.executedBy(attempt.orchestration_id),
           }),
         ),
     }
@@ -2029,6 +2194,17 @@ export class Orchestrator {
     // Refused dispatch generations: the person is needed at the lifetime limit; after five in a row the attempt waits.
     if (attempt.needs_person || (attempt.next_try_at !== null && attempt.next_try_at > now))
       return undefined
+    // A coding step whose approved settings no longer match: it is suspended as it is (one attempt per step) and the
+    // step waits for "Use the new settings" or a new approval (7.7b §12a). Nothing was sent.
+    if (denial?.policy !== undefined && attempt.step_id) {
+      sqlite
+        .prepare('UPDATE orc_attempts SET suspended = 1, updated_at = ? WHERE id = ?')
+        .run(now, attempt.id)
+      setStepStatus(sqlite, o.id, attempt.step_id, 'blocked', 'agent_changed', now)
+      addCause(sqlite, o.id, 'step_blocked', attempt.step_id, now, 'agent_changed')
+      touch(ctx, o.id)
+      return undefined
+    }
     if (denial?.cause === 'agent_changed') {
       if (attempt.kind === 'lead') {
         refuseAttempt(
@@ -2374,7 +2550,18 @@ export class Orchestrator {
     // The prepared expiry may not outlive the deadline as it stands now (it can move earlier while a launch is arming).
     if (o.deadline_at !== null && subject.expiry > Date.parse(o.deadline_at))
       return no('deadline_changed')
-    // Part 2's checks: the policy (prepared spec, bound identities, consent) and the limits.
+    // A coding worker: the prepared invocation is the stored policy's, every external identity is read once more (inside
+    // the critical section, immediately before `releasing`), and the run's coding step limit still has room (7.7b §3, §8).
+    if (attempt.kind === 'step' && attempt.runtime !== 'hermes') {
+      const stored = readWorkerPolicy(sqlite, o.id, attempt.agent_id)
+      if (!stored || subject.policyId !== stored.policyId) return no('agent_changed')
+      const check = this.options.codingFacts?.checkPolicy(attempt.agent_id, stored.policy)
+      if (!check) return no('agent_changed')
+      if (!check.ok) return no(check.cause)
+      if (check.id !== stored.policyId) return no('agent_changed')
+      if ((subject.executed ?? 0) >= o.coding_steps) return no('limit')
+    }
+    // Extra checks (tests inject causes here): the policy and the limits.
     const refused =
       this.options.releaseChecks?.policy?.(sqlite, subject) ??
       this.options.releaseChecks?.limits?.(sqlite, subject)

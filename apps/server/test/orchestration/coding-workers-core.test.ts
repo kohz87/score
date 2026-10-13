@@ -293,14 +293,17 @@ test('five readiness refusals in a row make the attempt wait; the readiness wake
 })
 
 test('past 20 generations the step is blocked "kept being held back" for the person; there is no automatic loop', async () => {
+  // Every dispatch is refused before the run is queued (a coding fence), 20 times over. The fence goes up after the run
+  // was approved: preflight refuses a worker while a fence is up.
+  let fence: string | null = null
   h = await workerHarness({
     lead: { script: oneStep() },
-    // Every dispatch is refused before the run is queued (a coding fence), 20 times over.
-    unit: { blocked: () => 'A fence is up.' },
+    unit: { blocked: () => fence },
     orchestrator: { retryMs: 20 },
   })
   h.addAgent()
   await h.create()
+  fence = 'A fence is up.'
   await h.until(() => attempts()[0]?.['state'] === 'refused', 60_000)
   expect(h.rows('SELECT generation FROM orc_generations')).toHaveLength(20)
   expect(attempts()[0]).toMatchObject({

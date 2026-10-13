@@ -335,6 +335,8 @@ test('rendered lead input is bounded: results newest first, older ones omitted w
     stop_requested_at: null,
     waiver_at: null,
     accepted_unknown_spend: false,
+    coding_steps: 10,
+    accepted_unknown_cost: [],
     acknowledgement: '{}',
     preflight: '{}',
     reserve_bytes: 0,

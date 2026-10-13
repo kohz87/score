@@ -1,5 +1,5 @@
 import { ownsProcessRowIn } from './coding-checkpoint.ts'
-import type { ReleaseDecision } from './owner.ts'
+import type { OwnedLaunchJournal, ReleaseDecision } from './owner.ts'
 import type { ExecutionJournal, JournalEntry } from './journal.ts'
 import {
   nextState,
@@ -112,7 +112,7 @@ export class CodingJournal {
    */
   releaseOwned(
     launchId: string,
-    decide: () => ReleaseDecision,
+    decide: (tx: OwnedLaunchJournal) => ReleaseDecision,
     project?: Projection,
   ): CodingResult {
     if (this.inTransaction())
@@ -176,7 +176,7 @@ export class CodingJournal {
     patch: CodingPatch,
     project: Projection | undefined,
     stillAuthorised?: () => boolean,
-    decide?: () => ReleaseDecision,
+    decide?: (tx: OwnedLaunchJournal) => ReleaseDecision,
   ): CodingResult {
     return this.journal.critical((tx): CodingResult => {
       const current = tx.launch(launchId)
@@ -223,7 +223,7 @@ export class CodingJournal {
       if (stillAuthorised && !stillAuthorised())
         return { ok: false, reason: 'not_authorised', ...(current ? { state: current.state } : {}) }
       if (decide) {
-        const decision = decide()
+        const decision = decide(tx)
         if (!decision.allowed) {
           const revoked = nextState(current?.state, id, 'revoked', { revokeCause: decision.cause })
           const entry = tx.append({ kind: 'revoked', ...revoked } as Parameters<

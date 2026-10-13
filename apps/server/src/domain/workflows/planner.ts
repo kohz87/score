@@ -7,7 +7,7 @@ import {
 import { createHash } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { agentAdmits, lifecycleOf } from '../agent-lifecycle.ts'
-import { budgetView, canReserve } from '../orchestration/budget.ts'
+import { budgetView, canReserve, unknownCostBlocks } from '../orchestration/budget.ts'
 import { touch, type Ctx } from '../orchestration/ctx.ts'
 import { stopRun } from '../orchestration/decisions.ts'
 import {
@@ -460,8 +460,7 @@ export function assignWait(
   if (frozen !== undefined && frozen !== current) return 'remap'
   if (!agentAdmits(sqlite, agentId)) return 'agent_unavailable'
   const view = budgetView(sqlite, o)
-  if (o.budget_usd !== null && view.unknownSpend && !o.accepted_unknown_spend)
-    return 'unknown_spend'
+  if (unknownCostBlocks(sqlite, o, view)) return 'unknown_spend'
   return null
 }
 

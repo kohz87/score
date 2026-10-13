@@ -442,13 +442,7 @@ export async function startServer(
       port: composite,
       access: new McpAccessStore(database),
       fence: fenceStore,
-      codingFacts: {
-        unitHost: () => {
-          const status = codingRuntime.backend()
-          return status.kind === 'unit' && status.checks.every((check) => check.ok)
-        },
-        agent: (id) => codingRuntime.agents().find((agent) => agent.id === id),
-      },
+      codingFacts: codingRuntime.workerFacts(),
       mcpAvailable: Boolean(config.remote),
       onError: (error) => app?.log.error({ err: error }, 'Orchestration executor failed'),
     })

@@ -161,3 +161,32 @@ export const overBudget = (view: BudgetView): boolean =>
 function round(value: number): number {
   return Math.round(value * 1e6) / 1e6
 }
+
+/** Where an attempt's cost comes from: `hermes` for the lead and Hermes steps, the CLI's runtime for a coding step. */
+export const costSourceOf = (attempt: Pick<AttemptRow, 'kind' | 'runtime'>): string =>
+  attempt.kind === 'step' ? attempt.runtime : 'hermes'
+
+/** The sources of the attempts that ended without a recorded cost (7.7b §8: unknown cost keeps its provenance). */
+export function unknownCostSources(sqlite: DatabaseSync, o: OrchRow): Set<string> {
+  const sources = new Set<string>()
+  for (const attempt of attemptsOf(sqlite, o.id)) {
+    if (attempt.state === 'refused' || attempt.settled) continue
+    if (
+      ['terminated', 'unknown', 'abandoned'].includes(attempt.state) &&
+      attempt.spend_usd === null
+    )
+      sources.add(costSourceOf(attempt))
+  }
+  return sources
+}
+
+/**
+ * Whether an unknown cost nobody accepted pauses the run: only with a dollar budget set (today's rule), and only for a
+ * source the person hasn't accepted. `acceptUnknownSpend` accepts every source.
+ */
+export function unknownCostBlocks(sqlite: DatabaseSync, o: OrchRow, view: BudgetView): boolean {
+  if (view.limitUsd === null || !view.unknownSpend || o.accepted_unknown_spend) return false
+  const accepted = new Set(o.accepted_unknown_cost)
+  for (const source of unknownCostSources(sqlite, o)) if (!accepted.has(source)) return true
+  return false
+}

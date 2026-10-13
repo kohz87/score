@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { chmodSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type {
+  WorkerReadiness,
   AgentDetail,
   CodingAgent,
   CodingUsage,
@@ -18,6 +19,15 @@ import type { Ingest } from '../../hub/ingest.ts'
 import { redact, redactBounded } from '../../redact.ts'
 import { checkRoot, type RootPolicy } from '../../workspace/policy.ts'
 import { CliLocator } from './cli.ts'
+import {
+  buildPolicy,
+  inputsOf,
+  PolicyUnverifiable,
+  policyIdOf,
+  reachOf,
+  type PolicyContext,
+  type WorkerPolicy,
+} from './policy.ts'
 import { driverFor } from './drivers.ts'
 import { CappedText } from './note.ts'
 import {
@@ -47,6 +57,7 @@ import {
 } from './translate.ts'
 import type { CodingEvent } from './types.ts'
 import type { OrchestrationOwner } from '../../domain/orchestration/owner.ts'
+import type { CodingWorkerFacts } from '../../domain/orchestration/supported-agents.ts'
 import type { BackendStatus, UnitBackend } from './unit-backend.ts'
 import { turnWitnessed } from '../../domain/orchestration/coding-checkpoint.ts'
 
@@ -395,6 +406,148 @@ export class CodingRuntime {
         cause: 'untested_version',
       }
     return null
+  }
+
+  // ---------------------------------------------------------------------------------------- worker policy (7.7b §3)
+
+  /** What the orchestration executor may ask about coding workers. */
+  workerFacts(): CodingWorkerFacts {
+    return {
+      unitHost: () => {
+        const status = this.backend()
+        return status.kind === 'unit' && status.checks.every((check) => check.ok)
+      },
+      agent: (id) => this.agents().find((agent) => agent.id === id),
+      report: (id) => this.workerReport(id),
+      checkPolicy: (id, policy) => this.checkWorkerPolicy(id, policy),
+    }
+  }
+
+  private policyContext(
+    agentId: string,
+    command: { file: string; args: readonly string[] },
+    settingsOnDisk: boolean,
+  ): PolicyContext {
+    const env = this.deps.locator.childEnv()
+    return {
+      home: env['HOME'] ?? this.deps.policy.home,
+      env,
+      settingsDir: join(this.deps.home, 'coding', agentId),
+      denyPaths: this.denyPaths(),
+      denyFiles: this.denyFiles(),
+      command,
+      settingsOnDisk,
+    }
+  }
+
+  /**
+   * The policy id of what would run for a stored policy right now, every identity read again (synchronously: the release
+   * check calls it inside the journal's critical section). The inputs are the policy's own; the agent row is not consulted.
+   */
+  checkWorkerPolicy(
+    agentId: string,
+    policy: WorkerPolicy,
+    command?: { file: string; args: readonly string[] },
+  ):
+    | { ok: true; id: string }
+    | { ok: false; cause: 'agent_changed' | 'reach_unverifiable'; detail: string } {
+    const driver = driverFor(policy.runtime)
+    let resolved = command
+    if (!resolved) {
+      const native = this.deps.locator.nativeCommand(driver)
+      if (!native.ok)
+        return {
+          ok: false,
+          cause: 'agent_changed',
+          detail: `${driver.label} can’t be found: ${native.message}`,
+        }
+      resolved = native
+    }
+    try {
+      const current = buildPolicy(inputsOf(policy), this.policyContext(agentId, resolved, true))
+      return { ok: true, id: policyIdOf(current) }
+    } catch (error) {
+      if (error instanceof PolicyUnverifiable)
+        return { ok: false, cause: 'reach_unverifiable', detail: error.message }
+      throw error
+    }
+  }
+
+  /**
+   * What preflight says about a coding agent as a worker: whether it can take a step now and, when it can, the policy the
+   * person is asked to approve. The agent's current row is the only input; the CLI is asked for `--version` and nothing else.
+   */
+  async workerReport(agentId: string): Promise<{
+    readiness: WorkerReadiness
+    detail: string | null
+    policy: WorkerPolicy | null
+    policyId: string | null
+    reach: string | null
+    reachBeyondWorkspace: boolean
+  }> {
+    const none = (readiness: WorkerReadiness, detail: string) => ({
+      readiness,
+      detail,
+      policy: null,
+      policyId: null,
+      reach: null,
+      reachBeyondWorkspace: false,
+    })
+    const agent = getCodingAgent(this.deps.db.sqlite, agentId)
+    if (!agent) return none('not_installed', 'Couldn’t find that coding agent.')
+    const driver = driverFor(agent.runtime)
+    const frozen = this.deps.frozen?.() ?? null
+    if (frozen) return none('frozen', frozen)
+    if (!this.deps.unit?.usable())
+      return none(
+        'needs_units',
+        'Score can’t run coding agents as supervised services on this computer right now.',
+      )
+    const paused = this.deps.unit.block()
+    if (paused) return none('paused', paused)
+    const refusal = await this.cliRefusal(agent, driver, true)
+    if (refusal) {
+      const readiness: WorkerReadiness =
+        refusal.cause === 'cli_missing'
+          ? 'not_installed'
+          : refusal.cause === 'untested_version'
+            ? 'version_untested'
+            : refusal.cause === 'reach_unverifiable'
+              ? 'level_unverified'
+              : 'reach_unverifiable'
+      return none(readiness, refusal.notice)
+    }
+    const checked = await checkRoot(agent.workspace, this.deps.policy)
+    if (!checked.ok)
+      return none('reach_unverifiable', `The workspace is unavailable: ${checked.reason}`)
+    const cli = await this.deps.locator.detect(driver, { fresh: true })
+    const native = this.deps.locator.nativeCommand(driver)
+    if (!native.ok || cli.version === null)
+      return none('not_installed', native.ok ? 'The CLI didn’t report a version.' : native.message)
+    try {
+      const policy = buildPolicy(
+        {
+          runtime: agent.runtime,
+          permission: agent.permission,
+          model: agent.model,
+          workspace: checked.real,
+          version: cli.version,
+        },
+        this.policyContext(agent.id, native, false),
+      )
+      const reach = reachOf(policy)
+      return {
+        readiness: 'ready',
+        detail: null,
+        policy,
+        policyId: policyIdOf(policy),
+        reach: reach.text,
+        reachBeyondWorkspace: reach.beyondWorkspace,
+      }
+    } catch (error) {
+      if (error instanceof PolicyUnverifiable) return none('reach_unverifiable', error.message)
+      throw error
+    }
   }
 
   /** The CLIs' own login files: an agent has no business reading them. */
@@ -961,6 +1114,14 @@ export class CodingRuntime {
     const translation = newTranslation(entry.runId, agent.id, room)
     const costKind = agent.runtime === 'claude-code' ? 'estimated' : 'unknown'
     const owner = entry.owner
+    // An owned worker runs what its policy says (7.7b §3), never what the agent row says now: permission, model and
+    // workspace come from the policy the person approved; a row changed to `full` and back changes nothing here.
+    const frozenPolicy = owner?.policy
+    if (frozenPolicy) {
+      agent.permission = frozenPolicy.policy.permission
+      agent.workspace = frozenPolicy.policy.workspace.real
+      model = frozenPolicy.policy.model
+    }
     // Ends the run without a launch having been requested. An owned run leaves the reason class for its executor.
     const endUnlaunched = async (cause: string, info: TerminalInfo): Promise<void> => {
       if (owner) this.recordRefusal(entry.runId, cause, info.error ?? null)
@@ -1030,6 +1191,9 @@ export class CodingRuntime {
       writeFileSync(settingsPath, settings.content, { mode: 0o600 })
       chmodSync(settingsPath, 0o600)
     }
+    // The policy-built invocation of an owned worker is prepared right after Score wrote its settings file: every identity
+    // is read again and the id computed from what will really run; a difference ends the run before anything is armed.
+    let preparedPolicyId: string | undefined
     let resume = room && !owner ? cliSessionFor(db.sqlite, room, agent.id) : null
     // Event numbers keep counting across attempts: they name the observations, and a fallback's must not collide.
     let index = 0
@@ -1060,6 +1224,22 @@ export class CodingRuntime {
           costKind,
         }))
       const { file, args } = command
+      if (frozenPolicy) {
+        const checked = this.checkWorkerPolicy(agent.id, frozenPolicy.policy, command)
+        if (!checked.ok)
+          return void (await endUnlaunched(checked.cause, {
+            status: 'failed',
+            error: checked.detail,
+            costKind,
+          }))
+        preparedPolicyId = checked.id
+        if (checked.id !== frozenPolicy.id)
+          return void (await endUnlaunched('agent_changed', {
+            status: 'failed',
+            error: `${driver.label} or its settings changed since this run was approved.`,
+            costKind,
+          }))
+      }
       // Not a visible queued -> running step for a turn that has been stopped already.
       if (entry.stopBeforeStart)
         return void (await endUnlaunched(
@@ -1093,9 +1273,10 @@ export class CodingRuntime {
           permission: agent.permission,
           model,
           sessionId: resume,
-          settingsPath,
+          settingsPath: frozenPolicy?.policy.settings?.path ?? settingsPath,
           denyPaths: this.denyPaths(),
           denyFiles: this.denyFiles(),
+          ...(frozenPolicy ? { worker: true } : {}),
         }),
       ]
       const stdin = driver.promptVia === 'stdin' ? input : ''
@@ -1144,14 +1325,18 @@ export class CodingRuntime {
                   attemptId: owner.attemptId,
                   generation: owner.generation,
                 },
-                authorise: (prepared: { expiry: number }) => {
+                ...(preparedPolicyId === undefined ? {} : { preparedPolicyId }),
+                authorise: (
+                  prepared: Parameters<OrchestrationOwner['authorise']>[0],
+                  journal: Parameters<OrchestrationOwner['authorise']>[1],
+                ) => {
                   // The runtime's own reasons first, then the executor's decision (inside the critical section).
                   if (entry.stopBeforeStart)
                     return { allowed: false as const, cause: stopCause(entry.stopBeforeStart) }
                   if (this.closed) return { allowed: false as const, cause: 'restart' }
                   if (this.hasUnresolvedGroup(agent.id))
                     return { allowed: false as const, cause: 'hold' }
-                  return owner.authorise(prepared)
+                  return owner.authorise(prepared, journal)
                 },
               }
             : {}),

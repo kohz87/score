@@ -128,6 +128,9 @@ const EntrySchema = z.discriminatedUnion('kind', [
     budgetUsd: z.number().nullable(),
     deadlineAt: z.string().nullable(),
     acceptUnknownSpend: z.boolean(),
+    /** 7.7b: the coding step limit and the sources whose unknown cost was accepted (absent in older entries). */
+    codingSteps: z.int().positive().optional(),
+    acceptUnknownCost: z.array(z.string()).optional(),
   }),
   // The person's decision to use a replacement agent for the rest of the run (fix-h item 3).
   z.object({
@@ -136,6 +139,15 @@ const EntrySchema = z.discriminatedUnion('kind', [
     orchestrationId: z.string().min(1),
     agentId: z.string().min(1),
     incarnation: z.string().min(1),
+  }),
+  // 7.7b §12a: "Use the new settings" for a coding step blocked `agent_changed`: the step's worker takes its current policy.
+  z.object({
+    ...Base,
+    kind: z.literal('policy_remap'),
+    orchestrationId: z.string().min(1),
+    stepId: z.string().min(1),
+    agentId: z.string().min(1),
+    policyId: z.string().regex(/^[0-9a-f]{64}$/),
   }),
   // Team and agent pause holds live outside the orchestration tables but gate its admissions.
   z.object({
@@ -251,6 +263,8 @@ export interface CriticalTx {
   launch(launchId: string): CodingLaunch | undefined
   /** Every launch the journal knows for a turn (any generation), so a witnessed turn can be recognised. */
   launchesOfTurn(turnId: string): CodingLaunch[]
+  /** Launches whose permanent owner is this orchestration and that may have executed (the coding step count, M4). */
+  executedBy(orchestrationId: string): number
   append(body: JournalEntryBody): JournalEntry
 }
 
@@ -409,6 +423,12 @@ export class ExecutionJournal {
         launch: (launchId) => launches.get(launchId),
         launchesOfTurn: (turnId) =>
           [...launches.values()].filter((launch) => launch.state.turnId === turnId),
+        executedBy: (orchestrationId) =>
+          [...launches.values()].filter(
+            (launch) =>
+              launch.state.owner?.orchestrationId === orchestrationId &&
+              launch.state.mayHaveExecuted,
+          ).length,
         append: (body) => {
           const entry = this.appendLocked(body)
           foldCodingEntry(launches, entry)
