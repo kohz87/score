@@ -599,3 +599,28 @@ test("7.7b-2 0b: a `go` that arrives after the absolute expiry doesn't spawn; th
   expect(receipts(h)).toEqual(['expired.json'])
   expect(json(join(h.receiptDir, 'expired.json'))).toMatchObject({ launch: 'launch1' })
 })
+
+test('7.7b-F1 #3: a `go` accepted just before the expiry does not spawn when the receipt’s fsyncs carry the clock past it', async () => {
+  const marker = join(mkdtempSync(join(tmpdir(), 'score-expired-')), 'ran')
+  const deadline = Date.now() + 60_000
+  const holder: { dir?: string } = {}
+  const { h, outcome } = await run(
+    {
+      deadline,
+      script: `require('fs').writeFileSync(process.env.MARK,'x')`,
+      // Time passes while released.json is being made durable: once the file is there, the clock is past the deadline.
+      now: () =>
+        holder.dir && existsSync(join(holder.dir, 'released.json')) ? deadline + 1 : Date.now(),
+    },
+    async (h) => {
+      holder.dir = h.receiptDir
+      h.spec.command.env.MARK = marker
+      h.session.go()
+    },
+  )
+  expect(existsSync(marker)).toBe(false)
+  expect(outcome.kind).toBe('lost')
+  expect(outcome.reasons).toContain('supervisor-error:expired')
+  // `released.json` stays: Score must keep treating the launch as possibly executed.
+  expect(receipts(h)).toEqual(['expired.json', 'released.json'])
+})

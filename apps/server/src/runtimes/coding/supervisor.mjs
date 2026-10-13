@@ -475,6 +475,10 @@ export async function runSupervisor(spec, deps = {}) {
       finish(EXIT.failed)
       return
     }
+    // The receipt's fsyncs block, and the clock moves while they do: check the absolute expiry once more, after the
+    // receipt is durable and right before the spawn (F1 #3). `released.json` stays (Score keeps the launch as possibly
+    // executed and its step charge); `expired.json` says the CLI never started.
+    if (now() >= spec.deadline) return expireBeforeSpawn()
     const useWrapper = Boolean(spec.python && spec.wrapper)
     const file = useWrapper ? spec.python : cmd.file
     const args = useWrapper
