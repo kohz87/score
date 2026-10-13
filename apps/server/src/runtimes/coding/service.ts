@@ -413,9 +413,10 @@ export class CodingRuntime {
   /** What the orchestration executor may ask about coding workers. */
   workerFacts(): CodingWorkerFacts {
     return {
+      // The unit backend's own status: a frozen home or a fence is reported by `report()` with its own reason.
       unitHost: () => {
-        const status = this.backend()
-        return status.kind === 'unit' && status.checks.every((check) => check.ok)
+        const status = this.deps.unit?.status
+        return status?.kind === 'unit' && status.checks.every((check) => check.ok)
       },
       agent: (id) => this.agents().find((agent) => agent.id === id),
       report: (id) => this.workerReport(id),
@@ -505,7 +506,9 @@ export class CodingRuntime {
       )
     const paused = this.deps.unit.block()
     if (paused) return none('paused', paused)
-    const refusal = await this.cliRefusal(agent, driver, true)
+    // The version reading is the locator's cached one: the dialog asks often. A CLI replaced since is caught by its file
+    // identity, which the launch reads again.
+    const refusal = await this.cliRefusal(agent, driver, false)
     if (refusal) {
       const readiness: WorkerReadiness =
         refusal.cause === 'cli_missing'
@@ -520,7 +523,7 @@ export class CodingRuntime {
     const checked = await checkRoot(agent.workspace, this.deps.policy)
     if (!checked.ok)
       return none('reach_unverifiable', `The workspace is unavailable: ${checked.reason}`)
-    const cli = await this.deps.locator.detect(driver, { fresh: true })
+    const cli = await this.deps.locator.detect(driver)
     const native = this.deps.locator.nativeCommand(driver)
     if (!native.ok || cli.version === null)
       return none('not_installed', native.ok ? 'The CLI didn’t report a version.' : native.message)

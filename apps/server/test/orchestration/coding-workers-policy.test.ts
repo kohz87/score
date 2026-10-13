@@ -292,3 +292,62 @@ describe('every external identity is read again before the release', () => {
     })
   })
 })
+
+describe('a coding step runs only under the policy it was approved with (common admission rule)', () => {
+  /** Changes the database between the step's admission and its send: the real ordering the send re-checks. */
+  function beforeSend(change: () => void): void {
+    const orch = h.orch as unknown as { dispatch(id: string): Promise<boolean> }
+    const dispatch = orch.dispatch.bind(orch)
+    let changed = false
+    orch.dispatch = (attemptId) => {
+      const row = h.rows<{ kind: string }>(
+        'SELECT kind FROM orc_attempts WHERE id = ?',
+        attemptId,
+      )[0]
+      if (row?.kind === 'step' && !changed) {
+        changed = true
+        change()
+      }
+      return dispatch(attemptId)
+    }
+  }
+  const expectSuspendedBeforeSend = async (id: string) => {
+    await h.until(
+      () => h.rows<{ status: string }>('SELECT status FROM orc_steps')[0]?.status === 'blocked',
+    )
+    expect(h.rows('SELECT disposition FROM orc_steps')).toEqual([{ disposition: 'agent_changed' }])
+    expect(attempt()).toMatchObject({ state: 'created', suspended: 1 })
+    // Nothing was sent: no generation, no launch, no CLI.
+    expect(gens()).toHaveLength(0)
+    expect(h.cliCalls()).toHaveLength(0)
+    expect(h.orch.summary(id).needsYou).toContainEqual(
+      expect.objectContaining({ kind: 'policy_changed', stepId: 's1' }),
+    )
+  }
+
+  test('the stored policy moved on after the step was admitted ⇒ the step is suspended, nothing is sent', async () => {
+    h = await workerHarness({ lead: { script: oneStep } })
+    h.addAgent()
+    beforeSend(() => sql("UPDATE orc_worker_policies SET policy_id = '" + 'e'.repeat(64) + "'"))
+    const id = await h.create()
+    await expectSuspendedBeforeSend(id)
+  })
+
+  test('the step’s approval was for other settings ⇒ the step is suspended, nothing is sent', async () => {
+    h = await workerHarness({ lead: { script: oneStep } })
+    h.addAgent()
+    const id = await h.create({ gatePolicy: 'every-step' })
+    await h.until(
+      () => h.rows<{ status: string }>('SELECT status FROM orc_gates')[0]?.status === 'open',
+    )
+    const open = h.orch.snapshot(id).orchestration.gates[0]!
+    // The gate the person approves carries another policy id than the worker has now.
+    sql('UPDATE orc_gates SET payload = json_set(payload, ?, ?)', '$.policyId', 'f'.repeat(64))
+    await h.orch.gateDecision(id, open.id, {
+      decision: 'approve',
+      expectedRevision: open.revision,
+      orchestrationRevision: h.orch.summary(id).revision,
+    })
+    await expectSuspendedBeforeSend(id)
+  })
+})
