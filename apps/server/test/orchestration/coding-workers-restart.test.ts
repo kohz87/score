@@ -193,6 +193,20 @@ describe('restart matrix (design §10)', () => {
     expect(attempt()).toMatchObject({ refused_total: 0 })
   })
 
+  test('F1 #6: the run exists but no launch was ever requested -> send_closed (restart), no readiness counters, generation 2 runs', async () => {
+    const id = await finished()
+    rewind(id, { attempt: 'running', run: { status: 'running' }, launch: { kind: 'absent' } })
+    await h.restart()
+    await h.until(() => gens().length === 2 && attempt()['state'] === 'terminated', 40_000)
+    expect(gens()[0]).toMatchObject({ closed_cause: 'restart' })
+    expect(closures()).toHaveLength(1)
+    const refusals = h.journal.readOwn()
+    if (!refusals.ok) throw new Error(refusals.reason)
+    expect(refusals.entries.filter((e) => e.kind === 'send_refused')).toHaveLength(0)
+    expect(attempt()).toMatchObject({ refused_total: 0, refused_streak: 0 })
+    expect(step()['status']).toBe('succeeded')
+  })
+
   test('row 2: launch armed, never releasing -> 7.7a revokes it (restart) -> send_closed -> generation 2', async () => {
     const id = await finished()
     const { launchId } = rewind(id, {

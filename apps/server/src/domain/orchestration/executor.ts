@@ -2699,7 +2699,13 @@ export class Orchestrator {
       const cause =
         refusal?.cause ??
         (facts.kind === 'known' ? facts.revokeCause : null) ??
-        (run.status === 'cancelled' ? 'stop' : 'start_failed')
+        // A run that Score's own restart interrupted before any launch was requested was never refused: it is a restart
+        // (hold class, no readiness counters), not a failed start (F1 #6).
+        (run.status === 'cancelled'
+          ? 'stop'
+          : run.status === 'interrupted'
+            ? 'restart'
+            : 'start_failed')
       return void this.closeCoding(ctx, o, attempt, attempt.dispatch_generation, cause)
     }
     // The launch may have executed. A released launch is the qualified release that resets the refusal streak (N7).
