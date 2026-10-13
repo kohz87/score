@@ -189,6 +189,8 @@ export interface OrchestratorOptions {
   onError?: (error: unknown) => void
   /** Minimum time between attempts to deliver an owed Stop, and the pause after a "nothing was sent" refusal. */
   retryMs?: number
+  /** How long close() waits for Stop deliveries in flight (default 5 s). */
+  stopDrainMs?: number
   /** What the coding runtime says about its agents and host (7.7b); absent where there is none (coding agents are then refused). */
   codingFacts?: CodingWorkerFacts
   /**
@@ -272,7 +274,10 @@ export class Orchestrator {
   private maintenanceTimer: NodeJS.Timeout | undefined
   private unsubscribe: (() => void) | undefined
   private readonly cooldown = new Map<string, number>()
-  private readonly stopTried = new Map<string, number>()
+  private readonly stopTried = new Map<string, { at: number; delay: number; fails: number }>()
+  /** In-flight Stop deliveries, one per attempt (design §9). */
+  private readonly stopJobs = new Map<string, Promise<void>>()
+  private abandonStops = false
   private readonly fingerprints = new Map<string, string>()
   private readonly ownershipSeen = new Map<string, string>()
   private readonly served = new Map<string, boolean>()
@@ -318,6 +323,18 @@ export class Orchestrator {
     clearInterval(this.timer)
     clearInterval(this.maintenanceTimer)
     await this.pumping?.catch(() => undefined)
+    // Stops in flight get up to 5 s to answer; the rest stay durably owed and are asked again after the next start.
+    if (this.stopJobs.size > 0) {
+      let timer: NodeJS.Timeout | undefined
+      await Promise.race([
+        Promise.allSettled([...this.stopJobs.values()]),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, this.options.stopDrainMs ?? 5_000)
+        }),
+      ])
+      clearTimeout(timer)
+      this.abandonStops = true
+    }
   }
 
   private err(error: unknown): void {
@@ -3044,32 +3061,61 @@ export class Orchestrator {
         ),
     )
     const owed = frozen ? owedAll.filter((attempt) => attempt.runtime !== 'hermes') : owedAll
-    let changed = false
     for (const attempt of owed) {
-      const last = this.stopTried.get(attempt.id) ?? 0
-      if (this.nowMs() - last < this.retryMs && last !== 0) continue
-      this.stopTried.set(attempt.id, this.nowMs())
-      try {
-        const outcome = await this.options.port.stopRun({
-          agentId: attempt.agent_id,
-          runId: attempt.run_id!,
-        })
-        // Not proven ended: the obligation stays owed and is asked again.
-        if (outcome === 'unconfirmed') continue
-      } catch (error) {
-        if (!(frozen && error instanceof HttpError && error.code === 'execution_frozen'))
+      if (this.closed || this.stopJobs.has(attempt.id)) continue
+      const last = this.stopTried.get(attempt.id)
+      if (last !== undefined && this.nowMs() < last.at + last.delay) continue
+      const job = this.deliverStop(attempt, frozen)
+        .catch((error: unknown) => {
           this.err(error)
-        continue
-      }
-      await this.mutate((ctx) => {
-        ctx.sqlite
-          .prepare('UPDATE orc_attempts SET stop_acknowledged_at = ?, updated_at = ? WHERE id = ?')
-          .run(ctx.now, ctx.now, attempt.id)
-        touch(ctx, attempt.orchestration_id)
-      })
-      changed = true
+          return false
+        })
+        .then((acknowledged) => {
+          this.stopJobs.delete(attempt.id)
+          // An acknowledgement frees the attempt's slot, so the executor looks again; a retry wakes itself at its time.
+          if (acknowledged) this.kick()
+        })
+      this.stopJobs.set(attempt.id, job)
     }
-    return changed
+    // Nothing here is awaited: a slow or hung Stop never holds the pump (design §9). A finished job kicks it again.
+    return false
+  }
+
+  /** One tracked Stop delivery for one attempt. Retries are paced by an exponential back-off per attempt. */
+  private async deliverStop(attempt: AttemptRow, frozen: boolean): Promise<boolean> {
+    const fails = this.stopTried.get(attempt.id)?.fails ?? 0
+    const retry = () => {
+      const delay = Math.min(this.retryMs * 2 ** fails, this.retryMs * 12)
+      this.stopTried.set(attempt.id, { at: this.nowMs(), delay, fails: fails + 1 })
+      this.wakeAfter(delay)
+      return false
+    }
+    try {
+      const outcome = await this.options.port.stopRun({
+        agentId: attempt.agent_id,
+        runId: attempt.run_id!,
+      })
+      // A coding Stop is acknowledged only by `stopped` or `not_running`; Hermes keeps `void` = acknowledged.
+      const acknowledged =
+        attempt.runtime === 'hermes'
+          ? outcome !== 'unconfirmed'
+          : outcome === 'stopped' || outcome === 'not_running'
+      if (!acknowledged) return retry()
+    } catch (error) {
+      if (!(frozen && error instanceof HttpError && error.code === 'execution_frozen'))
+        this.err(error)
+      return retry()
+    }
+    // After the shutdown window the Stop stays durably owed; a late answer is not recorded into a closing database.
+    if (this.abandonStops) return false
+    this.stopTried.delete(attempt.id)
+    await this.mutate((ctx) => {
+      ctx.sqlite
+        .prepare('UPDATE orc_attempts SET stop_acknowledged_at = ?, updated_at = ? WHERE id = ?')
+        .run(ctx.now, ctx.now, attempt.id)
+      touch(ctx, attempt.orchestration_id)
+    })
+    return true
   }
 
   // ------------------------------------------------------------------------------------------------- maintenance
