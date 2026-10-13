@@ -4,6 +4,9 @@ import { afterEach, vi, describe, expect, test } from 'vitest'
 import { claudeDriver } from '../../src/runtimes/coding/claude.ts'
 import { codexDriver } from '../../src/runtimes/coding/codex.ts'
 import { PolicyUnverifiable, mainCheckoutOf } from '../../src/runtimes/coding/worker-sources.ts'
+import type { LeadScript } from '../../src/hermes/fake/fake-lead.ts'
+import { budgetView } from '../../src/domain/orchestration/budget.ts'
+import { readOrch } from '../../src/domain/orchestration/store.ts'
 import { byTurn } from '../../src/hermes/fake/fake-lead.ts'
 import { workerHarness, type WorkerHarness } from '../helpers/worker-harness.ts'
 
@@ -142,5 +145,107 @@ describe('#2 configuration outside the workspace ancestors (a Git worktree)', ()
     h = await workerHarness({ lead: { script: oneStep() } })
     mkdirSync(join(h.workspace, '.git'))
     expect(mainCheckoutOf(h.workspace)).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------------------------------- #4, #5
+
+const plan =
+  (count: number): LeadScript =>
+  async (t) => {
+    if (t.steps.length === 0) {
+      for (let i = 0; i < count; i++)
+        await t.call('orch.assign', { agent: 'coder', instruction: '[fixture:basic] write hello' })
+      return 'assigned'
+    }
+    if (t.steps.every((s) => s.status === 'succeeded')) {
+      await t.call('orch.finish', { outcome: 'success', summary: 'done' })
+      return 'done'
+    }
+    return 'waiting'
+  }
+const stepStatus = (id: string) =>
+  h.rows<{ status: string; disposition: string | null }>(
+    'SELECT status, disposition FROM orc_steps WHERE id = ?',
+    id,
+  )[0]!
+const revision = (id: string) => h.orch.summary(id).revision
+const currentPolicy = async () => (await h.orch.preflight('lead', ['coder'])).workers[0]!.policyId!
+/** The decision names the revision the page saw; the executor may bump it between two decisions, so it is re-read. */
+async function remap(id: string, stepId: string, policyId: string): Promise<void> {
+  for (let tries = 0; ; tries++) {
+    try {
+      await h.orch.policyRemap(id, stepId, {
+        agentId: 'coder',
+        policyId,
+        orchestrationRevision: revision(id),
+      })
+      return
+    } catch (error) {
+      const stale = (error as { details?: { currentRevision?: number } }).details?.currentRevision
+      if (stale === undefined || tries > 5) throw error
+    }
+  }
+}
+const writeClaudeMd = () => writeFileSync(join(h.workspace, 'CLAUDE.md'), 'new instructions')
+const gateOf = (id: string, stepId: string) =>
+  h.orch
+    .snapshot(id)
+    .orchestration.gates.findLast((g) => g.stepId === stepId && g.status !== 'withdrawn')!
+
+describe('#4 a remap is judged against the step’s own approved settings', () => {
+  test('two steps of one worker blocked under the same settings can both be remapped', async () => {
+    h = await workerHarness({ lead: { script: plan(2) } })
+    h.addAgent()
+    atArming(writeClaudeMd)
+    const id = await h.create({ gatePolicy: 'none', maxConcurrentSteps: 2 })
+    await h.until(
+      () => stepStatus('s1').status === 'blocked' && stepStatus('s2').status === 'blocked',
+    )
+    const fresh = await currentPolicy()
+    await remap(id, 's1', fresh)
+    // The worker's stored mapping is now `fresh`; s2's attempt was still approved with the old settings.
+    await remap(id, 's2', fresh)
+    await h.until(() => h.orch.summary(id).status === 'succeeded', 60_000)
+    expect(h.errors).toEqual([])
+  })
+})
+
+describe('#5 rejecting the renewed gate closes the suspended attempt', () => {
+  test('the step is rejected and its $0.50 reservation is released', async () => {
+    h = await workerHarness({ lead: { script: plan(1) } })
+    h.addAgent()
+    atArming(writeClaudeMd)
+    const id = await h.create({ gatePolicy: 'every-step', budgetUsd: 20 })
+    await h.until(() => gateOf(id, 's1')?.status === 'open')
+    const first = gateOf(id, 's1')
+    await h.orch.gateDecision(id, first.id, {
+      decision: 'approve',
+      expectedRevision: first.revision,
+      orchestrationRevision: revision(id),
+    })
+    await h.until(() => stepStatus('s1').status === 'blocked')
+    await h.orch.policyRemap(id, 's1', {
+      agentId: 'coder',
+      policyId: await currentPolicy(),
+      orchestrationRevision: revision(id),
+    })
+    const renewed = gateOf(id, 's1')
+    expect(renewed.status).toBe('open')
+    const reserved = () =>
+      h.db.read((sqlite) => budgetView(sqlite, readOrch(sqlite, id)!)).reservedUsd
+    expect(reserved()).toBeGreaterThanOrEqual(0.5)
+    await h.orch.gateDecision(id, renewed.id, {
+      decision: 'reject',
+      expectedRevision: renewed.revision,
+      orchestrationRevision: revision(id),
+    })
+    expect(stepStatus('s1').status).toBe('rejected')
+    expect(attempt()).toMatchObject({ state: 'refused' })
+    // Only the lead's own turn estimate may remain reserved, not the rejected step's $0.50.
+    const stepReserved = h.rows<{ r: number }>(
+      "SELECT COALESCE(SUM(reserved_usd), 0) AS r FROM orc_attempts WHERE kind = 'step' AND state != 'refused'",
+    )[0]!.r
+    expect(stepReserved).toBe(0)
   })
 })

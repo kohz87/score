@@ -91,6 +91,13 @@ export function decideGate(ctx: Ctx, orchId: string, gateId: string, body: GateD
     sqlite
       .prepare('UPDATE orc_steps SET retired = 1 WHERE orchestration_id = ? AND id = ?')
       .run(orchId, gate.step_id)
+    // A coding step re-gated after "use the new settings" still has its suspended, proven-unsent attempt: rejecting the
+    // gate closes it in the same transaction, so its reservation doesn't outlive the step (F1 #5).
+    for (const held of attemptsOf(sqlite, orchId).filter(
+      (candidate) =>
+        candidate.step_id === gate.step_id && candidate.suspended && candidate.state === 'created',
+    ))
+      refuseAttempt(sqlite, held, 'not dispatched: the gate was rejected', now)
     addCause(sqlite, orchId, 'gate_rejected', gate.step_id, now, body.note ?? null)
     cascadeBlocked(sqlite, orchId, now)
   }
@@ -566,11 +573,13 @@ export function policyRemapStep(
       `${body.agentId} changed again. Look at what it can reach and decide again.`,
       { agentId: body.agentId, currentPolicyId: report.policyId },
     )
-  if (stored.policyId === body.policyId)
+  // Each suspended attempt carries the settings its own step was approved with. The agent's stored mapping may already
+  // have moved on (another step of the same worker was remapped first), and this step still needs its own decision (F1 #4).
+  if ((suspended.policy_id ?? stored.policyId) === body.policyId)
     throw new HttpError(
       409,
       'conflict',
-      `${body.agentId} still has the settings this run was approved with.`,
+      `${body.agentId} still has the settings this step was approved with.`,
     )
   if (
     report.reachBeyondWorkspace &&
