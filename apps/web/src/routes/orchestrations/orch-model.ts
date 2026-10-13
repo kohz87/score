@@ -1,4 +1,5 @@
 import type {
+  WorkerReadiness,
   AttemptView,
   NeedsYou,
   OrchEvent,
@@ -448,3 +449,17 @@ export const isRunOver = (status: OrchestrationDetail['status']): boolean =>
 
 export const usd = (value: number | null): string =>
   value === null ? 'unknown' : `$${value.toFixed(value < 1 ? 3 : 2)}`
+
+/** Why a coding agent can't take a step, in everyday words, when the server gave no sentence of its own. */
+export const readinessText: Record<WorkerReadiness, string> = {
+  ready: 'Ready.',
+  not_installed: 'Its program isn’t installed on this computer.',
+  version_untested: 'Score hasn’t tested this version of its program yet.',
+  level_unverified: 'Score can’t confirm how much it is allowed to do.',
+  reach_unverifiable: 'Score can’t tell what it would be able to read.',
+  changed: 'It changed since this run was approved.',
+  paused: 'Coding agents are paused right now.',
+  frozen: 'Score is holding all agent work until you review it on Now.',
+  needs_units:
+    'Score runs coding agents as separate system services, and this computer isn’t set up for that.',
+}

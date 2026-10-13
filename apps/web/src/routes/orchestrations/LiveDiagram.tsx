@@ -1,6 +1,7 @@
 import type { AgentSummary } from '@score/contract'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { runtimeLabel } from '../../components/runtime-label.ts'
 import { statusSegments } from '../../live/status-line.ts'
 import { MOTION, loadAnime, playMotion, usePrefersReducedMotion } from '../../motion/motion.ts'
 import { layoutFlow, type Point } from '../now/flow/layout.ts'
@@ -557,6 +558,8 @@ export function LiveDiagram({
               name: agent?.name ?? node.agentId,
               style: agent?.style ?? unknownStyle,
             }
+            // A coding agent shows which program it runs on, next to its name (colour and shape stay the glyph's).
+            const cli = runtimeLabel(agent?.runtime)
             const tone = litNodes.get(node.id)
             const shaped = node.shape !== undefined && node.shape !== 'agent'
             const size = nodeSize(node)
@@ -597,7 +600,7 @@ export function LiveDiagram({
                 aria-label={
                   shaped
                     ? `${what} ${title}, ${named(word, node.status)}`
-                    : `${isLead ? 'Lead' : `${what} ${title}`}, ${glyph.name}, ${named(word, node.status)}`
+                    : `${isLead ? 'Lead' : `${what} ${title}`}, ${glyph.name}${cli ? ` (${cli})` : ''}, ${named(word, node.status)}`
                 }
                 onClick={() => onSelect(selected === node.id ? null : node.id)}
               >
@@ -611,13 +614,15 @@ export function LiveDiagram({
                     <>
                       <b>{title}</b>
                       <span>
-                        {glyph.name} · <Caption text={shown} />
+                        {glyph.name}
+                        {cli && <em className="orch-cli">{cli}</em>} · <Caption text={shown} />
                       </span>
                     </>
                   ) : (
                     <>
                       <b>
                         {isLead ? 'Lead' : title} {!shaped && <i>{glyph.name}</i>}
+                        {cli && <em className="orch-cli">{cli}</em>}
                       </b>
                       <span>
                         <Caption text={shown} />

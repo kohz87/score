@@ -3,11 +3,14 @@ import {
   ORCH_DEFAULTS,
   ORCH_LIMITS,
   type AgentSummary,
+  type CodingWorkerPreflight,
+  type CostSource,
   type GatePolicy,
   type PreflightCheck,
 } from '@score/contract'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ApiError } from '../../data/api.ts'
+import { readinessText } from './orch-model.ts'
 import { describeOrchError, useCreateOrchestration, usePreflight } from './orchestration-queries.ts'
 import { AgentChip } from './RunDecisions.tsx'
 import './orchestrations.css'
@@ -22,6 +25,71 @@ const checkWord: Record<PreflightCheck['status'], string> = {
   ok: 'Ready',
   fail: 'Missing',
   unknown: 'Can’t be checked',
+}
+
+const costSourceName: Record<CostSource, string> = {
+  hermes: 'Hermes agents',
+  'claude-code': 'Claude Code',
+  codex: 'Codex',
+}
+
+/**
+ * The coding agents of a run and what each can read, in plain words. A reach beyond the workspace needs one
+ * acknowledgement for the whole list; `accepted` says whether it covers the policies shown right now.
+ */
+export function CodingWorkers({
+  workers,
+  agents,
+  accepted,
+  onAccept,
+}: {
+  workers: CodingWorkerPreflight[]
+  agents: AgentSummary[]
+  accepted: boolean
+  onAccept: (accepted: boolean) => void
+}) {
+  const wide = workers.some((worker) => worker.reachBeyondWorkspace)
+  return (
+    <section aria-label="Coding agents in this run" className="orch-workers">
+      <h3>Coding agents in this run</h3>
+      <p className="orch-muted">
+        Claude Code and Codex work on this computer, in the workspace you gave them. This is what
+        each one can read and do in this run.
+      </p>
+      <ul>
+        {workers.map((worker) => (
+          <li key={worker.agentId} data-ready={worker.readiness === 'ready'}>
+            <AgentChip agentId={worker.agentId} agents={agents} />
+            {worker.readiness === 'ready' && worker.reach ? (
+              <p>{worker.reach}</p>
+            ) : (
+              <p className="orch-error">{worker.detail ?? readinessText[worker.readiness]}</p>
+            )}
+          </li>
+        ))}
+      </ul>
+      {wide && (
+        <div className="orch-risk">
+          <p>
+            <strong>What to know first.</strong> Whatever a coding agent can read, it can repeat in
+            its answer. That answer is shown in the run, kept in Score and handed back to the lead,
+            which uses an online model. If those files hold anything private, such as keys or
+            passwords, pick another agent or don’t start this run.
+          </p>
+          <label className="orch-check orch-ack">
+            <input
+              type="checkbox"
+              checked={accepted}
+              onChange={(event) => onAccept(event.target.checked)}
+            />
+            <span>
+              I understand what these coding agents can read, and I accept it for this run.
+            </span>
+          </label>
+        </div>
+      )}
+    </section>
+  )
 }
 
 export function PreflightList({
@@ -53,7 +121,8 @@ export function NewOrchestrationDialog({
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const [goal, setGoal] = useState('')
-  const [lead, setLead] = useState(agents[0]?.id ?? '')
+  const leads = agents.filter((agent) => !agent.runtime || agent.runtime === 'hermes')
+  const [lead, setLead] = useState(leads[0]?.id ?? '')
   const [allowed, setAllowed] = useState<string[]>([])
   const [policy, setPolicy] = useState<GatePolicy>('every-step')
   const [budget, setBudget] = useState('')
@@ -63,6 +132,10 @@ export function NewOrchestrationDialog({
   const [leadEstimate, setLeadEstimate] = useState<number>(ORCH_DEFAULTS.leadTurnEstimateUsd)
   const [stepEstimate, setStepEstimate] = useState<number>(ORCH_DEFAULTS.stepEstimateUsd)
   const [ack, setAck] = useState(false)
+  const [codingSteps, setCodingSteps] = useState<number>(ORCH_DEFAULTS.codingSteps)
+  const [unknownCost, setUnknownCost] = useState<CostSource[]>([])
+  // The policy ids the person accepted the reach of. A changed id is not covered: it has to be accepted again.
+  const [reachAccepted, setReachAccepted] = useState<string[]>([])
   const create = useCreateOrchestration()
   const allowedFor = allowed.filter((id) => id !== lead)
   const preflight = usePreflight(lead, allowedFor)
@@ -70,6 +143,12 @@ export function NewOrchestrationDialog({
     dialog.current?.showModal?.()
   }, [])
 
+  const workers = preflight.data?.workers ?? []
+  const reachIds = workers.flatMap((worker) =>
+    worker.reachBeyondWorkspace && worker.policyId ? [worker.policyId] : [],
+  )
+  const reachCovered = reachIds.every((id) => reachAccepted.includes(id))
+  const costSources: CostSource[] = ['hermes', ...new Set(workers.map((worker) => worker.runtime))]
   const notes = preflight.data?.gatePolicyNotes
   const blocked = preflight.data ? !preflight.data.ok : false
   const failed =
@@ -93,8 +172,24 @@ export function NewOrchestrationDialog({
         leadTurnEstimateUsd: leadEstimate,
         stepEstimateUsd: stepEstimate,
         acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
+        ...(workers.length > 0
+          ? {
+              codingPolicies: Object.fromEntries(
+                workers.flatMap((worker) =>
+                  worker.policyId ? [[worker.agentId, worker.policyId] as const] : [],
+                ),
+              ),
+              codingSteps,
+              ...(reachIds.length > 0 ? { acknowledgeCodingReach: { policyIds: reachIds } } : {}),
+              ...(unknownCost.length > 0 ? { acceptUnknownCost: unknownCost } : {}),
+            }
+          : {}),
       },
       {
+        // The policy a worker was approved with moved on: look again before the person decides.
+        onError: (error) => {
+          if (error instanceof ApiError && error.code === 'policy_changed') void preflight.refetch()
+        },
         onSuccess: ({ orchestration }) =>
           created({
             id: orchestration.id,
@@ -140,7 +235,7 @@ export function NewOrchestrationDialog({
         <label className="orch-field">
           <span>Lead</span>
           <select value={lead} onChange={(event) => setLead(event.target.value)}>
-            {agents.map((agent) => (
+            {leads.map((agent) => (
               <option key={agent.id} value={agent.id}>
                 {agent.name}
               </option>
@@ -156,6 +251,7 @@ export function NewOrchestrationDialog({
                 <label key={agent.id} className="orch-check">
                   <input
                     type="checkbox"
+                    disabled={agent.runtime === 'antigravity' || agent.runtime === 'opencode'}
                     checked={allowed.includes(agent.id)}
                     onChange={(event) =>
                       setAllowed((list) =>
@@ -169,7 +265,10 @@ export function NewOrchestrationDialog({
                 </label>
               ))}
           </div>
-          <small className="orch-muted">The lead itself isn’t on the list.</small>
+          <small className="orch-muted">
+            The lead itself isn’t on the list. Only Hermes agents can lead. Claude Code and Codex
+            agents can take steps.
+          </small>
         </fieldset>
         <fieldset className="orch-field">
           <legend>Approvals</legend>
@@ -243,6 +342,18 @@ export function NewOrchestrationDialog({
                 onChange={(event) => setLeadEstimate(Number(event.target.value))}
               />
             </label>
+            {workers.length > 0 && (
+              <label className="orch-field">
+                <span>Most coding steps</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={ORCH_LIMITS.maxCodingSteps}
+                  value={codingSteps}
+                  onChange={(event) => setCodingSteps(Number(event.target.value))}
+                />
+              </label>
+            )}
             <label className="orch-field">
               <span>Estimate per step (USD)</span>
               <input
@@ -261,10 +372,44 @@ export function NewOrchestrationDialog({
           {preflight.isPending && lead !== '' && <p role="status">Checking…</p>}
           {preflight.isError && (
             <p role="alert" className="orch-error">
-              Couldn’t run the checks.
+              {preflight.error instanceof ApiError
+                ? describeCreateError(preflight.error)
+                : 'Couldn’t run the checks.'}
             </p>
           )}
           {preflight.data && <PreflightList checks={preflight.data.checks} />}
+          {workers.length > 0 && (
+            <CodingWorkers
+              workers={workers}
+              agents={agents}
+              accepted={reachIds.length > 0 && reachCovered}
+              onAccept={(accepted) => setReachAccepted(accepted ? reachIds : [])}
+            />
+          )}
+          {workers.length > 0 && (
+            <fieldset className="orch-field">
+              <legend>If the cost of some work can’t be worked out</legend>
+              <small className="orch-muted">
+                This only matters when you set a budget. Without it, the run goes on either way.
+              </small>
+              {costSources.map((source) => (
+                <label key={source} className="orch-check">
+                  <input
+                    type="checkbox"
+                    checked={unknownCost.includes(source)}
+                    onChange={(event) =>
+                      setUnknownCost((list) =>
+                        event.target.checked
+                          ? [...list, source]
+                          : list.filter((item) => item !== source),
+                      )
+                    }
+                  />
+                  <span>Keep going when the cost of {costSourceName[source]} is unknown</span>
+                </label>
+              ))}
+            </fieldset>
+          )}
           <p className="orch-muted">
             Watch also shows the agent’s other work; it can’t show a single run on its own.
           </p>
@@ -286,7 +431,12 @@ export function NewOrchestrationDialog({
             type="submit"
             className="orch-primary"
             disabled={
-              create.isPending || !ack || goal.trim() === '' || allowedFor.length === 0 || blocked
+              create.isPending ||
+              !ack ||
+              goal.trim() === '' ||
+              allowedFor.length === 0 ||
+              blocked ||
+              !reachCovered
             }
           >
             {create.isPending ? 'Starting…' : 'Start orchestration'}
@@ -305,6 +455,12 @@ export function describeCreateError(error: unknown): string {
       return 'Score is already running as many orchestrations or steps as it allows. Try again when one has finished.'
     if (error.code === 'quota_exhausted') return 'There isn’t enough storage left for another run.'
     if (error.code === 'fenced') return 'Starting work is blocked until you review the list on Now.'
+    if (error.code === 'policy_changed')
+      return 'A coding agent changed since you looked. Check what it can read below, then start again.'
+    if (error.code === 'reach_not_acknowledged')
+      return 'Accept what the coding agents can read before you start.'
+    if (error.code === 'coding_workers_need_units')
+      return 'Coding agents can take steps only where Score runs them as system services, and this computer isn’t set up for that.'
   }
   return describeOrchError(error)
 }

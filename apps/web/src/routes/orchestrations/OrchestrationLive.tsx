@@ -1,6 +1,7 @@
 import type { OrchEvent, OrchestrationDetail } from '@score/contract'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
+import { runtimeLabel } from '../../components/runtime-label.ts'
 import { useStreamQuery } from '../../data/query-client.ts'
 import { taskAgentsQuery } from '../tasks/task-queries.ts'
 import { LiveDiagram } from './LiveDiagram.tsx'
@@ -127,7 +128,18 @@ export function OrchestrationLive({ orchestrationId }: { orchestrationId: string
   const hidden = replaying
     ? new Set(detail.stepsList.filter((step) => !replay.steps.has(step.id)).map((s) => s.id))
     : undefined
-  const logEvents = filterLog(replaying ? events.slice(0, count) : events, { node: selected })
+  const runtimeOfStep = new Map(
+    detail.stepsList.map((item) => [
+      item.id,
+      runtimeLabel(agents.find((agent) => agent.id === item.agentId)?.runtime),
+    ]),
+  )
+  const logEvents = filterLog(replaying ? events.slice(0, count) : events, {
+    node: selected,
+  }).map((event) => ({
+    ...event,
+    badge: event.stepId ? (runtimeOfStep.get(event.stepId) ?? null) : null,
+  }))
   const step = detail.stepsList.find((item) => item.id === selected)
   const over = isRunOver(detail.status)
 
