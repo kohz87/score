@@ -13,6 +13,7 @@ import { createIngest, type Ingest } from '../../src/hub/ingest.ts'
 import { FakeScheduler } from '../hermes/fake-scheduler.ts'
 import { messageFromRow, storeMessage } from '../../src/domain/rooms.ts'
 import { RoutingDispatcher } from '../../src/domain/routing-dispatch.ts'
+import { resetDatabaseHistory } from '../../src/history-reset.ts'
 import { reserveMessageRun } from '../../src/domain/message-runs.ts'
 
 let dir: string
@@ -379,6 +380,28 @@ test('FU #3: a frozen home pumps no chat reply; the reply stays queued until the
   try {
     await restarted.dispatch()
     expect(run).toHaveBeenCalledTimes(1)
+  } finally {
+    await restarted.close()
+    Object.assign(port, { executionHold: undefined })
+  }
+})
+
+test('FU #4: reset-history retires a queued chat reply: nothing is dispatched after the reset', async () => {
+  let holding: string | null = 'Score is holding all agent work: this folder is a copy.'
+  Object.assign(port, { executionHold: () => holding })
+  const run = vi.spyOn(port, 'startRun')
+  await send({ text: 'queued while frozen' })
+  expect(run).not.toHaveBeenCalled()
+  // The probe of re-review 5: an inherited pending reply with no command intent survived the reset and was dispatched.
+  resetDatabaseHistory(db.sqlite, new Date().toISOString())
+  holding = null
+  await app.close()
+  const restarted = new RoutingDispatcher(db, ingest, port, () => undefined)
+  try {
+    await restarted.dispatch()
+    await advance(1100)
+    expect(run).not.toHaveBeenCalled()
+    expect(db.sqlite.prepare('SELECT state FROM message_runs').all()).toEqual([{ state: 'failed' }])
   } finally {
     await restarted.close()
     Object.assign(port, { executionHold: undefined })

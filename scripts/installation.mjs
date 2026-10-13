@@ -11,7 +11,6 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInterface } from 'node:readline/promises'
-import { DatabaseSync } from 'node:sqlite'
 import { journalInsideHome } from '../apps/server/src/journal-location.ts'
 import {
   confirmCopy,
@@ -20,7 +19,7 @@ import {
   registeredIdForHome,
   resolveInstallation,
 } from '../apps/server/src/installation.ts'
-import { resetDatabaseHistory, resetJournalHistory } from '../apps/server/src/history-reset.ts'
+import { resetHistory } from '../apps/server/src/history-reset.ts'
 
 const fail = (message) => {
   process.stderr.write(`score installation: ${message}\n`)
@@ -97,25 +96,18 @@ if (command === 'reset-history') {
     rl.close()
     if (answer !== 'reset') fail('nothing was changed')
   }
-  const dbFile = join(home, 'score.db')
-  const archived = resetJournalHistory({
+  const done = resetHistory({
     journalDir,
     namespaceDir: resolved.namespaceDir,
     installationId: resolved.id,
+    home,
+    dbFile: join(home, 'score.db'),
   })
-  let counts = 'no database yet'
-  if (existsSync(dbFile)) {
-    const sqlite = new DatabaseSync(dbFile)
-    try {
-      sqlite.exec('PRAGMA busy_timeout = 10000')
-      const done = resetDatabaseHistory(sqlite, new Date().toISOString())
-      counts = `${done.attempts} orchestration steps, ${done.intents} start requests, ${done.processes} process records and ${done.launches} coding launches retired`
-    } finally {
-      sqlite.close()
-    }
-  }
+  const counts = done.database
+    ? `${done.database.attempts} orchestration steps, ${done.database.intents} start requests, ${done.database.processes} process records and ${done.database.launches} coding launches retired`
+    : 'no database yet'
   process.stdout.write(
-    `History reset (${counts}). The old journal (${archived.archived} records) is in ${join(resolved.namespaceDir, archived.archive)}. Start Score again.\n`,
+    `History reset (${counts}). The old journal (${done.archived} records) is in ${join(resolved.namespaceDir, done.archive)}. Start Score again.\n`,
   )
   process.exit(0)
 }

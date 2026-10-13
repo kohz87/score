@@ -156,8 +156,10 @@ const EntrySchema = z.discriminatedUnion('kind', [
     /** Highest legacy `n` of this home that was copied; anything of this home above it was written after the cutover. */
     copiedThrough: z.int().nonnegative(),
   }),
-  // FV (decision 71): written by `scripts/score installation reset-history` as the first record of a fresh journal. The
-  // person decided to start a new history; the archived journal and launch folders are evidence only. Permanent.
+  // FV (decision 71) / FU (decision 72): `scripts/score installation reset-history` starts a fresh journal with this
+  // record. The person decided to start a new history; the archived journal and launch folders are evidence only. The
+  // random `generation` is stored in the database in the same step; a reset is finished only by the matching
+  // `history-reset-complete` record, written after the database commit was made durable. Permanent.
   z.object({
     ...Base,
     kind: z.literal('history-reset'),
@@ -165,11 +167,68 @@ const EntrySchema = z.discriminatedUnion('kind', [
     archive: z.string().min(1),
     /** How many records the archived journal held (0 when it was missing). */
     archived: z.int().nonnegative(),
+    /** Names this history; the database must carry the same one (a restored older database does not). */
+    generation: z.string().min(1).max(100),
+  }),
+  z.object({
+    ...Base,
+    kind: z.literal('history-reset-complete'),
+    generation: z.string().min(1).max(100),
+  }),
+  // FU (decision 72): why Score holds all agent work. Durable outside the database, so a restored older database can't
+  // forget it; only a completed reset of a LATER generation supersedes it. Permanent.
+  z.object({
+    ...Base,
+    kind: z.literal('execution-freeze'),
+    reason: z.string().min(1).max(1000),
   }),
   // 7.7a §2/§3: coding-run records (launch-requested … settled) and their permanent tombstones.
   ...codingRecordSchemas(Base),
 ])
 export type JournalEntry = z.infer<typeof EntrySchema>
+
+/** What the journal says about the history reset and the freeze (decision 72). */
+export interface HistoryState {
+  /** The newest history-reset record's generation, or null when this journal never had one. */
+  generation: string | null
+  /** When that reset record was written (attempts created before it belong to the archived history). */
+  resetAt: string | null
+  /** The matching `history-reset-complete` came after it. */
+  complete: boolean
+  /** The reason of a freeze record no completed reset superseded, or null. */
+  freeze: string | null
+}
+
+/** Replays the reset and freeze records in order. A completed reset of the current generation supersedes what came before. */
+export function foldHistory(entries: readonly JournalEntry[], scope: string): HistoryState {
+  const state: HistoryState = { generation: null, resetAt: null, complete: false, freeze: null }
+  for (const entry of entries) {
+    if (entry.scope !== scope) continue
+    if (entry.kind === 'history-reset') {
+      state.generation = entry.generation
+      state.resetAt = entry.at
+      state.complete = false
+      state.freeze = null
+    } else if (entry.kind === 'history-reset-complete') {
+      if (entry.generation === state.generation) {
+        state.complete = true
+        state.freeze = null
+      }
+    } else if (entry.kind === 'execution-freeze') {
+      state.freeze ??= entry.reason
+    }
+  }
+  return state
+}
+
+/** Why the history is held according to the journal alone, or null. */
+export function historyHold(state: HistoryState): string | null {
+  if (state.generation !== null && !state.complete)
+    return 'a history reset was started but not finished'
+  return state.freeze
+}
+
+export type HistoryRead = ({ ok: true } & HistoryState) | { ok: false; reason: string }
 
 /** What a critical section can do: read a launch's newest state, and append (fsync'd) under the same lock. */
 export interface CriticalTx {
@@ -334,6 +393,28 @@ export class ExecutionJournal {
       }
       return fn(tx)
     })
+  }
+
+  private historyCache: { signature: string; value: HistoryRead } | undefined
+  /**
+   * The reset and freeze state, read WITHOUT the journal lock (it is asked at every outgoing boundary, also inside
+   * transactions) and cached while the file is unchanged. An unreadable journal is a result, not an exception: callers
+   * treat it as frozen (decision 72).
+   */
+  historyState(): HistoryRead {
+    let signature = 'none'
+    try {
+      const stat = statSync(this.file)
+      signature = `${stat.ino}:${stat.size}:${stat.mtimeMs}`
+    } catch {
+      // no file: a fresh namespace
+    }
+    if (this.historyCache?.signature === signature) return this.historyCache.value
+    const read = this.parse()
+    if (!read.ok) return { ok: false, reason: read.reason }
+    const value: HistoryRead = { ok: true, ...foldHistory(read.entries, this.scope) }
+    this.historyCache = { signature, value }
+    return value
   }
 
   /** True when the journal file has never been created in this directory. */

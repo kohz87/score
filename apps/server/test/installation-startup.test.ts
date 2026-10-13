@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { loadConfig } from '../src/config.ts'
-import { resetDatabaseHistory, resetJournalHistory } from '../src/history-reset.ts'
+import { resetHistory } from '../src/history-reset.ts'
 import { confirmCopy, confirmMove } from '../src/installation.ts'
 import { startServer } from '../src/start-server.ts'
 
@@ -116,14 +116,13 @@ test('a copied home starts, but every admission is blocked and the fence cannot 
   }
   // reset-history (Score stopped) starts a fresh history: the copy runs, and the intent is retired for good.
   const namespace = join(root, 'journal', result.id)
-  resetJournalHistory({
+  resetHistory({
     journalDir: join(root, 'journal'),
     namespaceDir: namespace,
     installationId: result.id,
+    home: copy,
+    dbFile: join(copy, 'score.db'),
   })
-  const resetDb = new DatabaseSync(join(copy, 'score.db'))
-  resetDatabaseHistory(resetDb, new Date().toISOString())
-  resetDb.close()
   const fourth = await start(copy)
   try {
     expect(await fourth.fence()).toMatchObject({ fenced: false })

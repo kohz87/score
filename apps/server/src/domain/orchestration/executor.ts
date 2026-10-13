@@ -2177,7 +2177,7 @@ export class Orchestrator {
       .parse(
         sqlite
           .prepare(
-            `SELECT * FROM orc_attempts WHERE run_id IS NOT NULL AND (state IN ('running', 'unknown') OR (state = 'abandoned' AND evidence IS NULL) OR (state = 'terminated' AND settled = 0))`,
+            `SELECT * FROM orc_attempts WHERE run_id IS NOT NULL AND unknown_reason IS NOT 'history_reset' AND (state IN ('running', 'unknown') OR (state = 'abandoned' AND evidence IS NULL) OR (state = 'terminated' AND settled = 0))`,
           )
           .all(),
       )

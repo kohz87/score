@@ -6,8 +6,10 @@ import {
   openSync,
   readFileSync,
   renameSync,
+  writeSync,
 } from 'node:fs'
-import type { DatabaseSync } from 'node:sqlite'
+import { randomUUID } from 'node:crypto'
+import { DatabaseSync } from 'node:sqlite'
 import { join } from 'node:path'
 import {
   HISTORY_MARKER,
@@ -45,10 +47,12 @@ export function resetJournalHistory(options: {
   namespaceDir: string
   installationId: string
   now?: Date
-}): { archive: string; archived: number } {
+  generation?: string
+}): { archive: string; archived: number; generation: string } {
   const at = options.now ?? new Date()
   const stamp = at.toISOString().replace(/[:.]/g, '-')
   const ns = options.namespaceDir
+  const generation = options.generation ?? randomUUID()
   return withRegistryLock(options.journalDir, () => {
     mkdirDurable(ns)
     const lock = new OsLock(ns, fsyncSync, undefined, LOCK_RANK.journal)
@@ -77,18 +81,108 @@ export function resetJournalHistory(options: {
           kind: 'history-reset',
           archive,
           archived,
+          generation,
         }
         writeDurable(
           join(ns, JOURNAL),
           JSON.stringify({ ...record, c: lineChecksum(JSON.stringify(record)) }) + '\n',
         )
         writeDurable(join(ns, HISTORY_MARKER), JSON.stringify({ version: 1, at: at.toISOString() }))
-        return { archive, archived }
+        return { archive, archived, generation }
       })
     } finally {
       lock.close()
     }
   })
+}
+
+/** Appends the `history-reset-complete` record (fsync'd, then the directory): the reset is finished only after this. */
+export function completeJournalHistory(options: {
+  namespaceDir: string
+  installationId: string
+  generation: string
+  now?: Date
+}): void {
+  const file = join(options.namespaceDir, JOURNAL)
+  const raw = readFileSync(file, 'utf8')
+  const last = raw
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => (JSON.parse(line) as { n: number }).n)
+    .at(-1)
+  const record = {
+    n: (last ?? 0) + 1,
+    at: (options.now ?? new Date()).toISOString(),
+    scope: options.installationId,
+    kind: 'history-reset-complete',
+    generation: options.generation,
+  }
+  const line = Buffer.from(
+    JSON.stringify({ ...record, c: lineChecksum(JSON.stringify(record)) }) + '\n',
+  )
+  const fd = openSync(file, 'a', 0o600)
+  try {
+    let written = 0
+    while (written < line.length) written += writeSync(fd, line, written)
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+  syncDirectory(options.namespaceDir)
+}
+
+/**
+ * The whole reset, in the order that keeps every crash frozen (decision 72): hold the home lock and the journal's locks
+ * from start to end; write the `history-reset` record with a new random generation; commit the database retirement and
+ * the same generation durably; only then write `history-reset-complete`. A crash anywhere before the last record leaves
+ * a reset without its completion, which freezes the next start, and the person simply runs the command again.
+ */
+export function resetHistory(options: {
+  journalDir: string
+  namespaceDir: string
+  installationId: string
+  home: string
+  dbFile: string
+  now?: Date
+}): { archive: string; archived: number; generation: string; database: DatabaseReset | null } {
+  const at = options.now ?? new Date()
+  mkdirDurable(options.home)
+  const homeLock = new OsLock(options.home)
+  try {
+    return homeLock.runSync(() => {
+      const generation = randomUUID()
+      // The journal and registry locks are taken (and released) inside; the home lock stays held around all of it, so
+      // nothing that opens the database through the home lock can interleave with the retirement.
+      const journal = resetJournalHistory({
+        journalDir: options.journalDir,
+        namespaceDir: options.namespaceDir,
+        installationId: options.installationId,
+        now: at,
+        generation,
+      })
+      let database: DatabaseReset | null = null
+      if (existsSync(options.dbFile)) {
+        const sqlite = new DatabaseSync(options.dbFile)
+        try {
+          sqlite.exec('PRAGMA busy_timeout = 10000')
+          database = resetDatabaseHistory(sqlite, at.toISOString(), generation)
+          // The retirement must be on disk before the journal says the reset is complete.
+          sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+        } finally {
+          sqlite.close()
+        }
+      }
+      completeJournalHistory({
+        namespaceDir: options.namespaceDir,
+        installationId: options.installationId,
+        generation,
+        now: at,
+      })
+      return { ...journal, database }
+    })
+  } finally {
+    homeLock.close()
+  }
 }
 
 export interface DatabaseReset {
@@ -103,7 +197,11 @@ export interface DatabaseReset {
  * intents (and their owed Stops), coding process rows, members, terminals, handles and launches. Launch rows stay as
  * permanent "never sent again" witnesses. Then the fence and the freeze are lifted.
  */
-export function resetDatabaseHistory(sqlite: DatabaseSync, nowIso: string): DatabaseReset {
+export function resetDatabaseHistory(
+  sqlite: DatabaseSync,
+  nowIso: string,
+  generation: string = randomUUID(),
+): DatabaseReset {
   const has = (table: string): boolean =>
     sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) !==
     undefined
@@ -113,6 +211,8 @@ export function resetDatabaseHistory(sqlite: DatabaseSync, nowIso: string): Data
     )
   const result: DatabaseReset = { attempts: 0, intents: 0, processes: 0, launches: 0 }
   const note = 'Its history was reset by the person; it is never sent, stopped or resumed again.'
+  // The commit is on disk when it returns: the journal's completion record is written only after it.
+  sqlite.exec('PRAGMA synchronous = FULL')
   sqlite.exec('BEGIN IMMEDIATE')
   try {
     if (has('orc_attempts')) {
@@ -120,20 +220,29 @@ export function resetDatabaseHistory(sqlite: DatabaseSync, nowIso: string): Data
         sqlite
           .prepare(
             `UPDATE orc_attempts SET state = CASE WHEN state IN ('created', 'send_started', 'running') THEN 'unknown' ELSE state END,
-               unknown_reason = 'history_reset', sent_at = COALESCE(sent_at, ?),
+               unknown_reason = 'history_reset', sent_at = COALESCE(sent_at, ?), reserved_usd = 0,
                stop_acknowledged_at = CASE WHEN stop_requested_at IS NOT NULL THEN COALESCE(stop_acknowledged_at, ?) ELSE stop_acknowledged_at END,
                updated_at = ?
              WHERE state IN ('created', 'send_started', 'running', 'unknown', 'abandoned')`,
           )
           .run(nowIso, nowIso, nowIso).changes,
       )
+      // Steps: queued and gated ones will never start, admitted ones are unknown; all are retired so a late result or a
+      // reconciliation can never turn them back into live work (result consumption and scheduling skip retired steps).
       if (has('orc_steps'))
         sqlite
           .prepare(
-            `UPDATE orc_steps SET status = 'unknown', disposition = 'history_reset', updated_at = ?
-             WHERE status = 'admitted' AND EXISTS (
-               SELECT 1 FROM orc_attempts a WHERE a.orchestration_id = orc_steps.orchestration_id
-                 AND a.step_id = orc_steps.id AND a.unknown_reason = 'history_reset')`,
+            `UPDATE orc_steps SET status = CASE WHEN status IN ('pending_gate', 'queued') THEN 'not_started' ELSE 'unknown' END,
+               disposition = 'history_reset', retired = 1, updated_at = ?
+             WHERE status IN ('pending_gate', 'queued', 'admitted')`,
+          )
+          .run(nowIso)
+      // The bearer authority of retired attempts ends with them.
+      if (has('orc_capabilities'))
+        sqlite
+          .prepare(
+            `UPDATE orc_capabilities SET expired_at = COALESCE(expired_at, ?)
+             WHERE attempt_id IN (SELECT id FROM orc_attempts WHERE unknown_reason = 'history_reset')`,
           )
           .run(nowIso)
     }
@@ -158,12 +267,27 @@ export function resetDatabaseHistory(sqlite: DatabaseSync, nowIso: string): Data
             )
             .run(note, nowIso).changes,
         )
+      // An accepted start whose run row Score never saw is a handle to somebody else's run: nothing re-attaches to it.
+      sqlite
+        .prepare(
+          `UPDATE command_intents SET state = 'failed', last_error = ?, updated_at = ?
+           WHERE kind = 'start_run' AND state = 'accepted'
+             AND NOT EXISTS (SELECT 1 FROM runs WHERE runs.score_turn_id = command_intents.idempotency_key)`,
+        )
+        .run(note, nowIso)
       // A Stop owed on an accepted intent's run belongs to the old history.
       if (hasColumn('command_intents', 'stop_state'))
         sqlite
           .prepare("UPDATE command_intents SET stop_state = 'done' WHERE stop_state = 'pending'")
           .run()
     }
+    // Chat replies that were queued (or admitted without a run) are never dispatched: the dispatcher only picks `pending`.
+    if (has('message_runs'))
+      sqlite
+        .prepare(
+          `UPDATE message_runs SET state = 'failed' WHERE state = 'pending' OR (state = 'active' AND run_id IS NULL)`,
+        )
+        .run()
     for (const table of ['coding_processes', 'coding_process_members', 'coding_pending_terminals'])
       if (has(table))
         result.processes += Number(sqlite.prepare(`DELETE FROM ${table}`).run().changes)
@@ -188,6 +312,8 @@ export function resetDatabaseHistory(sqlite: DatabaseSync, nowIso: string): Data
         .run(nowIso)
       if (hasColumn('orc_global', 'frozen_reason'))
         sqlite.prepare('UPDATE orc_global SET frozen_reason = NULL WHERE id = 1').run()
+      if (hasColumn('orc_global', 'history_generation'))
+        sqlite.prepare('UPDATE orc_global SET history_generation = ? WHERE id = 1').run(generation)
       if (has('orc_history'))
         sqlite
           .prepare(

@@ -71,3 +71,37 @@ test('after reset-history a retired attempt’s owed Stop is never delivered and
     { state: 'unknown', unknown_reason: 'history_reset' },
   ])
 })
+
+test('FU #4: late completion of a run whose step was retired by reset-history changes nothing', async () => {
+  h = await harness({
+    lead: {
+      script: byTurn({
+        1: async (t) => {
+          await t.call('orch.assign', { agent: 'builder', instruction: '[fake:hold]' })
+        },
+      }),
+    },
+  })
+  const id = await h.create({ gatePolicy: 'none' })
+  await h.until(() => attemptOf(h, id, 'step', 's1').some((a) => a.state === 'running'))
+  h.fence.setHardBlock(HOLD)
+  resetDatabaseHistory(h.db.sqlite, new Date().toISOString())
+  h.fence.setHardBlock(null)
+  expect(h.rows("SELECT status, disposition, retired FROM orc_steps WHERE id = 's1'")).toEqual([
+    { status: 'unknown', disposition: 'history_reset', retired: 1 },
+  ])
+  // The source run finishes after the reset (the probe of re-review 5): its output must not be accepted.
+  h.db.sqlite
+    .prepare(
+      `UPDATE runs SET status = 'completed', output = 'LATE ANSWER', ended_at = ?, terminal_source = 'runtime'
+       WHERE id = (SELECT run_id FROM orc_attempts WHERE kind = 'step')`,
+    )
+    .run(new Date().toISOString())
+  await h.settle(3000)
+  expect(h.rows("SELECT status, disposition, result FROM orc_steps WHERE id = 's1'")).toEqual([
+    { status: 'unknown', disposition: 'history_reset', result: null },
+  ])
+  expect(h.rows("SELECT state, unknown_reason FROM orc_attempts WHERE kind = 'step'")).toEqual([
+    { state: 'unknown', unknown_reason: 'history_reset' },
+  ])
+})

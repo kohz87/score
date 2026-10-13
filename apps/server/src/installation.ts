@@ -466,6 +466,14 @@ function inheritedJournal(
       return { problem: `line ${index + 1} of ${file} fails its checksum` }
     if (body.scope === scope && body.kind === 'cutover') migratedAway = true
     if (body.scope !== scope || body.kind === 'cutover') continue
+    // The source's reset and freeze records are its own decisions: a copy must reset its OWN history, so inheriting them
+    // would let the source's reset stand in for it (decision 72).
+    if (
+      body.kind === 'history-reset' ||
+      body.kind === 'history-reset-complete' ||
+      body.kind === 'execution-freeze'
+    )
+      continue
     // Coding records (the only ones with a launch) are evidence in the copy, never ours to act on: the flag is part of
     // the record, so the copy's journal, its database projection and its recovery all see it.
     const copied = {

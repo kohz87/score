@@ -13,7 +13,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { loadConfig } from '../src/config.ts'
-import { resetDatabaseHistory, resetJournalHistory } from '../src/history-reset.ts'
+import {
+  completeJournalHistory,
+  resetDatabaseHistory,
+  resetJournalHistory,
+} from '../src/history-reset.ts'
 import { confirmCopy } from '../src/installation.ts'
 import { startServer } from '../src/start-server.ts'
 import { CodingJournal } from '../src/domain/orchestration/coding-journal.ts'
@@ -301,11 +305,20 @@ test('reset-history unfreezes for good: it retires every unfinished record, arch
     namespaceDir: join(dir, 'ns'),
     installationId: 'ns-id',
   })
-  const done = resetDatabaseHistory(database.sqlite, '2026-10-13T00:00:00.000Z')
+  const done = resetDatabaseHistory(
+    database.sqlite,
+    '2026-10-13T00:00:00.000Z',
+    archived.generation,
+  )
+  completeJournalHistory({
+    namespaceDir: join(dir, 'ns'),
+    installationId: 'ns-id',
+    generation: archived.generation,
+  })
   expect(done).toMatchObject({ attempts: 1, launches: 1 })
   const rows = (sql: string) => database.sqlite.prepare(sql).all()
   expect(rows('SELECT id, state, stop_state FROM command_intents ORDER BY id')).toEqual([
-    { id: 'i1', state: 'accepted', stop_state: 'done' },
+    { id: 'i1', state: 'failed', stop_state: 'done' }, // a handle to a run Score never saw is invalidated
     { id: 'i2', state: 'failed', stop_state: null },
   ])
   expect(rows('SELECT run_id FROM coding_processes')).toEqual([])
@@ -326,7 +339,7 @@ test('reset-history unfreezes for good: it retires every unfinished record, arch
   // The new journal starts with the permanent history-reset record; the old files are archived beside it.
   const fresh = new ExecutionJournal(join(dir, 'ns'), 'ns-id').readOwn()
   if (!fresh.ok) throw new Error(fresh.reason)
-  expect(fresh.entries.map((e) => e.kind)).toEqual(['history-reset'])
+  expect(fresh.entries.map((e) => e.kind)).toEqual(['history-reset', 'history-reset-complete'])
   expect(existsSync(join(dir, 'ns', archived.archive))).toBe(true)
   expect(existsSync(join(dir, 'ns', 'launches', 'L1'))).toBe(false)
   expect(readdirSync(join(dir, 'ns', archived.archive, 'launches'))).toEqual(['L1'])
@@ -350,4 +363,158 @@ test('reset-history on a damaged journal still archives it', () => {
   expect(readFileSync(join(dir, 'ns', result.archive, JOURNAL_FILE), 'utf8')).toBe('garbage\n')
   const fresh = new ExecutionJournal(join(dir, 'ns'), 'ns-id').readOwn()
   expect(fresh.ok && fresh.entries.map((e) => e.kind)).toEqual(['history-reset'])
+})
+
+// ---- FU (decision 72): sticky freeze, reset generation ------------------------------------------------------------------
+
+const fullReset = (dir: string, database: ReturnType<typeof openMigrated>) => {
+  const journal = resetJournalHistory({
+    journalDir: dir,
+    namespaceDir: join(dir, 'ns'),
+    installationId: 'ns-id',
+  })
+  resetDatabaseHistory(database.sqlite, new Date().toISOString(), journal.generation)
+  completeJournalHistory({
+    namespaceDir: join(dir, 'ns'),
+    installationId: 'ns-id',
+    generation: journal.generation,
+  })
+  return journal
+}
+
+test('FU #3: a restored older database can’t forget a freeze the journal remembers, and an ordinary lift is refused', () => {
+  const dir = join(root, 'sticky')
+  mkdirSync(dir)
+  const { journal, store, database } = fenceOf(dir, 'ns-id')
+  journal.append({
+    kind: 'send_started',
+    attemptId: 'a1',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: 0,
+  })
+  rmSync(join(dir, 'ns', JOURNAL_FILE))
+  expect(store.startupCheck().reasons).toContain('journal_missing')
+  // The probe of re-review 5: a database from before the freeze is put back while the journal's record stays.
+  database.sqlite.exec(
+    'UPDATE orc_global SET frozen_reason = NULL, fenced = 0, reason = NULL WHERE id = 1',
+  )
+  const restored = again(dir, 'ns-id', database)
+  expect(restored.executionFrozen()).toMatch(/history\.json/)
+  expect(restored.startupCheck().fenced).toBe(false) // nothing new is detected: the freeze is what remains
+  expect(restored.executionFrozen()).not.toBeNull()
+  database.sqlite.exec("UPDATE orc_global SET fenced = 1, reason = 'journal_mismatch' WHERE id = 1")
+  expect(() => restored.lift(restored.view().revision, 'looks fine')).toThrow(REASON)
+  // A completed reset supersedes it.
+  fullReset(dir, database)
+  expect(again(dir, 'ns-id', database).executionFrozen()).toBeNull()
+  database.close()
+})
+
+test('FU #3: an unreadable journal is frozen, whatever the database says', () => {
+  const dir = join(root, 'unreadable')
+  mkdirSync(join(dir, 'ns'), { recursive: true })
+  const { store, database } = fenceOf(dir, 'ns-id')
+  writeFileSync(join(dir, 'ns', JOURNAL_FILE), 'garbage\n')
+  expect(store.executionFrozen()).toMatch(/cannot be read/)
+  expect(() => store.lift(store.view().revision, undefined)).toThrow()
+  database.close()
+})
+
+test('FU #3: an orchestration-only database whose journal lost the dispatches freezes', () => {
+  const dir = join(root, 'orc-only')
+  mkdirSync(dir)
+  const { journal, store, database } = fenceOf(dir, 'ns-id')
+  expect(store.startupCheck()).toEqual({ fenced: false, reasons: [] })
+  database.sqlite.exec('PRAGMA foreign_keys = OFF')
+  database.sqlite.exec(`
+    INSERT INTO orchestrations (id, title, goal, lead_agent_id, lead_incarnation, allowed_agents, room_id, brief_id,
+      gate_policy, max_steps, max_lead_turns, max_concurrent_steps, lead_turn_estimate_usd, step_estimate_usd, status,
+      acknowledgement, preflight, reserve_bytes, created_at, updated_at)
+      VALUES ('o1', 't', 'g', 'lead', 'i', '[]', 'r', 'b', 'none', 1, 1, 1, 1, 1, 'running', '{}', '{}', 0, 'x', 'x');
+    INSERT INTO orc_attempts (id, orchestration_id, kind, n, agent_id, agent_incarnation, session_id, turn_id, message_id,
+      state, input, dispatch_generation, created_at, updated_at)
+      VALUES ('att1', 'o1', 'lead', 1, 'lead', 'i', 's', 'turn-att', 'm', 'running', '', 1, '2026-10-13T00:00:00.000Z', 'x');`)
+  // The journal survives with something older and no dispatch of att1.
+  journal.append({ kind: 'checkpoint' })
+  const restart = again(dir, 'ns-id', database)
+  expect(restart.startupCheck().reasons).toContain('journal_truncated')
+  expect(restart.executionFrozen()).toMatch(/att1/)
+  database.close()
+})
+
+test('FU #5: a database backup from before the reset is frozen, and so is a reset that was never completed', () => {
+  const dir = join(root, 'generation')
+  mkdirSync(dir)
+  const { store, database } = fenceOf(dir, 'ns-id')
+  expect(store.startupCheck()).toEqual({ fenced: false, reasons: [] })
+  database.sqlite.exec('PRAGMA foreign_keys = OFF')
+  database.sqlite.exec(
+    `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at)
+       VALUES ('i1', 'start_coding_run', 'turn-old', '{}', 'pending', 'x', 'x')`,
+  )
+  // A reset whose database half happened but whose completion record was never written.
+  const journal = resetJournalHistory({
+    journalDir: dir,
+    namespaceDir: join(dir, 'ns'),
+    installationId: 'ns-id',
+  })
+  expect(again(dir, 'ns-id', database).executionFrozen()).toMatch(/not finished/)
+  resetDatabaseHistory(database.sqlite, new Date().toISOString(), journal.generation)
+  expect(again(dir, 'ns-id', database).executionFrozen()).toMatch(/not finished/)
+  completeJournalHistory({
+    namespaceDir: join(dir, 'ns'),
+    installationId: 'ns-id',
+    generation: journal.generation,
+  })
+  expect(again(dir, 'ns-id', database).startupCheck()).toEqual({ fenced: false, reasons: [] })
+  // The probe of re-review 5: the database from before the reset comes back (pending intent, no generation).
+  database.sqlite.exec(
+    "UPDATE orc_global SET history_generation = NULL WHERE id = 1; UPDATE command_intents SET state = 'pending'",
+  )
+  const restored = again(dir, 'ns-id', database)
+  expect(restored.startupCheck().reasons).toContain('history_generation_mismatch')
+  expect(restored.executionFrozen()).toMatch(/backup from before/)
+  // ... and only a new reset leaves it.
+  fullReset(dir, database)
+  expect(again(dir, 'ns-id', database).executionFrozen()).toBeNull()
+  database.close()
+})
+
+test('FU #6: a source’s reset and freeze records are not inherited, so they can never stand in for the copy’s own reset', async () => {
+  const home = join(root, 'src-home')
+  mkdirSync(home)
+  const first = await run(home)
+  const sourceId = first.installation && first.installation.ok ? first.installation.id : ''
+  await first.close()
+  const ns = join(root, 'journal', sourceId)
+  // The source reset its own history once, and froze later.
+  const journal = new ExecutionJournal(ns, sourceId)
+  journal.append({ kind: 'checkpoint' })
+  resetJournalHistory({
+    journalDir: join(root, 'journal'),
+    namespaceDir: ns,
+    installationId: sourceId,
+  })
+  completeJournalHistory({
+    namespaceDir: ns,
+    installationId: sourceId,
+    generation: (journal.historyState() as { generation: string | null }).generation ?? 'unused',
+  })
+  new ExecutionJournal(ns, sourceId).append({ kind: 'execution-freeze', reason: 'source froze' })
+  const copy = join(root, 'src-copy')
+  cpSync(home, copy, { recursive: true })
+  rmSync(join(copy, 'score.pid'), { force: true })
+  const confirmed = confirmCopy({ journalDir: join(root, 'journal'), home: copy })
+  if (!confirmed.ok) throw new Error(confirmed.message)
+  const inherited = new ExecutionJournal(
+    join(root, 'journal', confirmed.id),
+    confirmed.id,
+  ).readOwn()
+  if (!inherited.ok) throw new Error(inherited.reason)
+  const kinds = inherited.entries.map((entry) => entry.kind)
+  expect(kinds).not.toContain('history-reset')
+  expect(kinds).not.toContain('history-reset-complete')
+  expect(kinds).not.toContain('execution-freeze')
 })

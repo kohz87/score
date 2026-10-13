@@ -7,6 +7,8 @@ import { recordRefusal } from './ops.ts'
 import { applyCodingEvidence, verifyCoding } from './coding-checkpoint.ts'
 import { foldCodingLaunches } from './coding-records.ts'
 import {
+  foldHistory,
+  historyHold,
   journalDispatches,
   type ExecutionJournal,
   type JournalEntry,
@@ -374,6 +376,36 @@ export function applyJournalEvidence(
 }
 
 /**
+ * Orchestration-only loss (decision 72): every attempt the database says was dispatched has a `send_started` record (or
+ * the tombstone compaction leaves) in the journal. One without it means the journal lost a witness (a truncated or
+ * replaced file) even when no coding state is involved. Attempts of an archived history (created before the newest
+ * reset, or retired by it) are exempt: their witnesses are in the archive.
+ */
+export function unjournaledAttempts(
+  sqlite: DatabaseSync,
+  entries: readonly JournalEntry[],
+  scope: string,
+): Mismatch[] {
+  const known = journalDispatches(entries.filter((entry) => entry.scope === scope))
+  const resetAt = foldHistory(entries, scope).resetAt
+  const rows = sqlite
+    .prepare(
+      `SELECT id, created_at FROM orc_attempts WHERE dispatch_generation > 0 AND unknown_reason IS NOT 'history_reset'`,
+    )
+    .all() as { id: string; created_at: string }[]
+  return rows
+    .filter((row) => !known.has(row.id) && (resetAt === null || row.created_at >= resetAt))
+    .slice(0, 20)
+    .map((row) => ({
+      kind: 'attempt' as const,
+      ref: row.id,
+      journalN: null,
+      lost: true,
+      detail: `The database dispatched attempt ${row.id}, but the journal has no record of that: the journal lost a witness`,
+    }))
+}
+
+/**
  * Launch folders that hold receipts the journal has no launch for: evidence this installation can't account for (the
  * journal lost a witness). No lift, time or earlier decision accounts for them; only `reset-history` does.
  */
@@ -471,15 +503,22 @@ export class GlobalFenceStore {
     return this.db.read((sqlite) => this.executionFrozenIn(sqlite))
   }
 
-  /** The same, inside a transaction the caller already holds. */
+  /**
+   * The same, inside a transaction the caller already holds. Sticky (decision 72): the database says so, OR the journal's
+   * newest freeze record is not superseded by a completed reset, OR the journal can't be read at all. A restored older
+   * database therefore can't forget a freeze the journal remembers.
+   */
   executionFrozenIn(sqlite: DatabaseSync): string | null {
     if (this.hardBlock !== null) return this.hardBlock
-    return (
+    const stored =
       (
         sqlite.prepare('SELECT frozen_reason FROM orc_global WHERE id = 1').get() as
           { frozen_reason: string | null } | undefined
       )?.frozen_reason ?? null
-    )
+    if (stored !== null) return stored
+    const history = this.journal.historyState()
+    if (!history.ok) return `the execution journal cannot be read (${history.reason})`
+    return historyHold(history)
   }
 
   /** `executionFrozen()` as the sentence the person reads, or null. */
@@ -490,6 +529,15 @@ export class GlobalFenceStore {
 
   /** Persists the freeze (the first reason stays) and raises the fence with the sentence as its only way forward. */
   freeze(why: string): void {
+    // The durable evidence outside the database first; the database flag below stands on its own if the journal can't
+    // take the record. Once per freeze: a later start finds the earlier record.
+    try {
+      const history = this.journal.historyState()
+      if (history.ok && historyHold(history) === null)
+        this.journal.append({ kind: 'execution-freeze', reason: why.slice(0, 1000) })
+    } catch {
+      // unreadable or unwritable: executionFrozen() treats an unreadable journal as frozen anyway
+    }
     this.db.tx((sqlite) =>
       sqlite
         .prepare('UPDATE orc_global SET frozen_reason = COALESCE(frozen_reason, ?) WHERE id = 1')
@@ -658,6 +706,7 @@ export class GlobalFenceStore {
     const marker = this.journal.readRestoreMarker()
     const fresh = this.journal.isFresh()
     const opened = this.journal.open()
+    this.checkHistoryGeneration(reasons)
     if (marker !== undefined) {
       reasons.push('restore')
       this.set(
@@ -731,6 +780,9 @@ export class GlobalFenceStore {
         const mismatches = [
           ...this.db.read((sqlite) => verifyJournal(sqlite, entries.entries)),
           ...unownedLaunchFolders(entries.entries, this.journal.launchDirectories()),
+          ...this.db.read((sqlite) =>
+            unjournaledAttempts(sqlite, entries.entries, this.journal.scope),
+          ),
         ]
         // The journal holds less than the database or the launch folders witnessed (truncated, replaced): nothing
         // automatic can say what ran, so this freezes too (decision 71).
@@ -751,6 +803,52 @@ export class GlobalFenceStore {
     }
     const fenced = alreadyFenced || reasons.length > 0
     return { fenced, reasons }
+  }
+
+  /**
+   * The journal and the database must name the same history (decision 72). A database that doesn't carry the generation
+   * of the journal's completed reset predates it (a restored backup): its retired work would come back. A database that
+   * names a generation the journal doesn't hold has lost its journal. Both freeze, durably.
+   */
+  private checkHistoryGeneration(reasons: string[]): void {
+    const history = this.journal.historyState()
+    if (!history.ok) return // executionFrozen() already reports an unreadable journal
+    const stored = this.db.read(
+      (sqlite) =>
+        (
+          sqlite.prepare('SELECT history_generation FROM orc_global WHERE id = 1').get() as
+            { history_generation: string | null } | undefined
+        )?.history_generation ?? null,
+    )
+    if (history.generation !== null && history.complete) {
+      if (stored === history.generation) return
+      // A database with no history of its own (brand new, or the reset ran before it existed) adopts the generation.
+      if (stored === null && !this.databaseHoldsExecutionHistory()) {
+        this.db.tx((sqlite) =>
+          sqlite
+            .prepare('UPDATE orc_global SET history_generation = ? WHERE id = 1')
+            .run(history.generation),
+        )
+        return
+      }
+      reasons.push('history_generation_mismatch')
+      this.freeze(
+        'the database is not the one that was reset (it looks like a backup from before the history reset)',
+      )
+    } else if (history.generation === null && stored !== null) {
+      reasons.push('history_generation_mismatch')
+      this.freeze(
+        'the database belongs to a history that was reset, but the execution journal does not hold that reset',
+      )
+    }
+  }
+
+  private databaseHoldsExecutionHistory(): boolean {
+    return this.db.read((sqlite) =>
+      ['orc_attempts', 'coding_launches', 'command_intents'].some(
+        (table) => sqlite.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get() !== undefined,
+      ),
+    )
   }
 
   /**
