@@ -69,6 +69,7 @@ import {
 } from './decisions.ts'
 import { applyJournalEvidence, fenceView, isFenced, type GlobalFenceStore } from './fence.ts'
 import { journalDispatches } from './journal.ts'
+import { admissionDenial, recoveredOnly } from './admission.ts'
 import {
   MAX_GENERATIONS,
   applyClosure,
@@ -205,90 +206,6 @@ export interface ReleaseChecks {
 type ToolResult =
   { kind: 'receipt'; receipt: OrchReceipt } | { kind: 'unauthorized'; message: string }
 
-/**
- * The orchestration executor: the single admission authority for lead attempts and steps (design v3). All writes go
- * through `mutate`, one ingest transaction each, so events, revisions and the database stay consistent.
- */
-/** Whether the step's latest attempt ended on recovered session text and was never confirmed ended. */
-function recoveredOnly(attempts: AttemptRow[], stepId: string): boolean {
-  const last = attempts
-    .filter((a) => a.step_id === stepId)
-    .reduce<AttemptRow | undefined>((best, a) => (!best || a.n > best.n ? a : best), undefined)
-  return (
-    last !== undefined &&
-    last.unknown_reason === 'recovered_text_only' &&
-    ['unknown', 'abandoned'].includes(last.state)
-  )
-}
-
-/** The result revisions a step's input was built from (recorded at claim); undefined for an attempt claimed before. */
-function frozenRevisions(
-  sqlite: DatabaseSync,
-  attemptId: string,
-): Record<string, number> | undefined {
-  const row = sqlite
-    .prepare(
-      "SELECT detail FROM orc_history WHERE kind = 'step_input_frozen' AND json_extract(detail, '$.attemptId') = ? ORDER BY id DESC LIMIT 1",
-    )
-    .get(attemptId) as { detail: string } | undefined
-  if (!row) return undefined
-  return (JSON.parse(row.detail) as { revisions?: Record<string, number> }).revisions
-}
-
-/**
- * Why an unsent step attempt's input is no longer usable (fix-j 2): a result it consumed is not a current success, only
- * ever ended on recovered text, or is at another revision than the one frozen into the input.
- */
-function inputWithdrawn(
-  sqlite: DatabaseSync,
-  orchId: string,
-  attempt: AttemptRow,
-): string | undefined {
-  if (attempt.kind !== 'step' || !attempt.step_id) return undefined
-  const step = readStep(sqlite, orchId, attempt.step_id)
-  if (!step) return undefined
-  const steps = stepsOf(sqlite, orchId)
-  const attempts = attemptsOf(sqlite, orchId)
-  // A workflow step has no `after`: what it consumed is recorded in `wf_consumed` and judged here at send (fix J, 7.1).
-  const consumed = sqlite
-    .prepare(
-      'SELECT producer, producer_step, output_revision, kind, withdrawn FROM wf_consumed WHERE orchestration_id = ? AND step_id = ?',
-    )
-    .all(orchId, step.id) as {
-    producer: string
-    producer_step: string
-    output_revision: number
-    kind: string
-    withdrawn: number
-  }[]
-  for (const c of consumed) {
-    if (c.withdrawn === 1) return `${c.producer}'s result was withdrawn`
-    if (c.kind === 'default') continue
-    const producer = sqlite
-      .prepare(
-        'SELECT state, output_revision FROM wf_nodes WHERE orchestration_id = ? AND node_id = ?',
-      )
-      .get(orchId, c.producer) as { state: string; output_revision: number } | undefined
-    if (!producer || !['succeeded', 'failed'].includes(producer.state))
-      return `${c.producer} is no longer a resolved result`
-    if (producer.output_revision !== c.output_revision)
-      return `${c.producer} changed after this step's input was built`
-    const producerStep = steps.find((s) => s.id === c.producer_step)
-    if (producerStep && c.kind === 'output' && recoveredOnly(attempts, producerStep.id))
-      return `${c.producer} only ended on recovered text`
-  }
-  const frozen = frozenRevisions(sqlite, attempt.id)
-  for (const dep of step.after_steps) {
-    const current = steps.find((s) => s.id === dep)
-    if (!current || current.status !== 'succeeded' || current.result === null)
-      return `${dep} is no longer a successful result`
-    if (recoveredOnly(attempts, dep)) return `${dep} only ended on recovered text`
-    if (frozen && frozen[dep] !== undefined && frozen[dep] !== current.result_revision)
-      return `${dep} changed after this step's input was built`
-  }
-  return undefined
-}
-
 /** A step attempt given to a coding worker (its launches are supervised units, its result is the eligible reply). */
 const isCodingStep = (attempt: Pick<AttemptRow, 'kind' | 'runtime'>): boolean =>
   attempt.kind === 'step' && attempt.runtime !== 'hermes'
@@ -319,6 +236,10 @@ function requireLeadOrch(sqlite: DatabaseSync, id: string): OrchRow {
   return o
 }
 
+/**
+ * The orchestration executor: the single admission authority for lead attempts and steps (design v3). All writes go
+ * through `mutate`, one ingest transaction each, so events, revisions and the database stay consistent.
+ */
 export class Orchestrator {
   private readonly db: ScoreDb
   private readonly ingest: Ingest
@@ -2071,19 +1992,17 @@ export class Orchestrator {
       touch(ctx, o.id)
       return undefined
     }
-    if (
-      isTerminalStatus(o.status) ||
-      o.status === 'stopping' ||
-      o.status === 'finishing' ||
-      attempt.retired
-    )
+    // The common admission rules, asked once (the release decision asks the same function). What each cause means for a
+    // send: the first group ends the attempt, the second keeps it `created` until the condition clears.
+    const denial = admissionDenial(sqlite, this.options.fence, o, attempt, now)
+    if (denial && ['retired', 'cancel', 'stop'].includes(denial.cause))
       return refuse(`not dispatched: run ${o.status}`, {
         status: 'not_started',
         disposition: `not_started: run ${o.status}`,
       })
     // Result eligibility of everything the input consumed, judged at send (fix-j 2).
-    const withdrawn = inputWithdrawn(sqlite, o.id, attempt)
-    if (withdrawn) {
+    if (denial?.cause === 'inputs_withdrawn') {
+      const withdrawn = denial.withdrawn!
       refuseAttempt(sqlite, attempt, `input_withdrawn: ${withdrawn}`, now)
       sqlite
         .prepare(
@@ -2110,24 +2029,16 @@ export class Orchestrator {
     // Refused dispatch generations: the person is needed at the lifetime limit; after five in a row the attempt waits.
     if (attempt.needs_person || (attempt.next_try_at !== null && attempt.next_try_at > now))
       return undefined
-    // These keep the attempt `created`: it is sent when the condition clears. The manual hold is read directly: it is
-    // independent of the status a remap or a limits decision may have cleared (fix-i 3).
-    if (
-      o.status === 'paused' ||
-      o.manual_paused_at !== null ||
-      isFenced(sqlite) ||
-      this.options.fence.executionFrozenIn(sqlite) !== null ||
-      teamPausedAt(sqlite) !== null
-    )
-      return undefined
-    const attempts = attemptsOf(sqlite, o.id)
-    if (unknownFenceAttempts(o, attempts).length > 0 || cancelFenceAttempts(o, attempts).length > 0)
-      return undefined
-    if (agentPausedAt(sqlite, attempt.agent_id) !== null) return undefined
-    const incarnation = lifecycleOf(sqlite, attempt.agent_id)?.incarnation_id ?? 'untracked'
-    if (incarnation !== attempt.agent_incarnation) {
+    if (denial?.cause === 'agent_changed') {
       if (attempt.kind === 'lead') {
-        refuseAttempt(sqlite, attempt, 'not dispatched: the lead agent changed', now)
+        refuseAttempt(
+          sqlite,
+          attempt,
+          denial.frozenMapping
+            ? 'not dispatched: the lead agent mapping changed'
+            : 'not dispatched: the lead agent changed',
+          now,
+        )
         // Nothing was sent, so the turn's causes go back to the wake cursor.
         sqlite
           .prepare(
@@ -2137,43 +2048,27 @@ export class Orchestrator {
         this.pauseFor(ctx, o, 'agent_unavailable')
         return undefined
       }
-      return refuse('not dispatched: the agent changed', {
-        status: 'blocked',
-        disposition: 'agent_unavailable: the agent was replaced or removed',
-      })
+      return denial.frozenMapping
+        ? refuse('not dispatched: not the approved agent mapping', {
+            status: 'blocked',
+            disposition: 'agent_changed: not the agent mapping approved for this run',
+          })
+        : refuse('not dispatched: the agent changed', {
+            status: 'blocked',
+            disposition: 'agent_unavailable: the agent was replaced or removed',
+          })
     }
-    // Re-checked against the frozen mapping as the last step before Hermes (fix-h item 3).
-    const frozen = frozenIncarnation(sqlite, o.id, attempt.agent_id)
-    if (frozen !== undefined && frozen !== attempt.agent_incarnation) {
-      if (attempt.kind === 'lead') {
-        refuseAttempt(sqlite, attempt, 'not dispatched: the lead agent mapping changed', now)
-        sqlite
-          .prepare(
-            'UPDATE orchestrations SET causes_consumed_up_to = ?, lead_turns_used = lead_turns_used - 1 WHERE id = ?',
-          )
-          .run(attempt.claim_from ?? 0, o.id)
-        this.pauseFor(ctx, o, 'agent_unavailable')
-        return undefined
-      }
-      return refuse('not dispatched: not the approved agent mapping', {
-        status: 'blocked',
-        disposition: 'agent_changed: not the agent mapping approved for this run',
-      })
-    }
-    if (!agentAdmits(sqlite, attempt.agent_id)) return undefined
-    // The last barrier before Hermes: spend, reservations and the deadline as they are now, not as they were when this
-    // attempt was prepared (another send may have been awaiting its reply since).
-    const fresh = requireOrch(sqlite, o.id)
-    if (fresh.deadline_at !== null && now >= fresh.deadline_at) return undefined
-    const view = budgetView(sqlite, fresh)
-    if (overBudget(view)) {
-      this.pauseFor(ctx, fresh, 'budget')
+    // Pauses, fences, holds, the deadline and a stop owed: the attempt stays `created`. The deadline flow, the budget
+    // pause and the unknown-cost pause are the orchestration's own.
+    if (denial?.cause === 'budget' || denial?.cause === 'unknown_cost') {
+      this.pauseFor(
+        ctx,
+        requireOrch(sqlite, o.id),
+        denial.cause === 'budget' ? 'budget' : 'unknown_spend',
+      )
       return undefined
     }
-    if (view.limitUsd !== null && view.unknownSpend && !fresh.accepted_unknown_spend) {
-      this.pauseFor(ctx, fresh, 'unknown_spend')
-      return undefined
-    }
+    if (denial) return undefined
     let capability: string | undefined
     // Dispatch generation g: 1, 2, ... for a step attempt (never reused, even after a journaled refusal); the lead's is
     // its capability generation.
@@ -2468,34 +2363,14 @@ export class Orchestrator {
     )
       return no('retired')
     const nowMs = this.nowMs()
-    const now = new Date(nowMs).toISOString()
-    // The common admission rules, in the order the cause table lists them.
-    if (attempt.retired) return no('retired')
-    if (attempt.stop_requested_at !== null) return no('owed_stop')
-    if (isTerminalStatus(o.status)) return no('cancel')
-    if (o.status === 'stopping' || o.status === 'finishing') return no('stop')
-    if (inputWithdrawn(sqlite, o.id, attempt)) return no('inputs_withdrawn')
-    if (o.deadline_at !== null && now >= o.deadline_at) return no('deadline')
-    if (o.status === 'paused' || o.manual_paused_at !== null) return no('paused')
-    if (this.options.fence.executionFrozenIn(sqlite) !== null) return no('frozen')
-    if (isFenced(sqlite)) return no('fenced')
-    if (teamPausedAt(sqlite) !== null || agentPausedAt(sqlite, attempt.agent_id) !== null)
-      return no('hold')
-    const attempts = attemptsOf(sqlite, o.id)
-    if (unknownFenceAttempts(o, attempts).length > 0 || cancelFenceAttempts(o, attempts).length > 0)
-      return no('fenced')
-    if (!agentAdmits(sqlite, attempt.agent_id)) return no('hold')
-    const incarnation = lifecycleOf(sqlite, attempt.agent_id)?.incarnation_id ?? 'untracked'
-    const frozen = frozenIncarnation(sqlite, o.id, attempt.agent_id)
-    if (
-      incarnation !== attempt.agent_incarnation ||
-      (frozen !== undefined && frozen !== attempt.agent_incarnation)
+    const denial = admissionDenial(
+      sqlite,
+      this.options.fence,
+      o,
+      attempt,
+      new Date(nowMs).toISOString(),
     )
-      return no('agent_changed')
-    const view = budgetView(sqlite, o)
-    if (overBudget(view)) return no('budget')
-    if (view.limitUsd !== null && view.unknownSpend && !o.accepted_unknown_spend)
-      return no('unknown_cost')
+    if (denial) return no(denial.cause)
     // The prepared expiry may not outlive the deadline as it stands now (it can move earlier while a launch is arming).
     if (o.deadline_at !== null && subject.expiry > Date.parse(o.deadline_at))
       return no('deadline_changed')
