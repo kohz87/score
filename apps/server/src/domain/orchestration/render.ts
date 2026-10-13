@@ -4,6 +4,12 @@ import type { CauseRow, GateRow, InquiryRow, OrchRow, StepRow } from './store.ts
 // Rendering of the two kinds of orchestration input. The lead's input is frozen at its claim and stored with a
 // placeholder where the capability goes; step inputs never contain a capability (they are scanned before admission).
 
+/**
+ * The most of one result a lead or a later step is shown. A Hermes step result is stored cut at `ORCH_LIMITS.resultBytes`;
+ * a coding worker's complete reply is stored up to 32 KiB (7.7b §7) and shown in full, within the input's own bound.
+ */
+const RESULT_RENDER_BYTES = 32 * 1024 + 128
+
 const encoder = new TextEncoder()
 const bytesOf = (text: string): number => encoder.encode(text).length
 
@@ -143,7 +149,7 @@ export function renderLeadInput(args: LeadInputArgs): string {
       blocks.push(`[result of ${step.id} omitted: input limit]`)
       continue
     }
-    const room = Math.min(ORCH_LIMITS.resultBytes, remaining - overhead - 48)
+    const room = Math.min(RESULT_RENDER_BYTES, remaining - overhead - 48)
     const cut = truncateBytes(step.result!, room)
     const body = cut.cut > 0 ? `${cut.text}\n[…truncated ${cut.cut} bytes]` : cut.text
     const block = quote(label, body)
@@ -174,7 +180,7 @@ export function renderStepInput(args: StepInputArgs): string {
   for (const dependency of dependencies) {
     if (dependency.result === null) continue
     const label = `RESULT ${dependency.id}`
-    const room = Math.min(ORCH_LIMITS.resultBytes, remaining - bytesOf(label) * 2 - 64)
+    const room = Math.min(RESULT_RENDER_BYTES, remaining - bytesOf(label) * 2 - 64)
     if (room < 256) {
       parts.push('', `[result of ${dependency.id} omitted: input limit]`)
       continue

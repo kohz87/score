@@ -6,6 +6,7 @@ import {
   addHistory,
   attemptsOf,
   isFinalStep,
+  readStep,
   stepsOf,
   type AttemptRow,
   type OrchRow,
@@ -232,7 +233,10 @@ export function beginFinish(
   withdrawInquiries(sqlite, o.id, now)
   for (const created of attemptsOf(sqlite, o.id).filter((a) => a.state === 'created')) {
     refuseAttempt(sqlite, created, 'not dispatched: run finishing', now)
-    if (created.step_id)
+    // A step that is already final (a coding worker's blocked step waiting with its suspended attempt) keeps its own
+    // status and reason; only waiting work becomes "not started".
+    const step = created.step_id ? readStep(sqlite, o.id, created.step_id) : undefined
+    if (created.step_id && (!step || !isFinalStep(step.status)))
       setStepStatus(sqlite, o.id, created.step_id, 'not_started', 'not_started: run_finishing', now)
   }
   addStored(sqlite, o.id, utf8Bytes(summary))

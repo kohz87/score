@@ -862,7 +862,7 @@ export class UnitBackend {
     if (this.tooFast())
       return refuse('Score is starting coding runs too quickly. Try again in a minute.', 'hold')
     const blocked = this.block()
-    if (blocked) return refuse(blocked, 'fenced')
+    if (blocked) return refuse(blocked, this.deps.frozen?.() != null ? 'frozen' : 'fenced')
     if (ctl.stopReason) return refuse('Stopped before it started.', 'stop')
 
     // Per-launch directories before `requested`: the receipt directory outside the home (each parent fsynced), and the
@@ -1138,6 +1138,7 @@ export class UnitBackend {
     // inside the critical section and in a read transaction of its own; a refusal is revoked there with its cause.
     const decide = (): ReleaseDecision => {
       if (ctl.stopReason) return { allowed: false, cause: 'stop' }
+      if (this.deps.frozen?.() != null) return { allowed: false, cause: 'frozen' }
       if (this.block() !== null) return { allowed: false, cause: 'fenced' }
       if (!request.authorised()) return { allowed: false, cause: 'stop' }
       return request.authorise?.({ expiry: request.deadline }) ?? { allowed: true }

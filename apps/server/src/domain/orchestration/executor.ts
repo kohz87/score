@@ -2504,6 +2504,12 @@ export class Orchestrator {
     return refused === undefined ? { allowed: true } : no(refused)
   }
 
+  /** A pump after a pause, so a held-back attempt is tried again without waiting for the next sweep. */
+  private wakeAfter(ms: number): void {
+    const timer = setTimeout(() => this.kick(), ms + 5)
+    timer.unref()
+  }
+
   /**
    * Closes a generation that provably launched nothing (design §6, M2). Refusal causes take 7.1's `send_refused` path
    * (counters, wait, lifetime limit); every other cause writes one `send_closed` record and moves the attempt and its
@@ -2544,6 +2550,7 @@ export class Orchestrator {
       sqlite.prepare('UPDATE orc_attempts SET run_id = NULL WHERE id = ?').run(attempt.id)
       recordRefusal(sqlite, o, attempt, generation, now)
       this.cooldown.set(o.id, this.nowMs() + this.retryMs)
+      this.wakeAfter(this.retryMs)
       addHistory(sqlite, o.id, 'send_refused', { attemptId: attempt.id, generation, cause }, now)
       touch(ctx, o.id)
       return
@@ -2564,6 +2571,7 @@ export class Orchestrator {
     applyClosure(sqlite, o, attempt, generation, cause, now)
     if (klass === 'hold') {
       this.cooldown.set(o.id, this.nowMs() + this.retryMs)
+      this.wakeAfter(this.retryMs)
       const fresh = requireOrch(sqlite, o.id)
       if (cause === 'budget') this.pauseFor(ctx, fresh, 'budget')
       if (cause === 'unknown_cost') this.pauseFor(ctx, fresh, 'unknown_spend')

@@ -1,5 +1,5 @@
 import { ORCH_ACKNOWLEDGEMENT_TEXT, type OrchestrationCreate } from '@score/contract'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -71,11 +71,12 @@ export interface WorkerHarness {
   /** Polls (real time) until `done()` holds. */
   until(done: () => boolean, timeoutMs?: number): Promise<void>
   rows<T = Record<string, unknown>>(sql: string, ...args: (string | number)[]): T[]
+  /** The fake CLI's own log: one entry per CLI process that really started. */
+  cliCalls(): { runtime: string; args: string[]; prompt: string }[]
   close(): Promise<void>
 }
 
 export async function workerHarness(options: WorkerHarnessOptions = {}): Promise<WorkerHarness> {
-  vi.setConfig({ testTimeout: 60_000 })
   const dir = mkdtempSync(join(tmpdir(), 'score-w7-'))
   const home = join(dir, 'home')
   const workspace = join(dir, 'ws')
@@ -147,6 +148,7 @@ export async function workerHarness(options: WorkerHarnessOptions = {}): Promise
       blocked: () => db.read((sqlite) => fenceBarrier(sqlite)),
       onError: (error) => errors.push(error),
       onEnded: () => self.orch?.kick(),
+      frozen: () => fence.frozenNotice(),
       ...options.unit,
     })
     await backend.start()
@@ -163,6 +165,7 @@ export async function workerHarness(options: WorkerHarnessOptions = {}): Promise
       reapRetryMs: 100,
       unit: backend,
       onError: (error) => errors.push(error),
+      frozen: () => fence.frozenNotice(),
       ...options.coding,
     })
     await coding.recover()
@@ -235,10 +238,22 @@ export async function workerHarness(options: WorkerHarnessOptions = {}): Promise
     async until(done: () => boolean, timeoutMs = 30_000) {
       await vi.waitFor(() => expect(done()).toBe(true), { timeout: timeoutMs, interval: 50 })
     },
+    cliCalls() {
+      const path = join(dir, 'fake-cli.log')
+      return existsSync(path)
+        ? readFileSync(path, 'utf8')
+            .trim()
+            .split('\n')
+            .filter(Boolean)
+            .map((line) => JSON.parse(line) as { runtime: string; args: string[]; prompt: string })
+        : []
+    },
     rows(sql: string, ...args: (string | number)[]) {
       return db.sqlite.prepare(sql).all(...args) as never
     },
     async close() {
+      // A unit a test kept populated would keep the runtime waiting for its proof for ever.
+      for (const unit of fake.units.values()) unit.forcePopulated = false
       await stop().catch(() => undefined)
       await fake.cleanup()
       await raw.stop()

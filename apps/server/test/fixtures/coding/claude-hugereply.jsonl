@@ -1,0 +1,4 @@
+{"_fixture":"hand-made, not recorded: a reply of 40000 characters"}
+{"type":"system","subtype":"init","session_id":"66666666-6666-4666-8666-666666666666","model":"claude-sonnet-fixture"}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "Writing the report."}]}}
+{"type": "result", "subtype": "success", "is_error": false, "result": "START-{{PAD:40000}}-END", "session_id": "66666666-6666-4666-8666-666666666666", "total_cost_usd": 0.002, "usage": {"input_tokens": 10, "output_tokens": 10}}
