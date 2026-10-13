@@ -83,6 +83,8 @@ interface BootOptions {
   ingestWrap?: (ingest: Ingest) => Pick<Ingest, 'submit'>
   noUnit?: boolean
   onOrphans?: (names: string[]) => void
+  /** Decision 71: why Score holds all agent work (the sentence), wired to both the backend and the runtime. */
+  frozen?: () => string | null
 }
 
 function makeBackend(options: BootOptions = {}): UnitBackend {
@@ -111,6 +113,7 @@ function makeBackend(options: BootOptions = {}): UnitBackend {
     graceMs: options.graceMs ?? 300,
     onError: (error) => errors.push(error),
     ...(options.blocked ? { blocked: options.blocked } : {}),
+    ...(options.frozen ? { frozen: options.frozen } : {}),
     ...options.unit,
   })
 }
@@ -132,6 +135,7 @@ async function boot(options: BootOptions = {}) {
     ...(options.reapRetryMs ? { reapRetryMs: options.reapRetryMs } : {}),
     ...(options.noUnit ? {} : { unit: backend }),
     ...(options.onOrphans ? { onOrphans: options.onOrphans } : {}),
+    ...(options.frozen ? { frozen: options.frozen } : {}),
     onError: (error) => errors.push(error),
     spawn: (spawnOptions) => {
       processLaunches++
@@ -1943,4 +1947,31 @@ test('re-review 2 #17: a stop cause that can’t be journaled stays visible: rep
   expect(errors.map(String).join('\n')).toContain('stop cause not journaled')
   // The database still names the cause, so the person isn't left guessing.
   expect(launches()[0]!.stop_cause).toBe('ingest-failure')
+})
+
+test('FV #1: a frozen home admits no coding run and recovery signals no supervisor, then carries on once unfrozen', async () => {
+  let holding: string | null =
+    'Score is holding all agent work: this folder is a copy. Run scripts/score installation reset-history to continue.'
+  await boot({ frozen: () => holding })
+  await addAgent()
+  const seed = seedLaunch('armed', { withUnit: true })
+  const before = launchRow(seed.launchId)
+  await coding.recover()
+  // Nothing was signalled, stopped, revoked or settled: the launch is exactly as it was found.
+  expect(fake.signals).toEqual([])
+  expect(fake.units.has(seed.unit)).toBe(true)
+  expect(launchRow(seed.launchId)).toMatchObject({ phase: before.phase, revoked: 0 })
+  // Admission is refused with the sentence, the card says the same, and the unit backend blocks by itself.
+  await expect(
+    coding.startRun({ agentId: 'coder', input: 'hi', turnId: 'turn-frozen' }),
+  ).rejects.toMatchObject({ message: holding })
+  expect(coding.backend().note).toBe(holding)
+  expect(coding.backend().checks.some((check) => !check.ok)).toBe(true)
+  expect(backend.block()).toBe(holding)
+  expect(await backend.stopSupervisor(seed.launchId)).toBe('unknown')
+  expect(fake.signals).toEqual([])
+  // The same state, unfrozen, does signal the recorded supervisor (the test can fail).
+  holding = null
+  await coding.recover()
+  expect(fake.signals.filter((s) => s.delivered)).toHaveLength(1)
 })

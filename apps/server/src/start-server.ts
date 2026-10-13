@@ -307,7 +307,10 @@ export async function startServer(
     })
     // Session rewinds (5.33): the live port asks, the bridge routes hand the command to the plugin.
     const rewindBroker = new RewindBroker()
+    // The fence store exists a few lines further down; the port only asks once it is started.
+    let holding: () => string | null = () => null
     port = createHermesPort(config, {
+      frozen: () => holding(),
       db: database,
       rewindBroker,
       imageReader: (id) => media.read(id),
@@ -324,6 +327,8 @@ export async function startServer(
         : new ExecutionJournal(resolveJournalDir(config), journalScope(realHome(config.home)))
     const fenceStore = new GlobalFenceStore(database, journal)
     fenceStore.setHardBlock(installationBlock)
+    fenceStore.setCopiedFrom(installation?.ok ? installation.copiedFrom : undefined)
+    holding = () => fenceStore.frozenNotice()
     const fenced = fenceStore.startupCheck()
     if (rootProvenance && rootProvenance.state !== 'known') {
       const why =
@@ -385,6 +390,7 @@ export async function startServer(
             ...(resolved === undefined || installationBlock !== null ? { unresolved: true } : {}),
             // Restore, journal and installation uncertainty stop every coding launch, whichever engine runs it.
             blocked: () => installationBlock ?? database.read((sqlite) => fenceBarrier(sqlite)),
+            frozen: () => fenceStore.frozenNotice(),
             ...(forcedFallback ? { forced: true } : {}),
             onError: (error) => app?.log.error({ err: error }, 'Coding unit backend failed'),
           })
@@ -408,15 +414,15 @@ export async function startServer(
       db: database,
       ingest,
       ...(unit ? { unit } : {}),
-      // A process row a confirmed copy inherited (or that an inherited launch covers) is never ours to signal (FZ3 #6).
-      // Always wired in live mode and conservative: an unresolved or blocked installation, a copy without its retirement
-      // record and an unreadable history all mean "not ours", so nothing is signalled (decision 70).
+      // Frozen homes (unresolved or copied installation, lost journal) admit and signal nothing (decision 71); beyond that
+      // a process row an inherited launch covers is never ours, and an unreadable history owns nothing.
+      frozen: () => fenceStore.frozenNotice(),
       ...(config.mode === 'live'
         ? {
             ownsProcessRow: (runId: string) =>
               resolved !== undefined &&
               installationBlock === null &&
-              codingJournal.ownsProcessRow(runId, resolved.copiedFrom !== undefined),
+              codingJournal.ownsProcessRow(runId),
           }
         : {}),
       onOrphans: (names) =>

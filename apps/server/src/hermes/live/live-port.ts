@@ -201,6 +201,7 @@ export class LivePort implements HermesPort {
         gateway: this.gateway,
         sink,
         ...(this.options.imageReader ? { imageReader: this.options.imageReader } : {}),
+        ...(this.options.frozen ? { frozen: this.options.frozen } : {}),
       })
       await this.refreshStatus()
       await this.intents.recoverIntents()

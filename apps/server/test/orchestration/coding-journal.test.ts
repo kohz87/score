@@ -550,7 +550,7 @@ test('FY2 #2: an inherited launch is evidence only: never owned, never acted on,
   expect(coding.isOwned('l1')).toBe(true)
 })
 
-test('FY2 #2: reconciling inherited launches retires their processes, holds and every pending coding intent', () => {
+test('FV #1: reconciling inherited launches marks them unsendable and nothing else (the frozen home does the holding)', () => {
   const entries = inheritedJournal().map(
     (e) =>
       ({ ...e, scope: SCOPE, inherited: true }) as unknown as ReturnType<typeof entriesOf>[number],
@@ -559,10 +559,8 @@ test('FY2 #2: reconciling inherited launches retires their processes, holds and 
     INSERT INTO coding_launches (launch_id, run_id, turn_id, generation, phase, journal_n, updated_at, held, unit)
       VALUES ('l9', 'r9', 't9', 1, 'armed', 2, 'x', 1, 'score-11111111-c-l9');
     INSERT INTO coding_processes (run_id, pid, pgid, created_at) VALUES ('r9', 4242, 4242, 'x');
-    INSERT INTO coding_process_members (run_id, pid, start_time, seen_at) VALUES ('r9', 4243, '1', 'x');
     INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at)
-      VALUES ('i9', 'start_coding_run', 't9', '{}', 'pending', 'x', 'x'),
-             ('i10', 'start_coding_run', 'unrelated', '{}', 'pending', 'x', 'x');
+      VALUES ('i10', 'start_coding_run', 'unrelated', '{}', 'pending', 'x', 'x');
   `)
   expect(
     verifyCoding(db.sqlite, entries)
@@ -570,16 +568,12 @@ test('FY2 #2: reconciling inherited launches retires their processes, holds and 
       .join(),
   ).toMatch(/inherited/)
   applyCodingEvidence(db.sqlite, entries, iso())
-  expect(rowOf('l9')).toMatchObject({ inherited: 1, held: 0, unsendable: 1 })
-  expect(db.sqlite.prepare('SELECT COUNT(*) AS n FROM coding_processes').get()).toEqual({ n: 0 })
-  expect(db.sqlite.prepare('SELECT COUNT(*) AS n FROM coding_process_members').get()).toEqual({
-    n: 0,
+  expect(rowOf('l9')).toMatchObject({ inherited: 1, unsendable: 1 })
+  // No automatic retirement any more: the process row and the pending intent are left for `reset-history`.
+  expect(db.sqlite.prepare('SELECT COUNT(*) AS n FROM coding_processes').get()).toEqual({ n: 1 })
+  expect(db.sqlite.prepare('SELECT state FROM command_intents WHERE id = ?').get('i10')).toEqual({
+    state: 'pending',
   })
-  // Even the pending intent of a turn that has no launch record is the source's, not ours.
-  expect(db.sqlite.prepare('SELECT id, state FROM command_intents ORDER BY id').all()).toEqual([
-    { id: 'i10', state: 'failed' },
-    { id: 'i9', state: 'failed' },
-  ])
   expect(verifyCoding(db.sqlite, entries)).toEqual([])
 })
 

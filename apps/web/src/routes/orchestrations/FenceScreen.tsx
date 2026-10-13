@@ -7,6 +7,16 @@ export function FenceScreen({ fence }: { fence: GlobalFence }) {
   const lift = useLiftFence()
   const [reviewed, setReviewed] = useState(false)
   const [note, setNote] = useState('')
+  // Score is holding all agent work (a copied home, a lost journal): only the command on the host leaves this state, so
+  // there is no button to lift it (decision 71).
+  const holding = fence.items.find((item) => item.ref === 'execution-frozen')
+  if (holding)
+    return (
+      <section className="orch-decision orch-fence" aria-label="Score is holding agent work">
+        <h3>Agent work is on hold</h3>
+        <p role="status">{holding.detail}</p>
+      </section>
+    )
   return (
     <section className="orch-decision orch-fence" aria-label="Review before starting work">
       <h3>Starting work is blocked until you review this list</h3>

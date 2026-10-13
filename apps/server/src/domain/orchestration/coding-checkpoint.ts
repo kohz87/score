@@ -154,18 +154,11 @@ const CODING_INTENT_KIND = 'start_coding_run'
  * database lost it. An intent that was accepted with its run is left alone: that turn answers with its existing run.
  * Returns the rows changed.
  */
-function retireIntent(
-  sqlite: DatabaseSync,
-  state: CodingState,
-  now: string,
-  inherited = false,
-): number {
+function retireIntent(sqlite: DatabaseSync, state: CodingState, now: string): number {
   const row = sqlite
     .prepare('SELECT id, state, result FROM command_intents WHERE idempotency_key = ?')
     .get(state.turnId) as { id: string; state: string; result: string | null } | undefined
-  const note = inherited
-    ? 'This turn belongs to the installation this one was copied from; it is never sent here.'
-    : 'The journal witnessed this turn executing; it is never sent again.'
+  const note = 'The journal witnessed this turn executing; it is never sent again.'
   if (!row)
     return Number(
       sqlite
@@ -186,158 +179,15 @@ function retireIntent(
 }
 
 /**
- * A launch inherited from another installation is evidence, never ours to act on: whatever the copied database holds of
- * its processes (the process row, member identities, the hold on the agent) is retired, so nothing here ever signals the
- * source's processes, and its turn's start intent is retired whether or not it had been released (the source may still
- * release it later, and the copy must not also send it). Idempotent; returns the rows changed.
+ * Whether this installation owns the process row of `runId` and may signal its group: false when the journal says the
+ * run's launch was inherited from another installation. A row with no evidence either way is this installation's own
+ * (the process-group engine keeps no journal). A copied home is frozen as a whole (`executionFrozen`), so this is only
+ * the second line of defence.
  */
-function retireInherited(sqlite: DatabaseSync, state: CodingState, now: string): number {
-  let changed = retireIntent(sqlite, state, now, true)
-  for (const table of ['coding_processes', 'coding_process_members', 'coding_pending_terminals'])
-    changed += Number(
-      sqlite.prepare(`DELETE FROM ${table} WHERE run_id = ?`).run(state.runId).changes,
-    )
-  changed += Number(
-    sqlite
-      .prepare('UPDATE coding_launches SET held = 0 WHERE launch_id = ? AND held != 0')
-      .run(state.launchId).changes,
-  )
-  return changed
-}
-
-/** What the copy's `inherited-retired` records name (FZ3, decision 69), as sets. */
-export interface InheritedRetirements {
-  intents: Set<string>
-  processes: Set<string>
-  attempts: Set<string>
-}
-
-export function inheritedRetirements(entries: readonly JournalEntry[]): InheritedRetirements {
-  const result: InheritedRetirements = {
-    intents: new Set(),
-    processes: new Set(),
-    attempts: new Set(),
-  }
-  for (const entry of entries) {
-    if (entry.kind !== 'inherited-retired') continue
-    for (const id of entry.intents) result.intents.add(id)
-    for (const id of entry.processes) result.processes.add(id)
-    for (const id of entry.attempts) result.attempts.add(id)
-  }
-  return result
-}
-
-/**
- * Whether this installation owns the process row of `runId` and may signal its group: false when a confirmed copy
- * retired the row (it was inherited from the source installation) or when the journal says the run's launch was
- * inherited. A row with no evidence either way is this installation's own (the process-group engine keeps no journal).
- */
-export function ownsProcessRowIn(
-  entries: readonly JournalEntry[],
-  runId: string,
-  /** A confirmed copy must hold its `inherited-retired` record: without it the rows can't be told apart. */
-  copied = false,
-): boolean {
-  if (copied && !entries.some((entry) => entry.kind === 'inherited-retired')) return false
-  if (inheritedRetirements(entries).processes.has(runId)) return false
+export function ownsProcessRowIn(entries: readonly JournalEntry[], runId: string): boolean {
   for (const launch of foldCodingLaunches(entries).values())
     if (launch.state.runId === runId && launch.state.inherited) return false
   return true
-}
-
-/**
- * Re-applies every `inherited-retired` record to the database: the copied intents become `failed` (created that way
- * when a restore lost the row), the inherited process rows and their member/terminal rows are deleted, and the
- * orchestration attempts the source had not sent become `unknown` (never sent again). Idempotent; run on every start,
- * every restore and every fence lift, so restoring a copy's own backup can never re-open them. Returns rows changed.
- */
-export function applyInheritedRetirements(
-  sqlite: DatabaseSync,
-  entries: readonly JournalEntry[],
-  now: string,
-): number {
-  const retired = inheritedRetirements(entries)
-  let changed = 0
-  const note =
-    'This turn belongs to the installation this one was copied from; it is never sent here.'
-  for (const turnId of retired.intents) {
-    const row = sqlite
-      .prepare('SELECT id, state, result FROM command_intents WHERE idempotency_key = ?')
-      .get(turnId) as { id: string; state: string; result: string | null } | undefined
-    if (!row) {
-      changed += Number(
-        sqlite
-          .prepare(
-            `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, last_error, created_at, updated_at)
-             VALUES (?, ?, ?, '{}', 'failed', ?, ?, ?)`,
-          )
-          .run(`retired-inherited-${turnId}`, CODING_INTENT_KIND, turnId, note, now, now).changes,
-      )
-    } else if (!(row.state === 'failed' || (row.state === 'accepted' && row.result)))
-      changed += Number(
-        sqlite
-          .prepare(
-            `UPDATE command_intents SET state = 'failed', last_error = ?, updated_at = ? WHERE id = ?`,
-          )
-          .run(note, now, row.id).changes,
-      )
-  }
-  for (const runId of retired.processes)
-    for (const table of ['coding_processes', 'coding_process_members', 'coding_pending_terminals'])
-      changed += Number(sqlite.prepare(`DELETE FROM ${table} WHERE run_id = ?`).run(runId).changes)
-  // A retired turn is also the turn of an orchestration attempt (a lost journal's launch folders name turns only).
-  const attemptIds = new Set(retired.attempts)
-  for (const turnId of retired.intents)
-    for (const row of sqlite
-      .prepare('SELECT id FROM orc_attempts WHERE turn_id = ?')
-      .all(turnId) as { id: string }[])
-      attemptIds.add(row.id)
-  for (const attemptId of attemptIds) {
-    const attempt = sqlite
-      .prepare('SELECT orchestration_id, step_id, state FROM orc_attempts WHERE id = ?')
-      .get(attemptId) as
-      { orchestration_id: string; step_id: string | null; state: string } | undefined
-    if (!attempt) continue
-    // Whatever the source had in flight is its own: an unsent attempt is never sent, a running one's run handle and owed
-    // Stop never act on the source's run. Terminal rows keep their evidence.
-    if (!['created', 'send_started', 'running', 'unknown', 'abandoned'].includes(attempt.state))
-      continue
-    const result = sqlite
-      .prepare(
-        `UPDATE orc_attempts SET state = CASE WHEN state IN ('created', 'send_started', 'running') THEN 'unknown' ELSE state END,
-           unknown_reason = 'inherited_retired', sent_at = COALESCE(sent_at, ?),
-           stop_acknowledged_at = CASE WHEN stop_requested_at IS NOT NULL THEN COALESCE(stop_acknowledged_at, ?) ELSE stop_acknowledged_at END,
-           updated_at = ?
-         WHERE id = ? AND (state IN ('created', 'send_started', 'running') OR unknown_reason IS NOT 'inherited_retired'
-           OR (stop_requested_at IS NOT NULL AND stop_acknowledged_at IS NULL))`,
-      )
-      .run(now, now, now, attemptId)
-    if (Number(result.changes) === 0) continue
-    changed++
-    if (attempt.step_id)
-      sqlite
-        .prepare(
-          "UPDATE orc_steps SET status = 'unknown', disposition = 'inherited_retired', updated_at = ? WHERE orchestration_id = ? AND id = ? AND status = 'admitted'",
-        )
-        .run(now, attempt.orchestration_id, attempt.step_id)
-  }
-  return changed
-}
-
-/** Every start intent that had not finished when the database was copied belongs to the source, not to the copy. */
-function retireCopiedIntents(sqlite: DatabaseSync, now: string): number {
-  return Number(
-    sqlite
-      .prepare(
-        `UPDATE command_intents SET state = 'failed', last_error = ?, updated_at = ?
-         WHERE kind = ? AND state IN ('pending', 'sent', 'unknown')`,
-      )
-      .run(
-        'This database was copied from another installation; its pending coding turns are never sent here.',
-        now,
-        CODING_INTENT_KIND,
-      ).changes,
-  )
 }
 
 /** Whether the journal's evidence has made this turn permanently unsendable (admission and release check this). */
@@ -423,6 +273,7 @@ export function verifyCoding(
         kind: 'journal',
         ref: `coding:${launchId}`,
         journalN: launch.n,
+        lost: true,
         detail: `The database holds coding launch ${launchId} at record ${row.journal_n}, past the journal's ${launch.n}: the journal lost records`,
       })
     else {
@@ -444,6 +295,7 @@ export function verifyCoding(
         kind: 'journal',
         ref: `coding:${row.launch_id}`,
         journalN: null,
+        lost: true,
         detail: `The database holds coding launch ${row.launch_id} (record ${row.journal_n}), but the journal has no record of it: the journal lost a witness`,
       })
   if (dbSeq < journalMax) {
@@ -460,6 +312,7 @@ export function verifyCoding(
       kind: 'journal',
       ref: 'coding-checkpoint',
       journalN: null,
+      lost: true,
       detail: `The database's coding checkpoint (${dbSeq}) is ahead of the journal (${journalMax}): the journal lost coding records`,
     })
   return mismatches
@@ -475,8 +328,6 @@ export function applyCodingEvidence(
   sqlite: DatabaseSync,
   entries: readonly JournalEntry[],
   now: string,
-  /** The database was copied from another installation: every pending coding intent it holds is the source's. */
-  copied: boolean = false,
 ): number {
   let changed = 0
   const folded = foldCodingLaunches(entries)
@@ -505,10 +356,7 @@ export function applyCodingEvidence(
       // Only an execution retires the turn; a launch revoked before release never ran, its turn may be retried.
       if (launch.state.mayHaveExecuted) changed += retireIntent(sqlite, launch.state, now)
     }
-    if (launch.state.inherited) changed += retireInherited(sqlite, launch.state, now)
   }
-  if (copied || [...folded.values()].some((launch) => launch.state.inherited))
-    changed += retireCopiedIntents(sqlite, now)
   const journalMax = maxCodingN(entries)
   if (readCheckpoint(sqlite) !== journalMax) {
     sqlite

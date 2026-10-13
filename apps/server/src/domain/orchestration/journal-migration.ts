@@ -192,6 +192,9 @@ function destinationProblem(
     return `the legacy journal says this home was migrated to ${nsDir}, but that journal is missing; execution history can't be trusted`
   const read = target.read()
   if (!read.ok) return `the namespace journal at ${nsDir} is unreadable: ${read.reason}`
+  // The person started a new history (`reset-history`): the legacy witnesses belong to the archived one.
+  if (read.entries.some((e) => e.scope === installationId && e.kind === 'history-reset'))
+    return undefined
   const have = new Map(
     read.entries.filter((e) => e.scope === installationId).map((e) => [e.n, e] as const),
   )

@@ -71,6 +71,7 @@ async function boot(
     stopObserveMs?: number
     onStop?: (cause: string) => void
     ownsProcessRow?: (runId: string) => boolean
+    frozen?: () => string | null
     ingestWrap?: (ingest: Ingest) => Pick<Ingest, 'submit'>
   } = {},
 ) {
@@ -90,6 +91,7 @@ async function boot(
     ...(options.stopObserveMs ? { stopObserveMs: options.stopObserveMs } : {}),
     ...(options.onStop ? { onStop: options.onStop } : {}),
     ...(options.ownsProcessRow ? { ownsProcessRow: options.ownsProcessRow } : {}),
+    ...(options.frozen ? { frozen: options.frozen } : {}),
     // Counts launches and keeps the pids, so a test can prove nothing started or that a child is gone.
     spawn: (spawnOptions) => {
       launches++
@@ -2002,4 +2004,35 @@ test('#6: a process row the installation does not own is never signalled, in rec
   // The reaper path (a Stop for that run) doesn't signal it either.
   await coding.stopRun({ agentId: 'coder', runId: 'cr_inherited' })
   expect(asked).toEqual(['4000012'])
+})
+
+test('FV #1: a frozen home starts no CLI and signals no recorded group, in recovery or by the reaper', async () => {
+  let holding: string | null = 'Score is holding all agent work: this folder is a copy.'
+  const asked: string[] = []
+  await rebootWith({
+    reapRetryMs: 20,
+    frozen: () => holding,
+    killGroup: async (record) => {
+      asked.push(`${record.pid}`)
+      return 'gone'
+    },
+  })
+  await addAgent()
+  seedCrashedRun('cr_inherited', { pid: 4_000_021, start: '5' })
+  await coding.recover()
+  await new Promise((r) => setTimeout(r, 150))
+  expect(asked).toEqual([])
+  expect(processRows()).toEqual([{ run_id: 'cr_inherited', unresolved: 0 }])
+  await coding.stopRun({ agentId: 'coder', runId: 'cr_inherited' })
+  expect(asked).toEqual([])
+  const before = launches
+  await expect(
+    coding.startRun({ agentId: 'coder', input: 'hi', turnId: 'turn-frozen' }),
+  ).rejects.toMatchObject({ message: holding })
+  expect(launches).toBe(before)
+  expect(coding.backend().note).toBe(holding)
+  // Unfrozen, the same row is signalled.
+  holding = null
+  await coding.recover()
+  expect(asked).toEqual(['4000021'])
 })

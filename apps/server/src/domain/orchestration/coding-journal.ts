@@ -54,13 +54,12 @@ export class CodingJournal {
   }
 
   /**
-   * FZ3 #6: whether this installation owns the coding process row of `runId` and may signal its group. False when a
-   * confirmed copy retired the row (the source's process) or its launch was inherited, and when the journal can't be
-   * read (no evidence, no signal). The process-group engine keeps no journal of its own, so a row nobody retired is ours.
+   * Whether this installation owns the coding process row of `runId` and may signal its group. False when its launch
+   * was inherited and when the journal can't be read (no evidence, no signal). A copied home is frozen as a whole.
    */
-  ownsProcessRow(runId: string, copied = false): boolean {
+  ownsProcessRow(runId: string): boolean {
     const read = this.journal.readOwn()
-    return read.ok && ownsProcessRowIn(read.entries, runId, copied)
+    return read.ok && ownsProcessRowIn(read.entries, runId)
   }
 
   /** `requested`: before `systemd-run`. A revoked launch can never be requested again. */

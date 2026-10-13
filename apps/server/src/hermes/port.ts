@@ -399,6 +399,11 @@ export interface HermesPortDeps {
   imageReader?: ImageReader
   /** Live only: how rewinds reach the Score bridge inside an agent's gateway (the bridge routes share it). */
   rewindBroker?: RewindBroker
+  /**
+   * Why Score holds all agent work, or null (decision 71). While non-null, recovery of unfinished start intents sends
+   * nothing and delivers no Stop: whose runs those handles name can't be told. Evaluated at every recovery.
+   */
+  frozen?: () => string | null
 }
 
 export type ImageReader = (mediaId: string) => { contentType: string; bytes: Uint8Array } | null

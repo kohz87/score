@@ -17,7 +17,7 @@ port="${SCORE_PORT:-8740}"
 host="${SCORE_HOST:-127.0.0.1}"
 
 usage() {
-  echo "Usage: score start|stop|status|logs [-f]|pair|password|restore <backup>|installation status|confirm-move|confirm-copy|tls [--new-ca]|tailscale" >&2
+  echo "Usage: score start|stop|status|logs [-f]|pair|password|restore <backup>|installation status|confirm-move|confirm-copy|reset-history|tls [--new-ca]|tailscale" >&2
   exit 2
 }
 
@@ -310,7 +310,8 @@ case "${1:-}" in
   password) SCORE_HOME="$home" exec node "$root/scripts/set-password.mjs" ;;
   # The only supported way to restore the home (7.5): sets the global admission fence for the next start.
   restore) shift; SCORE_HOME="$home" exec node "$root/scripts/restore.mjs" "$@" ;;
-  # 7.7a: tell Score a home at a new path is a moved folder (confirm-move) or a copy (confirm-copy).
+  # 7.7a: tell Score a home at a new path is a moved folder (confirm-move) or a copy (confirm-copy); reset-history starts a
+  # new run history when Score is holding all agent work (a copied home, a lost journal).
   installation) shift; SCORE_HOME="$home" exec node "$root/scripts/installation.mjs" "$@" ;;
   *) usage ;;
 esac

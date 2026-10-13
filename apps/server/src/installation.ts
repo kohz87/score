@@ -10,7 +10,6 @@ import {
   renameSync,
   writeFileSync,
 } from 'node:fs'
-import { DatabaseSync } from 'node:sqlite'
 import { dirname, join } from 'node:path'
 import { LOCK_RANK, mkdirDurable, OsLock } from './locks/os-lock.ts'
 import { canonicalPath } from './journal-location.ts'
@@ -28,8 +27,8 @@ export const MANIFEST_FILE = 'manifest.json'
 export const HOME_INSTALLATION_FILE = 'installation.json'
 export const LAUNCHES_DIR = 'launches'
 const RESTORE_MARKER = 'restore-marker.json'
-const HISTORY_MARKER = 'history.json'
-const JOURNAL = 'journal.ndjson'
+export const HISTORY_MARKER = 'history.json'
+export const JOURNAL = 'journal.ndjson'
 const ID_PATTERN = /^[0-9a-f]{16}$/
 
 export function isInstallationId(value: unknown): value is string {
@@ -119,7 +118,7 @@ export function readRegistry(journalDir: string): Registry {
 }
 
 /** The whole text or an error, then rename, then the directory: a reader sees the old file or the new one. */
-function writeDurable(file: string, text: string): void {
+export function writeDurable(file: string, text: string): void {
   const temp = `${file}.tmp`
   const fd = openSync(temp, 'w', 0o600)
   try {
@@ -414,7 +413,7 @@ export function resolveInstallation(options: ResolveOptions): InstallationResult
   })
 }
 
-const lineChecksum = (payload: string): string =>
+export const lineChecksum = (payload: string): string =>
   createHash('sha256').update(payload).digest('hex').slice(0, 16)
 
 /**
@@ -483,59 +482,6 @@ function inheritedJournal(
       problem: `${own} is missing although the legacy journal says this installation's history moved there`,
     }
   return { lines: lines.map((line) => `${line}\n`).join('') }
-}
-
-/** What the copied database holds that could still lead to an execution (FZ3, decision 69). */
-interface InheritedIdentities {
-  intents: string[]
-  processes: string[]
-  attempts: string[]
-}
-
-/**
- * Read from the copy's own database (the copy is ours; opened read-only), before the copy is published: every
- * intent that had not finished (any kind: each can execute), every coding process row (also the ones no launch record
- * explains), and every non-terminal orchestration attempt, whatever the inherited journal witnessed (a journaled refusal
- * stays sendable, a running attempt's run handle and owed Stop would act on the source's run). A missing table is "none"; a database
- * that can't be read is a refusal (the copy would inherit unknowns it can't retire).
- */
-function inheritedIdentities(
-  home: string,
-): { ok: true; value: InheritedIdentities } | { ok: false; problem: string } {
-  const file = join(home, 'score.db')
-  const value: InheritedIdentities = { intents: [], processes: [], attempts: [] }
-  if (!existsSync(file)) return { ok: true, value }
-  let db: DatabaseSync | undefined
-  try {
-    db = new DatabaseSync(file, { readOnly: true })
-    const has = (table: string): boolean =>
-      db!.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) !==
-      undefined
-    const column = (sql: string): string[] =>
-      (db!.prepare(sql).all() as Record<string, unknown>[]).flatMap((row) => {
-        const v = Object.values(row)[0]
-        return typeof v === 'string' && v ? [v] : []
-      })
-    if (has('command_intents'))
-      value.intents = column(
-        `SELECT idempotency_key FROM command_intents
-           WHERE state IN ('pending', 'sent', 'unknown')
-              OR (kind = 'start_coding_run' AND state = 'accepted' AND result IS NULL)`,
-      )
-    if (has('coding_processes')) value.processes = column('SELECT run_id FROM coding_processes')
-    if (has('orc_attempts'))
-      value.attempts = column(
-        `SELECT id FROM orc_attempts WHERE state IN ('created', 'send_started', 'running', 'unknown', 'abandoned')`,
-      )
-    return { ok: true, value }
-  } catch (error) {
-    return {
-      ok: false,
-      problem: `the copy's database (${file}) can't be read (${error instanceof Error ? error.message : String(error)})`,
-    }
-  } finally {
-    db?.close()
-  }
 }
 
 /**
@@ -684,34 +630,9 @@ export function confirmCopy(options: ResolveOptions): ConfirmResult {
         ok: false,
         message: `The source installation ${copy.id}'s execution journal can't be trusted: ${inherited.problem}. Resolve that first; nothing was changed.`,
       }
-    // Everything the copy inherited that could still lead to an execution is recorded in its journal BEFORE the copy
-    // is published, as one permanent record: reconciliation re-applies it after every start and every restore, so a
-    // restored backup of the copy can never send, signal or resume any of it (decision 69).
-    const identities = inheritedIdentities(home)
-    if (!identities.ok)
-      return {
-        ok: false,
-        message: `Can't record what ${home} inherited: ${identities.problem}. Nothing was changed.`,
-      }
-    const last = inherited.lines
-      .split('\n')
-      .filter(Boolean)
-      .map((line) => (JSON.parse(line) as { n: number }).n)
-      .at(-1)
-    const retired = {
-      n: (last ?? 0) + 1,
-      at: now,
-      scope: id,
-      kind: 'inherited-retired',
-      ...identities.value,
-    }
-    const journalText =
-      inherited.lines +
-      JSON.stringify({ ...retired, c: lineChecksum(JSON.stringify(retired)) }) +
-      '\n'
     const nsDir = namespaceDir(journalDir, id)
     mkdirDurable(join(nsDir, LAUNCHES_DIR))
-    writeDurable(join(nsDir, JOURNAL), journalText)
+    writeDurable(join(nsDir, JOURNAL), inherited.lines)
     writeDurable(join(nsDir, HISTORY_MARKER), JSON.stringify({ version: 1, at: now }))
     writeDurable(
       join(nsDir, RESTORE_MARKER),
@@ -725,7 +646,7 @@ export function confirmCopy(options: ResolveOptions): ConfirmResult {
       ok: true,
       id,
       changed: true,
-      message: `${home} is now its own installation (${id}), copied from ${copy.id}. The next start fences admission until you review the inherited history.`,
+      message: `${home} is now its own installation (${id}), copied from ${copy.id}. Score holds all agent work in it until you run \`scripts/score installation reset-history\`.`,
     }
   })
 }

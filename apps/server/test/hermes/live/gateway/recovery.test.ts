@@ -417,3 +417,37 @@ test('a stop for a cancelled reply that failed is retried by recovery and by an 
   await env.intents.startRunIntent(request, 'cancel-turn')
   expect(stops()).toBe(3)
 })
+
+test('FV #1: a frozen home delivers no owed Stop and resends no start from recovery; unfrozen, it does', async () => {
+  cancelTurn('cancel-frozen')
+  env.fake.stopFails = 1
+  const request = { profile: 'builder', input: 'fixture' }
+  await env.intents.startRunIntent(request, 'cancel-frozen')
+  expect(stops()).toBe(1)
+  // An accepted start_run intent whose Stop is still owed (the probe of re-review 4, finding 3).
+  expect(env.db.sqlite.prepare('SELECT state, stop_state FROM command_intents').get()).toEqual({
+    state: 'accepted',
+    stop_state: 'pending',
+  })
+  // And a start that never got an answer.
+  env.db.sqlite
+    .prepare(
+      `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at)
+       SELECT 'ci-open', kind, 'open-turn', payload, 'sent', created_at, updated_at FROM command_intents LIMIT 1`,
+    )
+    .run()
+  const calls = env.fake.calls.length
+  let holding: string | null = 'Score is holding all agent work: this folder is a copy.'
+  const frozen = new RunIntents({
+    db: env.db,
+    gateway: env.gateway,
+    sink: env.ingest,
+    frozen: () => holding,
+  })
+  await frozen.recoverIntents()
+  expect(stops()).toBe(1)
+  expect(env.fake.calls.length).toBe(calls)
+  holding = null
+  await frozen.recoverIntents()
+  expect(stops()).toBe(2)
+})

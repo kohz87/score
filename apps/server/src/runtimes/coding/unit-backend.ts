@@ -107,6 +107,11 @@ export interface UnitBackendDeps {
   /** Why coding admission is paused (hard block, journal fence, orphan units), or null. Evaluated at every admission. */
   blocked?: () => string | null
   /**
+   * Why Score holds all agent work (decision 71: an unresolved or copied home, a lost or truncated journal), as the
+   * sentence the person reads, or null. While non-null nothing is admitted, recovered or signalled.
+   */
+  frozen?: () => string | null
+  /**
    * Why runs can't be supervised on this host or in this setup (forced fallback, no runtime directory, unresolved
    * installation). The backend then stays on the fallback, but it still reconciles the unit inventory and the journal
    * and still enforces the admission barriers (`blocked`, orphans, held launches): the barriers don't depend on the
@@ -406,6 +411,8 @@ export class UnitBackend {
   }
   /** Why admission is paused, or null. */
   block(): string | null {
+    const frozen = this.deps.frozen?.() ?? null
+    if (frozen !== null) return frozen
     this.retryMarker()
     if (this.paused !== null) return this.paused
     if (this.orphans.length > 0)
@@ -1245,6 +1252,8 @@ export class UnitBackend {
    * launch that isn't this installation's is never touched.
    */
   async stopSupervisor(launchId: string): Promise<'signalled' | 'gone' | 'unknown'> {
+    // Frozen: whose supervisor this is can't be told; nothing is signalled (decision 71).
+    if (this.deps.frozen?.() != null) return 'unknown'
     const rec = this.recorded(launchId)
     if (!this.owns(launchId, rec.unit) || rec.disagreement) return 'unknown'
     if (!rec.supervisor || !rec.unit) return 'unknown'
@@ -1720,7 +1729,8 @@ export class UnitBackend {
    * installation's prefix that no journal launch owns are orphans: they fence admission and are never adopted.
    */
   async recover(): Promise<RecoveryReport> {
-    if (this.deps.unresolved) return { launches: [], orphans: [], unreadable: null }
+    if (this.deps.unresolved || this.deps.frozen?.() != null)
+      return { launches: [], orphans: [], unreadable: null }
     const read = this.deps.journal.journal.readOwn()
     if (!read.ok)
       return {

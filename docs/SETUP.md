@@ -286,6 +286,17 @@ admission is blocked and the fence cannot be lifted. Say which it is, with Score
 `scripts/score installation status` shows what the home and the registry say. If the registry is corrupt and no manifest
 survives, Score refuses admission until you restore `installations.json` from a backup.
 
+**When Score holds all agent work.** A confirmed copy, and a home whose execution journal is missing or holds less than the
+database and the launch folders witnessed (deleted, replaced, truncated), freeze: no orchestration step is sent, no Stop is
+delivered, no coding run is admitted or recovered, and no process is signalled. The fence screen and each coding agent's card
+say "Score is holding all agent work: <why>. Run scripts/score installation reset-history to continue." Nothing is
+reconciled or retired automatically in these states: Score can't tell what ran, and doing nothing can't repeat or misdirect
+work. With Score stopped, `scripts/score installation reset-history` (it asks you to type `reset`; `--yes` skips the question
+for scripts) retires every unfinished orchestration step, owed Stop, start request, coding process record and launch in the
+database, moves the old journal and launch folders into `history-before-reset-<time>/` beside a fresh journal whose first
+record is a permanent `history-reset`, and lifts the freeze. Nothing it retired is ever sent, stopped or signalled again, so
+check Hermes and your coding services yourself for anything the old history started that may still be running.
+
 ### Coding runs as supervised services (PLAN 7.7a)
 
 In live mode, every coding run (Claude Code, Codex, Antigravity) starts as a transient **systemd user service**

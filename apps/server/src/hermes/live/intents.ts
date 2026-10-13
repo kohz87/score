@@ -32,6 +32,8 @@ interface IntentDeps {
   gateway: GatewayClient
   sink: ObservationSink
   imageReader?: ImageReader
+  /** Why Score holds all agent work (decision 71), or null: recovery then sends and stops nothing. */
+  frozen?: () => string | null
 }
 
 export class RunIntents {
@@ -273,6 +275,9 @@ export async function startRunIntent(
 }
 
 export async function recoverIntents(deps: IntentDeps): Promise<void> {
+  // Pending Stops and unfinished starts may belong to another installation's runs (a copy, a lost journal): untouched
+  // until the person resets the history.
+  if (deps.frozen?.() != null) return
   const rows = z
     .array(IntentRowSchema)
     .parse(

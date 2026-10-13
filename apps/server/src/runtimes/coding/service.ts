@@ -85,6 +85,11 @@ export interface CodingRuntimeDeps {
    * `coding_processes` row, in recovery and in the reaper; false = never signalled, never treated as ours. Default: true.
    */
   ownsProcessRow?: (runId: string) => boolean
+  /**
+   * Why Score holds all agent work (decision 71: an unresolved or copied home, a lost or truncated journal), as the
+   * sentence the person reads, or null. While non-null nothing is admitted and recovery signals nothing.
+   */
+  frozen?: () => string | null
   /** Units carrying this installation's prefix that no journal launch owns: the caller fences and raises a review item. */
   onOrphans?: (units: string[]) => void
 }
@@ -186,14 +191,20 @@ export class CodingRuntime {
 
   /** How coding runs are launched right now, with the capability check behind it (docs/API-CONTRACT.md §8). */
   backend(): BackendStatus {
-    return (
-      this.deps.unit?.status ?? {
-        kind: 'process-group',
-        checks: [],
-        checkedAt: new Date().toISOString(),
-        note: 'Runs without a supervisor: tools a coding CLI started may keep running until Score restarts and stops them.',
-      }
-    )
+    const status = this.deps.unit?.status ?? {
+      kind: 'process-group' as const,
+      checks: [],
+      checkedAt: new Date().toISOString(),
+      note: 'Runs without a supervisor: tools a coding CLI started may keep running until Score restarts and stops them.',
+    }
+    const frozen = this.deps.frozen?.() ?? null
+    if (frozen === null) return status
+    // The card says why nothing runs and what to do (docs/WRITING.md); the checks stay as they were.
+    return {
+      ...status,
+      note: frozen,
+      checks: [...status.checks, { name: 'history', ok: false, detail: frozen }],
+    }
   }
   /** "Check again": reruns the capability check; new runs follow its answer. */
   async checkBackend(): Promise<BackendStatus> {
@@ -431,6 +442,9 @@ export class CodingRuntime {
         notice: UNRESOLVED_NOTE,
         agentId: agent.id,
       })
+    // A frozen home admits nothing, whichever engine would launch (decision 71).
+    const frozen = this.deps.frozen?.() ?? null
+    if (frozen) throw new HttpError(422, 'coding_paused', frozen, { notice: frozen })
     // Supervised units pause on a fence (an unreadable journal, orphan units): the person reviews it first (design §7).
     const paused = this.deps.unit?.block() ?? null
     if (paused) throw new HttpError(422, 'coding_paused', paused, { notice: paused })
@@ -935,7 +949,7 @@ export class CodingRuntime {
       // The last admission boundary for the process-group engine: a restore, journal or coding fence raised since
       // admission keeps the CLI from starting (re-review 2 #2; decision 69 removed the fallback journal that held this).
       if (!this.deps.unit?.usable()) {
-        const barrier = this.deps.unit?.block() ?? null
+        const barrier = this.deps.frozen?.() ?? this.deps.unit?.block() ?? null
         if (barrier)
           return void (await this.finish(translation, {
             status: 'failed',
@@ -1305,6 +1319,8 @@ export class CodingRuntime {
   /** A throwing check counts as not ours: nothing is signalled on doubt. */
   private ownsRow(runId: string): boolean {
     try {
+      // Frozen: whose process this is can't be told, so nothing is signalled (decision 71).
+      if (this.deps.frozen?.() != null) return false
       return this.deps.ownsProcessRow?.(runId) ?? true
     } catch (error) {
       this.deps.onError?.(error)
@@ -1420,7 +1436,7 @@ export class CodingRuntime {
     // Supervised units first (journal <-> database <-> units <-> receipts, design §6b): each unsettled launch is
     // stopped and proven ended; one that may have executed and can't be proven is held, like an unresolved group.
     const unit = this.deps.unit
-    const recovered = unit ? await unit.recover() : null
+    const recovered = unit ? await unit.recover() : null // reports nothing (and signals nothing) while frozen
     if (recovered) {
       if (recovered.unreadable) this.deps.onError?.(new Error(recovered.unreadable))
       if (recovered.orphans.length > 0) this.deps.onOrphans?.(recovered.orphans)

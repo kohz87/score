@@ -1595,7 +1595,8 @@ export class Orchestrator {
    */
   private admit(ctx: Ctx): string[] {
     const { sqlite } = ctx
-    if (isFenced(sqlite)) return []
+    // A frozen home (unresolved or copied installation, lost journal) dispatches nothing (decision 71).
+    if (isFenced(sqlite) || this.options.fence.executionFrozenIn(sqlite) !== null) return []
     const counts = activeStepCounts(sqlite)
     for (const o of listOrchs(sqlite).reverse()) {
       // The manual hold is checked on its own, whatever the status says (fix-i 3).
@@ -1940,6 +1941,7 @@ export class Orchestrator {
       o.status === 'paused' ||
       o.manual_paused_at !== null ||
       isFenced(sqlite) ||
+      this.options.fence.executionFrozenIn(sqlite) !== null ||
       teamPausedAt(sqlite) !== null
     )
       return undefined
@@ -2387,13 +2389,15 @@ export class Orchestrator {
 
   /** Delivers owed Stops until Hermes acknowledges. Abandoned attempts keep theirs. */
   private async serviceStops(): Promise<boolean> {
+    // Frozen: whose runs these handles name can't be told, so no Stop is delivered (decision 71).
+    if (this.options.fence.executionFrozen() !== null) return false
     const owed = this.db.read((sqlite) =>
       z
         .array(AttemptRowSchema)
         .parse(
           sqlite
             .prepare(
-              `SELECT * FROM orc_attempts WHERE stop_requested_at IS NOT NULL AND stop_acknowledged_at IS NULL AND run_id IS NOT NULL AND state IN ('send_started', 'running', 'unknown', 'abandoned') AND unknown_reason IS NOT 'inherited_retired'`,
+              `SELECT * FROM orc_attempts WHERE stop_requested_at IS NOT NULL AND stop_acknowledged_at IS NULL AND run_id IS NOT NULL AND state IN ('send_started', 'running', 'unknown', 'abandoned') AND unknown_reason IS NOT 'history_reset'`,
             )
             .all(),
         ),

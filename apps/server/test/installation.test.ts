@@ -29,8 +29,6 @@ import {
 import { canonicalPath } from '../src/journal-location.ts'
 import { ExecutionJournal } from '../src/domain/orchestration/journal.ts'
 import { CodingJournal } from '../src/domain/orchestration/coding-journal.ts'
-import { applyCodingEvidence } from '../src/domain/orchestration/coding-checkpoint.ts'
-import { openMigrated } from './orchestration/harness-db.ts'
 
 // 7.7a design v7 §2: installation identity, the registry outside the home, manifests, recovery, refusal on ambiguity,
 // copied/moved-home detection.
@@ -274,9 +272,9 @@ test('FX3 #10: confirm-copy carries the source journal into the copy, so inherit
   if (!result.ok) throw new Error(result.message)
   const journal = new ExecutionJournal(join(journalDir, result.id), result.id)
   const read = journal.read()
+  // The source's records only: no automatic retirement record any more (decision 71: the copy is frozen instead).
   expect(read.ok && read.entries.map((e) => [e.n, e.kind, e.scope])).toEqual([
     [1, 'send_started', result.id],
-    [2, 'inherited-retired', result.id],
   ])
   // A damaged source journal is not guessed at: nothing is published.
   const other = join(root, 'home-copy-2')
@@ -288,7 +286,7 @@ test('FX3 #10: confirm-copy carries the source journal into the copy, so inherit
   expect(registry.state === 'ok' && Object.keys(registry.installations)).toHaveLength(2)
 })
 
-test('FY2 #2/#10: a copy inherits a live source unit and a pending admission as evidence, never as work it owns', () => {
+test('FY2 #2/#10: a copy inherits a live source unit and a pending admission as evidence, never as work it owns (the home is frozen as a whole)', () => {
   const source = okId(resolveHome())
   const sourceJournal = new CodingJournal(new ExecutionJournal(join(journalDir, source), source))
   const identity = { launchId: 'l1', runId: 'r1', turnId: 't1', generation: 1 }
@@ -332,28 +330,6 @@ test('FY2 #2/#10: a copy inherits a live source unit and a pending admission as 
   // The source keeps its own launches: it owns them and may still release l2 after the copy was made.
   expect(sourceJournal.isOwned('l1')).toBe(true)
   expect(sourceJournal.release('l2', () => true).ok).toBe(true)
-  // The copied database held the source's process rows and pending intents; reconciliation retires them all.
-  const db = openMigrated(root, 'copy.db')
-  try {
-    db.sqlite.exec(`
-      INSERT INTO coding_launches (launch_id, run_id, turn_id, generation, phase, journal_n, updated_at, held)
-        VALUES ('l1', 'r1', 't1', 1, 'releasing', 3, 'x', 1);
-      INSERT INTO coding_processes (run_id, pid, pgid, created_at) VALUES ('r1', 999999, 999999, 'x');
-      INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at)
-        VALUES ('i2', 'start_coding_run', 't2', '{}', 'pending', 'x', 'x');`)
-    const read = new ExecutionJournal(join(journalDir, confirmed.id), confirmed.id).readOwn()
-    if (!read.ok) throw new Error(read.reason)
-    applyCodingEvidence(db.sqlite, read.entries, new Date().toISOString())
-    expect(db.sqlite.prepare('SELECT COUNT(*) AS n FROM coding_processes').get()).toEqual({ n: 0 })
-    expect(db.sqlite.prepare("SELECT state FROM command_intents WHERE id = 'i2'").get()).toEqual({
-      state: 'failed',
-    })
-    expect(
-      db.sqlite.prepare("SELECT held, inherited FROM coding_launches WHERE launch_id = 'l1'").get(),
-    ).toEqual({ held: 0, inherited: 1 })
-  } finally {
-    db.close()
-  }
 })
 
 test('FY2 #10: confirm-copy refuses when the source namespace journal is gone after its cutover', () => {
