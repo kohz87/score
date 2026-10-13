@@ -1852,22 +1852,20 @@ test('FW #4: an absent unit is not a clean exit: without the supervisor’s fina
   expect(runs()[1]!.status).toBe('completed')
 })
 
-test('FV #2: an absent unit with a readable but non-durable final receipt is not a clean exit; with `durable: true` it is', async () => {
+test('FU #1: a replaced manager’s absent unit is not a clean exit, even with a receipt carrying `durable: true`', async () => {
   await addAgent()
   await makeRoom()
-  // The receipt's name survived but its publication was never confirmed durable (the supervisor would have removed it
-  // and exited non-zero), and the manager lost the unit's exit metadata: absence alone proves nothing.
-  fake.hooks.onExit = ({ receiptDir }) => {
-    const file = join(receiptDir, 'acked.json')
-    const body = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>
-    delete body.durable
-    writeFileSync(file, JSON.stringify(body) + '\n')
+  // The probe of re-review 5: the supervisor's final publication failed (exit 1) but its receipt name survived with
+  // `durable: true`, and the manager's replacement forgot the failed unit. Nothing but the receipt is left.
+  fake.hooks.onExit = () => {
+    fake.managerPid = 5151
   }
   await say('@coder [fixture:basic] go')
   await finished()
   expect(fake.units.size).toBe(0)
   expect(runs()[0]!.status).toBe('failed')
-  expect(launches()[0]!.eligibility).toContain('supervisor-exit:not-durable')
+  expect(launches()[0]!.eligibility).toContain('supervisor-exit:absent')
+  // The same shape with the manager unchanged: the unit left by garbage collection, which is a clean exit.
   fake.hooks.onExit = undefined
   await say('@coder [fixture:basic] again')
   await finished(2)

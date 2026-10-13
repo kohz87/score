@@ -676,10 +676,9 @@ export async function runSupervisor(spec, deps = {}) {
             finish(EXIT.failed)
             return
           }
-          // The final receipt: written after `ack-end` was READ, before the clean exit. Score treats a run as normally
-          // completed only with this file and a clean exit; without the unit's exit metadata (a replaced manager) only a
-          // receipt carrying `durable: true` stands in, and that form exists only once the directory sync succeeded. A
-          // receipt whose publication failed is removed again before exiting non-zero, so its name is never left behind.
+          // The final receipt: written after `ack-end` was READ, before the exit. It is evidence that the acknowledgment was
+          // consumed and nothing more: a failed publication is removed again, but removal can fail too, so Score never
+          // takes the receipt (or its `durable` flag) for a clean exit; that comes from the unit's own metadata (FU #1).
           const body = { launch: spec.launch, generation: spec.generation, at: now() }
           try {
             try {

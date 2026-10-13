@@ -900,12 +900,15 @@ export class UnitBackend {
         // Eligibility also needs the unit's own account of its supervisor: it exited with status 0 (#10), and every stop
         // cause was made durable (#17).
         const exit = await this.supervisorExit(launchId)
-        // The supervisor writes its final receipt after reading `ack-end` and removes it again if it couldn't publish it
-        // durably: positive evidence that Score's acknowledgment was consumed (FW #4). Missing unit metadata is
-        // uncertainty, never "clean": without the unit's own clean exit only a receipt carrying `durable: true` (written
-        // after the directory sync succeeded) stands in, and absence alone never does (FV #2).
+        // The supervisor writes its final receipt after reading `ack-end`: positive evidence that Score's acknowledgment
+        // was consumed (FW #4), nothing more. Missing unit metadata is uncertainty, never "clean", and no receipt flag
+        // stands in for it: a publication that failed may still leave its name behind (FU #1).
         const acked = this.ackedReceipt(this.recorded(launchId))
-        if (!proof.proven || (exit !== 'clean' && exit !== 'absent')) {
+        // A unit that exited 0 is garbage-collected at once while a failed one stays, so absence is the clean exit only
+        // while the manager is the very one that verified the launch. A replaced or unreadable manager forgets failures
+        // too, and absence then proves nothing (FU #1).
+        const absentIsClean = exit === 'absent' && (await this.managerUnchanged(launchId))
+        if (!proof.proven || (exit !== 'clean' && !absentIsClean)) {
           outcome.complete = false
           outcome.reasons = [
             ...outcome.reasons,
@@ -914,9 +917,6 @@ export class UnitBackend {
         } else if (acked === 'missing') {
           outcome.complete = false
           outcome.reasons = [...outcome.reasons, 'supervisor-exit:unacknowledged']
-        } else if (exit === 'absent' && acked !== 'durable') {
-          outcome.complete = false
-          outcome.reasons = [...outcome.reasons, 'supervisor-exit:not-durable']
         }
         if (this.unrecordedStops.has(launchId)) {
           outcome.complete = false
@@ -970,7 +970,8 @@ export class UnitBackend {
       // fixed reservation.
       retainedBytes: () =>
         ((request.parser as { retainedBytes?: () => number }).retainedBytes?.() ?? 0) +
-        (request.retainedBytes?.() ?? 0),
+        (request.retainedBytes?.() ?? 0) +
+        diagnostics.size,
     }
 
     // ---- spec, token, unit ----
@@ -1416,18 +1417,17 @@ export class UnitBackend {
     return now !== null && `${now.pid}:${now.start}` !== rec.manager
   }
 
-  /** The final receipt: absent/invalid, valid, or valid and carrying `durable: true`. */
-  private ackedReceipt(rec: RecordedLaunch): 'missing' | 'plain' | 'durable' {
-    if (this.readReceiptIn(rec, 'acked.json') !== 'present') return 'missing'
-    try {
-      const body = parseReceipt(
-        readFileSync(join(rec.receiptDir ?? '', 'acked.json'), 'utf8'),
-        'acked',
-      )
-      return body.state === 'present' && body.body.durable === true ? 'durable' : 'plain'
-    } catch {
-      return 'missing'
-    }
+  /** The manager is positively the one recorded when the launch was verified (unreadable or unrecorded is not). */
+  private async managerUnchanged(launchId: string): Promise<boolean> {
+    const rec = this.recorded(launchId)
+    if (!rec.manager) return false
+    const now = await this.managerNow()
+    return now !== null && `${now.pid}:${now.start}` === rec.manager
+  }
+
+  /** The final receipt: absent/invalid, or valid. Evidence of the ACK only, never of how the supervisor exited. */
+  private ackedReceipt(rec: RecordedLaunch): 'missing' | 'present' {
+    return this.readReceiptIn(rec, 'acked.json') === 'present' ? 'present' : 'missing'
   }
 
   private readReceiptIn(rec: RecordedLaunch, name: 'released.json' | 'ended.json' | 'acked.json') {

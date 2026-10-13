@@ -716,7 +716,7 @@ test('FW #5: Codex unknown records are loss unless explicitly allow-listed', () 
   expect(runCodex([finalMessage, unknownItem, turnCompleted]).verdict?.eligible).toBe(false)
   // Allow-listed: a todo list item, the retry notice.
   const todo = codexLine({ type: 'item.completed', item: { id: 't1', type: 'todo_list' } })
-  const notice = codexLine({ type: 'error', message: 'stream disconnected, retrying' })
+  const notice = codexLine({ type: 'error', message: 'Reconnecting... 1/5' })
   const clean = runCodex([finalMessage, todo, notice, turnCompleted])
   expect(clean.lost).toBeNull()
   expect(clean.verdict?.eligible).toBe(true)
@@ -788,6 +788,29 @@ test('FV #3: Codex `error` records are ignorable only as a validated retry notic
   const clean = runCodex([retry, finalMessage, turnCompleted])
   expect(clean.lost).toBeNull()
   expect(clean.verdict?.eligible).toBe(true)
+})
+
+test('FU #2: only the anchored `Reconnecting... n/m` notice is harmless; messages that merely mention a retry are loss', () => {
+  const text = (message: string) => codexLine({ type: 'error', message })
+  for (const message of [
+    'stream disconnected: fatal output loss; no retries remain',
+    'Retrying fatal',
+    'reconnecting... 1/5',
+    'Reconnecting... 0/5',
+    'Reconnecting... 6/5',
+    'Reconnecting... x/5',
+    ' Reconnecting... 1/5',
+    'error: Reconnecting... 1/5',
+  ]) {
+    expect(runCodex([finalMessage, text(message), turnCompleted]).lost, message).not.toBeNull()
+    expect(runCodex([text(message), finalMessage, turnCompleted]).lost, message).not.toBeNull()
+  }
+  // Extra fields that could report a failure are not a plain notice either.
+  const extra = codexLine({ type: 'error', message: 'Reconnecting... 1/5', fatal: true })
+  expect(runCodex([extra, finalMessage, turnCompleted]).lost).not.toBeNull()
+  // The anchored form, with a reason after it, is the notice.
+  const reason = text('Reconnecting... 2/5 (stream disconnected before completion)')
+  expect(runCodex([reason, finalMessage, turnCompleted]).lost).toBeNull()
 })
 
 test('FV #3: Claude Code system records: only known notices that report no error, and only before the result', () => {

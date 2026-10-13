@@ -569,6 +569,32 @@ test('re-review 2 #17: Score-side stops (broken bound, ingestion failure, shutdo
   servers.splice(servers.indexOf(server), 1)
 })
 
+test('FU #8: stderr diagnostics and commentary the handlers keep are charged to the budget as they change', async () => {
+  const { server } = await setup({ memoryBudgetBytes: 1024 * 1024 })
+  let diagnostics = 0
+  const reg = server.expect({
+    launch: 'L1',
+    generation: 1,
+    specHash: 'h',
+    handlers: {
+      onStdoutRecord: () => undefined,
+      onStderr: (text: string) => {
+        diagnostics += text.length
+      },
+      retainedBytes: () => diagnostics,
+    },
+    retainedBytes: 1024,
+  })
+  const sup = new FakeSupervisor(server.path)
+  sup.hello('L1', reg.token)
+  await vi.waitFor(() => expect(sup.has('welcome')).toBe(true))
+  // Nothing from stdout arrives: only stderr grows what the handlers keep, and that alone is charged.
+  sup.out('stderr', 1, 'x'.repeat(4000))
+  await vi.waitFor(() => expect(server.bufferedBytes).toBe(4000))
+  sup.socket.destroy()
+  await reg.session.outcome
+})
+
 test('re-review 2 #18: a run is charged for what its parser really retains, and stopped past the installation budget', async () => {
   const { server } = await setup({ memoryBudgetBytes: 1024 * 1024 })
   let retained = 0

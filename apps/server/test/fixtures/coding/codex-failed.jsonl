@@ -1,6 +1,6 @@
 {"_fixture":"hand-made, not recorded: shaped after the CLI's documented stream format"}
 {"type":"thread.started","thread_id":"0199aaaa-0000-7000-8000-000000000004"}
 {"type":"turn.started"}
-{"type":"error","message":"stream disconnected, retrying"}
+{"type":"error","message":"Reconnecting... 1/5"}
 {"type":"turn.failed","error":{"message":"You've hit your usage limit."}}
 {"_exit":1}

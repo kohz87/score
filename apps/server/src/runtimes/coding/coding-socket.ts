@@ -387,6 +387,8 @@ export class RunSession {
       Buffer.byteLength(text) <= room ? text : Buffer.from(text).subarray(0, room).toString('utf8')
     this.stderrKept += Buffer.byteLength(kept)
     this.handlers.onStderr?.(kept)
+    // Diagnostics are retained text too (FU #8).
+    this.chargeRetained()
   }
 
   private enqueue(line: string): void {

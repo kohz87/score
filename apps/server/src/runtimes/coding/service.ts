@@ -991,7 +991,7 @@ export class CodingRuntime {
           generation: attempt,
           command: { file, args: cliArgs, env: locator.childEnv(), cwd: checked.real, stdin },
           parser,
-          retainedBytes: () => translationBytes(translation),
+          retainedBytes: () => translationBytes(translation) + text.size,
           onEvent: handleEvent,
           deadline,
           graceMs: this.deps.graceMs ?? 5_000,

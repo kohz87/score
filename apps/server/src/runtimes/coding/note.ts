@@ -82,6 +82,11 @@ export class BoundedDiagnostics {
     } else this.raw += text
   }
 
+  /** Bytes of raw text held in memory (UTF-16, so up to twice the characters kept as text). */
+  get size(): number {
+    return this.raw.length * 2
+  }
+
   /** On the raw start, for protocol messages Score's own launcher prints. */
   startsWith(prefix: string): boolean {
     return this.raw.startsWith(prefix)

@@ -51,8 +51,17 @@ const SearchItem = z.object({ query: z.string() })
 const IGNORABLE_RECORDS = new Set(['turn.started'])
 // The one `error` record that is only a notice: Codex telling the person it is retrying a dropped stream. It must be
 // exactly this shape, short, and arrive before the turn ended (FV #3); any other error record reports a failure.
-const ErrorNotice = z.object({ type: z.literal('error'), message: z.string().max(300) })
-const RETRY_NOTICE = /\b(?:reconnecting|retrying|stream disconnected)\b/i
+const ErrorNotice = z.object({ type: z.literal('error'), message: z.string().max(300) }).strict()
+// The pinned CLI's retry notice is `Reconnecting... n/m`, optionally followed by the reason for the retry. Nothing
+// else counts, so a fatal message that merely mentions a retry stays loss (re-review 5 #1).
+const RETRY_NOTICE = /^Reconnecting\.\.\. (\d+)\/(\d+)/
+function isRetryNotice(message: string): boolean {
+  const match = RETRY_NOTICE.exec(message)
+  if (!match) return false
+  const n = Number(match[1])
+  const m = Number(match[2])
+  return n >= 1 && n <= m
+}
 const IGNORABLE_ITEMS = new Set(['todo_list'])
 
 /** Whether a decoded record says it is a completed or updated agent message, whatever else is wrong with it. */
@@ -176,7 +185,7 @@ function createInnerCodexParser(cwd?: string): LineParser & { ownBytes(): number
         // malformed one, one after the verdict, one that reports a failure) takes the authority of the attempt.
         const notice = ErrorNotice.safeParse(value)
         stats.unknown++
-        if (!notice.success || turnEnded || !RETRY_NOTICE.test(notice.data.message))
+        if (!notice.success || turnEnded || !isRetryNotice(notice.data.message))
           lose('Codex reported an error that Score could not rule out')
         return []
       }
