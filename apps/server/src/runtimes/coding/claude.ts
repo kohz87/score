@@ -241,6 +241,11 @@ function createInnerClaudeParser(cwd?: string): LineParser {
       }
       const result = ResultEvent.safeParse(value)
       if (result.success) {
+        // One terminal per attempt (re-review 6 #1): a second result, success or not, is loss and never replaces the first.
+        if (resultSeen) {
+          lose('Claude Code reported more than one result')
+          return events
+        }
         resultSeen = true
         const usage = result.data.usage
         if (usage) {

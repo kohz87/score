@@ -96,6 +96,9 @@ function createInnerCodexParser(cwd?: string): LineParser & { ownBytes(): number
   const started = new Set<string>()
   // A record after `turn.completed` can't be a notice about the turn: it could contradict the verdict already given.
   let turnEnded = false
+  // One terminal per attempt (re-review 6 #1): completed or failed closes the attempt; a later terminal, or a message
+  // after it, contradicts the verdict and is sticky loss. A failed terminal is never replaced.
+  let terminals = 0
   return {
     stats,
     ownBytes: () =>
@@ -137,6 +140,10 @@ function createInnerCodexParser(cwd?: string): LineParser & { ownBytes(): number
       }
       if (completed.success) {
         turnEnded = true
+        if (terminals++ > 0) {
+          lose('Codex reported more than one end of the turn')
+          return []
+        }
         const events: CodingEvent[] = []
         const usage = completed.data.usage
         // `input_tokens` already counts the cached share.
@@ -171,7 +178,12 @@ function createInnerCodexParser(cwd?: string): LineParser & { ownBytes(): number
         lose('Codex sent a record Score could not validate')
         return []
       }
-      if (failed.success)
+      if (failed.success) {
+        turnEnded = true
+        if (terminals++ > 0) {
+          lose('Codex reported more than one end of the turn')
+          return []
+        }
         return [
           {
             kind: 'result',
@@ -180,6 +192,7 @@ function createInnerCodexParser(cwd?: string): LineParser & { ownBytes(): number
             verdict: { eligible: false, reply: null, reason: 'Codex reported a failed turn' },
           },
         ]
+      }
       if (recordType === 'error') {
         // An error envelope is ignorable only as a validated retry notice before the turn ended; anything else (a
         // malformed one, one after the verdict, one that reports a failure) takes the authority of the attempt.
@@ -209,6 +222,10 @@ function createInnerCodexParser(cwd?: string): LineParser & { ownBytes(): number
         else if (phase === 'item.completed' && !message.data.text.trim())
           lose('Codex sent a message Score could not validate')
         if (phase !== 'item.completed' || !message.success || !message.data.text) return []
+        if (turnEnded) {
+          lose('Codex sent a message after the end of the turn')
+          return []
+        }
         if (Buffer.byteLength(message.data.text) > MAX_REPLY_BYTES) {
           lose('Codex sent a message larger than Score keeps')
           return []

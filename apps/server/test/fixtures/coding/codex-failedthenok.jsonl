@@ -1,0 +1,5 @@
+{"_fixture":"hand-made: turn.failed, then a message and turn.completed (7.7a FT #1)"}
+{"type":"thread.started","thread_id":"dddddddd-dddd-4ddd-8ddd-eeeeeeeeeeee"}
+{"type":"turn.failed","error":{"message":"The model failed."}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"All done."}}
+{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}

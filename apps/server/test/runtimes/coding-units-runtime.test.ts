@@ -1514,6 +1514,24 @@ test('#1 (re-review 2): a malformed terminal record after a success takes the au
   expect(launches()[0]!.eligibility).toContain('could not validate')
 })
 
+test('FT #1: a failed terminal followed by a success never completes the run (codex)', async () => {
+  await addAgent({ id: 'cx', name: 'Cx', runtime: 'codex', acknowledgeReads: true })
+  await makeRoom()
+  await say('@cx [fixture:failedthenok] go')
+  await finished()
+  expect(runs()[0]!.status).toBe('failed')
+  expect(launches()[0]!.eligibility).not.toBe('eligible')
+})
+
+test('FT #1: an error result followed by a success never completes the run (claude)', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:failedthenok] go')
+  await finished()
+  expect(runs()[0]!.status).toBe('failed')
+  expect(launches()[0]!.eligibility).not.toBe('eligible')
+})
+
 // ---- third review round (FZ2; decision 69) ---------------------------------------------------------------------------
 
 const marker = () => join(namespace, UNIT_CAPABLE_FILE)

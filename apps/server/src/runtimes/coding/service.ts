@@ -923,6 +923,8 @@ export class CodingRuntime {
     const deadline = Date.now() + turnMs
     for (let attempt = 0; attempt < 2; attempt++) {
       let result: Extract<CodingEvent, { kind: 'result' }> | undefined
+      // One terminal per attempt (re-review 6 #1): the first result stands, a second one is loss, never a replacement.
+      let extraResult = false
       const text = new CappedText()
       // Anything the CLI did besides naming its session and reporting a result.
       let worked = false
@@ -975,7 +977,10 @@ export class CodingRuntime {
       // fallback keeps the run going but cannot call it complete either.
       let ingestFailed = false
       const handleEvent = async (event: CodingEvent): Promise<void> => {
-        if (event.kind === 'result') result = event
+        if (event.kind === 'result') {
+          if (result) extraResult = true
+          else result = event
+        }
         if (event.kind === 'text') text.push(event.text)
         if (event.kind !== 'session' && event.kind !== 'result') worked = true
         await ingest.submit(eventObservation(translation, event, index++))
@@ -1084,7 +1089,9 @@ export class CodingRuntime {
       // Loss anywhere in the stream (also after the result record) takes the authority away, decided once the whole
       // stream was processed (re-review #3). It is evaluated before anything else is decided from this attempt: a
       // record Score dropped may have been work (a tool call it could not read), so "nothing happened" is unprovable.
-      const lost = parser.lossReason?.() ?? null
+      const lost =
+        parser.lossReason?.() ??
+        (extraResult ? 'The CLI reported more than one result for this attempt' : null)
       // A resumed session the CLI refused before doing anything: start fresh once, and forget the dead id. Only with
       // proof that nothing ran: the first group is gone, no output or tool call was seen, and the CLI itself said the
       // session is unknown (a generic "not found" proves nothing). The second launch shares the turn's deadline.

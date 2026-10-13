@@ -548,7 +548,8 @@ test('codex: loss is sticky for the whole attempt; a later turn in the same stre
   const first = ['bad', agentMessage('m1', 'A'), turnCompleted].flatMap((l) => parser.parse(l))
   expect(verdictOf(first)?.eligible).toBe(false)
   const second = [agentMessage('m2', 'B'), turnCompleted].flatMap((l) => parser.parse(l))
-  expect(verdictOf(second)).toMatchObject({ eligible: false, reply: null })
+  // The first terminal closed the attempt: the second yields no verdict at all (FT #1) and the loss stays.
+  expect(verdictOf(second)).toBeUndefined()
   expect(parser.lossReason?.()).toBeTruthy()
 })
 
@@ -860,4 +861,40 @@ test('a real Claude Code read-only turn (record order and shapes captured 2026-1
   const events = lines.flatMap((line) => parser.parse(JSON.stringify(line)))
   expect(parser.lossReason?.() ?? null).toBeNull()
   expect(verdictOf(events)?.eligible).toBe(true)
+})
+
+// ---- FT #1 (re-review 6): one terminal per attempt -----------------------------------------------------------------
+
+test('FT #1: codex turn.failed followed by a message and turn.completed is loss; the failure is never replaced', () => {
+  const parser = createCodexParser()
+  const events = [
+    codexLine({ type: 'turn.failed', error: { message: 'x' } }),
+    agentMessage('m1', 'All done.'),
+    turnCompleted,
+  ].flatMap((line) => parser.parse(line))
+  expect(events.filter((event) => event.kind === 'result')).toHaveLength(1)
+  expect(verdictOf(events)?.eligible).toBe(false)
+  expect(parser.lossReason?.()).toBeTruthy()
+})
+
+test('FT #1: codex turn.completed followed by turn.failed, or by a second completion, is loss', () => {
+  for (const second of [codexLine({ type: 'turn.failed', error: { message: 'x' } }), turnCompleted]) {
+    const parser = createCodexParser()
+    const events = [agentMessage('m1', 'Done.'), turnCompleted, second].flatMap((line) =>
+      parser.parse(line),
+    )
+    expect(events.filter((event) => event.kind === 'result')).toHaveLength(1)
+    expect(parser.lossReason?.()).toBeTruthy()
+  }
+})
+
+test('FT #1: claude error result followed by an explicit success is loss and the first result stands', () => {
+  const parser = createClaudeParser()
+  const events = [
+    claudeResult({ subtype: 'error_during_execution', is_error: true, result: 'x' }),
+    claudeResult({ subtype: 'success', is_error: false, result: 'Done.' }),
+  ].flatMap((line) => parser.parse(line))
+  expect(events.filter((event) => event.kind === 'result')).toHaveLength(1)
+  expect(verdictOf(events)?.eligible).toBe(false)
+  expect(parser.lossReason?.()).toBeTruthy()
 })

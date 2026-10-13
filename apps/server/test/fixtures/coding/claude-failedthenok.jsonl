@@ -1,0 +1,5 @@
+{"_fixture":"hand-made: an error result, then an explicit success result (7.7a FT #1)"}
+{"type":"system","subtype":"init","session_id":"66666666-6666-4666-8666-777777777777"}
+{"type":"result","subtype":"error_during_execution","is_error":true,"result":"It failed."}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done."}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"Done."}
