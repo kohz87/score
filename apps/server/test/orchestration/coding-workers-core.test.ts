@@ -238,11 +238,20 @@ test('one launch per generation: an owned turn never resumes a CLI session and h
 
 test('a readiness refusal is a send_refused (counted); the redispatch is a new generation and the streak resets only on a release', async () => {
   let refuse = true
+  let streakAtRelease: number | undefined
   h = await workerHarness({
     lead: { script: oneStep() },
     orchestrator: {
       releaseChecks: {
-        limits: (_s, subject) => (refuse && subject.generation === 1 ? 'cli_missing' : undefined),
+        limits: (sqlite, subject) => {
+          if (subject.generation === 2)
+            streakAtRelease = (
+              sqlite
+                .prepare('SELECT refused_streak AS n FROM orc_attempts WHERE id = ?')
+                .get(subject.attemptId) as { n: number }
+            ).n
+          return refuse && subject.generation === 1 ? 'cli_missing' : undefined
+        },
       },
     },
   })
@@ -250,6 +259,8 @@ test('a readiness refusal is a send_refused (counted); the redispatch is a new g
   const id = await h.create()
   await h.until(() => status(id) === 'succeeded', 40_000)
   refuse = false
+  // The handle of generation 2 did not reset the streak; only its release does.
+  expect(streakAtRelease).toBe(1)
   const [a] = attempts()
   expect(a).toMatchObject({ refused_total: 1, refused_streak: 0, dispatch_generation: 2 })
   const read = h.journal.readOwn()
