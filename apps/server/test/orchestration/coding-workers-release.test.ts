@@ -187,11 +187,6 @@ describe('terminal causes: the attempt ends, the step is cancelled, a proven no-
     // The owed Stop is also delivered to the runtime, whose own `stop` can win the race; both are terminal causes.
     ['owed_stop|stop', () => sql('UPDATE orc_attempts SET stop_requested_at = ?', nowIso())],
     ['stop', () => sql("UPDATE orchestrations SET status = 'stopping'")],
-    [
-      'deadline',
-      () =>
-        sql('UPDATE orchestrations SET deadline_at = ?', new Date(Date.now() - 1000).toISOString()),
-    ],
   ]
   test.each(cases)('%s', async (cause, change) => {
     h = await workerHarness({ lead: { script: oneStep() } })
@@ -216,6 +211,44 @@ describe('terminal causes: the attempt ends, the step is cancelled, a proven no-
     })
     expect(step()).toMatchObject({ status: 'cancelled' })
     expect(accepted).toContain(step()['disposition'])
+    expect(journalKinds('send_closed')).toHaveLength(1)
+    expect(h.cliCalls()).toHaveLength(0)
+  })
+})
+
+describe('terminal cause: deadline', () => {
+  // The orchestration's own deadline flow (settle, after any transaction that touches the run) stops the run as soon as
+  // its clock passes the deadline, and its Stop can reach the runtime before the release decision looks. So the
+  // deadline is passed only for the decision itself: its clock is read one hour late, once, synchronously, while the
+  // flow and everything else keep the real time. No race, nothing widened.
+  test('a deadline already past at the ordering point revokes the launch with cause deadline', async () => {
+    h = await workerHarness({ lead: { script: oneStep() } })
+    h.addAgent()
+    const orch = h.orch as unknown as {
+      decideRelease(sqlite: unknown, subject: unknown): unknown
+      clock: () => number
+    }
+    const decide = orch.decideRelease.bind(orch)
+    const realClock = orch.clock
+    orch.decideRelease = (sqlite, subject) => {
+      orch.clock = () => realClock() + 2 * 3_600_000
+      try {
+        return decide(sqlite, subject)
+      } finally {
+        orch.clock = realClock
+      }
+    }
+    await h.create({ deadlineAt: new Date(Date.now() + 3_600_000).toISOString() })
+    await closed()
+    await h.until(() => attempt()['state'] === 'terminated')
+    expect(gens()[0]).toMatchObject({ closed_cause: 'deadline' })
+    expect(launches()[0]).toMatchObject({
+      revoked: 1,
+      may_have_executed: 0,
+      revoke_cause: 'deadline',
+    })
+    expect(attempt()).toMatchObject({ state: 'terminated', evidence: null, settled: 1 })
+    expect(step()).toMatchObject({ status: 'cancelled', disposition: 'deadline' })
     expect(journalKinds('send_closed')).toHaveLength(1)
     expect(h.cliCalls()).toHaveLength(0)
   })
