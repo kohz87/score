@@ -878,7 +878,10 @@ test('FT #1: codex turn.failed followed by a message and turn.completed is loss;
 })
 
 test('FT #1: codex turn.completed followed by turn.failed, or by a second completion, is loss', () => {
-  for (const second of [codexLine({ type: 'turn.failed', error: { message: 'x' } }), turnCompleted]) {
+  for (const second of [
+    codexLine({ type: 'turn.failed', error: { message: 'x' } }),
+    turnCompleted,
+  ]) {
     const parser = createCodexParser()
     const events = [agentMessage('m1', 'Done.'), turnCompleted, second].flatMap((line) =>
       parser.parse(line),
