@@ -843,11 +843,31 @@ export class GlobalFenceStore {
     }
   }
 
+  /**
+   * Whether the database carries any execution state at all (re-review 6 #2): attempts, launches, intents, steps, chat
+   * replies, runs or approval deliveries that are not provably over. Only a database with none of it is "brand new" and
+   * may adopt the journal's reset generation; a backup that still holds executable work must freeze instead.
+   */
   private databaseHoldsExecutionHistory(): boolean {
+    const probes: [table: string, where: string][] = [
+      ['orc_attempts', '1'],
+      ['coding_launches', '1'],
+      ['command_intents', '1'],
+      ['orc_steps', "status IN ('pending_gate', 'queued', 'admitted')"],
+      ['message_runs', "state IN ('pending', 'active')"],
+      ['runs', "status NOT IN ('completed', 'failed', 'cancelled', 'interrupted')"],
+      ['approval_deliveries', '1'],
+    ]
     return this.db.read((sqlite) =>
-      ['orc_attempts', 'coding_launches', 'command_intents'].some(
-        (table) => sqlite.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get() !== undefined,
-      ),
+      probes.some(([table, where]) => {
+        // A table an older schema doesn't have holds nothing.
+        if (
+          sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) ===
+          undefined
+        )
+          return false
+        return sqlite.prepare(`SELECT 1 FROM ${table} WHERE ${where} LIMIT 1`).get() !== undefined
+      }),
     )
   }
 

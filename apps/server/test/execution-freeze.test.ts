@@ -518,3 +518,59 @@ test('FU #6: a source’s reset and freeze records are not inherited, so they ca
   expect(kinds).not.toContain('history-reset-complete')
   expect(kinds).not.toContain('execution-freeze')
 })
+
+// ---- FT #2 (re-review 6): adoption of the reset generation needs a database with no execution state ----------------------
+
+const STALE_STATE: Record<string, string> = {
+  'a queued chat reply': `INSERT INTO message_runs (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, state, created_at)
+    VALUES ('m1', 'r1', 'builder', 'm0', 0, 'turn-1', 'm0', 'go', '[]', 'pending', 'x')`,
+  'a running run': `INSERT INTO runs (id, profile, origin, status, started_at, updated_at)
+    VALUES ('run-1', 'builder', 'score', 'running', 'x', 'x')`,
+  'an approval delivery': `INSERT INTO approval_deliveries (id, approval_id, choice, route, state, created_at, updated_at)
+    VALUES ('d1', 'ap1', 'once', 'bridge', 'intent', 'x', 'x')`,
+}
+
+for (const [label, sql] of Object.entries(STALE_STATE)) {
+  test(`FT #2: a pre-reset backup that still holds ${label} is frozen, not adopted`, () => {
+    const dir = join(root, 'adopt-' + label.replaceAll(' ', '-'))
+    mkdirSync(dir)
+    const { database } = fenceOf(dir, 'ns-id')
+    database.sqlite.exec('PRAGMA foreign_keys = OFF')
+    database.sqlite.exec(sql)
+    // The reset finished against the journal (another database was retired); this one is an older copy.
+    const journal = resetJournalHistory({
+      journalDir: dir,
+      namespaceDir: join(dir, 'ns'),
+      installationId: 'ns-id',
+    })
+    completeJournalHistory({
+      namespaceDir: join(dir, 'ns'),
+      installationId: 'ns-id',
+      generation: journal.generation,
+    })
+    const restored = again(dir, 'ns-id', database)
+    expect(restored.startupCheck().reasons).toContain('history_generation_mismatch')
+    expect(restored.executionFrozen()).toMatch(/backup from before/)
+    database.close()
+  })
+}
+
+test('FT #2: a database with no execution state at all still adopts the generation', () => {
+  const dir = join(root, 'adopt-fresh')
+  mkdirSync(dir)
+  const { database } = fenceOf(dir, 'ns-id')
+  const journal = resetJournalHistory({
+    journalDir: dir,
+    namespaceDir: join(dir, 'ns'),
+    installationId: 'ns-id',
+  })
+  completeJournalHistory({
+    namespaceDir: join(dir, 'ns'),
+    installationId: 'ns-id',
+    generation: journal.generation,
+  })
+  const next = again(dir, 'ns-id', database)
+  expect(next.startupCheck()).toEqual({ fenced: false, reasons: [] })
+  expect(next.executionFrozen()).toBeNull()
+  database.close()
+})
