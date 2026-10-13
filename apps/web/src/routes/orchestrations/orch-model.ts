@@ -400,6 +400,10 @@ export function needsYouText(item: NeedsYou): string {
       return `${item.agentId} was replaced: decide whether this run uses the new one`
     case 'fence':
       return 'Starting work is blocked until you review a list'
+    case 'policy_changed':
+      return `${item.agentId}’s settings changed: decide whether ${item.stepId} uses the new ones`
+    case 'coding_limit':
+      return `${item.stepId} is waiting: the run reached its limit of coding steps`
   }
 }
 
