@@ -103,6 +103,8 @@ import {
   compactControlHistory,
   refuseAttempt,
   reserveFor,
+  addCodingStored,
+  CODING_ITEM_EXTRA_BYTES,
   codingItemsFor,
   setStepStatus,
 } from './ops.ts'
@@ -777,6 +779,10 @@ export class Orchestrator {
     ).length
   }
 
+  /** Whether the whole database still has storage for `extra` more reserved bytes (a coding limit that grows a reserve). */
+  private readonly storageFits = (sqlite: DatabaseSync, extra: number): boolean =>
+    this.quotaUsed(sqlite) + extra <= this.quotaBytes
+
   private quotaUsed(sqlite: DatabaseSync): number {
     return listOrchs(sqlite).reduce(
       (sum, o) =>
@@ -926,8 +932,9 @@ export class Orchestrator {
       .prepare(
         `INSERT INTO orchestrations (id, title, goal, lead_agent_id, lead_incarnation, allowed_agents, room_id, brief_id, gate_policy,
            budget_usd, deadline_at, max_steps, max_lead_turns, max_concurrent_steps, lead_turn_estimate_usd, step_estimate_usd,
-           status, acknowledgement, preflight, reserve_bytes, stored_bytes, created_at, updated_at, coding_steps, accepted_unknown_cost)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?)`,
+           status, acknowledgement, preflight, reserve_bytes, stored_bytes, created_at, updated_at, coding_steps, accepted_unknown_cost,
+           coding_reserve_bytes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -954,6 +961,10 @@ export class Orchestrator {
         now,
         body.codingSteps ?? ORCH_DEFAULTS.codingSteps,
         JSON.stringify([...new Set(body.acceptUnknownCost ?? [])].sort()),
+        reports.size > 0
+          ? codingItemsFor(body.maxSteps, body.codingSteps ?? ORCH_DEFAULTS.codingSteps) *
+              CODING_ITEM_EXTRA_BYTES
+          : 0,
       )
     // The policy each coding worker is approved with, and the acknowledgement that covered it (stored in the history).
     for (const [agentId, report] of reports) {
@@ -1040,7 +1051,7 @@ export class Orchestrator {
     return this.decide(id, (ctx) => answerInquiry(ctx, id, inquiryId, body))
   }
   limits(id: string, body: LimitsDecision) {
-    return this.decide(id, (ctx) => setLimits(ctx, id, body))
+    return this.decide(id, (ctx) => setLimits(ctx, id, body, this.storageFits))
   }
   pause(id: string, body: RunControl) {
     return this.decide(id, (ctx) => pauseRun(ctx, id, body))
@@ -1314,7 +1325,7 @@ export class Orchestrator {
     return this.decideWf(id, (ctx) => remapWorkflow(ctx, id, body, this.options.fence.journal))
   }
   wfLimits(id: string, body: LimitsDecision) {
-    return this.decideWf(id, (ctx) => setLimits(ctx, id, body))
+    return this.decideWf(id, (ctx) => setLimits(ctx, id, body, this.storageFits))
   }
   wfPause(id: string, body: RunControl) {
     return this.decideWf(id, (ctx) => pauseRun(ctx, id, body))
@@ -1999,7 +2010,9 @@ export class Orchestrator {
       )
       setStepStatus(sqlite, o.id, step.id, 'admitted', null, now)
       // A workflow step's input also lives in its reply row and its dispatch intent: every retained copy is charged.
-      addStored(sqlite, o.id, Buffer.byteLength(input) * (o.planner === 'workflow' ? 3 : 1))
+      if (runtimeOfAgent(sqlite, step.agent_id) !== 'hermes')
+        addCodingStored(sqlite, o.id, Buffer.byteLength(input))
+      else addStored(sqlite, o.id, Buffer.byteLength(input) * (o.planner === 'workflow' ? 3 : 1))
       counts.perRun.set(o.id, (counts.perRun.get(o.id) ?? 0) + 1)
       counts.perAgent.set(step.agent_id, (counts.perAgent.get(step.agent_id) ?? 0) + 1)
       counts.total++
@@ -2735,6 +2748,8 @@ export class Orchestrator {
     const reply = sqlite
       .prepare('SELECT reply, truncated FROM coding_run_results WHERE run_id = ?')
       .get(attempt.run_id!) as { reply: string; truncated: number } | undefined
+    // The retained copy in `coding_run_results` is part of the coding inventory too (F1 #7).
+    if (reply) addCodingStored(sqlite, o.id, Buffer.byteLength(reply.reply))
     const status = run.status
     const disposition: 'completed' | 'failed' | 'cancelled' =
       status === 'cancelled'
@@ -2811,7 +2826,11 @@ export class Orchestrator {
         o.id,
         step.id,
       )
-    addStored(sqlite, o.id, Buffer.byteLength(result) * 2 + Buffer.byteLength(run.output ?? ''))
+    addCodingStored(
+      sqlite,
+      o.id,
+      Buffer.byteLength(result) * 2 + Buffer.byteLength(run.output ?? ''),
+    )
     addCause(
       sqlite,
       o.id,

@@ -18,14 +18,35 @@ import {
 
 export const utf8Bytes = (text: string): number => new TextEncoder().encode(text).length
 
-/** Room for ordinary text in a run: its reserve minus the protected part kept for Stop and obligation records. */
-export const storageRoom = (o: Pick<OrchRow, 'reserve_bytes' | 'stored_bytes'>): number =>
-  o.reserve_bytes - ORCH_LIMITS.controlReserveBytes - o.stored_bytes
+/**
+ * Room for ordinary text and observations in a run: its reserve minus the protected part kept for Stop and obligation
+ * records, minus the part held for coding inventory (unless coding inventory already spilled past its own part, in which
+ * case the spill is counted as ordinary use).
+ */
+export const storageRoom = (
+  o: Pick<
+    OrchRow,
+    'reserve_bytes' | 'stored_bytes' | 'coding_reserve_bytes' | 'coding_stored_bytes'
+  >,
+): number =>
+  o.reserve_bytes -
+  ORCH_LIMITS.controlReserveBytes -
+  o.coding_reserve_bytes -
+  (o.stored_bytes - Math.min(o.coding_stored_bytes, o.coding_reserve_bytes))
 
 export function addStored(sqlite: DatabaseSync, orchId: string, bytes: number): void {
   sqlite
     .prepare('UPDATE orchestrations SET stored_bytes = stored_bytes + ? WHERE id = ?')
     .run(bytes, orchId)
+}
+
+/** Coding inventory (a coding step's result, retained input and run result): charged to the coding part of the reserve. */
+export function addCodingStored(sqlite: DatabaseSync, orchId: string, bytes: number): void {
+  sqlite
+    .prepare(
+      'UPDATE orchestrations SET stored_bytes = stored_bytes + ?, coding_stored_bytes = coding_stored_bytes + ? WHERE id = ?',
+    )
+    .run(bytes, bytes, orchId)
 }
 
 /** The reserve a run takes at creation: steps and lead turns at 64 KiB each plus the control reserve. */
@@ -312,14 +333,22 @@ export function compactControlHistory(sqlite: DatabaseSync, orchId: string, limi
 export function chargeObservation(sqlite: DatabaseSync, runId: string, bytes: number): boolean {
   const owner = sqlite
     .prepare(
-      `SELECT o.id AS id, o.reserve_bytes AS reserve, o.stored_bytes AS stored FROM message_runs m
+      `SELECT o.id AS id, o.reserve_bytes AS reserve_bytes, o.stored_bytes AS stored_bytes,
+              o.coding_reserve_bytes AS coding_reserve_bytes, o.coding_stored_bytes AS coding_stored_bytes FROM message_runs m
        JOIN orc_attempts a ON a.id = m.orchestration_attempt_id JOIN orchestrations o ON o.id = a.orchestration_id
        WHERE m.run_id = ?`,
     )
-    .get(runId) as { id: string; reserve: number; stored: number } | undefined
+    .get(runId) as
+    | {
+        id: string
+        reserve_bytes: number
+        stored_bytes: number
+        coding_reserve_bytes: number
+        coding_stored_bytes: number
+      }
+    | undefined
   if (!owner) return true
-  if (bytes > storageRoom({ reserve_bytes: owner.reserve, stored_bytes: owner.stored }))
-    return false
+  if (bytes > storageRoom(owner)) return false
   addStored(sqlite, owner.id, bytes)
   return true
 }

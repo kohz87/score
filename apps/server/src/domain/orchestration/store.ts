@@ -56,6 +56,8 @@ export const OrchRowSchema = z.object({
   preflight: z.string(),
   reserve_bytes: z.int(),
   stored_bytes: z.int(),
+  coding_reserve_bytes: z.int(),
+  coding_stored_bytes: z.int(),
   revision: z.int(),
   created_at: z.string(),
   updated_at: z.string(),

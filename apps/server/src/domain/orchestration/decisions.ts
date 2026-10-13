@@ -1,3 +1,4 @@
+import type { DatabaseSync } from 'node:sqlite'
 import type {
   AbandonDecision,
   GateDecision,
@@ -14,6 +15,8 @@ import { journalSoft, touch, type Ctx } from './ctx.ts'
 import {
   addStored,
   bumpAdmission,
+  CODING_ITEM_EXTRA_BYTES,
+  codingItemsFor,
   cascadeBlocked,
   oweStop,
   refuseAttempt,
@@ -138,7 +141,12 @@ export function answerInquiry(
   touch(ctx, orchId)
 }
 
-export function setLimits(ctx: Ctx, orchId: string, body: LimitsDecision): void {
+export function setLimits(
+  ctx: Ctx,
+  orchId: string,
+  body: LimitsDecision,
+  storageFits: (sqlite: DatabaseSync, extraBytes: number) => boolean = () => true,
+): void {
   const { sqlite, now } = ctx
   const o = requireOrch(sqlite, orchId)
   expectRevision(o, body.orchestrationRevision)
@@ -166,6 +174,32 @@ export function setLimits(ctx: Ctx, orchId: string, body: LimitsDecision): void 
       .run(JSON.stringify([...accepted].sort()), orchId)
   }
   if (body.codingSteps !== undefined) {
+    // Each coding item the limit now allows holds its own inventory in the run's reserve. A higher limit grows the reserve
+    // (a lower one keeps it), or is refused when the database has no storage for the growth (F1 #7).
+    const hasWorkers =
+      sqlite
+        .prepare('SELECT 1 FROM orc_worker_policies WHERE orchestration_id = ? LIMIT 1')
+        .get(orchId) !== undefined
+    const grow = hasWorkers
+      ? Math.max(
+          0,
+          (codingItemsFor(o.max_steps, body.codingSteps) -
+            codingItemsFor(o.max_steps, o.coding_steps)) *
+            CODING_ITEM_EXTRA_BYTES,
+        )
+      : 0
+    if (grow > 0 && !storageFits(sqlite, grow))
+      throw new HttpError(
+        409,
+        'quota_exhausted',
+        'Score has no storage left for more coding steps in this run.',
+      )
+    if (grow > 0)
+      sqlite
+        .prepare(
+          'UPDATE orchestrations SET reserve_bytes = reserve_bytes + ?, coding_reserve_bytes = coding_reserve_bytes + ? WHERE id = ?',
+        )
+        .run(grow, grow, orchId)
     sqlite
       .prepare('UPDATE orchestrations SET coding_steps = ? WHERE id = ?')
       .run(body.codingSteps, orchId)

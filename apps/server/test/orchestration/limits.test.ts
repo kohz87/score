@@ -341,6 +341,8 @@ test('rendered lead input is bounded: results newest first, older ones omitted w
     preflight: '{}',
     reserve_bytes: 0,
     stored_bytes: 0,
+    coding_reserve_bytes: 0,
+    coding_stored_bytes: 0,
     revision: 1,
     created_at: now,
     updated_at: now,

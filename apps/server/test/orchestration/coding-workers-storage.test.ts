@@ -66,7 +66,7 @@ test('tool rows are dropped once the run has no room, and the run still complete
   const id = await h.create()
   // Room for the lead's commands but not for another observation row: only the protected reserve is left.
   h.db.sqlite
-    .prepare('UPDATE orchestrations SET stored_bytes = reserve_bytes - 262144 - 3000')
+    .prepare('UPDATE orchestrations SET stored_bytes = reserve_bytes - coding_reserve_bytes - 262144 - 3000')
     .run()
   await h.until(() => status(id) === 'succeeded', 40_000)
   expect(h.rows("SELECT 1 FROM tool_calls WHERE run_id LIKE 'cr_%'")).toHaveLength(0)
