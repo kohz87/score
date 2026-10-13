@@ -236,7 +236,10 @@ export async function workerHarness(options: WorkerHarnessOptions = {}): Promise
       return created.orchestration.id
     },
     async until(done: () => boolean, timeoutMs = 30_000) {
-      await vi.waitFor(() => expect(done()).toBe(true), { timeout: timeoutMs, interval: 50 })
+      await vi.waitFor(() => expect(done(), `waiting for: ${done.toString()}`).toBe(true), {
+        timeout: timeoutMs,
+        interval: 50,
+      })
     },
     cliCalls() {
       const path = join(dir, 'fake-cli.log')

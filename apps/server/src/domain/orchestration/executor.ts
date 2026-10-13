@@ -1552,6 +1552,8 @@ export class Orchestrator {
    */
   private recoverCodingSend(ctx: Ctx, o: OrchRow, attempt: AttemptRow): void {
     const { sqlite, now } = ctx
+    // A frozen home writes no journal record: the generation waits for reset-history (decision 71).
+    if (this.options.fence.executionFrozenIn(sqlite) !== null) return
     const generation = readGeneration(sqlite, attempt.id, attempt.dispatch_generation)
     if (!generation) return void this.markUnknown(ctx, o, attempt, 'crash_after_send_started')
     const committed =
