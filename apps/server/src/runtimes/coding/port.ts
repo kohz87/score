@@ -35,7 +35,18 @@ const unsupported = () =>
  * The port the routes see: Hermes's agents plus the coding agents, and turns for a coding agent go to its CLI runtime.
  * Everything else is Hermes's, untouched. Kanban tasks stay Hermes-only in v1 (review 2026-10-09, 7.2 #6).
  */
+// The composite is built once at the composition root and shared by the routes and the executor (7.7b §2); wrapping it
+// again with the same runtime returns the same object.
+const composites = new WeakMap<object, CodingRuntime>()
+
 export function withCodingAgents(port: HermesPort, coding: CodingRuntime): HermesPort {
+  if (composites.get(port) === coding) return port
+  const composite = compose(port, coding)
+  composites.set(composite, coding)
+  return composite
+}
+
+function compose(port: HermesPort, coding: CodingRuntime): HermesPort {
   const idOf = (value: unknown) => (typeof value === 'string' ? coding.isCodingAgent(value) : false)
   return new Proxy(port, {
     get(target, property, receiver) {

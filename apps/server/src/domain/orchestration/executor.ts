@@ -85,7 +85,11 @@ import { finalizeGraph, planWorkflow } from '../workflows/planner.ts'
 import { workflowDetailOf, workflowEventsOf, workflowSummaryOf } from '../workflows/views.ts'
 import { readVersion } from '../workflows/definitions.ts'
 import { validateDefinition } from '../workflows/definition.ts'
-import { assertHermesOnly } from './supported-agents.ts'
+import {
+  assertHermesOnly,
+  assertOrchestrationWorkers,
+  type CodingWorkerFacts,
+} from './supported-agents.ts'
 import {
   agentIdsOf,
   insertWorkflowRun,
@@ -160,6 +164,8 @@ export interface OrchestratorOptions {
   onError?: (error: unknown) => void
   /** Minimum time between attempts to deliver an owed Stop, and the pause after a "nothing was sent" refusal. */
   retryMs?: number
+  /** What the coding runtime says about its agents and host (7.7b); absent where there is none (coding agents are then refused). */
+  codingFacts?: CodingWorkerFacts
 }
 
 type ToolResult =
@@ -579,7 +585,7 @@ export class Orchestrator {
     const add = (id: PreflightCheck['id'], status: PreflightCheck['status'], message: string) =>
       checks.push({ id, status, message })
     const team = agents ?? (await port.listAgents())
-    assertHermesOnly([leadAgentId, ...allowedAgents], team)
+    assertOrchestrationWorkers(leadAgentId, allowedAgents, team, this.options.codingFacts)
     const known = new Map(team.map((agent) => [agent.id, agent]))
     const ready = (id: string): string | undefined => {
       const agent = known.get(id)

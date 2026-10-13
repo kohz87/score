@@ -22,3 +22,58 @@ export function assertHermesOnly(
     `Coding agents can’t take orchestration or workflow steps yet (${coding.join(', ')}). Choose Hermes agents instead.`,
   )
 }
+
+/** What the guard needs to know about coding agents; supplied by the composition root, absent where there is no coding runtime. */
+export interface CodingWorkerFacts {
+  /** The host supervises coding runs as systemd units and the capability check passes right now. */
+  unitHost(): boolean
+  agent(id: string): { runtime: string; permission: string } | undefined
+}
+
+/** Coding runtimes that can take orchestration steps (7.7b §1). Antigravity may leave scheduled work behind its run. */
+export const WORKER_RUNTIMES: readonly string[] = ['claude-code', 'codex']
+
+/**
+ * The orchestration guard (7.7b §1): the lead is always a Hermes agent; step agents may also be Claude Code or Codex
+ * workers with a `read-only` or `workspace-write` permission, on a host that runs coding turns as units. Workflows keep
+ * `assertHermesOnly` until 7.7c.
+ */
+export function assertOrchestrationWorkers(
+  leadId: string,
+  workerIds: readonly string[],
+  agents: readonly Pick<AgentSummary, 'id' | 'runtime'>[],
+  facts: CodingWorkerFacts | undefined,
+): void {
+  const byId = new Map(agents.map((agent) => [agent.id, agent]))
+  const runtimeOf = (id: string) => byId.get(id)?.runtime ?? 'hermes'
+  if (runtimeOf(leadId) !== 'hermes')
+    throw new HttpError(
+      422,
+      'unsupported_agent',
+      `${leadId} is a coding agent. The lead of an orchestration has to be a Hermes agent.`,
+    )
+  const coding = [...new Set(workerIds)].filter((id) => runtimeOf(id) !== 'hermes')
+  if (coding.length === 0) return
+  const unsupported = coding.filter(
+    (id) => !WORKER_RUNTIMES.includes(runtimeOf(id)) || facts?.agent(id) === undefined,
+  )
+  if (unsupported.length > 0)
+    throw new HttpError(
+      422,
+      'unsupported_agent',
+      `${unsupported.join(', ')} can’t take orchestration steps. Choose Hermes, Claude Code or Codex agents.`,
+    )
+  const full = coding.filter((id) => facts!.agent(id)!.permission === 'full')
+  if (full.length > 0)
+    throw new HttpError(
+      422,
+      'unsupported_agent',
+      `${full.join(', ')} has full access. Orchestration steps need a coding agent that is read-only or limited to its workspace.`,
+    )
+  if (!facts!.unitHost())
+    throw new HttpError(
+      422,
+      'coding_workers_need_units',
+      'Coding agents can take orchestration steps only where Score runs them as supervised system services, and this computer isn’t set up for that right now. Settings › Coding shows what is missing.',
+    )
+}

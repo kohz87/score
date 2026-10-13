@@ -22,6 +22,7 @@ import {
 } from './journal-location.ts'
 import { resolveInstallation, type InstallationResult } from './installation.ts'
 import { migrateLegacyJournal } from './domain/orchestration/journal-migration.ts'
+import { withCodingAgents } from './runtimes/coding/port.ts'
 import { Orchestrator } from './domain/orchestration/executor.ts'
 import { GlobalFenceStore } from './domain/orchestration/fence.ts'
 import { ExecutionJournal, journalScope } from './domain/orchestration/journal.ts'
@@ -347,18 +348,6 @@ export async function startServer(
       process.stderr.write(
         `Orchestration admission is fenced (${fenced.reasons.join(', ')}): review the reconciliation list in Score before lifting it.\n`,
       )
-    const executor = new Orchestrator({
-      db: database,
-      ingest,
-      port,
-      access: new McpAccessStore(database),
-      fence: fenceStore,
-      mcpAvailable: Boolean(config.remote),
-      onError: (error) => app?.log.error({ err: error }, 'Orchestration executor failed'),
-    })
-    orchestrator = executor
-    // The fake adapter has no models: a scripted lead stands in (it calls the same tools in-process).
-    if (config.mode === 'fake' && port instanceof FakePort) attachFakeLead(port, executor)
     // Coding agents (PLAN 7.2): fake mode never starts a real CLI (see locatorForMode).
     const { hermesHome: runtimeHome } = config
     // Coding backend (7.7a). Live mode always gets a UnitBackend: it owns the admission barriers (fences, orphan units,
@@ -442,6 +431,29 @@ export async function startServer(
     })
     // A CLI child dies with Score: turns still marked running are interrupted before anything else runs.
     await coding.recover()
+    // The composite port (Hermes agents plus coding agents) is built once and shared by the routes and the executor
+    // (7.7b §2): a step for a coding agent must reach the coding runtime, never Hermes.
+    const composite = withCodingAgents(port, coding)
+    const codingRuntime = coding
+    const executor = new Orchestrator({
+      db: database,
+      ingest,
+      port: composite,
+      access: new McpAccessStore(database),
+      fence: fenceStore,
+      codingFacts: {
+        unitHost: () => {
+          const status = codingRuntime.backend()
+          return status.kind === 'unit' && status.checks.every((check) => check.ok)
+        },
+        agent: (id) => codingRuntime.agents().find((agent) => agent.id === id),
+      },
+      mcpAvailable: Boolean(config.remote),
+      onError: (error) => app?.log.error({ err: error }, 'Orchestration executor failed'),
+    })
+    orchestrator = executor
+    // The fake adapter has no models: a scripted lead stands in (it calls the same tools in-process).
+    if (config.mode === 'fake' && port instanceof FakePort) attachFakeLead(port, executor)
     outbox = new ApprovalOutbox({
       db: database,
       ingest,
@@ -491,7 +503,7 @@ export async function startServer(
         : liveBridge
     app = buildApp({
       config,
-      port,
+      port: composite,
       coding,
       ...(knowledge ? { knowledge } : {}),
       outbox,
@@ -658,6 +670,8 @@ export async function startServer(
       app,
       bridgeApp,
       pairingToken: token,
+      orchestrator: executor,
+      port: composite,
       ingest,
       db: database,
       installation: installationBlock === null ? installation : undefined,
