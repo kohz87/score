@@ -2035,7 +2035,10 @@ test('FV #1: a frozen home starts no CLI and signals no recorded group, in recov
   await new Promise((r) => setTimeout(r, 150))
   expect(asked).toEqual([])
   expect(processRows()).toEqual([{ run_id: 'cr_inherited', unresolved: 0 }])
-  await coding.stopRun({ agentId: 'coder', runId: 'cr_inherited' })
+  // A Stop is refused with the freeze sentence (FT #5) and signals nothing.
+  await expect(coding.stopRun({ agentId: 'coder', runId: 'cr_inherited' })).rejects.toMatchObject({
+    code: 'execution_frozen',
+  })
   expect(asked).toEqual([])
   const before = launches
   await expect(
