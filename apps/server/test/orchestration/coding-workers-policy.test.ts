@@ -26,6 +26,15 @@ const oneStep = byTurn({
     await t.call('orch.finish', { outcome: 'success', summary: 'done' })
   },
 })
+/** Assigns one step and then only waits: the run stays open while the step waits for a decision of the person. */
+const assignOnly = byTurn({
+  1: async (t) => {
+    await t.call('orch.assign', { agent: 'coder', instruction: '[fixture:basic] write hello' })
+    return 'assigned'
+  },
+  2: async () => 'waiting',
+  3: async () => 'waiting',
+})
 const attempt = () =>
   h.rows<Record<string, unknown>>("SELECT * FROM orc_attempts WHERE kind = 'step' ORDER BY n")[0]!
 const gens = () =>
@@ -235,7 +244,7 @@ describe('every external identity is read again before the release', () => {
   const settingsFile = () => join(h.home, 'coding', 'coder', 'claude-settings.json')
 
   async function revokedBy(change: () => void) {
-    h = await workerHarness({ lead: { script: oneStep } })
+    h = await workerHarness({ lead: { script: assignOnly } })
     h.addAgent()
     atArming(change)
     const id = await h.create()
@@ -326,7 +335,7 @@ describe('a coding step runs only under the policy it was approved with (common 
   }
 
   test('the stored policy moved on after the step was admitted ⇒ the step is suspended, nothing is sent', async () => {
-    h = await workerHarness({ lead: { script: oneStep } })
+    h = await workerHarness({ lead: { script: assignOnly } })
     h.addAgent()
     beforeSend(() => sql("UPDATE orc_worker_policies SET policy_id = '" + 'e'.repeat(64) + "'"))
     const id = await h.create()
@@ -334,7 +343,7 @@ describe('a coding step runs only under the policy it was approved with (common 
   })
 
   test('the step’s approval was for other settings ⇒ the step is suspended, nothing is sent', async () => {
-    h = await workerHarness({ lead: { script: oneStep } })
+    h = await workerHarness({ lead: { script: assignOnly } })
     h.addAgent()
     const id = await h.create({ gatePolicy: 'every-step' })
     await h.until(
