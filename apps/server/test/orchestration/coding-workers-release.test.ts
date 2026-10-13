@@ -24,6 +24,16 @@ const oneStep = (instruction = '[fixture:basic] write hello') =>
       await t.call('orch.finish', { outcome: 'success', summary: 'done' })
     },
   })
+/** Assigns one step and then only waits: it never finishes the run, so a blocked step keeps its suspended attempt. */
+const assignOnly = byTurn({
+  1: async (t) => {
+    await t.call('orch.assign', { agent: 'coder', instruction: '[fixture:basic] write hello' })
+    return 'assigned'
+  },
+  2: async () => 'waiting',
+  3: async () => 'waiting',
+  4: async () => 'waiting',
+})
 const attempt = () =>
   h.rows<Record<string, unknown>>("SELECT * FROM orc_attempts WHERE kind = 'step' ORDER BY n")[0]!
 const step = () => h.rows<Record<string, unknown>>('SELECT * FROM orc_steps')[0]!
@@ -256,12 +266,15 @@ describe('terminal cause: deadline', () => {
 
 describe('agent_changed and limit: the step is blocked and the attempt is suspended', () => {
   test('agent_changed: the agent’s incarnation moved while the launch was arming', async () => {
-    h = await workerHarness({ lead: { script: oneStep() } })
+    // F1 #8: blocking the step wakes the lead, and a lead that finishes on its second turn legitimately refuses the
+    // suspended attempt ("not dispatched: run finishing"). This lead only waits, and the assertions follow an idle executor.
+    h = await workerHarness({ lead: { script: assignOnly } })
     h.addAgent()
     atArming(() => sql("UPDATE orc_attempts SET agent_incarnation = 'older'"))
     const id = await h.create()
     await closed()
     await h.until(() => step()['status'] === 'blocked')
+    await h.orch.idle()
     expect(gens()[0]).toMatchObject({ closed_cause: 'agent_changed' })
     expect(step()).toMatchObject({ status: 'blocked', disposition: 'agent_changed' })
     expect(attempt()).toMatchObject({ state: 'created', suspended: 1, refused_total: 0 })
