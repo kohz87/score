@@ -17,6 +17,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  renameSync,
   unlinkSync,
   writeFileSync,
   writeSync,
@@ -58,6 +59,7 @@ export function procStart(pid) {
 export function writeReceipt(dir, name, body, io = {}) {
   const write = io.writeSync ?? writeSync
   const link = io.linkSync ?? linkSync
+  const sync = io.fsyncSync ?? fsyncSync
   const final = join(dir, name)
   const tmp = join(dir, `.${name}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`)
   const data = Buffer.from(JSON.stringify(body) + '\n')
@@ -70,7 +72,7 @@ export function writeReceipt(dir, name, body, io = {}) {
         if (!(n > 0)) throw new Error('receipt: short write')
         off += n
       }
-      fsyncSync(fd)
+      sync(fd)
     } finally {
       closeSync(fd)
     }
@@ -82,12 +84,65 @@ export function writeReceipt(dir, name, body, io = {}) {
       // never created, or already gone
     }
   }
+  syncDirectory(dir, sync)
+}
+
+function syncDirectory(dir, sync = fsyncSync) {
   const dirFd = openSync(dir, 'r')
   try {
-    fsyncSync(dirFd)
+    sync(dirFd)
   } finally {
     closeSync(dirFd)
   }
+}
+
+/**
+ * Makes an EXISTING receipt durable: its contents and its directory entry are fsynced. A name that exists is not yet
+ * proof that it survives a crash (the writer's directory sync may have failed), so a reader that finds `EEXIST` calls
+ * this before it trusts the file. Throws on any error, including a missing file.
+ */
+export function syncReceipt(dir, name, io = {}) {
+  const sync = io.fsyncSync ?? fsyncSync
+  const fd = openSync(join(dir, name), 'r')
+  try {
+    sync(fd)
+  } finally {
+    closeSync(fd)
+  }
+  syncDirectory(dir, sync)
+}
+
+/**
+ * Replaces an existing receipt with a new body in one step (temp file, fsync, rename over the name, directory fsync). Used
+ * for the final `acked.json`, whose `durable: true` form exists only once the directory sync of the first one succeeded.
+ */
+export function replaceReceipt(dir, name, body, io = {}) {
+  const write = io.writeSync ?? writeSync
+  const sync = io.fsyncSync ?? fsyncSync
+  const tmp = join(dir, `.${name}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`)
+  const data = Buffer.from(JSON.stringify(body) + '\n')
+  try {
+    const fd = openSync(tmp, 'wx', 0o600)
+    try {
+      let off = 0
+      while (off < data.length) {
+        const n = write(fd, data, off, data.length - off)
+        if (!(n > 0)) throw new Error('receipt: short write')
+        off += n
+      }
+      sync(fd)
+    } finally {
+      closeSync(fd)
+    }
+    renameSync(tmp, join(dir, name))
+  } finally {
+    try {
+      unlinkSync(tmp)
+    } catch {
+      // renamed away, or never created
+    }
+  }
+  syncDirectory(dir, sync)
 }
 
 /**
@@ -622,18 +677,32 @@ export async function runSupervisor(spec, deps = {}) {
             return
           }
           // The final receipt: written after `ack-end` was READ, before the clean exit. Score treats a run as normally
-          // completed only with this file (a unit's exit metadata can vanish with the manager; this can't).
+          // completed only with this file and a clean exit; without the unit's exit metadata (a replaced manager) only a
+          // receipt carrying `durable: true` stands in, and that form exists only once the directory sync succeeded. A
+          // receipt whose publication failed is removed again before exiting non-zero, so its name is never left behind.
+          const body = { launch: spec.launch, generation: spec.generation, at: now() }
           try {
-            writeReceipt(spec.receiptDir, 'acked.json', {
-              launch: spec.launch,
-              generation: spec.generation,
-              at: now(),
-            })
-          } catch (error) {
-            if (error?.code !== 'EEXIST') {
-              finish(EXIT.failed)
-              return
+            try {
+              writeReceipt(spec.receiptDir, 'acked.json', body, deps.receiptIo)
+            } catch (error) {
+              // An earlier writer's name: take it over and make it durable below (or fail).
+              if (error?.code !== 'EEXIST') throw error
             }
+            replaceReceipt(
+              spec.receiptDir,
+              'acked.json',
+              { ...body, durable: true },
+              deps.receiptIo,
+            )
+          } catch {
+            try {
+              unlinkSync(join(spec.receiptDir, 'acked.json'))
+              syncDirectory(spec.receiptDir)
+            } catch {
+              // nothing more can be done; the exit below is non-zero
+            }
+            finish(EXIT.failed)
+            return
           }
           finish(EXIT.ok)
         }

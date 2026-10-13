@@ -3,9 +3,12 @@ import {
   chmodSync,
   writeSync,
   existsSync,
+  fstatSync,
+  fsyncSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -20,7 +23,7 @@ import {
   type Harness,
   type HarnessOptions,
 } from '../helpers/coding-harness.ts'
-import { parseReceipt, writeReceipt } from '../../src/runtimes/coding/supervisor.mjs'
+import { parseReceipt, syncReceipt, writeReceipt } from '../../src/runtimes/coding/supervisor.mjs'
 
 // 7.7a part 2: the supervisor with harmless `node -e` CLIs and an injected cgroup (no systemd). Fake-boundary tests.
 
@@ -58,6 +61,8 @@ test('a normal run: output, exit, payload empty, receipts, end/ack-end, exit 0 (
   expect(h.stdout.map((l) => JSON.parse(l))).toHaveLength(2)
   expect(h.stderr.join('')).toBe('diagnostic\n')
   expect(receipts(h)).toEqual(['acked.json', 'ended.json', 'released.json'])
+  // The final receipt carries `durable: true`, which exists only once its directory sync succeeded (FV #2).
+  expect(json(join(h.receiptDir, 'acked.json'))).toMatchObject({ launch: 'launch1', durable: true })
   expect(json(join(h.receiptDir, 'ended.json'))).toMatchObject({
     launch: 'launch1',
     code: 0,
@@ -536,4 +541,37 @@ test('re-review 2 #11: a deadline that arrives after `end` invalidates the candi
   // The supervisor does not leave with 0 as if nothing had happened.
   expect(code).toBe(1)
   expect(json(join(h.receiptDir, 'stop-cause.json'))).toMatchObject({ cause: 'deadline' })
+})
+
+test('FV #2: a final receipt whose directory sync fails is removed again and the supervisor exits non-zero', async () => {
+  const { h, code } = await run({
+    script: 'console.log(JSON.stringify({ a: 1 }))',
+    receiptIo: {
+      fsyncSync: (fd: number) => {
+        if (fstatSync(fd).isDirectory())
+          throw Object.assign(new Error('input/output error'), { code: 'EIO' })
+        fsyncSync(fd)
+      },
+    },
+  })
+  expect(code).not.toBe(0)
+  expect(receipts(h)).toEqual(['ended.json', 'released.json'])
+})
+
+test('FV #2: an existing receipt is made durable again before it is trusted (syncReceipt), and a missing one is an error', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'score-sync-'))
+  try {
+    writeReceipt(dir, 'x.json', { launch: 'l', generation: 0, at: 1 })
+    const synced: boolean[] = []
+    syncReceipt(dir, 'x.json', {
+      fsyncSync: (fd: number) => {
+        synced.push(fstatSync(fd).isDirectory())
+        fsyncSync(fd)
+      },
+    })
+    expect(synced).toEqual([false, true])
+    expect(() => syncReceipt(dir, 'missing.json')).toThrow()
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

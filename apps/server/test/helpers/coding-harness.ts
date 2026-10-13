@@ -21,6 +21,7 @@ import {
   hashSpec,
   runSupervisor,
   type SupervisorCgroup,
+  type SupervisorDeps,
   type SupervisorSpec,
 } from '../../src/runtimes/coding/supervisor.mjs'
 
@@ -112,6 +113,8 @@ export interface HarnessOptions {
   token?: string
   /** Test seam: the supervisor's socket (wrap it to model a stuck consumer). */
   connect?: (path: string) => net.Socket
+  /** Test seam: the write primitives of the supervisor's final receipt. */
+  receiptIo?: SupervisorDeps['receiptIo']
 }
 
 export async function startHarness(options: HarnessOptions): Promise<Harness> {
@@ -170,6 +173,7 @@ export async function startHarness(options: HarnessOptions): Promise<Harness> {
     watchdog: options.watchdog ?? (() => undefined),
     pollMs: 20,
     ...(options.connect ? { connect: options.connect } : {}),
+    ...(options.receiptIo ? { receiptIo: options.receiptIo } : {}),
   })
   return {
     dir,

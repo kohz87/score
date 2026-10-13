@@ -21,7 +21,13 @@ import { signalPid, type PidSignalResult } from './pidfd-signal.ts'
 import { bootId, processStart } from './proc.ts'
 import { pdeathsigSupport } from './pdeathsig-exec.ts'
 import type { StopReason } from './process.ts'
-import { hashSpec, parseReceipt, writeReceipt, type SupervisorSpec } from './supervisor.mjs'
+import {
+  hashSpec,
+  parseReceipt,
+  syncReceipt,
+  writeReceipt,
+  type SupervisorSpec,
+} from './supervisor.mjs'
 import type { CodingEvent, LineParser } from './types.ts'
 import {
   buildSystemRun,
@@ -558,7 +564,28 @@ export class UnitBackend {
       )
       return true
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'EEXIST') return true
+      // A marker that exists is not yet one that survives a crash: its writer's directory sync may have failed (the name
+      // is there, the sync threw). It counts only once it reads as ours and its contents and directory sync again.
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') return this.syncExistingMarker()
+      this.deps.onError?.(error)
+      return false
+    }
+  }
+
+  private syncExistingMarker(): boolean {
+    try {
+      const body: unknown = JSON.parse(
+        readFileSync(join(this.deps.namespaceDir, UNIT_CAPABLE_FILE), 'utf8'),
+      )
+      if (
+        typeof body !== 'object' ||
+        body === null ||
+        (body as { installation?: unknown }).installation !== this.deps.installationId
+      )
+        throw new Error('the capability marker isn’t this installation’s')
+      syncReceipt(this.deps.namespaceDir, UNIT_CAPABLE_FILE, this.deps.markerIo)
+      return true
+    } catch (error) {
       this.deps.onError?.(error)
       return false
     }
@@ -875,18 +902,23 @@ export class UnitBackend {
         // Eligibility also needs the unit's own account of its supervisor: it exited with status 0 (#10), and every stop
         // cause was made durable (#17).
         const exit = await this.supervisorExit(launchId)
-        // The supervisor writes its final receipt after reading `ack-end` and before exiting 0: positive evidence that
-        // Score's acknowledgment was consumed (FW #4). Missing unit metadata is uncertainty, never "clean".
-        const acked = this.readReceiptIn(this.recorded(launchId), 'acked.json') === 'present'
+        // The supervisor writes its final receipt after reading `ack-end` and removes it again if it couldn't publish it
+        // durably: positive evidence that Score's acknowledgment was consumed (FW #4). Missing unit metadata is
+        // uncertainty, never "clean": without the unit's own clean exit only a receipt carrying `durable: true` (written
+        // after the directory sync succeeded) stands in, and absence alone never does (FV #2).
+        const acked = this.ackedReceipt(this.recorded(launchId))
         if (!proof.proven || (exit !== 'clean' && exit !== 'absent')) {
           outcome.complete = false
           outcome.reasons = [
             ...outcome.reasons,
             `supervisor-exit:${proof.proven ? exit : 'unproven'}`,
           ]
-        } else if (!acked) {
+        } else if (acked === 'missing') {
           outcome.complete = false
           outcome.reasons = [...outcome.reasons, 'supervisor-exit:unacknowledged']
+        } else if (exit === 'absent' && acked !== 'durable') {
+          outcome.complete = false
+          outcome.reasons = [...outcome.reasons, 'supervisor-exit:not-durable']
         }
         if (this.unrecordedStops.has(launchId)) {
           outcome.complete = false
@@ -1373,6 +1405,20 @@ export class UnitBackend {
     if (!rec.manager) return false
     const now = await this.managerNow()
     return now !== null && `${now.pid}:${now.start}` !== rec.manager
+  }
+
+  /** The final receipt: absent/invalid, valid, or valid and carrying `durable: true`. */
+  private ackedReceipt(rec: RecordedLaunch): 'missing' | 'plain' | 'durable' {
+    if (this.readReceiptIn(rec, 'acked.json') !== 'present') return 'missing'
+    try {
+      const body = parseReceipt(
+        readFileSync(join(rec.receiptDir ?? '', 'acked.json'), 'utf8'),
+        'acked',
+      )
+      return body.state === 'present' && body.body.durable === true ? 'durable' : 'plain'
+    } catch {
+      return 'missing'
+    }
   }
 
   private readReceiptIn(rec: RecordedLaunch, name: 'released.json' | 'ended.json' | 'acked.json') {

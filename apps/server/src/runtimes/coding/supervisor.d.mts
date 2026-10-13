@@ -52,19 +52,20 @@ export interface SupervisorDeps {
   self?: { pid: number; start: string | null }
   /** Registers the handler for systemd's stop signal; returns the detach function. Default: process SIGINT/SIGTERM. */
   onUnitStop?: (handler: () => void) => (() => void) | void
+  /** Test seam: the write primitives of the final receipt (a test makes the directory sync fail). */
+  receiptIo?: ReceiptIo
 }
 
 export function hashSpec(spec: SupervisorSpec): string
 export function procStart(pid: number): string | null
-export function writeReceipt(
-  dir: string,
-  name: string,
-  body: unknown,
-  io?: {
-    writeSync?: (fd: number, data: Buffer, offset: number, length: number) => number
-    linkSync?: (existing: string, target: string) => void
-  },
-): void
+export interface ReceiptIo {
+  writeSync?: (fd: number, data: Buffer, offset: number, length: number) => number
+  linkSync?: (existing: string, target: string) => void
+  fsyncSync?: (fd: number) => void
+}
+export function writeReceipt(dir: string, name: string, body: unknown, io?: ReceiptIo): void
+export function syncReceipt(dir: string, name: string, io?: ReceiptIo): void
+export function replaceReceipt(dir: string, name: string, body: unknown, io?: ReceiptIo): void
 export type ParsedReceipt =
   { state: 'present'; body: Record<string, unknown> } | { state: 'invalid' }
 export function parseReceipt(

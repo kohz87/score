@@ -1,6 +1,8 @@
 import { RoomSchema, type CodingAgent, type Message } from '@score/contract'
 import {
   existsSync,
+  fstatSync,
+  fsyncSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -1578,6 +1580,51 @@ test('FW #2: a marker that can’t be written pauses coding until it is durable;
   errors.length = 0
 })
 
+test('FV #2: a marker whose directory sync failed after the name appeared stays paused until the sync succeeds (an existing marker is not a durable one)', async () => {
+  await coding.close()
+  await app.close()
+  rmSync(marker(), { force: true })
+  let broken = true
+  const syncs: string[] = []
+  const flakyDirectory = {
+    fsyncSync: (fd: number) => {
+      const isDirectory = fstatSync(fd).isDirectory()
+      syncs.push(isDirectory ? 'dir' : 'file')
+      if (isDirectory && broken)
+        throw Object.assign(new Error('input/output error'), { code: 'EIO' })
+      fsyncSync(fd)
+    },
+  }
+  try {
+    await boot({ unit: { markerIo: flakyDirectory } })
+    // The name is there (the link worked), but its directory never synced.
+    expect(existsSync(marker())).toBe(true)
+    expect(backend.usable()).toBe(false)
+    expect(backend.block()).toMatch(/paused/)
+    // The next attempt finds the name (EEXIST); it must sync again, and while that fails the pause stays.
+    syncs.length = 0
+    expect(backend.block()).toMatch(/paused/)
+    expect(syncs).toContain('dir')
+    expect(backend.usable()).toBe(false)
+    broken = false
+    expect(backend.block()).toBeNull()
+    expect(backend.usable()).toBe(true)
+  } finally {
+    broken = false
+  }
+  errors.length = 0
+})
+
+test('FV #2: a marker that isn’t this installation’s is never trusted', async () => {
+  await coding.close()
+  await app.close()
+  writeFileSync(marker(), JSON.stringify({ installation: 'someone-else', at: 1 }))
+  await boot()
+  expect(backend.usable()).toBe(false)
+  expect(backend.block()).toMatch(/paused/)
+  errors.length = 0
+})
+
 test('FW #2: the environment forces the fallback only under the test harness, never in production', () => {
   expect(fallbackForced({ SCORE_CODING_BACKEND: 'process-group', NODE_ENV: 'production' })).toBe(
     false,
@@ -1786,6 +1833,28 @@ test('FW #4: an absent unit is not a clean exit: without the supervisor’s fina
   expect(runs()[0]!.status).toBe('failed')
   expect(launches()[0]!.eligibility).toContain('supervisor-exit')
   // With the receipt in place the same shape of run (unit collected at once) completes.
+  fake.hooks.onExit = undefined
+  await say('@coder [fixture:basic] again')
+  await finished(2)
+  expect(runs()[1]!.status).toBe('completed')
+})
+
+test('FV #2: an absent unit with a readable but non-durable final receipt is not a clean exit; with `durable: true` it is', async () => {
+  await addAgent()
+  await makeRoom()
+  // The receipt's name survived but its publication was never confirmed durable (the supervisor would have removed it
+  // and exited non-zero), and the manager lost the unit's exit metadata: absence alone proves nothing.
+  fake.hooks.onExit = ({ receiptDir }) => {
+    const file = join(receiptDir, 'acked.json')
+    const body = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>
+    delete body.durable
+    writeFileSync(file, JSON.stringify(body) + '\n')
+  }
+  await say('@coder [fixture:basic] go')
+  await finished()
+  expect(fake.units.size).toBe(0)
+  expect(runs()[0]!.status).toBe('failed')
+  expect(launches()[0]!.eligibility).toContain('supervisor-exit:not-durable')
   fake.hooks.onExit = undefined
   await say('@coder [fixture:basic] again')
   await finished(2)
