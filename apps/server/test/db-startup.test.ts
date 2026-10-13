@@ -110,6 +110,8 @@ vi.mock('../src/domain/orchestration/fence.ts', () => ({
     startupCheck = () => ({ fenced: false, reasons: [] })
     fenceUnverifiedRoot = () => false
     setHardBlock = () => undefined
+    setCopiedFrom = () => undefined
+    frozenNotice = () => null
   },
 }))
 // Installation identity and the journal migration have their own tests (installation, orchestration/journal-migration).
