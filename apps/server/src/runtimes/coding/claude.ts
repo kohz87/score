@@ -66,6 +66,8 @@ const IGNORABLE_RECORDS = new Set(['stream_event', 'rate_limit_event', 'keep_ali
 const IGNORABLE_SYSTEM = new Set([
   'hook_started',
   'hook_response',
+  // Sent by Claude Code 2.x right after init, before the answer (seen in a real read-only turn, 2026-10-13).
+  'commands_changed',
   'hook_progress',
   'api_retry',
   'status',
