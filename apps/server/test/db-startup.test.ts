@@ -197,7 +197,8 @@ test('startup opens and migrates the configured database before building and lis
   })
   expect(mocks.buildApp).toHaveBeenCalledWith({
     config: expect.objectContaining({ home: '/tmp/score-test-startup' }),
-    port: mocks.port,
+    // The composite port (Hermes plus coding agents), built once and shared with the executor (7.7b §2).
+    port: expect.any(Object),
     coding: expect.any(Object),
     knowledge: expect.any(Object),
     orchestrator: expect.any(Object),
