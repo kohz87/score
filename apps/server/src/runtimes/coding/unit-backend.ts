@@ -55,8 +55,6 @@ import {
 
 /** Policy, not protocol: how many units one installation may start per minute (unique names bypass systemd's own counters, §6b). */
 export const LAUNCHES_PER_MINUTE = 30
-/** How long a run's budget reservation outlives its socket before it is released even if nobody handed the run over. */
-const RESERVATION_GRACE_MS = 10 * 60_000
 const SUPERVISOR_FILE = fileURLToPath(new URL('./supervisor.mjs', import.meta.url))
 const WRAPPER_FILE = fileURLToPath(new URL('./pdeathsig-exec.py', import.meta.url))
 
@@ -924,6 +922,15 @@ export class UnitBackend {
           outcome.complete = false
           outcome.reasons = [...outcome.reasons, 'stop-unrecorded']
         }
+        // The first stop cause is authoritative wherever it came from: Score's own stop or one the supervisor recorded
+        // first and Score adopted from its receipt. A run that something stopped never completes, whatever else the
+        // control or session view says (FV #3); the cause stays visible in the reasons.
+        const cause =
+          this.deps.journal.state(launchId)?.state.stopCause ?? this.storedStopCause(launchId)
+        if (cause !== null) {
+          outcome.complete = false
+          outcome.reasons = [...outcome.reasons, `stop-cause:${cause}`]
+        }
       }
       this.unrecordedStops.delete(launchId)
       return outcome
@@ -1006,14 +1013,9 @@ export class UnitBackend {
         ...(this.reservations.get(request.runId) ?? []),
         launchId,
       ])
-      // A caller that never hands over (a crash path) must not hold the budget for ever.
-      void registered.session.outcome.then(() => {
-        const timer = setTimeout(
-          () => this.releaseReservations(request.runId),
-          RESERVATION_GRACE_MS,
-        )
-        timer.unref()
-      })
+      // No timed release: the reservation is released when the state it charges is gone (`holdDelivery` replaces it with
+      // the delivery charge, `releaseDelivery`, the run's settlement or shutdown). A timer would uncharge memory a
+      // run still retains.
     } catch {
       return abort(
         'Score is holding too much coding output in memory right now. Try again shortly.',
@@ -1185,6 +1187,13 @@ export class UnitBackend {
   }
 
   // ---- stop and proof ----------------------------------------------------------------------------------------------
+
+  private storedStopCause(launchId: string): string | null {
+    const found = this.deps.db.sqlite
+      .prepare('SELECT stop_cause FROM coding_launches WHERE launch_id = ?')
+      .get(launchId) as { stop_cause: string | null } | undefined
+    return found?.stop_cause ?? null
+  }
 
   private rowOf(launchId: string): Row | undefined {
     return this.deps.db.sqlite

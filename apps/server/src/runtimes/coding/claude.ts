@@ -61,6 +61,21 @@ const ResultEvent = z.object({
 // neither the answer nor a failure. Anything else Score can't understand is loss for the whole attempt (it could have
 // been the final result or the error that contradicts an earlier success).
 const IGNORABLE_RECORDS = new Set(['stream_event', 'rate_limit_event', 'keep_alive'])
+// System records that are notices (hooks, a retried request, status). Validated: a known subtype that reports an error,
+// an unknown subtype, or any system record after the result could be the failure that contradicts the verdict (FV #3).
+const IGNORABLE_SYSTEM = new Set([
+  'hook_started',
+  'hook_response',
+  'hook_progress',
+  'api_retry',
+  'status',
+  'compact_boundary',
+])
+const SystemNotice = z.object({
+  type: z.literal('system'),
+  subtype: z.string().min(1),
+  is_error: z.boolean().optional(),
+})
 const IGNORABLE_BLOCKS = new Set(['image', 'redacted_thinking', 'document'])
 
 const PATH_KEYS = ['file_path', 'path', 'notebook_path']
@@ -130,6 +145,7 @@ function createInnerClaudeParser(cwd?: string): LineParser {
   const lose = (note: string) => {
     lossNote ??= note
   }
+  let resultSeen = false
   return {
     stats,
     lossReason: () =>
@@ -223,6 +239,7 @@ function createInnerClaudeParser(cwd?: string): LineParser {
       }
       const result = ResultEvent.safeParse(value)
       if (result.success) {
+        resultSeen = true
         const usage = result.data.usage
         if (usage) {
           events.push({
@@ -270,7 +287,16 @@ function createInnerClaudeParser(cwd?: string): LineParser {
       // Known envelope without meaning for us: only the allow-listed notices (and non-init system records, hooks…) may be
       // ignored. A `result` that failed validation is exactly what must not vanish.
       stats.unknown++
-      if (!IGNORABLE_RECORDS.has(envelopeType) && envelopeType !== 'system')
+      if (envelopeType === 'system') {
+        const notice = SystemNotice.safeParse(value)
+        if (
+          !notice.success ||
+          !IGNORABLE_SYSTEM.has(notice.data.subtype) ||
+          notice.data.is_error === true ||
+          resultSeen
+        )
+          lose('Claude Code sent a system record that Score could not rule out as a failure')
+      } else if (!IGNORABLE_RECORDS.has(envelopeType))
         lose('Claude Code sent a record Score could not validate')
       return events
     },

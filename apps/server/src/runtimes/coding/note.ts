@@ -21,24 +21,40 @@ export function rememberId<T>(set: Set<T>, id: T): void {
   if (set.size > MAX_REMEMBERED_IDS) set.delete(set.values().next().value as T)
 }
 
-/** Text kept from the start of a stream, up to a byte limit; the rest is dropped, not buffered. */
+/**
+ * Commentary kept for a failure note. Redaction needs the whole text in front of a value (and exact secrets need the whole
+ * value), so the raw text is kept from its start up to twice the limit and is redacted as a whole whenever it is read;
+ * only then is the sanitized text cut to the limit (FV #3: cutting raw text first left a recognisable prefix of a secret in
+ * what was stored). When the raw cap itself cut the text, the partial last word and any quote left open are discarded:
+ * a suffix that can't be judged is dropped, never stored.
+ */
 export class CappedText {
   private text = ''
   private bytes = 0
-  constructor(private readonly limit = MAX_RETAINED_TEXT_BYTES) {}
+  private overflowed = false
+  private readonly rawLimit: number
+  constructor(private readonly limit = MAX_RETAINED_TEXT_BYTES) {
+    this.rawLimit = limit * 2
+  }
   push(chunk: string): void {
-    if (this.bytes >= this.limit) return
-    const room = this.limit - this.bytes
-    const kept =
-      Buffer.byteLength(chunk) <= room
-        ? chunk
-        : Buffer.from(chunk).subarray(0, room).toString('utf8')
+    if (this.overflowed) return
+    const room = this.rawLimit - this.bytes
+    if (Buffer.byteLength(chunk) <= room) {
+      this.text += chunk
+      this.bytes += Buffer.byteLength(chunk)
+      return
+    }
+    const kept = Buffer.from(chunk).subarray(0, room).toString('utf8')
     this.text += kept
     this.bytes += Buffer.byteLength(kept)
+    this.overflowed = true
   }
+  /** Redacted as a whole, then cut: safe to store or show. */
   get value(): string {
-    return this.text
+    const raw = this.overflowed ? closeOpenCredential(this.text) : this.text
+    return redactBounded(raw, this.limit)
   }
+  /** Bytes of raw text held in memory (at most twice the limit). */
   get size(): number {
     return this.bytes
   }

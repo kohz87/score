@@ -766,3 +766,50 @@ test('FW #5: Antigravity unknown records are loss; telemetry is allow-listed', (
   parser.parse(JSON.stringify({ event: 'mystery' }))
   expect(parser.lossReason?.()).not.toBeNull()
 })
+
+// ---- FV #3 -----------------------------------------------------------------------------------------------------------
+
+test('FV #3: Codex `error` records are ignorable only as a validated retry notice before the turn ended', () => {
+  const fatal = codexLine({ type: 'error', message: 'fatal: the final output was lost' })
+  const retry = codexLine({ type: 'error', message: 'Reconnecting... 2/5' })
+  const malformed = codexLine({ type: 'error', message: { nested: true } })
+  const noMessage = codexLine({ type: 'error' })
+  // The probe of re-review 4: a validated answer and turn.completed, then an error claiming fatal output loss.
+  const late = runCodex([finalMessage, turnCompleted, fatal])
+  expect(late.lost).not.toBeNull()
+  expect(late.verdict?.eligible).toBe(true) // the verdict was already given; the final loss check takes the authority
+  // A retry notice after the verdict is still too late to be a notice about the turn.
+  expect(runCodex([finalMessage, turnCompleted, retry]).lost).not.toBeNull()
+  // Before the verdict: an error that reports a failure, a malformed one and one without a message all lose it.
+  expect(runCodex([finalMessage, fatal, turnCompleted]).lost).not.toBeNull()
+  expect(runCodex([finalMessage, malformed, turnCompleted]).lost).not.toBeNull()
+  expect(runCodex([finalMessage, noMessage, turnCompleted]).lost).not.toBeNull()
+  // The retry notice before the verdict keeps it.
+  const clean = runCodex([retry, finalMessage, turnCompleted])
+  expect(clean.lost).toBeNull()
+  expect(clean.verdict?.eligible).toBe(true)
+})
+
+test('FV #3: Claude Code system records: only known notices that report no error, and only before the result', () => {
+  const run = (lines: string[]) => {
+    const parser = createClaudeParser()
+    const events = lines.flatMap((line) => parser.parse(line))
+    return { verdict: verdictOf(events), lost: parser.lossReason?.() ?? null }
+  }
+  const success = JSON.stringify({
+    type: 'result',
+    subtype: 'success',
+    is_error: false,
+    result: 'Done.',
+  })
+  const system = (extra: object) => JSON.stringify({ type: 'system', ...extra })
+  expect(run([system({ subtype: 'hook_started' }), success]).lost).toBeNull()
+  expect(run([system({ subtype: 'api_retry', error: 'overloaded' }), success]).lost).toBeNull()
+  // The probe of re-review 4: an unknown system error record after a clean success.
+  expect(run([success, system({ subtype: 'error', message: 'output lost' })]).lost).not.toBeNull()
+  expect(run([system({ subtype: 'fatal_error' }), success]).lost).not.toBeNull()
+  // A known subtype that reports an error, a record with no subtype, and a notice after the result.
+  expect(run([system({ subtype: 'hook_response', is_error: true }), success]).lost).not.toBeNull()
+  expect(run([system({}), success]).lost).not.toBeNull()
+  expect(run([success, system({ subtype: 'hook_started' })]).lost).not.toBeNull()
+})

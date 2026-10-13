@@ -634,6 +634,19 @@ test('a refused resume starts one fresh launch; the first is settled as retried'
   expect(all.map((l) => l.disposition)).toContain('retried')
 })
 
+test('FV #3: a resume refusal behind a record Score could not read is not retried: one launch, the first attempt’s loss stands', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:stalelossy] one')
+  await finished()
+  await say('@coder [fixture:stalelossy] two')
+  await finished(2)
+  // The rejected record could have been work the refusal text hides: no second launch, no completed result.
+  expect(launches()).toHaveLength(2)
+  expect(runs()[1]).toMatchObject({ status: 'failed' })
+  expect(launches().map((l) => l.disposition)).not.toContain('retried')
+})
+
 // ---- launch rate and pause -------------------------------------------------------------------------------------------
 
 test('Score keeps its own launch backoff: too many units in a minute are refused with a sentence', async () => {
@@ -1904,6 +1917,58 @@ test('FW #9: a cause the supervisor recorded survives live completion: journal, 
   expect(stops.map((e) => e.stopCause)).toEqual(['socket-loss'])
   expect(launchRow(row!.launch_id).stop_cause).toBe('socket-loss')
   expect(verifyCoding(db.sqlite, read.entries)).toEqual([])
+})
+
+test('FV #3: a stop cause the supervisor recorded first disqualifies completion even when the run otherwise looks clean', async () => {
+  await addAgent()
+  await makeRoom()
+  // The supervisor stopped the run for its own reason, but the CLI finished with an explicit success before that.
+  fake.hooks.onExit = ({ receiptDir }) => {
+    const launch = receiptDir.split('/').at(-1)!
+    writeReceipt(receiptDir, 'stop-cause.json', {
+      launch,
+      generation: 0,
+      at: Date.now(),
+      cause: 'deadline',
+    })
+  }
+  await say('@coder [fixture:basic] go')
+  await finished()
+  const [row] = launches()
+  const read = journal.readOwn()
+  if (!read.ok) throw new Error(read.reason)
+  const recorded = read.entries.filter(
+    (e) => 'launchId' in e && e.launchId === row!.launch_id && e.kind === 'stop-requested',
+  ) as unknown as { stopCause: string }[]
+  expect(recorded.map((e) => e.stopCause)).toEqual(['deadline'])
+  // The adopted cause stops the run from completing; the cause stays visible beside the (otherwise clean) evidence.
+  expect(runs()[0]!.status).toBe('failed')
+  expect(launchRow(row!.launch_id).eligibility).toContain('stop-cause:deadline')
+  expect(launchRow(row!.launch_id).stop_cause).toBe('deadline')
+})
+
+test('FV #3: a run’s budget reservation is never released by a timer while it may still retain state; it goes when the state does', async () => {
+  const delays: number[] = []
+  const original = globalThis.setTimeout
+  const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
+    handler: () => void,
+    delay?: number,
+  ) => {
+    delays.push(delay ?? 0)
+    return original(handler, delay)
+  }) as unknown as typeof setTimeout)
+  try {
+    await addAgent()
+    await makeRoom()
+    await say('@coder [fixture:basic] go')
+    await finished()
+  } finally {
+    spy.mockRestore()
+  }
+  // The old code armed a ten-minute release after every outcome, whatever the run still held.
+  expect(delays.filter((delay) => delay >= 5 * 60_000)).toEqual([])
+  // Delivery cleared the state: nothing stays charged.
+  await vi.waitFor(() => expect(backend.budgetBytes).toBe(0))
 })
 
 test('FW #9: after real socket loss the supervisor’s first cause stays in the database too (live projection)', async () => {

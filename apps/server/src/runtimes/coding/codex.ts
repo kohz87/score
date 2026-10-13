@@ -48,7 +48,11 @@ const SearchItem = z.object({ query: z.string() })
 
 // Records Score knows it can ignore, named explicitly (FW #5): a notice that carries no turn content. Everything else
 // that isn't understood is loss for the whole attempt, because it could have been the one that mattered.
-const IGNORABLE_RECORDS = new Set(['turn.started', 'error'])
+const IGNORABLE_RECORDS = new Set(['turn.started'])
+// The one `error` record that is only a notice: Codex telling the person it is retrying a dropped stream. It must be
+// exactly this shape, short, and arrive before the turn ended (FV #3); any other error record reports a failure.
+const ErrorNotice = z.object({ type: z.literal('error'), message: z.string().max(300) })
+const RETRY_NOTICE = /\b(?:reconnecting|retrying|stream disconnected)\b/i
 const IGNORABLE_ITEMS = new Set(['todo_list'])
 
 /** Whether a decoded record says it is a completed or updated agent message, whatever else is wrong with it. */
@@ -81,6 +85,8 @@ function createInnerCodexParser(cwd?: string): LineParser & { ownBytes(): number
     lossNote ??= note
   }
   const started = new Set<string>()
+  // A record after `turn.completed` can't be a notice about the turn: it could contradict the verdict already given.
+  let turnEnded = false
   return {
     stats,
     ownBytes: () =>
@@ -121,6 +127,7 @@ function createInnerCodexParser(cwd?: string): LineParser & { ownBytes(): number
         return []
       }
       if (completed.success) {
+        turnEnded = true
         const events: CodingEvent[] = []
         const usage = completed.data.usage
         // `input_tokens` already counts the cached share.
@@ -164,11 +171,17 @@ function createInnerCodexParser(cwd?: string): LineParser & { ownBytes(): number
             verdict: { eligible: false, reply: null, reason: 'Codex reported a failed turn' },
           },
         ]
-      // Known, nothing to show.
-      if (IGNORABLE_RECORDS.has(recordType)) {
-        if (recordType !== 'turn.started') stats.unknown++
+      if (recordType === 'error') {
+        // An error envelope is ignorable only as a validated retry notice before the turn ended; anything else (a
+        // malformed one, one after the verdict, one that reports a failure) takes the authority of the attempt.
+        const notice = ErrorNotice.safeParse(value)
+        stats.unknown++
+        if (!notice.success || turnEnded || !RETRY_NOTICE.test(notice.data.message))
+          lose('Codex reported an error that Score could not rule out')
         return []
       }
+      // Known, nothing to show.
+      if (IGNORABLE_RECORDS.has(recordType)) return []
       const item = ItemEvent.safeParse(value)
       if (!item.success) {
         stats.unknown++

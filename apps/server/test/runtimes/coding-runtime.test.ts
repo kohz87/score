@@ -1834,6 +1834,18 @@ test('W5: a refused resume that nothing ran behind starts fresh once, within the
   expect(processRows()).toEqual([])
 })
 
+test('FV #3: on the fallback too, a refusal behind an unreadable record is not retried', async () => {
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:stalelossy] one')
+  await finished(1)
+  const before = launches
+  await say('@coder [fixture:stalelossy] two')
+  await finished(2)
+  expect(launches - before).toBe(1)
+  expect(runs()[1]).toMatchObject({ status: 'failed' })
+})
+
 // ---- 7.7a part 3: the acceptance matrix holds on the fallback backend too -----------------------------------------------
 
 test('fallback: a clean exit with text but no explicit success is no result (the exit-zero fallback is gone)', async () => {

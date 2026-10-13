@@ -590,6 +590,18 @@ test('re-review 2 #18: a run is charged for what its parser really retains, and 
   retained = 5 * 1024 * 1024
   sup.out('stdout', 2, 'b\n')
   await vi.waitFor(() => expect(sup.has('stop')).toBe(true))
+  // FV #3: the run stops, but the bytes it really holds stay charged (debt past the limit) until its state is cleared, so
+  // nothing else is admitted on top of them.
+  expect(server.bufferedBytes).toBe(5 * 1024 * 1024)
+  expect(() =>
+    server.expect({
+      launch: 'L2',
+      generation: 1,
+      specHash: 'h',
+      handlers: { onStdoutRecord: () => undefined },
+      retainedBytes: 1024,
+    }),
+  ).toThrow('memory-budget')
   sup.socket.destroy()
   const outcome = await reg.session.outcome
   expect(outcome.eligible).toBe(false)

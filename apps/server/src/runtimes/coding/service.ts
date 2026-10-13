@@ -1081,6 +1081,10 @@ export class CodingRuntime {
       }
       if (!outcome.groupGone) entry.unproven = true
       const stderr = oneLine(outcome.stderr, 400)
+      // Loss anywhere in the stream (also after the result record) takes the authority away, decided once the whole
+      // stream was processed (re-review #3). It is evaluated before anything else is decided from this attempt: a
+      // record Score dropped may have been work (a tool call it could not read), so "nothing happened" is unprovable.
+      const lost = parser.lossReason?.() ?? null
       // A resumed session the CLI refused before doing anything: start fresh once, and forget the dead id. Only with
       // proof that nothing ran: the first group is gone, no output or tool call was seen, and the CLI itself said the
       // session is unknown (a generic "not found" proves nothing). The second launch shares the turn's deadline.
@@ -1090,6 +1094,7 @@ export class CodingRuntime {
         outcome.groupGone &&
         outcome.refusal === null &&
         !worked &&
+        lost === null &&
         !outcome.stopped &&
         !outcome.spawnError &&
         outcome.complete &&
@@ -1104,9 +1109,6 @@ export class CodingRuntime {
         resume = null
         continue
       }
-      // Loss anywhere in the stream (also after the result record) takes the authority away, decided once the whole
-      // stream was processed (re-review #3).
-      const lost = parser.lossReason?.() ?? null
       const verdict =
         lost !== null && result?.verdict
           ? { eligible: false, reply: null, reason: lost }

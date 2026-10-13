@@ -16,8 +16,8 @@ import {
 test('#15: retained commentary stops growing at its limit', () => {
   const text = new CappedText(1000)
   for (let i = 0; i < 10_000; i++) text.push('x'.repeat(50))
-  expect(text.size).toBe(1000)
-  expect(text.value.length).toBe(1000)
+  expect(text.size).toBe(2000) // raw text held, twice the limit
+  expect(text.value.length).toBeLessThanOrEqual(1000) // what is stored: redacted first, then cut
 })
 
 test('#15: remembered call ids forget the oldest past the limit', () => {
@@ -116,4 +116,21 @@ test('FW #6: stderr cut at the raw cap masks the open credential to the end inst
     const text = notes.text()
     expect(text, open).not.toMatch(/spacey|secret words/)
   }
+})
+
+test('FV #3: commentary is redacted before it is cut, so a registered key at the boundary leaves no recognisable prefix', () => {
+  const key = 'k'.repeat(30) + 'Q9' + 'z'.repeat(38) // a 70-byte registered gateway key
+  registerKnownSecret(key)
+  // Text that redaction shortens a lot (passwords) pushes the key across the limit of the sanitized text.
+  const text = new CappedText(1000)
+  text.push('password=hunter2 '.repeat(40))
+  text.push(`the key is ${key} end`)
+  const stored = text.value
+  expect(stored).not.toContain(key.slice(0, 20))
+  expect(stored).not.toContain('hunter2')
+  // A key cut by the raw cap (the commentary kept growing) is dropped with its partial word, not stored as a prefix.
+  const long = new CappedText(1000)
+  long.push('a '.repeat(999))
+  long.push(`${key}`)
+  expect(long.value).not.toContain('kkkkkkkkkkkkkkkk')
 })

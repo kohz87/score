@@ -490,13 +490,17 @@ export class RunSession {
     if (actual === undefined || !Number.isFinite(actual)) return
     const target = Math.max(this.reservation.floor, Math.ceil(actual))
     const delta = target - this.reservation.bytes
-    if (delta > 0 && this.budget.used + delta > this.budget.limit) {
+    const over = delta > 0 && this.budget.used + delta > this.budget.limit
+    // The parser really holds these bytes whether or not they fit: they stay charged (as debt, past the limit) until the
+    // state is cleared, so other runs can't be admitted on top of memory that is already in use (FV #3).
+    if (delta !== 0) {
+      this.budget.used += delta
+      this.reservation.bytes = target
+    }
+    if (over) {
       this.dropped += 1
       this.violate('memory-budget')
-      return
     }
-    this.budget.used += delta
-    this.reservation.bytes = target
   }
 
   private reasons(): string[] {
