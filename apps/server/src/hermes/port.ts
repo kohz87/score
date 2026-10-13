@@ -11,6 +11,7 @@ import {
   type TaskSummary,
 } from '@score/contract'
 import { z } from 'zod'
+import type { OrchestrationOwner } from '../domain/orchestration/owner.ts'
 import type {
   AgentDetail,
   ConfigApplyRequest,
@@ -319,7 +320,7 @@ export interface HermesPort extends ProfileManagementPort {
      * Orchestration dispatch (PLAN 7.5): the executor owns recovery of this admission, so generic intent recovery must
      * never resend it.
      */
-    owner?: 'orchestration'
+    owner?: 'orchestration' | OrchestrationOwner
     /**
      * Applied to the stored input only for the payload sent to Hermes, in memory. The orchestrator uses it to insert a
      * per-turn capability that must never be stored.

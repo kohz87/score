@@ -60,8 +60,10 @@ export function refuseAttempt(
     )
     .run(reason, now, now, attempt.id)
   sqlite
-    .prepare("UPDATE message_runs SET state = 'failed' WHERE turn_id = ? AND state = 'pending'")
-    .run(attempt.turn_id)
+    .prepare(
+      "UPDATE message_runs SET state = 'failed' WHERE (turn_id = ? OR orchestration_attempt_id = ?) AND state = 'pending'",
+    )
+    .run(attempt.turn_id, attempt.id)
 }
 
 /** Retires the attempt and owes Hermes a Stop (retried by the executor until acknowledged). */
@@ -171,6 +173,7 @@ export function activeStepCounts(sqlite: DatabaseSync): ActiveCounts {
     .prepare(
       `SELECT orchestration_id AS orch, agent_id AS agent, COUNT(*) AS n FROM orc_attempts
        WHERE kind = 'step' AND state IN ('created', 'send_started', 'running', 'unknown') AND abandoned_at IS NULL
+         AND suspended = 0
        GROUP BY orchestration_id, agent_id`,
     )
     .all() as { orch: string; agent: string; n: number }[]
@@ -184,8 +187,9 @@ export function activeStepCounts(sqlite: DatabaseSync): ActiveCounts {
 }
 
 export const liveAttempts = (sqlite: DatabaseSync, orchId: string): AttemptRow[] =>
-  attemptsOf(sqlite, orchId).filter((attempt) =>
-    ['created', 'send_started', 'running'].includes(attempt.state),
+  attemptsOf(sqlite, orchId).filter(
+    (attempt) =>
+      !attempt.suspended && ['created', 'send_started', 'running'].includes(attempt.state),
   )
 
 /**
@@ -325,8 +329,10 @@ export function recordRefusal(
       )
       .run(total, streak, generation, now, now, attempt.id)
     sqlite
-      .prepare("UPDATE message_runs SET state = 'failed' WHERE turn_id = ? AND state = 'pending'")
-      .run(attempt.turn_id)
+      .prepare(
+        "UPDATE message_runs SET state = 'failed' WHERE (turn_id = ? OR orchestration_attempt_id = ?) AND state = 'pending'",
+      )
+      .run(attempt.turn_id, attempt.id)
     if (attempt.step_id) {
       setStepStatus(sqlite, o.id, attempt.step_id, 'failed', 'hermes_refused', now)
       addCause(

@@ -58,6 +58,16 @@ export const CodingStateShape = {
   stopCause: nonEmpty.optional(),
   /** Copied from another installation's journal: evidence only, never acted on (stop, reset, recover, release). */
   inherited: z.boolean().optional(),
+  /**
+   * The orchestration attempt generation that owns the launch (7.7b M4). Written by the `launch-requested` record,
+   * immutable afterwards, and kept by every later record, the projection row and the tombstone: the coding step limit
+   * counts launches by it, never by database joins alone.
+   */
+  owner: z
+    .object({ orchestrationId: nonEmpty, attemptId: nonEmpty, generation: z.int().nonnegative() })
+    .optional(),
+  /** Why a revoked launch was revoked (7.7b §6 typed cause); written by the `revoked` record, never replaced. */
+  revokeCause: nonEmpty.optional(),
 }
 export type CodingState = z.infer<z.ZodObject<typeof CodingStateShape>>
 export type CodingIdentity = Pick<CodingState, 'launchId' | 'runId' | 'turnId' | 'generation'>
@@ -74,6 +84,8 @@ export type CodingPatch = Partial<
     | 'waivedBy'
     | 'stopCause'
     | 'inherited'
+    | 'owner'
+    | 'revokeCause'
   >
 >
 
@@ -167,6 +179,13 @@ export function nextState(
   else delete next.stopCause
   if (base.inherited || patch.inherited) next.inherited = true
   else delete next.inherited
+  // The owner is written once, by the first record; the revoke cause by the revocation. Neither can change later.
+  const owner = base.owner ?? patch.owner
+  if (owner !== undefined) next.owner = owner
+  else delete next.owner
+  const revokeCause = base.revokeCause ?? (kind === 'revoked' ? patch.revokeCause : undefined)
+  if (revokeCause !== undefined) next.revokeCause = revokeCause
+  else delete next.revokeCause
   if (kind === 'waived') {
     next.waiver = true
     next.disposition = 'waived'
@@ -215,6 +234,8 @@ export function stateOf(record: CodingState): CodingState {
     ...(record.waivedBy === undefined ? {} : { waivedBy: record.waivedBy }),
     ...(record.stopCause === undefined ? {} : { stopCause: record.stopCause }),
     ...(record.inherited === undefined ? {} : { inherited: record.inherited }),
+    ...(record.owner === undefined ? {} : { owner: record.owner }),
+    ...(record.revokeCause === undefined ? {} : { revokeCause: record.revokeCause }),
   }
   return state
 }
@@ -264,6 +285,8 @@ export function foldCodingEntry(
   if (previous?.state.mayHaveExecuted && !entry.mayHaveExecuted)
     violation ??= 'release possibility was cleared'
   if (previous?.state.revoked && !entry.revoked) violation ??= 'revocation was cleared'
+  if (previous?.state.owner && JSON.stringify(previous.state.owner) !== JSON.stringify(entry.owner))
+    violation ??= 'the launch owner changed'
   launches.set(entry.launchId, {
     state: stateOf(entry),
     kind,

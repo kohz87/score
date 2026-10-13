@@ -3,6 +3,7 @@ import { type FenceItem, type GlobalFence } from '@score/contract'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { HttpError } from '../../errors.ts'
+import { applyClosure } from './coding-attempts.ts'
 import { recordRefusal } from './ops.ts'
 import { applyCodingEvidence, verifyCoding } from './coding-checkpoint.ts'
 import { foldCodingLaunches } from './coding-records.ts'
@@ -176,6 +177,7 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
     } else if (
       kind === 'send_started' ||
       entry.kind === 'send_refused' ||
+      entry.kind === 'send_closed' ||
       entry.kind === 'witness'
     ) {
       const id = (entry as { attemptId: string }).attemptId
@@ -204,6 +206,24 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
           journalN: entry.n,
           detail: `The journal records a refusal of dispatch generation ${latest.generation} of attempt ${id}, but the database does not hold it`,
         })
+      else if (
+        latest.state === 'closed' &&
+        latest.generation > 0 &&
+        (
+          sqlite
+            .prepare(
+              'SELECT closed_cause FROM orc_generations WHERE attempt_id = ? AND generation = ?',
+            )
+            .get(id, latest.generation) as { closed_cause: string | null } | undefined
+        )?.closed_cause === null
+      )
+        // The journal proves generation g launched nothing and was closed; the database never committed that.
+        mismatches.push({
+          kind: 'attempt',
+          ref: id,
+          journalN: entry.n,
+          detail: `The journal records dispatch generation ${latest.generation} of attempt ${id} as closed, but the database does not hold it`,
+        })
       else if (latest.generation > 0 && row.dispatch_generation < latest.generation)
         mismatches.push({
           kind: 'attempt',
@@ -212,7 +232,24 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
           detail: `The journal records dispatch generation ${latest.generation} of attempt ${id} (${latest.state === 'sent' ? 'sent' : 'refused'}), but the database is behind it`,
         })
     } else if (entry.kind === 'run_handle') {
-      const row = attempt.get(entry.attemptId) as { run_id: string | null } | undefined
+      const row = attempt.get(entry.attemptId) as
+        { run_id: string | null; dispatch_generation: number } | undefined
+      // Only the latest admitted generation's handle is verified; older ones are evidence (7.7b §5). A generation's own
+      // handle lives on its generation row (the attempt's run_id is cleared when that generation is closed).
+      if (entry.generation !== undefined) {
+        if (row && entry.generation < row.dispatch_generation) continue
+        const held = sqlite
+          .prepare('SELECT run_id FROM orc_generations WHERE attempt_id = ? AND generation = ?')
+          .get(entry.attemptId, entry.generation) as { run_id: string | null } | undefined
+        if (!held || held.run_id !== entry.runId)
+          mismatches.push({
+            kind: 'handle',
+            ref: entry.attemptId,
+            journalN: entry.n,
+            detail: `Run ${entry.runId} was returned for generation ${entry.generation} of attempt ${entry.attemptId}, but the database does not hold that handle`,
+          })
+        continue
+      }
       if (!row || row.run_id !== entry.runId)
         mismatches.push({
           kind: 'handle',
@@ -340,8 +377,39 @@ export function applyJournalEvidence(
       changed++
       continue
     }
+    // Generation g was proven to have launched nothing (7.7b §6) but the database never committed the closure: finish it,
+    // with the refusal counters untouched. A closure never revives an attempt that is already past that generation.
+    if (latest.state === 'closed' && attempt && latest.generation > 0) {
+      const closedCause = (
+        sqlite
+          .prepare(
+            'SELECT closed_cause FROM orc_generations WHERE attempt_id = ? AND generation = ?',
+          )
+          .get(attempt.id, latest.generation) as { closed_cause: string | null } | undefined
+      )?.closed_cause
+      if (closedCause === null && ['send_started', 'running'].includes(attempt.state)) {
+        const cause = entries.findLast(
+          (e) =>
+            e.kind === 'send_closed' &&
+            e.attemptId === attempt.id &&
+            e.generation === latest.generation,
+        ) as { cause: string } | undefined
+        if (cause) {
+          applyClosure(
+            sqlite,
+            { id: attempt.orchestration_id },
+            attempt,
+            latest.generation,
+            cause.cause,
+            now,
+          )
+          changed++
+          continue
+        }
+      }
+    }
     if (!attempt || attempt.state !== 'created') continue
-    if (latest.state === 'refused') {
+    if (latest.state === 'closed' || latest.state === 'refused') {
       // Proven unsent: it stays sendable, but the generation counter never goes back (a restored database lagged).
       if (attempt.dispatch_generation < latest.generation) {
         sqlite
@@ -366,6 +434,27 @@ export function applyJournalEvidence(
   }
   for (const entry of entries) {
     if (entry.kind !== 'run_handle') continue
+    if (entry.generation !== undefined) {
+      // A coding generation's handle is kept on its generation row, and attached to the attempt only while that
+      // generation is the current, still open one: an older generation's run is never reattached.
+      changed += Number(
+        sqlite
+          .prepare(
+            'UPDATE orc_generations SET run_id = ? WHERE attempt_id = ? AND generation = ? AND run_id IS NULL',
+          )
+          .run(entry.runId, entry.attemptId, entry.generation).changes,
+      )
+      changed += Number(
+        sqlite
+          .prepare(
+            `UPDATE orc_attempts SET run_id = ?, updated_at = ?
+             WHERE id = ? AND run_id IS NULL AND dispatch_generation = ? AND state IN ('send_started', 'running', 'unknown')
+               AND NOT EXISTS (SELECT 1 FROM orc_generations g WHERE g.attempt_id = orc_attempts.id AND g.generation = ? AND g.closed_cause IS NOT NULL)`,
+          )
+          .run(entry.runId, now, entry.attemptId, entry.generation, entry.generation).changes,
+      )
+      continue
+    }
     const result = sqlite
       .prepare('UPDATE orc_attempts SET run_id = ?, updated_at = ? WHERE id = ? AND run_id IS NULL')
       .run(entry.runId, now, entry.attemptId)

@@ -123,8 +123,19 @@ export function budgetView(sqlite: DatabaseSync, o: OrchRow): BudgetView {
     // An ended attempt that reported no spend leaves the total unknown (never zero).
     if (ended && attempt.spend_usd === null) unknownSpend = true
   }
+  // A step whose attempt is suspended (7.7b K2/A1) keeps its reservation on that attempt through re-gating and
+  // re-admission: the step's own estimate is not counted a second time while it waits.
+  const suspendedSteps = new Set(
+    attemptsOf(sqlite, o.id)
+      .filter((attempt) => attempt.suspended && attempt.step_id !== null)
+      .map((attempt) => attempt.step_id),
+  )
   for (const step of stepsOf(sqlite, o.id))
-    if (step.status === 'pending_gate' || step.status === 'queued') reserved += step.estimate_usd
+    if (
+      (step.status === 'pending_gate' || step.status === 'queued') &&
+      !suspendedSteps.has(step.id)
+    )
+      reserved += step.estimate_usd
   const committed = settled + provisional + reserved
   return {
     limitUsd: o.budget_usd,

@@ -46,6 +46,7 @@ import {
   type TerminalInfo,
 } from './translate.ts'
 import type { CodingEvent } from './types.ts'
+import type { OrchestrationOwner } from '../../domain/orchestration/owner.ts'
 import type { BackendStatus, UnitBackend } from './unit-backend.ts'
 import { turnWitnessed } from '../../domain/orchestration/coding-checkpoint.ts'
 
@@ -110,12 +111,16 @@ interface Attempt {
   refusal: string | null
   reasons: string[]
   launchId: string | null
+  /** The typed cause when the launch ended before the CLI (unit backend only). */
+  refusalCause: string | null
 }
 
 interface ActiveRun {
   agentId: string
   runId: string
   turnId: string
+  /** Set when an orchestration attempt generation owns the run (7.7b §5). */
+  owner?: OrchestrationOwner
   /** Set once the process (or unit) exists. */
   process?: { stop(reason?: StopReason): void }
   /** Stop asked while the turn was still waiting for the agent's previous turn. */
@@ -366,25 +371,28 @@ export class CodingRuntime {
     agent: StoredCodingAgent,
     driver: ReturnType<typeof driverFor>,
     fresh: boolean,
-  ): Promise<{ code: string; message: string; notice: string } | null> {
+  ): Promise<{ code: string; message: string; notice: string; cause: string } | null> {
     const cli = await this.deps.locator.detect(driver, { fresh })
     if (cli.state === 'not_supported' || cli.state === 'not_installed')
       return {
         code: 'cli_not_installed',
         message: cli.message ?? 'The CLI isn’t available.',
         notice: `${driver.label} can't run: ${cli.message ?? 'not available'}`,
+        cause: 'cli_missing',
       }
     if (!this.deps.locator.verifiedPermissions(driver).includes(agent.permission))
       return {
         code: 'permission_unverified',
         message: `${driver.label} is not verified for ${agent.permission} access yet`,
         notice: `${driver.label} is not verified for ${agent.permission} access yet. Open this agent in Team and pick a verified level.`,
+        cause: 'reach_unverifiable',
       }
     if (cli.state === 'untested_version' && agent.confirmedVersion !== cli.version)
       return {
         code: 'untested_cli_version',
         message: cli.message ?? 'Untested CLI version.',
         notice: `${driver.label} ${cli.version ?? ''} is an untested version. Open this agent in Team and confirm it to run.`,
+        cause: 'untested_version',
       }
     return null
   }
@@ -431,8 +439,10 @@ export class CodingRuntime {
     turnId: string
     sessionId?: string
     model?: string
+    owner?: 'orchestration' | OrchestrationOwner
   }): Promise<{ runId: string }> {
     const { db, ingest } = this.deps
+    const owner = typeof req.owner === 'object' ? req.owner : undefined
     this.assertOpen()
     const agent = getCodingAgent(db.sqlite, req.agentId)
     if (!agent) throw new HttpError(404, 'not_found', 'Couldn’t find that coding agent.')
@@ -441,13 +451,16 @@ export class CodingRuntime {
       throw new HttpError(422, 'agent_still_stopping', UNRESOLVED_NOTE, {
         notice: UNRESOLVED_NOTE,
         agentId: agent.id,
+        cause: 'hold',
       })
     // A frozen home admits nothing, whichever engine would launch (decision 71).
     const frozen = this.deps.frozen?.() ?? null
-    if (frozen) throw new HttpError(422, 'coding_paused', frozen, { notice: frozen })
+    if (frozen)
+      throw new HttpError(422, 'coding_paused', frozen, { notice: frozen, cause: 'frozen' })
     // Supervised units pause on a fence (an unreadable journal, orphan units): the person reviews it first (design §7).
     const paused = this.deps.unit?.block() ?? null
-    if (paused) throw new HttpError(422, 'coding_paused', paused, { notice: paused })
+    if (paused)
+      throw new HttpError(422, 'coding_paused', paused, { notice: paused, cause: 'fenced' })
     const driver = driverFor(agent.runtime)
     const existing = db.sqlite
       .prepare('SELECT * FROM command_intents WHERE idempotency_key = ?')
@@ -466,12 +479,25 @@ export class CodingRuntime {
       )
     // Refuse before anything is stored: a missing or untested CLI is the person's to fix, not a retry loop.
     const refusal = await this.cliRefusal(agent, driver, false)
-    if (refusal) throw new HttpError(422, refusal.code, refusal.message, { notice: refusal.notice })
+    if (refusal)
+      throw new HttpError(422, refusal.code, refusal.message, {
+        notice: refusal.notice,
+        cause: refusal.cause,
+      })
     const checked = await checkRoot(agent.workspace, this.deps.policy)
     if (!checked.ok)
       throw new HttpError(422, 'workspace_unavailable', checked.reason, {
         notice: `The workspace is unavailable: ${checked.reason}`,
+        cause: 'workspace_unavailable',
       })
+    // An owned turn runs only as a supervised unit (7.7b §1): a host that lost its units refuses it before admission.
+    if (owner && !this.deps.unit?.usable())
+      throw new HttpError(
+        422,
+        'coding_paused',
+        'Coding agents can take orchestration steps only where Score runs them as supervised system services.',
+        { notice: 'This host cannot supervise coding runs right now.', cause: 'needs_units' },
+      )
 
     // 1. Durable intent (idempotent per turn).
     const payload = IntentPayload.parse({
@@ -491,9 +517,20 @@ export class CodingRuntime {
       const now = new Date().toISOString()
       db.sqlite
         .prepare(
-          `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', ?, ?)`,
+          `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, owner, orchestration_attempt_id, generation, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
         )
-        .run(intentId, KIND, req.turnId, JSON.stringify(payload), now, now)
+        .run(
+          intentId,
+          KIND,
+          req.turnId,
+          JSON.stringify(payload),
+          owner ? 'orchestration' : null,
+          owner?.attemptId ?? null,
+          owner?.generation ?? null,
+          now,
+          now,
+        )
     }
     // 2. Admission: the run row and the room's streaming reply, in one observation.
     const known = db.sqlite
@@ -501,7 +538,8 @@ export class CodingRuntime {
       .get(req.turnId) as { id: string } | undefined
     const runId = known?.id ?? `cr_${randomUUID()}`
     const room = this.roomOf(req.turnId)
-    const resumed = room ? cliSessionFor(db.sqlite, room, agent.id) : null
+    // An owned turn never resumes a CLI session: one launch per generation, a fresh context per step (7.7b §5).
+    const resumed = room && !owner ? cliSessionFor(db.sqlite, room, agent.id) : null
     await ingest.submit({
       source: `coding:${agent.id}`,
       identity: `admitted:${intentId}`,
@@ -542,6 +580,7 @@ export class CodingRuntime {
         503,
         'shutting_down',
         'Score is shutting down. Try again once it has restarted.',
+        { cause: 'restart' },
       )
     }
     let settleEnded = (): void => undefined
@@ -549,6 +588,7 @@ export class CodingRuntime {
       agentId: agent.id,
       runId,
       turnId: req.turnId,
+      ...(owner ? { owner } : {}),
       ended: new Promise<boolean>((resolve) => {
         settleEnded = () => resolve(!entry.unproven)
       }),
@@ -581,6 +621,49 @@ export class CodingRuntime {
     return { runId }
   }
 
+  /** Why an owned run ended before any launch was requested, for its executor (7.7b §6). The first reason stays. */
+  private recordRefusal(runId: string, cause: string, detail: string | null): void {
+    try {
+      this.deps.db.sqlite
+        .prepare(
+          'INSERT OR IGNORE INTO coding_refusals (run_id, cause, detail, at) VALUES (?, ?, ?, ?)',
+        )
+        .run(runId, cause, detail === null ? null : oneLine(detail, 300), new Date().toISOString())
+    } catch (error) {
+      this.deps.onError?.(error)
+    }
+  }
+
+  /** The runtime a run belongs to (`runs.runtime`), or undefined when Score has no row for it. Controls route by it. */
+  runtimeOfRun(runId: string): string | undefined {
+    return (
+      this.deps.db.sqlite.prepare('SELECT runtime FROM runs WHERE id = ?').get(runId) as
+        { runtime: string } | undefined
+    )?.runtime
+  }
+
+  /**
+   * Whether any run of this agent is unresolved: queued or running, ended but not proven ended, a launch that isn't
+   * settled, or a held process group. Such an agent can't be removed (7.7b §2, `409 agent_busy`).
+   */
+  hasUnresolvedRuns(agentId: string): boolean {
+    const { sqlite } = this.deps.db
+    return (
+      sqlite
+        .prepare(
+          `SELECT 1 FROM runs WHERE profile = ? AND runtime != 'hermes' AND
+             (status IN ('queued','running','waiting_for_approval') OR terminal_source = 'unconfirmed') LIMIT 1`,
+        )
+        .get(agentId) !== undefined ||
+      sqlite
+        .prepare(
+          "SELECT 1 FROM coding_launches WHERE agent_id = ? AND phase != 'settled' AND waiver = 0 LIMIT 1",
+        )
+        .get(agentId) !== undefined ||
+      this.hasUnresolvedGroup(agentId)
+    )
+  }
+
   /** A stop asked outside any live process (a recorded group): its cause goes to the hook like any other. */
   private recordStop(reason: StopReason): void {
     try {
@@ -596,6 +679,7 @@ export class CodingRuntime {
         503,
         'shutting_down',
         'Score is shutting down. Try again once it has restarted.',
+        { cause: 'restart' },
       )
   }
 
@@ -631,7 +715,10 @@ export class CodingRuntime {
     const run = sqlite
       .prepare('SELECT status, profile FROM runs WHERE id = ? AND runtime != ?')
       .get(req.runId, 'hermes') as { status: string; profile: string } | undefined
-    if (!run || run.profile !== req.agentId) return 'not_running'
+    // A restored database may have lost the run row while the journal still holds its launch (7.7b §2, K4): the launch
+    // evidence is resolved before answering, so a missing row never means "not running".
+    const known = this.deps.unit?.openLaunchesOf(req.runId, req.agentId) ?? []
+    if (run ? run.profile !== req.agentId : known.length === 0) return 'not_running'
     const record = this.recordOf(req.runId)
     if (record) {
       this.recordStop('user')
@@ -644,7 +731,7 @@ export class CodingRuntime {
       ])
       return answer
     }
-    const launches = this.deps.unit?.openLaunchesOf(req.runId) ?? []
+    const launches = known
     if (launches.length > 0) {
       const unit = this.deps.unit!
       const gone = Promise.all(launches.map((id) => unit.stopUnattached(id))).then((all) =>
@@ -666,6 +753,7 @@ export class CodingRuntime {
             .catch((error: unknown) => this.deps.onError?.(error))
       return answer
     }
+    if (!run) return 'unconfirmed'
     if (run.status === 'queued') {
       // Queued means the run never left the queue: the process cannot exist.
       const agent = getCodingAgent(this.deps.db.sqlite, req.agentId, true)
@@ -872,6 +960,14 @@ export class CodingRuntime {
     const driver = driverFor(agent.runtime)
     const translation = newTranslation(entry.runId, agent.id, room)
     const costKind = agent.runtime === 'claude-code' ? 'estimated' : 'unknown'
+    const owner = entry.owner
+    // Ends the run without a launch having been requested. An owned run leaves the reason class for its executor.
+    const endUnlaunched = async (cause: string, info: TerminalInfo): Promise<void> => {
+      if (owner) this.recordRefusal(entry.runId, cause, info.error ?? null)
+      await this.finish(translation, owner ? { ...info, ownedResult: true } : info)
+    }
+    const stopCause = (reason: StopReason): string =>
+      reason === 'shutdown' ? 'restart' : reason === 'timeout' ? 'deadline' : 'stop'
     const stopped = (reason: StopReason): TerminalInfo => ({
       status: reason === 'shutdown' ? 'interrupted' : reason === 'user' ? 'cancelled' : 'failed',
       error:
@@ -885,18 +981,28 @@ export class CodingRuntime {
       costKind,
     })
     if (entry.stopBeforeStart)
-      return void (await this.finish(translation, stopped(entry.stopBeforeStart)))
+      return void (await endUnlaunched(
+        stopCause(entry.stopBeforeStart),
+        stopped(entry.stopBeforeStart),
+      ))
+    // An owned turn needs a supervised unit; a host that lost them since admission refuses it here.
+    if (owner && !this.deps.unit?.usable())
+      return void (await endUnlaunched('needs_units', {
+        status: 'failed',
+        error: 'Score can’t supervise coding runs right now.',
+        costKind,
+      }))
     // A queued turn may start long after admission: the CLI may have been replaced meanwhile.
     const refusal = await this.cliRefusal(agent, driver, true)
     if (refusal)
-      return void (await this.finish(translation, {
+      return void (await endUnlaunched(refusal.cause, {
         status: 'failed',
         error: refusal.notice,
         costKind,
       }))
     // An earlier turn's tools may still be running (its group was never proven gone): no new turn until they have ended.
     if (this.hasUnresolvedGroup(agent.id))
-      return void (await this.finish(translation, {
+      return void (await endUnlaunched('hold', {
         status: 'failed',
         error: UNRESOLVED_NOTE,
         costKind,
@@ -904,14 +1010,17 @@ export class CodingRuntime {
     // The folder may have changed since admission.
     const checked = await checkRoot(agent.workspace, this.deps.policy)
     if (!checked.ok)
-      return void (await this.finish(translation, {
+      return void (await endUnlaunched('workspace_unavailable', {
         status: 'failed',
         error: `The workspace is unavailable: ${checked.reason}`,
         costKind,
       }))
     // The final check before launching: a Stop or shutdown that arrived during the awaits above ends the turn unlaunched.
     if (entry.stopBeforeStart)
-      return void (await this.finish(translation, stopped(entry.stopBeforeStart)))
+      return void (await endUnlaunched(
+        stopCause(entry.stopBeforeStart),
+        stopped(entry.stopBeforeStart),
+      ))
     let settingsPath: string | null = null
     const settings = driver.settingsFile?.(this.denyPaths(), this.denyFiles())
     if (settings) {
@@ -921,12 +1030,14 @@ export class CodingRuntime {
       writeFileSync(settingsPath, settings.content, { mode: 0o600 })
       chmodSync(settingsPath, 0o600)
     }
-    let resume = room ? cliSessionFor(db.sqlite, room, agent.id) : null
+    let resume = room && !owner ? cliSessionFor(db.sqlite, room, agent.id) : null
     // Event numbers keep counting across attempts: they name the observations, and a fallback's must not collide.
     let index = 0
     // One wall-clock budget for the whole turn, whichever launch it takes.
     const turnMs = this.deps.maxTurnMs ?? 30 * 60_000
-    const deadline = Date.now() + turnMs
+    // An owned run's expiry never exceeds the orchestration's absolute deadline (7.7b §9); the executor's authorise
+    // refuses the release if that deadline has moved earlier or passed by then.
+    const deadline = Math.min(Date.now() + turnMs, owner?.deadlineAt ?? Infinity)
     for (let attempt = 0; attempt < 2; attempt++) {
       let result: Extract<CodingEvent, { kind: 'result' }> | undefined
       // One terminal per attempt (re-review 6 #1): the first result stands, a second one is loss, never a replacement.
@@ -936,11 +1047,14 @@ export class CodingRuntime {
       let worked = false
       // Between fallback attempts too: nothing launches once Stop or shutdown has been asked for.
       if (entry.stopBeforeStart)
-        return void (await this.finish(translation, stopped(entry.stopBeforeStart)))
+        return void (await endUnlaunched(
+          stopCause(entry.stopBeforeStart),
+          stopped(entry.stopBeforeStart),
+        ))
       const parser = driver.createParser({ cwd: checked.real })
       const command = locator.nativeCommand(driver)
       if (!command.ok)
-        return void (await this.finish(translation, {
+        return void (await endUnlaunched('cli_missing', {
           status: 'failed',
           error: command.message,
           costKind,
@@ -948,18 +1062,24 @@ export class CodingRuntime {
       const { file, args } = command
       // Not a visible queued -> running step for a turn that has been stopped already.
       if (entry.stopBeforeStart)
-        return void (await this.finish(translation, stopped(entry.stopBeforeStart)))
+        return void (await endUnlaunched(
+          stopCause(entry.stopBeforeStart),
+          stopped(entry.stopBeforeStart),
+        ))
       await ingest
         .submit(runningObservation(translation))
         .catch((error: unknown) => this.deps.onError?.(error))
       if (entry.stopBeforeStart)
-        return void (await this.finish(translation, stopped(entry.stopBeforeStart)))
+        return void (await endUnlaunched(
+          stopCause(entry.stopBeforeStart),
+          stopped(entry.stopBeforeStart),
+        ))
       // The last admission boundary for the process-group engine: a restore, journal or coding fence raised since
       // admission keeps the CLI from starting (re-review 2 #2; decision 69 removed the fallback journal that held this).
       if (!this.deps.unit?.usable()) {
         const barrier = this.deps.frozen?.() ?? this.deps.unit?.block() ?? null
         if (barrier)
-          return void (await this.finish(translation, {
+          return void (await endUnlaunched(this.deps.frozen?.() ? 'frozen' : 'fenced', {
             status: 'failed',
             error: barrier,
             costKind,
@@ -993,6 +1113,13 @@ export class CodingRuntime {
       }
       let outcome: Attempt
       const unit = this.deps.unit?.usable() ? this.deps.unit : undefined
+      // Owned runs never take the process-group engine (checked above and at admission).
+      if (owner && !unit)
+        return void (await endUnlaunched('needs_units', {
+          status: 'failed',
+          error: 'Score can’t supervise coding runs right now.',
+          costKind,
+        }))
       if (unit) {
         const unitRun = unit.launch({
           agentId: agent.id,
@@ -1006,8 +1133,28 @@ export class CodingRuntime {
           onEvent: handleEvent,
           deadline,
           graceMs: this.deps.graceMs ?? 5_000,
-          authorised: () =>
-            !entry.stopBeforeStart && !this.closed && !this.hasUnresolvedGroup(agent.id),
+          authorised: owner
+            ? () => true
+            : () => !entry.stopBeforeStart && !this.closed && !this.hasUnresolvedGroup(agent.id),
+          ...(owner
+            ? {
+                launchId: owner.launchId,
+                owner: {
+                  orchestrationId: owner.orchestrationId,
+                  attemptId: owner.attemptId,
+                  generation: owner.generation,
+                },
+                authorise: (prepared: { expiry: number }) => {
+                  // The runtime's own reasons first, then the executor's decision (inside the critical section).
+                  if (entry.stopBeforeStart)
+                    return { allowed: false as const, cause: stopCause(entry.stopBeforeStart) }
+                  if (this.closed) return { allowed: false as const, cause: 'restart' }
+                  if (this.hasUnresolvedGroup(agent.id))
+                    return { allowed: false as const, cause: 'hold' }
+                  return owner.authorise(prepared)
+                },
+              }
+            : {}),
         })
         // Stop must wait for proof from here on: the unit may be starting.
         entry.launched = true
@@ -1034,6 +1181,7 @@ export class CodingRuntime {
           refusal: done.refusal,
           reasons: done.reasons,
           launchId: done.launchId,
+          refusalCause: done.refusalCause,
         }
       } else {
         const spawnOptions: Parameters<typeof spawnCli>[0] = {
@@ -1088,6 +1236,7 @@ export class CodingRuntime {
           refusal: null,
           reasons: [...(ingestFailed ? ['ingest-failure'] : []), ...done.streamLoss],
           launchId: null,
+          refusalCause: null,
         }
       }
       if (!outcome.groupGone) entry.unproven = true
@@ -1103,6 +1252,7 @@ export class CodingRuntime {
       // session is unknown (a generic "not found" proves nothing). The second launch shares the turn's deadline.
       if (
         attempt === 0 &&
+        !owner &&
         resume &&
         outcome.groupGone &&
         outcome.refusal === null &&
@@ -1203,6 +1353,12 @@ export class CodingRuntime {
         info.error =
           `${info.error ?? ''} Some programs the agent started couldn’t be stopped. ${UNRESOLVED_NOTE}`.trim()
       if (info.error) info.error = redact(info.error)
+      if (owner) {
+        info.ownedResult = true
+        // A launch that ended before the CLI (revoked, refused) leaves its typed cause for the executor.
+        if (outcome.refusal !== null && outcome.refusalCause !== null)
+          this.recordRefusal(entry.runId, outcome.refusalCause, outcome.refusal)
+      }
       await this.finish(translation, info)
       if (!outcome.groupGone) {
         if (outcome.launchId) void unit?.reap(outcome.launchId, this.deps.reapRetryMs)

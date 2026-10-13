@@ -161,6 +161,10 @@ export const AttemptRowSchema = z.object({
   refused_generation: z.int(),
   next_try_at: z.string().nullable(),
   needs_person: bool,
+  runtime: z.string(),
+  suspended: bool,
+  result_text: z.string().nullable(),
+  result_truncated: bool,
 })
 export type AttemptRow = z.infer<typeof AttemptRowSchema>
 

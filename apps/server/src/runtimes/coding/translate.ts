@@ -327,7 +327,14 @@ export interface TerminalInfo {
   group?: 'released' | 'unconfirmed'
   /** The eligible authoritative reply (7.7a §6): plans and hand-offs read only this. `null` = none; absent = legacy. */
   reply?: string | null
+  /**
+   * An orchestration-owned run (7.7b §7): the complete eligible reply is also stored, up to 32 KiB, in the same
+   * transaction as the terminal state, for the executor to take as the worker's result.
+   */
+  ownedResult?: boolean
 }
+
+export const CODING_RESULT_BYTES = 32 * 1024
 
 /** The run ended: record it and finish the room reply (hand-offs only after a clean finish). */
 export function terminalObservation(
@@ -348,6 +355,20 @@ export function terminalObservation(
       const row = readRun(sqlite, runId)
       if (runLifecycle.isTerminal(row.status)) return []
       const usage = translation.usage
+      if (
+        info.ownedResult &&
+        info.status === 'completed' &&
+        info.group !== 'unconfirmed' &&
+        typeof info.reply === 'string'
+      ) {
+        const redacted = redact(info.reply)
+        const kept = redactBounded(info.reply, CODING_RESULT_BYTES)
+        sqlite
+          .prepare(
+            'INSERT OR IGNORE INTO coding_run_results (run_id, reply, truncated, created_at) VALUES (?, ?, ?, ?)',
+          )
+          .run(runId, kept, Buffer.byteLength(redacted) > CODING_RESULT_BYTES ? 1 : 0, now)
+      }
       const changed = setRun(sqlite, runId, now, {
         status: info.status,
         ended_at: now,

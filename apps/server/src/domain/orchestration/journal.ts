@@ -48,6 +48,20 @@ const EntrySchema = z.discriminatedUnion('kind', [
     attemptKind: z.enum(['lead', 'step']),
     agentId: z.string().min(1),
     generation: z.int().nonnegative(),
+    /** Coding workers (7.7b §5): the generation's own turn id and pre-minted launch id, so a restart can ask the coding journal whether it ever launched. */
+    turnId: z.string().min(1).optional(),
+    launchId: z.string().min(1).optional(),
+  }),
+  // 7.7b §6: generation `generation` is proven to have launched nothing (a revoke tombstone, or no launch was ever
+  // requested), for a cause that is not a refusal. The attempt is sendable as the next generation or ends, per the cause
+  // table; refusal counters are never touched.
+  z.object({
+    ...Base,
+    kind: z.literal('send_closed'),
+    attemptId: z.string().min(1),
+    orchestrationId: z.string().min(1),
+    generation: z.int().positive(),
+    cause: z.string().min(1).max(64),
   }),
   // v8.2: a proven refusal (nothing reached Hermes) of dispatch generation `generation`. With the matching
   // `send_started` it says the attempt is unsent again; any later generation starts with a new `send_started`.
@@ -66,7 +80,7 @@ const EntrySchema = z.discriminatedUnion('kind', [
     attemptId: z.string().min(1),
     orchestrationId: z.string().min(1),
     lastGeneration: z.int().positive(),
-    lastState: z.enum(['refused', 'sent']),
+    lastState: z.enum(['refused', 'sent', 'closed']),
     refusedCount: z.int().nonnegative(),
   }),
   z.object({
@@ -74,6 +88,8 @@ const EntrySchema = z.discriminatedUnion('kind', [
     kind: z.literal('run_handle'),
     attemptId: z.string().min(1),
     runId: z.string().min(1),
+    /** Coding workers: the dispatch generation the handle belongs to. Only the latest admitted generation's handle is verified or attached. */
+    generation: z.int().positive().optional(),
   }),
   z.object({
     ...Base,
@@ -244,7 +260,7 @@ export type JournalEntryBody = DistributiveOmit<JournalEntry, 'n' | 'at' | 'scop
 /** What the journal says about an attempt's dispatch: its latest generation and whether that one was sent. */
 export interface JournalDispatch {
   generation: number
-  state: 'sent' | 'refused'
+  state: 'sent' | 'refused' | 'closed'
   n: number
 }
 
@@ -258,6 +274,10 @@ export function journalDispatches(entries: readonly JournalEntry[]): Map<string,
       const current = result.get(entry.attemptId)
       if (!current || current.generation <= entry.generation)
         result.set(entry.attemptId, { generation: entry.generation, state: 'refused', n: entry.n })
+    } else if (entry.kind === 'send_closed') {
+      const current = result.get(entry.attemptId)
+      if (!current || current.generation <= entry.generation)
+        result.set(entry.attemptId, { generation: entry.generation, state: 'closed', n: entry.n })
     } else if (entry.kind === 'witness')
       result.set(entry.attemptId, {
         generation: entry.lastGeneration,
@@ -865,6 +885,7 @@ export function foldGenerations(entries: readonly JournalEntry[], scope: string)
     if (
       entry.kind === 'send_started' ||
       entry.kind === 'send_refused' ||
+      entry.kind === 'send_closed' ||
       entry.kind === 'witness'
     ) {
       const group = byAttempt.get(entry.attemptId) ?? []
@@ -898,7 +919,7 @@ export function foldGenerations(entries: readonly JournalEntry[], scope: string)
         attemptId: (newest as { attemptId: string }).attemptId,
         orchestrationId: (newest as { orchestrationId: string }).orchestrationId,
         lastGeneration: latest.generation,
-        lastState: 'refused',
+        lastState: latest.state === 'closed' ? 'closed' : 'refused',
         refusedCount: refused,
       })
     }

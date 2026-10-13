@@ -1,4 +1,5 @@
 import { ownsProcessRowIn } from './coding-checkpoint.ts'
+import type { ReleaseDecision } from './owner.ts'
 import type { ExecutionJournal, JournalEntry } from './journal.ts'
 import {
   nextState,
@@ -31,13 +32,29 @@ export type CodingRejection =
 
 export type CodingResult =
   | { ok: true; entry: JournalEntry; state: CodingState }
-  | { ok: false; reason: CodingRejection; state?: CodingState; cause?: unknown }
+  | {
+      ok: false
+      reason: CodingRejection
+      state?: CodingState
+      cause?: unknown
+      /** `not_authorised` by a typed decision: the revoke tombstone with this cause was written in the same critical section. */
+      denied?: string
+    }
+
+export type { ReleaseDecision }
 
 /** Runs inside the critical section after the record is durable; throwing means "the database did not commit". */
 export type Projection = (entry: JournalEntry, state: CodingState) => void
 
 export class CodingJournal {
-  constructor(readonly journal: ExecutionJournal) {}
+  /**
+   * `inTransaction` reports whether the caller's database connection is inside a transaction. Release must never run
+   * there (7.7b §6): the projection opens its own, and a nested one would fail after `releasing` was already durable.
+   */
+  constructor(
+    readonly journal: ExecutionJournal,
+    private readonly inTransaction: () => boolean = () => false,
+  ) {}
 
   /** A launch's newest state, read under the lock. */
   state(launchId: string): CodingLaunch | undefined {
@@ -87,9 +104,37 @@ export class CodingJournal {
     return this.step(launchId, 'releasing', undefined, {}, project, stillAuthorised)
   }
 
+  /**
+   * The ordering point for an owned launch (7.7b §6): `decide` runs inside the critical section, in its own read
+   * transaction, and never writes. On yes the journal records `releasing` and the projection commits, exactly as
+   * `release`. On no the revoke tombstone with the typed cause is written in this same critical section (no `go`
+   * before the owning commit, no gap between the refusal and its record). Never called inside a database transaction.
+   */
+  releaseOwned(
+    launchId: string,
+    decide: () => ReleaseDecision,
+    project?: Projection,
+  ): CodingResult {
+    if (this.inTransaction())
+      throw new Error('A launch is never released inside a database transaction')
+    return this.step(launchId, 'releasing', undefined, {}, project, undefined, decide)
+  }
+
   /** Revocation is the same critical section: it appends `revoked` only when no `releasing` record exists. */
-  revoke(launchId: string, identity?: CodingIdentity, project?: Projection): CodingResult {
-    return this.step(launchId, 'revoked', identity, {}, project)
+  revoke(
+    launchId: string,
+    identity?: CodingIdentity,
+    project?: Projection,
+    /** The typed cause (`paused`, `stop`, `deadline`…) kept in the launch's permanent state. */
+    cause?: string,
+  ): CodingResult {
+    return this.step(
+      launchId,
+      'revoked',
+      identity,
+      cause === undefined ? {} : { revokeCause: cause },
+      project,
+    )
   }
 
   /** Score read the supervisor's `released` receipt. */
@@ -131,6 +176,7 @@ export class CodingJournal {
     patch: CodingPatch,
     project: Projection | undefined,
     stillAuthorised?: () => boolean,
+    decide?: () => ReleaseDecision,
   ): CodingResult {
     return this.journal.critical((tx): CodingResult => {
       const current = tx.launch(launchId)
@@ -176,6 +222,21 @@ export class CodingJournal {
         }
       if (stillAuthorised && !stillAuthorised())
         return { ok: false, reason: 'not_authorised', ...(current ? { state: current.state } : {}) }
+      if (decide) {
+        const decision = decide()
+        if (!decision.allowed) {
+          const revoked = nextState(current?.state, id, 'revoked', { revokeCause: decision.cause })
+          const entry = tx.append({ kind: 'revoked', ...revoked } as Parameters<
+            typeof tx.append
+          >[0])
+          try {
+            project?.(entry, revoked)
+          } catch (cause) {
+            return { ok: false, reason: 'projection_failed', state: revoked, cause }
+          }
+          return { ok: false, reason: 'not_authorised', state: revoked, denied: decision.cause }
+        }
+      }
       const state = nextState(current?.state, id, kind, patch)
       const entry = tx.append({ kind, ...state } as Parameters<typeof tx.append>[0])
       try {

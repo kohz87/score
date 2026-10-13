@@ -1025,7 +1025,7 @@ room's CLI session (`skipped: no_session`).
   fiveHourResets: string|null; weeklyRemainingPercent: number|null; weeklyResets: string|null }[]; text }`: Antigravity's quota (`agy -p /usage`, no model
   turn), cached for 60 s; `text` is the redacted table as printed, the fallback when a group could not be read. Other runtimes: `409 unsupported`;
   CLI missing or untested: `422 cli_not_installed` / `422 untested_cli_version`; the CLI failing or printing nothing readable: `502 usage_unavailable`.
-- **H** `DELETE /api/coding-agents/:id` → `204` (`409` while a turn runs). Past messages stay; its runs leave Reports.
+- **H** `DELETE /api/coding-agents/:id` → `204` (`409 agent_busy` while any of its runs is unresolved: running or queued, ended but not proven ended, a launch that isn’t settled, or a held group). Past messages stay; its runs leave Reports.
 - Turns: a mention routes through the normal room queue. One turn per coding agent at a time (others show as `queued`); at most 30 minutes per
   turn; Stop = SIGINT, SIGTERM after 5 s, SIGKILL after 5 s more; Stop answers `stopped` only once the process group is proven gone within about a second, otherwise `unconfirmed` (the stop goes on in the background). An untested/missing CLI or an unavailable workspace fails the reply with a
   sentence in the room (`422`, never retried). The CLI's pid, process group and start time are stored right after the spawn; a restart first stops what is left of each recorded group (only when pid and start time still match; SIGTERM, then SIGKILL) and then marks running turns `interrupted` ("Score restarted while this ran"); the CLI session id
@@ -1572,9 +1572,12 @@ Controls and accounting cover observed, Score-started work only.
 
 ### Browser API
 
-- **Hermes agents only (interim, until PLAN 7.7).** Preflight, create (orchestrations) and workflow save/start answer `422
-  unsupported_agent` when the lead or a step agent is a coding agent ("Coding agents can’t take orchestration or workflow
-  steps yet …"). PLAN 7.7 lifts this.
+- **Who may take a step (PLAN 7.7b).** The lead is always a Hermes agent. A step agent may also be a Claude Code or Codex
+  coding agent whose permission is `read-only` or `workspace-write`, on a host that runs coding turns as supervised units.
+  Preflight and create answer `422 unsupported_agent` for a coding lead, an Antigravity or `full` agent, and
+  `422 coding_workers_need_units` on a host without units (process-group fallback or a failing capability check).
+  **Workflows keep the Hermes-only rule until 7.7c:** workflow save/start answer `422 unsupported_agent` for any coding agent
+  ("Coding agents can’t take orchestration or workflow steps yet …").
 - `GET /api/orchestrations/preflight?leadAgentId=&allowedAgents=a,b` → `Preflight` (`checks[]`: listener, lead ready, lead
   MCP access, lead MCP token, allowed agents, global fence, journal, capacity, quota, tool readiness (`unknown`: Hermes loads
   MCP tools per session, which Score cannot see), plus `gatePolicyNotes`, the acknowledgement text and the defaults).

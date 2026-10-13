@@ -211,12 +211,14 @@ export function registerCodingAgentRoutes(
     const { agentId } = Params.parse(request.params)
     if (!getCodingAgent(db.sqlite, agentId))
       throw new HttpError(404, 'not_found', 'Couldn’t find that coding agent.')
-    const busy = db.sqlite
-      .prepare(
-        "SELECT 1 FROM runs WHERE profile = ? AND status IN ('queued','running','waiting_for_approval') LIMIT 1",
+    // Not while any of its runs is unresolved: running or queued, not proven ended, a launch that isn't settled, or a
+    // held group. Its launches keep their routing until then (7.7b §2).
+    if (coding.hasUnresolvedRuns(agentId))
+      throw new HttpError(
+        409,
+        'agent_busy',
+        'This agent still has work Score can’t call finished. Stop it and wait until it has ended first.',
       )
-      .get(agentId)
-    if (busy) throw new HttpError(409, 'conflict', 'Stop what this agent is doing first.')
     db.tx((sqlite) => removeCodingAgent(sqlite, agentId, new Date(clock()).toISOString()))
     // Gone from Team and Reports (their lists read the projection); browsers hear it as a removed agent.
     await ingest.submit({

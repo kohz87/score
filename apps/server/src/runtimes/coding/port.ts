@@ -92,10 +92,15 @@ function compose(port: HermesPort, coding: CodingRuntime): HermesPort {
               ? coding.startRun(req as Parameters<typeof coding.startRun>[0])
               : call(req)
         case 'stopRun':
-          return (req: { agentId: string }) =>
-            idOf(req.agentId)
+          // Controls route by the run's own durable runtime (7.7b §2), not by whether the agent is a coding agent now:
+          // a queued Chat coding turn and a process-group run of an agent that was removed meanwhile still belong to the
+          // coding runtime. A run Score has no row for goes by its agent.
+          return (req: { agentId: string; runId: string }) => {
+            const runtime = coding.runtimeOfRun(req.runId)
+            return (runtime === undefined ? idOf(req.agentId) : runtime !== 'hermes')
               ? coding.stopRun(req as Parameters<typeof coding.stopRun>[0])
               : call(req)
+          }
         case 'rewindSession':
           // A coding agent has no rewindable history: the room hides the messages in Score, and the agent's CLI
           // session for this room is dropped so its next turn starts fresh instead of remembering what was undone.

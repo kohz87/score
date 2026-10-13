@@ -365,7 +365,7 @@ export async function startServer(
             ? 'The fallback is forced (SCORE_CODING_BACKEND).'
             : undefined
     const resolved = installation?.ok === true ? installation : undefined
-    const codingJournal = new CodingJournal(journal)
+    const codingJournal = new CodingJournal(journal, () => database.sqlite.isTransaction)
     const unit =
       config.mode === 'live'
         ? new UnitBackend({
@@ -380,6 +380,7 @@ export async function startServer(
             // Restore, journal and installation uncertainty stop every coding launch, whichever engine runs it.
             blocked: () => installationBlock ?? database.read((sqlite) => fenceBarrier(sqlite)),
             frozen: () => fenceStore.frozenNotice(),
+            onEnded: () => orchestrator?.kick(),
             ...(forcedFallback ? { forced: true } : {}),
             onError: (error) => app?.log.error({ err: error }, 'Coding unit backend failed'),
           })
