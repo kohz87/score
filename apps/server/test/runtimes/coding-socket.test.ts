@@ -405,6 +405,22 @@ test('shutdown sends stop to attached runs and destroys the accepted sockets exp
   expect(existsSync(server.path)).toBe(false)
 })
 
+test('FT #5: a held Score drops the sockets at shutdown without sending its own Stop frame', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'score-sock-'))
+  const server = new CodingSocketServer({
+    runtimeDir: dir,
+    installationId: INSTALL,
+    frozen: () => 'Score is holding all agent work.',
+  })
+  await server.start(true)
+  servers.push(server)
+  const { sup, session } = await connect(server)
+  await server.shutdown()
+  await vi.waitFor(() => expect(sup.closed).toBe(true))
+  expect(sup.frames.some((f) => f['t'] === 'stop')).toBe(false)
+  expect((await session.outcome).kind).toBe('lost')
+})
+
 // ---- review 2026-10-12 #1 and #7: terminal order and forced closure ------------------------------------------------
 
 test('#7: an early end (before EOF and exit) is never acknowledged and is not eligible', async () => {

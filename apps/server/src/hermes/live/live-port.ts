@@ -410,6 +410,8 @@ export class LivePort implements HermesPort {
     await this.routines.remove(id)
   }
   async runRoutine(id: string) {
+    // A routine run is an agent turn: refused like every other outgoing execution while Score holds all agent work.
+    assertThawed(this.options.frozen)
     this.requireStarted()
     await this.routines.run(id)
   }
@@ -773,6 +775,9 @@ export class LivePort implements HermesPort {
   async taskAction(
     req: Parameters<HermesPort['taskAction']>[0],
   ): Promise<{ hermesStatus: string }> {
+    // Actions that make Hermes pick a task up (start, unblock, request changes) start agent work.
+    if (['start', 'unblock', 'request_changes'].includes(req.action))
+      assertThawed(this.options.frozen)
     const { gateway } = this.requireStarted()
     const result = await taskAction(req, {
       readTask: taskReader(this.options.hermesHome),

@@ -369,6 +369,7 @@ export class UnitBackend {
       new CodingSocketServer({
         runtimeDir: deps.runtimeDir,
         installationId: deps.installationId,
+        ...(deps.frozen ? { frozen: deps.frozen } : {}),
       })
     this.current = {
       kind: 'process-group',
@@ -747,6 +748,9 @@ export class UnitBackend {
    * the authenticated connection; without one, to the recorded supervisor through its pidfd. Never by unit name.
    */
   sendStop(launchId: string, session: RunSession | null, reason: StopReason): void {
+    // The cause is already recorded. While Score holds all agent work no Stop frame or signal leaves it (re-review 6 #5);
+    // the supervisor's own disconnect and watchdog containment still ends the CLI.
+    if (this.deps.frozen?.() != null) return
     if (session?.connected) session.stop(STOP_CAUSE[reason])
     else void this.stopSupervisor(launchId).catch((error: unknown) => this.deps.onError?.(error))
   }

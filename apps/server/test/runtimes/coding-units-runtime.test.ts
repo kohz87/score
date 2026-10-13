@@ -2125,3 +2125,27 @@ test('FV #1: a frozen home admits no coding run and recovery signals no supervis
   await coding.recover()
   expect(fake.signals.filter((s) => s.delivered)).toHaveLength(1)
 })
+
+test('FT #5: while frozen, a live Stop is refused, sendStop sends nothing, and the run goes on until the freeze lifts', async () => {
+  let holding: string | null = null
+  await coding.close()
+  await app.close()
+  await boot({ frozen: () => holding })
+  await addAgent()
+  await makeRoom()
+  await say('@coder [fixture:slow] take your time')
+  await vi.waitFor(() => expect(runs()[0]?.status).toBe('running'), { timeout: 15_000 })
+  holding = 'Score is holding all agent work: this folder is a copy.'
+  await expect(coding.stopRun({ agentId: 'coder', runId: runs()[0]!.id })).rejects.toMatchObject({
+    status: 423,
+    code: 'execution_frozen',
+  })
+  // The direct backend probe of re-review 6: a connected session still got `stop('user')`.
+  const stop = vi.fn()
+  backend.sendStop(launches()[0]!.launch_id, { connected: true, stop } as never, 'user')
+  expect(stop).not.toHaveBeenCalled()
+  expect(runs()[0]!.status).toBe('running')
+  holding = null
+  expect(await coding.stopRun({ agentId: 'coder', runId: runs()[0]!.id })).toBe('stopped')
+  await finished()
+})

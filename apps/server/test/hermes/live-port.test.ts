@@ -394,3 +394,18 @@ test('FU #3: a frozen home refuses every outgoing execution and control call at 
   await live.stopRun({ agentId: 'builder', runId: started.runId })
   expect(env.fake.calls.length).toBeGreaterThan(calls)
 })
+
+test('FT #5: a frozen home refuses routine runs and task actions that start work, but not a comment', async () => {
+  let holding: string | null = null
+  const live = create(undefined, () => holding)
+  await live.start(env.ingest)
+  holding = 'Score is holding all agent work: this folder is a copy.'
+  const refused = { status: 423, code: 'execution_frozen', message: holding }
+  await expect(live.runRoutine('builder:r1')).rejects.toMatchObject(refused)
+  for (const action of ['start', 'unblock', 'request_changes'] as const)
+    await expect(live.taskAction({ taskId: 't_x', action })).rejects.toMatchObject(refused)
+  // Not execution: this one reaches the (missing) task and fails for that reason, not with the freeze.
+  await expect(
+    live.taskAction({ taskId: 't_x', action: 'comment', text: 'hi' }),
+  ).rejects.not.toMatchObject({ code: 'execution_frozen' })
+})

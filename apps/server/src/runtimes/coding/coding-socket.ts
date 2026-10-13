@@ -225,11 +225,13 @@ export class RunSession {
   }
 
   /** @internal Shutdown: tell the supervisor to stop, then destroy the socket once the frame is flushed. */
-  shutdown(): Promise<void> {
+  shutdown(sendStop = true): Promise<void> {
     return new Promise((resolve) => {
       const socket = this.socket
       if (!socket || socket.destroyed) return resolve()
       socket.once('close', () => resolve())
+      // Held (re-review 6 #5): the socket is simply dropped; the supervisor's own disconnect containment ends the CLI.
+      if (!sendStop) return void socket.destroy()
       const line =
         JSON.stringify({ v: PROTOCOL_VERSION, t: 'stop', cause: 'score-shutdown' }) + '\n'
       this.noteStop('score-shutdown')
@@ -567,6 +569,8 @@ export interface CodingSocketOptions {
   runtimeDir: string
   installationId: string
   limits?: Partial<SocketLimits>
+  /** Why Score holds all agent work, or null (decisions 71 and 72). While held, Score sends no Stop frame of its own. */
+  frozen?: () => string | null
 }
 
 export class CodingSocketServer {
@@ -827,7 +831,8 @@ export class CodingSocketServer {
    */
   async shutdown(): Promise<void> {
     const sessions = [...this.pending.values()].map((p) => p.session)
-    await Promise.all(sessions.map((s) => s.shutdown()))
+    const held = (this.options.frozen?.() ?? null) !== null
+    await Promise.all(sessions.map((s) => s.shutdown(!held)))
     for (const socket of this.sockets) socket.destroy()
     const server = this.server
     this.server = null

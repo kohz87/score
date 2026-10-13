@@ -606,6 +606,9 @@ export class CodingRuntime {
    * on in the background; no record and an ended run means there is nothing to stop.
    */
   async stopRun(req: { agentId: string; runId: string }): Promise<StopOutcome> {
+    // A Stop is an outgoing control call (decisions 71 and 72; re-review 6 #5).
+    const hold = this.deps.frozen?.() ?? null
+    if (hold !== null) throw new HttpError(423, 'execution_frozen', hold, { notice: hold })
     const entry = this.active.get(req.runId)
     if (entry) {
       if (entry.agentId !== req.agentId) return 'not_running'

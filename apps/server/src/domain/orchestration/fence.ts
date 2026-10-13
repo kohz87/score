@@ -862,8 +862,9 @@ export class GlobalFenceStore {
       probes.some(([table, where]) => {
         // A table an older schema doesn't have holds nothing.
         if (
-          sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) ===
-          undefined
+          sqlite
+            .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
+            .get(table) === undefined
         )
           return false
         return sqlite.prepare(`SELECT 1 FROM ${table} WHERE ${where} LIMIT 1`).get() !== undefined
