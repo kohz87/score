@@ -7,9 +7,8 @@ import { pair } from './pair.ts'
 import { visualFixtures, visualHello } from './visual-fixtures.ts'
 
 // PLAN 7.7b, coding agents as workers, in the browser against the fake adapter. No real coding agent is started and no
-// model is called. Fake mode has no supervised units, so the first test sees the honest "can't run here" answer from
-// the real server; the others put a ready worker in front of the same dialog and diagram by answering the browser's
-// own requests (the same technique as the visual baselines).
+// model is called. Fake mode has no supervised units and the team has no coding agent, so each test puts one in front of
+// the real dialog or diagram by answering the browser's own requests (the technique of the visual baselines).
 
 const shots = process.env.SCORE_UI_SHOTS
 const shot = async (page: Page, name: string) => {
@@ -51,26 +50,28 @@ const readyPreflight = {
   reserveBytes: 1000,
 }
 
-async function addCodingAgent(page: Page, id: string) {
-  const status = await page.evaluate(
-    async ([agentId]) => {
-      const response = await fetch('/api/coding-agents', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'X-Score-Client': 'web' },
-        body: JSON.stringify({
-          id: agentId,
-          name: agentId,
-          runtime: 'codex',
-          permission: 'workspace-write',
-          style: { color: '#19C39A', shape: 'hexagon' },
-          acknowledgeReads: true,
-        }),
-      })
-      return response.status
-    },
-    [id],
-  )
-  expect(status).toBe(201)
+/**
+ * A coding agent in front of the real server's team list, by answering the browser's own request. Making a real one
+ * would change the team that the other specs count, which they run in parallel with this one.
+ */
+async function withCodingAgent(page: Page, id: string) {
+  await page.route('**/api/agents', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const response = await route.fetch()
+    const body = (await response.json()) as { items: Record<string, unknown>[] }
+    body.items.push({
+      ...body.items[0],
+      id,
+      name: id,
+      role: 'Codex coding agent',
+      runtime: 'codex',
+      style: { color: '#19C39A', shape: 'hexagon' },
+      status: 'idle',
+      activity: null,
+      served: true,
+    })
+    await route.fulfill({ response, json: body })
+  })
 }
 
 async function openDialog(page: Page, agent: string) {
@@ -83,12 +84,24 @@ async function openDialog(page: Page, agent: string) {
   return dialog
 }
 
-test('a coding agent on a host without supervised services is refused in plain words', async ({
+test('a coding agent the computer can’t run as a service is refused in plain words', async ({
   page,
 }) => {
   const id = `coder-${Date.now().toString(36)}`
   await pair(page)
-  await addCodingAgent(page, id)
+  await withCodingAgent(page, id)
+  // What the real server answers on a computer without supervised services (covered by the server tests).
+  await page.route('**/api/orchestrations/preflight*', async (route) => {
+    await route.fulfill({
+      status: 422,
+      json: {
+        error: {
+          code: 'coding_workers_need_units',
+          message: 'Coding agents can take steps only where Score runs them as system services.',
+        },
+      },
+    })
+  })
   const dialog = await openDialog(page, id)
   await expect(dialog.getByRole('alert')).toContainText(
     'Coding agents can take steps only where Score runs them as system services',
@@ -102,7 +115,7 @@ test('the start dialog explains what a coding agent can read and asks for one ac
 }) => {
   const id = `coder-${Date.now().toString(36)}`
   await pair(page)
-  await addCodingAgent(page, id)
+  await withCodingAgent(page, id)
   await page.route('**/api/orchestrations/preflight*', async (route) => {
     await route.fulfill({
       json: { ...readyPreflight, workers: [{ ...readyPreflight.workers[0], agentId: id }] },
