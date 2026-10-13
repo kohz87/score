@@ -2841,9 +2841,11 @@ export class Orchestrator {
 
   /** Delivers owed Stops until Hermes acknowledges. Abandoned attempts keep theirs. */
   private async serviceStops(): Promise<boolean> {
-    // Frozen: whose runs these handles name can't be told, so no Stop is delivered (decision 71).
-    if (this.options.fence.executionFrozen() !== null) return false
-    const owed = this.db.read((sqlite) =>
+    // Frozen: whose runs these handles name can't be told, so a Hermes Stop is not delivered (decision 71). A coding run
+    // this process launched and is connected to is provably its own, and a Stop only ends work (decision 74): the coding
+    // runtime answers those and refuses (`execution_frozen`) a recovered or inherited run, which then waits for the reset.
+    const frozen = this.options.fence.executionFrozen() !== null
+    const owedAll = this.db.read((sqlite) =>
       z
         .array(AttemptRowSchema)
         .parse(
@@ -2854,6 +2856,7 @@ export class Orchestrator {
             .all(),
         ),
     )
+    const owed = frozen ? owedAll.filter((attempt) => attempt.runtime !== 'hermes') : owedAll
     let changed = false
     for (const attempt of owed) {
       const last = this.stopTried.get(attempt.id) ?? 0
@@ -2867,7 +2870,8 @@ export class Orchestrator {
         // Not proven ended: the obligation stays owed and is asked again.
         if (outcome === 'unconfirmed') continue
       } catch (error) {
-        this.err(error)
+        if (!(frozen && error instanceof HttpError && error.code === 'execution_frozen'))
+          this.err(error)
         continue
       }
       await this.mutate((ctx) => {
