@@ -817,8 +817,19 @@ test('FV #3: Claude Code system records: only known notices that report no error
 test('a real Claude Code read-only turn (record order and shapes captured 2026-10-13, ids stripped) keeps its success', () => {
   const parser = createClaudeParser()
   const lines = [
-    { type: 'system', subtype: 'init', session_id: '88888888-8888-4888-8888-888888888888', tools: [], cwd: '/w' },
-    { type: 'system', subtype: 'commands_changed', session_id: '88888888-8888-4888-8888-888888888888', commands: [] },
+    {
+      type: 'system',
+      subtype: 'init',
+      session_id: '88888888-8888-4888-8888-888888888888',
+      tools: [],
+      cwd: '/w',
+    },
+    {
+      type: 'system',
+      subtype: 'commands_changed',
+      session_id: '88888888-8888-4888-8888-888888888888',
+      commands: [],
+    },
     { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'ok' }] } },
     { type: 'rate_limit_event', rate_limit_info: { status: 'allowed' } },
     { type: 'result', subtype: 'success', is_error: false, result: 'ok', num_turns: 1 },
