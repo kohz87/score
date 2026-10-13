@@ -364,6 +364,27 @@ test('same-room turns serialize, build bounded redacted context at admission and
   }
 })
 
+test('FU #3: a frozen home pumps no chat reply; the reply stays queued until the freeze is gone', async () => {
+  let holding: string | null = 'Score is holding all agent work: this folder is a copy.'
+  Object.assign(port, { executionHold: () => holding })
+  const run = vi.spyOn(port, 'startRun')
+  await send({ text: 'while frozen' })
+  expect(run).not.toHaveBeenCalled()
+  expect(
+    db.sqlite.prepare("SELECT count(*) AS n FROM message_runs WHERE state = 'pending'").get(),
+  ).toEqual({ n: 1 })
+  holding = null
+  await app.close()
+  const restarted = new RoutingDispatcher(db, ingest, port, () => undefined)
+  try {
+    await restarted.dispatch()
+    expect(run).toHaveBeenCalledTimes(1)
+  } finally {
+    await restarted.close()
+    Object.assign(port, { executionHold: undefined })
+  }
+})
+
 test('an uncertain admission holds later turns and retries the same frozen input', async () => {
   const run = vi.spyOn(port, 'startRun').mockRejectedValueOnce(new Error('admission unavailable'))
   expect((await send({ text: 'first' }, 'uncertain')).statusCode).toBe(500)

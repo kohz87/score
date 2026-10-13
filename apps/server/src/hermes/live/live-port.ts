@@ -9,6 +9,7 @@ import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import type { MessagingSetupRequest } from '@score/contract'
 import { HttpError } from '../../errors.ts'
+import { assertThawed } from './freeze.ts'
 import {
   projectedTasks,
   readProjectedTask,
@@ -223,6 +224,10 @@ export class LivePort implements HermesPort {
       await this.stop()
       throw error
     }
+  }
+  /** Why Score holds all agent work, or null (decision 72). The chat dispatcher asks before it pumps. */
+  executionHold(): string | null {
+    return this.options.frozen?.() ?? null
   }
   async stop(): Promise<void> {
     this.settings.close()
@@ -696,6 +701,7 @@ export class LivePort implements HermesPort {
     let intents: RunIntents
     try {
       ;({ intents } = this.requireStarted())
+      assertThawed(this.options.frozen)
       assertAgentAdmits(this.db!.sqlite, req.agentId)
       assertFeature(this.current, 'score-runs')
       if (!this.current.hermes.servedProfiles.includes(req.agentId))
@@ -738,6 +744,8 @@ export class LivePort implements HermesPort {
   async stopRun(req: { agentId: string; runId: string }): Promise<void> {
     // Kanban attempts are not runs and cannot be stopped from Score: refused before any profile or run lookup.
     assertNotKanbanAttempt(req.runId)
+    // Any Stop (a message's, a Flow's, a person's) can name a run that belongs to another installation (decision 72).
+    assertThawed(this.options.frozen)
     const { db, gateway } = this.requireStarted()
     const row = readRun(db.sqlite, req.runId)
     if (row.profile !== req.agentId)
@@ -855,6 +863,8 @@ export class LivePort implements HermesPort {
     req: Parameters<HermesPort['deliverDecision']>[0],
   ): Promise<'applied' | 'not_pending' | 'failed'> {
     try {
+      const hold = this.options.frozen?.() ?? null
+      if (hold !== null) throw new ApprovalDeliveryError('execution_frozen', false, true)
       const { db, gateway } = this.requireStarted()
       const target = DecisionDeliveryRequestSchema.extend({ runId: z.string().min(1) }).parse(req)
       const row = readRun(db.sqlite, target.runId)

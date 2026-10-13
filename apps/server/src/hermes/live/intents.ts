@@ -7,6 +7,7 @@ import { GatewayClient, HermesHttpError, StartRunSchema, type StartRun } from '.
 import { attachRunMessage, isCancelledTurn } from '../../domain/message-runs.ts'
 import { assertAgentAdmits } from '../../domain/agent-lifecycle.ts'
 import { runDraft } from './translate.ts'
+import { assertThawed } from './freeze.ts'
 import { HttpError } from '../../errors.ts'
 import type { ImageReader } from '../port.ts'
 import { buildRunInput } from './attachments.ts'
@@ -79,6 +80,8 @@ async function dispatch(
   const payload = PayloadSchema.parse(JSON.parse(row.payload))
   let runId = row.result
   if (row.state !== 'accepted') {
+    // Nothing leaves while Score holds all agent work (decision 72), whoever asked: a fresh dispatch, a replay, recovery.
+    assertThawed(deps.frozen)
     assertAgentAdmits(db.sqlite, payload.profile)
     // Typed so routing fails the turn instead of replaying this refusal forever.
     if (row.state === 'failed')
@@ -189,6 +192,8 @@ async function stopCancelledRun(
   generation: number,
 ): Promise<void> {
   const { db, gateway } = deps
+  // The Stop is owed but not delivered: whose run the handle names can't be told while frozen (decision 72).
+  if (deps.frozen?.() != null) return
   db.sqlite
     .prepare(
       "UPDATE command_intents SET stop_state = 'pending' WHERE id = ? AND stop_state IS NULL",
@@ -241,6 +246,8 @@ export async function startRunIntent(
       throw new Error('Idempotency key belongs to a different request')
     return dispatch(deps, row, options.render)
   }
+  // No intent is recorded for work that cannot be sent: a frozen home retires nothing it never created.
+  assertThawed(deps.frozen)
   const credentialGeneration = deps.gateway.generation(parsed.profile)
   const active = z
     .object({ count: z.int().nonnegative() })

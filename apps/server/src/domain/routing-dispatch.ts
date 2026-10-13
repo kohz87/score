@@ -77,6 +77,8 @@ export class RoutingDispatcher {
     const attempted = new Set<string>()
     let failure: unknown
     while (!this.closed) {
+      // A frozen home sends no chat reply (decision 72); the replies stay queued until the history is reset.
+      if (this.port.executionHold?.() != null) break
       const pending = this.db.read((sqlite) =>
         z.array(MessageRunSchema).parse(
           sqlite

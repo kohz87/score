@@ -21,7 +21,7 @@ afterEach(async () => {
   env.db.close()
   rmSync(env.home, { recursive: true, force: true })
 })
-function create(runner?: LivePortOptions['runner']) {
+function create(runner?: LivePortOptions['runner'], frozen?: () => string | null) {
   const hermesHome = join(env.home, 'upstream-fixture')
   mkdirSync(hermesHome)
   writeFileSync(
@@ -32,6 +32,7 @@ function create(runner?: LivePortOptions['runner']) {
     scoreHome: env.home,
     hermesHome,
     ...(runner ? { runner } : {}),
+    ...(frozen ? { frozen } : {}),
     db: env.db,
     fetch: env.fake.fetch,
     readCliVersion: async () => null,
@@ -359,4 +360,37 @@ test('gate #11 stopping the port interrupts supervisor backoff without restartin
   const calls = env.fake.calls.length
   await port.stop()
   expect(env.fake.calls).toHaveLength(calls)
+})
+
+test('FU #3: a frozen home refuses every outgoing execution and control call at the port, with the freeze sentence', async () => {
+  let holding: string | null = null
+  const live = create(undefined, () => holding)
+  await live.start(env.ingest)
+  const started = await live.startRun({ agentId: 'builder', input: 'hello', turnId: 'before' })
+  await expect.poll(() => readRun(env.db.sqlite, started.runId).status).toBe('completed')
+  holding = 'Score is holding all agent work: this folder is a copy.'
+  expect(live.executionHold()).toBe(holding)
+  const calls = env.fake.calls.length
+  const refused = { status: 423, code: 'execution_frozen', message: holding }
+  await expect(
+    live.startRun({ agentId: 'builder', input: 'hello', turnId: 'during' }),
+  ).rejects.toMatchObject(refused)
+  // The probe of re-review 5: a browser Stop reached the gateway through a copied handle.
+  await expect(live.stopRun({ agentId: 'builder', runId: started.runId })).rejects.toMatchObject(
+    refused,
+  )
+  await expect(
+    live.deliverDecision({
+      approvalId: 'approval',
+      origin: 'score-run',
+      profile: 'builder',
+      runId: started.runId,
+      requestId: 'exact-request',
+      choice: 'once',
+    }),
+  ).rejects.toMatchObject({ code: 'execution_frozen', maybeApplied: false })
+  expect(env.fake.calls).toHaveLength(calls)
+  holding = null
+  await live.stopRun({ agentId: 'builder', runId: started.runId })
+  expect(env.fake.calls.length).toBeGreaterThan(calls)
 })
