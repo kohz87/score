@@ -474,6 +474,13 @@
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+.now-message-text {
+  color: var(--tasks-note);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+/* The lead message keeps its large heading look for its opening paragraph only; tables and lists stay body size. */
+.now-message-text.now-message-lead > .chat-md > p:first-child,
 .now-message-body p.now-message-lead {
   font-family: var(--font-heading);
   font-size: 21px;

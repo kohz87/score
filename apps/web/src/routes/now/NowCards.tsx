@@ -19,6 +19,8 @@ import { Composer } from '../chat/Composer.tsx'
 import { approvalChip, type Chip } from '../../live/resolved.ts'
 import { ResolvedChip } from '../../live/ResolvedChip.tsx'
 import { roomsQuery } from '../chat/queries.ts'
+import { Markdown } from '../chat/Markdown.tsx'
+import '../chat/chat.css'
 
 const time = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
@@ -26,7 +28,7 @@ const time = (iso: string) =>
 function messageText(message: Message): string {
   return message.parts
     .flatMap((part) => (part.kind === 'text' ? [part.text] : []))
-    .join('\n')
+    .join('\n\n')
     .trim()
 }
 
@@ -63,7 +65,8 @@ export function ThreadCard({
                 ? agents.find((item) => item.id === author.agentId)
                 : undefined
             const name = message.author.kind === 'you' ? 'You' : (agent?.name ?? 'Agent')
-            const text = messageText(message) || partNote(message)
+            const text = messageText(message)
+            const lead = index === 0 && thread.messages.length > 1
             return (
               <article key={message.id} className="now-message">
                 {agent ? (
@@ -83,12 +86,24 @@ export function ThreadCard({
                     </span>
                     <time dateTime={message.createdAt}>{time(message.createdAt)}</time>
                   </div>
-                  <p
-                    className={index === 0 && thread.messages.length > 1 ? 'now-message-lead' : ''}
-                  >
-                    {text}
-                    {message.streaming && <span className="now-sr-only"> (writing)</span>}
-                  </p>
+                  {text ? (
+                    // Same rendering as Chat, so tables, lists and code read the same here (owner, 2026-10-13).
+                    <div
+                      className={lead ? 'now-message-text now-message-lead' : 'now-message-text'}
+                    >
+                      <Markdown
+                        text={text}
+                        streaming={message.streaming}
+                        workspace={{
+                          agentId: author.kind === 'agent' ? author.agentId : null,
+                          agentIds: agents.map((item) => item.id),
+                        }}
+                      />
+                      {message.streaming && <span className="now-sr-only"> (writing)</span>}
+                    </div>
+                  ) : (
+                    <p className={lead ? 'now-message-lead' : ''}>{partNote(message)}</p>
+                  )}
                 </div>
               </article>
             )

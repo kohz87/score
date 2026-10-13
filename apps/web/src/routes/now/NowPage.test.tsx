@@ -336,6 +336,37 @@ test('the cards render the thread, the asking card, made today and the composer'
   expect(await screen.findByRole('combobox', { name: 'Message #feed' })).toBeTruthy()
 })
 
+test('room messages render Markdown like Chat: a table is a table, not pipes', async () => {
+  current = snapshot({
+    thread: {
+      roomId: 'room1',
+      messages: [
+        {
+          id: 'm1',
+          roomId: 'room1',
+          author: { kind: 'agent', agentId: 'lead' },
+          to: [],
+          parts: [
+            {
+              kind: 'text',
+              text: 'Notes:\n\n| Topic | Decision | Status |\n|---|---|---|\n| Read layer | **Ship** | done |',
+            },
+          ],
+          createdAt: at(-5),
+          streaming: false,
+          refs: [],
+        },
+      ],
+    },
+  })
+  renderNow()
+  const thread = await screen.findByRole('region', { name: 'Room' })
+  const table = await within(thread).findByRole('table')
+  expect(within(table).getByRole('columnheader', { name: 'Decision' })).toBeTruthy()
+  expect(within(table).getByRole('cell', { name: 'Ship' })).toBeTruthy()
+  expect(thread.textContent).not.toContain('| Topic |')
+})
+
 test('Approve posts the decision once with an idempotency key and shows the outcome', async () => {
   renderNow()
   const asking = await screen.findByRole('region', { name: 'Needs you' })
