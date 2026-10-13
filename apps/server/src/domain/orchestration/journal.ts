@@ -333,6 +333,10 @@ export class ExecutionJournal {
   private readonly lock: OsLock
   private nextN: number | undefined
   private broken: string | undefined
+  // Verification #5: once this handle has seen the file, its disappearance is history lost for good. Latched here so no
+  // append through this handle can recreate the file and make the loss look like a fresh namespace.
+  private established = false
+  private vanished: string | undefined
 
   constructor(
     readonly dir: string,
@@ -402,12 +406,18 @@ export class ExecutionJournal {
    * treat it as frozen (decision 72).
    */
   historyState(): HistoryRead {
+    if (this.vanished !== undefined) return { ok: false, reason: this.vanished }
     let signature = 'none'
     try {
       const stat = statSync(this.file)
       signature = `${stat.ino}:${stat.size}:${stat.mtimeMs}`
+      this.established = true
     } catch {
-      // no file: a fresh namespace
+      // no file: a fresh namespace, unless this handle saw it before
+      if (this.established) {
+        this.vanished = 'the execution journal disappeared while Score was running'
+        return { ok: false, reason: this.vanished }
+      }
     }
     if (this.historyCache?.signature === signature) return this.historyCache.value
     const read = this.parse()
@@ -616,6 +626,11 @@ export class ExecutionJournal {
   }
 
   private appendLocked(body: JournalEntryBody): JournalEntry {
+    if (this.established && !existsSync(this.file))
+      this.vanished ??= 'the execution journal disappeared while Score was running'
+    // Only the freeze record itself may follow a loss: it is the evidence a restored database can't forget.
+    if (this.vanished !== undefined && body.kind !== 'execution-freeze')
+      throw new Error(`Execution journal is unusable: ${this.vanished}`)
     if (this.broken !== undefined)
       throw new Error(`Execution journal is unreadable: ${this.broken}`)
     if (this.nextN === undefined && !this.open()) throw new Error('Execution journal is unreadable')
@@ -656,6 +671,7 @@ export class ExecutionJournal {
     }
     // The entry is on disk now; the next number is taken whatever happens to the directory sync below.
     this.nextN = entry.n + 1
+    this.established = true
     // Always, not only for a new name: a handle or process that did not create the file cannot know whether an earlier
     // writer's directory sync (or a compaction's rename sync) failed, and appends are rare enough to afford it.
     this.syncDirectory()

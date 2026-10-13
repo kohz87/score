@@ -748,10 +748,12 @@ export class UnitBackend {
    * the authenticated connection; without one, to the recorded supervisor through its pidfd. Never by unit name.
    */
   sendStop(launchId: string, session: RunSession | null, reason: StopReason): void {
-    // The cause is already recorded. While Score holds all agent work no Stop frame or signal leaves it (re-review 6 #5);
-    // the supervisor's own disconnect and watchdog containment still ends the CLI.
-    if (this.deps.frozen?.() != null) return
+    // The cause is already recorded. A connected session is a launch this process made (its supervisor proved the
+    // single-use token issued for it), so its Stop — the person's, the deadline's or a cap's — goes out even while Score
+    // holds all agent work (decision 74). Signals to a recorded supervisor don't: that one may not be ours, and its own
+    // disconnect and watchdog containment still ends the CLI.
     if (session?.connected) session.stop(STOP_CAUSE[reason])
+    else if (this.deps.frozen?.() != null) return
     else void this.stopSupervisor(launchId).catch((error: unknown) => this.deps.onError?.(error))
   }
 

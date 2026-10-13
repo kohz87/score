@@ -402,7 +402,13 @@ test('FT #5: a frozen home refuses routine runs and task actions that start work
   holding = 'Score is holding all agent work: this folder is a copy.'
   const refused = { status: 423, code: 'execution_frozen', message: holding }
   await expect(live.runRoutine('builder:r1')).rejects.toMatchObject(refused)
-  for (const action of ['start', 'unblock', 'request_changes'] as const)
+  for (const action of [
+    'start',
+    'unblock',
+    'schedule',
+    'request_review',
+    'request_changes',
+  ] as const)
     await expect(live.taskAction({ taskId: 't_x', action })).rejects.toMatchObject(refused)
   // Not execution: this one reaches the (missing) task and fails for that reason, not with the freeze.
   await expect(

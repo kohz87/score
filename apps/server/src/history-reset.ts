@@ -300,16 +300,17 @@ export function resetDatabaseHistory(
         .run()
     }
     // The run rows are the handles Stop, the follower, recovery and approvals look up: a retired run has none.
+    // Every unfinished approval, a run's or the gateway's (verification #2): an old session's request is never answered
+    // from the new history; Hermes times it out on its side.
+    if (has('approvals'))
+      sqlite
+        .prepare(
+          `UPDATE approvals SET phase = 'withdrawn', status = 'withdrawn', closed_reason = 'history_reset', closed_at = ?,
+             updated_at = ?, version = version + 1
+           WHERE phase IN ('guardian_evaluating', 'escalated', 'human_pending')`,
+        )
+        .run(nowIso, nowIso)
     if (has('runs')) {
-      if (has('approvals'))
-        sqlite
-          .prepare(
-            `UPDATE approvals SET phase = 'withdrawn', status = 'withdrawn', closed_reason = 'run_ended', closed_at = ?,
-               updated_at = ?, version = version + 1
-             WHERE phase IN ('guardian_evaluating', 'escalated', 'human_pending')
-               AND run_id IN (SELECT id FROM runs WHERE status IN ('queued', 'running', 'waiting_for_approval'))`,
-          )
-          .run(nowIso, nowIso)
       sqlite
         .prepare(
           `UPDATE runs SET status = 'interrupted', ended_at = COALESCE(ended_at, ?), error = COALESCE(error, ?),

@@ -2126,7 +2126,7 @@ test('FV #1: a frozen home admits no coding run and recovery signals no supervis
   expect(fake.signals.filter((s) => s.delivered)).toHaveLength(1)
 })
 
-test('FT #5: while frozen, a live Stop is refused, sendStop sends nothing, and the run goes on until the freeze lifts', async () => {
+test('decision 74: while frozen, a run this Score started is still stopped over its own connection; nothing else is', async () => {
   let holding: string | null = null
   await coding.close()
   await app.close()
@@ -2136,16 +2136,20 @@ test('FT #5: while frozen, a live Stop is refused, sendStop sends nothing, and t
   await say('@coder [fixture:slow] take your time')
   await vi.waitFor(() => expect(runs()[0]?.status).toBe('running'), { timeout: 15_000 })
   holding = 'Score is holding all agent work: this folder is a copy.'
-  await expect(coding.stopRun({ agentId: 'coder', runId: runs()[0]!.id })).rejects.toMatchObject({
+  // A run this process doesn't hold (recovered or inherited) is not stopped while frozen.
+  await expect(
+    coding.stopRun({ agentId: 'coder', runId: 'not-started-here' }),
+  ).rejects.toMatchObject({
     status: 423,
     code: 'execution_frozen',
   })
-  // The direct backend probe of re-review 6: a connected session still got `stop('user')`.
-  const stop = vi.fn()
-  backend.sendStop(launches()[0]!.launch_id, { connected: true, stop } as never, 'user')
-  expect(stop).not.toHaveBeenCalled()
-  expect(runs()[0]!.status).toBe('running')
-  holding = null
+  // Without a connected session the only way would be a signal to a recorded supervisor: none while frozen.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- private method observed, not called
+  const signal = vi.spyOn(backend as any, 'stopSupervisor')
+  backend.sendStop(launches()[0]!.launch_id, null, 'user')
+  expect(signal).not.toHaveBeenCalled()
+  // Its own connected run: the person's Stop goes out and the run ends.
   expect(await coding.stopRun({ agentId: 'coder', runId: runs()[0]!.id })).toBe('stopped')
   await finished()
+  expect(runs()[0]!.status).not.toBe('running')
 })

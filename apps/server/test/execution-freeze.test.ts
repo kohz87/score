@@ -9,6 +9,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
+import { actionable, readApprovalRow } from '../src/domain/approval-store.ts'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test } from 'vitest'
@@ -600,6 +601,33 @@ test('FT #4: reset retires active replies, live run rows, their pending approval
   database.close()
 })
 
+test('verification #2: reset withdraws every unfinished approval, a gateway one without a run too, so it cannot be answered again', () => {
+  const dir = join(root, 'retire-approvals')
+  mkdirSync(dir)
+  const { database } = fenceOf(dir, 'ns-id')
+  const sqlite = database.sqlite
+  sqlite.exec('PRAGMA foreign_keys = OFF')
+  sqlite.exec(`
+    INSERT INTO approvals (id, origin, stage, target_kind, request_id, profile, session_key, surface, command, description,
+      pattern_keys, choices, phase, status, created_at, updated_at)
+    VALUES ('gw', 'gateway', 'human', 'gateway_request', 'req-1', 'builder', 'old-session', 'cli', 'rm', 'd', '[]', '["once"]',
+      'human_pending', 'pending', '2026-10-13T00:00:00.000Z', '2026-10-13T00:00:00.000Z'),
+           ('done', 'gateway', 'human', 'gateway_request', 'req-2', 'builder', 'old-session', 'cli', 'rm', 'd', '[]', '["once"]',
+      'executed', 'approved', '2026-10-13T00:00:00.000Z', '2026-10-13T00:00:00.000Z');
+    INSERT INTO approval_deliveries (id, approval_id, choice, route, state, lease_id, lease_until, created_at, updated_at)
+      VALUES ('d1', 'gw', 'once', 'bridge', 'delivering', 'l1', 9999999999999, '2026-10-13T00:00:00.000Z',
+        '2026-10-13T00:00:00.000Z');`)
+  resetDatabaseHistory(sqlite, new Date().toISOString())
+  expect(
+    sqlite.prepare('SELECT id, phase, closed_reason FROM approvals ORDER BY id').all(),
+  ).toEqual([
+    { id: 'done', phase: 'executed', closed_reason: null },
+    { id: 'gw', phase: 'withdrawn', closed_reason: 'history_reset' },
+  ])
+  expect(actionable(sqlite, readApprovalRow(sqlite, 'gw')!)).toBe(false)
+  database.close()
+})
+
 test('FT #6: an established journal that disappears while Score runs holds all agent work, and recreating it does not thaw', () => {
   const dir = join(root, 'vanish')
   mkdirSync(dir)
@@ -618,10 +646,50 @@ test('FT #6: an established journal that disappears while Score runs holds all a
   rmSync(join(dir, 'ns', JOURNAL_FILE))
   expect(store.executionFrozenIn(database.sqlite)).toMatch(/disappeared/)
   expect(store.executionFrozen()).toMatch(/disappeared/)
-  // The file coming back (the freeze record itself, or anything else) does not lift it.
+  // Only the freeze record recreates the file (verification #5); nothing ordinary can.
   expect(existsSync(join(dir, 'ns', JOURNAL_FILE))).toBe(true)
   expect(store.executionFrozen()).toMatch(/disappeared/)
   expect(again(dir, 'ns-id', database).executionFrozen()).toMatch(/disappeared/)
+  database.close()
+})
+
+test('verification #5: after the loss is seen, an ordinary append cannot recreate the journal, and a file recreated by another writer does not thaw', () => {
+  const dir = join(root, 'vanish-latch')
+  mkdirSync(dir)
+  const { journal, store, database } = fenceOf(dir, 'ns-id')
+  expect(store.startupCheck()).toEqual({ fenced: false, reasons: [] })
+  const body = {
+    kind: 'send_started',
+    attemptId: 'a1',
+    orchestrationId: 'o1',
+    attemptKind: 'step',
+    agentId: 'builder',
+    generation: 1,
+  } as const
+  journal.append(body)
+  expect(store.executionFrozen()).toBeNull()
+  rmSync(join(dir, 'ns', JOURNAL_FILE))
+  // The probe: an ordinary append (a team resume) right after the loss.
+  expect(() => journal.append({ ...body, attemptId: 'a2' })).toThrow(/disappeared/)
+  expect(existsSync(join(dir, 'ns', JOURNAL_FILE))).toBe(false)
+  // Another writer recreates the file: the latch holds.
+  writeFileSync(join(dir, 'ns', JOURNAL_FILE), '')
+  expect(store.executionFrozenIn(database.sqlite)).toMatch(/disappeared/)
+  expect(store.executionFrozen()).toMatch(/disappeared/)
+  database.close()
+})
+
+test('verification #1: the freeze predicate answers inside a caller transaction (the bridge lease) instead of failing', () => {
+  const dir = join(root, 'nested')
+  mkdirSync(dir)
+  const { store, database } = fenceOf(dir, 'ns-id')
+  expect(store.startupCheck()).toEqual({ fenced: false, reasons: [] })
+  expect(database.tx(() => store.executionFrozen())).toBeNull()
+  database.tx((sqlite) =>
+    sqlite.prepare("UPDATE orc_global SET frozen_reason = 'a test freeze' WHERE id = 1").run(),
+  )
+  expect(database.tx(() => store.executionFrozen())).toBe('a test freeze')
+  expect(database.read(() => store.executionFrozen())).toBe('a test freeze')
   database.close()
 })
 

@@ -775,8 +775,8 @@ export class LivePort implements HermesPort {
   async taskAction(
     req: Parameters<HermesPort['taskAction']>[0],
   ): Promise<{ hermesStatus: string }> {
-    // Actions that make Hermes pick a task up (start, unblock, request changes) start agent work.
-    if (['start', 'unblock', 'request_changes'].includes(req.action))
+    // Actions that make Hermes pick a task up (start, unblock, schedule, ask for review or changes) start agent work.
+    if (['start', 'unblock', 'schedule', 'request_review', 'request_changes'].includes(req.action))
       assertThawed(this.options.frozen)
     const { gateway } = this.requireStarted()
     const result = await taskAction(req, {

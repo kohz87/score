@@ -496,6 +496,8 @@ export class GlobalFenceStore {
   /** The installation registry says this home is a copy of another installation (until its history is reset). */
   /** Set once the journal file has been seen: its later absence is a loss, never a fresh namespace. */
   private journalSeen = false
+  private lostHistory: string | null = null
+  private lostPersisted = false
 
   private copiedFrom: string | undefined
   setCopiedFrom(id: string | undefined): void {
@@ -510,13 +512,19 @@ export class GlobalFenceStore {
    */
   executionFrozen(): string | null {
     if (this.hardBlock !== null) return this.hardBlock
-    const why = this.db.read((sqlite) => this.executionFrozenIn(sqlite))
-    // A journal that vanished is remembered for good, so recreating the file can't thaw it.
-    if (why !== null && this.journalSeen && this.journal.isFresh()) {
+    // Callers ask from inside their own transactions too (the bridge lease, verification #1): answer on that one.
+    const inTx = this.db.sqlite.isTransaction
+    const why = inTx
+      ? this.executionFrozenIn(this.db.sqlite)
+      : this.db.read((sqlite) => this.executionFrozenIn(sqlite))
+    // A journal that vanished is remembered for good (latched in memory at once, persisted at the first chance outside a
+    // transaction), so recreating the file can't thaw it.
+    if (this.lostHistory !== null && !this.lostPersisted && !inTx) {
       try {
-        this.freeze(why)
+        this.freeze(this.lostHistory)
+        this.lostPersisted = true
       } catch {
-        // the predicate keeps answering from the journal's absence
+        // the in-memory latch keeps answering
       }
     }
     return why
@@ -535,10 +543,12 @@ export class GlobalFenceStore {
           { frozen_reason: string | null } | undefined
       )?.frozen_reason ?? null
     if (stored !== null) return stored
+    if (this.lostHistory !== null) return this.lostHistory
     // An established journal that disappears while Score runs is history lost, not a fresh start (re-review 6 #7).
     // Checked here so it precedes every dispatch decision and append that asks the predicate.
     if (this.journal.isFresh()) {
-      if (this.journalSeen) return 'the execution journal disappeared while Score was running'
+      if (this.journalSeen)
+        return (this.lostHistory = 'the execution journal disappeared while Score was running')
     } else this.journalSeen = true
     const history = this.journal.historyState()
     if (!history.ok) return `the execution journal cannot be read (${history.reason})`
@@ -557,7 +567,8 @@ export class GlobalFenceStore {
     // take the record. Once per freeze: a later start finds the earlier record.
     try {
       const history = this.journal.historyState()
-      if (history.ok && historyHold(history) === null)
+      // A journal that vanished reads as not ok, yet takes this one record (verification #5); a damaged one refuses it.
+      if (!history.ok || historyHold(history) === null)
         this.journal.append({ kind: 'execution-freeze', reason: why.slice(0, 1000) })
     } catch {
       // unreadable or unwritable: executionFrozen() treats an unreadable journal as frozen anyway
