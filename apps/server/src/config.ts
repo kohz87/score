@@ -88,6 +88,11 @@ const ConfigSchema = z.object({
   vault: z.string().min(1).optional(),
   // Media store quota in MiB (default 512, applied by the store).
   mediaQuotaMb: z.coerce.number().int().min(1).optional(),
+  // The GitHub repository whose tags the About page's update check reads (SCORE_UPDATE_REPO), `owner/name`.
+  updateRepo: z
+    .string()
+    .regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, 'Expected owner/name')
+    .default('kohz87/score'),
   fakeSpeed: z.coerce.number().positive().default(1),
   fakeLoop: z
     .enum(['true', 'false'])
@@ -131,6 +136,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     logFile: env.SCORE_LOG_FILE || undefined,
     vault: env.SCORE_VAULT,
     mediaQuotaMb: env.SCORE_MEDIA_QUOTA_MB,
+    updateRepo: env.SCORE_UPDATE_REPO || undefined,
     fakeSpeed: env.SCORE_FAKE_SPEED,
     fakeLoop: env.SCORE_FAKE_LOOP,
     ignoredInsecureHttp: env.SCORE_REMOTE_INSECURE_HTTP !== undefined,

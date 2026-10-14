@@ -62,6 +62,8 @@ import { PasskeyService } from './auth/passkeys.ts'
 import type { SessionStore } from './auth/session-store.ts'
 import { registerCurrencyRoutes } from './http/currency.ts'
 import { registerLogRoutes } from './http/logs.ts'
+import { registerAboutRoutes } from './http/about.ts'
+import type { UpdateFetcher } from './domain/about.ts'
 import { registerSessionRoutes } from './http/session.ts'
 import { registerSystemRoutes } from './http/system.ts'
 import { registerStreamRoute, type StreamRouteOptions } from './http/stream.ts'
@@ -100,6 +102,8 @@ interface BuildAppOptions {
   getEpoch?: () => string
   port?: HermesPort
   getSystemStatus?: () => SystemStatus
+  /** The update check's network call; tests inject one so they never reach GitHub. */
+  updateFetcher?: UpdateFetcher
   streamOptions?: Pick<StreamRouteOptions, 'heartbeatMs' | 'fanoutOptions'>
   bridge?: BridgeDeps
   outbox?: ApprovalOutbox
@@ -153,6 +157,7 @@ export function buildApp({
   getEpoch,
   port = createHermesPort(config),
   getSystemStatus = () => defaultSystemStatus(config, port, db, clock),
+  updateFetcher,
   streamOptions,
   bridge,
   outbox,
@@ -453,6 +458,13 @@ export function buildApp({
     })
   registerSystemRoutes(app, getSystemStatus)
   registerLogRoutes(app, config.logFile)
+  registerAboutRoutes(app, {
+    config,
+    db,
+    getSystemStatus,
+    ...(updateFetcher ? { fetcher: updateFetcher } : {}),
+    ...(clock ? { clock } : {}),
+  })
   if (db && ingest && getEpoch) {
     registerStreamRoute(app, {
       db,
