@@ -3,6 +3,12 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.2.1] — 2026-10-14
+
+### Fixed
+- An orchestration's coding step no longer overwrites Chat's saved CLI session for that room and agent, so a later Chat
+  message there can't resume the step's session (found by the 7.7c design review; 7.7b promised it).
+
 ## [1.2.0] — 2026-10-14
 
 Stage 2 of coding agents in orchestration (PLAN 7.7b): an orchestration's lead can give **worker steps to Claude Code

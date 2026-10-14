@@ -1114,7 +1114,7 @@ export class CodingRuntime {
         costKind: 'unknown',
       }))
     const driver = driverFor(agent.runtime)
-    const translation = newTranslation(entry.runId, agent.id, room)
+    const translation = newTranslation(entry.runId, agent.id, room, Boolean(entry.owner))
     const costKind = agent.runtime === 'claude-code' ? 'estimated' : 'unknown'
     const owner = entry.owner
     // An owned worker runs what its policy says (7.7b §3), never what the agent row says now: permission, model and

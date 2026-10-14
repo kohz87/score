@@ -34,6 +34,8 @@ export interface RunTranslation {
   runId: string
   agentId: string
   roomId: string | null
+  /** An orchestration- or workflow-owned run (7.7b §6): it never writes Chat's (room, agent) session cache. */
+  owned: boolean
   seq: number
   calls: Map<string, { seq: number; startedAt: string; detail?: ToolDetail }>
   usage: { input: number; output: number; costUsd: number | null } | null
@@ -54,7 +56,8 @@ export const newTranslation = (
   runId: string,
   agentId: string,
   roomId: string | null,
-): RunTranslation => ({ runId, agentId, roomId, seq: 0, calls: new Map(), usage: null })
+  owned = false,
+): RunTranslation => ({ runId, agentId, roomId, owned, seq: 0, calls: new Map(), usage: null })
 
 function setRun(
   sqlite: DatabaseSync,
@@ -217,8 +220,9 @@ export function eventObservation(
             session_id: event.sessionId,
             ...(event.model ? { model: event.model } : {}),
           })
-          // Durable as soon as it is known: a restart keeps the session so the next turn resumes it.
-          if (translation.roomId)
+          // Durable as soon as it is known: a restart keeps the session so the next turn resumes it. An owned run keeps
+          // its session on its run row only: Chat's cache for that room is never overwritten (7.7b §6).
+          if (translation.roomId && !translation.owned)
             rememberCliSession(sqlite, translation.roomId, agentId, event.sessionId, now)
           drafts.push(runDraft(sqlite, runId))
           break

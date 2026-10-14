@@ -49,6 +49,18 @@ test('smoke: a coding step is dispatched, released, completed and its complete r
   expect(h.errors).toEqual([])
 })
 
+test("an orchestration step keeps its CLI session on its run only: Chat's session cache for the room stays untouched", async () => {
+  h = await workerHarness({ lead: { script: oneStep('[fixture:basic] write hello') } })
+  h.addAgent()
+  const id = await h.create()
+  await h.until(() => status(id) === 'succeeded', 40_000)
+  // The fixture reports a CLI session; the run row keeps it, Chat's (room, agent) cache never sees it (7.7b §6).
+  expect(
+    h.rows('SELECT session_id FROM runs WHERE runtime != ?', 'hermes')[0]?.['session_id'],
+  ).toBeTruthy()
+  expect(h.rows('SELECT * FROM coding_sessions')).toEqual([])
+})
+
 test('a hold at release closes generation 1 (send_closed, cause paused); generation 2 has its own turn, launch and run', async () => {
   h = await workerHarness({
     lead: { script: oneStep('[fixture:basic] write hello') },
