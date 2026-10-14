@@ -395,6 +395,24 @@ describe('#7 coding inventory has its own part of the reserve', () => {
     )
   })
 
+  test('lowering then restoring codingSteps does not reserve twice (F2 #5)', async () => {
+    const quota = reserveFor(12, 20, codingItemsFor(12, 10))
+    h = await workerHarness({
+      lead: { script: byTurn({ 1: async () => 'waiting', 2: async () => 'waiting' }) },
+      orchestrator: { quotaBytes: quota },
+    })
+    h.addAgent()
+    const id = await h.create({ codingSteps: 10 })
+    const reserved = orch()['reserve_bytes']
+    expect(orch()['coding_reserve_bytes']).toBe(10 * CODING_ITEM_EXTRA_BYTES)
+    await h.orch.limits(id, { codingSteps: 4, orchestrationRevision: revision(id) })
+    expect(orch()['coding_reserve_bytes']).toBe(10 * CODING_ITEM_EXTRA_BYTES)
+    await h.orch.limits(id, { codingSteps: 10, orchestrationRevision: revision(id) })
+    expect(orch()['coding_steps']).toBe(10)
+    expect(orch()['reserve_bytes']).toBe(reserved)
+    expect(orch()['coding_reserve_bytes']).toBe(10 * CODING_ITEM_EXTRA_BYTES)
+  })
+
   test('raising codingSteps grows the reserve by the new items; a database without room refuses it', async () => {
     // The database holds exactly what a default run (10 coding items) reserves, which is also what preflight asks for.
     const quota = reserveFor(12, 20, codingItemsFor(12, 10))

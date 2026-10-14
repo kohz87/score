@@ -180,13 +180,12 @@ export function setLimits(
       sqlite
         .prepare('SELECT 1 FROM orc_worker_policies WHERE orchestration_id = ? LIMIT 1')
         .get(orchId) !== undefined
+    // Growth is measured against what is already reserved, not against the previous limit: 10 -> 4 -> 10 keeps ten
+    // items' reserve and adds nothing (F2 #5).
+    const reservedItems = Math.floor(o.coding_reserve_bytes / CODING_ITEM_EXTRA_BYTES)
     const grow = hasWorkers
-      ? Math.max(
-          0,
-          (codingItemsFor(o.max_steps, body.codingSteps) -
-            codingItemsFor(o.max_steps, o.coding_steps)) *
-            CODING_ITEM_EXTRA_BYTES,
-        )
+      ? Math.max(0, codingItemsFor(o.max_steps, body.codingSteps) - reservedItems) *
+        CODING_ITEM_EXTRA_BYTES
       : 0
     if (grow > 0 && !storageFits(sqlite, grow))
       throw new HttpError(
