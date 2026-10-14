@@ -6,6 +6,7 @@ import {
   addHistory,
   attemptsOf,
   isFinalStep,
+  readStep,
   stepsOf,
   type AttemptRow,
   type OrchRow,
@@ -17,9 +18,21 @@ import {
 
 export const utf8Bytes = (text: string): number => new TextEncoder().encode(text).length
 
-/** Room for ordinary text in a run: its reserve minus the protected part kept for Stop and obligation records. */
-export const storageRoom = (o: Pick<OrchRow, 'reserve_bytes' | 'stored_bytes'>): number =>
-  o.reserve_bytes - ORCH_LIMITS.controlReserveBytes - o.stored_bytes
+/**
+ * Room for ordinary text and observations in a run: its reserve minus the protected part kept for Stop and obligation
+ * records, minus the part held for coding inventory (unless coding inventory already spilled past its own part, in which
+ * case the spill is counted as ordinary use).
+ */
+export const storageRoom = (
+  o: Pick<
+    OrchRow,
+    'reserve_bytes' | 'stored_bytes' | 'coding_reserve_bytes' | 'coding_stored_bytes'
+  >,
+): number =>
+  o.reserve_bytes -
+  ORCH_LIMITS.controlReserveBytes -
+  o.coding_reserve_bytes -
+  (o.stored_bytes - Math.min(o.coding_stored_bytes, o.coding_reserve_bytes))
 
 export function addStored(sqlite: DatabaseSync, orchId: string, bytes: number): void {
   sqlite
@@ -27,10 +40,43 @@ export function addStored(sqlite: DatabaseSync, orchId: string, bytes: number): 
     .run(bytes, orchId)
 }
 
+/** Coding inventory (a coding step's result, retained input and run result): charged to the coding part of the reserve. */
+export function addCodingStored(sqlite: DatabaseSync, orchId: string, bytes: number): void {
+  sqlite
+    .prepare(
+      'UPDATE orchestrations SET stored_bytes = stored_bytes + ?, coding_stored_bytes = coding_stored_bytes + ? WHERE id = ?',
+    )
+    .run(bytes, bytes, orchId)
+}
+
 /** The reserve a run takes at creation: steps and lead turns at 64 KiB each plus the control reserve. */
-export const reserveFor = (maxSteps: number, maxLeadTurns: number): number =>
+export const reserveFor = (maxSteps: number, maxLeadTurns: number, codingItems = 0): number =>
   (maxSteps + maxLeadTurns) * (ORCH_LIMITS.storagePerItemBytes + ORCH_LIMITS.recordsPerItemBytes) +
-  ORCH_LIMITS.controlReserveBytes
+  ORCH_LIMITS.controlReserveBytes +
+  codingItems * CODING_ITEM_EXTRA_BYTES
+
+/** One kept copy of a coding result (the translator's cap), and the run output kept beside it. */
+export const CODING_RESULT_BYTES = 32 * 1024
+export const CODING_OUTPUT_BYTES = 8 * 1024
+/** A step result is the kept reply plus a short cut notice, bounded at this much. */
+const CODING_RESULT_COPY_BYTES = CODING_RESULT_BYTES + 128
+
+/**
+ * What a coding worker item reserves beyond an ordinary step (design §11, F2 #4): everything one item can retain, so
+ * inventory never reaches the control reserve. One retained input (the step input cap), the step result and the attempt
+ * result (two copies), the retained reply (`coding_run_results`), the run output, and 2 KiB for each of up to 20
+ * dispatch generations. Independent of the observation pool, so terminal state, proof, refusal receipt and Stop always fit.
+ */
+export const CODING_ITEM_EXTRA_BYTES =
+  ORCH_LIMITS.stepInputBytes +
+  2 * CODING_RESULT_COPY_BYTES +
+  CODING_RESULT_BYTES +
+  CODING_OUTPUT_BYTES +
+  20 * 2 * 1024
+
+/** A run can release at most `codingSteps` launches, and each coding item needs one, so that bounds the items. */
+export const codingItemsFor = (maxSteps: number, codingSteps: number): number =>
+  Math.min(maxSteps, codingSteps)
 
 export function setStepStatus(
   sqlite: DatabaseSync,
@@ -60,8 +106,10 @@ export function refuseAttempt(
     )
     .run(reason, now, now, attempt.id)
   sqlite
-    .prepare("UPDATE message_runs SET state = 'failed' WHERE turn_id = ? AND state = 'pending'")
-    .run(attempt.turn_id)
+    .prepare(
+      "UPDATE message_runs SET state = 'failed' WHERE (turn_id = ? OR orchestration_attempt_id = ?) AND state = 'pending'",
+    )
+    .run(attempt.turn_id, attempt.id)
 }
 
 /** Retires the attempt and owes Hermes a Stop (retried by the executor until acknowledged). */
@@ -124,27 +172,29 @@ export function cascadeBlocked(sqlite: DatabaseSync, orchId: string, now: string
   for (;;) {
     const steps = stepsOf(sqlite, orchId)
     const byId = new Map(steps.map((step) => [step.id, step]))
-    const next = steps.find(
-      (step) =>
-        (step.status === 'queued' || step.status === 'pending_gate') &&
-        step.after_steps.some((id) => {
-          const dependency = byId.get(id)
-          return (
-            dependency !== undefined &&
-            isFinalStep(dependency.status) &&
-            dependency.status !== 'succeeded'
-          )
-        }),
+    // A coding step blocked "agent changed" or "limit reached" keeps its suspended attempt and may go on once the person
+    // decides (7.7b §12a): the steps waiting for it keep waiting instead of being blocked for good.
+    const suspended = new Set(
+      attemptsOf(sqlite, orchId)
+        .filter((attempt) => attempt.suspended && attempt.step_id !== null)
+        .map((attempt) => attempt.step_id),
     )
-    if (!next) return blocked
-    const culprit = next.after_steps.find((id) => {
+    const failedDependency = (id: string): boolean => {
       const dependency = byId.get(id)
       return (
         dependency !== undefined &&
         isFinalStep(dependency.status) &&
-        dependency.status !== 'succeeded'
+        dependency.status !== 'succeeded' &&
+        !(dependency.status === 'blocked' && suspended.has(dependency.id))
       )
-    })!
+    }
+    const next = steps.find(
+      (step) =>
+        (step.status === 'queued' || step.status === 'pending_gate') &&
+        step.after_steps.some(failedDependency),
+    )
+    if (!next) return blocked
+    const culprit = next.after_steps.find(failedDependency)!
     setStepStatus(
       sqlite,
       orchId,
@@ -171,6 +221,7 @@ export function activeStepCounts(sqlite: DatabaseSync): ActiveCounts {
     .prepare(
       `SELECT orchestration_id AS orch, agent_id AS agent, COUNT(*) AS n FROM orc_attempts
        WHERE kind = 'step' AND state IN ('created', 'send_started', 'running', 'unknown') AND abandoned_at IS NULL
+         AND suspended = 0
        GROUP BY orchestration_id, agent_id`,
     )
     .all() as { orch: string; agent: string; n: number }[]
@@ -184,8 +235,9 @@ export function activeStepCounts(sqlite: DatabaseSync): ActiveCounts {
 }
 
 export const liveAttempts = (sqlite: DatabaseSync, orchId: string): AttemptRow[] =>
-  attemptsOf(sqlite, orchId).filter((attempt) =>
-    ['created', 'send_started', 'running'].includes(attempt.state),
+  attemptsOf(sqlite, orchId).filter(
+    (attempt) =>
+      !attempt.suspended && ['created', 'send_started', 'running'].includes(attempt.state),
   )
 
 /**
@@ -228,7 +280,10 @@ export function beginFinish(
   withdrawInquiries(sqlite, o.id, now)
   for (const created of attemptsOf(sqlite, o.id).filter((a) => a.state === 'created')) {
     refuseAttempt(sqlite, created, 'not dispatched: run finishing', now)
-    if (created.step_id)
+    // A step that is already final (a coding worker's blocked step waiting with its suspended attempt) keeps its own
+    // status and reason; only waiting work becomes "not started".
+    const step = created.step_id ? readStep(sqlite, o.id, created.step_id) : undefined
+    if (created.step_id && (!step || !isFinalStep(step.status)))
       setStepStatus(sqlite, o.id, created.step_id, 'not_started', 'not_started: run_finishing', now)
   }
   addStored(sqlite, o.id, utf8Bytes(summary))
@@ -290,14 +345,22 @@ export function compactControlHistory(sqlite: DatabaseSync, orchId: string, limi
 export function chargeObservation(sqlite: DatabaseSync, runId: string, bytes: number): boolean {
   const owner = sqlite
     .prepare(
-      `SELECT o.id AS id, o.reserve_bytes AS reserve, o.stored_bytes AS stored FROM message_runs m
+      `SELECT o.id AS id, o.reserve_bytes AS reserve_bytes, o.stored_bytes AS stored_bytes,
+              o.coding_reserve_bytes AS coding_reserve_bytes, o.coding_stored_bytes AS coding_stored_bytes FROM message_runs m
        JOIN orc_attempts a ON a.id = m.orchestration_attempt_id JOIN orchestrations o ON o.id = a.orchestration_id
        WHERE m.run_id = ?`,
     )
-    .get(runId) as { id: string; reserve: number; stored: number } | undefined
+    .get(runId) as
+    | {
+        id: string
+        reserve_bytes: number
+        stored_bytes: number
+        coding_reserve_bytes: number
+        coding_stored_bytes: number
+      }
+    | undefined
   if (!owner) return true
-  if (bytes > storageRoom({ reserve_bytes: owner.reserve, stored_bytes: owner.stored }))
-    return false
+  if (bytes > storageRoom(owner)) return false
   addStored(sqlite, owner.id, bytes)
   return true
 }
@@ -325,8 +388,10 @@ export function recordRefusal(
       )
       .run(total, streak, generation, now, now, attempt.id)
     sqlite
-      .prepare("UPDATE message_runs SET state = 'failed' WHERE turn_id = ? AND state = 'pending'")
-      .run(attempt.turn_id)
+      .prepare(
+        "UPDATE message_runs SET state = 'failed' WHERE (turn_id = ? OR orchestration_attempt_id = ?) AND state = 'pending'",
+      )
+      .run(attempt.turn_id, attempt.id)
     if (attempt.step_id) {
       setStepStatus(sqlite, o.id, attempt.step_id, 'failed', 'hermes_refused', now)
       addCause(

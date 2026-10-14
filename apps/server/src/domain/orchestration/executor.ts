@@ -3,6 +3,7 @@ import {
   WORKFLOW_LIMITS,
   ORCH_ACKNOWLEDGEMENT_TEXT,
   ORCH_CAPACITY,
+  ORCH_DEFAULTS,
   ORCH_LIMITS,
   ORC_CAPABILITY_PLACEHOLDER,
   type GateDecision,
@@ -19,6 +20,7 @@ import {
   type PreflightCheck,
   type AbandonDecision,
   type RunControl,
+  type PolicyRemapDecision,
   type RemapDecision,
   type WaiverDecision,
   type WorkflowPreflight,
@@ -46,7 +48,14 @@ import { agentAdmits, agentPausedAt, lifecycleOf } from '../agent-lifecycle.ts'
 import { briefTitle, createBrief, emitBriefChange } from '../briefs.ts'
 import { insertRoom, storeMessage } from '../rooms.ts'
 import { teamPausedAt } from '../team-pause.ts'
-import { budgetView, canReserve, makeSpendReader, overBudget, type SpendReader } from './budget.ts'
+import {
+  budgetView,
+  canReserve,
+  makeSpendReader,
+  overBudget,
+  unknownCostBlocks,
+  type SpendReader,
+} from './budget.ts'
 import {
   containsCapability,
   hashCapability,
@@ -63,12 +72,28 @@ import {
   grantWaiver,
   remapAgent,
   pauseRun,
+  policyRemapStep,
   resumeRun,
   setLimits,
   stopRun,
 } from './decisions.ts'
 import { applyJournalEvidence, fenceView, isFenced, type GlobalFenceStore } from './fence.ts'
 import { journalDispatches } from './journal.ts'
+import { readWorkerPolicy, storeWorkerPolicy } from './coding-policy.ts'
+import { admissionDenial, recoveredOnly } from './admission.ts'
+import {
+  MAX_GENERATIONS,
+  applyClosure,
+  dropUnlaunchedInput,
+  causeClass,
+  codingTurnId,
+  launchFacts,
+  provenNoLaunch,
+  readGeneration,
+  runtimeOfAgent,
+} from './coding-attempts.ts'
+import type { OrchestrationOwner, ReleaseDecision } from './owner.ts'
+import { CODING_RESULT_BYTES } from '../../runtimes/coding/translate.ts'
 import {
   activeStepCounts,
   addStored,
@@ -78,6 +103,9 @@ import {
   compactControlHistory,
   refuseAttempt,
   reserveFor,
+  addCodingStored,
+  CODING_ITEM_EXTRA_BYTES,
+  codingItemsFor,
   setStepStatus,
 } from './ops.ts'
 import { renderLeadInput, renderStepInput } from './render.ts'
@@ -85,7 +113,12 @@ import { finalizeGraph, planWorkflow } from '../workflows/planner.ts'
 import { workflowDetailOf, workflowEventsOf, workflowSummaryOf } from '../workflows/views.ts'
 import { readVersion } from '../workflows/definitions.ts'
 import { validateDefinition } from '../workflows/definition.ts'
-import { assertHermesOnly } from './supported-agents.ts'
+import {
+  assertHermesOnly,
+  assertOrchestrationWorkers,
+  type CodingWorkerFacts,
+  type WorkerReport,
+} from './supported-agents.ts'
 import {
   agentIdsOf,
   insertWorkflowRun,
@@ -160,93 +193,61 @@ export interface OrchestratorOptions {
   onError?: (error: unknown) => void
   /** Minimum time between attempts to deliver an owed Stop, and the pause after a "nothing was sent" refusal. */
   retryMs?: number
+  /** How long close() waits for Stop deliveries in flight (default 5 s). */
+  stopDrainMs?: number
+  /** What the coding runtime says about its agents and host (7.7b); absent where there is none (coding agents are then refused). */
+  codingFacts?: CodingWorkerFacts
+  /**
+   * Checks the release decision consults after the common admission rules (7.7b §6). Part 2 of 7.7b fills the policy,
+   * consent, limit and spend checks in here; each returns a typed cause to refuse the release, or undefined to allow it.
+   * The default allows everything.
+   */
+  releaseChecks?: ReleaseChecks
+}
+
+/** What a release check is told about the launch it is judging. */
+export interface ReleaseSubject {
+  orchestrationId: string
+  attemptId: string
+  generation: number
+  launchId: string
+  /** The expiry this launch was prepared with (epoch ms). */
+  expiry: number
+  /** The id of the worker policy the launch's invocation was built from (coding workers). */
+  policyId?: string | undefined
+  /** Launches of this orchestration that may have executed, read from the coding journal inside the critical section. */
+  executed?: number | undefined
+}
+export interface ReleaseChecks {
+  /** The policy checks (prepared spec, bound identities, consent); runs in the release read transaction, never writes. */
+  policy?(sqlite: DatabaseSync, subject: ReleaseSubject): string | undefined
+  /** The coding step limit and unknown-cost acceptance. */
+  limits?(sqlite: DatabaseSync, subject: ReleaseSubject): string | undefined
 }
 
 type ToolResult =
   { kind: 'receipt'; receipt: OrchReceipt } | { kind: 'unauthorized'; message: string }
 
-/**
- * The orchestration executor: the single admission authority for lead attempts and steps (design v3). All writes go
- * through `mutate`, one ingest transaction each, so events, revisions and the database stay consistent.
- */
-/** Whether the step's latest attempt ended on recovered session text and was never confirmed ended. */
-function recoveredOnly(attempts: AttemptRow[], stepId: string): boolean {
-  const last = attempts
-    .filter((a) => a.step_id === stepId)
-    .reduce<AttemptRow | undefined>((best, a) => (!best || a.n > best.n ? a : best), undefined)
-  return (
-    last !== undefined &&
-    last.unknown_reason === 'recovered_text_only' &&
-    ['unknown', 'abandoned'].includes(last.state)
-  )
-}
+/** A step attempt given to a coding worker (its launches are supervised units, its result is the eligible reply). */
+const isCodingStep = (attempt: Pick<AttemptRow, 'kind' | 'runtime'>): boolean =>
+  attempt.kind === 'step' && attempt.runtime !== 'hermes'
 
-/** The result revisions a step's input was built from (recorded at claim); undefined for an attempt claimed before. */
-function frozenRevisions(
-  sqlite: DatabaseSync,
-  attemptId: string,
-): Record<string, number> | undefined {
+/** The launch of the attempt's current generation has end proof in the database projection (a cheap read). */
+function codingProofIn(sqlite: DatabaseSync, attempt: AttemptRow): boolean {
   const row = sqlite
     .prepare(
-      "SELECT detail FROM orc_history WHERE kind = 'step_input_frozen' AND json_extract(detail, '$.attemptId') = ? ORDER BY id DESC LIMIT 1",
+      `SELECT 1 FROM coding_launches l JOIN orc_generations g ON g.launch_id = l.launch_id
+       WHERE g.attempt_id = ? AND g.generation = ? AND l.phase IN ('ended', 'settled') AND l.proof IS NOT NULL AND l.waiver = 0`,
     )
-    .get(attemptId) as { detail: string } | undefined
-  if (!row) return undefined
-  return (JSON.parse(row.detail) as { revisions?: Record<string, number> }).revisions
+    .get(attempt.id, attempt.dispatch_generation)
+  return row !== undefined
 }
 
-/**
- * Why an unsent step attempt's input is no longer usable (fix-j 2): a result it consumed is not a current success, only
- * ever ended on recovered text, or is at another revision than the one frozen into the input.
- */
-function inputWithdrawn(
-  sqlite: DatabaseSync,
-  orchId: string,
-  attempt: AttemptRow,
-): string | undefined {
-  if (attempt.kind !== 'step' || !attempt.step_id) return undefined
-  const step = readStep(sqlite, orchId, attempt.step_id)
-  if (!step) return undefined
-  const steps = stepsOf(sqlite, orchId)
-  const attempts = attemptsOf(sqlite, orchId)
-  // A workflow step has no `after`: what it consumed is recorded in `wf_consumed` and judged here at send (fix J, 7.1).
-  const consumed = sqlite
-    .prepare(
-      'SELECT producer, producer_step, output_revision, kind, withdrawn FROM wf_consumed WHERE orchestration_id = ? AND step_id = ?',
-    )
-    .all(orchId, step.id) as {
-    producer: string
-    producer_step: string
-    output_revision: number
-    kind: string
-    withdrawn: number
-  }[]
-  for (const c of consumed) {
-    if (c.withdrawn === 1) return `${c.producer}'s result was withdrawn`
-    if (c.kind === 'default') continue
-    const producer = sqlite
-      .prepare(
-        'SELECT state, output_revision FROM wf_nodes WHERE orchestration_id = ? AND node_id = ?',
-      )
-      .get(orchId, c.producer) as { state: string; output_revision: number } | undefined
-    if (!producer || !['succeeded', 'failed'].includes(producer.state))
-      return `${c.producer} is no longer a resolved result`
-    if (producer.output_revision !== c.output_revision)
-      return `${c.producer} changed after this step's input was built`
-    const producerStep = steps.find((s) => s.id === c.producer_step)
-    if (producerStep && c.kind === 'output' && recoveredOnly(attempts, producerStep.id))
-      return `${c.producer} only ended on recovered text`
-  }
-  const frozen = frozenRevisions(sqlite, attempt.id)
-  for (const dep of step.after_steps) {
-    const current = steps.find((s) => s.id === dep)
-    if (!current || current.status !== 'succeeded' || current.result === null)
-      return `${dep} is no longer a successful result`
-    if (recoveredOnly(attempts, dep)) return `${dep} only ended on recovered text`
-    if (frozen && frozen[dep] !== undefined && frozen[dep] !== current.result_revision)
-      return `${dep} changed after this step's input was built`
-  }
-  return undefined
+/** The typed cause a coding runtime attached to a refusal raised before the run was queued, if any. */
+function codingFailureCause(error: unknown): string | undefined {
+  if (!(error instanceof HttpError)) return undefined
+  const details = error.details as { cause?: unknown } | null | undefined
+  return typeof details?.cause === 'string' ? details.cause : undefined
 }
 
 /** A lead-planned run; a workflow run id answers 404 here (its routes are /api/workflow-runs). */
@@ -257,6 +258,10 @@ function requireLeadOrch(sqlite: DatabaseSync, id: string): OrchRow {
   return o
 }
 
+/**
+ * The orchestration executor: the single admission authority for lead attempts and steps (design v3). All writes go
+ * through `mutate`, one ingest transaction each, so events, revisions and the database stay consistent.
+ */
 export class Orchestrator {
   private readonly db: ScoreDb
   private readonly ingest: Ingest
@@ -273,7 +278,10 @@ export class Orchestrator {
   private maintenanceTimer: NodeJS.Timeout | undefined
   private unsubscribe: (() => void) | undefined
   private readonly cooldown = new Map<string, number>()
-  private readonly stopTried = new Map<string, number>()
+  private readonly stopTried = new Map<string, { at: number; delay: number; fails: number }>()
+  /** In-flight Stop deliveries, one per attempt (design §9). */
+  private readonly stopJobs = new Map<string, Promise<void>>()
+  private abandonStops = false
   private readonly fingerprints = new Map<string, string>()
   private readonly ownershipSeen = new Map<string, string>()
   private readonly served = new Map<string, boolean>()
@@ -319,6 +327,18 @@ export class Orchestrator {
     clearInterval(this.timer)
     clearInterval(this.maintenanceTimer)
     await this.pumping?.catch(() => undefined)
+    // Stops in flight get up to 5 s to answer; the rest stay durably owed and are asked again after the next start.
+    if (this.stopJobs.size > 0) {
+      let timer: NodeJS.Timeout | undefined
+      await Promise.race([
+        Promise.allSettled([...this.stopJobs.values()]),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, this.options.stopDrainMs ?? 5_000)
+        }),
+      ])
+      clearTimeout(timer)
+      this.abandonStops = true
+    }
   }
 
   private err(error: unknown): void {
@@ -573,14 +593,30 @@ export class Orchestrator {
     allowedAgents: string[],
     agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
   ): Promise<Preflight> {
+    return (await this.preflightWith(leadAgentId, allowedAgents, agents)).preflight
+  }
+
+  /** The preflight and, for each coding worker, the full report its policy came from (create stores the policy). */
+  private async preflightWith(
+    leadAgentId: string,
+    allowedAgents: string[],
+    agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
+  ): Promise<{ preflight: Preflight; reports: Map<string, WorkerReport> }> {
     const { port, access } = this.options
     const fake = port.mode === 'fake'
     const checks: PreflightCheck[] = []
     const add = (id: PreflightCheck['id'], status: PreflightCheck['status'], message: string) =>
       checks.push({ id, status, message })
     const team = agents ?? (await port.listAgents())
-    assertHermesOnly([leadAgentId, ...allowedAgents], team)
+    assertOrchestrationWorkers(leadAgentId, allowedAgents, team, this.options.codingFacts)
     const known = new Map(team.map((agent) => [agent.id, agent]))
+    // Each coding worker: can it take a step now, and what policy would the person approve (7.7b §3).
+    const reports = new Map<string, WorkerReport>()
+    for (const id of new Set(allowedAgents)) {
+      const runtime = known.get(id)?.runtime
+      if (runtime && runtime !== 'hermes' && this.options.codingFacts)
+        reports.set(id, await this.options.codingFacts.report(id))
+    }
     const ready = (id: string): string | undefined => {
       const agent = known.get(id)
       if (!agent) return `${id} is not a team member`
@@ -624,6 +660,9 @@ export class Orchestrator {
         const problem = ready(id)
         return problem ? [problem] : []
       }),
+      ...[...reports].flatMap(([id, report]) =>
+        report.readiness === 'ready' ? [] : [`${id}: ${report.detail ?? report.readiness}`],
+      ),
     ]
     add(
       'allowed_agents',
@@ -655,7 +694,11 @@ export class Orchestrator {
         ? `${running} of ${ORCH_CAPACITY.runningOrchestrations} orchestrations are running`
         : `${ORCH_CAPACITY.runningOrchestrations} orchestrations are already running.`,
     )
-    const reserve = reserveFor(12, 20)
+    const reserve = reserveFor(
+      12,
+      20,
+      reports.size > 0 ? codingItemsFor(12, ORCH_DEFAULTS.codingSteps) : 0,
+    )
     const fits = this.db.read((sqlite) => this.quotaUsed(sqlite) + reserve <= this.quotaBytes)
     add(
       'quota',
@@ -695,9 +738,18 @@ export class Orchestrator {
           ? 'Scripted lead'
           : 'Score cannot see which MCP tools the lead has. Hermes caches the tool list per connection, so after Score is upgraded reload MCP (/reload-mcp, or restart the gateway) before starting.',
       )
-    return {
+    const preflight: Preflight = {
       ok: checks.every((check) => check.status !== 'fail'),
       checks,
+      workers: [...reports].map(([agentId, report]) => ({
+        agentId,
+        runtime: known.get(agentId)!.runtime as 'claude-code' | 'codex',
+        readiness: report.readiness,
+        detail: report.detail,
+        policyId: report.policyId,
+        reach: report.reach,
+        reachBeyondWorkspace: report.reachBeyondWorkspace,
+      })),
       gatePolicyNotes: {
         'every-step': 'You approve every assignment before it starts.',
         'lead-asks':
@@ -711,9 +763,11 @@ export class Orchestrator {
         maxConcurrentSteps: 2,
         leadTurnEstimateUsd: 0.25,
         stepEstimateUsd: 0.5,
+        codingSteps: ORCH_DEFAULTS.codingSteps,
       },
       reserveBytes: reserve,
     }
+    return { preflight, reports }
   }
 
   /** Orchestrations that hold capacity: running ones, and finished ones whose attempts are still not confirmed ended. */
@@ -724,6 +778,10 @@ export class Orchestrator {
         attemptsOf(sqlite, o.id).some((a) => a.state === 'unknown' && a.abandoned_at === null),
     ).length
   }
+
+  /** Whether the whole database still has storage for `extra` more reserved bytes (a coding limit that grows a reserve). */
+  private readonly storageFits = (sqlite: DatabaseSync, extra: number): boolean =>
+    this.quotaUsed(sqlite) + extra <= this.quotaBytes
 
   private quotaUsed(sqlite: DatabaseSync): number {
     return listOrchs(sqlite).reduce(
@@ -738,7 +796,11 @@ export class Orchestrator {
     body: OrchestrationCreate,
     agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
   ): Promise<OrchestrationCreated> {
-    const preflight = await this.preflight(body.leadAgentId, body.allowedAgents, agents)
+    const { preflight, reports } = await this.preflightWith(
+      body.leadAgentId,
+      body.allowedAgents,
+      agents,
+    )
     if (new Set(body.allowedAgents).size !== body.allowedAgents.length)
       throw new HttpError(400, 'bad_request', 'An agent is listed twice in the allowed agents.')
     if (!preflight.ok) {
@@ -763,13 +825,47 @@ export class Orchestrator {
         )
       throw new HttpError(409, 'preflight_failed', 'The check before the run failed.', details)
     }
+    // Consent is by policy id (7.7b §4): the id the person saw must still be the agent's, and a reach beyond the workspace
+    // needs the acknowledgement of exactly that id.
+    for (const [agentId, report] of reports) {
+      const seen = body.codingPolicies?.[agentId]
+      if (seen === undefined)
+        throw new HttpError(
+          400,
+          'bad_request',
+          `The request has to name the settings it was approved with for ${agentId}.`,
+        )
+      if (seen !== report.policyId)
+        throw new HttpError(
+          409,
+          'policy_changed',
+          `${agentId} changed since you looked. Check what it can reach and start again.`,
+          { agentId, currentPolicyId: report.policyId },
+        )
+      if (
+        report.reachBeyondWorkspace &&
+        !body.acknowledgeCodingReach?.policyIds.includes(report.policyId!)
+      )
+        throw new HttpError(
+          409,
+          'reach_not_acknowledged',
+          `${agentId} can read beyond its workspace. Accept that before the run starts.`,
+          { agentId, policyId: report.policyId },
+        )
+    }
     const id = `orc-${randomUUID().slice(0, 8)}`
-    await this.mutate((ctx) => this.insert(ctx, id, body, preflight))
+    await this.mutate((ctx) => this.insert(ctx, id, body, preflight, reports))
     this.kick()
     return { orchestration: this.summary(id), preflight }
   }
 
-  private insert(ctx: Ctx, id: string, body: OrchestrationCreate, preflight: Preflight): void {
+  private insert(
+    ctx: Ctx,
+    id: string,
+    body: OrchestrationCreate,
+    preflight: Preflight,
+    reports: Map<string, WorkerReport>,
+  ): void {
     const { sqlite, now } = ctx
     if (isFenced(sqlite))
       throw new HttpError(
@@ -784,7 +880,13 @@ export class Orchestrator {
         'capacity',
         `${ORCH_CAPACITY.runningOrchestrations} orchestrations are already running.`,
       )
-    const reserve = reserveFor(body.maxSteps, body.maxLeadTurns)
+    const reserve = reserveFor(
+      body.maxSteps,
+      body.maxLeadTurns,
+      reports.size > 0
+        ? codingItemsFor(body.maxSteps, body.codingSteps ?? ORCH_DEFAULTS.codingSteps)
+        : 0,
+    )
     if (this.quotaUsed(sqlite) + reserve > this.quotaBytes)
       throw new HttpError(
         409,
@@ -830,8 +932,9 @@ export class Orchestrator {
       .prepare(
         `INSERT INTO orchestrations (id, title, goal, lead_agent_id, lead_incarnation, allowed_agents, room_id, brief_id, gate_policy,
            budget_usd, deadline_at, max_steps, max_lead_turns, max_concurrent_steps, lead_turn_estimate_usd, step_estimate_usd,
-           status, acknowledgement, preflight, reserve_bytes, stored_bytes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?)`,
+           status, acknowledgement, preflight, reserve_bytes, stored_bytes, created_at, updated_at, coding_steps, accepted_unknown_cost,
+           coding_reserve_bytes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -856,7 +959,54 @@ export class Orchestrator {
         Buffer.byteLength(body.goal) + 1024,
         now,
         now,
+        body.codingSteps ?? ORCH_DEFAULTS.codingSteps,
+        JSON.stringify([...new Set(body.acceptUnknownCost ?? [])].sort()),
+        reports.size > 0
+          ? codingItemsFor(body.maxSteps, body.codingSteps ?? ORCH_DEFAULTS.codingSteps) *
+              CODING_ITEM_EXTRA_BYTES
+          : 0,
       )
+    // The policy each coding worker is approved with, and the acknowledgement that covered it (stored in the history).
+    for (const [agentId, report] of reports) {
+      storeWorkerPolicy(
+        sqlite,
+        id,
+        agentId,
+        {
+          policyId: report.policyId!,
+          policy: report.policy!,
+          reach: report.reach!,
+          reachBeyondWorkspace: report.reachBeyondWorkspace,
+          acknowledged: body.acknowledgeCodingReach?.policyIds.includes(report.policyId!) ?? false,
+        },
+        now,
+      )
+    }
+    if (reports.size > 0) {
+      addHistory(
+        sqlite,
+        id,
+        'coding_reach_acknowledged',
+        {
+          policyIds: [...reports.values()]
+            .filter((report) => body.acknowledgeCodingReach?.policyIds.includes(report.policyId!))
+            .map((report) => report.policyId),
+        },
+        now,
+      )
+      // The limits the person started with are journaled like any later change (verified after a restore).
+      journalSoft(ctx, () =>
+        ctx.journal.append({
+          kind: 'authorization',
+          orchestrationId: id,
+          budgetUsd: body.budgetUsd ?? null,
+          deadlineAt: body.deadlineAt ?? null,
+          acceptUnknownSpend: false,
+          codingSteps: body.codingSteps ?? ORCH_DEFAULTS.codingSteps,
+          acceptUnknownCost: [...new Set(body.acceptUnknownCost ?? [])].sort(),
+        }),
+      )
+    }
     // Freeze who this run was started with: the lead and every allowed agent (fix-h item 3).
     const freeze = sqlite.prepare(
       'INSERT INTO orc_agent_map (orchestration_id, agent_id, role, incarnation, updated_at) VALUES (?, ?, ?, ?, ?)',
@@ -901,7 +1051,7 @@ export class Orchestrator {
     return this.decide(id, (ctx) => answerInquiry(ctx, id, inquiryId, body))
   }
   limits(id: string, body: LimitsDecision) {
-    return this.decide(id, (ctx) => setLimits(ctx, id, body))
+    return this.decide(id, (ctx) => setLimits(ctx, id, body, this.storageFits))
   }
   pause(id: string, body: RunControl) {
     return this.decide(id, (ctx) => pauseRun(ctx, id, body))
@@ -913,8 +1063,21 @@ export class Orchestrator {
   stop(id: string) {
     return this.decide(id, (ctx) => stopRun(ctx, id))
   }
-  remap(id: string, body: RemapDecision) {
-    return this.decide(id, (ctx) => remapAgent(ctx, id, body))
+  async remap(id: string, body: RemapDecision) {
+    this.db.read((sqlite) => requireLeadOrch(sqlite, id))
+    // A coding worker's replacement is judged on its policy as it is now (the report is asked before the transaction).
+    const isCoding = this.db.read(
+      (sqlite) => readWorkerPolicy(sqlite, id, body.agentId) !== undefined,
+    )
+    const report = isCoding ? await this.options.codingFacts?.report(body.agentId) : undefined
+    return this.decide(id, (ctx) => remapAgent(ctx, id, body, report))
+  }
+
+  /** "Use the new settings" for a step blocked `agent_changed` (7.7b §12a). */
+  async policyRemap(id: string, stepId: string, body: PolicyRemapDecision) {
+    this.db.read((sqlite) => requireLeadOrch(sqlite, id))
+    const report = await this.options.codingFacts?.report(body.agentId)
+    return this.decide(id, (ctx) => policyRemapStep(ctx, id, stepId, body, report))
   }
 
   waiver(id: string, body: WaiverDecision) {
@@ -1162,7 +1325,7 @@ export class Orchestrator {
     return this.decideWf(id, (ctx) => remapWorkflow(ctx, id, body, this.options.fence.journal))
   }
   wfLimits(id: string, body: LimitsDecision) {
-    return this.decideWf(id, (ctx) => setLimits(ctx, id, body))
+    return this.decideWf(id, (ctx) => setLimits(ctx, id, body, this.storageFits))
   }
   wfPause(id: string, body: RunControl) {
     return this.decideWf(id, (ctx) => pauseRun(ctx, id, body))
@@ -1438,7 +1601,9 @@ export class Orchestrator {
       for (const o of listOrchs(sqlite)) {
         if (isTerminalStatus(o.status)) continue
         for (const attempt of attemptsOf(sqlite, o.id))
-          if (attempt.state === 'send_started') {
+          if (attempt.state === 'send_started' && isCodingStep(attempt)) {
+            this.recoverCodingSend(ctx, o, attempt)
+          } else if (attempt.state === 'send_started') {
             // The adapter may have committed the handle Hermes returned before Score recorded it: keep it, so the
             // run can be observed and a Stop delivered. The attempt is still never resent.
             const committed =
@@ -1480,6 +1645,68 @@ export class Orchestrator {
     })
   }
 
+  /**
+   * Restart matrix, a coding generation that was `send_started` and has no handle (design §10). If the coding runtime
+   * committed the run for this generation's turn, the handle is kept and the run's own end (interrupted by recovery)
+   * decides. Otherwise the pre-minted launch id says what ran: absent from the coding journal (or revoked before
+   * `releasing`) proves nothing launched and the generation is closed with cause `restart`; anything else is unknown.
+   */
+  private recoverCodingSend(ctx: Ctx, o: OrchRow, attempt: AttemptRow): void {
+    const { sqlite, now } = ctx
+    // A frozen home writes no journal record: the generation waits for reset-history (decision 71).
+    if (this.options.fence.executionFrozenIn(sqlite) !== null) return
+    const generation = readGeneration(sqlite, attempt.id, attempt.dispatch_generation)
+    if (!generation) return void this.markUnknown(ctx, o, attempt, 'crash_after_send_started')
+    const committed =
+      (
+        sqlite
+          .prepare(
+            "SELECT result FROM command_intents WHERE idempotency_key = ? AND state = 'accepted' AND result IS NOT NULL",
+          )
+          .get(generation.turn_id) as { result: string } | undefined
+      )?.result ??
+      (
+        sqlite.prepare('SELECT id FROM runs WHERE score_turn_id = ?').get(generation.turn_id) as
+          { id: string } | undefined
+      )?.id
+    if (committed) {
+      sqlite
+        .prepare(
+          "UPDATE orc_attempts SET run_id = ?, state = 'running', updated_at = ? WHERE id = ? AND run_id IS NULL",
+        )
+        .run(committed, now, attempt.id)
+      sqlite
+        .prepare(
+          'UPDATE orc_generations SET run_id = COALESCE(run_id, ?) WHERE attempt_id = ? AND generation = ?',
+        )
+        .run(committed, attempt.id, generation.generation)
+      journalSoft(ctx, () =>
+        ctx.journal.append({
+          kind: 'run_handle',
+          attemptId: attempt.id,
+          runId: committed,
+          generation: generation.generation,
+        }),
+      )
+      addHistory(sqlite, o.id, 'recovered_handle', { attemptId: attempt.id, runId: committed }, now)
+      return
+    }
+    const facts = launchFacts(sqlite, ctx.journal, generation.launch_id)
+    if (facts.kind !== 'unreadable' && provenNoLaunch(facts)) {
+      this.closeCoding(
+        ctx,
+        o,
+        attempt,
+        generation.generation,
+        facts.kind === 'known' && facts.revokeCause ? facts.revokeCause : 'restart',
+      )
+      addHistory(sqlite, o.id, 'recovered_closed', { attemptId: attempt.id }, now)
+      return
+    }
+    this.markUnknown(ctx, o, attempt, 'crash_after_send_started')
+    addHistory(sqlite, o.id, 'recovered_unknown', { attemptId: attempt.id }, now)
+  }
+
   private markUnknown(ctx: Ctx, o: OrchRow, attempt: AttemptRow, reason: string): void {
     const { sqlite, now } = ctx
     sqlite
@@ -1512,7 +1739,10 @@ export class Orchestrator {
       if (planned && o.status !== 'running') touch(ctx, orchId)
     }
     const attempts = attemptsOf(sqlite, orchId)
-    const live = attempts.some((a) => ['created', 'send_started', 'running'].includes(a.state))
+    // A suspended attempt (agent changed, limit reached) holds no slot and does not keep the run alive.
+    const live = attempts.some(
+      (a) => !a.suspended && ['created', 'send_started', 'running'].includes(a.state),
+    )
     const end = (status: OrchRow['status'], reason: string | null): boolean => {
       sqlite
         .prepare(
@@ -1564,7 +1794,10 @@ export class Orchestrator {
       steps.some((s) => ['pending_gate', 'queued', 'admitted'].includes(s.status)) ||
       inquiriesOf(sqlite, orchId).some((q) => q.status === 'open') ||
       gatesOf(sqlite, orchId).some((g) => g.status === 'open') ||
-      attempts.some((a) => a.state === 'unknown' && a.abandoned_at === null)
+      attempts.some((a) => a.state === 'unknown' && a.abandoned_at === null) ||
+      // A coding step blocked with its suspended attempt waits for the person (settings, limit): that is on Needs you, not
+      // a run nobody can wake (7.7b §12a).
+      attempts.some((a) => a.suspended && a.state === 'created')
     if (!wakeSource) {
       this.pauseFor(ctx, o, 'no_wake_source')
       return true
@@ -1611,7 +1844,7 @@ export class Orchestrator {
         sqlite
           .prepare(
             `SELECT a.id, a.orchestration_id FROM orc_attempts a JOIN orchestrations o ON o.id = a.orchestration_id
-             WHERE a.state = 'created' AND o.status IN ('running', 'stopping', 'finishing') ORDER BY a.created_at, a.rowid`,
+             WHERE a.state = 'created' AND a.suspended = 0 AND o.status IN ('running', 'stopping', 'finishing') ORDER BY a.created_at, a.rowid`,
           )
           .all(),
       )
@@ -1627,8 +1860,7 @@ export class Orchestrator {
     if (o.deadline_at !== null && now >= o.deadline_at) return
     const view = budgetView(sqlite, o)
     if (overBudget(view)) return this.pauseFor(ctx, o, 'budget')
-    if (view.limitUsd !== null && view.unknownSpend && !o.accepted_unknown_spend)
-      return this.pauseFor(ctx, o, 'unknown_spend')
+    if (unknownCostBlocks(sqlite, o, view)) return this.pauseFor(ctx, o, 'unknown_spend')
     if (teamPausedAt(sqlite) !== null) return
 
     const steps = stepsOf(sqlite, o.id)
@@ -1736,6 +1968,29 @@ export class Orchestrator {
         touch(ctx, o.id)
         continue
       }
+      // A step that was blocked with a suspended attempt (agent changed, limit reached) goes on with that SAME attempt:
+      // one active attempt per step, its reservation and frozen input kept (7.7b §12a). It is admitted again through the
+      // same rules; its policy id is the one the step is approved for now.
+      const suspended = attempts.findLast((a) => a.step_id === step.id && a.suspended)
+      if (suspended) {
+        sqlite
+          .prepare(
+            'UPDATE orc_attempts SET suspended = 0, policy_id = ?, updated_at = ? WHERE id = ?',
+          )
+          .run(
+            // The step keeps the settings it was approved with (set at its own remap); the worker's stored mapping may
+            // have moved on for another step, and admission then blocks this one until it is remapped itself (F2 #3).
+            suspended.policy_id ?? readWorkerPolicy(sqlite, o.id, step.agent_id)?.policyId ?? null,
+            now,
+            suspended.id,
+          )
+        setStepStatus(sqlite, o.id, step.id, 'admitted', null, now)
+        counts.perRun.set(o.id, (counts.perRun.get(o.id) ?? 0) + 1)
+        counts.perAgent.set(step.agent_id, (counts.perAgent.get(step.agent_id) ?? 0) + 1)
+        counts.total++
+        touch(ctx, o.id)
+        continue
+      }
       const n = attempts.filter((a) => a.step_id === step.id).length + 1
       const attemptId = `orc-${o.id.slice(4)}-${step.id}-${n}`
       this.insertAttempt(ctx, o, {
@@ -1761,7 +2016,9 @@ export class Orchestrator {
       )
       setStepStatus(sqlite, o.id, step.id, 'admitted', null, now)
       // A workflow step's input also lives in its reply row and its dispatch intent: every retained copy is charged.
-      addStored(sqlite, o.id, Buffer.byteLength(input) * (o.planner === 'workflow' ? 3 : 1))
+      if (runtimeOfAgent(sqlite, step.agent_id) !== 'hermes')
+        addCodingStored(sqlite, o.id, Buffer.byteLength(input))
+      else addStored(sqlite, o.id, Buffer.byteLength(input) * (o.planner === 'workflow' ? 3 : 1))
       counts.perRun.set(o.id, (counts.perRun.get(o.id) ?? 0) + 1)
       counts.perAgent.set(step.agent_id, (counts.perAgent.get(step.agent_id) ?? 0) + 1)
       counts.total++
@@ -1789,8 +2046,8 @@ export class Orchestrator {
     sqlite
       .prepare(
         `INSERT INTO orc_attempts (id, orchestration_id, kind, step_id, n, agent_id, agent_incarnation, session_id, turn_id, message_id,
-           state, input, reserved_usd, claim_from, claim_to, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'created', ?, ?, ?, ?, ?, ?)`,
+           state, input, reserved_usd, claim_from, claim_to, created_at, updated_at, runtime, policy_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'created', ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         a.id,
@@ -1809,6 +2066,8 @@ export class Orchestrator {
         a.claim?.to ?? null,
         now,
         now,
+        a.kind === 'step' ? runtimeOfAgent(sqlite, a.agentId) : 'hermes',
+        a.kind === 'step' ? (readWorkerPolicy(sqlite, o.id, a.agentId)?.policyId ?? null) : null,
       )
     // The reply row the run's text attaches to. Never queued by the room dispatcher (orchestration_attempt_id).
     sqlite
@@ -1840,7 +2099,13 @@ export class Orchestrator {
    * point the admission is never replayed: any uncertainty makes the attempt `unknown`.
    */
   private async dispatch(attemptId: string): Promise<boolean> {
-    let begun: { attempt: AttemptRow; capability?: string } | undefined
+    let begun:
+      | {
+          attempt: AttemptRow
+          capability?: string
+          coding?: { generation: number; turnId: string; launchId: string }
+        }
+      | undefined
     try {
       begun = await this.mutate((ctx) => this.beginSend(ctx, attemptId))
     } catch (error) {
@@ -1850,30 +2115,74 @@ export class Orchestrator {
       return false
     }
     if (!begun) return false
-    const { attempt, capability } = begun
+    const { attempt, capability, coding } = begun
     try {
       const result = await this.options.port.startRun({
         agentId: attempt.agent_id,
         input: attempt.input,
-        turnId: attempt.turn_id,
+        turnId: coding?.turnId ?? attempt.turn_id,
         sessionId: attempt.session_id,
-        owner: 'orchestration',
+        owner: coding ? this.ownerOf(attempt, coding) : 'orchestration',
         ...(capability ? { render: (stored: string) => withCapability(stored, capability) } : {}),
       })
-      await this.mutate((ctx) => this.recordHandle(ctx, attempt.id, result.runId))
+      await this.mutate((ctx) =>
+        this.recordHandle(ctx, attempt.id, coding?.generation ?? null, result.runId),
+      )
     } catch (error) {
-      await this.mutate((ctx) => this.recordSendFailure(ctx, attempt.id, error))
+      await this.mutate((ctx) =>
+        this.recordSendFailure(ctx, attempt.id, error, coding?.generation ?? null),
+      )
     }
     return true
+  }
+
+  /** The owner a coding launch carries: its generation's identity and the executor's decision at the ordering point. */
+  private ownerOf(
+    attempt: AttemptRow,
+    coding: { generation: number; launchId: string },
+  ): OrchestrationOwner {
+    const { deadline, policy } = this.db.read((sqlite) => ({
+      deadline: readOrch(sqlite, attempt.orchestration_id)?.deadline_at ?? null,
+      policy: readWorkerPolicy(sqlite, attempt.orchestration_id, attempt.agent_id),
+    }))
+    return {
+      kind: 'orchestration',
+      orchestrationId: attempt.orchestration_id,
+      attemptId: attempt.id,
+      generation: coding.generation,
+      launchId: coding.launchId,
+      deadlineAt: deadline === null ? null : Date.parse(deadline),
+      // The invocation is built from this stored policy, never from the live agent row (7.7b §3).
+      ...(policy ? { policy: { id: policy.policyId, policy: policy.policy } } : {}),
+      // Its own read transaction, inside the release critical section. Never writes, never awaits (design §6).
+      authorise: (prepared, journal) =>
+        this.db.read((sqlite) =>
+          this.decideRelease(sqlite, {
+            orchestrationId: attempt.orchestration_id,
+            attemptId: attempt.id,
+            generation: coding.generation,
+            launchId: coding.launchId,
+            expiry: prepared.expiry,
+            policyId: prepared.policyId,
+            executed: journal.executedBy(attempt.orchestration_id),
+          }),
+        ),
+    }
   }
 
   private beginSend(
     ctx: Ctx,
     attemptId: string,
-  ): { attempt: AttemptRow; capability?: string } | undefined {
+  ):
+    | {
+        attempt: AttemptRow
+        capability?: string
+        coding?: { generation: number; turnId: string; launchId: string }
+      }
+    | undefined {
     const { sqlite, now } = ctx
     const attempt = readAttempt(sqlite, attemptId)
-    if (!attempt || attempt.state !== 'created') return undefined
+    if (!attempt || attempt.state !== 'created' || attempt.suspended) return undefined
     // Fresh run facts first (another dispatch may have been awaiting its reply while a sibling's run ended or was
     // recovered): every fence and hold below is judged on what reconciliation just established (fix-i 1).
     this.reconcileAttempts(ctx)
@@ -1896,19 +2205,17 @@ export class Orchestrator {
       touch(ctx, o.id)
       return undefined
     }
-    if (
-      isTerminalStatus(o.status) ||
-      o.status === 'stopping' ||
-      o.status === 'finishing' ||
-      attempt.retired
-    )
+    // The common admission rules, asked once (the release decision asks the same function). What each cause means for a
+    // send: the first group ends the attempt, the second keeps it `created` until the condition clears.
+    const denial = admissionDenial(sqlite, this.options.fence, o, attempt, now)
+    if (denial && ['retired', 'cancel', 'stop'].includes(denial.cause))
       return refuse(`not dispatched: run ${o.status}`, {
         status: 'not_started',
         disposition: `not_started: run ${o.status}`,
       })
     // Result eligibility of everything the input consumed, judged at send (fix-j 2).
-    const withdrawn = inputWithdrawn(sqlite, o.id, attempt)
-    if (withdrawn) {
+    if (denial?.cause === 'inputs_withdrawn') {
+      const withdrawn = denial.withdrawn!
       refuseAttempt(sqlite, attempt, `input_withdrawn: ${withdrawn}`, now)
       sqlite
         .prepare(
@@ -1935,24 +2242,27 @@ export class Orchestrator {
     // Refused dispatch generations: the person is needed at the lifetime limit; after five in a row the attempt waits.
     if (attempt.needs_person || (attempt.next_try_at !== null && attempt.next_try_at > now))
       return undefined
-    // These keep the attempt `created`: it is sent when the condition clears. The manual hold is read directly: it is
-    // independent of the status a remap or a limits decision may have cleared (fix-i 3).
-    if (
-      o.status === 'paused' ||
-      o.manual_paused_at !== null ||
-      isFenced(sqlite) ||
-      this.options.fence.executionFrozenIn(sqlite) !== null ||
-      teamPausedAt(sqlite) !== null
-    )
+    // A coding step whose approved settings no longer match: it is suspended as it is (one attempt per step) and the
+    // step waits for "Use the new settings" or a new approval (7.7b §12a). Nothing was sent.
+    if (denial?.policy !== undefined && attempt.step_id) {
+      sqlite
+        .prepare('UPDATE orc_attempts SET suspended = 1, updated_at = ? WHERE id = ?')
+        .run(now, attempt.id)
+      setStepStatus(sqlite, o.id, attempt.step_id, 'blocked', 'agent_changed', now)
+      addCause(sqlite, o.id, 'step_blocked', attempt.step_id, now, 'agent_changed')
+      touch(ctx, o.id)
       return undefined
-    const attempts = attemptsOf(sqlite, o.id)
-    if (unknownFenceAttempts(o, attempts).length > 0 || cancelFenceAttempts(o, attempts).length > 0)
-      return undefined
-    if (agentPausedAt(sqlite, attempt.agent_id) !== null) return undefined
-    const incarnation = lifecycleOf(sqlite, attempt.agent_id)?.incarnation_id ?? 'untracked'
-    if (incarnation !== attempt.agent_incarnation) {
+    }
+    if (denial?.cause === 'agent_changed') {
       if (attempt.kind === 'lead') {
-        refuseAttempt(sqlite, attempt, 'not dispatched: the lead agent changed', now)
+        refuseAttempt(
+          sqlite,
+          attempt,
+          denial.frozenMapping
+            ? 'not dispatched: the lead agent mapping changed'
+            : 'not dispatched: the lead agent changed',
+          now,
+        )
         // Nothing was sent, so the turn's causes go back to the wake cursor.
         sqlite
           .prepare(
@@ -1962,43 +2272,27 @@ export class Orchestrator {
         this.pauseFor(ctx, o, 'agent_unavailable')
         return undefined
       }
-      return refuse('not dispatched: the agent changed', {
-        status: 'blocked',
-        disposition: 'agent_unavailable: the agent was replaced or removed',
-      })
+      return denial.frozenMapping
+        ? refuse('not dispatched: not the approved agent mapping', {
+            status: 'blocked',
+            disposition: 'agent_changed: not the agent mapping approved for this run',
+          })
+        : refuse('not dispatched: the agent changed', {
+            status: 'blocked',
+            disposition: 'agent_unavailable: the agent was replaced or removed',
+          })
     }
-    // Re-checked against the frozen mapping as the last step before Hermes (fix-h item 3).
-    const frozen = frozenIncarnation(sqlite, o.id, attempt.agent_id)
-    if (frozen !== undefined && frozen !== attempt.agent_incarnation) {
-      if (attempt.kind === 'lead') {
-        refuseAttempt(sqlite, attempt, 'not dispatched: the lead agent mapping changed', now)
-        sqlite
-          .prepare(
-            'UPDATE orchestrations SET causes_consumed_up_to = ?, lead_turns_used = lead_turns_used - 1 WHERE id = ?',
-          )
-          .run(attempt.claim_from ?? 0, o.id)
-        this.pauseFor(ctx, o, 'agent_unavailable')
-        return undefined
-      }
-      return refuse('not dispatched: not the approved agent mapping', {
-        status: 'blocked',
-        disposition: 'agent_changed: not the agent mapping approved for this run',
-      })
-    }
-    if (!agentAdmits(sqlite, attempt.agent_id)) return undefined
-    // The last barrier before Hermes: spend, reservations and the deadline as they are now, not as they were when this
-    // attempt was prepared (another send may have been awaiting its reply since).
-    const fresh = requireOrch(sqlite, o.id)
-    if (fresh.deadline_at !== null && now >= fresh.deadline_at) return undefined
-    const view = budgetView(sqlite, fresh)
-    if (overBudget(view)) {
-      this.pauseFor(ctx, fresh, 'budget')
+    // Pauses, fences, holds, the deadline and a stop owed: the attempt stays `created`. The deadline flow, the budget
+    // pause and the unknown-cost pause are the orchestration's own.
+    if (denial?.cause === 'budget' || denial?.cause === 'unknown_cost') {
+      this.pauseFor(
+        ctx,
+        requireOrch(sqlite, o.id),
+        denial.cause === 'budget' ? 'budget' : 'unknown_spend',
+      )
       return undefined
     }
-    if (view.limitUsd !== null && view.unknownSpend && !fresh.accepted_unknown_spend) {
-      this.pauseFor(ctx, fresh, 'unknown_spend')
-      return undefined
-    }
+    if (denial) return undefined
     let capability: string | undefined
     // Dispatch generation g: 1, 2, ... for a step attempt (never reused, even after a journaled refusal); the lead's is
     // its capability generation.
@@ -2033,6 +2327,33 @@ export class Orchestrator {
           now,
         )
     }
+    // A coding worker's generation has its own turn id and launch id, minted here and journaled with the send (7.7b §5).
+    let coding: { generation: number; turnId: string; launchId: string } | undefined
+    if (attempt.kind === 'step' && attempt.runtime !== 'hermes') {
+      if (generation > MAX_GENERATIONS) {
+        // Held back again and again: the person decides, there is no automatic loop (design §5).
+        refuseAttempt(sqlite, attempt, 'held_back_too_often', now)
+        if (attempt.step_id) {
+          setStepStatus(
+            sqlite,
+            o.id,
+            attempt.step_id,
+            'blocked',
+            'kept being held back: it was prepared 20 times and never started',
+            now,
+          )
+          addCause(sqlite, o.id, 'step_blocked', attempt.step_id, now, 'kept being held back')
+        }
+        touch(ctx, o.id)
+        return undefined
+      }
+      coding = {
+        generation,
+        turnId: codingTurnId(attempt.turn_id, generation),
+        launchId: randomUUID(),
+      }
+      this.openGeneration(ctx, attempt, coding)
+    }
     sqlite
       .prepare(
         "UPDATE orc_attempts SET state = 'send_started', sent_at = ?, dispatch_generation = ?, next_try_at = NULL, updated_at = ? WHERE id = ?",
@@ -2046,21 +2367,81 @@ export class Orchestrator {
       attemptKind: attempt.kind,
       agentId: attempt.agent_id,
       generation,
+      ...(coding ? { turnId: coding.turnId, launchId: coding.launchId } : {}),
     })
     touch(ctx, o.id)
-    return { attempt: { ...attempt, state: 'send_started' }, ...(capability ? { capability } : {}) }
+    return {
+      attempt: { ...attempt, state: 'send_started', dispatch_generation: generation },
+      ...(capability ? { capability } : {}),
+      ...(coding ? { coding } : {}),
+    }
   }
 
-  private recordHandle(ctx: Ctx, attemptId: string, runId: string): void {
+  /** The generation's identity rows: its turn/launch ids and its own reply row (never the older generation's). */
+  private openGeneration(
+    ctx: Ctx,
+    attempt: AttemptRow,
+    coding: { generation: number; turnId: string; launchId: string },
+  ): void {
+    const { sqlite, now } = ctx
+    const messageId = `reply:${coding.turnId}`
+    sqlite
+      .prepare(
+        'INSERT INTO orc_generations (attempt_id, generation, turn_id, launch_id, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(attempt.id, coding.generation, coding.turnId, coding.launchId, messageId, now)
+    // The first generation takes over the reply row insertAttempt reserved; later ones copy it, so every generation
+    // streams into its own reply and the older one is only ever closed.
+    const taken = sqlite
+      .prepare(
+        'UPDATE message_runs SET turn_id = ?, message_id = ?, generation = ? WHERE orchestration_attempt_id = ? AND generation IS NULL',
+      )
+      .run(coding.turnId, messageId, coding.generation, attempt.id)
+    if (Number(taken.changes) === 0)
+      sqlite
+        .prepare(
+          `INSERT INTO message_runs (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, created_at, orchestration_attempt_id, generation)
+           SELECT ?, room_id, agent_id, chain_id, hop, ?, parent_message_id, input, agents, ?, orchestration_attempt_id, ?
+           FROM message_runs WHERE orchestration_attempt_id = ? ORDER BY generation DESC LIMIT 1`,
+        )
+        .run(messageId, coding.turnId, now, coding.generation, attempt.id)
+    sqlite.prepare('UPDATE orc_attempts SET message_id = ? WHERE id = ?').run(messageId, attempt.id)
+  }
+
+  private recordHandle(
+    ctx: Ctx,
+    attemptId: string,
+    generation: number | null,
+    runId: string,
+  ): void {
     const { sqlite, now } = ctx
     const attempt = readAttempt(sqlite, attemptId)
     if (!attempt) return
     const o = requireOrch(sqlite, attempt.orchestration_id)
+    if (generation !== null) {
+      // The handle belongs to one generation: it is kept as that generation's evidence, and it attaches to the attempt
+      // only while that generation is the current one (7.7b §5). An older generation's run is never reattached.
+      sqlite
+        .prepare(
+          'UPDATE orc_generations SET run_id = COALESCE(run_id, ?) WHERE attempt_id = ? AND generation = ?',
+        )
+        .run(runId, attemptId, generation)
+      journalSoft(ctx, () =>
+        ctx.journal.append({ kind: 'run_handle', attemptId, runId, generation }),
+      )
+      if (
+        attempt.dispatch_generation !== generation ||
+        !['send_started', 'running'].includes(attempt.state)
+      ) {
+        touch(ctx, o.id)
+        return
+      }
+    }
     sqlite
       .prepare(
-        `UPDATE orc_attempts SET run_id = ?, state = CASE WHEN state = 'send_started' THEN 'running' ELSE state END, refused_streak = 0, updated_at = ? WHERE id = ?`,
+        `UPDATE orc_attempts SET run_id = ?, state = CASE WHEN state = 'send_started' THEN 'running' ELSE state END, refused_streak = CASE WHEN ? = 1 THEN refused_streak ELSE 0 END, updated_at = ? WHERE id = ?`,
       )
-      .run(runId, now, attemptId)
+      .run(runId, generation === null ? 0 : 1, now, attemptId)
     // A Stop (or finish of a non-requesting attempt) that raced the admission: the handle arrived late; stop it now.
     if (['stopping'].includes(o.status) || isTerminalStatus(o.status) || attempt.retired)
       sqlite
@@ -2068,15 +2449,29 @@ export class Orchestrator {
           'UPDATE orc_attempts SET retired = 1, stop_requested_at = COALESCE(stop_requested_at, ?) WHERE id = ?',
         )
         .run(now, attemptId)
-    journalSoft(ctx, () => ctx.journal.append({ kind: 'run_handle', attemptId, runId }))
+    if (generation === null)
+      journalSoft(ctx, () => ctx.journal.append({ kind: 'run_handle', attemptId, runId }))
     touch(ctx, o.id)
   }
 
-  private recordSendFailure(ctx: Ctx, attemptId: string, error: unknown): void {
+  private recordSendFailure(
+    ctx: Ctx,
+    attemptId: string,
+    error: unknown,
+    generation: number | null,
+  ): void {
     const { sqlite, now } = ctx
     const attempt = readAttempt(sqlite, attemptId)
     if (!attempt || attempt.state !== 'send_started') return
+    if (generation !== null && attempt.dispatch_generation !== generation) return
     const o = requireOrch(sqlite, attempt.orchestration_id)
+    const cause = generation === null ? undefined : codingFailureCause(error)
+    if (generation !== null && cause !== undefined) {
+      // `startRun` threw before the run was queued, so nothing was launched: the generation is closed (or refused) by
+      // its typed cause. A throw that carries no cause stays on the ordinary paths below.
+      this.closeCoding(ctx, o, attempt, generation, cause)
+      return
+    }
     const definite =
       error instanceof HttpError &&
       error.status >= 400 &&
@@ -2166,6 +2561,291 @@ export class Orchestrator {
     touch(ctx, o.id)
   }
 
+  // ---------------------------------------------------------------------------------------- coding: release and closure
+
+  /**
+   * The executor's answer at the release critical section (7.7b §6): the common admission rules, the phase guard for
+   * this generation and launch, the deadline the launch was prepared with, then the policy and limit checks (part 2).
+   * A pure read: it never writes and never awaits, and says no with a typed cause.
+   */
+  private decideRelease(sqlite: DatabaseSync, subject: ReleaseSubject): ReleaseDecision {
+    const no = (cause: string): ReleaseDecision => ({ allowed: false, cause })
+    const attempt = readAttempt(sqlite, subject.attemptId)
+    const generation = attempt ? readGeneration(sqlite, attempt.id, subject.generation) : undefined
+    const o = attempt ? readOrch(sqlite, attempt.orchestration_id) : undefined
+    // The phase guard: release needs `send_started` or `running` for THIS generation, this launch, and this launch's
+    // handle or none yet. Anything else means the attempt moved on without this launch.
+    if (!attempt || !generation || !o || generation.launch_id !== subject.launchId)
+      return no('retired')
+    if (
+      attempt.dispatch_generation !== subject.generation ||
+      generation.closed_cause !== null ||
+      !['send_started', 'running'].includes(attempt.state) ||
+      (attempt.run_id !== null &&
+        generation.run_id !== null &&
+        attempt.run_id !== generation.run_id)
+    )
+      return no('retired')
+    const nowMs = this.nowMs()
+    const denial = admissionDenial(
+      sqlite,
+      this.options.fence,
+      o,
+      attempt,
+      new Date(nowMs).toISOString(),
+    )
+    if (denial) return no(denial.cause)
+    // The prepared expiry may not outlive the deadline as it stands now (it can move earlier while a launch is arming).
+    if (o.deadline_at !== null && subject.expiry > Date.parse(o.deadline_at))
+      return no('deadline_changed')
+    // A coding worker: the prepared invocation is the stored policy's, every external identity is read once more (inside
+    // the critical section, immediately before `releasing`), and the run's coding step limit still has room (7.7b §3, §8).
+    if (attempt.kind === 'step' && attempt.runtime !== 'hermes') {
+      const stored = readWorkerPolicy(sqlite, o.id, attempt.agent_id)
+      if (!stored || subject.policyId !== stored.policyId) return no('agent_changed')
+      const check = this.options.codingFacts?.checkPolicy(attempt.agent_id, stored.policy)
+      if (!check) return no('agent_changed')
+      if (!check.ok) return no(check.cause)
+      if (check.id !== stored.policyId) return no('agent_changed')
+      if ((subject.executed ?? 0) >= o.coding_steps) return no('limit')
+    }
+    // Extra checks (tests inject causes here): the policy and the limits.
+    const refused =
+      this.options.releaseChecks?.policy?.(sqlite, subject) ??
+      this.options.releaseChecks?.limits?.(sqlite, subject)
+    return refused === undefined ? { allowed: true } : no(refused)
+  }
+
+  /** A pump after a pause, so a held-back attempt is tried again without waiting for the next sweep. */
+  private wakeAfter(ms: number): void {
+    const timer = setTimeout(() => this.kick(), ms + 5)
+    timer.unref()
+  }
+
+  /**
+   * Closes a generation that provably launched nothing (design §6, M2). Refusal causes take 7.1's `send_refused` path
+   * (counters, wait, lifetime limit); every other cause writes one `send_closed` record and moves the attempt and its
+   * step as the cause table says, never touching the refusal counters.
+   */
+  private closeCoding(
+    ctx: Ctx,
+    o: OrchRow,
+    attempt: AttemptRow,
+    generation: number,
+    cause: string,
+  ): void {
+    const { sqlite, now } = ctx
+    const klass = causeClass(cause)
+    if (klass === 'refusal') {
+      try {
+        ctx.journal.append({
+          kind: 'send_refused',
+          attemptId: attempt.id,
+          orchestrationId: o.id,
+          generation,
+        })
+      } catch (error) {
+        ctx.journalFailure = error instanceof Error ? error.message : String(error)
+        this.markUnknown(ctx, o, attempt, 'refusal_unjournaled')
+        return
+      }
+      sqlite
+        .prepare(
+          'UPDATE orc_generations SET closed_cause = COALESCE(closed_cause, ?), closed_at = COALESCE(closed_at, ?) WHERE attempt_id = ? AND generation = ?',
+        )
+        .run(cause, now, attempt.id, generation)
+      sqlite
+        .prepare(
+          "UPDATE message_runs SET state = 'failed' WHERE orchestration_attempt_id = ? AND generation = ? AND state = 'pending'",
+        )
+        .run(attempt.id, generation)
+      dropUnlaunchedInput(sqlite, attempt.id, generation)
+      sqlite.prepare('UPDATE orc_attempts SET run_id = NULL WHERE id = ?').run(attempt.id)
+      recordRefusal(sqlite, o, attempt, generation, now)
+      this.cooldown.set(o.id, this.nowMs() + this.retryMs)
+      this.wakeAfter(this.retryMs)
+      addHistory(sqlite, o.id, 'send_refused', { attemptId: attempt.id, generation, cause }, now)
+      touch(ctx, o.id)
+      return
+    }
+    try {
+      ctx.journal.append({
+        kind: 'send_closed',
+        attemptId: attempt.id,
+        orchestrationId: o.id,
+        generation,
+        cause,
+      })
+    } catch (error) {
+      ctx.journalFailure = error instanceof Error ? error.message : String(error)
+      this.markUnknown(ctx, o, attempt, 'closure_unjournaled')
+      return
+    }
+    applyClosure(sqlite, o, attempt, generation, cause, now)
+    if (klass === 'hold') {
+      this.cooldown.set(o.id, this.nowMs() + this.retryMs)
+      this.wakeAfter(this.retryMs)
+      const fresh = requireOrch(sqlite, o.id)
+      if (cause === 'budget') this.pauseFor(ctx, fresh, 'budget')
+      if (cause === 'unknown_cost') this.pauseFor(ctx, fresh, 'unknown_spend')
+    } else if (klass === 'terminal') bumpAdmission(sqlite)
+    addHistory(sqlite, o.id, 'send_closed', { attemptId: attempt.id, generation, cause }, now)
+    touch(ctx, o.id)
+  }
+
+  /**
+   * What a terminal run of a coding attempt means (design §6, §7). The launch's journal state decides: a launch that
+   * provably never ran closes its generation; one that may have run needs end proof before anything is accepted.
+   */
+  private reconcileCoding(
+    ctx: Ctx,
+    o: OrchRow,
+    attempt: AttemptRow,
+    run: RunFacts & { id?: string },
+  ): void {
+    const { sqlite, now } = ctx
+    // A frozen home writes no journal records and signals nothing (decision 71); the sweep tries again after the reset.
+    if (this.options.fence.executionFrozenIn(sqlite) !== null) return
+    const generation = readGeneration(sqlite, attempt.id, attempt.dispatch_generation)
+    if (!generation) return void this.markUnknown(ctx, o, attempt, 'generation_missing')
+    const facts = launchFacts(sqlite, ctx.journal, generation.launch_id)
+    if (facts.kind === 'unreadable') return // the journal can't be read: fail closed, the fence reports it
+    if (provenNoLaunch(facts)) {
+      if (attempt.state !== 'running') return // an unknown attempt with no launch is settled by the person, not here
+      const refusal = sqlite
+        .prepare('SELECT cause FROM coding_refusals WHERE run_id = ?')
+        .get(attempt.run_id!) as { cause: string } | undefined
+      const cause =
+        refusal?.cause ??
+        (facts.kind === 'known' ? facts.revokeCause : null) ??
+        // A run that Score's own restart interrupted before any launch was requested was never refused: it is a restart
+        // (hold class, no readiness counters), not a failed start (F1 #6).
+        (run.status === 'cancelled'
+          ? 'stop'
+          : run.status === 'interrupted'
+            ? 'restart'
+            : 'start_failed')
+      return void this.closeCoding(ctx, o, attempt, attempt.dispatch_generation, cause)
+    }
+    // The launch may have executed. A released launch is the qualified release that resets the refusal streak (N7).
+    if (facts.kind === 'known' && facts.mayHaveExecuted && attempt.refused_streak > 0)
+      sqlite.prepare('UPDATE orc_attempts SET refused_streak = 0 WHERE id = ?').run(attempt.id)
+    if (facts.kind !== 'known' || !facts.proof) {
+      if (attempt.state === 'running') this.markUnknown(ctx, o, attempt, 'run_not_proven_ended')
+      return
+    }
+    // Proof for an abandoned attempt is recorded and never consumed (the same path as any abandoned attempt).
+    if (attempt.state === 'abandoned') {
+      sqlite
+        .prepare(
+          'UPDATE orc_attempts SET evidence = ?, terminated_at = ?, updated_at = ? WHERE id = ?',
+        )
+        .run(
+          run.status === 'completed' ? 'completed' : 'failed',
+          run.ended_at ?? now,
+          now,
+          attempt.id,
+        )
+      addHistory(sqlite, o.id, 'late_result', { attemptId: attempt.id, status: run.status }, now)
+      return
+    }
+    const late = attempt.state !== 'running'
+    const spend = this.spend(sqlite, attempt)
+    const reply = sqlite
+      .prepare('SELECT reply, truncated FROM coding_run_results WHERE run_id = ?')
+      .get(attempt.run_id!) as { reply: string; truncated: number } | undefined
+    // The retained copy in `coding_run_results` is part of the coding inventory too (F1 #7).
+    if (reply) addCodingStored(sqlite, o.id, Buffer.byteLength(reply.reply))
+    const status = run.status
+    const disposition: 'completed' | 'failed' | 'cancelled' =
+      status === 'cancelled'
+        ? 'cancelled'
+        : status === 'completed' && reply
+          ? 'completed'
+          : 'failed'
+    sqlite
+      .prepare(
+        `UPDATE orc_attempts SET state = 'terminated', evidence = ?, terminated_at = ?, unknown_reason = NULL,
+           spend_usd = COALESCE(?, spend_usd), spend_complete = ?, settled = ?, reserved_usd = CASE WHEN ? = 1 THEN 0 ELSE reserved_usd END,
+           result_text = ?, result_truncated = ?, updated_at = ? WHERE id = ?`,
+      )
+      .run(
+        disposition === 'cancelled' ? null : disposition,
+        run.ended_at ?? now,
+        spend.usd,
+        spend.complete ? 1 : 0,
+        spend.complete ? 1 : 0,
+        spend.complete ? 1 : 0,
+        // The result belongs to the attempt only if it is accepted now, never from a late proof.
+        !late && disposition === 'completed' ? reply!.reply : null,
+        !late && disposition === 'completed' && reply!.truncated === 1 ? 1 : 0,
+        now,
+        attempt.id,
+      )
+    bumpAdmission(sqlite)
+    const step = stepsOf(sqlite, o.id).find((candidate) => candidate.id === attempt.step_id)
+    if (!step) return
+    if (late || step.retired) {
+      // Late proof closes the obligations and settles the accounting; its result is permanently non-consumable (§7).
+      addHistory(
+        sqlite,
+        o.id,
+        'late_result',
+        { attemptId: attempt.id, stepId: step.id, status: disposition },
+        now,
+      )
+      if (late && !step.retired && ['unknown', 'admitted'].includes(step.status)) {
+        setStepStatus(
+          sqlite,
+          o.id,
+          step.id,
+          'failed',
+          'ended after it was last seen: its result is not used',
+          now,
+        )
+        addCause(sqlite, o.id, 'step_failed', step.id, now, 'ended after it was last seen')
+      }
+      return
+    }
+    if (disposition === 'cancelled') {
+      // Obligations closed, no result, never retried.
+      setStepStatus(sqlite, o.id, step.id, 'cancelled', 'stop', now)
+      addCause(sqlite, o.id, 'step_cancelled', step.id, now, 'stopped')
+      return
+    }
+    const text =
+      disposition === 'completed'
+        ? reply!.truncated === 1
+          ? `${reply!.reply}\n[…cut at ${CODING_RESULT_BYTES / 1024} KiB by Score]`
+          : reply!.reply
+        : [run.output, run.error ? `[error] ${run.error}` : null].filter(Boolean).join('\n')
+    const result = redactBounded(text, CODING_RESULT_BYTES + 128)
+    sqlite
+      .prepare(
+        `UPDATE orc_steps SET status = ?, disposition = ?, result = ?, result_revision = result_revision + 1, updated_at = ? WHERE orchestration_id = ? AND id = ?`,
+      )
+      .run(
+        disposition === 'completed' ? 'succeeded' : 'failed',
+        disposition === 'failed' ? 'the step run failed' : null,
+        result,
+        now,
+        o.id,
+        step.id,
+      )
+    addCodingStored(
+      sqlite,
+      o.id,
+      Buffer.byteLength(result) * 2 + Buffer.byteLength(run.output ?? ''),
+    )
+    addCause(
+      sqlite,
+      o.id,
+      disposition === 'completed' ? 'step_succeeded' : 'step_failed',
+      step.id,
+      now,
+    )
+  }
+
   // ------------------------------------------------------------------------------------------------ observation
 
   /** What the observed runs say about attempts: termination evidence, late evidence, spend. Pure read. */
@@ -2190,11 +2870,14 @@ export class Orchestrator {
       const spend = this.spend(sqlite, attempt)
       const terminalRun = ['completed', 'failed', 'cancelled', 'interrupted'].includes(run.status)
       const evidence = isEvidence(run)
-      const ends =
-        terminalRun &&
-        ((attempt.state === 'running' && true) ||
-          (attempt.state === 'unknown' && evidence) ||
-          (attempt.state === 'abandoned' && evidence))
+      const ends = isCodingStep(attempt)
+        ? terminalRun &&
+          (attempt.state === 'running' ||
+            (['unknown', 'abandoned'].includes(attempt.state) && codingProofIn(sqlite, attempt)))
+        : terminalRun &&
+          ((attempt.state === 'running' && true) ||
+            (attempt.state === 'unknown' && evidence) ||
+            (attempt.state === 'abandoned' && evidence))
       const settle = attempt.state === 'terminated' && spend.complete
       const spendChanged =
         (spend.usd !== null && spend.usd !== attempt.spend_usd) ||
@@ -2226,6 +2909,23 @@ export class Orchestrator {
         run.status === 'failed' ||
         run.status === 'cancelled' ||
         run.status === 'interrupted'
+      if (isCodingStep(attempt)) {
+        // A coding run's end is decided by its launch's journal state and proof, never by the run's own terminal word.
+        const codingEnded =
+          terminalRun &&
+          (attempt.state === 'running' ||
+            (['unknown', 'abandoned'].includes(attempt.state) && codingProofIn(sqlite, attempt)))
+        if (codingEnded) this.reconcileCoding(ctx, o, attempt, run)
+        else {
+          const settle = attempt.state === 'terminated' && spend.complete
+          sqlite
+            .prepare(
+              'UPDATE orc_attempts SET spend_usd = COALESCE(?, spend_usd), spend_complete = ?, settled = ?, reserved_usd = CASE WHEN ? = 1 THEN 0 ELSE reserved_usd END, updated_at = ? WHERE id = ?',
+            )
+            .run(spend.usd, spend.complete ? 1 : 0, settle ? 1 : 0, settle ? 1 : 0, now, attempt.id)
+        }
+        continue
+      }
       const ending =
         terminalRun &&
         (attempt.state === 'running' ||
@@ -2389,9 +3089,11 @@ export class Orchestrator {
 
   /** Delivers owed Stops until Hermes acknowledges. Abandoned attempts keep theirs. */
   private async serviceStops(): Promise<boolean> {
-    // Frozen: whose runs these handles name can't be told, so no Stop is delivered (decision 71).
-    if (this.options.fence.executionFrozen() !== null) return false
-    const owed = this.db.read((sqlite) =>
+    // Frozen: whose runs these handles name can't be told, so a Hermes Stop is not delivered (decision 71). A coding run
+    // this process launched and is connected to is provably its own, and a Stop only ends work (decision 74): the coding
+    // runtime answers those and refuses (`execution_frozen`) a recovered or inherited run, which then waits for the reset.
+    const frozen = this.options.fence.executionFrozen() !== null
+    const owedAll = this.db.read((sqlite) =>
       z
         .array(AttemptRowSchema)
         .parse(
@@ -2402,31 +3104,62 @@ export class Orchestrator {
             .all(),
         ),
     )
-    let changed = false
+    const owed = frozen ? owedAll.filter((attempt) => attempt.runtime !== 'hermes') : owedAll
     for (const attempt of owed) {
-      const last = this.stopTried.get(attempt.id) ?? 0
-      if (this.nowMs() - last < this.retryMs && last !== 0) continue
-      this.stopTried.set(attempt.id, this.nowMs())
-      try {
-        const outcome = await this.options.port.stopRun({
-          agentId: attempt.agent_id,
-          runId: attempt.run_id!,
+      if (this.closed || this.stopJobs.has(attempt.id)) continue
+      const last = this.stopTried.get(attempt.id)
+      if (last !== undefined && this.nowMs() < last.at + last.delay) continue
+      const job = this.deliverStop(attempt, frozen)
+        .catch((error: unknown) => {
+          this.err(error)
+          return false
         })
-        // Not proven ended: the obligation stays owed and is asked again.
-        if (outcome === 'unconfirmed') continue
-      } catch (error) {
-        this.err(error)
-        continue
-      }
-      await this.mutate((ctx) => {
-        ctx.sqlite
-          .prepare('UPDATE orc_attempts SET stop_acknowledged_at = ?, updated_at = ? WHERE id = ?')
-          .run(ctx.now, ctx.now, attempt.id)
-        touch(ctx, attempt.orchestration_id)
-      })
-      changed = true
+        .then((acknowledged) => {
+          this.stopJobs.delete(attempt.id)
+          // An acknowledgement frees the attempt's slot, so the executor looks again; a retry wakes itself at its time.
+          if (acknowledged) this.kick()
+        })
+      this.stopJobs.set(attempt.id, job)
     }
-    return changed
+    // Nothing here is awaited: a slow or hung Stop never holds the pump (design §9). A finished job kicks it again.
+    return false
+  }
+
+  /** One tracked Stop delivery for one attempt. Retries are paced by an exponential back-off per attempt. */
+  private async deliverStop(attempt: AttemptRow, frozen: boolean): Promise<boolean> {
+    const fails = this.stopTried.get(attempt.id)?.fails ?? 0
+    const retry = () => {
+      const delay = Math.min(this.retryMs * 2 ** fails, this.retryMs * 12)
+      this.stopTried.set(attempt.id, { at: this.nowMs(), delay, fails: fails + 1 })
+      this.wakeAfter(delay)
+      return false
+    }
+    try {
+      const outcome = await this.options.port.stopRun({
+        agentId: attempt.agent_id,
+        runId: attempt.run_id!,
+      })
+      // A coding Stop is acknowledged only by `stopped` or `not_running`; Hermes keeps `void` = acknowledged.
+      const acknowledged =
+        attempt.runtime === 'hermes'
+          ? outcome !== 'unconfirmed'
+          : outcome === 'stopped' || outcome === 'not_running'
+      if (!acknowledged) return retry()
+    } catch (error) {
+      if (!(frozen && error instanceof HttpError && error.code === 'execution_frozen'))
+        this.err(error)
+      return retry()
+    }
+    // After the shutdown window the Stop stays durably owed; a late answer is not recorded into a closing database.
+    if (this.abandonStops) return false
+    this.stopTried.delete(attempt.id)
+    await this.mutate((ctx) => {
+      ctx.sqlite
+        .prepare('UPDATE orc_attempts SET stop_acknowledged_at = ?, updated_at = ? WHERE id = ?')
+        .run(ctx.now, ctx.now, attempt.id)
+      touch(ctx, attempt.orchestration_id)
+    })
+    return true
   }
 
   // ------------------------------------------------------------------------------------------------- maintenance
@@ -2447,7 +3180,11 @@ export class Orchestrator {
           newest.set(`m:${entry.orchestrationId}:${entry.agentId}`, entry.n)
       }
     const compacted = journal.compact((entry) => {
-      if (entry.kind === 'send_refused' || entry.kind === 'witness') {
+      if (
+        entry.kind === 'send_refused' ||
+        entry.kind === 'send_closed' ||
+        entry.kind === 'witness'
+      ) {
         const attempt = readAttempt(sqlite, entry.attemptId)
         return (
           attempt !== undefined && (attempt.state === 'terminated' || attempt.state === 'refused')

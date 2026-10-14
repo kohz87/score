@@ -34,11 +34,15 @@ const RowSchema = z.object({
   inherited: z.int(),
   journal_n: z.int(),
   unsendable: z.int(),
+  owner_orchestration: z.string().nullable(),
+  owner_attempt: z.string().nullable(),
+  owner_generation: z.int().nullable(),
+  revoke_cause: z.string().nullable(),
 })
 type Row = z.infer<typeof RowSchema>
 
 const ROW_COLUMNS =
-  'launch_id, run_id, turn_id, generation, phase, revoked, may_have_executed, unit, invocation_id, cgroup, proof, disposition, waiver, stop_cause, inherited, journal_n, unsendable'
+  'launch_id, run_id, turn_id, generation, phase, revoked, may_have_executed, unit, invocation_id, cgroup, proof, disposition, waiver, stop_cause, inherited, journal_n, unsendable, owner_orchestration, owner_attempt, owner_generation, revoke_cause'
 
 /** The fields in which a row differs from the journal's state for the same record number (empty = they agree). */
 function divergence(row: Row, state: CodingState): string[] {
@@ -61,6 +65,10 @@ function divergence(row: Row, state: CodingState): string[] {
   // The journal's first stop cause is the truth; a row with a cause the journal never saw is not a divergence.
   if (state.stopCause !== undefined) check('stop cause', row.stop_cause, state.stopCause)
   check('inherited', row.inherited, state.inherited ? 1 : 0)
+  check('owner', row.owner_orchestration, state.owner?.orchestrationId ?? null)
+  check('owner attempt', row.owner_attempt, state.owner?.attemptId ?? null)
+  check('owner generation', row.owner_generation, state.owner?.generation ?? null)
+  check('revoke cause', row.revoke_cause, state.revokeCause ?? null)
   if (isUnsendable(state) && row.unsendable === 0) differs.push('unsendable')
   return differs
 }
@@ -81,8 +89,9 @@ function upsertLaunch(sqlite: DatabaseSync, launch: CodingLaunch, now: string): 
   sqlite
     .prepare(
       `INSERT INTO coding_launches (launch_id, run_id, turn_id, generation, phase, revoked, may_have_executed, unit,
-         invocation_id, cgroup, proof, disposition, waiver, stop_cause, inherited, journal_n, unsendable, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         invocation_id, cgroup, proof, disposition, waiver, stop_cause, inherited, journal_n, unsendable, updated_at,
+         owner_orchestration, owner_attempt, owner_generation, revoke_cause)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (launch_id) DO UPDATE SET run_id = excluded.run_id, turn_id = excluded.turn_id,
          generation = excluded.generation, phase = excluded.phase, revoked = excluded.revoked,
          stop_cause = COALESCE(excluded.stop_cause, coding_launches.stop_cause),
@@ -90,7 +99,11 @@ function upsertLaunch(sqlite: DatabaseSync, launch: CodingLaunch, now: string): 
          may_have_executed = excluded.may_have_executed, unit = excluded.unit, invocation_id = excluded.invocation_id,
          cgroup = excluded.cgroup, proof = excluded.proof, disposition = excluded.disposition, waiver = excluded.waiver,
          journal_n = excluded.journal_n, unsendable = MAX(coding_launches.unsendable, excluded.unsendable),
-         updated_at = excluded.updated_at
+         updated_at = excluded.updated_at,
+         owner_orchestration = COALESCE(coding_launches.owner_orchestration, excluded.owner_orchestration),
+         owner_attempt = COALESCE(coding_launches.owner_attempt, excluded.owner_attempt),
+         owner_generation = COALESCE(coding_launches.owner_generation, excluded.owner_generation),
+         revoke_cause = COALESCE(coding_launches.revoke_cause, excluded.revoke_cause)
        WHERE excluded.journal_n > coding_launches.journal_n`,
     )
     .run(
@@ -112,6 +125,10 @@ function upsertLaunch(sqlite: DatabaseSync, launch: CodingLaunch, now: string): 
       launch.n,
       isUnsendable(s) ? 1 : 0,
       now,
+      s.owner?.orchestrationId ?? null,
+      s.owner?.attemptId ?? null,
+      s.owner?.generation ?? null,
+      s.revokeCause ?? null,
     )
 }
 
@@ -122,7 +139,8 @@ function repairLaunch(sqlite: DatabaseSync, launch: CodingLaunch, now: string): 
       `UPDATE coding_launches SET run_id = ?, turn_id = ?, generation = ?, phase = ?,
          revoked = MAX(revoked, ?), may_have_executed = MAX(may_have_executed, ?), unit = ?, invocation_id = ?,
          cgroup = ?, proof = ?, disposition = ?, waiver = ?, stop_cause = COALESCE(?, stop_cause),
-         inherited = MAX(inherited, ?), unsendable = MAX(unsendable, ?), updated_at = ?
+         inherited = MAX(inherited, ?), unsendable = MAX(unsendable, ?), updated_at = ?,
+         owner_orchestration = ?, owner_attempt = ?, owner_generation = ?, revoke_cause = ?
        WHERE launch_id = ?`,
     )
     .run(
@@ -142,6 +160,10 @@ function repairLaunch(sqlite: DatabaseSync, launch: CodingLaunch, now: string): 
       s.inherited ? 1 : 0,
       isUnsendable(s) ? 1 : 0,
       now,
+      s.owner?.orchestrationId ?? null,
+      s.owner?.attemptId ?? null,
+      s.owner?.generation ?? null,
+      s.revokeCause ?? null,
       s.launchId,
     )
 }

@@ -6,7 +6,8 @@ import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { codingProjection } from '../../domain/orchestration/coding-checkpoint.ts'
-import type { CodingJournal } from '../../domain/orchestration/coding-journal.ts'
+import type { CodingJournal, ReleaseDecision } from '../../domain/orchestration/coding-journal.ts'
+import type { OwnedLaunchJournal, PreparedLaunch } from '../../domain/orchestration/owner.ts'
 import {
   foldCodingLaunches,
   type CodingLaunch,
@@ -135,6 +136,8 @@ export interface UnitBackendDeps {
   run?: RunTool
   clock?: () => number
   onError?: (error: unknown) => void
+  /** A launch's end proof was just recorded for this run (late proof: the executor reconciles its attempt now). */
+  onEnded?: (runId: string) => void
   /** Test seams. */
   /** The write primitives of the capability marker (a test makes the disk fail). */
   markerIo?: Parameters<typeof writeReceipt>[3]
@@ -196,9 +199,23 @@ export interface UnitLaunchRequest {
   authorised(): boolean
   /** The CLI was released (`go` sent). */
   onReleased?(launchId: string): void
+  /**
+   * Orchestration-owned launches (7.7b §5, §6). `launchId` is the id the executor minted for this dispatch generation
+   * (one launch per generation, journaled with its `send_started`); `owner` is written into the `requested` record and
+   * stays with the launch forever; `authorise` is the executor's decision at the ordering point: it runs inside the
+   * release critical section, in its own read transaction, and answers with a typed cause when it says no. `prepared`
+   * is what this launch was prepared with (its absolute expiry).
+   */
+  launchId?: string
+  owner?: { orchestrationId: string; attemptId: string; generation: number }
+  authorise?(prepared: PreparedLaunch, journal: OwnedLaunchJournal): ReleaseDecision
+  /** The id of the worker policy the invocation was built from (7.7b §3); handed to `authorise` with the expiry. */
+  preparedPolicyId?: string
 }
 
 export interface UnitOutcome {
+  /** The typed cause when the launch ended before the CLI (revoked, or refused before it was requested), else null. */
+  refusalCause: string | null
   launchId: string
   unit: string
   /** `go` was sent: the CLI may have run. */
@@ -626,12 +643,13 @@ export class UnitBackend {
   // ---- launch ----------------------------------------------------------------------------------------------------
 
   launch(request: UnitLaunchRequest): UnitRun {
-    const launchId = randomUUID()
+    const launchId = request.launchId ?? randomUUID()
     const ctl = new Control(launchId)
     const done = this.drive(launchId, request, ctl).catch((error: unknown) => {
       this.deps.onError?.(error)
       return this.outcomeOf(launchId, '', {
         refusal: `Could not start the supervised run: ${error instanceof Error ? error.message : String(error)}`,
+        refusalCause: 'start_failed',
         stats: request.parser.stats,
       })
     })
@@ -763,6 +781,7 @@ export class UnitBackend {
     over: Partial<UnitOutcome> & { stats: LineParser['stats'] },
   ): UnitOutcome {
     return {
+      refusalCause: null,
       launchId,
       unit,
       released: false,
@@ -841,12 +860,13 @@ export class UnitBackend {
       LAUNCHES_DIR,
       launchId,
     )
-    const refuse = (refusal: string) => this.outcomeOf(launchId, unit, { refusal, stats })
+    const refuse = (refusal: string, cause: string) =>
+      this.outcomeOf(launchId, unit, { refusal, refusalCause: cause, stats })
     if (this.tooFast())
-      return refuse('Score is starting coding runs too quickly. Try again in a minute.')
+      return refuse('Score is starting coding runs too quickly. Try again in a minute.', 'hold')
     const blocked = this.block()
-    if (blocked) return refuse(blocked)
-    if (ctl.stopReason) return refuse('Stopped before it started.')
+    if (blocked) return refuse(blocked, this.deps.frozen?.() != null ? 'frozen' : 'fenced')
+    if (ctl.stopReason) return refuse('Stopped before it started.', 'stop')
 
     // Per-launch directories before `requested`: the receipt directory outside the home (each parent fsynced), and the
     // spec directory in the runtime dir (0700). Nothing external has happened yet, so a failure is a plain refusal.
@@ -864,7 +884,7 @@ export class UnitBackend {
         turnId: request.turnId,
       })
     } catch (error) {
-      return refuse(`Couldn’t prepare the run’s folders: ${errorText(error)}`)
+      return refuse(`Couldn’t prepare the run’s folders: ${errorText(error)}`, 'start_failed')
     }
     const identity = {
       launchId,
@@ -875,10 +895,13 @@ export class UnitBackend {
     const project = this.projection(request, receiptDir, specDir, {
       deadline_at: request.deadline,
     })
-    const requested = journal.requestLaunch(identity, project(launchId), { unit })
+    const requested = journal.requestLaunch(identity, project(launchId), {
+      unit,
+      ...(request.owner ? { owner: request.owner } : {}),
+    })
     if (!requested.ok) {
       this.removeSpecDir(specDir)
-      return refuse(`Couldn’t record the run (${requested.reason}).`)
+      return refuse(`Couldn’t record the run (${requested.reason}).`, 'start_failed')
     }
 
     // ---- from here the launch is journaled: every exit goes through `end()` ----
@@ -941,9 +964,9 @@ export class UnitBackend {
       this.unrecordedStops.delete(launchId)
       return outcome
     }
-    const abort = async (reason: string): Promise<UnitOutcome> => {
+    const abort = async (reason: string, cause: string): Promise<UnitOutcome> => {
       // Nothing was released. Revoke if the journal still allows it (no `releasing`), cancel/stop, then prove.
-      const revoked = journal.revoke(launchId, undefined, project(launchId))
+      const revoked = journal.revoke(launchId, undefined, project(launchId), cause)
       if (
         !revoked.ok &&
         revoked.reason !== 'may_have_executed' &&
@@ -959,7 +982,7 @@ export class UnitBackend {
       // A supervisor that never reported has nothing to pin: its launch is unknown to Score now, so it is rejected and
       // leaves by itself; the proof below waits for that. One that reported is stopped through its pidfd.
       await this.stopSupervisor(launchId)
-      return finish({ refusal: reason })
+      return finish({ refusal: reason, refusalCause: cause })
     }
 
     let sawEvents = false
@@ -1026,6 +1049,7 @@ export class UnitBackend {
     } catch {
       return abort(
         'Score is holding too much coding output in memory right now. Try again shortly.',
+        'hold',
       )
     }
     session = registered.session
@@ -1034,9 +1058,9 @@ export class UnitBackend {
     try {
       writeFileSync(specPath, JSON.stringify(spec), { flag: 'wx', mode: 0o600 })
     } catch (error) {
-      return abort(`Couldn’t write the run’s settings: ${errorText(error)}`)
+      return abort(`Couldn’t write the run’s settings: ${errorText(error)}`, 'start_failed')
     }
-    if (ctl.stopReason) return abort('Stopped before it started.')
+    if (ctl.stopReason) return abort('Stopped before it started.', 'stop')
 
     const started = await (async () => {
       const names = await managerEnvironmentNames(this.run)
@@ -1057,9 +1081,10 @@ export class UnitBackend {
       const detail = redactNote(started.stderr.trim(), 160)
       return abort(
         `The system service manager refused to start the run${detail ? ` (${detail})` : ''}.`,
+        'start_failed',
       )
     }
-    if (ctl.stopReason) return abort('Stopped before it started.')
+    if (ctl.stopReason) return abort('Stopped before it started.', 'stop')
 
     // ---- hello / ready, then identity (§5) ----
     const ready = await Promise.race([
@@ -1075,9 +1100,11 @@ export class UnitBackend {
         ready.why === 'stopped'
           ? 'Stopped before it started.'
           : 'The run’s supervisor didn’t report in.',
+        ready.why === 'stopped' ? 'stop' : 'start_failed',
       )
     const verified = await this.verifyIdentity(unit, ready.info)
-    if (!verified.ok) return abort(`The run’s identity didn’t check out (${verified.reason}).`)
+    if (!verified.ok)
+      return abort(`The run’s identity didn’t check out (${verified.reason}).`, 'start_failed')
     const unitState = verified.state
     const manager = await this.managerNow()
     const managerText = manager ? `${this.bootNow() ?? ''}|${manager.pid}:${manager.start}` : null
@@ -1096,25 +1123,52 @@ export class UnitBackend {
         supervisor: { pid: ready.info.pid, start: ready.info.start },
       })
     } catch (error) {
-      return abort(`Couldn’t record the run’s identity (${errorText(error)}).`)
+      return abort(`Couldn’t record the run’s identity (${errorText(error)}).`, 'start_failed')
     }
     const armed = journal.arm(
       launchId,
       { unit, invocationId: unitState.invocationId, cgroup: ready.info.cgroup },
       this.projection(request, receiptDir, specDir, { manager: managerText })(launchId),
     )
-    if (!armed.ok) return abort(`Couldn’t record the run’s identity (${armed.reason}).`)
+    if (!armed.ok)
+      return abort(`Couldn’t record the run’s identity (${armed.reason}).`, 'start_failed')
     // The spec held the single-use token: Score's backstop deletes it now that the supervisor reported in.
     this.removeSpecDir(specDir)
-    if (ctl.stopReason) return abort('Stopped before it started.')
+    if (ctl.stopReason) return abort('Stopped before it started.', 'stop')
 
     // ---- the ordering point (§3) ----
-    const releasing = journal.release(
-      launchId,
-      // A fence raised while the unit was starting also stops the release (review #5).
-      () => !ctl.stopReason && this.block() === null && request.authorised(),
-      project(launchId),
-    )
+    // A fence raised while the unit was starting also stops the release (review #5). An owned launch asks its owner,
+    // inside the critical section and in a read transaction of its own; a refusal is revoked there with its cause.
+    const decide = (tx: OwnedLaunchJournal): ReleaseDecision => {
+      if (ctl.stopReason) return { allowed: false, cause: 'stop' }
+      if (this.deps.frozen?.() != null) return { allowed: false, cause: 'frozen' }
+      if (this.block() !== null) return { allowed: false, cause: 'fenced' }
+      if (!request.authorised()) return { allowed: false, cause: 'stop' }
+      return (
+        request.authorise?.(
+          {
+            expiry: request.deadline,
+            ...(request.preparedPolicyId === undefined
+              ? {}
+              : { policyId: request.preparedPolicyId }),
+          },
+          tx,
+        ) ?? { allowed: true }
+      )
+    }
+    let releasing: ReturnType<typeof journal.release>
+    try {
+      releasing = request.authorise
+        ? journal.releaseOwned(launchId, decide, project(launchId))
+        : journal.release(
+            launchId,
+            () => !ctl.stopReason && this.block() === null && request.authorised(),
+            project(launchId),
+          )
+    } catch (error) {
+      // Nothing was written or sent by a decision that threw: the launch is revoked, not left armed.
+      return abort(`Couldn’t release the run (${errorText(error)}).`, 'start_failed')
+    }
     if (!releasing.ok) {
       if (releasing.reason === 'projection_failed') {
         // The record is durable: this launch MAY have executed. No `go`; stop it and prove it ended.
@@ -1130,8 +1184,11 @@ export class UnitBackend {
       }
       return abort(
         releasing.reason === 'not_authorised'
-          ? 'Stopped before it started.'
+          ? releasing.denied === 'deadline' || releasing.denied === 'deadline_changed'
+            ? 'The run’s deadline came before it could start.'
+            : 'Stopped before it started.'
           : `Couldn’t release the run (${releasing.reason}).`,
+        releasing.denied ?? (releasing.reason === 'not_authorised' ? 'stop' : 'start_failed'),
       )
     }
     released = true
@@ -1745,11 +1802,26 @@ export class UnitBackend {
     )
       this.deps.journal.releasedSeen(row.launch_id, {}, project)
     // A launch that never executed is revoked before it ends: the journal alone proves no-launch (§3).
-    if (state && !state.state.mayHaveExecuted && !state.state.revoked)
-      this.deps.journal.revoke(row.launch_id, undefined, project)
+    if (state && !state.state.mayHaveExecuted && !state.state.revoked) {
+      const cause = state.state.stopCause
+      this.deps.journal.revoke(
+        row.launch_id,
+        undefined,
+        project,
+        cause === undefined
+          ? 'start_failed'
+          : cause === 'deadline'
+            ? 'deadline'
+            : cause === 'score-shutdown' || cause === 'unit-stop'
+              ? 'restart'
+              : 'stop',
+      )
+    }
     const ended = this.deps.journal.ended(row.launch_id, { proof }, project)
     if (!ended.ok && ended.reason !== 'illegal_transition')
       this.deps.onError?.(new Error(`ended refused: ${ended.reason}`))
+    // Proof is the executor's evidence (7.7b §7): an attempt it holds as unknown is settled as soon as this is recorded.
+    else this.deps.onEnded?.(row.run_id)
   }
 
   /** The runtime stopped waiting for the run: the stop request for a launch that has no live handle (no `UnitRun`). */
@@ -1770,13 +1842,13 @@ export class UnitBackend {
   }
 
   /** Unsettled launches of one run (for a Stop that finds no live handle). */
-  openLaunchesOf(runId: string): string[] {
+  openLaunchesOf(runId: string, agentId?: string): string[] {
     return (
       this.deps.db.sqlite
         .prepare(
-          "SELECT launch_id FROM coding_launches WHERE run_id = ? AND backend = 'unit' AND phase NOT IN ('ended','settled')",
+          "SELECT launch_id FROM coding_launches WHERE run_id = ? AND backend = 'unit' AND phase NOT IN ('ended','settled') AND (? IS NULL OR agent_id IS NULL OR agent_id = ?)",
         )
-        .all(runId) as { launch_id: string }[]
+        .all(runId, agentId ?? null, agentId ?? null) as { launch_id: string }[]
     ).map((r) => r.launch_id)
   }
 
@@ -1873,7 +1945,7 @@ export class UnitBackend {
     const id = l.state.launchId
     // No `releasing` record: the journal proves the CLI never ran. Revoke so nothing can release it later.
     if (!l.state.mayHaveExecuted && !l.state.revoked)
-      this.deps.journal.revoke(id, undefined, codingProjection(this.deps.db, this.clock))
+      this.deps.journal.revoke(id, undefined, codingProjection(this.deps.db, this.clock), 'restart')
     await this.stopSupervisor(id)
     const proof = await this.proveEnded(id, { timeoutMs: this.deps.recoverProofMs ?? 10_000 })
     const row = this.rowOf(id)

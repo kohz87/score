@@ -113,6 +113,8 @@ export interface HarnessOptions {
   token?: string
   /** Test seam: the supervisor's socket (wrap it to model a stuck consumer). */
   connect?: (path: string) => net.Socket
+  /** Test seam: the supervisor's clock. */
+  now?: () => number
   /** Test seam: the write primitives of the supervisor's final receipt. */
   receiptIo?: SupervisorDeps['receiptIo']
 }
@@ -174,6 +176,7 @@ export async function startHarness(options: HarnessOptions): Promise<Harness> {
     pollMs: 20,
     ...(options.connect ? { connect: options.connect } : {}),
     ...(options.receiptIo ? { receiptIo: options.receiptIo } : {}),
+    ...(options.now ? { now: options.now } : {}),
   })
   return {
     dir,

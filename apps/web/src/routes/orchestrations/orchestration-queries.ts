@@ -16,6 +16,7 @@ import {
   type OrchestrationCreate,
   type OrchestrationDetail,
   type OrchestrationSummary,
+  type PolicyRemapDecision,
   type RunControl,
   type RemapDecision,
   type WaiverDecision,
@@ -208,6 +209,10 @@ export function describeOrchError(error: unknown): string {
     return 'What would be re-created changed while you were looking. The page now shows the new plan. Check it and decide again.'
   if (error.code === 'not_retryable')
     return 'This step can’t be retried any more (no tries left, or it moved on). The page now shows where it is.'
+  if (error.code === 'policy_changed')
+    return 'The agent’s settings changed again while you were looking. The page now shows the latest. Check them and decide again.'
+  if (error.code === 'reach_not_acknowledged')
+    return 'Accept what the agent can read before you go on.'
   if (error.code === 'not_open')
     return 'That isn’t waiting for a decision any more. The page now shows where the run is.'
   return error.message
@@ -262,6 +267,10 @@ export function useRunActions(id: string) {
     stop: useRunPost<RunControl>(id, plain('stop')),
     waiver: useRunPost<WaiverDecision>(id, plain('waiver')),
     remap: useRunPost<RemapDecision>(id, plain('remap')),
+    policyRemap: useRunPost<{ stepId: string; body: PolicyRemapDecision }>(id, (v) => ({
+      path: `steps/${encodeURIComponent(v.stepId)}/remap`,
+      body: v.body,
+    })),
     abandon: useRunPost<AbandonDecision>(id, plain('abandon')),
   }
 }

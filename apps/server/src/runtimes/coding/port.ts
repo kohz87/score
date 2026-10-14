@@ -35,7 +35,18 @@ const unsupported = () =>
  * The port the routes see: Hermes's agents plus the coding agents, and turns for a coding agent go to its CLI runtime.
  * Everything else is Hermes's, untouched. Kanban tasks stay Hermes-only in v1 (review 2026-10-09, 7.2 #6).
  */
+// The composite is built once at the composition root and shared by the routes and the executor (7.7b §2); wrapping it
+// again with the same runtime returns the same object.
+const composites = new WeakMap<object, CodingRuntime>()
+
 export function withCodingAgents(port: HermesPort, coding: CodingRuntime): HermesPort {
+  if (composites.get(port) === coding) return port
+  const composite = compose(port, coding)
+  composites.set(composite, coding)
+  return composite
+}
+
+function compose(port: HermesPort, coding: CodingRuntime): HermesPort {
   const idOf = (value: unknown) => (typeof value === 'string' ? coding.isCodingAgent(value) : false)
   return new Proxy(port, {
     get(target, property, receiver) {
@@ -81,10 +92,15 @@ export function withCodingAgents(port: HermesPort, coding: CodingRuntime): Herme
               ? coding.startRun(req as Parameters<typeof coding.startRun>[0])
               : call(req)
         case 'stopRun':
-          return (req: { agentId: string }) =>
-            idOf(req.agentId)
+          // Controls route by the run's own durable runtime (7.7b §2), not by whether the agent is a coding agent now:
+          // a queued Chat coding turn and a process-group run of an agent that was removed meanwhile still belong to the
+          // coding runtime. A run Score has no row for goes by its agent.
+          return (req: { agentId: string; runId: string }) => {
+            const runtime = coding.runtimeOfRun(req.runId)
+            return (runtime === undefined ? idOf(req.agentId) : runtime !== 'hermes')
               ? coding.stopRun(req as Parameters<typeof coding.stopRun>[0])
               : call(req)
+          }
         case 'rewindSession':
           // A coding agent has no rewindable history: the room hides the messages in Score, and the agent's CLI
           // session for this room is dropped so its next turn starts fresh instead of remembering what was undone.

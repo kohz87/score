@@ -2,12 +2,15 @@ import { Arrival } from '../../motion/Arrival.tsx'
 import { gateChip } from '../../live/resolved.ts'
 import { ResolvedList } from '../../live/ResolvedList.tsx'
 import { useRecentlyResolved } from '../../live/use-recently-resolved.ts'
-import type { AgentSummary, NeedsYou, OrchestrationDetail } from '@score/contract'
+import type { AgentSummary, CostSource, NeedsYou, OrchestrationDetail } from '@score/contract'
+import { ORCH_LIMITS } from '@score/contract'
 import { useState } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
-import { needsYouText, usd } from './orch-model.ts'
+import { runtimeLabel } from '../../components/runtime-label.ts'
+import { needsYouText, readinessText, usd } from './orch-model.ts'
 import {
   describeOrchError,
+  usePreflight,
   type DecisionActions,
   type RunActions,
 } from './orchestration-queries.ts'
@@ -21,9 +24,19 @@ export function AgentChip({ agentId, agents }: { agentId: string; agents: AgentS
     <span className="orch-agent">
       {agent && <AgentGlyph agent={agent} size="xs" describeShape />}
       <span>{agent?.name ?? agentId}</span>
+      <CliBadge runtime={agent?.runtime} />
     </span>
   )
 }
+
+/** Which program a coding agent runs on (Claude Code, Codex); nothing for Hermes agents. */
+export function CliBadge({ runtime }: { runtime: AgentSummary['runtime'] }) {
+  const label = runtimeLabel(runtime)
+  return label ? <span className="orch-cli">{label}</span> : null
+}
+
+export const sourceName = (source: CostSource): string =>
+  source === 'claude-code' ? 'Claude Code' : source === 'codex' ? 'Codex' : 'Hermes agents'
 
 export function ErrorLine({ error }: { error: unknown }) {
   return error ? (
@@ -35,7 +48,9 @@ export function ErrorLine({ error }: { error: unknown }) {
 
 /** The parts of a run the shared cards read; a workflow run supplies them from its own view (7.1b). */
 export type GateRun = Pick<OrchestrationDetail, 'gates' | 'stepsList' | 'revision'>
-export type LimitsRun = Pick<OrchestrationDetail, 'budget' | 'revision'>
+export type LimitsRun = Pick<OrchestrationDetail, 'budget' | 'revision'> & {
+  coding?: OrchestrationDetail['coding']
+}
 export type AttemptsRun = Pick<OrchestrationDetail, 'attempts' | 'revision'>
 
 export function GateCard({
@@ -275,6 +290,26 @@ export function LimitsCard({
             Continue although spend is unknown
           </button>
         )}
+        {reason === 'unknown_spend' &&
+          run.coding &&
+          (['claude-code', 'codex'] as const)
+            .filter((source) => run.coding!.workers.some((worker) => worker.runtime === source))
+            .filter((source) => !run.coding!.acceptedUnknownCost.includes(source))
+            .map((source) => (
+              <button
+                key={source}
+                type="button"
+                disabled={actions.limits.isPending}
+                onClick={() =>
+                  actions.limits.mutate({
+                    orchestrationRevision: run.revision,
+                    acceptUnknownCost: { add: [source] },
+                  })
+                }
+              >
+                Continue although {sourceName(source)} cost is unknown
+              </button>
+            ))}
       </div>
       <ErrorLine error={actions.limits.error} />
     </Arrival>
@@ -458,6 +493,134 @@ export function RemapCard({
   )
 }
 
+/** A coding agent's settings changed since the run was approved: use its new settings for this step, or stop the run. */
+export function PolicyChangedCard({
+  run,
+  item,
+  agents,
+  actions,
+}: {
+  run: OrchestrationDetail
+  item: Extract<NeedsYou, { kind: 'policy_changed' }>
+  agents: AgentSummary[]
+  actions: RunActions
+}) {
+  // The same check the start dialog ran, for this one agent: its current settings and what they let it read.
+  const check = usePreflight(run.leadAgentId, [item.agentId])
+  const worker = check.data?.workers.find((entry) => entry.agentId === item.agentId)
+  const [accepted, setAccepted] = useState<string | null>(null)
+  const policyId = worker?.policyId ?? null
+  const ready = worker?.readiness === 'ready' && policyId !== null
+  const wide = worker?.reachBeyondWorkspace === true
+  const covered = !wide || accepted === policyId
+  return (
+    <Arrival
+      arrivalId={`policy-${item.stepId}`}
+      className="orch-decision"
+      aria-label={`New settings for ${item.agentId}`}
+    >
+      <h3>
+        Settings changed for <AgentChip agentId={item.agentId} agents={agents} />
+      </h3>
+      <p>
+        {item.stepId} is blocked because {item.agentId} isn’t set up the way it was when you
+        approved this run. Nothing runs until you decide.
+      </p>
+      {check.isPending && <p role="status">Checking what it can do now…</p>}
+      {worker && ready && worker.reach && <p>With the new settings: {worker.reach}</p>}
+      {worker && !ready && (
+        <p className="orch-error">
+          {worker.detail ?? readinessText[worker.readiness]} Fix that first, or stop the run.
+        </p>
+      )}
+      {wide && ready && (
+        <label className="orch-check orch-ack">
+          <input
+            type="checkbox"
+            checked={accepted === policyId}
+            onChange={(event) => setAccepted(event.target.checked ? policyId : null)}
+          />
+          <span>I understand what it can read now, and I accept it for this run.</span>
+        </label>
+      )}
+      <div className="orch-actions">
+        <button
+          type="button"
+          className="orch-primary"
+          disabled={actions.policyRemap.isPending || !ready || !covered}
+          onClick={() =>
+            policyId &&
+            actions.policyRemap.mutate({
+              stepId: item.stepId,
+              body: {
+                agentId: item.agentId,
+                policyId,
+                ...(wide ? { acknowledgeCodingReach: { policyIds: [policyId] } } : {}),
+                orchestrationRevision: run.revision,
+              },
+            })
+          }
+        >
+          Use the new settings
+        </button>
+      </div>
+      <ErrorLine error={actions.policyRemap.error} />
+    </Arrival>
+  )
+}
+
+/** The run reached its limit of coding steps: raise it so the blocked step can go on. */
+export function CodingLimitCard({
+  run,
+  item,
+  actions,
+}: {
+  run: OrchestrationDetail
+  item: Extract<NeedsYou, { kind: 'coding_limit' }>
+  actions: Pick<RunActions, 'limits'>
+}) {
+  const current = run.coding?.stepLimit ?? 0
+  const [limit, setLimit] = useState(String(Math.min(current + 5, ORCH_LIMITS.maxCodingSteps)))
+  const next = Number(limit)
+  const valid = Number.isInteger(next) && next > current && next <= ORCH_LIMITS.maxCodingSteps
+  return (
+    <Arrival
+      arrivalId={`coding-limit-${item.stepId}`}
+      className="orch-decision"
+      aria-label="Coding step limit"
+    >
+      <h3>{item.stepId} is waiting: the run reached its limit of coding steps</h3>
+      <p>
+        This run may use up to {current} coding steps, and they are used. Raise the limit to let{' '}
+        {item.stepId} go on, or stop the run.
+      </p>
+      <label className="orch-field">
+        <span>New limit (up to {ORCH_LIMITS.maxCodingSteps})</span>
+        <input
+          type="number"
+          min={current + 1}
+          max={ORCH_LIMITS.maxCodingSteps}
+          value={limit}
+          onChange={(event) => setLimit(event.target.value)}
+        />
+      </label>
+      <div className="orch-actions">
+        <button
+          type="button"
+          className="orch-primary"
+          disabled={actions.limits.isPending || !valid}
+          onClick={() =>
+            actions.limits.mutate({ orchestrationRevision: run.revision, codingSteps: next })
+          }
+        >
+          Raise the limit and continue
+        </button>
+      </div>
+      <ErrorLine error={actions.limits.error} />
+    </Arrival>
+  )
+}
+
 /** Every item the run needs from the person, typed as the server lists them (`needsYou[]`). */
 export function RunNeeds({
   run,
@@ -550,6 +713,20 @@ export function RunNeeds({
                 agents={agents}
                 actions={actions}
               />
+            )
+          case 'policy_changed':
+            return (
+              <PolicyChangedCard
+                key={`pc${item.stepId}`}
+                run={run}
+                item={item}
+                agents={agents}
+                actions={actions}
+              />
+            )
+          case 'coding_limit':
+            return (
+              <CodingLimitCard key={`cl${item.stepId}`} run={run} item={item} actions={actions} />
             )
           case 'paused':
             return (

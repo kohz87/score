@@ -5,6 +5,7 @@ import {
   InquiryAnswerSchema,
   LimitsDecisionSchema,
   OrchestrationCreateSchema,
+  PolicyRemapDecisionSchema,
   RunControlSchema,
   RemapDecisionSchema,
   WaiverDecisionSchema,
@@ -19,6 +20,7 @@ import { requestIdempotency } from './idempotency.ts'
 
 const IdParams = z.object({ id: z.string().min(1).max(100) })
 const GateParams = IdParams.extend({ gateId: z.string().min(1).max(100) })
+const StepParams = IdParams.extend({ stepId: z.string().min(1).max(100) })
 const InquiryParams = IdParams.extend({ inquiryId: z.string().min(1).max(100) })
 const PreflightQuery = z.object({
   leadAgentId: z.string().min(1).max(256),
@@ -112,6 +114,10 @@ export function registerOrchestrationRoutes(
   app.post('/api/orchestrations/:id/remap', mutation, async (request) => {
     const { id } = IdParams.parse(request.params)
     return orchestrator.remap(id, RemapDecisionSchema.parse(request.body))
+  })
+  app.post('/api/orchestrations/:id/steps/:stepId/remap', mutation, async (request) => {
+    const { id, stepId } = StepParams.parse(request.params)
+    return orchestrator.policyRemap(id, stepId, PolicyRemapDecisionSchema.parse(request.body))
   })
   app.post('/api/orchestrations/:id/abandon', mutation, async (request) => {
     const { id } = IdParams.parse(request.params)

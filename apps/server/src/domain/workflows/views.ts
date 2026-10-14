@@ -18,7 +18,12 @@ import {
 import { createHash } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { agentAdmits, agentPausedAt, lifecycleOf } from '../agent-lifecycle.ts'
-import { budgetView, canReserve, spendEvidence } from '../orchestration/budget.ts'
+import {
+  budgetView,
+  canReserve,
+  spendEvidence,
+  unknownCostBlocks,
+} from '../orchestration/budget.ts'
 import { isFenced } from '../orchestration/fence.ts'
 import { activeStepCounts } from '../orchestration/ops.ts'
 import {
@@ -151,8 +156,7 @@ function waitingFor(
     return 'agent_hold'
   if (!agentAdmits(sqlite, step.agent_id)) return 'agent_unavailable'
   const view = budgetView(sqlite, o)
-  if (view.limitUsd !== null && view.unknownSpend && !o.accepted_unknown_spend)
-    return 'unknown_spend'
+  if (unknownCostBlocks(sqlite, o, view)) return 'unknown_spend'
   if (!attempt) {
     if (
       (counts.perRun.get(o.id) ?? 0) >= o.max_concurrent_steps ||

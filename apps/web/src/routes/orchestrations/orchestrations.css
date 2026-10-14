@@ -932,3 +932,50 @@ button.orch-primary,
 .orch-summary-slot {
   min-height: 1.6em;
 }
+
+/* Coding agents (7.7b): the program an agent runs on, a small pill next to its name */
+.orch-cli {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--subtle);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.orch-workers ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  display: grid;
+  gap: 8px;
+}
+.orch-workers li {
+  background: var(--subtle);
+  border-radius: var(--radius-14);
+  padding: 10px 12px;
+}
+.orch-workers li p {
+  margin: 4px 0 0;
+}
+.orch-risk {
+  margin-top: 8px;
+}
+.orch-node__cli {
+  position: absolute;
+  top: -9px;
+  left: 10px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--subtle);
+  border: 1px solid var(--hairline);
+  color: var(--ink-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}

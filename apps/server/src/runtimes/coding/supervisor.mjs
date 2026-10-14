@@ -368,6 +368,23 @@ export async function runSupervisor(spec, deps = {}) {
     })()
   }
 
+  // The `expired` receipt says why no `released` receipt exists. The launch stays released in Score's journal (the
+  // release was durable before `go`); the receipts are what prove the CLI never spawned.
+  function expireBeforeSpawn() {
+    stopCause ??= 'deadline'
+    try {
+      writeReceipt(spec.receiptDir, 'expired.json', {
+        launch: spec.launch,
+        generation: spec.generation,
+        at: now(),
+      })
+    } catch {
+      // A receipt that can't be written leaves the launch unproven on Score's side, which is the safe answer.
+    }
+    send({ t: 'error', code: 'expired' })
+    endWithoutRun()
+  }
+
   function endWithoutRun() {
     phase = 'ended'
     // The payload cgroup exists but nothing was started in it, so there is nothing to wait for.
@@ -458,6 +475,10 @@ export async function runSupervisor(spec, deps = {}) {
       finish(EXIT.failed)
       return
     }
+    // The receipt's fsyncs block, and the clock moves while they do: check the absolute expiry once more, after the
+    // receipt is durable and right before the spawn (F1 #3). `released.json` stays (Score keeps the launch as possibly
+    // executed and its step charge); `expired.json` says the CLI never started.
+    if (now() >= spec.deadline) return expireBeforeSpawn()
     const useWrapper = Boolean(spec.python && spec.wrapper)
     const file = useWrapper ? spec.python : cmd.file
     const args = useWrapper
@@ -659,7 +680,11 @@ export async function runSupervisor(spec, deps = {}) {
         finish(EXIT.rejected)
         return
       case 'go':
-        if (phase === 'waiting-go') startCli()
+        if (phase !== 'waiting-go') return
+        // The expiry is absolute and checked right before the spawn (7.7b A2): a `go` that was delayed past it (a slow
+        // commit, a stalled socket) must not start the CLI, whatever the control loop's tick has noticed so far.
+        if (now() >= spec.deadline) return expireBeforeSpawn()
+        startCli()
         return
       case 'cancel':
         if (phase === 'waiting-go' || phase === 'connecting') {

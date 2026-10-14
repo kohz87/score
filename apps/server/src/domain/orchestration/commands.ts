@@ -10,11 +10,13 @@ import {
   type OrchReceipt,
 } from '@score/contract'
 import { createHash } from 'node:crypto'
+import type { DatabaseSync } from 'node:sqlite'
 import type { z } from 'zod'
 import { agentAdmits, lifecycleOf } from '../agent-lifecycle.ts'
 import { storeMessage } from '../rooms.ts'
 import { redact } from '../../redact.ts'
-import { budgetView, canReserve } from './budget.ts'
+import { budgetView, canReserve, unknownCostBlocks } from './budget.ts'
+import { readWorkerPolicy } from './coding-policy.ts'
 import { containsCapability, hashCapability } from './capability.ts'
 import { journalSoft, touch, type Ctx } from './ctx.ts'
 import {
@@ -94,6 +96,12 @@ const refuse = (code: string, message: string): OrchReceipt => ({
   code,
   message,
 })
+
+/** `{ policyId }` for a coding worker with a stored policy, nothing for a Hermes agent. */
+function policyField(sqlite: DatabaseSync, orchId: string, agentId: string): { policyId?: string } {
+  const stored = readWorkerPolicy(sqlite, orchId, agentId)
+  return stored ? { policyId: stored.policyId } : {}
+}
 
 /** Canonical payload: keys sorted, capability and commandId excluded (they identify the call, not its content). */
 export function payloadHash(tool: string, args: Record<string, unknown>): string {
@@ -351,7 +359,7 @@ const HANDLERS: Record<ToolName, Handler> = {
     }
     const instruction = redact(rawInstruction)
     const view = budgetView(sqlite, o)
-    if (o.budget_usd !== null && view.unknownSpend && !o.accepted_unknown_spend)
+    if (unknownCostBlocks(sqlite, o, view))
       return refuse(
         'unknown_spend',
         'Spend of an earlier attempt is unknown; the person has to accept that first',
@@ -374,6 +382,8 @@ const HANDLERS: Record<ToolName, Handler> = {
       dependencyRevisions: Object.fromEntries(
         after.map((dep) => [dep, byId.get(dep)!.result_revision]),
       ),
+      // A coding worker's approval is for the settings it was approved with (7.7b §12a).
+      ...policyField(sqlite, o.id, agent),
     }
     const payloadText = JSON.stringify(payload)
     const bytes = utf8Bytes(instruction) + (policyGate ? utf8Bytes(payloadText) : 0) + 256
@@ -463,6 +473,7 @@ const HANDLERS: Record<ToolName, Handler> = {
       dependencyRevisions: Object.fromEntries(
         step.after_steps.map((dep) => [dep, byId.get(dep)?.result_revision ?? 0]),
       ),
+      ...policyField(sqlite, o.id, step.agent_id),
     }
     const text = JSON.stringify(payload)
     const quota = quotaRefusal(o, utf8Bytes(text))

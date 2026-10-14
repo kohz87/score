@@ -1,8 +1,10 @@
+import type { DatabaseSync } from 'node:sqlite'
 import type {
   AbandonDecision,
   GateDecision,
   InquiryAnswer,
   LimitsDecision,
+  PolicyRemapDecision,
   RemapDecision,
   RunControl,
   WaiverDecision,
@@ -13,6 +15,8 @@ import { journalSoft, touch, type Ctx } from './ctx.ts'
 import {
   addStored,
   bumpAdmission,
+  CODING_ITEM_EXTRA_BYTES,
+  codingItemsFor,
   cascadeBlocked,
   oweStop,
   refuseAttempt,
@@ -35,6 +39,10 @@ import {
   type OrchRow,
 } from './store.ts'
 import { cancelFenceAttempts } from './views.ts'
+import { createHash } from 'node:crypto'
+import { readWorkerPolicy, storeWorkerPolicy } from './coding-policy.ts'
+import type { WorkerReport } from './supported-agents.ts'
+import { gatesOf, readStep } from './store.ts'
 
 // Human decisions (contract §14). Each is revision-bound: the page names the run revision it showed, and a stale one is
 // a 409. Stop is the exception: it can only reduce risk, so it never waits on a stale page.
@@ -86,6 +94,13 @@ export function decideGate(ctx: Ctx, orchId: string, gateId: string, body: GateD
     sqlite
       .prepare('UPDATE orc_steps SET retired = 1 WHERE orchestration_id = ? AND id = ?')
       .run(orchId, gate.step_id)
+    // A coding step re-gated after "use the new settings" still has its suspended, proven-unsent attempt: rejecting the
+    // gate closes it in the same transaction, so its reservation doesn't outlive the step (F1 #5).
+    for (const held of attemptsOf(sqlite, orchId).filter(
+      (candidate) =>
+        candidate.step_id === gate.step_id && candidate.suspended && candidate.state === 'created',
+    ))
+      refuseAttempt(sqlite, held, 'not dispatched: the gate was rejected', now)
     addCause(sqlite, orchId, 'gate_rejected', gate.step_id, now, body.note ?? null)
     cascadeBlocked(sqlite, orchId, now)
   }
@@ -126,7 +141,12 @@ export function answerInquiry(
   touch(ctx, orchId)
 }
 
-export function setLimits(ctx: Ctx, orchId: string, body: LimitsDecision): void {
+export function setLimits(
+  ctx: Ctx,
+  orchId: string,
+  body: LimitsDecision,
+  storageFits: (sqlite: DatabaseSync, extraBytes: number) => boolean = () => true,
+): void {
   const { sqlite, now } = ctx
   const o = requireOrch(sqlite, orchId)
   expectRevision(o, body.orchestrationRevision)
@@ -145,6 +165,46 @@ export function setLimits(ctx: Ctx, orchId: string, body: LimitsDecision): void 
     sqlite
       .prepare('UPDATE orchestrations SET accepted_unknown_spend = ? WHERE id = ?')
       .run(body.acceptUnknownSpend ? 1 : 0, orchId)
+  if (body.acceptUnknownCost !== undefined) {
+    const accepted = new Set(o.accepted_unknown_cost)
+    for (const source of body.acceptUnknownCost.add ?? []) accepted.add(source)
+    for (const source of body.acceptUnknownCost.remove ?? []) accepted.delete(source)
+    sqlite
+      .prepare('UPDATE orchestrations SET accepted_unknown_cost = ? WHERE id = ?')
+      .run(JSON.stringify([...accepted].sort()), orchId)
+  }
+  if (body.codingSteps !== undefined) {
+    // Each coding item the limit now allows holds its own inventory in the run's reserve. A higher limit grows the reserve
+    // (a lower one keeps it), or is refused when the database has no storage for the growth (F1 #7).
+    const hasWorkers =
+      sqlite
+        .prepare('SELECT 1 FROM orc_worker_policies WHERE orchestration_id = ? LIMIT 1')
+        .get(orchId) !== undefined
+    // Growth is measured against what is already reserved, not against the previous limit: 10 -> 4 -> 10 keeps ten
+    // items' reserve and adds nothing (F2 #5).
+    const reservedItems = Math.floor(o.coding_reserve_bytes / CODING_ITEM_EXTRA_BYTES)
+    const grow = hasWorkers
+      ? Math.max(0, codingItemsFor(o.max_steps, body.codingSteps) - reservedItems) *
+        CODING_ITEM_EXTRA_BYTES
+      : 0
+    if (grow > 0 && !storageFits(sqlite, grow))
+      throw new HttpError(
+        409,
+        'quota_exhausted',
+        'Score has no storage left for more coding steps in this run.',
+      )
+    if (grow > 0)
+      sqlite
+        .prepare(
+          'UPDATE orchestrations SET reserve_bytes = reserve_bytes + ?, coding_reserve_bytes = coding_reserve_bytes + ? WHERE id = ?',
+        )
+        .run(grow, grow, orchId)
+    sqlite
+      .prepare('UPDATE orchestrations SET coding_steps = ? WHERE id = ?')
+      .run(body.codingSteps, orchId)
+    // Raising the limit lets the steps it blocked go on: the same suspended attempt is admitted again (7.7b §12a).
+    if (body.codingSteps > o.coding_steps) resumeSuspendedSteps(ctx, orchId, 'coding_limit')
+  }
   // A pause caused by a limit ends with the decision about that limit; admission re-pauses if it still applies.
   if (
     o.status === 'paused' &&
@@ -169,9 +229,33 @@ export function setLimits(ctx: Ctx, orchId: string, body: LimitsDecision): void 
       budgetUsd: after.budget_usd,
       deadlineAt: after.deadline_at,
       acceptUnknownSpend: after.accepted_unknown_spend,
+      codingSteps: after.coding_steps,
+      acceptUnknownCost: after.accepted_unknown_cost,
     }),
   )
   touch(ctx, orchId)
+}
+
+/**
+ * Steps blocked on a decision that was just taken (`coding_limit`, `agent_changed`) become queued again; admission then
+ * re-admits the SAME suspended attempt (one attempt per step, K2). A step whose approval is no longer current goes back
+ * to `pending_gate` through the policy remap, not through here.
+ */
+export function resumeSuspendedSteps(
+  ctx: Ctx,
+  orchId: string,
+  disposition: string,
+  only?: string,
+): void {
+  const { sqlite, now } = ctx
+  const attempts = attemptsOf(sqlite, orchId)
+  for (const step of stepsOf(sqlite, orchId)) {
+    if (only !== undefined && step.id !== only) continue
+    if (step.status !== 'blocked' || step.disposition !== disposition) continue
+    if (!attempts.some((attempt) => attempt.step_id === step.id && attempt.suspended)) continue
+    setStepStatus(sqlite, orchId, step.id, 'queued', null, now)
+  }
+  bumpAdmission(sqlite)
 }
 
 export function pauseRun(ctx: Ctx, orchId: string, body: RunControl): void {
@@ -376,7 +460,12 @@ export function abandonAttempts(ctx: Ctx, orchId: string, body: AbandonDecision)
  * incarnations the page showed; anything else is a conflict (the agent was replaced again, or the run was remapped). Steps
  * assigned under the old mapping stay blocked: the lead assigns again under the new one.
  */
-export function remapAgent(ctx: Ctx, orchId: string, body: RemapDecision): void {
+export function remapAgent(
+  ctx: Ctx,
+  orchId: string,
+  body: RemapDecision,
+  report?: WorkerReport,
+): void {
   const { sqlite, now } = ctx
   const o = requireOrch(sqlite, orchId)
   expectRevision(o, body.orchestrationRevision)
@@ -392,6 +481,48 @@ export function remapAgent(ctx: Ctx, orchId: string, body: RemapDecision): void 
   )
     throw new HttpError(409, 'conflict', `${body.agentId} changed again. Look at the run again.`)
   if (frozen === current) throw new HttpError(409, 'conflict', `${body.agentId} was not replaced.`)
+  // A coding worker's replacement is approved by its new policy id and its reach, like a worker at the start (7.7b §12a).
+  const codingPolicy = readWorkerPolicy(sqlite, orchId, body.agentId)
+  if (codingPolicy) {
+    if (!report || report.readiness !== 'ready' || !report.policy || report.policyId === null)
+      throw new HttpError(
+        409,
+        'conflict',
+        `${body.agentId} isn’t ready: ${report?.detail ?? 'Score couldn’t check it'}.`,
+      )
+    if (body.policyId !== report.policyId)
+      throw new HttpError(
+        409,
+        'policy_changed',
+        `${body.agentId} changed again. Look at what it can reach and decide again.`,
+        { agentId: body.agentId, currentPolicyId: report.policyId },
+      )
+    if (
+      report.reachBeyondWorkspace &&
+      !body.acknowledgeCodingReach?.policyIds.includes(report.policyId)
+    )
+      throw new HttpError(
+        409,
+        'reach_not_acknowledged',
+        `${body.agentId} can read beyond its workspace. Accept that to use it.`,
+        { agentId: body.agentId, policyId: report.policyId },
+      )
+    storeWorkerPolicy(
+      sqlite,
+      orchId,
+      body.agentId,
+      {
+        policyId: report.policyId,
+        policy: report.policy,
+        reach: report.reach!,
+        reachBeyondWorkspace: report.reachBeyondWorkspace,
+        acknowledged: report.reachBeyondWorkspace,
+      },
+      now,
+    )
+    if (report.reachBeyondWorkspace)
+      addHistory(sqlite, orchId, 'coding_reach_acknowledged', { policyIds: [report.policyId] }, now)
+  }
   // The journal entry comes first: a database that later lacks this remap is detected at start.
   journalSoft(ctx, () =>
     ctx.journal.append({
@@ -430,6 +561,150 @@ export function remapAgent(ctx: Ctx, orchId: string, body: RemapDecision): void 
   )
   // The lead learns of it (an assignment it was refused may now succeed).
   addCause(sqlite, orchId, 'agent_remapped', body.agentId, now)
+  bumpAdmission(sqlite)
+  touch(ctx, orchId)
+}
+
+/**
+ * "Use the new settings" (7.7b §12a): a step blocked `agent_changed` takes the SAME coding agent's current policy. The
+ * decision is bound to the policy id the person saw and, when the reach goes beyond the workspace, to an acknowledgement
+ * of that exact id. A gate approved for the old id is withdrawn and the step returns to `pending_gate` for a fresh
+ * approval; without a gate the step is queued again. Either way admission re-admits the step's one suspended attempt.
+ */
+export function policyRemapStep(
+  ctx: Ctx,
+  orchId: string,
+  stepId: string,
+  body: PolicyRemapDecision,
+  report: WorkerReport | undefined,
+): void {
+  const { sqlite, now } = ctx
+  const o = requireOrch(sqlite, orchId)
+  expectRevision(o, body.orchestrationRevision)
+  mustBeLive(o)
+  const step = readStep(sqlite, orchId, stepId)
+  if (!step) throw new HttpError(404, 'not_found', 'Couldn’t find that step.')
+  if (step.agent_id !== body.agentId)
+    throw new HttpError(409, 'conflict', `${body.agentId} isn’t the agent of this step.`)
+  const suspended = attemptsOf(sqlite, orchId).find(
+    (attempt) => attempt.step_id === stepId && attempt.suspended,
+  )
+  if (step.status !== 'blocked' || step.disposition !== 'agent_changed' || !suspended)
+    throw new HttpError(409, 'conflict', 'This step isn’t waiting for new settings.')
+  const stored = readWorkerPolicy(sqlite, orchId, body.agentId)
+  if (!stored) throw new HttpError(409, 'conflict', `${body.agentId} has no settings in this run.`)
+  if (!report || report.readiness !== 'ready' || !report.policy || report.policyId === null)
+    throw new HttpError(
+      409,
+      'conflict',
+      `${body.agentId} isn’t ready: ${report?.detail ?? 'Score couldn’t check it'}.`,
+    )
+  if (report.policyId !== body.policyId)
+    throw new HttpError(
+      409,
+      'policy_changed',
+      `${body.agentId} changed again. Look at what it can reach and decide again.`,
+      { agentId: body.agentId, currentPolicyId: report.policyId },
+    )
+  // Each suspended attempt carries the settings its own step was approved with. The agent's stored mapping may already
+  // have moved on (another step of the same worker was remapped first), and this step still needs its own decision (F1 #4).
+  if ((suspended.policy_id ?? stored.policyId) === body.policyId)
+    throw new HttpError(
+      409,
+      'conflict',
+      `${body.agentId} still has the settings this step was approved with.`,
+    )
+  if (
+    report.reachBeyondWorkspace &&
+    !body.acknowledgeCodingReach?.policyIds.includes(body.policyId)
+  )
+    throw new HttpError(
+      409,
+      'reach_not_acknowledged',
+      `${body.agentId} can read beyond its workspace. Accept that to use the new settings.`,
+      { agentId: body.agentId, policyId: body.policyId },
+    )
+  // The journal entry comes first: a database that later lacks this decision is detected at start.
+  journalSoft(ctx, () =>
+    ctx.journal.append({
+      kind: 'policy_remap',
+      orchestrationId: orchId,
+      stepId,
+      agentId: body.agentId,
+      policyId: body.policyId,
+    }),
+  )
+  storeWorkerPolicy(
+    sqlite,
+    orchId,
+    body.agentId,
+    {
+      policyId: body.policyId,
+      policy: report.policy,
+      reach: report.reach!,
+      reachBeyondWorkspace: report.reachBeyondWorkspace,
+      acknowledged: body.acknowledgeCodingReach?.policyIds.includes(body.policyId) ?? false,
+    },
+    now,
+  )
+  if (report.reachBeyondWorkspace)
+    addHistory(
+      sqlite,
+      orchId,
+      'coding_reach_acknowledged',
+      { policyIds: [body.policyId], stepId },
+      now,
+    )
+  // The step's own attempt now carries the settings this decision approved (F2 #3).
+  sqlite
+    .prepare('UPDATE orc_attempts SET policy_id = ?, updated_at = ? WHERE id = ?')
+    .run(body.policyId, now, suspended.id)
+  const hadGate = gatesOf(sqlite, orchId).some((gate) => gate.step_id === stepId)
+  // A gate approved (or still open) for the old settings no longer covers the step.
+  sqlite
+    .prepare(
+      "UPDATE orc_gates SET status = 'withdrawn', revision = revision + 1, decided_at = ? WHERE orchestration_id = ? AND step_id = ? AND status IN ('open', 'approved')",
+    )
+    .run(now, orchId, stepId)
+  if (hadGate || o.gate_policy === 'every-step') {
+    const byId = new Map(stepsOf(sqlite, orchId).map((candidate) => [candidate.id, candidate]))
+    const payload = {
+      agentId: step.agent_id,
+      agentIncarnation: step.agent_incarnation,
+      instruction: step.instruction,
+      after: step.after_steps,
+      replaces: step.replaces,
+      estimateUsd: step.estimate_usd,
+      dependencyRevisions: Object.fromEntries(
+        step.after_steps.map((dep) => [dep, byId.get(dep)?.result_revision ?? 0]),
+      ),
+      policyId: body.policyId,
+    }
+    const text = JSON.stringify(payload)
+    sqlite
+      .prepare(
+        `INSERT INTO orc_gates (orchestration_id, id, step_id, requested_by, payload, payload_hash, status, created_at)
+         VALUES (?, ?, ?, 'policy', ?, ?, 'open', ?)`,
+      )
+      .run(
+        orchId,
+        `g${gatesOf(sqlite, orchId).length + 1}`,
+        stepId,
+        text,
+        createHash('sha256').update(text).digest('hex'),
+        now,
+      )
+    addStored(sqlite, orchId, utf8Bytes(text))
+    setStepStatus(sqlite, orchId, stepId, 'pending_gate', null, now)
+  } else setStepStatus(sqlite, orchId, stepId, 'queued', null, now)
+  addHistory(
+    sqlite,
+    orchId,
+    'policy_remapped',
+    { stepId, agentId: body.agentId, from: stored.policyId, to: body.policyId },
+    now,
+  )
+  addCause(sqlite, orchId, 'policy_remapped', stepId, now)
   bumpAdmission(sqlite)
   touch(ctx, orchId)
 }

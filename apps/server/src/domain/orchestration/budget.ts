@@ -99,13 +99,78 @@ export const makeSpendReader =
     return live ? { ...reading, complete: false } : reading
   }
 
-export function budgetView(sqlite: DatabaseSync, o: OrchRow): BudgetView {
+/**
+ * An attempt as the run facts say it is NOW (F1 #1): a run row can commit its terminal state and cost before the
+ * executor reconciles the attempt, so a release decision that read the attempt alone would miss a sibling's spend. An
+ * attempt not yet settled whose own run is terminal counts as ended, with the run's cost (unknown when it has none).
+ */
+function freshAttempt(sqlite: DatabaseSync, attempt: AttemptRow): AttemptRow {
+  if (
+    attempt.settled ||
+    !['send_started', 'running', 'unknown', 'abandoned'].includes(attempt.state)
+  )
+    return attempt
+  const runId =
+    attempt.run_id ??
+    (
+      sqlite
+        .prepare(
+          'SELECT run_id FROM orc_generations WHERE attempt_id = ? AND generation = ? AND run_id IS NOT NULL',
+        )
+        .get(attempt.id, attempt.dispatch_generation) as { run_id: string } | undefined
+    )?.run_id
+  if (runId === undefined || runId === null) return attempt
+  const row = sqlite.prepare('SELECT status, cost_usd FROM runs WHERE id = ?').get(runId) as
+    { status: string; cost_usd: number | null } | undefined
+  if (!row || !TERMINAL_RUN.includes(row.status)) return attempt
+  return {
+    ...attempt,
+    state:
+      attempt.state === 'send_started' || attempt.state === 'running'
+        ? 'terminated'
+        : attempt.state,
+    spend_usd: row.cost_usd ?? attempt.spend_usd,
+  }
+}
+
+/**
+ * A coding generation that provably launched nothing (F2 #1): its launch was revoked before `releasing`, it was closed
+ * by `send_closed`, or the run ended on a refusal receipt. Such an attempt spent exactly nothing, so a missing cost is
+ * not an unknown one.
+ */
+function provenUnsent(sqlite: DatabaseSync, attempt: AttemptRow): boolean {
+  const generation = sqlite
+    .prepare(
+      'SELECT launch_id, run_id, closed_cause FROM orc_generations WHERE attempt_id = ? AND generation = ?',
+    )
+    .get(attempt.id, attempt.dispatch_generation) as
+    { launch_id: string; run_id: string | null; closed_cause: string | null } | undefined
+  if (!generation) return false
+  if (generation.closed_cause !== null) return true
+  const launch = sqlite
+    .prepare('SELECT revoked, may_have_executed FROM coding_launches WHERE launch_id = ?')
+    .get(generation.launch_id) as { revoked: number; may_have_executed: number } | undefined
+  if (launch && launch.revoked === 1 && launch.may_have_executed === 0) return true
+  const runId = attempt.run_id ?? generation.run_id
+  return (
+    runId !== null &&
+    sqlite.prepare('SELECT 1 FROM coding_refusals WHERE run_id = ?').get(runId) !== undefined
+  )
+}
+
+export function budgetView(
+  sqlite: DatabaseSync,
+  o: OrchRow,
+  options: { fresh?: boolean } = {},
+): BudgetView {
+  const attemptRows = attemptsOf(sqlite, o.id)
+  const attempts = options.fresh ? attemptRows.map((a) => freshAttempt(sqlite, a)) : attemptRows
   let settled = 0
   let provisional = 0
   let reserved = 0
   let unknownSpend = false
   let allSettled = true
-  for (const attempt of attemptsOf(sqlite, o.id)) {
+  for (const attempt of attempts) {
     if (attempt.state === 'refused') continue
     if (attempt.state === 'created') {
       reserved += attempt.reserved_usd
@@ -121,10 +186,21 @@ export function budgetView(sqlite: DatabaseSync, o: OrchRow): BudgetView {
     provisional += attempt.spend_usd ?? 0
     if (attempt.state !== 'abandoned') reserved += attempt.reserved_usd
     // An ended attempt that reported no spend leaves the total unknown (never zero).
-    if (ended && attempt.spend_usd === null) unknownSpend = true
+    if (ended && attempt.spend_usd === null && !provenUnsent(sqlite, attempt)) unknownSpend = true
   }
+  // A step whose attempt is suspended (7.7b K2/A1) keeps its reservation on that attempt through re-gating and
+  // re-admission: the step's own estimate is not counted a second time while it waits.
+  const suspendedSteps = new Set(
+    attempts
+      .filter((attempt) => attempt.suspended && attempt.step_id !== null)
+      .map((attempt) => attempt.step_id),
+  )
   for (const step of stepsOf(sqlite, o.id))
-    if (step.status === 'pending_gate' || step.status === 'queued') reserved += step.estimate_usd
+    if (
+      (step.status === 'pending_gate' || step.status === 'queued') &&
+      !suspendedSteps.has(step.id)
+    )
+      reserved += step.estimate_usd
   const committed = settled + provisional + reserved
   return {
     limitUsd: o.budget_usd,
@@ -149,4 +225,46 @@ export const overBudget = (view: BudgetView): boolean =>
 
 function round(value: number): number {
   return Math.round(value * 1e6) / 1e6
+}
+
+/** Where an attempt's cost comes from: `hermes` for the lead and Hermes steps, the CLI's runtime for a coding step. */
+export const costSourceOf = (attempt: Pick<AttemptRow, 'kind' | 'runtime'>): string =>
+  attempt.kind === 'step' ? attempt.runtime : 'hermes'
+
+/** The sources of the attempts that ended without a recorded cost (7.7b §8: unknown cost keeps its provenance). */
+export function unknownCostSources(
+  sqlite: DatabaseSync,
+  o: OrchRow,
+  options: { fresh?: boolean } = {},
+): Set<string> {
+  const sources = new Set<string>()
+  for (const read of attemptsOf(sqlite, o.id)) {
+    const attempt = options.fresh ? freshAttempt(sqlite, read) : read
+    if (attempt.state === 'refused' || attempt.settled) continue
+    if (
+      ['terminated', 'unknown', 'abandoned'].includes(attempt.state) &&
+      attempt.spend_usd === null &&
+      // Proven never executed: known zero, not an unknown cost of its source (F2 verification #1).
+      !provenUnsent(sqlite, attempt)
+    )
+      sources.add(costSourceOf(attempt))
+  }
+  return sources
+}
+
+/**
+ * Whether an unknown cost nobody accepted pauses the run: only with a dollar budget set (today's rule), and only for a
+ * source the person hasn't accepted. `acceptUnknownSpend` accepts every source.
+ */
+export function unknownCostBlocks(
+  sqlite: DatabaseSync,
+  o: OrchRow,
+  view: BudgetView,
+  options: { fresh?: boolean } = {},
+): boolean {
+  if (view.limitUsd === null || !view.unknownSpend || o.accepted_unknown_spend) return false
+  const accepted = new Set(o.accepted_unknown_cost)
+  for (const source of unknownCostSources(sqlite, o, options))
+    if (!accepted.has(source)) return true
+  return false
 }

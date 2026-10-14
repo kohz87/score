@@ -86,6 +86,35 @@ export interface DriverRunOptions {
   denyPaths: readonly string[]
   /** Absolute file patterns off limits too (the CLIs' own login files). */
   denyFiles: readonly string[]
+  /**
+   * An orchestration worker launch (7.7b §3): the driver adds the flags that turn off what the CLI would otherwise read
+   * on its own (see `CodingDriver.worker`). Chat turns never set it.
+   */
+  worker?: boolean
+}
+
+/** Where a worker's CLI looks for configuration: the user's home, the workspace, the allow-listed environment. */
+export interface WorkerContext {
+  home: string
+  workspace: string
+  env: Readonly<Record<string, string>>
+}
+
+/**
+ * What a driver does about the CLI's own configuration for an orchestration worker (7.7b §3). It is declared per pinned
+ * CLI version and was checked against the installed CLI's `--help` output only (never a prompt). A configuration source the
+ * CLI may still read is bound by file identity (stat: dev, ino, size, mtime, or absent; never read), so any change shows
+ * as "agent changed".
+ */
+export interface WorkerDeclaration {
+  /** The CLI versions this declaration holds for; any other version is `reach_unverifiable`. */
+  readonly versions: readonly string[]
+  /** What the driver turns off for a worker launch, with the `--help` text that documents the flag. */
+  readonly neutralised: readonly { source: string; flag: string; evidence: string }[]
+  /** Configuration the CLI may still read, as absolute paths. Credential files are never listed. */
+  bound(context: WorkerContext): readonly string[]
+  /** What the worker can reach, in plain words, and whether that goes beyond its workspace. */
+  reach(permission: CodingPermission, workspace: string): { text: string; beyondWorkspace: boolean }
 }
 
 export interface CodingDriver {
@@ -116,6 +145,8 @@ export interface CodingDriver {
    * from the start. Only this (before any output or tool call) allows a fresh launch; absent = never.
    */
   readonly resumeRefusal?: RegExp
+  /** Present for the runtimes that can take orchestration steps (7.7b): Claude Code and Codex. */
+  readonly worker?: WorkerDeclaration
   /** Argument vector after the executable. The prompt is never in it: it goes to stdin. */
   buildArgs(options: DriverRunOptions): string[]
   createParser(options: { cwd: string }): LineParser

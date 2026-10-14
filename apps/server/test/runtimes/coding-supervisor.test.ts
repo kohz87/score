@@ -575,3 +575,52 @@ test('FV #2: an existing receipt is made durable again before it is trusted (syn
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test("7.7b-2 0b: a `go` that arrives after the absolute expiry doesn't spawn; the supervisor reports `expired` with a receipt", async () => {
+  const marker = join(mkdtempSync(join(tmpdir(), 'score-expired-')), 'ran')
+  const { h, outcome, code } = await run(
+    // The control loop ticks once a minute, so only the `go` handler can notice the expiry in time.
+    {
+      deadline: Date.now() + 300,
+      tickMs: 60_000,
+      script: `require('fs').writeFileSync(process.env.MARK,'x')`,
+    },
+    async (h) => {
+      h.spec.command.env.MARK = marker
+      await new Promise((resolve) => setTimeout(resolve, 600))
+      h.session.go()
+    },
+  )
+  expect(code).not.toBeUndefined()
+  expect(existsSync(marker)).toBe(false)
+  expect(outcome.kind).toBe('lost')
+  expect(outcome.reasons).toContain('supervisor-error:expired')
+  // `released.json` is the receipt of a spawn: it must not exist. `expired.json` says why.
+  expect(receipts(h)).toEqual(['expired.json'])
+  expect(json(join(h.receiptDir, 'expired.json'))).toMatchObject({ launch: 'launch1' })
+})
+
+test('7.7b-F1 #3: a `go` accepted just before the expiry does not spawn when the receipt’s fsyncs carry the clock past it', async () => {
+  const marker = join(mkdtempSync(join(tmpdir(), 'score-expired-')), 'ran')
+  const deadline = Date.now() + 60_000
+  const holder: { dir?: string } = {}
+  const { h, outcome } = await run(
+    {
+      deadline,
+      script: `require('fs').writeFileSync(process.env.MARK,'x')`,
+      // Time passes while released.json is being made durable: once the file is there, the clock is past the deadline.
+      now: () =>
+        holder.dir && existsSync(join(holder.dir, 'released.json')) ? deadline + 1 : Date.now(),
+    },
+    async (h) => {
+      holder.dir = h.receiptDir
+      h.spec.command.env.MARK = marker
+      h.session.go()
+    },
+  )
+  expect(existsSync(marker)).toBe(false)
+  expect(outcome.kind).toBe('lost')
+  expect(outcome.reasons).toContain('supervisor-error:expired')
+  // `released.json` stays: Score must keep treating the launch as possibly executed.
+  expect(receipts(h)).toEqual(['expired.json', 'released.json'])
+})

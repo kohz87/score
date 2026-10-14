@@ -1025,7 +1025,7 @@ room's CLI session (`skipped: no_session`).
   fiveHourResets: string|null; weeklyRemainingPercent: number|null; weeklyResets: string|null }[]; text }`: Antigravity's quota (`agy -p /usage`, no model
   turn), cached for 60 s; `text` is the redacted table as printed, the fallback when a group could not be read. Other runtimes: `409 unsupported`;
   CLI missing or untested: `422 cli_not_installed` / `422 untested_cli_version`; the CLI failing or printing nothing readable: `502 usage_unavailable`.
-- **H** `DELETE /api/coding-agents/:id` → `204` (`409` while a turn runs). Past messages stay; its runs leave Reports.
+- **H** `DELETE /api/coding-agents/:id` → `204` (`409 agent_busy` while any of its runs is unresolved: running or queued, ended but not proven ended, a launch that isn’t settled, or a held group). Past messages stay; its runs leave Reports.
 - Turns: a mention routes through the normal room queue. One turn per coding agent at a time (others show as `queued`); at most 30 minutes per
   turn; Stop = SIGINT, SIGTERM after 5 s, SIGKILL after 5 s more; Stop answers `stopped` only once the process group is proven gone within about a second, otherwise `unconfirmed` (the stop goes on in the background). An untested/missing CLI or an unavailable workspace fails the reply with a
   sentence in the room (`422`, never retried). The CLI's pid, process group and start time are stored right after the spawn; a restart first stops what is left of each recorded group (only when pid and start time still match; SIGTERM, then SIGKILL) and then marks running turns `interrupted` ("Score restarted while this ran"); the CLI session id
@@ -1572,16 +1572,38 @@ Controls and accounting cover observed, Score-started work only.
 
 ### Browser API
 
-- **Hermes agents only (interim, until PLAN 7.7).** Preflight, create (orchestrations) and workflow save/start answer `422
-  unsupported_agent` when the lead or a step agent is a coding agent ("Coding agents can’t take orchestration or workflow
-  steps yet …"). PLAN 7.7 lifts this.
+- **Who may take a step (PLAN 7.7b).** The lead is always a Hermes agent. A step agent may also be a Claude Code or Codex
+  coding agent whose permission is `read-only` or `workspace-write`, on a host that runs coding turns as supervised units.
+  Preflight and create answer `422 unsupported_agent` for a coding lead, an Antigravity or `full` agent, and
+  `422 coding_workers_need_units` on a host without units (process-group fallback or a failing capability check).
+  **Workflows keep the Hermes-only rule until 7.7c:** workflow save/start answer `422 unsupported_agent` for any coding agent
+  ("Coding agents can’t take orchestration or workflow steps yet …").
 - `GET /api/orchestrations/preflight?leadAgentId=&allowedAgents=a,b` → `Preflight` (`checks[]`: listener, lead ready, lead
   MCP access, lead MCP token, allowed agents, global fence, journal, capacity, quota, tool readiness (`unknown`: Hermes loads
   MCP tools per session, which Score cannot see), plus `gatePolicyNotes`, the acknowledgement text and the defaults).
+  **Coding workers (PLAN 7.7b):** `Preflight.workers[]` has one entry per coding agent among the step agents:
+  `{ agentId, runtime, readiness, detail, policyId, reach, reachBeyondWorkspace }`. `readiness` is `ready | not_installed |
+  version_untested | level_unverified | reach_unverifiable | changed | paused | frozen | needs_units`; anything but `ready`
+  also fails the `allowed_agents` check with the reason. `policyId` is the sha-256 of the worker's **policy**, the canonical
+  JSON of: runtime, permission, model, the CLI's identity (real path, dev/ino, size, mtime, reported version), the
+  workspace identity (real path, dev/ino), the full argument vector minus the prompt (as a hash), the allow-listed
+  environment variable names and a hash of their values, the hash of the settings bytes Score writes for the CLI, and the
+  identities (dev/ino, size, mtime, or "absent"; never the contents) of every configuration file the CLI may still read:
+  Claude Code's user, project and local settings, managed settings and `CLAUDE.md` files up the workspace chain; Codex's
+  `$CODEX_HOME/config.toml`, project `.codex/`, managed config and `AGENTS.md` files up the chain. Environment values are
+  never stored or returned; only a hash of them is. Credential files are never read or statted. A CLI whose configuration
+  can't be neutralised or bound (an unlisted version, a file that can't be statted) is `reach_unverifiable`. `reach` is the
+  plain-words sentence the start dialog shows; `reachBeyondWorkspace` says the person has to acknowledge it.
 - **H** `POST /api/orchestrations` `OrchestrationCreate` → `201 OrchestrationCreated` (`Idempotency-Key` honoured). The
   server re-runs the preflight; a failing check → `409 preflight_failed` `{ checks }`; capacity → `429 capacity`; storage
   quota → `409 quota_exhausted`; global fence → `409 fenced`. It creates the run's room and brief (owner: `orchestration`) and
   queues the first lead attempt.
+  **Coding workers (7.7b):** the body also carries `codingPolicies: { [agentId]: policyId }` (the id the person saw for each
+  coding worker among `allowedAgents`; a different current id → `409 policy_changed`, a missing one → `400 bad_request`),
+  `acknowledgeCodingReach?: { policyIds }` (required, covering every worker whose `reachBeyondWorkspace` is true, else
+  `409 reach_not_acknowledged`; stored in the run history), `acceptUnknownCost?: ('hermes'|'claude-code'|'codex')[]` and
+  `codingSteps?` (1–100, default 10: how many coding launches the run may **release**; counted from the coding journal, not
+  from the database). A coding worker on a host without units → `422 coding_workers_need_units`.
 - **S** `GET /api/orchestrations` → `OrchestrationList`; **S** `GET /api/orchestrations/:id` → `OrchestrationSnapshot`.
   Lists are not paginated (≤ 200 runs; finished runs are kept 90 days).
 - Decisions (all **H**, all carry `orchestrationRevision` = the run `revision` the page showed; a stale one → `409
@@ -1590,7 +1612,10 @@ conflict`; gates and inquiries also carry their own `expectedRevision`; the resp
     `rejected`, blocks its dependents and wakes the lead.
   - `POST …/:id/inquiries/:inquiryId/answer` `InquiryAnswer` — the answer is data for the next lead turn; it never changes
     permissions.
-  - `POST …/:id/limits` `LimitsDecision` — raise/clear the budget or deadline, or `acceptUnknownSpend`.
+  - `POST …/:id/limits` `LimitsDecision` — raise/clear the budget or deadline, or `acceptUnknownSpend`. 7.7b adds
+    `codingSteps` (raising it lets steps blocked `coding_limit` go on) and `acceptUnknownCost: { add?, remove? }` (unknown cost
+    accepted per source, journaled as the full resulting authorisation and verified after a restore). An unaccepted source
+    with unknown cost pauses the run only when a dollar budget is set.
   - `POST …/:id/pause`, `…/resume`, `…/stop` `RunControl`. Resume never lifts a cancel fence, an unknown-attempt fence or the
     global fence. **Stop ignores a stale `orchestrationRevision`** (it can only reduce risk); it is an admission barrier: one
     transaction fences all further admissions, retires queued steps (`not_started: stopped`), withdraws gates and inquiries,
@@ -1607,6 +1632,15 @@ conflict`; gates and inquiries also carry their own `expectedRevision`; the resp
     conflict`, as for a stale `orchestrationRevision`); it updates the frozen mapping, is journaled (`remap` entry), wakes
     the lead and, for the lead, ends the `agent_unavailable` pause. Steps assigned under the old mapping stay blocked and
     are assigned again. A removed agent (`currentIncarnation: "untracked"`) cannot be remapped; the person can only Stop.
+  - `POST …/:id/steps/:stepId/remap` `PolicyRemapDecision` `{ agentId, policyId, acknowledgeCodingReach?, orchestrationRevision }`
+    — 7.7b "Use the new settings": a step blocked `agent_changed` takes its **same** coding agent's current policy. The agent must
+    be the step's worker, its current policy id must differ from the stored one and equal `policyId`, it must be ready, and a
+    reach beyond the workspace needs `acknowledgeCodingReach` naming `policyId` (`409 policy_changed` / `409 reach_not_acknowledged`
+    / `409 conflict`). The decision is journaled with the step's mapping and verified after a restore. Gates are bound to the
+    policy id: a gate approved for an old id is withdrawn and the step returns to `pending_gate` for a fresh approval. The
+    step's one suspended attempt is unsuspended and admitted again; no second attempt is created. `POST …/:id/remap` to a
+    different agent keeps its rules and, for a coding worker, also carries `policyId` and `acknowledgeCodingReach` for the
+    new agent's policy.
   - `POST …/:id/abandon` `AbandonDecision` — releases capacity and reservations of the listed unresolved attempts, keeps
     their owed stops, records that late results are ignored; the run then pauses (`pauseReason: abandonment`) until Resume.
 - `GET /api/orchestrations/:id/events` → `OrchestrationEvents` `{ asOfSeq, events[] }` (PLAN 7.5b, additive). The run's event
@@ -1621,6 +1655,11 @@ conflict`; gates and inquiries also carry their own `expectedRevision`; the resp
   never termination evidence.
 - Stream (§2): `orchestration.upserted` (`OrchestrationSummary`, after every change; refetch the snapshot for detail) and
   `orchestration.fence.updated` (`GlobalFence`).
+
+**New codes (7.7b):** `coding_workers_need_units` (422), `policy_changed` (409), `reach_not_acknowledged` (409), `agent_busy`
+(409, deleting a coding agent that has an unresolved run). `OrchestrationDetail.coding` carries `{ stepLimit,
+acceptedUnknownCost, workers[] }`; `needsYou` gains `policy_changed` and `coding_limit` items; a gate's payload carries the
+worker's `policyId`.
 
 A stale revision answers `409 conflict` with `details.currentRevision`. `GET /api/orchestrations/:id` also carries, per
 attempt, `state`, `evidence`, `unknownReason`, owed-Stop timestamps and spend, so the page can show "not confirmed ended".

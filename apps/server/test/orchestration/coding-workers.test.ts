@@ -79,10 +79,21 @@ const refused = (response: {
   )
 }
 
-test('orchestration preflight and create refuse a coding agent as a step agent or as the lead', async () => {
-  refused(await get('/api/orchestrations/preflight?leadAgentId=lead&allowedAgents=builder,coder'))
-  refused(await get('/api/orchestrations/preflight?leadAgentId=coder&allowedAgents=builder'))
-  refused(
+// 7.7b: orchestrations take Claude Code and Codex as workers (guard: supported-agents.ts), so here only the lead and an
+// executor without a coding runtime refuse a coding agent. The workflow routes below keep the Hermes-only rule.
+test('orchestration preflight and create refuse a coding agent as the lead, and as a step agent without a coding runtime', async () => {
+  const refusedOrch = (response: {
+    statusCode: number
+    json: () => { error: { code: string } }
+  }) => {
+    expect(response.statusCode).toBe(422)
+    expect(response.json().error.code).toBe('unsupported_agent')
+  }
+  refusedOrch(
+    await get('/api/orchestrations/preflight?leadAgentId=lead&allowedAgents=builder,coder'),
+  )
+  refusedOrch(await get('/api/orchestrations/preflight?leadAgentId=coder&allowedAgents=builder'))
+  refusedOrch(
     await post('/api/orchestrations', {
       goal: 'Write the release notes',
       leadAgentId: 'lead',

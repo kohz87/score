@@ -724,7 +724,7 @@ export class LivePort implements HermesPort {
         },
         req.turnId,
         {
-          ...(req.owner ? { owner: req.owner } : {}),
+          ...(typeof req.owner === 'string' ? { owner: req.owner } : {}),
           ...(req.render ? { render: req.render } : {}),
         },
       )

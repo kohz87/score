@@ -1,3 +1,4 @@
+import { runtimeLabel } from '../../components/runtime-label.ts'
 import type {
   AgentSummary,
   AttemptView,
@@ -16,7 +17,7 @@ import {
   type NodeVisual,
 } from './orch-model.ts'
 import { describeOrchError, type DecisionActions } from './orchestration-queries.ts'
-import { AgentChip } from './RunDecisions.tsx'
+import { AgentChip, sourceName } from './RunDecisions.tsx'
 import { LiveCount } from '../../live/LiveCount.tsx'
 import { RunSummary } from '../../live/RunSummary.tsx'
 import { secondsBetween } from '../../live/run-summary.ts'
@@ -212,7 +213,10 @@ export function EndSummary({
 export function BudgetBlock({
   run,
 }: {
-  run: Pick<OrchestrationDetail, 'budget' | 'stepEstimateUsd'> & { leadTurnEstimateUsd?: number }
+  run: Pick<OrchestrationDetail, 'budget' | 'stepEstimateUsd'> & {
+    leadTurnEstimateUsd?: number
+    coding?: OrchestrationDetail['coding']
+  }
 }) {
   const b = run.budget
   return (
@@ -227,6 +231,17 @@ export function BudgetBlock({
       <dd>{usd(b.provisionalUsd)} (may still change; counted against the budget)</dd>
       <dt>Reserved</dt>
       <dd>{usd(b.reservedUsd)} for work not yet started</dd>
+      {run.coding && (
+        <>
+          <dt>Coding steps</dt>
+          <dd>
+            Up to {run.coding.stepLimit}
+            {run.coding.acceptedUnknownCost.length > 0
+              ? `; you accepted unknown cost for ${run.coding.acceptedUnknownCost.map(sourceName).join(' and ')}`
+              : ''}
+          </dd>
+        </>
+      )}
       <dt>Complete</dt>
       <dd>
         {b.complete ? 'Yes: all spend is settled' : 'No: some spend isn’t settled yet'}
@@ -247,9 +262,26 @@ export function BudgetBlock({
   )
 }
 
-export function AttemptLine({ attempt }: { attempt: AttemptView }) {
+/** Why a step is blocked or was handled the way it was, in everyday words. */
+export function dispositionText(disposition: string): string {
+  if (disposition === 'agent_changed')
+    return 'Blocked: the agent changed after you approved this run.'
+  if (disposition === 'coding_limit') return 'Blocked: the run reached its limit of coding steps.'
+  return `Handled as: ${disposition}.`
+}
+
+export function AttemptLine({
+  attempt,
+  agents = [],
+}: {
+  attempt: AttemptView
+  agents?: AgentSummary[]
+}) {
+  // Who reported the end: Hermes for its own agents, the coding agent's program otherwise.
+  const reporter =
+    runtimeLabel(agents.find((agent) => agent.id === attempt.agentId)?.runtime) ?? 'Hermes'
   const evidence = attempt.evidence
-    ? `ended (Hermes reported ${attempt.evidence})`
+    ? `ended (${reporter} reported ${attempt.evidence})`
     : attempt.state === 'abandoned'
       ? 'you stopped waiting for it'
       : attempt.state === 'unknown'
@@ -308,7 +340,7 @@ export function StepCard({
       <p className="orch-muted">
         {step.after.length > 0 && <>After {step.after.join(', ')}. </>}
         {step.replaces && <>Replaces {step.replaces}. </>}
-        {step.disposition && <>Handled as: {step.disposition}. </>}
+        {step.disposition && <>{dispositionText(step.disposition)} </>}
         {step.gateId && <>Gate {step.gateId}. </>}
         Estimate {usd(step.estimateUsd)}.
       </p>
@@ -327,7 +359,7 @@ export function StepCard({
           </summary>
           <ul className="orch-attempts">
             {attempts.map((attempt) => (
-              <AttemptLine key={attempt.id} attempt={attempt} />
+              <AttemptLine key={attempt.id} attempt={attempt} agents={agents} />
             ))}
           </ul>
         </details>
@@ -354,7 +386,7 @@ export function FinishBlock({ run }: { run: OrchestrationDetail }) {
         <>
           <h3>Not confirmed as ended</h3>
           <p>
-            Score keeps asking Hermes to stop these until it confirms. A stop being acknowledged
+            Score keeps asking the agent to stop these until it confirms. A stop being acknowledged
             doesn’t prove that the run ended.
           </p>
           <ul className="orch-attempts">

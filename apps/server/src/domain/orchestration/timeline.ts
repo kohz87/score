@@ -36,6 +36,8 @@ const CONTROL_TEXT: Record<string, string> = {
   abandoned: 'Unresolved attempts abandoned',
   limits_changed: 'Limits changed',
   agent_remapped: 'A replaced agent was accepted for the rest of the run',
+  policy_remapped: 'New settings were accepted for a coding agent',
+  coding_reach_acknowledged: 'What the coding agents can reach was accepted',
   recovered_text:
     'Hermes forgot a run; its text was recovered from the history but does not prove it ended',
   finish_requested: 'The lead asked to finish',
