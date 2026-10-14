@@ -329,7 +329,9 @@ export function StartWorkflowDialog({
             )}
           </div>
           <p className="orch-muted">
-            At most {(data?.maxSteps ?? definition) ? (data?.maxSteps ?? '…') : '…'} steps can run,
+            {data?.maxSteps === undefined
+              ? 'At most … steps can run,'
+              : `At most ${data.maxSteps} ${data.maxSteps === 1 ? 'step' : 'steps'} can run,`}{' '}
             counting retries (the limit is {WORKFLOW_LIMITS.maxSteps}). Score reserves the estimate
             against the budget before a step starts.
           </p>
