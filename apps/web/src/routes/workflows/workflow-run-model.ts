@@ -9,7 +9,7 @@ import type {
   WorkflowRunDetail,
   WorkflowRunSummary,
 } from '@score/contract'
-import { NodeStateSchema } from '@score/contract'
+import { NodeStateSchema, type OrchestrationDetail } from '@score/contract'
 import type { Effect, GraphEdge, GraphNode, NodeVisual } from '../orchestrations/orch-model.ts'
 import { describeCondition } from './workflow-model.ts'
 
@@ -40,6 +40,26 @@ export function nodeVisual(state: NodeState): NodeVisual {
   }
 }
 
+/**
+ * The shared limits card reads an orchestration's `coding` block; a workflow's is the same facts under other names (7.7c).
+ * This keeps its limit and scoped unknown-cost controls working until the cards take explicit props.
+ */
+export function limitsRunOf<T extends { coding?: WorkflowRunSummary['coding'] }>(
+  run: T,
+): Omit<T, 'coding'> & { coding?: OrchestrationDetail['coding'] } {
+  const { coding, ...rest } = run
+  return coding === undefined
+    ? rest
+    : {
+        ...rest,
+        coding: {
+          stepLimit: coding.codingSteps,
+          acceptedUnknownCost: coding.acceptedUnknownCost,
+          workers: coding.workers,
+        },
+      }
+}
+
 export const waitingText: Record<WaitingFor, string> = {
   budget: 'waiting for budget',
   unknown_spend: 'waiting: spend unknown',
@@ -53,6 +73,9 @@ export const waitingText: Record<WaitingFor, string> = {
   hermes_unavailable: 'waiting: Hermes is unavailable',
   remap: 'waiting for your decision on a replaced agent',
   refusal_limit: 'Hermes keeps refusing this step',
+  coding_settings: 'waiting for your decision on the agent’s new settings',
+  coding_limit: 'waiting for a higher coding step limit',
+  held_back: 'waiting for you to try again',
 }
 
 // ------------------------------------------------------------------------------------------------------- graph
@@ -317,6 +340,14 @@ export function workflowNeedsText(
       return `${item.agentId} was replaced: decide whether this run uses the new one`
     case 'refusal_limit':
       return `Hermes refused ${nodeLabel(item.nodeId)} ${item.refusals} times`
+    case 'coding_agent_changed':
+      return `${item.agentId}’s settings changed: decide whether ${nodeLabel(item.nodeId)} uses the new ones`
+    case 'coding_limit':
+      return `${item.used} of ${item.limit} coding steps are used: raise the limit to go on`
+    case 'coding_held_back':
+      return `${nodeLabel(item.nodeId)} was held back 20 times: try again or stop`
+    case 'node_inputs_withdrawn':
+      return `${nodeLabel(item.nodeId)} lost something it was going to read: re-run the step before it, then retry`
   }
 }
 

@@ -5,6 +5,7 @@ import * as f from './fixtures.ts'
 // Valid and invalid fixtures for contract §15 (schemas.test.ts requires a pair for every exported schema).
 
 const at = f.at
+const policyId = 'a'.repeat(64)
 const agentNode = {
   id: 'draft',
   kind: 'agent',
@@ -175,6 +176,16 @@ const remapPlanItem = {
 const needsYou = [
   { kind: 'gate', gateId: 'g1', gateKind: 'node', nodeId: 'approve' },
   { kind: 'retry', nodeId: 'draft', attemptsLeft: 1 },
+  {
+    kind: 'coding_agent_changed',
+    nodeId: 'draft',
+    agentId: 'coder',
+    newPolicyId: policyId,
+    reach: 'Reads and edits files in /work.',
+  },
+  { kind: 'coding_limit', used: 4, limit: 4 },
+  { kind: 'coding_held_back', nodeId: 'draft' },
+  { kind: 'node_inputs_withdrawn', nodeId: 'draft' },
 ] as const
 const spendEvidence = {
   attemptId: 'a1',
@@ -242,16 +253,48 @@ const event = {
   edgeId: null,
 } as const
 const preflightCheck = { id: 'definition', status: 'ok', message: 'Valid' } as const
+const codingBlock = {
+  workers: [
+    {
+      agentId: 'coder',
+      runtime: 'claude-code',
+      policyId,
+      reach: 'Reads and edits files in /work.',
+      reachBeyondWorkspace: false,
+    },
+  ],
+  codingSteps: 4,
+  used: 1,
+  acceptedUnknownCost: ['codex'],
+  unknownSpend: 'pause',
+} as const
 const preflight = {
   ok: true,
   checks: [preflightCheck],
+  issues: [],
+  workers: [
+    {
+      agentId: 'coder',
+      runtime: 'claude-code',
+      readiness: 'ready',
+      detail: null,
+      policyId,
+      reach: 'Reads and edits files in /work.',
+      reachBeyondWorkspace: false,
+    },
+  ],
   mapping: [{ agentId: 'builder', name: 'Builder', incarnation: 'inc-1' }],
   gatePolicyNotes: { 'gates-only': 'Only gates stop.', 'every-step': 'Every step asks.' },
   acknowledgementText: ORCH_ACKNOWLEDGEMENT_TEXT,
   spendNote: 'Hermes reports tokens, often not dollars.',
   maxSteps: 2,
   reserveBytes: 1000,
-  defaults: { gatePolicy: 'gates-only', maxConcurrentSteps: 2, stepEstimateUsd: 0.5 },
+  defaults: {
+    gatePolicy: 'gates-only',
+    maxConcurrentSteps: 2,
+    stepEstimateUsd: 0.5,
+    codingSteps: 3,
+  },
 } as const
 const runCreate = {
   workflowId: 'wf-1',
@@ -263,6 +306,10 @@ const runCreate = {
   maxConcurrentSteps: 2,
   stepEstimateUsd: 0.5,
   acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
+  codingPolicies: { coder: policyId },
+  acknowledgeCodingReach: { policyIds: [policyId] },
+  acceptUnknownCost: ['codex'],
+  codingSteps: 3,
 } as const
 const portable = {
   name: 'Release notes',
@@ -368,6 +415,17 @@ export const workflowCases = [
   ['AssignmentGateViewSchema', assignmentGateView, { ...assignmentGateView, nodeId: 'Bad Id' }],
   ['RemapPlanItemSchema', remapPlanItem, { ...remapPlanItem, payload: undefined }],
   ['WorkflowNeedsYouSchema', needsYou[0], { kind: 'retry', nodeId: 'draft' }],
+  ['WorkflowCodingBlockSchema', codingBlock, { ...codingBlock, unknownSpend: 'maybe' }],
+  [
+    'WorkflowCodingReachAcknowledgementSchema',
+    { policyIds: [policyId] },
+    { policyIds: ['not-a-hash'] },
+  ],
+  [
+    'WorkflowPolicyRemapDecisionSchema',
+    { policyId, expectedNodeRevision: 2, orchestrationRevision: 5 },
+    { policyId, orchestrationRevision: 5 },
+  ],
   [
     'AgentMapEntrySchema',
     { agentId: 'builder', incarnation: 'inc-1', status: 'changed' },

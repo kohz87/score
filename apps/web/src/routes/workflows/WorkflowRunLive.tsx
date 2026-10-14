@@ -23,6 +23,7 @@ import {
   edgeIndex,
   edgeStatesOf,
   filterWorkflowLog,
+  limitsRunOf,
   liveWorkflowVisuals,
   outcomeLines,
   workflowEventEffect,
@@ -287,7 +288,7 @@ export function WorkflowRunLive({
         </section>
         <section aria-label="Budget and limits">
           <h3>Budget and limits</h3>
-          <BudgetBlock run={detail} />
+          <BudgetBlock run={limitsRunOf(detail)} />
           <p className="orch-muted">{detail.spend.note}</p>
         </section>
       </div>

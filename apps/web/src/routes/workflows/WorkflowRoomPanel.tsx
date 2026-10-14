@@ -6,7 +6,7 @@ import { AgentChip } from '../orchestrations/RunDecisions.tsx'
 import { BudgetBlock, RunControls, StateMark } from '../orchestrations/RunPanel.tsx'
 import { WorkflowNeeds } from './WorkflowDecisions.tsx'
 import { useWorkflowRun, useWorkflowRunActions } from './workflow-queries.ts'
-import { nodeVisual, outcomeLines, waitingText } from './workflow-run-model.ts'
+import { limitsRunOf, nodeVisual, outcomeLines, waitingText } from './workflow-run-model.ts'
 import '../orchestrations/orchestrations.css'
 import './workflows.css'
 
@@ -105,7 +105,7 @@ export function WorkflowRoomPanel({
               </div>
               <details>
                 <summary>Budget and limits</summary>
-                <BudgetBlock run={detail} />
+                <BudgetBlock run={limitsRunOf(detail)} />
               </details>
             </div>
           )}

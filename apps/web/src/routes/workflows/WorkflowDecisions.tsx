@@ -11,6 +11,7 @@ import {
   UnknownCard,
 } from '../orchestrations/RunDecisions.tsx'
 import type { WorkflowRunActions } from './workflow-queries.ts'
+import { limitsRunOf } from './workflow-run-model.ts'
 import { gateChip } from '../../live/resolved.ts'
 import { ResolvedList } from '../../live/ResolvedList.tsx'
 import { useRecentlyResolved } from '../../live/use-recently-resolved.ts'
@@ -405,7 +406,7 @@ export function WorkflowNeeds({
             return (
               <LimitsCard
                 key={`b${item.reason}`}
-                run={run}
+                run={limitsRunOf(run)}
                 reason={item.reason}
                 actions={actions}
               />

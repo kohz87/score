@@ -226,6 +226,8 @@ export const workflowPreflight = WorkflowPreflightSchema.parse({
     { id: 'agents', status: 'ok', message: 'builder and reviewer are ready' },
     { id: 'capacity', status: 'ok', message: 'There is room for another run' },
   ],
+  issues: [],
+  workers: [],
   mapping: [
     { agentId: 'builder', name: 'builder', incarnation: '4f7c1d2e-8a3b-4c5d-9e6f-0a1b2c3d4e5f' },
     { agentId: 'reviewer', name: 'reviewer', incarnation: '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d' },
