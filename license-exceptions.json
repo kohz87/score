@@ -132,18 +132,18 @@
       "version": "6.1.2",
       "license": "MIT-0",
       "scope": "dev (jsdom, test environment)",
-      "approvedBy": "pending owner review",
-      "date": "2026-10-10",
-      "reason": "MIT-0 (MIT without the attribution condition) is not on the AGENTS.md list; it was accepted by the checker until the Phase 7 gate (fix-l). Test environment only, not shipped. Owner to confirm or replace."
+      "approvedBy": "owner",
+      "date": "2026-10-14",
+      "reason": "MIT-0 (MIT without the attribution condition); test environment only (jsdom), not shipped. Approved by the owner on 2026-10-14 (decision 26)."
     },
     {
       "name": "@csstools/css-syntax-patches-for-csstree",
       "version": "1.1.15",
       "license": "MIT-0",
       "scope": "dev (jsdom, test environment)",
-      "approvedBy": "pending owner review",
-      "date": "2026-10-10",
-      "reason": "MIT-0 (MIT without the attribution condition) is not on the AGENTS.md list; it was accepted by the checker until the Phase 7 gate (fix-l). Test environment only, not shipped. Owner to confirm or replace."
+      "approvedBy": "owner",
+      "date": "2026-10-14",
+      "reason": "MIT-0 (MIT without the attribution condition); test environment only (jsdom), not shipped. Approved by the owner on 2026-10-14 (decision 26)."
     }
   ]
 }
