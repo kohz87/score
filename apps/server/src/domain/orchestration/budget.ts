@@ -133,6 +133,31 @@ function freshAttempt(sqlite: DatabaseSync, attempt: AttemptRow): AttemptRow {
   }
 }
 
+/**
+ * A coding generation that provably launched nothing (F2 #1): its launch was revoked before `releasing`, it was closed
+ * by `send_closed`, or the run ended on a refusal receipt. Such an attempt spent exactly nothing, so a missing cost is
+ * not an unknown one.
+ */
+function provenUnsent(sqlite: DatabaseSync, attempt: AttemptRow): boolean {
+  const generation = sqlite
+    .prepare(
+      'SELECT launch_id, run_id, closed_cause FROM orc_generations WHERE attempt_id = ? AND generation = ?',
+    )
+    .get(attempt.id, attempt.dispatch_generation) as
+    { launch_id: string; run_id: string | null; closed_cause: string | null } | undefined
+  if (!generation) return false
+  if (generation.closed_cause !== null) return true
+  const launch = sqlite
+    .prepare('SELECT revoked, may_have_executed FROM coding_launches WHERE launch_id = ?')
+    .get(generation.launch_id) as { revoked: number; may_have_executed: number } | undefined
+  if (launch && launch.revoked === 1 && launch.may_have_executed === 0) return true
+  const runId = attempt.run_id ?? generation.run_id
+  return (
+    runId !== null &&
+    sqlite.prepare('SELECT 1 FROM coding_refusals WHERE run_id = ?').get(runId) !== undefined
+  )
+}
+
 export function budgetView(
   sqlite: DatabaseSync,
   o: OrchRow,
@@ -161,7 +186,7 @@ export function budgetView(
     provisional += attempt.spend_usd ?? 0
     if (attempt.state !== 'abandoned') reserved += attempt.reserved_usd
     // An ended attempt that reported no spend leaves the total unknown (never zero).
-    if (ended && attempt.spend_usd === null) unknownSpend = true
+    if (ended && attempt.spend_usd === null && !provenUnsent(sqlite, attempt)) unknownSpend = true
   }
   // A step whose attempt is suspended (7.7b K2/A1) keeps its reservation on that attempt through re-gating and
   // re-admission: the step's own estimate is not counted a second time while it waits.
