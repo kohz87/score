@@ -1576,8 +1576,7 @@ Controls and accounting cover observed, Score-started work only.
   coding agent whose permission is `read-only` or `workspace-write`, on a host that runs coding turns as supervised units.
   Preflight and create answer `422 unsupported_agent` for a coding lead, an Antigravity or `full` agent, and
   `422 coding_workers_need_units` on a host without units (process-group fallback or a failing capability check).
-  **Workflows keep the Hermes-only rule until 7.7c:** workflow save/start answer `422 unsupported_agent` for any coding agent
-  ("Coding agents can’t take orchestration or workflow steps yet …").
+  Workflows take the same agents from 7.7c on (§15 "Coding agents in workflows").
 - `GET /api/orchestrations/preflight?leadAgentId=&allowedAgents=a,b` → `Preflight` (`checks[]`: listener, lead ready, lead
   MCP access, lead MCP token, allowed agents, global fence, journal, capacity, quota, tool readiness (`unknown`: Hermes loads
   MCP tools per session, which Score cannot see), plus `gatePolicyNotes`, the acknowledgement text and the defaults).
@@ -1852,6 +1851,16 @@ message }`; only `error`s block. Codes: limits (`too_many_nodes`, `too_many_edge
 `template_forward_reference`, `template_not_ancestor`, `template_needs_default` = a conditional ancestor needs a default,
 `template_field_unavailable`), `agent_missing` and `layout_unknown_node`.
 
+**Runtime validation (PLAN 7.7c).** Validate, save, new versions, preflight and start all call one function,
+`validateWorkflowAgents(definition, team, facts)`, next to the graph rules. It adds three codes, each with the `nodeId` of the
+step and `field: 'agentId'`: `coding_agent_unsupported` (the step's agent is not a Hermes, Claude Code or Codex agent, e.g.
+Antigravity or OpenCode, or no coding runtime is wired), `coding_permission_full` (a Claude Code or Codex agent with `full`
+access; steps need `read-only` or `workspace-write`) and `coding_workers_need_units` (the host doesn’t run coding turns as
+supervised units). Graph `gate` nodes have no agent and are never checked. These issues depend on the team and the host, never
+on the definition alone: they are **not** part of a definition, its stored `hash` or its export validation, and readiness of
+a CLI (installed, version, policy) is checked only at preflight and start. A workflow with no coding step node gets no coding
+fields anywhere (no policies, no `codingSteps`, no reach acknowledgement, no coding storage).
+
 - **S** `GET /api/workflows` → `WorkflowList` (summaries + retained-inventory counts).
 - **S** `GET /api/workflows/:id` → `WorkflowDetail` (version list + latest). `GET /api/workflows/:id/versions/:version` →
   `WorkflowVersion`.
@@ -1859,8 +1868,9 @@ message }`; only `error`s block. Codes: limits (`too_many_nodes`, `too_many_edge
 - **H** `POST /api/workflows` `WorkflowCreate` → `201 WorkflowVersion` (version 1). **H** `POST /api/workflows/:id/versions`
   `WorkflowVersionCreate { baseVersion, definition }` → `201 WorkflowVersion`; `baseVersion` must be the latest (`409
   conflict`, `details.latestVersion`). An invalid definition → `422 invalid_definition` `{ result: ValidationResult }`; limits
-  (200 definitions, 20 versions each) → `409 quota_exhausted`; an agent node that is a coding agent → `422 unsupported_agent`
-  (also on `POST /api/workflow-runs` and its preflight).
+  (200 definitions, 20 versions each) → `409 quota_exhausted`. The runtime issues above make a save `422 invalid_definition`
+  too (and `POST /api/workflow-runs` answers the same with the current issues, e.g. when the host lost its units after the
+  version was saved).
 - **H** `DELETE /api/workflows/:id` → `204`; `409 workflow_used` when any run ever used a version.
 - `POST /api/workflows/:id/versions/:version/export` `WorkflowExportRequest` → `WorkflowExport` (format
   `score.workflow/1`): every free-text field passes `redact()`, `changes` lists every difference, `removePaths` drops fields
@@ -1870,8 +1880,9 @@ message }`; only `error`s block. Codes: limits (`too_many_nodes`, `too_many_edge
 ### Runs
 
 - `GET /api/workflow-runs/preflight?workflowId=&version=` → `WorkflowPreflight`: checks (`definition`, `agents` ready,
-  `mapping`, `global_fence`, `journal`, `capacity`, `quota`), the agents the definition uses with their **current
-  incarnations**, both gate-policy notes, `ORCH_ACKNOWLEDGEMENT_TEXT`, the spend note and the true maximum step count.
+  `mapping`, `global_fence`, `journal`, `capacity`, `quota`), `issues` (the graph and runtime issues Validate returns for the
+  stored definition), the agents the definition uses with their **current incarnations**, both gate-policy notes,
+  `ORCH_ACKNOWLEDGEMENT_TEXT`, the spend note and the true maximum step count.
 - **H** `POST /api/workflow-runs` `WorkflowRunCreate` → `201 WorkflowRunCreated` (`Idempotency-Key` honoured). The server
   re-runs the preflight; failing check → `409 preflight_failed` `{ checks }`; `429 capacity`; `409 quota_exhausted`; `409
   fenced`; `agentMap` must name exactly the incarnations the page showed (else `409 conflict`); inputs must fit the

@@ -68,14 +68,15 @@ afterEach(async () => {
 
 const get = (url: string) => app.inject({ method: 'GET', url, headers })
 const post = (url: string, payload: object) => app.inject({ method: 'POST', url, headers, payload })
+// 7.7c: with no coding runtime wired, a workflow step on a coding agent is a structured issue at every door.
 const refused = (response: {
   statusCode: number
-  json: () => { error: { code: string; message: string } }
+  json: () => { error: { code: string; details: { result: { issues: { code: string }[] } } } }
 }) => {
   expect(response.statusCode).toBe(422)
-  expect(response.json().error.code).toBe('unsupported_agent')
-  expect(response.json().error.message).toMatch(
-    /Coding agents can’t take orchestration or workflow steps yet/,
+  expect(response.json().error.code).toBe('invalid_definition')
+  expect(response.json().error.details.result.issues.map((issue) => issue.code)).toContain(
+    'coding_agent_unsupported',
   )
 }
 
@@ -108,7 +109,7 @@ test('orchestration preflight and create refuse a coding agent as the lead, and 
   ).toBe(200)
 })
 
-test('workflow save, preflight and start refuse a coding agent', async () => {
+test('workflow save, preflight and start refuse a coding agent when no coding runtime is wired', async () => {
   const withCoder = definition([agent('a', { agentId: 'coder' }), end()], [edge('a', 'done')])
   refused(await post('/api/workflows', { definition: withCoder }))
   const ok = await post('/api/workflows', {
@@ -119,9 +120,14 @@ test('workflow save, preflight and start refuse a coding agent', async () => {
   refused(
     await post(`/api/workflows/${workflowId}/versions`, { baseVersion: 1, definition: withCoder }),
   )
-  // A version stored before this rule (or by another route) is refused when it is checked or started.
+  // A version stored before this rule (or by another route) lists its issues when it is checked and is refused at start.
   const stored = save(h, withCoder)
-  refused(await get(`/api/workflow-runs/preflight?workflowId=${stored}&version=1`))
+  const checked = await get(`/api/workflow-runs/preflight?workflowId=${stored}&version=1`)
+  expect(checked.statusCode).toBe(200)
+  expect(checked.json().ok).toBe(false)
+  expect(checked.json().issues.map((issue: { code: string }) => issue.code)).toContain(
+    'coding_agent_unsupported',
+  )
   refused(
     await post('/api/workflow-runs', {
       workflowId: stored,

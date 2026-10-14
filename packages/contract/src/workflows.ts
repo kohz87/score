@@ -261,6 +261,10 @@ export const ValidationCodeSchema = z.enum([
   'template_field_unavailable',
   'agent_missing',
   'layout_unknown_node',
+  // 7.7c: runtime checks against the team and the host (never part of a stored definition's hash).
+  'coding_agent_unsupported',
+  'coding_permission_full',
+  'coding_workers_need_units',
 ])
 export type ValidationCode = z.infer<typeof ValidationCodeSchema>
 
@@ -781,6 +785,8 @@ export const WorkflowPreflightCheckSchema = PreflightCheckSchema.extend({
 export const WorkflowPreflightSchema = z.object({
   ok: z.boolean(),
   checks: z.array(WorkflowPreflightCheckSchema),
+  /** Graph and runtime issues of the definition (7.7c): the same list Validate returns for it. */
+  issues: z.array(ValidationIssueSchema),
   /** Agents the definition uses with their current incarnation: the start request must name exactly these. */
   mapping: z.array(
     z.object({ agentId: AgentIdSchema, name: z.string(), incarnation: z.string().min(1) }),

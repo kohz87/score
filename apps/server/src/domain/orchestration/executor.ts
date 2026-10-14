@@ -23,6 +23,8 @@ import {
   type PolicyRemapDecision,
   type RemapDecision,
   type WaiverDecision,
+  type ValidationResult,
+  type WorkflowDefinition,
   type WorkflowPreflight,
   type WorkflowRemapDecision,
   type WorkflowRetryDecision,
@@ -113,8 +115,8 @@ import { finalizeGraph, planWorkflow } from '../workflows/planner.ts'
 import { workflowDetailOf, workflowEventsOf, workflowSummaryOf } from '../workflows/views.ts'
 import { readVersion } from '../workflows/definitions.ts'
 import { validateDefinition } from '../workflows/definition.ts'
+import { validateWorkflowAgents, withAgentIssues } from '../workflows/agents.ts'
 import {
-  assertHermesOnly,
   assertOrchestrationWorkers,
   type CodingWorkerFacts,
   type WorkerReport,
@@ -1144,6 +1146,21 @@ export class Orchestrator {
     )
   }
 
+  /**
+   * The one runtime validation of a workflow (7.7c §1): the graph rules plus the team and host rules for coding agents.
+   * Validate, save, new versions, preflight and start all call this, so none of them can disagree.
+   */
+  async validateWorkflow(
+    definition: WorkflowDefinition,
+    agents?: Pick<AgentSummary, 'id' | 'runtime'>[],
+  ): Promise<ValidationResult> {
+    const team = agents ?? (await this.options.port.listAgents())
+    return withAgentIssues(
+      validateDefinition(definition),
+      validateWorkflowAgents(definition, team, this.options.codingFacts),
+    )
+  }
+
   async workflowPreflight(
     workflowId: string,
     version: number,
@@ -1158,7 +1175,8 @@ export class Orchestrator {
       message: string,
     ) => checks.push({ id, status, message })
     const found = this.db.read((sqlite) => readVersion(sqlite, workflowId, version))
-    const validation = validateDefinition(found.definition)
+    const team = agents ?? (await port.listAgents())
+    const validation = await this.validateWorkflow(found.definition, team)
     add(
       'definition',
       validation.ok ? 'ok' : 'fail',
@@ -1166,9 +1184,7 @@ export class Orchestrator {
         ? 'The workflow is valid'
         : `${validation.issues.length} problems in the workflow`,
     )
-    const team = agents ?? (await port.listAgents())
     const ids = agentIdsOf(found)
-    assertHermesOnly(ids, team)
     const known = new Map(team.map((agent) => [agent.id, agent]))
     const problems = ids.flatMap((id) => {
       const agent = known.get(id)
@@ -1224,6 +1240,7 @@ export class Orchestrator {
     return {
       ok: checks.every((check) => check.status !== 'fail'),
       checks,
+      issues: validation.issues,
       mapping,
       gatePolicyNotes: {
         'gates-only':
@@ -1245,6 +1262,15 @@ export class Orchestrator {
   ): Promise<WorkflowRunCreated> {
     const found = this.db.read((sqlite) => readVersion(sqlite, body.workflowId, body.version))
     validateInputs(found, body.inputs)
+    // A definition the team or the host can't run (7.7c §1) gets the same answer as at save: structured issues.
+    const validation = await this.validateWorkflow(found.definition, agents)
+    if (!validation.ok)
+      throw new HttpError(
+        422,
+        'invalid_definition',
+        'This workflow can’t start as it is. Fix the problems and save a new version.',
+        { result: validation },
+      )
     const preflight = await this.workflowPreflight(body.workflowId, body.version, agents)
     if (!preflight.ok) {
       const failed = (id: string) =>

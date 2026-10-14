@@ -1,10 +1,10 @@
-import { assertHermesOnly } from '../domain/orchestration/supported-agents.ts'
 import {
   AbandonDecisionSchema,
   GateDecisionSchema,
   LimitsDecisionSchema,
   RunControlSchema,
   WaiverDecisionSchema,
+  type WorkflowDefinition,
   WorkflowCreateSchema,
   WorkflowExportRequestSchema,
   WorkflowRemapDecisionSchema,
@@ -19,7 +19,6 @@ import { z } from 'zod'
 import { humanGuard } from '../auth/human.ts'
 import type { ScoreDb } from '../db/index.ts'
 import type { Orchestrator } from '../domain/orchestration/executor.ts'
-import { validateDefinition } from '../domain/workflows/definition.ts'
 import {
   addVersion,
   createWorkflow,
@@ -30,6 +29,7 @@ import {
   readVersion,
 } from '../domain/workflows/definitions.ts'
 import type { HermesPort } from '../hermes/index.ts'
+import { HttpError } from '../errors.ts'
 import { requestIdempotency } from './idempotency.ts'
 
 const IdParams = z.object({ id: z.string().min(1).max(100) })
@@ -62,8 +62,22 @@ export function registerWorkflowRoutes(
 
   // ----- definitions
   app.get('/api/workflows', async () => db.read((sqlite) => listWorkflows(sqlite)))
+  // One runtime validation for Validate, save, new versions and start (7.7c §1): the graph rules and the team and host
+  // rules for coding agents.
+  const validated = async (definition: WorkflowDefinition) =>
+    orchestrator.validateWorkflow(definition, await deps.port.listAgents())
+  const requireRunnable = async (definition: WorkflowDefinition): Promise<void> => {
+    const result = await validated(definition)
+    if (!result.ok)
+      throw new HttpError(
+        422,
+        'invalid_definition',
+        'The workflow has errors. Fix them and save again.',
+        { result },
+      )
+  }
   app.post('/api/workflows/validate', async (request) =>
-    validateDefinition(WorkflowValidateSchema.parse(request.body).definition),
+    validated(WorkflowValidateSchema.parse(request.body).definition),
   )
   app.get('/api/workflows/:id', async (request) =>
     db.read((sqlite) => getWorkflow(sqlite, IdParams.parse(request.params).id)),
@@ -74,13 +88,13 @@ export function registerWorkflowRoutes(
   })
   app.post('/api/workflows', mutation, async (request, reply) => {
     const body = WorkflowCreateSchema.parse(request.body)
-    assertHermesOnly(agentIdsInDefinition(body.definition), await deps.port.listAgents())
+    await requireRunnable(body.definition)
     return reply.code(201).send(db.tx((sqlite) => createWorkflow(sqlite, body.definition, now())))
   })
   app.post('/api/workflows/:id/versions', mutation, async (request, reply) => {
     const { id } = IdParams.parse(request.params)
     const body = WorkflowVersionCreateSchema.parse(request.body)
-    assertHermesOnly(agentIdsInDefinition(body.definition), await deps.port.listAgents())
+    await requireRunnable(body.definition)
     return reply
       .code(201)
       .send(db.tx((sqlite) => addVersion(sqlite, id, body.baseVersion, body.definition, now())))
@@ -173,8 +187,3 @@ export function registerWorkflowRoutes(
     return orchestrator.wfTryAgain(id, nodeId, WorkflowTryAgainDecisionSchema.parse(request.body))
   })
 }
-
-const agentIdsInDefinition = (definition: {
-  nodes: { kind: string; agentId?: string }[]
-}): string[] =>
-  definition.nodes.flatMap((node) => (node.kind === 'agent' && node.agentId ? [node.agentId] : []))
