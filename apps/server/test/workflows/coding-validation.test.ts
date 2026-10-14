@@ -74,7 +74,9 @@ describe('the runtime validation of a workflow', () => {
       'coding_permission_full:s-wide',
     ])
     expect(result.issues.every((issue) => issue.field === 'agentId')).toBe(true)
-    expect(result.issues.map((issue) => issue.message).join(' ')).toMatch(/Antigravity/)
+    expect(result.issues.map((issue) => issue.message).join(' ')).toMatch(
+      /ag is an Antigravity agent.*oc is an OpenCode agent/s,
+    )
     const accepted = await post('/api/workflows/validate', { definition: withAgents('cc', 'cx') })
     expect(ValidationResultSchema.parse(accepted.json())).toMatchObject({ ok: true, issues: [] })
   })

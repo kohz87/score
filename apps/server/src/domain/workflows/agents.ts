@@ -62,7 +62,7 @@ export function validateWorkflowAgents(
       issue(
         'coding_agent_unsupported',
         node.nodeId,
-        `${node.agentId} is a ${label} agent, which can’t take workflow steps. Choose a Hermes, Claude Code or Codex agent.`,
+        `${node.agentId} is ${/^[aeiou]/i.test(label) ? 'an' : 'a'} ${label} agent, which can’t take workflow steps. Choose a Hermes, Claude Code or Codex agent.`,
       )
       continue
     }

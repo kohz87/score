@@ -155,6 +155,35 @@ describe('remapping a coding agent’s new version', () => {
     await h.until(() => wfRunOf(h, id).status === 'succeeded', 60_000)
   })
 
+  test('a step that may already be running keeps its attempt and its obligations; only later work takes the new version', async () => {
+    await boot()
+    const id = await startWorkflow(
+      h,
+      definition(
+        [agent('a', { agentId: 'cc', instruction: '[fixture:slow] stay busy' }), end()],
+        [edge('a', 'done')],
+      ),
+    )
+    await h.until(
+      () =>
+        h.cliCalls().length === 1 &&
+        rows("SELECT 1 FROM orc_attempts WHERE state = 'running'").length === 1,
+      60_000,
+    )
+    lifecycle('cc', B)
+    await h.until(() => remapCard(id, 'cc') !== undefined)
+    const card = remapCard(id, 'cc')
+    // Nothing of it is provably unsent, so the plan has nothing to re-create.
+    expect(card).toMatchObject({ kind: 'remap', nodeIds: [], plan: [] })
+    await remap(id, 'cc', { policyId: await currentPolicy('cc') })
+    expect(rows("SELECT state, retired FROM orc_attempts WHERE kind = 'step'")).toEqual([
+      { state: 'running', retired: 0 },
+    ])
+    expect(node(id, 'a')).toMatchObject({ state: 'running', remaps: 0 })
+    await h.orch.wfStop(id)
+    await h.until(() => wfRunOf(h, id).status === 'stopped', 60_000)
+  })
+
   test('replaced before the step was sent: the remap asks for the same consent and re-creates the step', async () => {
     await boot()
     const id = await startWorkflow(h, flow('cc'), { gatePolicy: 'every-step' })

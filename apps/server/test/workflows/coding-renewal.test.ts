@@ -112,6 +112,34 @@ describe('a coding dispatch held back 20 times', () => {
     expect(h.errors).toEqual([])
   })
 
+  test('the renewal keeps the step’s approved gate: no second approval is asked for', async () => {
+    await boot()
+    const id = await startWorkflow(h, flow(), { gatePolicy: 'every-step' })
+    await h.until(() => wfRunOf(h, id).assignmentGates.some((g) => g.status === 'open'))
+    fence = 'A fence is up.'
+    const gate = wfRunOf(h, id).assignmentGates.find((g) => g.status === 'open')!
+    await h.orch.wfGateDecision(id, gate.id, {
+      decision: 'approve',
+      expectedRevision: gate.revision,
+      orchestrationRevision: revision(id),
+    })
+    await heldBack()
+    fence = null
+    await tryAgain(id)
+    await h.until(() => wfRunOf(h, id).status === 'succeeded', 60_000)
+    // One gate, approved once; the fresh attempt carried the step’s policy binding.
+    expect(wfRunOf(h, id).assignmentGates.map((g) => g.status)).toEqual(['approved'])
+    expect(attempts()).toHaveLength(2)
+    expect(
+      rows("SELECT policy_id FROM orc_attempts WHERE kind = 'step' ORDER BY n").map(
+        (a) => a['policy_id'],
+      ),
+    ).toEqual([
+      rows('SELECT policy_id FROM orc_worker_policies')[0]!['policy_id'],
+      rows('SELECT policy_id FROM orc_worker_policies')[0]!['policy_id'],
+    ])
+  })
+
   test('renewals are bounded: after the last one is held back again the node fails “kept being held back”', async () => {
     await boot()
     const id = await startWorkflow(h, flow())
