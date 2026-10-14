@@ -11,6 +11,7 @@ test('loads defaults without reading process.env', () => {
     port: 8740,
     webOrigin: 'http://127.0.0.1:5173',
     mode: 'fake',
+    updateRepo: 'kohz87/score',
     fakeSpeed: 1,
     fakeLoop: true,
     serveWeb: false,
@@ -27,6 +28,7 @@ test('loads explicit config and normalizes the web origin', () => {
     SCORE_PORT: '9000',
     SCORE_WEB_ORIGIN: 'https://localhost:5173/',
     SCORE_MODE: 'live',
+    SCORE_UPDATE_REPO: 'acme/score-fork',
     SCORE_FAKE_SPEED: '2.5',
     SCORE_FAKE_LOOP: 'false',
   }
@@ -37,6 +39,7 @@ test('loads explicit config and normalizes the web origin', () => {
     port: 9000,
     webOrigin: 'https://localhost:5173',
     mode: 'live',
+    updateRepo: 'acme/score-fork',
     fakeSpeed: 2.5,
     fakeLoop: false,
     serveWeb: false,

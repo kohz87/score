@@ -11,6 +11,7 @@ import { ModelListSection } from './ModelListSection.tsx'
 import { ProvidersSection } from './ProvidersSection.tsx'
 import { HermesVersionBanner } from './HermesVersionBanner.tsx'
 import { KnowledgeSection } from '../knowledge/KnowledgeSection.tsx'
+import { AboutSection } from './AboutSection.tsx'
 import { LogsSection } from './LogsSection.tsx'
 import { SharesSection } from './SharesSection.tsx'
 import { RemoteSection } from './RemoteSection.tsx'
@@ -30,6 +31,7 @@ const sections = [
   { id: 'advanced', label: 'Advanced', built: true },
   { id: 'backup', label: 'Backup', built: true },
   { id: 'logs', label: 'Logs', built: true },
+  { id: 'about', label: 'About', built: true },
 ] as const
 
 export function SettingsPage() {
@@ -111,6 +113,7 @@ export function SettingsPage() {
         <AdvancedSection />
         <BackupSection />
         <LogsSection />
+        <AboutSection />
         <RemoteSection />
         <TerminalSection />
       </div>

@@ -198,6 +198,17 @@ export const visualFixtures: Record<string, unknown> = {
       price: null,
     })),
   },
+  '/api/about': {
+    version: '1.3.0',
+    commit: '1a2b3c4',
+    schema: 67,
+    contract: 1,
+    hermes: { version: '0.9.0' },
+    node: 'v24.0.0',
+    mode: 'live',
+    repository: 'https://github.com/kohz87/score',
+    checkout: '/home/user/score',
+  },
   '/api/system/logs?limit=200': {
     available: true,
     items: [

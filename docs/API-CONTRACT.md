@@ -1282,6 +1282,21 @@ compatible: boolean }`. Read-only: compares the running build (version, code sha
   when the build changed since the check (hash differs), `409 not_compatible` when the check is not compatible.
 - Theme (light, dark, system) is a per-browser setting in `localStorage` (`score.theme`); there is no settings/ui endpoint.
 
+### About and updates (decision 79; schemas in `packages/contract/src/about.ts`)
+
+- `GET /api/about` → `About` `{ version: string /* Score's package.json */; commit: string | null /* short git commit of the
+  running checkout, read once; null when the folder isn't a git checkout */; schema: number /* newest applied database
+  migration, 0 without a database */; contract: number; hermes: { version: string } | null; node: string;
+  mode: 'live' | 'fake'; repository: string /* https URL */; checkout: string /* the folder the server runs from */ }`.
+- **H** `POST /api/about/update-check` (no body) → `UpdateCheck` `{ checkedAt; current: string; status: 'up_to_date' |
+  'update_available' | 'ahead' | 'unavailable'; latest: { version; tag; url; changelogUrl } | null; message: string }`.
+  Runs only when asked: Score never checks at start, on page load or in the background. It reads the public tag list of
+  `SCORE_UPDATE_REPO` (default `kohz87/score`) from GitHub with no credentials and nothing about the person, takes the
+  highest `vX.Y.Z` tag (pre-releases ignored) and compares it with `current`. A failure, a timeout (10 s) or an answer
+  that doesn't validate is `unavailable` with a plain message, not an HTTP error. One real check per 60 seconds: a
+  call inside that window returns the last answer unchanged. Score never updates itself; the page only shows the steps.
+  In fake mode the answer is fixed (`up_to_date`).
+
 ## 12. Knowledge (central vault; design docs/briefs/6.0-workspace-knowledge.md § 6.2)
 Score's own Markdown vault (default `~/score-vault`, `$SCORE_VAULT`), git-versioned; the files are the source of truth and
 Score's DB only indexes them. Paths are POSIX, relative to the vault; notes end in `.md`, attachments live under
