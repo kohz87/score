@@ -1959,6 +1959,11 @@ executor's one admission function, the coding step limit counted from the launch
   doesn't change. `needsYou` lists `coding_limit { used, limit }` once for the run while any step waits for it. Other blocked
   dispositions (`agent_unavailable`, a remap) keep the planner's behaviour from §15 "Mapping".
 
+- **A parked coding step says why.** A queued coding step that admission parks because the run's room for unsent coding
+  inputs is used up (`codingUnsentSlots` taken, or the partition has no bytes left for its input) shows `waitingFor:
+  'coding_room'`. It is computed in the views, never stored; the step stays `queued` and goes on when an attempt is sent or
+  settled, or the person raises the coding step limit. The web shows it for `ready` and `running` nodes. No new action.
+
 - **Assignment gates** (`every-step`) of a coding step carry the agent's `policyId` in their payload; admission and release
   require the gate's id to equal the step's stored policy, and an approval for an old id never covers a new one. A graph
   `gate` node has no agent and no policy binding.

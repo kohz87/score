@@ -735,9 +735,21 @@ test('only the exact tested version runs unasked, and a queued turn is checked a
   expect(calls().filter((call) => call.prompt.includes('second'))).toHaveLength(0)
 }, 30_000)
 
-test('a real server crash leaves the CLI child running; the next start stops its group before admitting turns (review: high 2)', async () => {
+test('a real server crash leaves the tools the CLI started running; the next start stops their group before admitting turns (review: high 2)', async () => {
   const { spawn } = await import('node:child_process')
-  const { isSameProcess } = await import('../../src/runtimes/coding/proc.ts')
+  // The CLI itself dies with the server (parent-death signal); what outlives the crash is a tool it started, in its group.
+  // A killed member stays a zombie until its new parent reaps it, which is not ours to wait for: only live ones count.
+  const groupAlive = (pgid: number) =>
+    readdirSync('/proc').some((entry) => {
+      if (!/^\d+$/.test(entry)) return false
+      try {
+        const stat = readFileSync(`/proc/${entry}/stat`, 'utf8')
+        const [state, , group] = stat.slice(stat.lastIndexOf(')') + 2).split(' ')
+        return state !== 'Z' && Number(group) === pgid
+      } catch {
+        return false
+      }
+    })
   const crashDir = join(dir, 'crash')
   mkdirSync(crashDir)
   const script = fileURLToPath(new URL('./crash-server.ts', import.meta.url))
@@ -761,12 +773,12 @@ test('a real server crash leaves the CLI child running; the next start stops its
       })
       server.on('exit', () => reject(new Error(`server exited early: ${out}`)))
     })
-    expect(isSameProcess(childPid, null)).toBe(true)
+    expect(groupAlive(childPid)).toBe(true)
     server.removeAllListeners('exit')
     server.kill('SIGKILL')
     await new Promise((resolve) => server.on('exit', resolve))
-    // The crash: the server is gone, its child is not.
-    expect(isSameProcess(childPid, null)).toBe(true)
+    // The crash: the server is gone, the tool its CLI started is not.
+    expect(groupAlive(childPid)).toBe(true)
     const crashDb = openDatabase(join(crashDir, 'score.db'))
     migrate(crashDb, fileURLToPath(new URL('../../migrations/', import.meta.url)))
     const crashIngest = createIngest(crashDb)
@@ -786,7 +798,7 @@ test('a real server crash leaves the CLI child running; the next start stops its
     ).toMatchObject({ pid: childPid, pgid: childPid, start_time: expect.stringMatching(/^\d+$/) })
     expect(await restarted.recover()).toBe(1)
     // Stopped before the run was released, and the record is gone.
-    expect(isSameProcess(childPid, null)).toBe(false)
+    expect(groupAlive(childPid)).toBe(false)
     expect(crashDb.sqlite.prepare('SELECT 1 FROM coding_processes').get()).toBeUndefined()
     expect(crashDb.sqlite.prepare('SELECT status FROM runs').get()).toEqual({
       status: 'interrupted',
@@ -795,7 +807,7 @@ test('a real server crash leaves the CLI child running; the next start stops its
     crashDb.close()
   } finally {
     server.kill('SIGKILL')
-    if (childPid && isSameProcess(childPid, null)) process.kill(-childPid, 'SIGKILL')
+    if (childPid && groupAlive(childPid)) process.kill(-childPid, 'SIGKILL')
   }
 }, 60_000)
 

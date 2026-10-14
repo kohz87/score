@@ -43,6 +43,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    setupFiles: ['./src/test/tmp-root.ts'],
+    setupFiles: ['./src/test/tmp-root.ts', './src/test/load-tolerance.ts'],
+    testTimeout: 20_000,
   },
 })

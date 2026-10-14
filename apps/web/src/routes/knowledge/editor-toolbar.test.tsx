@@ -57,7 +57,10 @@ beforeAll(() => {
 beforeEach(() => {
   latest = ''
 })
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 describe('formatting buttons', () => {
   test('toggle the selection and show their state; each has a name, a tooltip and a shortcut', async () => {
@@ -77,6 +80,9 @@ describe('formatting buttons', () => {
   })
 
   test('lists, quote and undo / redo', async () => {
+    // CodeMirror joins edits made within 500 ms of each other into one undo step, by the wall clock. On a slow machine
+    // the wait between the two clicks could pass that, so the clock is frozen: the grouping is then what is under test.
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
     render(<Harness initial={'one\ntwo'} />)
     await screen.findByRole('toolbar', { name: 'Formatting' })
     expect((button('Undo') as HTMLButtonElement).disabled).toBe(true)

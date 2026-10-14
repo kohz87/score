@@ -40,6 +40,12 @@ export function nodeVisual(state: NodeState): NodeVisual {
   }
 }
 
+/** A parked coding step is `running` with a queued step; every other reason shows on ready nodes. */
+export const showsWaiting = <T extends { state: string; waitingFor: WaitingFor | null }>(
+  node: T,
+): node is T & { waitingFor: WaitingFor } =>
+  node.waitingFor !== null && (node.state === 'ready' || node.state === 'running')
+
 export const waitingText: Record<WaitingFor, string> = {
   budget: 'waiting for budget',
   unknown_spend: 'waiting: spend unknown',
@@ -56,6 +62,8 @@ export const waitingText: Record<WaitingFor, string> = {
   coding_settings: 'waiting for your decision on the agent’s new settings',
   coding_limit: 'waiting for a higher coding step limit',
   held_back: 'waiting for you to try again',
+  coding_room:
+    'waiting for room: other coding steps of this run hold their inputs until they are sent or finished',
 }
 
 // ------------------------------------------------------------------------------------------------------- graph
@@ -142,8 +150,8 @@ export function captionsOf(run: WorkflowRunDetail): Map<string, string> {
         captions.set(def.id, `took ${edgeKindOf(def, edge.port).label ?? edge.port}`.slice(0, 30))
     } else if (def.kind === 'agent') {
       const base = nodeVisualWord(node.state)
-      if (node.state === 'ready' && node.waitingFor)
-        captions.set(def.id, waitingText[node.waitingFor].slice(0, 34))
+      if (showsWaiting(node))
+        captions.set(def.id, waitingText[node.waitingFor].split(':')[0]!.slice(0, 34))
       else if (node.attemptsMax > 1 && node.attemptsUsed > 0)
         captions.set(def.id, `${base} · try ${node.attemptsUsed}/${node.attemptsMax}`)
     }

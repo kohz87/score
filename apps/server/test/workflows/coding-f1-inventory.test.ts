@@ -83,6 +83,21 @@ describe('unsent coding inventory', () => {
     // Two per concurrent step, and the rest of the steps waited unprepared.
     expect(unsent()).toBeLessThanOrEqual(2 * before.max_concurrent_steps)
     expect(rows('SELECT COUNT(*) AS n FROM orc_attempts')[0]!['n']).toBeLessThan(WIDTH)
+    // The parked steps say why; the ones that were prepared don't.
+    const detail = wfRunOf(h, id)
+    const parked = new Set(
+      rows(
+        "SELECT s.id FROM orc_steps s WHERE s.status = 'queued' AND NOT EXISTS (SELECT 1 FROM orc_attempts a WHERE a.step_id = s.id)",
+      ).map((row) => String(row['id'])),
+    )
+    const roomNodes = detail.nodeStates.filter((n) => n.waitingFor === 'coding_room')
+    expect(roomNodes.length).toBeGreaterThan(0)
+    expect(roomNodes.map((n) => n.stepId).sort()).toEqual([...parked].sort())
+    const prepared = new Set(
+      rows('SELECT step_id FROM orc_attempts').map((row) => String(row['step_id'])),
+    )
+    for (const n of detail.nodeStates)
+      if (n.stepId && prepared.has(n.stepId)) expect(n.waitingFor).not.toBe('coding_room')
     // Raising the limit grows the partition; the parked steps are prepared as room appears and the run completes.
     await h.orch.wfLimits(id, { codingSteps: WIDTH + 1, orchestrationRevision: revision(id) })
     await h.until(() => wfRunOf(h, id).status === 'succeeded', 150_000)

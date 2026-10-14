@@ -60,8 +60,10 @@ test('the switch is hidden when the server has no knowledge vault', async () => 
     vi.fn(() => Promise.resolve(json({ error: { code: 'not_found', message: 'x' } }, 404))),
   )
   mount(<KnowledgeToolsRow agent={agent} />)
-  await new Promise((resolve) => setTimeout(resolve, 50))
-  expect(screen.queryByRole('switch')).toBeNull()
+  // The switch shows (disabled) while the answer is on its way, so the real signal is that it goes away again; a fixed
+  // sleep could check before the 404 had landed on a slow machine.
+  await screen.findByRole('switch')
+  await waitFor(() => expect(screen.queryByRole('switch')).toBeNull())
 })
 
 test('Settings › Knowledge lists each agent’s writes today', async () => {

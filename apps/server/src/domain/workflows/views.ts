@@ -29,7 +29,8 @@ import { readWorkerPolicy, workerPoliciesOf } from '../orchestration/coding-poli
 import type { CodingWorkerFacts } from '../orchestration/supported-agents.ts'
 import type { WorkerPolicy } from '../../runtimes/coding/policy.ts'
 import { isFenced } from '../orchestration/fence.ts'
-import { activeStepCounts } from '../orchestration/ops.ts'
+import { activeStepCounts, codingUnsentSlots } from '../orchestration/ops.ts'
+import { runtimeOfAgent } from '../orchestration/coding-attempts.ts'
 import {
   attemptsOf,
   gatesOf,
@@ -138,6 +139,7 @@ function waitingFor(
   attempt: AttemptRow | undefined,
   now: string,
   counts: ReturnType<typeof activeStepCounts>,
+  unsentCoding: number,
 ): WaitingFor | null {
   if (isTerminalStatus(o.status) || node.kind !== 'agent') return null
   const def = wf.definition.nodes.find((n) => n.id === node.node_id)
@@ -176,6 +178,13 @@ function waitingFor(
       return 'capacity'
     if ((counts.perAgent.get(step.agent_id) ?? 0) >= ORCH_CAPACITY.stepsPerAgent)
       return 'agent_capacity'
+    // Admission parks a coding step while the run's room for unsent coding inputs is used up (executor.ts, same rule).
+    if (
+      runtimeOfAgent(sqlite, step.agent_id) !== 'hermes' &&
+      (unsentCoding >= codingUnsentSlots(o.max_steps, o.max_concurrent_steps) ||
+        o.coding_stored_bytes + Buffer.byteLength(step.instruction) > o.coding_reserve_bytes)
+    )
+      return 'coding_room'
   }
   return null
 }
@@ -581,6 +590,12 @@ export function workflowDetailOf(
   const lineage = wfStepsOf(sqlite, o.id)
   const gates = gatesOf(sqlite, o.id)
   const counts = activeStepCounts(sqlite)
+  const unsentCoding = attempts.filter(
+    (a) =>
+      a.kind === 'step' &&
+      a.runtime !== 'hermes' &&
+      ['created', 'send_started', 'running', 'unknown'].includes(a.state),
+  ).length
   const stepNode = new Map(lineage.map((l) => [l.step_id, l.node_id]))
   const nodeViews: NodeView[] = nodes.map((n) => {
     const step = n.step_id ? stepById.get(n.step_id) : undefined
@@ -598,7 +613,7 @@ export function workflowDetailOf(
       kind: n.kind as NodeView['kind'],
       state: n.state,
       revision: n.revision,
-      waitingFor: waitingFor(sqlite, o, wf, n, step, attempt, now, counts),
+      waitingFor: waitingFor(sqlite, o, wf, n, step, attempt, now, counts, unsentCoding),
       attemptsUsed: n.attempts_used,
       attemptsMax: n.attempts_max,
       stepId: n.step_id,
