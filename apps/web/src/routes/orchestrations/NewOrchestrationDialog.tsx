@@ -42,11 +42,14 @@ export function CodingWorkers({
   agents,
   accepted,
   onAccept,
+  answerGoesTo = 'handed back to the lead, which uses an online model',
 }: {
   workers: CodingWorkerPreflight[]
   agents: AgentSummary[]
   accepted: boolean
   onAccept: (accepted: boolean) => void
+  /** Where the answer goes after the run keeps it (an orchestration hands it to its lead; a workflow to later steps). */
+  answerGoesTo?: string
 }) {
   const wide = workers.some((worker) => worker.reachBeyondWorkspace)
   return (
@@ -72,9 +75,9 @@ export function CodingWorkers({
         <div className="orch-risk">
           <p>
             <strong>What to know first.</strong> Whatever a coding agent can read, it can repeat in
-            its answer. That answer is shown in the run, kept in Score and handed back to the lead,
-            which uses an online model. If those files hold anything private, such as keys or
-            passwords, pick another agent or don’t start this run.
+            its answer. That answer is shown in the run, kept in Score and {answerGoesTo}. If those
+            files hold anything private, such as keys or passwords, pick another agent or don’t
+            start this run.
           </p>
           <label className="orch-check orch-ack">
             <input

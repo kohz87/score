@@ -15,8 +15,9 @@ import { journalSoft, touch, type Ctx } from './ctx.ts'
 import {
   addStored,
   bumpAdmission,
-  CODING_ITEM_EXTRA_BYTES,
+  codingItemBytesOf,
   codingItemsFor,
+  codingUnsentBytes,
   cascadeBlocked,
   oweStop,
   refuseAttempt,
@@ -41,7 +42,11 @@ import {
 import { cancelFenceAttempts } from './views.ts'
 import { createHash } from 'node:crypto'
 import { readWorkerPolicy, storeWorkerPolicy } from './coding-policy.ts'
-import type { WorkerReport } from './supported-agents.ts'
+import {
+  forbiddenPermissionError,
+  isForbiddenPermission,
+  type WorkerReport,
+} from './supported-agents.ts'
 import { gatesOf, readStep } from './store.ts'
 
 // Human decisions (contract §14). Each is revision-bound: the page names the run revision it showed, and a stale one is
@@ -153,6 +158,19 @@ export function setLimits(
   if (isTerminalStatus(o.status)) throw new HttpError(409, 'conflict', `This run is ${o.status}.`)
   if (body.deadlineAt !== undefined && body.deadlineAt !== null && body.deadlineAt <= now)
     throw new HttpError(400, 'bad_request', 'The deadline must be in the future.')
+  // A workflow without coding agents has no coding settings to change (7.7c §1).
+  if (
+    o.planner === 'workflow' &&
+    (body.codingSteps !== undefined || body.acceptUnknownCost !== undefined) &&
+    sqlite
+      .prepare('SELECT 1 FROM orc_worker_policies WHERE orchestration_id = ? LIMIT 1')
+      .get(orchId) === undefined
+  )
+    throw new HttpError(
+      400,
+      'bad_request',
+      'This workflow has no coding agents, so it takes no coding settings.',
+    )
   if (body.budgetUsd !== undefined)
     sqlite
       .prepare('UPDATE orchestrations SET budget_usd = ? WHERE id = ?')
@@ -181,11 +199,13 @@ export function setLimits(
         .prepare('SELECT 1 FROM orc_worker_policies WHERE orchestration_id = ? LIMIT 1')
         .get(orchId) !== undefined
     // Growth is measured against what is already reserved, not against the previous limit: 10 -> 4 -> 10 keeps ten
-    // items' reserve and adds nothing (F2 #5).
-    const reservedItems = Math.floor(o.coding_reserve_bytes / CODING_ITEM_EXTRA_BYTES)
+    // items' reserve and adds nothing (F2 #5). An item is the PLANNER's: a workflow's holds more than an orchestration's.
+    const itemBytes = codingItemBytesOf(o.planner)
+    // The unsent-inventory room is part of the partition but not an item: it stays out of the item count (F1 #6).
+    const unsent = hasWorkers ? codingUnsentBytes(o.max_steps, o.max_concurrent_steps) : 0
+    const reservedItems = Math.floor(Math.max(0, o.coding_reserve_bytes - unsent) / itemBytes)
     const grow = hasWorkers
-      ? Math.max(0, codingItemsFor(o.max_steps, body.codingSteps) - reservedItems) *
-        CODING_ITEM_EXTRA_BYTES
+      ? Math.max(0, codingItemsFor(o.max_steps, body.codingSteps) - reservedItems) * itemBytes
       : 0
     if (grow > 0 && !storageFits(sqlite, grow))
       throw new HttpError(
@@ -456,6 +476,63 @@ export function abandonAttempts(ctx: Ctx, orchId: string, body: AbandonDecision)
 }
 
 /**
+ * A coding worker's replacement is approved by its new policy id and its reach, like a worker at the start (7.7b §12a): the
+ * agent must be ready, the request must name the policy id it is now, and a reach beyond the workspace needs the
+ * acknowledgement of exactly that id. Stores the new policy. A no-op for an agent that isn't a coding worker of the run.
+ * Shared by the orchestration remap and the workflow remap (7.7c).
+ */
+export function acceptCodingRemap(
+  sqlite: DatabaseSync,
+  orchId: string,
+  body: Pick<RemapDecision, 'agentId' | 'policyId' | 'acknowledgeCodingReach'>,
+  report: WorkerReport | undefined,
+  now: string,
+): void {
+  if (!readWorkerPolicy(sqlite, orchId, body.agentId)) return
+  if (!report || report.readiness !== 'ready' || !report.policy || report.policyId === null)
+    throw new HttpError(
+      409,
+      'conflict',
+      `${body.agentId} isn’t ready: ${report?.detail ?? 'Score couldn’t check it'}.`,
+    )
+  // The same rule as at create: a remap can't carry a coding worker to a permission it may not have (7.7c F1 #1).
+  if (isForbiddenPermission(report.policy.permission))
+    throw forbiddenPermissionError([body.agentId])
+  if (body.policyId !== report.policyId)
+    throw new HttpError(
+      409,
+      'policy_changed',
+      `${body.agentId} changed again. Look at what it can reach and decide again.`,
+      { agentId: body.agentId, currentPolicyId: report.policyId },
+    )
+  if (
+    report.reachBeyondWorkspace &&
+    !body.acknowledgeCodingReach?.policyIds.includes(report.policyId)
+  )
+    throw new HttpError(
+      409,
+      'reach_not_acknowledged',
+      `${body.agentId} can read beyond its workspace. Accept that to use it.`,
+      { agentId: body.agentId, policyId: report.policyId },
+    )
+  storeWorkerPolicy(
+    sqlite,
+    orchId,
+    body.agentId,
+    {
+      policyId: report.policyId,
+      policy: report.policy,
+      reach: report.reach!,
+      reachBeyondWorkspace: report.reachBeyondWorkspace,
+      acknowledged: report.reachBeyondWorkspace,
+    },
+    now,
+  )
+  if (report.reachBeyondWorkspace)
+    addHistory(sqlite, orchId, 'coding_reach_acknowledged', { policyIds: [report.policyId] }, now)
+}
+
+/**
  * "Use the new <agent> for this run": the person's answer to a replaced agent. Paired with the exact frozen and current
  * incarnations the page showed; anything else is a conflict (the agent was replaced again, or the run was remapped). Steps
  * assigned under the old mapping stay blocked: the lead assigns again under the new one.
@@ -481,48 +558,7 @@ export function remapAgent(
   )
     throw new HttpError(409, 'conflict', `${body.agentId} changed again. Look at the run again.`)
   if (frozen === current) throw new HttpError(409, 'conflict', `${body.agentId} was not replaced.`)
-  // A coding worker's replacement is approved by its new policy id and its reach, like a worker at the start (7.7b §12a).
-  const codingPolicy = readWorkerPolicy(sqlite, orchId, body.agentId)
-  if (codingPolicy) {
-    if (!report || report.readiness !== 'ready' || !report.policy || report.policyId === null)
-      throw new HttpError(
-        409,
-        'conflict',
-        `${body.agentId} isn’t ready: ${report?.detail ?? 'Score couldn’t check it'}.`,
-      )
-    if (body.policyId !== report.policyId)
-      throw new HttpError(
-        409,
-        'policy_changed',
-        `${body.agentId} changed again. Look at what it can reach and decide again.`,
-        { agentId: body.agentId, currentPolicyId: report.policyId },
-      )
-    if (
-      report.reachBeyondWorkspace &&
-      !body.acknowledgeCodingReach?.policyIds.includes(report.policyId)
-    )
-      throw new HttpError(
-        409,
-        'reach_not_acknowledged',
-        `${body.agentId} can read beyond its workspace. Accept that to use it.`,
-        { agentId: body.agentId, policyId: report.policyId },
-      )
-    storeWorkerPolicy(
-      sqlite,
-      orchId,
-      body.agentId,
-      {
-        policyId: report.policyId,
-        policy: report.policy,
-        reach: report.reach!,
-        reachBeyondWorkspace: report.reachBeyondWorkspace,
-        acknowledged: report.reachBeyondWorkspace,
-      },
-      now,
-    )
-    if (report.reachBeyondWorkspace)
-      addHistory(sqlite, orchId, 'coding_reach_acknowledged', { policyIds: [report.policyId] }, now)
-  }
+  acceptCodingRemap(sqlite, orchId, body, report, now)
   // The journal entry comes first: a database that later lacks this remap is detected at start.
   journalSoft(ctx, () =>
     ctx.journal.append({
@@ -586,10 +622,19 @@ export function policyRemapStep(
   if (!step) throw new HttpError(404, 'not_found', 'Couldn’t find that step.')
   if (step.agent_id !== body.agentId)
     throw new HttpError(409, 'conflict', `${body.agentId} isn’t the agent of this step.`)
-  const suspended = attemptsOf(sqlite, orchId).find(
-    (attempt) => attempt.step_id === stepId && attempt.suspended,
+  // Only the step's current attempt: unsent, suspended and not retired (a renewal's predecessor is none of these).
+  const suspended = attemptsOf(sqlite, orchId).findLast(
+    (attempt) =>
+      attempt.step_id === stepId &&
+      attempt.suspended &&
+      attempt.state === 'created' &&
+      !attempt.retired,
   )
-  if (step.status !== 'blocked' || step.disposition !== 'agent_changed' || !suspended)
+  if (
+    step.status !== 'blocked' ||
+    !['agent_changed', 'permission_forbidden'].includes(step.disposition ?? '') ||
+    !suspended
+  )
     throw new HttpError(409, 'conflict', 'This step isn’t waiting for new settings.')
   const stored = readWorkerPolicy(sqlite, orchId, body.agentId)
   if (!stored) throw new HttpError(409, 'conflict', `${body.agentId} has no settings in this run.`)
@@ -599,6 +644,8 @@ export function policyRemapStep(
       'conflict',
       `${body.agentId} isn’t ready: ${report?.detail ?? 'Score couldn’t check it'}.`,
     )
+  if (isForbiddenPermission(report.policy.permission))
+    throw forbiddenPermissionError([body.agentId])
   if (report.policyId !== body.policyId)
     throw new HttpError(
       409,

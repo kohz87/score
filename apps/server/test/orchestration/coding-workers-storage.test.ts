@@ -1,5 +1,9 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { codingItemsFor, reserveFor } from '../../src/domain/orchestration/ops.ts'
+import {
+  codingItemsFor,
+  codingUnsentBytes,
+  reserveFor,
+} from '../../src/domain/orchestration/ops.ts'
 import { byTurn } from '../../src/hermes/fake/fake-lead.ts'
 import { workerHarness, type WorkerHarness } from '../helpers/worker-harness.ts'
 
@@ -31,7 +35,9 @@ test('a run with a coding worker reserves the coding items on top of the ordinar
   h = await workerHarness({ lead: { script: oneStep } })
   h.addAgent()
   const id = await h.create()
-  expect(orch()['reserve_bytes']).toBe(reserveFor(12, 20, codingItemsFor(12, 10)))
+  expect(orch()['reserve_bytes']).toBe(
+    reserveFor(12, 20, codingItemsFor(12, 10), codingUnsentBytes(12, 2)),
+  )
   expect(orch()['reserve_bytes']).toBeGreaterThan(reserveFor(12, 20))
   await h.until(() => status(id) === 'succeeded', 40_000)
 })

@@ -1,7 +1,7 @@
 import type { AgentSummary, OrchestrationSummary } from '@score/contract'
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { statusLabel } from './orch-model.ts'
+import { orchCoding, statusLabel } from './orch-model.ts'
 import { useRun, useRunActions } from './orchestration-queries.ts'
 import { RunNeeds } from './RunDecisions.tsx'
 import {
@@ -84,7 +84,7 @@ export function RoomRunPanel({
               <FinishBlock run={detail} />
               <details>
                 <summary>Budget and limits</summary>
-                <BudgetBlock run={detail} />
+                <BudgetBlock run={detail} coding={orchCoding(detail.coding)} />
               </details>
             </div>
           )}

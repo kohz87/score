@@ -23,7 +23,10 @@ import {
   type PolicyRemapDecision,
   type RemapDecision,
   type WaiverDecision,
+  type ValidationResult,
+  type WorkflowDefinition,
   type WorkflowPreflight,
+  type WorkflowPolicyRemapDecision,
   type WorkflowRemapDecision,
   type WorkflowRetryDecision,
   type WorkflowRunCreate,
@@ -93,7 +96,9 @@ import {
   runtimeOfAgent,
 } from './coding-attempts.ts'
 import type { OrchestrationOwner, ReleaseDecision } from './owner.ts'
+import { insertAttemptRows, type NewAttempt } from './attempt-rows.ts'
 import { CODING_RESULT_BYTES } from '../../runtimes/coding/translate.ts'
+import { REPLY_TOO_LARGE_PATTERN } from '../../runtimes/coding/note.ts'
 import {
   activeStepCounts,
   addStored,
@@ -106,6 +111,8 @@ import {
   addCodingStored,
   CODING_ITEM_EXTRA_BYTES,
   codingItemsFor,
+  codingUnsentBytes,
+  codingUnsentSlots,
   setStepStatus,
 } from './ops.ts'
 import { renderLeadInput, renderStepInput } from './render.ts'
@@ -114,13 +121,20 @@ import { workflowDetailOf, workflowEventsOf, workflowSummaryOf } from '../workfl
 import { readVersion } from '../workflows/definitions.ts'
 import { validateDefinition } from '../workflows/definition.ts'
 import {
-  assertHermesOnly,
+  codingAgentsOf,
+  codingNodeIdsOf,
+  validateWorkflowAgents,
+  withAgentIssues,
+} from '../workflows/agents.ts'
+import {
   assertOrchestrationWorkers,
+  isForbiddenPermission,
   type CodingWorkerFacts,
   type WorkerReport,
 } from './supported-agents.ts'
 import {
   agentIdsOf,
+  defaultCodingSteps,
   insertWorkflowRun,
   stepBudgetOf,
   validateInputs,
@@ -481,6 +495,7 @@ export class Orchestrator {
               ? workflowDetailOf(sqlite, o, now, {
                   lineageProvable: this.lineageProvable,
                   skipStorage: true,
+                  ...(this.options.codingFacts ? { facts: this.options.codingFacts } : {}),
                 })
               : detailOf(sqlite, o)),
             revision: 0,
@@ -505,7 +520,12 @@ export class Orchestrator {
         workflow
           ? {
               type: 'workflow.run.upserted',
-              data: workflowSummaryOf(sqlite, fresh, this.options.fence.journal),
+              data: workflowSummaryOf(
+                sqlite,
+                fresh,
+                this.options.fence.journal,
+                this.options.codingFacts,
+              ),
             }
           : { type: 'orchestration.upserted', data: summaryOf(sqlite, fresh) },
       )
@@ -592,8 +612,10 @@ export class Orchestrator {
     leadAgentId: string,
     allowedAgents: string[],
     agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
+    maxConcurrentSteps?: number,
   ): Promise<Preflight> {
-    return (await this.preflightWith(leadAgentId, allowedAgents, agents)).preflight
+    return (await this.preflightWith(leadAgentId, allowedAgents, agents, maxConcurrentSteps))
+      .preflight
   }
 
   /** The preflight and, for each coding worker, the full report its policy came from (create stores the policy). */
@@ -601,6 +623,8 @@ export class Orchestrator {
     leadAgentId: string,
     allowedAgents: string[],
     agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
+    // F2 #2: the quota check reserves unsent coding inventory for the concurrency the request asks for.
+    maxConcurrentSteps: number = ORCH_DEFAULTS.maxConcurrentSteps,
   ): Promise<{ preflight: Preflight; reports: Map<string, WorkerReport> }> {
     const { port, access } = this.options
     const fake = port.mode === 'fake'
@@ -698,6 +722,7 @@ export class Orchestrator {
       12,
       20,
       reports.size > 0 ? codingItemsFor(12, ORCH_DEFAULTS.codingSteps) : 0,
+      reports.size > 0 ? codingUnsentBytes(12, maxConcurrentSteps) : 0,
     )
     const fits = this.db.read((sqlite) => this.quotaUsed(sqlite) + reserve <= this.quotaBytes)
     add(
@@ -800,6 +825,7 @@ export class Orchestrator {
       body.leadAgentId,
       body.allowedAgents,
       agents,
+      body.maxConcurrentSteps,
     )
     if (new Set(body.allowedAgents).size !== body.allowedAgents.length)
       throw new HttpError(400, 'bad_request', 'An agent is listed twice in the allowed agents.')
@@ -886,6 +912,7 @@ export class Orchestrator {
       reports.size > 0
         ? codingItemsFor(body.maxSteps, body.codingSteps ?? ORCH_DEFAULTS.codingSteps)
         : 0,
+      reports.size > 0 ? codingUnsentBytes(body.maxSteps, body.maxConcurrentSteps) : 0,
     )
     if (this.quotaUsed(sqlite) + reserve > this.quotaBytes)
       throw new HttpError(
@@ -963,7 +990,8 @@ export class Orchestrator {
         JSON.stringify([...new Set(body.acceptUnknownCost ?? [])].sort()),
         reports.size > 0
           ? codingItemsFor(body.maxSteps, body.codingSteps ?? ORCH_DEFAULTS.codingSteps) *
-              CODING_ITEM_EXTRA_BYTES
+              CODING_ITEM_EXTRA_BYTES +
+              codingUnsentBytes(body.maxSteps, body.maxConcurrentSteps)
           : 0,
       )
     // The policy each coding worker is approved with, and the acknowledgement that covered it (stored in the history).
@@ -1111,7 +1139,7 @@ export class Orchestrator {
     return this.db.read((sqlite) => ({
       asOfSeq: headSeq(sqlite),
       items: listWorkflowOrchs(sqlite).map((o) =>
-        workflowSummaryOf(sqlite, o, this.options.fence.journal),
+        workflowSummaryOf(sqlite, o, this.options.fence.journal, this.options.codingFacts),
       ),
     }))
   }
@@ -1126,6 +1154,7 @@ export class Orchestrator {
         {
           lineageProvable: this.lineageProvable,
           journal: this.options.fence.journal,
+          ...(this.options.codingFacts ? { facts: this.options.codingFacts } : {}),
         },
       ),
     }))
@@ -1140,7 +1169,27 @@ export class Orchestrator {
 
   workflowSummary(id: string): WorkflowRunSummary {
     return this.db.read((sqlite) =>
-      workflowSummaryOf(sqlite, this.requireWorkflowOrch(sqlite, id), this.options.fence.journal),
+      workflowSummaryOf(
+        sqlite,
+        this.requireWorkflowOrch(sqlite, id),
+        this.options.fence.journal,
+        this.options.codingFacts,
+      ),
+    )
+  }
+
+  /**
+   * The one runtime validation of a workflow (7.7c §1): the graph rules plus the team and host rules for coding agents.
+   * Validate, save, new versions, preflight and start all call this, so none of them can disagree.
+   */
+  async validateWorkflow(
+    definition: WorkflowDefinition,
+    agents?: Pick<AgentSummary, 'id' | 'runtime'>[],
+  ): Promise<ValidationResult> {
+    const team = agents ?? (await this.options.port.listAgents())
+    return withAgentIssues(
+      validateDefinition(definition),
+      validateWorkflowAgents(definition, team, this.options.codingFacts),
     )
   }
 
@@ -1148,7 +1197,19 @@ export class Orchestrator {
     workflowId: string,
     version: number,
     agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
+    maxConcurrentSteps?: number,
   ): Promise<WorkflowPreflight> {
+    return (await this.workflowPreflightWith(workflowId, version, agents, maxConcurrentSteps))
+      .preflight
+  }
+
+  /** The preflight and, for each coding agent of the workflow, the full report its policy came from (start stores it). */
+  private async workflowPreflightWith(
+    workflowId: string,
+    version: number,
+    agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
+    maxConcurrentSteps: number = ORCH_DEFAULTS.maxConcurrentSteps,
+  ): Promise<{ preflight: WorkflowPreflight; reports: Map<string, WorkerReport> }> {
     const { port } = this.options
     const fake = port.mode === 'fake'
     const checks: WorkflowPreflight['checks'] = []
@@ -1158,7 +1219,8 @@ export class Orchestrator {
       message: string,
     ) => checks.push({ id, status, message })
     const found = this.db.read((sqlite) => readVersion(sqlite, workflowId, version))
-    const validation = validateDefinition(found.definition)
+    const team = agents ?? (await port.listAgents())
+    const validation = await this.validateWorkflow(found.definition, team)
     add(
       'definition',
       validation.ok ? 'ok' : 'fail',
@@ -1166,18 +1228,27 @@ export class Orchestrator {
         ? 'The workflow is valid'
         : `${validation.issues.length} problems in the workflow`,
     )
-    const team = agents ?? (await port.listAgents())
     const ids = agentIdsOf(found)
-    assertHermesOnly(ids, team)
     const known = new Map(team.map((agent) => [agent.id, agent]))
-    const problems = ids.flatMap((id) => {
-      const agent = known.get(id)
-      if (!agent) return [`${id} is not a team member`]
-      if (!this.db.read((sqlite) => agentAdmits(sqlite, id)))
-        return [`${id} is not ready for new work`]
-      if (!fake && !agent.served) return [`${id} is not served by Hermes right now`]
-      return []
-    })
+    // Each coding agent of the workflow: can it take a step now, and what would the person approve (7.7c §2). Only asked
+    // for a definition the team and host can run at all.
+    const reports = new Map<string, WorkerReport>()
+    if (validation.ok && this.options.codingFacts)
+      for (const id of codingAgentsOf(found.definition, team))
+        reports.set(id, await this.options.codingFacts.report(id))
+    const problems = [
+      ...ids.flatMap((id) => {
+        const agent = known.get(id)
+        if (!agent) return [`${id} is not a team member`]
+        if (!this.db.read((sqlite) => agentAdmits(sqlite, id)))
+          return [`${id} is not ready for new work`]
+        if (!fake && !agent.served) return [`${id} is not served by Hermes right now`]
+        return []
+      }),
+      ...[...reports].flatMap(([id, report]) =>
+        report.readiness === 'ready' ? [] : [`${id}: ${report.detail ?? report.readiness}`],
+      ),
+    ]
     add('agents', problems.length ? 'fail' : 'ok', problems.join('; ') || 'All agents are ready')
     const mapping = this.db.read((sqlite) =>
       ids.map((agentId) => ({
@@ -1214,29 +1285,57 @@ export class Orchestrator {
       running < ORCH_CAPACITY.runningOrchestrations ? 'ok' : 'fail',
       `${running} of ${ORCH_CAPACITY.runningOrchestrations} runs are using capacity`,
     )
-    const reserve = workflowReserve(stepBudgetOf(found))
+    const steps = stepBudgetOf(found)
+    const defaultSteps =
+      reports.size > 0
+        ? defaultCodingSteps(found, codingNodeIdsOf(found.definition, team))
+        : undefined
+    const reserve = workflowReserve(
+      steps,
+      defaultSteps === undefined ? 0 : codingItemsFor(steps, defaultSteps),
+      defaultSteps === undefined ? 0 : codingUnsentBytes(steps, maxConcurrentSteps),
+    )
     const fits = this.db.read((sqlite) => this.quotaUsed(sqlite) + reserve <= this.quotaBytes)
     add(
       'quota',
       fits ? 'ok' : 'fail',
       fits ? 'There is room for another run' : 'Run storage is full; remove old runs first',
     )
-    return {
+    const preflight: WorkflowPreflight = {
       ok: checks.every((check) => check.status !== 'fail'),
       checks,
+      issues: validation.issues,
       mapping,
+      workers: [...reports].map(([agentId, report]) => ({
+        agentId,
+        runtime: known.get(agentId)!.runtime as 'claude-code' | 'codex',
+        readiness: report.readiness,
+        detail: report.detail,
+        policyId: report.policyId,
+        reach: report.reach,
+        reachBeyondWorkspace: report.reachBeyondWorkspace,
+      })),
       gatePolicyNotes: {
         'gates-only':
           'Only gate nodes stop for you; agent steps start as soon as their inputs are ready.',
         'every-step': 'You approve every agent step before it starts, as well as the gate nodes.',
       },
       acknowledgementText: ORCH_ACKNOWLEDGEMENT_TEXT,
-      spendNote:
-        'Hermes reports tokens, often not dollars. Unknown cost is shown as unknown, never as zero, and spend of a live Hermes run is not settled: reservations are held until the run ends.',
+      spendNote: `Hermes reports tokens, often not dollars. Unknown cost is shown as unknown, never as zero, and spend of a live Hermes run is not settled: reservations are held until the run ends.${
+        reports.size > 0
+          ? ' Claude Code reports an estimated cost and Codex reports none; a coding step that ends without a cost counts as unknown cost.'
+          : ''
+      }`,
       maxSteps: found.maxSteps,
       reserveBytes: reserve,
-      defaults: { gatePolicy: 'gates-only', maxConcurrentSteps: 2, stepEstimateUsd: 0.5 },
+      defaults: {
+        gatePolicy: 'gates-only',
+        maxConcurrentSteps: 2,
+        stepEstimateUsd: 0.5,
+        ...(defaultSteps === undefined ? {} : { codingSteps: defaultSteps }),
+      },
     }
+    return { preflight, reports }
   }
 
   async createWorkflowRun(
@@ -1245,7 +1344,34 @@ export class Orchestrator {
   ): Promise<WorkflowRunCreated> {
     const found = this.db.read((sqlite) => readVersion(sqlite, body.workflowId, body.version))
     validateInputs(found, body.inputs)
-    const preflight = await this.workflowPreflight(body.workflowId, body.version, agents)
+    // A definition the team or the host can't run (7.7c §1) gets the same answer as at save: structured issues.
+    const validation = await this.validateWorkflow(found.definition, agents)
+    if (!validation.ok)
+      throw new HttpError(
+        422,
+        'invalid_definition',
+        'This workflow can’t start as it is. Fix the problems and save a new version.',
+        { result: validation },
+      )
+    const { preflight, reports } = await this.workflowPreflightWith(
+      body.workflowId,
+      body.version,
+      agents,
+      body.maxConcurrentSteps,
+    )
+    // A workflow with no coding step node sends and stores no coding fields at all (7.7c §1).
+    if (
+      reports.size === 0 &&
+      (body.codingPolicies !== undefined ||
+        body.acknowledgeCodingReach !== undefined ||
+        body.acceptUnknownCost !== undefined ||
+        body.codingSteps !== undefined)
+    )
+      throw new HttpError(
+        400,
+        'bad_request',
+        'This workflow has no coding agents, so it takes no coding settings.',
+      )
     if (!preflight.ok) {
       const failed = (id: string) =>
         preflight.checks.some((check) => check.id === id && check.status === 'fail')
@@ -1263,6 +1389,48 @@ export class Orchestrator {
         throw new HttpError(409, 'quota_exhausted', 'Score has no storage left for runs.', details)
       throw new HttpError(409, 'preflight_failed', 'The check before the run failed.', details)
     }
+    // Consent is by policy id (7.7b §4, 7.7c §2): the id the person saw must still be the agent's, and a reach beyond the
+    // workspace needs the acknowledgement of exactly that id. A rerun asks again; nothing carries over from the earlier run.
+    for (const agentId of Object.keys(body.codingPolicies ?? {}))
+      if (!reports.has(agentId))
+        throw new HttpError(
+          400,
+          'bad_request',
+          `${agentId} is not a coding agent of this workflow.`,
+        )
+    for (const [agentId, report] of reports) {
+      const seen = body.codingPolicies?.[agentId]
+      if (seen === undefined)
+        throw new HttpError(
+          400,
+          'bad_request',
+          `The request has to name the settings it was approved with for ${agentId}.`,
+        )
+      if (seen !== report.policyId)
+        throw new HttpError(
+          409,
+          'policy_changed',
+          `${agentId} changed since you looked. Check what it can reach and start again.`,
+          { agentId, currentPolicyId: report.policyId },
+        )
+      if (
+        report.reachBeyondWorkspace &&
+        !body.acknowledgeCodingReach?.policyIds.includes(report.policyId!)
+      )
+        throw new HttpError(
+          409,
+          'reach_not_acknowledged',
+          `${agentId} can read beyond its workspace. Accept that before the run starts.`,
+          { agentId, policyId: report.policyId },
+        )
+    }
+    const coding =
+      reports.size > 0
+        ? {
+            reports,
+            codingSteps: body.codingSteps ?? preflight.defaults.codingSteps ?? 1,
+          }
+        : undefined
     const id = `orc-${randomUUID().slice(0, 8)}`
     await this.mutate((ctx) => {
       const { sqlite, now } = ctx
@@ -1274,7 +1442,13 @@ export class Orchestrator {
         )
       if (this.capacityUsed(sqlite) >= ORCH_CAPACITY.runningOrchestrations)
         throw new HttpError(429, 'capacity', 'Too many runs are using capacity.')
-      if (this.quotaUsed(sqlite) + workflowReserve(stepBudgetOf(found)) > this.quotaBytes)
+      const steps = stepBudgetOf(found)
+      const reserve = workflowReserve(
+        steps,
+        coding === undefined ? 0 : codingItemsFor(steps, coding.codingSteps),
+        coding === undefined ? 0 : codingUnsentBytes(steps, body.maxConcurrentSteps),
+      )
+      if (this.quotaUsed(sqlite) + reserve > this.quotaBytes)
         throw new HttpError(409, 'quota_exhausted', 'Score has no storage left for this run.')
       if (body.deadlineAt !== undefined && body.deadlineAt <= now)
         throw new HttpError(400, 'bad_request', 'The deadline must be in the future.')
@@ -1289,7 +1463,7 @@ export class Orchestrator {
             `${entry.agentId} changed. Look at the start screen again.`,
           )
       }
-      insertWorkflowRun(ctx, id, body, found, preflight)
+      insertWorkflowRun(ctx, id, body, found, preflight, coding)
     })
     this.kick()
     return { run: this.workflowSummary(id), preflight }
@@ -1321,8 +1495,55 @@ export class Orchestrator {
   wfTryAgain(id: string, nodeId: string, body: WorkflowTryAgainDecision) {
     return this.decideWf(id, (ctx) => tryAgain(ctx, id, nodeId, body))
   }
-  wfRemap(id: string, body: WorkflowRemapDecision) {
-    return this.decideWf(id, (ctx) => remapWorkflow(ctx, id, body, this.options.fence.journal))
+  async wfRemap(id: string, body: WorkflowRemapDecision) {
+    this.db.read((sqlite) => this.requireWorkflowOrch(sqlite, id))
+    // A coding agent's new version is judged on its policy as it is now (the report is asked before the transaction).
+    const isCoding = this.db.read(
+      (sqlite) => readWorkerPolicy(sqlite, id, body.agentId) !== undefined,
+    )
+    const report = isCoding ? await this.options.codingFacts?.report(body.agentId) : undefined
+    return this.decideWf(id, (ctx) =>
+      remapWorkflow(ctx, id, body, this.options.fence.journal, report),
+    )
+  }
+  /**
+   * "Use the new settings" for a coding node (7.7c §4): the node's agent is unchanged, its step's one suspended attempt takes
+   * the agent's current policy, through the same per-step remap and re-admission as an orchestration step (7.7b §12a).
+   */
+  async wfPolicyRemap(id: string, nodeId: string, body: WorkflowPolicyRemapDecision) {
+    const agentId = this.db.read((sqlite) => {
+      this.requireWorkflowOrch(sqlite, id)
+      const def = requireWfRun(sqlite, id).definition.nodes.find((n) => n.id === nodeId)
+      if (!def || def.kind !== 'agent')
+        throw new HttpError(404, 'not_found', 'Couldn’t find that step.')
+      return def.agentId
+    })
+    // Judged on the policy as it is now: the report is asked before the transaction.
+    const report = await this.options.codingFacts?.report(agentId)
+    return this.decideWf(id, (ctx) => {
+      const node = nodesOf(ctx.sqlite, id).find((n) => n.node_id === nodeId)
+      if (!node) throw new HttpError(404, 'not_found', 'Couldn’t find that step.')
+      if (node.revision !== body.expectedNodeRevision)
+        throw new HttpError(409, 'conflict', 'The step changed while you were looking.', {
+          currentRevision: node.revision,
+        })
+      if (node.step_id === null)
+        throw new HttpError(409, 'conflict', 'This step isn’t waiting for new settings.')
+      policyRemapStep(
+        ctx,
+        id,
+        node.step_id,
+        {
+          agentId,
+          policyId: body.policyId,
+          ...(body.acknowledgeCodingReach === undefined
+            ? {}
+            : { acknowledgeCodingReach: body.acknowledgeCodingReach }),
+          orchestrationRevision: body.orchestrationRevision,
+        },
+        report,
+      )
+    })
   }
   wfLimits(id: string, body: LimitsDecision) {
     return this.decideWf(id, (ctx) => setLimits(ctx, id, body, this.storageFits))
@@ -1916,6 +2137,14 @@ export class Orchestrator {
       }
     }
     const byId = new Map(steps.map((s) => [s.id, s]))
+    // Coding attempts that are prepared and not finished (waiting, in flight or blocked for a decision) keep their frozen
+    // input; their number is bounded apart from the launch limit, and the in-flight ones count so a burst can't exceed it.
+    let unsentCoding = attempts.filter(
+      (a) =>
+        a.kind === 'step' &&
+        a.runtime !== 'hermes' &&
+        ['created', 'send_started', 'running', 'unknown'].includes(a.state),
+    ).length
     for (const step of steps) {
       if (step.status !== 'queued') continue
       // A lead-asks step waits until the turn that created it ends, so the lead can ask for approval first.
@@ -1991,6 +2220,19 @@ export class Orchestrator {
         touch(ctx, o.id)
         continue
       }
+      // A coding step is parked, with nothing prepared or retained, while the run's room for unsent inputs is used up (the
+      // slots, or the partition's bytes): it goes on when an attempt is sent or settled, or the person raises the limit
+      // that grows the partition (7.7c F1 #6). Retaining it anyway would spill into the control reserve.
+      const codingStep = runtimeOfAgent(sqlite, step.agent_id) !== 'hermes'
+      if (codingStep) {
+        const fresh = readOrch(sqlite, o.id) ?? o
+        if (
+          unsentCoding >= codingUnsentSlots(o.max_steps, o.max_concurrent_steps) ||
+          fresh.coding_stored_bytes + Buffer.byteLength(input) > fresh.coding_reserve_bytes
+        )
+          continue
+        unsentCoding++
+      }
       const n = attempts.filter((a) => a.step_id === step.id).length + 1
       const attemptId = `orc-${o.id.slice(4)}-${step.id}-${n}`
       this.insertAttempt(ctx, o, {
@@ -2016,8 +2258,7 @@ export class Orchestrator {
       )
       setStepStatus(sqlite, o.id, step.id, 'admitted', null, now)
       // A workflow step's input also lives in its reply row and its dispatch intent: every retained copy is charged.
-      if (runtimeOfAgent(sqlite, step.agent_id) !== 'hermes')
-        addCodingStored(sqlite, o.id, Buffer.byteLength(input))
+      if (codingStep) addCodingStored(sqlite, o.id, Buffer.byteLength(input))
       else addStored(sqlite, o.id, Buffer.byteLength(input) * (o.planner === 'workflow' ? 3 : 1))
       counts.perRun.set(o.id, (counts.perRun.get(o.id) ?? 0) + 1)
       counts.perAgent.set(step.agent_id, (counts.perAgent.get(step.agent_id) ?? 0) + 1)
@@ -2026,69 +2267,8 @@ export class Orchestrator {
     }
   }
 
-  private insertAttempt(
-    ctx: Ctx,
-    o: OrchRow,
-    a: {
-      id: string
-      kind: 'lead' | 'step'
-      stepId: string | null
-      n: number
-      agentId: string
-      incarnation: string
-      input: string
-      reserved: number
-      claim: { from: number; to: number } | null
-    },
-  ): void {
-    const { sqlite, now } = ctx
-    const turnId = `orc-turn-${a.id}`
-    sqlite
-      .prepare(
-        `INSERT INTO orc_attempts (id, orchestration_id, kind, step_id, n, agent_id, agent_incarnation, session_id, turn_id, message_id,
-           state, input, reserved_usd, claim_from, claim_to, created_at, updated_at, runtime, policy_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'created', ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        a.id,
-        o.id,
-        a.kind,
-        a.stepId,
-        a.n,
-        a.agentId,
-        a.incarnation,
-        a.id,
-        turnId,
-        `reply:${turnId}`,
-        a.input,
-        a.reserved,
-        a.claim?.from ?? null,
-        a.claim?.to ?? null,
-        now,
-        now,
-        a.kind === 'step' ? runtimeOfAgent(sqlite, a.agentId) : 'hermes',
-        a.kind === 'step' ? (readWorkerPolicy(sqlite, o.id, a.agentId)?.policyId ?? null) : null,
-      )
-    // The reply row the run's text attaches to. Never queued by the room dispatcher (orchestration_attempt_id).
-    sqlite
-      .prepare(
-        `INSERT INTO message_runs (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, created_at, orchestration_attempt_id)
-         VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        `reply:${turnId}`,
-        o.room_id,
-        a.agentId,
-        o.brief_id,
-        turnId,
-        o.brief_id,
-        a.kind === 'lead' ? `Lead turn ${a.n}` : `Step ${a.stepId}`,
-        JSON.stringify(
-          o.lead_agent_id === null ? o.allowed_agents : [o.lead_agent_id, ...o.allowed_agents],
-        ),
-        now,
-        a.id,
-      )
+  private insertAttempt(ctx: Ctx, o: OrchRow, a: NewAttempt): void {
+    insertAttemptRows(ctx, o, a)
   }
 
   // ---------------------------------------------------------------------------------------------------- dispatch
@@ -2330,6 +2510,16 @@ export class Orchestrator {
     // A coding worker's generation has its own turn id and launch id, minted here and journaled with the send (7.7b §5).
     let coding: { generation: number; turnId: string; launchId: string } | undefined
     if (attempt.kind === 'step' && attempt.runtime !== 'hermes') {
+      if (generation > MAX_GENERATIONS && o.planner === 'workflow' && attempt.step_id) {
+        // A workflow node's dispatch held back 20 times waits for the person where it is (7.7c §4): the attempt is
+        // suspended, the node keeps its step, and Try again renews it. It is never refused and replaced by the planner.
+        sqlite
+          .prepare('UPDATE orc_attempts SET suspended = 1, updated_at = ? WHERE id = ?')
+          .run(now, attempt.id)
+        setStepStatus(sqlite, o.id, attempt.step_id, 'blocked', 'held_back', now)
+        touch(ctx, o.id)
+        return undefined
+      }
       if (generation > MAX_GENERATIONS) {
         // Held back again and again: the person decides, there is no automatic loop (design §5).
         refuseAttempt(sqlite, attempt, 'held_back_too_often', now)
@@ -2603,6 +2793,8 @@ export class Orchestrator {
     if (attempt.kind === 'step' && attempt.runtime !== 'hermes') {
       const stored = readWorkerPolicy(sqlite, o.id, attempt.agent_id)
       if (!stored || subject.policyId !== stored.policyId) return no('agent_changed')
+      // A stored policy with a permission workers may never have (a damaged or hand-edited row) never launches.
+      if (isForbiddenPermission(stored.policy.permission)) return no('permission_forbidden')
       const check = this.options.codingFacts?.checkPolicy(attempt.agent_id, stored.policy)
       if (!check) return no('agent_changed')
       if (!check.ok) return no(check.cause)
@@ -2757,6 +2949,15 @@ export class Orchestrator {
     // The retained copy in `coding_run_results` is part of the coding inventory too (F1 #7).
     if (reply) addCodingStored(sqlite, o.id, Buffer.byteLength(reply.reply))
     const status = run.status
+    // A workflow node names why a coding step produced no usable answer (7.7c §3): the person reads this on the node.
+    const failure =
+      o.planner !== 'workflow'
+        ? 'the step run failed'
+        : REPLY_TOO_LARGE_PATTERN.test(`${run.error ?? ''}`)
+          ? 'answer too long to read a verdict'
+          : status === 'completed' && !reply
+            ? 'no final answer'
+            : 'the step run failed'
     const disposition: 'completed' | 'failed' | 'cancelled' =
       status === 'cancelled'
         ? 'cancelled'
@@ -2826,7 +3027,7 @@ export class Orchestrator {
       )
       .run(
         disposition === 'completed' ? 'succeeded' : 'failed',
-        disposition === 'failed' ? 'the step run failed' : null,
+        disposition === 'failed' ? failure : null,
         result,
         now,
         o.id,
@@ -3178,6 +3379,8 @@ export class Orchestrator {
         if (entry.kind === 'hold') newest.set(holdKey(entry), entry.n)
         if (entry.kind === 'remap')
           newest.set(`m:${entry.orchestrationId}:${entry.agentId}`, entry.n)
+        if (entry.kind === 'renewal')
+          newest.set(`r:${entry.orchestrationId}:${entry.nodeId}`, entry.n)
       }
     const compacted = journal.compact((entry) => {
       if (
@@ -3210,6 +3413,9 @@ export class Orchestrator {
       }
       if (entry.kind === 'remap')
         return newest.get(`m:${entry.orchestrationId}:${entry.agentId}`) !== entry.n
+      // Only the newest renewal per node is needed: it carries the count, and its successor is the node's attempt.
+      if (entry.kind === 'renewal')
+        return newest.get(`r:${entry.orchestrationId}:${entry.nodeId}`) !== entry.n
       if (entry.kind === 'authorization' || entry.kind === 'hold') {
         // Only the newest word per run / per target is needed; the older ones are superseded.
         return (

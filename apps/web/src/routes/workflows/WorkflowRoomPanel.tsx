@@ -105,7 +105,7 @@ export function WorkflowRoomPanel({
               </div>
               <details>
                 <summary>Budget and limits</summary>
-                <BudgetBlock run={detail} />
+                <BudgetBlock run={detail} coding={detail.coding} />
               </details>
             </div>
           )}

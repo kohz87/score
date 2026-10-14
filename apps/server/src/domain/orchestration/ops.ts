@@ -50,10 +50,16 @@ export function addCodingStored(sqlite: DatabaseSync, orchId: string, bytes: num
 }
 
 /** The reserve a run takes at creation: steps and lead turns at 64 KiB each plus the control reserve. */
-export const reserveFor = (maxSteps: number, maxLeadTurns: number, codingItems = 0): number =>
+export const reserveFor = (
+  maxSteps: number,
+  maxLeadTurns: number,
+  codingItems = 0,
+  codingUnsent = 0,
+): number =>
   (maxSteps + maxLeadTurns) * (ORCH_LIMITS.storagePerItemBytes + ORCH_LIMITS.recordsPerItemBytes) +
   ORCH_LIMITS.controlReserveBytes +
-  codingItems * CODING_ITEM_EXTRA_BYTES
+  codingItems * CODING_ITEM_EXTRA_BYTES +
+  codingUnsent
 
 /** One kept copy of a coding result (the translator's cap), and the run output kept beside it. */
 export const CODING_RESULT_BYTES = 32 * 1024
@@ -73,6 +79,33 @@ export const CODING_ITEM_EXTRA_BYTES =
   CODING_RESULT_BYTES +
   CODING_OUTPUT_BYTES +
   20 * 2 * 1024
+
+/**
+ * What one coding item of a WORKFLOW reserves (7.7c §5): everything an orchestration's item keeps, plus the two copies a
+ * workflow adds (the `wf_results` output and the node's own output, 32 KiB each), the verdict record (2 KiB) and the
+ * generation records of the renewals the person may ask for (each renewal is a fresh attempt with up to 20 generations).
+ * Computed from the constants, so the partition can never drift from what is written into it.
+ */
+export const WORKFLOW_CODING_ITEM_BYTES =
+  CODING_ITEM_EXTRA_BYTES +
+  2 * WORKFLOW_LIMITS.outputBytes +
+  2 * 1024 +
+  WORKFLOW_LIMITS.maxRenewalsPerNode * 20 * 2 * 1024
+
+/** The coding item size of a run, by its planner: a workflow's items hold more than an orchestration's. */
+export const codingItemBytesOf = (planner: 'lead' | 'workflow'): number =>
+  planner === 'workflow' ? WORKFLOW_CODING_ITEM_BYTES : CODING_ITEM_EXTRA_BYTES
+
+/**
+ * The room a run keeps for the retained inputs of coding attempts that were prepared but not sent (7.7c F1 #6). Launches
+ * are bounded by `codingSteps`, but attempts that wait unsent (blocked for a decision, or queued behind the concurrency
+ * limit) each keep their frozen input, so that inventory has its own bound: twice the run's concurrency, never more than
+ * its steps. Independent of `codingSteps`: raising the limit never changes it, and a step past it is parked unprepared.
+ */
+export const codingUnsentSlots = (maxSteps: number, maxConcurrentSteps: number): number =>
+  Math.min(maxSteps, 2 * maxConcurrentSteps)
+export const codingUnsentBytes = (maxSteps: number, maxConcurrentSteps: number): number =>
+  codingUnsentSlots(maxSteps, maxConcurrentSteps) * ORCH_LIMITS.stepInputBytes
 
 /** A run can release at most `codingSteps` launches, and each coding item needs one, so that bounds the items. */
 export const codingItemsFor = (maxSteps: number, codingSteps: number): number =>
@@ -373,7 +406,10 @@ export function chargeObservation(sqlite: DatabaseSync, runId: string, bytes: nu
 export function recordRefusal(
   sqlite: DatabaseSync,
   o: { id: string; planner: 'lead' | 'workflow' },
-  attempt: Pick<AttemptRow, 'id' | 'turn_id' | 'step_id' | 'refused_total' | 'refused_streak'>,
+  attempt: Pick<
+    AttemptRow,
+    'id' | 'turn_id' | 'step_id' | 'refused_total' | 'refused_streak' | 'runtime'
+  >,
   generation: number,
   now: string,
 ): 'retry' | 'wait' | 'needs_person' | 'failed' {
@@ -405,6 +441,18 @@ export function recordRefusal(
     }
     bumpAdmission(sqlite)
     return 'failed'
+  }
+  if (lifetime && o.planner === 'workflow' && attempt.runtime !== 'hermes' && attempt.step_id) {
+    // A coding node refused 20 times waits for the person exactly like one held back 20 times (7.7c §4, F1 #4): the one
+    // attempt is suspended, the node keeps its step, and Try again renews it under the same bound (past it the node fails
+    // and gives up its slot and reservation). It is never left `needs_person` outside that hold.
+    sqlite
+      .prepare(
+        "UPDATE orc_attempts SET state = 'created', refused_total = ?, refused_streak = ?, refused_generation = ?, needs_person = 0, suspended = 1, next_try_at = NULL, updated_at = ? WHERE id = ?",
+      )
+      .run(total, streak, generation, now, attempt.id)
+    setStepStatus(sqlite, o.id, attempt.step_id, 'blocked', 'held_back', now)
+    return 'needs_person'
   }
   const wait = streak >= WORKFLOW_LIMITS.refusedPause && !lifetime
   sqlite

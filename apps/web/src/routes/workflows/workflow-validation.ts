@@ -75,6 +75,10 @@ export const CODE_HELP: Record<ValidationCode, string> = {
   template_field_unavailable: 'Only agent steps have an output or a verdict.',
   agent_missing: 'Choose the agent for this step.',
   layout_unknown_node: 'The drawing positions a step that no longer exists.',
+  coding_agent_unsupported: 'Open the step and pick one of those from the Agent list.',
+  coding_permission_full:
+    'Give it read-only or workspace access on its Team page, or choose another agent for this step.',
+  coding_workers_need_units: 'Until that is set up, give this step a Hermes agent.',
 }
 
 export const ALL_CODES: readonly ValidationCode[] = ValidationCodeSchema.options

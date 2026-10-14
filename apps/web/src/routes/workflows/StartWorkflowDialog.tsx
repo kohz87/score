@@ -1,13 +1,20 @@
 import {
   ORCH_ACKNOWLEDGEMENT_TEXT,
+  ORCH_LIMITS,
   WORKFLOW_LIMITS,
   type AgentSummary,
+  type CostSource,
   type WorkflowGatePolicy,
   type WorkflowPreflight,
 } from '@score/contract'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ApiError } from '../../data/api.ts'
-import { describeCreateError, PreflightList } from '../orchestrations/NewOrchestrationDialog.tsx'
+import {
+  CodingWorkers,
+  describeCreateError,
+  PreflightList,
+} from '../orchestrations/NewOrchestrationDialog.tsx'
+import { sourceName } from '../orchestrations/decision-parts.tsx'
 import { AgentChip } from '../orchestrations/RunDecisions.tsx'
 import {
   useCreateWorkflowRun,
@@ -62,6 +69,11 @@ export function StartWorkflowDialog({
   const [concurrent, setConcurrent] = useState(2)
   const [estimate, setEstimate] = useState(0.5)
   const [ack, setAck] = useState(false)
+  // The coding fields. Nothing carries over from an earlier run, so a rerun starts with none of them accepted.
+  const [codingSteps, setCodingSteps] = useState<number | null>(null)
+  const [unknownCost, setUnknownCost] = useState<CostSource[]>([])
+  // The policy ids the person accepted the reach of. A changed id is not covered: it has to be accepted again.
+  const [reachAccepted, setReachAccepted] = useState<string[]>([])
   useEffect(() => {
     dialog.current?.showModal?.()
   }, [])
@@ -71,6 +83,14 @@ export function StartWorkflowDialog({
     (input) => input.required && ownText(inputs, input.name).trim() === '',
   )
   const blocked = data ? !data.ok : false
+  const workers = data?.workers ?? []
+  const reachIds = workers.flatMap((worker) =>
+    worker.reachBeyondWorkspace && worker.policyId ? [worker.policyId] : [],
+  )
+  const reachCovered = reachIds.every((id) => reachAccepted.includes(id))
+  const codingSources = [...new Set(workers.map((worker) => worker.runtime))]
+  const stepLimit = codingSteps ?? data?.defaults.codingSteps ?? 1
+  const problems = (data?.issues ?? []).filter((issue) => issue.severity === 'error')
   const failedChecks =
     create.error instanceof ApiError && create.error.code === 'preflight_failed'
       ? (create.error.details as { checks?: WorkflowPreflight['checks'] } | undefined)?.checks
@@ -99,9 +119,25 @@ export function StartWorkflowDialog({
         stepEstimateUsd: estimate,
         ...(rerunOf ? { rerunOf } : {}),
         acknowledgement: { text: ORCH_ACKNOWLEDGEMENT_TEXT },
+        // Only a workflow with coding steps sends coding fields.
+        ...(workers.length > 0
+          ? {
+              codingPolicies: Object.fromEntries(
+                workers.flatMap((worker) =>
+                  worker.policyId ? [[worker.agentId, worker.policyId] as const] : [],
+                ),
+              ),
+              codingSteps: stepLimit,
+              ...(reachIds.length > 0 ? { acknowledgeCodingReach: { policyIds: reachIds } } : {}),
+              ...(unknownSpend === 'pause' && unknownCost.length > 0
+                ? { acceptUnknownCost: unknownCost }
+                : {}),
+            }
+          : {}),
       },
       {
         onSuccess: ({ run }) => created({ id: run.id, briefId: run.briefId, roomId: run.roomId }),
+        // A coding agent changed meanwhile, or an agent was replaced: look again before the person decides.
         onError: () => void preflight.refetch(),
       },
     )
@@ -230,6 +266,30 @@ export function StartWorkflowDialog({
             </span>
           </label>
           {data && <small className="orch-muted">{data.spendNote}</small>}
+          {workers.length > 0 && unknownSpend === 'pause' && (
+            <>
+              <small className="orch-muted">
+                Claude Code and Codex don’t always say what a step cost. Choose which of them may
+                keep going when that happens; this only matters when you set a budget.
+              </small>
+              {codingSources.map((source) => (
+                <label key={source} className="orch-check">
+                  <input
+                    type="checkbox"
+                    checked={unknownCost.includes(source)}
+                    onChange={(event) =>
+                      setUnknownCost((list) =>
+                        event.target.checked
+                          ? [...list, source]
+                          : list.filter((item) => item !== source),
+                      )
+                    }
+                  />
+                  <span>Keep going when the cost of {sourceName(source)} is unknown</span>
+                </label>
+              ))}
+            </>
+          )}
         </fieldset>
 
         <details>
@@ -255,9 +315,23 @@ export function StartWorkflowDialog({
                 onChange={(event) => setEstimate(Number(event.target.value))}
               />
             </label>
+            {workers.length > 0 && (
+              <label className="orch-field">
+                <span>Most coding steps</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={ORCH_LIMITS.maxCodingSteps}
+                  value={stepLimit}
+                  onChange={(event) => setCodingSteps(Number(event.target.value))}
+                />
+              </label>
+            )}
           </div>
           <p className="orch-muted">
-            At most {(data?.maxSteps ?? definition) ? (data?.maxSteps ?? '…') : '…'} steps can run,
+            {data?.maxSteps === undefined
+              ? 'At most … steps can run,'
+              : `At most ${data.maxSteps} ${data.maxSteps === 1 ? 'step' : 'steps'} can run,`}{' '}
             counting retries (the limit is {WORKFLOW_LIMITS.maxSteps}). Score reserves the estimate
             against the budget before a step starts.
           </p>
@@ -296,6 +370,25 @@ export function StartWorkflowDialog({
             </p>
           )}
           {data && <PreflightList checks={data.checks} />}
+          {problems.length > 0 && (
+            <ul className="orch-checks" aria-label="Problems with the workflow">
+              {problems.map((issue, index) => (
+                <li key={index} className="orch-check-item orch-check-item--fail">
+                  <strong>Problem</strong>
+                  <span>{issue.message}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {workers.length > 0 && (
+            <CodingWorkers
+              workers={workers}
+              agents={agents}
+              accepted={reachIds.length > 0 && reachCovered}
+              onAccept={(accepted) => setReachAccepted(accepted ? reachIds : [])}
+              answerGoesTo="passed to the steps after it, which may use an online model"
+            />
+          )}
           <p className="orch-muted">
             Watch also shows the agent’s other work; it can’t show a single run on its own.
           </p>
@@ -317,7 +410,13 @@ export function StartWorkflowDialog({
             type="submit"
             className="orch-primary"
             disabled={
-              create.isPending || !ack || !data || !definition || blocked || missing.length > 0
+              create.isPending ||
+              !ack ||
+              !data ||
+              !definition ||
+              blocked ||
+              missing.length > 0 ||
+              !reachCovered
             }
           >
             {create.isPending ? 'Starting…' : 'Start the run'}
@@ -339,6 +438,8 @@ function describeStartError(error: unknown): string {
     if (error.code === 'conflict')
       return 'An agent changed while this screen was open. The list above now shows the current ones. Check it and start again.'
     if (error.code === 'invalid_inputs') return error.message
+    if (error.code === 'invalid_definition')
+      return 'A step of this workflow can’t run as it is drawn. The problems are listed below; fix them in the editor and save a new version.'
   }
   return describeCreateError(error)
 }

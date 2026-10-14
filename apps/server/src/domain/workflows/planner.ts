@@ -8,12 +8,15 @@ import { createHash } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { agentAdmits, lifecycleOf } from '../agent-lifecycle.ts'
 import { budgetView, canReserve, unknownCostBlocks } from '../orchestration/budget.ts'
+import { readWorkerPolicy } from '../orchestration/coding-policy.ts'
 import { touch, type Ctx } from '../orchestration/ctx.ts'
 import { stopRun } from '../orchestration/decisions.ts'
 import {
+  addCodingStored,
   addStored,
   admissionRevision,
   beginFinish,
+  refuseAttempt,
   setStepStatus,
   storageRoom,
   utf8Bytes,
@@ -204,7 +207,19 @@ const lastAttemptOf = (p: Pass, stepId: string): AttemptRow | undefined =>
 
 function onAgentSuccess(p: Pass, node: WfNodeRow, step: StepRow): void {
   const attempt = lastAttemptOf(p, step.id)
-  const stored = attempt ? readResult(p.ctx.sqlite, attempt.id) : undefined
+  const coding = attempt !== undefined && attempt.runtime !== 'hermes'
+  // A coding attempt's facts are the current dispatch generation's (7.7c §3).
+  const stored = attempt
+    ? readResult(p.ctx.sqlite, attempt.id, coding ? attempt.dispatch_generation : undefined)
+    : undefined
+  if (coding) {
+    // The verdict was read from the raw eligible reply when the run ended. No row: no eligible reply, no answer. Over the
+    // verdict input limit: the answer is too long to read, and no prefix is ever parsed.
+    if (!stored) return onAgentFailure(p, node, 'no final answer', true)
+    if (stored.too_long) return onAgentFailure(p, node, 'answer too long to read a verdict', true)
+    // The node keeps its own copy of the output: coding inventory, charged to the run's coding partition (§5).
+    addCodingStored(p.ctx.sqlite, p.o.id, utf8Bytes(stored.output))
+  }
   let output = stored?.output ?? step.result ?? ''
   let truncated = stored?.truncated ?? false
   let verdict = stored?.verdict ?? null
@@ -241,6 +256,37 @@ function onAgentFailure(p: Pass, node: WfNodeRow, reason: string, retryable: boo
   else failRun(p, node.node_id, `${node.node_id} failed: ${reason}`)
 }
 
+/**
+ * A step that never started because its inputs were withdrawn (7.7a/7.7b: judged at send and again at the release): the
+ * node is unresolved. For a coding step nothing ran, so the try it used is given back and the person can re-run the
+ * upstream step and retry this one, even with no retries configured.
+ */
+function unresolvedWithdrawn(p: Pass, node: WfNodeRow, step: StepRow, reason: string): void {
+  const attempt = lastAttemptOf(p, step.id)
+  const coding = attempt !== undefined && attempt.runtime !== 'hermes'
+  setState(p, node.node_id, 'unresolved', {
+    reason,
+    ...(coding ? { attempts_used: Math.max(0, node.attempts_used - 1) } : {}),
+  })
+}
+
+/** What the node says while its coding step waits for the person, by the step's disposition. */
+const CODING_HOLD_REASON: Record<string, string> = {
+  agent_changed: 'waiting for your decision about the changed agent',
+  permission_forbidden: 'waiting for you: the agent has full access, which steps can’t use',
+  coding_limit: 'waiting for a higher coding step limit',
+  held_back: 'its start was held back 20 times: waiting for you to try again',
+}
+
+/** A blocked coding step that still has its one suspended attempt: it waits for a decision and is never replaced. */
+function heldCodingStep(p: Pass, step: StepRow): boolean {
+  return (
+    step.status === 'blocked' &&
+    CODING_HOLD_REASON[step.disposition ?? ''] !== undefined &&
+    p.attempts.some((a) => a.step_id === step.id && a.suspended)
+  )
+}
+
 function observe(p: Pass): boolean {
   let changed = false
   for (const node of p.nodes.values()) {
@@ -270,7 +316,8 @@ function observe(p: Pass): boolean {
       case 'queued':
       case 'admitted':
       case 'unknown':
-        if (node.state !== 'running') {
+        // A reason left by a coding block ("waiting for new settings") ends when the step is admitted again.
+        if (node.state !== 'running' || node.reason !== null) {
           setState(p, node.node_id, 'running', { reason: null })
           changed = true
         }
@@ -297,7 +344,36 @@ function observe(p: Pass): boolean {
         break
       case 'blocked': {
         const why = step.disposition ?? ''
-        if (/^input_withdrawn/.test(why)) setState(p, node.node_id, 'unresolved', { reason: why })
+        if (heldCodingStep(p, step)) {
+          // A coding step blocked for a decision of the person (new settings, the step limit) keeps its node's binding
+          // (7.7c §4): the node never lets go of the step, and the planner never assigns a replacement. Only the matching
+          // decision admits THAT suspended attempt again.
+          // Renewals are bounded (7.7c §4): past the last one the node fails, it doesn't wait for ever.
+          if (why === 'held_back' && node.renewals >= WORKFLOW_LIMITS.maxRenewalsPerNode) {
+            for (const held of p.attempts.filter(
+              (a) => a.step_id === step.id && a.suspended && a.state === 'created',
+            ))
+              refuseAttempt(p.ctx.sqlite, held, 'not dispatched: kept being held back', p.ctx.now)
+            setStepStatus(
+              p.ctx.sqlite,
+              p.o.id,
+              step.id,
+              'failed',
+              'kept being held back',
+              p.ctx.now,
+            )
+            onAgentFailure(p, node, 'kept being held back', false)
+            changed = true
+            break
+          }
+          const reason = CODING_HOLD_REASON[why]!
+          if (node.state !== 'running' || node.reason !== reason) {
+            setState(p, node.node_id, 'running', { reason })
+            changed = true
+          }
+          break
+        }
+        if (/^input_withdrawn/.test(why)) unresolvedWithdrawn(p, node, step, why)
         else if (/^capability_in_input/.test(why)) onAgentFailure(p, node, why, false)
         else
           // agent_changed / agent_unavailable: the node waits for the person's remap; no logical attempt is used.
@@ -310,6 +386,17 @@ function observe(p: Pass): boolean {
         // A remapped step is re-created; one retired by Stop / Finish stays as it is.
         if (/remapped/.test(step.disposition ?? '') && p.canIssue) {
           setState(p, node.node_id, 'ready', { reason: 'remapped', step_id: null })
+          changed = true
+        } else if (step.status === 'cancelled' && step.disposition === 'inputs_withdrawn') {
+          // A coding step refused at the release because what it was going to read was withdrawn: the node is unresolved
+          // with its own Needs-you item, never left running (7.7c §4, X6). Stop, cancel and the deadline keep the run's
+          // own terminal behaviour (the node ends cancelled with the run).
+          unresolvedWithdrawn(
+            p,
+            node,
+            step,
+            'something this step was going to read was withdrawn before it started',
+          )
           changed = true
         }
         break
@@ -470,8 +557,16 @@ function pendingKind(
 ): { attempt: number; reason: 'initial' | 'retry' | 'remap' } {
   if (node.attempts_used === 0) return { attempt: 1, reason: 'initial' }
   const last = currentStep(p, node.node_id)
-  if (last && (last.status === 'blocked' || last.status === 'not_started'))
-    return { attempt: node.attempts_used, reason: 'remap' }
+  if (last && (last.status === 'blocked' || last.status === 'not_started')) {
+    // A coding step whose inputs were withdrawn gave its try back (`unresolvedWithdrawn`): the next step consumes that
+    // slot, once, as a retry. Read as a remap it would keep the count and run the node past `attempts_max` (F1 #3).
+    const attempt = lastAttemptOf(p, last.id)
+    const refunded =
+      /^input_withdrawn/.test(last.disposition ?? '') &&
+      attempt !== undefined &&
+      attempt.runtime !== 'hermes'
+    if (!refunded) return { attempt: node.attempts_used, reason: 'remap' }
+  }
   return { attempt: node.attempts_used + 1, reason: 'retry' }
 }
 
@@ -595,6 +690,9 @@ function assign(p: Pass, node: WfNodeRow): boolean {
   let gateId: string | null = null
   if (everyStep) {
     gateId = `g${(sqlite.prepare('SELECT COUNT(*) AS n FROM orc_gates WHERE orchestration_id = ?').get(p.o.id) as { n: number }).n + 1}`
+    // A coding step is approved for the settings it will run under (7.7b §12a): the gate names the policy id, admission and
+    // release require it to match, and an approval for an old id never covers a new one (7.7c §4).
+    const policyId = readWorkerPolicy(sqlite, p.o.id, def.agentId)?.policyId
     const payload = {
       agentId: def.agentId,
       agentIncarnation: incarnation,
@@ -603,6 +701,7 @@ function assign(p: Pass, node: WfNodeRow): boolean {
       replaces: previous?.id ?? null,
       estimateUsd: estimate,
       dependencyRevisions: {} as Record<string, number>,
+      ...(policyId === undefined ? {} : { policyId }),
     }
     const text = JSON.stringify(payload)
     sqlite

@@ -2,15 +2,20 @@ import { z } from 'zod'
 import {
   AttemptViewSchema,
   BudgetViewSchema,
+  CodingReachAcknowledgementSchema,
+  CodingWorkerPreflightSchema,
+  CostSourceSchema,
   type GateDecision,
   GateViewSchema,
   OrchEventKindSchema,
   OrchEventSchema,
   OwnershipStateSchema,
   PauseReasonSchema,
+  PolicyIdSchema,
   PreflightCheckSchema,
   StepViewSchema,
   ORCH_ACKNOWLEDGEMENT_TEXT,
+  ORCH_LIMITS,
 } from './orchestration.ts'
 import { AgentIdSchema } from './types.ts'
 
@@ -49,8 +54,15 @@ export const WORKFLOW_LIMITS = {
   /** Σ over agent nodes of (retries + 1); the executor's own step limit. */
   maxSteps: 30,
   maxRemapsPerNode: 2,
+  /** 7.7c: how often the person may renew a coding node whose dispatch was held back 20 times (does not spend retries). */
+  maxRenewalsPerNode: 3,
   /** Stored sanitized output per attempt (the verdict is parsed from the complete reply before this cut). */
   outputBytes: 32 * 1024,
+  /**
+   * 7.7c: the longest eligible reply a verdict is read from (the whole reply, never a prefix). A coding agent's reply over
+   * this fails its step "answer too long to read a verdict".
+   */
+  verdictInputBytes: 256 * 1024,
   verdictReasonChars: 500,
   /** Control history kept per run; older records fold into counters (journaled transitions are kept). */
   controlHistoryRecords: 200,
@@ -261,6 +273,10 @@ export const ValidationCodeSchema = z.enum([
   'template_field_unavailable',
   'agent_missing',
   'layout_unknown_node',
+  // 7.7c: runtime checks against the team and the host (never part of a stored definition's hash).
+  'coding_agent_unsupported',
+  'coding_permission_full',
+  'coding_workers_need_units',
 ])
 export type ValidationCode = z.infer<typeof ValidationCodeSchema>
 
@@ -434,6 +450,10 @@ export const WaitingForSchema = z.enum([
   'hermes_unavailable',
   'remap',
   'refusal_limit',
+  // 7.7c: a coding step is held for a decision of the person and keeps its place (it is not replaced).
+  'coding_settings',
+  'coding_limit',
+  'held_back',
 ])
 export type WaitingFor = z.infer<typeof WaitingForSchema>
 
@@ -489,6 +509,8 @@ export const NodeViewSchema = z.object({
   refusals: NodeRefusalsSchema.nullable(),
   /** Remaps of this node so far (≤ 2). */
   remaps: z.int().nonnegative(),
+  /** 7.7c: how often a coding node's dispatch was renewed after being held back (≤ `maxRenewalsPerNode`). */
+  renewals: z.int().nonnegative(),
   /** Unresolved with attempts left: the person may Retry. */
   canRetry: z.boolean(),
   startedAt: z.iso.datetime().nullable(),
@@ -598,6 +620,27 @@ export const WorkflowNeedsYouSchema = z.discriminatedUnion('kind', [
     attemptId: z.string(),
     refusals: z.int().positive(),
   }),
+  // ----- 7.7c: coding steps. Each keeps its node's step and its one suspended attempt until the matching decision.
+  /** A coding agent's settings changed since the run was approved: "Use the new settings" (node policy-remap). */
+  z.object({
+    kind: z.literal('coding_agent_changed'),
+    nodeId: NodeIdSchema,
+    agentId: AgentIdSchema,
+    /** The policy id the agent would have now, when Score can tell without asking the CLI again; the card asks preflight. */
+    newPolicyId: PolicyIdSchema.nullable(),
+    /** What the agent was approved to reach (the card shows the new reach from preflight). */
+    reach: z.string().nullable(),
+  }),
+  /** The run reached its coding step limit: raise `codingSteps` in the limits decision and the blocked step goes on. */
+  z.object({
+    kind: z.literal('coding_limit'),
+    used: z.int().nonnegative(),
+    limit: z.int().positive(),
+  }),
+  /** A coding step was prepared 20 times and never started: Try again renews it (bounded), or Stop the run. */
+  z.object({ kind: z.literal('coding_held_back'), nodeId: NodeIdSchema }),
+  /** What a coding step was going to read was withdrawn before it started: re-run the upstream step or skip. */
+  z.object({ kind: z.literal('node_inputs_withdrawn'), nodeId: NodeIdSchema }),
 ])
 export type WorkflowNeedsYou = z.infer<typeof WorkflowNeedsYouSchema>
 
@@ -649,6 +692,31 @@ export const StorageInventorySchema = z.object({
 })
 export type StorageInventory = z.infer<typeof StorageInventorySchema>
 
+/**
+ * 7.7c: a workflow run's coding authorisation as it stands NOW (not as it was at the start): who may be launched, how many
+ * launches the run may release, how many it has, which sources' unknown cost is accepted and whether unknown spend pauses.
+ * Absent for a workflow without coding agents. The shared decision cards take this block as their explicit input.
+ */
+export const WorkflowCodingBlockSchema = z.object({
+  workers: z.array(
+    z.object({
+      agentId: AgentIdSchema,
+      runtime: z.enum(['claude-code', 'codex']),
+      policyId: PolicyIdSchema,
+      reach: z.string(),
+      reachBeyondWorkspace: z.boolean(),
+    }),
+  ),
+  /** The coding step limit: launches the run may release. */
+  codingSteps: z.int().positive(),
+  /** Launches that may have executed so far (the limit is judged on the coding journal; this is the database's count). */
+  used: z.int().nonnegative(),
+  acceptedUnknownCost: z.array(CostSourceSchema),
+  /** `continue` = every source's unknown cost is accepted; `pause` = only `acceptedUnknownCost` is. */
+  unknownSpend: z.enum(['pause', 'continue']),
+})
+export type WorkflowCodingBlock = z.infer<typeof WorkflowCodingBlockSchema>
+
 export const WorkflowRunSummarySchema = z.object({
   /** The orchestration id. */
   id: z.string().min(1),
@@ -689,6 +757,8 @@ export const WorkflowRunSummarySchema = z.object({
     unresolved: z.int().nonnegative(),
   }),
   needsYou: z.array(WorkflowNeedsYouSchema),
+  /** 7.7c: the run's current coding authorisation; absent when the workflow has no coding agents. */
+  coding: WorkflowCodingBlockSchema.optional(),
   /** Attempts abandoned or unknown whose end is not confirmed. */
   unconfirmed: z.int().nonnegative(),
   rerunOf: z.string().nullable(),
@@ -724,7 +794,10 @@ export const WorkflowRunDetailSchema = WorkflowRunSummarySchema.extend({
   maxConcurrentSteps: z.int().positive(),
   stepEstimateUsd: z.number(),
   budget: BudgetViewSchema,
-  /** `pause` (default) stops a budgeted run when spend is unknown; `continue` was chosen at start. */
+  /**
+   * Whether unknown spend pauses a budgeted run, as it stands now: `continue` once the person accepted it (at the start or
+   * in a limits decision), `pause` otherwise. Not a snapshot of the start request (7.7c).
+   */
   unknownSpend: z.enum(['pause', 'continue']),
   spend: z.object({
     /** Always false for live Hermes today: "spend not settled — Hermes doesn't report complete costs". */
@@ -778,9 +851,22 @@ export const WorkflowPreflightCheckSchema = PreflightCheckSchema.extend({
   id: z.enum(['definition', 'agents', 'mapping', 'global_fence', 'journal', 'capacity', 'quota']),
 })
 
+/**
+ * "I accept what these coding agents can reach" for a workflow: the policy ids the person saw. Up to one per distinct
+ * coding agent of the workflow (at most the 30 mapped agents), where an orchestration's own acknowledgement keeps its 8.
+ */
+export const WorkflowCodingReachAcknowledgementSchema = z
+  .object({ policyIds: z.array(PolicyIdSchema).max(30) })
+  .strict()
+export type WorkflowCodingReachAcknowledgement = z.infer<
+  typeof WorkflowCodingReachAcknowledgementSchema
+>
+
 export const WorkflowPreflightSchema = z.object({
   ok: z.boolean(),
   checks: z.array(WorkflowPreflightCheckSchema),
+  /** Graph and runtime issues of the definition (7.7c): the same list Validate returns for it. */
+  issues: z.array(ValidationIssueSchema),
   /** Agents the definition uses with their current incarnation: the start request must name exactly these. */
   mapping: z.array(
     z.object({ agentId: AgentIdSchema, name: z.string(), incarnation: z.string().min(1) }),
@@ -790,10 +876,14 @@ export const WorkflowPreflightSchema = z.object({
   spendNote: z.string(),
   maxSteps: z.int().nonnegative(),
   reserveBytes: z.int().nonnegative(),
+  /** 7.7c: one entry per distinct coding agent among the step nodes; empty for a workflow with Hermes agents only. */
+  workers: z.array(CodingWorkerPreflightSchema),
   defaults: z.object({
     gatePolicy: WorkflowGatePolicySchema,
     maxConcurrentSteps: z.int(),
     stepEstimateUsd: z.number(),
+    /** The default coding step limit; present only when the workflow has coding agents. */
+    codingSteps: z.int().positive().optional(),
   }),
 })
 export type WorkflowPreflight = z.infer<typeof WorkflowPreflightSchema>
@@ -817,6 +907,16 @@ export const WorkflowRunCreateSchema = z
     rerunOf: z.string().min(1).max(100).optional(),
     /** Must be exactly `ORCH_ACKNOWLEDGEMENT_TEXT`; recorded on the run. */
     acknowledgement: z.object({ text: z.literal(ORCH_ACKNOWLEDGEMENT_TEXT) }),
+    // 7.7c: the coding fields. All four are omitted when the workflow has no coding step node (sending one is
+    // `400 bad_request`); a rerun sends them again, nothing carries over from the earlier run.
+    /** The policy id the person saw for each coding agent of the workflow (`409 policy_changed` otherwise). */
+    codingPolicies: z.record(AgentIdSchema, PolicyIdSchema).optional(),
+    /** Required for every coding agent whose reach goes beyond its workspace (`409 reach_not_acknowledged`). */
+    acknowledgeCodingReach: WorkflowCodingReachAcknowledgementSchema.optional(),
+    /** Sources whose unknown cost is accepted from the start (with `unknownSpend: 'pause'`; 'continue' accepts all). */
+    acceptUnknownCost: z.array(CostSourceSchema).max(3).optional(),
+    /** How many coding launches the run may release (default: the coding step nodes × their tries, at most 100). */
+    codingSteps: z.int().min(1).max(ORCH_LIMITS.maxCodingSteps).optional(),
   })
   .strict()
   .refine(
@@ -857,6 +957,21 @@ export const WorkflowTryAgainDecisionSchema = z
   .strict()
 export type WorkflowTryAgainDecision = z.infer<typeof WorkflowTryAgainDecisionSchema>
 
+/**
+ * `POST /api/workflow-runs/:id/nodes/:nodeId/policy-remap` (7.7c): "Use the new settings" for a coding node whose agent's
+ * settings changed. The node's agent stays the same; the decision names the policy id the person saw, carries the
+ * acknowledgement of its reach where it goes beyond the workspace, and is bound to the run's and the node's revisions.
+ */
+export const WorkflowPolicyRemapDecisionSchema = z
+  .object({
+    policyId: PolicyIdSchema,
+    acknowledgeCodingReach: CodingReachAcknowledgementSchema.optional(),
+    expectedNodeRevision: revision,
+    orchestrationRevision: revision,
+  })
+  .strict()
+export type WorkflowPolicyRemapDecision = z.infer<typeof WorkflowPolicyRemapDecisionSchema>
+
 /** `POST /api/workflow-runs/:id/remap`: §14's decision plus the exact re-created payloads the card showed. */
 export const WorkflowRemapDecisionSchema = z
   .object({
@@ -868,6 +983,9 @@ export const WorkflowRemapDecisionSchema = z
     plan: z
       .array(z.object({ nodeId: NodeIdSchema, payloadHash: z.string().min(1) }).strict())
       .max(30),
+    /** 7.7c: for a coding agent, the new version's policy id and the acknowledgement of its reach (as in §14's remap). */
+    policyId: PolicyIdSchema.optional(),
+    acknowledgeCodingReach: CodingReachAcknowledgementSchema.optional(),
   })
   .strict()
 export type WorkflowRemapDecision = z.infer<typeof WorkflowRemapDecisionSchema>

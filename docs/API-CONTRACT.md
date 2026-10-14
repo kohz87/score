@@ -1576,8 +1576,7 @@ Controls and accounting cover observed, Score-started work only.
   coding agent whose permission is `read-only` or `workspace-write`, on a host that runs coding turns as supervised units.
   Preflight and create answer `422 unsupported_agent` for a coding lead, an Antigravity or `full` agent, and
   `422 coding_workers_need_units` on a host without units (process-group fallback or a failing capability check).
-  **Workflows keep the Hermes-only rule until 7.7c:** workflow save/start answer `422 unsupported_agent` for any coding agent
-  ("Coding agents can’t take orchestration or workflow steps yet …").
+  Workflows take the same agents from 7.7c on (§15 "Coding agents in workflows").
 - `GET /api/orchestrations/preflight?leadAgentId=&allowedAgents=a,b` → `Preflight` (`checks[]`: listener, lead ready, lead
   MCP access, lead MCP token, allowed agents, global fence, journal, capacity, quota, tool readiness (`unknown`: Hermes loads
   MCP tools per session, which Score cannot see), plus `gatePolicyNotes`, the acknowledgement text and the defaults).
@@ -1852,6 +1851,16 @@ message }`; only `error`s block. Codes: limits (`too_many_nodes`, `too_many_edge
 `template_forward_reference`, `template_not_ancestor`, `template_needs_default` = a conditional ancestor needs a default,
 `template_field_unavailable`), `agent_missing` and `layout_unknown_node`.
 
+**Runtime validation (PLAN 7.7c).** Validate, save, new versions, preflight and start all call one function,
+`validateWorkflowAgents(definition, team, facts)`, next to the graph rules. It adds three codes, each with the `nodeId` of the
+step and `field: 'agentId'`: `coding_agent_unsupported` (the step's agent is not a Hermes, Claude Code or Codex agent, e.g.
+Antigravity or OpenCode, or no coding runtime is wired), `coding_permission_full` (a Claude Code or Codex agent with `full`
+access; steps need `read-only` or `workspace-write`) and `coding_workers_need_units` (the host doesn’t run coding turns as
+supervised units). Graph `gate` nodes have no agent and are never checked. These issues depend on the team and the host, never
+on the definition alone: they are **not** part of a definition, its stored `hash` or its export validation, and readiness of
+a CLI (installed, version, policy) is checked only at preflight and start. A workflow with no coding step node gets no coding
+fields anywhere (no policies, no `codingSteps`, no reach acknowledgement, no coding storage).
+
 - **S** `GET /api/workflows` → `WorkflowList` (summaries + retained-inventory counts).
 - **S** `GET /api/workflows/:id` → `WorkflowDetail` (version list + latest). `GET /api/workflows/:id/versions/:version` →
   `WorkflowVersion`.
@@ -1859,8 +1868,9 @@ message }`; only `error`s block. Codes: limits (`too_many_nodes`, `too_many_edge
 - **H** `POST /api/workflows` `WorkflowCreate` → `201 WorkflowVersion` (version 1). **H** `POST /api/workflows/:id/versions`
   `WorkflowVersionCreate { baseVersion, definition }` → `201 WorkflowVersion`; `baseVersion` must be the latest (`409
   conflict`, `details.latestVersion`). An invalid definition → `422 invalid_definition` `{ result: ValidationResult }`; limits
-  (200 definitions, 20 versions each) → `409 quota_exhausted`; an agent node that is a coding agent → `422 unsupported_agent`
-  (also on `POST /api/workflow-runs` and its preflight).
+  (200 definitions, 20 versions each) → `409 quota_exhausted`. The runtime issues above make a save `422 invalid_definition`
+  too (and `POST /api/workflow-runs` answers the same with the current issues, e.g. when the host lost its units after the
+  version was saved).
 - **H** `DELETE /api/workflows/:id` → `204`; `409 workflow_used` when any run ever used a version.
 - `POST /api/workflows/:id/versions/:version/export` `WorkflowExportRequest` → `WorkflowExport` (format
   `score.workflow/1`): every free-text field passes `redact()`, `changes` lists every difference, `removePaths` drops fields
@@ -1870,8 +1880,9 @@ message }`; only `error`s block. Codes: limits (`too_many_nodes`, `too_many_edge
 ### Runs
 
 - `GET /api/workflow-runs/preflight?workflowId=&version=` → `WorkflowPreflight`: checks (`definition`, `agents` ready,
-  `mapping`, `global_fence`, `journal`, `capacity`, `quota`), the agents the definition uses with their **current
-  incarnations**, both gate-policy notes, `ORCH_ACKNOWLEDGEMENT_TEXT`, the spend note and the true maximum step count.
+  `mapping`, `global_fence`, `journal`, `capacity`, `quota`), `issues` (the graph and runtime issues Validate returns for the
+  stored definition), the agents the definition uses with their **current incarnations**, both gate-policy notes,
+  `ORCH_ACKNOWLEDGEMENT_TEXT`, the spend note and the true maximum step count.
 - **H** `POST /api/workflow-runs` `WorkflowRunCreate` → `201 WorkflowRunCreated` (`Idempotency-Key` honoured). The server
   re-runs the preflight; failing check → `409 preflight_failed` `{ checks }`; `429 capacity`; `409 quota_exhausted`; `409
   fenced`; `agentMap` must name exactly the incarnations the page showed (else `409 conflict`); inputs must fit the
@@ -1895,6 +1906,98 @@ message }`; only `error`s block. Codes: limits (`too_many_nodes`, `too_many_edge
   stopped at `refusedLifetime` (20) refused dispatch generations (`needsYou.refusal_limit`). The alternative is Stop.
 - **Remap** `POST /api/workflow-runs/:id/remap` `WorkflowRemapDecision`: §14's agent-level decision plus `plan`, the exact
   `{ nodeId, payloadHash }` list the Remap card showed. A different current plan → `409 stale_plan`.
+
+### Coding agents in workflows (PLAN 7.7c; design docs/briefs/7.7c-coding-workflows.md v3)
+
+Claude Code and Codex agents may be the agent of a **step node** (permission `read-only` or `workspace-write`, never `full`; on
+hosts that run coding turns as supervised units). A workflow run is an orchestration, so everything §14 says about coding
+workers (frozen worker policy and policy id, consent by policy id, per-generation identities, release authorised by the
+executor's one admission function, the coding step limit counted from the launch journal, unknown cost per source,
+`result_text`) applies to its coding steps unchanged. This section lists what is workflow-specific.
+
+- **Preflight** `workers[]` has one entry per **distinct coding agent** among the step nodes, in §14's shape
+  (`{ agentId, runtime, readiness, detail, policyId, reach, reachBeyondWorkspace }`); a workflow with Hermes agents only has
+  `workers: []` and no `defaults.codingSteps`. A worker that isn't `ready` also fails the `agents` check with the reason.
+  `defaults.codingSteps` is the number of coding step nodes × (1 + their retries), at least 1, at most 100.
+- **Start** (`WorkflowRunCreate`) gains four fields, all omitted for a workflow without coding step nodes (sending any of them
+  → `400 bad_request`): `codingPolicies: { [agentId]: policyId }` (the id the person saw for each coding agent; a missing one →
+  `400`, a different current one → `409 policy_changed`), `acknowledgeCodingReach: { policyIds }` (up to **30** ids, one per
+  distinct coding agent, where an orchestration's own acknowledgement keeps its 8; required for every agent whose
+  `reachBeyondWorkspace` is true, else `409 reach_not_acknowledged`), `acceptUnknownCost?: Source[]` and `codingSteps?` (1–100).
+  A **rerun** is an ordinary start: it asks again, and nothing carries over from the earlier run.
+- **Unknown cost.** `unknownSpend: 'continue'` accepts every source; `'pause'` plus `acceptUnknownCost` accepts those sources.
+  Both are journaled with the admission. Later changes go through the limits decision (`codingSteps`, scoped
+  `acceptUnknownCost` add/remove), as in §14.
+- **Storage.** A workflow's coding item reserves `WORKFLOW_CODING_ITEM_BYTES` = §14's coding item + the `wf_results` output
+  (32 KiB) + the node's output (32 KiB) + the verdict record (2 KiB) + `renewals_max` (3) × 20 generations × 2 KiB. The coding
+  partition (`codingSteps` items, at most one per step the run can create) is set when the run is created and is part of its
+  reserve; ordinary observations can't spend it.
+
+- **The `coding` block** (`WorkflowRunSummary.coding`, so also the detail; absent for a workflow without coding agents) is the
+  run's **effective, current** authorisation, never a snapshot of the start request: `{ workers[] (agentId, runtime, policyId,
+  reach, reachBeyondWorkspace), codingSteps, used, acceptedUnknownCost, unknownSpend }`. `used` is the launches that may have
+  executed (the limit itself is judged on the coding journal); `unknownSpend` is `continue` once unknown spend is accepted (at
+  the start or by a limits decision) and `pause` otherwise. `WorkflowRunDetail.unknownSpend` reports the same effective value.
+  The shared decision cards take this block as their explicit input.
+- **Limits decision** `POST /api/workflow-runs/:id/limits` `LimitsDecision` accepts `codingSteps` and the scoped
+  `acceptUnknownCost: { add?, remove? }` exactly as §14 does (journaled as the full resulting authorisation and verified after
+  a restore; raising the limit lets steps blocked `coding_limit` go on). A higher limit grows the coding partition by the
+  **workflow** item size. A workflow without coding agents answers `400 bad_request` to either field.
+
+- **Results and verdicts of coding steps.** The verdict is read from the **raw eligible reply** (the CLI's own validated final
+  answer, whole), in the transaction that records the run's end: before any storage cut (the 32 KiB `result_text`), display
+  fallback or Score annotation, never from a prefix. Parsing is §15's (exactly one `score-verdict` block). A reply over 256 KiB
+  (`WORKFLOW_LIMITS.verdictInputBytes`; the drivers don't keep a longer one) fails the node with the reason `answer too long to
+  read a verdict`; no eligible reply, no result row, and the node fails `no final answer`. The row is keyed by `(attempt,
+  generation)`: a late result of an earlier generation never replaces the current one, and late proof, `interrupted` or
+  `unknown` never give a verdict. The row and the node's own copy of the output are charged to the coding partition.
+
+- **A blocked coding node keeps its step.** When a coding step is blocked for a decision (`agent_changed`, `coding_limit`, or
+  held back 20 times) its attempt is **suspended** (holds no slot, keeps its reservation) and the node stays `running` with
+  `waitingFor` `coding_settings | coding_limit | held_back`; the planner never clears the node's step or assigns a replacement.
+  Only the matching decision (new settings, a higher `codingSteps`, Try again) admits that attempt again, so `attemptsUsed`
+  doesn't change. `needsYou` lists `coding_limit { used, limit }` once for the run while any step waits for it. Other blocked
+  dispositions (`agent_unavailable`, a remap) keep the planner's behaviour from §15 "Mapping".
+
+- **Assignment gates** (`every-step`) of a coding step carry the agent's `policyId` in their payload; admission and release
+  require the gate's id to equal the step's stored policy, and an approval for an old id never covers a new one. A graph
+  `gate` node has no agent and no policy binding.
+- **Use the new settings** `POST /api/workflow-runs/:id/nodes/:nodeId/policy-remap`
+  `WorkflowPolicyRemapDecision { policyId, acknowledgeCodingReach?, expectedNodeRevision, orchestrationRevision }` →
+  `WorkflowRunSummary`: for a coding node whose agent's settings changed (`needsYou.coding_agent_changed { nodeId, agentId,
+  newPolicyId, reach }`; `newPolicyId` is the id the stored policy has now when Score can tell without asking the CLI again,
+  else `null` — the card asks preflight). The node's agent is unchanged; the step's one suspended attempt takes the agent's
+  current policy through §14's per-step remap: `policyId` must equal the agent's current policy and differ from the step's
+  (`409 policy_changed`), the agent must be ready, a reach beyond the workspace needs `acknowledgeCodingReach` naming
+  `policyId` (`409 reach_not_acknowledged`), a stale node or run revision is `409 conflict`. Journaled (`policy_remap`) and
+  verified after a restore. Under `every-step` the old approval is withdrawn and a fresh gate naming the new id needs
+  approving; otherwise the attempt is admitted again at once. Switching a node between a Hermes and a coding agent is not
+  offered.
+
+- **Remap of a coding agent** (`POST /api/workflow-runs/:id/remap`, same agent id, a new version) also carries `policyId` and
+  `acknowledgeCodingReach?`, judged as at the start: the agent must be ready, `policyId` must be its current policy (`409
+  policy_changed`) and a reach beyond the workspace needs the acknowledgement (`409 reach_not_acknowledged`). It closes **every**
+  affected provably unsent attempt of the node — a suspended, blocked one included (its step is retired `remapped` and its
+  reservation released) — and re-creates the work under the new version; possibly executed attempts keep their obligations.
+  The remap card reads the agent's current policy and readiness from the workflow preflight.
+
+- **Try again for a coding node is a dispatch renewal.** A coding dispatch that Score held back 20 times (generation cap, or 20
+  readiness refusals) is never refused and replaced: its attempt is suspended, the step is blocked `held_back`, the node stays
+  `running` (`waitingFor: 'held_back'`) and `needsYou` lists `coding_held_back { nodeId }`. `POST …/nodes/:nodeId/try-again`
+  then **renews** it, separately from execution retries (it doesn't spend `attempts_max`; a zero-retry node can renew): in one
+  transaction it retires the proven-unsent predecessor (every launch revoked or never requested), creates a fresh attempt on the
+  same step (a new id with its own generations), transfers the reservation and keeps the step's approved gate and policy
+  binding; admission then takes it up through the normal rules. Bounded per node by `WORKFLOW_LIMITS.maxRenewalsPerNode` (3,
+  `NodeView.renewals` counts them); when the last renewed attempt is held back again the node fails `kept being held back`
+  and no further item is offered. Hermes nodes keep §15's Try again unchanged.
+
+- **Every coding closure cause has a node transition.** `stop`, `cancel` and `deadline` keep the run's terminal behaviour (the
+  node ends `cancelled` with the run); holds (`paused`, `frozen`, `hold`, `fenced`, `restart`, `budget`, `unknown_cost`,
+  `deadline_changed`) keep the node `running` while the same attempt is admitted again; `agent_changed`, `coding_limit` and the
+  generation cap block with the node's step kept (above); readiness causes follow the refusal flow. **`inputs_withdrawn`** (what
+  the step was going to read was withdrawn while it was queued or arming) makes the node `unresolved` with
+  `needsYou.node_inputs_withdrawn { nodeId }` — re-run the upstream step, then Retry this one. Nothing of the step ran, so the
+  try it used is given back (`attemptsUsed` goes down by one) and Retry is possible even for a node with no retries.
 
 ### Graph semantics
 

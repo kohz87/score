@@ -1,0 +1,4 @@
+{"_fixture": "hand-made, not recorded: a reply of 300000 characters (over the 256 KiB Score keeps)"}
+{"type": "system", "subtype": "init", "session_id": "77777777-7777-4777-8777-777777777777", "model": "claude-sonnet-fixture"}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "Working on it."}]}}
+{"type": "result", "subtype": "success", "is_error": false, "result": "START-{{PAD:300000}}-END", "session_id": "77777777-7777-4777-8777-777777777777", "total_cost_usd": 0.003, "usage": {"input_tokens": 10, "output_tokens": 10}}

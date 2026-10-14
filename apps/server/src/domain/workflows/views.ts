@@ -11,6 +11,7 @@ import {
   type TokenView,
   type WaitingFor,
   type WorkflowEvent,
+  type WorkflowCodingBlock,
   type WorkflowNeedsYou,
   type WorkflowRunDetail,
   type WorkflowRunSummary,
@@ -24,6 +25,9 @@ import {
   spendEvidence,
   unknownCostBlocks,
 } from '../orchestration/budget.ts'
+import { readWorkerPolicy, workerPoliciesOf } from '../orchestration/coding-policy.ts'
+import type { CodingWorkerFacts } from '../orchestration/supported-agents.ts'
+import type { WorkerPolicy } from '../../runtimes/coding/policy.ts'
 import { isFenced } from '../orchestration/fence.ts'
 import { activeStepCounts } from '../orchestration/ops.ts'
 import {
@@ -145,6 +149,13 @@ function waitingFor(
     return null
   }
   if (!['running'].includes(node.state) || !step) return null
+  // 7.7c: a coding step blocked for a decision keeps its place and says what it waits for.
+  if (step.status === 'blocked' && attempt?.suspended)
+    return step.disposition === 'coding_limit'
+      ? 'coding_limit'
+      : step.disposition === 'held_back'
+        ? 'held_back'
+        : 'coding_settings'
   if (attempt?.needs_person) return 'refusal_limit'
   if (attempt && attempt.state === 'created' && attempt.next_try_at && attempt.next_try_at > now)
     return 'hermes_unavailable'
@@ -181,6 +192,7 @@ function needsYouOf(
   nodes: WfNodeRow[],
   attempts: AttemptRow[],
   journal: ExecutionJournal | undefined,
+  facts: Pick<CodingWorkerFacts, 'checkPolicy'> | undefined,
 ): WorkflowNeedsYou[] {
   const result: WorkflowNeedsYou[] = []
   const stepNode = new Map(wfStepsOf(sqlite, o.id).map((s) => [s.step_id, s.node_id]))
@@ -213,13 +225,82 @@ function needsYouOf(
     result.push({ kind: 'cancel_fence', stepId: attempt.step_id ?? '', attemptId: attempt.id })
   if (!isTerminalStatus(o.status) && isFenced(sqlite))
     result.push({ kind: 'fence', reason: 'global' })
+  // 7.7c: a coding step that never started because what it was going to read was withdrawn has its own item (re-run the
+  // upstream step, then retry this one) instead of the abandoned-attempt Retry.
+  const stepById = new Map(stepsOf(sqlite, o.id).map((step) => [step.id, step]))
+  const withdrawn = new Set<string>()
+  for (const node of nodes) {
+    const step = node.step_id ? stepById.get(node.step_id) : undefined
+    const last = step
+      ? attempts
+          .filter((a) => a.step_id === step.id)
+          .reduce<AttemptRow | undefined>((b, a) => (!b || a.n > b.n ? a : b), undefined)
+      : undefined
+    if (
+      node.state === 'unresolved' &&
+      step &&
+      last !== undefined &&
+      last.runtime !== 'hermes' &&
+      ((step.status === 'cancelled' && step.disposition === 'inputs_withdrawn') ||
+        (step.status === 'blocked' && /^input_withdrawn/.test(step.disposition ?? '')))
+    )
+      withdrawn.add(node.node_id)
+  }
   for (const node of nodes)
-    if (node.state === 'unresolved' && node.attempts_used < node.attempts_max)
+    if (withdrawn.has(node.node_id))
+      result.push({ kind: 'node_inputs_withdrawn', nodeId: node.node_id })
+    else if (node.state === 'unresolved' && node.attempts_used < node.attempts_max)
       result.push({
         kind: 'retry',
         nodeId: node.node_id,
         attemptsLeft: node.attempts_max - node.attempts_used,
       })
+  if (!isTerminalStatus(o.status) && o.status !== 'stopping' && o.status !== 'finishing') {
+    // 7.7c: coding steps held for the person. Each keeps its node's step and its one suspended attempt.
+    const suspended = new Set(
+      attempts.filter((a) => a.suspended && a.step_id !== null).map((a) => a.step_id),
+    )
+    const held = stepsOf(sqlite, o.id).filter(
+      (step) => step.status === 'blocked' && suspended.has(step.id),
+    )
+    // A coding agent whose settings changed (same agent version): "Use the new settings" on the node. A replaced agent
+    // (another version) is the remap item below.
+    const frozen = new Map(
+      (
+        sqlite
+          .prepare('SELECT agent_id, incarnation FROM orc_agent_map WHERE orchestration_id = ?')
+          .all(o.id) as { agent_id: string; incarnation: string }[]
+      ).map((row) => [row.agent_id, row.incarnation]),
+    )
+    for (const step of held) {
+      if (step.disposition !== 'agent_changed' && step.disposition !== 'permission_forbidden')
+        continue
+      const current = lifecycleOf(sqlite, step.agent_id)?.incarnation_id ?? 'untracked'
+      if (frozen.get(step.agent_id) !== current) continue
+      const stored = readWorkerPolicy(sqlite, o.id, step.agent_id)
+      result.push({
+        kind: 'coding_agent_changed',
+        nodeId: stepNode.get(step.id) ?? '',
+        agentId: step.agent_id,
+        newPolicyId: stored ? currentPolicyId(facts, step.agent_id, stored.policy) : null,
+        reach: stored?.reach ?? null,
+      })
+    }
+    // A coding step whose start was held back 20 times: Try again renews it (until the last renewal is used).
+    const renewals = new Map(nodes.map((n) => [n.node_id, n.renewals]))
+    for (const step of held) {
+      if (step.disposition !== 'held_back') continue
+      const nodeId = stepNode.get(step.id) ?? ''
+      if ((renewals.get(nodeId) ?? 0) < WORKFLOW_LIMITS.maxRenewalsPerNode)
+        result.push({ kind: 'coding_held_back', nodeId })
+    }
+    if (held.some((step) => step.disposition === 'coding_limit'))
+      result.push({
+        kind: 'coding_limit',
+        used: executedLaunches(sqlite, o.id),
+        limit: o.coding_steps,
+      })
+  }
   for (const attempt of attempts)
     if (attempt.needs_person && attempt.state === 'created' && attempt.step_id)
       result.push({
@@ -259,16 +340,64 @@ function needsYouOf(
   return result
 }
 
+/** The id the agent's stored policy has now, when it can be told without asking the CLI again; null otherwise. */
+function currentPolicyId(
+  facts: Pick<CodingWorkerFacts, 'checkPolicy'> | undefined,
+  agentId: string,
+  policy: WorkerPolicy,
+): string | null {
+  try {
+    const check = facts?.checkPolicy(agentId, policy)
+    return check?.ok ? check.id : null
+  } catch {
+    return null
+  }
+}
+
+/** Launches that may have executed (the database's projection of the coding journal; the limit itself is judged on the journal). */
+const executedLaunches = (sqlite: DatabaseSync, orchId: string): number =>
+  (
+    sqlite
+      .prepare(
+        'SELECT COUNT(*) AS n FROM coding_launches WHERE owner_orchestration = ? AND may_have_executed = 1',
+      )
+      .get(orchId) as { n: number }
+  ).n
+
+/** The run's coding authorisation as it stands now (7.7c §6); undefined for a workflow without coding agents. */
+export function codingBlockOf(sqlite: DatabaseSync, o: OrchRow): WorkflowCodingBlock | undefined {
+  const workers = workerPoliciesOf(sqlite, o.id)
+  if (workers.length === 0) return undefined
+  return {
+    workers: workers.map((stored) => ({
+      agentId: stored.agentId,
+      runtime: stored.policy.runtime as 'claude-code' | 'codex',
+      policyId: stored.policyId,
+      reach: stored.reach,
+      reachBeyondWorkspace: stored.reachBeyondWorkspace,
+    })),
+    codingSteps: o.coding_steps,
+    used: executedLaunches(sqlite, o.id),
+    acceptedUnknownCost: o.accepted_unknown_cost.filter(
+      (source): source is 'hermes' | 'claude-code' | 'codex' =>
+        source === 'hermes' || source === 'claude-code' || source === 'codex',
+    ),
+    unknownSpend: o.accepted_unknown_spend ? 'continue' : 'pause',
+  }
+}
+
 export function workflowSummaryOf(
   sqlite: DatabaseSync,
   o: OrchRow,
   journal?: ExecutionJournal,
+  facts?: Pick<CodingWorkerFacts, 'checkPolicy'>,
 ): WorkflowRunSummary {
   const wf = requireWfRun(sqlite, o.id)
   const nodes = nodesOf(sqlite, o.id)
   const attempts = attemptsOf(sqlite, o.id)
   const count = (state: string) => nodes.filter((n) => n.state === state).length
   const unconfirmed = unconfirmedOf(attempts)
+  const coding = codingBlockOf(sqlite, o)
   const outcomeNote =
     wf.graph_outcome === 'reached_end'
       ? unconfirmed > 0
@@ -306,7 +435,8 @@ export function workflowSummaryOf(
       skipped: count('skipped'),
       unresolved: count('unresolved'),
     },
-    needsYou: needsYouOf(sqlite, o, wf, nodes, attempts, journal),
+    needsYou: needsYouOf(sqlite, o, wf, nodes, attempts, journal, facts),
+    ...(coding === undefined ? {} : { coding }),
     unconfirmed,
     rerunOf: wf.rerun_of,
     createdAt: o.created_at,
@@ -435,10 +565,15 @@ export function workflowDetailOf(
   sqlite: DatabaseSync,
   o: OrchRow,
   now: string,
-  options: { lineageProvable: boolean; journal?: ExecutionJournal; skipStorage?: boolean },
+  options: {
+    lineageProvable: boolean
+    journal?: ExecutionJournal
+    skipStorage?: boolean
+    facts?: Pick<CodingWorkerFacts, 'checkPolicy'>
+  },
 ): WorkflowRunDetail {
   const wf = requireWfRun(sqlite, o.id)
-  const summary = workflowSummaryOf(sqlite, o, options.journal)
+  const summary = workflowSummaryOf(sqlite, o, options.journal, options.facts)
   const nodes = nodesOf(sqlite, o.id)
   const steps = stepsOf(sqlite, o.id)
   const stepById = new Map(steps.map((s) => [s.id, s]))
@@ -486,6 +621,7 @@ export function workflowDetailOf(
             }
           : null,
       remaps: n.remaps,
+      renewals: n.renewals,
       canRetry: n.state === 'unresolved' && n.attempts_used < n.attempts_max,
       startedAt: n.started_at,
       endedAt: n.ended_at,
@@ -573,7 +709,7 @@ export function workflowDetailOf(
     maxConcurrentSteps: o.max_concurrent_steps,
     stepEstimateUsd: o.step_estimate_usd,
     budget,
-    unknownSpend: wf.unknown_spend,
+    unknownSpend: o.accepted_unknown_spend ? 'continue' : 'pause',
     spend: { settled, note: settled ? 'spend settled' : SPEND_NOTE, evidence },
     cancelFence: cancelFenceAttempts(o, attempts).map((a) => ({
       stepId: a.step_id ?? '',

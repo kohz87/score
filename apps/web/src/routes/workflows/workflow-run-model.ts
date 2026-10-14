@@ -53,6 +53,9 @@ export const waitingText: Record<WaitingFor, string> = {
   hermes_unavailable: 'waiting: Hermes is unavailable',
   remap: 'waiting for your decision on a replaced agent',
   refusal_limit: 'Hermes keeps refusing this step',
+  coding_settings: 'waiting for your decision on the agent’s new settings',
+  coding_limit: 'waiting for a higher coding step limit',
+  held_back: 'waiting for you to try again',
 }
 
 // ------------------------------------------------------------------------------------------------------- graph
@@ -317,6 +320,14 @@ export function workflowNeedsText(
       return `${item.agentId} was replaced: decide whether this run uses the new one`
     case 'refusal_limit':
       return `Hermes refused ${nodeLabel(item.nodeId)} ${item.refusals} times`
+    case 'coding_agent_changed':
+      return `${item.agentId}’s settings changed: decide whether ${nodeLabel(item.nodeId)} uses the new ones`
+    case 'coding_limit':
+      return `${item.used} of ${item.limit} coding steps are used: raise the limit to go on`
+    case 'coding_held_back':
+      return `${nodeLabel(item.nodeId)} was held back 20 times: try again or stop`
+    case 'node_inputs_withdrawn':
+      return `${nodeLabel(item.nodeId)} lost something it was going to read: re-run the step before it, then retry`
   }
 }
 

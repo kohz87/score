@@ -17,6 +17,7 @@ import {
   type AbandonDecision,
   type WorkflowDefinition,
   type WorkflowEvent,
+  type WorkflowPolicyRemapDecision,
   type WorkflowRemapDecision,
   type WorkflowRetryDecision,
   type WorkflowRunCreate,
@@ -201,17 +202,24 @@ export function useWorkflowRun(id: string | undefined) {
   })
 }
 
+export async function fetchWorkflowPreflight(
+  workflowId: string,
+  version: number,
+  signal?: AbortSignal,
+) {
+  return WorkflowPreflightSchema.parse(
+    await apiFetch(
+      `workflow-runs/preflight?${new URLSearchParams({ workflowId, version: String(version) })}`,
+      signal ? { signal } : {},
+    ),
+  )
+}
+
 export function useWorkflowPreflight(workflowId: string | undefined, version: number | undefined) {
   return useQuery({
     queryKey: ['workflow-runs', 'preflight', workflowId, version],
     enabled: workflowId !== undefined && version !== undefined,
-    queryFn: async ({ signal }) =>
-      WorkflowPreflightSchema.parse(
-        await apiFetch(
-          `workflow-runs/preflight?${new URLSearchParams({ workflowId: workflowId!, version: String(version) })}`,
-          { signal },
-        ),
-      ),
+    queryFn: ({ signal }) => fetchWorkflowPreflight(workflowId!, version!, signal),
     retry: false,
     staleTime: 0,
   })
@@ -257,6 +265,10 @@ export function useWorkflowRunActions(id: string) {
     remap: useAction<WorkflowRemapDecision>(plain('remap')),
     retry: useAction<{ nodeId: string; body: WorkflowRetryDecision }>((v) => ({
       path: `nodes/${encodeURIComponent(v.nodeId)}/retry`,
+      body: v.body,
+    })),
+    policyRemap: useAction<{ nodeId: string; body: WorkflowPolicyRemapDecision }>((v) => ({
+      path: `nodes/${encodeURIComponent(v.nodeId)}/policy-remap`,
       body: v.body,
     })),
     tryAgain: useAction<{ nodeId: string; body: WorkflowTryAgainDecision }>((v) => ({

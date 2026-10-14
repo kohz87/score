@@ -68,6 +68,7 @@ export const WfNodeRowSchema = z.object({
     ),
   gate_id: z.string().nullable(),
   remaps: z.int(),
+  renewals: z.int(),
   started_at: z.string().nullable(),
   ended_at: z.string().nullable(),
 })
@@ -137,10 +138,12 @@ export type WfCommandRow = z.infer<typeof WfCommandRowSchema>
 
 export const WfResultRowSchema = z.object({
   attempt_id: z.string(),
+  generation: z.int(),
   verdict: z.string().nullable(),
   output: z.string(),
   truncated: bool,
   full_bytes: z.int(),
+  too_long: bool,
   created_at: z.string(),
 })
 export type WfResultRow = z.infer<typeof WfResultRowSchema>
@@ -200,8 +203,23 @@ export const commandsOf = (sqlite: DatabaseSync, orchId: string): WfCommandRow[]
         .prepare('SELECT * FROM wf_commands WHERE orchestration_id = ? ORDER BY rowid')
         .all(orchId),
     )
-export function readResult(sqlite: DatabaseSync, attemptId: string): WfResultRow | undefined {
-  const row = sqlite.prepare('SELECT * FROM wf_results WHERE attempt_id = ?').get(attemptId)
+/**
+ * The complete-reply facts of an attempt. A coding attempt names the dispatch generation that is current (its result is
+ * the one that generation's run produced); a Hermes attempt has a single row.
+ */
+export function readResult(
+  sqlite: DatabaseSync,
+  attemptId: string,
+  generation?: number,
+): WfResultRow | undefined {
+  const row =
+    generation === undefined
+      ? sqlite
+          .prepare('SELECT * FROM wf_results WHERE attempt_id = ? ORDER BY generation DESC LIMIT 1')
+          .get(attemptId)
+      : sqlite
+          .prepare('SELECT * FROM wf_results WHERE attempt_id = ? AND generation = ?')
+          .get(attemptId, generation)
   return row === undefined ? undefined : WfResultRowSchema.parse(row)
 }
 
@@ -224,6 +242,7 @@ export function setNode(
     verdict: string | null
     gate_id: string | null
     remaps: number
+    renewals: number
     started_at: string | null
     ended_at: string | null
   }>,

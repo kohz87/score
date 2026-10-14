@@ -13,7 +13,8 @@ import { addCause, type AttemptRow, type OrchRow } from './store.ts'
 /** A coding attempt is bounded: past this many dispatch generations the step is blocked for the person (no loop). */
 export const MAX_GENERATIONS = 20
 
-export type CauseClass = 'hold' | 'terminal' | 'agent_changed' | 'limit' | 'refusal'
+export type CauseClass =
+  'hold' | 'terminal' | 'agent_changed' | 'permission_forbidden' | 'limit' | 'refusal'
 
 const HOLD = new Set([
   'paused',
@@ -35,6 +36,7 @@ export function causeClass(cause: string): CauseClass {
   if (HOLD.has(cause)) return 'hold'
   if (TERMINAL.has(cause)) return 'terminal'
   if (cause === 'agent_changed') return 'agent_changed'
+  if (cause === 'permission_forbidden') return 'permission_forbidden'
   if (cause === 'limit') return 'limit'
   return 'refusal'
 }
@@ -226,14 +228,20 @@ export function applyClosure(
     }
     return
   }
-  const suspended = klass === 'agent_changed' || klass === 'limit'
+  const suspended =
+    klass === 'agent_changed' || klass === 'permission_forbidden' || klass === 'limit'
   sqlite
     .prepare(
       "UPDATE orc_attempts SET state = 'created', run_id = NULL, suspended = ?, updated_at = ? WHERE id = ?",
     )
     .run(suspended ? 1 : 0, now, attempt.id)
   if (suspended && attempt.step_id) {
-    const disposition = klass === 'limit' ? 'coding_limit' : 'agent_changed'
+    const disposition =
+      klass === 'limit'
+        ? 'coding_limit'
+        : klass === 'permission_forbidden'
+          ? 'permission_forbidden'
+          : 'agent_changed'
     setStepStatus(sqlite, o.id, attempt.step_id, 'blocked', disposition, now)
     addCause(sqlite, o.id, 'step_blocked', attempt.step_id, now, disposition)
   }

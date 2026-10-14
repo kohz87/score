@@ -4,10 +4,14 @@ import type {
   WorkflowRetryDecision,
   WorkflowTryAgainDecision,
 } from '@score/contract'
+import { WORKFLOW_LIMITS } from '@score/contract'
 import { HttpError } from '../../errors.ts'
 import { lifecycleOf } from '../agent-lifecycle.ts'
 import { journalSoft, touch, type Ctx } from '../orchestration/ctx.ts'
-import { stopRun } from '../orchestration/decisions.ts'
+import { acceptCodingRemap, stopRun } from '../orchestration/decisions.ts'
+import type { WorkerReport } from '../orchestration/supported-agents.ts'
+import { insertAttemptRows } from '../orchestration/attempt-rows.ts'
+import { generationsOf } from '../orchestration/coding-attempts.ts'
 import { bumpAdmission, refuseAttempt, setStepStatus, withdrawGates } from '../orchestration/ops.ts'
 import type { ExecutionJournal } from '../orchestration/journal.ts'
 import {
@@ -15,11 +19,14 @@ import {
   attemptsOf,
   frozenIncarnation,
   isTerminalStatus,
+  readStep,
   requireOrch,
   stepsOf,
+  type AttemptRow,
   type OrchRow,
+  type StepRow,
 } from '../orchestration/store.ts'
-import { setNode, nodesOf, requireWfRun } from './store.ts'
+import { setNode, nodesOf, requireWfRun, type WfNodeRow } from './store.ts'
 import { remapPlan } from './views.ts'
 
 // Decisions that only workflows have (contract §15): node gates, Retry, Try again and the workflow form of Remap. All
@@ -185,9 +192,19 @@ export function tryAgain(
     throw new HttpError(409, 'conflict', 'The step changed while you were looking.', {
       currentRevision: node.revision,
     })
-  const attempt = attemptsOf(sqlite, orchId).find(
-    (a) => a.step_id === node.step_id && a.needs_person && a.state === 'created',
+  const stepAttempts = attemptsOf(sqlite, orchId).filter((a) => a.step_id === node.step_id)
+  const latest = stepAttempts.reduce<AttemptRow | undefined>(
+    (best, a) => (!best || a.n > best.n ? a : best),
+    undefined,
   )
+  // A coding node held back by Score (20 prepared dispatches, or 20 refusals) is renewed, not reset: its generation
+  // identities are never reused (7.7c §4).
+  if (latest && latest.runtime !== 'hermes' && latest.state === 'created') {
+    const step = node.step_id ? readStep(sqlite, orchId, node.step_id) : undefined
+    if (latest.needs_person || (latest.suspended && step?.disposition === 'held_back'))
+      return renewDispatch(ctx, o, node, latest, step!)
+  }
+  const attempt = stepAttempts.find((a) => a.needs_person && a.state === 'created')
   if (!attempt) throw new HttpError(409, 'not_open', 'This step isn’t waiting for you.')
   journalSoft(ctx, () =>
     ctx.journal.append({ kind: 'transition', orchestrationId: orchId, what: 'try_again', nodeId }),
@@ -204,6 +221,84 @@ export function tryAgain(
 }
 
 /**
+ * Try again for a coding node as a **dispatch renewal** (7.7c §4, W4/X1): separate from execution retries, it doesn't spend
+ * `attempts_max`. In one transaction it retires the proven-unsent predecessor (every launch of it was revoked or never
+ * requested), creates a fresh attempt on the same step (a new id with its own generations), TRANSFERS the reservation and
+ * keeps the step's approved gate and policy binding. Bounded per node; past the bound the node fails, it isn't offered.
+ */
+function renewDispatch(
+  ctx: Ctx,
+  o: OrchRow,
+  node: WfNodeRow,
+  predecessor: AttemptRow,
+  step: StepRow,
+): void {
+  const { sqlite, now } = ctx
+  if (node.renewals >= WORKFLOW_LIMITS.maxRenewalsPerNode)
+    throw new HttpError(
+      409,
+      'not_open',
+      'This step was held back too often and can’t be tried again.',
+    )
+  // Proven unsent: every generation of the predecessor was closed without a launch. Anything else may have run.
+  if (generationsOf(sqlite, predecessor.id).some((g) => g.closed_cause === null))
+    throw new HttpError(
+      409,
+      'conflict',
+      'This step may already have started, so it can’t be renewed.',
+    )
+  const n = attemptsOf(sqlite, o.id).filter((a) => a.step_id === step.id).length + 1
+  const freshId = `orc-${o.id.slice(4)}-${step.id}-${n}`
+  // The renewal is recorded with its count and both attempt ids (F1 #5): a restore from before it is detected.
+  journalSoft(ctx, () =>
+    ctx.journal.append({
+      kind: 'renewal',
+      orchestrationId: o.id,
+      nodeId: node.node_id,
+      renewals: node.renewals + 1,
+      predecessorId: predecessor.id,
+      successorId: freshId,
+    }),
+  )
+  refuseAttempt(sqlite, predecessor, 'not dispatched: renewed', now)
+  // The fresh attempt carries the input (so its retained copy is the predecessor's, not a second one) and the reservation.
+  // The retired predecessor is no longer the step's suspended attempt: a later decision must find the current one (F1 #2).
+  sqlite
+    .prepare(
+      "UPDATE orc_attempts SET reserved_usd = 0, input = '', suspended = 0, updated_at = ? WHERE id = ?",
+    )
+    .run(now, predecessor.id)
+  insertAttemptRows(ctx, o, {
+    id: freshId,
+    kind: 'step',
+    stepId: step.id,
+    n,
+    agentId: predecessor.agent_id,
+    incarnation: predecessor.agent_incarnation,
+    input: predecessor.input,
+    reserved: predecessor.reserved_usd,
+    claim: null,
+    // Suspended until admission takes it up again through the normal rules (capacity, holds, the gate and policy binding).
+    suspended: true,
+    policyId: predecessor.policy_id,
+  })
+  setStepStatus(sqlite, o.id, step.id, 'queued', null, now)
+  setNode(sqlite, o.id, node.node_id, {
+    renewals: node.renewals + 1,
+    reason: 'trying again after your decision',
+  })
+  addHistory(
+    sqlite,
+    o.id,
+    'node_try_again',
+    { nodeId: node.node_id, attemptId: freshId, renewedFrom: predecessor.id },
+    now,
+  )
+  bumpAdmission(sqlite)
+  touch(ctx, o.id)
+}
+
+/**
  * Remap (v8.1 item 1): the workflow form of "use the new <agent>". Provably unsent steps of the agent are retired with
  * disposition `remapped` (their gates withdrawn) and re-created for the new incarnation; possibly-sent work keeps its
  * attempt and obligations, the new mapping applies to later work. The decision names the exact payloads it approves.
@@ -213,6 +308,7 @@ export function remapWorkflow(
   orchId: string,
   body: WorkflowRemapDecision,
   journal: ExecutionJournal,
+  report?: WorkerReport,
 ): void {
   const { sqlite, now } = ctx
   const o = requireOrch(sqlite, orchId)
@@ -248,6 +344,9 @@ export function remapWorkflow(
   for (const item of plan.items)
     if ((nodes.get(item.nodeId)?.remaps ?? 0) >= 2)
       throw new HttpError(409, 'conflict', `${item.nodeId} was already reassigned twice.`)
+  // A coding agent's new version is approved like a worker at the start: its policy id and, beyond the workspace, its reach
+  // (7.7c §4). Judged before anything changes.
+  acceptCodingRemap(sqlite, orchId, body, report, now)
   journalSoft(ctx, () =>
     ctx.journal.append({
       kind: 'remap',
@@ -266,7 +365,14 @@ export function remapWorkflow(
   for (const item of plan.items) {
     const node = nodes.get(item.nodeId)!
     const step = node.step_id ? steps.get(node.step_id) : undefined
-    if (step && ['pending_gate', 'queued', 'admitted'].includes(step.status)) {
+    // A coding step blocked for a decision (new settings, the step limit) is provably unsent too: its suspended attempt is
+    // closed here, so its reservation is released and the re-created step is the only one (7.7c §4).
+    if (
+      step &&
+      (['pending_gate', 'queued', 'admitted'].includes(step.status) ||
+        (step.status === 'blocked' &&
+          attempts.some((a) => a.step_id === step.id && a.suspended && a.state === 'created')))
+    ) {
       for (const attempt of attempts.filter((a) => a.step_id === step.id && a.state === 'created'))
         refuseAttempt(sqlite, attempt, 'not dispatched: remapped', now)
       setStepStatus(sqlite, orchId, step.id, 'not_started', 'remapped', now)

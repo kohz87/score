@@ -7,6 +7,7 @@ import type {
   StepStatus,
   StepView,
 } from '@score/contract'
+import type { RunCoding } from './CodingCards.tsx'
 
 // Pure model of the orchestration pages: how a step looks, which graph the diagram draws, which events move a dot,
 // how the live log is filtered and what the diagram shows at a scrubbed time of the replay. No React, no DOM.
@@ -462,4 +463,18 @@ export const readinessText: Record<WorkerReadiness, string> = {
   frozen: 'Score is holding all agent work until you review it on Now.',
   needs_units:
     'Score runs coding agents as separate system services, and this computer isn’t set up for that.',
+}
+
+/**
+ * An orchestration's `coding` block in the shape the shared coding cards read (its limit is called `stepLimit` there;
+ * a workflow calls it `codingSteps`).
+ */
+export function orchCoding(coding: OrchestrationDetail['coding']): RunCoding | undefined {
+  return coding
+    ? {
+        workers: coding.workers,
+        codingSteps: coding.stepLimit,
+        acceptedUnknownCost: coding.acceptedUnknownCost,
+      }
+    : undefined
 }

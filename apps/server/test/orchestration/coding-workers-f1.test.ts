@@ -8,6 +8,7 @@ import type { LeadScript } from '../../src/hermes/fake/fake-lead.ts'
 import { budgetView } from '../../src/domain/orchestration/budget.ts'
 import {
   CODING_ITEM_EXTRA_BYTES,
+  codingUnsentBytes,
   codingItemsFor,
   reserveFor,
   CODING_OUTPUT_BYTES,
@@ -365,6 +366,9 @@ describe('#5 rejecting the renewed gate closes the suspended attempt', () => {
   })
 })
 
+// The room for unsent inputs of a default run (12 steps, 2 at once) is part of the partition (F1 #6 of 7.7c).
+const UNSENT = codingUnsentBytes(12, 2)
+
 describe('#7 coding inventory has its own part of the reserve', () => {
   const orch = () => h.rows<Record<string, number>>('SELECT * FROM orchestrations')[0]!
 
@@ -428,7 +432,7 @@ describe('#7 coding inventory has its own part of the reserve', () => {
   })
 
   test('lowering then restoring codingSteps does not reserve twice (F2 #5)', async () => {
-    const quota = reserveFor(12, 20, codingItemsFor(12, 10))
+    const quota = reserveFor(12, 20, codingItemsFor(12, 10), UNSENT)
     h = await workerHarness({
       lead: { script: byTurn({ 1: async () => 'waiting', 2: async () => 'waiting' }) },
       orchestrator: { quotaBytes: quota },
@@ -436,18 +440,18 @@ describe('#7 coding inventory has its own part of the reserve', () => {
     h.addAgent()
     const id = await h.create({ codingSteps: 10 })
     const reserved = orch()['reserve_bytes']
-    expect(orch()['coding_reserve_bytes']).toBe(10 * CODING_ITEM_EXTRA_BYTES)
+    expect(orch()['coding_reserve_bytes']).toBe(10 * CODING_ITEM_EXTRA_BYTES + UNSENT)
     await h.orch.limits(id, { codingSteps: 4, orchestrationRevision: revision(id) })
-    expect(orch()['coding_reserve_bytes']).toBe(10 * CODING_ITEM_EXTRA_BYTES)
+    expect(orch()['coding_reserve_bytes']).toBe(10 * CODING_ITEM_EXTRA_BYTES + UNSENT)
     await h.orch.limits(id, { codingSteps: 10, orchestrationRevision: revision(id) })
     expect(orch()['coding_steps']).toBe(10)
     expect(orch()['reserve_bytes']).toBe(reserved)
-    expect(orch()['coding_reserve_bytes']).toBe(10 * CODING_ITEM_EXTRA_BYTES)
+    expect(orch()['coding_reserve_bytes']).toBe(10 * CODING_ITEM_EXTRA_BYTES + UNSENT)
   })
 
   test('raising codingSteps grows the reserve by the new items; a database without room refuses it', async () => {
     // The database holds exactly what a default run (10 coding items) reserves, which is also what preflight asks for.
-    const quota = reserveFor(12, 20, codingItemsFor(12, 10))
+    const quota = reserveFor(12, 20, codingItemsFor(12, 10), UNSENT)
     h = await workerHarness({
       lead: {
         script: byTurn({
@@ -460,12 +464,12 @@ describe('#7 coding inventory has its own part of the reserve', () => {
     })
     h.addAgent()
     const id = await h.create({ codingSteps: 4 })
-    const base = reserveFor(12, 20, codingItemsFor(12, 4))
+    const base = reserveFor(12, 20, codingItemsFor(12, 4), UNSENT)
     expect(orch()['reserve_bytes']).toBe(base)
-    expect(orch()['coding_reserve_bytes']).toBe(4 * CODING_ITEM_EXTRA_BYTES)
+    expect(orch()['coding_reserve_bytes']).toBe(4 * CODING_ITEM_EXTRA_BYTES + UNSENT)
     await h.orch.limits(id, { codingSteps: 6, orchestrationRevision: revision(id) })
     expect(orch()['reserve_bytes']).toBe(base + 2 * CODING_ITEM_EXTRA_BYTES)
-    expect(orch()['coding_reserve_bytes']).toBe(6 * CODING_ITEM_EXTRA_BYTES)
+    expect(orch()['coding_reserve_bytes']).toBe(6 * CODING_ITEM_EXTRA_BYTES + UNSENT)
     // Six more items (12 in all) are more than the database has room for.
     await expect(
       h.orch.limits(id, { codingSteps: 12, orchestrationRevision: revision(id) }),
