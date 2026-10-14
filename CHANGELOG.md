@@ -3,6 +3,39 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.2.0] — 2026-10-14
+
+Stage 2 of coding agents in orchestration (PLAN 7.7b): an orchestration's lead can give **worker steps to Claude Code
+and Codex agents**. Designed over four adversarial reviews, built in three sequential parts, then a Codex code review and
+two verification rounds; every fix has a regression test that failed before it.
+
+### Added — coding workers in orchestrations
+- Claude Code and Codex agents (read-only or workspace-write) can take worker steps; the lead stays a Hermes agent.
+  Antigravity, `full` access and hosts without supervised units aren't workers yet; workflows still refuse coding agents
+  (stage 3).
+- **The settings you approved are the settings that run.** Starting an orchestration takes a snapshot of each coding
+  worker (CLI program, version, permission, workspace, environment fingerprint and the CLI's own config files, by file
+  identity only: Score never reads them). Right before a step's CLI starts, Score checks all of it again; anything
+  changed holds the step as "Settings changed", with **Use the new settings** to approve the new ones.
+- Workers run with the CLI's own extras switched off where the CLI allows it (Codex `--ignore-user-config`,
+  `--ignore-rules`; Claude Code `--strict-mcp-config`).
+- The start dialog explains in plain words what each worker can read and asks for one acknowledgement.
+- A step only starts if the orchestration still allows it at that moment (Stop, pause, deadline, budget, limit); a step
+  held back provably never ran and costs nothing. Each retry is a separate try with a fresh CLI session.
+- Results are the CLI's own validated final answer, complete up to 32 KB, and only with proof the run ended.
+- **Coding step limit** (default 10), counted from the launch journal so restores can't lose it; unknown cost is tracked
+  per CLI and can be accepted per CLI.
+- Coding steps show a **Claude Code** or **Codex** badge in Flow and the log.
+
+### Changed
+- Owed Stops are delivered in the background; shutdown waits up to 5 s for them, the rest stay owed.
+- Claude Code 2.1.296 is a tested version.
+
+### Fixed
+- Live mode: a coding agent created a moment ago now shows up straight away in rooms and orchestration screens (the
+  agent list's cache only knew Hermes profiles and hid coding agents until its next refresh). Found by the live check.
+- A refused readiness check in the new-orchestration dialog now blocks Start.
+
 ## [1.1.0] — 2026-10-13
 
 Stage 1 of coding agents in orchestration (PLAN 7.7a): every coding turn now runs as its own supervised systemd user
