@@ -256,6 +256,20 @@ function onAgentFailure(p: Pass, node: WfNodeRow, reason: string, retryable: boo
   else failRun(p, node.node_id, `${node.node_id} failed: ${reason}`)
 }
 
+/**
+ * A step that never started because its inputs were withdrawn (7.7a/7.7b: judged at send and again at the release): the
+ * node is unresolved. For a coding step nothing ran, so the try it used is given back and the person can re-run the
+ * upstream step and retry this one, even with no retries configured.
+ */
+function unresolvedWithdrawn(p: Pass, node: WfNodeRow, step: StepRow, reason: string): void {
+  const attempt = lastAttemptOf(p, step.id)
+  const coding = attempt !== undefined && attempt.runtime !== 'hermes'
+  setState(p, node.node_id, 'unresolved', {
+    reason,
+    ...(coding ? { attempts_used: Math.max(0, node.attempts_used - 1) } : {}),
+  })
+}
+
 /** What the node says while its coding step waits for the person, by the step's disposition. */
 const CODING_HOLD_REASON: Record<string, string> = {
   agent_changed: 'waiting for your decision about the changed agent',
@@ -358,7 +372,7 @@ function observe(p: Pass): boolean {
           }
           break
         }
-        if (/^input_withdrawn/.test(why)) setState(p, node.node_id, 'unresolved', { reason: why })
+        if (/^input_withdrawn/.test(why)) unresolvedWithdrawn(p, node, step, why)
         else if (/^capability_in_input/.test(why)) onAgentFailure(p, node, why, false)
         else
           // agent_changed / agent_unavailable: the node waits for the person's remap; no logical attempt is used.
@@ -371,6 +385,17 @@ function observe(p: Pass): boolean {
         // A remapped step is re-created; one retired by Stop / Finish stays as it is.
         if (/remapped/.test(step.disposition ?? '') && p.canIssue) {
           setState(p, node.node_id, 'ready', { reason: 'remapped', step_id: null })
+          changed = true
+        } else if (step.status === 'cancelled' && step.disposition === 'inputs_withdrawn') {
+          // A coding step refused at the release because what it was going to read was withdrawn: the node is unresolved
+          // with its own Needs-you item, never left running (7.7c §4, X6). Stop, cancel and the deadline keep the run's
+          // own terminal behaviour (the node ends cancelled with the run).
+          unresolvedWithdrawn(
+            p,
+            node,
+            step,
+            'something this step was going to read was withdrawn before it started',
+          )
           changed = true
         }
         break

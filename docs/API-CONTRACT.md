@@ -1991,6 +1991,14 @@ executor's one admission function, the coding step limit counted from the launch
   `NodeView.renewals` counts them); when the last renewed attempt is held back again the node fails `kept being held back`
   and no further item is offered. Hermes nodes keep §15's Try again unchanged.
 
+- **Every coding closure cause has a node transition.** `stop`, `cancel` and `deadline` keep the run's terminal behaviour (the
+  node ends `cancelled` with the run); holds (`paused`, `frozen`, `hold`, `fenced`, `restart`, `budget`, `unknown_cost`,
+  `deadline_changed`) keep the node `running` while the same attempt is admitted again; `agent_changed`, `coding_limit` and the
+  generation cap block with the node's step kept (above); readiness causes follow the refusal flow. **`inputs_withdrawn`** (what
+  the step was going to read was withdrawn while it was queued or arming) makes the node `unresolved` with
+  `needsYou.node_inputs_withdrawn { nodeId }` — re-run the upstream step, then Retry this one. Nothing of the step ran, so the
+  try it used is given back (`attemptsUsed` goes down by one) and Retry is possible even for a node with no retries.
+
 ### Graph semantics
 
 **Planner principal.** Server-only (no capability, no MCP). Its commands (`assign`, `cancel`, `finish`) use the run-scoped

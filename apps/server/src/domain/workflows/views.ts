@@ -225,8 +225,31 @@ function needsYouOf(
     result.push({ kind: 'cancel_fence', stepId: attempt.step_id ?? '', attemptId: attempt.id })
   if (!isTerminalStatus(o.status) && isFenced(sqlite))
     result.push({ kind: 'fence', reason: 'global' })
+  // 7.7c: a coding step that never started because what it was going to read was withdrawn has its own item (re-run the
+  // upstream step, then retry this one) instead of the abandoned-attempt Retry.
+  const stepById = new Map(stepsOf(sqlite, o.id).map((step) => [step.id, step]))
+  const withdrawn = new Set<string>()
+  for (const node of nodes) {
+    const step = node.step_id ? stepById.get(node.step_id) : undefined
+    const last = step
+      ? attempts
+          .filter((a) => a.step_id === step.id)
+          .reduce<AttemptRow | undefined>((b, a) => (!b || a.n > b.n ? a : b), undefined)
+      : undefined
+    if (
+      node.state === 'unresolved' &&
+      step &&
+      last !== undefined &&
+      last.runtime !== 'hermes' &&
+      ((step.status === 'cancelled' && step.disposition === 'inputs_withdrawn') ||
+        (step.status === 'blocked' && /^input_withdrawn/.test(step.disposition ?? '')))
+    )
+      withdrawn.add(node.node_id)
+  }
   for (const node of nodes)
-    if (node.state === 'unresolved' && node.attempts_used < node.attempts_max)
+    if (withdrawn.has(node.node_id))
+      result.push({ kind: 'node_inputs_withdrawn', nodeId: node.node_id })
+    else if (node.state === 'unresolved' && node.attempts_used < node.attempts_max)
       result.push({
         kind: 'retry',
         nodeId: node.node_id,
