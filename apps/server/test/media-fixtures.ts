@@ -18,7 +18,14 @@ export const webp = (pad = 64, seed = 3) =>
     Buffer.from('WEBP'),
     Buffer.alloc(pad, seed),
   ])
-export const unique = (size: number) => png(size - 8, 0).fill(randomBytes(1)[0]!, 8)
+// A counter in the first bytes after the magic number makes every call differ, whatever the random fill is (one random
+// byte alone collided 1 time in 256, and the store de-duplicates by content, so two "unique" uploads became one item).
+let uniqueCount = 0
+export const unique = (size: number) => {
+  const bytes = png(size - 8, 0).fill(randomBytes(1)[0]!, 8)
+  bytes.writeUInt32BE(++uniqueCount, 8)
+  return bytes
+}
 
 export function multipart(
   parts: { name: string; filename?: string; type?: string; data: Buffer }[],
