@@ -57,6 +57,11 @@ export const WORKFLOW_LIMITS = {
   maxRenewalsPerNode: 3,
   /** Stored sanitized output per attempt (the verdict is parsed from the complete reply before this cut). */
   outputBytes: 32 * 1024,
+  /**
+   * 7.7c: the longest eligible reply a verdict is read from (the whole reply, never a prefix). A coding agent's reply over
+   * this fails its step "answer too long to read a verdict".
+   */
+  verdictInputBytes: 256 * 1024,
   verdictReasonChars: 500,
   /** Control history kept per run; older records fold into counters (journaled transitions are kept). */
   controlHistoryRecords: 200,

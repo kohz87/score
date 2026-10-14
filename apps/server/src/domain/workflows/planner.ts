@@ -11,6 +11,7 @@ import { budgetView, canReserve, unknownCostBlocks } from '../orchestration/budg
 import { touch, type Ctx } from '../orchestration/ctx.ts'
 import { stopRun } from '../orchestration/decisions.ts'
 import {
+  addCodingStored,
   addStored,
   admissionRevision,
   beginFinish,
@@ -204,7 +205,20 @@ const lastAttemptOf = (p: Pass, stepId: string): AttemptRow | undefined =>
 
 function onAgentSuccess(p: Pass, node: WfNodeRow, step: StepRow): void {
   const attempt = lastAttemptOf(p, step.id)
-  const stored = attempt ? readResult(p.ctx.sqlite, attempt.id) : undefined
+  const coding = attempt !== undefined && attempt.runtime !== 'hermes'
+  // A coding attempt's facts are the current dispatch generation's (7.7c §3).
+  const stored = attempt
+    ? readResult(p.ctx.sqlite, attempt.id, coding ? attempt.dispatch_generation : undefined)
+    : undefined
+  if (coding) {
+    // The verdict was read from the raw eligible reply when the run ended. No row: no eligible reply, no answer. Over the
+    // verdict input limit: the answer is too long to read, and no prefix is ever parsed.
+    if (!stored) return onAgentFailure(p, node, 'no final answer', true)
+    if (stored.too_long)
+      return onAgentFailure(p, node, 'answer too long to read a verdict', true)
+    // The node keeps its own copy of the output: coding inventory, charged to the run's coding partition (§5).
+    addCodingStored(p.ctx.sqlite, p.o.id, utf8Bytes(stored.output))
+  }
   let output = stored?.output ?? step.result ?? ''
   let truncated = stored?.truncated ?? false
   let verdict = stored?.verdict ?? null

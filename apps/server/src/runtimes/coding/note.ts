@@ -121,6 +121,10 @@ export const MAX_ID_BYTES = 256
 export const MAX_DETAIL_FIELD_BYTES = 16 * 1024
 /** Longest candidate reply a run retains; a longer one is not an authoritative reply. */
 export const MAX_REPLY_BYTES = 256 * 1024
+/** The reason a reply over `MAX_REPLY_BYTES` is not eligible (the executor names it for a workflow step). */
+export const REPLY_TOO_LARGE = 'The reply is larger than Score keeps'
+/** Matches both drivers' wording of it (Codex reports it as a message it could not keep). */
+export const REPLY_TOO_LARGE_PATTERN = /larger than Score keeps/
 const MAX_TOOL_NAME_BYTES = 200
 const MAX_PREVIEW_BYTES = 8 * 1024
 const MAX_ERROR_BYTES = 8 * 1024
@@ -190,7 +194,7 @@ export function boundEvent(event: CodingEvent): CodingEvent {
     case 'result': {
       const verdict =
         event.verdict?.eligible && Buffer.byteLength(event.verdict.reply ?? '') > MAX_REPLY_BYTES
-          ? { eligible: false, reply: null, reason: 'The reply is larger than Score keeps' }
+          ? { eligible: false, reply: null, reason: REPLY_TOO_LARGE }
           : event.verdict
       return {
         ...event,

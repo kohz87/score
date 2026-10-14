@@ -1944,6 +1944,14 @@ executor's one admission function, the coding step limit counted from the launch
   a restore; raising the limit lets steps blocked `coding_limit` go on). A higher limit grows the coding partition by the
   **workflow** item size. A workflow without coding agents answers `400 bad_request` to either field.
 
+- **Results and verdicts of coding steps.** The verdict is read from the **raw eligible reply** (the CLI's own validated final
+  answer, whole), in the transaction that records the run's end: before any storage cut (the 32 KiB `result_text`), display
+  fallback or Score annotation, never from a prefix. Parsing is §15's (exactly one `score-verdict` block). A reply over 256 KiB
+  (`WORKFLOW_LIMITS.verdictInputBytes`; the drivers don't keep a longer one) fails the node with the reason `answer too long to
+  read a verdict`; no eligible reply, no result row, and the node fails `no final answer`. The row is keyed by `(attempt,
+  generation)`: a late result of an earlier generation never replaces the current one, and late proof, `interrupted` or
+  `unknown` never give a verdict. The row and the node's own copy of the output are charged to the coding partition.
+
 ### Graph semantics
 
 **Planner principal.** Server-only (no capability, no MCP). Its commands (`assign`, `cancel`, `finish`) use the run-scoped

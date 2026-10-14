@@ -1,0 +1,5 @@
+{"_fixture": "hand-made, not recorded: a message of 300000 characters (over the 256 KiB Score keeps)"}
+{"type": "thread.started", "thread_id": "0199bbbb-0000-7000-8000-000000000002"}
+{"type": "turn.started"}
+{"type": "item.completed", "item": {"id": "item_0", "type": "agent_message", "text": "START-{{PAD:300000}}-END"}}
+{"type": "turn.completed", "usage": {"input_tokens": 20, "cached_input_tokens": 0, "output_tokens": 10}}

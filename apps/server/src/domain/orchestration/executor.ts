@@ -96,6 +96,7 @@ import {
 } from './coding-attempts.ts'
 import type { OrchestrationOwner, ReleaseDecision } from './owner.ts'
 import { CODING_RESULT_BYTES } from '../../runtimes/coding/translate.ts'
+import { REPLY_TOO_LARGE_PATTERN } from '../../runtimes/coding/note.ts'
 import {
   activeStepCounts,
   addStored,
@@ -2899,6 +2900,15 @@ export class Orchestrator {
     // The retained copy in `coding_run_results` is part of the coding inventory too (F1 #7).
     if (reply) addCodingStored(sqlite, o.id, Buffer.byteLength(reply.reply))
     const status = run.status
+    // A workflow node names why a coding step produced no usable answer (7.7c §3): the person reads this on the node.
+    const failure =
+      o.planner !== 'workflow'
+        ? 'the step run failed'
+        : REPLY_TOO_LARGE_PATTERN.test(`${run.error ?? ''}`)
+          ? 'answer too long to read a verdict'
+          : status === 'completed' && !reply
+            ? 'no final answer'
+            : 'the step run failed'
     const disposition: 'completed' | 'failed' | 'cancelled' =
       status === 'cancelled'
         ? 'cancelled'
@@ -2968,7 +2978,7 @@ export class Orchestrator {
       )
       .run(
         disposition === 'completed' ? 'succeeded' : 'failed',
-        disposition === 'failed' ? 'the step run failed' : null,
+        disposition === 'failed' ? failure : null,
         result,
         now,
         o.id,

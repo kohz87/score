@@ -1,0 +1,4 @@
+{"_fixture": "hand-made, not recorded: two score-verdict blocks more than 32 KiB apart (the whole reply has two, the first 32 KiB only one)"}
+{"type": "system", "subtype": "init", "session_id": "77777777-7777-4777-8777-777777777777", "model": "claude-sonnet-fixture"}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "Working on it."}]}}
+{"type": "result", "subtype": "success", "is_error": false, "result": "```score-verdict\n{\"verdict\": \"passed\", \"reason\": \"First\"}\n```\n{{PAD:40000}}\n```score-verdict\n{\"verdict\": \"changes_requested\", \"reason\": \"Second\"}\n```", "session_id": "77777777-7777-4777-8777-777777777777", "total_cost_usd": 0.003, "usage": {"input_tokens": 10, "output_tokens": 10}}

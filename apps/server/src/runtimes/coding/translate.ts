@@ -24,6 +24,7 @@ import {
   CODING_OUTPUT_BYTES,
   CODING_RESULT_BYTES,
 } from '../../domain/orchestration/ops.ts'
+import { recordRunResult } from '../../domain/workflows/verdict.ts'
 import { rememberCliSession } from './store.ts'
 import type { CodingEvent, ToolDetail } from './types.ts'
 
@@ -385,6 +386,9 @@ export function terminalObservation(
             'INSERT OR IGNORE INTO coding_run_results (run_id, reply, truncated, created_at) VALUES (?, ?, ?, ?)',
           )
           .run(runId, kept, Buffer.byteLength(redacted) > CODING_RESULT_BYTES ? 1 : 0, now)
+        // A workflow step's verdict is read from the COMPLETE eligible reply, here, before any display cut, storage cut or
+        // Score annotation, and stored with the run's generation (7.7c §3). Never from the 32 KiB copy above.
+        recordRunResult(sqlite, runId, info.reply, now)
       }
       const changed = setRun(sqlite, runId, now, {
         status: info.status,
