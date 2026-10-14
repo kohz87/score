@@ -4,7 +4,9 @@ import { z } from 'zod'
 import type { ScoreDb } from '../../db/index.ts'
 import { HttpError } from '../../errors.ts'
 import { applyClosure } from './coding-attempts.ts'
-import { recordRefusal } from './ops.ts'
+import { recordRefusal, refuseAttempt, setStepStatus } from './ops.ts'
+import { insertAttemptRows } from './attempt-rows.ts'
+import { readAttempt, readOrch, readStep } from './store.ts'
 import { applyCodingEvidence, verifyCoding } from './coding-checkpoint.ts'
 import { foldCodingLaunches } from './coding-records.ts'
 import {
@@ -509,7 +511,80 @@ export function applyJournalEvidence(
       .run(entry.runId, now, entry.attemptId)
     changed += Number(result.changes)
   }
+  changed += applyRenewals(sqlite, entries, now)
   changed += applyCodingEvidence(sqlite, entries, now)
+  return changed
+}
+
+/**
+ * 7.7c F2 #1: replays the newest journaled Try again (dispatch renewal) of each coding node. The node's renewal count never
+ * goes below the journal's, and a restored predecessor (proven unsent when the renewal was recorded) is retired and its input
+ * and reservation move to the journaled successor, which waits suspended: the node shows "held back" again, and its next Try
+ * again is counted.
+ */
+function applyRenewals(
+  sqlite: DatabaseSync,
+  entries: readonly JournalEntry[],
+  now: string,
+): number {
+  const newest = new Map<string, Extract<JournalEntry, { kind: 'renewal' }>>()
+  for (const entry of entries)
+    if (entry.kind === 'renewal') newest.set(`${entry.orchestrationId}:${entry.nodeId}`, entry)
+  let changed = 0
+  for (const entry of newest.values()) {
+    const node = sqlite
+      .prepare('SELECT renewals, step_id FROM wf_nodes WHERE orchestration_id = ? AND node_id = ?')
+      .get(entry.orchestrationId, entry.nodeId) as
+      { renewals: number; step_id: string | null } | undefined
+    const o = readOrch(sqlite, entry.orchestrationId)
+    if (!node || !o) continue
+    const predecessor = readAttempt(sqlite, entry.predecessorId)
+    if (
+      predecessor &&
+      predecessor.state === 'created' &&
+      node.step_id !== null &&
+      predecessor.step_id === node.step_id &&
+      !readAttempt(sqlite, entry.successorId) &&
+      readStep(sqlite, o.id, node.step_id)
+    ) {
+      refuseAttempt(sqlite, predecessor, 'not dispatched: renewed', now)
+      sqlite
+        .prepare(
+          "UPDATE orc_attempts SET reserved_usd = 0, input = '', suspended = 0, updated_at = ? WHERE id = ?",
+        )
+        .run(now, predecessor.id)
+      const n = (
+        sqlite
+          .prepare(
+            'SELECT COUNT(*) AS c FROM orc_attempts WHERE orchestration_id = ? AND step_id = ?',
+          )
+          .get(o.id, node.step_id) as { c: number }
+      ).c
+      insertAttemptRows({ sqlite, now }, o, {
+        id: entry.successorId,
+        kind: 'step',
+        stepId: node.step_id,
+        n: n + 1,
+        agentId: predecessor.agent_id,
+        incarnation: predecessor.agent_incarnation,
+        input: predecessor.input,
+        reserved: predecessor.reserved_usd,
+        claim: null,
+        suspended: true,
+        policyId: predecessor.policy_id,
+      })
+      setStepStatus(sqlite, o.id, node.step_id, 'blocked', 'held_back', now)
+      changed++
+    }
+    if (node.renewals < entry.renewals) {
+      sqlite
+        .prepare(
+          'UPDATE wf_nodes SET renewals = ?, revision = revision + 1 WHERE orchestration_id = ? AND node_id = ?',
+        )
+        .run(entry.renewals, entry.orchestrationId, entry.nodeId)
+      changed++
+    }
+  }
   return changed
 }
 

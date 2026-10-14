@@ -22,7 +22,11 @@ export interface NewAttempt {
   policyId?: string | null
 }
 
-export function insertAttemptRows(ctx: Ctx, o: OrchRow, a: NewAttempt): void {
+export function insertAttemptRows(
+  ctx: Pick<Ctx, 'sqlite' | 'now'>,
+  o: OrchRow,
+  a: NewAttempt,
+): void {
   const { sqlite, now } = ctx
   const turnId = `orc-turn-${a.id}`
   sqlite
