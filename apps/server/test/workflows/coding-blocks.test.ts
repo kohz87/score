@@ -51,7 +51,7 @@ async function passes(id: string, times = 4): Promise<void> {
   expect(wfRunOf(h, id).status).not.toBe('failed')
 }
 // Waits on the executor's own state (the step is blocked at the limit), so the checks after it are about what the planner did.
-const blocked = (_id: string, _nodeId: string) =>
+const blocked = () =>
   h.until(
     () => rows("SELECT 1 FROM orc_steps WHERE disposition = 'coding_limit'").length > 0,
     60_000,
@@ -66,7 +66,7 @@ describe('a coding node blocked at the step limit keeps its step', () => {
   test('concurrency 1: raising the limit resumes the same attempt; no replacement, attempts used unchanged', async () => {
     await boot()
     const id = await startWorkflow(h, sequence(), { codingSteps: 1, maxConcurrentSteps: 1 })
-    await blocked(id, 'b')
+    await blocked()
     const held = node(id, 'b')
     expect(held).toMatchObject({
       state: 'running',
@@ -97,7 +97,7 @@ describe('a coding node blocked at the step limit keeps its step', () => {
   test('concurrency 2 with fan-out: the step that did not get a launch waits, then both finish once each', async () => {
     await boot()
     const id = await startWorkflow(h, fanOut(), { codingSteps: 1, maxConcurrentSteps: 2 })
-    await blocked(id, 'a')
+    await blocked()
     const heldStep = rows("SELECT id FROM orc_steps WHERE disposition = 'coding_limit'")[0]!['id']
     const heldNode = ['a', 'b'].find((n) => node(id, n).stepId === heldStep)!
     expect(heldNode).toBeDefined()
@@ -125,7 +125,7 @@ describe('a coding node blocked at the step limit keeps its step', () => {
       maxConcurrentSteps: 1,
       budgetUsd: 0.6,
     })
-    await blocked(id, 'b')
+    await blocked()
     await passes(id)
     expect(wfRunOf(h, id).budget.reservedUsd).toBe(0.5)
     await h.orch.wfLimits(id, { codingSteps: 2, orchestrationRevision: revision(id) })
@@ -136,7 +136,7 @@ describe('a coding node blocked at the step limit keeps its step', () => {
   test('across a restart: the held step is still the node’s, and the raised limit resumes it', async () => {
     await boot()
     const id = await startWorkflow(h, sequence(), { codingSteps: 1, maxConcurrentSteps: 1 })
-    await blocked(id, 'b')
+    await blocked()
     const step = node(id, 'b').stepId!
     const [attempt] = attemptsOf(step)
     await h.restart()
