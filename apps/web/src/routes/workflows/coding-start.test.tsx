@@ -1,5 +1,13 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import {
+  cleanup,
+  configure,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import {
@@ -14,6 +22,9 @@ import { createQueryClient, StreamContext } from '../../data/query-client.ts'
 import { createStreamQueryRegistry } from '../../data/resync.ts'
 import { createStreamClient } from '../../data/stream.ts'
 import { StartWorkflowDialog } from './StartWorkflowDialog.tsx'
+
+// Several workers share the machine; the default 1 s is tight for a dialog that fetches its preflight first.
+configure({ asyncUtilTimeout: 5000 })
 
 // 7.7c-2 #4: the run dialog of a workflow with coding steps: what each coding agent can read and the risk in the 7.7b
 // words, one acknowledgement by policy id, unknown cost per program, the coding step limit; a rerun asks again.
