@@ -55,7 +55,8 @@ export function registerAboutRoutes(
     return z.object({ version: z.number().nullable() }).parse(row).version ?? 0
   }
   app.get('/api/about', async () => {
-    const hermes = options.getSystemStatus().hermes.version
+    const { hermes: status } = options.getSystemStatus()
+    const hermes = status.version
     return AboutSchema.parse({
       version,
       commit: await (options.commit ?? readCommit)(),
