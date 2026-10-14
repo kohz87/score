@@ -2,6 +2,7 @@ import { z } from 'zod'
 import {
   AttemptViewSchema,
   BudgetViewSchema,
+  CodingReachAcknowledgementSchema,
   CodingWorkerPreflightSchema,
   CostSourceSchema,
   type GateDecision,
@@ -953,6 +954,21 @@ export const WorkflowTryAgainDecisionSchema = z
   .object({ expectedNodeRevision: revision, orchestrationRevision: revision })
   .strict()
 export type WorkflowTryAgainDecision = z.infer<typeof WorkflowTryAgainDecisionSchema>
+
+/**
+ * `POST /api/workflow-runs/:id/nodes/:nodeId/policy-remap` (7.7c): "Use the new settings" for a coding node whose agent's
+ * settings changed. The node's agent stays the same; the decision names the policy id the person saw, carries the
+ * acknowledgement of its reach where it goes beyond the workspace, and is bound to the run's and the node's revisions.
+ */
+export const WorkflowPolicyRemapDecisionSchema = z
+  .object({
+    policyId: PolicyIdSchema,
+    acknowledgeCodingReach: CodingReachAcknowledgementSchema.optional(),
+    expectedNodeRevision: revision,
+    orchestrationRevision: revision,
+  })
+  .strict()
+export type WorkflowPolicyRemapDecision = z.infer<typeof WorkflowPolicyRemapDecisionSchema>
 
 /** `POST /api/workflow-runs/:id/remap`: §14's decision plus the exact re-created payloads the card showed. */
 export const WorkflowRemapDecisionSchema = z

@@ -7,6 +7,7 @@ import {
   type WorkflowDefinition,
   WorkflowCreateSchema,
   WorkflowExportRequestSchema,
+  WorkflowPolicyRemapDecisionSchema,
   WorkflowRemapDecisionSchema,
   WorkflowRetryDecisionSchema,
   WorkflowRunCreateSchema,
@@ -181,6 +182,14 @@ export function registerWorkflowRoutes(
   app.post('/api/workflow-runs/:id/nodes/:nodeId/retry', mutation, async (request) => {
     const { id, nodeId } = NodeParams.parse(request.params)
     return orchestrator.wfRetry(id, nodeId, WorkflowRetryDecisionSchema.parse(request.body))
+  })
+  app.post('/api/workflow-runs/:id/nodes/:nodeId/policy-remap', mutation, async (request) => {
+    const { id, nodeId } = NodeParams.parse(request.params)
+    return orchestrator.wfPolicyRemap(
+      id,
+      nodeId,
+      WorkflowPolicyRemapDecisionSchema.parse(request.body),
+    )
   })
   app.post('/api/workflow-runs/:id/nodes/:nodeId/try-again', mutation, async (request) => {
     const { id, nodeId } = NodeParams.parse(request.params)

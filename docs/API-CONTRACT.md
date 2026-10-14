@@ -1959,6 +1959,21 @@ executor's one admission function, the coding step limit counted from the launch
   doesn't change. `needsYou` lists `coding_limit { used, limit }` once for the run while any step waits for it. Other blocked
   dispositions (`agent_unavailable`, a remap) keep the planner's behaviour from §15 "Mapping".
 
+- **Assignment gates** (`every-step`) of a coding step carry the agent's `policyId` in their payload; admission and release
+  require the gate's id to equal the step's stored policy, and an approval for an old id never covers a new one. A graph
+  `gate` node has no agent and no policy binding.
+- **Use the new settings** `POST /api/workflow-runs/:id/nodes/:nodeId/policy-remap`
+  `WorkflowPolicyRemapDecision { policyId, acknowledgeCodingReach?, expectedNodeRevision, orchestrationRevision }` →
+  `WorkflowRunSummary`: for a coding node whose agent's settings changed (`needsYou.coding_agent_changed { nodeId, agentId,
+  newPolicyId, reach }`; `newPolicyId` is the id the stored policy has now when Score can tell without asking the CLI again,
+  else `null` — the card asks preflight). The node's agent is unchanged; the step's one suspended attempt takes the agent's
+  current policy through §14's per-step remap: `policyId` must equal the agent's current policy and differ from the step's
+  (`409 policy_changed`), the agent must be ready, a reach beyond the workspace needs `acknowledgeCodingReach` naming
+  `policyId` (`409 reach_not_acknowledged`), a stale node or run revision is `409 conflict`. Journaled (`policy_remap`) and
+  verified after a restore. Under `every-step` the old approval is withdrawn and a fresh gate naming the new id needs
+  approving; otherwise the attempt is admitted again at once. Switching a node between a Hermes and a coding agent is not
+  offered.
+
 ### Graph semantics
 
 **Planner principal.** Server-only (no capability, no MCP). Its commands (`assign`, `cancel`, `finish`) use the run-scoped

@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { agentAdmits, lifecycleOf } from '../agent-lifecycle.ts'
 import { budgetView, canReserve, unknownCostBlocks } from '../orchestration/budget.ts'
+import { readWorkerPolicy } from '../orchestration/coding-policy.ts'
 import { touch, type Ctx } from '../orchestration/ctx.ts'
 import { stopRun } from '../orchestration/decisions.ts'
 import {
@@ -635,6 +636,9 @@ function assign(p: Pass, node: WfNodeRow): boolean {
   let gateId: string | null = null
   if (everyStep) {
     gateId = `g${(sqlite.prepare('SELECT COUNT(*) AS n FROM orc_gates WHERE orchestration_id = ?').get(p.o.id) as { n: number }).n + 1}`
+    // A coding step is approved for the settings it will run under (7.7b §12a): the gate names the policy id, admission and
+    // release require it to match, and an approval for an old id never covers a new one (7.7c §4).
+    const policyId = readWorkerPolicy(sqlite, p.o.id, def.agentId)?.policyId
     const payload = {
       agentId: def.agentId,
       agentIncarnation: incarnation,
@@ -643,6 +647,7 @@ function assign(p: Pass, node: WfNodeRow): boolean {
       replaces: previous?.id ?? null,
       estimateUsd: estimate,
       dependencyRevisions: {} as Record<string, number>,
+      ...(policyId === undefined ? {} : { policyId }),
     }
     const text = JSON.stringify(payload)
     sqlite

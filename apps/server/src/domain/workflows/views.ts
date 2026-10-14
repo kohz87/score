@@ -25,7 +25,9 @@ import {
   spendEvidence,
   unknownCostBlocks,
 } from '../orchestration/budget.ts'
-import { workerPoliciesOf } from '../orchestration/coding-policy.ts'
+import { readWorkerPolicy, workerPoliciesOf } from '../orchestration/coding-policy.ts'
+import type { CodingWorkerFacts } from '../orchestration/supported-agents.ts'
+import type { WorkerPolicy } from '../../runtimes/coding/policy.ts'
 import { isFenced } from '../orchestration/fence.ts'
 import { activeStepCounts } from '../orchestration/ops.ts'
 import {
@@ -190,6 +192,7 @@ function needsYouOf(
   nodes: WfNodeRow[],
   attempts: AttemptRow[],
   journal: ExecutionJournal | undefined,
+  facts: Pick<CodingWorkerFacts, 'checkPolicy'> | undefined,
 ): WorkflowNeedsYou[] {
   const result: WorkflowNeedsYou[] = []
   const stepNode = new Map(wfStepsOf(sqlite, o.id).map((s) => [s.step_id, s.node_id]))
@@ -237,6 +240,28 @@ function needsYouOf(
     const held = stepsOf(sqlite, o.id).filter(
       (step) => step.status === 'blocked' && suspended.has(step.id),
     )
+    // A coding agent whose settings changed (same agent version): "Use the new settings" on the node. A replaced agent
+    // (another version) is the remap item below.
+    const frozen = new Map(
+      (
+        sqlite
+          .prepare('SELECT agent_id, incarnation FROM orc_agent_map WHERE orchestration_id = ?')
+          .all(o.id) as { agent_id: string; incarnation: string }[]
+      ).map((row) => [row.agent_id, row.incarnation]),
+    )
+    for (const step of held) {
+      if (step.disposition !== 'agent_changed') continue
+      const current = lifecycleOf(sqlite, step.agent_id)?.incarnation_id ?? 'untracked'
+      if (frozen.get(step.agent_id) !== current) continue
+      const stored = readWorkerPolicy(sqlite, o.id, step.agent_id)
+      result.push({
+        kind: 'coding_agent_changed',
+        nodeId: stepNode.get(step.id) ?? '',
+        agentId: step.agent_id,
+        newPolicyId: stored ? currentPolicyId(facts, step.agent_id, stored.policy) : null,
+        reach: stored?.reach ?? null,
+      })
+    }
     if (held.some((step) => step.disposition === 'coding_limit'))
       result.push({
         kind: 'coding_limit',
@@ -283,6 +308,20 @@ function needsYouOf(
   return result
 }
 
+/** The id the agent's stored policy has now, when it can be told without asking the CLI again; null otherwise. */
+function currentPolicyId(
+  facts: Pick<CodingWorkerFacts, 'checkPolicy'> | undefined,
+  agentId: string,
+  policy: WorkerPolicy,
+): string | null {
+  try {
+    const check = facts?.checkPolicy(agentId, policy)
+    return check?.ok ? check.id : null
+  } catch {
+    return null
+  }
+}
+
 /** Launches that may have executed (the database's projection of the coding journal; the limit itself is judged on the journal). */
 const executedLaunches = (sqlite: DatabaseSync, orchId: string): number =>
   (
@@ -319,6 +358,7 @@ export function workflowSummaryOf(
   sqlite: DatabaseSync,
   o: OrchRow,
   journal?: ExecutionJournal,
+  facts?: Pick<CodingWorkerFacts, 'checkPolicy'>,
 ): WorkflowRunSummary {
   const wf = requireWfRun(sqlite, o.id)
   const nodes = nodesOf(sqlite, o.id)
@@ -363,7 +403,7 @@ export function workflowSummaryOf(
       skipped: count('skipped'),
       unresolved: count('unresolved'),
     },
-    needsYou: needsYouOf(sqlite, o, wf, nodes, attempts, journal),
+    needsYou: needsYouOf(sqlite, o, wf, nodes, attempts, journal, facts),
     ...(coding === undefined ? {} : { coding }),
     unconfirmed,
     rerunOf: wf.rerun_of,
@@ -493,10 +533,15 @@ export function workflowDetailOf(
   sqlite: DatabaseSync,
   o: OrchRow,
   now: string,
-  options: { lineageProvable: boolean; journal?: ExecutionJournal; skipStorage?: boolean },
+  options: {
+    lineageProvable: boolean
+    journal?: ExecutionJournal
+    skipStorage?: boolean
+    facts?: Pick<CodingWorkerFacts, 'checkPolicy'>
+  },
 ): WorkflowRunDetail {
   const wf = requireWfRun(sqlite, o.id)
-  const summary = workflowSummaryOf(sqlite, o, options.journal)
+  const summary = workflowSummaryOf(sqlite, o, options.journal, options.facts)
   const nodes = nodesOf(sqlite, o.id)
   const steps = stepsOf(sqlite, o.id)
   const stepById = new Map(steps.map((s) => [s.id, s]))

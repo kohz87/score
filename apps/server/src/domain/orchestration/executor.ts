@@ -26,6 +26,7 @@ import {
   type ValidationResult,
   type WorkflowDefinition,
   type WorkflowPreflight,
+  type WorkflowPolicyRemapDecision,
   type WorkflowRemapDecision,
   type WorkflowRetryDecision,
   type WorkflowRunCreate,
@@ -490,6 +491,7 @@ export class Orchestrator {
               ? workflowDetailOf(sqlite, o, now, {
                   lineageProvable: this.lineageProvable,
                   skipStorage: true,
+                  ...(this.options.codingFacts ? { facts: this.options.codingFacts } : {}),
                 })
               : detailOf(sqlite, o)),
             revision: 0,
@@ -514,7 +516,12 @@ export class Orchestrator {
         workflow
           ? {
               type: 'workflow.run.upserted',
-              data: workflowSummaryOf(sqlite, fresh, this.options.fence.journal),
+              data: workflowSummaryOf(
+                sqlite,
+                fresh,
+                this.options.fence.journal,
+                this.options.codingFacts,
+              ),
             }
           : { type: 'orchestration.upserted', data: summaryOf(sqlite, fresh) },
       )
@@ -1120,7 +1127,7 @@ export class Orchestrator {
     return this.db.read((sqlite) => ({
       asOfSeq: headSeq(sqlite),
       items: listWorkflowOrchs(sqlite).map((o) =>
-        workflowSummaryOf(sqlite, o, this.options.fence.journal),
+        workflowSummaryOf(sqlite, o, this.options.fence.journal, this.options.codingFacts),
       ),
     }))
   }
@@ -1135,6 +1142,7 @@ export class Orchestrator {
         {
           lineageProvable: this.lineageProvable,
           journal: this.options.fence.journal,
+          ...(this.options.codingFacts ? { facts: this.options.codingFacts } : {}),
         },
       ),
     }))
@@ -1149,7 +1157,12 @@ export class Orchestrator {
 
   workflowSummary(id: string): WorkflowRunSummary {
     return this.db.read((sqlite) =>
-      workflowSummaryOf(sqlite, this.requireWorkflowOrch(sqlite, id), this.options.fence.journal),
+      workflowSummaryOf(
+        sqlite,
+        this.requireWorkflowOrch(sqlite, id),
+        this.options.fence.journal,
+        this.options.codingFacts,
+      ),
     )
   }
 
@@ -1466,6 +1479,45 @@ export class Orchestrator {
   }
   wfRemap(id: string, body: WorkflowRemapDecision) {
     return this.decideWf(id, (ctx) => remapWorkflow(ctx, id, body, this.options.fence.journal))
+  }
+  /**
+   * "Use the new settings" for a coding node (7.7c §4): the node's agent is unchanged, its step's one suspended attempt takes
+   * the agent's current policy, through the same per-step remap and re-admission as an orchestration step (7.7b §12a).
+   */
+  async wfPolicyRemap(id: string, nodeId: string, body: WorkflowPolicyRemapDecision) {
+    const agentId = this.db.read((sqlite) => {
+      this.requireWorkflowOrch(sqlite, id)
+      const def = requireWfRun(sqlite, id).definition.nodes.find((n) => n.id === nodeId)
+      if (!def || def.kind !== 'agent')
+        throw new HttpError(404, 'not_found', 'Couldn’t find that step.')
+      return def.agentId
+    })
+    // Judged on the policy as it is now: the report is asked before the transaction.
+    const report = await this.options.codingFacts?.report(agentId)
+    return this.decideWf(id, (ctx) => {
+      const node = nodesOf(ctx.sqlite, id).find((n) => n.node_id === nodeId)
+      if (!node) throw new HttpError(404, 'not_found', 'Couldn’t find that step.')
+      if (node.revision !== body.expectedNodeRevision)
+        throw new HttpError(409, 'conflict', 'The step changed while you were looking.', {
+          currentRevision: node.revision,
+        })
+      if (node.step_id === null)
+        throw new HttpError(409, 'conflict', 'This step isn’t waiting for new settings.')
+      policyRemapStep(
+        ctx,
+        id,
+        node.step_id,
+        {
+          agentId,
+          policyId: body.policyId,
+          ...(body.acknowledgeCodingReach === undefined
+            ? {}
+            : { acknowledgeCodingReach: body.acknowledgeCodingReach }),
+          orchestrationRevision: body.orchestrationRevision,
+        },
+        report,
+      )
+    })
   }
   wfLimits(id: string, body: LimitsDecision) {
     return this.decideWf(id, (ctx) => setLimits(ctx, id, body, this.storageFits))
