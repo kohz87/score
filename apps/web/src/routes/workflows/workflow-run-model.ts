@@ -41,8 +41,10 @@ export function nodeVisual(state: NodeState): NodeVisual {
 }
 
 /** A parked coding step is `running` with a queued step; every other reason shows on ready nodes. */
-export const showsWaiting = (node: { state: string; waitingFor: unknown }): boolean =>
-  Boolean(node.waitingFor) && (node.state === 'ready' || node.state === 'running')
+export const showsWaiting = <T extends { state: string; waitingFor: WaitingFor | null }>(
+  node: T,
+): node is T & { waitingFor: WaitingFor } =>
+  node.waitingFor !== null && (node.state === 'ready' || node.state === 'running')
 
 export const waitingText: Record<WaitingFor, string> = {
   budget: 'waiting for budget',

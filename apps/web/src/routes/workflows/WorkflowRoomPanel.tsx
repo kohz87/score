@@ -84,7 +84,7 @@ export function WorkflowRoomPanel({
                           <AgentChip agentId={def.agentId} agents={agents} />
                         )}
                         <StateMark visual={nodeVisual(node.state)} />
-                        {showsWaiting(node) && node.waitingFor && (
+                        {showsWaiting(node) && (
                           <span className="orch-muted">{waitingText[node.waitingFor]}</span>
                         )}
                       </header>

@@ -48,7 +48,7 @@ export function WorkflowNodePanel({
         <dt>State</dt>
         <dd>
           <StateMark visual={visual} />
-          {showsWaiting(view) && view.waitingFor ? ` ${waitingText[view.waitingFor]}` : ''}
+          {showsWaiting(view) ? ` ${waitingText[view.waitingFor]}` : ''}
           {effective === 'unknown' ? ' (a try isn’t confirmed as ended)' : ''}
         </dd>
         {def.kind === 'agent' && (
