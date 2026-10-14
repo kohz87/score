@@ -557,8 +557,16 @@ function pendingKind(
 ): { attempt: number; reason: 'initial' | 'retry' | 'remap' } {
   if (node.attempts_used === 0) return { attempt: 1, reason: 'initial' }
   const last = currentStep(p, node.node_id)
-  if (last && (last.status === 'blocked' || last.status === 'not_started'))
-    return { attempt: node.attempts_used, reason: 'remap' }
+  if (last && (last.status === 'blocked' || last.status === 'not_started')) {
+    // A coding step whose inputs were withdrawn gave its try back (`unresolvedWithdrawn`): the next step consumes that
+    // slot, once, as a retry. Read as a remap it would keep the count and run the node past `attempts_max` (F1 #3).
+    const attempt = lastAttemptOf(p, last.id)
+    const refunded =
+      /^input_withdrawn/.test(last.disposition ?? '') &&
+      attempt !== undefined &&
+      attempt.runtime !== 'hermes'
+    if (!refunded) return { attempt: node.attempts_used, reason: 'remap' }
+  }
   return { attempt: node.attempts_used + 1, reason: 'retry' }
 }
 
