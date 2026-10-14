@@ -1974,6 +1974,13 @@ executor's one admission function, the coding step limit counted from the launch
   approving; otherwise the attempt is admitted again at once. Switching a node between a Hermes and a coding agent is not
   offered.
 
+- **Remap of a coding agent** (`POST /api/workflow-runs/:id/remap`, same agent id, a new version) also carries `policyId` and
+  `acknowledgeCodingReach?`, judged as at the start: the agent must be ready, `policyId` must be its current policy (`409
+  policy_changed`) and a reach beyond the workspace needs the acknowledgement (`409 reach_not_acknowledged`). It closes **every**
+  affected provably unsent attempt of the node — a suspended, blocked one included (its step is retired `remapped` and its
+  reservation released) — and re-creates the work under the new version; possibly executed attempts keep their obligations.
+  The remap card reads the agent's current policy and readiness from the workflow preflight.
+
 ### Graph semantics
 
 **Planner principal.** Server-only (no capability, no MCP). Its commands (`assign`, `cancel`, `finish`) use the run-scoped

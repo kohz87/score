@@ -981,6 +981,9 @@ export const WorkflowRemapDecisionSchema = z
     plan: z
       .array(z.object({ nodeId: NodeIdSchema, payloadHash: z.string().min(1) }).strict())
       .max(30),
+    /** 7.7c: for a coding agent, the new version's policy id and the acknowledgement of its reach (as in §14's remap). */
+    policyId: PolicyIdSchema.optional(),
+    acknowledgeCodingReach: CodingReachAcknowledgementSchema.optional(),
   })
   .strict()
 export type WorkflowRemapDecision = z.infer<typeof WorkflowRemapDecisionSchema>

@@ -469,6 +469,60 @@ export function abandonAttempts(ctx: Ctx, orchId: string, body: AbandonDecision)
 }
 
 /**
+ * A coding worker's replacement is approved by its new policy id and its reach, like a worker at the start (7.7b §12a): the
+ * agent must be ready, the request must name the policy id it is now, and a reach beyond the workspace needs the
+ * acknowledgement of exactly that id. Stores the new policy. A no-op for an agent that isn't a coding worker of the run.
+ * Shared by the orchestration remap and the workflow remap (7.7c).
+ */
+export function acceptCodingRemap(
+  sqlite: DatabaseSync,
+  orchId: string,
+  body: Pick<RemapDecision, 'agentId' | 'policyId' | 'acknowledgeCodingReach'>,
+  report: WorkerReport | undefined,
+  now: string,
+): void {
+  if (!readWorkerPolicy(sqlite, orchId, body.agentId)) return
+  if (!report || report.readiness !== 'ready' || !report.policy || report.policyId === null)
+    throw new HttpError(
+      409,
+      'conflict',
+      `${body.agentId} isn’t ready: ${report?.detail ?? 'Score couldn’t check it'}.`,
+    )
+  if (body.policyId !== report.policyId)
+    throw new HttpError(
+      409,
+      'policy_changed',
+      `${body.agentId} changed again. Look at what it can reach and decide again.`,
+      { agentId: body.agentId, currentPolicyId: report.policyId },
+    )
+  if (
+    report.reachBeyondWorkspace &&
+    !body.acknowledgeCodingReach?.policyIds.includes(report.policyId)
+  )
+    throw new HttpError(
+      409,
+      'reach_not_acknowledged',
+      `${body.agentId} can read beyond its workspace. Accept that to use it.`,
+      { agentId: body.agentId, policyId: report.policyId },
+    )
+  storeWorkerPolicy(
+    sqlite,
+    orchId,
+    body.agentId,
+    {
+      policyId: report.policyId,
+      policy: report.policy,
+      reach: report.reach!,
+      reachBeyondWorkspace: report.reachBeyondWorkspace,
+      acknowledged: report.reachBeyondWorkspace,
+    },
+    now,
+  )
+  if (report.reachBeyondWorkspace)
+    addHistory(sqlite, orchId, 'coding_reach_acknowledged', { policyIds: [report.policyId] }, now)
+}
+
+/**
  * "Use the new <agent> for this run": the person's answer to a replaced agent. Paired with the exact frozen and current
  * incarnations the page showed; anything else is a conflict (the agent was replaced again, or the run was remapped). Steps
  * assigned under the old mapping stay blocked: the lead assigns again under the new one.
@@ -494,48 +548,7 @@ export function remapAgent(
   )
     throw new HttpError(409, 'conflict', `${body.agentId} changed again. Look at the run again.`)
   if (frozen === current) throw new HttpError(409, 'conflict', `${body.agentId} was not replaced.`)
-  // A coding worker's replacement is approved by its new policy id and its reach, like a worker at the start (7.7b §12a).
-  const codingPolicy = readWorkerPolicy(sqlite, orchId, body.agentId)
-  if (codingPolicy) {
-    if (!report || report.readiness !== 'ready' || !report.policy || report.policyId === null)
-      throw new HttpError(
-        409,
-        'conflict',
-        `${body.agentId} isn’t ready: ${report?.detail ?? 'Score couldn’t check it'}.`,
-      )
-    if (body.policyId !== report.policyId)
-      throw new HttpError(
-        409,
-        'policy_changed',
-        `${body.agentId} changed again. Look at what it can reach and decide again.`,
-        { agentId: body.agentId, currentPolicyId: report.policyId },
-      )
-    if (
-      report.reachBeyondWorkspace &&
-      !body.acknowledgeCodingReach?.policyIds.includes(report.policyId)
-    )
-      throw new HttpError(
-        409,
-        'reach_not_acknowledged',
-        `${body.agentId} can read beyond its workspace. Accept that to use it.`,
-        { agentId: body.agentId, policyId: report.policyId },
-      )
-    storeWorkerPolicy(
-      sqlite,
-      orchId,
-      body.agentId,
-      {
-        policyId: report.policyId,
-        policy: report.policy,
-        reach: report.reach!,
-        reachBeyondWorkspace: report.reachBeyondWorkspace,
-        acknowledged: report.reachBeyondWorkspace,
-      },
-      now,
-    )
-    if (report.reachBeyondWorkspace)
-      addHistory(sqlite, orchId, 'coding_reach_acknowledged', { policyIds: [report.policyId] }, now)
-  }
+  acceptCodingRemap(sqlite, orchId, body, report, now)
   // The journal entry comes first: a database that later lacks this remap is detected at start.
   journalSoft(ctx, () =>
     ctx.journal.append({

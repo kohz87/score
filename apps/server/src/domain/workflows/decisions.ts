@@ -7,7 +7,8 @@ import type {
 import { HttpError } from '../../errors.ts'
 import { lifecycleOf } from '../agent-lifecycle.ts'
 import { journalSoft, touch, type Ctx } from '../orchestration/ctx.ts'
-import { stopRun } from '../orchestration/decisions.ts'
+import { acceptCodingRemap, stopRun } from '../orchestration/decisions.ts'
+import type { WorkerReport } from '../orchestration/supported-agents.ts'
 import { bumpAdmission, refuseAttempt, setStepStatus, withdrawGates } from '../orchestration/ops.ts'
 import type { ExecutionJournal } from '../orchestration/journal.ts'
 import {
@@ -213,6 +214,7 @@ export function remapWorkflow(
   orchId: string,
   body: WorkflowRemapDecision,
   journal: ExecutionJournal,
+  report?: WorkerReport,
 ): void {
   const { sqlite, now } = ctx
   const o = requireOrch(sqlite, orchId)
@@ -248,6 +250,9 @@ export function remapWorkflow(
   for (const item of plan.items)
     if ((nodes.get(item.nodeId)?.remaps ?? 0) >= 2)
       throw new HttpError(409, 'conflict', `${item.nodeId} was already reassigned twice.`)
+  // A coding agent's new version is approved like a worker at the start: its policy id and, beyond the workspace, its reach
+  // (7.7c §4). Judged before anything changes.
+  acceptCodingRemap(sqlite, orchId, body, report, now)
   journalSoft(ctx, () =>
     ctx.journal.append({
       kind: 'remap',
@@ -266,7 +271,14 @@ export function remapWorkflow(
   for (const item of plan.items) {
     const node = nodes.get(item.nodeId)!
     const step = node.step_id ? steps.get(node.step_id) : undefined
-    if (step && ['pending_gate', 'queued', 'admitted'].includes(step.status)) {
+    // A coding step blocked for a decision (new settings, the step limit) is provably unsent too: its suspended attempt is
+    // closed here, so its reservation is released and the re-created step is the only one (7.7c §4).
+    if (
+      step &&
+      (['pending_gate', 'queued', 'admitted'].includes(step.status) ||
+        (step.status === 'blocked' &&
+          attempts.some((a) => a.step_id === step.id && a.suspended && a.state === 'created')))
+    ) {
       for (const attempt of attempts.filter((a) => a.step_id === step.id && a.state === 'created'))
         refuseAttempt(sqlite, attempt, 'not dispatched: remapped', now)
       setStepStatus(sqlite, orchId, step.id, 'not_started', 'remapped', now)

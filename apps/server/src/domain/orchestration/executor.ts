@@ -1477,8 +1477,16 @@ export class Orchestrator {
   wfTryAgain(id: string, nodeId: string, body: WorkflowTryAgainDecision) {
     return this.decideWf(id, (ctx) => tryAgain(ctx, id, nodeId, body))
   }
-  wfRemap(id: string, body: WorkflowRemapDecision) {
-    return this.decideWf(id, (ctx) => remapWorkflow(ctx, id, body, this.options.fence.journal))
+  async wfRemap(id: string, body: WorkflowRemapDecision) {
+    this.db.read((sqlite) => this.requireWorkflowOrch(sqlite, id))
+    // A coding agent's new version is judged on its policy as it is now (the report is asked before the transaction).
+    const isCoding = this.db.read(
+      (sqlite) => readWorkerPolicy(sqlite, id, body.agentId) !== undefined,
+    )
+    const report = isCoding ? await this.options.codingFacts?.report(body.agentId) : undefined
+    return this.decideWf(id, (ctx) =>
+      remapWorkflow(ctx, id, body, this.options.fence.journal, report),
+    )
   }
   /**
    * "Use the new settings" for a coding node (7.7c §4): the node's agent is unchanged, its step's one suspended attempt takes
