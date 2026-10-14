@@ -262,6 +262,14 @@ function needsYouOf(
         reach: stored?.reach ?? null,
       })
     }
+    // A coding step whose start was held back 20 times: Try again renews it (until the last renewal is used).
+    const renewals = new Map(nodes.map((n) => [n.node_id, n.renewals]))
+    for (const step of held) {
+      if (step.disposition !== 'held_back') continue
+      const nodeId = stepNode.get(step.id) ?? ''
+      if ((renewals.get(nodeId) ?? 0) < WORKFLOW_LIMITS.maxRenewalsPerNode)
+        result.push({ kind: 'coding_held_back', nodeId })
+    }
     if (held.some((step) => step.disposition === 'coding_limit'))
       result.push({
         kind: 'coding_limit',
@@ -589,6 +597,7 @@ export function workflowDetailOf(
             }
           : null,
       remaps: n.remaps,
+      renewals: n.renewals,
       canRetry: n.state === 'unresolved' && n.attempts_used < n.attempts_max,
       startedAt: n.started_at,
       endedAt: n.ended_at,

@@ -509,6 +509,8 @@ export const NodeViewSchema = z.object({
   refusals: NodeRefusalsSchema.nullable(),
   /** Remaps of this node so far (≤ 2). */
   remaps: z.int().nonnegative(),
+  /** 7.7c: how often a coding node's dispatch was renewed after being held back (≤ `maxRenewalsPerNode`). */
+  renewals: z.int().nonnegative(),
   /** Unresolved with attempts left: the person may Retry. */
   canRetry: z.boolean(),
   startedAt: z.iso.datetime().nullable(),

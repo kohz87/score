@@ -1981,6 +1981,16 @@ executor's one admission function, the coding step limit counted from the launch
   reservation released) — and re-creates the work under the new version; possibly executed attempts keep their obligations.
   The remap card reads the agent's current policy and readiness from the workflow preflight.
 
+- **Try again for a coding node is a dispatch renewal.** A coding dispatch that Score held back 20 times (generation cap, or 20
+  readiness refusals) is never refused and replaced: its attempt is suspended, the step is blocked `held_back`, the node stays
+  `running` (`waitingFor: 'held_back'`) and `needsYou` lists `coding_held_back { nodeId }`. `POST …/nodes/:nodeId/try-again`
+  then **renews** it, separately from execution retries (it doesn't spend `attempts_max`; a zero-retry node can renew): in one
+  transaction it retires the proven-unsent predecessor (every launch revoked or never requested), creates a fresh attempt on the
+  same step (a new id with its own generations), transfers the reservation and keeps the step's approved gate and policy
+  binding; admission then takes it up through the normal rules. Bounded per node by `WORKFLOW_LIMITS.maxRenewalsPerNode` (3,
+  `NodeView.renewals` counts them); when the last renewed attempt is held back again the node fails `kept being held back`
+  and no further item is offered. Hermes nodes keep §15's Try again unchanged.
+
 ### Graph semantics
 
 **Planner principal.** Server-only (no capability, no MCP). Its commands (`assign`, `cancel`, `finish`) use the run-scoped

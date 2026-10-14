@@ -304,6 +304,7 @@ const node = (
   gateId: null,
   refusals: null,
   remaps: 0,
+  renewals: 0,
   canRetry: false,
   startedAt: null,
   endedAt: null,

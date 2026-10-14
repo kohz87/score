@@ -96,6 +96,7 @@ import {
   runtimeOfAgent,
 } from './coding-attempts.ts'
 import type { OrchestrationOwner, ReleaseDecision } from './owner.ts'
+import { insertAttemptRows, type NewAttempt } from './attempt-rows.ts'
 import { CODING_RESULT_BYTES } from '../../runtimes/coding/translate.ts'
 import { REPLY_TOO_LARGE_PATTERN } from '../../runtimes/coding/note.ts'
 import {
@@ -2229,69 +2230,8 @@ export class Orchestrator {
     }
   }
 
-  private insertAttempt(
-    ctx: Ctx,
-    o: OrchRow,
-    a: {
-      id: string
-      kind: 'lead' | 'step'
-      stepId: string | null
-      n: number
-      agentId: string
-      incarnation: string
-      input: string
-      reserved: number
-      claim: { from: number; to: number } | null
-    },
-  ): void {
-    const { sqlite, now } = ctx
-    const turnId = `orc-turn-${a.id}`
-    sqlite
-      .prepare(
-        `INSERT INTO orc_attempts (id, orchestration_id, kind, step_id, n, agent_id, agent_incarnation, session_id, turn_id, message_id,
-           state, input, reserved_usd, claim_from, claim_to, created_at, updated_at, runtime, policy_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'created', ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        a.id,
-        o.id,
-        a.kind,
-        a.stepId,
-        a.n,
-        a.agentId,
-        a.incarnation,
-        a.id,
-        turnId,
-        `reply:${turnId}`,
-        a.input,
-        a.reserved,
-        a.claim?.from ?? null,
-        a.claim?.to ?? null,
-        now,
-        now,
-        a.kind === 'step' ? runtimeOfAgent(sqlite, a.agentId) : 'hermes',
-        a.kind === 'step' ? (readWorkerPolicy(sqlite, o.id, a.agentId)?.policyId ?? null) : null,
-      )
-    // The reply row the run's text attaches to. Never queued by the room dispatcher (orchestration_attempt_id).
-    sqlite
-      .prepare(
-        `INSERT INTO message_runs (message_id, room_id, agent_id, chain_id, hop, turn_id, parent_message_id, input, agents, created_at, orchestration_attempt_id)
-         VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        `reply:${turnId}`,
-        o.room_id,
-        a.agentId,
-        o.brief_id,
-        turnId,
-        o.brief_id,
-        a.kind === 'lead' ? `Lead turn ${a.n}` : `Step ${a.stepId}`,
-        JSON.stringify(
-          o.lead_agent_id === null ? o.allowed_agents : [o.lead_agent_id, ...o.allowed_agents],
-        ),
-        now,
-        a.id,
-      )
+  private insertAttempt(ctx: Ctx, o: OrchRow, a: NewAttempt): void {
+    insertAttemptRows(ctx, o, a)
   }
 
   // ---------------------------------------------------------------------------------------------------- dispatch
@@ -2533,6 +2473,16 @@ export class Orchestrator {
     // A coding worker's generation has its own turn id and launch id, minted here and journaled with the send (7.7b §5).
     let coding: { generation: number; turnId: string; launchId: string } | undefined
     if (attempt.kind === 'step' && attempt.runtime !== 'hermes') {
+      if (generation > MAX_GENERATIONS && o.planner === 'workflow' && attempt.step_id) {
+        // A workflow node's dispatch held back 20 times waits for the person where it is (7.7c §4): the attempt is
+        // suspended, the node keeps its step, and Try again renews it. It is never refused and replaced by the planner.
+        sqlite
+          .prepare('UPDATE orc_attempts SET suspended = 1, updated_at = ? WHERE id = ?')
+          .run(now, attempt.id)
+        setStepStatus(sqlite, o.id, attempt.step_id, 'blocked', 'held_back', now)
+        touch(ctx, o.id)
+        return undefined
+      }
       if (generation > MAX_GENERATIONS) {
         // Held back again and again: the person decides, there is no automatic loop (design §5).
         refuseAttempt(sqlite, attempt, 'held_back_too_often', now)

@@ -68,6 +68,7 @@ export const WfNodeRowSchema = z.object({
     ),
   gate_id: z.string().nullable(),
   remaps: z.int(),
+  renewals: z.int(),
   started_at: z.string().nullable(),
   ended_at: z.string().nullable(),
 })
@@ -241,6 +242,7 @@ export function setNode(
     verdict: string | null
     gate_id: string | null
     remaps: number
+    renewals: number
     started_at: string | null
     ended_at: string | null
   }>,

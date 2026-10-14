@@ -16,6 +16,7 @@ import {
   addStored,
   admissionRevision,
   beginFinish,
+  refuseAttempt,
   setStepStatus,
   storageRoom,
   utf8Bytes,
@@ -259,6 +260,7 @@ function onAgentFailure(p: Pass, node: WfNodeRow, reason: string, retryable: boo
 const CODING_HOLD_REASON: Record<string, string> = {
   agent_changed: 'waiting for your decision about the changed agent',
   coding_limit: 'waiting for a higher coding step limit',
+  held_back: 'its start was held back 20 times: waiting for you to try again',
 }
 
 /** A blocked coding step that still has its one suspended attempt: it waits for a decision and is never replaced. */
@@ -331,6 +333,24 @@ function observe(p: Pass): boolean {
           // A coding step blocked for a decision of the person (new settings, the step limit) keeps its node's binding
           // (7.7c §4): the node never lets go of the step, and the planner never assigns a replacement. Only the matching
           // decision admits THAT suspended attempt again.
+          // Renewals are bounded (7.7c §4): past the last one the node fails, it doesn't wait for ever.
+          if (why === 'held_back' && node.renewals >= WORKFLOW_LIMITS.maxRenewalsPerNode) {
+            for (const held of p.attempts.filter(
+              (a) => a.step_id === step.id && a.suspended && a.state === 'created',
+            ))
+              refuseAttempt(p.ctx.sqlite, held, 'not dispatched: kept being held back', p.ctx.now)
+            setStepStatus(
+              p.ctx.sqlite,
+              p.o.id,
+              step.id,
+              'failed',
+              'kept being held back',
+              p.ctx.now,
+            )
+            onAgentFailure(p, node, 'kept being held back', false)
+            changed = true
+            break
+          }
           const reason = CODING_HOLD_REASON[why]!
           if (node.state !== 'running' || node.reason !== reason) {
             setState(p, node.node_id, 'running', { reason })

@@ -105,6 +105,7 @@ export const nodeView = {
   gateId: null,
   refusals: null,
   remaps: 0,
+  renewals: 0,
   canRetry: false,
   startedAt: at,
   endedAt: null,
