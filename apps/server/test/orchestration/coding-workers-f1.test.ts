@@ -10,7 +10,10 @@ import {
   CODING_ITEM_EXTRA_BYTES,
   codingItemsFor,
   reserveFor,
+  CODING_OUTPUT_BYTES,
+  CODING_RESULT_BYTES,
 } from '../../src/domain/orchestration/ops.ts'
+import { ORCH_LIMITS } from '@score/contract'
 import { readOrch } from '../../src/domain/orchestration/store.ts'
 import { byTurn } from '../../src/hermes/fake/fake-lead.ts'
 import { workerHarness, type WorkerHarness } from '../helpers/worker-harness.ts'
@@ -351,6 +354,30 @@ describe('#7 coding inventory has its own part of the reserve', () => {
     ).toBeTruthy()
     // What the coding step kept is charged to the coding part.
     expect(orch()['coding_stored_bytes']).toBeGreaterThan(0)
+  })
+
+  test('maximum-sized inventory after the ordinary room is gone never reaches the control reserve (F2 #4)', async () => {
+    h = await workerHarness({ lead: { script: byTurn({ 1: async () => 'waiting' }) } })
+    h.addAgent()
+    const id = await h.create({ codingSteps: 1 })
+    // Observations have used all the ordinary room: only the coding part and the control reserve remain.
+    sql(
+      'UPDATE orchestrations SET coding_stored_bytes = 0, stored_bytes = reserve_bytes - coding_reserve_bytes - ?',
+      ORCH_LIMITS.controlReserveBytes,
+    )
+    // One item's largest inventory: the input, two copies of the longest result, the retained reply and the run output.
+    const resultCopy = CODING_RESULT_BYTES + 128
+    const largest =
+      ORCH_LIMITS.stepInputBytes + 2 * resultCopy + CODING_RESULT_BYTES + CODING_OUTPUT_BYTES
+    h.db.sqlite
+      .prepare(
+        'UPDATE orchestrations SET stored_bytes = stored_bytes + ?, coding_stored_bytes = coding_stored_bytes + ? WHERE id = ?',
+      )
+      .run(largest, largest, id)
+    const row = orch()
+    expect(row['reserve_bytes']! - row['stored_bytes']!).toBeGreaterThanOrEqual(
+      ORCH_LIMITS.controlReserveBytes,
+    )
   })
 
   test('every retained copy of the result is charged: the step result and attempt result, the run output and coding_run_results', async () => {

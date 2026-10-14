@@ -55,12 +55,24 @@ export const reserveFor = (maxSteps: number, maxLeadTurns: number, codingItems =
   ORCH_LIMITS.controlReserveBytes +
   codingItems * CODING_ITEM_EXTRA_BYTES
 
+/** One kept copy of a coding result (the translator's cap), and the run output kept beside it. */
+export const CODING_RESULT_BYTES = 32 * 1024
+export const CODING_OUTPUT_BYTES = 8 * 1024
+/** A step result is the kept reply plus a short cut notice, bounded at this much. */
+const CODING_RESULT_COPY_BYTES = CODING_RESULT_BYTES + 128
+
 /**
- * What a coding worker item reserves beyond an ordinary step (design §11): the result (32 KiB), one retained input
- * (32 KiB) and 2 KiB for each of up to 20 dispatch generations. Independent of the observation pool, so its terminal
- * state, proof, refusal receipt and Stop always fit.
+ * What a coding worker item reserves beyond an ordinary step (design §11, F2 #4): everything one item can retain, so
+ * inventory never reaches the control reserve. One retained input (the step input cap), the step result and the attempt
+ * result (two copies), the retained reply (`coding_run_results`), the run output, and 2 KiB for each of up to 20
+ * dispatch generations. Independent of the observation pool, so terminal state, proof, refusal receipt and Stop always fit.
  */
-export const CODING_ITEM_EXTRA_BYTES = 32 * 1024 + 32 * 1024 + 20 * 2 * 1024
+export const CODING_ITEM_EXTRA_BYTES =
+  ORCH_LIMITS.stepInputBytes +
+  2 * CODING_RESULT_COPY_BYTES +
+  CODING_RESULT_BYTES +
+  CODING_OUTPUT_BYTES +
+  20 * 2 * 1024
 
 /** A run can release at most `codingSteps` launches, and each coding item needs one, so that bounds the items. */
 export const codingItemsFor = (maxSteps: number, codingSteps: number): number =>

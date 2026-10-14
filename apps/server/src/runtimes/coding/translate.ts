@@ -19,7 +19,11 @@ import { guardedUpsert } from '../../hub/projections.ts'
 import { redact, redactBounded } from '../../redact.ts'
 import { readRun, runDraft, runLifecycle } from '../../hermes/index.ts'
 import { boundEvent, detailBytes, MAX_REMEMBERED_IDS, redactNote } from './note.ts'
-import { chargeObservation } from '../../domain/orchestration/ops.ts'
+import {
+  chargeObservation,
+  CODING_OUTPUT_BYTES,
+  CODING_RESULT_BYTES,
+} from '../../domain/orchestration/ops.ts'
 import { rememberCliSession } from './store.ts'
 import type { CodingEvent, ToolDetail } from './types.ts'
 
@@ -343,7 +347,7 @@ export interface TerminalInfo {
   ownedResult?: boolean
 }
 
-export const CODING_RESULT_BYTES = 32 * 1024
+export { CODING_RESULT_BYTES }
 
 /** The run ended: record it and finish the room reply (hand-offs only after a clean finish). */
 export function terminalObservation(
@@ -382,7 +386,7 @@ export function terminalObservation(
         status: info.status,
         ended_at: now,
         ...(info.group === 'unconfirmed' ? { terminal_source: 'unconfirmed' } : {}),
-        output: info.output == null ? null : redactBounded(info.output, 8192),
+        output: info.output == null ? null : redactBounded(info.output, CODING_OUTPUT_BYTES),
         error: info.error == null ? null : redactBounded(info.error, 2048),
         cost_kind: usage?.costUsd != null ? info.costKind : 'unknown',
         ...(usage
