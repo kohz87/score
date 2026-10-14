@@ -6,7 +6,7 @@ test('settings shows providers and connections and the command to run for a sign
   await page.goto('/settings')
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible()
   const nav = page.getByRole('navigation', { name: 'Settings sections' })
-  await expect(nav.getByRole('link')).toHaveCount(10)
+  await expect(nav.getByRole('link')).toHaveCount(11)
 
   const models = page.getByRole('region', { name: 'Models and keys' })
   await expect(models.getByText('OpenRouter')).toBeVisible()
