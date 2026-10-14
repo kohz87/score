@@ -1952,6 +1952,13 @@ executor's one admission function, the coding step limit counted from the launch
   generation)`: a late result of an earlier generation never replaces the current one, and late proof, `interrupted` or
   `unknown` never give a verdict. The row and the node's own copy of the output are charged to the coding partition.
 
+- **A blocked coding node keeps its step.** When a coding step is blocked for a decision (`agent_changed`, `coding_limit`, or
+  held back 20 times) its attempt is **suspended** (holds no slot, keeps its reservation) and the node stays `running` with
+  `waitingFor` `coding_settings | coding_limit | held_back`; the planner never clears the node's step or assigns a replacement.
+  Only the matching decision (new settings, a higher `codingSteps`, Try again) admits that attempt again, so `attemptsUsed`
+  doesn't change. `needsYou` lists `coding_limit { used, limit }` once for the run while any step waits for it. Other blocked
+  dispositions (`agent_unavailable`, a remap) keep the planner's behaviour from §15 "Mapping".
+
 ### Graph semantics
 
 **Planner principal.** Server-only (no capability, no MCP). Its commands (`assign`, `cancel`, `finish`) use the run-scoped

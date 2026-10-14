@@ -214,8 +214,7 @@ function onAgentSuccess(p: Pass, node: WfNodeRow, step: StepRow): void {
     // The verdict was read from the raw eligible reply when the run ended. No row: no eligible reply, no answer. Over the
     // verdict input limit: the answer is too long to read, and no prefix is ever parsed.
     if (!stored) return onAgentFailure(p, node, 'no final answer', true)
-    if (stored.too_long)
-      return onAgentFailure(p, node, 'answer too long to read a verdict', true)
+    if (stored.too_long) return onAgentFailure(p, node, 'answer too long to read a verdict', true)
     // The node keeps its own copy of the output: coding inventory, charged to the run's coding partition (§5).
     addCodingStored(p.ctx.sqlite, p.o.id, utf8Bytes(stored.output))
   }
@@ -255,6 +254,21 @@ function onAgentFailure(p: Pass, node: WfNodeRow, reason: string, retryable: boo
   else failRun(p, node.node_id, `${node.node_id} failed: ${reason}`)
 }
 
+/** What the node says while its coding step waits for the person, by the step's disposition. */
+const CODING_HOLD_REASON: Record<string, string> = {
+  agent_changed: 'waiting for your decision about the changed agent',
+  coding_limit: 'waiting for a higher coding step limit',
+}
+
+/** A blocked coding step that still has its one suspended attempt: it waits for a decision and is never replaced. */
+function heldCodingStep(p: Pass, step: StepRow): boolean {
+  return (
+    step.status === 'blocked' &&
+    CODING_HOLD_REASON[step.disposition ?? ''] !== undefined &&
+    p.attempts.some((a) => a.step_id === step.id && a.suspended)
+  )
+}
+
 function observe(p: Pass): boolean {
   let changed = false
   for (const node of p.nodes.values()) {
@@ -284,7 +298,8 @@ function observe(p: Pass): boolean {
       case 'queued':
       case 'admitted':
       case 'unknown':
-        if (node.state !== 'running') {
+        // A reason left by a coding block ("waiting for new settings") ends when the step is admitted again.
+        if (node.state !== 'running' || node.reason !== null) {
           setState(p, node.node_id, 'running', { reason: null })
           changed = true
         }
@@ -311,6 +326,17 @@ function observe(p: Pass): boolean {
         break
       case 'blocked': {
         const why = step.disposition ?? ''
+        if (heldCodingStep(p, step)) {
+          // A coding step blocked for a decision of the person (new settings, the step limit) keeps its node's binding
+          // (7.7c §4): the node never lets go of the step, and the planner never assigns a replacement. Only the matching
+          // decision admits THAT suspended attempt again.
+          const reason = CODING_HOLD_REASON[why]!
+          if (node.state !== 'running' || node.reason !== reason) {
+            setState(p, node.node_id, 'running', { reason })
+            changed = true
+          }
+          break
+        }
         if (/^input_withdrawn/.test(why)) setState(p, node.node_id, 'unresolved', { reason: why })
         else if (/^capability_in_input/.test(why)) onAgentFailure(p, node, why, false)
         else

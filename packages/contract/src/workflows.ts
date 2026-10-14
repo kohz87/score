@@ -449,6 +449,10 @@ export const WaitingForSchema = z.enum([
   'hermes_unavailable',
   'remap',
   'refusal_limit',
+  // 7.7c: a coding step is held for a decision of the person and keeps its place (it is not replaced).
+  'coding_settings',
+  'coding_limit',
+  'held_back',
 ])
 export type WaitingFor = z.infer<typeof WaitingForSchema>
 
@@ -613,6 +617,27 @@ export const WorkflowNeedsYouSchema = z.discriminatedUnion('kind', [
     attemptId: z.string(),
     refusals: z.int().positive(),
   }),
+  // ----- 7.7c: coding steps. Each keeps its node's step and its one suspended attempt until the matching decision.
+  /** A coding agent's settings changed since the run was approved: "Use the new settings" (node policy-remap). */
+  z.object({
+    kind: z.literal('coding_agent_changed'),
+    nodeId: NodeIdSchema,
+    agentId: AgentIdSchema,
+    /** The policy id the agent would have now, when Score can tell without asking the CLI again; the card asks preflight. */
+    newPolicyId: PolicyIdSchema.nullable(),
+    /** What the agent was approved to reach (the card shows the new reach from preflight). */
+    reach: z.string().nullable(),
+  }),
+  /** The run reached its coding step limit: raise `codingSteps` in the limits decision and the blocked step goes on. */
+  z.object({
+    kind: z.literal('coding_limit'),
+    used: z.int().nonnegative(),
+    limit: z.int().positive(),
+  }),
+  /** A coding step was prepared 20 times and never started: Try again renews it (bounded), or Stop the run. */
+  z.object({ kind: z.literal('coding_held_back'), nodeId: NodeIdSchema }),
+  /** What a coding step was going to read was withdrawn before it started: re-run the upstream step or skip. */
+  z.object({ kind: z.literal('node_inputs_withdrawn'), nodeId: NodeIdSchema }),
 ])
 export type WorkflowNeedsYou = z.infer<typeof WorkflowNeedsYouSchema>
 

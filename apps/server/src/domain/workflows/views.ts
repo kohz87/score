@@ -147,6 +147,13 @@ function waitingFor(
     return null
   }
   if (!['running'].includes(node.state) || !step) return null
+  // 7.7c: a coding step blocked for a decision keeps its place and says what it waits for.
+  if (step.status === 'blocked' && attempt?.suspended)
+    return step.disposition === 'coding_limit'
+      ? 'coding_limit'
+      : step.disposition === 'held_back'
+        ? 'held_back'
+        : 'coding_settings'
   if (attempt?.needs_person) return 'refusal_limit'
   if (attempt && attempt.state === 'created' && attempt.next_try_at && attempt.next_try_at > now)
     return 'hermes_unavailable'
@@ -222,6 +229,21 @@ function needsYouOf(
         nodeId: node.node_id,
         attemptsLeft: node.attempts_max - node.attempts_used,
       })
+  if (!isTerminalStatus(o.status) && o.status !== 'stopping' && o.status !== 'finishing') {
+    // 7.7c: coding steps held for the person. Each keeps its node's step and its one suspended attempt.
+    const suspended = new Set(
+      attempts.filter((a) => a.suspended && a.step_id !== null).map((a) => a.step_id),
+    )
+    const held = stepsOf(sqlite, o.id).filter(
+      (step) => step.status === 'blocked' && suspended.has(step.id),
+    )
+    if (held.some((step) => step.disposition === 'coding_limit'))
+      result.push({
+        kind: 'coding_limit',
+        used: executedLaunches(sqlite, o.id),
+        limit: o.coding_steps,
+      })
+  }
   for (const attempt of attempts)
     if (attempt.needs_person && attempt.state === 'created' && attempt.step_id)
       result.push({
