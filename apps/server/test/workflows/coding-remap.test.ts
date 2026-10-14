@@ -37,6 +37,8 @@ const remapCard = (id: string, agentId: string) =>
     .workflowSummary(id)
     .needsYou.find((item) => item.kind === 'remap' && item.agentId === agentId)
 const decision = async (id: string, agentId: string, consent: object = {}) => {
+  // The planner may still be settling the run (a node reason, a new generation) when the card appears: read it quiet.
+  await h.orch.idle()
   const card = remapCard(id, agentId)
   if (card?.kind !== 'remap') throw new Error('no remap card')
   return {
@@ -47,6 +49,17 @@ const decision = async (id: string, agentId: string, consent: object = {}) => {
     acknowledge: true as const,
     plan: card.plan.map(({ nodeId, payloadHash }) => ({ nodeId, payloadHash })),
     ...consent,
+  }
+}
+/** The decision with the revision the page would show now; a run that moved meanwhile is read again (a stale page, not a bug). */
+const remap = async (id: string, agentId: string, consent: object = {}) => {
+  for (let tries = 0; ; tries++) {
+    try {
+      return await h.orch.wfRemap(id, await decision(id, agentId, consent))
+    } catch (error) {
+      if (tries < 3 && (error as { code?: string }).code === 'conflict') continue
+      throw error
+    }
   }
 }
 async function boot(): Promise<void> {
@@ -90,12 +103,12 @@ describe('remapping a coding agent’s new version', () => {
       plan: [{ nodeId: 'a', retiresAttemptId: held!['id'] }],
     })
     // Consent first: the policy id of the new version, nothing else will do.
-    await expect(h.orch.wfRemap(id, await decision(id, 'cc'))).rejects.toMatchObject({
+    await expect(remap(id, 'cc')).rejects.toMatchObject({
       status: 409,
       code: 'policy_changed',
     })
     const policyId = await currentPolicy('cc')
-    await h.orch.wfRemap(id, await decision(id, 'cc', { policyId }))
+    await remap(id, 'cc', { policyId })
     // The old attempt is closed with its step; the re-created step holds the only reservation.
     expect(
       rows('SELECT state, suspended FROM orc_attempts WHERE id = ?', held!['id'] as string)[0],
@@ -134,14 +147,11 @@ describe('remapping a coding agent’s new version', () => {
       60_000,
     )
     const policyId = await currentPolicy('cx')
-    await expect(h.orch.wfRemap(id, await decision(id, 'cx', { policyId }))).rejects.toMatchObject({
+    await expect(remap(id, 'cx', { policyId })).rejects.toMatchObject({
       status: 409,
       code: 'reach_not_acknowledged',
     })
-    await h.orch.wfRemap(
-      id,
-      await decision(id, 'cx', { policyId, acknowledgeCodingReach: { policyIds: [policyId] } }),
-    )
+    await remap(id, 'cx', { policyId, acknowledgeCodingReach: { policyIds: [policyId] } })
     await h.until(() => wfRunOf(h, id).status === 'succeeded', 60_000)
   })
 
@@ -151,11 +161,11 @@ describe('remapping a coding agent’s new version', () => {
     await h.until(() => wfRunOf(h, id).assignmentGates.some((g) => g.status === 'open'))
     lifecycle('cc', B)
     await h.until(() => remapCard(id, 'cc') !== undefined)
-    await expect(h.orch.wfRemap(id, await decision(id, 'cc'))).rejects.toMatchObject({
+    await expect(remap(id, 'cc')).rejects.toMatchObject({
       status: 409,
       code: 'policy_changed',
     })
-    await h.orch.wfRemap(id, await decision(id, 'cc', { policyId: await currentPolicy('cc') }))
+    await remap(id, 'cc', { policyId: await currentPolicy('cc') })
     await h.until(() =>
       wfRunOf(h, id).assignmentGates.some((g) => g.status === 'open' && g.stepId !== 's1'),
     )
