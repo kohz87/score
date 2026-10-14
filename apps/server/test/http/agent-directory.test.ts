@@ -132,3 +132,34 @@ test('a refresh that started before a save cannot undo it, and the post-save rea
   expect(again?.model?.id).toBe('new-model')
   expect(port.listAgentDetails.mock.calls.length).toBeGreaterThanOrEqual(reads)
 })
+
+test('live routes see a coding agent created a moment ago (7.7b live check: preflight found no coding worker)', async () => {
+  const { routePort } = await import('../../src/app.ts')
+  const { withCodingAgents } = await import('../../src/runtimes/coding/port.ts')
+  type Coding = Parameters<typeof withCodingAgents>[1]
+  const coder = {
+    ...details[0]!,
+    id: 'coder',
+    name: 'coder',
+    runtime: 'claude-code',
+    runtimeNote: 'Claude Code',
+  }
+  const codingAgents: (typeof coder)[] = []
+  const coding = {
+    isCodingAgent: (id: string) => codingAgents.some((agent) => agent.id === id),
+    details: async () => [...codingAgents],
+  } as unknown as Coding
+  // The composition root hands buildApp the composite (Hermes + coding); live mode adds the directory.
+  const port = routePort({
+    live: true,
+    port: withCodingAgents(fake, coding),
+    coding,
+    db: env.db,
+    ingest: env.ingest,
+  })
+  await port.listAgents() // a page load primes the directory's projection
+  codingAgents.push(coder) // the person creates a coding agent, then starts an orchestration right away
+  const ids = (await port.listAgents()).map((agent) => agent.id)
+  expect(ids).toContain('coder')
+  for (const agent of details) expect(ids).toContain(agent.id)
+})

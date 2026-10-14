@@ -38,12 +38,20 @@ const unsupported = () =>
 // The composite is built once at the composition root and shared by the routes and the executor (7.7b §2); wrapping it
 // again with the same runtime returns the same object.
 const composites = new WeakMap<object, CodingRuntime>()
+const hermesParts = new WeakMap<object, HermesPort>()
 
 export function withCodingAgents(port: HermesPort, coding: CodingRuntime): HermesPort {
   if (composites.get(port) === coding) return port
   const composite = compose(port, coding)
   composites.set(composite, coding)
+  hermesParts.set(composite, port)
   return composite
+}
+
+/** The Hermes part of a composite port (the port itself when it isn't one): live-mode layers that only know Hermes
+ * profiles, such as the agent directory, wrap this part, and the coding agents are added on top again. */
+export function hermesPortOf(port: HermesPort): HermesPort {
+  return hermesParts.get(port) ?? port
 }
 
 function compose(port: HermesPort, coding: CodingRuntime): HermesPort {

@@ -7,7 +7,7 @@ import { ApprovalOutbox } from './domain/approval-outbox.ts'
 import { createAgentDirectory, withAgentDirectory } from './http/agent-directory.ts'
 import { registerAgentRoutes } from './http/agents.ts'
 import { registerCodingAgentRoutes } from './http/coding-agents.ts'
-import { withCodingAgents } from './runtimes/coding/port.ts'
+import { hermesPortOf, withCodingAgents } from './runtimes/coding/port.ts'
 import type { CodingRuntime } from './runtimes/coding/service.ts'
 import { registerProfileRoutes } from './http/profiles.ts'
 import { registerAgentContextRoutes } from './http/agent-context.ts'
@@ -119,6 +119,30 @@ interface BuildAppOptions {
   terminal?: Pick<TerminalOptions, 'spawn' | 'launch' | 'limits' | 'clock' | 'isSecure'>
 }
 
+/**
+ * The port the routes see. Live Hermes reads cost seconds per profile, so pages read Hermes agents from Score's
+ * projection (5.23); that directory only knows Hermes profiles, so it wraps the Hermes part and the coding agents are
+ * added on top of it (otherwise its list hid the coding agents from every live route: rooms, orchestration preflight
+ * and create). Coding agents join the team under the same port: rooms, Now, Flow and Reports see one list of agents.
+ */
+export function routePort(options: {
+  live: boolean
+  port: HermesPort
+  coding?: CodingRuntime | undefined
+  db?: ScoreDb | undefined
+  ingest?: Ingest | undefined
+  warn?: (error: unknown) => void
+}): HermesPort {
+  const { coding, db, ingest } = options
+  let port = options.port
+  if (options.live && db && ingest) {
+    const hermes = hermesPortOf(port)
+    port = withAgentDirectory(hermes, createAgentDirectory(hermes, db, ingest, options.warn))
+  }
+  if (db && ingest && coding) port = withCodingAgents(port, coding)
+  return port
+}
+
 export function buildApp({
   config,
   logger,
@@ -142,16 +166,14 @@ export function buildApp({
   terminal,
 }: BuildAppOptions): FastifyInstance {
   const logging = logger ?? process.env.NODE_ENV !== 'test'
-  // Coding agents join the team under the same port (rooms, Now, Flow and Reports see one list of agents).
-  if (db && ingest && coding) port = withCodingAgents(port, coding)
-  // Live Hermes reads cost seconds per profile: pages read agents from Score's projection (5.23).
-  if (config.mode === 'live' && db && ingest)
-    port = withAgentDirectory(
-      port,
-      createAgentDirectory(port, db, ingest, (error) =>
-        app.log.warn({ err: error }, 'Background agent refresh failed'),
-      ),
-    )
+  port = routePort({
+    live: config.mode === 'live',
+    port,
+    coding,
+    db,
+    ingest,
+    warn: (error) => app.log.warn({ err: error }, 'Background agent refresh failed'),
+  })
   const app = Fastify({
     ...(https ? { https } : {}),
     trustProxy: false,
