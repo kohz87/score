@@ -1,4 +1,12 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
@@ -64,6 +72,22 @@ describe('Git pointer reads (F2 #2)', () => {
     writeFileSync(target, '../..\n')
     symlinkSync(target, join(gitDir, 'commondir'))
     expect(() => mainCheckoutOf(workspace)).toThrow(PolicyUnverifiable)
+  })
+
+  test('a hard-linked commondir or .git (another name of a CLI config file) is refused without opening it', () => {
+    const { gitDir } = worktree()
+    const config = join(dir, 'config.toml')
+    writeFileSync(config, '../..\n')
+    linkSync(config, join(gitDir, 'commondir'))
+    expect(() => mainCheckoutOf(workspace)).toThrow(PolicyUnverifiable)
+    expect(opened.filter((path) => path.endsWith('commondir'))).toEqual([])
+    const settings = join(dir, 'settings.json')
+    writeFileSync(settings, `gitdir: ${gitDir}\n`)
+    rmSync(join(workspace, '.git'))
+    linkSync(settings, join(workspace, '.git'))
+    opened.length = 0
+    expect(() => mainCheckoutOf(workspace)).toThrow(PolicyUnverifiable)
+    expect(opened.filter((path) => path.endsWith('.git'))).toEqual([])
   })
 
   test('a gitdir that does not exist is unverifiable', () => {

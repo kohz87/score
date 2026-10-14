@@ -243,7 +243,9 @@ export function unknownCostSources(
     if (attempt.state === 'refused' || attempt.settled) continue
     if (
       ['terminated', 'unknown', 'abandoned'].includes(attempt.state) &&
-      attempt.spend_usd === null
+      attempt.spend_usd === null &&
+      // Proven never executed: known zero, not an unknown cost of its source (F2 verification #1).
+      !provenUnsent(sqlite, attempt)
     )
       sources.add(costSourceOf(attempt))
   }

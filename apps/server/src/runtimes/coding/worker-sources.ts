@@ -42,6 +42,9 @@ function gitPointer(path: string): string | undefined {
   const uid = process.getuid?.()
   if (
     !before.isFile() ||
+    // A hard link could make a CLI config or credential file look like a Git pointer: only a file with one name is
+    // opened (F2 verification #2).
+    before.nlink !== 1 ||
     before.size > GIT_POINTER_BYTES ||
     (uid !== undefined && before.uid !== uid)
   )
@@ -60,6 +63,7 @@ function gitPointer(path: string): string | undefined {
     const stat = fstatSync(fd)
     if (
       !stat.isFile() ||
+      stat.nlink !== 1 ||
       stat.size > GIT_POINTER_BYTES ||
       stat.ino !== before.ino ||
       stat.dev !== before.dev
