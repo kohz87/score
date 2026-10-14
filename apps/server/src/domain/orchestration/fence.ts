@@ -102,6 +102,10 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
   const remap = new Map<string, Extract<JournalEntry, { kind: 'remap' }>>()
   for (const entry of entries)
     if (entry.kind === 'remap') remap.set(`${entry.orchestrationId}:${entry.agentId}`, entry)
+  // 7.7c: the newest renewal of each coding node (its count and successor attempt).
+  const renewal = new Map<string, Extract<JournalEntry, { kind: 'renewal' }>>()
+  for (const entry of entries)
+    if (entry.kind === 'renewal') renewal.set(`${entry.orchestrationId}:${entry.nodeId}`, entry)
   // 7.7b: the newest settings a coding worker was remapped to (a database restored from before it would run the old ones).
   const policyRemap = new Map<string, Extract<JournalEntry, { kind: 'policy_remap' }>>()
   for (const entry of entries)
@@ -176,6 +180,19 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
           ref: entry.orchestrationId,
           journalN: entry.n,
           detail: `The remap of ${entry.agentId} in ${entry.orchestrationId} was recorded, but the database does not hold it`,
+        })
+    } else if (entry.kind === 'renewal') {
+      if (renewal.get(`${entry.orchestrationId}:${entry.nodeId}`) !== entry) continue
+      const node = sqlite
+        .prepare('SELECT renewals FROM wf_nodes WHERE orchestration_id = ? AND node_id = ?')
+        .get(entry.orchestrationId, entry.nodeId) as { renewals: number } | undefined
+      const successor = attempt.get(entry.successorId)
+      if (!node || node.renewals < entry.renewals || !successor)
+        mismatches.push({
+          kind: 'fence',
+          ref: entry.orchestrationId,
+          journalN: entry.n,
+          detail: `Try again for ${entry.nodeId} in ${entry.orchestrationId} (renewal ${entry.renewals}) was recorded, but the database does not hold it`,
         })
     } else if (entry.kind === 'policy_remap') {
       if (policyRemap.get(`${entry.orchestrationId}:${entry.agentId}`) !== entry) continue

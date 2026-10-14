@@ -247,16 +247,19 @@ function renewDispatch(
       'conflict',
       'This step may already have started, so it can’t be renewed.',
     )
-  journalSoft(ctx, () =>
-    ctx.journal.append({
-      kind: 'transition',
-      orchestrationId: o.id,
-      what: 'try_again',
-      nodeId: node.node_id,
-    }),
-  )
   const n = attemptsOf(sqlite, o.id).filter((a) => a.step_id === step.id).length + 1
   const freshId = `orc-${o.id.slice(4)}-${step.id}-${n}`
+  // The renewal is recorded with its count and both attempt ids (F1 #5): a restore from before it is detected.
+  journalSoft(ctx, () =>
+    ctx.journal.append({
+      kind: 'renewal',
+      orchestrationId: o.id,
+      nodeId: node.node_id,
+      renewals: node.renewals + 1,
+      predecessorId: predecessor.id,
+      successorId: freshId,
+    }),
+  )
   refuseAttempt(sqlite, predecessor, 'not dispatched: renewed', now)
   // The fresh attempt carries the input (so its retained copy is the predecessor's, not a second one) and the reservation.
   // The retired predecessor is no longer the step's suspended attempt: a later decision must find the current one (F1 #2).

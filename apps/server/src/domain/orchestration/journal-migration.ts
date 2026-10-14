@@ -273,6 +273,8 @@ function newestByKey(entries: readonly JournalEntry[]): Map<string, Keyed> {
     else if (entry.kind === 'hold')
       key = `hold of ${entry.target === 'team' ? 'the team' : `agent ${entry.agentId}`}`
     else if (entry.kind === 'remap') key = `remap of ${entry.agentId} in ${entry.orchestrationId}`
+    else if (entry.kind === 'renewal')
+      key = `renewal of ${entry.nodeId} in ${entry.orchestrationId}`
     else if (entry.kind === 'global_fence') key = 'global fence'
     if (key !== undefined) newest.set(key, { key, n: entry.n, entry })
   }

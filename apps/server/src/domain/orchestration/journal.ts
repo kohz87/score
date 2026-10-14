@@ -149,6 +149,18 @@ const EntrySchema = z.discriminatedUnion('kind', [
     agentId: z.string().min(1),
     policyId: z.string().regex(/^[0-9a-f]{64}$/),
   }),
+  // 7.7c F1 #5: a coding node's dispatch renewal. The count and both attempt ids are the record: a database restored from
+  // before it would give the node a renewal back, or still hold the predecessor as the step's attempt.
+  z.object({
+    ...Base,
+    kind: z.literal('renewal'),
+    orchestrationId: z.string().min(1),
+    nodeId: z.string().min(1),
+    /** The node's renewal count after this one. */
+    renewals: z.int().positive(),
+    predecessorId: z.string().min(1),
+    successorId: z.string().min(1),
+  }),
   // Team and agent pause holds live outside the orchestration tables but gate its admissions.
   z.object({
     ...Base,
@@ -787,6 +799,7 @@ export class ExecutionJournal {
         'authorization',
         'hold',
         'remap',
+        'renewal',
         'send_refused',
         'witness',
       ].includes(entry.kind)

@@ -3343,6 +3343,8 @@ export class Orchestrator {
         if (entry.kind === 'hold') newest.set(holdKey(entry), entry.n)
         if (entry.kind === 'remap')
           newest.set(`m:${entry.orchestrationId}:${entry.agentId}`, entry.n)
+        if (entry.kind === 'renewal')
+          newest.set(`r:${entry.orchestrationId}:${entry.nodeId}`, entry.n)
       }
     const compacted = journal.compact((entry) => {
       if (
@@ -3375,6 +3377,9 @@ export class Orchestrator {
       }
       if (entry.kind === 'remap')
         return newest.get(`m:${entry.orchestrationId}:${entry.agentId}`) !== entry.n
+      // Only the newest renewal per node is needed: it carries the count, and its successor is the node's attempt.
+      if (entry.kind === 'renewal')
+        return newest.get(`r:${entry.orchestrationId}:${entry.nodeId}`) !== entry.n
       if (entry.kind === 'authorization' || entry.kind === 'hold') {
         // Only the newest word per run / per target is needed; the older ones are superseded.
         return (

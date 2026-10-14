@@ -1,6 +1,8 @@
-import { writeFileSync } from 'node:fs'
+import { copyFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
+import { GlobalFenceStore, verifyJournal } from '../../src/domain/orchestration/fence.ts'
+import { openMigrated } from '../orchestration/harness-db.ts'
 import { addCodingAgent, startWorkflow, wfRunOf } from '../helpers/wf-coding.ts'
 import { workerHarness, type WorkerHarness } from '../helpers/worker-harness.ts'
 import { agent, definition, edge, end } from './wf-harness.ts'
@@ -63,5 +65,53 @@ describe('renewal then new settings', () => {
     )
     await h.until(() => wfRunOf(h, id).status === 'succeeded', 60_000)
     expect(h.cliCalls()).toHaveLength(1)
+  })
+})
+
+describe('renewals are journaled', () => {
+  test('F1 #5: a database restored from before a renewal is detected, also after compaction', async () => {
+    h = await workerHarness({ unit: { blocked: () => fence }, orchestrator: { retryMs: 20 } })
+    addCodingAgent(h, 'cc', 'claude-code')
+    const id = await startWorkflow(h, flow())
+    fence = 'A fence is up.'
+    await h.until(
+      () => rows("SELECT 1 FROM orc_steps WHERE disposition = 'held_back'").length > 0,
+      120_000,
+    )
+    // The backup is taken before the renewal; the successor stays unsent behind the fence.
+    h.db.sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+    copyFileSync(join(h.dir, 'score.db'), join(h.dir, 'before-renewal.db'))
+    await h.orch.wfTryAgain(id, 'a', {
+      expectedNodeRevision: node(id).revision,
+      orchestrationRevision: revision(id),
+    })
+    expect(node(id)).toMatchObject({ renewals: 1 })
+    const entries = () => {
+      const read = h.journal.readOwn()
+      if (!read.ok) throw new Error('journal unreadable')
+      return read.entries
+    }
+    expect(entries().filter((e) => e.kind === 'renewal')).toMatchObject([
+      {
+        nodeId: 'a',
+        renewals: 1,
+        predecessorId: expect.any(String),
+        successorId: expect.any(String),
+      },
+    ])
+    // The honest database agrees with its journal, before and after compaction.
+    expect(verifyJournal(h.db.sqlite, entries())).toEqual([])
+    h.orch.maintenance()
+    expect(verifyJournal(h.db.sqlite, entries())).toEqual([])
+    // The old database lacks the renewal: its count went back and its successor attempt never existed.
+    const restored = openMigrated(h.dir, 'before-renewal.db')
+    const mismatches = verifyJournal(restored.sqlite, entries())
+    expect(mismatches.map((m) => m.detail)).toContainEqual(
+      expect.stringContaining('Try again for a'),
+    )
+    expect(new GlobalFenceStore(restored, h.journal).startupCheck()).toMatchObject({
+      fenced: true,
+    })
+    restored.close()
   })
 })
