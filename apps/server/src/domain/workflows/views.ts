@@ -273,7 +273,8 @@ function needsYouOf(
       ).map((row) => [row.agent_id, row.incarnation]),
     )
     for (const step of held) {
-      if (step.disposition !== 'agent_changed') continue
+      if (step.disposition !== 'agent_changed' && step.disposition !== 'permission_forbidden')
+        continue
       const current = lifecycleOf(sqlite, step.agent_id)?.incarnation_id ?? 'untracked'
       if (frozen.get(step.agent_id) !== current) continue
       const stored = readWorkerPolicy(sqlite, o.id, step.agent_id)

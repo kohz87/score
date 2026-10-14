@@ -47,6 +47,16 @@ export type PolicyCheck =
   | { ok: true; id: string }
   | { ok: false; cause: 'agent_changed' | 'reach_unverifiable'; detail: string }
 
+/** Permissions a coding worker may never run with: one rule for create, remap and the release check (7.7c F1 #1). */
+export const isForbiddenPermission = (permission: string): boolean => permission === 'full'
+
+export const forbiddenPermissionError = (agentIds: readonly string[]): HttpError =>
+  new HttpError(
+    422,
+    'unsupported_agent',
+    `${agentIds.join(', ')} has full access. Orchestration steps need a coding agent that is read-only or limited to its workspace.`,
+  )
+
 /** Coding runtimes that can take orchestration steps (7.7b §1). Antigravity may leave scheduled work behind its run. */
 export const WORKER_RUNTIMES: readonly string[] = ['claude-code', 'codex']
 
@@ -80,13 +90,8 @@ export function assertOrchestrationWorkers(
       'unsupported_agent',
       `${unsupported.join(', ')} can’t take orchestration steps. Choose Hermes, Claude Code or Codex agents.`,
     )
-  const full = coding.filter((id) => facts!.agent(id)!.permission === 'full')
-  if (full.length > 0)
-    throw new HttpError(
-      422,
-      'unsupported_agent',
-      `${full.join(', ')} has full access. Orchestration steps need a coding agent that is read-only or limited to its workspace.`,
-    )
+  const full = coding.filter((id) => isForbiddenPermission(facts!.agent(id)!.permission))
+  if (full.length > 0) throw forbiddenPermissionError(full)
   if (!facts!.unitHost())
     throw new HttpError(
       422,

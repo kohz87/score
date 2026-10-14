@@ -41,7 +41,11 @@ import {
 import { cancelFenceAttempts } from './views.ts'
 import { createHash } from 'node:crypto'
 import { readWorkerPolicy, storeWorkerPolicy } from './coding-policy.ts'
-import type { WorkerReport } from './supported-agents.ts'
+import {
+  forbiddenPermissionError,
+  isForbiddenPermission,
+  type WorkerReport,
+} from './supported-agents.ts'
 import { gatesOf, readStep } from './store.ts'
 
 // Human decisions (contract §14). Each is revision-bound: the page names the run revision it showed, and a stale one is
@@ -488,6 +492,9 @@ export function acceptCodingRemap(
       'conflict',
       `${body.agentId} isn’t ready: ${report?.detail ?? 'Score couldn’t check it'}.`,
     )
+  // The same rule as at create: a remap can't carry a coding worker to a permission it may not have (7.7c F1 #1).
+  if (isForbiddenPermission(report.policy.permission))
+    throw forbiddenPermissionError([body.agentId])
   if (body.policyId !== report.policyId)
     throw new HttpError(
       409,
@@ -615,7 +622,11 @@ export function policyRemapStep(
   const suspended = attemptsOf(sqlite, orchId).find(
     (attempt) => attempt.step_id === stepId && attempt.suspended,
   )
-  if (step.status !== 'blocked' || step.disposition !== 'agent_changed' || !suspended)
+  if (
+    step.status !== 'blocked' ||
+    !['agent_changed', 'permission_forbidden'].includes(step.disposition ?? '') ||
+    !suspended
+  )
     throw new HttpError(409, 'conflict', 'This step isn’t waiting for new settings.')
   const stored = readWorkerPolicy(sqlite, orchId, body.agentId)
   if (!stored) throw new HttpError(409, 'conflict', `${body.agentId} has no settings in this run.`)
@@ -625,6 +636,8 @@ export function policyRemapStep(
       'conflict',
       `${body.agentId} isn’t ready: ${report?.detail ?? 'Score couldn’t check it'}.`,
     )
+  if (isForbiddenPermission(report.policy.permission))
+    throw forbiddenPermissionError([body.agentId])
   if (report.policyId !== body.policyId)
     throw new HttpError(
       409,

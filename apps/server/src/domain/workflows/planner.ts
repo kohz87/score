@@ -273,6 +273,7 @@ function unresolvedWithdrawn(p: Pass, node: WfNodeRow, step: StepRow, reason: st
 /** What the node says while its coding step waits for the person, by the step's disposition. */
 const CODING_HOLD_REASON: Record<string, string> = {
   agent_changed: 'waiting for your decision about the changed agent',
+  permission_forbidden: 'waiting for you: the agent has full access, which steps can’t use',
   coding_limit: 'waiting for a higher coding step limit',
   held_back: 'its start was held back 20 times: waiting for you to try again',
 }

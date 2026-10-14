@@ -271,6 +271,8 @@ export function BudgetBlock({
 export function dispositionText(disposition: string): string {
   if (disposition === 'agent_changed')
     return 'Blocked: the agent changed after you approved this run.'
+  if (disposition === 'permission_forbidden')
+    return 'Blocked: the agent has full access, which orchestration and workflow steps can’t use.'
   if (disposition === 'coding_limit') return 'Blocked: the run reached its limit of coding steps.'
   return `Handled as: ${disposition}.`
 }

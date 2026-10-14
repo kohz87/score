@@ -113,7 +113,7 @@ export function needsYouOf(
     )
     for (const step of stepsOf(sqlite, o.id)) {
       if (step.status !== 'blocked' || !suspended.has(step.id)) continue
-      if (step.disposition === 'agent_changed')
+      if (step.disposition === 'agent_changed' || step.disposition === 'permission_forbidden')
         result.push({
           kind: 'policy_changed',
           stepId: step.id,

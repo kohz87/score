@@ -126,6 +126,7 @@ import {
 } from '../workflows/agents.ts'
 import {
   assertOrchestrationWorkers,
+  isForbiddenPermission,
   type CodingWorkerFacts,
   type WorkerReport,
 } from './supported-agents.ts'
@@ -2756,6 +2757,8 @@ export class Orchestrator {
     if (attempt.kind === 'step' && attempt.runtime !== 'hermes') {
       const stored = readWorkerPolicy(sqlite, o.id, attempt.agent_id)
       if (!stored || subject.policyId !== stored.policyId) return no('agent_changed')
+      // A stored policy with a permission workers may never have (a damaged or hand-edited row) never launches.
+      if (isForbiddenPermission(stored.policy.permission)) return no('permission_forbidden')
       const check = this.options.codingFacts?.checkPolicy(attempt.agent_id, stored.policy)
       if (!check) return no('agent_changed')
       if (!check.ok) return no(check.cause)
