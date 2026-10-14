@@ -3,6 +3,30 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.3.0] — 2026-10-14
+
+Stage 3 of coding agents in orchestration (PLAN 7.7c): **workflow steps can be Claude Code or Codex agents.** Design
+accepted after two adversarial rounds; Codex code review, a fix round, a verification and a second fix round; every fix
+has a regression test that failed before it. Checked live with a real two-step workflow (Claude Code, then Codex).
+
+### Added — coding agents in workflows
+- The workflow editor offers Claude Code and Codex agents for step nodes (with their badge); Antigravity and OpenCode
+  are shown as unavailable with the reason. **Validate**, saving and starting all report coding problems the same way.
+- The run dialog explains in plain words what each coding agent can read and asks for one acknowledgement; it sets the
+  coding step limit and which programs may keep going when their cost is unknown. A **rerun asks again**.
+- A step's verdict is read only from the CLI's own complete, validated final answer.
+- A coding step blocked by changed settings or the step limit keeps its place: **Use the new settings** or **Raise the
+  limit** resumes the same try (never a duplicate). **Try again** for a coding step that kept being held back is its
+  own small allowance (3), separate from retries. A step whose inputs were withdrawn waits for you instead of hanging.
+- The live workflow view shows the CLI badge on coding steps and the new decision cards.
+- Workflows without coding agents are unchanged.
+
+### Fixed
+- **Coding workers never run with `full` access through "Use the new settings"** (orchestrations too, since 1.2.0): a
+  remap to a `full` agent is refused, and a stored `full` policy can't start.
+- A restored backup keeps the count of coding Try agains; preflight reserves storage for the concurrency you chose.
+- The workflow run dialog says "1 step" (not "1 steps").
+
 ## [1.2.1] — 2026-10-14
 
 ### Fixed
