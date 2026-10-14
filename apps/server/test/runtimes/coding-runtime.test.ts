@@ -723,7 +723,7 @@ test('only the exact tested version runs unasked, and a queued turn is checked a
   await say('@coder second')
   await vi.waitFor(() => expect(runs()).toHaveLength(2), { timeout: 10_000 })
   expect(runs()[1]!.status).toBe('queued')
-  setEnv('SCORE_CODING_FAKE_VERSION', '2.1.296')
+  setEnv('SCORE_CODING_FAKE_VERSION', '2.1.297')
   const first = db.sqlite
     .prepare("SELECT message_id FROM message_runs WHERE room_id = ? AND agent_id = 'coder'")
     .get(firstRoom) as { message_id: string }

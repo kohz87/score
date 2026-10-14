@@ -346,7 +346,9 @@ export const claudeDriver: CodingDriver = {
   resumeRefusal: /^No conversation found with session ID\b/i,
   label: 'Claude Code',
   executable: 'claude',
-  testedVersions: ['2.1.295'],
+  // 2.1.296: real read-only turns on 2026-10-13 (7.7a live check; captured record shapes in coding-drivers.test.ts), owner
+  // decision 77.
+  testedVersions: ['2.1.295', '2.1.296'],
   supported: true,
   quota: 'Uses your Claude plan quota (the CLI’s own login).',
   promptVia: 'stdin',
