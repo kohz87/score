@@ -659,6 +659,31 @@ export const StorageInventorySchema = z.object({
 })
 export type StorageInventory = z.infer<typeof StorageInventorySchema>
 
+/**
+ * 7.7c: a workflow run's coding authorisation as it stands NOW (not as it was at the start): who may be launched, how many
+ * launches the run may release, how many it has, which sources' unknown cost is accepted and whether unknown spend pauses.
+ * Absent for a workflow without coding agents. The shared decision cards take this block as their explicit input.
+ */
+export const WorkflowCodingBlockSchema = z.object({
+  workers: z.array(
+    z.object({
+      agentId: AgentIdSchema,
+      runtime: z.enum(['claude-code', 'codex']),
+      policyId: PolicyIdSchema,
+      reach: z.string(),
+      reachBeyondWorkspace: z.boolean(),
+    }),
+  ),
+  /** The coding step limit: launches the run may release. */
+  codingSteps: z.int().positive(),
+  /** Launches that may have executed so far (the limit is judged on the coding journal; this is the database's count). */
+  used: z.int().nonnegative(),
+  acceptedUnknownCost: z.array(CostSourceSchema),
+  /** `continue` = every source's unknown cost is accepted; `pause` = only `acceptedUnknownCost` is. */
+  unknownSpend: z.enum(['pause', 'continue']),
+})
+export type WorkflowCodingBlock = z.infer<typeof WorkflowCodingBlockSchema>
+
 export const WorkflowRunSummarySchema = z.object({
   /** The orchestration id. */
   id: z.string().min(1),
@@ -699,6 +724,8 @@ export const WorkflowRunSummarySchema = z.object({
     unresolved: z.int().nonnegative(),
   }),
   needsYou: z.array(WorkflowNeedsYouSchema),
+  /** 7.7c: the run's current coding authorisation; absent when the workflow has no coding agents. */
+  coding: WorkflowCodingBlockSchema.optional(),
   /** Attempts abandoned or unknown whose end is not confirmed. */
   unconfirmed: z.int().nonnegative(),
   rerunOf: z.string().nullable(),
@@ -734,7 +761,10 @@ export const WorkflowRunDetailSchema = WorkflowRunSummarySchema.extend({
   maxConcurrentSteps: z.int().positive(),
   stepEstimateUsd: z.number(),
   budget: BudgetViewSchema,
-  /** `pause` (default) stops a budgeted run when spend is unknown; `continue` was chosen at start. */
+  /**
+   * Whether unknown spend pauses a budgeted run, as it stands now: `continue` once the person accepted it (at the start or
+   * in a limits decision), `pause` otherwise. Not a snapshot of the start request (7.7c).
+   */
   unknownSpend: z.enum(['pause', 'continue']),
   spend: z.object({
     /** Always false for live Hermes today: "spend not settled — Hermes doesn't report complete costs". */

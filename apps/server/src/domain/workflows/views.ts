@@ -11,6 +11,7 @@ import {
   type TokenView,
   type WaitingFor,
   type WorkflowEvent,
+  type WorkflowCodingBlock,
   type WorkflowNeedsYou,
   type WorkflowRunDetail,
   type WorkflowRunSummary,
@@ -24,6 +25,7 @@ import {
   spendEvidence,
   unknownCostBlocks,
 } from '../orchestration/budget.ts'
+import { workerPoliciesOf } from '../orchestration/coding-policy.ts'
 import { isFenced } from '../orchestration/fence.ts'
 import { activeStepCounts } from '../orchestration/ops.ts'
 import {
@@ -259,6 +261,38 @@ function needsYouOf(
   return result
 }
 
+/** Launches that may have executed (the database's projection of the coding journal; the limit itself is judged on the journal). */
+const executedLaunches = (sqlite: DatabaseSync, orchId: string): number =>
+  (
+    sqlite
+      .prepare(
+        'SELECT COUNT(*) AS n FROM coding_launches WHERE owner_orchestration = ? AND may_have_executed = 1',
+      )
+      .get(orchId) as { n: number }
+  ).n
+
+/** The run's coding authorisation as it stands now (7.7c §6); undefined for a workflow without coding agents. */
+export function codingBlockOf(sqlite: DatabaseSync, o: OrchRow): WorkflowCodingBlock | undefined {
+  const workers = workerPoliciesOf(sqlite, o.id)
+  if (workers.length === 0) return undefined
+  return {
+    workers: workers.map((stored) => ({
+      agentId: stored.agentId,
+      runtime: stored.policy.runtime as 'claude-code' | 'codex',
+      policyId: stored.policyId,
+      reach: stored.reach,
+      reachBeyondWorkspace: stored.reachBeyondWorkspace,
+    })),
+    codingSteps: o.coding_steps,
+    used: executedLaunches(sqlite, o.id),
+    acceptedUnknownCost: o.accepted_unknown_cost.filter(
+      (source): source is 'hermes' | 'claude-code' | 'codex' =>
+        source === 'hermes' || source === 'claude-code' || source === 'codex',
+    ),
+    unknownSpend: o.accepted_unknown_spend ? 'continue' : 'pause',
+  }
+}
+
 export function workflowSummaryOf(
   sqlite: DatabaseSync,
   o: OrchRow,
@@ -269,6 +303,7 @@ export function workflowSummaryOf(
   const attempts = attemptsOf(sqlite, o.id)
   const count = (state: string) => nodes.filter((n) => n.state === state).length
   const unconfirmed = unconfirmedOf(attempts)
+  const coding = codingBlockOf(sqlite, o)
   const outcomeNote =
     wf.graph_outcome === 'reached_end'
       ? unconfirmed > 0
@@ -307,6 +342,7 @@ export function workflowSummaryOf(
       unresolved: count('unresolved'),
     },
     needsYou: needsYouOf(sqlite, o, wf, nodes, attempts, journal),
+    ...(coding === undefined ? {} : { coding }),
     unconfirmed,
     rerunOf: wf.rerun_of,
     createdAt: o.created_at,
@@ -573,7 +609,7 @@ export function workflowDetailOf(
     maxConcurrentSteps: o.max_concurrent_steps,
     stepEstimateUsd: o.step_estimate_usd,
     budget,
-    unknownSpend: wf.unknown_spend,
+    unknownSpend: o.accepted_unknown_spend ? 'continue' : 'pause',
     spend: { settled, note: settled ? 'spend settled' : SPEND_NOTE, evidence },
     cancelFence: cancelFenceAttempts(o, attempts).map((a) => ({
       stepId: a.step_id ?? '',

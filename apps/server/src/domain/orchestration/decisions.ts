@@ -15,7 +15,7 @@ import { journalSoft, touch, type Ctx } from './ctx.ts'
 import {
   addStored,
   bumpAdmission,
-  CODING_ITEM_EXTRA_BYTES,
+  codingItemBytesOf,
   codingItemsFor,
   cascadeBlocked,
   oweStop,
@@ -153,6 +153,19 @@ export function setLimits(
   if (isTerminalStatus(o.status)) throw new HttpError(409, 'conflict', `This run is ${o.status}.`)
   if (body.deadlineAt !== undefined && body.deadlineAt !== null && body.deadlineAt <= now)
     throw new HttpError(400, 'bad_request', 'The deadline must be in the future.')
+  // A workflow without coding agents has no coding settings to change (7.7c §1).
+  if (
+    o.planner === 'workflow' &&
+    (body.codingSteps !== undefined || body.acceptUnknownCost !== undefined) &&
+    sqlite
+      .prepare('SELECT 1 FROM orc_worker_policies WHERE orchestration_id = ? LIMIT 1')
+      .get(orchId) === undefined
+  )
+    throw new HttpError(
+      400,
+      'bad_request',
+      'This workflow has no coding agents, so it takes no coding settings.',
+    )
   if (body.budgetUsd !== undefined)
     sqlite
       .prepare('UPDATE orchestrations SET budget_usd = ? WHERE id = ?')
@@ -181,11 +194,11 @@ export function setLimits(
         .prepare('SELECT 1 FROM orc_worker_policies WHERE orchestration_id = ? LIMIT 1')
         .get(orchId) !== undefined
     // Growth is measured against what is already reserved, not against the previous limit: 10 -> 4 -> 10 keeps ten
-    // items' reserve and adds nothing (F2 #5).
-    const reservedItems = Math.floor(o.coding_reserve_bytes / CODING_ITEM_EXTRA_BYTES)
+    // items' reserve and adds nothing (F2 #5). An item is the PLANNER's: a workflow's holds more than an orchestration's.
+    const itemBytes = codingItemBytesOf(o.planner)
+    const reservedItems = Math.floor(o.coding_reserve_bytes / itemBytes)
     const grow = hasWorkers
-      ? Math.max(0, codingItemsFor(o.max_steps, body.codingSteps) - reservedItems) *
-        CODING_ITEM_EXTRA_BYTES
+      ? Math.max(0, codingItemsFor(o.max_steps, body.codingSteps) - reservedItems) * itemBytes
       : 0
     if (grow > 0 && !storageFits(sqlite, grow))
       throw new HttpError(

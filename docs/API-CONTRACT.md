@@ -1933,6 +1933,17 @@ executor's one admission function, the coding step limit counted from the launch
   partition (`codingSteps` items, at most one per step the run can create) is set when the run is created and is part of its
   reserve; ordinary observations can't spend it.
 
+- **The `coding` block** (`WorkflowRunSummary.coding`, so also the detail; absent for a workflow without coding agents) is the
+  run's **effective, current** authorisation, never a snapshot of the start request: `{ workers[] (agentId, runtime, policyId,
+  reach, reachBeyondWorkspace), codingSteps, used, acceptedUnknownCost, unknownSpend }`. `used` is the launches that may have
+  executed (the limit itself is judged on the coding journal); `unknownSpend` is `continue` once unknown spend is accepted (at
+  the start or by a limits decision) and `pause` otherwise. `WorkflowRunDetail.unknownSpend` reports the same effective value.
+  The shared decision cards take this block as their explicit input.
+- **Limits decision** `POST /api/workflow-runs/:id/limits` `LimitsDecision` accepts `codingSteps` and the scoped
+  `acceptUnknownCost: { add?, remove? }` exactly as §14 does (journaled as the full resulting authorisation and verified after
+  a restore; raising the limit lets steps blocked `coding_limit` go on). A higher limit grows the coding partition by the
+  **workflow** item size. A workflow without coding agents answers `400 bad_request` to either field.
+
 ### Graph semantics
 
 **Planner principal.** Server-only (no capability, no MCP). Its commands (`assign`, `cancel`, `finish`) use the run-scoped
