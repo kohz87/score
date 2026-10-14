@@ -957,3 +957,8 @@
 .settings-command a {
   color: #fff;
 }
+.about-links a,
+#about > p > a {
+  color: var(--ink);
+  font-weight: 600;
+}
