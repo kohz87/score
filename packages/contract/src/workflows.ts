@@ -2,15 +2,19 @@ import { z } from 'zod'
 import {
   AttemptViewSchema,
   BudgetViewSchema,
+  CodingWorkerPreflightSchema,
+  CostSourceSchema,
   type GateDecision,
   GateViewSchema,
   OrchEventKindSchema,
   OrchEventSchema,
   OwnershipStateSchema,
   PauseReasonSchema,
+  PolicyIdSchema,
   PreflightCheckSchema,
   StepViewSchema,
   ORCH_ACKNOWLEDGEMENT_TEXT,
+  ORCH_LIMITS,
 } from './orchestration.ts'
 import { AgentIdSchema } from './types.ts'
 
@@ -49,6 +53,8 @@ export const WORKFLOW_LIMITS = {
   /** Σ over agent nodes of (retries + 1); the executor's own step limit. */
   maxSteps: 30,
   maxRemapsPerNode: 2,
+  /** 7.7c: how often the person may renew a coding node whose dispatch was held back 20 times (does not spend retries). */
+  maxRenewalsPerNode: 3,
   /** Stored sanitized output per attempt (the verdict is parsed from the complete reply before this cut). */
   outputBytes: 32 * 1024,
   verdictReasonChars: 500,
@@ -782,6 +788,17 @@ export const WorkflowPreflightCheckSchema = PreflightCheckSchema.extend({
   id: z.enum(['definition', 'agents', 'mapping', 'global_fence', 'journal', 'capacity', 'quota']),
 })
 
+/**
+ * "I accept what these coding agents can reach" for a workflow: the policy ids the person saw. Up to one per distinct
+ * coding agent of the workflow (at most the 30 mapped agents), where an orchestration's own acknowledgement keeps its 8.
+ */
+export const WorkflowCodingReachAcknowledgementSchema = z
+  .object({ policyIds: z.array(PolicyIdSchema).max(30) })
+  .strict()
+export type WorkflowCodingReachAcknowledgement = z.infer<
+  typeof WorkflowCodingReachAcknowledgementSchema
+>
+
 export const WorkflowPreflightSchema = z.object({
   ok: z.boolean(),
   checks: z.array(WorkflowPreflightCheckSchema),
@@ -796,10 +813,14 @@ export const WorkflowPreflightSchema = z.object({
   spendNote: z.string(),
   maxSteps: z.int().nonnegative(),
   reserveBytes: z.int().nonnegative(),
+  /** 7.7c: one entry per distinct coding agent among the step nodes; empty for a workflow with Hermes agents only. */
+  workers: z.array(CodingWorkerPreflightSchema),
   defaults: z.object({
     gatePolicy: WorkflowGatePolicySchema,
     maxConcurrentSteps: z.int(),
     stepEstimateUsd: z.number(),
+    /** The default coding step limit; present only when the workflow has coding agents. */
+    codingSteps: z.int().positive().optional(),
   }),
 })
 export type WorkflowPreflight = z.infer<typeof WorkflowPreflightSchema>
@@ -823,6 +844,16 @@ export const WorkflowRunCreateSchema = z
     rerunOf: z.string().min(1).max(100).optional(),
     /** Must be exactly `ORCH_ACKNOWLEDGEMENT_TEXT`; recorded on the run. */
     acknowledgement: z.object({ text: z.literal(ORCH_ACKNOWLEDGEMENT_TEXT) }),
+    // 7.7c: the coding fields. All four are omitted when the workflow has no coding step node (sending one is
+    // `400 bad_request`); a rerun sends them again, nothing carries over from the earlier run.
+    /** The policy id the person saw for each coding agent of the workflow (`409 policy_changed` otherwise). */
+    codingPolicies: z.record(AgentIdSchema, PolicyIdSchema).optional(),
+    /** Required for every coding agent whose reach goes beyond its workspace (`409 reach_not_acknowledged`). */
+    acknowledgeCodingReach: WorkflowCodingReachAcknowledgementSchema.optional(),
+    /** Sources whose unknown cost is accepted from the start (with `unknownSpend: 'pause'`; 'continue' accepts all). */
+    acceptUnknownCost: z.array(CostSourceSchema).max(3).optional(),
+    /** How many coding launches the run may release (default: the coding step nodes × their tries, at most 100). */
+    codingSteps: z.int().min(1).max(ORCH_LIMITS.maxCodingSteps).optional(),
   })
   .strict()
   .refine(

@@ -115,7 +115,12 @@ import { finalizeGraph, planWorkflow } from '../workflows/planner.ts'
 import { workflowDetailOf, workflowEventsOf, workflowSummaryOf } from '../workflows/views.ts'
 import { readVersion } from '../workflows/definitions.ts'
 import { validateDefinition } from '../workflows/definition.ts'
-import { validateWorkflowAgents, withAgentIssues } from '../workflows/agents.ts'
+import {
+  codingAgentsOf,
+  codingNodeIdsOf,
+  validateWorkflowAgents,
+  withAgentIssues,
+} from '../workflows/agents.ts'
 import {
   assertOrchestrationWorkers,
   type CodingWorkerFacts,
@@ -123,6 +128,7 @@ import {
 } from './supported-agents.ts'
 import {
   agentIdsOf,
+  defaultCodingSteps,
   insertWorkflowRun,
   stepBudgetOf,
   validateInputs,
@@ -1166,6 +1172,15 @@ export class Orchestrator {
     version: number,
     agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
   ): Promise<WorkflowPreflight> {
+    return (await this.workflowPreflightWith(workflowId, version, agents)).preflight
+  }
+
+  /** The preflight and, for each coding agent of the workflow, the full report its policy came from (start stores it). */
+  private async workflowPreflightWith(
+    workflowId: string,
+    version: number,
+    agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
+  ): Promise<{ preflight: WorkflowPreflight; reports: Map<string, WorkerReport> }> {
     const { port } = this.options
     const fake = port.mode === 'fake'
     const checks: WorkflowPreflight['checks'] = []
@@ -1186,14 +1201,25 @@ export class Orchestrator {
     )
     const ids = agentIdsOf(found)
     const known = new Map(team.map((agent) => [agent.id, agent]))
-    const problems = ids.flatMap((id) => {
-      const agent = known.get(id)
-      if (!agent) return [`${id} is not a team member`]
-      if (!this.db.read((sqlite) => agentAdmits(sqlite, id)))
-        return [`${id} is not ready for new work`]
-      if (!fake && !agent.served) return [`${id} is not served by Hermes right now`]
-      return []
-    })
+    // Each coding agent of the workflow: can it take a step now, and what would the person approve (7.7c §2). Only asked
+    // for a definition the team and host can run at all.
+    const reports = new Map<string, WorkerReport>()
+    if (validation.ok && this.options.codingFacts)
+      for (const id of codingAgentsOf(found.definition, team))
+        reports.set(id, await this.options.codingFacts.report(id))
+    const problems = [
+      ...ids.flatMap((id) => {
+        const agent = known.get(id)
+        if (!agent) return [`${id} is not a team member`]
+        if (!this.db.read((sqlite) => agentAdmits(sqlite, id)))
+          return [`${id} is not ready for new work`]
+        if (!fake && !agent.served) return [`${id} is not served by Hermes right now`]
+        return []
+      }),
+      ...[...reports].flatMap(([id, report]) =>
+        report.readiness === 'ready' ? [] : [`${id}: ${report.detail ?? report.readiness}`],
+      ),
+    ]
     add('agents', problems.length ? 'fail' : 'ok', problems.join('; ') || 'All agents are ready')
     const mapping = this.db.read((sqlite) =>
       ids.map((agentId) => ({
@@ -1230,30 +1256,56 @@ export class Orchestrator {
       running < ORCH_CAPACITY.runningOrchestrations ? 'ok' : 'fail',
       `${running} of ${ORCH_CAPACITY.runningOrchestrations} runs are using capacity`,
     )
-    const reserve = workflowReserve(stepBudgetOf(found))
+    const steps = stepBudgetOf(found)
+    const defaultSteps =
+      reports.size > 0
+        ? defaultCodingSteps(found, codingNodeIdsOf(found.definition, team))
+        : undefined
+    const reserve = workflowReserve(
+      steps,
+      defaultSteps === undefined ? 0 : codingItemsFor(steps, defaultSteps),
+    )
     const fits = this.db.read((sqlite) => this.quotaUsed(sqlite) + reserve <= this.quotaBytes)
     add(
       'quota',
       fits ? 'ok' : 'fail',
       fits ? 'There is room for another run' : 'Run storage is full; remove old runs first',
     )
-    return {
+    const preflight: WorkflowPreflight = {
       ok: checks.every((check) => check.status !== 'fail'),
       checks,
       issues: validation.issues,
       mapping,
+      workers: [...reports].map(([agentId, report]) => ({
+        agentId,
+        runtime: known.get(agentId)!.runtime as 'claude-code' | 'codex',
+        readiness: report.readiness,
+        detail: report.detail,
+        policyId: report.policyId,
+        reach: report.reach,
+        reachBeyondWorkspace: report.reachBeyondWorkspace,
+      })),
       gatePolicyNotes: {
         'gates-only':
           'Only gate nodes stop for you; agent steps start as soon as their inputs are ready.',
         'every-step': 'You approve every agent step before it starts, as well as the gate nodes.',
       },
       acknowledgementText: ORCH_ACKNOWLEDGEMENT_TEXT,
-      spendNote:
-        'Hermes reports tokens, often not dollars. Unknown cost is shown as unknown, never as zero, and spend of a live Hermes run is not settled: reservations are held until the run ends.',
+      spendNote: `Hermes reports tokens, often not dollars. Unknown cost is shown as unknown, never as zero, and spend of a live Hermes run is not settled: reservations are held until the run ends.${
+        reports.size > 0
+          ? ' Claude Code reports an estimated cost and Codex reports none; a coding step that ends without a cost counts as unknown cost.'
+          : ''
+      }`,
       maxSteps: found.maxSteps,
       reserveBytes: reserve,
-      defaults: { gatePolicy: 'gates-only', maxConcurrentSteps: 2, stepEstimateUsd: 0.5 },
+      defaults: {
+        gatePolicy: 'gates-only',
+        maxConcurrentSteps: 2,
+        stepEstimateUsd: 0.5,
+        ...(defaultSteps === undefined ? {} : { codingSteps: defaultSteps }),
+      },
     }
+    return { preflight, reports }
   }
 
   async createWorkflowRun(
@@ -1271,7 +1323,24 @@ export class Orchestrator {
         'This workflow can’t start as it is. Fix the problems and save a new version.',
         { result: validation },
       )
-    const preflight = await this.workflowPreflight(body.workflowId, body.version, agents)
+    const { preflight, reports } = await this.workflowPreflightWith(
+      body.workflowId,
+      body.version,
+      agents,
+    )
+    // A workflow with no coding step node sends and stores no coding fields at all (7.7c §1).
+    if (
+      reports.size === 0 &&
+      (body.codingPolicies !== undefined ||
+        body.acknowledgeCodingReach !== undefined ||
+        body.acceptUnknownCost !== undefined ||
+        body.codingSteps !== undefined)
+    )
+      throw new HttpError(
+        400,
+        'bad_request',
+        'This workflow has no coding agents, so it takes no coding settings.',
+      )
     if (!preflight.ok) {
       const failed = (id: string) =>
         preflight.checks.some((check) => check.id === id && check.status === 'fail')
@@ -1289,6 +1358,48 @@ export class Orchestrator {
         throw new HttpError(409, 'quota_exhausted', 'Score has no storage left for runs.', details)
       throw new HttpError(409, 'preflight_failed', 'The check before the run failed.', details)
     }
+    // Consent is by policy id (7.7b §4, 7.7c §2): the id the person saw must still be the agent's, and a reach beyond the
+    // workspace needs the acknowledgement of exactly that id. A rerun asks again; nothing carries over from the earlier run.
+    for (const agentId of Object.keys(body.codingPolicies ?? {}))
+      if (!reports.has(agentId))
+        throw new HttpError(
+          400,
+          'bad_request',
+          `${agentId} is not a coding agent of this workflow.`,
+        )
+    for (const [agentId, report] of reports) {
+      const seen = body.codingPolicies?.[agentId]
+      if (seen === undefined)
+        throw new HttpError(
+          400,
+          'bad_request',
+          `The request has to name the settings it was approved with for ${agentId}.`,
+        )
+      if (seen !== report.policyId)
+        throw new HttpError(
+          409,
+          'policy_changed',
+          `${agentId} changed since you looked. Check what it can reach and start again.`,
+          { agentId, currentPolicyId: report.policyId },
+        )
+      if (
+        report.reachBeyondWorkspace &&
+        !body.acknowledgeCodingReach?.policyIds.includes(report.policyId!)
+      )
+        throw new HttpError(
+          409,
+          'reach_not_acknowledged',
+          `${agentId} can read beyond its workspace. Accept that before the run starts.`,
+          { agentId, policyId: report.policyId },
+        )
+    }
+    const coding =
+      reports.size > 0
+        ? {
+            reports,
+            codingSteps: body.codingSteps ?? preflight.defaults.codingSteps ?? 1,
+          }
+        : undefined
     const id = `orc-${randomUUID().slice(0, 8)}`
     await this.mutate((ctx) => {
       const { sqlite, now } = ctx
@@ -1300,7 +1411,12 @@ export class Orchestrator {
         )
       if (this.capacityUsed(sqlite) >= ORCH_CAPACITY.runningOrchestrations)
         throw new HttpError(429, 'capacity', 'Too many runs are using capacity.')
-      if (this.quotaUsed(sqlite) + workflowReserve(stepBudgetOf(found)) > this.quotaBytes)
+      const steps = stepBudgetOf(found)
+      const reserve = workflowReserve(
+        steps,
+        coding === undefined ? 0 : codingItemsFor(steps, coding.codingSteps),
+      )
+      if (this.quotaUsed(sqlite) + reserve > this.quotaBytes)
         throw new HttpError(409, 'quota_exhausted', 'Score has no storage left for this run.')
       if (body.deadlineAt !== undefined && body.deadlineAt <= now)
         throw new HttpError(400, 'bad_request', 'The deadline must be in the future.')
@@ -1315,7 +1431,7 @@ export class Orchestrator {
             `${entry.agentId} changed. Look at the start screen again.`,
           )
       }
-      insertWorkflowRun(ctx, id, body, found, preflight)
+      insertWorkflowRun(ctx, id, body, found, preflight, coding)
     })
     this.kick()
     return { run: this.workflowSummary(id), preflight }

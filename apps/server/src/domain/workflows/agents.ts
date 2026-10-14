@@ -29,6 +29,12 @@ export function codingNodesOf(
   })
 }
 
+/** The ids of the agent nodes that are coding steps. */
+export const codingNodeIdsOf = (
+  definition: Parameters<typeof codingNodesOf>[0],
+  team: readonly TeamMember[],
+): Set<string> => new Set(codingNodesOf(definition, team).map((node) => node.nodeId))
+
 /** The distinct coding agents of a definition, in first-use order. */
 export const codingAgentsOf = (
   definition: Parameters<typeof codingNodesOf>[0],

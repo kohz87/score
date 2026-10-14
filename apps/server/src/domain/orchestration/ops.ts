@@ -74,6 +74,22 @@ export const CODING_ITEM_EXTRA_BYTES =
   CODING_OUTPUT_BYTES +
   20 * 2 * 1024
 
+/**
+ * What one coding item of a WORKFLOW reserves (7.7c §5): everything an orchestration's item keeps, plus the two copies a
+ * workflow adds (the `wf_results` output and the node's own output, 32 KiB each), the verdict record (2 KiB) and the
+ * generation records of the renewals the person may ask for (each renewal is a fresh attempt with up to 20 generations).
+ * Computed from the constants, so the partition can never drift from what is written into it.
+ */
+export const WORKFLOW_CODING_ITEM_BYTES =
+  CODING_ITEM_EXTRA_BYTES +
+  2 * WORKFLOW_LIMITS.outputBytes +
+  2 * 1024 +
+  WORKFLOW_LIMITS.maxRenewalsPerNode * 20 * 2 * 1024
+
+/** The coding item size of a run, by its planner: a workflow's items hold more than an orchestration's. */
+export const codingItemBytesOf = (planner: 'lead' | 'workflow'): number =>
+  planner === 'workflow' ? WORKFLOW_CODING_ITEM_BYTES : CODING_ITEM_EXTRA_BYTES
+
 /** A run can release at most `codingSteps` launches, and each coding item needs one, so that bounds the items. */
 export const codingItemsFor = (maxSteps: number, codingSteps: number): number =>
   Math.min(maxSteps, codingSteps)

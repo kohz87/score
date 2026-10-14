@@ -1907,6 +1907,32 @@ fields anywhere (no policies, no `codingSteps`, no reach acknowledgement, no cod
 - **Remap** `POST /api/workflow-runs/:id/remap` `WorkflowRemapDecision`: §14's agent-level decision plus `plan`, the exact
   `{ nodeId, payloadHash }` list the Remap card showed. A different current plan → `409 stale_plan`.
 
+### Coding agents in workflows (PLAN 7.7c; design docs/briefs/7.7c-coding-workflows.md v3)
+
+Claude Code and Codex agents may be the agent of a **step node** (permission `read-only` or `workspace-write`, never `full`; on
+hosts that run coding turns as supervised units). A workflow run is an orchestration, so everything §14 says about coding
+workers (frozen worker policy and policy id, consent by policy id, per-generation identities, release authorised by the
+executor's one admission function, the coding step limit counted from the launch journal, unknown cost per source,
+`result_text`) applies to its coding steps unchanged. This section lists what is workflow-specific.
+
+- **Preflight** `workers[]` has one entry per **distinct coding agent** among the step nodes, in §14's shape
+  (`{ agentId, runtime, readiness, detail, policyId, reach, reachBeyondWorkspace }`); a workflow with Hermes agents only has
+  `workers: []` and no `defaults.codingSteps`. A worker that isn't `ready` also fails the `agents` check with the reason.
+  `defaults.codingSteps` is the number of coding step nodes × (1 + their retries), at least 1, at most 100.
+- **Start** (`WorkflowRunCreate`) gains four fields, all omitted for a workflow without coding step nodes (sending any of them
+  → `400 bad_request`): `codingPolicies: { [agentId]: policyId }` (the id the person saw for each coding agent; a missing one →
+  `400`, a different current one → `409 policy_changed`), `acknowledgeCodingReach: { policyIds }` (up to **30** ids, one per
+  distinct coding agent, where an orchestration's own acknowledgement keeps its 8; required for every agent whose
+  `reachBeyondWorkspace` is true, else `409 reach_not_acknowledged`), `acceptUnknownCost?: Source[]` and `codingSteps?` (1–100).
+  A **rerun** is an ordinary start: it asks again, and nothing carries over from the earlier run.
+- **Unknown cost.** `unknownSpend: 'continue'` accepts every source; `'pause'` plus `acceptUnknownCost` accepts those sources.
+  Both are journaled with the admission. Later changes go through the limits decision (`codingSteps`, scoped
+  `acceptUnknownCost` add/remove), as in §14.
+- **Storage.** A workflow's coding item reserves `WORKFLOW_CODING_ITEM_BYTES` = §14's coding item + the `wf_results` output
+  (32 KiB) + the node's output (32 KiB) + the verdict record (2 KiB) + `renewals_max` (3) × 20 generations × 2 KiB. The coding
+  partition (`codingSteps` items, at most one per step the run can create) is set when the run is created and is part of its
+  reserve; ordinary observations can't spend it.
+
 ### Graph semantics
 
 **Planner principal.** Server-only (no capability, no MCP). Its commands (`assign`, `cancel`, `finish`) use the run-scoped

@@ -5,12 +5,15 @@ import {
   type WorkflowRunCreate,
   type WorkflowVersion,
 } from '@score/contract'
+import type { WorkerReport } from '../orchestration/supported-agents.ts'
 import { HttpError } from '../../errors.ts'
 import { briefTitle, createBrief, emitBriefChange } from '../briefs.ts'
 import { lifecycleOf } from '../agent-lifecycle.ts'
 import { storeMessage, insertRoom } from '../rooms.ts'
-import { touch, type Ctx } from '../orchestration/ctx.ts'
+import { journalSoft, touch, type Ctx } from '../orchestration/ctx.ts'
 import { addHistory } from '../orchestration/store.ts'
+import { codingItemsFor, WORKFLOW_CODING_ITEM_BYTES } from '../orchestration/ops.ts'
+import { storeWorkerPolicy } from '../orchestration/coding-policy.ts'
 import { startEdge } from './planner.ts'
 import { graphOf, bytesOf, definitionHash } from './definition.ts'
 
@@ -19,8 +22,29 @@ import { graphOf, bytesOf, definitionHash } from './definition.ts'
 
 /** Per-run storage reserve: every step can keep its input three times (attempt, reply row, intent) and its output. */
 export const WORKFLOW_STEP_BYTES = 256 * 1024
-export const workflowReserve = (steps: number): number =>
-  steps * (WORKFLOW_STEP_BYTES + ORCH_LIMITS.recordsPerItemBytes) + ORCH_LIMITS.controlReserveBytes
+export const workflowReserve = (steps: number, codingItems = 0): number =>
+  steps * (WORKFLOW_STEP_BYTES + ORCH_LIMITS.recordsPerItemBytes) +
+  ORCH_LIMITS.controlReserveBytes +
+  codingItems * WORKFLOW_CODING_ITEM_BYTES
+
+/**
+ * The default coding step limit (7.7c §2): each coding step node can take one launch per try, so the nodes × (1 + their
+ * retries), at most the 7.7b maximum and at least one.
+ */
+export const defaultCodingSteps = (
+  version: WorkflowVersion,
+  codingNodeIds: ReadonlySet<string>,
+): number =>
+  Math.max(
+    1,
+    Math.min(
+      ORCH_LIMITS.maxCodingSteps,
+      version.definition.nodes.reduce(
+        (sum, n) => sum + (n.kind === 'agent' && codingNodeIds.has(n.id) ? n.retries + 1 : 0),
+        0,
+      ),
+    ),
+  )
 
 export const agentIdsOf = (version: WorkflowVersion): string[] => [
   ...new Set(version.definition.nodes.flatMap((n) => (n.kind === 'agent' ? [n.agentId] : []))),
@@ -56,17 +80,26 @@ export function validateInputs(version: WorkflowVersion, inputs: Record<string, 
     throw new HttpError(422, 'invalid_inputs', problems.join('; '), { problems })
 }
 
+/** What a workflow with coding step nodes starts with (7.7c §2); absent for a workflow without any. */
+export interface WorkflowCodingStart {
+  /** The report each coding agent's policy came from (preflight, asked before the transaction). */
+  reports: Map<string, WorkerReport>
+  codingSteps: number
+}
+
 export function insertWorkflowRun(
   ctx: Ctx,
   id: string,
   body: WorkflowRunCreate,
   version: WorkflowVersion,
   preflight: unknown,
+  coding?: WorkflowCodingStart,
 ): void {
   const { sqlite, now } = ctx
   const def = version.definition
   const agents = agentIdsOf(version)
   const steps = stepBudgetOf(version)
+  const codingItems = coding ? codingItemsFor(steps, coding.codingSteps) : 0
   const title = briefTitle(`${def.name}`)
   const roomId = `room-${id}`
   const messageId = `orc-goal:${id}`
@@ -99,7 +132,7 @@ export function insertWorkflowRun(
     ),
   )
   createBrief(sqlite, { id: messageId, roomId, text: goal }, now)
-  const reserve = workflowReserve(steps)
+  const reserve = workflowReserve(steps, codingItems)
   sqlite
     .prepare(
       `INSERT INTO orchestrations (id, title, goal, planner, lead_agent_id, lead_incarnation, allowed_agents, room_id, brief_id, gate_policy,
@@ -130,6 +163,57 @@ export function insertWorkflowRun(
       // and send (and a later limits decision can revoke it).
       body.unknownSpend === 'continue' ? 1 : 0,
     )
+  if (coding) {
+    // The partition is set here, once, from the planner's own item constant (7.7c §5); `setLimits` grows it the same way.
+    sqlite
+      .prepare(
+        'UPDATE orchestrations SET coding_steps = ?, accepted_unknown_cost = ?, coding_reserve_bytes = ? WHERE id = ?',
+      )
+      .run(
+        coding.codingSteps,
+        JSON.stringify([...new Set(body.acceptUnknownCost ?? [])].sort()),
+        codingItems * WORKFLOW_CODING_ITEM_BYTES,
+        id,
+      )
+    // The policy each coding agent is approved with, and the acknowledgement that covered it.
+    for (const [agentId, report] of coding.reports)
+      storeWorkerPolicy(
+        sqlite,
+        id,
+        agentId,
+        {
+          policyId: report.policyId!,
+          policy: report.policy!,
+          reach: report.reach!,
+          reachBeyondWorkspace: report.reachBeyondWorkspace,
+          acknowledged: body.acknowledgeCodingReach?.policyIds.includes(report.policyId!) ?? false,
+        },
+        now,
+      )
+    addHistory(
+      sqlite,
+      id,
+      'coding_reach_acknowledged',
+      {
+        policyIds: [...coding.reports.values()]
+          .filter((report) => body.acknowledgeCodingReach?.policyIds.includes(report.policyId!))
+          .map((report) => report.policyId),
+      },
+      now,
+    )
+    // The limits the person started with are journaled like any later change (verified after a restore).
+    journalSoft(ctx, () =>
+      ctx.journal.append({
+        kind: 'authorization',
+        orchestrationId: id,
+        budgetUsd: body.budgetUsd ?? null,
+        deadlineAt: body.deadlineAt ?? null,
+        acceptUnknownSpend: body.unknownSpend === 'continue',
+        codingSteps: coding.codingSteps,
+        acceptUnknownCost: [...new Set(body.acceptUnknownCost ?? [])].sort(),
+      }),
+    )
+  }
   const freeze = sqlite.prepare(
     "INSERT INTO orc_agent_map (orchestration_id, agent_id, role, incarnation, updated_at) VALUES (?, ?, 'agent', ?, ?)",
   )
