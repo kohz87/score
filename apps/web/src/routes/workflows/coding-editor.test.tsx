@@ -182,7 +182,7 @@ test('Validate’s coding issue shows on the step it is about, with words for wh
     /coder-c is an Antigravity agent, which can’t take workflow steps/,
   )
   expect(
-    within(problems).getByText(/Choose a Hermes, Claude Code or Codex agent for this step\./),
+    within(problems).getByText(/Open the step and pick one of those from the Agent list\./),
   ).toBeTruthy()
   expect(
     await screen.findByRole('button', {

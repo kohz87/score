@@ -457,6 +457,11 @@
   color: var(--card);
   pointer-events: none;
 }
+.wf-node .orch-node__cli {
+  /* The problem flag sits at the top left; the program's name goes to the other corner. */
+  left: auto;
+  right: 12px;
+}
 .wf-node__flag--warning {
   background: var(--agent-saffron);
   color: #12131a;
