@@ -3,6 +3,21 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.3.1] — 2026-10-14
+
+### Added
+- **Settings › About:** Score's version, build, database schema, contract, Hermes and Node versions, and a **Check for
+  updates** button. Score asks GitHub for the list of released versions only when you press it (nothing in the
+  background, nothing about you is sent); when a newer version exists it shows the steps to run yourself — Score never
+  updates itself (decision 79).
+- A coding step waiting for room says so ("waiting for room: other coding steps of this run hold their inputs until they
+  are sent or finished"); running workflow steps now show their waiting reason too.
+
+### Fixed
+- Four tests that failed only under load now have their real causes fixed (a media fixture that wasn't unique, a fixed
+  sleep, the editor's undo grouping by wall clock, and a crash test that watched the wrong process). None was a product
+  bug.
+
 ## [1.3.0] — 2026-10-14
 
 Stage 3 of coding agents in orchestration (PLAN 7.7c): **workflow steps can be Claude Code or Codex agents.** Design
