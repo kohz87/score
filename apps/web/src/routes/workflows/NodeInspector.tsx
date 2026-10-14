@@ -5,6 +5,7 @@ import {
   type WorkflowNode,
 } from '@score/contract'
 import { useId, useState } from 'react'
+import { runtimeLabel } from '../../components/runtime-label.ts'
 import { AgentChip } from '../orchestrations/RunDecisions.tsx'
 import { TemplateField } from './TemplateField.tsx'
 import {
@@ -233,6 +234,13 @@ function conditionFrom(key: string, current: BranchCondition): BranchCondition {
   return { kind: 'output_contains', text: current.kind === 'output_contains' ? current.text : '' }
 }
 
+/** Why an agent can't take a step, or null when it can: Hermes, Claude Code and Codex agents can. */
+function refusalFor(runtime: AgentSummary['runtime']): string | null {
+  return !runtime || runtime === 'hermes' || runtime === 'claude-code' || runtime === 'codex'
+    ? null
+    : 'can’t take workflow steps'
+}
+
 export function NodeInspector({
   draft,
   node,
@@ -250,9 +258,14 @@ export function NodeInspector({
   onDelete: () => void
   announce: (message: string) => void
 }) {
-  const hermes = agents.filter((agent) => !agent.runtime || agent.runtime === 'hermes')
   const patch = (change: Partial<WorkflowNode>, coalesce?: string) =>
     commit(updateNode(draft, node.id, change), coalesce)
+  const picked =
+    node.kind === 'agent' ? agents.find((agent) => agent.id === node.agentId) : undefined
+  const codingNote =
+    picked?.runtime === 'claude-code' || picked?.runtime === 'codex'
+      ? `${runtimeLabel(picked.runtime)} works on this computer, in its own workspace. Starting the run asks you to accept what it can read.`
+      : null
   const agentNodes = draft.nodes.filter((other) => other.kind === 'agent')
   const issueFor = (field: string) => issues.some((issue) => issue.field === field)
 
@@ -288,16 +301,23 @@ export function NodeInspector({
               onChange={(event) => patch({ agentId: event.target.value })}
             >
               {node.agentId === '' && <option value="">Choose an agent…</option>}
-              {node.agentId !== '' && !hermes.some((agent) => agent.id === node.agentId) && (
+              {node.agentId !== '' && !agents.some((agent) => agent.id === node.agentId) && (
                 <option value={node.agentId}>{node.agentId} (not on this team)</option>
               )}
-              {hermes.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name}
-                </option>
-              ))}
+              {agents.map((agent) => {
+                const cli = runtimeLabel(agent.runtime)
+                const refused = refusalFor(agent.runtime)
+                return (
+                  <option key={agent.id} value={agent.id} disabled={refused !== null}>
+                    {agent.name}
+                    {cli ? ` · ${cli}` : ''}
+                    {refused ? ` (${refused})` : ''}
+                  </option>
+                )
+              })}
             </select>
             {node.agentId !== '' && <AgentChip agentId={node.agentId} agents={agents} />}
+            {codingNote && <small className="orch-muted">{codingNote}</small>}
           </label>
           <TemplateField
             label="Instruction"

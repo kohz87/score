@@ -10,6 +10,7 @@ import {
   type PointerEvent,
 } from 'react'
 import { AgentGlyph } from '../../components/AgentGlyph.tsx'
+import { runtimeLabel } from '../../components/runtime-label.ts'
 import { layoutFlow, type Point } from '../now/flow/layout.ts'
 import { withPositions } from '../now/flow/free-layout.ts'
 import { KIND_LABEL, portsOf, type Draft } from './workflow-model.ts'
@@ -618,6 +619,8 @@ export function EditorCanvas({
                 name: agent?.name ?? (node.kind === 'agent' ? node.agentId || 'No agent yet' : ''),
                 style: agent?.style ?? unknownStyle,
               }
+              // A coding agent shows which program it runs on, as in the live view.
+              const cli = runtimeLabel(agent?.runtime)
               const mine = issuesForNode(issues, draft, node.id)
               const worst = worstSeverity(mine)
               const shaped = node.kind !== 'agent'
@@ -668,7 +671,7 @@ export function EditorCanvas({
                     data-kind={node.kind}
                     aria-pressed={isOn}
                     aria-keyshortcuts="M"
-                    aria-label={`${KIND_LABEL[node.kind]} ${node.label || node.id}${node.kind === 'agent' ? `, ${glyph.name}` : ''}${live ? `, ${visualLabel[live.visual]}${live.status ? `: ${live.status.replaceAll('`', '')}` : ''}` : ''}${mine.length > 0 ? `, ${mine.length} ${mine.length === 1 ? 'problem' : 'problems'}` : ''}`}
+                    aria-label={`${KIND_LABEL[node.kind]} ${node.label || node.id}${node.kind === 'agent' ? `, ${glyph.name}${cli ? ` (${cli})` : ''}` : ''}${live ? `, ${visualLabel[live.visual]}${live.status ? `: ${live.status.replaceAll('`', '')}` : ''}` : ''}${mine.length > 0 ? `, ${mine.length} ${mine.length === 1 ? 'problem' : 'problems'}` : ''}`}
                     tabIndex={node.id === focusId ? 0 : -1}
                     onFocus={() => setActiveId(node.id)}
                     onBlur={() => setMoving((current) => (current === node.id ? null : current))}
@@ -701,6 +704,7 @@ export function EditorCanvas({
                         )}
                       </span>
                     </span>
+                    {cli && <span className="orch-node__cli">{cli}</span>}
                     {live?.visual === 'gate' && <span className="orch-node__flag">Needs you</span>}
                   </button>
                   {mine.length > 0 && (
