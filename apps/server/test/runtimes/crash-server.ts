@@ -33,11 +33,23 @@ insertCodingAgent(db.sqlite, {
   style: { color: '#19C39A', shape: 'hexagon' },
   createdAt: new Date().toISOString(),
 })
-await runtime.startRun({ agentId: 'crashy', input: '[fixture:slow] hold', turnId: 'turn-crash' })
+await runtime.startRun({
+  agentId: 'crashy',
+  input: '[fixture:leftoverhang] hold',
+  turnId: 'turn-crash',
+})
+// READY once the tool the CLI left running is recorded as a member of the run's group (it is noted every 100 ms). Killed
+// earlier, the next start couldn't prove the tool is Score's and would rightly leave it alone, so what the test checks
+// would depend on timing. The CLI itself dies with the server (parent-death signal); only that tool outlives the crash.
 const timer = setInterval(() => {
-  const row = db.sqlite.prepare('SELECT pid FROM coding_processes').get() as
-    { pid: number } | undefined
-  if (row) {
+  const row = db.sqlite.prepare('SELECT run_id, pid FROM coding_processes').get() as
+    { run_id: string; pid: number } | undefined
+  const tool =
+    row &&
+    db.sqlite
+      .prepare('SELECT 1 FROM coding_process_members WHERE run_id = ? AND pid != ?')
+      .get(row.run_id, row.pid)
+  if (row && tool) {
     clearInterval(timer)
     process.stdout.write(`READY ${row.pid}\n`)
   }

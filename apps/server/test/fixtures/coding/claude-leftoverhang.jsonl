@@ -1,0 +1,5 @@
+{"_fixture":"hand-made, not recorded: a CLI that left a tool running and then hangs (crash-recovery test)"}
+{"type":"system","subtype":"init","session_id":"66666666-6666-4666-8666-666666666666","model":"claude-sonnet-fixture"}
+{"_orphan":120000}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Started a server."}]}}
+{"_hang":true}
