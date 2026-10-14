@@ -136,7 +136,7 @@ describe('#1 release reads fresh spend', () => {
           now,
         )
       })
-      await h.create({ budgetUsd: 5, ...extra })
+      await h.create({ budgetUsd: 5, ...(extra as { acceptUnknownCost?: 'hermes'[] }) })
       // The release is granted: the generation reaches the CLI instead of closing with `unknown_cost`.
       await h.until(() => h.cliCalls().length > 0)
       expect(gens().map((g) => g['closed_cause'])).not.toContain('unknown_cost')
