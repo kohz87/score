@@ -619,8 +619,13 @@ export function policyRemapStep(
   if (!step) throw new HttpError(404, 'not_found', 'Couldn’t find that step.')
   if (step.agent_id !== body.agentId)
     throw new HttpError(409, 'conflict', `${body.agentId} isn’t the agent of this step.`)
-  const suspended = attemptsOf(sqlite, orchId).find(
-    (attempt) => attempt.step_id === stepId && attempt.suspended,
+  // Only the step's current attempt: unsent, suspended and not retired (a renewal's predecessor is none of these).
+  const suspended = attemptsOf(sqlite, orchId).findLast(
+    (attempt) =>
+      attempt.step_id === stepId &&
+      attempt.suspended &&
+      attempt.state === 'created' &&
+      !attempt.retired,
   )
   if (
     step.status !== 'blocked' ||

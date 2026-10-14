@@ -259,8 +259,11 @@ function renewDispatch(
   const freshId = `orc-${o.id.slice(4)}-${step.id}-${n}`
   refuseAttempt(sqlite, predecessor, 'not dispatched: renewed', now)
   // The fresh attempt carries the input (so its retained copy is the predecessor's, not a second one) and the reservation.
+  // The retired predecessor is no longer the step's suspended attempt: a later decision must find the current one (F1 #2).
   sqlite
-    .prepare("UPDATE orc_attempts SET reserved_usd = 0, input = '', updated_at = ? WHERE id = ?")
+    .prepare(
+      "UPDATE orc_attempts SET reserved_usd = 0, input = '', suspended = 0, updated_at = ? WHERE id = ?",
+    )
     .run(now, predecessor.id)
   insertAttemptRows(ctx, o, {
     id: freshId,
