@@ -656,6 +656,10 @@ export function policyRemapStep(
       { policyIds: [body.policyId], stepId },
       now,
     )
+  // The step's own attempt now carries the settings this decision approved (F2 #3).
+  sqlite
+    .prepare('UPDATE orc_attempts SET policy_id = ?, updated_at = ? WHERE id = ?')
+    .run(body.policyId, now, suspended.id)
   const hadGate = gatesOf(sqlite, orchId).some((gate) => gate.step_id === stepId)
   // A gate approved (or still open) for the old settings no longer covers the step.
   sqlite

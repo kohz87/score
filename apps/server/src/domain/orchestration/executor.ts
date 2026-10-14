@@ -1977,7 +1977,13 @@ export class Orchestrator {
           .prepare(
             'UPDATE orc_attempts SET suspended = 0, policy_id = ?, updated_at = ? WHERE id = ?',
           )
-          .run(readWorkerPolicy(sqlite, o.id, step.agent_id)?.policyId ?? null, now, suspended.id)
+          .run(
+            // The step keeps the settings it was approved with (set at its own remap); the worker's stored mapping may
+            // have moved on for another step, and admission then blocks this one until it is remapped itself (F2 #3).
+            suspended.policy_id ?? readWorkerPolicy(sqlite, o.id, step.agent_id)?.policyId ?? null,
+            now,
+            suspended.id,
+          )
         setStepStatus(sqlite, o.id, step.id, 'admitted', null, now)
         counts.perRun.set(o.id, (counts.perRun.get(o.id) ?? 0) + 1)
         counts.perAgent.set(step.agent_id, (counts.perAgent.get(step.agent_id) ?? 0) + 1)

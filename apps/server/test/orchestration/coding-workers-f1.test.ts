@@ -245,6 +245,52 @@ describe('#4 a remap is judged against the step’s own approved settings', () =
   })
 })
 
+describe('#4 (F2 #3) each step keeps its own approved mapping through readmission', () => {
+  test('S1 remapped to B, S2 remapped to C, S1’s B gate approved: S1 is blocked and can still be remapped to C', async () => {
+    h = await workerHarness({ lead: { script: plan(2) } })
+    h.addAgent()
+    atArming(writeClaudeMd)
+    const id = await h.create({ gatePolicy: 'every-step', maxConcurrentSteps: 2 })
+    const approve = async (stepId: string) => {
+      await h.until(() => gateOf(id, stepId)?.status === 'open')
+      for (let tries = 0; ; tries++) {
+        const gate = gateOf(id, stepId)
+        try {
+          await h.orch.gateDecision(id, gate.id, {
+            decision: 'approve',
+            expectedRevision: gate.revision,
+            orchestrationRevision: revision(id),
+          })
+          return
+        } catch (error) {
+          const stale = (error as { details?: { currentRevision?: number } }).details
+            ?.currentRevision
+          if (stale === undefined || tries > 5) throw error
+        }
+      }
+    }
+    await approve('s1')
+    await approve('s2')
+    await h.until(
+      () => stepStatus('s1').status === 'blocked' && stepStatus('s2').status === 'blocked',
+    )
+    const b = await currentPolicy()
+    await remap(id, 's1', b)
+    writeFileSync(join(h.workspace, 'CLAUDE.md'), 'newer instructions, again')
+    const c = await currentPolicy()
+    expect(c).not.toBe(b)
+    await remap(id, 's2', c)
+    // S1's renewed gate names B; approving it must not rewrite S1's attempt to C.
+    await approve('s1')
+    await h.until(() => stepStatus('s1').status === 'blocked')
+    await remap(id, 's1', c)
+    await approve('s1')
+    await approve('s2')
+    await h.until(() => h.orch.summary(id).status === 'succeeded', 60_000)
+    expect(h.errors).toEqual([])
+  })
+})
+
 describe('#5 rejecting the renewed gate closes the suspended attempt', () => {
   test('the step is rejected and its $0.50 reservation is released', async () => {
     h = await workerHarness({ lead: { script: plan(1) } })
