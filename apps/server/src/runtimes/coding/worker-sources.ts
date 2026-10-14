@@ -1,4 +1,4 @@
-import { closeSync, fstatSync, lstatSync, openSync, readSync } from 'node:fs'
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, statSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 
 /** Why a CLI's configuration locations can't be worked out: the reach of the CLI can't be verified. */
@@ -21,11 +21,34 @@ export const inChain = (dir: string, ...parts: string[]): string[] =>
 /** At most this much of a Git pointer file (`.git` file, `commondir`) is read. */
 const GIT_POINTER_BYTES = 4096
 
-/** One line of Git metadata (never CLI configuration): the file, or undefined when it isn't there. */
+/**
+ * One line of Git metadata (never CLI configuration): the file, or undefined when it isn't there. A link is never
+ * followed (F2 #2): `lstat` first (a regular file of this user, small), then `O_NOFOLLOW`, then the same file again by
+ * identity, so a `commondir` that links to a CLI configuration file is refused without being opened.
+ */
 function gitPointer(path: string): string | undefined {
+  const unverifiable = () => new PolicyUnverifiable(`Score can’t check the Git folder ${path}.`)
+  let before
+  try {
+    before = lstatSync(path, { throwIfNoEntry: false })
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOTDIR') return undefined
+    throw new PolicyUnverifiable(
+      `Score can’t check the Git folder ${path} (${code ?? 'unreadable'}).`,
+    )
+  }
+  if (!before) return undefined
+  const uid = process.getuid?.()
+  if (
+    !before.isFile() ||
+    before.size > GIT_POINTER_BYTES ||
+    (uid !== undefined && before.uid !== uid)
+  )
+    throw unverifiable()
   let fd: number
   try {
-    fd = openSync(path, 'r')
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW)
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
     if (code === 'ENOENT' || code === 'ENOTDIR') return undefined
@@ -34,16 +57,32 @@ function gitPointer(path: string): string | undefined {
     )
   }
   try {
-    if (!fstatSync(fd).isFile() || fstatSync(fd).size > GIT_POINTER_BYTES)
-      throw new PolicyUnverifiable(`Score can’t check the Git folder ${path}.`)
+    const stat = fstatSync(fd)
+    if (
+      !stat.isFile() ||
+      stat.size > GIT_POINTER_BYTES ||
+      stat.ino !== before.ino ||
+      stat.dev !== before.dev
+    )
+      throw unverifiable()
     const buffer = Buffer.alloc(GIT_POINTER_BYTES)
     return buffer.subarray(0, readSync(fd, buffer, 0, GIT_POINTER_BYTES, 0)).toString('utf8')
   } catch (error) {
     if (error instanceof PolicyUnverifiable) throw error
-    throw new PolicyUnverifiable(`Score can’t check the Git folder ${path}.`)
+    throw unverifiable()
   } finally {
     closeSync(fd)
   }
+}
+
+/** A Git folder a pointer names must exist, be a folder, and hold a `HEAD` (stat only: nothing is read). */
+function requireGitDir(dir: string): void {
+  try {
+    if (statSync(dir).isDirectory() && statSync(join(dir, 'HEAD')).isFile()) return
+  } catch {
+    // falls through
+  }
+  throw new PolicyUnverifiable(`Score can’t find the Git folder ${dir}.`)
 }
 
 /**
@@ -68,9 +107,11 @@ export function mainCheckoutOf(workspace: string): string | undefined {
     const pointer = /^gitdir:\s*(.+?)\s*$/m.exec(gitPointer(dotGit) ?? '')?.[1]
     if (!pointer) throw new PolicyUnverifiable(`Score can’t read where ${dotGit} points.`)
     const gitDir = resolve(folder, pointer)
+    requireGitDir(gitDir)
     const common = gitPointer(join(gitDir, 'commondir'))?.trim()
     // No `commondir`: the pointed-to folder is the repository itself (not a linked worktree).
     const commonDir = common ? resolve(gitDir, common) : gitDir
+    requireGitDir(commonDir)
     if (basename(commonDir) !== '.git')
       throw new PolicyUnverifiable(`Score can’t find the main checkout of ${workspace}.`)
     const main = dirname(commonDir)

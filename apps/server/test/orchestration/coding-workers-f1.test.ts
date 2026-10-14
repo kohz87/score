@@ -129,6 +129,8 @@ describe('#2 configuration outside the workspace ancestors (a Git worktree)', ()
     const gitDir = join(main, '.git', 'worktrees', 'wt')
     mkdirSync(gitDir, { recursive: true })
     writeFileSync(join(gitDir, 'commondir'), '../..\n')
+    writeFileSync(join(gitDir, 'HEAD'), 'ref: refs/heads/main\n')
+    writeFileSync(join(main, '.git', 'HEAD'), 'ref: refs/heads/main\n')
     writeFileSync(join(h.workspace, '.git'), `gitdir: ${gitDir}\n`)
     return main
   }
