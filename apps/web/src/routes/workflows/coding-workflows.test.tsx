@@ -224,3 +224,15 @@ test('the budget block shows the coding steps used and the sources whose unknown
   const budget = await screen.findByRole('region', { name: 'Budget and limits' })
   expect(within(budget).getByText(/2 of 4 used; you accepted unknown cost for Codex/)).toBeTruthy()
 })
+
+test('a parked coding step says it waits for room, in plain words', async () => {
+  snapshot = codingRunSnapshot([], { waitingFor: 'coding_room', attemptsUsed: 0 })
+  live()
+  fireEvent.click(await screen.findByRole('button', { name: /^Step Draft the notes/ }))
+  const panel = await screen.findByRole('region', { name: 'Selected step' })
+  expect(
+    within(panel).getByText(
+      /waiting for room: other coding steps of this run hold their inputs until they are sent or finished/,
+    ),
+  ).toBeTruthy()
+})

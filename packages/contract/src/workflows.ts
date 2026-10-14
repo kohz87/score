@@ -454,6 +454,8 @@ export const WaitingForSchema = z.enum([
   'coding_settings',
   'coding_limit',
   'held_back',
+  // A queued coding step is parked because the run's room for unsent coding inputs is used up (computed, never stored).
+  'coding_room',
 ])
 export type WaitingFor = z.infer<typeof WaitingForSchema>
 

@@ -4,7 +4,7 @@ import { stepVisual } from '../orchestrations/orch-model.ts'
 import { AgentChip } from '../orchestrations/RunDecisions.tsx'
 import { AttemptLine, StateMark } from '../orchestrations/RunPanel.tsx'
 import { KIND_LABEL } from './workflow-model.ts'
-import { nodeVisual, waitingText } from './workflow-run-model.ts'
+import { nodeVisual, showsWaiting, waitingText } from './workflow-run-model.ts'
 
 // The inspector of a run's node: its attempts, what it read (with the result revision), its verdict and its output.
 // All of it comes from the server's snapshot of the run.
@@ -48,7 +48,7 @@ export function WorkflowNodePanel({
         <dt>State</dt>
         <dd>
           <StateMark visual={visual} />
-          {view.state === 'ready' && view.waitingFor ? ` ${waitingText[view.waitingFor]}` : ''}
+          {showsWaiting(view) && view.waitingFor ? ` ${waitingText[view.waitingFor]}` : ''}
           {effective === 'unknown' ? ' (a try isn’t confirmed as ended)' : ''}
         </dd>
         {def.kind === 'agent' && (
