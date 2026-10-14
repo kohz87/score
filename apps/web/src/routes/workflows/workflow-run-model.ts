@@ -9,7 +9,7 @@ import type {
   WorkflowRunDetail,
   WorkflowRunSummary,
 } from '@score/contract'
-import { NodeStateSchema, type OrchestrationDetail } from '@score/contract'
+import { NodeStateSchema } from '@score/contract'
 import type { Effect, GraphEdge, GraphNode, NodeVisual } from '../orchestrations/orch-model.ts'
 import { describeCondition } from './workflow-model.ts'
 
@@ -38,26 +38,6 @@ export function nodeVisual(state: NodeState): NodeVisual {
     case 'unresolved':
       return 'abandoned'
   }
-}
-
-/**
- * The shared limits card reads an orchestration's `coding` block; a workflow's is the same facts under other names (7.7c).
- * This keeps its limit and scoped unknown-cost controls working until the cards take explicit props.
- */
-export function limitsRunOf<T extends { coding?: WorkflowRunSummary['coding'] }>(
-  run: T,
-): Omit<T, 'coding'> & { coding?: OrchestrationDetail['coding'] } {
-  const { coding, ...rest } = run
-  return coding === undefined
-    ? rest
-    : {
-        ...rest,
-        coding: {
-          stepLimit: coding.codingSteps,
-          acceptedUnknownCost: coding.acceptedUnknownCost,
-          workers: coding.workers,
-        },
-      }
 }
 
 export const waitingText: Record<WaitingFor, string> = {

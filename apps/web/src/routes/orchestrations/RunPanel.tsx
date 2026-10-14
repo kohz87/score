@@ -17,7 +17,8 @@ import {
   type NodeVisual,
 } from './orch-model.ts'
 import { describeOrchError, type DecisionActions } from './orchestration-queries.ts'
-import { AgentChip, sourceName } from './RunDecisions.tsx'
+import type { RunCoding } from './CodingCards.tsx'
+import { AgentChip, sourceName } from './decision-parts.tsx'
 import { LiveCount } from '../../live/LiveCount.tsx'
 import { RunSummary } from '../../live/RunSummary.tsx'
 import { secondsBetween } from '../../live/run-summary.ts'
@@ -212,11 +213,11 @@ export function EndSummary({
 
 export function BudgetBlock({
   run,
+  coding,
 }: {
-  run: Pick<OrchestrationDetail, 'budget' | 'stepEstimateUsd'> & {
-    leadTurnEstimateUsd?: number
-    coding?: OrchestrationDetail['coding']
-  }
+  run: Pick<OrchestrationDetail, 'budget' | 'stepEstimateUsd'> & { leadTurnEstimateUsd?: number }
+  /** The run's current coding authorisation; absent for a run without coding agents. */
+  coding?: RunCoding | undefined
 }) {
   const b = run.budget
   return (
@@ -231,14 +232,18 @@ export function BudgetBlock({
       <dd>{usd(b.provisionalUsd)} (may still change; counted against the budget)</dd>
       <dt>Reserved</dt>
       <dd>{usd(b.reservedUsd)} for work not yet started</dd>
-      {run.coding && (
+      {coding && (
         <>
           <dt>Coding steps</dt>
           <dd>
-            Up to {run.coding.stepLimit}
-            {run.coding.acceptedUnknownCost.length > 0
-              ? `; you accepted unknown cost for ${run.coding.acceptedUnknownCost.map(sourceName).join(' and ')}`
-              : ''}
+            {coding.used === undefined
+              ? `Up to ${coding.codingSteps}`
+              : `${coding.used} of ${coding.codingSteps} used`}
+            {coding.unknownSpend === 'continue'
+              ? '; you accepted unknown cost for every source'
+              : coding.acceptedUnknownCost.length > 0
+                ? `; you accepted unknown cost for ${coding.acceptedUnknownCost.map(sourceName).join(' and ')}`
+                : ''}
           </dd>
         </>
       )}

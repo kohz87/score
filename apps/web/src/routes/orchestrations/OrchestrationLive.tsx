@@ -12,6 +12,7 @@ import {
   filterLog,
   isRunOver,
   LEAD_NODE,
+  orchCoding,
   replayAt,
   replayDelayMs,
   stepVisual,
@@ -240,7 +241,7 @@ export function OrchestrationLive({ orchestrationId }: { orchestrationId: string
         </section>
         <section aria-label="Budget and limits">
           <h3>Budget and limits</h3>
-          <BudgetBlock run={detail} />
+          <BudgetBlock run={detail} coding={orchCoding(detail.coding)} />
         </section>
       </div>
       <FinishBlock run={detail} />

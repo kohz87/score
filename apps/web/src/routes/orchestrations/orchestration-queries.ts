@@ -167,18 +167,25 @@ export function useRun(id: string | undefined) {
   })
 }
 
+export async function fetchPreflight(
+  leadAgentId: string,
+  allowedAgents: string[],
+  signal?: AbortSignal,
+) {
+  return PreflightSchema.parse(
+    await apiFetch(
+      `orchestrations/preflight?${new URLSearchParams({ leadAgentId, allowedAgents: allowedAgents.join(',') })}`,
+      signal ? { signal } : {},
+    ),
+  )
+}
+
 export function usePreflight(leadAgentId: string, allowedAgents: string[]) {
   const key = allowedAgents.join(',')
   return useQuery({
     queryKey: ['orchestrations', 'preflight', leadAgentId, key],
     enabled: leadAgentId !== '',
-    queryFn: async ({ signal }) =>
-      PreflightSchema.parse(
-        await apiFetch(
-          `orchestrations/preflight?${new URLSearchParams({ leadAgentId, allowedAgents: key })}`,
-          { signal },
-        ),
-      ),
+    queryFn: ({ signal }) => fetchPreflight(leadAgentId, allowedAgents, signal),
     retry: false,
     staleTime: 0,
   })

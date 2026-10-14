@@ -1,6 +1,6 @@
 import { Arrival } from '../../motion/Arrival.tsx'
 import type { AgentSummary, WorkflowNeedsYou, WorkflowRunDetail } from '@score/contract'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { pauseReasonText } from '../orchestrations/orch-model.ts'
 import {
   AgentChip,
@@ -11,7 +11,14 @@ import {
   UnknownCard,
 } from '../orchestrations/RunDecisions.tsx'
 import type { WorkflowRunActions } from './workflow-queries.ts'
-import { limitsRunOf } from './workflow-run-model.ts'
+import { fetchWorkflowPreflight } from './workflow-queries.ts'
+import {
+  CodingAgentChangedCard,
+  CodingHeldBackCard,
+  InputsWithdrawnCard,
+  WorkflowCodingLimitCard,
+} from './WorkflowCodingCards.tsx'
+import type { PreflightWorker } from '../orchestrations/CodingCards.tsx'
 import { gateChip } from '../../live/resolved.ts'
 import { ResolvedList } from '../../live/ResolvedList.tsx'
 import { useRecentlyResolved } from '../../live/use-recently-resolved.ts'
@@ -352,6 +359,15 @@ export function WorkflowNeeds({
     () => ({ gates: run.assignmentGates, stepsList: run.steps, revision: run.revision }),
     [run.assignmentGates, run.steps, run.revision],
   )
+  // The run's own check of a coding agent: the workflow's preflight, read for that one agent. No lead is involved.
+  const { workflowId, version } = run
+  const preflightWorker = useCallback<PreflightWorker>(
+    async (agentId) =>
+      (await fetchWorkflowPreflight(workflowId, version)).workers.find(
+        (entry) => entry.agentId === agentId,
+      ),
+    [workflowId, version],
+  )
   // Only a running or paused run can be decided on; while it stops or after it ended the server answers 409 not_open,
   // so only what winding down still needs (unconfirmed attempts, a cancelled step, the fence) is offered.
   const deciding = run.status === 'running' || run.status === 'paused'
@@ -406,7 +422,8 @@ export function WorkflowNeeds({
             return (
               <LimitsCard
                 key={`b${item.reason}`}
-                run={limitsRunOf(run)}
+                run={run}
+                coding={run.coding}
                 reason={item.reason}
                 actions={actions}
               />
@@ -459,6 +476,37 @@ export function WorkflowNeeds({
                 run={run}
                 item={item}
                 agents={agents}
+                actions={actions}
+              />
+            )
+          case 'coding_agent_changed':
+            return (
+              <CodingAgentChangedCard
+                key={`cc${item.nodeId}`}
+                run={run}
+                item={item}
+                agents={agents}
+                preflightWorker={preflightWorker}
+                actions={actions}
+              />
+            )
+          case 'coding_limit':
+            return <WorkflowCodingLimitCard key="cl" run={run} actions={actions} />
+          case 'coding_held_back':
+            return (
+              <CodingHeldBackCard
+                key={`hb${item.nodeId}`}
+                run={run}
+                nodeId={item.nodeId}
+                actions={actions}
+              />
+            )
+          case 'node_inputs_withdrawn':
+            return (
+              <InputsWithdrawnCard
+                key={`iw${item.nodeId}`}
+                run={run}
+                nodeId={item.nodeId}
                 actions={actions}
               />
             )
