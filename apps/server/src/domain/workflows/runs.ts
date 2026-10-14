@@ -12,7 +12,11 @@ import { lifecycleOf } from '../agent-lifecycle.ts'
 import { storeMessage, insertRoom } from '../rooms.ts'
 import { journalSoft, touch, type Ctx } from '../orchestration/ctx.ts'
 import { addHistory } from '../orchestration/store.ts'
-import { codingItemsFor, WORKFLOW_CODING_ITEM_BYTES } from '../orchestration/ops.ts'
+import {
+  codingItemsFor,
+  codingUnsentBytes,
+  WORKFLOW_CODING_ITEM_BYTES,
+} from '../orchestration/ops.ts'
 import { storeWorkerPolicy } from '../orchestration/coding-policy.ts'
 import { startEdge } from './planner.ts'
 import { graphOf, bytesOf, definitionHash } from './definition.ts'
@@ -22,10 +26,11 @@ import { graphOf, bytesOf, definitionHash } from './definition.ts'
 
 /** Per-run storage reserve: every step can keep its input three times (attempt, reply row, intent) and its output. */
 export const WORKFLOW_STEP_BYTES = 256 * 1024
-export const workflowReserve = (steps: number, codingItems = 0): number =>
+export const workflowReserve = (steps: number, codingItems = 0, codingUnsent = 0): number =>
   steps * (WORKFLOW_STEP_BYTES + ORCH_LIMITS.recordsPerItemBytes) +
   ORCH_LIMITS.controlReserveBytes +
-  codingItems * WORKFLOW_CODING_ITEM_BYTES
+  codingItems * WORKFLOW_CODING_ITEM_BYTES +
+  codingUnsent
 
 /**
  * The default coding step limit (7.7c §2): each coding step node can take one launch per try, so the nodes × (1 + their
@@ -132,7 +137,8 @@ export function insertWorkflowRun(
     ),
   )
   createBrief(sqlite, { id: messageId, roomId, text: goal }, now)
-  const reserve = workflowReserve(steps, codingItems)
+  const codingUnsent = coding ? codingUnsentBytes(steps, body.maxConcurrentSteps) : 0
+  const reserve = workflowReserve(steps, codingItems, codingUnsent)
   sqlite
     .prepare(
       `INSERT INTO orchestrations (id, title, goal, planner, lead_agent_id, lead_incarnation, allowed_agents, room_id, brief_id, gate_policy,
@@ -172,7 +178,7 @@ export function insertWorkflowRun(
       .run(
         coding.codingSteps,
         JSON.stringify([...new Set(body.acceptUnknownCost ?? [])].sort()),
-        codingItems * WORKFLOW_CODING_ITEM_BYTES,
+        codingItems * WORKFLOW_CODING_ITEM_BYTES + codingUnsent,
         id,
       )
     // The policy each coding agent is approved with, and the acknowledgement that covered it.

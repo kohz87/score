@@ -111,6 +111,8 @@ import {
   addCodingStored,
   CODING_ITEM_EXTRA_BYTES,
   codingItemsFor,
+  codingUnsentBytes,
+  codingUnsentSlots,
   setStepStatus,
 } from './ops.ts'
 import { renderLeadInput, renderStepInput } from './render.ts'
@@ -716,6 +718,7 @@ export class Orchestrator {
       12,
       20,
       reports.size > 0 ? codingItemsFor(12, ORCH_DEFAULTS.codingSteps) : 0,
+      reports.size > 0 ? codingUnsentBytes(12, ORCH_DEFAULTS.maxConcurrentSteps) : 0,
     )
     const fits = this.db.read((sqlite) => this.quotaUsed(sqlite) + reserve <= this.quotaBytes)
     add(
@@ -904,6 +907,7 @@ export class Orchestrator {
       reports.size > 0
         ? codingItemsFor(body.maxSteps, body.codingSteps ?? ORCH_DEFAULTS.codingSteps)
         : 0,
+      reports.size > 0 ? codingUnsentBytes(body.maxSteps, body.maxConcurrentSteps) : 0,
     )
     if (this.quotaUsed(sqlite) + reserve > this.quotaBytes)
       throw new HttpError(
@@ -981,7 +985,8 @@ export class Orchestrator {
         JSON.stringify([...new Set(body.acceptUnknownCost ?? [])].sort()),
         reports.size > 0
           ? codingItemsFor(body.maxSteps, body.codingSteps ?? ORCH_DEFAULTS.codingSteps) *
-              CODING_ITEM_EXTRA_BYTES
+              CODING_ITEM_EXTRA_BYTES +
+              codingUnsentBytes(body.maxSteps, body.maxConcurrentSteps)
           : 0,
       )
     // The policy each coding worker is approved with, and the acknowledgement that covered it (stored in the history).
@@ -1280,6 +1285,7 @@ export class Orchestrator {
     const reserve = workflowReserve(
       steps,
       defaultSteps === undefined ? 0 : codingItemsFor(steps, defaultSteps),
+      defaultSteps === undefined ? 0 : codingUnsentBytes(steps, ORCH_DEFAULTS.maxConcurrentSteps),
     )
     const fits = this.db.read((sqlite) => this.quotaUsed(sqlite) + reserve <= this.quotaBytes)
     add(
@@ -1431,6 +1437,7 @@ export class Orchestrator {
       const reserve = workflowReserve(
         steps,
         coding === undefined ? 0 : codingItemsFor(steps, coding.codingSteps),
+        coding === undefined ? 0 : codingUnsentBytes(steps, body.maxConcurrentSteps),
       )
       if (this.quotaUsed(sqlite) + reserve > this.quotaBytes)
         throw new HttpError(409, 'quota_exhausted', 'Score has no storage left for this run.')
@@ -2121,6 +2128,14 @@ export class Orchestrator {
       }
     }
     const byId = new Map(steps.map((s) => [s.id, s]))
+    // Coding attempts that are prepared and not finished (waiting, in flight or blocked for a decision) keep their frozen
+    // input; their number is bounded apart from the launch limit, and the in-flight ones count so a burst can't exceed it.
+    let unsentCoding = attempts.filter(
+      (a) =>
+        a.kind === 'step' &&
+        a.runtime !== 'hermes' &&
+        ['created', 'send_started', 'running', 'unknown'].includes(a.state),
+    ).length
     for (const step of steps) {
       if (step.status !== 'queued') continue
       // A lead-asks step waits until the turn that created it ends, so the lead can ask for approval first.
@@ -2196,6 +2211,19 @@ export class Orchestrator {
         touch(ctx, o.id)
         continue
       }
+      // A coding step is parked, with nothing prepared or retained, while the run's room for unsent inputs is used up (the
+      // slots, or the partition's bytes): it goes on when an attempt is sent or settled, or the person raises the limit
+      // that grows the partition (7.7c F1 #6). Retaining it anyway would spill into the control reserve.
+      const codingStep = runtimeOfAgent(sqlite, step.agent_id) !== 'hermes'
+      if (codingStep) {
+        const fresh = readOrch(sqlite, o.id) ?? o
+        if (
+          unsentCoding >= codingUnsentSlots(o.max_steps, o.max_concurrent_steps) ||
+          fresh.coding_stored_bytes + Buffer.byteLength(input) > fresh.coding_reserve_bytes
+        )
+          continue
+        unsentCoding++
+      }
       const n = attempts.filter((a) => a.step_id === step.id).length + 1
       const attemptId = `orc-${o.id.slice(4)}-${step.id}-${n}`
       this.insertAttempt(ctx, o, {
@@ -2221,8 +2249,7 @@ export class Orchestrator {
       )
       setStepStatus(sqlite, o.id, step.id, 'admitted', null, now)
       // A workflow step's input also lives in its reply row and its dispatch intent: every retained copy is charged.
-      if (runtimeOfAgent(sqlite, step.agent_id) !== 'hermes')
-        addCodingStored(sqlite, o.id, Buffer.byteLength(input))
+      if (codingStep) addCodingStored(sqlite, o.id, Buffer.byteLength(input))
       else addStored(sqlite, o.id, Buffer.byteLength(input) * (o.planner === 'workflow' ? 3 : 1))
       counts.perRun.set(o.id, (counts.perRun.get(o.id) ?? 0) + 1)
       counts.perAgent.set(step.agent_id, (counts.perAgent.get(step.agent_id) ?? 0) + 1)

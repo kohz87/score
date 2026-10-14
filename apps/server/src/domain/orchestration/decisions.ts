@@ -17,6 +17,7 @@ import {
   bumpAdmission,
   codingItemBytesOf,
   codingItemsFor,
+  codingUnsentBytes,
   cascadeBlocked,
   oweStop,
   refuseAttempt,
@@ -200,7 +201,9 @@ export function setLimits(
     // Growth is measured against what is already reserved, not against the previous limit: 10 -> 4 -> 10 keeps ten
     // items' reserve and adds nothing (F2 #5). An item is the PLANNER's: a workflow's holds more than an orchestration's.
     const itemBytes = codingItemBytesOf(o.planner)
-    const reservedItems = Math.floor(o.coding_reserve_bytes / itemBytes)
+    // The unsent-inventory room is part of the partition but not an item: it stays out of the item count (F1 #6).
+    const unsent = hasWorkers ? codingUnsentBytes(o.max_steps, o.max_concurrent_steps) : 0
+    const reservedItems = Math.floor(Math.max(0, o.coding_reserve_bytes - unsent) / itemBytes)
     const grow = hasWorkers
       ? Math.max(0, codingItemsFor(o.max_steps, body.codingSteps) - reservedItems) * itemBytes
       : 0

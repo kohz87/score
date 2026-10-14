@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { WORKFLOW_CODING_ITEM_BYTES } from '../../src/domain/orchestration/ops.ts'
+import {
+  codingUnsentBytes,
+  WORKFLOW_CODING_ITEM_BYTES,
+} from '../../src/domain/orchestration/ops.ts'
 import { addCodingAgent, startWorkflow, wfRunOf } from '../helpers/wf-coding.ts'
 import { workerHarness, type WorkerHarness } from '../helpers/worker-harness.ts'
 import { agent, definition, edge, end } from './wf-harness.ts'
@@ -92,11 +95,12 @@ describe('the workflow limits decision', () => {
         id,
       )[0]!
     const before = row()
-    expect(before['c']).toBe(2 * WORKFLOW_CODING_ITEM_BYTES)
+    const unsent = codingUnsentBytes(Number(before['m']), 2)
+    expect(before['c']).toBe(2 * WORKFLOW_CODING_ITEM_BYTES + unsent)
     await h.orch.wfLimits(id, { codingSteps: 5, orchestrationRevision: revision(id) })
     const grown = row()
     expect(Number(grown['m'])).toBeGreaterThanOrEqual(5)
-    expect(grown['c']).toBe(5 * WORKFLOW_CODING_ITEM_BYTES)
+    expect(grown['c']).toBe(5 * WORKFLOW_CODING_ITEM_BYTES + unsent)
     expect(Number(grown['r']) - Number(before['r'])).toBe(3 * WORKFLOW_CODING_ITEM_BYTES)
     // Lowering keeps the reserve, and raising again within it adds nothing.
     await h.orch.wfLimits(id, { codingSteps: 1, orchestrationRevision: revision(id) })

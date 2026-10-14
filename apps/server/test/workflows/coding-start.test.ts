@@ -5,7 +5,10 @@ import {
   ORCH_ACKNOWLEDGEMENT_TEXT,
 } from '@score/contract'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { WORKFLOW_CODING_ITEM_BYTES } from '../../src/domain/orchestration/ops.ts'
+import {
+  codingUnsentBytes,
+  WORKFLOW_CODING_ITEM_BYTES,
+} from '../../src/domain/orchestration/ops.ts'
 import { workflowReserve } from '../../src/domain/workflows/runs.ts'
 import {
   addCodingAgent,
@@ -62,7 +65,7 @@ describe('workflow preflight', () => {
     // Two coding nodes, one with a retry: 2 + 1 tries.
     expect(pre.defaults.codingSteps).toBe(3)
     // Seven steps can be created (3 tries and 2 remaps per agent node) and the partition holds three coding items.
-    expect(pre.reserveBytes).toBe(workflowReserve(7, 3))
+    expect(pre.reserveBytes).toBe(workflowReserve(7, 3, codingUnsentBytes(7, 2)))
   })
 
   test('a workflow with Hermes agents only has no workers and no coding default', async () => {
@@ -92,8 +95,10 @@ describe('starting a workflow with coding agents', () => {
     expect(orch['coding_steps']).toBe(4)
     expect(orch['accepted_unknown_cost']).toBe('["codex"]')
     const steps = Number(orch['max_steps'])
-    expect(orch['coding_reserve_bytes']).toBe(4 * WORKFLOW_CODING_ITEM_BYTES)
-    expect(orch['reserve_bytes']).toBe(workflowReserve(steps, 4))
+    expect(orch['coding_reserve_bytes']).toBe(
+      4 * WORKFLOW_CODING_ITEM_BYTES + codingUnsentBytes(steps, 2),
+    )
+    expect(orch['reserve_bytes']).toBe(workflowReserve(steps, 4, codingUnsentBytes(steps, 2)))
     expect(
       rows(
         "SELECT detail FROM orc_history WHERE orchestration_id = ? AND kind = 'coding_reach_acknowledged'",

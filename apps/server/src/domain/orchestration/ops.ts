@@ -50,10 +50,16 @@ export function addCodingStored(sqlite: DatabaseSync, orchId: string, bytes: num
 }
 
 /** The reserve a run takes at creation: steps and lead turns at 64 KiB each plus the control reserve. */
-export const reserveFor = (maxSteps: number, maxLeadTurns: number, codingItems = 0): number =>
+export const reserveFor = (
+  maxSteps: number,
+  maxLeadTurns: number,
+  codingItems = 0,
+  codingUnsent = 0,
+): number =>
   (maxSteps + maxLeadTurns) * (ORCH_LIMITS.storagePerItemBytes + ORCH_LIMITS.recordsPerItemBytes) +
   ORCH_LIMITS.controlReserveBytes +
-  codingItems * CODING_ITEM_EXTRA_BYTES
+  codingItems * CODING_ITEM_EXTRA_BYTES +
+  codingUnsent
 
 /** One kept copy of a coding result (the translator's cap), and the run output kept beside it. */
 export const CODING_RESULT_BYTES = 32 * 1024
@@ -89,6 +95,17 @@ export const WORKFLOW_CODING_ITEM_BYTES =
 /** The coding item size of a run, by its planner: a workflow's items hold more than an orchestration's. */
 export const codingItemBytesOf = (planner: 'lead' | 'workflow'): number =>
   planner === 'workflow' ? WORKFLOW_CODING_ITEM_BYTES : CODING_ITEM_EXTRA_BYTES
+
+/**
+ * The room a run keeps for the retained inputs of coding attempts that were prepared but not sent (7.7c F1 #6). Launches
+ * are bounded by `codingSteps`, but attempts that wait unsent (blocked for a decision, or queued behind the concurrency
+ * limit) each keep their frozen input, so that inventory has its own bound: twice the run's concurrency, never more than
+ * its steps. Independent of `codingSteps`: raising the limit never changes it, and a step past it is parked unprepared.
+ */
+export const codingUnsentSlots = (maxSteps: number, maxConcurrentSteps: number): number =>
+  Math.min(maxSteps, 2 * maxConcurrentSteps)
+export const codingUnsentBytes = (maxSteps: number, maxConcurrentSteps: number): number =>
+  codingUnsentSlots(maxSteps, maxConcurrentSteps) * ORCH_LIMITS.stepInputBytes
 
 /** A run can release at most `codingSteps` launches, and each coding item needs one, so that bounds the items. */
 export const codingItemsFor = (maxSteps: number, codingSteps: number): number =>
