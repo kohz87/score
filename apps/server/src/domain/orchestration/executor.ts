@@ -612,8 +612,10 @@ export class Orchestrator {
     leadAgentId: string,
     allowedAgents: string[],
     agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
+    maxConcurrentSteps?: number,
   ): Promise<Preflight> {
-    return (await this.preflightWith(leadAgentId, allowedAgents, agents)).preflight
+    return (await this.preflightWith(leadAgentId, allowedAgents, agents, maxConcurrentSteps))
+      .preflight
   }
 
   /** The preflight and, for each coding worker, the full report its policy came from (create stores the policy). */
@@ -621,6 +623,8 @@ export class Orchestrator {
     leadAgentId: string,
     allowedAgents: string[],
     agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
+    // F2 #2: the quota check reserves unsent coding inventory for the concurrency the request asks for.
+    maxConcurrentSteps: number = ORCH_DEFAULTS.maxConcurrentSteps,
   ): Promise<{ preflight: Preflight; reports: Map<string, WorkerReport> }> {
     const { port, access } = this.options
     const fake = port.mode === 'fake'
@@ -718,7 +722,7 @@ export class Orchestrator {
       12,
       20,
       reports.size > 0 ? codingItemsFor(12, ORCH_DEFAULTS.codingSteps) : 0,
-      reports.size > 0 ? codingUnsentBytes(12, ORCH_DEFAULTS.maxConcurrentSteps) : 0,
+      reports.size > 0 ? codingUnsentBytes(12, maxConcurrentSteps) : 0,
     )
     const fits = this.db.read((sqlite) => this.quotaUsed(sqlite) + reserve <= this.quotaBytes)
     add(
@@ -821,6 +825,7 @@ export class Orchestrator {
       body.leadAgentId,
       body.allowedAgents,
       agents,
+      body.maxConcurrentSteps,
     )
     if (new Set(body.allowedAgents).size !== body.allowedAgents.length)
       throw new HttpError(400, 'bad_request', 'An agent is listed twice in the allowed agents.')
@@ -1192,8 +1197,10 @@ export class Orchestrator {
     workflowId: string,
     version: number,
     agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
+    maxConcurrentSteps?: number,
   ): Promise<WorkflowPreflight> {
-    return (await this.workflowPreflightWith(workflowId, version, agents)).preflight
+    return (await this.workflowPreflightWith(workflowId, version, agents, maxConcurrentSteps))
+      .preflight
   }
 
   /** The preflight and, for each coding agent of the workflow, the full report its policy came from (start stores it). */
@@ -1201,6 +1208,7 @@ export class Orchestrator {
     workflowId: string,
     version: number,
     agents?: Pick<AgentSummary, 'id' | 'served' | 'runtime'>[],
+    maxConcurrentSteps: number = ORCH_DEFAULTS.maxConcurrentSteps,
   ): Promise<{ preflight: WorkflowPreflight; reports: Map<string, WorkerReport> }> {
     const { port } = this.options
     const fake = port.mode === 'fake'
@@ -1285,7 +1293,7 @@ export class Orchestrator {
     const reserve = workflowReserve(
       steps,
       defaultSteps === undefined ? 0 : codingItemsFor(steps, defaultSteps),
-      defaultSteps === undefined ? 0 : codingUnsentBytes(steps, ORCH_DEFAULTS.maxConcurrentSteps),
+      defaultSteps === undefined ? 0 : codingUnsentBytes(steps, maxConcurrentSteps),
     )
     const fits = this.db.read((sqlite) => this.quotaUsed(sqlite) + reserve <= this.quotaBytes)
     add(
@@ -1349,6 +1357,7 @@ export class Orchestrator {
       body.workflowId,
       body.version,
       agents,
+      body.maxConcurrentSteps,
     )
     // A workflow with no coding step node sends and stores no coding fields at all (7.7c §1).
     if (
