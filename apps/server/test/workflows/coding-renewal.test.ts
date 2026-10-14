@@ -176,7 +176,7 @@ describe('a coding dispatch held back 20 times', () => {
     const id = await startWorkflow(h, flow())
     // Wake the attempt out of each five-in-a-row wait until the lifetime limit asks for the person.
     const asking = () =>
-      h.orch.workflowSummary(id).needsYou.some((item) => item.kind === 'refusal_limit')
+      h.orch.workflowSummary(id).needsYou.some((item) => item.kind === 'coding_held_back')
     for (let i = 0; i < 60 && !asking(); i++) {
       await new Promise((resolve) => setTimeout(resolve, 500))
       await h.orch.agentReady('cc')
@@ -190,5 +190,39 @@ describe('a coding dispatch held back 20 times', () => {
     await h.until(() => wfRunOf(h, id).status === 'succeeded', 60_000)
     expect(attempts().map((a) => a['state'])).toEqual(['refused', 'terminated'])
     expect(node(id, 'a')).toMatchObject({ attemptsUsed: 1, renewals: 1 })
+  })
+
+  test('F1 #4: readiness refusals are bounded by the same renewals: after the last one the node fails and frees its slot and reservation', async () => {
+    await boot({ orchestrator: { retryMs: 20, releaseChecks: { limits: () => 'cli_missing' } } })
+    const id = await startWorkflow(h, flow(), { budgetUsd: 5 })
+    const asking = () =>
+      h.orch.workflowSummary(id).needsYou.some((item) => item.kind === 'coding_held_back')
+    const wake = async (until: () => boolean) => {
+      for (let i = 0; i < 400 && !until(); i++) {
+        await new Promise((resolve) => setTimeout(resolve, 40))
+        await h.orch.agentReady('cc')
+        await h.orch.idle()
+      }
+      expect(until()).toBe(true)
+    }
+    for (let renewal = 0; renewal < 3; renewal++) {
+      await wake(asking)
+      expect(node(id, 'a')).toMatchObject({ waitingFor: 'held_back', renewals: renewal })
+      expect(attempts().at(-1)).toMatchObject({ state: 'created', suspended: 1 })
+      await tryAgain(id)
+    }
+    // The fourth round of refusals: the node fails instead of asking again.
+    await wake(() => wfRunOf(h, id).status === 'failed')
+    expect(node(id, 'a')).toMatchObject({ state: 'failed', renewals: 3 })
+    expect(h.orch.workflowSummary(id).needsYou.some((i) => i.kind === 'coding_held_back')).toBe(
+      false,
+    )
+    expect(attempts().every((a) => a['state'] === 'refused')).toBe(true)
+    expect(wfRunOf(h, id).budget.reservedUsd).toBe(0)
+    expect(
+      rows(
+        "SELECT COUNT(*) AS n FROM orc_attempts WHERE state IN ('created', 'send_started', 'running')",
+      )[0]!['n'],
+    ).toBe(0)
   })
 })

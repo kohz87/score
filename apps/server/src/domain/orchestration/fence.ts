@@ -367,7 +367,7 @@ export function applyJournalEvidence(
   for (const [attemptId, latest] of journalDispatches(entries)) {
     const attempt = sqlite
       .prepare(
-        'SELECT id, turn_id, state, step_id, orchestration_id, dispatch_generation, refused_generation, refused_total, refused_streak FROM orc_attempts WHERE id = ?',
+        'SELECT id, turn_id, state, step_id, orchestration_id, dispatch_generation, refused_generation, refused_total, refused_streak, runtime FROM orc_attempts WHERE id = ?',
       )
       .get(attemptId) as
       | {
@@ -380,6 +380,7 @@ export function applyJournalEvidence(
           refused_generation: number
           refused_total: number
           refused_streak: number
+          runtime: string
         }
       | undefined
     // A refusal the journal proved but the database lost, with the attempt still `send_started` at that very generation:

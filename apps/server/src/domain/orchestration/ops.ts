@@ -389,7 +389,10 @@ export function chargeObservation(sqlite: DatabaseSync, runId: string, bytes: nu
 export function recordRefusal(
   sqlite: DatabaseSync,
   o: { id: string; planner: 'lead' | 'workflow' },
-  attempt: Pick<AttemptRow, 'id' | 'turn_id' | 'step_id' | 'refused_total' | 'refused_streak'>,
+  attempt: Pick<
+    AttemptRow,
+    'id' | 'turn_id' | 'step_id' | 'refused_total' | 'refused_streak' | 'runtime'
+  >,
   generation: number,
   now: string,
 ): 'retry' | 'wait' | 'needs_person' | 'failed' {
@@ -421,6 +424,18 @@ export function recordRefusal(
     }
     bumpAdmission(sqlite)
     return 'failed'
+  }
+  if (lifetime && o.planner === 'workflow' && attempt.runtime !== 'hermes' && attempt.step_id) {
+    // A coding node refused 20 times waits for the person exactly like one held back 20 times (7.7c §4, F1 #4): the one
+    // attempt is suspended, the node keeps its step, and Try again renews it under the same bound (past it the node fails
+    // and gives up its slot and reservation). It is never left `needs_person` outside that hold.
+    sqlite
+      .prepare(
+        "UPDATE orc_attempts SET state = 'created', refused_total = ?, refused_streak = ?, refused_generation = ?, needs_person = 0, suspended = 1, next_try_at = NULL, updated_at = ? WHERE id = ?",
+      )
+      .run(total, streak, generation, now, attempt.id)
+    setStepStatus(sqlite, o.id, attempt.step_id, 'blocked', 'held_back', now)
+    return 'needs_person'
   }
   const wait = streak >= WORKFLOW_LIMITS.refusedPause && !lifetime
   sqlite
