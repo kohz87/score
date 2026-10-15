@@ -131,6 +131,8 @@ export const KnowledgeNoteSchema = z.object({
   links: z.array(KnowledgeLinkSchema),
   backlinks: z.array(z.object({ path: z.string(), title: z.string() })),
   lastAuthor: KnowledgeAuthorSchema.nullable(),
+  /** False when the note's path is Git-ignored and untracked: saved, but never kept in history (decision 80). */
+  versioned: z.boolean().default(true),
 })
 /** A note may be 8 MiB (PLAN 6.8: images are embedded as data URIs); the server counts bytes and answers 413. */
 export const KNOWLEDGE_NOTE_MAX_BYTES = 8 * 1024 * 1024
@@ -145,7 +147,14 @@ export const KnowledgeWriteRequestSchema = z.object({
   /** The etag the editor loaded; null creates the note and refuses an existing one. */
   etag: z.string().nullable(),
 })
-export const KnowledgeWriteResponseSchema = z.object({ etag: z.string(), path: z.string() })
+export const KnowledgeWriteResponseSchema = z.object({
+  etag: z.string(),
+  path: z.string(),
+  /** False when the note is Git-ignored and untracked: saved without history. */
+  versioned: z.boolean().default(true),
+  /** False when the note is saved but the git commit failed for another reason. */
+  historyUpdated: z.boolean().default(true),
+})
 export const KnowledgeMoveRequestSchema = z.object({
   from: z.string().min(1),
   to: z.string().min(1),

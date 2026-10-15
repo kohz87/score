@@ -1012,11 +1012,16 @@ const cases = [
       links: [{ target: 'B', path: null }],
       backlinks: [],
       lastAuthor: 'you',
+      versioned: false,
     },
     { path: 'a.md' },
   ],
   ['KnowledgeWriteRequestSchema', { body: 'x', etag: null }, { body: 'x' }],
-  ['KnowledgeWriteResponseSchema', { etag: 'e', path: 'a.md' }, { etag: 'e' }],
+  [
+    'KnowledgeWriteResponseSchema',
+    { etag: 'e', path: 'a.md', versioned: false, historyUpdated: true },
+    { etag: 'e' },
+  ],
   [
     'KnowledgeMoveRequestSchema',
     { from: 'a.md', to: 'b.md', updateLinks: true },
@@ -1076,7 +1081,11 @@ const cases = [
     { folders: [], notes: [], documents: [], truncated: false },
     { folders: [] },
   ],
-  ['BridgeKnowledgeWriteResponseSchema', { etag: 'e', path: 'a.md' }, { etag: 'e' }],
+  [
+    'BridgeKnowledgeWriteResponseSchema',
+    { etag: 'e', path: 'a.md', versioned: true, historyUpdated: false },
+    { etag: 'e' },
+  ],
   ['KnowledgeAgentAccessSchema', { enabled: true }, { enabled: 'yes' }],
   [
     'McpAccessSchema',

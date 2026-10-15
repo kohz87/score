@@ -55,11 +55,13 @@ function Properties({ frontmatter }: { frontmatter: Record<string, unknown> }) {
 
 function History({
   path,
+  versioned,
   currentBody,
   agents,
   onRestored,
 }: {
   path: string
+  versioned: boolean
   currentBody: string
   agents: AgentSummary[]
   onRestored: () => void
@@ -75,7 +77,13 @@ function History({
       <h3 id="kn-history">History</h3>
       {history.isPending && <p role="status">Loading history…</p>}
       {history.isError && <p role="alert">History is not available.</p>}
-      {history.data && items.length === 0 && (
+      {!versioned && (
+        <p className="kn-muted" data-testid="history-not-kept">
+          This note isn’t kept in history: .gitignore excludes this folder, so Score saves it
+          without earlier versions.
+        </p>
+      )}
+      {versioned && history.data && items.length === 0 && (
         <p className="kn-muted">No saved versions yet, or git is not available.</p>
       )}
       <ol className="kn-history-list">
@@ -226,6 +234,7 @@ export function NotePanels({
       <History
         key={note.path}
         path={note.path}
+        versioned={note.versioned}
         currentBody={currentBody}
         agents={agents}
         onRestored={onRestored}

@@ -839,6 +839,7 @@ export class KnowledgeVault {
       links,
       backlinks,
       lastAuthor: authorFromColumn(row.last_author),
+      versioned: await this.isVersioned(rel),
     }
   }
 
@@ -929,8 +930,8 @@ export class KnowledgeVault {
   }
 
   /** Commits paths for the documents module (same author and failure rules as notes). */
-  commitPaths(paths: string[], message: string, author: KnowledgeAuthor): Promise<void> {
-    return this.commit(paths, message, author)
+  async commitPaths(paths: string[], message: string, author: KnowledgeAuthor): Promise<void> {
+    await this.commit(paths, message, author)
   }
 
   /** Indexes a note file Score has just written itself. */
@@ -938,18 +939,42 @@ export class KnowledgeVault {
     await this.indexFile(rel, author)
   }
 
+  /**
+   * Commits what Score changed. Ignored, untracked paths are left out (never force-added, decision 80) and reported
+   * as `versioned: false`; any other git failure is logged and reported as `historyUpdated: false`: the files are
+   * saved either way.
+   */
   private async commit(
     paths: string[],
     message: string,
     author: KnowledgeAuthor,
     amendNote?: string,
-  ): Promise<void> {
+  ): Promise<{ versioned: boolean; historyUpdated: boolean }> {
     try {
-      await this.git.commit({ paths, message, author, ...(amendNote ? { amendNote } : {}) })
+      const ignored = await this.git.ignoredUntracked(paths)
+      const rest = paths.filter((path) => !ignored.has(path))
+      if (rest.length > 0)
+        await this.git.commit({
+          paths: rest,
+          message,
+          author,
+          ...(amendNote && !ignored.has(amendNote) ? { amendNote } : {}),
+        })
+      return { versioned: ignored.size === 0, historyUpdated: true }
     } catch (error) {
       // The files are saved; history can catch up with the next "Outside changes" commit.
       this.options.log?.warn({ err: error }, 'Could not commit a knowledge change')
+      return { versioned: true, historyUpdated: false }
     }
+  }
+
+  /** False when the note's path is Git-ignored and untracked, so it has no history. */
+  private async isVersioned(rel: string): Promise<boolean> {
+    return !(await this.git.ignoredUntracked([rel])).has(rel)
+  }
+
+  private async historyState(rel: string) {
+    return { versioned: await this.isVersioned(rel), historyUpdated: true }
   }
 
   /** Save a note (create with `etag: null`). `author` is `'you'` for the browser; 6.4 passes the calling agent. */
@@ -959,7 +984,7 @@ export class KnowledgeVault {
     author: KnowledgeAuthor = 'you',
     /** Uploads: `request.body` is the whole file (frontmatter included), written byte for byte. */
     rawContent = false,
-  ): Promise<{ etag: string; path: string }> {
+  ): Promise<{ etag: string; path: string; versioned: boolean; historyUpdated: boolean }> {
     const rel = parseNotePath(input)
     return this.serial(async () => {
       const { abs: existingAbs, stat } = await this.lookup(rel.split('/'))
@@ -987,15 +1012,16 @@ export class KnowledgeVault {
           : serialiseNote(request.body, request.frontmatter)
       prepareNoteContent(content)
       const hash = hashContent(content)
-      if (hash === currentHash) return { etag: etagOf(hash), path: rel }
+      if (hash === currentHash)
+        return { etag: etagOf(hash), path: rel, ...(await this.historyState(rel)) }
       await this.commitOutside()
       const abs = await this.prepareParent(rel)
       // An outside edit that landed since the etag check is now in history; the save must not silently replace it.
       await this.atomicWrite(abs, content, { hash: currentHash })
-      await this.commit([rel], `${stat ? 'Update' : 'Create'} ${rel}`, author, rel)
+      const history = await this.commit([rel], `${stat ? 'Update' : 'Create'} ${rel}`, author, rel)
       await this.indexFile(rel, author)
       await this.publish({ path: rel, kind: 'written', to: null, by: author })
-      return { etag: etagOf(hash), path: rel }
+      return { etag: etagOf(hash), path: rel, ...history }
     })
   }
 
@@ -1136,26 +1162,51 @@ export class KnowledgeVault {
     return MovePlanSchema.parse(JSON.parse(raw))
   }
 
-  /** Moves a plan an older version kept under `.git` into Score's state, once. */
+  /**
+   * Moves a plan an older version kept under `.git` into Score's state: copy, confirm the copy is on disk and parses,
+   * and only then delete the old file. Only content that can never be read (a parse error) is discarded; any I/O
+   * error leaves the old file for the next start, so a plan always survives somewhere.
+   */
   private async migrateLegacyPlan(): Promise<void> {
     const legacy = path.join(this.root, '.git', 'score-move-plan.json')
     let raw: string
     try {
       raw = await fs.readFile(legacy, 'utf8')
-    } catch {
-      return // none, or `.git` is a file (linked worktree): nothing to migrate
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ENOENT' || code === 'ENOTDIR') return // none, or `.git` is a file (linked worktree)
+      throw error
+    }
+    let plan: MovePlan
+    try {
+      plan = MovePlanSchema.parse(JSON.parse(raw))
+    } catch (error) {
+      this.options.log?.warn({ err: error }, 'Discarded an unreadable move plan')
+      await fs.rm(legacy, { force: true })
+      return
     }
     const target = this.planFile()
-    const hasNew = await fs.lstat(target).then(
-      () => true,
-      () => false,
-    )
-    if (!hasNew) {
-      try {
-        await this.writePlanFile(MovePlanSchema.parse(JSON.parse(raw)))
-      } catch (error) {
-        this.options.log?.warn({ err: error }, 'Ignored an unreadable move plan')
-      }
+    const [legacyStat, targetStat] = await Promise.all([
+      fs.stat(legacy),
+      fs.stat(target).catch((error: unknown) => {
+        if (isNotFound(error)) return null
+        throw error
+      }),
+    ])
+    let keepLegacy = targetStat === null
+    if (targetStat !== null) {
+      // Both exist: the newer file wins. An unreadable replacement doesn't count as a plan.
+      const existing = await this.readPlan(target).catch((error: unknown) => {
+        if (error instanceof SyntaxError || error instanceof z.ZodError) return null
+        throw error
+      })
+      keepLegacy = existing === null || legacyStat.mtimeMs > targetStat.mtimeMs
+    }
+    if (keepLegacy) {
+      await this.writePlanFile(plan)
+      const back = await this.readPlan(target)
+      if (back === null || JSON.stringify(back) !== JSON.stringify(plan))
+        throw new Error('The migrated move plan could not be read back')
     }
     await fs.rm(legacy, { force: true })
   }
