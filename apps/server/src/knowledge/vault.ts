@@ -1136,26 +1136,51 @@ export class KnowledgeVault {
     return MovePlanSchema.parse(JSON.parse(raw))
   }
 
-  /** Moves a plan an older version kept under `.git` into Score's state, once. */
+  /**
+   * Moves a plan an older version kept under `.git` into Score's state: copy, confirm the copy is on disk and parses,
+   * and only then delete the old file. Only content that can never be read (a parse error) is discarded; any I/O
+   * error leaves the old file for the next start, so a plan always survives somewhere.
+   */
   private async migrateLegacyPlan(): Promise<void> {
     const legacy = path.join(this.root, '.git', 'score-move-plan.json')
     let raw: string
     try {
       raw = await fs.readFile(legacy, 'utf8')
-    } catch {
-      return // none, or `.git` is a file (linked worktree): nothing to migrate
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ENOENT' || code === 'ENOTDIR') return // none, or `.git` is a file (linked worktree)
+      throw error
+    }
+    let plan: MovePlan
+    try {
+      plan = MovePlanSchema.parse(JSON.parse(raw))
+    } catch (error) {
+      this.options.log?.warn({ err: error }, 'Discarded an unreadable move plan')
+      await fs.rm(legacy, { force: true })
+      return
     }
     const target = this.planFile()
-    const hasNew = await fs.lstat(target).then(
-      () => true,
-      () => false,
-    )
-    if (!hasNew) {
-      try {
-        await this.writePlanFile(MovePlanSchema.parse(JSON.parse(raw)))
-      } catch (error) {
-        this.options.log?.warn({ err: error }, 'Ignored an unreadable move plan')
-      }
+    const [legacyStat, targetStat] = await Promise.all([
+      fs.stat(legacy),
+      fs.stat(target).catch((error: unknown) => {
+        if (isNotFound(error)) return null
+        throw error
+      }),
+    ])
+    let keepLegacy = targetStat === null
+    if (targetStat !== null) {
+      // Both exist: the newer file wins. An unreadable replacement doesn't count as a plan.
+      const existing = await this.readPlan(target).catch((error: unknown) => {
+        if (error instanceof SyntaxError || error instanceof z.ZodError) return null
+        throw error
+      })
+      keepLegacy = existing === null || legacyStat.mtimeMs > targetStat.mtimeMs
+    }
+    if (keepLegacy) {
+      await this.writePlanFile(plan)
+      const back = await this.readPlan(target)
+      if (back === null || JSON.stringify(back) !== JSON.stringify(plan))
+        throw new Error('The migrated move plan could not be read back')
     }
     await fs.rm(legacy, { force: true })
   }
