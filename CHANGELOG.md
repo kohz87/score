@@ -3,6 +3,27 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.3.2] — 2026-10-15
+
+Fixes from a fourth external audit of 1.3.1 (seven findings plus one to verify; `docs/reviews/2026-10-15-external-audit-4.md`).
+Every fix has a regression test that failed before it.
+
+### Fixed
+- Leaving a page while it was refreshing could lose an update and later show old data as current; the page now
+  refreshes properly when you come back.
+- Upgrading could delete the only record of an unfinished Knowledge move if writing its new copy failed; the old record
+  is now kept until the new one is safely on disk.
+- **Notes in a folder your `.gitignore` excludes** are saved and now clearly marked **Not kept in history** (badge,
+  reason in History, a warning before overwrite or delete). Score never adds them to Git against your rules. When saving
+  works but history can't be updated, Score says so instead of hiding it. A note Git already tracks keeps its history
+  when its folder later becomes ignored (decision 80).
+- A share now keeps the images in its snapshot until the share itself ends, even when the original message is deleted.
+- Rejected connections to the coding supervisor socket are closed at once and can't use up its connection slots.
+- **Check again** for coding agents now retries starting Score's listener instead of repeating the old error.
+- Two simultaneous starts of the same coding turn share one run (not reachable through Score's own callers, fixed anyway).
+- Score cleans up its bookkeeping for finished coding runs, so it no longer grows without limit.
+- Agents are told that Knowledge writes in ignored folders have no history (Hermes plugin text).
+
 ## [1.3.1] — 2026-10-14
 
 ### Added
