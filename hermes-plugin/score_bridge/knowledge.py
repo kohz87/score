@@ -58,7 +58,7 @@ SCHEMAS = {
         "description": (
             _VAULT + _SEARCH_FIRST + "Create or replace a note's Markdown body. To create, pass expected_etag null "
             "(fails if the note exists). To update, read the note first and pass its etag; on a conflict you get the "
-            "current etag back: re-read, merge and retry. Max 256 KB. Images in a note appear as [image: alt, size] placeholders: keep them where they are to keep the images; you can't add images. Every write is versioned and can be undone by the user."
+            "current etag back: re-read, merge and retry. Max 256 KB. Images in a note appear as [image: alt, size] placeholders: keep them where they are to keep the images; you can't add images. Writes are versioned and can be undone by the user, except in folders the vault's .gitignore excludes: then the reply says versioned: false and there is no earlier version to go back to."
         ),
         "parameters": {
             "type": "object",
