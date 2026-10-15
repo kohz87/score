@@ -573,6 +573,9 @@ export interface CodingSocketOptions {
   frozen?: () => string | null
 }
 
+/** Hard stop for a rejected connection whose reply write never completes. */
+const REJECT_BACKSTOP_MS = 1000
+
 export class CodingSocketServer {
   readonly path: string
   private readonly limits: SocketLimits
@@ -604,6 +607,7 @@ export class CodingSocketServer {
    * live listener that is not ours is refused, never replaced.
    */
   async start(holdsInstallationLock: boolean): Promise<void> {
+    if (this.listening) return // idempotent: our own listener must not be probed as a "foreign" one
     if (Buffer.byteLength(this.path) > MAX_SOCKET_PATH_BYTES) {
       throw new SocketStartError(
         'path-too-long',
@@ -629,8 +633,19 @@ export class CodingSocketServer {
         resolve()
       })
     })
-    chmodSync(this.path, 0o600)
+    try {
+      chmodSync(this.path, 0o600)
+    } catch (error) {
+      // Never leave a half-set-up listener behind: the next attempt must start from nothing.
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+      throw error
+    }
     this.server = server
+  }
+
+  /** True while this instance owns a bound, listening server (a failed or foreign bind is not ownership). */
+  get listening(): boolean {
+    return this.server !== null && this.server.listening
   }
 
   private async clearStale(holdsLock: boolean): Promise<void> {
@@ -762,17 +777,19 @@ export class CodingSocketServer {
     socket.setEncoding('utf8')
     let buffer = ''
     let authenticated = false
+    // The hello deadline runs until authentication succeeds or the socket closes (S4-005): a peer that sends a line and
+    // then idles, or never reads the rejection, must not keep its slot.
+    const timer = setTimeout(() => socket.destroy(), this.limits.helloTimeoutMs)
+    timer.unref()
     const leaveUnauthenticated = () => {
+      clearTimeout(timer)
       if (!authenticated) {
         authenticated = true
         this.unauthenticated -= 1
       }
     }
-    const timer = setTimeout(() => socket.destroy(), this.limits.helloTimeoutMs)
-    timer.unref()
     socket.on('error', () => undefined)
     socket.on('close', () => {
-      clearTimeout(timer)
       leaveUnauthenticated()
       this.sockets.delete(socket)
     })
@@ -784,7 +801,6 @@ export class CodingSocketServer {
         return
       }
       socket.off('data', onData)
-      clearTimeout(timer)
       const line = buffer.slice(0, nl)
       const leftover = buffer.slice(nl + 1)
       this.hello(socket, line, leftover, leaveUnauthenticated)
@@ -800,7 +816,13 @@ export class CodingSocketServer {
   ): void {
     const reject = (reason: string) => {
       // Reasons are fixed words; never echo the presented token or anything the peer sent.
-      socket.end(JSON.stringify({ v: PROTOCOL_VERSION, t: 'reject', reason }) + '\n')
+      // destroy() after the write: end() alone leaves a half-open peer holding the slot until the hello deadline.
+      const backstop = setTimeout(() => socket.destroy(), REJECT_BACKSTOP_MS)
+      backstop.unref()
+      socket.once('close', () => clearTimeout(backstop))
+      socket.write(JSON.stringify({ v: PROTOCOL_VERSION, t: 'reject', reason }) + '\n', () =>
+        socket.destroy(),
+      )
     }
     let parsed
     try {

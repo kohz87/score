@@ -589,7 +589,31 @@ export class CodingRuntime {
    * Admits a room turn for a coding agent. Mirrors the Hermes path: a durable intent first, then the run row and the
    * room's streaming reply, then the process. Only after the run is admitted does anything spawn.
    */
-  async startRun(req: {
+  startRun(req: {
+    agentId: string
+    input: string
+    turnId: string
+    sessionId?: string
+    model?: string
+    owner?: 'orchestration' | OrchestrationOwner
+  }): Promise<{ runId: string }> {
+    // Admission is serialised per turn (S4-C01): a second call for the same turn waits for the first and then finds its
+    // accepted intent, so both return the one persisted run id and only one execution is scheduled.
+    const previous = this.admissions.get(req.turnId) ?? Promise.resolve()
+    const mine = previous.then(() => this.admit(req))
+    const tail = mine.then(
+      () => undefined,
+      () => undefined,
+    )
+    this.admissions.set(req.turnId, tail)
+    void tail.then(() => {
+      if (this.admissions.get(req.turnId) === tail) this.admissions.delete(req.turnId)
+    })
+    return mine
+  }
+  private readonly admissions = new Map<string, Promise<void>>()
+
+  private async admit(req: {
     agentId: string
     input: string
     turnId: string
@@ -692,7 +716,7 @@ export class CodingRuntime {
     const known = db.sqlite
       .prepare('SELECT id FROM runs WHERE score_turn_id = ?')
       .get(req.turnId) as { id: string } | undefined
-    const runId = known?.id ?? `cr_${randomUUID()}`
+    const proposed = known?.id ?? `cr_${randomUUID()}`
     const room = this.roomOf(req.turnId)
     // An owned turn never resumes a CLI session: one launch per generation, a fresh context per step (7.7b §5).
     const resumed = room && !owner ? cliSessionFor(db.sqlite, room, agent.id) : null
@@ -705,13 +729,20 @@ export class CodingRuntime {
             `INSERT INTO runs (id, profile, origin, score_turn_id, session_id, status, model, started_at, updated_at, runtime)
              VALUES (?, ?, 'score', ?, ?, 'queued', ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`,
           )
-          .run(runId, agent.id, req.turnId, resumed, payload.model, now, now, agent.runtime)
+          .run(proposed, agent.id, req.turnId, resumed, payload.model, now, now, agent.runtime)
         return [
-          ...(inserted.changes ? [runDraft(sqlite, runId)] : []),
-          ...attachRunMessage(sqlite, req.turnId, runId, now),
+          ...(inserted.changes ? [runDraft(sqlite, proposed)] : []),
+          ...attachRunMessage(sqlite, req.turnId, proposed, now),
         ]
       },
     })
+    // The id that was persisted, never the proposed one: an earlier admission of this turn (a replayed identity applies
+    // nothing) may have stored a different run.
+    const persisted = db.sqlite
+      .prepare('SELECT id FROM runs WHERE score_turn_id = ?')
+      .get(req.turnId) as { id: string } | undefined
+    if (!persisted) throw new Error('admission stored no run for this turn')
+    const runId = persisted.id
     db.sqlite
       .prepare(
         "UPDATE command_intents SET state = 'accepted', result = ?, updated_at = ? WHERE id = ?",
