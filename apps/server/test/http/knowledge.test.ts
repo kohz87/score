@@ -152,7 +152,12 @@ describe('writes', () => {
       etag: null,
     })
     expect(created.statusCode).toBe(200)
-    expect(created.json()).toEqual({ etag: expect.any(String), path: 'New ideas/Idea one.md' })
+    expect(created.json()).toEqual({
+      etag: expect.any(String),
+      path: 'New ideas/Idea one.md',
+      versioned: true,
+      historyUpdated: true,
+    })
     const dup = await call('PUT', `${N}${enc('New ideas/Idea one.md')}`, {
       body: 'again',
       etag: null,
@@ -269,7 +274,12 @@ describe('writes', () => {
     expect((await call('GET', `${N}h.md/versions/NOT-A-COMMIT`)).statusCode).toBe(400)
     const restored = await call('POST', `${N}h.md/restore`, { commit: oldest })
     expect(restored.statusCode).toBe(200)
-    expect(restored.json()).toEqual({ etag: expect.any(String), path: 'h.md' })
+    expect(restored.json()).toEqual({
+      etag: expect.any(String),
+      path: 'h.md',
+      versioned: true,
+      historyUpdated: true,
+    })
     expect((await call('GET', `${N}h.md`)).json().body).toBe('v1')
     expect((await call('GET', `${N}h.md/history`)).json().items).toHaveLength(3)
     expect((await call('POST', `${N}h.md/restore`, { commit: 'nothex!' })).statusCode).toBe(400)
