@@ -935,6 +935,36 @@ test('S3-006: events dropped while idle make the cache stale; a failed refresh n
   off()
 })
 
+test('S4-001: leaving during a refresh fences the buffered events; a failed reopen never publishes success without them', async () => {
+  vi.useFakeTimers()
+  const { queries, source } = setupWith({ retryBaseMs: 1000 })
+  hello(source)
+  const { def, requests } = definition()
+  const handle = queries.register(def)
+  let off = handle.subscribe(() => {})
+  await vi.waitFor(() => expect(requests).toHaveLength(1))
+  requests[0]!.resolve({ data: 'A', asOfSeq: 10 })
+  await vi.waitFor(() => expect(handle.getSnapshot().data).toBe('A'))
+  // A refresh is held in flight; update 11 is buffered behind it, then the page is left.
+  void handle.refetch()
+  await vi.waitFor(() => expect(requests).toHaveLength(2))
+  delta(source, 11, '+')
+  off()
+  off = handle.subscribe(() => {})
+  await vi.waitFor(() => expect(requests).toHaveLength(3))
+  requests[2]!.reject(new Error('offline'))
+  await vi.waitFor(() => expect(handle.getSnapshot().status).toBe('error'))
+  delta(source, 12, 'B')
+  expect(handle.getSnapshot()).toMatchObject({ status: 'error', data: 'A', asOfSeq: 10 })
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(requests).toHaveLength(4)
+  requests[3]!.resolve({ data: 'A+B', asOfSeq: 12 })
+  await vi.waitFor(() =>
+    expect(handle.getSnapshot()).toMatchObject({ status: 'success', data: 'A+B', asOfSeq: 12 }),
+  )
+  off()
+})
+
 test('an unobserved registration is evicted after the idle period and registers again on next use', async () => {
   vi.useFakeTimers()
   const { queries, queryClient } = setupWith({ idleEvictMs: 1000 })
