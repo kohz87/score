@@ -94,6 +94,7 @@ export function retireIngestKeys(
         .run(...INTERNAL_OBSERVATION_SOURCES, cutoff).changes,
     ),
   )
+  retired += reclaimCodingEventKeys(db, options.batchSize)
   // Watch frames live 7 days (D6), but each agent keeps its newest frame so per-agent `seq` never restarts.
   releaseAndDeleteOldFrames(db, new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString())
   db.sqlite
@@ -160,4 +161,45 @@ export function retireIngestKeys(
     } while (changes === options.batchSize)
   }
   return { retired, floors }
+}
+
+/**
+ * Retention contract for `coding:<agent>` ingest keys. A run's detailed event keys (`coding:<run>:running` and
+ * `coding:<run>:<index>`) are only needed while the run can still change. They go once the run is terminal (or
+ * already pruned), its result is delivered (no `coding_pending_terminals` row) and its launch is settled (or it never
+ * had one). The `admitted:*` and `coding:<run>:terminal` keys stay as the bounded per-run replay guard, and a replayed
+ * event or running observation against a terminal run applies nothing anyway. Pending and unsettled runs keep
+ * everything; there is no time-based expiry.
+ */
+export function reclaimCodingEventKeys(db: ScoreDb, batchSize: number): number {
+  let total = 0
+  let changes: number
+  do {
+    changes = db.tx((sqlite) =>
+      Number(
+        sqlite
+          .prepare(
+            `WITH detail AS (
+               SELECT rowid AS rid,
+                      substr(identity, 8, instr(substr(identity, 8), ':') - 1) AS run_id,
+                      substr(identity, 8 + instr(substr(identity, 8), ':')) AS tail
+               FROM ingest_keys
+               WHERE source LIKE 'coding:%' AND identity LIKE 'coding:%' AND instr(substr(identity, 8), ':') > 0
+             )
+             DELETE FROM ingest_keys WHERE rowid IN (
+               SELECT d.rid FROM detail d
+               WHERE (d.tail = 'running' OR (d.tail <> '' AND d.tail NOT GLOB '*[^0-9]*'))
+                 AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.id = d.run_id
+                                 AND r.status NOT IN ('completed', 'failed', 'cancelled', 'interrupted'))
+                 AND NOT EXISTS (SELECT 1 FROM coding_pending_terminals t WHERE t.run_id = d.run_id)
+                 AND NOT EXISTS (SELECT 1 FROM coding_launches l WHERE l.run_id = d.run_id AND l.phase <> 'settled')
+               LIMIT ?
+             )`,
+          )
+          .run(batchSize).changes,
+      ),
+    )
+    total += changes
+  } while (changes === batchSize)
+  return total
 }
