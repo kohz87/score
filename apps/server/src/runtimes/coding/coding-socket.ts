@@ -573,6 +573,9 @@ export interface CodingSocketOptions {
   frozen?: () => string | null
 }
 
+/** Hard stop for a rejected connection whose reply write never completes. */
+const REJECT_BACKSTOP_MS = 1000
+
 export class CodingSocketServer {
   readonly path: string
   private readonly limits: SocketLimits
@@ -762,17 +765,19 @@ export class CodingSocketServer {
     socket.setEncoding('utf8')
     let buffer = ''
     let authenticated = false
+    // The hello deadline runs until authentication succeeds or the socket closes (S4-005): a peer that sends a line and
+    // then idles, or never reads the rejection, must not keep its slot.
+    const timer = setTimeout(() => socket.destroy(), this.limits.helloTimeoutMs)
+    timer.unref()
     const leaveUnauthenticated = () => {
+      clearTimeout(timer)
       if (!authenticated) {
         authenticated = true
         this.unauthenticated -= 1
       }
     }
-    const timer = setTimeout(() => socket.destroy(), this.limits.helloTimeoutMs)
-    timer.unref()
     socket.on('error', () => undefined)
     socket.on('close', () => {
-      clearTimeout(timer)
       leaveUnauthenticated()
       this.sockets.delete(socket)
     })
@@ -784,7 +789,6 @@ export class CodingSocketServer {
         return
       }
       socket.off('data', onData)
-      clearTimeout(timer)
       const line = buffer.slice(0, nl)
       const leftover = buffer.slice(nl + 1)
       this.hello(socket, line, leftover, leaveUnauthenticated)
@@ -800,7 +804,13 @@ export class CodingSocketServer {
   ): void {
     const reject = (reason: string) => {
       // Reasons are fixed words; never echo the presented token or anything the peer sent.
-      socket.end(JSON.stringify({ v: PROTOCOL_VERSION, t: 'reject', reason }) + '\n')
+      // destroy() after the write: end() alone leaves a half-open peer holding the slot until the hello deadline.
+      const backstop = setTimeout(() => socket.destroy(), REJECT_BACKSTOP_MS)
+      backstop.unref()
+      socket.once('close', () => clearTimeout(backstop))
+      socket.write(JSON.stringify({ v: PROTOCOL_VERSION, t: 'reject', reason }) + '\n', () =>
+        socket.destroy(),
+      )
     }
     let parsed
     try {
