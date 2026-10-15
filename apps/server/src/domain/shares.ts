@@ -4,6 +4,7 @@ import { ShareSummarySchema, type ShareSummary } from '@score/contract'
 import { z } from 'zod'
 import { redact } from '../redact.ts'
 import type { ShareSnapshot } from '../shares/page.ts'
+import { releaseShareMedia, retainShareMedia } from './media-refs.ts'
 import { messageFromRow, roomRow } from './rooms.ts'
 
 const MAX_MESSAGES = 2000
@@ -96,9 +97,12 @@ export function insertShare(
 ): void {
   // Old, finished shares go; their snapshots would otherwise sit in the database for good.
   const cutoff = new Date(Date.parse(share.createdAt) - 30 * DAY_MS).toISOString()
-  sqlite
-    .prepare('DELETE FROM room_shares WHERE expires_at < ? OR revoked_at < ?')
-    .run(cutoff, cutoff)
+  const old = sqlite
+    .prepare('SELECT id FROM room_shares WHERE expires_at < ? OR revoked_at < ?')
+    .all(cutoff, cutoff) as { id: string }[]
+  const oldIds = old.map((row) => row.id)
+  releaseShareMedia(sqlite, oldIds)
+  for (const id of oldIds) sqlite.prepare('DELETE FROM room_shares WHERE id = ?').run(id)
   sqlite
     .prepare(
       `INSERT INTO room_shares (id, room_id, token_hash, created_at, expires_at, include_images, snapshot)
@@ -113,6 +117,9 @@ export function insertShare(
       Number(share.includeImages),
       JSON.stringify(share.snapshot),
     )
+  // The share owns its images: they stay until it ends, whatever happens to the original messages.
+  if (share.includeImages)
+    retainShareMedia(sqlite, share.id, share.snapshot.images, share.createdAt)
 }
 
 /** A live share by token hash: not revoked, not expired. Compares the hashes in constant time as well. */
@@ -181,6 +188,7 @@ export function listShares(
 export function revokeShare(sqlite: DatabaseSync, id: string, nowIso: string): boolean {
   const row = sqlite.prepare('SELECT id FROM room_shares WHERE id = ?').get(id)
   if (!row) return false
+  releaseShareMedia(sqlite, [id])
   sqlite
     .prepare(
       `UPDATE room_shares SET revoked_at = COALESCE(revoked_at, ?), snapshot = '{"title":"","messages":[],"images":[]}'

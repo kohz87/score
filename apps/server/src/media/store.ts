@@ -17,6 +17,7 @@ import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import type { ScoreDb } from '../db/index.ts'
+import { releaseEndedShareMedia } from '../domain/media-refs.ts'
 import { HttpError } from '../errors.ts'
 import { declaredMatches, isImageType, MEDIA_TYPES, sniffMedia, type MediaType } from './sniff.ts'
 
@@ -220,6 +221,8 @@ export class MediaStore {
     // Rows sharing one blob (different document types) are hashed once per sweep and spend the budget once.
     const hashed = new Map<string, boolean>()
     this.db.tx((sqlite) => {
+      // Shares that ended give their images back before anything is judged unused or evicted.
+      releaseEndedShareMedia(sqlite, nowIso)
       // Least recently verified first (never verified = first), so every row gets its turn over several sweeps.
       const rows = sqlite
         .prepare(

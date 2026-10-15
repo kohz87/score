@@ -178,6 +178,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'session_cost_snapshots',
     'session_tool_calls',
     'sessions',
+    'share_media',
     'task_projections',
     'task_rooms',
     'team_paused_briefs',

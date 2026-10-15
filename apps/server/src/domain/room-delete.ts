@@ -2,7 +2,7 @@ import type { RoomDeletePlan } from '@score/contract'
 import type { DatabaseSync } from 'node:sqlite'
 import { HttpError } from '../errors.ts'
 import type { DomainEventDraft } from '../hub/ingest.ts'
-import { releaseMessageMedia } from './media-refs.ts'
+import { releaseMessageMedia, releaseShareMedia } from './media-refs.ts'
 import { isHeld, ownerOfRoom } from './orchestration/ownership.ts'
 import { pruneOrchestrationRows } from './orchestration/prune.ts'
 import { readOrch } from './orchestration/store.ts'
@@ -119,6 +119,12 @@ export function deleteRoom(
       sqlite
         .prepare('SELECT id FROM messages WHERE room_id = ? AND deleted_at IS NULL')
         .all(roomId) as { id: string }[]
+    ).map((row) => row.id),
+  )
+  releaseShareMedia(
+    sqlite,
+    (
+      sqlite.prepare('SELECT id FROM room_shares WHERE room_id = ?').all(roomId) as { id: string }[]
     ).map((row) => row.id),
   )
   for (const table of [
