@@ -12,6 +12,7 @@ import {
   writeSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
+import net from 'node:net'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
@@ -30,7 +31,7 @@ import { CliLocator } from '../../src/runtimes/coding/cli.ts'
 import { processStart } from '../../src/runtimes/coding/proc.ts'
 import { spawnCli } from '../../src/runtimes/coding/process.ts'
 import { CodingRuntime, type CodingRuntimeDeps } from '../../src/runtimes/coding/service.ts'
-import { RunSession } from '../../src/runtimes/coding/coding-socket.ts'
+import { CodingSocketServer, RunSession } from '../../src/runtimes/coding/coding-socket.ts'
 import { writeReceipt } from '../../src/runtimes/coding/supervisor.mjs'
 import {
   fenceBarrier,
@@ -402,6 +403,78 @@ test('an installation that never passed the check keeps the process-group backen
   expect(again.json()).toMatchObject({ kind: 'unit', note: 'Runs as a supervised system service.' })
   const read = await request('GET', '/api/coding-agents/backend')
   expect(read.json().kind).toBe('unit')
+})
+
+// audit4 S4-006: "Check again" retries a listener that failed to bind.
+async function bootWithSocketDir(rt: string) {
+  await coding.close()
+  await app.close()
+  mkdirSync(join(rt, 'score'), { recursive: true, mode: 0o700 })
+  await boot({ unit: { runtimeDir: rt } })
+  return CodingSocketServer.socketPath(rt, INSTALLATION)
+}
+const socketCheck = (body: { checks: { name: string; ok: boolean; detail: string }[] }) =>
+  body.checks.find((c) => c.name === 'socket')!
+const connects = (path: string) =>
+  new Promise<boolean>((resolve) => {
+    const c = net.connect(path)
+    c.once('connect', () => (c.destroy(), resolve(true)))
+    c.once('error', () => resolve(false))
+  })
+
+test('Check again rebinds a listener that failed to start; concurrent rechecks share one bind', async () => {
+  const rt = join(dir, 'rt2')
+  const path = await bootWithSocketDir(rt)
+  expect(socketCheck((await request('GET', '/api/coding-agents/backend')).json())).toMatchObject({
+    ok: true,
+  })
+  // Fresh backend whose first bind fails: a non-socket occupies the path.
+  await coding.close()
+  await app.close()
+  const rt3 = join(dir, 'rt3')
+  mkdirSync(join(rt3, 'score'), { recursive: true, mode: 0o700 })
+  const blocked = CodingSocketServer.socketPath(rt3, INSTALLATION)
+  writeFileSync(blocked, 'not a socket')
+  await boot({ unit: { runtimeDir: rt3 } })
+  const first = await request('GET', '/api/coding-agents/backend')
+  expect(socketCheck(first.json())).toMatchObject({ ok: false })
+  expect(await connects(blocked)).toBe(false)
+  expect(path).not.toBe(blocked)
+  // The obstacle goes away; three simultaneous rechecks bind exactly once.
+  rmSync(blocked)
+  const starts = vi.spyOn(backend.socket, 'start')
+  const results = await Promise.all(
+    [1, 2, 3].map(() => request('POST', '/api/coding-agents/backend/check', {})),
+  )
+  for (const r of results) expect(socketCheck(r.json())).toMatchObject({ ok: true })
+  expect(starts).toHaveBeenCalledTimes(1)
+  expect(await connects(blocked)).toBe(true)
+  expect(results[0]!.json()).toMatchObject({ kind: 'unit' })
+  // Idempotent: another recheck does not rebind or mistake our own listener for a foreign one.
+  const again = await request('POST', '/api/coding-agents/backend/check', {})
+  expect(socketCheck(again.json())).toMatchObject({ ok: true })
+  expect(starts).toHaveBeenCalledTimes(1)
+})
+
+test('Check again still refuses a foreign listener on the socket path', async () => {
+  await coding.close()
+  await app.close()
+  const rt = join(dir, 'rt4')
+  mkdirSync(join(rt, 'score'), { recursive: true, mode: 0o700 })
+  const foreignPath = CodingSocketServer.socketPath(rt, INSTALLATION)
+  const foreign = net.createServer((c) => c.destroy())
+  await new Promise<void>((resolve) => foreign.listen(foreignPath, () => resolve()))
+  try {
+    await boot({ unit: { runtimeDir: rt } })
+    for (let i = 0; i < 2; i++) {
+      const r = await request('POST', '/api/coding-agents/backend/check', {})
+      expect(socketCheck(r.json())).toMatchObject({ ok: false })
+      expect(socketCheck(r.json()).detail).toContain('another process is listening')
+    }
+    expect(backend.socket.listening).toBe(false)
+  } finally {
+    await new Promise<void>((resolve) => foreign.close(() => resolve()))
+  }
 })
 
 test('without a unit backend the card says so (fake mode and old hosts)', async () => {

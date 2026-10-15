@@ -607,6 +607,7 @@ export class CodingSocketServer {
    * live listener that is not ours is refused, never replaced.
    */
   async start(holdsInstallationLock: boolean): Promise<void> {
+    if (this.listening) return // idempotent: our own listener must not be probed as a "foreign" one
     if (Buffer.byteLength(this.path) > MAX_SOCKET_PATH_BYTES) {
       throw new SocketStartError(
         'path-too-long',
@@ -632,8 +633,19 @@ export class CodingSocketServer {
         resolve()
       })
     })
-    chmodSync(this.path, 0o600)
+    try {
+      chmodSync(this.path, 0o600)
+    } catch (error) {
+      // Never leave a half-set-up listener behind: the next attempt must start from nothing.
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+      throw error
+    }
     this.server = server
+  }
+
+  /** True while this instance owns a bound, listening server (a failed or foreign bind is not ownership). */
+  get listening(): boolean {
+    return this.server !== null && this.server.listening
   }
 
   private async clearStale(holdsLock: boolean): Promise<void> {

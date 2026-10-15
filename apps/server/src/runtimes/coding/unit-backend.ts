@@ -467,18 +467,36 @@ export class UnitBackend {
 
   /** Starts the socket listener and runs the capability check. Never throws: a failure means the fallback backend. */
   async start(): Promise<BackendStatus> {
-    if (this.deps.disabled === undefined) {
+    return this.check()
+  }
+
+  private listenerAttempt: Promise<void> | null = null
+  /**
+   * Binds the supervisor socket if this backend doesn't own a listener yet (S4-006). Shared by startup and "Check
+   * again", so a failed first bind is retried; concurrent callers share one attempt. `socketError` is cleared only after
+   * a confirmed bind. The installation lock is held by the caller for the process lifetime, and a foreign listener is
+   * still refused by `CodingSocketServer.start`.
+   */
+  private ensureListener(): Promise<void> {
+    if (this.deps.disabled !== undefined || this.closed || this.socket.listening)
+      return Promise.resolve()
+    this.listenerAttempt ??= (async () => {
       try {
         // Held by the caller: the home lock keeps a second Score off this installation's socket (design §4).
         await this.socket.start(true)
+        this.socketError = null
       } catch (error) {
         this.socketError = error instanceof Error ? error.message : String(error)
+      } finally {
+        this.listenerAttempt = null
       }
-    }
-    return this.check()
+    })()
+    return this.listenerAttempt
   }
-  /** "Check again": the same check, on demand. */
+
+  /** "Check again": the same check, on demand (it also retries a listener that failed to bind). */
   async check(): Promise<BackendStatus> {
+    await this.ensureListener()
     await this.rescanOrphans()
     if (this.deps.disabled !== undefined) {
       const checks = [{ name: 'manager', ok: false, detail: this.deps.disabled }]
