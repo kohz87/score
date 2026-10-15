@@ -4,6 +4,8 @@ import { promisify } from 'node:util'
 import type { KnowledgeAuthor, KnowledgeCommit } from '@score/contract'
 import { authorFromGit, authorToColumn, gitIdentity, sameAuthor } from './note.ts'
 
+const IGNORE_BATCH = 500
+
 const run = promisify(execFile)
 
 /** File names from `--name-only -z` output after a format: NUL-separated, never quoted or trimmed. */
@@ -179,18 +181,37 @@ export class VaultGit {
   async ignoredUntracked(paths: string[]): Promise<Set<string>> {
     const found = new Set<string>()
     if (!this.available) return found
-    for (const path of paths) {
+    // One git run per batch of paths, not per path: a 1,000-note import took three times as long with one run each.
+    // `-z` needs `--stdin`, so the output is one path per line; a path git might quote is asked about on its own.
+    const plain = paths.filter((path) => !/["\\\p{Cc}]/u.test(path))
+    const quoted = new Set(paths)
+    for (const path of plain) quoted.delete(path)
+    for (const path of quoted) if (await this.ignoredOne(path)) found.add(path)
+    for (let i = 0; i < plain.length; i += IGNORE_BATCH) {
+      const batch = plain.slice(i, i + IGNORE_BATCH)
+      const asked = new Set(batch)
       try {
-        // check-ignore refuses literal-pathspec mode, which every other call here uses.
-        await this.git(['check-ignore', '-q', '--', path], {
+        // check-ignore refuses literal-pathspec mode, which every other call here uses. It prints the ignored ones.
+        const out = await this.git(['check-ignore', '--', ...batch], {
           env: { GIT_LITERAL_PATHSPECS: '0' },
-        }) // exit 0: ignored
-        found.add(path)
-      } catch {
-        // exit 1: not ignored; anything else: unknown, treated the same
+        })
+        for (const path of out.split('\n')) if (asked.has(path)) found.add(path)
+      } catch (error) {
+        // Exit 1: none of them is ignored. Anything else: ask one by one, so one odd path can't hide the others.
+        if ((error as { code?: unknown }).code === 1) continue
+        for (const path of batch) if (await this.ignoredOne(path)) found.add(path)
       }
     }
     return found
+  }
+
+  private async ignoredOne(path: string): Promise<boolean> {
+    try {
+      await this.git(['check-ignore', '-q', '--', path], { env: { GIT_LITERAL_PATHSPECS: '0' } })
+      return true // exit 0: ignored
+    } catch {
+      return false // exit 1: not ignored; anything else: unknown, treated the same
+    }
   }
 
   /** Commits (or amends) the given paths. Resolves to the commit hash, or null when nothing changed or git failed. */
