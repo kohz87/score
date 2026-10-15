@@ -477,6 +477,46 @@ test('Check again still refuses a foreign listener on the socket path', async ()
   }
 })
 
+// audit4 S4-C01: two same-turn admissions never diverge from the persisted run.
+for (const pending of [false, true]) {
+  test(`two concurrent same-turn startRun calls share one persisted run and one execution (${pending ? 'with' : 'without'} a pending intent)`, async () => {
+    await addAgent()
+    const turnId = `turn-conc-${pending}`
+    if (pending) {
+      const now = new Date().toISOString()
+      db.sqlite
+        .prepare(
+          `INSERT INTO command_intents (id, kind, idempotency_key, payload, state, created_at, updated_at)
+           VALUES (?, 'start_coding_run', ?, ?, 'pending', ?, ?)`,
+        )
+        .run(
+          'intent-pre',
+          turnId,
+          JSON.stringify({
+            agentId: 'coder',
+            input: '[fixture:basic] go',
+            sessionId: null,
+            model: null,
+          }),
+          now,
+          now,
+        )
+    }
+    const req = { agentId: 'coder', input: '[fixture:basic] go', turnId }
+    const [a, b] = await Promise.all([coding.startRun(req), coding.startRun(req)])
+    expect(a.runId).toBe(b.runId)
+    const rows = runs()
+    expect(rows.map((r) => r.id)).toEqual([a.runId])
+    const intent = db.sqlite
+      .prepare('SELECT state, result FROM command_intents WHERE idempotency_key = ?')
+      .all(turnId)
+    expect(intent).toEqual([{ state: 'accepted', result: a.runId }])
+    await finished()
+    expect(launches()).toHaveLength(1)
+    expect(runs()).toHaveLength(1)
+  })
+}
+
 test('without a unit backend the card says so (fake mode and old hosts)', async () => {
   await coding.close()
   await app.close()
