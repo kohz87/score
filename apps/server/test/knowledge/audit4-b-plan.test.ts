@@ -123,8 +123,8 @@ describe('S4-002 the old move plan is deleted only after the copy is durable', (
     const past = new Date(Date.now() - 60_000)
     fs.utimesSync(target, past, past)
     const spy = vi
-      .spyOn(KnowledgeVault.prototype as never, 'recoverMove' as never)
-      .mockResolvedValue(undefined as never)
+      .spyOn(KnowledgeVault.prototype as unknown as { recoverMove(): Promise<void> }, 'recoverMove')
+      .mockResolvedValue(undefined)
     const next = open(h)
     await next.start()
     const kept = JSON.parse(fs.readFileSync(target, 'utf8')) as { from: string }
