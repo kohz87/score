@@ -1,8 +1,16 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, expect, test, vi } from 'vitest'
 import { AboutSchema, CONTRACT_VERSION, UpdateCheckSchema } from '@score/contract'
 import { buildApp } from '../../src/app.ts'
 import { loadConfig } from '../../src/config.ts'
 import { setup } from '../hermes/live/gateway/helpers.ts'
+
+// The running version, whatever release this is; "newer" examples use 99.x so they stay newer.
+const CURRENT = (
+  JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
+    version: string
+  }
+).version
 
 const apps: ReturnType<typeof buildApp>[] = []
 afterEach(async () => {
@@ -50,7 +58,7 @@ test('GET /api/about shows the running version, the schema number and the reposi
   const { app, spy } = await start(answer([]), {}, { db: env.db, ingest: env.ingest })
   const about = AboutSchema.parse((await app.inject({ url: '/api/about' })).json())
   expect(about).toMatchObject({
-    version: '1.3.0',
+    version: CURRENT,
     contract: CONTRACT_VERSION,
     mode: 'live',
     repository: 'https://github.com/kohz87/score',
@@ -63,29 +71,29 @@ test('GET /api/about shows the running version, the schema number and the reposi
 })
 
 test('says up to date, update available (highest stable tag) or ahead', async () => {
-  const names = tags('v1.2.0', 'v1.10.0', 'v2.0.0-rc.1', 'nightly', 'v1.9.9')
+  const names = tags('v1.2.0', 'v99.10.0', 'v100.0.0-rc.1', 'nightly', 'v99.9.9')
   const a = await start(answer(names), { SCORE_UPDATE_REPO: 'acme/score-fork' })
   const result = UpdateCheckSchema.parse(await a.check())
   expect(result).toMatchObject({
     status: 'update_available',
-    current: '1.3.0',
-    message: 'v1.10.0 is available.',
+    current: CURRENT,
+    message: 'v99.10.0 is available.',
     latest: {
-      version: '1.10.0',
-      tag: 'v1.10.0',
-      url: 'https://github.com/acme/score-fork/releases/tag/v1.10.0',
-      changelogUrl: 'https://github.com/acme/score-fork/blob/v1.10.0/CHANGELOG.md',
+      version: '99.10.0',
+      tag: 'v99.10.0',
+      url: 'https://github.com/acme/score-fork/releases/tag/v99.10.0',
+      changelogUrl: 'https://github.com/acme/score-fork/blob/v99.10.0/CHANGELOG.md',
     },
   })
   const [url, init] = a.spy.mock.calls[0]!
   expect(url).toBe('https://api.github.com/repos/acme/score-fork/tags?per_page=100')
-  expect(init.headers['user-agent']).toBe('Score/1.3.0')
+  expect(init.headers['user-agent']).toBe(`Score/${CURRENT}`)
   expect(Object.keys(init.headers).join()).not.toMatch(/authorization|cookie/i)
 
-  const same = await start(answer(tags('v1.3.0', 'v1.2.0')))
+  const same = await start(answer(tags(`v${CURRENT}`, 'v1.2.0')))
   expect(await same.check()).toMatchObject({
     status: 'up_to_date',
-    message: 'You’re up to date (v1.3.0).',
+    message: `You’re up to date (v${CURRENT}).`,
   })
   const ahead = await start(answer(tags('v1.2.1')))
   expect(await ahead.check()).toMatchObject({
@@ -127,7 +135,7 @@ test('a request that never answers is cut off after 10 seconds', async () => {
 })
 
 test('one real check per minute: a second call inside it gets the same answer without a request', async () => {
-  const { check, spy, advance } = await start(answer(tags('v1.4.0')))
+  const { check, spy, advance } = await start(answer(tags('v99.4.0')))
   const first = await check()
   advance(30_000)
   expect(await check()).toEqual(first)
@@ -139,7 +147,7 @@ test('one real check per minute: a second call inside it gets the same answer wi
 })
 
 test('the check is for paired browsers and never runs by itself', async () => {
-  const { app, spy } = await start(answer(tags('v1.4.0')))
+  const { app, spy } = await start(answer(tags('v99.4.0')))
   const res = await app.inject({
     method: 'POST',
     url: '/api/about/update-check',
@@ -169,7 +177,7 @@ test('fake mode gives a fixed answer without any request', async () => {
       cookie: String(paired.headers['set-cookie']).split(';')[0]!,
     },
   })
-  expect(res.json()).toMatchObject({ status: 'up_to_date', current: '1.3.0' })
+  expect(res.json()).toMatchObject({ status: 'up_to_date', current: CURRENT })
   expect(fetchSpy).not.toHaveBeenCalled()
   fetchSpy.mockRestore()
 })
