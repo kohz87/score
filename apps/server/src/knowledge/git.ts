@@ -47,7 +47,10 @@ export class VaultGit {
     private readonly now: () => number = Date.now,
   ) {}
 
-  private async git(args: string[], options: { author?: KnowledgeAuthor } = {}): Promise<string> {
+  private async git(
+    args: string[],
+    options: { author?: KnowledgeAuthor; env?: Record<string, string> } = {},
+  ): Promise<string> {
     const identity = gitIdentity(options.author ?? 'you')
     const { stdout } = await run(
       'git',
@@ -75,6 +78,7 @@ export class VaultGit {
           GIT_AUTHOR_EMAIL: identity.email,
           GIT_COMMITTER_NAME: identity.name,
           GIT_COMMITTER_EMAIL: identity.email,
+          ...options.env,
         },
       },
     )
@@ -126,6 +130,30 @@ export class VaultGit {
   }
 
   /**
+   * `git add -A`, except that git refuses the whole call when a pathspec sits in an ignored folder, even for a file
+   * it already tracks. Then the tracked files are staged with `-u` and the not-ignored new ones separately, so a
+   * tracked note keeps its history after a rule starts matching it.
+   */
+  private async stage(paths: string[]): Promise<void> {
+    try {
+      await this.git(['add', '-A', '--', ...paths])
+      return
+    } catch (error) {
+      try {
+        await this.git(['add', '-u', '--', ...paths])
+        const fresh = (
+          await this.git(['ls-files', '-z', '--others', '--exclude-standard', '--', ...paths])
+        )
+          .split('\0')
+          .filter((name) => name !== '')
+        if (fresh.length > 0) await this.git(['add', '-A', '--', ...fresh])
+      } catch {
+        throw error
+      }
+    }
+  }
+
+  /**
    * Commits whatever changed outside Score as "Outside changes", so Score's own commit contains only its own
    * change. Returns true when something was committed, false when there was nothing to commit (or git is off).
    * A failure THROWS: callers about to overwrite or delete must not treat "could not snapshot" as "nothing changed".
@@ -134,7 +162,7 @@ export class VaultGit {
     if (!this.available) return false
     const paths = await this.dirty()
     if (paths.length === 0) return false
-    await this.git(['add', '-A', '--', ...paths])
+    await this.stage(paths)
     await this.git(['commit', '-q', '--no-verify', '-m', 'Outside changes', '--', ...paths], {
       author: 'outside',
     })
@@ -142,11 +170,34 @@ export class VaultGit {
     return true
   }
 
+  /**
+   * The given paths that Git ignores and does not track. `git add` refuses those, and Score never force-adds one: the
+   * note is saved but has no history. Without `--no-index`, a tracked path is never reported (it keeps its history
+   * even when a rule later matches it). One argv call per path (a commit names at most a few); a failed check
+   * counts as "not ignored" so the commit is tried and its own failure is reported.
+   */
+  async ignoredUntracked(paths: string[]): Promise<Set<string>> {
+    const found = new Set<string>()
+    if (!this.available) return found
+    for (const path of paths) {
+      try {
+        // check-ignore refuses literal-pathspec mode, which every other call here uses.
+        await this.git(['check-ignore', '-q', '--', path], {
+          env: { GIT_LITERAL_PATHSPECS: '0' },
+        }) // exit 0: ignored
+        found.add(path)
+      } catch {
+        // exit 1: not ignored; anything else: unknown, treated the same
+      }
+    }
+    return found
+  }
+
   /** Commits (or amends) the given paths. Resolves to the commit hash, or null when nothing changed or git failed. */
   async commit(options: CommitOptions): Promise<string | null> {
     if (!this.available) return null
     const { paths, message, author, amendNote } = options
-    await this.git(['add', '-A', '--', ...paths])
+    await this.stage(paths)
     const staged = await this.git(['diff', '--cached', '--name-only', '--', ...paths])
     if (staged.trim() === '') return null
     const head = (await this.git(['rev-parse', 'HEAD']).catch(() => '')).trim()

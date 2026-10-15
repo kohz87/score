@@ -30,6 +30,8 @@ let nextEtag: number
 let holdPut: Promise<void> | null
 let failNoteReads: boolean
 let controls: Set<(control: StreamControl) => void>
+let unversioned: Set<string>
+let historyUpdated: boolean
 
 const builder: AgentSummary = {
   id: 'builder',
@@ -60,6 +62,7 @@ function noteJson(path: string) {
     ],
     backlinks: [{ path: 'Home.md', title: 'Home' }],
     lastAuthor: n.lastAuthor,
+    versioned: !unversioned.has(path),
   }
 }
 
@@ -132,7 +135,7 @@ function respond(input: string, init: RequestInit = {}): Response {
       lastAuthor: 'you',
       mtime: '2026-01-01T00:00:00Z',
     })
-    return json({ etag: `e${nextEtag}`, path })
+    return json({ etag: `e${nextEtag}`, path, versioned: !unversioned.has(path), historyUpdated })
   }
   if (method === 'DELETE') {
     notes.delete(path)
@@ -149,6 +152,8 @@ beforeEach(() => {
   failNoteReads = false
   controls = new Set()
   putStatus = 200
+  unversioned = new Set()
+  historyUpdated = true
   listeners = new Set()
   info = { vault: '/vault', notes: 3, gitAvailable: true, agentAccess: true }
   const base = { lastAuthor: 'you', mtime: '2026-01-01T00:00:00Z' }
@@ -749,4 +754,43 @@ test('a note with an embedded image shows the picture, never the data, and saves
   fireEvent.click(screen.getByRole('button', { name: 'Source' }))
   expect(dom.querySelector('.cm-lp-image-chip')?.textContent).toBe('data:image/png · 70 B')
   expect(dom.textContent).not.toContain('base64')
+})
+
+test('a note outside history shows the badge, the reason, and warns before overwrite and delete', async () => {
+  unversioned = new Set(['projects/Plan.md'])
+  const view = await openEditor()
+  expect((await screen.findByTestId('not-in-history')).textContent).toBe('Not kept in history')
+  expect(
+    screen.getByText(/\.gitignore excludes this folder, so Score saves the note/),
+  ).toBeDefined()
+  expect((await screen.findByTestId('history-not-kept')).textContent).toMatch(
+    /\.gitignore excludes this folder/,
+  )
+  expect(screen.queryByText(/No saved versions yet/)).toBeNull()
+
+  putStatus = 412
+  type(view, 'mine')
+  const banner = await screen.findByTestId('conflict', {}, { timeout: 3000 })
+  expect(within(banner).getByText(/there is no earlier version/)).toBeDefined()
+  putStatus = 200
+  fireEvent.click(within(banner).getByRole('button', { name: 'Overwrite' }))
+  await waitFor(() => expect(screen.queryByTestId('conflict')).toBeNull())
+
+  fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+  const confirm = await screen.findByRole('dialog', { name: 'Delete Plan?' })
+  await within(confirm).findByText(/no earlier version to restore/)
+})
+
+test('a normal note shows no history warning; a failed history update is reported after a save', async () => {
+  const view = await openEditor()
+  expect(screen.queryByTestId('not-in-history')).toBeNull()
+  expect(screen.queryByTestId('history-missed')).toBeNull()
+  historyUpdated = false
+  type(view, 'more')
+  expect((await screen.findByTestId('history-missed', {}, { timeout: 3000 })).textContent).toMatch(
+    /Saved, but history wasn’t updated/,
+  )
+  historyUpdated = true
+  type(view, ' again')
+  await waitFor(() => expect(screen.queryByTestId('history-missed')).toBeNull(), { timeout: 3000 })
 })

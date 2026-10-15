@@ -7,7 +7,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
-import { knowledgeFailure } from './knowledge-queries.ts'
+import { knowledgeFailure, useNote } from './knowledge-queries.ts'
 import { baseName, normalizeNewPath } from './knowledge-paths.ts'
 
 export function Modal({
@@ -199,12 +199,17 @@ export function DeleteDialog({
   onConfirm: () => void
   onClose: () => void
 }) {
+  // The open note is already cached; a note outside history has no earlier version to fall back on.
+  const note = useNote(document ? null : path)
+  const unversioned = note.data?.versioned === false
   return (
     <Modal title={`Delete ${document ? path.split('/').pop() : baseName(path)}?`} onClose={onClose}>
       <p>
         {document
           ? 'The file is removed from Knowledge. If it is versioned in git (files up to 10 MB), its history keeps the last version; larger files are gone for good.'
-          : 'The note is removed from Knowledge. If git is available, its history keeps every earlier version.'}
+          : unversioned
+            ? 'The note is removed from Knowledge. There is no earlier version to restore: .gitignore excludes this folder, so Score doesn’t keep it in history.'
+            : 'The note is removed from Knowledge. If git is available, its history keeps every earlier version.'}
       </p>
       {error != null && (
         <p role="alert">

@@ -145,6 +145,8 @@ function Pane({
   const [status, setStatus] = useState<Status>(orphan ? 'dirty' : 'saved')
   const [changedElsewhere, setChangedElsewhere] = useState(false)
   const [saveError, setSaveError] = useState<unknown>(null)
+  // The last save landed but git refused to record it (other than an ignore rule).
+  const [historyMissed, setHistoryMissed] = useState(false)
   const [conflict, setConflict] = useState<{ etag: string | null } | null>(
     orphan && orphan.etag !== session.etag ? { etag: session.etag } : null,
   )
@@ -199,7 +201,10 @@ function Pane({
           setConflict(null)
           setCompare(null)
           setSaveError(null)
-          if (!unmounted.current) refreshPanels()
+          if (!unmounted.current) {
+            setHistoryMissed(!response.historyUpdated)
+            refreshPanels()
+          }
           if (draftRef.current !== body) {
             if (unmounted.current) void saveRef.current()
             else {
@@ -344,6 +349,11 @@ function Pane({
           <div>
             <h2>{note.title}</h2>
             <p className="kn-path">{path}</p>
+            {!note.versioned && (
+              <span className="kn-type-badge" data-testid="not-in-history">
+                Not kept in history
+              </span>
+            )}
           </div>
           <div className="kn-actions">
             <button type="button" aria-pressed={source} onClick={toggleSource}>
@@ -370,6 +380,19 @@ function Pane({
                 ? 'Not saved'
                 : 'Saved'}
         </p>
+        {!note.versioned && (
+          <p className="kn-banner" role="note">
+            <span>
+              <strong>Not kept in history.</strong> .gitignore excludes this folder, so Score saves
+              the note but keeps no earlier versions. Saving or deleting it can’t be undone.
+            </span>
+          </p>
+        )}
+        {historyMissed && (
+          <p className="kn-banner is-warn" role="status" data-testid="history-missed">
+            Saved, but history wasn’t updated. Your note is safe; the next save tries again.
+          </p>
+        )}
         {status === 'error' && (
           <p role="alert" className="kn-banner is-warn">
             {knowledgeFailure(saveError, 'save the note')}{' '}
@@ -449,6 +472,7 @@ function Pane({
           <div className="kn-banner is-warn" role="alert" data-testid="conflict">
             <p>
               <strong>This note changed somewhere else.</strong> Your edits are not saved yet.
+              {!note.versioned && ' Overwriting replaces it for good: there is no earlier version.'}
             </p>
             <div className="kn-actions">
               <button type="button" onClick={() => void doReload()}>

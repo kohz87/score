@@ -1305,10 +1305,10 @@ tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
 - `GET /api/knowledge` → `KnowledgeInfo` `{ vault; notes; gitAvailable; agentAccess; moveIssue }`. `moveIssue` is null, or `{ state: 'pending' | 'conflicted'; from; to; message }` for an interrupted move: `pending` is retried automatically (backoff), `conflicted` means recovery could not prove the destination is the moved file and waits for the owner. While one exists, `POST /api/knowledge/move` answers `409 move_pending`. **H** `POST /api/knowledge/move-issue/dismiss` → `KnowledgeInfo` abandons the plan (files untouched).
 - `GET /api/knowledge/tree` → `{ folders: string[]; notes: KnowledgeNoteSummary[] }` (`{ path; title; mtime; lastAuthor }`)
 - `GET /api/knowledge/notes/*path` → `KnowledgeNote` `{ path; title; frontmatter; body; etag; mtime; links: { target;
-  path | null }[]; backlinks: { path; title }[]; lastAuthor }`. Title: frontmatter `title`, else the first `# H1`, else
+  path | null }[]; backlinks: { path; title }[]; lastAuthor; versioned }`. `versioned` is `false` when the note's path is Git-ignored and untracked (a `.gitignore` or global ignore rule excludes it): Score saves it but never force-adds it, so it has no history (owner decision 80). Tracked notes keep history even if a rule later matches them. Title: frontmatter `title`, else the first `# H1`, else
   the file name. Wikilinks `[[Target]]`, `[[Target|alias]]`, `[[Target#heading]]` resolve Obsidian-style (exact path,
   then a unique basename, case-insensitive); unresolved links have `path: null`.
-- **H** `PUT /api/knowledge/notes/*path` `{ body; frontmatter?; etag | null }` → `{ etag; path }`; `412
+- **H** `PUT /api/knowledge/notes/*path` `{ body; frontmatter?; etag | null }` → `{ etag; path; versioned; historyUpdated }` (`versioned: false`: the note is Git-ignored and untracked, saved without history; `historyUpdated: false`: the note is saved but the git commit failed for another reason, logged, and the next "Outside changes" commit catches up); `412
   precondition_failed` with `details.etag` on a stale etag; `etag: null` creates and refuses an existing note (`409
   exists`); missing folders are created. Atomic write, then a git commit (author `You`); rapid edits of one note by one
   author within 60 s amend Score's own last commit when it is still `HEAD`. Before any save, move, delete or restore Score
