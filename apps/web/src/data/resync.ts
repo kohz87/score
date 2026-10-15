@@ -328,6 +328,9 @@ export function createStreamQueryRegistry(
             releaseObserver?.()
             releaseObserver = undefined
             flush()
+            // Dropping a snapshot in flight, or the events buffered behind it, loses updates for good:
+            // the cache stays untrusted until a snapshot succeeds.
+            if ((fetching || buffer.length) && cached()) fenced = true
             controller?.abort()
             generation++
             fetching = false
