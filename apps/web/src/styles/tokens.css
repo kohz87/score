@@ -1,5 +1,6 @@
 /* Design tokens: docs/design/html/. The agent palette is neutral and reusable. */
-:root {
+:root,
+[data-pack='score'] {
   --profile-dashed: #b9bdc6;
   --profile-add-ink: #3a3d45;
   --ground: #eceef2;
@@ -106,13 +107,17 @@
   --on-dark: #fff; /* text and rings on ink, coloured and scrimmed fills */
   --shadow-rgb: 18 19 26; /* the tint of drop shadows and scrims */
   --amber: #e0a000;
+  --h1-size: 58px;
+  --body-size: 15px;
+  --rail-width: 248px; /* side navigation layout */
   --font-heading: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif;
   --font-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
   --font-code: 'JetBrains Mono', ui-monospace, monospace;
 }
 
 /* Dark theme: Settings › Look. "System" leaves data-theme unset and follows the OS. */
-:root[data-theme='dark'] {
+:root[data-theme='dark'],
+[data-pack='score'][data-theme='dark'] {
   color-scheme: dark;
   --profile-dashed: #4d5260;
   --profile-add-ink: #c9ccd4;
@@ -226,7 +231,7 @@ body {
   background: var(--ground);
   color: var(--ink);
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: var(--body-size);
   line-height: 1.5;
 }
 button,
@@ -245,13 +250,13 @@ h3 {
 h1 {
   margin: 0;
   font-weight: 600;
-  font-size: 58px;
+  font-size: var(--h1-size);
   letter-spacing: -0.035em;
   line-height: 0.98;
 }
 @media (width < 1024px) {
   h1 {
-    font-size: clamp(30px, 6.4vw, 58px);
+    font-size: clamp(30px, 6.4vw, var(--h1-size));
   }
 }
 code,

@@ -1,0 +1,100 @@
+/* Dense: neutral greys, Inter, 8px corners and tighter spacing for big screens. Tokens only (PLAN 8.3); every colour pair is checked by src/styles/packs.contrast.test.ts. */
+[data-pack='dense'] {
+  --ground: #e9eaec;
+  --card: #ffffff;
+  --ink: #16181d;
+  --ink-muted: #565a63;
+  --muted: #5a5e67;
+  --hairline: #d9dbdf;
+  --subtle: #f2f3f4;
+  --subtle-2: #edeef0;
+  --tasks-ground: #dfe0e3;
+  --tasks-border: #d9dbdf;
+  --tasks-done: #f5f5f6;
+  --tasks-note: #2a2d33;
+  --chat-text: #2a2d33;
+  --chat-secondary: #3a3d44;
+  --chat-soft: #f5f5f6;
+  --chat-card-border: #d9dbdf;
+  --flow-canvas: #f5f5f6;
+  --flow-canvas-dot: #d2d4d8;
+  --flow-log-border: #ebecee;
+  --track: #e3e4e7;
+  --track-2: #d6d8dc;
+  --line-strong: #8f939b;
+  --profile-dashed: #b5b8be;
+  --profile-add-ink: #3a3d44;
+  --panel-ink: #16181d;
+  --flow-edge: #80848c;
+  --radius-xs: 3px;
+  --radius-s: 4px;
+  --radius-m: 6px;
+  --radius-l: 8px;
+  --radius-card: 8px;
+  --font-heading: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --density: 0.75;
+  --h1-size: 40px;
+  --body-size: 14px;
+  --rail-width: 232px;
+}
+[data-pack='dense'][data-theme='dark'] {
+  color-scheme: dark;
+  --ground: #101113;
+  --card: #17181b;
+  --ink: #ecedef;
+  --ink-muted: #a8abb2;
+  --muted: #9ea1a9;
+  --hairline: #2a2c30;
+  --subtle: #1e1f23;
+  --subtle-2: #232428;
+  --tasks-ground: #131416;
+  --tasks-border: #2a2c30;
+  --tasks-done: #1b1c1f;
+  --tasks-note: #d5d7db;
+  --chat-text: #d5d7db;
+  --chat-secondary: #bfc1c6;
+  --chat-soft: #1b1c1f;
+  --chat-card-border: #2a2c30;
+  --flow-canvas: #131416;
+  --flow-canvas-dot: #2a2c30;
+  --flow-log-border: #232428;
+  --track: #2a2c30;
+  --track-2: #34363b;
+  --line-strong: #787b83;
+  --profile-dashed: #4a4c52;
+  --profile-add-ink: #c8cace;
+  --panel-ink: #25272c;
+  --flow-edge: #787b83;
+}
+@media (prefers-color-scheme: dark) {
+  [data-pack='dense']:not([data-theme='light']):not([data-theme='dark']) {
+    color-scheme: dark;
+    --ground: #101113;
+    --card: #17181b;
+    --ink: #ecedef;
+    --ink-muted: #a8abb2;
+    --muted: #9ea1a9;
+    --hairline: #2a2c30;
+    --subtle: #1e1f23;
+    --subtle-2: #232428;
+    --tasks-ground: #131416;
+    --tasks-border: #2a2c30;
+    --tasks-done: #1b1c1f;
+    --tasks-note: #d5d7db;
+    --chat-text: #d5d7db;
+    --chat-secondary: #bfc1c6;
+    --chat-soft: #1b1c1f;
+    --chat-card-border: #2a2c30;
+    --flow-canvas: #131416;
+    --flow-canvas-dot: #2a2c30;
+    --flow-log-border: #232428;
+    --track: #2a2c30;
+    --track-2: #34363b;
+    --line-strong: #787b83;
+    --profile-dashed: #4a4c52;
+    --profile-add-ink: #c8cace;
+    --panel-ink: #25272c;
+    --flow-edge: #787b83;
+  }
+}

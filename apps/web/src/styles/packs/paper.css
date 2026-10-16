@@ -1,0 +1,96 @@
+/* Paper: warm off-white, serif headings, soft 12px corners and lower-contrast lines. Tokens only (PLAN 8.3); every colour pair is checked by src/styles/packs.contrast.test.ts. */
+[data-pack='paper'] {
+  --ground: #f3eee4;
+  --card: #fffdf8;
+  --ink: #2b2620;
+  --ink-muted: #655d52;
+  --muted: #675f54;
+  --hairline: #e6decf;
+  --subtle: #f7f2e8;
+  --subtle-2: #f1ebde;
+  --tasks-ground: #ece5d7;
+  --tasks-border: #e6decf;
+  --tasks-done: #faf6ec;
+  --tasks-note: #3a332b;
+  --chat-text: #3a332b;
+  --chat-secondary: #4a4237;
+  --chat-soft: #faf6ec;
+  --chat-card-border: #e6decf;
+  --flow-canvas: #faf6ec;
+  --flow-canvas-dot: #ddd3c0;
+  --flow-log-border: #efe8da;
+  --track: #eae3d5;
+  --track-2: #dfd6c5;
+  --line-strong: #9a9080;
+  --profile-dashed: #bfb5a2;
+  --profile-add-ink: #4a4237;
+  --panel-ink: #2b2620;
+  --flow-edge: #8a8070;
+  --radius-xs: 4px;
+  --radius-s: 6px;
+  --radius-m: 8px;
+  --radius-l: 10px;
+  --radius-card: 12px;
+  --font-heading: 'Source Serif 4', Georgia, serif;
+  --h1-size: 48px;
+}
+[data-pack='paper'][data-theme='dark'] {
+  color-scheme: dark;
+  --ground: #17140f;
+  --card: #1f1b15;
+  --ink: #f0e9db;
+  --ink-muted: #b3aa9a;
+  --muted: #a9a090;
+  --hairline: #332d24;
+  --subtle: #27231b;
+  --subtle-2: #2d281f;
+  --tasks-ground: #1b1812;
+  --tasks-border: #332d24;
+  --tasks-done: #231f18;
+  --tasks-note: #e2dacb;
+  --chat-text: #e2dacb;
+  --chat-secondary: #cfc6b5;
+  --chat-soft: #231f18;
+  --chat-card-border: #332d24;
+  --flow-canvas: #1b1812;
+  --flow-canvas-dot: #332d24;
+  --flow-log-border: #2a251d;
+  --track: #2f2a21;
+  --track-2: #3b352a;
+  --line-strong: #8a8170;
+  --profile-dashed: #51493c;
+  --profile-add-ink: #d8cfbe;
+  --panel-ink: #2b261e;
+  --flow-edge: #857c6b;
+}
+@media (prefers-color-scheme: dark) {
+  [data-pack='paper']:not([data-theme='light']):not([data-theme='dark']) {
+    color-scheme: dark;
+    --ground: #17140f;
+    --card: #1f1b15;
+    --ink: #f0e9db;
+    --ink-muted: #b3aa9a;
+    --muted: #a9a090;
+    --hairline: #332d24;
+    --subtle: #27231b;
+    --subtle-2: #2d281f;
+    --tasks-ground: #1b1812;
+    --tasks-border: #332d24;
+    --tasks-done: #231f18;
+    --tasks-note: #e2dacb;
+    --chat-text: #e2dacb;
+    --chat-secondary: #cfc6b5;
+    --chat-soft: #231f18;
+    --chat-card-border: #332d24;
+    --flow-canvas: #1b1812;
+    --flow-canvas-dot: #332d24;
+    --flow-log-border: #2a251d;
+    --track: #2f2a21;
+    --track-2: #3b352a;
+    --line-strong: #8a8170;
+    --profile-dashed: #51493c;
+    --profile-add-ink: #d8cfbe;
+    --panel-ink: #2b261e;
+    --flow-edge: #857c6b;
+  }
+}
