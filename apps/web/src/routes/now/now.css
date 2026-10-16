@@ -138,6 +138,10 @@
 .now-lane-role {
   font-size: 13px;
   color: var(--ink-muted);
+  /* Lanes have a fixed height: a long description stays on one line (full text on hover). */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .now-plot-col {
   position: relative;
