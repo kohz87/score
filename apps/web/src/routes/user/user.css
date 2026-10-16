@@ -335,3 +335,9 @@
 .user-needs:empty {
   display: none;
 }
+
+@media (width < 600px) {
+  .user-run-title {
+    flex-basis: 100%;
+  }
+}

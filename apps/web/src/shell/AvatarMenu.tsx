@@ -42,7 +42,7 @@ export function AvatarMenu({
       <button
         type="button"
         className="avatar"
-        aria-label="Account menu"
+        aria-label="Your account"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen(!open)}

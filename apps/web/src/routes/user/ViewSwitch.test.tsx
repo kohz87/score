@@ -17,7 +17,7 @@ function mount(view: 'admin' | 'user', path: string) {
     </MemoryRouter>,
   )
 }
-const open = () => fireEvent.click(screen.getByRole('button', { name: 'Account menu' }))
+const open = () => fireEvent.click(screen.getByRole('button', { name: 'Your account' }))
 
 beforeEach(() => window.localStorage.clear())
 afterEach(() => {
