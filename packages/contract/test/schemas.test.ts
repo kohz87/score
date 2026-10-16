@@ -1462,6 +1462,16 @@ const cases = [
     },
   ],
   ['CodingQuotaResponseSchema', { quota: null }, { quota: { runtime: 'codex' } }],
+  [
+    'CodingModelOptionSchema',
+    { id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol', description: 'Fast.', efforts: ['low', 'high'] },
+    { id: '', name: 'No id' },
+  ],
+  [
+    'CodingModelsResponseSchema',
+    { models: [{ id: 'opus', name: 'Opus' }], source: 'aliases' },
+    { models: [], source: 'file' },
+  ],
   ['CodingRuntimesResponseSchema', { items: [] }, { items: [{ runtime: 'nope' }] }],
   [
     'CodingAgentSchema',

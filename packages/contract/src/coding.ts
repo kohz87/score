@@ -178,3 +178,20 @@ export type CodingQuota = z.infer<typeof CodingQuotaSchema>
 /** `GET /api/coding-agents/:id/quota` and `GET /api/coding-agents/runtimes/:runtime/quota`: null until a reading exists. */
 export const CodingQuotaResponseSchema = z.object({ quota: CodingQuotaSchema.nullable() })
 export type CodingQuotaResponse = z.infer<typeof CodingQuotaResponseSchema>
+
+/**
+ * The models a coding CLI offers (PLAN 8.5, decision 86). `source`: `cli` = the CLI's own listing command, `cache` = the
+ * model cache the CLI keeps, `aliases` = a fixed list of documented names, `none` = nothing readable (free text only).
+ */
+export const CodingModelOptionSchema = z.object({
+  id: z.string().min(1).max(200),
+  name: z.string().min(1).max(200),
+  description: z.string().max(500).optional(),
+  efforts: z.array(z.string().min(1).max(40)).max(12).optional(),
+})
+export const CodingModelsResponseSchema = z.object({
+  models: z.array(CodingModelOptionSchema).max(200),
+  source: z.enum(['cli', 'cache', 'aliases', 'none']),
+})
+export type CodingModelOption = z.infer<typeof CodingModelOptionSchema>
+export type CodingModelsResponse = z.infer<typeof CodingModelsResponseSchema>

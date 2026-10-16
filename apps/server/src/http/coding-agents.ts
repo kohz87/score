@@ -9,6 +9,7 @@ import {
   AgentSummarySchema,
   CodingAgentsResponseSchema,
   CodingBackendSchema,
+  CodingModelsResponseSchema,
   CodingRuntimeSchema,
   CodingRuntimesResponseSchema,
   CodingQuotaResponseSchema,
@@ -109,6 +110,12 @@ export function registerCodingAgentRoutes(
   app.get('/api/coding-agents/runtimes/:runtime/usage', async (request) => {
     const { runtime } = z.object({ runtime: CodingRuntimeSchema }).parse(request.params)
     return CodingUsageSchema.parse(await coding.usage(runtime))
+  })
+
+  app.get('/api/coding-agents/runtimes/:runtime/models', async (request) => {
+    const { runtime } = z.object({ runtime: CodingRuntimeSchema }).parse(request.params)
+    const { fresh } = z.object({ fresh: z.enum(['1']).optional() }).parse(request.query)
+    return CodingModelsResponseSchema.parse(await coding.models(runtime, fresh === '1'))
   })
 
   app.get('/api/coding-agents/runtimes/:runtime/quota', async (request) => {

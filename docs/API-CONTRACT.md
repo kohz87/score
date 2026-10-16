@@ -1033,6 +1033,13 @@ room's CLI session (`skipped: no_session`).
   `source: 'log'`. Antigravity: the `/usage` reading above (`group` set per model group, `remaining` turned into `used`), `source: 'usage'`, only for `…/:id/quota` and `…/runtimes/antigravity/quota`
   (same errors as `/usage`). Claude Code and Codex are stored (table `coding_quota`, latest per agent) and never read from the CLI between turns; `null` until a turn has reported one.
   The `runtimes/:runtime/quota` form answers with the most recent reading of any agent of that runtime. Unknown agent: `404`.
+- `GET /api/coding-agents/runtimes/:runtime/models` → `CodingModelsResponse` `{ models: { id; name; description?: string; efforts?: string[] }[]; source: 'cli'|'cache'|'aliases'|'none' }`
+  (PLAN 8.5, decision 86). The model list the add-agent form and the agent's settings offer; `id` is what `--model` takes. Antigravity: `agy models` (lines `id<TAB>name`, run with no prompt,
+  30 s timeout, strict line pattern; lines that don't match are dropped), `source: 'cli'`. Codex: `$CODEX_HOME/models_cache.json` (default `~/.codex`; opened with `O_NOFOLLOW`, regular file owned by the
+  user, at most 2 MB), only `models[].slug|display_name|description|visibility|supported_reasoning_levels` are read (entries whose `visibility` is given and isn't `list` are dropped; the file's account identity
+  and every other field are never read, kept or logged), `source: 'cache'`. Claude Code has no listing command (a bare word after `claude` runs a prompt), so the documented aliases `fable`, `opus`,
+  `sonnet` come from a constant, `source: 'aliases'`. Ids not matching `[A-Za-z0-9][A-Za-z0-9._:/@+-]*` are dropped. Cached on the server for 5 minutes per runtime, except that `?fresh=1`
+  (sent when the form opens) bypasses the cache. A CLI that is missing or untested, a file that can't be read or a command that fails gives `{ models: [], source: 'none' }` (never an error): the web falls back to a free-text field.
 - **H** `DELETE /api/coding-agents/:id` → `204` (`409 agent_busy` while any of its runs is unresolved: running or queued, ended but not proven ended, a launch that isn’t settled, or a held group). Past messages stay; its runs leave Reports.
 - Turns: a mention routes through the normal room queue. One turn per coding agent at a time (others show as `queued`); at most 30 minutes per
   turn; Stop = SIGINT, SIGTERM after 5 s, SIGKILL after 5 s more; Stop answers `stopped` only once the process group is proven gone within about a second, otherwise `unconfirmed` (the stop goes on in the background). An untested/missing CLI or an unavailable workspace fails the reply with a

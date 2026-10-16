@@ -7,6 +7,7 @@ import {
 } from '@score/contract'
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -2213,4 +2214,69 @@ test('8.1: Antigravity’s quota is its /usage reading as meters per model group
   })
   const byRuntime = await request('GET', '/api/coding-agents/runtimes/antigravity/quota')
   expect(byRuntime.json().quota.windows).toEqual(quota.windows)
+})
+
+// PLAN 8.5 (decision 86): the model picker's lists.
+test('8.5: Antigravity models come from `agy models` (no prompt), are cached, and fresh=1 asks again', async () => {
+  const calls = () =>
+    readFileSync(log, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as { args: string[] })
+      .filter((entry) => entry.args[0] === 'models')
+  const first = await request('GET', '/api/coding-agents/runtimes/antigravity/models')
+  expect(first.statusCode, first.body).toBe(200)
+  const body = first.json()
+  expect(body.source).toBe('cli')
+  expect(body.models).toHaveLength(13)
+  expect(body.models[1]).toEqual({ id: 'gemini-4-argon-high', name: 'Gemini 4 Argon (High)' })
+  expect(calls()).toHaveLength(1)
+  expect(calls()[0]!.args).toEqual(['models'])
+  await request('GET', '/api/coding-agents/runtimes/antigravity/models')
+  expect(calls()).toHaveLength(1)
+  await request('GET', '/api/coding-agents/runtimes/antigravity/models?fresh=1')
+  expect(calls()).toHaveLength(2)
+  expect(
+    (await request('GET', '/api/coding-agents/runtimes/antigravity/models?fresh=yes')).statusCode,
+  ).toBe(400)
+})
+
+test('8.5: Claude Code gets the aliases without running anything; Codex reads only its model cache', async () => {
+  const alias = await request('GET', '/api/coding-agents/runtimes/claude-code/models')
+  expect(alias.json()).toMatchObject({ source: 'aliases' })
+  expect(alias.json().models.map((model: { id: string }) => model.id)).toEqual([
+    'fable',
+    'opus',
+    'sonnet',
+  ])
+  const codexHome = join(dir, 'codex-home')
+  mkdirSync(codexHome)
+  setEnv('CODEX_HOME', codexHome)
+  expect((await request('GET', '/api/coding-agents/runtimes/codex/models')).json()).toEqual({
+    models: [],
+    source: 'none',
+  })
+  copyFileSync(
+    fileURLToPath(new URL('../fixtures/coding/codex-models-cache.json', import.meta.url)),
+    join(codexHome, 'models_cache.json'),
+  )
+  writeFileSync(join(codexHome, 'auth.json'), '{"tokens":"SECRET-DO-NOT-READ"}')
+  const response = await request('GET', '/api/coding-agents/runtimes/codex/models?fresh=1')
+  expect(response.json().source).toBe('cache')
+  expect(response.json().models.map((model: { id: string }) => model.id)).toEqual([
+    'gpt-6.1-sol',
+    'gpt-6.1-mini',
+  ])
+  expect(response.body).not.toMatch(/example\.invalid|acct-FAKE|SECRET-DO-NOT-READ|identity/)
+  // Only version probes ran (they exit before the fake CLI logs): no listing command, no prompt.
+  expect(existsSync(log)).toBe(false)
+})
+
+test('8.5: an unknown runtime is refused and a failing CLI gives the free-text answer, not an error', async () => {
+  expect((await request('GET', '/api/coding-agents/runtimes/nope/models')).statusCode).toBe(400)
+  // An unreadable list is `none`, and is not remembered.
+  setEnv('CODEX_HOME', join(dir, 'does-not-exist'))
+  const none = await request('GET', '/api/coding-agents/runtimes/codex/models')
+  expect(none.statusCode).toBe(200)
+  expect(none.json()).toEqual({ models: [], source: 'none' })
 })

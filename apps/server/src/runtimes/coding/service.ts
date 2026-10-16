@@ -6,6 +6,7 @@ import type {
   WorkerReadiness,
   AgentDetail,
   CodingAgent,
+  CodingModelsResponse,
   CodingQuota,
   CodingQuotaWindow,
   CodingUsage,
@@ -32,6 +33,7 @@ import {
 } from './policy.ts'
 import { driverFor } from './drivers.ts'
 import { quotaFromUsage, readCodexQuota } from './quota.ts'
+import { aliasModels, parseAntigravityModels, readCodexModels } from './models.ts'
 import { CappedText } from './note.ts'
 import {
   bootId,
@@ -418,6 +420,49 @@ export class CodingRuntime {
       text: redactBounded(reading.text, 8000),
     }
     this.usageCache.set(runtime, { at: Date.now(), value })
+    return value
+  }
+
+  private readonly modelsCache = new Map<string, { at: number; value: CodingModelsResponse }>()
+
+  /**
+   * The models the form offers for a CLI (PLAN 8.5, decision 86), cached for 5 minutes unless `fresh`. Never an error:
+   * anything unreadable is `none`, and the form falls back to a free-text field. Never sends a prompt: Antigravity's
+   * `agy models` is a listing command, Codex's list is a file, Claude Code's is a constant.
+   */
+  async models(runtime: RuntimeId, fresh = false): Promise<CodingModelsResponse> {
+    const cached = this.modelsCache.get(runtime)
+    if (!fresh && cached && Date.now() - cached.at < 300_000) return cached.value
+    let value: CodingModelsResponse = { models: [], source: 'none' }
+    try {
+      const driver = driverFor(runtime)
+      const cli = await this.deps.locator.detect(driver)
+      if (cli.state !== 'not_installed' && cli.state !== 'not_supported') {
+        const aliases = aliasModels(runtime)
+        if (aliases) value = aliases
+        else if (runtime === 'codex')
+          value = readCodexModels(this.deps.locator.childEnv().CODEX_HOME)
+        else if (runtime === 'antigravity') {
+          const { file, args } = this.deps.locator.command(driver)
+          const cwd = join(this.deps.home, 'coding')
+          mkdirSync(cwd, { recursive: true, mode: 0o700 })
+          const output = await new Promise<string>((done, fail) =>
+            execFile(
+              file,
+              [...args, 'models'],
+              { cwd, env: this.deps.locator.childEnv(), timeout: 30_000, maxBuffer: 256 * 1024 },
+              (error, stdout) => (error ? fail(error) : done(stdout)),
+            ),
+          )
+          const models = parseAntigravityModels(output)
+          if (models.length) value = { models, source: 'cli' }
+        }
+      }
+    } catch (error) {
+      this.deps.onError?.(error)
+    }
+    if (value.source === 'none') this.modelsCache.delete(runtime)
+    else this.modelsCache.set(runtime, { at: Date.now(), value })
     return value
   }
 
