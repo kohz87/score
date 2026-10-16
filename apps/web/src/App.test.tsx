@@ -98,7 +98,7 @@ test.each(routes)('%s renders %s inside the shell with the active nav', async (p
   const main = screen.getByRole('main')
   expect(within(main).getByRole('heading', { level: 1, name: title })).toBeDefined()
   expect(screen.getByRole('banner')).toBeDefined()
-  expect(screen.getByRole('img', { name: 'You' }).textContent).toBe('Y')
+  expect(screen.getByRole('button', { name: 'Account menu' }).textContent).toBe('Y')
   const nav = within(screen.getByRole('navigation', { name: 'Main' }))
   expect(nav.getAllByRole('link')).toHaveLength(7)
   for (const destination of destinations) {

@@ -274,7 +274,17 @@ function RoomStatus({ working, agents }: { working: string[]; agents: AgentSumma
   )
 }
 
-export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSummary[] }) {
+export function ChatThread({
+  roomId,
+  agents,
+  variant = 'admin',
+}: {
+  roomId: string
+  agents: AgentSummary[]
+  /** The user view (PLAN 8.4) shows the same conversation without the admin links and controls. */
+  variant?: 'admin' | 'user'
+}) {
+  const userView = variant === 'user'
   const definition = useMemo(() => roomQuery(roomId), [roomId])
   const { data: room, status, error } = useStreamQuery(definition)
   const context = useContext(StreamContext)!
@@ -336,7 +346,7 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
   const owned = (orchestration ?? workflowRun)?.ownership
   const roomIsOwned = owned !== undefined && owned !== 'released'
   return (
-    <section className="chat-thread" aria-label="Room">
+    <section className={`chat-thread${userView ? ' chat-thread--user' : ''}`} aria-label="Room">
       <header className="chat-thread-header">
         <div>
           {room && renaming ? (
@@ -348,7 +358,7 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
             />
           ) : (
             <h1>
-              {room?.kind === 'room' ? (
+              {room?.kind === 'room' && !userView ? (
                 <button
                   type="button"
                   className="chat-title-button"
@@ -359,7 +369,11 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
                   {roomLabel(room)}
                 </button>
               ) : room ? (
-                roomLabel(room)
+                userView && room.kind === 'direct' ? (
+                  (lead?.name ?? roomLabel(room))
+                ) : (
+                  roomLabel(room)
+                )
               ) : (
                 'Chat'
               )}
@@ -368,9 +382,11 @@ export function ChatThread({ roomId, agents }: { roomId: string; agents: AgentSu
           {room?.leadAgentId && <p>Unaddressed messages go to {lead?.name ?? room.leadAgentId}</p>}
           {room && <RoomStatus working={room.activeAgents} agents={agents} />}
         </div>
-        <Link className="chat-score-link" to="/now">
-          See it on the Score
-        </Link>
+        {!userView && (
+          <Link className="chat-score-link" to="/now">
+            See it on the Score
+          </Link>
+        )}
       </header>
       {status === 'pending' && !room && (
         <p className="chat-state" role="status">

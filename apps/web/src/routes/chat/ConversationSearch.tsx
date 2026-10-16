@@ -6,7 +6,16 @@ import { messageHref, useMessageSearch } from '../../data/message-search.ts'
 import { roomLabel } from './room-label.ts'
 
 /** Searches the text of every message (PLAN 5.26); a hit opens its room scrolled to that message. */
-export function ConversationSearch({ rooms, agents }: { rooms: Room[]; agents: AgentSummary[] }) {
+export function ConversationSearch({
+  rooms,
+  agents,
+  hrefFor = messageHref,
+}: {
+  rooms: Room[]
+  agents: AgentSummary[]
+  /** Where a hit opens: the admin Chat by default. */
+  hrefFor?: (roomId: string, messageId: string) => string
+}) {
   const [text, setText] = useState('')
   const id = useId()
   const search = useMessageSearch(text)
@@ -38,7 +47,7 @@ export function ConversationSearch({ rooms, agents }: { rooms: Room[]; agents: A
           <ul aria-label="Search results">
             {search.data?.map((hit) => (
               <li key={hit.messageId}>
-                <Link to={messageHref(hit.roomId, hit.messageId)} onClick={() => setText('')}>
+                <Link to={hrefFor(hit.roomId, hit.messageId)} onClick={() => setText('')}>
                   <span className="chat-hit-where">
                     {where(hit.roomId, hit.roomName)} ·{' '}
                     <time dateTime={hit.createdAt}>

@@ -89,11 +89,14 @@ export function Composer({
   roomName,
   agents,
   leadAgentId = null,
+  onSent,
 }: {
   roomId: string
   roomName: string
   agents: AgentSummary[]
   leadAgentId?: string | null
+  /** The user view's first message opens its room once it is sent (PLAN 8.4). */
+  onSent?: () => void
 }) {
   const queryClient = useQueryClient()
   const textarea = useRef<HTMLTextAreaElement>(null)
@@ -462,6 +465,7 @@ export function Composer({
       update((data) => withMessage(data, result.message, temporary))
       sendKey.current = null
       void saveSentToKnowledge(sent)
+      if (!editing) onSent?.()
       if (!mounted.current) {
         // The composer moved to another conversation mid-send: only drop the stored draft if it is still what we sent.
         if (loadDraft(roomId).trim() === body) saveDraft(roomId, '')
