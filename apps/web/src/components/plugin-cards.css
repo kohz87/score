@@ -5,16 +5,16 @@
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .plugins-card {
   flex: 1 1 240px;
   border-radius: var(--radius-20);
   border: 1px solid var(--tasks-border);
-  padding: 16px 18px;
+  padding: var(--space-4) 18px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .plugins-card-text {
   flex: 1;

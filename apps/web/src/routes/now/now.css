@@ -2,7 +2,7 @@
 .now-page {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-5);
 }
 .now-sr-only {
   position: absolute;
@@ -19,8 +19,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 20px;
-  padding: 6px 4px 0;
+  gap: var(--space-5);
+  padding: 6px var(--space-1) 0;
 }
 .now-title h1 {
   flex: 1 1 560px;
@@ -34,11 +34,11 @@
 }
 .now-views {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-pill);
-  padding: 4px;
+  padding: var(--space-1);
 }
 .now-view {
   height: 40px;
@@ -58,7 +58,7 @@
 }
 .now-pause {
   height: 48px;
-  padding: 0 20px;
+  padding: 0 var(--space-5);
   border-radius: var(--radius-pill);
   border: 1.5px solid var(--ink);
   background: transparent;
@@ -67,7 +67,7 @@
   font-size: 14px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   cursor: pointer;
 }
 .now-pause:disabled {
@@ -89,12 +89,12 @@
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
-  padding: 22px 24px 26px;
+  padding: 22px var(--space-6) 26px;
 }
 .now-score-scroll {
   overflow-x: auto;
   /* The now label sits above the plot; keep it out of the scroll clip. */
-  padding-top: 4px;
+  padding-top: var(--space-1);
 }
 .now-score-grid {
   min-width: 980px;
@@ -108,7 +108,7 @@
   height: 76px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .now-lane-name {
   display: flex;
@@ -121,7 +121,7 @@
   font-size: 16px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .now-lane-link {
   color: inherit;
@@ -133,7 +133,7 @@
 .now-lane-dot {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 .now-lane-role {
   font-size: 13px;
@@ -166,8 +166,8 @@
   border-radius: var(--radius-16);
   background: repeating-linear-gradient(
     135deg,
-    rgba(18, 19, 26, 0.045) 0,
-    rgba(18, 19, 26, 0.045) 1px,
+    rgb(var(--shadow-rgb) / 4.5%) 0,
+    rgb(var(--shadow-rgb) / 4.5%) 1px,
     transparent 1px,
     transparent 9px
   );
@@ -196,7 +196,7 @@
   stroke: var(--agent-jade);
 }
 .now-connector--review {
-  stroke: #e0a000;
+  stroke: var(--amber);
 }
 .now-connector--sent_back {
   stroke: var(--line-strong);
@@ -233,7 +233,7 @@
   padding: 0 14px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-family: inherit;
   font-weight: 600;
   font-size: 13px;
@@ -274,18 +274,18 @@
   list-style: none;
   background: var(--card);
   border: 1px solid var(--hairline);
-  border-radius: 18px;
-  box-shadow: 0 10px 30px rgba(18, 19, 26, 0.14);
+  border-radius: var(--radius-18);
+  box-shadow: 0 10px 30px rgb(var(--shadow-rgb) / 14%);
 }
 .now-group-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
   border: 0;
   background: none;
-  border-radius: 12px;
-  padding: 8px 10px;
+  border-radius: var(--radius-12);
+  padding: var(--space-2) 10px;
   font: inherit;
   font-size: 13px;
   text-align: left;
@@ -316,7 +316,7 @@
   top: 63px;
   height: 8px;
   min-width: 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--c) 45%, var(--card));
   z-index: 1;
 }
@@ -340,7 +340,7 @@
   width: 7px;
   height: 7px;
   flex: 0 0 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: currentColor;
 }
 .now-block--planned {
@@ -388,19 +388,19 @@
   flex-wrap: wrap;
   gap: 18px;
   margin-top: 18px;
-  padding-left: 4px;
+  padding-left: var(--space-1);
   font-size: 13px;
   color: var(--ink-muted);
 }
 .now-legend > span {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .now-legend-swatch {
   width: 22px;
   height: 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 .now-legend-swatch--done {
   background: var(--track-2);
@@ -416,7 +416,7 @@
 .now-cards {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: var(--space-5);
   align-items: stretch;
 }
 .now-card {
@@ -424,10 +424,10 @@
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
-  padding: 24px 26px;
+  padding: var(--space-6) 26px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 .now-card h2 {
   margin: 0;
@@ -438,7 +438,7 @@
 .now-card-head {
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .now-card-head a {
   font-size: 14px;
@@ -451,12 +451,12 @@
 }
 .now-thread {
   flex: 1.5 1 440px;
-  gap: 20px;
+  gap: var(--space-5);
 }
 .now-messages {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-5);
 }
 .now-message {
   display: flex;
@@ -465,7 +465,7 @@
 .now-message-body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
 }
 .now-message-body p {
@@ -505,7 +505,7 @@
   width: 34px;
   height: 34px;
   flex: none;
-  border-radius: 11px;
+  border-radius: var(--radius-11);
   background: var(--ink);
   color: var(--card);
   display: flex;
@@ -536,7 +536,7 @@
 .now-asking-tile {
   width: 36px;
   height: 36px;
-  border-radius: 12px;
+  border-radius: var(--radius-12);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -545,7 +545,7 @@
   font-size: 14px;
   background: var(--rules-panel);
   border-radius: var(--radius-14);
-  padding: 14px 16px;
+  padding: 14px var(--space-4);
   overflow-x: auto;
   white-space: nowrap;
 }
@@ -567,7 +567,7 @@
   color: var(--rules-muted);
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
 }
 .now-asking-notice:empty {
@@ -634,8 +634,8 @@
 .now-made-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 4px 2px;
+  gap: var(--space-3);
+  padding: var(--space-1) 2px;
   color: var(--ink-muted);
 }
 .now-made-file {
@@ -670,7 +670,7 @@
 .now-composer {
   display: flex;
   justify-content: center;
-  padding-top: 4px;
+  padding-top: var(--space-1);
 }
 .now-composer .chat-composer {
   max-width: 920px;
@@ -684,7 +684,7 @@
 .now-routines {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: var(--space-5);
 }
 .now-routines-agent {
   flex: 1 1 420px;
@@ -771,7 +771,7 @@
   height: 24px;
   padding: 0;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--ink-muted);
   cursor: pointer;
@@ -800,7 +800,7 @@
 }
 @media (width < 1024px) {
   .now-page {
-    gap: 16px;
+    gap: var(--space-4);
   }
   .now-title {
     padding: 0;
@@ -813,7 +813,7 @@
     flex: 1 1 100%;
     flex-wrap: nowrap;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--space-2);
     min-width: 0;
   }
   .now-views {
@@ -828,11 +828,11 @@
   }
   .now-pause {
     height: 46px;
-    padding: 0 16px;
+    padding: 0 var(--space-4);
     flex-shrink: 0;
   }
   .now-score {
-    padding: 16px 16px 20px;
+    padding: var(--space-4) var(--space-4) var(--space-5);
   }
   .now-score-grid {
     grid-template-columns: 150px minmax(0, 1fr);
@@ -848,14 +848,14 @@
   }
   .now-score {
     border-radius: var(--radius-20);
-    padding: 12px 12px 16px;
+    padding: var(--space-3) var(--space-3) var(--space-4);
   }
   .now-score-grid {
     grid-template-columns: 112px minmax(0, 1fr);
     min-width: 760px;
   }
   .now-lane-label {
-    gap: 8px;
+    gap: var(--space-2);
   }
   .now-lane-role {
     display: none;

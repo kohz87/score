@@ -20,7 +20,7 @@
 .orch-link {
   background: none;
   border: 0;
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   color: var(--ink);
   text-decoration: underline;
   cursor: pointer;
@@ -43,7 +43,7 @@
 .orch-room button.orch-link {
   border: 0;
   background: none;
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   border-radius: 0;
 }
 .orch-live button:focus-visible,
@@ -86,7 +86,7 @@ button.orch-primary,
 .orch-head {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: var(--space-4);
   justify-content: space-between;
   align-items: flex-start;
   background: var(--card);
@@ -110,7 +110,7 @@ button.orch-primary,
 .orch-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
 }
 .orch-head-actions {
@@ -125,7 +125,7 @@ button.orch-primary,
 }
 .orch-badge {
   border-radius: var(--radius-pill);
-  padding: 2px 12px;
+  padding: 2px var(--space-3);
   font-weight: 700;
   background: var(--subtle-2);
   border: 1px solid var(--hairline);
@@ -166,14 +166,14 @@ button.orch-primary,
 /* Decisions */
 .orch-needs {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   margin-bottom: 16px;
 }
 .orch-decision {
   background: var(--card);
   border: 2px solid var(--ink);
   border-radius: var(--radius-20);
-  padding: 16px 20px;
+  padding: var(--space-4) var(--space-5);
 }
 .orch-decision h3,
 .orch-lower h3,
@@ -191,7 +191,7 @@ button.orch-primary,
 }
 .orch-quote {
   margin: 0 0 8px;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   background: var(--subtle);
   border-left: 3px solid var(--ink);
   white-space: pre-wrap;
@@ -199,7 +199,7 @@ button.orch-primary,
 .orch-facts {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 4px 14px;
+  gap: var(--space-1) 14px;
   margin: 8px 0;
 }
 .orch-facts dt {
@@ -214,7 +214,7 @@ button.orch-primary,
 }
 .orch-pre {
   margin: 0;
-  padding: 8px 10px;
+  padding: var(--space-2) 10px;
   background: var(--subtle);
   border-radius: var(--radius-8);
   font-family: var(--font-code);
@@ -227,7 +227,7 @@ button.orch-primary,
 .orch-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   margin: 8px 0;
   border: 0;
   padding: 0;
@@ -244,7 +244,7 @@ button.orch-primary,
   font: inherit;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-14);
-  padding: 8px 10px;
+  padding: var(--space-2) 10px;
   background: var(--card);
   color: var(--ink);
   min-width: 0;
@@ -252,14 +252,14 @@ button.orch-primary,
 .orch-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .orch-row > .orch-field {
   flex: 1 1 160px;
 }
 .orch-check {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: flex-start;
   margin: 6px 0;
 }
@@ -270,7 +270,7 @@ button.orch-primary,
 .orch-ack {
   background: var(--subtle);
   border-radius: var(--radius-14);
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   font-weight: 600;
 }
 .orch-agent {
@@ -281,7 +281,7 @@ button.orch-primary,
 .orch-agent-pick {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 18px;
+  gap: var(--space-1) 18px;
 }
 
 /* Preflight */
@@ -290,7 +290,7 @@ button.orch-primary,
   padding: 0;
   margin: 6px 0;
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .orch-check-item {
   display: flex;
@@ -322,7 +322,7 @@ button.orch-primary,
   padding: 22px 26px;
 }
 .orch-dialog::backdrop {
-  background: rgb(18 19 26 / 55%);
+  background: rgb(var(--shadow-rgb) / 55%);
 }
 .orch-dialog-head {
   display: flex;
@@ -338,7 +338,7 @@ button.orch-primary,
 .orch-main {
   display: grid;
   grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
-  gap: 16px;
+  gap: var(--space-4);
   align-items: start;
 }
 @media (max-width: 900px) {
@@ -357,7 +357,7 @@ button.orch-primary,
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
-  padding: 14px 16px;
+  padding: 14px var(--space-4);
   min-width: 0;
 }
 .orch-selected,
@@ -368,7 +368,7 @@ button.orch-primary,
 .orch-lower {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
+  gap: var(--space-4);
 }
 .orch-canvas {
   overflow: auto;
@@ -426,9 +426,9 @@ button.orch-primary,
   position: absolute;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 0 10px;
-  border-radius: 18px;
+  border-radius: var(--radius-18);
   border: 1px solid var(--hairline);
   background: var(--card);
   color: var(--ink);
@@ -471,7 +471,7 @@ button.orch-primary,
   border-radius: var(--radius-pill);
   font-size: 11px;
   font-weight: 700;
-  padding: 1px 8px;
+  padding: 1px var(--space-2);
 }
 .orch-node__q {
   position: absolute;
@@ -585,11 +585,11 @@ button.orch-primary,
 .orch-state {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   font-size: 12.5px;
   font-weight: 600;
   border-radius: var(--radius-pill);
-  padding: 1px 8px;
+  padding: 1px var(--space-2);
   background: var(--subtle-2);
   border: 1px solid var(--hairline);
 }
@@ -614,7 +614,7 @@ button.orch-primary,
 .orch-log header {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: baseline;
   justify-content: space-between;
 }
@@ -635,7 +635,7 @@ button.orch-primary,
 .orch-log-scroll li {
   display: grid;
   grid-template-columns: 5.5em 4.8em 1fr;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 5px 0;
   border-top: 1px solid var(--flow-log-border);
   font-size: 13px;
@@ -679,7 +679,7 @@ button.orch-primary,
 }
 .orch-speeds {
   display: inline-flex;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 /* Cards */
@@ -699,7 +699,7 @@ button.orch-primary,
 .orch-step header {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
 }
 .orch-step-instruction {
@@ -727,12 +727,12 @@ button.orch-primary,
   z-index: 2;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: var(--space-2) var(--space-3);
   align-items: center;
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-20);
-  padding: 8px 14px;
+  padding: var(--space-2) 14px;
 }
 .orch-room-head .orch-controls {
   margin-left: auto;
@@ -750,14 +750,14 @@ button.orch-primary,
   content: '▾ ';
 }
 .orch-room-body {
-  padding: 12px 6px 0;
+  padding: var(--space-3) 6px 0;
 }
 .orch-fence-items {
   padding-left: 18px;
 }
 .orch-now {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 /* Workflow runs (PLAN 7.1b): local nodes are shapes (gate diamond, branch hexagon, join and end pills), edges carry
@@ -938,7 +938,7 @@ button.orch-primary,
   display: inline-block;
   margin-left: 6px;
   padding: 0 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--subtle);
   color: var(--muted);
   font-size: 0.72rem;
@@ -952,12 +952,12 @@ button.orch-primary,
   padding: 0;
   margin: 8px 0;
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .orch-workers li {
   background: var(--subtle);
   border-radius: var(--radius-14);
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
 }
 .orch-workers li p {
   margin: 4px 0 0;
@@ -970,7 +970,7 @@ button.orch-primary,
   top: -9px;
   left: 10px;
   padding: 0 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--subtle);
   border: 1px solid var(--hairline);
   color: var(--ink-muted);

@@ -2,7 +2,7 @@
 .kn-layout {
   display: grid;
   grid-template-columns: minmax(230px, 290px) minmax(0, 1fr);
-  gap: 16px;
+  gap: var(--space-4);
   align-items: start;
 }
 .kn-left,
@@ -10,7 +10,7 @@
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
-  padding: 20px;
+  padding: var(--space-5);
   min-width: 0;
 }
 .kn-left {
@@ -26,7 +26,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .kn-left h1,
 .kn-note h2,
@@ -96,7 +96,7 @@
 .kn-main button,
 .kn-dialog button {
   height: 32px;
-  padding: 0 12px;
+  padding: 0 var(--space-3);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-pill);
   background: var(--card);
@@ -171,7 +171,7 @@
   align-items: center;
   gap: 6px;
   min-height: 30px;
-  padding-right: 8px;
+  padding-right: var(--space-2);
   border-radius: var(--radius-8);
   cursor: pointer;
   font-size: 14px;
@@ -195,14 +195,14 @@
 }
 .kn-recent li,
 .kn-results li {
-  padding: 4px 0;
+  padding: var(--space-1) 0;
   font-size: 14px;
 }
 .kn-results a {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 8px 10px;
+  padding: var(--space-2) 10px;
   border-radius: var(--radius-14);
   color: var(--ink);
   text-decoration: none;
@@ -224,7 +224,7 @@
 .kn-note {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 290px);
-  gap: 20px;
+  gap: var(--space-5);
   align-items: start;
 }
 .kn-note-main {
@@ -253,7 +253,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .kn-banner.is-warn {
   background: var(--agent-saffron-tint);
@@ -277,7 +277,7 @@
 .kn-edit-area {
   border: 1px solid var(--hairline);
   border-radius: var(--radius-16);
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   min-height: 320px;
   background: var(--card);
 }
@@ -298,11 +298,11 @@
 .kn-side {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
 }
 .kn-panel {
-  padding: 14px 16px;
+  padding: 14px var(--space-4);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-16);
   background: var(--card);
@@ -339,7 +339,7 @@
   margin-top: 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .kn-version-body,
 .kn-diff {
@@ -363,7 +363,7 @@
   color: var(--agent-coral-text);
 }
 .kn-empty {
-  padding: 24px 4px;
+  padding: var(--space-6) var(--space-1);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -380,17 +380,17 @@
   z-index: 20;
   display: grid;
   place-items: center;
-  padding: 16px;
+  padding: var(--space-4);
   background: color-mix(in srgb, var(--ink) 35%, transparent);
 }
 .kn-dialog {
   width: min(480px, 100%);
-  padding: 24px 26px;
+  padding: var(--space-6) 26px;
   border-radius: var(--radius-card);
   background: var(--card);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .kn-dialog h2 {
   margin: 0;
@@ -400,7 +400,7 @@
 .kn-dialog form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .kn-dialog label {
   display: flex;
@@ -441,13 +441,13 @@
 @media (width < 1024px) {
   .kn-layout {
     grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
+    gap: var(--space-3);
   }
   .kn-notes-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: var(--space-2);
     height: 44px;
     border-radius: var(--radius-pill);
     border: 1px solid var(--hairline);
@@ -464,7 +464,7 @@
     border-radius: 0 var(--radius-card) var(--radius-card) 0;
   }
   .kn-main {
-    padding: 16px;
+    padding: var(--space-4);
   }
 }
 @media (width < 600px) {
@@ -532,8 +532,8 @@
 .cm-lp-code-inline {
   font-size: 0.88em;
   background: var(--subtle-2);
-  border-radius: 6px;
-  padding: 1px 4px;
+  border-radius: var(--radius-key);
+  padding: 1px var(--space-1);
 }
 .cm-lp-link,
 .cm-lp-wikilink {
@@ -639,13 +639,13 @@
   padding-right: 14px !important;
 }
 .cm-lp-fence-first {
-  border-top-left-radius: 16px;
-  border-top-right-radius: 16px;
+  border-top-left-radius: var(--radius-16);
+  border-top-right-radius: var(--radius-16);
   padding-top: 6px !important;
 }
 .cm-lp-fence-last {
-  border-bottom-left-radius: 16px;
-  border-bottom-right-radius: 16px;
+  border-bottom-left-radius: var(--radius-16);
+  border-bottom-right-radius: var(--radius-16);
   padding-bottom: 6px !important;
 }
 .cm-lp-lang {
@@ -673,7 +673,7 @@
 .cm-lp-table th,
 .cm-lp-table td {
   border-bottom: 1px solid var(--hairline);
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   text-align: left;
 }
 .cm-lp-table th {
@@ -690,8 +690,8 @@
   font-family: var(--font-code);
   font-size: 0.88em;
   background: var(--subtle-2);
-  border-radius: 6px;
-  padding: 1px 4px;
+  border-radius: var(--radius-key);
+  padding: 1px var(--space-1);
 }
 
 /* Files (PLAN 6.6): file manager, document page, upload dialogs */
@@ -700,7 +700,7 @@
   align-items: center;
   justify-content: center;
   height: 32px;
-  padding: 0 12px;
+  padding: 0 var(--space-3);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-pill);
   background: var(--card);
@@ -767,7 +767,7 @@
 .kn-doc {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
 }
 .kn-files h2,
@@ -820,7 +820,7 @@
   font-size: 14px;
 }
 .kn-table th {
-  padding: 9px 12px;
+  padding: 9px var(--space-3);
   text-align: left;
   font-size: 12px;
   font-weight: 600;
@@ -830,7 +830,7 @@
   white-space: nowrap;
 }
 .kn-table td {
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--hairline);
   vertical-align: middle;
   overflow-wrap: anywhere;
@@ -850,8 +850,8 @@
 }
 .kn-doc-props {
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px 16px;
-  padding: 12px 14px;
+  gap: 10px var(--space-4);
+  padding: var(--space-3) 14px;
   border-radius: var(--radius-16);
   background: var(--subtle);
 }
@@ -863,7 +863,7 @@
   margin: 0;
   max-height: 60vh;
   overflow: auto;
-  padding: 12px 14px;
+  padding: var(--space-3) 14px;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-16);
   background: var(--card);
@@ -899,7 +899,7 @@
 .kn-zip-list li {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   padding: 5px 10px;
   border-bottom: 1px solid var(--hairline);
 }
@@ -921,7 +921,7 @@
 .kn-choice {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   border: 0;
@@ -929,7 +929,7 @@
 .kn-dialog label.kn-radio {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .kn-actions--stack {
   flex-direction: column;
@@ -988,8 +988,8 @@
   z-index: 5;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 4px;
+  gap: var(--space-1);
+  padding: var(--space-1);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-16);
   background: var(--card);
@@ -1008,12 +1008,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 34px;
   height: 34px;
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-10);
   background: transparent;
   color: var(--ink);
   font-size: 13px;
@@ -1049,7 +1049,7 @@
 }
 .kn-tb-label {
   flex: none;
-  padding: 0 8px 0 6px;
+  padding: 0 var(--space-2) 0 6px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -1058,7 +1058,7 @@
 }
 .kn-tb-table {
   border-top: 1px solid var(--hairline);
-  padding-top: 4px;
+  padding-top: var(--space-1);
 }
 /* Wide screens show every table tool; phones scroll the strip. */
 @media (width >= 600px) {
@@ -1068,7 +1068,7 @@
   }
 }
 .kn-tb-panel {
-  padding: 8px;
+  padding: var(--space-2);
   border-top: 1px solid var(--hairline);
 }
 .kn-tb-choices {
@@ -1085,14 +1085,14 @@
 .kn-tb-code {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .kn-tb-inline,
 .kn-tb-link {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .kn-tb-link .kn-tb-choices {
   flex-basis: 100%;
@@ -1157,7 +1157,7 @@
 }
 .kn-tb-notice {
   margin: 0;
-  padding: 8px 10px;
+  padding: var(--space-2) 10px;
   border-radius: var(--radius-14);
   background: var(--agent-saffron-tint);
   color: var(--ink);
@@ -1181,7 +1181,7 @@
 .cm-lp-image {
   display: inline-flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   max-width: 100%;
   margin: 6px 0;
   vertical-align: top;
@@ -1251,7 +1251,7 @@
   overflow: auto;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-14);
-  padding: 4px 10px;
+  padding: var(--space-1) 10px;
 }
 .kn-version-body .kn-editor-host,
 .kn-version-body .kn-editor-host .cm-editor {
@@ -1276,7 +1276,7 @@
   height: auto;
   min-height: 38px;
   box-sizing: border-box;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   border: 0;
   border-radius: 0;
   background: var(--card);

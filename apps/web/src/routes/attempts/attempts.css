@@ -1,7 +1,7 @@
 .attempt-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
   max-width: 760px;
 }
 .attempt-back {
@@ -13,7 +13,7 @@
 }
 .attempt-card {
   background: var(--card);
-  border-radius: 28px;
+  border-radius: var(--radius-card);
   padding: 28px;
   display: flex;
   flex-direction: column;
@@ -36,9 +36,9 @@
 }
 .attempt-note {
   margin: 0;
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   border: 1.5px dashed var(--line-strong);
-  border-radius: 16px;
+  border-radius: var(--radius-16);
   font-size: 14px;
 }
 .attempt-note a {
@@ -62,8 +62,8 @@
 .attempt-row {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
   border-bottom: 1px solid var(--ground);
 }
 .attempt-row:last-child {
@@ -81,7 +81,7 @@
 .attempt-agent {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .attempt-muted {
   margin: 0;

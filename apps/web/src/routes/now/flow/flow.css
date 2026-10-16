@@ -2,14 +2,14 @@
 .flow-view {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-5);
 }
 .flow-heading {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 20px;
-  padding: 6px 4px 0;
+  gap: var(--space-5);
+  padding: 6px var(--space-1) 0;
 }
 .flow-heading__title {
   flex: 1 1 560px;
@@ -50,7 +50,7 @@
   font-size: 14px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .flow-status::before {
   content: '';
@@ -80,7 +80,7 @@
 }
 .flow-run-button {
   height: 48px;
-  padding: 0 20px;
+  padding: 0 var(--space-5);
   border-radius: var(--radius-pill);
   border: 1.5px solid var(--ink);
   background: transparent;
@@ -97,7 +97,7 @@
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
-  padding: 32px;
+  padding: var(--space-7);
   color: var(--ink-muted);
 }
 
@@ -106,19 +106,19 @@
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
-  padding: 16px;
+  padding: var(--space-4);
 }
 .flow-canvas {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .flow-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 18px;
-  padding: 4px 6px 0;
+  padding: var(--space-1) 6px 0;
   font-size: 13px;
   color: var(--ink-muted);
 }
@@ -131,7 +131,7 @@
 .flow-legend li {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .flow-swatch {
   width: 18px;
@@ -269,7 +269,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  border-radius: 18px;
+  border-radius: var(--radius-18);
   font-size: 14px;
   line-height: 1.35;
   text-align: left;
@@ -362,7 +362,7 @@
   background: var(--ink);
   color: var(--card);
   border-radius: var(--radius-pill);
-  padding: 1px 8px;
+  padding: 1px var(--space-2);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -378,7 +378,7 @@
 .flow-bottom {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: var(--space-5);
   align-items: stretch;
 }
 .flow-main > .flow-panel {
@@ -397,10 +397,10 @@
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
-  padding: 22px 24px;
+  padding: 22px var(--space-6);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 .flow-inspector {
   flex: 1 1 320px;
@@ -418,7 +418,7 @@
 .flow-inspector__heading {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .flow-inspector__heading span {
   font-size: 14px;
@@ -446,7 +446,7 @@
 .flow-steps li {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   padding: 6px 0;
   color: var(--muted);
 }
@@ -471,14 +471,14 @@
 .flow-watch {
   background: var(--subtle);
   border-radius: var(--radius-16);
-  padding: 16px;
+  padding: var(--space-4);
   color: var(--ink-muted);
   font-size: 14px;
 }
 .flow-watch--link {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   color: var(--ink);
   font-weight: 600;
   text-decoration: none;
@@ -508,8 +508,8 @@
 .flow-inspector__facts > div {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
   border-bottom: 1px solid var(--ground);
 }
 .flow-inspector__facts dt {
@@ -523,7 +523,7 @@
 }
 .flow-inspector__actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   margin-top: auto;
 }
 .flow-inspector__actions > * {
@@ -548,7 +548,7 @@
 }
 .flow-inspector .chat-approval {
   margin: 0;
-  padding: 16px 18px;
+  padding: var(--space-4) 18px;
   border-radius: var(--radius-20);
 }
 .flow-inspector .chat-approval-actions {
@@ -556,7 +556,7 @@
 }
 .flow-log {
   flex: 2 1 560px;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .flow-stats {
   flex: 1 1 340px;
@@ -638,7 +638,7 @@
 .flow-stats dl > div {
   background: var(--subtle);
   border-radius: var(--radius-20);
-  padding: 14px 16px;
+  padding: 14px var(--space-4);
 }
 .flow-stats dd {
   margin: 0;
@@ -698,7 +698,7 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   font-size: 13px;
 }
 .flow-attempts a {
@@ -718,7 +718,7 @@
 /* Flow sections: the runs and the workflows (PLAN 7.1b) */
 .flow-sections {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   margin-bottom: 14px;
 }
 .flow-section {

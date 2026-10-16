@@ -10,7 +10,7 @@
   max-width: 250px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   padding-top: 6px;
 }
 .settings-nav h1 {
@@ -53,7 +53,7 @@
   padding: 26px 28px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 .settings-card h2 {
   margin: 0;
@@ -136,7 +136,7 @@
 .settings-pill,
 .settings-primary {
   height: 40px;
-  padding: 0 16px;
+  padding: 0 var(--space-4);
   border-radius: var(--radius-pill);
   border: 1.5px solid var(--ink);
   background: transparent;
@@ -173,8 +173,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: var(--space-3);
+  padding: var(--space-3) 14px;
   border-radius: var(--radius-16);
   background: var(--subtle);
 }
@@ -193,7 +193,7 @@
 }
 .settings-dot[data-status='needs_signin'],
 .settings-dot[data-status='error'] {
-  background: #e0a000;
+  background: var(--amber);
 }
 .settings-dot[data-status='disconnected'] {
   background: transparent;
@@ -202,21 +202,21 @@
 .settings-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: var(--space-3);
+  padding: var(--space-4);
   border-radius: var(--radius-16);
   background: var(--subtle);
 }
 .settings-form label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   font-size: 13px;
   font-weight: 600;
 }
 .settings-form input {
   height: 40px;
-  padding: 0 12px;
+  padding: 0 var(--space-3);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-14);
   background: var(--card);
@@ -225,22 +225,22 @@
   flex-basis: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 14px 16px;
+  gap: var(--space-2);
+  padding: 14px var(--space-4);
   border-radius: var(--radius-16);
   background: var(--ink);
-  color: #fff;
+  color: var(--on-dark);
 }
 .settings-command code {
   font-size: 13px;
   overflow-wrap: anywhere;
 }
 .settings-command .settings-pill {
-  border-color: #fff;
-  color: #fff;
+  border-color: var(--on-dark);
+  color: var(--on-dark);
 }
 .settings-command .settings-link {
-  color: #fff;
+  color: var(--on-dark);
 }
 .settings-command-actions {
   display: flex;
@@ -291,7 +291,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .advanced-key {
   font-family: 'JetBrains Mono', monospace;
@@ -301,7 +301,7 @@
 .advanced-value {
   font-family: 'JetBrains Mono', monospace;
   font-size: 13px;
-  padding: 3px 8px;
+  padding: 3px var(--space-2);
   border-radius: var(--radius-14);
   background: var(--subtle);
   overflow-wrap: anywhere;
@@ -312,7 +312,7 @@
 .advanced-edit input {
   flex: 1 1 240px;
   height: 40px;
-  padding: 0 12px;
+  padding: 0 var(--space-3);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-14);
   font-family: 'JetBrains Mono', monospace;
@@ -320,8 +320,8 @@
 .advanced-tray {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: var(--space-3);
+  padding: var(--space-4);
   border-radius: var(--radius-16);
   background: var(--subtle);
 }
@@ -336,15 +336,15 @@
 .advanced-tray li {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: center;
 }
 .advanced-diff {
   margin: 0;
-  padding: 14px 16px;
+  padding: 14px var(--space-4);
   border-radius: var(--radius-16);
   background: var(--ink);
-  color: #fff;
+  color: var(--on-dark);
   font-family: 'JetBrains Mono', monospace;
   font-size: 13px;
   overflow-x: auto;
@@ -354,7 +354,7 @@
 .settings-card.rules-card {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--on-dark);
 }
 .rules-lead {
   margin: 2px 0 0;
@@ -369,7 +369,7 @@
   border: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .rules-style legend {
   padding: 0;
@@ -380,9 +380,9 @@
 }
 .rules-option {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: flex-start;
-  padding: 12px 14px;
+  padding: var(--space-3) 14px;
   border-radius: var(--radius-16);
   background: var(--rules-panel);
   color: var(--rules-text);
@@ -398,7 +398,7 @@
   gap: 2px;
 }
 .rules-option strong {
-  color: #fff;
+  color: var(--on-dark);
 }
 .rules-option small {
   font-size: 13px;
@@ -411,16 +411,16 @@
 .rules-columns {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--space-3);
 }
 .rules-column {
   overflow-wrap: anywhere;
   border-radius: var(--radius-20);
   background: var(--rules-panel);
-  padding: 16px 18px;
+  padding: var(--space-4) 18px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   color: var(--rules-text);
   font-size: 14px;
 }
@@ -428,7 +428,7 @@
   font-family: var(--font-heading);
   font-weight: 600;
   font-size: 20px;
-  color: #fff;
+  color: var(--on-dark);
 }
 .rules-column[data-kind='go'] .rules-heading {
   color: var(--rules-go);
@@ -448,7 +448,7 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .rules-item code {
   font-size: 13px;
@@ -474,7 +474,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: #fff;
+  color: var(--on-dark);
   font-size: 14px;
   font-weight: 600;
   text-decoration: underline;
@@ -489,11 +489,11 @@
 .rules-pill,
 .rules-primary {
   height: 40px;
-  padding: 0 16px;
+  padding: 0 var(--space-4);
   border-radius: var(--radius-pill);
-  border: 1.5px solid #fff;
+  border: 1.5px solid var(--on-dark);
   background: transparent;
-  color: #fff;
+  color: var(--on-dark);
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
@@ -508,26 +508,26 @@
   cursor: default;
 }
 .rules-card :focus-visible {
-  outline-color: #fff;
+  outline-color: var(--on-dark);
 }
 .rules-forms {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .rules-forms form {
   flex: 1 1 280px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px 16px;
+  padding: 14px var(--space-4);
   border-radius: var(--radius-16);
   background: var(--rules-panel);
 }
 .rules-forms label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   font-size: 13px;
   font-weight: 600;
 }
@@ -537,10 +537,10 @@
   border: 1px solid var(--chat-dark-border);
   border-radius: var(--radius-14);
   background-color: var(--ink);
-  color: #fff;
+  color: var(--on-dark);
 }
 .rules-forms input {
-  padding: 0 12px;
+  padding: 0 var(--space-3);
 }
 .rules-forms .score-select {
   --select-focus: var(--card);
@@ -555,7 +555,7 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 10px;
-  padding: 14px 16px;
+  padding: 14px var(--space-4);
   border-radius: var(--radius-16);
   background: var(--rules-panel);
 }
@@ -569,20 +569,20 @@
 .rules-drift {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .plugins-theme-choices {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .plugins-theme-choice {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   height: 40px;
-  padding: 0 14px 0 8px;
+  padding: 0 14px 0 var(--space-2);
   border: 1.5px solid transparent;
   border-radius: var(--radius-pill);
   background: transparent;
@@ -620,12 +620,12 @@
 }
 .settings-check-table caption {
   text-align: left;
-  padding-bottom: 8px;
+  padding-bottom: var(--space-2);
 }
 .settings-check-table th,
 .settings-check-table td {
   text-align: left;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--ground);
   vertical-align: top;
   overflow-wrap: anywhere;
@@ -638,7 +638,7 @@
 .settings-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .settings-command-text {
   /* One click selects the whole command, so Ctrl+C works even where the copy button can't. */
@@ -651,8 +651,8 @@
   flex-basis: 100%;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: var(--space-3);
+  padding: var(--space-4);
   border-radius: var(--radius-16);
   background: var(--subtle);
 }
@@ -667,7 +667,7 @@
   gap: 14px;
 }
 .settings-signin-code {
-  padding: 10px 16px;
+  padding: 10px var(--space-4);
   border-radius: var(--radius-14);
   background: var(--card);
   border: 1px solid var(--hairline);
@@ -681,7 +681,7 @@
   flex-basis: 100%;
 }
 .settings-warning {
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   border-radius: var(--radius-14);
   background: var(--agent-saffron-tint);
   font-weight: 600;
@@ -689,7 +689,7 @@
 .settings-form label.settings-check {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .settings-form label.settings-check input {
   height: auto;
@@ -713,7 +713,7 @@
 .settings-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   align-items: flex-start;
 }
 .settings-field label {
@@ -724,7 +724,7 @@
 .kn-settings {
   margin: 0;
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .kn-settings dd {
   margin: 0;
@@ -746,19 +746,19 @@
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .kn-usage li {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .qr-code {
   display: block;
   width: 192px;
   height: 192px;
   margin: 8px 0;
-  border-radius: 12px;
+  border-radius: var(--radius-12);
 }
 .settings-origins {
   border: 0;
@@ -772,7 +772,7 @@
 .logs-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 16px;
+  gap: var(--space-3) var(--space-4);
   align-items: end;
 }
 .logs-table {
@@ -789,7 +789,7 @@
 .logs-table th,
 .logs-table td {
   text-align: left;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   vertical-align: top;
   overflow-wrap: anywhere;
 }
@@ -805,7 +805,7 @@
 .plugins-currency label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .plugins-currency input {
   min-width: 0;
@@ -817,7 +817,7 @@
 .logs-controls label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .logs-controls label:has(input[type='checkbox']) {
   flex-direction: row;
@@ -826,7 +826,7 @@
 /* Look: theme and display currency stacked; a side-by-side grid stretched the one-line theme row. */
 .look-stack {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .plugins-sendkey {
   flex-direction: column;
@@ -845,7 +845,7 @@
     flex-direction: column;
     flex-wrap: nowrap;
     align-items: stretch;
-    gap: 16px;
+    gap: var(--space-4);
   }
   .settings-nav {
     flex: none;
@@ -860,7 +860,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--space-3);
     min-height: 52px;
     padding: 6px 18px;
     border-radius: var(--radius-16);
@@ -890,7 +890,7 @@
     background: var(--card);
   }
   .settings-jump-list a {
-    padding: 12px 14px;
+    padding: var(--space-3) 14px;
     border-radius: var(--radius-14);
     color: var(--ink);
     text-decoration: none;
@@ -905,12 +905,12 @@
   }
   .settings-content {
     flex: none;
-    gap: 16px;
+    gap: var(--space-4);
   }
 }
 @media (width < 600px) {
   .settings-card {
-    padding: 20px 16px;
+    padding: var(--space-5) var(--space-4);
     border-radius: var(--radius-20);
   }
 }
@@ -924,7 +924,7 @@
 .about-facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 14px 20px;
+  gap: 14px var(--space-5);
   margin: 0;
 }
 .about-facts dt {
@@ -939,12 +939,12 @@
 .about-check {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .about-result {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .about-links {
   display: flex;
@@ -955,10 +955,124 @@
   white-space: pre-wrap;
 }
 .settings-command a {
-  color: #fff;
+  color: var(--on-dark);
 }
 .about-links a,
 #about > p > a {
   color: var(--ink);
   font-weight: 600;
+}
+
+/* Look › Style: theme packs (PLAN 8.3). The toggle sits on the Theme label's line so the closed card keeps its height. */
+.plugins-theme-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+.plugins-theme-head .plugins-card-name {
+  flex: none;
+}
+.look-style-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  font-size: 14px;
+  line-height: 1;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.look-style-toggle:hover {
+  color: var(--ink);
+}
+.look-packs {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+.look-pack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1.5px solid var(--hairline);
+  border-radius: var(--radius-16);
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.look-pack[aria-checked='true'] {
+  border-color: var(--ink);
+}
+.look-pack-name {
+  font-weight: 600;
+  padding: 0 var(--space-1);
+}
+.look-pack-blurb {
+  font-size: 13px;
+  color: var(--ink-muted);
+  padding: 0 var(--space-1) var(--space-1);
+}
+/* The preview takes its look from its own data-pack and data-theme, whatever the page is wearing. */
+.look-pack-preview {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 14px 1fr;
+  gap: 5px;
+  height: 92px;
+  padding: 6px;
+  background: var(--ground);
+  border-radius: var(--radius-m);
+  font-family: var(--font-body);
+  color: var(--ink);
+}
+.look-pack-preview[data-layout='side'] {
+  grid-template-columns: 22px 1fr;
+  grid-template-rows: 1fr;
+}
+.look-pack-nav {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: calc(var(--radius-card) / 4);
+}
+.look-pack-page {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.look-pack-title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1;
+}
+.look-pack-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: calc(var(--radius-card) / 3);
+}
+.look-pack-line {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--track-2);
+}
+.look-pack-line--short {
+  width: 60%;
+}
+.look-pack-button {
+  margin-top: auto;
+  width: 34px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
 }

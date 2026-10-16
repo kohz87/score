@@ -8,6 +8,9 @@ import '@fontsource/hanken-grotesk/700.css'
 import '@fontsource/jetbrains-mono/400.css'
 import '@fontsource/jetbrains-mono/500.css'
 import './styles/tokens.css'
+import './styles/packs/paper.css'
+import './styles/packs/night.css'
+import './styles/packs/dense.css'
 import './styles/select.css'
 import './shell/shell.css'
 
@@ -20,10 +23,13 @@ import { createQueryClient, StreamContext } from './data/query-client.ts'
 import { createStreamClient } from './data/stream.ts'
 import { createStreamQueryRegistry } from './data/resync.ts'
 import { clearBrowserSession } from './data/session.ts'
+import { applyPack, readPackId } from './data/pack.ts'
 import { applyTheme, readTheme } from './data/theme.ts'
+import { findPack } from './styles/packs.ts'
 import { registerServiceWorker } from './pwa/service-worker.ts'
 
 applyTheme(readTheme())
+applyPack(findPack(readPackId()))
 registerServiceWorker()
 
 const queryClient = createQueryClient()
