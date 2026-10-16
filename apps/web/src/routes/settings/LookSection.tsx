@@ -5,17 +5,91 @@ import { apiFetch } from '../../data/api.ts'
 import { currencyKey, useDisplayCurrency } from '../../data/currency.ts'
 import '../../components/plugin-cards.css'
 import { isTouchDevice, readSendKey, saveSendKey, type SendKey } from '../../data/send-key.ts'
+import { readPackId, savePack } from '../../data/pack.ts'
 import { saveTheme, readTheme, themeChoices, type ThemeChoice } from '../../data/theme.ts'
+import { findPack, packs } from '../../styles/packs.ts'
 
 const themeLabels: Record<ThemeChoice, string> = { light: 'Light', dark: 'Dark', system: 'System' }
 
+/** Light or dark for the previews: the saved choice, or the device's when it is System. */
+function previewMode(theme: ThemeChoice): 'light' | 'dark' {
+  if (theme !== 'system') return theme
+  try {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  } catch {
+    return 'light'
+  }
+}
+
+function StylePanel({
+  theme,
+  packId,
+  onPick,
+}: {
+  theme: ThemeChoice
+  packId: string
+  onPick: (id: string) => void
+}) {
+  return (
+    <div id="look-style-panel" role="radiogroup" aria-label="Style" className="look-packs">
+      {packs.map((pack) => (
+        <button
+          key={pack.id}
+          type="button"
+          role="radio"
+          aria-checked={packId === pack.id}
+          className="look-pack"
+          data-pack-choice={pack.id}
+          onClick={() => {
+            onPick(pack.id)
+            savePack(pack)
+          }}
+        >
+          <span
+            className="look-pack-preview"
+            data-pack={pack.id}
+            data-theme={previewMode(theme)}
+            data-layout={pack.layout}
+            aria-hidden="true"
+          >
+            <span className="look-pack-nav" />
+            <span className="look-pack-page">
+              <span className="look-pack-title">Aa</span>
+              <span className="look-pack-card">
+                <span className="look-pack-line" />
+                <span className="look-pack-line look-pack-line--short" />
+                <span className="look-pack-button" />
+              </span>
+            </span>
+          </span>
+          <span className="look-pack-name">{pack.name}</span>
+          <span className="look-pack-blurb">{pack.blurb}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function ThemeCard() {
   const [theme, setTheme] = useState<ThemeChoice>(readTheme)
+  const [stylesOpen, setStylesOpen] = useState(false)
+  const [packId, setPackId] = useState<string>(readPackId)
   return (
     <div className="plugins-card plugins-theme plugins-sendkey">
-      <span className="plugins-card-name" id="plugins-theme-label">
-        Theme
-      </span>
+      <div className="plugins-theme-head">
+        <span className="plugins-card-name" id="plugins-theme-label">
+          Theme
+        </span>
+        <button
+          type="button"
+          className="look-style-toggle"
+          aria-expanded={stylesOpen}
+          aria-controls="look-style-panel"
+          onClick={() => setStylesOpen((open) => !open)}
+        >
+          Style: {findPack(packId).name}
+        </button>
+      </div>
       <div
         role="radiogroup"
         aria-labelledby="plugins-theme-label"
@@ -39,6 +113,7 @@ function ThemeCard() {
           </button>
         ))}
       </div>
+      {stylesOpen && <StylePanel theme={theme} packId={packId} onPick={setPackId} />}
     </div>
   )
 }

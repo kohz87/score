@@ -53,3 +53,37 @@ test('"Send messages with" is a per-device choice between Enter and Ctrl+Enter',
   fireEvent.click(screen.getByRole('radio', { name: 'Enter' }))
   expect(localStorage.getItem('score.sendKey')).toBeNull()
 })
+
+test('Style picks a theme pack, applies its attributes live and remembers it', async () => {
+  window.localStorage.clear()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(Response.json({ code: 'USD', rate: 1 }))),
+  )
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <LookSection />
+    </QueryClientProvider>,
+  )
+  const root = document.documentElement
+  const toggle = screen.getByRole('button', { name: 'Style: Score' })
+  expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  expect(screen.queryByRole('radiogroup', { name: 'Style' })).toBeNull()
+  fireEvent.click(toggle)
+  const group = screen.getByRole('radiogroup', { name: 'Style' })
+  expect(group.querySelectorAll('[role="radio"]')).toHaveLength(4)
+  fireEvent.click(screen.getByRole('radio', { name: /Dense/ }))
+  expect(root.getAttribute('data-pack')).toBe('dense')
+  expect(root.getAttribute('data-layout')).toBe('side')
+  expect(root.getAttribute('data-density')).toBe('compact')
+  expect(JSON.parse(window.localStorage.getItem('score.look')!)).toEqual({
+    pack: 'dense',
+    layout: 'side',
+    density: 'compact',
+  })
+  expect(screen.getByRole('button', { name: 'Style: Dense' })).toBeDefined()
+  fireEvent.click(screen.getByRole('radio', { name: /^Score/ }))
+  expect(root.getAttribute('data-pack')).toBe('score')
+  expect(root.getAttribute('data-layout')).toBe('top')
+  expect(window.localStorage.getItem('score.look')).toBeNull()
+})

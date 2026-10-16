@@ -962,3 +962,117 @@
   color: var(--ink);
   font-weight: 600;
 }
+
+/* Look › Style: theme packs (PLAN 8.3). The toggle sits on the Theme label's line so the closed card keeps its height. */
+.plugins-theme-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+.plugins-theme-head .plugins-card-name {
+  flex: none;
+}
+.look-style-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  font-size: 14px;
+  line-height: 1;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.look-style-toggle:hover {
+  color: var(--ink);
+}
+.look-packs {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+.look-pack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1.5px solid var(--hairline);
+  border-radius: var(--radius-16);
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.look-pack[aria-checked='true'] {
+  border-color: var(--ink);
+}
+.look-pack-name {
+  font-weight: 600;
+  padding: 0 var(--space-1);
+}
+.look-pack-blurb {
+  font-size: 13px;
+  color: var(--ink-muted);
+  padding: 0 var(--space-1) var(--space-1);
+}
+/* The preview takes its look from its own data-pack and data-theme, whatever the page is wearing. */
+.look-pack-preview {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 14px 1fr;
+  gap: 5px;
+  height: 92px;
+  padding: 6px;
+  background: var(--ground);
+  border-radius: var(--radius-m);
+  font-family: var(--font-body);
+  color: var(--ink);
+}
+.look-pack-preview[data-layout='side'] {
+  grid-template-columns: 22px 1fr;
+  grid-template-rows: 1fr;
+}
+.look-pack-nav {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: calc(var(--radius-card) / 4);
+}
+.look-pack-page {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.look-pack-title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1;
+}
+.look-pack-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: calc(var(--radius-card) / 3);
+}
+.look-pack-line {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--track-2);
+}
+.look-pack-line--short {
+  width: 60%;
+}
+.look-pack-button {
+  margin-top: auto;
+  width: 34px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+}
