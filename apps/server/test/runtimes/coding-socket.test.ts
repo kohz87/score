@@ -712,3 +712,42 @@ test('(control) a partial first line is dropped at the hello deadline', async ()
   await vi.waitFor(() => expect(priv.unauthenticated).toBe(0), { timeout: 3000 })
   await vi.waitFor(() => expect(c.state.ended || c.socket.destroyed).toBe(true), { timeout: 3000 })
 })
+
+// audit5 S5-C01: socket loss while a record is still being ingested resolves the outcome and releases the launch's
+// reservation; the ingestion that finishes afterwards must not charge the budget again (nobody would ever release it).
+test('a record that finishes ingesting after socket loss does not recharge the released reservation', async () => {
+  const { server } = await setup()
+  let unblock!: () => void
+  const gate = new Promise<void>((resolve) => (unblock = resolve))
+  let started!: () => void
+  const startedSeen = new Promise<void>((resolve) => (started = resolve))
+  let retained = 0
+  const reg = server.expect({
+    launch: 'L1',
+    generation: 1,
+    specHash: 'h',
+    retainedBytes: 100,
+    handlers: {
+      onStdoutRecord: async () => {
+        started()
+        await gate
+        retained = 5000 // what the parser holds once the record is applied
+      },
+      retainedBytes: () => retained,
+    },
+  })
+  const sup = new FakeSupervisor(server.path)
+  sup.hello('L1', reg.token)
+  await vi.waitFor(() => expect(sup.has('welcome')).toBe(true))
+  expect(server.bufferedBytes).toBe(100)
+  sup.out('stdout', 1, 'one\n')
+  await startedSeen
+  sup.socket.destroy()
+  const outcome = await reg.session.outcome
+  expect(outcome.reasons).toContain('ingestion-incomplete')
+  // The launch reservation is released with the outcome; only the record still in flight stays charged.
+  await vi.waitFor(() => expect(server.bufferedBytes).toBeLessThan(100))
+  unblock()
+  await new Promise((resolve) => setTimeout(resolve, 100))
+  expect(server.bufferedBytes).toBe(0)
+})

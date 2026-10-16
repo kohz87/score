@@ -477,6 +477,46 @@ test('Check again still refuses a foreign listener on the socket path', async ()
   }
 })
 
+// audit5 S5-006: close() owns the listener's whole lifecycle, including a bind that is still in flight.
+test('close() during an in-flight bind leaves no listener; a later Check again does not rebind', async () => {
+  const rt = join(dir, 'rt-close')
+  mkdirSync(join(rt, 'score'), { recursive: true, mode: 0o700 })
+  const path = CodingSocketServer.socketPath(rt, INSTALLATION)
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  let held!: () => void
+  const heldSeen = new Promise<void>((resolve) => (held = resolve))
+  const realCreate = net.createServer.bind(net)
+  let first = true
+  vi.spyOn(net, 'createServer').mockImplementation(((...args: never[]) => {
+    const server = realCreate(...args)
+    if (!first) return server
+    first = false
+    const listen = server.listen.bind(server) as (...a: unknown[]) => net.Server
+    // A real server whose bind is held: the supervisor socket cannot finish listening until released.
+    server.listen = ((...a: unknown[]) => {
+      held()
+      void gate.then(() => listen(...a))
+      return server
+    }) as typeof server.listen
+    return server
+  }) as typeof net.createServer)
+  const other = makeBackend({ unit: { runtimeDir: rt } })
+  const checking = other.check()
+  await heldSeen
+  const closing = other.close()
+  const closingAgain = other.close()
+  release()
+  await Promise.all([closing, closingAgain, checking])
+  expect(other.socket.listening).toBe(false)
+  expect(await connects(path)).toBe(false)
+  expect(existsSync(path)).toBe(false)
+  // "Check again" after shutdown must not bring the listener back.
+  await other.check()
+  expect(other.socket.listening).toBe(false)
+  expect(await connects(path)).toBe(false)
+})
+
 // audit4 S4-C01: two same-turn admissions never diverge from the persisted run.
 for (const pending of [false, true]) {
   test(`two concurrent same-turn startRun calls share one persisted run and one execution (${pending ? 'with' : 'without'} a pending intent)`, async () => {

@@ -156,24 +156,31 @@ export function registerCodingAgentRoutes(
     if (!agent) throw new HttpError(404, 'not_found', 'Couldn’t find that coding agent.')
     if (body.permission && body.permission !== agent.permission)
       assertVerified(driverFor(agent.runtime), body.permission)
-    // Raising the access level is the sensitive change; lowering it never needs the password.
+    // Raising the access level is the sensitive change; lowering it never needs the password. The password is
+    // verified here, outside the transaction (it's slow); the transition that is committed is judged again inside it.
     const order: CodingPermission[] = ['read-only', 'workspace-write', 'full']
-    if (
-      body.permission &&
-      body.permission === 'full' &&
-      order.indexOf(body.permission) > order.indexOf(agent.permission)
-    )
-      await requirePassword(request, body.password)
+    const raising =
+      body.permission === 'full' && order.indexOf(body.permission) > order.indexOf(agent.permission)
+    if (raising) await requirePassword(request, body.password)
     const workspace = body.workspace ? await workspaceFor(agentId, body.workspace) : undefined
-    db.tx((sqlite) =>
+    db.tx((sqlite) => {
+      // The agent may have changed while we awaited; never write a permission decided from a stale read.
+      const current = getCodingAgent(sqlite, agentId)
+      if (!current) throw new HttpError(404, 'not_found', 'Couldn’t find that coding agent.')
+      if (body.permission === 'full' && current.permission !== 'full' && !raising)
+        throw new HttpError(
+          409,
+          'conflict',
+          'This agent changed while you were editing it. Reload and confirm with your password to give it full access.',
+        )
       updateCodingAgent(sqlite, agentId, {
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.role !== undefined ? { role: body.role } : {}),
         ...(body.permission !== undefined ? { permission: body.permission } : {}),
         ...(body.model !== undefined ? { model: body.model } : {}),
         ...(workspace !== undefined ? { workspace } : {}),
-      }),
-    )
+      })
+    })
     await publish(agentId)
     return CodingAgentSchema.parse(await coding.view(getCodingAgent(db.sqlite, agentId)!))
   })

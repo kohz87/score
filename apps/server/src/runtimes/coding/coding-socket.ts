@@ -118,7 +118,12 @@ export const DEFAULT_LIMITS: SocketLimits = {
 export class SocketStartError extends Error {
   constructor(
     readonly code:
-      'path-too-long' | 'bad-directory' | 'foreign-listener' | 'stale-needs-lock' | 'not-a-socket',
+      | 'path-too-long'
+      | 'bad-directory'
+      | 'foreign-listener'
+      | 'stale-needs-lock'
+      | 'not-a-socket'
+      | 'closed',
     message: string,
   ) {
     super(message)
@@ -182,7 +187,10 @@ export class RunSession {
     private readonly limits: SocketLimits,
     private readonly budget: Budget,
     /** Bytes charged to the budget for what the run retains; grows with the parser's actual retained bytes. */
-    private readonly reservation: { bytes: number; floor: number } = { bytes: 0, floor: 0 },
+    private readonly reservation: { bytes: number; floor: number; released?: boolean } = {
+      bytes: 0,
+      floor: 0,
+    },
   ) {
     this.ready = new Promise<ReadyInfo>((resolve, reject) => {
       this.resolveReady = resolve
@@ -490,6 +498,9 @@ export class RunSession {
    * reservation. Past the installation budget the run is stopped and ineligible (review 2026-10-12 #18).
    */
   private chargeRetained(): void {
+    // A record still being ingested when the socket was lost finishes after the launch's reservation was released:
+    // nothing would ever release a new charge, so a released reservation is never charged again (S5-C01).
+    if (this.reservation.released) return
     const actual = this.handlers.retainedBytes?.()
     if (actual === undefined || !Number.isFinite(actual)) return
     const target = Math.max(this.reservation.floor, Math.ceil(actual))
@@ -558,7 +569,7 @@ interface Pending {
   session: RunSession
   used: boolean
   /** Budget bytes reserved for what the run keeps in memory besides queued records (released once, see `release`). */
-  reservation: { bytes: number; floor: number }
+  reservation: { bytes: number; floor: number; released?: boolean }
 }
 
 /** What an active run may keep in memory beyond queued records (retained text, remembered call ids): reserved up front. */
@@ -585,6 +596,8 @@ export class CodingSocketServer {
   private readonly pending = new Map<string, Pending>()
   private readonly sockets = new Set<net.Socket>()
   private server: net.Server | null = null
+  /** Bumped by every shutdown: a bind that was in flight when it happened must not publish its listener. */
+  private epoch = 0
   private unauthenticated = 0
 
   constructor(private readonly options: CodingSocketOptions) {
@@ -624,7 +637,10 @@ export class CodingSocketServer {
       )
     }
     if ((stat.mode & 0o077) !== 0) chmodSync(dir, 0o700)
+    const epoch = this.epoch
     await this.clearStale(holdsInstallationLock)
+    if (epoch !== this.epoch)
+      throw new SocketStartError('closed', 'the socket server was shut down')
     const server = net.createServer((socket) => this.accept(socket))
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject)
@@ -634,6 +650,9 @@ export class CodingSocketServer {
       })
     })
     try {
+      // Shut down while the bind was in flight: the listener we just made is never published (closing it removes it).
+      if (epoch !== this.epoch)
+        throw new SocketStartError('closed', 'the socket server was shut down')
       chmodSync(this.path, 0o600)
     } catch (error) {
       // Never leave a half-set-up listener behind: the next attempt must start from nothing.
@@ -759,6 +778,7 @@ export class CodingSocketServer {
     this.budget.used -= entry.reservation.bytes
     entry.reservation.bytes = 0
     entry.reservation.floor = 0
+    entry.reservation.released = true
   }
 
   private tokenFor(launch: string, generation: number, specHash: string): string {
@@ -852,6 +872,7 @@ export class CodingSocketServer {
    * alone would wait for them), then close the listener and remove the socket file.
    */
   async shutdown(): Promise<void> {
+    this.epoch++
     const sessions = [...this.pending.values()].map((p) => p.session)
     const held = (this.options.frozen?.() ?? null) !== null
     await Promise.all(sessions.map((s) => s.shutdown(!held)))
