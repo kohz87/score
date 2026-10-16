@@ -461,10 +461,15 @@ const one = <T>(sqlite: DatabaseSync, sql: string, ...args: (string | number)[])
 
 export function storageInventory(sqlite: DatabaseSync, o: OrchRow): StorageInventory {
   const id = o.id
+  // A coding worker's dispatch generations each have a turn id of their own, with runs and intents attached to it
+  // (pruning deletes by the same set).
   const turnIds = (
-    sqlite.prepare('SELECT turn_id FROM orc_attempts WHERE orchestration_id = ?').all(id) as {
-      turn_id: string
-    }[]
+    sqlite
+      .prepare(
+        `SELECT turn_id FROM orc_attempts WHERE orchestration_id = ?1
+         UNION SELECT turn_id FROM orc_generations WHERE attempt_id IN (SELECT id FROM orc_attempts WHERE orchestration_id = ?1)`,
+      )
+      .all(id) as { turn_id: string }[]
   ).map((r) => r.turn_id)
   const marks = turnIds.map(() => '?').join(',') || "''"
   const sum = (sql: string, ...args: (string | number)[]) =>

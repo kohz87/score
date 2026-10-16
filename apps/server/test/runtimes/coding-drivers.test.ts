@@ -249,7 +249,7 @@ test('child environment is an allowlist: no Score variables, no *_API_KEY, no to
 
 test('deny rules are filesystem-rooted: .env variants anywhere, credentials, and the protected folders (review: high 1)', () => {
   const rules = claudeDenyRules(deny, ['/home/u/.claude/.credentials*', '/home/u/.codex/auth*'])
-  for (const tool of ['Read', 'Edit']) {
+  for (const tool of ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'NotebookEdit']) {
     expect(rules).toContain(`${tool}(//**/.env*)`)
     expect(rules).toContain(`${tool}(//home/u/.claude/.credentials*)`)
     expect(rules).toContain(`${tool}(//home/u/.codex/auth*)`)
@@ -900,4 +900,72 @@ test('FT #1: claude error result followed by an explicit success is loss and the
   expect(events.filter((event) => event.kind === 'result')).toHaveLength(1)
   expect(verdictOf(events)?.eligible).toBe(false)
   expect(parser.lossReason?.()).toBeTruthy()
+})
+
+test('fix-argon A2: Claude Code activity after the result (assistant text or tool use, a tool result) takes the authority away', () => {
+  const baseLines = fixtureLines('claude-basic')
+  const after: Record<string, string> = {
+    text: JSON.stringify({
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'One more thing.' }] },
+    }),
+    stringText: JSON.stringify({
+      type: 'assistant',
+      message: { role: 'assistant', content: 'One more thing.' },
+    }),
+    toolUse: JSON.stringify({
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'toolu_late', name: 'Bash', input: { command: 'rm x' } }],
+      },
+    }),
+    toolResult: JSON.stringify({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: 'toolu_1', content: 'late', is_error: false },
+        ],
+      },
+    }),
+  }
+  const clean = createClaudeParser('/work')
+  baseLines.forEach((line) => clean.parse(line))
+  expect(clean.lossReason?.()).toBeNull()
+  for (const [name, line] of Object.entries(after)) {
+    const parser = createClaudeParser('/work')
+    baseLines.forEach((l) => parser.parse(l))
+    parser.parse(line)
+    expect(parser.lossReason?.(), name).toBeTruthy()
+  }
+})
+
+test('fix-argon A2: a Codex tool or command item after turn.completed takes the authority away', () => {
+  const items = [
+    codexLine({
+      type: 'item.started',
+      item: { id: 'c9', type: 'command_execution', command: 'rm x', status: 'in_progress' },
+    }),
+    codexLine({
+      type: 'item.completed',
+      item: {
+        id: 'f9',
+        type: 'file_change',
+        changes: [{ path: '/w/x', kind: 'add' }],
+        status: 'completed',
+      },
+    }),
+    codexLine({
+      type: 'item.completed',
+      item: { id: 'w9', type: 'web_search', query: 'q' },
+    }),
+  ]
+  for (const line of items) {
+    const parser = createCodexParser()
+    ;[agentMessage('m1', 'Final.'), turnCompleted].forEach((l) => parser.parse(l))
+    expect(parser.lossReason?.()).toBeNull()
+    parser.parse(line)
+    expect(parser.lossReason?.(), line).toBeTruthy()
+  }
 })

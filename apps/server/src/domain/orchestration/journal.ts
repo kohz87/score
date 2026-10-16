@@ -173,11 +173,13 @@ const EntrySchema = z.discriminatedUnion('kind', [
   z.object({
     ...Base,
     kind: z.literal('tombstone'),
-    of: z.enum(['send_started', 'stop_fence', 'transition']),
+    of: z.enum(['send_started', 'stop_fence', 'transition', 'witness']),
     orchestrationId: z.string().min(1),
     attemptId: z.string().min(1).optional(),
     /** For a send: the latest generation and whether it was sent (always `sent` for a tombstone made from a send). */
     generation: z.int().nonnegative().optional(),
+    /** For a tombstone of a `witness` (or of a compacted `send_refused`/`send_closed`): the last generation's state. */
+    lastState: z.enum(['refused', 'sent', 'closed']).optional(),
     what: z
       .enum(['finish', 'pause', 'resume', 'waiver', 'abandon', 'retry', 'try_again'])
       .optional(),
@@ -312,6 +314,12 @@ export function journalDispatches(entries: readonly JournalEntry[]): Map<string,
       })
     else if (entry.kind === 'tombstone' && entry.of === 'send_started' && entry.attemptId)
       result.set(entry.attemptId, { generation: entry.generation ?? 0, state: 'sent', n: entry.n })
+    else if (entry.kind === 'tombstone' && entry.of === 'witness' && entry.attemptId)
+      result.set(entry.attemptId, {
+        generation: entry.generation ?? 0,
+        state: entry.lastState ?? 'refused',
+        n: entry.n,
+      })
   }
   return result
 }
@@ -815,6 +823,28 @@ export class ExecutionJournal {
           orchestrationId: entry.orchestrationId,
           attemptId: entry.attemptId,
           generation: entry.generation,
+        })
+      } else if (
+        entry.kind === 'witness' ||
+        entry.kind === 'send_refused' ||
+        entry.kind === 'send_closed'
+      ) {
+        // The database keeps the attempt's dispatch_generation, so the journal must keep a word on it (A1).
+        out.push({
+          n: entry.n,
+          at: entry.at,
+          scope: entry.scope,
+          kind: 'tombstone',
+          of: 'witness',
+          orchestrationId: entry.orchestrationId,
+          attemptId: entry.attemptId,
+          generation: entry.kind === 'witness' ? entry.lastGeneration : entry.generation,
+          lastState:
+            entry.kind === 'witness'
+              ? entry.lastState
+              : entry.kind === 'send_closed'
+                ? 'closed'
+                : 'refused',
         })
       } else if (entry.kind === 'stop_fence') {
         out.push({

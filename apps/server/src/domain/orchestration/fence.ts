@@ -226,6 +226,7 @@ export function verifyJournal(sqlite: DatabaseSync, entries: readonly JournalEnt
         })
     } else if (
       kind === 'send_started' ||
+      kind === 'witness' ||
       entry.kind === 'send_refused' ||
       entry.kind === 'send_closed' ||
       entry.kind === 'witness'

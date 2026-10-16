@@ -305,7 +305,7 @@ function authorityProblem(
           other.attemptId === entry.attemptId &&
           other.runId === entry.runId) ||
         (other.kind === 'tombstone' &&
-          other.of === 'send_started' &&
+          (other.of === 'send_started' || other.of === 'witness') &&
           other.attemptId === entry.attemptId),
     )
     if (!covered) return `the run handle of attempt ${entry.attemptId}`

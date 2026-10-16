@@ -285,6 +285,33 @@ test('posting is rate limited per agent per hour, and the window slides', async 
   expect((await call(client, 'rooms.post', { roomId: 'r1', text: 'later' })).error).toBe(false)
 })
 
+test('fix-argon A4: MCP errors keep their details (retryAfterSeconds, the current etag) and nothing else', async () => {
+  const client = await connect(enable('builder', true))
+  const first = await call(client, 'knowledge.write', {
+    path: 'e.md',
+    body: 'v1',
+    expectedEtag: null,
+  })
+  expect(first.error).toBe(false)
+  const stale = await call(client, 'knowledge.write', {
+    path: 'e.md',
+    body: 'v2',
+    expectedEtag: 'stale',
+  })
+  expect(stale.error).toBe(true)
+  const conflict = JSON.parse(stale.text.slice(stale.text.indexOf('\n') + 1))
+  expect(stale.text).toMatch(/^conflict: /)
+  expect(typeof conflict.details.etag).toBe('string')
+  expect(stale.text).not.toMatch(/\bat .*\.ts/)
+  for (let i = 0; i < MCP_POSTS_PER_HOUR; i++)
+    await call(client, 'rooms.post', { roomId: 'r1', text: `n${i}` })
+  const limited = await call(client, 'rooms.post', { roomId: 'r1', text: 'one more' })
+  expect(limited.text).toContain('rate_limited')
+  expect(
+    JSON.parse(limited.text.slice(limited.text.indexOf('\n') + 1)).details.retryAfterSeconds,
+  ).toBeGreaterThan(0)
+})
+
 test('a post that fails after its slot was reserved gives the slot back', async () => {
   const client = await connect(enable('builder', true))
   const submit = vi.spyOn(ingest, 'submit').mockRejectedValueOnce(new Error('disk full'))

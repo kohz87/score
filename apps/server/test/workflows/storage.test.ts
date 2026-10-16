@@ -296,3 +296,41 @@ test('through the live translator, tool starts and completions with multibyte pr
   expect(retained).toBeGreaterThan(20 * 2000)
   expect(stored(id).stored_bytes - before).toBeGreaterThanOrEqual(retained)
 })
+
+test('fix-argon A6: the inventory counts the runs, tool calls and thinking of every dispatch generation', async () => {
+  h = await wfHarness()
+  const id = await start(h, simple())
+  await h.until(done(id))
+  const count = (kind: string) => run(h!, id).storage.items.find((i) => i.kind === kind)!
+  const before = {
+    runs: count('attempt_runs').rows,
+    tools: count('tool_rows').rows,
+    thinking: count('thinking').rows,
+  }
+  const attempt = h.rows<{ id: string }>('SELECT id FROM orc_attempts LIMIT 1')[0]!
+  const AT = '2026-10-16T00:00:00.000Z'
+  // A coding worker's later dispatch generation has a turn id of its own (orc_generations), not the attempt's.
+  h.db.sqlite
+    .prepare(
+      `INSERT INTO orc_generations (attempt_id, generation, turn_id, launch_id, message_id, created_at)
+       VALUES (?, 1, 'gen-turn-1', 'gen-launch-1', 'gen-msg-1', ?)`,
+    )
+    .run(attempt.id, AT)
+  h.db.sqlite
+    .prepare(
+      `INSERT INTO runs (id, profile, origin, status, started_at, updated_at, score_turn_id, output)
+       VALUES ('gen-run-1', 'lead', 'score', 'completed', ?, ?, 'gen-turn-1', 'generation output')`,
+    )
+    .run(AT, AT)
+  h.db.sqlite
+    .prepare(
+      `INSERT INTO tool_calls (run_id, seq, tool, preview, status, started_at) VALUES ('gen-run-1', 1, 'Bash', 'ls', 'ok', ?)`,
+    )
+    .run(AT)
+  h.db.sqlite
+    .prepare(`INSERT INTO run_thinking (run_id, seq, text) VALUES ('gen-run-1', 1, 'thoughts')`)
+    .run()
+  expect(count('attempt_runs').rows).toBe(before.runs + 1)
+  expect(count('tool_rows').rows).toBe(before.tools + 1)
+  expect(count('thinking').rows).toBe(before.thinking + 1)
+})
