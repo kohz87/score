@@ -118,7 +118,12 @@ export const DEFAULT_LIMITS: SocketLimits = {
 export class SocketStartError extends Error {
   constructor(
     readonly code:
-      'path-too-long' | 'bad-directory' | 'foreign-listener' | 'stale-needs-lock' | 'not-a-socket',
+      | 'path-too-long'
+      | 'bad-directory'
+      | 'foreign-listener'
+      | 'stale-needs-lock'
+      | 'not-a-socket'
+      | 'closed',
     message: string,
   ) {
     super(message)
