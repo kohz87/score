@@ -243,7 +243,9 @@ export function ScoreTimeline({ snapshot }: { snapshot: NowSnapshot }) {
                       />
                     )}
                   </span>
-                  <span className="now-lane-role">{role}</span>
+                  <span className="now-lane-role" title={role ?? undefined}>
+                    {role}
+                  </span>
                   {runtimeLabel(agent?.runtime) && (
                     <span className="now-lane-role">{runtimeLabel(agent?.runtime)}</span>
                   )}

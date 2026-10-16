@@ -647,7 +647,9 @@ export function Composer({
                   onClick={() => select(position)}
                 >
                   <span className="chat-menu-command">/{item.name}</span>
-                  <span>{item.description}</span>
+                  <span className="chat-menu-detail" title={item.description}>
+                    {item.description}
+                  </span>
                 </button>
               ))
             : mentionItems.map((agent, position) => (
@@ -663,7 +665,9 @@ export function Composer({
                 >
                   <AgentGlyph agent={agent} size="xs" bare decorative />
                   <span className="chat-menu-command">@{agent.id}</span>
-                  <span>{agent.role}</span>
+                  <span className="chat-menu-detail" title={agent.role ?? undefined}>
+                    {agent.role}
+                  </span>
                 </button>
               ))}
         </div>

@@ -702,6 +702,15 @@
   font-weight: 500;
   min-width: 90px;
   color: var(--ink);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+/* One line per option, however long an agent's description is (full text on hover). */
+.chat-menu-detail {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .chat-composer-notice {
   margin-bottom: 10px;
