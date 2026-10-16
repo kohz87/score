@@ -25,7 +25,7 @@ import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import type { KnowledgeAgentApi } from '../knowledge/agent-api.ts'
-import { redact } from '../redact.ts'
+import { redact, redactValue } from '../redact.ts'
 import type { McpAccessStore } from './access.ts'
 
 export interface McpToolDeps {
@@ -90,7 +90,14 @@ export function createMcpServer(
           )
         return text(await run(args))
       } catch (error) {
-        if (error instanceof HttpError) return failure(`${error.code}: ${error.message}`)
+        // The details (the current etag of a conflict, retryAfterSeconds) are what the agent needs to act, as on the
+        // bridge path; only the error's own typed payload, redacted, never a stack.
+        if (error instanceof HttpError)
+          return failure(
+            error.details === undefined
+              ? `${error.code}: ${error.message}`
+              : `${error.code}: ${error.message}\n${JSON.stringify({ details: redactValue(error.details) })}`,
+          )
         throw error
       } finally {
         end()
