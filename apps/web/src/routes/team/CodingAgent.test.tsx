@@ -24,19 +24,16 @@ const runtimes = [
       'Antigravity can also browse the web, generate images, schedule work and run sub-agents.',
   }),
 ]
-const usage = {
-  runtime: 'antigravity',
-  fetchedAt: '2026-10-11T00:00:00.000Z',
-  groups: [
-    {
-      name: 'Gemini Pro',
-      fiveHourRemainingPercent: 82,
-      fiveHourResets: 'resets in 3h',
-      weeklyRemainingPercent: 64,
-      weeklyResets: null,
-    },
-  ],
-  text: 'table',
+const quota = {
+  quota: {
+    runtime: 'antigravity',
+    seenAt: '2026-10-11T00:00:00.000Z',
+    source: 'usage',
+    windows: [
+      { name: '5 hours', group: 'Gemini Pro', usedPercent: 18, resetsAt: null },
+      { name: 'week', group: 'Gemini Pro', usedPercent: 36, resetsAt: null },
+    ],
+  },
 }
 let posted: unknown[]
 beforeEach(() => {
@@ -46,7 +43,7 @@ beforeEach(() => {
       posted.push(JSON.parse(String(init.body)))
       return new Response('{"error":{"code":"x","message":"stop here"}}', { status: 400 })
     }
-    const body = path.endsWith('/usage') ? usage : { items: runtimes }
+    const body = path.endsWith('/quota') ? quota : { items: runtimes }
     return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
   })
 })
@@ -72,7 +69,11 @@ test('Antigravity: warning, quota, unverified level disabled, no read acknowledg
     await screen.findByText(/browse the web, generate images/, {}, { timeout: 10_000 }),
   ).toBeDefined()
   expect(
-    await screen.findByText(/Gemini Pro: 82% left in the 5-hour window/, {}, { timeout: 10_000 }),
+    await screen.findByText(
+      /Gemini Pro 5 hours 82% left · Gemini Pro week 64% left/,
+      {},
+      { timeout: 10_000 },
+    ),
   ).toBeDefined()
   const full = screen.getByRole('radio', { name: /Full access/ })
   expect((full as HTMLInputElement).disabled).toBe(true)
