@@ -11,7 +11,7 @@
     }
     var mode = window.localStorage.getItem('score.theme')
     if (mode === 'light' || mode === 'dark') root.setAttribute('data-theme', mode)
-  } catch (error) {
+  } catch {
     // Blocked storage: the default look.
   }
   if (!root.hasAttribute('data-pack')) {
