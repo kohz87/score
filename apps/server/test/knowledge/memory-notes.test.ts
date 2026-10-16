@@ -65,9 +65,15 @@ test('room names become safe file names', () => {
 })
 
 test('the monthly index lists notes by weight (5 first), then newest day', async () => {
-  const a = await saveMemoryNote(h.vault, input({ roomName: 'Alpha', now: Date.UTC(2026, 9, 3, 4) }))
+  const a = await saveMemoryNote(
+    h.vault,
+    input({ roomName: 'Alpha', now: Date.UTC(2026, 9, 3, 4) }),
+  )
   const b = await saveMemoryNote(h.vault, input({ roomName: 'Beta', now: Date.UTC(2026, 9, 9, 4) }))
-  const c = await saveMemoryNote(h.vault, input({ roomName: 'Gamma', now: Date.UTC(2026, 9, 5, 4) }))
+  const c = await saveMemoryNote(
+    h.vault,
+    input({ roomName: 'Gamma', now: Date.UTC(2026, 9, 5, 4) }),
+  )
   const index = 'Memory/builder/2026/10/index.md'
   const order = () =>
     [...read(index).matchAll(/\[\[[^|]*\|([^\]]+)\]\]/g)].map((match) => match[1]!.slice(11))

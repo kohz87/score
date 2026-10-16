@@ -755,7 +755,9 @@ export class KnowledgeVault {
     if (current === content) return
     await this.commitOutside()
     const target = await this.prepareParent(rel)
-    await this.atomicWrite(target, content, { hash: current === null ? null : hashContent(current) })
+    await this.atomicWrite(target, content, {
+      hash: current === null ? null : hashContent(current),
+    })
     await this.commit([rel], `${stat ? 'Update' : 'Create'} ${rel}`, author, rel)
     await this.indexFile(rel, author)
     await this.publish({ path: rel, kind: 'written', to: null, by: author })

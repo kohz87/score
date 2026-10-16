@@ -93,7 +93,11 @@ const compacted = () =>
     )
 async function compact(roomId: string, agent = 'builder') {
   const before = compacted().length
-  const accepted = await send('POST', `/api/agents/${agent}/sessions/score-${roomId}-${agent}/compact`, {})
+  const accepted = await send(
+    'POST',
+    `/api/agents/${agent}/sessions/score-${roomId}-${agent}/compact`,
+    {},
+  )
   expect(accepted.statusCode).toBe(202)
   await vi.waitFor(() => expect(compacted()).toHaveLength(before + 1), { timeout: 3000 })
   return compacted().at(-1)!.data as { status: string; memoryNote: string | null }
@@ -120,7 +124,13 @@ test('compacting a room saves the summary as a dated memory note and reports its
 })
 
 test('the setting turns memory notes off, and a compaction then writes nothing', async () => {
-  expect(((await app.inject({ method: 'GET', url: '/api/knowledge', headers })).json() as { memoryNotes: boolean }).memoryNotes).toBe(true)
+  expect(
+    (
+      (await app.inject({ method: 'GET', url: '/api/knowledge', headers })).json() as {
+        memoryNotes: boolean
+      }
+    ).memoryNotes,
+  ).toBe(true)
   const off = await send('PUT', '/api/knowledge/settings', { memoryNotes: false })
   expect(off.json()).toMatchObject({ memoryNotes: false, agentAccess: true })
   const r = await room()

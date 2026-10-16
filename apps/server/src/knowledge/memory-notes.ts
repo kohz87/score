@@ -17,6 +17,8 @@ const MAX_SAME_DAY = 99
 /** A room name as a file name: no path or link punctuation, one line, at most 60 characters. */
 export function memoryFileLabel(roomName: string): string {
   const cleaned = roomName
+    // Control characters can't be part of a file name.
+    // eslint-disable-next-line no-control-regex
     .replace(/[\\/:*?"<>|#^[\]\u0000-\u001f]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()

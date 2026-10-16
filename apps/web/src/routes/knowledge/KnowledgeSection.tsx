@@ -59,6 +59,25 @@ export function KnowledgeSection() {
             are never served, but Score can’t recognise every secret, so don’t store secrets in
             notes.
           </p>
+          <label className="kn-check">
+            <input
+              type="checkbox"
+              role="switch"
+              checked={info.data.memoryNotes}
+              disabled={actions.setMemoryNotes.isPending}
+              onChange={(event) => actions.setMemoryNotes.mutate(event.target.checked)}
+            />
+            Save compacted summaries as memory notes
+          </label>
+          <p className="settings-muted-strong">
+            When you compact an agent’s context, Score saves the summary as a note under Memory in
+            Knowledge, with a list for each month.
+          </p>
+          {actions.setMemoryNotes.isError && (
+            <p role="alert">
+              {knowledgeFailure(actions.setMemoryNotes.error, 'change this setting')}
+            </p>
+          )}
           <AgentUsage />
           {actions.setAgentAccess.isError && (
             <p role="alert">
