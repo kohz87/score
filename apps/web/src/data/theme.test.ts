@@ -38,8 +38,10 @@ function block(selector: string): Record<string, string> {
     [...body.matchAll(/--([\w-]+):\s*(#[0-9a-f]{6})/gi)].map((m) => [m[1]!, m[2]!]),
   )
 }
-const light = block(':root {')
-const dark = { ...light, ...block(":root[data-theme='dark'] {") }
+// The default pack's tokens are also scoped to [data-pack='score'] so Settings can preview it inside another pack.
+const darkSelector = ":root[data-theme='dark'],\n[data-pack='score'][data-theme='dark'] {"
+const light = block(":root,\n[data-pack='score'] {")
+const dark = { ...light, ...block(darkSelector) }
 const luminance = (hex: string) => {
   const [r, g, b] = [1, 3, 5].map((i) => {
     const c = parseInt(hex.slice(i, i + 2), 16) / 255
@@ -98,6 +100,6 @@ test('the System block repeats every dark value', () => {
       (m) => [m[1]!, m[2]!],
     ),
   )
-  expect(system).toEqual(block(":root[data-theme='dark'] {"))
+  expect(system).toEqual(block(darkSelector))
   expect(Object.keys(system).length).toBeGreaterThan(30)
 })
