@@ -348,7 +348,8 @@ export const claudeDriver: CodingDriver = {
   executable: 'claude',
   // 2.1.296: real read-only turns on 2026-10-13 (7.7a live check; captured record shapes in coding-drivers.test.ts), owner
   // decision 77.
-  testedVersions: ['2.1.295', '2.1.296'],
+  // 2.1.301: real read-only turn on 2026-10-16 (owner-approved), record shapes unchanged.
+  testedVersions: ['2.1.295', '2.1.296', '2.1.301'],
   supported: true,
   quota: 'Uses your Claude plan quota (the CLI’s own login).',
   promptVia: 'stdin',
@@ -389,7 +390,7 @@ export const claudeDriver: CodingDriver = {
   },
   worker: {
     // Checked against `claude --help` of 2.1.296 (the installed CLI, 2026-10-13); 2.1.295 is the pinned test version.
-    versions: ['2.1.295', '2.1.296'],
+    versions: ['2.1.295', '2.1.296', '2.1.301'],
     neutralised: [
       {
         source: 'MCP servers (user, project, local and managed)',

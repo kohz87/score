@@ -3,6 +3,13 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.3.3] — 2026-10-16
+
+### Changed
+- Claude Code **2.1.301** and Antigravity **1.3.6** are tested versions, so agents using them no longer ask you to
+  confirm the version (each checked with a real read-only turn; Antigravity on Gemini 4 Argon). To use Gemini 4 Argon,
+  set an Antigravity agent's model to `gemini-4-argon-low`, `-medium` or `-high`.
+
 ## [1.3.2] — 2026-10-15
 
 Fixes from a fourth external audit of 1.3.1 (seven findings plus one to verify; `docs/reviews/2026-10-15-external-audit-4.md`).

@@ -306,7 +306,8 @@ export const antigravityDriver: CodingDriver = {
   resumeRefusal: /^conversation \S+ not found\b/i,
   label: 'Antigravity (agy)',
   executable: 'agy',
-  testedVersions: ['1.3.3'],
+  // 1.3.6: real read-only turn on gemini-4-argon-medium on 2026-10-16 (owner-approved), record shapes unchanged.
+  testedVersions: ['1.3.3', '1.3.6'],
   supported: true,
   quota: 'Uses your Google Antigravity plan quota (5-hour and weekly limits).',
   promptVia: 'argv',
