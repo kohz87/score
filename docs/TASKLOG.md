@@ -153,3 +153,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   e2e 309/318 → the 9 failures were the new packs' Settings baselines made before 8.2's Knowledge switch; regenerated (9/9).
   Existing default-look baselines unchanged. Noted, not fixed: default `--line-strong` on cards is 2.68:1 (< 3:1) —
   changing it alters the default look; for the owner to decide.
+- **8.4 chat-first user view** merged. Front end only (no server/contract/migration). Lead review: check green (contract 1208,
+  web 1377, server 3896, plugin 323), e2e 338/344 → the 6 failures were the user-view run baselines changed by the lead's
+  fixes: decision-card buttons were unstyled in the user view (button styles scoped to admin containers; `.user-needs`
+  added), messages showed through the 8px strip above the sticky run bar (covered), run bar narrower than messages on
+  phones (full width < 600px). Regenerated and re-viewed; user-view + orchestration visuals 32/32. Accepted deviations:
+  flat Rooms/Agents list instead of RoomList; workflow rooms keep the admin panel; "most recent room" is per browser.
