@@ -375,3 +375,21 @@ memories, skills over time); Score as an MCP tool server for its agents.
 **6.5 Knowledge editor** · (owner 2026-10-10) Obsidian-style live preview in CodeMirror (Markdown rendered inline except the edited line; files stay byte-exact), notes open rendered by default, split view on wide screens, styled tables/code/quotes/task lists/callouts.
 Not planned (owner): full-screen voice stage; multiple user accounts with roles.
 
+
+## Phase 8: reading and living with it (owner 2026-10-16)
+**8.1 CLI quota meters** · Team › coding agent (and the agent picker) shows each CLI's own quota as meters: Antigravity
+from its `/usage` answer (per model group, 5-hour and weekly, resets in the owner's timezone); Claude Code from the
+`rate_limit_event` every turn already sends (5-hour and 7-day utilisation and resets, "as of the last turn"); Codex from
+the `rate_limits` line in Codex's own session log of runs Score started (located by the run's thread id, read-only,
+never other Codex files; unknown if the format changes). No extra CLI calls.
+**8.2 Memory notes from compaction** · When a Hermes session is compacted (5.36), Score saves the summary as a Knowledge
+note `Memory/<agent>/<YYYY>/<MM>/<YYYY-MM-DD> <room>.md` (frontmatter: date, agent, room, session, weight 1–5 default 3,
+changeable in the note), never overwriting; a monthly index note per agent lists that month's notes, highest weight
+first. Written through the vault (history, the 6.x write rules); agents can read them like any note.
+**8.3 Theme packs** · Settings › Look offers built-in themes (3–4) that change colours, fonts, corner radius, spacing
+density and a few layout variants (e.g. side navigation vs top navigation), switched live and remembered; a theme is a
+small file of design tokens plus a layout choice; today's look stays the default theme. Design first.
+**8.4 Chat-first user view** · (reference: a Grok-style chatbot app) a second interface for the same owner: a chat
+window with a sidebar of rooms and conversations, a composer that can start an orchestration, and progress arriving as
+chat messages; no Reports, Team or Settings. The current interface stays as the admin view; switch in the avatar menu,
+optionally guarded by the security password. Single owner (multi-user accounts stay not planned). Design first.
