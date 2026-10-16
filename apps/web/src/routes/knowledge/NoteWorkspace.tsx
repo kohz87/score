@@ -1,6 +1,7 @@
 import type {
   AgentSummary,
   KnowledgeChanged,
+  KnowledgeHistoryStatus,
   KnowledgeNote,
   KnowledgeNoteSummary,
 } from '@score/contract'
@@ -146,7 +147,8 @@ function Pane({
   const [changedElsewhere, setChangedElsewhere] = useState(false)
   const [saveError, setSaveError] = useState<unknown>(null)
   // The last save landed but git refused to record it (other than an ignore rule).
-  const [historyMissed, setHistoryMissed] = useState(false)
+  // What the last save did to history; `failed` offers a retry, `git_unavailable` explains why there is none.
+  const [historyStatus, setHistoryStatus] = useState<KnowledgeHistoryStatus>('committed')
   const [conflict, setConflict] = useState<{ etag: string | null } | null>(
     orphan && orphan.etag !== session.etag ? { etag: session.etag } : null,
   )
@@ -202,7 +204,7 @@ function Pane({
           setCompare(null)
           setSaveError(null)
           if (!unmounted.current) {
-            setHistoryMissed(!response.historyUpdated)
+            setHistoryStatus(response.history)
             refreshPanels()
           }
           if (draftRef.current !== body) {
@@ -388,9 +390,22 @@ function Pane({
             </span>
           </p>
         )}
-        {historyMissed && (
+        {historyStatus === 'failed' && (
           <p className="kn-banner is-warn" role="status" data-testid="history-missed">
-            Saved, but history wasn’t updated. Your note is safe; the next save tries again.
+            <span>Saved, but history wasn’t updated. Your note is safe.</span>
+            <button
+              type="button"
+              disabled={status === 'saving'}
+              onClick={() => void save(etagRef.current)}
+            >
+              Save to history again
+            </button>
+          </p>
+        )}
+        {historyStatus === 'git_unavailable' && (
+          <p className="kn-banner is-warn" role="status" data-testid="history-unavailable">
+            Saved, but Knowledge history isn’t working, so this version isn’t recorded. Fix git in
+            the Knowledge folder; the note stays as it is.
           </p>
         )}
         {status === 'error' && (

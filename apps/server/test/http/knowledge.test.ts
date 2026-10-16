@@ -157,6 +157,7 @@ describe('writes', () => {
       path: 'New ideas/Idea one.md',
       versioned: true,
       historyUpdated: true,
+      history: 'committed',
     })
     const dup = await call('PUT', `${N}${enc('New ideas/Idea one.md')}`, {
       body: 'again',
@@ -279,6 +280,7 @@ describe('writes', () => {
       path: 'h.md',
       versioned: true,
       historyUpdated: true,
+      history: 'committed',
     })
     expect((await call('GET', `${N}h.md`)).json().body).toBe('v1')
     expect((await call('GET', `${N}h.md/history`)).json().items).toHaveLength(3)

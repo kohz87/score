@@ -1308,7 +1308,14 @@ tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
   path | null }[]; backlinks: { path; title }[]; lastAuthor; versioned }`. `versioned` is `false` when the note's path is Git-ignored and untracked (a `.gitignore` or global ignore rule excludes it): Score saves it but never force-adds it, so it has no history (owner decision 80). Tracked notes keep history even if a rule later matches them. Title: frontmatter `title`, else the first `# H1`, else
   the file name. Wikilinks `[[Target]]`, `[[Target|alias]]`, `[[Target#heading]]` resolve Obsidian-style (exact path,
   then a unique basename, case-insensitive); unresolved links have `path: null`.
-- **H** `PUT /api/knowledge/notes/*path` `{ body; frontmatter?; etag | null }` → `{ etag; path; versioned; historyUpdated }` (`versioned: false`: the note is Git-ignored and untracked, saved without history; `historyUpdated: false`: the note is saved but the git commit failed for another reason, logged, and the next "Outside changes" commit catches up); `412
+- **H** `PUT /api/knowledge/notes/*path` `{ body; frontmatter?; etag | null }` → `{ etag; path; history; versioned; historyUpdated }`. `history` is the one status of the save: `committed` (a new history
+  entry), `unchanged` (the saved content is already in history for that path), `not_versioned` (the path is Git-ignored and
+  untracked, saved without history, decision 80; Score never force-adds), `git_unavailable` (there is no working git
+  repository: saved, nothing recorded) or `failed` (the git commit failed: saved, logged, history pending). A save whose
+  content equals the file on disk still checks history and retries a commit that failed earlier (`committed` = repaired,
+  `unchanged` = it was already there), so the same request again is a "save to history again". `versioned` and `historyUpdated`
+  stay for compatibility: `versioned` is false for `not_versioned` and `git_unavailable`; `historyUpdated` is true for
+  `committed`, `unchanged` and `not_versioned`; ``412
   precondition_failed` with `details.etag` on a stale etag; `etag: null` creates and refuses an existing note (`409
   exists`); missing folders are created. Atomic write, then a git commit (author `You`); rapid edits of one note by one
   author within 60 s amend Score's own last commit when it is still `HEAD`. Before any save, move, delete or restore Score
@@ -1333,22 +1340,21 @@ tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
 **Documents and zips (PLAN 6.6).** Files that are not Markdown notes live in the same vault and tree: `.pdf`, `.docx`,
 `.csv`, `.json`, `.html`/`.htm`, images (png, jpeg, gif, webp) and `.zip`. `.md`/`.markdown` (any case) uploads and `.txt`
 (all stored as `<name>.md`) become notes, with the same checks as an ordinary save. A file never replaces one that appeared meanwhile: with `ask` or `keep` a name that was taken after the check is a `409`
-(a zip entry is skipped); `replace` publishes only over the version it saw (`412` otherwise). Limits: 25 MB per file; documents up to 10 MB are committed to the vault's git,
-larger ones are stored but not versioned (`versioned: false`); extracted text is redacted (D6), cut at 2 MiB
+(a zip entry is skipped); `replace` publishes only over the version it saw (`412` otherwise). Limits: 25 MB per file; documents up to 10 MB are committed to the vault's git unless their path is Git-ignored and untracked (size decides eligibility, the same ignore rule as notes decides the rest; both are stored, `versioned: false`, and never force-added); extracted text is redacted (D6), cut at 2 MiB
 (`textStatus: 'truncated'`) and indexed in its own FTS table. Text of PDF (`unpdf`) and DOCX (`mammoth`) is extracted in a
 worker thread (20 s, 512 MB heap); a failure keeps the file with `textStatus: 'unavailable'`. Types are decided from
 the bytes (magic numbers), never the extension or declared type alone. Names: no `..`, absolute, dot-segments or `.git`.
 - `GET /api/knowledge/tree` now also returns `documents: KnowledgeDocumentSummary[]` `{ path; type; size; mtime;
   lastAuthor; versioned; textStatus }`; `GET /api/knowledge` also `documents` and `documentBytes`.
 - **H** `PUT /api/knowledge/files/*path?onConflict=ask|keep|replace&mode=keep|unzip|preview&folder=` with the raw file as
-  the body (`application/octet-stream`, at most 25 MB) -> `{ path; kind: 'note'|'document'; replaced }` (201). A name that
+  the body (`application/octet-stream`, at most 25 MB) -> `{ path; kind: 'note'|'document'; replaced; history }` (201; `history` as for a note save, for a document it is `not_versioned` when it is over 10 MB or Git-ignored and untracked). A name that
   exists answers `409 exists` with `details.existing[]` (`ask`, the default); `keep` adds ` (2)`, ` (3)` to the name;
   `replace` overwrites (a note keeps its history; a document is a new commit when versioned). Unsupported or
   mismatching content -> `415 unsupported_type`; over 25 MB -> `413`.
 - Zip files (`mode`, default `keep`): `keep` stores the zip as a document (its file list shows on its page; not
   indexed); `preview` stores nothing and returns `KnowledgeZipPreview` `{ entries: { path; size; action; reason }[];
   more; extractCount }`; `unzip` extracts into `folder` (default: the zip's name) -> `KnowledgeUnzipResult` `{ folder;
-  written[]; skipped[] }` in one commit "Unzipped <name>.zip". The zip is read in a worker thread: at most 1,000
+  written[]; skipped[]; history }` in one commit "Unzipped <name>.zip". The zip is read in a worker thread: at most 1,000
   entries, 200 MB uncompressed in total, 100:1 compression ratio per entry (entries under 64 KiB exempt), sizes
   checked while inflating; entry paths are normalised and confined to the folder (no `..`, absolute paths, drive
   letters, dot-files, `.git`); symlinks and directories are ignored; nested zips are kept as files; only the allowed
@@ -1390,11 +1396,15 @@ active line; a Source toggle shows plain Markdown). No new endpoints; the note r
   any other type -> `415 unsupported_type`), well-formed base64, decoded size <= 1.5 MiB (`413 payload_too_large`), and
   magic bytes that match the declared type (`415 unsupported_type`). Export keeps the bytes as stored.
 - Agents never see the base64: `knowledge_read` (bridge and MCP `knowledge.read`) replaces each embedded image with
-  `[image: <alt>, <size>]` (e.g. `[image: diagram, 240 KB]`); the 256 KiB read cut applies after that. FTS indexing and
+  a numbered placeholder `[image <n>: <alt>, <size>]` (e.g. `[image 2: diagram, 240 KB]`, where `n` is the image's place in
+  the note, counting from 1); the 256 KiB read cut applies after that. FTS indexing and
   snippets skip data URIs. `knowledge_write` and `knowledge_append` refuse a body that contains an embedded image
-  (`400 images_not_allowed`); on `knowledge_write` over an existing note, a placeholder the agent kept (same text, in order) is
-  turned back into the original image, so an edit by an agent does not delete the images it could not see; a placeholder it
-  removed deletes that image.
+  (`400 images_not_allowed`). On `knowledge_write` over an existing note, a placeholder the agent kept is turned back
+  into the original image, so an edit by an agent does not delete the images it could not see: `[image 2: ...]`
+  restores the note's 2nd image only when its `alt, size` still matches; a number the note doesn't have, a text that
+  doesn't match, or a number used twice stays plain text (never another image). An old placeholder without a number
+  (`[image: <alt>, <size>]`) restores only when exactly one image has that text; with more than one the write is
+  refused `409 ambiguous_image` ("read the note again"). A placeholder the agent removed deletes that image.
 - The web CSP already allows `img-src data:`; scripts and objects from data URIs stay blocked.
 - Errors: path outside the vault, `..`, NUL, absolute, `.git` → `400 bad_path`; not a `.md` note where one is needed →
   `400 not_a_note`; too large (note > 8 MiB) → `413 payload_too_large`; missing → `404 not_found`.
