@@ -297,3 +297,43 @@ test('fix-l: a room summary that points at a lead note does not block pruning; t
   // Referenced data stays, like a referenced reply.
   expect(h.rows("SELECT 1 FROM messages WHERE id LIKE 'orc-note:%'")).toHaveLength(1)
 })
+
+test('fix-argon A1: compaction keeps a dispatch witness (a refused or closed generation) as a tombstone, so a restart is not frozen', async () => {
+  const { GlobalFenceStore, unjournaledAttempts } =
+    await import('../../src/domain/orchestration/fence.ts')
+  h = await harness()
+  const id = await h.create({ gatePolicy: 'none' })
+  await h.until(() => status(id) === 'succeeded')
+  const attempts = h.rows<{ id: string; dispatch_generation: number }>(
+    'SELECT id, dispatch_generation FROM orc_attempts WHERE dispatch_generation > 0 ORDER BY id',
+  )
+  expect(attempts.length).toBeGreaterThanOrEqual(2)
+  // One attempt ends refused-before-launch, another closed-before-launch: both fold into a witness and then drop.
+  const [refused, closed] = [attempts[0]!, attempts[1]!]
+  h.journal.append({
+    kind: 'send_refused',
+    attemptId: refused.id,
+    orchestrationId: id,
+    generation: refused.dispatch_generation,
+  })
+  h.journal.append({
+    kind: 'send_closed',
+    attemptId: closed.id,
+    orchestrationId: id,
+    generation: closed.dispatch_generation,
+    cause: 'stop',
+  })
+  h.db.sqlite.prepare("UPDATE orc_attempts SET state = 'terminated'").run()
+  h.orch.maintenance()
+  const after = h.journal.readOwn()
+  if (!after.ok) throw new Error('journal unreadable')
+  expect(unjournaledAttempts(h.db.sqlite, after.entries, 'test-home')).toEqual([])
+  const restart = new GlobalFenceStore(h.db, h.journal).startupCheck()
+  expect(restart.reasons).not.toContain('journal_truncated')
+  // A genuinely truncated journal still freezes.
+  const { writeFileSync } = await import('node:fs')
+  const { JOURNAL_FILE } = await import('../../src/domain/orchestration/journal.ts')
+  writeFileSync(`${h.dir}/journal/${JOURNAL_FILE}`, '')
+  const rows = unjournaledAttempts(h.db.sqlite, [], 'test-home')
+  expect(rows.length).toBeGreaterThan(0)
+})
