@@ -1,3 +1,5 @@
+import type { CodingQuotaWindow } from '@score/contract'
+import { claudeQuotaFromRecord } from './quota.ts'
 import { withBounds } from './note.ts'
 import { z } from 'zod'
 import { redact } from '../../redact.ts'
@@ -150,8 +152,11 @@ function createInnerClaudeParser(cwd?: string): LineParser {
     lossNote ??= note
   }
   let resultSeen = false
+  // The latest rate-limit windows of the stream (8.1): kept for the meters, never part of a verdict.
+  let quota: CodingQuotaWindow[] | null = null
   return {
     stats,
+    quota: () => quota,
     lossReason: () =>
       lossNote ?? (stats.malformed > 0 ? 'Score dropped a record of this turn' : null),
     parse(line) {
@@ -296,6 +301,7 @@ function createInnerClaudeParser(cwd?: string): LineParser {
         })
         return events
       }
+      if (envelopeType === 'rate_limit_event') quota = claudeQuotaFromRecord(value) ?? quota
       // Known envelope without meaning for us: only the allow-listed notices (and non-init system records, hooks…) may be
       // ignored. A `result` that failed validation is exactly what must not vanish.
       stats.unknown++

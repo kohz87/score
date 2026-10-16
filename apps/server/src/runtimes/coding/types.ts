@@ -1,4 +1,4 @@
-import type { CodingPermission, CodingRuntime } from '@score/contract'
+import type { CodingPermission, CodingQuotaWindow, CodingRuntime } from '@score/contract'
 
 /**
  * What a driver makes of one CLI stream line. Drivers are the only code that knows a CLI's flags and event shapes
@@ -68,6 +68,8 @@ export interface LineParser {
    * was dropped or invalid, also after the result). Asked once the stream is complete; null = no loss seen.
    */
   lossReason?(): string | null
+  /** The latest quota windows the CLI reported in this stream (PLAN 8.1), if any. Never affects a verdict. */
+  quota?(): CodingQuotaWindow[] | null
   /** Bytes the parser (and the candidate result it produced) currently hold; the installation budget charges this. */
   retainedBytes?(): number
 }

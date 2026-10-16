@@ -155,3 +155,26 @@ export const CodingUsageSchema = z.object({
   text: z.string(),
 })
 export type CodingUsage = z.infer<typeof CodingUsageSchema>
+
+/**
+ * A coding CLI's own quota meters (PLAN 8.1, decision 82). One shape for all three CLIs. `usedPercent` is the share of
+ * the window already used (the web shows "% left"); null when the CLI didn't say. `group` names the model group
+ * (Antigravity) and is null otherwise.
+ */
+export const CodingQuotaWindowSchema = z.object({
+  name: z.enum(['5 hours', 'week']),
+  group: z.string().min(1).max(100).nullable(),
+  usedPercent: z.number().min(0).max(100).nullable(),
+  resetsAt: z.iso.datetime().nullable(),
+})
+export const CodingQuotaSchema = z.object({
+  runtime: CodingRuntimeSchema,
+  seenAt: z.iso.datetime(),
+  windows: z.array(CodingQuotaWindowSchema).max(24),
+  source: z.enum(['usage', 'turn', 'log']),
+})
+export type CodingQuotaWindow = z.infer<typeof CodingQuotaWindowSchema>
+export type CodingQuota = z.infer<typeof CodingQuotaSchema>
+/** `GET /api/coding-agents/:id/quota` and `GET /api/coding-agents/runtimes/:runtime/quota`: null until a reading exists. */
+export const CodingQuotaResponseSchema = z.object({ quota: CodingQuotaSchema.nullable() })
+export type CodingQuotaResponse = z.infer<typeof CodingQuotaResponseSchema>

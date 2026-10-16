@@ -1,8 +1,10 @@
 import {
   CodingPermissionSchema,
+  CodingQuotaSchema,
   CodingRuntimeSchema,
   ShapeSchema,
   type CodingPermission,
+  type CodingQuota,
   type CodingRuntime,
 } from '@score/contract'
 import type { DatabaseSync } from 'node:sqlite'
@@ -154,4 +156,58 @@ export function forgetCliSession(sqlite: DatabaseSync, roomId: string, agentId: 
   sqlite
     .prepare('DELETE FROM coding_sessions WHERE room_id = ? AND agent_id = ?')
     .run(roomId, agentId)
+}
+
+const QuotaRowSchema = z.object({
+  agent_id: z.string(),
+  runtime: CodingRuntimeSchema,
+  seen_at: z.iso.datetime(),
+  source: z.enum(['usage', 'turn', 'log']),
+  windows: z.string(),
+})
+const toQuota = (value: unknown): CodingQuota | null => {
+  const row = QuotaRowSchema.safeParse(value)
+  if (!row.success) return null
+  let windows: unknown
+  try {
+    windows = JSON.parse(row.data.windows)
+  } catch {
+    return null
+  }
+  const parsed = CodingQuotaSchema.safeParse({
+    runtime: row.data.runtime,
+    seenAt: row.data.seen_at,
+    source: row.data.source,
+    windows,
+  })
+  return parsed.success ? parsed.data : null
+}
+
+/** The latest quota reading of this agent (replaces the previous one). Only these validated numbers are stored. */
+export function saveCodingQuota(sqlite: DatabaseSync, agentId: string, quota: CodingQuota): void {
+  const valid = CodingQuotaSchema.parse(quota)
+  sqlite
+    .prepare(
+      `INSERT INTO coding_quota (agent_id, runtime, seen_at, source, windows) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(agent_id) DO UPDATE SET runtime = excluded.runtime, seen_at = excluded.seen_at,
+         source = excluded.source, windows = excluded.windows`,
+    )
+    .run(agentId, valid.runtime, valid.seenAt, valid.source, JSON.stringify(valid.windows))
+}
+export function getCodingQuota(sqlite: DatabaseSync, agentId: string): CodingQuota | null {
+  const row = sqlite.prepare('SELECT * FROM coding_quota WHERE agent_id = ?').get(agentId)
+  return row === undefined ? null : toQuota(row)
+}
+/** The most recent reading of any live agent of this runtime. */
+export function latestCodingQuota(
+  sqlite: DatabaseSync,
+  runtime: CodingRuntime,
+): CodingQuota | null {
+  const row = sqlite
+    .prepare(
+      `SELECT q.* FROM coding_quota q JOIN coding_agents a ON a.id = q.agent_id
+        WHERE q.runtime = ? AND a.removed_at IS NULL ORDER BY q.seen_at DESC LIMIT 1`,
+    )
+    .get(runtime)
+  return row === undefined ? null : toQuota(row)
 }

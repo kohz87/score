@@ -56,7 +56,8 @@ test('claude fixture: session, text, thinking, tool calls with details, usage an
     costUsd: 0.0123,
   })
   expect(events[11]).toMatchObject({ kind: 'result', ok: true })
-  expect(parser.stats).toEqual({ unknown: 0, malformed: 0 })
+  // The rate-limit record (kept for the quota meter, never an event) is the one record counted as ignorable.
+  expect(parser.stats).toEqual({ unknown: 1, malformed: 0 })
 })
 
 test('claude: unknown shapes and malformed lines are counted and dropped, never stored', () => {

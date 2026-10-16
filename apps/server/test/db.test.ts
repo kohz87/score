@@ -93,6 +93,7 @@ test('fresh db migrates all infrastructure tables and records checksums', () => 
     'coding_pending_terminals',
     'coding_process_members',
     'coding_processes',
+    'coding_quota',
     'coding_refusals',
     'coding_releases',
     'coding_run_results',
