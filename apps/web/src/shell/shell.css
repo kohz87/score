@@ -484,3 +484,75 @@ body.scroll-locked {
 .top-bar-terminal:focus-visible {
   color: var(--ink);
 }
+
+/* Side navigation (PLAN 8.3): the same top bar becomes a left rail. Same elements, same order, so keyboard and
+   screen-reader behaviour is unchanged. Below 1100px it falls back to today's top bar. */
+@media (width >= 1100px) {
+  :root[data-layout='side'] .app-shell {
+    padding-left: var(--space-4);
+  }
+  :root[data-layout='side'] .shell-content {
+    display: grid;
+    grid-template-columns: var(--rail-width) minmax(0, 1fr);
+    column-gap: var(--space-6);
+    align-items: start;
+  }
+  :root[data-layout='side'] .top-bar {
+    position: sticky;
+    top: var(--space-5);
+    grid-column: 1;
+    grid-row: 1;
+    height: calc(100vh - 2 * var(--space-5));
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-4);
+    padding: var(--space-4);
+    background: var(--card);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-card);
+    overflow-y: auto;
+  }
+  :root[data-layout='side'] .page-content {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  :root[data-layout='side'] .brand-subtitle {
+    margin: -10px 0 0;
+  }
+  :root[data-layout='side'] .main-nav {
+    flex-direction: column;
+    align-items: stretch;
+    margin: 0;
+    padding: 0;
+    gap: var(--space-1);
+    background: none;
+    border: 0;
+    border-radius: 0;
+  }
+  :root[data-layout='side'] .main-nav-link {
+    justify-content: space-between;
+    border-radius: var(--radius-m);
+  }
+  :root[data-layout='side'] .top-bar-spacer {
+    flex: 1 1 auto;
+  }
+  :root[data-layout='side'] .command-trigger {
+    flex: 0 0 44px;
+    justify-content: flex-start;
+    padding: 0 var(--space-3);
+    gap: 10px;
+    border-radius: var(--radius-m);
+  }
+  :root[data-layout='side'] .command-trigger > span {
+    display: inline;
+  }
+  :root[data-layout='side'] .command-shortcut {
+    display: none;
+  }
+  :root[data-layout='side'] .top-bar-terminal {
+    align-self: flex-start;
+  }
+  :root[data-layout='side'] .avatar {
+    align-self: flex-start;
+  }
+}
