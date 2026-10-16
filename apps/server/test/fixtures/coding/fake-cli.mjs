@@ -42,6 +42,12 @@ if (log)
     })}\n`,
   )
 
+// `agy models` lists the models without a prompt (real output captured 2026-10-16).
+if (runtime === 'antigravity' && args[0] === 'models') {
+  process.stdout.write(readFileSync(join(here, 'antigravity-models.txt'), 'utf8'))
+  process.exit(0)
+}
+
 if (runtime === 'antigravity' && prompt === '/usage') {
   const usage = JSON.parse(readFileSync(join(here, 'antigravity-usage.json'), 'utf8'))
   delete usage._fixture
