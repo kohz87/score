@@ -253,3 +253,85 @@
     font-size: 26px;
   }
 }
+
+/* Score's status lines between messages: small, centred, never a chat bubble and never an agent. */
+.user-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.user-status-mark {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 2px;
+  background: var(--hairline);
+  border: 1.5px solid var(--muted);
+}
+.user-status[data-tone='ok'] .user-status-mark {
+  background: var(--agent-jade);
+  border-color: var(--agent-jade-text);
+}
+.user-status[data-tone='fail'] .user-status-mark {
+  background: var(--agent-coral);
+  border-color: var(--agent-coral-text);
+}
+.user-status[data-tone='need'] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.user-status[data-tone='need'] .user-status-mark {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.user-status time {
+  font-size: 12px;
+}
+
+/* The run's header and its decisions inside the conversation. */
+.user-view .user-run {
+  position: sticky;
+  top: var(--space-2);
+  z-index: 2;
+  max-width: 764px;
+  box-sizing: border-box;
+  margin: 0 auto var(--space-3);
+  width: calc(100% - 56px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) 14px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-20);
+}
+.user-view .user-run .orch-room-head {
+  position: static;
+  border: 0;
+  padding: 0;
+  background: none;
+}
+.user-run-title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.user-run-details {
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.user-needs:empty {
+  display: none;
+}

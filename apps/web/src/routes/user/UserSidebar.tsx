@@ -19,9 +19,8 @@ export function UserSidebar() {
   const rooms = useStreamQuery(roomsQuery)
   const agents = useStreamQuery(agentsQuery).data ?? []
   const live = useLiveRooms()
-  const runRooms = new Set(
-    (useStreamQuery(orchestrationsQuery).data ?? []).map((run) => run.roomId),
-  )
+  const runs = useStreamQuery(orchestrationsQuery).data ?? []
+  const runRooms = new Set(runs.map((run) => run.roomId))
   const base = userRoomPath('').replace(/\/$/, '')
   const all = [...(rooms.data?.rooms ?? []), ...(rooms.data?.directs ?? [])]
   return (
@@ -75,6 +74,7 @@ export function UserSidebar() {
                     agents={agents}
                     orchestration={runRooms.has(room.id)}
                     live={live.has(room.id)}
+                    title={runs.find((run) => run.roomId === room.id)?.title}
                     base={base}
                   />
                 ))}

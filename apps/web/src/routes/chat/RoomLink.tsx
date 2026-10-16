@@ -11,6 +11,7 @@ export function RoomLink({
   orchestration = false,
   base = '/chat',
   live = false,
+  title,
 }: {
   room: Room
   selected?: string | undefined
@@ -20,6 +21,8 @@ export function RoomLink({
   base?: string
   /** A run in this room is going now (the user view's dot). */
   live?: boolean
+  /** Shown in place of the room's name (the user view names a run's room after the run). */
+  title?: string | undefined
 }) {
   const agent = agents.find((item) => item.id === room.leadAgentId)
   return (
@@ -36,7 +39,7 @@ export function RoomLink({
               ★{' '}
             </span>
           )}
-          {room.kind === 'direct' ? (agent?.name ?? room.name) : roomLabel(room)}
+          {title ?? (room.kind === 'direct' ? (agent?.name ?? room.name) : roomLabel(room))}
         </span>
         {room.kind === 'direct' && agent && (
           <small

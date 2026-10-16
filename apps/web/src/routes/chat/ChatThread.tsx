@@ -1,5 +1,6 @@
 import type { AgentSummary } from '@score/contract'
 import {
+  Fragment,
   useCallback,
   useContext,
   useEffect,
@@ -31,11 +32,21 @@ import {
 } from './versions.tsx'
 import { useShowDeleted } from './deleted-toggle.ts'
 import { roomLabel } from './room-label.ts'
-import { orchestrationsQuery } from '../orchestrations/orchestration-queries.ts'
+import { orchestrationsQuery, useRun } from '../orchestrations/orchestration-queries.ts'
+import { UserRunNeeds, UserRunPanel } from '../user/UserRun.tsx'
+import { StatusMessageItem } from '../user/StatusMessageItem.tsx'
+import { statusMessages } from '../user/status-messages.ts'
 import { RoomRunPanel } from '../orchestrations/RoomRunPanel.tsx'
 import { WorkflowRoomPanel } from '../workflows/WorkflowRoomPanel.tsx'
 import { useStartOrchestration } from '../user/use-start-orchestration.tsx'
 import { workflowRunsQuery } from '../workflows/workflow-queries.ts'
+
+/** Something the thread draws between messages by its time without being a message. */
+export interface ThreadExtra {
+  id: string
+  at: string
+  node: ReactNode
+}
 
 export function QueryError({ text, retry }: { text: string; retry: () => void }) {
   return (
@@ -59,6 +70,8 @@ function MessagePage({
   onView,
   onChange,
   onPrepend,
+  extras = [],
+  extraUntil = null,
 }: {
   roomId: string
   before?: string | null
@@ -73,6 +86,10 @@ function MessagePage({
   onView: (view: VersionView) => void
   onChange: () => void
   onPrepend: () => void
+  /** Lines the user view draws between messages by time (Score's status messages); never stored. */
+  extras?: ThreadExtra[]
+  /** The first message time of the page below this one: lines from there on belong to that page. */
+  extraUntil?: string | null
 }) {
   const definition = useMemo(() => messagesQuery(roomId, before), [roomId, before])
   const { data, status } = useStreamQuery(definition)
@@ -123,6 +140,11 @@ function MessagePage({
           onView={onView}
           onChange={onChange}
           onPrepend={onPrepend}
+          extras={extras}
+          extraUntil={items.reduce<string | null>(
+            (first, item) => (first === null || item.createdAt < first ? item.createdAt : first),
+            extraUntil,
+          )}
         />
       ) : (
         data?.nextCursor && (
@@ -175,7 +197,22 @@ function MessagePage({
         const pending = [...markers].sort((a, b) =>
           a.anchorCreatedAt.localeCompare(b.anchorCreatedAt),
         )
+        // Each page draws the lines from its first message up to the next page's first message.
+        const lines = extras
+          .filter(
+            (extra) =>
+              (extraUntil === null || extra.at < extraUntil) &&
+              (!data?.nextCursor || (oldest !== undefined && extra.at >= oldest)),
+          )
+          .sort((a, b) => a.at.localeCompare(b.at))
+        const flushLines = (until: string | null) => {
+          while (lines[0] && (until === null || lines[0].at <= until)) {
+            const line = lines.shift()!
+            nodes.push(<Fragment key={`x-${line.id}`}>{line.node}</Fragment>)
+          }
+        }
         const flush = (until: string | null) => {
+          flushLines(until)
           while (pending[0] && (until === null || pending[0].anchorCreatedAt <= until)) {
             const version = pending.shift()!
             nodes.push(
@@ -232,6 +269,7 @@ function MessagePage({
           )
         }
         flush(null)
+        flushLines(null)
         return nodes
       })()}
       {before === null && (
@@ -345,6 +383,22 @@ export function ChatThread({
   )
   // A workflow run owns its room the same way (contract §15).
   const workflowRun = useStreamQuery(workflowRunsQuery).data?.find((item) => item.roomId === roomId)
+  // The user view tells how the run is going in the thread, from the run's recorded events.
+  const runData = useRun(userView ? orchestration?.id : undefined).data
+  const extras = useMemo<ThreadExtra[]>(() => {
+    if (!userView || !runData) return []
+    const steps = runData.snapshot.orchestration.stepsList
+    return statusMessages(runData.events, {
+      stepAgent: (id) => {
+        const agentId = steps.find((step) => step.id === id)?.agentId
+        return agentId ? (agents.find((agent) => agent.id === agentId)?.name ?? agentId) : null
+      },
+    }).map((message) => ({
+      id: message.id,
+      at: message.at,
+      node: <StatusMessageItem message={message} />,
+    }))
+  }, [userView, runData, agents])
   const owned = (orchestration ?? workflowRun)?.ownership
   const roomIsOwned = owned !== undefined && owned !== 'released'
   return (
@@ -371,7 +425,9 @@ export function ChatThread({
                   {roomLabel(room)}
                 </button>
               ) : room ? (
-                userView && room.kind === 'direct' ? (
+                userView && orchestration ? (
+                  orchestration.title
+                ) : userView && room.kind === 'direct' ? (
                   (lead?.name ?? roomLabel(room))
                 ) : (
                   roomLabel(room)
@@ -420,7 +476,12 @@ export function ChatThread({
             position.current.height = element.scrollHeight
           }}
         >
-          {orchestration && <RoomRunPanel summary={orchestration} agents={agents} />}
+          {orchestration &&
+            (userView ? (
+              <UserRunPanel summary={orchestration} />
+            ) : (
+              <RoomRunPanel summary={orchestration} agents={agents} />
+            ))}
           {workflowRun && <WorkflowRoomPanel summary={workflowRun} agents={agents} />}
           <div className="chat-messages">
             <MessagePage
@@ -432,7 +493,9 @@ export function ChatThread({
               onView={setView}
               onChange={onChange}
               onPrepend={onPrepend}
+              extras={extras}
             />
+            {userView && orchestration && <UserRunNeeds summary={orchestration} agents={agents} />}
           </div>
         </div>
       )}
@@ -443,7 +506,11 @@ export function ChatThread({
             disabled
             rows={1}
             aria-label="Message"
-            placeholder={`This room belongs to a running ${workflowRun ? 'workflow' : 'orchestration'}. Use the run controls above.`}
+            placeholder={
+              userView && !workflowRun
+                ? 'This room belongs to a running orchestration. Answer in the chat above, or use Pause or Stop.'
+                : `This room belongs to a running ${workflowRun ? 'workflow' : 'orchestration'}. Use the run controls above.`
+            }
           />
         </div>
       )}
