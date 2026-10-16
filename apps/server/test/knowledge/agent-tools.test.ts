@@ -240,7 +240,7 @@ test('read answers [image: alt, size] instead of base64; write refuses a new ima
     body: string
     etag: string
   }
-  expect(read.body).toBe('# Pics\n[image: whiteboard, 70 B]\n')
+  expect(read.body).toBe('# Pics\n[image 1: whiteboard, 70 B]\n')
   expect(read.body).not.toContain('base64')
   expect(read.etag).toBe(created.etag)
 

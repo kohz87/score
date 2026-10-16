@@ -128,7 +128,7 @@ export class KnowledgeAgentApi {
       throw new HttpError(
         400,
         'images_not_allowed',
-        'Agents cannot add embedded images to a note. Keep the [image: ...] placeholders as they are, or leave them out.',
+        'Agents cannot add embedded images to a note. Keep the [image 1: ...] placeholders as they are, or leave them out.',
       )
   }
 

@@ -36,7 +36,7 @@ SCHEMAS = {
         },
     },
     "knowledge_read": {
-        "description": _VAULT + "Read one note. Returns its body (embedded images appear as [image: alt, size]) and an etag; pass the etag to knowledge_write to update it. Given a document path (e.g. reports/q3.pdf) it returns the extracted text with kind \"document\" and a notice if the text is missing or cut; documents can't be written.",
+        "description": _VAULT + "Read one note. Returns its body (embedded images appear as numbered placeholders like [image 2: alt, 69 B]) and an etag; pass the etag to knowledge_write to update it. Given a document path (e.g. reports/q3.pdf) it returns the extracted text with kind \"document\" and a notice if the text is missing or cut; documents can't be written.",
         "parameters": {
             "type": "object",
             "properties": {"path": {"type": "string", "minLength": 1, "maxLength": 1024,
@@ -58,7 +58,7 @@ SCHEMAS = {
         "description": (
             _VAULT + _SEARCH_FIRST + "Create or replace a note's Markdown body. To create, pass expected_etag null "
             "(fails if the note exists). To update, read the note first and pass its etag; on a conflict you get the "
-            "current etag back: re-read, merge and retry. Max 256 KB. Images in a note appear as [image: alt, size] placeholders: keep them where they are to keep the images; you can't add images. Writes are versioned and can be undone by the user, except in folders the vault's .gitignore excludes: then the reply says versioned: false and there is no earlier version to go back to."
+            "current etag back: re-read, merge and retry. Max 256 KB. Images in a note appear as numbered placeholders such as [image 2: alt, 69 B] (the note's 2nd image): copy each one exactly as you read it, number included, to keep that image; delete one to remove its image; you can't add images. Writes are versioned and can be undone by the user. The reply's history field says what happened: committed or unchanged (in history), not_versioned (the vault's .gitignore excludes the folder: no earlier version to go back to), failed or git_unavailable (saved, but history wasn't updated)."
         ),
         "parameters": {
             "type": "object",
@@ -90,7 +90,7 @@ SCHEMAS = {
 
 DESCRIPTIONS = {
     "knowledge_search": "Search Score's shared Knowledge (notes and uploaded documents).",
-    "knowledge_read": "Read a note (embedded images show as [image: alt, size]), or the extracted text of an uploaded document, from Score's shared Knowledge.",
+    "knowledge_read": "Read a note (embedded images show as numbered placeholders like [image 2: alt, 69 B]), or the extracted text of an uploaded document, from Score's shared Knowledge.",
     "knowledge_list": "List notes in Score's shared Knowledge.",
     "knowledge_write": "Create or update a note in Score's shared Knowledge.",
     "knowledge_append": "Append text to a note in Score's shared Knowledge.",

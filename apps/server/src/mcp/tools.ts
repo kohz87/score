@@ -335,7 +335,7 @@ export function createMcpServer(
       'knowledge.read',
       {
         description:
-          'Read one note from Score’s Knowledge by path. Returns its etag, needed to update it. Embedded images appear as [image: alt, size] placeholders. For an uploaded document (e.g. .pdf, .docx, .csv) it returns the extracted text, read-only, with a notice when the text is missing or was cut.',
+          'Read one note from Score’s Knowledge by path. Returns its etag, needed to update it. Embedded images appear as numbered placeholders like [image 2: alt, 69 B] (the note’s 2nd image). For an uploaded document (e.g. .pdf, .docx, .csv) it returns the extracted text, read-only, with a notice when the text is missing or was cut.',
         inputSchema: { path: z.string().min(1).max(1024) },
       },
       guarded(false, ({ path }: { path: string }) => knowledge.read(agentId, path)),
@@ -344,7 +344,7 @@ export function createMcpServer(
       'knowledge.write',
       {
         description:
-          'Create or replace a note in Score’s Knowledge. Pass expectedEtag from knowledge.read to replace a note, or null to create a new one. Keep any [image: alt, size] placeholder in place to keep that image; you can’t add images.',
+          'Create or replace a note in Score’s Knowledge. Pass expectedEtag from knowledge.read to replace a note, or null to create a new one. Copy each [image 2: alt, 69 B] placeholder exactly as you read it, number included, to keep that image; delete one to remove its image; you can’t add images. The reply’s history field says whether the save reached history: committed or unchanged, not_versioned (the folder is Git-ignored: no earlier version), failed or git_unavailable (saved, history not updated).',
         inputSchema: {
           path: z.string().min(1).max(1024),
           body: z.string().max(256 * 1024),

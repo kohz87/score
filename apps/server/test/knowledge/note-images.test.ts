@@ -92,7 +92,7 @@ describe('agents and embedded images', () => {
   test('read replaces each image with a placeholder', async () => {
     await h.vault.writeNote('r.md', { body: `# R\n${png('a chart')}\ntext\n`, etag: null })
     const read = await api.read('builder', 'r.md')
-    expect(read.body).toBe('# R\n[image: a chart, 70 B]\ntext\n')
+    expect(read.body).toBe('# R\n[image 1: a chart, 70 B]\ntext\n')
     expect(read.body).not.toContain('base64')
   })
 
@@ -116,7 +116,7 @@ describe('agents and embedded images', () => {
     await api.write('builder', 'k.md', edited, first.etag)
     const after = await h.vault.readNote('k.md')
     expect(after.body).toBe(`# K\n${png('one')}\nMIDDLE EDITED\n${png('two')}\n`)
-    const dropped = edited.replace('[image: one, 70 B]\n', '')
+    const dropped = edited.replace('[image 1: one, 70 B]\n', '')
     await api.write('builder', 'k.md', dropped, after.etag)
     expect((await h.vault.readNote('k.md')).body).toBe(`# K\nMIDDLE EDITED\n${png('two')}\n`)
   })
@@ -131,7 +131,7 @@ describe('agents and embedded images', () => {
 describe('placeholder helpers', () => {
   test('alt text is cleaned and sizes are formatted', () => {
     const [image] = findNoteImages(png('a [b'))
-    expect(imagePlaceholder(image!)).toBe('[image: a  b, 70 B]')
+    expect(imagePlaceholder(image!, 1)).toBe('[image 1: a  b, 70 B]')
     expect(withPlaceholders('none')).toBe('none')
     expect(restoreImages('[image: x, 1 KB]', 'no images')).toBe('[image: x, 1 KB]')
   })

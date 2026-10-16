@@ -177,9 +177,11 @@ def test_garbage_error_body_still_gives_a_message(bridge):
 
 
 def test_tool_descriptions_explain_image_placeholders():
-    # PLAN 6.8: notes may hold embedded images; agents only ever see [image: alt, size] placeholders.
-    assert "[image: alt, size]" in knowledge.SCHEMAS["knowledge_read"]["description"]
-    assert "[image: alt, size]" in knowledge.SCHEMAS["knowledge_write"]["description"]
+    # PLAN 6.8: notes may hold embedded images; agents only ever see numbered [image 2: alt, 69 B] placeholders.
+    assert "[image 2: alt, 69 B]" in knowledge.SCHEMAS["knowledge_read"]["description"]
+    assert "[image 2: alt, 69 B]" in knowledge.SCHEMAS["knowledge_write"]["description"]
+    assert "number included" in knowledge.SCHEMAS["knowledge_write"]["description"]
+    assert "history field" in knowledge.SCHEMAS["knowledge_write"]["description"]
     assert "can't add images" in knowledge.SCHEMAS["knowledge_write"]["description"]
 
 
@@ -187,9 +189,9 @@ def test_read_passes_placeholders_through_and_a_refused_image_write_explains_its
     h = handlers(bridge)
     bridge.reply = lambda op, body: {"path": "a.md", "title": "A", "etag": "e", "truncated": False,
                                      "kind": "note", "notice": None,
-                                     "body": "# A\n[image: whiteboard, 240 KB]\n"}
+                                     "body": "# A\n[image 1: whiteboard, 240 KB]\n"}
     out = run(h["knowledge_read"], path="a.md")
-    assert out["body"] == "# A\n[image: whiteboard, 240 KB]\n"
+    assert out["body"] == "# A\n[image 1: whiteboard, 240 KB]\n"
     bridge.reply = lambda op, body: (400, {"error": {"code": "images_not_allowed",
                                                       "message": "Agents cannot add embedded images to a note."}})
     refused = run(h["knowledge_write"], path="a.md", body="![x](data:image/png;base64,AAAA)", expected_etag="e")
