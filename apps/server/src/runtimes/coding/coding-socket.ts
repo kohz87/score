@@ -585,6 +585,8 @@ export class CodingSocketServer {
   private readonly pending = new Map<string, Pending>()
   private readonly sockets = new Set<net.Socket>()
   private server: net.Server | null = null
+  /** Bumped by every shutdown: a bind that was in flight when it happened must not publish its listener. */
+  private epoch = 0
   private unauthenticated = 0
 
   constructor(private readonly options: CodingSocketOptions) {
@@ -624,7 +626,10 @@ export class CodingSocketServer {
       )
     }
     if ((stat.mode & 0o077) !== 0) chmodSync(dir, 0o700)
+    const epoch = this.epoch
     await this.clearStale(holdsInstallationLock)
+    if (epoch !== this.epoch)
+      throw new SocketStartError('closed', 'the socket server was shut down')
     const server = net.createServer((socket) => this.accept(socket))
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject)
@@ -634,6 +639,9 @@ export class CodingSocketServer {
       })
     })
     try {
+      // Shut down while the bind was in flight: the listener we just made is never published (closing it removes it).
+      if (epoch !== this.epoch)
+        throw new SocketStartError('closed', 'the socket server was shut down')
       chmodSync(this.path, 0o600)
     } catch (error) {
       // Never leave a half-set-up listener behind: the next attempt must start from nothing.
@@ -852,6 +860,7 @@ export class CodingSocketServer {
    * alone would wait for them), then close the listener and remove the socket file.
    */
   async shutdown(): Promise<void> {
+    this.epoch++
     const sessions = [...this.pending.values()].map((p) => p.session)
     const held = (this.options.frozen?.() ?? null) !== null
     await Promise.all(sessions.map((s) => s.shutdown(!held)))

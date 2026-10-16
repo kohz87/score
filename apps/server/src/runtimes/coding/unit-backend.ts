@@ -653,9 +653,18 @@ export class UnitBackend {
     return this.deps.notifySocket ?? join(this.deps.runtimeDir, 'systemd', 'notify')
   }
 
-  async close(): Promise<void> {
+  private closing: Promise<void> | null = null
+  /**
+   * Stops new binds, waits out a bind that is already in flight (the socket server refuses to publish a listener that
+   * finished after shutdown began), then shuts the listener down. Repeated calls await the same cleanup (S5-006).
+   */
+  close(): Promise<void> {
     this.closed = true
-    await this.socket.shutdown()
+    this.closing ??= (async () => {
+      await this.socket.shutdown()
+      await this.listenerAttempt?.catch(() => undefined)
+    })()
+    return this.closing
   }
 
   // ---- launch ----------------------------------------------------------------------------------------------------
