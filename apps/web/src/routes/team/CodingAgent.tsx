@@ -16,6 +16,7 @@ import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { runtimeLabel } from '../../components/runtime-label.ts'
 import { CodingBackend } from './CodingBackend.tsx'
+import { ModelPicker } from './ModelPicker.tsx'
 import { ReleaseHeld } from './ReleaseHeld.tsx'
 import { AgentQuota, RuntimeQuotaLine } from './QuotaMeters.tsx'
 
@@ -193,6 +194,8 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
           onChange={(event) => {
             const next = event.target.value as CodingRuntime
             setRuntime(next)
+            // A model name of one CLI means nothing to another.
+            setModel('')
             // A level that is not verified for the new CLI is never kept selected.
             const blocked =
               runtimes.data?.find((item) => item.runtime === next)?.unverifiedPermissions ?? []
@@ -251,15 +254,7 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
           onChange={(event) => setWorkspace(event.target.value)}
         />
       </label>
-      <label>
-        Model (optional, the CLI’s default otherwise)
-        <input
-          value={model}
-          maxLength={200}
-          pattern="[A-Za-z0-9][A-Za-z0-9._:/@+\-]*"
-          onChange={(event) => setModel(event.target.value)}
-        />
-      </label>
+      <ModelPicker key={runtime} runtime={runtime} value={model} onChange={setModel} />
       <PermissionPicker
         value={permission}
         onChange={setPermission}
@@ -483,15 +478,7 @@ function CodingSettings({
           save.mutate()
         }}
       >
-        <label>
-          Model (optional)
-          <input
-            value={model}
-            maxLength={200}
-            pattern="[A-Za-z0-9][A-Za-z0-9._:/@+\-]*"
-            onChange={(event) => setModel(event.target.value)}
-          />
-        </label>
+        <ModelPicker runtime={coding.runtime} value={model} onChange={setModel} />
         <PermissionPicker
           value={permission}
           onChange={setPermission}
