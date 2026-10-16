@@ -182,7 +182,10 @@ export class RunSession {
     private readonly limits: SocketLimits,
     private readonly budget: Budget,
     /** Bytes charged to the budget for what the run retains; grows with the parser's actual retained bytes. */
-    private readonly reservation: { bytes: number; floor: number } = { bytes: 0, floor: 0 },
+    private readonly reservation: { bytes: number; floor: number; released?: boolean } = {
+      bytes: 0,
+      floor: 0,
+    },
   ) {
     this.ready = new Promise<ReadyInfo>((resolve, reject) => {
       this.resolveReady = resolve
@@ -490,6 +493,9 @@ export class RunSession {
    * reservation. Past the installation budget the run is stopped and ineligible (review 2026-10-12 #18).
    */
   private chargeRetained(): void {
+    // A record still being ingested when the socket was lost finishes after the launch's reservation was released:
+    // nothing would ever release a new charge, so a released reservation is never charged again (S5-C01).
+    if (this.reservation.released) return
     const actual = this.handlers.retainedBytes?.()
     if (actual === undefined || !Number.isFinite(actual)) return
     const target = Math.max(this.reservation.floor, Math.ceil(actual))
@@ -558,7 +564,7 @@ interface Pending {
   session: RunSession
   used: boolean
   /** Budget bytes reserved for what the run keeps in memory besides queued records (released once, see `release`). */
-  reservation: { bytes: number; floor: number }
+  reservation: { bytes: number; floor: number; released?: boolean }
 }
 
 /** What an active run may keep in memory beyond queued records (retained text, remembered call ids): reserved up front. */
@@ -767,6 +773,7 @@ export class CodingSocketServer {
     this.budget.used -= entry.reservation.bytes
     entry.reservation.bytes = 0
     entry.reservation.floor = 0
+    entry.reservation.released = true
   }
 
   private tokenFor(launch: string, generation: number, specHash: string): string {
