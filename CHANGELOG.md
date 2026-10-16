@@ -3,6 +3,43 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.4.0] — 2026-10-16
+
+Phase 8: a chat-first view, theme packs, quota meters, a model picker for coding agents and memory notes from compaction.
+
+### Added
+- **Chat-first user view** (`/u`): a chatbot-style screen with your rooms and agents in a sidebar, one conversation at a
+  time and a large message box. Start an orchestration from chat ("+" or `/orchestrate <goal>`), follow it as short
+  status lines between the messages, and answer everything it needs — step approvals, questions, limits — right in the
+  chat, with Pause and Stop at the top. Reports, Team and Settings stay in the full (admin) view; switch views from the
+  avatar menu. Optionally ask for the security password before this browser opens the admin view (Settings › Look; a
+  convenience for a shared screen, not access control).
+- **Theme packs** in Settings › Look: Score (default, unchanged), Paper (warm, serif headings), Night shift (deep
+  blue-black, navigation on the left) and Dense (neutral, Inter, tight spacing). Each has light and dark variants and
+  passes WCAG AA contrast checks; the choice is remembered per browser and applied before the page appears.
+- **Usage limits as meters** on each coding agent: Antigravity per model group, Claude Code and Codex from their last
+  turn ("as of …"), with % left and reset times in your timezone. No extra CLI calls.
+- **Model picker** when you add or edit a coding agent: Antigravity's models from `agy models`, Codex's from its own model
+  cache (model fields only), Claude Code's aliases; "CLI default" and "Other…" are always there.
+- **Memory notes from compaction:** compacting a room session saves the summary Hermes wrote as a Knowledge note under
+  `Memory/<agent>/<year>/<month>/`, with a weight (1–5, default 3) and a monthly index sorted by weight. Notes are never
+  overwritten; turn it off in Settings › Knowledge. Only compactions started from Score produce notes (Hermes doesn't
+  tell plugins about its own automatic ones).
+
+### Changed
+- The avatar in the top bar opens a menu (switch view, theme, log out this browser).
+- The Hermes plugin returns the compaction summary (redacted, capped at 32 KB).
+- **Antigravity 1.4.0** is a tested version (agy updates itself; checked with a real read-only turn). Its new weekly-only
+  "Gemini 4 Argon" limit shows as one meter.
+
+### Fixed
+- A long agent description no longer spills over the next lanes on Now or the next entries in the @mention menu: it
+  stays on one line, with the full text on hover.
+
+### Upgrade notes
+- Two database migrations (0069 quota readings, 0070 the memory-notes setting); back up first as usual.
+- Update the Hermes plugin (`hermes_private.py`) on profiles that use Score and restart the gateway while agents are idle.
+
 ## [1.3.4] — 2026-10-16
 
 Fixes from two audits of 1.3.2, cross-referenced: a Gemini 4 Argon audit (8 findings, 6 fixed, 2 rejected after checking;

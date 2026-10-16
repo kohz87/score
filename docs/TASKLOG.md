@@ -159,3 +159,9 @@ One entry per completed task: what landed, review results, and any **rejected re
   added), messages showed through the 8px strip above the sticky run bar (covered), run bar narrower than messages on
   phones (full width < 600px). Regenerated and re-viewed; user-view + orchestration visuals 32/32. Accepted deviations:
   flat Rooms/Agents list instead of RoomList; workflow rooms keep the admin panel; "most recent room" is per browser.
+- **Release 1.4.0** (Phase 8 + long-description fix + agy 1.4.0 tested). Final check green (contract 1208, web 1377,
+  server 3896, plugin 323, license). Full e2e runs: 343/345 then failures only under full parallel load, each passing
+  alone. Follow-ups: (1) Now design screenshot is 1px taller/shorter intermittently under the full suite (12/12 alone);
+  (2) the user-view guard spec's two wrong guesses count toward the server's password attempt limit, so repeats fail
+  with 429 — use its own paired browser or fewer wrong guesses; (3) user-view orchestration spec timed out once under
+  load (4/4 alone). The long-description spec first left its agent behind (team counts 6 ≠ 5): fixed, it removes it.
