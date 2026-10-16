@@ -54,7 +54,7 @@ def run_rewind(item, profile: str | None = None) -> dict:
 
 
 def run_compact(item, profile: str | None = None) -> dict:
-    """Ask Hermes to compact; the result carries counts and a fixed error code, never Hermes text."""
+    """Ask Hermes to compact; the result carries counts, the redacted summary Hermes wrote, and a fixed error code."""
     try:
         result = hermes_private.compact_session(item["sessionId"], item.get("keepRecent"), profile,
                                                 expires_at=item["expiresAt"])
@@ -70,7 +70,10 @@ def run_compact(item, profile: str | None = None) -> dict:
         return {"outcome": "failed", "error": "compact_failed"}
     if result is None:
         return {"outcome": "nothing"}
-    return {"outcome": "done", "before": result["before"], "after": result["after"]}
+    done = {"outcome": "done", "before": result["before"], "after": result["after"]}
+    if result.get("summary"):
+        done["summary"] = result["summary"]
+    return done
 
 
 def run_context(item, profile: str | None = None) -> dict:

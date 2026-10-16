@@ -2022,6 +2022,17 @@ export class FakePort implements HermesPort {
       status: 'compacted',
       before: { messages: 40, tokens: 54_000 },
       after: { messages: 8 + (req.keepRecent ?? 2) * 2, tokens: 9_000 },
+      summary: [
+        '## Goal',
+        'Ship the launch checklist and keep the team in step.',
+        '',
+        '## Decisions',
+        '- Review each change before it merges.',
+        '- Keep the release notes short.',
+        '',
+        '## Open',
+        '- Confirm the date with the designer.',
+      ].join('\n'),
     }
   }
 

@@ -51,7 +51,12 @@ export async function compactSession(
   switch (outcome.status) {
     case 'done':
       return outcome.before && outcome.after
-        ? { status: 'compacted', before: outcome.before, after: outcome.after }
+        ? {
+            status: 'compacted',
+            before: outcome.before,
+            after: outcome.after,
+            ...(outcome.summary ? { summary: outcome.summary } : {}),
+          }
         : { status: 'failed', reason: 'compact_failed' }
     case 'nothing':
       return { status: 'nothing' }

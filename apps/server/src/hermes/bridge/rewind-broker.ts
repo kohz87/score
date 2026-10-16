@@ -23,6 +23,7 @@ export type RewindOutcome =
       before?: SessionSize
       after?: SessionSize
       context?: SessionContextReading
+      summary?: string
     }
   | { status: 'nothing' }
   | { status: 'failed'; error?: string }
@@ -132,6 +133,7 @@ export class RewindBroker {
             ...(result.before ? { before: result.before } : {}),
             ...(result.after ? { after: result.after } : {}),
             ...(result.context ? { context: result.context } : {}),
+            ...(result.summary ? { summary: result.summary } : {}),
           }
         : result.outcome === 'failed'
           ? { status: 'failed', ...(result.error ? { error: result.error } : {}) }

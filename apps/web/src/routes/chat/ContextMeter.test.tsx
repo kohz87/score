@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { SessionContextSnapshot, StreamEvent } from '@score/contract'
 import { createQueryClient, StreamContext } from '../../data/query-client.ts'
@@ -52,7 +53,15 @@ function mount(props: Partial<Parameters<typeof ContextMeter>[0]> = {}) {
   render(
     <QueryClientProvider client={queryClient}>
       <StreamContext value={{ client, queries }}>
-        <ContextMeter roomId="r" agentId="builder" name="Builder" finishedReplies={0} {...props} />
+        <MemoryRouter>
+          <ContextMeter
+            roomId="r"
+            agentId="builder"
+            name="Builder"
+            finishedReplies={0}
+            {...props}
+          />
+        </MemoryRouter>
       </StreamContext>
     </QueryClientProvider>,
   )
@@ -250,4 +259,34 @@ test('a result that arrives before the POST resolves ends the wait', async () =>
   await act(async () => release(json({ commandId: 'cmd-1' }, 202)))
   expect(screen.queryAllByText('Compacting Builder…')).toHaveLength(0)
   expect(screen.getByRole('button', { name: 'Compact' }).hasAttribute('disabled')).toBe(false)
+})
+
+test('a compaction that saved a memory note links to it (PLAN 8.2)', async () => {
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: /Builder context/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Compact' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Compact now' }))
+  await screen.findAllByText('Compacting Builder…')
+  reading = { ...base, used: 9000, compactions: 1 }
+  act(() =>
+    Source.current.emit({
+      type: 'session.compacted',
+      seq: 7,
+      ts: '2026-10-11T10:01:00.000Z',
+      data: {
+        commandId: 'cmd-1',
+        agentId: 'builder',
+        sessionId: 'score-r-builder',
+        roomId: 'r',
+        status: 'compacted',
+        reason: null,
+        keepRecent: 2,
+        before: { messages: 40, tokens: 54_000 },
+        after: { messages: 8, tokens: 9000 },
+        memoryNote: 'Memory/builder/2026/10/2026-10-16 launch.md',
+      },
+    } as StreamEvent),
+  )
+  const link = await screen.findByRole('link', { name: 'Open the memory note' })
+  expect(link.getAttribute('href')).toBe('/knowledge/Memory/builder/2026/10/2026-10-16%20launch.md')
 })

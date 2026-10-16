@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { Link } from 'react-router'
 import { ApiError } from '../../data/api.ts'
 import { MOTION, playMotion } from '../../motion/motion.ts'
 import { useValueTween } from '../../motion/use-value-tween.ts'
@@ -392,6 +393,17 @@ function MeterView({
                   ? 'Nothing to compact yet: the conversation is still short.'
                   : (COMPACT_FAILURE_TEXT[compaction.reason ?? 'compact_failed'] ??
                     COMPACT_FAILURE_TEXT.compact_failed)}
+              {compaction.status === 'compacted' && compaction.memoryNote && (
+                <>
+                  {' '}
+                  <Link
+                    to={`/knowledge/${compaction.memoryNote.split('/').map(encodeURIComponent).join('/')}`}
+                  >
+                    Open the memory note
+                  </Link>
+                  .
+                </>
+              )}
             </p>
           )}
           {error && (

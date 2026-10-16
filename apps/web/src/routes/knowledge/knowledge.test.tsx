@@ -22,7 +22,13 @@ let notes: Map<string, Note>
 let history: { commit: string; at: string; author: unknown; message: string }[]
 let versions: Record<string, string>
 let putStatus: 200 | 412
-let info: { vault: string; notes: number; gitAvailable: boolean; agentAccess: boolean }
+let info: {
+  vault: string
+  notes: number
+  gitAvailable: boolean
+  agentAccess: boolean
+  memoryNotes: boolean
+}
 let listeners: Set<(event: StreamEvent) => void>
 let router: ReturnType<typeof createMemoryRouter>
 let registry: ReturnType<typeof createStreamQueryRegistry>
@@ -74,7 +80,7 @@ function respond(input: string, init: RequestInit = {}): Response {
   const p = url.pathname.replace('/api/knowledge', '')
   if (p === '' && method === 'GET') return json(info)
   if (p === '/settings' && method === 'PUT') {
-    info = { ...info, agentAccess: (body as { agentAccess: boolean }).agentAccess }
+    info = { ...info, ...(body as { agentAccess?: boolean; memoryNotes?: boolean }) }
     return json(info)
   }
   if (p === '/tree')
@@ -161,7 +167,7 @@ beforeEach(() => {
   unversioned = new Set()
   historyUpdated = true
   listeners = new Set()
-  info = { vault: '/vault', notes: 3, gitAvailable: true, agentAccess: true }
+  info = { vault: '/vault', notes: 3, gitAvailable: true, agentAccess: true, memoryNotes: true }
   const base = { lastAuthor: 'you', mtime: '2026-01-01T00:00:00Z' }
   notes = new Map([
     ['Home.md', { ...base, body: '# Home\n\nSee [[Plan]] and [[Ghost]].', etag: 'h1' }],
@@ -567,6 +573,21 @@ test('Settings › Knowledge shows the vault, git status and the agent switch', 
   await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(false))
   const put = calls.find((c) => c.url === '/api/knowledge/settings')!
   expect(put).toMatchObject({ method: 'PUT', body: { agentAccess: false } })
+})
+
+test('Settings › Knowledge has a switch for saving compacted summaries as memory notes (PLAN 8.2)', async () => {
+  mount('/settings')
+  const section = await screen.findByRole('region', { name: 'Knowledge' })
+  const toggle = await within(section).findByRole('switch', {
+    name: 'Save compacted summaries as memory notes',
+  })
+  expect((toggle as HTMLInputElement).checked).toBe(true)
+  fireEvent.click(toggle)
+  await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(false))
+  expect(calls.find((c) => c.url === '/api/knowledge/settings')).toMatchObject({
+    method: 'PUT',
+    body: { memoryNotes: false },
+  })
 })
 
 // Audit wave 4 (batch B): the draft is never replaced by anything the person did not ask for.

@@ -613,9 +613,10 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   the tip of its compression lineage is compacted). The API server ignores `/compress`, so Score asks the agent's gateway through the bridge (`compact` command,
   §11). The request returns at once; the answer is the stream event `session.compacted`
   `{ commandId; agentId; sessionId; roomId: string | null; status: 'compacted' | 'nothing' | 'failed'; reason: CompactFailureReason
-  | null; keepRecent: number | null; before: { messages; tokens } | null; after: { messages; tokens } | null }`
+  | null; keepRecent: number | null; before: { messages; tokens } | null; after: { messages; tokens } | null; memoryNote: string | null }`
   (`reason`: `bridge_unavailable`, `no_answer`, `session_busy`, `lock_held`, `no_session`, `compact_failed`; `tokens` are Hermes's
-  rough request estimates; `nothing` = too short to compact). Refusals, synchronous: `404` unknown agent or a session that
+  rough request estimates; `nothing` = too short to compact; `memoryNote` (PLAN 8.2, decision 83) = the Knowledge path the summary was
+  saved as, see §12 "Memory notes"; null when none was written). Refusals, synchronous: `404` unknown agent or a session that
   is not one of this agent's room sessions; `409 unsupported` for a coding agent; `409 session_busy` while a message run of
   that agent in that room is `pending` or `active` (Stop first) or the room is being rewound; `409
   orchestration_owned` for a session in a room an orchestration or workflow run owns (owned or draining);
@@ -1346,7 +1347,17 @@ tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
 - `GET /api/knowledge/notes/*path/history` → `{ items: { commit; at; author; message }[] }` (newest first; empty with
   `gitAvailable: false`). `GET /api/knowledge/notes/*path/versions/:commit` → `{ commit; body }`.
 - **H** `POST /api/knowledge/notes/*path/restore` `{ commit }` → `{ etag; path }` (a new commit with that version).
-- **H** `PUT /api/knowledge/settings` `{ agentAccess: boolean }` → `KnowledgeInfo`.
+- **H** `PUT /api/knowledge/settings` `{ agentAccess?: boolean; memoryNotes?: boolean }` (at least one) → `KnowledgeInfo`. `KnowledgeInfo`
+  also carries `memoryNotes: boolean` (default `true`): Settings › Knowledge › "Save compacted summaries as memory notes".
+- **Memory notes** (PLAN 8.2, decision 83). When a compaction Score requested finishes with a summary (§11 `compact`) and
+  `memoryNotes` is on, Score writes, through the vault's normal write path (history, author = the agent):
+  `Memory/<agent>/<YYYY>/<MM>/<YYYY-MM-DD> <room name>.md` (day in GMT+8, `SCORE_TIMEZONE` overrides; the room name is made
+  file-safe and cut at 60 characters; a second note the same day gets ` (2)`, ` (3)`, …; an existing note is never overwritten),
+  frontmatter `date`, `agent`, `room`, `session`, `weight: 3`, `source: compaction`, body = the summary. The write never fails
+  the compaction: if the vault is off or refuses, `memoryNote` is null and Score logs it. `Memory/<agent>/<YYYY>/<MM>/index.md`
+  is generated: links (`[[path|name]]`) to that month's notes by `weight` (1–5, anything else counts as 3; 5 first), then newest
+  day. The person changes a weight by editing the note's frontmatter; Score rebuilds the index after each save of a memory note,
+  after each new one and after each vault scan that sees one change (unchanged content is not rewritten).
 - `GET /api/agents/:agentId/knowledge` → `{ enabled }`; **H** `PUT` same path `{ enabled }` → `{ enabled }`: the per-agent
   "Knowledge tools" switch (Team › agent › Tools; default on; the global `agentAccess` is checked first).
 - `GET /api/knowledge/agent-usage` → `{ items: { agentId; writesToday }[] }`: agent writes since local midnight
@@ -1501,7 +1512,7 @@ whose `isolation` is not `unknown`; the plugin polls only while it runs inside a
   can't move the target; a target that changed is `failed`), and checks afterwards that no active user row from `since` remains, else `failed`). A
   command is handed to one polling producer of the profile once and is not redelivered.
 - `POST /bridge/v1/commands/:commandId/result` `{ outcome: 'done' | 'nothing' | 'failed' | 'expired'; turnsUndone?; rewoundCount?;
-  before?: { messages; tokens }; after?: { messages; tokens }; context?: SessionContextReading; error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what
+  before?: { messages; tokens }; after?: { messages; tokens }; context?: SessionContextReading; summary?: string; error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what
   `/undo` uses; soft-deletes the rows, the next turn rebuilds from the active ones) from `hermes_private.py` and reports
   Hermes's `turns_undone` / `rewound_count`; `nothing` = Hermes had nothing to rewind. A command with no result within
   60 s is reported to the person as `no_answer`, and Score keeps the room's rewind hold (persisted in `rewind_holds`, restored after a
@@ -1516,7 +1527,7 @@ whose `isolation` is not `unknown`; the plugin polls only while it runs inside a
   `_build_manual_compression_agent`; Hermes commits the result itself (in place or as a compression continuation, its
   choice). It checks `expiresAt` immediately before compressing, and answers `nothing` for a session shorter than Hermes's
   minimum, `failed` (`error`: `lock_held` while Hermes holds its compression lock for that session, `compact_failed`
-  otherwise; never Hermes text) and `done` with Hermes's before/after message and token estimates. A command is run at most once
+  otherwise; never Hermes text) and `done` with Hermes's before/after message and token estimates and `summary` (PLAN 8.2): the text Hermes's compressor wrote for the replaced turns (`agent.context_compressor._previous_summary`, the body without Hermes's handoff prefix; fallback: the compressed row flagged `_compressed_summary`, cut at its end marker), redacted and capped at 32 KB (a longer one is cut with a note); absent when Hermes kept none. Hermes has no plugin hook for compression, so only compactions Score requests reach the plugin; Hermes's own automatic compressions are not visible to it. A command is run at most once
   per `commandId`; a repeated one returns the remembered result.
 
   **`context_breakdown`** (PLAN 5.36): a read-only query, answer window 20 s. The plugin (`hermes_private.context_breakdown`)

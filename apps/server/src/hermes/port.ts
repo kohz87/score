@@ -378,7 +378,13 @@ export interface HermesPort extends ProfileManagementPort {
 }
 
 export type CompactSessionResult =
-  | { status: 'compacted'; before: SessionSize; after: SessionSize }
+  | {
+      status: 'compacted'
+      before: SessionSize
+      after: SessionSize
+      /** What Hermes wrote for the replaced turns (redacted, at most 32 KB); absent when the plugin has none. */
+      summary?: string
+    }
   | { status: 'nothing' }
   | { status: 'failed'; reason: CompactFailureReason }
 

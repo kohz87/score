@@ -69,6 +69,22 @@ test('the tip of the compression lineage is compacted, and a missing session is 
   ).toEqual({ status: 'failed', reason: 'no_session' })
 })
 
+test('the summary Hermes wrote travels with a finished compaction', async () => {
+  const { broker } = brokerAnswering({
+    outcome: 'done',
+    before: { messages: 10, tokens: 5000 },
+    after: { messages: 4, tokens: 900 },
+    summary: 'Goal: ship it.',
+  })
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  expect(
+    await compactSession(
+      { agentId: 'builder', sessionId: 'score-r-builder' },
+      { broker, hermesHome: hermes.home },
+    ),
+  ).toMatchObject({ status: 'compacted', summary: 'Goal: ship it.' })
+})
+
 test('refusals map to the contract reasons', async () => {
   const none = { broker: new RewindBroker(), hermesHome: hermes.home }
   expect(await compactSession({ agentId: 'builder', sessionId: 'score-r-builder' }, none)).toEqual({

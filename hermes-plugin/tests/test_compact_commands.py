@@ -85,12 +85,13 @@ class Rig:
     """Everything compact_session reaches for, as modules in sys.modules."""
 
     def __init__(self, monkeypatch, db=None, status="compressed", runtime=None, multiplex=False,
-                 mode="rotated"):
+                 mode="rotated", summary="Goal: ship the report. Decision: use the monthly index.", fallback_row=None):
         # _lookup caches Hermes callables per module: a second rig in one test must not see the first one's.
         CURRENT[-1]._lookup.cache_clear()
         CURRENT[-1]._lookup_attr.cache_clear()
         self.db, self.store = db or FakeDb(), FakeStore()
         self.status, self.events, self.agents, self.compress_calls = status, [], [], []
+        self.summary, self.fallback_row = summary, fallback_row
         self.mode = mode  # rotated (published child), rotated_bare, inplace, unchanged
         self.released, self.acquired, self.scopes = [], [], []
         self.depth_seen = []
@@ -149,6 +150,8 @@ class Rig:
             rig.depth_seen.append(rig.store.depth)
             rig.compress_calls.append((agent, messages, request, kwargs))
             if rig.status == "compressed":
+                if rig.summary is not None:
+                    agent.context_compressor = types.SimpleNamespace(_previous_summary=rig.summary)
                 if rig.mode in ("rotated", "rotated_bare"):
                     agent.session_id = "child-1"
                     if rig.mode == "rotated":
@@ -160,7 +163,7 @@ class Rig:
                                                  after_messages=list(messages), before_tokens=5, after_tokens=5)
                 kept = messages[-request.keep_last * 2:] if request.partial else messages[-2:]
                 return types.SimpleNamespace(status="compressed", before_messages=messages,
-                                             after_messages=[{"role": "user", "content": "summary"}, *kept],
+                                             after_messages=[rig.fallback_row or {"role": "user", "content": "summary"}, *kept],
                                              before_tokens=54000, after_tokens=9000)
             return types.SimpleNamespace(status=rig.status, before_messages=messages, after_messages=messages,
                                          before_tokens=1, after_tokens=1)
@@ -201,7 +204,8 @@ def test_compacts_the_profiles_own_session_under_the_transcript_lock(monkeypatch
     rig = Rig(monkeypatch)
     result = hermes_private.compact_session("score-room-builder", 3, "scoretesta", expires_at=time.time() + 60)
     assert result == {"before": {"messages": 12, "tokens": 54000}, "after": {"messages": 7, "tokens": 9000},
-                      "rotated": True, "newSessionId": "child-1"}
+                      "rotated": True, "newSessionId": "child-1",
+                      "summary": "Goal: ship the report. Decision: use the monthly index."}
     # Worked in the profile's own store, under the transcript lock, and released the handle.
     assert rig.acquired == [Path("/hermes/profiles/scoretesta/state.db")] and rig.released == [rig.db]
     assert rig.depth_seen == [1]
@@ -319,9 +323,34 @@ def test_round_trip_reports_counts_only_and_runs_once(monkeypatch, hermes_privat
     command_poller.process_once()
     assert len(rig.compress_calls) == 1
     expected = {"outcome": "done", "before": {"messages": 12, "tokens": 54000},
-                "after": {"messages": 7, "tokens": 9000}}  # rotated/newSessionId stay in the plugin
+                "after": {"messages": 7, "tokens": 9000},
+                "summary": "Goal: ship the report. Decision: use the monthly index."}  # rotated/newSessionId stay in the plugin
     assert [body for _, body in transport.results] == [expected, expected]
     assert "text 1" not in repr(transport.results)
+
+
+def test_the_summary_is_redacted_and_capped(monkeypatch, hermes_private):
+    secret = "sk-" + "a1B2c3D4" * 5
+    Rig(monkeypatch, summary=f"Key was {secret}. " + "word " * 20000)
+    summary = hermes_private.compact_session("s", None, "p")["summary"]
+    assert secret not in summary
+    assert len(summary.encode()) < 33 * 1024 and summary.endswith("longer than 32 KB.]")
+
+
+def test_the_summary_falls_back_to_the_flagged_compressed_row(monkeypatch, hermes_private):
+    row = {"role": "user", "_compressed_summary": True,
+           "content": "[CONTEXT COMPACTION] handoff.\nBody of the summary.\n--- END OF CONTEXT SUMMARY — respond ---"}
+    Rig(monkeypatch, summary=None, fallback_row=row)
+    assert hermes_private.compact_session("s", None, "p")["summary"] == "[CONTEXT COMPACTION] handoff.\nBody of the summary."
+
+
+def test_no_summary_text_is_none_and_not_reported(monkeypatch, hermes_private):
+    Rig(monkeypatch, summary=None)
+    assert hermes_private.compact_session("s", None, "p")["summary"] is None
+    rig = Rig(monkeypatch, summary=None)
+    command_poller, transport = poller([command()])
+    command_poller.process_once()
+    assert "summary" not in transport.results[0][1]
 
 
 @pytest.mark.parametrize("status,error", [("lock_skipped", "lock_held")])

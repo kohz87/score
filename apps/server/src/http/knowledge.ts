@@ -45,7 +45,9 @@ const SearchQuerySchema = z.object({
   q: z.string().max(500).default(''),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 })
-const SettingsSchema = z.object({ agentAccess: z.boolean() })
+const SettingsSchema = z
+  .object({ agentAccess: z.boolean().optional(), memoryNotes: z.boolean().optional() })
+  .refine((value) => value.agentAccess !== undefined || value.memoryNotes !== undefined)
 const UploadQuerySchema = z.object({
   onConflict: KnowledgeUploadConflictSchema.default('ask'),
   mode: z.enum(['keep', 'unzip', 'preview']).default('keep'),
@@ -267,7 +269,9 @@ export function registerKnowledgeRoutes(
   })
 
   app.put('/api/knowledge/settings', guard, async (request) => {
-    const { agentAccess } = SettingsSchema.parse(request.body)
-    return KnowledgeInfoSchema.parse(vault.setAgentAccess(agentAccess))
+    const { agentAccess, memoryNotes } = SettingsSchema.parse(request.body)
+    if (agentAccess !== undefined) vault.setAgentAccess(agentAccess)
+    if (memoryNotes !== undefined) vault.setMemoryNotes(memoryNotes)
+    return KnowledgeInfoSchema.parse(vault.info())
   })
 }
