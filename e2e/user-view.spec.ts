@@ -140,13 +140,24 @@ test('Pause, Resume and Stop from the chat; See full details opens Flow in the a
   await approve(page, 's1')
   const run = page.getByRole('region', { name: 'Orchestration' })
   await expect(run.getByRole('button', { name: 'Pause' })).toBeVisible({ timeout: 30_000 })
-  await run.getByRole('button', { name: 'Pause' }).click()
-  await expect(run.getByText('Paused by you')).toBeVisible({ timeout: 30_000 })
+  // A click on a stale reading of the run is answered with a conflict: read again and press again.
+  await expect(async () => {
+    if (await run.getByRole('button', { name: 'Pause' }).isVisible())
+      await run.getByRole('button', { name: 'Pause' }).click()
+    await expect(run.getByText('Paused by you')).toBeVisible({ timeout: 4000 })
+  }).toPass({ timeout: 45_000 })
   await expect(page.getByText('You paused the run.')).toBeVisible()
-  await run.getByRole('button', { name: 'Resume' }).click()
-  await expect(run.getByRole('button', { name: 'Pause' })).toBeVisible({ timeout: 30_000 })
-  await run.getByRole('button', { name: 'Stop', exact: true }).click()
-  await run.getByRole('button', { name: 'Stop the run' }).click()
+  await expect(async () => {
+    if (await run.getByRole('button', { name: 'Resume' }).isVisible())
+      await run.getByRole('button', { name: 'Resume' }).click()
+    await expect(run.getByRole('button', { name: 'Pause' })).toBeVisible({ timeout: 4000 })
+  }).toPass({ timeout: 45_000 })
+  await expect(async () => {
+    if (!(await run.getByRole('button', { name: 'Stop the run' }).isVisible()))
+      await run.getByRole('button', { name: 'Stop', exact: true }).click()
+    await run.getByRole('button', { name: 'Stop the run' }).click({ timeout: 3000 })
+    await expect(page.getByText('Stopping the run.')).toBeVisible({ timeout: 4000 })
+  }).toPass({ timeout: 45_000 })
   await expect(page.getByText('Stopping the run.')).toBeVisible({ timeout: 30_000 })
   // The fake Hermes does not confirm the stop: the card to stop waiting appears in the chat.
   const card = page.getByRole('region', { name: 'Not confirmed as ended' })
