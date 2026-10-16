@@ -6,6 +6,7 @@ import { useStreamQuery } from '../../data/query-client.ts'
 import { Composer } from '../chat/Composer.tsx'
 import { saveDraft } from '../chat/composer-model.ts'
 import { agentsQuery, roomsQuery } from '../chat/queries.ts'
+import { useStartOrchestration } from './use-start-orchestration.tsx'
 import { readLastRoom, userRoomPath } from './user-view.ts'
 
 const hermesFirst = (agents: AgentSummary[]) =>
@@ -29,6 +30,7 @@ export function UserHome() {
   // A suggestion fills the draft, so the composer is made again to read it.
   const [round, setRound] = useState(0)
   const area = useRef<HTMLElement>(null)
+  const starter = useStartOrchestration(agents)
   const last = readLastRoom()
   const all = [...(rooms.data?.rooms ?? []), ...(rooms.data?.directs ?? [])]
   if (!fresh && last && all.some((room) => room.id === last))
@@ -74,6 +76,7 @@ export function UserHome() {
           agents={agents}
           leadAgentId={agent.id}
           onSent={() => void navigate(userRoomPath(direct.id))}
+          orchestrate={starter.start}
         />
       ) : (
         <p className="user-muted" role="status">
@@ -92,8 +95,14 @@ export function UserHome() {
               Catch me up on the team
             </button>
           </li>
+          <li>
+            <button type="button" onClick={() => starter.start('')}>
+              Start an orchestration…
+            </button>
+          </li>
         </ul>
       )}
+      {starter.dialog}
     </section>
   )
 }

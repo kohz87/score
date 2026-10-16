@@ -117,13 +117,18 @@ export function NewOrchestrationDialog({
   agents,
   close,
   created,
+  compact = false,
+  initialGoal = '',
 }: {
   agents: AgentSummary[]
   close: () => void
   created: (run: { id: string; briefId: string; roomId: string }) => void
+  /** The chat-first view's version (PLAN 8.4): goal, lead, agents and an optional budget; defaults for the rest. */
+  compact?: boolean
+  initialGoal?: string
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
-  const [goal, setGoal] = useState('')
+  const [goal, setGoal] = useState(initialGoal)
   const leads = agents.filter((agent) => !agent.runtime || agent.runtime === 'hermes')
   const [lead, setLead] = useState(leads[0]?.id ?? '')
   const [allowed, setAllowed] = useState<string[]>([])
@@ -222,8 +227,9 @@ export function NewOrchestrationDialog({
         </button>
       </div>
       <p className="orch-muted">
-        A lead agent decides the steps while it works, hands them to team agents and asks you when
-        it needs to. Score checks every request the lead makes.
+        {compact
+          ? 'A lead agent works through the goal with the agents you pick, and the updates arrive in this chat.'
+          : 'A lead agent decides the steps while it works, hands them to team agents and asks you when it needs to. Score checks every request the lead makes.'}
       </p>
       <form onSubmit={submit} className="orch-form">
         <label className="orch-field">
@@ -274,23 +280,25 @@ export function NewOrchestrationDialog({
             agents can take steps.
           </small>
         </fieldset>
-        <fieldset className="orch-field">
-          <legend>Approvals</legend>
-          {POLICIES.map((item) => (
-            <label key={item.id} className="orch-check orch-policy">
-              <input
-                type="radio"
-                name="orch-policy"
-                checked={policy === item.id}
-                onChange={() => setPolicy(item.id)}
-              />
-              <span>
-                <strong>{item.label}</strong>
-                {notes && <small>{notes[item.id]}</small>}
-              </span>
-            </label>
-          ))}
-        </fieldset>
+        {!compact && (
+          <fieldset className="orch-field">
+            <legend>Approvals</legend>
+            {POLICIES.map((item) => (
+              <label key={item.id} className="orch-check orch-policy">
+                <input
+                  type="radio"
+                  name="orch-policy"
+                  checked={policy === item.id}
+                  onChange={() => setPolicy(item.id)}
+                />
+                <span>
+                  <strong>{item.label}</strong>
+                  {notes && <small>{notes[item.id]}</small>}
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        )}
         <div className="orch-row">
           <label className="orch-field">
             <span>Budget in USD (optional)</span>
@@ -300,76 +308,80 @@ export function NewOrchestrationDialog({
               onChange={(event) => setBudget(event.target.value)}
             />
           </label>
-          <label className="orch-field">
-            <span>Deadline (optional)</span>
-            <input
-              type="datetime-local"
-              value={deadline}
-              onChange={(event) => setDeadline(event.target.value)}
-            />
-          </label>
+          {!compact && (
+            <label className="orch-field">
+              <span>Deadline (optional)</span>
+              <input
+                type="datetime-local"
+                value={deadline}
+                onChange={(event) => setDeadline(event.target.value)}
+              />
+            </label>
+          )}
         </div>
-        <details>
-          <summary>Limits and estimates</summary>
-          <p className="orch-muted">
-            Estimates are per lead turn and per step. Score reserves them against the budget before
-            work starts and replaces them with the real spend afterwards.
-          </p>
-          <div className="orch-row">
-            <label className="orch-field">
-              <span>Most steps</span>
-              <input
-                type="number"
-                min={1}
-                max={ORCH_LIMITS.maxSteps}
-                value={maxSteps}
-                onChange={(event) => setMaxSteps(Number(event.target.value))}
-              />
-            </label>
-            <label className="orch-field">
-              <span>Most lead turns</span>
-              <input
-                type="number"
-                min={1}
-                max={ORCH_LIMITS.maxLeadTurns}
-                value={maxTurns}
-                onChange={(event) => setMaxTurns(Number(event.target.value))}
-              />
-            </label>
-            <label className="orch-field">
-              <span>Estimate per lead turn (USD)</span>
-              <input
-                type="number"
-                min={0.01}
-                step={0.01}
-                value={leadEstimate}
-                onChange={(event) => setLeadEstimate(Number(event.target.value))}
-              />
-            </label>
-            {workers.length > 0 && (
+        {!compact && (
+          <details>
+            <summary>Limits and estimates</summary>
+            <p className="orch-muted">
+              Estimates are per lead turn and per step. Score reserves them against the budget
+              before work starts and replaces them with the real spend afterwards.
+            </p>
+            <div className="orch-row">
               <label className="orch-field">
-                <span>Most coding steps</span>
+                <span>Most steps</span>
                 <input
                   type="number"
                   min={1}
-                  max={ORCH_LIMITS.maxCodingSteps}
-                  value={codingSteps}
-                  onChange={(event) => setCodingSteps(Number(event.target.value))}
+                  max={ORCH_LIMITS.maxSteps}
+                  value={maxSteps}
+                  onChange={(event) => setMaxSteps(Number(event.target.value))}
                 />
               </label>
-            )}
-            <label className="orch-field">
-              <span>Estimate per step (USD)</span>
-              <input
-                type="number"
-                min={0.01}
-                step={0.01}
-                value={stepEstimate}
-                onChange={(event) => setStepEstimate(Number(event.target.value))}
-              />
-            </label>
-          </div>
-        </details>
+              <label className="orch-field">
+                <span>Most lead turns</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={ORCH_LIMITS.maxLeadTurns}
+                  value={maxTurns}
+                  onChange={(event) => setMaxTurns(Number(event.target.value))}
+                />
+              </label>
+              <label className="orch-field">
+                <span>Estimate per lead turn (USD)</span>
+                <input
+                  type="number"
+                  min={0.01}
+                  step={0.01}
+                  value={leadEstimate}
+                  onChange={(event) => setLeadEstimate(Number(event.target.value))}
+                />
+              </label>
+              {workers.length > 0 && (
+                <label className="orch-field">
+                  <span>Most coding steps</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={ORCH_LIMITS.maxCodingSteps}
+                    value={codingSteps}
+                    onChange={(event) => setCodingSteps(Number(event.target.value))}
+                  />
+                </label>
+              )}
+              <label className="orch-field">
+                <span>Estimate per step (USD)</span>
+                <input
+                  type="number"
+                  min={0.01}
+                  step={0.01}
+                  value={stepEstimate}
+                  onChange={(event) => setStepEstimate(Number(event.target.value))}
+                />
+              </label>
+            </div>
+          </details>
+        )}
 
         <section aria-label="Before it starts">
           <h3>Before it starts</h3>
@@ -414,9 +426,11 @@ export function NewOrchestrationDialog({
               ))}
             </fieldset>
           )}
-          <p className="orch-muted">
-            Watch also shows the agent’s other work; it can’t show a single run on its own.
-          </p>
+          {!compact && (
+            <p className="orch-muted">
+              Watch also shows the agent’s other work; it can’t show a single run on its own.
+            </p>
+          )}
         </section>
 
         <label className="orch-check orch-ack">

@@ -49,6 +49,12 @@ import { ChipSaveOption } from '../knowledge/ChipSaveOption.tsx'
 import { summaryText, useUploadFlow } from '../knowledge/UploadFlow.tsx'
 import { isSupportedName } from '../knowledge/knowledge-files.ts'
 
+const ORCHESTRATE_MENU_ITEM = {
+  name: 'orchestrate',
+  usage: '/orchestrate <goal>',
+  description: 'Start an orchestration for a goal.',
+}
+
 type Notice =
   | { kind: 'error'; text: string; heldAgent?: string }
   | { kind: 'info'; text: string }
@@ -90,6 +96,7 @@ export function Composer({
   agents,
   leadAgentId = null,
   onSent,
+  orchestrate,
 }: {
   roomId: string
   roomName: string
@@ -97,6 +104,11 @@ export function Composer({
   leadAgentId?: string | null
   /** The user view's first message opens its room once it is sent (PLAN 8.4). */
   onSent?: () => void
+  /**
+   * The user view starts orchestrations from the composer (PLAN 8.4): the "+" menu gets "Start an orchestration…",
+   * and `/orchestrate <goal>` calls this with the goal (empty when none was typed).
+   */
+  orchestrate?: (goal: string) => void
 }) {
   const queryClient = useQueryClient()
   const textarea = useRef<HTMLTextAreaElement>(null)
@@ -269,8 +281,9 @@ export function Composer({
             ...LOCAL_COMMAND_MENU.filter(
               (local) => !commands.data?.some((item) => item.name === local.name),
             ),
+            ...(orchestrate ? [ORCHESTRATE_MENU_ITEM] : []),
           ].filter((item) => item.name.startsWith(slash)),
-    [slash, commands.data],
+    [slash, commands.data, orchestrate],
   )
   const mentionItems = useMemo(() => {
     if (!mention) return []
@@ -412,6 +425,14 @@ export function Composer({
   async function send() {
     const body = text.trim()
     if (!body || pending || uploading) return
+    const orchestration =
+      orchestrate && !editing ? /^\/orchestrate(?:\s+([\s\S]*))?$/i.exec(body) : null
+    if (orchestrate && orchestration) {
+      setText('')
+      setCaret(0)
+      orchestrate((orchestration[1] ?? '').trim())
+      return
+    }
     const local = editing ? null : parseLocalCommand(body)
     if (local) return runLocalCommand(local)
     // Editing rewinds the room and the agents first (PLAN 5.33); the person confirms what that does.
@@ -887,24 +908,39 @@ export function Composer({
             <button
               type="button"
               className="chat-attach"
-              aria-label="Attach files"
+              aria-label={orchestrate ? 'Add' : 'Attach files'}
               aria-haspopup="true"
               aria-expanded={attachMenu}
-              title="Attach images and documents (up to 10; 25 MB each)"
-              disabled={pending || attachments.length + uploading >= MAX_ATTACHMENTS}
+              title={
+                orchestrate
+                  ? 'Attach files or start an orchestration'
+                  : 'Attach images and documents (up to 10; 25 MB each)'
+              }
+              disabled={
+                pending || (!orchestrate && attachments.length + uploading >= MAX_ATTACHMENTS)
+              }
               onClick={() => setAttachMenu(!attachMenu)}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path
-                  d="M10.5 5 L5.8 9.7 A1.6 1.6 0 0 0 8.1 12 L13 7.1 A3 3 0 0 0 8.8 2.9 L3.9 7.8 A4.4 4.4 0 0 0 10.1 14"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
+                {orchestrate ? (
+                  <path
+                    d="M8 3 V13 M3 8 H13"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                  />
+                ) : (
+                  <path
+                    d="M10.5 5 L5.8 9.7 A1.6 1.6 0 0 0 8.1 12 L13 7.1 A3 3 0 0 0 8.8 2.9 L3.9 7.8 A4.4 4.4 0 0 0 10.1 14"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                )}
               </svg>
             </button>
             {attachMenu && (
-              <ul className="chat-attach-list" aria-label="Attach">
+              <ul className="chat-attach-list" aria-label={orchestrate ? 'Add' : 'Attach'}>
                 <li>
                   <button
                     type="button"
@@ -927,6 +963,19 @@ export function Composer({
                     From workspace…
                   </button>
                 </li>
+                {orchestrate && (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttachMenu(false)
+                        orchestrate('')
+                      }}
+                    >
+                      Start an orchestration…
+                    </button>
+                  </li>
+                )}
               </ul>
             )}
           </span>

@@ -34,6 +34,7 @@ import { roomLabel } from './room-label.ts'
 import { orchestrationsQuery } from '../orchestrations/orchestration-queries.ts'
 import { RoomRunPanel } from '../orchestrations/RoomRunPanel.tsx'
 import { WorkflowRoomPanel } from '../workflows/WorkflowRoomPanel.tsx'
+import { useStartOrchestration } from '../user/use-start-orchestration.tsx'
 import { workflowRunsQuery } from '../workflows/workflow-queries.ts'
 
 export function QueryError({ text, retry }: { text: string; retry: () => void }) {
@@ -285,6 +286,7 @@ export function ChatThread({
   variant?: 'admin' | 'user'
 }) {
   const userView = variant === 'user'
+  const starter = useStartOrchestration(agents)
   const definition = useMemo(() => roomQuery(roomId), [roomId])
   const { data: room, status, error } = useStreamQuery(definition)
   const context = useContext(StreamContext)!
@@ -453,9 +455,11 @@ export function ChatThread({
             roomName={room.name}
             agents={agents}
             leadAgentId={room.leadAgentId}
+            {...(userView ? { orchestrate: starter.start } : {})}
           />
         </div>
       )}
+      {userView && starter.dialog}
     </section>
   )
 }
