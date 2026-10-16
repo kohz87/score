@@ -30,7 +30,7 @@ export function parseAntigravityModels(output: string): CodingModelOption[] {
 
 /** Claude Code has no listing command, and a bare word after `claude` runs a prompt: the documented aliases only. */
 export const CLAUDE_CODE_ALIASES: CodingModelOption[] = [
-  { id: 'fable', name: 'Fable', description: 'Claude’s most capable model.' },
+  { id: 'fable', name: 'Fable', description: 'The latest Fable model.' },
   { id: 'opus', name: 'Opus', description: 'The latest Opus model.' },
   { id: 'sonnet', name: 'Sonnet', description: 'The latest Sonnet model.' },
 ]
