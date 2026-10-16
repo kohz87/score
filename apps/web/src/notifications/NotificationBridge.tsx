@@ -5,6 +5,7 @@ import { agentsQuery } from '../routes/team/team-queries.ts'
 import { readNotificationPrefs } from './prefs.ts'
 import { createNotificationRouter } from './router.ts'
 import { showNotification } from './deliver.ts'
+import { readView, userPathFor } from '../routes/user/user-view.ts'
 
 /** Safe in-app targets only: a path on this origin. */
 export const isAppPath = (value: unknown): value is string =>
@@ -24,7 +25,8 @@ function Bridge() {
           .data?.find((agent) => agent.id === id)?.name ?? id,
     })
     const open = (url: string) => {
-      if (isAppPath(url)) void navigate(url)
+      // A browser that lives in the user view opens a room there.
+      if (isAppPath(url)) void navigate((readView() === 'user' ? userPathFor(url) : null) ?? url)
     }
     const unsubscribe = context.client.subscribe((event) => {
       const payload = router.handle(event)
