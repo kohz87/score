@@ -16,6 +16,8 @@ import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { headSeq } from '../hub/snapshot.ts'
+import type { KnowledgeVault } from '../knowledge/vault.ts'
+import { saveMemoryNote } from '../knowledge/memory-notes.ts'
 import { readAgentContext } from './agent-context.ts'
 
 const ParamsSchema = z.object({
@@ -39,6 +41,8 @@ export function registerSessionCompactionRoutes(
     /** Starts the turns that waited for the compaction. */
     redispatch(): Promise<unknown>
     clock?: () => number
+    /** The vault that receives memory notes (PLAN 8.2); without it none are written. */
+    knowledge?: KnowledgeVault
   },
 ): void {
   const { port, db, ingest, mutation } = deps
@@ -46,6 +50,33 @@ export function registerSessionCompactionRoutes(
   const inflight = new Map<string, string>()
   const compactions = new Map<string, number>()
   const cache = new Map<string, { at: number; stamp: string; value: SessionContext }>()
+
+  /** The summary as a memory note. Never throws: the compaction itself already happened. */
+  async function writeMemoryNote(input: {
+    agentId: string
+    roomId: string
+    sessionId: string
+    summary: string | undefined
+  }): Promise<string | null> {
+    const vault = deps.knowledge
+    if (!vault || !input.summary?.trim()) return null
+    try {
+      if (!vault.memoryNotes()) return null
+      const room = db.read((sqlite) =>
+        sqlite.prepare('SELECT name FROM rooms WHERE id = ?').get(input.roomId),
+      ) as { name: string } | undefined
+      return await saveMemoryNote(vault, {
+        agentId: input.agentId,
+        roomName: room?.name ?? 'Room',
+        sessionId: input.sessionId,
+        summary: input.summary,
+        now: clock(),
+      })
+    } catch (error) {
+      app.log.warn({ err: error }, 'Couldn’t save a compaction summary as a memory note')
+      return null
+    }
+  }
 
   async function resolve(agentId: string, sessionId: string) {
     const agents = z.array(AgentSummarySchema).parse(await port.listAgents())
@@ -159,6 +190,7 @@ export function registerSessionCompactionRoutes(
         sessionId,
         roomId,
         keepRecent: body.keepRecent ?? null,
+        memoryNote: null,
       }
       try {
         const result = await compact({
@@ -166,6 +198,15 @@ export function registerSessionCompactionRoutes(
           sessionId: hermesSession,
           ...(body.keepRecent === undefined ? {} : { keepRecent: body.keepRecent }),
         })
+        const memoryNote =
+          result.status === 'compacted'
+            ? await writeMemoryNote({
+                agentId,
+                roomId,
+                sessionId,
+                summary: result.summary,
+              })
+            : null
         event =
           result.status === 'compacted'
             ? {
@@ -174,6 +215,7 @@ export function registerSessionCompactionRoutes(
                 reason: null,
                 before: result.before,
                 after: result.after,
+                memoryNote,
               }
             : result.status === 'nothing'
               ? { ...base, status: 'nothing', reason: null, before: null, after: null }

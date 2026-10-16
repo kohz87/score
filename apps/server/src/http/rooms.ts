@@ -71,6 +71,7 @@ import { attachmentNote } from '../domain/attachment-input.ts'
 import { resolveAttachments } from './message-attachments.ts'
 import type { AgentWorkspaces } from '../workspace/agent-workspace.ts'
 import { requestIdempotency } from './idempotency.ts'
+import type { KnowledgeVault } from '../knowledge/vault.ts'
 import { registerSessionCompactionRoutes } from './session-compaction.ts'
 
 // "#launch" or "launch", optionally followed by #tag words ("#launch #q4"): tags are parsed from the name (PLAN 5.26).
@@ -127,6 +128,7 @@ export function registerRoomRoutes(
   clock = Date.now,
   media?: MediaStore,
   workspaces?: AgentWorkspaces,
+  knowledge?: KnowledgeVault,
 ): () => Promise<void> {
   // JSON escaping can expand a valid 16 KB text beyond the default receipt limit.
   const receipts = requestIdempotency(db, clock, (app.initialConfig.bodyLimit ?? 1048576) + 65536)
@@ -147,6 +149,7 @@ export function registerRoomRoutes(
     mutation,
     redispatch: () => routing.dispatch(),
     clock,
+    ...(knowledge ? { knowledge } : {}),
   })
   const agents = async () =>
     z

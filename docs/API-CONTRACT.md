@@ -613,9 +613,10 @@ learned: { text: string; savedTo: AgentId[]; at: string }[] }`
   the tip of its compression lineage is compacted). The API server ignores `/compress`, so Score asks the agent's gateway through the bridge (`compact` command,
   §11). The request returns at once; the answer is the stream event `session.compacted`
   `{ commandId; agentId; sessionId; roomId: string | null; status: 'compacted' | 'nothing' | 'failed'; reason: CompactFailureReason
-  | null; keepRecent: number | null; before: { messages; tokens } | null; after: { messages; tokens } | null }`
+  | null; keepRecent: number | null; before: { messages; tokens } | null; after: { messages; tokens } | null; memoryNote: string | null }`
   (`reason`: `bridge_unavailable`, `no_answer`, `session_busy`, `lock_held`, `no_session`, `compact_failed`; `tokens` are Hermes's
-  rough request estimates; `nothing` = too short to compact). Refusals, synchronous: `404` unknown agent or a session that
+  rough request estimates; `nothing` = too short to compact; `memoryNote` (PLAN 8.2, decision 83) = the Knowledge path the summary was
+  saved as, see §12 "Memory notes"; null when none was written). Refusals, synchronous: `404` unknown agent or a session that
   is not one of this agent's room sessions; `409 unsupported` for a coding agent; `409 session_busy` while a message run of
   that agent in that room is `pending` or `active` (Stop first) or the room is being rewound; `409
   orchestration_owned` for a session in a room an orchestration or workflow run owns (owned or draining);
@@ -1331,7 +1332,17 @@ tools (§11, task 6.4) and are attributed in git and in `knowledge.changed`.
 - `GET /api/knowledge/notes/*path/history` → `{ items: { commit; at; author; message }[] }` (newest first; empty with
   `gitAvailable: false`). `GET /api/knowledge/notes/*path/versions/:commit` → `{ commit; body }`.
 - **H** `POST /api/knowledge/notes/*path/restore` `{ commit }` → `{ etag; path }` (a new commit with that version).
-- **H** `PUT /api/knowledge/settings` `{ agentAccess: boolean }` → `KnowledgeInfo`.
+- **H** `PUT /api/knowledge/settings` `{ agentAccess?: boolean; memoryNotes?: boolean }` (at least one) → `KnowledgeInfo`. `KnowledgeInfo`
+  also carries `memoryNotes: boolean` (default `true`): Settings › Knowledge › "Save compacted summaries as memory notes".
+- **Memory notes** (PLAN 8.2, decision 83). When a compaction Score requested finishes with a summary (§11 `compact`) and
+  `memoryNotes` is on, Score writes, through the vault's normal write path (history, author = the agent):
+  `Memory/<agent>/<YYYY>/<MM>/<YYYY-MM-DD> <room name>.md` (day in GMT+8, `SCORE_TIMEZONE` overrides; the room name is made
+  file-safe and cut at 60 characters; a second note the same day gets ` (2)`, ` (3)`, …; an existing note is never overwritten),
+  frontmatter `date`, `agent`, `room`, `session`, `weight: 3`, `source: compaction`, body = the summary. The write never fails
+  the compaction: if the vault is off or refuses, `memoryNote` is null and Score logs it. `Memory/<agent>/<YYYY>/<MM>/index.md`
+  is generated: links (`[[path|name]]`) to that month's notes by `weight` (1–5, anything else counts as 3; 5 first), then newest
+  day. The person changes a weight by editing the note's frontmatter; Score rebuilds the index after each save of a memory note,
+  after each new one and after each vault scan that sees one change (unchanged content is not rewritten).
 - `GET /api/agents/:agentId/knowledge` → `{ enabled }`; **H** `PUT` same path `{ enabled }` → `{ enabled }`: the per-agent
   "Knowledge tools" switch (Team › agent › Tools; default on; the global `agentAccess` is checked first).
 - `GET /api/knowledge/agent-usage` → `{ items: { agentId; writesToday }[] }`: agent writes since local midnight

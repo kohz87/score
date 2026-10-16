@@ -42,6 +42,8 @@ export const SessionCompactedSchema = z.object({
   keepRecent: z.int().positive().nullable(),
   before: SessionSizeSchema.nullable(),
   after: SessionSizeSchema.nullable(),
+  /** PLAN 8.2: the Knowledge note the summary was saved as; null when none was written (off, no summary, or the vault refused). */
+  memoryNote: z.string().nullable().default(null),
 })
 export type SessionCompacted = z.infer<typeof SessionCompactedSchema>
 

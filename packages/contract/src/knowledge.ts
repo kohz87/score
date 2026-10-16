@@ -15,6 +15,8 @@ export const KnowledgeInfoSchema = z.object({
   gitAvailable: z.boolean(),
   /** Whether agents may use the knowledge tools at all (Settings › Knowledge). */
   agentAccess: z.boolean(),
+  /** Whether a compaction's summary is saved as a memory note (Settings › Knowledge; PLAN 8.2). */
+  memoryNotes: z.boolean().default(true),
   /** Uploaded documents (PDF, DOCX, CSV, images, zips, ...) and their total size on disk (task 6.6). */
   documents: z.number().int().nonnegative().default(0),
   documentBytes: z.number().int().nonnegative().default(0),
