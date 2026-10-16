@@ -39,6 +39,7 @@ import {
 import { SEED_NOTES } from './seed.ts'
 import { isDocumentPath, MAX_FILE_BYTES } from './doc-types.ts'
 import { KnowledgeDocuments } from './documents.ts'
+import { buildMonthIndex, memoryMonthDir } from './memory-notes.ts'
 
 // The central vault (contract §12, design 6.0 § 6.2). Files are the source of truth; the DB only indexes them.
 // Everything that changes files runs through one lock, so scans, saves and git never interleave. Nothing here is
@@ -709,6 +710,7 @@ export class KnowledgeVault {
       if (changed.length > 0) this.relink(sqlite)
     })
     changed.push(...(await this.docs.scan(documents, announce, verify, covered)))
+    await this.refreshMemoryIndexes(changed)
     if (announce)
       for (const rel of changed
         .filter((item) => !isDocumentPath(item))
@@ -720,6 +722,45 @@ export class KnowledgeVault {
           by: 'outside',
         })
     return changed
+  }
+
+  /** Rebuilds the monthly memory indexes of the memory notes that changed (inside the vault lock). */
+  private async refreshMemoryIndexes(
+    changed: string[],
+    author: KnowledgeAuthor = 'outside',
+  ): Promise<void> {
+    const dirs = new Set(changed.flatMap((rel) => memoryMonthDir(rel) ?? []))
+    for (const dir of dirs)
+      await this.writeMemoryIndex(dir, author).catch((error: unknown) =>
+        this.options.log?.warn({ err: error }, 'Couldn’t rebuild a memory index'),
+      )
+  }
+
+  /** Writes `<dir>/index.md` from the indexed notes of that month; leaves it alone when it is already right. */
+  private async writeMemoryIndex(dir: string, author: KnowledgeAuthor): Promise<void> {
+    const rel = `${dir}/index.md`
+    const prefix = `${dir}/`
+    const entries = this.options.db
+      .read((sqlite) => this.noteRows(sqlite))
+      .filter((row) => row.path.startsWith(prefix) && memoryMonthDir(row.path) === dir)
+      .map((row) => ({
+        path: row.path,
+        title: row.title,
+        frontmatter: z.record(z.string(), z.unknown()).parse(JSON.parse(row.frontmatter_json)),
+      }))
+    const { abs, stat } = await this.lookup(rel.split('/'))
+    if (entries.length === 0 && !stat) return
+    const content = buildMonthIndex(dir, entries)
+    const current = stat ? await this.readRaw(abs, stat) : null
+    if (current === content) return
+    await this.commitOutside()
+    const target = await this.prepareParent(rel)
+    await this.atomicWrite(target, content, {
+      hash: current === null ? null : hashContent(current),
+    })
+    await this.commit([rel], `${stat ? 'Update' : 'Create'} ${rel}`, author, rel)
+    await this.indexFile(rel, author)
+    await this.publish({ path: rel, kind: 'written', to: null, by: author })
   }
 
   /** Fills "who last changed it" for notes the index has no author for yet, from git history. */
@@ -769,6 +810,23 @@ export class KnowledgeVault {
     return z.object({ agent_access: z.number() }).parse(row).agent_access === 1
   }
 
+  /** Settings › Knowledge: "Save compacted summaries as memory notes". */
+  memoryNotes(): boolean {
+    const row = this.options.db.read((sqlite) =>
+      sqlite.prepare('SELECT memory_notes FROM knowledge_settings WHERE id = 1').get(),
+    )
+    return z.object({ memory_notes: z.number() }).parse(row).memory_notes === 1
+  }
+
+  setMemoryNotes(value: boolean): KnowledgeInfo {
+    this.options.db.tx((sqlite) =>
+      sqlite
+        .prepare('UPDATE knowledge_settings SET memory_notes = ? WHERE id = 1')
+        .run(value ? 1 : 0),
+    )
+    return this.info()
+  }
+
   setAgentAccess(value: boolean): KnowledgeInfo {
     this.options.db.tx((sqlite) =>
       sqlite
@@ -791,6 +849,7 @@ export class KnowledgeVault {
       notes: count,
       gitAvailable: this.git.available,
       agentAccess: this.agentAccess(),
+      memoryNotes: this.memoryNotes(),
       documents: documents.documents,
       documentBytes: documents.bytes,
       moveIssue: this.issue,
@@ -1057,6 +1116,8 @@ export class KnowledgeVault {
       const history = await this.commit([rel], `${stat ? 'Update' : 'Create'} ${rel}`, author, rel)
       await this.indexFile(rel, author)
       await this.publish({ path: rel, kind: 'written', to: null, by: author })
+      // A memory note's weight or a new memory note changes its month's list (PLAN 8.2); the save stands either way.
+      await this.refreshMemoryIndexes([rel], author)
       return { etag: etagOf(hash), path: rel, ...history }
     })
   }

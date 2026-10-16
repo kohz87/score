@@ -383,6 +383,41 @@ def _persist_compression(db, agent, session_id: str, result) -> tuple[bool, str]
     raise CompactNotPersisted()
 
 
+SUMMARY_CAP_BYTES = 32 * 1024
+_SUMMARY_END_MARKER = "--- END OF CONTEXT SUMMARY"
+
+
+def _cap_text(text: str, cap: int = SUMMARY_CAP_BYTES) -> str:
+    raw = text.encode("utf-8")
+    if len(raw) <= cap:
+        return text
+    return raw[:cap].decode("utf-8", "ignore").rstrip() + "\n\n[Cut here: the summary was longer than 32 KB.]"
+
+
+def compaction_summary(agent, result) -> str | None:
+    """The text Hermes's compressor wrote for the turns it replaced, redacted and capped at 32 KB.
+
+    Hermes keeps it twice: ``agent.context_compressor._previous_summary`` (the body, handoff prefix already stripped, what
+    the next compression updates) and, inside the compressed messages, one row flagged ``_compressed_summary`` whose
+    content is the handoff prefix + body + an end marker (possibly merged with a kept message). The first is preferred; the
+    flagged row is the fallback, cut at the end marker with Hermes's own prefix stripper when it can be reached."""
+    text = getattr(getattr(agent, "context_compressor", None), "_previous_summary", None)
+    if type(text) is not str or not text.strip():
+        text = None
+        for message in getattr(result, "after_messages", None) or []:
+            content = message.get("content") if isinstance(message, dict) else None
+            if isinstance(message, dict) and message.get("_compressed_summary") is True and type(content) is str:
+                strip = _lookup("agent.context_compressor.ContextCompressor._strip_summary_prefix")
+                try:
+                    text = strip(content) if strip is not None else content.split(_SUMMARY_END_MARKER, 1)[0]
+                except Exception:
+                    text = content.split(_SUMMARY_END_MARKER, 1)[0]
+                break
+    if type(text) is not str or not text.strip():
+        return None
+    return _cap_text(redact(text.strip()))
+
+
 def _gateway_runner():
     module = sys.modules.get("gateway.run")
     ref = getattr(module, "_gateway_runner_ref", None)
@@ -440,7 +475,7 @@ def compact_session(session_id: str, keep_recent: int | None = None, profile: st
     Works in ``profile``'s own store (Score's room sessions are API-server sessions the gateway's routing index does
     not know) under the transcript lock that rewind takes, so an ``/undo`` can't move the history under it.
     ``compress_now`` runs ``_compress_context(force=True)`` on the throwaway agent; the result is then persisted by
-    ``_persist_compression`` (rotation vs in place). Returns ``{"before": {...}, "after": {...}, "rotated", "newSessionId"}``
+    ``_persist_compression`` (rotation vs in place). Returns ``{"before": {...}, "after": {...}, "rotated", "newSessionId", "summary"}``
     (message count and Hermes's request-token estimate), or None when the session is too short to compact. Raises ``CompactLockHeld``,
     ``SessionBusy``, ``CompactUnsupported``, ``CompactNotPersisted``, ``CommandExpired`` or whatever Hermes raised.
     """
@@ -501,7 +536,8 @@ def compact_session(session_id: str, keep_recent: int | None = None, profile: st
             committed = True
             return {"before": {"messages": len(result.before_messages), "tokens": int(result.before_tokens)},
                     "after": {"messages": len(result.after_messages), "tokens": int(result.after_tokens)},
-                    "rotated": persisted[0], "newSessionId": persisted[1]}
+                    "rotated": persisted[0], "newSessionId": persisted[1],
+                    "summary": compaction_summary(agent, result)}
     finally:
         if agent is not None:
             if not committed:

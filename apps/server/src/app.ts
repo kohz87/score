@@ -284,7 +284,16 @@ export function buildApp({
   registerCurrencyRoutes(app, db)
   registerRulesRoutes(app, port, ingest, db, clock)
   if (db && ingest) {
-    const dispatch = registerRoomRoutes(app, port, db, ingest, clock, mediaStore, workspaces)
+    const dispatch = registerRoomRoutes(
+      app,
+      port,
+      db,
+      ingest,
+      clock,
+      mediaStore,
+      workspaces,
+      knowledge,
+    )
     registerConversationRoutes(app, { db, ingest, port, ...(clock ? { clock } : {}) })
     registerOutsideSessionRoutes(app, { db, ingest, port })
     const holds = createTaskHolds({

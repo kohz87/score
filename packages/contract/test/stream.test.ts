@@ -34,6 +34,7 @@ const eventData = {
     keepRecent: 2,
     before: { messages: 40, tokens: 54000 },
     after: { messages: 8, tokens: 9000 },
+    memoryNote: 'Memory/builder/2026/10/2026-10-16 Launch.md',
   },
   'knowledge.changed': f.knowledgeChanged,
   typing: f.typing,

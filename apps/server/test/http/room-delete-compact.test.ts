@@ -224,6 +224,7 @@ test('compact: 202 now, session.compacted later with Hermes sizes; turns wait me
     keepRecent: 3,
     before: { messages: 40, tokens: 54000 },
     after: { messages: 14, tokens: 9000 },
+    memoryNote: null,
   })
   expect(fake().compactions).toEqual([{ agentId: 'builder', sessionId, keepRecent: 3 }])
   expect(compactingSessions.size).toBe(0)

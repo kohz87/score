@@ -17,6 +17,7 @@ describe('first use', () => {
       notes: 1,
       gitAvailable: true,
       agentAccess: true,
+      memoryNotes: true,
       documents: 0,
       documentBytes: 0,
       moveIssue: null,

@@ -201,6 +201,16 @@ export function useKnowledgeActions() {
         ),
       onSuccess: refresh,
     }),
+    setMemoryNotes: useMutation({
+      mutationFn: async (memoryNotes: boolean) =>
+        KnowledgeInfoSchema.parse(
+          await apiFetch('knowledge/settings', {
+            method: 'PUT',
+            body: JSON.stringify({ memoryNotes }),
+          }),
+        ),
+      onSuccess: refresh,
+    }),
     setAgentAccess: useMutation({
       mutationFn: async (agentAccess: boolean) =>
         KnowledgeInfoSchema.parse(
