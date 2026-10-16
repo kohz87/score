@@ -1441,6 +1441,27 @@ const cases = [
     },
     { runtime: 'nope', fetchedAt: 'yesterday', groups: [], text: 'x' },
   ],
+  [
+    'CodingQuotaWindowSchema',
+    { name: '5 hours', group: null, usedPercent: 6, resetsAt: '2026-10-16T05:40:00.000Z' },
+    { name: 'month', group: null, usedPercent: 6, resetsAt: null },
+  ],
+  [
+    'CodingQuotaSchema',
+    {
+      runtime: 'codex',
+      seenAt: '2026-10-16T05:40:00.000Z',
+      source: 'log',
+      windows: [{ name: 'week', group: 'Gemini Models', usedPercent: null, resetsAt: null }],
+    },
+    {
+      runtime: 'codex',
+      seenAt: '2026-10-16T05:40:00.000Z',
+      source: 'log',
+      windows: [{ name: 'week', group: null, usedPercent: 101, resetsAt: null }],
+    },
+  ],
+  ['CodingQuotaResponseSchema', { quota: null }, { quota: { runtime: 'codex' } }],
   ['CodingRuntimesResponseSchema', { items: [] }, { items: [{ runtime: 'nope' }] }],
   [
     'CodingAgentSchema',

@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import { join } from 'node:path'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { pair } from './pair.ts'
 
 // Coding agents (PLAN 7.2) against the fake adapter and a fake CLI script that prints hand-made fixtures: no model is
@@ -17,6 +17,12 @@ async function api(page: Page, path: string, body: object): Promise<unknown> {
     },
     [`/api/${path}`, body],
   )
+}
+
+// Where the quota-meter screenshots go, when asked for (SCORE_QUOTA_SHOTS=<folder>).
+async function shot(target: Locator, name: string): Promise<void> {
+  const folder = process.env['SCORE_QUOTA_SHOTS']
+  if (folder) await target.screenshot({ path: join(folder, name) })
 }
 
 test('add a coding agent, give it work in a room, stop one turn, see it in Reports and Watch', async ({
@@ -91,6 +97,22 @@ test('add a coding agent, give it work in a room, stop one turn, see it in Repor
   await page.goto(`/now/watch/${encodeURIComponent(id)}`)
   await expect(page.getByText(/Ran ls -la/).first()).toBeVisible({ timeout: 15_000 })
 
+  // Quota meters (PLAN 8.1): the turn's own rate-limit record, as "% left" with when Score saw it.
+  await page.goto(`/team/${encodeURIComponent(id)}`)
+  const meters = page.getByRole('region', { name: 'Coding agent' }).getByRole('group', {
+    name: 'Claude Code limits',
+  })
+  await expect(meters.getByRole('meter', { name: '5 hours left' })).toHaveAttribute(
+    'aria-valuenow',
+    '94',
+  )
+  await expect(meters.getByRole('meter', { name: 'week left' })).toHaveAttribute(
+    'aria-valuenow',
+    '22',
+  )
+  await expect(meters).toContainText('As of')
+  await shot(meters, 'meters-claude-code.png')
+
   // Clean up so other specs see the usual team.
   await page.goto(`/team/${encodeURIComponent(id)}`)
   page.once('dialog', (confirm) => void confirm.accept())
@@ -112,8 +134,8 @@ test('Antigravity: warning, quota, unverified level disabled, a turn with tool c
   await dialog.getByRole('radio', { name: /Coding agent/ }).check()
   await dialog.getByLabel('Kind of coding agent').selectOption('antigravity')
   await expect(dialog).toContainText('browse the web, generate images')
-  await expect(dialog.getByRole('group', { name: 'Antigravity quota' })).toContainText(
-    'Gemini Models: 87% left in the 5-hour window',
+  await expect(dialog.getByRole('group', { name: 'Antigravity limits' })).toContainText(
+    'Gemini Models 5 hours 87% left',
   )
   await expect(dialog.getByRole('radio', { name: /Full access/ })).toBeDisabled()
   await expect(dialog).toContainText('not verified for agy yet')
@@ -132,7 +154,15 @@ test('Antigravity: warning, quota, unverified level disabled, a turn with tool c
   const card = page.getByRole('region', { name: 'Coding agent' })
   await expect(card).toContainText('Antigravity 1.3.3 · Ready')
   await expect(card).toContainText('Gemini Models')
+  const agyMeters = card.getByRole('group', { name: 'Antigravity limits' })
+  await expect(
+    agyMeters.getByRole('meter', { name: 'Gemini Models, 5 hours left' }),
+  ).toHaveAttribute('aria-valuenow', '87')
+  await expect(agyMeters).toContainText('Claude and GPT models, week')
+  await expect(agyMeters).toContainText('75% left')
+  await expect(agyMeters).toContainText(/resets .*(am|pm)/)
   await page.screenshot({ path: testInfo.outputPath('agy-overview.png') })
+  await shot(agyMeters, 'meters-antigravity.png')
 
   await api(page, 'rooms', { name: roomName, leadAgentId: 'lead' })
   await page.goto('/chat')
@@ -160,6 +190,55 @@ test('Antigravity: warning, quota, unverified level disabled, a turn with tool c
   await expect(page.getByText(/Ran ls -la/).first()).toBeVisible({ timeout: 15_000 })
 
   await page.goto(`/team/${encodeURIComponent(id)}`)
+  page.once('dialog', (confirm) => void confirm.accept())
+  await page.getByRole('button', { name: 'Remove agent' }).click()
+  await expect(page).toHaveURL(/\/team$/)
+})
+
+test('Codex: the meters come from the log of the run Score started, and say nothing before the first reply', async ({
+  page,
+}) => {
+  test.setTimeout(90_000)
+  const suffix = Date.now().toString(36)
+  const id = `cx-${suffix}`
+  await pair(page)
+  const created = await api(page, 'coding-agents', {
+    id,
+    name: id,
+    runtime: 'codex',
+    style: { color: '#19C39A', shape: 'hexagon' },
+    permission: 'read-only',
+    acknowledgeReads: true,
+  })
+  expect(created).toMatchObject({ id })
+  await page.goto(`/team/${encodeURIComponent(id)}`)
+  const card = page.getByRole('region', { name: 'Coding agent' })
+  await expect(card).toContainText('Codex reports its limits after its first reply')
+  await api(page, 'rooms', { name: `codex-${suffix}`, leadAgentId: 'lead' })
+  await page.goto('/chat')
+  await page
+    .getByRole('navigation', { name: 'Rooms' })
+    .getByRole('link', { name: new RegExp(`codex-${suffix}`) })
+    .click({ timeout: 15_000 })
+  const composer = page.getByRole('combobox', { name: /^Message/ })
+  await composer.fill(`@${id} look around`)
+  await composer.press('Enter')
+  await expect(
+    page.getByRole('region', { name: 'Message history' }).getByRole('article').filter({
+      hasText: 'Updated notes.txt and added new.txt.',
+    }),
+  ).toBeVisible({ timeout: 30_000 })
+  await page.goto(`/team/${encodeURIComponent(id)}`)
+  const meters = card.getByRole('group', { name: 'Codex limits' })
+  await expect(meters.getByRole('meter', { name: '5 hours left' })).toHaveAttribute(
+    'aria-valuenow',
+    '88',
+  )
+  await expect(meters.getByRole('meter', { name: 'week left' })).toHaveAttribute(
+    'aria-valuenow',
+    '59',
+  )
+  await shot(meters, 'meters-codex.png')
   page.once('dialog', (confirm) => void confirm.accept())
   await page.getByRole('button', { name: 'Remove agent' }).click()
   await expect(page).toHaveURL(/\/team$/)

@@ -65,6 +65,8 @@ export default defineConfig({
             TMPDIR: scratch,
             SCORE_MODE: 'fake',
             SCORE_CODING_FAKE_CLI: fakeCodingCli,
+            // The fake Codex writes its session log (with a rate_limits line) here, never the real ~/.codex.
+            CODEX_HOME: join(runDir, 'codex-home'),
             // Antigravity levels the specs may use; 'full' stays unverified so the disabled state is covered.
             SCORE_CODING_VERIFIED_ANTIGRAVITY: 'read-only,workspace-write',
             SCORE_FAKE_REWIND_SKIP: 'reviewer:compressed',
@@ -85,6 +87,8 @@ export default defineConfig({
             TMPDIR: scratch,
             SCORE_MODE: 'fake',
             SCORE_CODING_FAKE_CLI: fakeCodingCli,
+            // The fake Codex writes its session log (with a rate_limits line) here, never the real ~/.codex.
+            CODEX_HOME: join(runDir, 'codex-home'),
             // Antigravity levels the specs may use; 'full' stays unverified so the disabled state is covered.
             SCORE_CODING_VERIFIED_ANTIGRAVITY: 'read-only,workspace-write',
             // The fake adapter cannot rewind this agent (PLAN 5.33: "Hide in Score only").

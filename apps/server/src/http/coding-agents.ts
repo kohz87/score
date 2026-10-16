@@ -11,6 +11,7 @@ import {
   CodingBackendSchema,
   CodingRuntimeSchema,
   CodingRuntimesResponseSchema,
+  CodingQuotaResponseSchema,
   CodingUsageSchema,
   CodingVersionConfirmSchema,
   type CodingPermission,
@@ -108,6 +109,17 @@ export function registerCodingAgentRoutes(
   app.get('/api/coding-agents/runtimes/:runtime/usage', async (request) => {
     const { runtime } = z.object({ runtime: CodingRuntimeSchema }).parse(request.params)
     return CodingUsageSchema.parse(await coding.usage(runtime))
+  })
+
+  app.get('/api/coding-agents/runtimes/:runtime/quota', async (request) => {
+    const { runtime } = z.object({ runtime: CodingRuntimeSchema }).parse(request.params)
+    return CodingQuotaResponseSchema.parse({ quota: await coding.quotaOfRuntime(runtime) })
+  })
+  app.get('/api/coding-agents/:id/quota', async (request) => {
+    const { id } = z.object({ id: z.string().min(1).max(100) }).parse(request.params)
+    const agent = getCodingAgent(db.sqlite, id)
+    if (!agent) throw new HttpError(404, 'not_found', 'Couldn’t find that coding agent.')
+    return CodingQuotaResponseSchema.parse({ quota: await coding.quotaOf(agent) })
   })
 
   app.post('/api/coding-agents', guard, async (request, reply) => {

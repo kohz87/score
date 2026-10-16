@@ -2,7 +2,6 @@ import {
   CodingAgentSchema,
   CodingAgentsResponseSchema,
   CodingRuntimesResponseSchema,
-  CodingUsageSchema,
   ShapeSchema,
   type AgentDetail,
   type CodingAgent,
@@ -18,6 +17,7 @@ import { apiFetch } from '../../data/api.ts'
 import { runtimeLabel } from '../../components/runtime-label.ts'
 import { CodingBackend } from './CodingBackend.tsx'
 import { ReleaseHeld } from './ReleaseHeld.tsx'
+import { AgentQuota, RuntimeQuotaLine } from './QuotaMeters.tsx'
 
 const permissionLabels: Record<CodingPermission, string> = {
   'read-only': 'Read only: looks at files, changes nothing',
@@ -129,49 +129,6 @@ function PermissionPicker({
   )
 }
 
-function resetText(value: string): string {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime())
-    ? value
-    : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-}
-
-/** Antigravity's own quota (`/usage`): the 5-hour and weekly share left per model group. */
-function AntigravityQuota() {
-  const usage = useQuery({
-    queryKey: ['coding', 'usage', 'antigravity'],
-    queryFn: async ({ signal }) =>
-      CodingUsageSchema.parse(
-        await apiFetch('coding-agents/runtimes/antigravity/usage', { signal }),
-      ),
-    retry: false,
-    staleTime: 60_000,
-  })
-  if (usage.isPending) return <p className="team-muted">Reading the Antigravity quota…</p>
-  if (usage.error)
-    return <p className="team-muted">Antigravity quota unavailable: {usage.error.message}</p>
-  const { groups, text } = usage.data
-  return (
-    <div aria-label="Antigravity quota" role="group">
-      {groups.length === 0 ? (
-        <pre className="team-muted">{text}</pre>
-      ) : (
-        <ul className="team-muted team-coding-quota">
-          {groups.map((group) => (
-            <li key={group.name}>
-              {group.name}: {group.fiveHourRemainingPercent ?? '?'}% left in the 5-hour window
-              {group.fiveHourResets ? ` (resets ${resetText(group.fiveHourResets)})` : ''}
-              {group.weeklyRemainingPercent !== null
-                ? `, ${group.weeklyRemainingPercent}% left this week${group.weeklyResets ? ` (resets ${resetText(group.weeklyResets)})` : ''}`
-                : ''}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
-}
-
 export function AddCodingAgentForm({ close }: { close: () => void }) {
   const queryClient = useQueryClient()
   const runtimes = useQuery(codingRuntimesQuery)
@@ -272,7 +229,7 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
           {info.warning}
         </p>
       )}
-      {runtime === 'antigravity' && usable && <AntigravityQuota />}
+      {usable && <RuntimeQuotaLine runtime={runtime} />}
       <label>
         Agent name (letters, digits, - and _)
         <input
@@ -480,14 +437,12 @@ function CodingSettings({
           <dt>Quota</dt>
           <dd>{coding.quota}</dd>
         </div>
-        {coding.runtime === 'antigravity' && (
-          <div>
-            <dt>Limits left</dt>
-            <dd>
-              <AntigravityQuota />
-            </dd>
-          </div>
-        )}
+        <div>
+          <dt>Limits left</dt>
+          <dd>
+            <AgentQuota agentId={coding.id} runtime={coding.runtime} />
+          </dd>
+        </div>
         <div>
           <dt>Workspace</dt>
           <dd>

@@ -255,6 +255,7 @@ export function withBounds(
   return {
     stats: inner.stats,
     ...(inner.lossReason ? { lossReason: () => inner.lossReason!() } : {}),
+    ...(inner.quota ? { quota: () => inner.quota!() } : {}),
     parse(line) {
       const events = inner.parse(line).map(boundEvent)
       for (const event of events) if (event.kind === 'result') result = event

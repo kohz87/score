@@ -6,6 +6,8 @@ import type {
   WorkerReadiness,
   AgentDetail,
   CodingAgent,
+  CodingQuota,
+  CodingQuotaWindow,
   CodingUsage,
   CodingRuntime as RuntimeId,
 } from '@score/contract'
@@ -29,6 +31,7 @@ import {
   type WorkerPolicy,
 } from './policy.ts'
 import { driverFor } from './drivers.ts'
+import { quotaFromUsage, readCodexQuota } from './quota.ts'
 import { CappedText } from './note.ts'
 import {
   bootId,
@@ -42,7 +45,10 @@ import {
   cliSessionFor,
   forgetCliSession,
   getCodingAgent,
+  getCodingQuota,
+  latestCodingQuota,
   listCodingAgents,
+  saveCodingQuota,
   type StoredCodingAgent,
 } from './store.ts'
 import {
@@ -325,6 +331,51 @@ export class CodingRuntime {
         }
       }),
     )
+  }
+
+  /**
+   * The meters of the CLI that just ended a turn (8.1): Claude Code's latest rate-limit record from the stream, Codex's
+   * from its own log of this run. Best effort, never part of the run's outcome.
+   */
+  private recordQuota(
+    agent: StoredCodingAgent,
+    runtime: RuntimeId,
+    streamed: CodingQuotaWindow[] | null,
+    threadId: string | null,
+    locator: CliLocator,
+  ): void {
+    try {
+      let windows = streamed
+      let source: CodingQuota['source'] = 'turn'
+      if (runtime === 'codex') {
+        source = 'log'
+        windows =
+          threadId === null
+            ? null
+            : readCodexQuota(locator.childEnv().CODEX_HOME, threadId, new Date())
+      }
+      if (windows === null || runtime === 'antigravity') return
+      saveCodingQuota(this.deps.db.sqlite, agent.id, {
+        runtime,
+        seenAt: new Date().toISOString(),
+        windows,
+        source,
+      })
+    } catch (error) {
+      this.deps.onError?.(error)
+    }
+  }
+
+  /** The stored quota of one agent; Antigravity's is read from its own `/usage` (cached for a minute). */
+  async quotaOf(agent: StoredCodingAgent): Promise<CodingQuota | null> {
+    if (agent.runtime === 'antigravity') return quotaFromUsage(await this.usage('antigravity'))
+    return getCodingQuota(this.deps.db.sqlite, agent.id)
+  }
+
+  /** The newest reading among the live agents of a runtime (the add-agent form, before any agent exists). */
+  async quotaOfRuntime(runtime: RuntimeId): Promise<CodingQuota | null> {
+    if (runtime === 'antigravity') return quotaFromUsage(await this.usage('antigravity'))
+    return latestCodingQuota(this.deps.db.sqlite, runtime)
   }
 
   private readonly usageCache = new Map<string, { at: number; value: CodingUsage }>()
@@ -1317,7 +1368,9 @@ export class CodingRuntime {
       // Saving an event can fail. The supervised backend stops the run and the result is not used (design §4); the
       // fallback keeps the run going but cannot call it complete either.
       let ingestFailed = false
+      let threadId: string | null = null
       const handleEvent = async (event: CodingEvent): Promise<void> => {
+        if (event.kind === 'session') threadId = event.sessionId
         if (event.kind === 'result') {
           if (result) extraResult = true
           else result = event
@@ -1466,6 +1519,8 @@ export class CodingRuntime {
       const lost =
         parser.lossReason?.() ??
         (extraResult ? 'The CLI reported more than one result for this attempt' : null)
+      if (!outcome.spawnError && outcome.refusal === null)
+        this.recordQuota(agent, driver.runtime, parser.quota?.() ?? null, threadId, locator)
       // A resumed session the CLI refused before doing anything: start fresh once, and forget the dead id. Only with
       // proof that nothing ran: the first group is gone, no output or tool call was seen, and the CLI itself said the
       // session is unknown (a generic "not found" proves nothing). The second launch shares the turn's deadline.

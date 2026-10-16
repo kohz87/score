@@ -1025,6 +1025,14 @@ room's CLI session (`skipped: no_session`).
   fiveHourResets: string|null; weeklyRemainingPercent: number|null; weeklyResets: string|null }[]; text }`: Antigravity's quota (`agy -p /usage`, no model
   turn), cached for 60 s; `text` is the redacted table as printed, the fallback when a group could not be read. Other runtimes: `409 unsupported`;
   CLI missing or untested: `422 cli_not_installed` / `422 untested_cli_version`; the CLI failing or printing nothing readable: `502 usage_unavailable`.
+- `GET /api/coding-agents/:id/quota` and `GET /api/coding-agents/runtimes/:runtime/quota` → `CodingQuotaResponse` `{ quota: CodingQuota | null }` (PLAN 8.1, decision 82),
+  `CodingQuota` `{ runtime; seenAt; windows: { name: '5 hours'|'week'; group: string|null; usedPercent: number|null; resetsAt: string|null }[]; source: 'usage'|'turn'|'log' }`.
+  One shape for all three CLIs; `usedPercent` is the share used (the web shows "% left"), null = the CLI didn't say. Claude Code: the latest `rate_limit_event` of a turn
+  (`unifiedWindows.five_hour|seven_day`, `utilization` 0–1, `resetsAt` epoch seconds), `source: 'turn'`. Codex: the last `rate_limits` line in the tail (last 256 KB) of the session log
+  of the run Score started, `$CODEX_HOME/sessions/<y>/<m>/<d>/rollout-*-<threadId>.jsonl` (opened with `O_NOFOLLOW`, regular file owned by the user; no other Codex file is ever read),
+  `source: 'log'`. Antigravity: the `/usage` reading above (`group` set per model group, `remaining` turned into `used`), `source: 'usage'`, only for `…/:id/quota` and `…/runtimes/antigravity/quota`
+  (same errors as `/usage`). Claude Code and Codex are stored (table `coding_quota`, latest per agent) and never read from the CLI between turns; `null` until a turn has reported one.
+  The `runtimes/:runtime/quota` form answers with the most recent reading of any agent of that runtime. Unknown agent: `404`.
 - **H** `DELETE /api/coding-agents/:id` → `204` (`409 agent_busy` while any of its runs is unresolved: running or queued, ended but not proven ended, a launch that isn’t settled, or a held group). Past messages stay; its runs leave Reports.
 - Turns: a mention routes through the normal room queue. One turn per coding agent at a time (others show as `queued`); at most 30 minutes per
   turn; Stop = SIGINT, SIGTERM after 5 s, SIGKILL after 5 s more; Stop answers `stopped` only once the process group is proven gone within about a second, otherwise `unconfirmed` (the stop goes on in the background). An untested/missing CLI or an unavailable workspace fails the reply with a

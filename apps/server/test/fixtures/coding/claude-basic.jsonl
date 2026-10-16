@@ -1,5 +1,6 @@
 {"_fixture":"hand-made, not recorded: shaped after the CLI's documented stream format"}
 {"type":"system","subtype":"init","session_id":"11111111-1111-4111-8111-111111111111","model":"claude-sonnet-fixture","cwd":"/work","tools":["Bash","Read","Write","Edit"]}
+{"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","resetsAt":1792206000,"rateLimitType":"seven_day","utilization":0.78,"overageStatus":"rejected","isUsingOverage":false,"surpassedThreshold":0.75,"unifiedWindows":{"five_hour":{"utilization":0.06,"resetsAt":1792129200},"seven_day":{"utilization":0.78,"resetsAt":1792206000}},"overageEnabled":false},"uuid":"00000000-0000-4000-8000-000000000000","session_id":"11111111-1111-4111-8111-111111111111"}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"I should look at the folder first."},{"type":"text","text":"Looking at the project."},{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls -la"}}]}}
 {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"total 4\ndrwxr-xr-x 2 u u 4096 notes.txt","is_error":false}]}}
 {"_sleep":30}

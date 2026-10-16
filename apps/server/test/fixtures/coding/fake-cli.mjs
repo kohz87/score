@@ -3,7 +3,7 @@
 // and under test). It never talks to a model: it prints a hand-made fixture selected by `[fixture:NAME]` in the prompt.
 // Usage: node fake-cli.mjs <claude-code|codex|opencode> <the real CLI's arguments…>
 import { spawn } from 'node:child_process'
-import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -57,6 +57,46 @@ const base = join(here, `${fixtureNames[runtime]}-${name}`)
 const file =
   resumed && existsSync(`${base}-resumed.jsonl`) ? `${base}-resumed.jsonl` : `${base}.jsonl`
 const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean)
+// Codex also writes its own session log under $CODEX_HOME; the quota meter reads the `rate_limits` line of this run's file.
+if (runtime === 'codex' && process.env.CODEX_HOME && !process.env.SCORE_CODING_FAKE_NO_CODEX_LOG) {
+  const thread = lines
+    .map((line) => /"thread_id":"([^"]+)"/.exec(line)?.[1])
+    .find((value) => value !== undefined)
+  if (thread) {
+    const now = new Date()
+    const two = (value) => String(value).padStart(2, '0')
+    const dir = join(
+      process.env.CODEX_HOME,
+      'sessions',
+      String(now.getFullYear()),
+      two(now.getMonth() + 1),
+      two(now.getDate()),
+    )
+    mkdirSync(dir, { recursive: true })
+    const entry = (payload) =>
+      `${JSON.stringify({ timestamp: now.toISOString(), type: 'event_msg', payload })}\n`
+    writeFileSync(
+      join(dir, `rollout-${now.toISOString().slice(0, 19).replace(/:/g, '-')}-${thread}.jsonl`),
+      entry({ type: 'task_started' }) +
+        entry({
+          type: 'token_count',
+          info: null,
+          rate_limits: {
+            primary: {
+              used_percent: 12.0,
+              window_minutes: 300,
+              resets_at: Math.floor(Date.now() / 1000) + 9000,
+            },
+            secondary: {
+              used_percent: 41.0,
+              window_minutes: 10080,
+              resets_at: Math.floor(Date.now() / 1000) + 400000,
+            },
+          },
+        }),
+    )
+  }
+}
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 process.on('SIGINT', () => process.exit(130))
 for (const line of lines) {

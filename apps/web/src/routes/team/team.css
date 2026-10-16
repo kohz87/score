@@ -1058,6 +1058,71 @@ a.team-pill-button {
   padding: 0;
 }
 
+/* CLI quota meters (PLAN 8.1): a bar per window; the figure beside it always says the same thing as the fill. */
+.quota {
+  text-align: left;
+}
+.quota-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.quota-row {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) minmax(5rem, 1fr) 4.5rem minmax(0, 9rem);
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  text-align: left;
+}
+.quota-name {
+  overflow-wrap: anywhere;
+}
+.quota-bar {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+}
+.quota-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ink);
+}
+.quota-fill[data-level='low'] {
+  background: var(--agent-saffron);
+}
+.quota-fill[data-level='out'] {
+  background: var(--agent-coral);
+}
+.quota-left {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.quota-reset,
+.quota-seen {
+  color: var(--muted);
+}
+.quota-seen {
+  margin: 6px 0 0;
+}
+@media (max-width: 560px) {
+  .quota-row {
+    grid-template-columns: minmax(0, 1fr) 4.5rem;
+  }
+  .quota-bar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .quota-reset {
+    grid-column: 1 / -1;
+  }
+}
+
 /* What a coding agent can read: two short lines (owner 2026-10-11). */
 .coding-reach p {
   margin: 0 0 4px;
