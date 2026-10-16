@@ -49,7 +49,18 @@ test('a long agent description stays on one line in Now and in the @mention menu
       permission: 'read-only',
     }),
   ).toMatchObject({ id })
+  try {
+    await checkBoth(page, id, suffix)
+  } finally {
+    // Other specs count the team's agents: never leave this one behind.
+    await page.goto(`/team/${encodeURIComponent(id)}`)
+    page.once('dialog', (confirm) => void confirm.accept())
+    await page.getByRole('button', { name: 'Remove agent' }).click()
+    await expect(page).toHaveURL(/\/team$/)
+  }
+})
 
+async function checkBoth(page: Page, id: string, suffix: string): Promise<void> {
   await page.goto('/now')
   const lane = page.locator('.now-lane-label').filter({ hasText: id })
   await expect(lane).toBeVisible({ timeout: 15_000 })
@@ -71,4 +82,4 @@ test('a long agent description stays on one line in Now and in the @mention menu
   await expect(option).toBeVisible()
   await expect(option.locator('.chat-menu-command')).toHaveText(`@${id}`)
   await cutToOneLine(option.locator('.chat-menu-detail'))
-})
+}
