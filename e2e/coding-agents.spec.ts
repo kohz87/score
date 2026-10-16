@@ -44,6 +44,16 @@ test('add a coding agent, give it work in a room, stop one turn, see it in Repor
   await expect(dialog.getByRole('note')).toContainText(
     'Score blocks your Hermes, Score and SSH folders',
   )
+  // Model picker (PLAN 8.5): Claude Code has no listing command, so its list is the documented aliases.
+  const claudeModel = dialog.getByRole('combobox', { name: 'Model' })
+  await expect(claudeModel.locator('option')).toHaveText([
+    'CLI default',
+    'Fable',
+    'Opus',
+    'Sonnet',
+    'Other…',
+  ])
+  await expect(claudeModel).toHaveValue('')
   await dialog.getByLabel(/Agent name/).fill(id)
   await dialog.getByRole('radio', { name: /Full access/ }).check()
   await expect(dialog.getByText(/turns the CLI’s own sandbox off/)).toBeVisible()
@@ -139,6 +149,32 @@ test('Antigravity: warning, quota, unverified level disabled, a turn with tool c
   )
   await expect(dialog.getByRole('radio', { name: /Full access/ })).toBeDisabled()
   await expect(dialog).toContainText('not verified for agy yet')
+  // Model picker (PLAN 8.5): `agy models`, grouped by family, with CLI default first and Other… last.
+  const model = dialog.getByRole('combobox', { name: 'Model' })
+  await expect(model.locator('option').first()).toHaveText('CLI default')
+  await expect(model.locator('option').last()).toHaveText('Other…')
+  await expect(model.locator('optgroup')).toHaveCount(4)
+  await expect(model.locator('optgroup[label="Gemini 4 Argon"] option')).toHaveText([
+    'Gemini 4 Argon (Medium)',
+    'Gemini 4 Argon (High)',
+    'Gemini 4 Argon (Low)',
+  ])
+  await model.selectOption('gemini-4-argon-high')
+  await expect(dialog.getByLabel('Model name')).toHaveCount(0)
+  await model.selectOption('__other__')
+  await dialog.getByLabel('Model name').fill('some-other-model')
+  await model.selectOption('gemini-4-argon-high')
+  await expect(dialog.getByLabel('Model name')).toHaveCount(0)
+  // The screenshot shows the list opened (a native menu isn't drawn in a capture, so it is shown as a list box).
+  const pickerShots = process.env['SCORE_PICKER_SHOTS']
+  if (pickerShots) {
+    await model.evaluate((element) => element.setAttribute('size', '9'))
+    // With a size it is a list box, no longer a combobox.
+    const opened = dialog.getByRole('listbox', { name: 'Model' })
+    await opened.scrollIntoViewIfNeeded()
+    await dialog.screenshot({ path: join(pickerShots, 'picker.png') })
+    await opened.evaluate((element) => element.removeAttribute('size'))
+  }
   await dialog.getByLabel(/Agent name/).fill(id)
   await dialog.getByRole('radio', { name: /Read only/ }).check()
   const add = dialog.getByRole('button', { name: 'Add coding agent' })
@@ -163,6 +199,19 @@ test('Antigravity: warning, quota, unverified level disabled, a turn with tool c
   await expect(agyMeters).toContainText(/resets .*(am|pm)/)
   await page.screenshot({ path: testInfo.outputPath('agy-overview.png') })
   await shot(agyMeters, 'meters-antigravity.png')
+
+  // The chosen model is the agent's setting; an unknown one comes back as Other… with its name.
+  const settingsModel = card.getByRole('combobox', { name: 'Model' })
+  await expect(settingsModel).toHaveValue('gemini-4-argon-high')
+  await settingsModel.selectOption('__other__')
+  await card.getByLabel('Model name').fill('retired-model-1')
+  await card.getByRole('button', { name: 'Save' }).click()
+  await expect(async () => {
+    await page.reload()
+    await expect(
+      page.getByRole('region', { name: 'Coding agent' }).getByLabel('Model name'),
+    ).toHaveValue('retired-model-1')
+  }).toPass({ timeout: 15_000 })
 
   await api(page, 'rooms', { name: roomName, leadAgentId: 'lead' })
   await page.goto('/chat')
