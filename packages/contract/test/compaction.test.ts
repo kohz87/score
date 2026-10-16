@@ -59,7 +59,8 @@ describe('compaction and room deletion contracts (PLAN 5.36)', () => {
     }
     expect(SessionCompactedSchema.parse(data)).toEqual(data)
     // An older producer's event has no memory note: it reads as none.
-    const { memoryNote: _omitted, ...older } = data
+    const older: Record<string, unknown> = { ...data }
+    delete older.memoryNote
     expect(SessionCompactedSchema.parse(older).memoryNote).toBeNull()
     expect(SessionCompactedSchema.safeParse({ ...data, reason: 'because' }).success).toBe(false)
     const envelope = { seq: 1, ts: '2026-10-11T10:00:00.000Z' }
