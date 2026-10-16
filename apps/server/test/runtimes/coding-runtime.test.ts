@@ -14,6 +14,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
+import fsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -364,6 +365,58 @@ test('full access needs the security password, and lowering it never does', asyn
   expect(lower.json().permission).toBe('read-only')
   const raise = await request('PATCH', '/api/coding-agents/bold', { permission: 'full' })
   expect(raise.statusCode).toBe(403)
+})
+
+test('audit5 S5-001: a stale PATCH cannot turn a fresh downgrade back into full without a password', async () => {
+  await new SecurityPassword(home).set('correct horse battery', undefined)
+  const created = await request('POST', '/api/coding-agents', {
+    id: 'bold',
+    name: 'Bold',
+    runtime: 'codex',
+    acknowledgeReads: true,
+    workspace,
+    style,
+    permission: 'full',
+    password: 'correct horse battery',
+  })
+  expect(created.statusCode).toBe(201)
+  const other = join(dir, 'other-ws')
+  mkdirSync(other)
+  // Hold the stale request while it validates its new workspace (it already read permission = full: no password needed).
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  let held!: () => void
+  const heldSeen = new Promise<void>((resolve) => (held = resolve))
+  const realStat = fsPromises.stat.bind(fsPromises)
+  vi.spyOn(fsPromises, 'stat').mockImplementation((async (target: string, ...rest: never[]) => {
+    if (String(target) === other) {
+      held()
+      await gate
+    }
+    return realStat(target, ...rest)
+  }) as typeof fsPromises.stat)
+  const stale = request('PATCH', '/api/coding-agents/bold', {
+    permission: 'full',
+    workspace: other,
+  })
+  await heldSeen
+  const lowered = await request('PATCH', '/api/coding-agents/bold', { permission: 'read-only' })
+  expect(lowered.json().permission).toBe('read-only')
+  release()
+  const result = await stale
+  expect(result.statusCode, result.body).toBe(409)
+  expect(result.json().error.code).toBe('conflict')
+  const row = db.sqlite
+    .prepare('SELECT permission, workspace FROM coding_agents WHERE id = ?')
+    .get('bold') as { permission: string; workspace: string }
+  expect(row.permission).toBe('read-only')
+  expect(row.workspace).not.toBe(other)
+  // Freshly authorised (password verified for this request), the escalation is allowed.
+  const raised = await request('PATCH', '/api/coding-agents/bold', {
+    permission: 'full',
+    password: 'correct horse battery',
+  })
+  expect(raised.json().permission).toBe('full')
 })
 
 test('an @mention runs Claude Code in the workspace: reply, tool cards, run, usage, frames, session', async () => {
