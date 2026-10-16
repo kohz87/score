@@ -2,7 +2,11 @@
   "fetched_at": "2026-10-16T03:12:44.000Z",
   "etag": "W/\"8a1f0c2e\"",
   "client_version": "0.160.1",
-  "identity": { "email": "someone@example.invalid", "account_id": "acct-FAKE-0001", "plan": "plus" },
+  "identity": {
+    "email": "someone@example.invalid",
+    "account_id": "acct-FAKE-0001",
+    "plan": "plus"
+  },
   "models": [
     {
       "slug": "gpt-6.1-sol",
