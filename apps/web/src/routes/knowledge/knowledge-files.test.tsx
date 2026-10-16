@@ -199,7 +199,7 @@ test('a PDF without text says so; an unversioned image says it has no history', 
   router.dispose()
   registry.dispose()
   mount('/knowledge/inbox/huge.png')
-  expect(await screen.findByText(/Not versioned: files over 10 MB/)).toBeDefined()
+  expect(await screen.findByText(/Not versioned: stored without history/)).toBeDefined()
   expect(screen.getByAltText('Preview of huge.png').getAttribute('src')).toBe(
     '/api/knowledge/files/inbox/huge.png',
   )

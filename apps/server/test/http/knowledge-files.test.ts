@@ -96,6 +96,7 @@ describe('document routes', () => {
       path: 'reports/q3.pdf',
       kind: 'document',
       replaced: false,
+      history: 'committed',
     })
     const tree = KnowledgeTreeSchema.parse((await call('GET', '/api/knowledge/tree')).json())
     expect(tree.documents[0]).toMatchObject({

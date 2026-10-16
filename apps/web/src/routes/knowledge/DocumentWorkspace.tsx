@@ -140,7 +140,7 @@ export function DocumentWorkspace({
           <dd>
             {doc.versioned
               ? 'In Knowledge history (git)'
-              : 'Not versioned: files over 10 MB are stored without history'}
+              : 'Not versioned: stored without history (files over 10 MB, or in a folder .gitignore excludes)'}
           </dd>
         </div>
         <div>

@@ -7,6 +7,7 @@ import type {
   KnowledgeDocument,
   KnowledgeDocumentSummary,
   KnowledgeDocumentType,
+  KnowledgeHistoryStatus,
   KnowledgeTextStatusSchema,
   KnowledgeUnzipResult,
   KnowledgeUploadResult,
@@ -136,6 +137,28 @@ export class KnowledgeDocuments {
 
   list(): KnowledgeDocumentSummary[] {
     return this.db.read((sqlite) => this.rows(sqlite)).map(toSummary)
+  }
+
+  /**
+   * Startup repair of the `versioned` flag: rows written before documents followed the ignore rule can say "in git"
+   * for a Git-ignored, untracked path (its commit was never possible), or "not in git" for a small file whose ignore
+   * rule is gone. A tracked file always keeps history, and nothing is force-added.
+   */
+  async reconcileHistory(): Promise<number> {
+    if (!this.vault.gitAvailable) return 0
+    const rows = this.db.read((sqlite) => this.rows(sqlite))
+    const ask = rows.filter((row) => row.versioned === 1 || row.size <= MAX_VERSIONED_BYTES)
+    if (ask.length === 0) return 0
+    const ignored = await this.vault.ignoredUntracked(ask.map((row) => row.path))
+    const fix = ask.filter((row) =>
+      row.versioned === 1 ? ignored.has(row.path) : !ignored.has(row.path),
+    )
+    if (fix.length === 0) return 0
+    this.db.tx((sqlite) => {
+      const update = sqlite.prepare('UPDATE knowledge_documents SET versioned = ? WHERE path = ?')
+      for (const row of fix) update.run(row.versioned === 1 ? 0 : 1, row.path)
+    })
+    return fix.length
   }
 
   /** Paths that are stored but not in git (the vault's git must not sweep them into "Outside changes"). */
@@ -505,7 +528,7 @@ export class KnowledgeDocuments {
         author,
         true,
       )
-      return { path: written.path, kind: 'note', replaced: replace }
+      return { path: written.path, kind: 'note', replaced: replace, history: written.history }
     }
     return this.vault.runLocked(async () => {
       const again = await this.existing(target)
@@ -514,18 +537,36 @@ export class KnowledgeDocuments {
         const { stat } = await this.vault.lookup(target.split('/'))
         if (!stat?.isFile()) throw new HttpError(400, 'bad_path', 'A folder has that name.')
       }
-      await this.place({ ...prepared, path: target }, author, { hash: expectHash })
-      return { path: target, kind: 'document' as const, replaced: again !== null }
+      const placed = await this.place({ ...prepared, path: target }, author, { hash: expectHash })
+      return {
+        path: target,
+        kind: 'document' as const,
+        replaced: again !== null,
+        history: placed.history,
+      }
     })
   }
 
-  /** Writes one prepared document and indexes it (caller holds the lock). Returns whether it is in git. */
+  /**
+   * Whether history applies to a document: size only decides eligibility (a bigger file stays out unless it was
+   * versioned before or git tracks it); then the same ignore rule as for notes. An ignored, untracked path is stored
+   * but not versioned, and never force-added (decision 80).
+   */
+  private async keptInHistory(rel: string, size: number, known: boolean): Promise<boolean> {
+    if (size > MAX_VERSIONED_BYTES && !known && this.trackedHint?.has(rel) !== true) return false
+    return !(await this.vault.ignoredUntracked([rel])).has(rel)
+  }
+
+  /**
+   * Writes one prepared document and indexes it (caller holds the lock). Says whether it is in git and what the
+   * commit did; in a batch the commit is the caller's, so `history` is only a placeholder there.
+   */
   private async place(
     document: PreparedDocument,
     author: KnowledgeAuthor,
     expect: { hash: string | null },
     batch?: string[],
-  ): Promise<boolean> {
+  ): Promise<{ versioned: boolean; history: KnowledgeHistoryStatus }> {
     const existed = expect.hash !== null
     const rel = document.path
     const previous = this.db.read((sqlite) => this.row(sqlite, rel))
@@ -534,7 +575,11 @@ export class KnowledgeDocuments {
     const abs = await this.vault.prepareParent(rel)
     await this.vault.atomicWrite(abs, document.bytes, expect)
     const stat = await fs.lstat(abs)
-    const versioned = document.bytes.length <= MAX_VERSIONED_BYTES || previous?.versioned === 1
+    const versioned = await this.keptInHistory(
+      rel,
+      document.bytes.length,
+      previous?.versioned === 1,
+    )
     this.db.tx((sqlite) =>
       this.writeIndex(
         sqlite,
@@ -544,14 +589,17 @@ export class KnowledgeDocuments {
         author,
       ),
     )
+    let history: KnowledgeHistoryStatus = versioned ? 'committed' : 'not_versioned'
     if (batch) {
       if (versioned) batch.push(rel)
     } else {
       if (versioned)
-        await this.vault.commitPaths([rel], `${existed ? 'Replace' : 'Add'} ${rel}`, author)
+        history = (
+          await this.vault.commitPaths([rel], `${existed ? 'Replace' : 'Add'} ${rel}`, author)
+        ).history
       await this.vault.publishChange({ path: rel, kind: 'written', to: null, by: author })
     }
-    return versioned
+    return { versioned, history }
   }
 
   // ---- delete and move -------------------------------------------------------------------------------------
@@ -636,20 +684,13 @@ export class KnowledgeDocuments {
     // A file whose bytes don't match its extension is left alone (and unlisted), not indexed as something it isn't.
     const facts = bytesMatch(type, bytes) ? await this.documentFacts(rel, type, bytes) : null
     if (!facts) return this.dropIndex(rel)
+    // A rebuild has no rows to remember, so git's tracking stands in for them.
+    const versioned = await this.keptInHistory(rel, stat.size, known?.versioned === 1)
     this.db.tx((sqlite) =>
       this.writeIndex(
         sqlite,
         rel,
-        {
-          mtimeMs: stat.mtimeMs,
-          size: stat.size,
-          hash,
-          // A rebuild has no rows to remember, so git's tracking stands in for them.
-          versioned:
-            stat.size <= MAX_VERSIONED_BYTES ||
-            known?.versioned === 1 ||
-            this.trackedHint?.has(rel) === true,
-        },
+        { mtimeMs: stat.mtimeMs, size: stat.size, hash, versioned },
         facts,
         author,
       ),
@@ -829,13 +870,14 @@ export class KnowledgeDocuments {
           }
           done.push(item)
         }
+        let history: KnowledgeHistoryStatus = 'not_versioned'
         if (committed.length > 0)
-          await this.vault.commitPaths(committed, `Unzipped ${zipName}`, author)
+          history = (await this.vault.commitPaths(committed, `Unzipped ${zipName}`, author)).history
         for (const item of done.slice(0, MAX_EVENTS))
           await this.vault.publishChange({ path: item.path, kind: 'written', to: null, by: author })
-        return done.map((item) => item.path)
+        return { paths: done.map((item) => item.path), history }
       })
-      return { folder, written, skipped }
+      return { folder, written: written.paths, skipped, history: written.history }
     } finally {
       await fs.rm(scratch, { recursive: true, force: true })
     }

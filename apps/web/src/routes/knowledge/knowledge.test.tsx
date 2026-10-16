@@ -135,7 +135,13 @@ function respond(input: string, init: RequestInit = {}): Response {
       lastAuthor: 'you',
       mtime: '2026-01-01T00:00:00Z',
     })
-    return json({ etag: `e${nextEtag}`, path, versioned: !unversioned.has(path), historyUpdated })
+    return json({
+      etag: `e${nextEtag}`,
+      path,
+      versioned: !unversioned.has(path),
+      historyUpdated,
+      history: historyUpdated ? 'committed' : 'failed',
+    })
   }
   if (method === 'DELETE') {
     notes.delete(path)
@@ -793,4 +799,18 @@ test('a normal note shows no history warning; a failed history update is reporte
   historyUpdated = true
   type(view, ' again')
   await waitFor(() => expect(screen.queryByTestId('history-missed')).toBeNull(), { timeout: 3000 })
+})
+
+test('after a failed history update, "Save to history again" retries without any text change', async () => {
+  const view = await openEditor()
+  historyUpdated = false
+  type(view, 'more')
+  await screen.findByTestId('history-missed', {}, { timeout: 3000 })
+  const writes = () => calls.filter((call) => call.method === 'PUT').length
+  const before = writes()
+  historyUpdated = true
+  fireEvent.click(screen.getByRole('button', { name: 'Save to history again' }))
+  await waitFor(() => expect(screen.queryByTestId('history-missed')).toBeNull(), { timeout: 3000 })
+  expect(writes()).toBe(before + 1)
+  expect(screen.queryByRole('button', { name: 'Save to history again' })).toBeNull()
 })

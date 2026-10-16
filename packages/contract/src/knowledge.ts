@@ -76,12 +76,21 @@ export const KnowledgeDocumentSchema = KnowledgeDocumentSummarySchema.extend({
   /** Zip documents: the file list (at most 1,000 names). */
   entries: z.array(KnowledgeZipEntrySchema).nullable(),
 })
+/** What happened to history when something was saved (API-CONTRACT, Knowledge). */
+export const KnowledgeHistoryStatusSchema = z.enum([
+  'committed',
+  'unchanged',
+  'not_versioned',
+  'git_unavailable',
+  'failed',
+])
 export const KnowledgeUploadConflictSchema = z.enum(['ask', 'keep', 'replace'])
 export const KnowledgeUploadResultSchema = z.object({
   /** Where the file ended up (`.txt` becomes a `.md` note; `keep` may add a suffix). */
   path: z.string(),
   kind: z.enum(['note', 'document']),
   replaced: z.boolean(),
+  history: KnowledgeHistoryStatusSchema.default('committed'),
 })
 /** 409 `exists` details of an upload: what is already there (and, for an unzip, which names clash). */
 export const KnowledgeExistsDetailsSchema = z.object({
@@ -105,6 +114,7 @@ export const KnowledgeUnzipResultSchema = z.object({
   folder: z.string(),
   written: z.array(z.string()),
   skipped: z.array(z.object({ path: z.string(), reason: z.string() })),
+  history: KnowledgeHistoryStatusSchema.default('committed'),
 })
 export const KnowledgeFolderRequestSchema = z.object({ path: z.string().min(1).max(1024) })
 export const KnowledgeFromMediaRequestSchema = z.object({
@@ -152,8 +162,10 @@ export const KnowledgeWriteResponseSchema = z.object({
   path: z.string(),
   /** False when the note is Git-ignored and untracked: saved without history. */
   versioned: z.boolean().default(true),
-  /** False when the note is saved but the git commit failed for another reason. */
+  /** False when the note is saved but history was not updated (git failed or is missing). */
   historyUpdated: z.boolean().default(true),
+  /** The one status of the save; `versioned` and `historyUpdated` follow from it. */
+  history: KnowledgeHistoryStatusSchema.default('committed'),
 })
 export const KnowledgeMoveRequestSchema = z.object({
   from: z.string().min(1),
@@ -212,6 +224,7 @@ export type KnowledgeCommit = z.infer<typeof KnowledgeCommitSchema>
 export type KnowledgeDocumentSummary = z.infer<typeof KnowledgeDocumentSummarySchema>
 export type KnowledgeDocument = z.infer<typeof KnowledgeDocumentSchema>
 export type KnowledgeDocumentType = z.infer<typeof KnowledgeDocumentTypeSchema>
+export type KnowledgeHistoryStatus = z.infer<typeof KnowledgeHistoryStatusSchema>
 export type KnowledgeUploadResult = z.infer<typeof KnowledgeUploadResultSchema>
 export type KnowledgeZipPreview = z.infer<typeof KnowledgeZipPreviewSchema>
 export type KnowledgeUnzipResult = z.infer<typeof KnowledgeUnzipResultSchema>

@@ -9,6 +9,7 @@ import type {
   KnowledgeAuthor,
   KnowledgeChanged,
   KnowledgeCommit,
+  KnowledgeHistoryStatus,
   KnowledgeInfo,
   KnowledgeNote,
   KnowledgeSearchHit,
@@ -148,6 +149,22 @@ function isNotFound(error: unknown): boolean {
   return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
+export interface HistoryOutcome {
+  history: KnowledgeHistoryStatus
+  /** False when the path has no history by design or because git is missing. */
+  versioned: boolean
+  /** False when the save did not reach history (`failed`, `git_unavailable`). */
+  historyUpdated: boolean
+}
+
+function historyOutcome(history: KnowledgeHistoryStatus, partlyIgnored = false): HistoryOutcome {
+  return {
+    history,
+    versioned: !partlyIgnored && history !== 'not_versioned' && history !== 'git_unavailable',
+    historyUpdated: history !== 'failed' && history !== 'git_unavailable',
+  }
+}
+
 export class KnowledgeVault {
   readonly git: VaultGit
   /** Uploaded documents (PLAN 6.6); share this vault's lock, git and index. */
@@ -237,6 +254,11 @@ export class KnowledgeVault {
           author: 'you',
         })
       await this.scan(false)
+      await this.docs
+        .reconcileHistory()
+        .catch((error: unknown) =>
+          this.options.log?.warn({ err: error }, 'Couldn’t check which documents are in history'),
+        )
       await this.fillAuthors()
     })
     if (this.options.watch !== false) this.startWatching()
@@ -930,8 +952,21 @@ export class KnowledgeVault {
   }
 
   /** Commits paths for the documents module (same author and failure rules as notes). */
-  async commitPaths(paths: string[], message: string, author: KnowledgeAuthor): Promise<void> {
-    await this.commit(paths, message, author)
+  async commitPaths(
+    paths: string[],
+    message: string,
+    author: KnowledgeAuthor,
+  ): Promise<HistoryOutcome> {
+    return this.commit(paths, message, author)
+  }
+
+  get gitAvailable(): boolean {
+    return this.git.available
+  }
+
+  /** The given paths that are Git-ignored and untracked (the documents module classifies with this). */
+  ignoredUntracked(paths: string[]): Promise<Set<string>> {
+    return this.git.ignoredUntracked(paths)
   }
 
   /** Indexes a note file Score has just written itself. */
@@ -940,41 +975,39 @@ export class KnowledgeVault {
   }
 
   /**
-   * Commits what Score changed. Ignored, untracked paths are left out (never force-added, decision 80) and reported
-   * as `versioned: false`; any other git failure is logged and reported as `historyUpdated: false`: the files are
-   * saved either way.
+   * Commits what Score changed and says what happened to history. Ignored, untracked paths are left out (never
+   * force-added, decision 80) and reported as `not_versioned`; a missing git is `git_unavailable`; any other git
+   * failure is logged and reported as `failed`. The files are saved in every case. Calling it again for content that
+   * is already in history answers `unchanged`; for content whose commit failed it commits (a repair).
    */
   private async commit(
     paths: string[],
     message: string,
     author: KnowledgeAuthor,
     amendNote?: string,
-  ): Promise<{ versioned: boolean; historyUpdated: boolean }> {
+  ): Promise<HistoryOutcome> {
+    if (!this.git.available) return historyOutcome('git_unavailable')
     try {
       const ignored = await this.git.ignoredUntracked(paths)
       const rest = paths.filter((path) => !ignored.has(path))
-      if (rest.length > 0)
-        await this.git.commit({
-          paths: rest,
-          message,
-          author,
-          ...(amendNote && !ignored.has(amendNote) ? { amendNote } : {}),
-        })
-      return { versioned: ignored.size === 0, historyUpdated: true }
+      if (rest.length === 0) return historyOutcome('not_versioned')
+      const sha = await this.git.commit({
+        paths: rest,
+        message,
+        author,
+        ...(amendNote && !ignored.has(amendNote) ? { amendNote } : {}),
+      })
+      return historyOutcome(sha === null ? 'unchanged' : 'committed', ignored.size > 0)
     } catch (error) {
       // The files are saved; history can catch up with the next "Outside changes" commit.
       this.options.log?.warn({ err: error }, 'Could not commit a knowledge change')
-      return { versioned: true, historyUpdated: false }
+      return historyOutcome('failed')
     }
   }
 
   /** False when the note's path is Git-ignored and untracked, so it has no history. */
   private async isVersioned(rel: string): Promise<boolean> {
     return !(await this.git.ignoredUntracked([rel])).has(rel)
-  }
-
-  private async historyState(rel: string) {
-    return { versioned: await this.isVersioned(rel), historyUpdated: true }
   }
 
   /** Save a note (create with `etag: null`). `author` is `'you'` for the browser; 6.4 passes the calling agent. */
@@ -984,7 +1017,7 @@ export class KnowledgeVault {
     author: KnowledgeAuthor = 'you',
     /** Uploads: `request.body` is the whole file (frontmatter included), written byte for byte. */
     rawContent = false,
-  ): Promise<{ etag: string; path: string; versioned: boolean; historyUpdated: boolean }> {
+  ): Promise<{ etag: string; path: string } & HistoryOutcome> {
     const rel = parseNotePath(input)
     return this.serial(async () => {
       const { abs: existingAbs, stat } = await this.lookup(rel.split('/'))
@@ -1012,8 +1045,11 @@ export class KnowledgeVault {
           : serialiseNote(request.body, request.frontmatter)
       prepareNoteContent(content)
       const hash = hashContent(content)
-      if (hash === currentHash)
-        return { etag: etagOf(hash), path: rel, ...(await this.historyState(rel)) }
+      if (hash === currentHash) {
+        // Nothing to write, but a commit that failed earlier is still owed: try it again before answering.
+        const repaired = await this.commit([rel], `${stat ? 'Update' : 'Create'} ${rel}`, author)
+        return { etag: etagOf(hash), path: rel, ...repaired }
+      }
       await this.commitOutside()
       const abs = await this.prepareParent(rel)
       // An outside edit that landed since the etag check is now in history; the save must not silently replace it.

@@ -84,44 +84,73 @@ export function formatImageSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-/** What an agent sees instead of an image: `[image: <alt>, <size>]`. */
-export function imagePlaceholder(image: NoteImage): string {
+/** The placeholder text without its number: `alt, 69 B`. */
+function placeholderLabel(image: NoteImage): string {
   const payload = DATA_URI.exec(image.uri)?.[3] ?? ''
   const alt = image.alt.replace(/[[\]\n]/g, ' ').trim() || 'image'
-  return `[image: ${alt}, ${formatImageSize(base64Bytes(payload) ?? payload.length)}]`
+  return `${alt}, ${formatImageSize(base64Bytes(payload) ?? payload.length)}`
 }
 
-/** The note with every embedded image replaced by its placeholder. */
+/**
+ * What an agent sees instead of an image: `[image 2: <alt>, <size>]`, where 2 is the image's place in the note (the
+ * 2nd embedded image as the agent read it). Two images with the same label still have different numbers.
+ */
+export function imagePlaceholder(image: NoteImage, index: number): string {
+  return `[image ${index}: ${placeholderLabel(image)}]`
+}
+
+/** The note with every embedded image replaced by its numbered placeholder. */
 export function withPlaceholders(text: string): string {
   const images = findNoteImages(text)
   if (images.length === 0) return text
   let out = ''
   let at = 0
-  for (const image of images) {
-    out += text.slice(at, image.start) + imagePlaceholder(image)
+  images.forEach((image, i) => {
+    out += text.slice(at, image.start) + imagePlaceholder(image, i + 1)
     at = image.end
-  }
+  })
   return out + text.slice(at)
 }
 
+const PLACEHOLDER = /\[image(?: (\d+))?: ([^[\]\n]*, \d+(?:\.\d)? (?:B|KB|MB))\]/g
+
 /**
- * Turns the placeholders an agent kept back into the images of `current` (matched by text, in order, each image once),
- * so an agent's rewrite of a note does not delete the images it could not see.
+ * Turns the placeholders an agent kept back into the images of `current`, so an agent's rewrite of a note does not
+ * delete the images it could not see. `[image 2: ...]` restores the note's 2nd image, and only when that image's
+ * label still matches; a number the note doesn't have, a label that doesn't match, or a number used twice stays text,
+ * never another image. An old `[image: ...]` (no number) restores only when exactly one image has that label;
+ * otherwise the write is refused, because guessing could swap two images.
  */
 export function restoreImages(agentText: string, current: string): string {
   const originals = findNoteImages(current)
   if (originals.length === 0) return agentText
-  const pool = originals.map((image) => ({
-    placeholder: imagePlaceholder(image),
-    markdown: current.slice(image.start, image.end),
-    used: false,
-  }))
-  return agentText.replace(/\[image: [^[\]\n]*, \d+(?:\.\d)? (?:B|KB|MB)\]/g, (placeholder) => {
-    const hit = pool.find((entry) => !entry.used && entry.placeholder === placeholder)
-    if (!hit) return placeholder
-    hit.used = true
-    return hit.markdown
-  })
+  const labels = originals.map(placeholderLabel)
+  const used = new Set<number>()
+  const restore = (index: number): string => {
+    used.add(index)
+    return current.slice(originals[index]!.start, originals[index]!.end)
+  }
+  // One pass, so restored image text is never scanned for placeholders again.
+  return agentText.replace(
+    PLACEHOLDER,
+    (placeholder, number: string | undefined, label: string) => {
+      if (number !== undefined) {
+        const index = Number(number) - 1
+        if (index < 0 || index >= originals.length || used.has(index) || labels[index] !== label)
+          return placeholder
+        return restore(index)
+      }
+      const matches = labels.flatMap((item, index) => (item === label ? [index] : []))
+      if (matches.length === 0) return placeholder
+      if (matches.length > 1)
+        throw new HttpError(
+          409,
+          'ambiguous_image',
+          `Score can’t tell which image “${placeholder}” stands for, because the note has more than one with that name and size. Read the note again (the placeholders now carry numbers like [image 1: ...]), then write it again.`,
+        )
+      return used.has(matches[0]!) ? placeholder : restore(matches[0]!)
+    },
+  )
 }
 
 /** The body as indexed for search: no embedded images and no stray base64 runs. */
