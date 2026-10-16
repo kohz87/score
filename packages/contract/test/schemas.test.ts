@@ -955,9 +955,10 @@ const cases = [
   ],
   ['KnowledgeZipEntrySchema', { path: 'b.md', size: 3 }, { path: 'b.md' }],
   ['KnowledgeUploadConflictSchema', 'keep', 'overwrite'],
+  ['KnowledgeHistoryStatusSchema', 'git_unavailable', 'versioned'],
   [
     'KnowledgeUploadResultSchema',
-    { path: 'a.pdf', kind: 'document', replaced: false },
+    { path: 'a.pdf', kind: 'document', replaced: false, history: 'not_versioned' },
     { path: 'a.pdf', kind: 'folder', replaced: false },
   ],
   [
@@ -984,6 +985,7 @@ const cases = [
       folder: 'f',
       written: ['f/a.md'],
       skipped: [{ path: 'x.exe', reason: 'type not supported' }],
+      history: 'committed',
     },
     { folder: 'f', written: 'a' },
   ],
@@ -1019,7 +1021,7 @@ const cases = [
   ['KnowledgeWriteRequestSchema', { body: 'x', etag: null }, { body: 'x' }],
   [
     'KnowledgeWriteResponseSchema',
-    { etag: 'e', path: 'a.md', versioned: false, historyUpdated: true },
+    { etag: 'e', path: 'a.md', versioned: false, historyUpdated: true, history: 'not_versioned' },
     { etag: 'e' },
   ],
   [
@@ -1083,7 +1085,7 @@ const cases = [
   ],
   [
     'BridgeKnowledgeWriteResponseSchema',
-    { etag: 'e', path: 'a.md', versioned: true, historyUpdated: false },
+    { etag: 'e', path: 'a.md', versioned: true, historyUpdated: false, history: 'failed' },
     { etag: 'e' },
   ],
   ['KnowledgeAgentAccessSchema', { enabled: true }, { enabled: 'yes' }],
