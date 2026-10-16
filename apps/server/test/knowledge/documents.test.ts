@@ -33,7 +33,12 @@ describe('upload and read', () => {
       textPdf('Zeppelin budget review'),
       'ask',
     )
-    expect(result).toEqual({ path: 'reports/q3.pdf', kind: 'document', replaced: false })
+    expect(result).toEqual({
+      path: 'reports/q3.pdf',
+      kind: 'document',
+      replaced: false,
+      history: 'committed',
+    })
     const doc = await h.vault.docs.get('reports/q3.pdf')
     expect(doc).toMatchObject({
       type: 'pdf',
