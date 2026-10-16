@@ -3,6 +3,31 @@
 All notable changes to Score are listed here. Score follows [Semantic Versioning](https://semver.org/); the format is
 based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.3.4] — 2026-10-16
+
+Fixes from two audits of 1.3.2, cross-referenced: a Gemini 4 Argon audit (8 findings, 6 fixed, 2 rejected after checking;
+`docs/reviews/2026-10-16-argon-audit.md`) and a fifth external audit (6 findings plus 1 candidate, all fixed;
+`docs/reviews/2026-10-16-external-audit-5.md`). Every fix has a regression test that failed before it.
+
+### Fixed
+- **Score could freeze all agent work after a restart:** daily journal upkeep dropped the record of a step that was
+  stopped before it launched, and the next start then took the journal for truncated. Those records are now kept.
+- A settings change that started before you lowered a coding agent's access can no longer raise it back to full access
+  without your password.
+- After an agent edited a note, two images with the same description and size could swap places. Agents now see
+  numbered placeholders like `[image 2: alt, 69 B]`; an ambiguous older edit is refused instead of guessed.
+- **Knowledge history status is truthful:** each save reports committed, unchanged, not versioned (ignored folder), Git
+  unavailable or failed; a save is never called versioned when Git isn't working; saving unchanged text after a failure
+  repairs history, and the editor offers **Save to history again**. Documents, uploads and ZIP imports follow the same
+  rules, and wrongly labelled document records are corrected at start.
+- A Claude Code or Codex turn that keeps working after its final result no longer counts as completed.
+- Shutting down while **Check again** was starting the coding listener could leave the listener running.
+- A coding run cut off mid-save could leave a permanent charge on Score's memory budget for coding runs.
+- MCP errors now give agents the details they need to retry (for example the current version of a note after a conflict).
+- The MCP rate-limit log no longer grows without limit; storage figures for coding steps count every retry.
+- Claude Code workers' deny rules name every file tool explicitly (their settings fingerprints change once).
+- The Hermes plugin's Knowledge tool descriptions explain the numbered images and the history field.
+
 ## [1.3.3] — 2026-10-16
 
 ### Changed
