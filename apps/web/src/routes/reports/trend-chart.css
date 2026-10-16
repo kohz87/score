@@ -7,7 +7,7 @@
 .trend__legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 20px;
+  gap: var(--space-2) var(--space-5);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -17,7 +17,7 @@
 .trend__legend li {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .trend__swatch--bar {
   width: 12px;
@@ -45,7 +45,7 @@
 .trend__scroll {
   min-width: 0;
   overflow-x: auto;
-  padding: 4px;
+  padding: var(--space-1);
   margin: -4px;
 }
 .trend__svg {

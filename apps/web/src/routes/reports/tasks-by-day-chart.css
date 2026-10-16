@@ -9,7 +9,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 16px;
+  gap: var(--space-2) var(--space-4);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -20,7 +20,7 @@
 .tasks-by-day__legend li {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .tasks-by-day__swatch {
@@ -33,7 +33,7 @@
 .tasks-by-day__scroll {
   min-width: 0;
   overflow-x: auto;
-  padding: 4px;
+  padding: var(--space-1);
   margin: -4px;
 }
 

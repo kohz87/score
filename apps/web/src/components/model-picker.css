@@ -1,7 +1,7 @@
 .model-picker {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
 }
 .model-picker > label {
@@ -9,7 +9,7 @@
   font-weight: 600;
 }
 .model-picker input {
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-14);
   background: var(--card);
@@ -34,11 +34,11 @@
   border: 1px solid var(--hairline);
   border-radius: var(--radius-14);
   background: var(--card);
-  box-shadow: 0 8px 24px rgb(18 19 26 / 12%);
+  box-shadow: 0 8px 24px rgb(var(--shadow-rgb) / 12%);
 }
 .model-picker-note {
   margin: 0;
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   font-size: 13px;
   font-weight: 400;
   color: var(--muted);
@@ -61,14 +61,14 @@
 .model-picker-list {
   max-height: 260px;
   overflow-y: auto;
-  padding: 4px;
+  padding: var(--space-1);
 }
 .model-picker-list:empty {
   display: none;
   padding: 0;
 }
 .model-picker-heading {
-  padding: 8px 10px 4px;
+  padding: var(--space-2) 10px var(--space-1);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -79,9 +79,9 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 2px 12px;
-  padding: 8px 10px;
-  border-radius: 12px;
+  gap: 2px var(--space-3);
+  padding: var(--space-2) 10px;
+  border-radius: var(--radius-12);
   font-weight: 400;
   cursor: pointer;
 }
@@ -109,12 +109,12 @@
 }
 
 .model-picker-all {
-  padding: 4px 8px 8px;
+  padding: var(--space-1) var(--space-2) var(--space-2);
 }
 .model-picker-all button {
   padding: 6px 10px;
   border: 1px solid var(--hairline);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--card);
   color: var(--ink);
   font: inherit;

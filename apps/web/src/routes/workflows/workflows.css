@@ -83,7 +83,7 @@
 .wf-page__head {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 24px;
+  gap: var(--space-3) var(--space-6);
   justify-content: space-between;
   align-items: flex-end;
   margin-bottom: 18px;
@@ -113,12 +113,12 @@
 .wf-card {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px 24px;
+  gap: 14px var(--space-6);
   justify-content: space-between;
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
-  padding: 20px 24px;
+  padding: var(--space-5) var(--space-6);
 }
 .wf-card__main {
   flex: 1 1 320px;
@@ -145,7 +145,7 @@
 .wf-card__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: flex-start;
   align-content: flex-start;
   flex: 0 1 auto;
@@ -153,7 +153,7 @@
 .wf-confirm {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
 }
 .wf-chip {
@@ -180,7 +180,7 @@
 .wf-editor__head {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 20px;
+  gap: var(--space-3) var(--space-5);
   justify-content: space-between;
   align-items: flex-end;
   margin-bottom: 14px;
@@ -205,7 +205,7 @@
   border-radius: var(--radius-14);
   background: transparent;
   color: var(--ink);
-  padding: 2px 8px;
+  padding: 2px var(--space-2);
   margin-left: -8px;
 }
 .wf-name input:hover,
@@ -216,7 +216,7 @@
 .wf-editor__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .wf-saved {
   color: var(--agent-jade-text);
@@ -229,7 +229,7 @@
 .wf-editor__body {
   display: grid;
   grid-template-columns: minmax(250px, 290px) minmax(0, 1fr) minmax(310px, 370px);
-  gap: 16px;
+  gap: var(--space-4);
   align-items: start;
 }
 @media (width < 1180px) {
@@ -254,7 +254,7 @@
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
-  padding: 16px 18px;
+  padding: var(--space-4) 18px;
   min-width: 0;
 }
 .wf-side--left {
@@ -273,12 +273,12 @@
   min-width: 0;
 }
 .wf-main > section {
-  padding: 16px 20px;
+  padding: var(--space-4) var(--space-5);
 }
 .wf-main__bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 14px;
+  gap: var(--space-2) 14px;
   align-items: center;
 }
 .wf-summary {
@@ -329,7 +329,7 @@
   gap: 10px;
   text-align: left;
   border-radius: var(--radius-16);
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   cursor: grab;
 }
 .wf-palette__item b {
@@ -362,20 +362,20 @@
   border-width: 4px;
 }
 .wf-palette__shape--end {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--ink);
 }
 
 /* Canvas */
 .wf-canvas {
-  padding: 12px 14px;
+  padding: var(--space-3) 14px;
 }
 .wf-canvas__bar {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   margin-bottom: 8px;
 }
 .wf-zoom {
@@ -384,12 +384,12 @@
   gap: 6px;
 }
 .wf-zoom button {
-  padding: 2px 12px;
+  padding: 2px var(--space-3);
   min-width: 36px;
 }
 .wf-banner {
   margin: 0 0 8px;
-  padding: 6px 12px;
+  padding: 6px var(--space-3);
   border-radius: var(--radius-14);
   background: var(--agent-saffron-tint);
   border: 1px solid var(--agent-saffron);
@@ -414,7 +414,7 @@
 }
 .orch-node--dragging {
   cursor: grabbing;
-  box-shadow: 0 10px 28px rgb(18 19 26 / 0.22);
+  box-shadow: 0 10px 28px rgb(var(--shadow-rgb) / 22%);
   z-index: 3;
 }
 .orch-node--moving {
@@ -422,7 +422,7 @@
   outline-offset: 3px;
 }
 .wf-arrange {
-  padding: 2px 12px;
+  padding: 2px var(--space-3);
 }
 .wf-node--error > .orch-node:not(.orch-node--shaped) {
   border: 2px dashed var(--agent-coral-text);
@@ -452,7 +452,7 @@
   border-radius: var(--radius-pill);
   font-size: 11px;
   font-weight: 700;
-  padding: 1px 8px;
+  padding: 1px var(--space-2);
   background: var(--agent-coral-text);
   color: var(--card);
   pointer-events: none;
@@ -524,7 +524,7 @@
   font: inherit;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-14);
-  padding: 8px 10px;
+  padding: var(--space-2) 10px;
   background: var(--card);
   color: var(--ink);
 }
@@ -551,7 +551,7 @@
 .wf-template__bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 10px;
+  gap: var(--space-1) 10px;
   align-items: baseline;
   font-size: 12.5px;
 }
@@ -561,7 +561,7 @@
 .wf-suggest {
   list-style: none;
   margin: 0;
-  padding: 4px;
+  padding: var(--space-1);
   position: absolute;
   z-index: 5;
   left: 0;
@@ -593,7 +593,7 @@
 }
 .wf-port {
   border-top: 1px solid var(--hairline);
-  padding: 8px 0;
+  padding: var(--space-2) 0;
 }
 .wf-port ul {
   list-style: none;
@@ -603,7 +603,7 @@
 .wf-port li {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .wf-rules .wf-rule {
   display: flex;
@@ -632,13 +632,13 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .wf-issue {
   display: grid;
   grid-template-columns: 5.2em 1fr;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: var(--space-2);
+  padding: var(--space-2) 10px;
   border-radius: var(--radius-14);
   border: 1px solid var(--hairline);
 }
@@ -736,7 +736,7 @@
 .wf-diff {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 8px;
+  gap: var(--space-2);
 }
 .wf-changes,
 .wf-leave {
@@ -744,7 +744,7 @@
   padding: 0;
   margin: 6px 0;
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .wf-changes code {
   font-family: var(--font-code);
@@ -776,7 +776,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-size: 14px;
   font-weight: 600;
   color: var(--agent-jade-text);
@@ -793,7 +793,7 @@
 .wf-preview {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .wf-preview__bar {
   display: flex;
@@ -804,7 +804,7 @@
 }
 .wf-preview__label {
   border-radius: var(--radius-pill);
-  padding: 4px 14px;
+  padding: var(--space-1) 14px;
   background: var(--agent-saffron-tint);
   color: var(--agent-saffron-text);
   font-size: 14px;
@@ -813,11 +813,11 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .wf-preview__speed {
   display: inline-flex;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .wf-preview__speed button[aria-pressed='true'] {
   background: var(--ink);

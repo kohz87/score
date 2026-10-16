@@ -4,7 +4,7 @@
   --select-focus: var(--ink);
   appearance: none;
   height: 40px;
-  padding: 0 40px 0 16px;
+  padding: 0 var(--space-8) 0 var(--space-4);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-pill);
   background-color: var(--card);
@@ -36,6 +36,6 @@
   .score-select {
     appearance: auto;
     background-image: none;
-    padding-right: 16px;
+    padding-right: var(--space-4);
   }
 }

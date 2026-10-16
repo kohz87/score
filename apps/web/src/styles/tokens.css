@@ -70,12 +70,42 @@
   --halo-glow: 20px;
   --halo-ring-tint: 26%;
   --halo-glow-tint: 38%;
+  /* Corner scale (PLAN 8.3). A pack overrides --radius-xs/s/m/l/card; the in-between sizes follow them, and the
+     values below are exactly today's look. */
+  --radius-xs: 6px;
+  --radius-s: 8px;
+  --radius-m: 14px;
+  --radius-l: 20px;
   --radius-card: 28px;
-  --radius-20: 20px;
-  --radius-16: 16px;
-  --radius-14: 14px;
-  --radius-8: 8px;
-  --radius-key: 6px;
+  --radius-key: var(--radius-xs);
+  --radius-8: var(--radius-s);
+  --radius-10: min(10px, var(--radius-m));
+  --radius-11: min(11px, var(--radius-m));
+  --radius-12: min(12px, var(--radius-m));
+  --radius-14: var(--radius-m);
+  --radius-16: min(16px, var(--radius-l));
+  --radius-18: min(18px, var(--radius-l));
+  --radius-20: var(--radius-l);
+  --radius-22: min(22px, var(--radius-card));
+  --radius-24: min(24px, var(--radius-card));
+  --radius-26: min(26px, var(--radius-card));
+  --radius-32: calc(var(--radius-card) + 4px);
+  --radius-34: calc(var(--radius-card) + 6px);
+  /* Spacing scale (PLAN 8.3): gaps and paddings of shells, cards and lists. --density is 1 (comfortable) or less
+     (compact); a pack sets it. */
+  --density: 1;
+  --space-1: calc(4px * var(--density));
+  --space-2: calc(8px * var(--density));
+  --space-3: calc(12px * var(--density));
+  --space-4: calc(16px * var(--density));
+  --space-5: calc(20px * var(--density));
+  --space-6: calc(24px * var(--density));
+  --space-7: calc(32px * var(--density));
+  --space-8: calc(40px * var(--density));
+  /* Fixed colours that stay the same in every pack and mode. */
+  --on-dark: #fff; /* text and rings on ink, coloured and scrimmed fills */
+  --shadow-rgb: 18 19 26; /* the tint of drop shadows and scrims */
+  --amber: #e0a000;
   --font-heading: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif;
   --font-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
   --font-code: 'JetBrains Mono', ui-monospace, monospace;

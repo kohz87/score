@@ -2,7 +2,7 @@
 .team-layout {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: var(--space-5);
   align-items: flex-start;
 }
 .team-members {
@@ -11,15 +11,15 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-top: 4px;
+  padding-top: var(--space-1);
 }
 .team-members a {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: var(--space-3);
+  padding: 10px var(--space-3);
   border: 1px solid transparent;
-  border-radius: 18px;
+  border-radius: var(--radius-18);
   color: var(--ink);
   font-weight: 600;
   text-decoration: none;
@@ -30,19 +30,19 @@
 }
 .team-members a.team-all {
   min-height: 40px;
-  padding-block: 4px;
+  padding-block: var(--space-1);
 }
 .team-content {
   flex: 999 1 640px;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-5);
 }
 .team-profile {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-5);
 }
 
 .team-list-heading p {
@@ -55,7 +55,7 @@
   list-style: none;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
+  gap: var(--space-4);
 }
 .team-agent-card {
   display: flex;
@@ -79,10 +79,10 @@
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
-  padding: 22px 24px;
+  padding: 22px var(--space-6);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .team-card h2 {
   margin: 0;
@@ -96,7 +96,7 @@
 .team-card-heading {
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .team-card-heading h2 {
   flex: 1;
@@ -128,8 +128,8 @@
 .team-band {
   background: var(--team-color);
   color: var(--team-band-ink);
-  border-radius: 32px;
-  padding: 30px 32px;
+  border-radius: var(--radius-32);
+  padding: 30px var(--space-7);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -143,7 +143,7 @@
   width: 112px;
   height: 112px;
   border: 0;
-  border-radius: 34px;
+  border-radius: var(--radius-34);
   background: #08241c;
   display: flex;
   align-items: center;
@@ -198,12 +198,12 @@
   border-radius: var(--radius-20);
   background: var(--card);
   color: var(--ink);
-  box-shadow: 0 12px 32px rgb(18 19 26 / 16%);
+  box-shadow: 0 12px 32px rgb(var(--shadow-rgb) / 16%);
 }
 .team-style-popover form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: flex-start;
 }
 .team-style-popover h2 {
@@ -213,7 +213,7 @@
 .team-style-popover label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   font-size: 14px;
   font-weight: 600;
 }
@@ -227,11 +227,11 @@
 }
 .team-style-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .team-style-actions button {
   height: 40px;
-  padding: 0 16px;
+  padding: 0 var(--space-4);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-pill);
   background: var(--card);
@@ -248,7 +248,7 @@
 .team-tabs {
   display: flex;
   overflow-x: auto;
-  padding: 4px;
+  padding: var(--space-1);
   margin: -4px;
   min-width: 0;
   gap: 6px;
@@ -257,7 +257,7 @@
   flex-shrink: 0;
   white-space: nowrap;
   height: 40px;
-  padding: 0 16px;
+  padding: 0 var(--space-4);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-pill);
   background: var(--card);
@@ -276,14 +276,14 @@
 .team-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
+  gap: var(--space-4);
 }
 .team-personality {
   grid-column: 1 / -1;
   flex-direction: row;
   flex-wrap: wrap;
-  gap: 24px;
-  padding: 24px 28px;
+  gap: var(--space-6);
+  padding: var(--space-6) 28px;
   align-items: flex-start;
 }
 .team-personality-text {
@@ -304,14 +304,14 @@
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   font-size: 14px;
 }
 .team-facts > div {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
   border-bottom: 1px solid var(--ground);
 }
 .team-facts > div:last-child {
@@ -342,10 +342,10 @@
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .team-skills li {
-  padding: 6px 12px;
+  padding: 6px var(--space-3);
   border-radius: var(--radius-pill);
   background: var(--agent-jade-tint);
   color: var(--agent-jade-text);
@@ -357,7 +357,7 @@
   color: var(--ink-muted);
 }
 .team-card .team-memory {
-  padding: 12px 14px;
+  padding: var(--space-3) 14px;
   border-radius: var(--radius-16);
   background: var(--subtle);
   font-size: 14px;
@@ -374,14 +374,14 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .team-rows li {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
   border-bottom: 1px solid var(--ground);
 }
 .team-rows li:last-child {
@@ -456,15 +456,15 @@
     flex-direction: column;
     flex-wrap: nowrap;
     align-items: stretch;
-    gap: 16px;
+    gap: var(--space-4);
   }
   .team-members {
     flex: none;
     max-width: none;
     flex-direction: row;
     align-items: center;
-    gap: 8px;
-    padding: 2px 16px 2px 0;
+    gap: var(--space-2);
+    padding: 2px var(--space-4) 2px 0;
     margin-right: -16px;
     overflow-x: auto;
     scrollbar-width: none;
@@ -474,14 +474,14 @@
     flex-shrink: 0;
   }
   .team-members a {
-    padding: 6px 14px 6px 8px;
+    padding: 6px 14px 6px var(--space-2);
     border-radius: var(--radius-pill);
     border-color: var(--hairline);
     background: var(--card);
     white-space: nowrap;
   }
   .team-members a.team-all {
-    padding: 4px 16px;
+    padding: var(--space-1) var(--space-4);
   }
   .team-members a[aria-current='page'] {
     background: var(--ink);
@@ -496,18 +496,18 @@
   .team-add-agent {
     margin: 0;
     height: 44px;
-    padding: 0 16px;
+    padding: 0 var(--space-4);
     border-radius: var(--radius-pill);
     white-space: nowrap;
   }
   .team-content {
     flex: none;
-    gap: 16px;
+    gap: var(--space-4);
   }
   .team-band {
     border-radius: var(--radius-card);
-    padding: 22px 24px;
-    gap: 20px;
+    padding: 22px var(--space-6);
+    gap: var(--space-5);
     flex-wrap: nowrap;
   }
   .team-style {
@@ -516,7 +516,7 @@
   .team-glyph-trigger {
     width: 88px;
     height: 88px;
-    border-radius: 28px;
+    border-radius: var(--radius-card);
   }
   .team-glyph-trigger svg.agent-glyph {
     width: 48px;
@@ -554,7 +554,7 @@
   .team-glyph-trigger {
     width: 64px;
     height: 64px;
-    border-radius: 20px;
+    border-radius: var(--radius-20);
   }
   .team-glyph-trigger svg.agent-glyph {
     width: 36px;
@@ -565,7 +565,7 @@
     width: 100%;
   }
   .team-card {
-    padding: 18px 16px;
+    padding: 18px var(--space-4);
     border-radius: var(--radius-20);
   }
 }
@@ -577,7 +577,7 @@
   gap: 6px;
 }
 .team-segment button {
-  padding: 8px 14px;
+  padding: var(--space-2) 14px;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-pill);
   background: var(--card);
@@ -593,11 +593,11 @@
 .team-file-editor {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .team-file-text {
   min-height: 260px;
-  padding: 14px 16px;
+  padding: 14px var(--space-4);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-16);
   background: var(--subtle);
@@ -610,11 +610,11 @@
 .team-file-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
 }
 .team-file-actions button {
-  padding: 9px 16px;
+  padding: 9px var(--space-4);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-pill);
   background: var(--card);
@@ -637,7 +637,7 @@
 }
 .team-diff {
   margin: 0;
-  padding: 12px 0;
+  padding: var(--space-3) 0;
   overflow: auto;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-14);
@@ -666,7 +666,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 16px;
+  padding: var(--space-4);
   border: 1px solid var(--agent-saffron);
   border-radius: var(--radius-16);
   background: var(--agent-saffron-tint);
@@ -687,21 +687,21 @@
 .team-routine-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: var(--space-3);
+  padding: var(--space-4);
   border-radius: var(--radius-20);
   background: var(--subtle);
 }
 .team-routine-form label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   font-size: 14px;
   font-weight: 600;
 }
 .team-routine-form input,
 .team-routine-form textarea {
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-14);
   background: var(--card);
@@ -749,7 +749,7 @@
 .team-routine-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .team-routine-actions button,
 .team-routine-form .team-style-actions button {
@@ -781,7 +781,7 @@
 .team-stack {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-5);
 }
 .team-block {
   display: block;
@@ -803,12 +803,12 @@ button.team-toggle:focus-visible,
 }
 .team-search {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .team-search input {
   flex: 1;
   min-width: 0;
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-14);
   background: var(--card);
@@ -854,13 +854,13 @@ button.team-toggle:focus-visible,
   flex: 1 1 260px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   font-size: 13px;
   font-weight: 600;
 }
 .team-permission-form input {
   height: 40px;
-  padding: 0 12px;
+  padding: 0 var(--space-3);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-14);
   background: var(--card);
@@ -875,7 +875,7 @@ button.team-toggle:focus-visible,
 .team-add-agent {
   margin-top: 6px;
   height: 48px;
-  border-radius: 18px;
+  border-radius: var(--radius-18);
   border: 1.5px dashed var(--profile-dashed);
   background: transparent;
   color: var(--profile-add-ink);
@@ -886,7 +886,7 @@ button.team-toggle:focus-visible,
 .team-profile-dialog {
   width: min(640px, calc(100vw - 40px));
   max-height: calc(100vh - 40px);
-  padding: 24px 28px;
+  padding: var(--space-6) 28px;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
   background: var(--card);
@@ -894,13 +894,13 @@ button.team-toggle:focus-visible,
   overflow: auto;
 }
 .team-profile-dialog::backdrop {
-  background: rgb(18 19 26 / 40%);
+  background: rgb(var(--shadow-rgb) / 40%);
 }
 .team-profile-appearance {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .team-profile-confirm {
   flex-direction: row !important;
@@ -911,14 +911,14 @@ button.team-toggle:focus-visible,
 }
 .team-operation-steps {
   margin: 0;
-  padding-left: 20px;
+  padding-left: var(--space-5);
 }
 .team-profile-dialog code,
 .team-profile-danger code {
   overflow-wrap: anywhere;
 }
 .team-routine-form select {
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-14);
   background: var(--card);
@@ -957,7 +957,7 @@ button.team-toggle:focus-visible,
 }
 .team-command {
   margin-top: 10px;
-  padding: 12px 14px;
+  padding: var(--space-3) 14px;
   border-radius: var(--radius-16);
   background: var(--subtle);
 }
@@ -981,7 +981,7 @@ a.team-pill-button {
   margin: 0 0 12px;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .team-add-kind legend,
 .team-coding-permission legend {
@@ -994,7 +994,7 @@ a.team-pill-button {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-weight: 400;
 }
 .team-routine-form .team-coding-permission input {
@@ -1011,7 +1011,7 @@ a.team-pill-button {
   margin-left: 10px;
   padding: 0;
   border: 1px solid currentColor;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -1023,9 +1023,9 @@ a.team-pill-button {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--space-2);
   margin-top: 12px;
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-14);
 }
@@ -1067,7 +1067,7 @@ a.team-pill-button {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .quota-row {
   display: grid;
@@ -1083,14 +1083,14 @@ a.team-pill-button {
 .quota-bar {
   display: block;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--track);
   overflow: hidden;
 }
 .quota-fill {
   display: block;
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--ink);
 }
 .quota-fill[data-level='low'] {

@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 16px;
+  padding: var(--space-4);
   border-radius: var(--radius-20);
   background: var(--subtle);
 }
@@ -27,8 +27,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-14);
   background: var(--card);
@@ -46,12 +46,12 @@
 .ms-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .ms-button {
-  padding: 6px 12px;
+  padding: 6px var(--space-3);
   border: 1.5px solid var(--ink);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -81,13 +81,13 @@
 .ms-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   font-size: 14px;
   font-weight: 600;
 }
 .ms-field input,
 .ms-field select {
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-14);
   background: var(--card);
@@ -102,6 +102,6 @@
 .ms-check {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-weight: 400;
 }
