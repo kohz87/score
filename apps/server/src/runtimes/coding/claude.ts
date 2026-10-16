@@ -193,6 +193,9 @@ function createInnerClaudeParser(cwd?: string): LineParser {
       }
       if (message.success) {
         const content = message.data.message.content
+        // Anything the model or its tools did after the result contradicts the verdict already given (A2).
+        if (resultSeen && (typeof content === 'string' ? content !== '' : content.length > 0))
+          lose('Claude Code reported activity after its result')
         if (typeof content === 'string') {
           if (message.data.type === 'assistant' && content) {
             events.push({ kind: 'text', text: spoke ? `\n\n${content}` : content })

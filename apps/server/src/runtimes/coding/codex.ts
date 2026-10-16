@@ -217,6 +217,9 @@ function createInnerCodexParser(cwd?: string): LineParser & { ownBytes(): number
       const { type } = item.data.item
       const id = boundId(item.data.item.id)
       const phase = item.data.type
+      // Tool activity after the turn ended could contradict the verdict already given (A2).
+      if (turnEnded && type !== 'agent_message' && !IGNORABLE_ITEMS.has(type))
+        lose('Codex reported tool activity after the end of the turn')
       if (type === 'agent_message') {
         const message = MessageItem.safeParse(item.data.item)
         // Every phase is validated: a started or updated message that is malformed makes the turn non-authoritative too.
