@@ -249,7 +249,7 @@ test('child environment is an allowlist: no Score variables, no *_API_KEY, no to
 
 test('deny rules are filesystem-rooted: .env variants anywhere, credentials, and the protected folders (review: high 1)', () => {
   const rules = claudeDenyRules(deny, ['/home/u/.claude/.credentials*', '/home/u/.codex/auth*'])
-  for (const tool of ['Read', 'Edit']) {
+  for (const tool of ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'NotebookEdit']) {
     expect(rules).toContain(`${tool}(//**/.env*)`)
     expect(rules).toContain(`${tool}(//home/u/.claude/.credentials*)`)
     expect(rules).toContain(`${tool}(//home/u/.codex/auth*)`)

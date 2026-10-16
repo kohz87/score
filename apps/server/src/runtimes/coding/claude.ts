@@ -320,6 +320,8 @@ function createInnerClaudeParser(cwd?: string): LineParser {
 // `.env*` covers .env, .env.local, .envrc and other suffixes.
 const DENY_FILE_PATTERNS = ['//**/.env*']
 
+const CLAUDE_DENY_TOOLS = ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'NotebookEdit'] as const
+
 /**
  * What Claude Code may never read or write, whatever the permission level (review 2026-10-09, 7.2 #1b): the folders
  * Score is told are off limits (its own home, the Hermes home, ~/.ssh; `//` is Claude's absolute-path syntax) and
@@ -331,7 +333,8 @@ export function claudeDenyRules(
 ): string[] {
   const folders = [...new Set(denyPaths)].map((folder) => `/${folder.replace(/\/+$/, '')}/**`)
   const files = denyFiles.map((file) => `/${file}`)
-  return ['Read', 'Edit'].flatMap((tool) =>
+  // Claude Code applies Read rules to Grep/Glob and Edit rules to Write/NotebookEdit; every tool is listed anyway.
+  return CLAUDE_DENY_TOOLS.flatMap((tool) =>
     [...folders, ...files, ...DENY_FILE_PATTERNS].map((pattern) => `${tool}(${pattern})`),
   )
 }
