@@ -153,6 +153,13 @@ test('Antigravity: "remaining" becomes "used" per model group; a reset that is n
         weeklyResets: 'resets in 3h',
       },
       {
+        name: 'Gemini 4 Argon',
+        fiveHourRemainingPercent: null,
+        fiveHourResets: null,
+        weeklyRemainingPercent: 45,
+        weeklyResets: '2026-10-23T01:02:23Z',
+      },
+      {
         name: 'Other',
         fiveHourRemainingPercent: null,
         fiveHourResets: null,
@@ -173,6 +180,13 @@ test('Antigravity: "remaining" becomes "used" per model group; a reset that is n
       resetsAt: '2026-10-11T04:43:48.000Z',
     },
     { name: 'week', group: 'Gemini Models', usedPercent: 25, resetsAt: null },
+    // agy 1.4.0: a weekly-only group gets no empty 5-hour meter.
+    {
+      name: 'week',
+      group: 'Gemini 4 Argon',
+      usedPercent: 55,
+      resetsAt: '2026-10-23T01:02:23.000Z',
+    },
     { name: '5 hours', group: 'Other', usedPercent: null, resetsAt: null },
   ])
 })

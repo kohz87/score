@@ -201,14 +201,18 @@ export function quotaFromUsage(usage: CodingUsage): CodingQuota {
   for (const group of usage.groups) {
     const name = group.name.slice(0, 100)
     if (!name) continue
-    windows.push({
-      name: '5 hours',
-      group: name,
-      usedPercent:
-        group.fiveHourRemainingPercent === null ? null : 100 - group.fiveHourRemainingPercent,
-      resetsAt: resets(group.fiveHourResets),
-    })
-    if (group.weeklyRemainingPercent !== null || group.weeklyResets !== null)
+    const weekly = group.weeklyRemainingPercent !== null || group.weeklyResets !== null
+    // 1.4.0 lists groups with a weekly limit only (Gemini 4 Argon): no empty 5-hour meter beside their weekly one. A
+    // group with no readings at all keeps one unknown meter, so it doesn't silently disappear.
+    if (group.fiveHourRemainingPercent !== null || group.fiveHourResets !== null || !weekly)
+      windows.push({
+        name: '5 hours',
+        group: name,
+        usedPercent:
+          group.fiveHourRemainingPercent === null ? null : 100 - group.fiveHourRemainingPercent,
+        resetsAt: resets(group.fiveHourResets),
+      })
+    if (weekly)
       windows.push({
         name: 'week',
         group: name,
