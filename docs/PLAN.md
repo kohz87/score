@@ -393,3 +393,9 @@ small file of design tokens plus a layout choice; today's look stays the default
 window with a sidebar of rooms and conversations, a composer that can start an orchestration, and progress arriving as
 chat messages; no Reports, Team or Settings. The current interface stays as the admin view; switch in the avatar menu,
 optionally guarded by the security password. Single owner (multi-user accounts stay not planned). Design first.
+**8.5 Model picker for coding agents** · (owner 2026-10-16) Creating or editing a coding agent offers the CLI's
+available models instead of a free-text field: Antigravity from `agy models` (id + name, effort levels); Codex from its
+own model cache `$CODEX_HOME/models_cache.json` (only `models[].slug/display_name/description/visibility/
+supported_reasoning_levels`; nothing else from that file, never `auth.json`); Claude Code from its documented aliases
+(no list command); every list keeps "CLI default" and "Other…" (free text). Lists cached for a few minutes, refreshed on
+open; unknown/unreadable ⇒ free text as today. Builds on 8.1's coding-agent page.
