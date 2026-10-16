@@ -1,0 +1,357 @@
+/* The chat-first view (PLAN 8.4). Tokens only, so every theme pack applies. */
+.user-view {
+  display: flex;
+  min-height: 100dvh;
+  background: var(--ground);
+  color: var(--ink);
+}
+.user-sidebar {
+  flex: 0 0 290px;
+  width: 290px;
+  box-sizing: border-box;
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  border-right: 1px solid var(--hairline);
+  background: var(--card);
+  overflow-y: auto;
+}
+.user-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 var(--space-2);
+}
+.user-new-chat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--card);
+  font-weight: 600;
+  text-decoration: none;
+}
+.user-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-height: 0;
+}
+.user-sidebar-foot {
+  position: sticky;
+  bottom: 0;
+  padding-top: var(--space-3);
+  background: inherit;
+  border-top: 1px solid var(--hairline);
+}
+.user-live-dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--agent-jade);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--agent-jade) 25%, transparent);
+}
+.user-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+.user-top {
+  display: none;
+  padding: var(--space-3) var(--space-4);
+}
+.user-menu-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.user-view .chat-thread {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.user-view .chat-thread-header {
+  border-bottom: 0;
+  padding: var(--space-5) 28px var(--space-2);
+  max-width: 820px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 auto;
+}
+.user-view .chat-thread h1 {
+  font-size: 22px;
+}
+.user-view .chat-composer {
+  box-sizing: border-box;
+  max-width: 820px;
+  padding: 0 28px var(--space-5);
+}
+.user-view .chat-composer-box {
+  background: var(--card);
+  border-radius: var(--radius-card);
+  padding: var(--space-4) var(--space-4) var(--space-3) var(--space-5);
+}
+.user-view .chat-composer textarea {
+  min-height: 3em;
+}
+.user-view .chat-composer-locked {
+  max-width: 820px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 auto;
+}
+.user-empty {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-5);
+  width: 100%;
+  max-width: 820px;
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: var(--space-6);
+}
+.user-empty h1 {
+  margin: 0;
+  text-align: center;
+  font-size: 34px;
+  letter-spacing: -0.025em;
+}
+.user-agents,
+.user-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.user-agent,
+.user-chips button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.user-agent[aria-checked='true'] {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.user-muted {
+  color: var(--muted);
+}
+.user-dialog {
+  max-width: min(420px, calc(100vw - 32px));
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--ink);
+  padding: var(--space-6);
+}
+.user-dialog::backdrop {
+  background: color-mix(in srgb, var(--ink) 40%, transparent);
+}
+.user-dialog h2 {
+  margin: 0 0 var(--space-2);
+}
+.user-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-3) 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.user-field input {
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-m);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+.user-dialog-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.user-dialog-actions button {
+  min-height: 44px;
+  padding: 0 var(--space-5);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.user-dialog-actions .user-primary,
+.user-primary {
+  background: var(--ink);
+  color: var(--card);
+  border-color: var(--ink);
+}
+.user-dialog [role='alert'] {
+  color: var(--agent-coral-text);
+}
+
+/* Phone and tablet: the sidebar is a drawer (ResponsiveDrawer); a bar above the conversation opens it. */
+@media (width < 1024px) {
+  .user-top {
+    display: block;
+  }
+  .user-sidebar {
+    position: fixed;
+    height: auto;
+  }
+  .user-view .chat-thread-header {
+    padding: var(--space-2) var(--space-4);
+  }
+  .user-empty {
+    justify-content: flex-start;
+    padding: var(--space-4);
+  }
+  .user-empty h1 {
+    font-size: 26px;
+  }
+}
+
+/* Score's status lines between messages: small, centred, never a chat bubble and never an agent. */
+.user-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.user-status-mark {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 2px;
+  background: var(--hairline);
+  border: 1.5px solid var(--muted);
+}
+.user-status[data-tone='ok'] .user-status-mark {
+  background: var(--agent-jade);
+  border-color: var(--agent-jade-text);
+}
+.user-status[data-tone='fail'] .user-status-mark {
+  background: var(--agent-coral);
+  border-color: var(--agent-coral-text);
+}
+.user-status[data-tone='need'] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.user-status[data-tone='need'] .user-status-mark {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.user-status time {
+  font-size: 12px;
+}
+
+/* The run's header and its decisions inside the conversation. */
+.user-view .user-run {
+  position: sticky;
+  top: var(--space-2);
+  z-index: 2;
+  max-width: 764px;
+  box-sizing: border-box;
+  margin: 0 auto var(--space-3);
+  width: calc(100% - 56px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) 14px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-20);
+}
+/* Covers the strip above the stuck header so messages don't show through it. */
+.user-view .user-run::before {
+  content: '';
+  position: absolute;
+  left: -28px;
+  right: -28px;
+  bottom: 100%;
+  height: calc(var(--space-2) + 1px);
+  background: var(--ground);
+}
+.user-view .user-run .orch-room-head {
+  position: static;
+  border: 0;
+  padding: 0;
+  background: none;
+}
+.user-run-title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.user-run-details {
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.user-needs:empty {
+  display: none;
+}
+
+@media (width < 600px) {
+  .user-run-title {
+    flex-basis: 100%;
+  }
+  /* Full width, so the messages scrolling underneath don't show beside it. */
+  .user-view .user-run {
+    width: 100%;
+  }
+}

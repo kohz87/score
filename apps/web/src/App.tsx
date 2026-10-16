@@ -13,6 +13,10 @@ import { NowPage } from './routes/now/NowPage.tsx'
 import { AttemptPage } from './routes/attempts/AttemptPage.tsx'
 import { PopOutPage } from './routes/pop/PopOutPage.tsx'
 import { ReportsPage } from './routes/reports/ReportsPage.tsx'
+import { UserHome } from './routes/user/UserHome.tsx'
+import { UserRoom } from './routes/user/UserRoom.tsx'
+import { UserShell } from './routes/user/UserShell.tsx'
+import { readView } from './routes/user/user-view.ts'
 
 // Knowledge brings CodeMirror and the Markdown renderer: loaded on first visit, not with the shell.
 const LazyKnowledgePage = lazy(async () => ({
@@ -45,11 +49,22 @@ function StubPage({ title }: { title: string }) {
 export const appRoutes: RouteObject[] = [
   // 7.4b: one agent's compact view for its own browser window; no shell around it.
   { path: '/agents/:agentId/pop', Component: PopOutPage },
+  // 8.4: the chat-first user view has its own shell; the admin view's routes stay as they were.
+  {
+    path: '/u',
+    Component: UserShell,
+    HydrateFallback: UserShell,
+    children: [
+      { index: true, Component: UserHome },
+      { path: 'rooms/:roomId', Component: UserRoom },
+      { path: '*', loader: () => redirect('/u') },
+    ],
+  },
   {
     Component: AppShell,
     HydrateFallback: AppShell,
     children: [
-      { index: true, loader: () => redirect('/now') },
+      { index: true, loader: () => redirect(readView() === 'user' ? '/u' : '/now') },
       ...destinations.map(({ path, title }): RouteObject => {
         if (path === '/tasks')
           return {

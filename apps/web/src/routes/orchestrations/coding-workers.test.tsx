@@ -403,3 +403,45 @@ test('unknown spend can be accepted for one source', async () => {
     })
   })
 })
+
+test('the compact dialog (user view) keeps the goal, agents, budget and the safety questions, with defaults for the rest', async () => {
+  post = () => json({ error: { code: 'x', message: 'stop here' } }, 500)
+  mount(
+    <NewOrchestrationDialog
+      compact
+      initialGoal="Plan the launch"
+      agents={agents as never}
+      close={() => {}}
+      created={vi.fn()}
+    />,
+  )
+  const dialog = await screen.findByRole('dialog', { name: 'New orchestration' })
+  expect((within(dialog).getByLabelText('Goal') as HTMLTextAreaElement).value).toBe(
+    'Plan the launch',
+  )
+  expect(within(dialog).getByLabelText('Budget in USD (optional)')).toBeTruthy()
+  // What the full dialog also asks is left out.
+  expect(within(dialog).queryByText('Approvals')).toBeNull()
+  expect(within(dialog).queryByLabelText('Deadline (optional)')).toBeNull()
+  expect(within(dialog).queryByText('Limits and estimates')).toBeNull()
+  // A coding agent still brings the reach acknowledgement and the unknown-cost question.
+  fireEvent.click(within(dialog).getByRole('checkbox', { name: /designer/ }))
+  fireEvent.click(within(dialog).getByLabelText(/Score controls the work it starts/))
+  const section = await within(dialog).findByRole('region', { name: 'Coding agents in this run' })
+  expect(startButton(dialog).disabled).toBe(true)
+  fireEvent.click(
+    within(section).getByRole('checkbox', {
+      name: /I understand what these coding agents can read/,
+    }),
+  )
+  expect(within(dialog).getByLabelText(/Keep going when the cost of Codex is unknown/)).toBeTruthy()
+  await waitFor(() => expect(startButton(dialog).disabled).toBe(false))
+  fireEvent.click(startButton(dialog))
+  await waitFor(() => expect(requests.some((r) => r.init?.method === 'POST')).toBe(true))
+  expect(createBody()).toMatchObject({
+    goal: 'Plan the launch',
+    gatePolicy: 'every-step',
+    maxSteps: 12,
+    acknowledgeCodingReach: { policyIds: [hexA] },
+  })
+})

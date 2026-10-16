@@ -1076,3 +1076,33 @@
   border-radius: var(--radius-pill);
   background: var(--ink);
 }
+
+.look-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-weight: 600;
+}
+.look-guard-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-3);
+}
+.look-guard-form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 14px;
+  font-weight: 600;
+}
+.look-guard-form input {
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-m);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}

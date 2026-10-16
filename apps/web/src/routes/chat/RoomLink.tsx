@@ -9,17 +9,26 @@ export function RoomLink({
   selected,
   agents,
   orchestration = false,
+  base = '/chat',
+  live = false,
+  title,
 }: {
   room: Room
   selected?: string | undefined
   agents: AgentSummary[]
   orchestration?: boolean | 'workflow'
+  /** Where rooms live: `/chat` in the admin view, `/u/rooms` in the user view. */
+  base?: string
+  /** A run in this room is going now (the user view's dot). */
+  live?: boolean
+  /** Shown in place of the room's name (the user view names a run's room after the run). */
+  title?: string | undefined
 }) {
   const agent = agents.find((item) => item.id === room.leadAgentId)
   return (
     <Link
       className={`chat-room-link${room.kind === 'direct' ? ' chat-room-link--direct' : ''}`}
-      to={`/chat/${encodeURIComponent(room.id)}`}
+      to={`${base}/${encodeURIComponent(room.id)}`}
       aria-current={room.id === selected ? 'page' : undefined}
     >
       {room.kind === 'direct' && agent && <AgentGlyph agent={agent} size="sm" decorative />}
@@ -30,7 +39,7 @@ export function RoomLink({
               ★{' '}
             </span>
           )}
-          {room.kind === 'direct' ? (agent?.name ?? room.name) : roomLabel(room)}
+          {title ?? (room.kind === 'direct' ? (agent?.name ?? room.name) : roomLabel(room))}
         </span>
         {room.kind === 'direct' && agent && (
           <small
@@ -50,6 +59,7 @@ export function RoomLink({
           </small>
         )}
       </span>
+      {live && <span className="user-live-dot" role="img" aria-label="Running now" />}
       {room.unread > 0 && (
         <span className="chat-unread" aria-label={`${room.unread} unread messages`}>
           {room.unread}

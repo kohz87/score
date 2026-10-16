@@ -2,6 +2,7 @@ import type { Ref } from 'react'
 import { NAV_DRAWER_ID } from './NavDrawer.tsx'
 import { MainNav } from './MainNav.tsx'
 import { TerminalButton } from './TerminalButton.tsx'
+import { AvatarMenu } from './AvatarMenu.tsx'
 
 type TopBarProps = {
   commandButtonRef: Ref<HTMLButtonElement>
@@ -84,9 +85,7 @@ export function TopBar({
         <kbd className="command-shortcut">⌘K</kbd>
       </button>
       <TerminalButton offered={terminalOffered} />
-      <div className="avatar" role="img" aria-label="You">
-        Y
-      </div>
+      <AvatarMenu view="admin" />
     </header>
   )
 }
