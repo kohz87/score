@@ -140,6 +140,8 @@ export const BridgeCommandResultSchema = z.object({
   before: CommandSizeSchema.optional(),
   after: CommandSizeSchema.optional(),
   context: SessionContextReadingSchema.optional(),
+  /** `compact`: the summary Hermes wrote for the turns it replaced, redacted and capped at 32 KB by the plugin. */
+  summary: z.string().max(40_000).optional(),
   error: z.string().max(200).optional(),
 })
 export type BridgeCommandResult = z.infer<typeof BridgeCommandResultSchema>

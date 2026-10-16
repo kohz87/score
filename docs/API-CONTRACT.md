@@ -1486,7 +1486,7 @@ whose `isolation` is not `unknown`; the plugin polls only while it runs inside a
   can't move the target; a target that changed is `failed`), and checks afterwards that no active user row from `since` remains, else `failed`). A
   command is handed to one polling producer of the profile once and is not redelivered.
 - `POST /bridge/v1/commands/:commandId/result` `{ outcome: 'done' | 'nothing' | 'failed' | 'expired'; turnsUndone?; rewoundCount?;
-  before?: { messages; tokens }; after?: { messages; tokens }; context?: SessionContextReading; error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what
+  before?: { messages; tokens }; after?: { messages; tokens }; context?: SessionContextReading; summary?: string; error? }` → `204`. For `rewind`, the plugin calls the gateway session store's `rewind_session(sessionId, turns)` (what
   `/undo` uses; soft-deletes the rows, the next turn rebuilds from the active ones) from `hermes_private.py` and reports
   Hermes's `turns_undone` / `rewound_count`; `nothing` = Hermes had nothing to rewind. A command with no result within
   60 s is reported to the person as `no_answer`, and Score keeps the room's rewind hold (persisted in `rewind_holds`, restored after a
@@ -1501,7 +1501,7 @@ whose `isolation` is not `unknown`; the plugin polls only while it runs inside a
   `_build_manual_compression_agent`; Hermes commits the result itself (in place or as a compression continuation, its
   choice). It checks `expiresAt` immediately before compressing, and answers `nothing` for a session shorter than Hermes's
   minimum, `failed` (`error`: `lock_held` while Hermes holds its compression lock for that session, `compact_failed`
-  otherwise; never Hermes text) and `done` with Hermes's before/after message and token estimates. A command is run at most once
+  otherwise; never Hermes text) and `done` with Hermes's before/after message and token estimates and `summary` (PLAN 8.2): the text Hermes's compressor wrote for the replaced turns (`agent.context_compressor._previous_summary`, the body without Hermes's handoff prefix; fallback: the compressed row flagged `_compressed_summary`, cut at its end marker), redacted and capped at 32 KB (a longer one is cut with a note); absent when Hermes kept none. Hermes has no plugin hook for compression, so only compactions Score requests reach the plugin; Hermes's own automatic compressions are not visible to it. A command is run at most once
   per `commandId`; a repeated one returns the remembered result.
 
   **`context_breakdown`** (PLAN 5.36): a read-only query, answer window 20 s. The plugin (`hermes_private.context_breakdown`)
