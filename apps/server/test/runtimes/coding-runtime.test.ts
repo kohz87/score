@@ -1146,16 +1146,16 @@ test('antigravity: the version is read before every turn; a self-updated CLI pau
   await makeRoom()
   await say('@agy1 one')
   await finished()
-  setEnv('SCORE_CODING_FAKE_VERSION', '1.4.0')
+  setEnv('SCORE_CODING_FAKE_VERSION', '1.9.9')
   await say('@agy1 two')
   await vi.waitFor(() => expect(JSON.stringify(replies())).toMatch(/untested version/), {
     timeout: 10_000,
   })
   expect(calls().length).toBe(1)
   const view = (await request('GET', '/api/coding-agents')).json().items[0]
-  expect(view.cli).toMatchObject({ state: 'untested_version', version: '1.4.0', confirmed: false })
+  expect(view.cli).toMatchObject({ state: 'untested_version', version: '1.9.9', confirmed: false })
   const confirmed = await request('POST', '/api/coding-agents/agy1/confirm-version', {
-    version: '1.4.0',
+    version: '1.9.9',
   })
   expect(confirmed.statusCode, confirmed.body).toBe(200)
   await say('@agy1 three')
