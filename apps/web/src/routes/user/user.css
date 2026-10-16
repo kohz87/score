@@ -309,6 +309,16 @@
   border: 1px solid var(--hairline);
   border-radius: var(--radius-20);
 }
+/* Covers the strip above the stuck header so messages don't show through it. */
+.user-view .user-run::before {
+  content: '';
+  position: absolute;
+  left: -28px;
+  right: -28px;
+  bottom: 100%;
+  height: calc(var(--space-2) + 1px);
+  background: var(--ground);
+}
 .user-view .user-run .orch-room-head {
   position: static;
   border: 0;
@@ -339,5 +349,9 @@
 @media (width < 600px) {
   .user-run-title {
     flex-basis: 100%;
+  }
+  /* Full width, so the messages scrolling underneath don't show beside it. */
+  .user-view .user-run {
+    width: 100%;
   }
 }
