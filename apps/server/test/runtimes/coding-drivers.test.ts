@@ -867,6 +867,7 @@ test('8.7: a real Claude Code 2.1.302 turn with a sub-agent: no loss, nesting, s
     [callId, 'done'],
     [callId, 'done'],
   ])
+  expect(agentCall).toMatchObject({ preview: 'List files in folder' })
   expect(subs[0]).toMatchObject({
     description: 'List files in folder',
     subagentType: 'general-purpose',

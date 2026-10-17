@@ -136,6 +136,11 @@ function preview(tool: string, input: unknown): string {
   const record = input as Record<string, unknown>
   const pick = (key: string) => (typeof record[key] === 'string' ? (record[key] as string) : null)
   if (tool === 'Bash') return pick('command') ?? ''
+  // A sub-agent's card says what it was asked to do, in a few words, not the whole prompt (PLAN 8.7).
+  if (tool === 'Agent' || tool === 'Task') {
+    const description = pick('description')
+    if (description) return description
+  }
   for (const key of [...PATH_KEYS, 'pattern', 'url', 'query']) {
     const value = pick(key)
     if (value) return value
