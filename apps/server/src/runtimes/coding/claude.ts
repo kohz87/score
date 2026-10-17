@@ -365,6 +365,7 @@ export const claudeDriver: CodingDriver = {
   supported: true,
   quota: 'Uses your Claude plan quota (the CLI’s own login).',
   promptVia: 'stdin',
+  instructions: 'file',
   verifiedPermissions: ['read-only', 'workspace-write', 'full'],
   warning: null,
   requiresReadAck: () => false,
@@ -398,6 +399,10 @@ export const claudeDriver: CodingDriver = {
     args.push('--disallowed-tools', claudeDenyRules(options.denyPaths, options.denyFiles).join(','))
     if (options.model) args.push('--model', options.model)
     if (options.sessionId) args.push('--resume', options.sessionId)
+    // The owner's role and instructions (PLAN 8.8): a file, never the text on argv. Claude Code records the system prompt
+    // once per conversation, so a resumed session renders it fresh for an edit to apply (`claude --help`, 2.1.301).
+    if (options.instructionsFile) args.push('--append-system-prompt-file', options.instructionsFile)
+    if (options.refreshSystemPrompt) args.push('--system-prompt-snapshot', 'off')
     return args
   },
   worker: {

@@ -1,0 +1,4 @@
+{"_fixture":"hand-made, not recorded: shaped after the CLI's documented stream format"}
+{"type":"system","subtype":"init","session_id":"33333333-3333-4333-8333-333333333333","model":"claude-sonnet-fixture"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Received instructions: {{RECEIVED}}"}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"Received instructions: {{RECEIVED}}","session_id":"33333333-3333-4333-8333-333333333333","total_cost_usd":0.001,"usage":{"input_tokens":10,"output_tokens":12}}

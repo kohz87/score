@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { chmodSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type {
   WorkerReadiness,
@@ -32,6 +32,7 @@ import {
   type WorkerPolicy,
 } from './policy.ts'
 import { driverFor } from './drivers.ts'
+import { blockHash, frameOf, instructionsEtag, promptWithInstructions } from './instructions.ts'
 import { quotaFromUsage, readCodexQuota } from './quota.ts'
 import { aliasModels, parseAntigravityModels, readCodexModels } from './models.ts'
 import { CappedText } from './note.ts'
@@ -45,11 +46,13 @@ import {
 import { spawnCli, SpawnRecordError, stopCauseOf, type CliRun, type StopReason } from './process.ts'
 import {
   cliSessionFor,
+  cliSessionInstructions,
   forgetCliSession,
   getCodingAgent,
   getCodingQuota,
   latestCodingQuota,
   listCodingAgents,
+  rememberCliInstructions,
   saveCodingQuota,
   type StoredCodingAgent,
 } from './store.ts'
@@ -258,6 +261,8 @@ export class CodingRuntime {
       id: agent.id,
       name: agent.name,
       role: agent.role,
+      instructions: agent.instructions,
+      instructionsEtag: instructionsEtag(agent.instructions),
       runtime: agent.runtime,
       workspace: agent.workspace,
       permission: agent.permission,
@@ -1248,6 +1253,23 @@ export class CodingRuntime {
     admitted: StoredCodingAgent,
     input: string,
     room: string | null,
+    model: string | null,
+  ): Promise<void> {
+    // The owner's instructions file (Claude Code) lives only as long as the run.
+    const temporary: string[] = []
+    try {
+      await this.executeRun(temporary, entry, admitted, input, room, model)
+    } finally {
+      for (const file of temporary) rmSync(file, { force: true })
+    }
+  }
+
+  private async executeRun(
+    temporary: string[],
+    entry: ActiveRun,
+    admitted: StoredCodingAgent,
+    input: string,
+    room: string | null,
     /** The model admitted with the turn (`req.model ?? agent.model` at admission): what the row says is what runs. */
     model: string | null,
   ): Promise<void> {
@@ -1415,11 +1437,39 @@ export class CodingRuntime {
             costKind,
           }))
       }
+      // The owner's role and instructions (PLAN 8.8): a 0600 file for a CLI with a flag for it, else in front of the
+      // message. A new session (also the retry after a dead resume) is sent the block again; a resumed one only
+      // when it changed since the session last received it.
+      const frame = frameOf(agent)
+      const sentHash = resume && room ? cliSessionInstructions(db.sqlite, room, agent.id) : ''
+      const delivery: { prompt: string; file: string | null; refresh: boolean } = {
+        prompt: input,
+        file: null,
+        refresh: false,
+      }
+      if (driver.instructions === 'file') {
+        if (frame !== '') {
+          const dir = join(this.deps.home, 'coding', agent.id)
+          mkdirSync(dir, { recursive: true, mode: 0o700 })
+          delivery.file = join(dir, `instructions-${entry.runId}-${attempt}.md`)
+          temporary.push(delivery.file)
+          writeFileSync(delivery.file, frame, { mode: 0o600, flag: 'w' })
+          chmodSync(delivery.file, 0o600)
+        }
+        delivery.refresh = resume !== null && (frame !== '' || sentHash !== '')
+      } else {
+        delivery.prompt = promptWithInstructions({
+          frame,
+          sent: sentHash,
+          resumed: resume !== null,
+          message: input,
+        })
+      }
       const cliArgs = [
         ...args,
         ...driver.buildArgs({
           workspace: checked.real,
-          prompt: input,
+          prompt: delivery.prompt,
           permission: agent.permission,
           model,
           sessionId: resume,
@@ -1427,9 +1477,11 @@ export class CodingRuntime {
           denyPaths: this.denyPaths(),
           denyFiles: this.denyFiles(),
           ...(frozenPolicy ? { worker: true } : {}),
+          ...(delivery.file ? { instructionsFile: delivery.file } : {}),
+          ...(delivery.refresh ? { refreshSystemPrompt: true } : {}),
         }),
       ]
-      const stdin = driver.promptVia === 'stdin' ? input : ''
+      const stdin = driver.promptVia === 'stdin' ? delivery.prompt : ''
       // Saving an event can fail. The supervised backend stops the run and the result is not used (design §4); the
       // fallback keeps the run going but cannot call it complete either.
       let ingestFailed = false
@@ -1698,6 +1750,19 @@ export class CodingRuntime {
         if (outcome.refusal !== null && outcome.refusalCause !== null)
           this.recordRefusal(entry.runId, outcome.refusalCause, outcome.refusal)
       }
+      // The CLI took this turn's prompt: its session now holds this block (a failed launch changes nothing).
+      if (
+        room &&
+        !owner &&
+        !outcome.spawnError &&
+        outcome.refusal === null &&
+        (threadId !== null || resume !== null)
+      )
+        try {
+          rememberCliInstructions(db.sqlite, room, agent.id, blockHash(frame))
+        } catch (error) {
+          this.deps.onError?.(error)
+        }
       await this.finish(translation, info)
       if (!outcome.groupGone) {
         if (outcome.launchId) void unit?.reap(outcome.launchId, this.deps.reapRetryMs)

@@ -93,6 +93,13 @@ export interface DriverRunOptions {
    * on its own (see `CodingDriver.worker`). Chat turns never set it.
    */
   worker?: boolean
+  /**
+   * The owner's role and instructions as a file the CLI reads (PLAN 8.8): only for a driver with `instructions: 'file'`.
+   * Null/absent = nothing is added to the argument vector.
+   */
+  instructionsFile?: string | null
+  /** A resumed session whose recorded system prompt must be rendered again so an edit (or a removal) applies. */
+  refreshSystemPrompt?: boolean
 }
 
 /** Where a worker's CLI looks for configuration: the user's home, the workspace, the allow-listed environment. */
@@ -149,6 +156,11 @@ export interface CodingDriver {
   readonly resumeRefusal?: RegExp
   /** Present for the runtimes that can take orchestration steps (7.7b): Claude Code and Codex. */
   readonly worker?: WorkerDeclaration
+  /**
+   * How the owner's role and instructions reach the CLI (PLAN 8.8). `file`: the driver has a flag that takes a file.
+   * Absent: no such flag, so Score puts the block in front of the first message of a session.
+   */
+  readonly instructions?: 'file'
   /** Argument vector after the executable. The prompt is never in it: it goes to stdin. */
   buildArgs(options: DriverRunOptions): string[]
   createParser(options: { cwd: string }): LineParser

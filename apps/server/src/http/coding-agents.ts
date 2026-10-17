@@ -27,6 +27,7 @@ import { HttpError } from '../errors.ts'
 import type { HermesPort } from '../hermes/index.ts'
 import type { Ingest } from '../hub/ingest.ts'
 import { driverFor } from '../runtimes/coding/drivers.ts'
+import { instructionsEtag } from '../runtimes/coding/instructions.ts'
 import type { CodingRuntime } from '../runtimes/coding/service.ts'
 import {
   getCodingAgent,
@@ -155,6 +156,7 @@ export function registerCodingAgentRoutes(
         id: body.id,
         name: body.name,
         role: body.role,
+        instructions: body.instructions,
         runtime: body.runtime,
         workspace,
         permission: body.permission,
@@ -195,9 +197,21 @@ export function registerCodingAgentRoutes(
           'conflict',
           'This agent changed while you were editing it. Reload and confirm with your password to give it full access.',
         )
+      // The instructions text is an etag-checked edit (like SOUL.md): a stale base changes nothing in this request.
+      if (
+        body.instructions !== undefined &&
+        body.instructionsEtag !== instructionsEtag(current.instructions)
+      )
+        throw new HttpError(
+          409,
+          'conflict',
+          'These instructions were changed somewhere else. Reload to see the newest version.',
+          { etag: instructionsEtag(current.instructions), instructions: current.instructions },
+        )
       updateCodingAgent(sqlite, agentId, {
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.role !== undefined ? { role: body.role } : {}),
+        ...(body.instructions !== undefined ? { instructions: body.instructions } : {}),
         ...(body.permission !== undefined ? { permission: body.permission } : {}),
         ...(body.model !== undefined ? { model: body.model } : {}),
         ...(workspace !== undefined ? { workspace } : {}),

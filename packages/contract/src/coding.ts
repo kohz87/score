@@ -44,10 +44,18 @@ export const CodingRuntimesResponseSchema = z.object({ items: z.array(CodingRunt
 export const QuotaFloorSchema = z.int().min(0).max(50)
 export const DEFAULT_QUOTA_FLOOR_PERCENT = 10
 
+/** Longest "Personality and instructions" text of a coding agent (PLAN 8.8, decision 94). */
+export const CODING_INSTRUCTIONS_MAX = 8000
+const InstructionsSchema = z.string().max(CODING_INSTRUCTIONS_MAX)
+
 export const CodingAgentSchema = z.object({
   id: AgentIdSchema,
   name: z.string(),
   role: z.string(),
+  /** The owner's "Personality and instructions" (Markdown), handed to the CLI each session. */
+  instructions: z.string(),
+  /** Identifies `instructions` for an edit: send it back as `instructionsEtag` when saving. */
+  instructionsEtag: z.string().min(1).max(64),
   runtime: CodingRuntimeSchema,
   workspace: z.string(),
   permission: CodingPermissionSchema,
@@ -110,6 +118,7 @@ export const CodingAgentCreateSchema = z
     id: ProfileNameSchema,
     name: NameSchema,
     role: z.string().max(2000).default(''),
+    instructions: InstructionsSchema.default(''),
     runtime: CodingRuntimeSchema,
     /** Absolute folder (`~/` allowed). Default `~/score-workspaces/<id>`, created on demand. */
     workspace: z.string().min(1).max(4096).optional(),
@@ -133,6 +142,9 @@ export const CodingAgentPatchSchema = z
   .object({
     name: NameSchema.optional(),
     role: z.string().max(2000).optional(),
+    instructions: InstructionsSchema.optional(),
+    /** Required with `instructions`: the `instructionsEtag` the edit started from (`409 conflict` when stale). */
+    instructionsEtag: z.string().min(1).max(64).optional(),
     permission: CodingPermissionSchema.optional(),
     model: ModelSchema.nullable().optional(),
     workspace: z.string().min(1).max(4096).optional(),
@@ -140,7 +152,13 @@ export const CodingAgentPatchSchema = z
     password: z.string().max(1024).optional(),
   })
   .strict()
-  .refine((value) => Object.keys(value).some((key) => key !== 'password'))
+  .refine((value) =>
+    Object.keys(value).some((key) => key !== 'password' && key !== 'instructionsEtag'),
+  )
+  .refine((value) => value.instructions === undefined || value.instructionsEtag !== undefined, {
+    message: 'instructionsEtag is required with instructions',
+    path: ['instructionsEtag'],
+  })
 export type CodingAgentPatch = z.infer<typeof CodingAgentPatchSchema>
 
 export const CodingVersionConfirmSchema = z.object({ version: z.string().min(1).max(100) }).strict()
