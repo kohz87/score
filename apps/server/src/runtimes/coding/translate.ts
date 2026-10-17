@@ -323,6 +323,9 @@ export function eventObservation(
             costUsd: event.costUsd ?? null,
           }
           break
+        case 'subagent':
+          // Stored with the nesting in the next item of PLAN 8.7; recognised here so the turn is not marked lost.
+          break
         case 'result':
           break
       }
