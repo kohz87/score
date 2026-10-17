@@ -22,7 +22,10 @@ describe('sanitiseCss', () => {
     expect(reasons('a { color: red !important }')).toEqual(['important'])
     expect(reasons('[data-protected] { opacity: 0 }')).toEqual(['protected_selector'])
     expect(reasons('.chat-approval button { display: none }')).toEqual(['protected_selector'])
-    expect(reasons('.orch-decision-x { color: red }')).toEqual([])
+    expect(reasons('.orch-decision--gate { color: red }')).toEqual(['protected_selector'])
+    expect(reasons('.agent-glyph__ring { fill: none }')).toEqual(['protected_selector'])
+    expect(reasons('.orch-decisions { color: red }')).toEqual(['protected_selector'])
+    expect(reasons('.settings-card { color: red }')).toEqual([])
     expect(reasons('@font-face { font-family: x; src: url(a.woff2) }')).toEqual(['font_face'])
   })
 

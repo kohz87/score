@@ -9,7 +9,8 @@ import { protectedClasses, protectedCustomPropertyPrefixes } from './protected-s
 type Reason = ThemeSanitiseReport['dropped'][number]['reason']
 export type SanitiseResult = { css: string; report: ThemeSanitiseReport }
 
-const classPattern = new RegExp(`\\.(${protectedClasses.join('|')})(?![A-Za-z0-9_-])`, 'i')
+// A prefix match: `.chat-approval-command` and `.agent-glyph__ring` belong to their component too.
+const classPattern = new RegExp(`\\.(${protectedClasses.join('|')})`, 'i')
 const GROUPING = new Set([
   'CSSMediaRule',
   'CSSSupportsRule',

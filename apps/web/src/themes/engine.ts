@@ -112,7 +112,9 @@ function radiusCss(shape: Look['shape']): string {
   return `--radius-xs:${px(0.2)};--radius-s:${px(0.3)};--radius-m:${px(0.5)};--radius-l:${px(0.7)};--radius-card:${n}px;`
 }
 
-const SCOPE = ":root[data-look='custom']"
+// `:root:root` raises the specificity by one class so the sheet wins wherever it sits in the cascade: the boot copy
+// (public/boot-look.js) lands in <head> before the app's stylesheets.
+const SCOPE = ":root:root[data-look='custom']"
 
 /** The generated token sheet: colours for both modes, fonts, numeric radius. No theme-controlled text but validated tokens. */
 export function tokenCss(look: Look, themeId: string): string {

@@ -91,7 +91,7 @@ function parts(surface: HTMLElement): HTMLElement[] {
 function withoutTheme<T>(run: () => T): T {
   const sheets = appliedThemeSheets()
   const elements = appliedThemeElements()
-  const before = document.adoptedStyleSheets
+  const before = [...document.adoptedStyleSheets]
   const disabled = elements.map((el) => el.disabled)
   document.adoptedStyleSheets = before.filter((sheet) => !sheets.includes(sheet))
   elements.forEach((el) => {

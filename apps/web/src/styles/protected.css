@@ -22,6 +22,14 @@
     unicode-bidi: normal !important;
     text-indent: 0 !important;
   }
+  /* No generated text or boxes (a fake "Approve" laid over the real one): none of these surfaces draws any. */
+  html[data-look='custom'] [data-protected]::before,
+  html[data-look='custom'] [data-protected]::after,
+  html[data-look='custom'] [data-protected] *::before,
+  html[data-look='custom'] [data-protected] *::after {
+    content: none !important;
+    display: none !important;
+  }
   /* A disabled control keeps looking disabled, but never invisible. */
   html[data-look='custom'] [data-protected] :is(:disabled, [aria-disabled='true']) {
     opacity: 0.5 !important;
@@ -35,6 +43,7 @@
   }
   html[data-look='custom'] [data-protected] {
     isolation: isolate !important;
+    font-family: var(--font-body) !important;
     /* The theme's fonts never reach these surfaces. */
     --font-heading: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif !important;
     --font-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif !important;
