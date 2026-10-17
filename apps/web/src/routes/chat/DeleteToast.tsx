@@ -18,7 +18,7 @@ export function DeleteToast() {
         </div>
       ))}
       {failed && (
-        <div className="chat-toast" role="alert">
+        <div className="chat-toast" role="alert" data-protected="flex">
           <span>{failed}</span>
           <button type="button" className="chat-toast-undo" onClick={dismissDeleteFailure}>
             Dismiss

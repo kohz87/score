@@ -71,7 +71,8 @@ export function ShareDialog({ room, close }: { room: Room; close: () => void }) 
     <dialog
       ref={dialog}
       open={typeof HTMLDialogElement.prototype.showModal !== 'function'}
-      className="share-dialog"
+      className="share-dialog security-password"
+      data-protected="any"
       aria-labelledby="share-title"
       onCancel={(event) => {
         event.preventDefault()

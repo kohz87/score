@@ -66,7 +66,8 @@ function SetPassword({ change, onDone }: { change: boolean; onDone: () => void }
   }
   return (
     <form
-      className="settings-form"
+      className="settings-form security-password"
+      data-protected="any"
       aria-label={change ? 'Change the security password' : 'Set a security password'}
       onSubmit={(event) => void submit(event)}
     >

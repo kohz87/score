@@ -243,7 +243,12 @@ export function AskingCard({
   const card = useRef<HTMLElement>(null)
   useArrival(card, approval ? `approval-${approval.id}` : null)
   return (
-    <section ref={card} className="now-card now-asking" aria-label="Needs you">
+    <section
+      ref={card}
+      className="now-card now-asking"
+      aria-label="Needs you"
+      data-protected="flex"
+    >
       <p className="now-asking-notice" role="status">
         {decided && (
           <>

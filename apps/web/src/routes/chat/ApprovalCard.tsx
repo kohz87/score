@@ -115,7 +115,7 @@ export function ApprovalCard({ approvalId }: { approvalId: string }) {
     const loading = status === 'pending' || byId.isLoading
     const notFound = byId.error instanceof ApiError && byId.error.status === 404
     return (
-      <div className="chat-approval chat-approval--done" role="status">
+      <div className="chat-approval chat-approval--done" role="status" data-protected="flex">
         <span>
           {loading
             ? 'Loading approval…'
@@ -138,6 +138,7 @@ export function ApprovalCard({ approvalId }: { approvalId: string }) {
   return (
     <div
       ref={card}
+      data-protected="flex"
       className={`chat-approval${showButtons || busy ? '' : ' chat-approval--done'}`}
       role="group"
       aria-label={`Approval: ${approval.title}`}

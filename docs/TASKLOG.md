@@ -181,3 +181,10 @@ One entry per completed task: what landed, review results, and any **rejected re
   accessible name (the e2e caught the lost name). Full e2e 342/349 → the 3 profile specs (my change) + 3 count cascades
   + the known user-view flake; after the fix the affected specs 17/17, Reports alone 2/2.
 - **Release 1.5.0**: 8.6 + the agent dialogs.
+- **9.1 + 9.2 themes** merged together (integration branch). 9.1 by a Sonnet builder; 9.2 finished by the forked lead
+  session (its additions: protected-text contrast guard with two hostile cases; /api/themes visual fixture). Lead review
+  and fixes: server CSS checks also reject `image()`, `cross-fade()`, `element()`/`-moz-element()` (live copy of another
+  element); migration renumbered 0071 → 0072; 8.6's quota card wasn't marked `data-protected` (coverage test caught it);
+  server built-in name "Night" → "Night shift" (combined e2e caught it). Combined run: check green after the fixes;
+  e2e 353/365 → every failure explained (2 real, fixed; coding-agent/phone timing; count cascades; user-view flake),
+  failing specs 21/21 alone.

@@ -1,0 +1,28 @@
+/* The banners of the escape hatches (PLAN 9.2). Protected: a theme can't restyle them (sanitiser) or hide them. */
+.look-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  background: #12131a;
+  color: #fff;
+  font-size: 14px;
+}
+.look-banner a,
+.look-banner button {
+  color: #fff;
+  font: inherit;
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}

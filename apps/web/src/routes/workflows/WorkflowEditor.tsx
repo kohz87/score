@@ -337,6 +337,7 @@ function WorkflowEditor({ detail }: { detail: WorkflowDetail | null }) {
       {conflict !== null && (
         <section
           role="alert"
+          data-protected="block"
           className="orch-decision wf-conflict"
           aria-label="Someone saved first"
         >

@@ -12,13 +12,21 @@ export function FenceScreen({ fence }: { fence: GlobalFence }) {
   const holding = fence.items.find((item) => item.ref === 'execution-frozen')
   if (holding)
     return (
-      <section className="orch-decision orch-fence" aria-label="Score is holding agent work">
+      <section
+        data-protected="block"
+        className="orch-decision orch-fence"
+        aria-label="Score is holding agent work"
+      >
         <h3>Agent work is on hold</h3>
         <p role="status">{holding.detail}</p>
       </section>
     )
   return (
-    <section className="orch-decision orch-fence" aria-label="Review before starting work">
+    <section
+      data-protected="block"
+      className="orch-decision orch-fence"
+      aria-label="Review before starting work"
+    >
       <h3>Starting work is blocked until you review this list</h3>
       <p>
         Score’s database doesn’t match the separate record it keeps of what it started

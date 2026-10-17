@@ -71,6 +71,7 @@ export function PolicyChangedCard({
   return (
     <Arrival
       arrivalId={`policy-${arrivalKey}`}
+      data-protected="block"
       className="orch-decision"
       aria-label={`New settings for ${agentId}`}
     >
@@ -148,6 +149,7 @@ export function CodingLimitCard({
   return (
     <Arrival
       arrivalId={`coding-limit-${arrivalKey}`}
+      data-protected="block"
       className="orch-decision"
       aria-label="Coding step limit"
     >
@@ -218,6 +220,7 @@ export function QuotaLowCard({
   return (
     <Arrival
       arrivalId={`quota-${arrivalKey}`}
+      data-protected="block"
       className="orch-decision"
       aria-label={`${hold.agentId}’s limit is low`}
     >
