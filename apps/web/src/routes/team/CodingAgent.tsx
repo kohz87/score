@@ -16,6 +16,7 @@ import { AgentGlyph } from '../../components/AgentGlyph.tsx'
 import { apiFetch } from '../../data/api.ts'
 import { runtimeLabel } from '../../components/runtime-label.ts'
 import { CodingBackend } from './CodingBackend.tsx'
+import { AGENT_ID_PATTERN, agentIdInput } from './agent-id.ts'
 import { ModelPicker } from './ModelPicker.tsx'
 import { ReleaseHeld } from './ReleaseHeld.tsx'
 import { AgentQuota, RuntimeQuotaLine } from './QuotaMeters.tsx'
@@ -234,15 +235,20 @@ export function AddCodingAgentForm({ close }: { close: () => void }) {
       )}
       {usable && <RuntimeQuotaLine runtime={runtime} />}
       <label>
-        Agent name (letters, digits, - and _)
+        Agent name (lowercase letters, digits, - and _)
         <input
           required
-          pattern="[a-z0-9][a-z0-9_-]{0,63}"
+          pattern={AGENT_ID_PATTERN}
+          title="Lowercase letters, digits, - and _"
           maxLength={64}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           value={id}
           onChange={(event) => {
-            setId(event.target.value)
-            setName(event.target.value)
+            const next = agentIdInput(event.target.value)
+            setId(next)
+            setName(next)
           }}
         />
       </label>

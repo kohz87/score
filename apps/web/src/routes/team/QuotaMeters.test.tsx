@@ -1,16 +1,21 @@
 // @vitest-environment jsdom
 import type { CodingQuota } from '@score/contract'
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, expect, test } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
 import { leftPercent, quotaLine, QuotaMeters, resetText, seenText } from './QuotaMeters.tsx'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 const quota = (windows: CodingQuota['windows'], source: CodingQuota['source'] = 'turn') =>
   ({ runtime: 'claude-code', seenAt: '2026-10-16T05:30:00.000Z', source, windows }) as CodingQuota
 
 test('a meter shows "% left" from the used share, with the reset time and "as of"', () => {
   process.env.TZ = 'Asia/Singapore'
+  // The reset is later the same day: without a fixed clock the text gains a date once that day has passed.
+  vi.useFakeTimers({ now: new Date('2026-10-16T05:35:00.000Z'), toFake: ['Date'] })
   render(
     <QuotaMeters
       runtime="claude-code"
