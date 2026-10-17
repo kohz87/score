@@ -483,8 +483,9 @@ export const claudeDriver: CodingDriver = {
   executable: 'claude',
   // 2.1.296: real read-only turns on 2026-10-13 (7.7a live check; captured record shapes in coding-drivers.test.ts), owner
   // decision 77.
-  // 2.1.301: real read-only turn on 2026-10-16 (owner-approved), record shapes unchanged.
-  testedVersions: ['2.1.295', '2.1.296', '2.1.301'],
+  // 2.1.301: real read-only turn on 2026-10-16 (owner-approved), record shapes unchanged. 2.1.302: a read-only turn and a
+  // workspace-write turn with a sub-agent on 2026-10-17 (decision 95), both replayed without loss.
+  testedVersions: ['2.1.295', '2.1.296', '2.1.301', '2.1.302'],
   supported: true,
   quota: 'Uses your Claude plan quota (the CLI’s own login).',
   promptVia: 'stdin',
